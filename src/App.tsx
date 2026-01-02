@@ -4,31 +4,22 @@ import React, { useMemo, useState } from "react";
 import "./App.css";
 import type { ContactId } from "./evolu";
 import { evolu, useEvolu } from "./evolu";
-import {
-  generate12WordMnemonic,
-  INITIAL_MNEMONIC_STORAGE_KEY,
-} from "./mnemonic";
-
-type LnAddress = {
-  address: string;
-  isPrimary: boolean;
-};
+import { getInitialLang, persistLang, translations, type Lang } from "./i18n";
+import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
 
 type ContactFormState = {
   name: string;
   npub: string;
-  lnAddresses: { address: string; isPrimary: boolean }[];
-  email: string;
-  phone: string;
+  lnAddress: string;
 };
 
 const makeEmptyForm = (): ContactFormState => ({
   name: "",
   npub: "",
-  lnAddresses: [{ address: "", isPrimary: true }],
-  email: "",
-  phone: "",
+  lnAddress: "",
 });
+
+type ActiveSection = "contacts" | "settings";
 
 const App = () => {
   console.log("App component rendering");
@@ -36,15 +27,57 @@ const App = () => {
 
   const [form, setForm] = useState<ContactFormState>(makeEmptyForm());
   const [editingId, setEditingId] = useState<ContactId | null>(null);
-  const [mnemonicInput, setMnemonicInput] = useState("");
+  const [activeSection, setActiveSection] = useState<ActiveSection>("contacts");
+  const [isContactFormOpen, setIsContactFormOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<ContactId | null>(
+    null
+  );
+  const [isPasteArmed, setIsPasteArmed] = useState(false);
+  const [lang, setLang] = useState<Lang>(() => getInitialLang());
   const [owner, setOwner] = useState<Awaited<typeof evolu.appOwner> | null>(
     null
   );
 
+  const t = <K extends keyof typeof translations.cs>(key: K) =>
+    translations[lang][key];
+
   React.useEffect(() => {
     evolu.appOwner.then(setOwner);
   }, []);
+
+  React.useEffect(() => {
+    persistLang(lang);
+    try {
+      document.documentElement.lang = lang;
+    } catch {
+      // ignore
+    }
+  }, [lang]);
+
+  React.useEffect(() => {
+    if (!pendingDeleteId) return;
+    const timeoutId = window.setTimeout(() => {
+      setPendingDeleteId(null);
+    }, 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [pendingDeleteId]);
+
+  React.useEffect(() => {
+    if (!isPasteArmed) return;
+    const timeoutId = window.setTimeout(() => {
+      setIsPasteArmed(false);
+    }, 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [isPasteArmed]);
+
+  React.useEffect(() => {
+    if (!status) return;
+    const timeoutId = window.setTimeout(() => {
+      setStatus(null);
+    }, 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [status]);
 
   // Query pro všechny aktivní kontakty
   const contactsQuery = useMemo(
@@ -61,155 +94,83 @@ const App = () => {
 
   const contacts = useQuery(contactsQuery);
 
-  const resetForm = () => {
+  const clearContactForm = () => {
     setForm(makeEmptyForm());
     setEditingId(null);
   };
 
-  const handleLnChange = (index: number, patch: Partial<LnAddress>) => {
-    setForm((prev) => {
-      const next = prev.lnAddresses.map((ln, i) =>
-        i === index ? { ...ln, ...patch } : ln
-      );
-      return { ...prev, lnAddresses: next };
+  const closeContactForm = () => {
+    clearContactForm();
+    setIsContactFormOpen(false);
+  };
+
+  const openNewContactForm = () => {
+    setActiveSection("contacts");
+    setIsContactFormOpen(true);
+    setPendingDeleteId(null);
+    setIsPasteArmed(false);
+    setEditingId(null);
+    setForm(makeEmptyForm());
+  };
+
+  const toggleSettings = () => {
+    setActiveSection((current) => {
+      const next = current === "settings" ? "contacts" : "settings";
+      if (next === "settings") {
+        closeContactForm();
+      }
+      setPendingDeleteId(null);
+      setIsPasteArmed(false);
+      return next;
     });
   };
 
-  const addLnAddress = () => {
-    setForm((prev) => ({
-      ...prev,
-      lnAddresses: [
-        ...prev.lnAddresses,
-        { address: "", isPrimary: prev.lnAddresses.length === 0 },
-      ],
-    }));
-  };
-
-  const setPrimaryLn = (index: number) => {
-    setForm((prev) => ({
-      ...prev,
-      lnAddresses: prev.lnAddresses.map((ln, i) => ({
-        ...ln,
-        isPrimary: i === index,
-      })),
-    }));
-  };
-
-  const removeLnAddress = (index: number) => {
-    setForm((prev) => ({
-      ...prev,
-      lnAddresses: prev.lnAddresses.filter((_, i) => i !== index),
-    }));
-  };
-
-  const handleSaveContact = () => {
-    const name = form.name.trim();
-    const npub = form.npub.trim();
-    const lnAddresses = form.lnAddresses
-      .map((ln) => ({ ...ln, address: ln.address.trim() }))
-      .filter((ln) => ln.address.length > 0);
-
-    if (!name || !npub) {
-      setStatus("Vyplňte jméno i npub.");
-      return;
-    }
-
-    if (lnAddresses.length === 0) {
-      setStatus("Přidejte alespoň jednu LN adresu.");
-      return;
-    }
-
-    if (lnAddresses.every((ln) => !ln.isPrimary))
-      lnAddresses[0].isPrimary = true;
-
-    const payload = {
-      name: name as typeof Evolu.NonEmptyString1000.Type,
-      npub: npub as typeof Evolu.NonEmptyString1000.Type,
-      lnAddresses: JSON.stringify(
-        lnAddresses
-      ) as typeof Evolu.NonEmptyString1000.Type,
-      email: form.email.trim()
-        ? (form.email.trim() as typeof Evolu.String1000.Type)
-        : null,
-      phone: form.phone.trim()
-        ? (form.phone.trim() as typeof Evolu.String1000.Type)
-        : null,
-    };
-
-    if (editingId) {
-      const result = update("contact", { id: editingId, ...payload });
-      if (result.ok) {
-        setStatus("Kontakt byl upraven.");
-      } else {
-        setStatus(`Chyba: ${String(result.error)}`);
-      }
-    } else {
-      const result = insert("contact", payload);
-      if (result.ok) {
-        setStatus("Kontakt byl uložen.");
-      } else {
-        setStatus(`Chyba: ${String(result.error)}`);
-      }
-    }
-
-    resetForm();
-  };
-
-  const startEdit = (contact: (typeof contacts)[number]) => {
-    setEditingId(contact.id);
-    const lnAddresses = contact.lnAddresses
-      ? JSON.parse(contact.lnAddresses)
-      : [{ address: "", isPrimary: true }];
-    setForm({
-      name: contact.name ?? "",
-      npub: contact.npub ?? "",
-      lnAddresses,
-      email: contact.email ?? "",
-      phone: contact.phone ?? "",
-    });
+  const goHome = () => {
+    setActiveSection("contacts");
+    setPendingDeleteId(null);
+    setIsPasteArmed(false);
+    closeContactForm();
   };
 
   const handleDelete = (id: ContactId) => {
     const result = update("contact", { id, isDeleted: Evolu.sqliteTrue });
     if (result.ok) {
-      setStatus("Kontakt byl smazán.");
-    } else {
-      setStatus(`Chyba: ${String(result.error)}`);
+      setStatus(t("contactDeleted"));
+      return;
     }
+    setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
   };
 
-  const handleGenerateKeys = async () => {
-    const mnemonic = generate12WordMnemonic();
-    const words = mnemonic.trim().split(/\s+/).length;
-    setStatus(`Vygenerovali jsme nové klíče (${words} slov). Obnovujeme…`);
-    await evolu.restoreAppOwner(mnemonic, { reload: false });
-    try {
-      localStorage.setItem(INITIAL_MNEMONIC_STORAGE_KEY, mnemonic);
-    } catch {
-      // ignore
-    }
-    globalThis.location.reload();
-  };
-
-  const handleApplyKeys = async () => {
-    const value = mnemonicInput.trim();
-    if (!value) {
-      setStatus("Zadejte klíče (seed).");
+  const requestDelete = (id: ContactId) => {
+    if (pendingDeleteId === id) {
+      setPendingDeleteId(null);
+      handleDelete(id);
       return;
     }
 
+    setPendingDeleteId(id);
+    setStatus(t("deleteArmedHint"));
+  };
+
+  const copyToClipboard = async (value: string) => {
+    try {
+      await navigator.clipboard?.writeText(value);
+      setStatus(t("copiedToClipboard"));
+    } catch {
+      setStatus(t("copyFailed"));
+    }
+  };
+
+  const applyKeysFromText = async (value: string) => {
     try {
       const mnemonicResult = Evolu.Mnemonic.fromUnknown(value);
       if (!mnemonicResult.ok) {
-        // Mnemonic.fromUnknown can return several underlying string errors.
         setStatus(Evolu.createFormatTypeError()(mnemonicResult.error));
         return;
       }
 
       const mnemonic = mnemonicResult.value;
-
-      setStatus("Klíče byly ověřeny. Obnovujeme…");
-      // Avoid automatic reload so we can surface errors without wiping the input.
+      setStatus(t("keysPasting"));
       await evolu.restoreAppOwner(mnemonic, { reload: false });
       try {
         localStorage.setItem(INITIAL_MNEMONIC_STORAGE_KEY, mnemonic);
@@ -218,241 +179,312 @@ const App = () => {
       }
       globalThis.location.reload();
     } catch (error) {
-      setStatus(`Chyba: ${String(error)}`);
+      setStatus(`${t("errorPrefix")}: ${String(error)}`);
     }
+  };
+
+  const pasteKeysFromClipboard = async () => {
+    if (!navigator.clipboard?.readText) {
+      setStatus(t("pasteNotAvailable"));
+      return;
+    }
+
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (!text) {
+        setStatus(t("pasteEmpty"));
+        return;
+      }
+      await applyKeysFromText(text);
+    } catch {
+      setStatus(t("pasteNotAvailable"));
+    }
+  };
+
+  const requestPasteKeys = async () => {
+    if (isPasteArmed) {
+      setIsPasteArmed(false);
+      await pasteKeysFromClipboard();
+      return;
+    }
+    setIsPasteArmed(true);
+    setStatus(t("pasteArmedHint"));
+  };
+
+  const startEdit = (contact: (typeof contacts)[number]) => {
+    setActiveSection("contacts");
+    setIsContactFormOpen(true);
+    setPendingDeleteId(null);
+    setIsPasteArmed(false);
+
+    setEditingId(contact.id);
+    setForm({
+      name: (contact.name ?? "") as string,
+      npub: (contact.npub ?? "") as string,
+      lnAddress: (contact.lnAddress ?? "") as string,
+    });
+  };
+
+  const handleSaveContact = () => {
+    const name = form.name.trim();
+    const npub = form.npub.trim();
+    const lnAddress = form.lnAddress.trim();
+
+    if (!name && !npub && !lnAddress) {
+      setStatus(t("fillAtLeastOne"));
+      return;
+    }
+
+    const payload = {
+      name: name ? (name as typeof Evolu.NonEmptyString1000.Type) : null,
+      npub: npub ? (npub as typeof Evolu.NonEmptyString1000.Type) : null,
+      lnAddress: lnAddress
+        ? (lnAddress as typeof Evolu.NonEmptyString1000.Type)
+        : null,
+    };
+
+    if (editingId) {
+      const result = update("contact", { id: editingId, ...payload });
+      if (result.ok) {
+        setStatus(t("contactUpdated"));
+      } else {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+      }
+    } else {
+      const result = insert("contact", payload);
+      if (result.ok) {
+        setStatus(t("contactSaved"));
+      } else {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+      }
+    }
+
+    closeContactForm();
   };
 
   const copyMnemonic = async () => {
     if (!owner || !owner.mnemonic) return;
     await navigator.clipboard?.writeText(owner.mnemonic);
-    setStatus("Klíče zkopírovány do schránky.");
+    setStatus(t("keysCopied"));
   };
   console.log("Rendering with contacts:", contacts.length, "owner:", owner);
   return (
     <div className="page">
       <header className="hero">
-        <div>
-          <p className="eyebrow">Linky · Evolu PWA</p>
-          <h1>Správa kontaktů s lokálním uložením</h1>
-          <p className="lede">
-            Klíče zůstávají u vás. Kontakty se ukládají do Evolu, fungují
-            offline a PWA lze nainstalovat na zařízení.
-          </p>
+        <div className="hero-content">
+          <button className="title-button" onClick={goHome}>
+            {t("appTitle")}
+          </button>
+          <p className="eyebrow">{t("appTagline")}</p>
         </div>
-        <div className="badge-box">
-          <span className="badge">PWA ready</span>
-          <span className="badge">Local-first</span>
+        <div className="hero-actions">
+          <button
+            className="ghost gear-button"
+            onClick={toggleSettings}
+            aria-label={
+              activeSection === "settings" ? t("close") : t("settings")
+            }
+            title={activeSection === "settings" ? t("close") : t("settings")}
+          >
+            <span className="gear-icon">⚙︎</span>
+            <span className="gear-label">{t("settings")}</span>
+          </button>
         </div>
       </header>
 
-      <section className="panel key-panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Klíče</p>
-            <h2>Vygenerujte nebo vložte vlastní seed</h2>
-          </div>
-          <button
-            className="ghost"
-            onClick={copyMnemonic}
-            disabled={!owner?.mnemonic}
-          >
-            Zkopírovat aktuální
-          </button>
-        </div>
-        <div className="key-grid">
-          <div>
-            <label>Aktuální seed</label>
-            <div className="mono-box">
-              {owner?.mnemonic || "Není k dispozici"}
+      {activeSection === "settings" && (
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">{t("settings")}</p>
+              <h2>{t("keys")}</h2>
             </div>
-            <small className="hint">
-              Změna seedu vás přepne na jiného vlastníka.
-            </small>
-          </div>
-          <div>
-            <label>Práce se seedem</label>
-            <textarea
-              value={mnemonicInput}
-              onChange={(e) => setMnemonicInput(e.target.value)}
-              placeholder="12 slov oddělených mezerou"
-            />
-            <div className="key-actions">
-              <button onClick={handleGenerateKeys}>
-                Vygenerovat nové klíče
+            <div className="badge-box">
+              <button
+                className="ghost"
+                onClick={copyMnemonic}
+                disabled={!owner?.mnemonic}
+              >
+                {t("copyCurrent")}
               </button>
-              <button className="secondary" onClick={handleApplyKeys}>
-                Použít zadané klíče
+              <button
+                className={isPasteArmed ? "danger" : "ghost"}
+                onClick={requestPasteKeys}
+                aria-label={t("paste")}
+                title={isPasteArmed ? t("pasteArmedHint") : t("paste")}
+              >
+                {t("paste")}
               </button>
             </div>
           </div>
-        </div>
-      </section>
 
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Kontakty</p>
-            <h2>{editingId ? "Upravit kontakt" : "Přidat nový kontakt"}</h2>
-          </div>
-          {editingId && (
-            <button className="ghost" onClick={resetForm}>
-              Zrušit úpravy
-            </button>
-          )}
-        </div>
-        <div className="form-grid">
-          <div className="form-col">
-            <label>Jméno*</label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Např. Alice"
-            />
-
-            <label>npub*</label>
-            <input
-              value={form.npub}
-              onChange={(e) => setForm({ ...form, npub: e.target.value })}
-              placeholder="nostr veřejný klíč"
-            />
-
-            <label>LN adresy*</label>
-            <div className="ln-list">
-              {form.lnAddresses.map((ln, index) => (
-                <div key={index} className="ln-row">
-                  <input
-                    value={ln.address}
-                    onChange={(e) =>
-                      handleLnChange(index, { address: e.target.value })
-                    }
-                    placeholder="např. alice@zapsat.cz"
-                  />
-                  <div className="ln-actions">
-                    <label className="radio">
-                      <input
-                        type="radio"
-                        name="primary-ln"
-                        checked={ln.isPrimary}
-                        onChange={() => setPrimaryLn(index)}
-                      />
-                      hlavní
-                    </label>
-                    {form.lnAddresses.length > 1 && (
-                      <button
-                        className="icon"
-                        onClick={() => removeLnAddress(index)}
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-              <button className="ghost" onClick={addLnAddress}>
-                Přidat další LN adresu
+          <div className="panel-header">
+            <div>
+              <h2>{t("language")}</h2>
+            </div>
+            <div className="badge-box">
+              <button
+                className={lang === "cs" ? "" : "secondary"}
+                onClick={() => setLang("cs")}
+              >
+                {t("czech")}
+              </button>
+              <button
+                className={lang === "en" ? "" : "secondary"}
+                onClick={() => setLang("en")}
+              >
+                {t("english")}
               </button>
             </div>
-
-            <div className="inline">
-              <div>
-                <label>Email</label>
-                <input
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="alice@example.com"
-                />
-              </div>
-              <div>
-                <label>Telefon</label>
-                <input
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="+420 ..."
-                />
-              </div>
-            </div>
-
-            <div className="actions">
-              <button onClick={handleSaveContact}>
-                {editingId ? "Uložit změny" : "Uložit kontakt"}
-              </button>
-              <button className="secondary" onClick={resetForm}>
-                Vyčistit formulář
-              </button>
-            </div>
-            {status && <p className="status">{status}</p>}
           </div>
 
-          <div className="form-col">
+          {status && <p className="status">{status}</p>}
+        </section>
+      )}
+
+      {activeSection === "contacts" && (
+        <>
+          <section className="panel">
             <div className="list-header">
-              <h3>Moje kontakty</h3>
-              <span className="pill">{contacts.length}</span>
+              <h3>{t("list")}</h3>
+
+              <button onClick={openNewContactForm}>{t("addContact")}</button>
             </div>
             <div className="contact-list">
               {contacts.length === 0 && (
-                <p className="muted">Zatím žádné kontakty.</p>
+                <p className="muted">{t("noContactsYet")}</p>
               )}
               {contacts.map((contact) => {
-                const lnAddresses: LnAddress[] = contact.lnAddresses
-                  ? JSON.parse(contact.lnAddresses)
-                  : [];
+                const isDeleteArmed = pendingDeleteId === contact.id;
                 return (
                   <article key={contact.id} className="contact-card">
                     <div className="card-header">
-                      <div>
-                        <h4>{contact.name}</h4>
-                        <p className="muted">{contact.npub}</p>
+                      <div className="card-main">
+                        <div className="card-title-row">
+                          {contact.name ? <h4>{contact.name}</h4> : null}
+                          <div className="contact-badges">
+                            {contact.lnAddress ? (
+                              <button
+                                type="button"
+                                className="tag tag-button"
+                                onClick={() => {
+                                  setPendingDeleteId(null);
+                                  copyToClipboard(contact.lnAddress!);
+                                }}
+                                title="Kliknutím zkopírujete lightning adresu"
+                              >
+                                {contact.lnAddress}
+                              </button>
+                            ) : null}
+                            {contact.npub ? (
+                              <button
+                                type="button"
+                                className="tag tag-button"
+                                onClick={() => {
+                                  setPendingDeleteId(null);
+                                  copyToClipboard(contact.npub!);
+                                }}
+                                title="Kliknutím zkopírujete npub"
+                              >
+                                {t("npub")}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
                       <div className="card-actions">
                         <button
                           className="ghost"
                           onClick={() => startEdit(contact)}
+                          aria-label={t("edit")}
                         >
-                          Upravit
+                          <span className="btn-icon" aria-hidden="true">
+                            ✎
+                          </span>
+                          <span className="btn-label">{t("edit")}</span>
                         </button>
                         <button
-                          className="danger"
-                          onClick={() => handleDelete(contact.id)}
+                          className={isDeleteArmed ? "danger" : "ghost"}
+                          onClick={() => requestDelete(contact.id)}
+                          aria-label={isDeleteArmed ? t("delete") : t("delete")}
+                          title={
+                            isDeleteArmed
+                              ? "Klikněte znovu pro smazání"
+                              : t("delete")
+                          }
                         >
-                          Smazat
+                          <span
+                            className={
+                              isDeleteArmed
+                                ? "btn-icon danger-armed"
+                                : "btn-icon"
+                            }
+                            aria-hidden="true"
+                          >
+                            🗑
+                          </span>
+                          <span className="btn-label">{t("delete")}</span>
                         </button>
                       </div>
                     </div>
-                    <dl>
-                      <div className="row">
-                        <dt>LN adresy</dt>
-                        <dd className="ln-tags">
-                          {lnAddresses.map((ln) => (
-                            <span
-                              key={ln.address}
-                              className={ln.isPrimary ? "tag primary" : "tag"}
-                            >
-                              {ln.address}
-                              {ln.isPrimary && <em>· hlavní</em>}
-                            </span>
-                          ))}
-                        </dd>
-                      </div>
-                      {contact.email && (
-                        <div className="row">
-                          <dt>Email</dt>
-                          <dd>{contact.email}</dd>
-                        </div>
-                      )}
-                      {contact.phone && (
-                        <div className="row">
-                          <dt>Telefon</dt>
-                          <dd>{contact.phone}</dd>
-                        </div>
-                      )}
-                    </dl>
                   </article>
                 );
               })}
             </div>
-          </div>
-        </div>
-      </section>
+            {status && <p className="status">{status}</p>}
+          </section>
+
+          {isContactFormOpen && (
+            <section className="panel">
+              <div className="panel-header keep-right">
+                <div>
+                  <p className="eyebrow">{t("contact")}</p>
+                  <h2>{editingId ? t("editContact") : t("newContact")}</h2>
+                </div>
+                <button className="ghost" onClick={closeContactForm}>
+                  {t("close")}
+                </button>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-col">
+                  <label>Jméno</label>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Např. Alice"
+                  />
+
+                  <label>npub</label>
+                  <input
+                    value={form.npub}
+                    onChange={(e) => setForm({ ...form, npub: e.target.value })}
+                    placeholder="nostr veřejný klíč"
+                  />
+
+                  <label>{t("lightningAddress")}</label>
+                  <input
+                    value={form.lnAddress}
+                    onChange={(e) =>
+                      setForm({ ...form, lnAddress: e.target.value })
+                    }
+                    placeholder="např. alice@zapsat.cz"
+                  />
+
+                  <div className="actions">
+                    <button onClick={handleSaveContact}>
+                      {editingId ? t("saveChanges") : t("saveContact")}
+                    </button>
+                    <button className="secondary" onClick={clearContactForm}>
+                      {t("clearForm")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 };

@@ -1,73 +1,39 @@
-# React + TypeScript + Vite
+# Linky
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+| ⚠️ This is hobby tool without any guarantee. Use it with caution!
 
-Currently, two official plugins are available:
+Linky is a simple PWA for managing Lightning (LN address) and Nostr (npub) contacts.
+It is local-first: your data is stored locally and the app works offline.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## What it does
 
-## React Compiler
+- Stores contacts with a name, a Lightning address, and an npub.
+  No field is required, but at least one field must be filled in to save a contact.
+- Clicking the Lightning address or the “npub” badge copies the value to the clipboard.
+- Contacts can be edited and deleted (delete requires a second click to confirm).
+- Settings:
+  - Keys: copy the current seed and paste a seed from the clipboard.
+  - Language: switch between Czech and English.
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+## Keys (seed) and data
 
-## Expanding the ESLint configuration
+The app uses a seed (mnemonic) as the identity of the data owner.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- “Copy current” copies the current seed to the clipboard.
+- “Paste” reads a seed from the clipboard and switches the app to a different owner.
+  This effectively wipes/replaces the current local dataset in the app (that’s why paste requires a second click to confirm).
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Running the project
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Requirements: Node.js + npm.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Tech stack
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- Vite + React + TypeScript
+- Evolu (local-first database / sync)
+- PWA via vite-plugin-pwa

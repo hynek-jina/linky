@@ -5,11 +5,40 @@
 }
 
 .hero {
+  position: relative;
   display: flex;
   justify-content: space-between;
   gap: 24px;
   align-items: flex-start;
   margin-bottom: 12px;
+}
+
+.hero-content {
+  padding-right: 140px;
+}
+
+.hero-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+button.gear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.gear-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.gear-label {
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .eyebrow {
@@ -24,6 +53,18 @@ h1 {
   margin: 0 0 12px;
   font-size: 32px;
   color: #f8fafc;
+}
+
+button.title-button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0 0 12px;
+  font-size: 32px;
+  color: #f8fafc;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
 }
 
 h2 {
@@ -292,14 +333,53 @@ button.icon {
   margin-bottom: 8px;
 }
 
+.card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-title-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.contact-badges {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .card-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .muted {
   color: #94a3b8;
   margin: 0;
+}
+
+button.copyable {
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.copyable.npub {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.copyable:hover {
+  text-decoration: underline;
 }
 
 dl {
@@ -340,6 +420,20 @@ dd {
   color: #cbd5e1;
 }
 
+button.tag-button {
+  cursor: pointer;
+}
+
+.btn-icon {
+  display: inline-flex;
+  width: 18px;
+  justify-content: center;
+}
+
+.danger-armed {
+  color: #ef4444;
+}
+
 .tag.primary {
   background: rgba(59, 130, 246, 0.15);
   border-color: rgba(59, 130, 246, 0.35);
@@ -361,7 +455,22 @@ dd {
     align-items: flex-start;
   }
 
+  .panel-header.keep-right {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .panel-header.keep-right > div {
+    flex: 1;
+    min-width: 0;
+  }
+
   .row {
     grid-template-columns: 1fr;
+  }
+
+  .card-actions .btn-label {
+    display: none;
   }
 }

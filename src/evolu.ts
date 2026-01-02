@@ -15,12 +15,9 @@ export type ContactId = typeof ContactId.Type;
 export const Schema = {
   contact: {
     id: ContactId,
-    name: Evolu.NonEmptyString1000,
-    npub: Evolu.NonEmptyString1000,
-    // LN adresy uložíme jako JSON string
-    lnAddresses: Evolu.NonEmptyString1000,
-    email: Evolu.nullOr(Evolu.String1000),
-    phone: Evolu.nullOr(Evolu.String1000),
+    name: Evolu.nullOr(Evolu.NonEmptyString1000),
+    npub: Evolu.nullOr(Evolu.NonEmptyString1000),
+    lnAddress: Evolu.nullOr(Evolu.NonEmptyString1000),
   },
 };
 
