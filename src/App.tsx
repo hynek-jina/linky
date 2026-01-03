@@ -3,11 +3,12 @@ import { useQuery } from "@evolu/react";
 import React, { useMemo, useState } from "react";
 import "./App.css";
 import { parseCashuToken } from "./cashu";
-import type { CashuTokenId, ContactId } from "./evolu";
+import type { CashuTokenId, ContactId, NostrIdentityId } from "./evolu";
 import { evolu, useEvolu } from "./evolu";
 import { getInitialLang, persistLang, translations, type Lang } from "./i18n";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
 import {
+  NOSTR_RELAYS,
   fetchNostrProfileMetadata,
   fetchNostrProfilePicture,
   loadCachedProfileMetadata,
@@ -43,17 +44,27 @@ const makeEmptyForm = (): ContactFormState => ({
 type Route =
   | { kind: "contacts" }
   | { kind: "settings" }
+  | { kind: "profile" }
   | { kind: "wallet" }
   | { kind: "contactNew" }
   | { kind: "contact"; id: ContactId }
   | { kind: "contactEdit"; id: ContactId }
-  | { kind: "contactPay"; id: ContactId };
+  | { kind: "contactPay"; id: ContactId }
+  | { kind: "chat"; id: ContactId };
 
 const parseRouteFromHash = (): Route => {
   const hash = globalThis.location?.hash ?? "";
   if (hash === "#") return { kind: "contacts" };
   if (hash === "#settings") return { kind: "settings" };
+  if (hash === "#profile") return { kind: "profile" };
   if (hash === "#wallet") return { kind: "wallet" };
+
+  const chatPrefix = "#chat/";
+  if (hash.startsWith(chatPrefix)) {
+    const rest = hash.slice(chatPrefix.length);
+    const id = decodeURIComponent(String(rest ?? "")).trim();
+    if (id) return { kind: "chat", id: id as ContactId };
+  }
 
   if (hash === "#contact/new") return { kind: "contactNew" };
 
@@ -75,7 +86,6 @@ const parseRouteFromHash = (): Route => {
 };
 
 const App = () => {
-  console.log("App component rendering");
   const { insert, update } = useEvolu();
 
   const NO_GROUP_FILTER = "__linky_no_group__";
@@ -90,6 +100,7 @@ const App = () => {
   const [pendingCashuDeleteId, setPendingCashuDeleteId] =
     useState<CashuTokenId | null>(null);
   const [isPasteArmed, setIsPasteArmed] = useState(false);
+  const [isNostrPasteArmed, setIsNostrPasteArmed] = useState(false);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>(() => getInitialLang());
   const [useBitcoinSymbol, setUseBitcoinSymbol] = useState<boolean>(() =>
@@ -108,6 +119,18 @@ const App = () => {
   const [cashuIsBusy, setCashuIsBusy] = useState(false);
 
   const [payAmount, setPayAmount] = useState<string>("");
+
+  const [derivedNostrIdentity, setDerivedNostrIdentity] = useState<{
+    nsec: string;
+    npub: string;
+  } | null>(null);
+
+  const [chatDraft, setChatDraft] = useState<string>("");
+  const chatSeenWrapIdsRef = React.useRef<Set<string>>(new Set());
+
+  const [myProfileName, setMyProfileName] = useState<string | null>(null);
+  const [myProfilePicture, setMyProfilePicture] = useState<string | null>(null);
+  const [myProfileQr, setMyProfileQr] = useState<string | null>(null);
 
   const nostrInFlight = React.useRef<Set<string>>(new Set());
   const nostrMetadataInFlight = React.useRef<Set<string>>(new Set());
@@ -184,12 +207,20 @@ const App = () => {
     window.location.assign(`#contact/${encodeURIComponent(String(id))}/pay`);
   };
 
+  const navigateToChat = (id: ContactId) => {
+    window.location.assign(`#chat/${encodeURIComponent(String(id))}`);
+  };
+
   const navigateToNewContact = () => {
     window.location.assign("#contact/new");
   };
 
   const navigateToWallet = () => {
     window.location.assign("#wallet");
+  };
+
+  const navigateToProfile = () => {
+    window.location.assign("#profile");
   };
 
   React.useEffect(() => {
@@ -241,6 +272,14 @@ const App = () => {
   }, [isPasteArmed]);
 
   React.useEffect(() => {
+    if (!isNostrPasteArmed) return;
+    const timeoutId = window.setTimeout(() => {
+      setIsNostrPasteArmed(false);
+    }, 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [isNostrPasteArmed]);
+
+  React.useEffect(() => {
     if (!status) return;
     const timeoutId = window.setTimeout(() => {
       setStatus(null);
@@ -263,6 +302,21 @@ const App = () => {
 
   const contacts = useQuery(contactsQuery);
 
+  const nostrIdentityQuery = useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("nostrIdentity")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue)
+          .orderBy("createdAt", "desc")
+      ),
+    []
+  );
+
+  const nostrIdentities = useQuery(nostrIdentityQuery);
+  const storedNostrIdentity = nostrIdentities[0] ?? null;
+
   const cashuTokensQuery = useMemo(
     () =>
       evolu.createQuery((db) =>
@@ -277,6 +331,27 @@ const App = () => {
 
   const cashuTokens = useQuery(cashuTokensQuery);
 
+  const chatContactId = route.kind === "chat" ? route.id : null;
+
+  const chatMessagesQuery = useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("nostrMessage")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue)
+          .where(
+            "contactId",
+            "=",
+            (chatContactId ?? "__linky_none__") as unknown as ContactId
+          )
+          .orderBy("createdAtSec", "asc")
+      ),
+    [chatContactId]
+  );
+
+  const chatMessages = useQuery(chatMessagesQuery);
+
   const cashuBalance = useMemo(() => {
     return cashuTokens.reduce((sum, token) => {
       const state = String(token.state ?? "");
@@ -287,6 +362,177 @@ const App = () => {
   }, [cashuTokens]);
 
   const canPayWithCashu = cashuBalance > 0;
+
+  const currentNpub =
+    (storedNostrIdentity?.npub
+      ? String(storedNostrIdentity.npub)
+      : derivedNostrIdentity?.npub) ?? null;
+
+  const currentNsec =
+    (storedNostrIdentity?.nsec
+      ? String(storedNostrIdentity.nsec)
+      : derivedNostrIdentity?.nsec) ?? null;
+
+  const deriveNostrIdentityFromMnemonic = React.useCallback(
+    async (
+      mnemonic: string
+    ): Promise<{ nsec: string; npub: string } | null> => {
+      const sha256 = async (input: Uint8Array) => {
+        const out = await crypto.subtle.digest(
+          "SHA-256",
+          input as unknown as BufferSource
+        );
+        return new Uint8Array(out);
+      };
+
+      try {
+        const { mnemonicToSeedSync } = await import("@scure/bip39");
+        const { getPublicKey, nip19 } = await import("nostr-tools");
+
+        const seed = mnemonicToSeedSync(String(mnemonic));
+        const prefix = new TextEncoder().encode("linky-nostr-v1:");
+        const data = new Uint8Array(prefix.length + seed.length);
+        data.set(prefix);
+        data.set(seed, prefix.length);
+
+        // Try a couple of variants to guarantee a valid secp256k1 private key.
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const attemptData = new Uint8Array(data.length + 1);
+          attemptData.set(data);
+          attemptData.set(new Uint8Array([attempt]), data.length);
+
+          const privBytes = await sha256(attemptData);
+
+          try {
+            const pubHex = getPublicKey(privBytes);
+            const nsec = nip19.nsecEncode(privBytes);
+            const npub = nip19.npubEncode(pubHex);
+            return { nsec, npub };
+          } catch {
+            // try next attempt
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      return null;
+    },
+    []
+  );
+
+  React.useEffect(() => {
+    // Derive Nostr keys from owner's mnemonic (once available). Do not overwrite stored keys.
+    if (!owner?.mnemonic) return;
+
+    let cancelled = false;
+    const run = async () => {
+      const derived = await deriveNostrIdentityFromMnemonic(
+        String(owner.mnemonic)
+      );
+      if (!derived) return;
+      if (cancelled) return;
+      setDerivedNostrIdentity(derived);
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [deriveNostrIdentityFromMnemonic, owner?.mnemonic]);
+
+  React.useEffect(() => {
+    // Store derived Nostr identity into Evolu if none is present yet.
+    if (!owner?.mnemonic) return;
+    if (storedNostrIdentity) return;
+    if (!derivedNostrIdentity) return;
+
+    const result = insert("nostrIdentity", {
+      nsec: derivedNostrIdentity.nsec as typeof Evolu.NonEmptyString1000.Type,
+      npub: derivedNostrIdentity.npub as typeof Evolu.NonEmptyString1000.Type,
+    });
+
+    if (!result.ok) {
+      // no status; keep silent
+    }
+  }, [owner?.mnemonic, storedNostrIdentity, derivedNostrIdentity, insert]);
+
+  React.useEffect(() => {
+    // Load current user's Nostr profile (name + picture) from relays.
+    if (!currentNpub) return;
+
+    const cachedPic = loadCachedProfilePicture(currentNpub);
+    if (cachedPic) setMyProfilePicture(cachedPic.url);
+
+    const cachedMeta = loadCachedProfileMetadata(currentNpub);
+    if (cachedMeta?.metadata) {
+      const bestName = getBestNostrName(cachedMeta.metadata);
+      if (bestName) setMyProfileName(bestName);
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const [picture, metadata] = await Promise.all([
+          fetchNostrProfilePicture(currentNpub, { signal: controller.signal }),
+          fetchNostrProfileMetadata(currentNpub, { signal: controller.signal }),
+        ]);
+
+        if (cancelled) return;
+
+        saveCachedProfilePicture(currentNpub, picture);
+        if (picture) setMyProfilePicture(picture);
+
+        saveCachedProfileMetadata(currentNpub, metadata);
+        const bestName = metadata ? getBestNostrName(metadata) : null;
+        if (bestName) setMyProfileName(bestName);
+      } catch {
+        // ignore
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [currentNpub]);
+
+  React.useEffect(() => {
+    // Generate QR code for the current npub on the profile page.
+    if (route.kind !== "profile") {
+      setMyProfileQr(null);
+      return;
+    }
+    if (!currentNpub) {
+      setMyProfileQr(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const QRCode = await import("qrcode");
+        const url = await QRCode.toDataURL(currentNpub, {
+          margin: 1,
+          width: 240,
+        });
+        if (cancelled) return;
+        setMyProfileQr(url);
+      } catch {
+        if (cancelled) return;
+        setMyProfileQr(null);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [route.kind, currentNpub]);
 
   React.useEffect(() => {
     // Fill missing name / lightning address from Nostr on list page only,
@@ -489,7 +735,8 @@ const App = () => {
     const id =
       route.kind === "contact" ||
       route.kind === "contactEdit" ||
-      route.kind === "contactPay"
+      route.kind === "contactPay" ||
+      route.kind === "chat"
         ? route.id
         : null;
 
@@ -891,9 +1138,339 @@ const App = () => {
     setStatus(t("keysCopied"));
   };
 
+  const copyNostrKeys = async () => {
+    if (!currentNsec) return;
+    await navigator.clipboard?.writeText(currentNsec);
+    setStatus(t("nostrKeysCopied"));
+  };
+
+  const applyNostrKeysFromText = async (value: string) => {
+    const text = value.trim();
+    if (!text || !text.startsWith("nsec")) {
+      setStatus(t("nostrPasteInvalid"));
+      return;
+    }
+
+    try {
+      const { nip19, getPublicKey } = await import("nostr-tools");
+      const decoded = nip19.decode(text);
+      if (decoded.type !== "nsec") {
+        setStatus(t("nostrPasteInvalid"));
+        return;
+      }
+
+      const privBytes = decoded.data as Uint8Array;
+      const pubHex = getPublicKey(privBytes);
+      const npub = nip19.npubEncode(pubHex);
+
+      if (storedNostrIdentity?.id) {
+        const result = update("nostrIdentity", {
+          id: storedNostrIdentity.id as unknown as NostrIdentityId,
+          nsec: text as typeof Evolu.NonEmptyString1000.Type,
+          npub: npub as typeof Evolu.NonEmptyString1000.Type,
+        });
+        if (!result.ok) {
+          setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+          return;
+        }
+      } else {
+        const result = insert("nostrIdentity", {
+          nsec: text as typeof Evolu.NonEmptyString1000.Type,
+          npub: npub as typeof Evolu.NonEmptyString1000.Type,
+        });
+        if (!result.ok) {
+          setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+          return;
+        }
+      }
+
+      setStatus(t("nostrKeysUpdated"));
+    } catch {
+      setStatus(t("nostrPasteInvalid"));
+    }
+  };
+
+  const pasteNostrKeysFromClipboard = async () => {
+    if (!navigator.clipboard?.readText) {
+      setStatus(t("pasteNotAvailable"));
+      return;
+    }
+
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (!text) {
+        setStatus(t("pasteEmpty"));
+        return;
+      }
+      await applyNostrKeysFromText(text);
+    } catch {
+      setStatus(t("pasteNotAvailable"));
+    }
+  };
+
+  const requestPasteNostrKeys = async () => {
+    if (isNostrPasteArmed) {
+      setIsNostrPasteArmed(false);
+      await pasteNostrKeysFromClipboard();
+      return;
+    }
+    setIsNostrPasteArmed(true);
+    setStatus(t("nostrPasteArmedHint"));
+  };
+
+  const deriveAndStoreNostrKeys = async () => {
+    if (!owner?.mnemonic) return;
+
+    const derived = await deriveNostrIdentityFromMnemonic(
+      String(owner.mnemonic)
+    );
+    if (!derived) {
+      setStatus(`${t("errorPrefix")}: ${t("nostrPasteInvalid")}`);
+      return;
+    }
+
+    if (storedNostrIdentity?.id) {
+      const result = update("nostrIdentity", {
+        id: storedNostrIdentity.id as unknown as NostrIdentityId,
+        nsec: derived.nsec as typeof Evolu.NonEmptyString1000.Type,
+        npub: derived.npub as typeof Evolu.NonEmptyString1000.Type,
+      });
+      if (!result.ok) {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+        return;
+      }
+    } else {
+      const result = insert("nostrIdentity", {
+        nsec: derived.nsec as typeof Evolu.NonEmptyString1000.Type,
+        npub: derived.npub as typeof Evolu.NonEmptyString1000.Type,
+      });
+      if (!result.ok) {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+        return;
+      }
+    }
+
+    setStatus(t("nostrKeysDerived"));
+  };
+
+  React.useEffect(() => {
+    // NIP-17 inbox sync + subscription while a chat is open.
+    if (route.kind !== "chat") return;
+    if (!selectedContact) return;
+
+    const contactNpub = String(selectedContact.npub ?? "").trim();
+    if (!contactNpub) return;
+    if (!currentNsec) return;
+
+    let cancelled = false;
+
+    const existingWrapIds = chatSeenWrapIdsRef.current;
+    existingWrapIds.clear();
+    for (const m of chatMessages) {
+      const id = String(m.wrapId ?? "");
+      if (id) existingWrapIds.add(id);
+    }
+
+    const run = async () => {
+      try {
+        const { nip19, getPublicKey, SimplePool } = await import("nostr-tools");
+        const { unwrapEvent } = await import("nostr-tools/nip17");
+
+        const decodedMe = nip19.decode(currentNsec);
+        if (decodedMe.type !== "nsec") return;
+        const privBytes = decodedMe.data as Uint8Array;
+        const myPubHex = getPublicKey(privBytes);
+
+        const decodedContact = nip19.decode(contactNpub);
+        if (decodedContact.type !== "npub") return;
+        const contactPubHex = decodedContact.data as string;
+
+        const pool = new SimplePool();
+
+        const processWrap = (wrap: any) => {
+          try {
+            const wrapId = String(wrap?.id ?? "");
+            if (!wrapId) return;
+            if (existingWrapIds.has(wrapId)) return;
+            existingWrapIds.add(wrapId);
+
+            const inner = unwrapEvent(wrap, privBytes) as any;
+            if (!inner || inner.kind !== 14) return;
+
+            const innerPub = String(inner.pubkey ?? "");
+            const content = String(inner.content ?? "").trim();
+            if (!content) return;
+
+            const createdAtSecRaw = Number(inner.created_at ?? 0);
+            const createdAtSec =
+              Number.isFinite(createdAtSecRaw) && createdAtSecRaw > 0
+                ? Math.trunc(createdAtSecRaw)
+                : Math.ceil(Date.now() / 1e3);
+
+            const isIncoming = innerPub === contactPubHex;
+            const isOutgoing = innerPub === myPubHex;
+            if (!isIncoming && !isOutgoing) return;
+
+            // Ensure outgoing messages are for this contact.
+            const pTags = Array.isArray(inner.tags)
+              ? (inner.tags as any[])
+                  .filter((t) => Array.isArray(t) && t[0] === "p")
+                  .map((t) => String(t[1] ?? "").trim())
+              : [];
+            const mentionsContact = pTags.includes(contactPubHex);
+            if (isOutgoing && !mentionsContact) return;
+
+            if (cancelled) return;
+
+            insert("nostrMessage", {
+              contactId: selectedContact.id,
+              direction: (isIncoming
+                ? "in"
+                : "out") as typeof Evolu.NonEmptyString100.Type,
+              content: content as typeof Evolu.NonEmptyString.Type,
+              wrapId: wrapId as typeof Evolu.NonEmptyString1000.Type,
+              rumorId: inner.id
+                ? (String(inner.id) as typeof Evolu.NonEmptyString1000.Type)
+                : null,
+              pubkey: innerPub as typeof Evolu.NonEmptyString1000.Type,
+              createdAtSec: createdAtSec as typeof Evolu.PositiveInt.Type,
+            });
+          } catch {
+            // ignore individual events
+          }
+        };
+
+        const existing = await pool.querySync(
+          NOSTR_RELAYS,
+          { kinds: [1059], "#p": [myPubHex], limit: 50 },
+          { maxWait: 5000 }
+        );
+
+        if (!cancelled) {
+          for (const e of existing as any[]) processWrap(e);
+        }
+
+        const sub = pool.subscribe(
+          NOSTR_RELAYS,
+          { kinds: [1059], "#p": [myPubHex] },
+          {
+            onevent: (e: any) => {
+              if (cancelled) return;
+              processWrap(e);
+            },
+          }
+        );
+
+        return () => {
+          void sub.close("chat closed");
+          pool.close(NOSTR_RELAYS);
+        };
+      } catch {
+        return;
+      }
+    };
+
+    let cleanup: (() => void) | undefined;
+    void run().then((c) => {
+      cleanup = c;
+    });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [
+    currentNsec,
+    insert,
+    route.kind,
+    selectedContact?.id,
+    selectedContact?.npub,
+  ]);
+
+  const sendChatMessage = async () => {
+    if (route.kind !== "chat") return;
+    if (!selectedContact) return;
+
+    const text = chatDraft.trim();
+    if (!text) return;
+
+    const contactNpub = String(selectedContact.npub ?? "").trim();
+    if (!contactNpub) return;
+    if (!currentNsec) {
+      setStatus(t("profileMissingNpub"));
+      return;
+    }
+
+    try {
+      const { nip19, getPublicKey, SimplePool } = await import("nostr-tools");
+      const { wrapEvent } = await import("nostr-tools/nip59");
+
+      const decodedMe = nip19.decode(currentNsec);
+      if (decodedMe.type !== "nsec") throw new Error("invalid nsec");
+      const privBytes = decodedMe.data as Uint8Array;
+      const myPubHex = getPublicKey(privBytes);
+
+      const decodedContact = nip19.decode(contactNpub);
+      if (decodedContact.type !== "npub") throw new Error("invalid npub");
+      const contactPubHex = decodedContact.data as string;
+
+      const baseEvent = {
+        created_at: Math.ceil(Date.now() / 1e3),
+        kind: 14,
+        tags: [
+          ["p", contactPubHex],
+          ["p", myPubHex],
+        ],
+        content: text,
+      };
+
+      const wrapForMe = wrapEvent(baseEvent as any, privBytes, myPubHex) as any;
+      const wrapForContact = wrapEvent(
+        baseEvent as any,
+        privBytes,
+        contactPubHex
+      ) as any;
+
+      chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
+
+      const pool = new SimplePool();
+      try {
+        const publishResults = await Promise.allSettled([
+          ...pool.publish(NOSTR_RELAYS, wrapForMe),
+          ...pool.publish(NOSTR_RELAYS, wrapForContact),
+        ]);
+
+        // Some relays may fail (websocket issues), while others succeed.
+        // Treat it as success if at least one relay accepted the event.
+        const anySuccess = publishResults.some((r) => r.status === "fulfilled");
+        if (!anySuccess) {
+          const firstError = publishResults.find(
+            (r): r is PromiseRejectedResult => r.status === "rejected"
+          )?.reason;
+          throw new Error(String(firstError ?? "publish failed"));
+        }
+      } finally {
+        pool.close(NOSTR_RELAYS);
+      }
+
+      insert("nostrMessage", {
+        contactId: selectedContact.id,
+        direction: "out" as typeof Evolu.NonEmptyString100.Type,
+        content: text as typeof Evolu.NonEmptyString.Type,
+        wrapId: String(wrapForMe.id) as typeof Evolu.NonEmptyString1000.Type,
+        rumorId: null,
+        pubkey: myPubHex as typeof Evolu.NonEmptyString1000.Type,
+        createdAtSec: baseEvent.created_at as typeof Evolu.PositiveInt.Type,
+      });
+
+      setChatDraft("");
+    } catch (e) {
+      setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
+    }
+  };
+
   const showGroupFilter = route.kind === "contacts" && groupNames.length > 0;
   const showNoGroupFilter = ungroupedCount > 0;
-  console.log("Rendering with contacts:", contacts.length, "owner:", owner);
 
   const topbar = (() => {
     if (route.kind === "settings") {
@@ -901,6 +1478,14 @@ const App = () => {
         icon: "<",
         label: t("close"),
         onClick: navigateToContacts,
+      };
+    }
+
+    if (route.kind === "profile") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToSettings,
       };
     }
 
@@ -929,6 +1514,14 @@ const App = () => {
     }
 
     if (route.kind === "contactEdit" || route.kind === "contactPay") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: () => navigateToContact(route.id),
+      };
+    }
+
+    if (route.kind === "chat") {
       return {
         icon: "<",
         label: t("close"),
@@ -966,6 +1559,12 @@ const App = () => {
   const topbarTitle = (() => {
     if (route.kind === "contacts") return t("contactsTitle");
     if (route.kind === "wallet") return t("wallet");
+    if (route.kind === "settings") return t("menu");
+    if (route.kind === "profile") return t("profile");
+    if (route.kind === "contactNew") return t("newContact");
+    if (route.kind === "chat") {
+      return selectedContact?.name ? String(selectedContact.name) : t("chat");
+    }
     return null;
   })();
 
@@ -1007,6 +1606,38 @@ const App = () => {
 
       {route.kind === "settings" && (
         <section className="panel">
+          <button
+            type="button"
+            className="profile-button"
+            onClick={navigateToProfile}
+            disabled={!currentNpub}
+            aria-label={t("profile")}
+            title={t("profile")}
+          >
+            <span className="profile-avatar" aria-hidden="true">
+              {myProfilePicture ? (
+                <img
+                  src={myProfilePicture}
+                  alt=""
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="profile-avatar-fallback">
+                  {getInitials(myProfileName ?? t("profileNoName"))}
+                </span>
+              )}
+            </span>
+            <span className="profile-text">
+              <span className="profile-name">
+                {myProfileName ?? t("profileNoName")}
+              </span>
+              {currentNpub ? (
+                <span className="profile-npub">{currentNpub}</span>
+              ) : null}
+            </span>
+          </button>
+
           <div className="settings-row">
             <div className="settings-left">
               <span className="settings-icon" aria-hidden="true">
@@ -1028,6 +1659,43 @@ const App = () => {
                   onClick={requestPasteKeys}
                   aria-label={t("paste")}
                   title={isPasteArmed ? t("pasteArmedHint") : t("paste")}
+                >
+                  {t("paste")}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-icon" aria-hidden="true">
+                🦤
+              </span>
+              <span className="settings-label">{t("nostrKeys")}</span>
+            </div>
+            <div className="settings-right">
+              <div className="badge-box">
+                <button
+                  className="ghost"
+                  onClick={deriveAndStoreNostrKeys}
+                  disabled={!owner?.mnemonic}
+                >
+                  {t("derive")}
+                </button>
+                <button
+                  className="ghost"
+                  onClick={copyNostrKeys}
+                  disabled={!currentNsec}
+                >
+                  {t("copyCurrent")}
+                </button>
+                <button
+                  className={isNostrPasteArmed ? "danger" : "ghost"}
+                  onClick={requestPasteNostrKeys}
+                  aria-label={t("paste")}
+                  title={
+                    isNostrPasteArmed ? t("nostrPasteArmedHint") : t("paste")
+                  }
                 >
                   {t("paste")}
                 </button>
@@ -1230,6 +1898,19 @@ const App = () => {
                     </button>
                   );
                 })()}
+
+                {(() => {
+                  const npub = String(selectedContact.npub ?? "").trim();
+                  if (!npub) return null;
+                  return (
+                    <button
+                      className="btn-wide secondary"
+                      onClick={() => navigateToChat(selectedContact.id)}
+                    >
+                      {t("sendMessage")}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           ) : null}
@@ -1389,8 +2070,96 @@ const App = () => {
         </section>
       )}
 
-      {route.kind === "contactEdit" && (
+      {route.kind === "chat" && (
         <section className="panel">
+          {!selectedContact ? (
+            <p className="muted">Kontakt nenalezen.</p>
+          ) : null}
+
+          {selectedContact ? (
+            <>
+              <div className="contact-header">
+                <div className="contact-avatar is-large" aria-hidden="true">
+                  {(() => {
+                    const npub = String(selectedContact.npub ?? "").trim();
+                    const url = npub ? nostrPictureByNpub[npub] : null;
+                    return url ? (
+                      <img
+                        src={url}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="contact-avatar-fallback">
+                        {getInitials(String(selectedContact.name ?? ""))}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="contact-header-text">
+                  {selectedContact.name ? (
+                    <h3>{selectedContact.name}</h3>
+                  ) : null}
+                  {(() => {
+                    const npub = String(selectedContact.npub ?? "").trim();
+                    if (!npub) return null;
+                    return <p className="muted profile-npub">{npub}</p>;
+                  })()}
+                </div>
+              </div>
+
+              {(() => {
+                const npub = String(selectedContact.npub ?? "").trim();
+                if (npub) return null;
+                return <p className="muted">{t("chatMissingContactNpub")}</p>;
+              })()}
+
+              <div className="chat-messages" role="log" aria-live="polite">
+                {chatMessages.length === 0 ? (
+                  <p className="muted">{t("chatEmpty")}</p>
+                ) : (
+                  chatMessages.map((m) => {
+                    const isOut = String(m.direction ?? "") === "out";
+                    return (
+                      <div
+                        key={String(m.id)}
+                        className={isOut ? "chat-bubble out" : "chat-bubble in"}
+                      >
+                        {String(m.content ?? "")}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="chat-compose">
+                <textarea
+                  value={chatDraft}
+                  onChange={(e) => setChatDraft(e.target.value)}
+                  placeholder={t("chatPlaceholder")}
+                  disabled={!String(selectedContact.npub ?? "").trim()}
+                />
+                <button
+                  className="btn-wide"
+                  onClick={() => void sendChatMessage()}
+                  disabled={
+                    !chatDraft.trim() ||
+                    !String(selectedContact.npub ?? "").trim()
+                  }
+                >
+                  {t("send")}
+                </button>
+              </div>
+            </>
+          ) : null}
+
+          {status && <p className="status">{status}</p>}
+        </section>
+      )}
+
+      {route.kind === "contactEdit" && (
+        <section className="panel panel-plain">
           {!selectedContact ? (
             <p className="muted">Kontakt nenalezen.</p>
           ) : null}
@@ -1460,17 +2229,7 @@ const App = () => {
       )}
 
       {route.kind === "contactNew" && (
-        <section className="panel">
-          <div className="panel-header keep-right">
-            <div>
-              <p className="eyebrow">{t("contact")}</p>
-              <h2>{t("newContact")}</h2>
-            </div>
-            <button className="ghost" onClick={closeContactDetail}>
-              {t("close")}
-            </button>
-          </div>
-
+        <section className="panel panel-plain">
           <div className="form-grid">
             <div className="form-col">
               <label>Jméno</label>
@@ -1623,6 +2382,33 @@ const App = () => {
             </nav>
           )}
         </>
+      )}
+
+      {route.kind === "profile" && (
+        <section className="panel">
+          {!currentNpub ? (
+            <p className="muted">{t("profileMissingNpub")}</p>
+          ) : (
+            <>
+              <p className="muted">{t("myNpubQr")}</p>
+              {myProfileQr ? (
+                <img
+                  className="qr"
+                  src={myProfileQr}
+                  alt={t("myNpubQr")}
+                  onClick={() => {
+                    if (!currentNpub) return;
+                    void copyText(currentNpub);
+                  }}
+                />
+              ) : (
+                <p className="muted">{currentNpub}</p>
+              )}
+            </>
+          )}
+
+          {status && <p className="status">{status}</p>}
+        </section>
       )}
     </div>
   );

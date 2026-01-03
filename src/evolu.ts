@@ -15,6 +15,14 @@ export type ContactId = typeof ContactId.Type;
 const CashuTokenId = Evolu.id("CashuToken");
 export type CashuTokenId = typeof CashuTokenId.Type;
 
+// Primary key pro NostrIdentity tabulku
+const NostrIdentityId = Evolu.id("NostrIdentity");
+export type NostrIdentityId = typeof NostrIdentityId.Type;
+
+// Primary key pro NostrMessage tabulku
+const NostrMessageId = Evolu.id("NostrMessage");
+export type NostrMessageId = typeof NostrMessageId.Type;
+
 // Schema pro Linky app
 export const Schema = {
   contact: {
@@ -23,6 +31,29 @@ export const Schema = {
     npub: Evolu.nullOr(Evolu.NonEmptyString1000),
     lnAddress: Evolu.nullOr(Evolu.NonEmptyString1000),
     groupName: Evolu.nullOr(Evolu.NonEmptyString1000),
+  },
+  nostrIdentity: {
+    id: NostrIdentityId,
+    // Bech32 NIP-19 secret key, must start with "nsec".
+    nsec: Evolu.NonEmptyString1000,
+    // Bech32 NIP-19 public key (derived from nsec), starts with "npub".
+    npub: Evolu.NonEmptyString1000,
+  },
+  nostrMessage: {
+    id: NostrMessageId,
+    contactId: ContactId,
+    // "in" | "out"
+    direction: Evolu.NonEmptyString100,
+    // Decrypted plaintext message.
+    content: Evolu.NonEmptyString,
+    // Gift-wrapped event id (kind 1059) used for de-duplication.
+    wrapId: Evolu.NonEmptyString1000,
+    // Inner (rumor) event id (kind 14, unsigned) if available.
+    rumorId: Evolu.nullOr(Evolu.NonEmptyString1000),
+    // Sender pubkey hex (64 chars) of the inner message.
+    pubkey: Evolu.NonEmptyString1000,
+    // created_at (seconds) from the inner event when available.
+    createdAtSec: Evolu.PositiveInt,
   },
   cashuToken: {
     id: CashuTokenId,

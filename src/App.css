@@ -196,6 +196,124 @@
   align-items: center;
 }
 
+.profile-button {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 0 0 14px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  transform: none;
+  text-align: left;
+}
+
+.profile-button:hover {
+  transform: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.profile-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: #0b1222;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-avatar-fallback {
+  color: #94a3b8;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.profile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.profile-name {
+  color: #e2e8f0;
+  font-weight: 800;
+}
+
+.profile-npub {
+  color: #94a3b8;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.qr {
+  width: 240px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 12px auto 0;
+  cursor: pointer;
+}
+
+.chat-messages {
+  margin-top: 14px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid #1f2937;
+  background: #0b1222;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.chat-bubble {
+  max-width: 85%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid #1f2937;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-bubble.in {
+  align-self: flex-start;
+  background: transparent;
+}
+
+.chat-bubble.out {
+  align-self: flex-end;
+  border-color: #334155;
+  background: transparent;
+}
+
+.chat-compose {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-compose textarea {
+  min-height: 70px;
+}
+
 .balance-hero {
   display: inline-flex;
   align-items: baseline;
@@ -717,6 +835,8 @@ button.icon {
   margin-top: 16px;
   width: 100%;
   display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .contact-avatar img {

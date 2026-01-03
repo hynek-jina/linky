@@ -3,9 +3,31 @@ export const en = {
   appTagline: "Personal lightning contacts",
 
   settings: "Settings",
+  menu: "Menu",
   keys: "Keys",
-  copyCurrent: "Copy current",
+  copyCurrent: "Copy",
   paste: "Paste",
+
+  nostrKeys: "Nostr keys",
+  derive: "Derive",
+  nostrKeysCopied: "Nostr keys copied to clipboard.",
+  nostrKeysUpdated: "Nostr keys saved.",
+  nostrKeysDerived: "Nostr keys derived from seed.",
+  nostrPasteArmedHint:
+    "Pasting Nostr keys will overwrite the current ones. Click once more to confirm.",
+  nostrPasteInvalid: "Invalid Nostr key (expected nsec…).",
+
+  chat: "Chat",
+  sendMessage: "Send message",
+  chatEmpty: "No messages yet.",
+  chatPlaceholder: "Message",
+  chatMissingContactNpub: "Missing contact npub.",
+  send: "Send",
+
+  profile: "Profile",
+  profileNoName: "Nostr profile",
+  myNpubQr: "Your contact",
+  profileMissingNpub: "Missing Nostr keys.",
 
   language: "Language",
   czech: "Czech",

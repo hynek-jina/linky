@@ -3,9 +3,31 @@ export const cs = {
   appTagline: "Osobní lightning kontakty",
 
   settings: "Nastavení",
+  menu: "Menu",
   keys: "Klíče",
-  copyCurrent: "Zkopírovat aktuální",
+  copyCurrent: "Zkopírovat",
   paste: "Vložit",
+
+  nostrKeys: "Nostr klíče",
+  derive: "Derivovat",
+  nostrKeysCopied: "Nostr klíče zkopírovány do schránky.",
+  nostrKeysUpdated: "Nostr klíče byly uloženy.",
+  nostrKeysDerived: "Nostr klíče byly znovu odvozeny ze seedu.",
+  nostrPasteArmedHint:
+    "Vložením Nostr klíčů přepíšete aktuální. Klikněte ještě jednou pro potvrzení.",
+  nostrPasteInvalid: "Neplatný Nostr klíč (očekávám nsec…).",
+
+  chat: "Chat",
+  sendMessage: "Poslat zprávu",
+  chatEmpty: "Zatím žádné zprávy.",
+  chatPlaceholder: "Zpráva",
+  chatMissingContactNpub: "Chybí npub u kontaktu.",
+  send: "Odeslat",
+
+  profile: "Profil",
+  profileNoName: "Nostr profil",
+  myNpubQr: "Tvůj kontakt",
+  profileMissingNpub: "Chybí Nostr klíče.",
 
   language: "Jazyk",
   czech: "Čeština",

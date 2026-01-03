@@ -19,7 +19,7 @@ const getNostrTools = () => {
   return nostrToolsPromise;
 };
 
-const RELAYS = [
+export const NOSTR_RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol",
   "wss://relay.nostr.band",
@@ -160,7 +160,7 @@ export const fetchNostrProfileMetadata = async (
 
   try {
     const events = await pool.querySync(
-      RELAYS,
+      NOSTR_RELAYS,
       { kinds: [0], authors: [pubkey], limit: 5 },
       { maxWait: 5000 }
     );
@@ -207,7 +207,7 @@ export const fetchNostrProfileMetadata = async (
     if (Object.keys(metadata).length === 0) return null;
     return metadata;
   } finally {
-    pool.close(RELAYS);
+    pool.close(NOSTR_RELAYS);
   }
 };
 
