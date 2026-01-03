@@ -2,7 +2,8 @@ import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
 import React, { useMemo, useState } from "react";
 import "./App.css";
-import type { ContactId } from "./evolu";
+import { parseCashuToken } from "./cashu";
+import type { CashuTokenId, ContactId } from "./evolu";
 import { evolu, useEvolu } from "./evolu";
 import { getInitialLang, persistLang, translations, type Lang } from "./i18n";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
@@ -22,6 +23,16 @@ type ContactFormState = {
   group: string;
 };
 
+const UNIT_TOGGLE_STORAGE_KEY = "linky_use_btc_symbol";
+
+const getInitialUseBitcoinSymbol = (): boolean => {
+  try {
+    return localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
 const makeEmptyForm = (): ContactFormState => ({
   name: "",
   npub: "",
@@ -32,21 +43,32 @@ const makeEmptyForm = (): ContactFormState => ({
 type Route =
   | { kind: "contacts" }
   | { kind: "settings" }
+  | { kind: "wallet" }
   | { kind: "contactNew" }
-  | { kind: "contact"; id: ContactId };
+  | { kind: "contact"; id: ContactId }
+  | { kind: "contactEdit"; id: ContactId }
+  | { kind: "contactPay"; id: ContactId };
 
 const parseRouteFromHash = (): Route => {
   const hash = globalThis.location?.hash ?? "";
   if (hash === "#") return { kind: "contacts" };
   if (hash === "#settings") return { kind: "settings" };
+  if (hash === "#wallet") return { kind: "wallet" };
 
   if (hash === "#contact/new") return { kind: "contactNew" };
 
   const contactPrefix = "#contact/";
   if (hash.startsWith(contactPrefix)) {
-    const rawId = hash.slice(contactPrefix.length);
-    const id = decodeURIComponent(rawId).trim();
-    if (id) return { kind: "contact", id: id as ContactId };
+    const rest = hash.slice(contactPrefix.length);
+    const [rawId, rawSub] = rest.split("/");
+    const id = decodeURIComponent(String(rawId ?? "")).trim();
+    const sub = String(rawSub ?? "").trim();
+
+    if (id) {
+      if (sub === "edit") return { kind: "contactEdit", id: id as ContactId };
+      if (sub === "pay") return { kind: "contactPay", id: id as ContactId };
+      return { kind: "contact", id: id as ContactId };
+    }
   }
 
   return { kind: "contacts" };
@@ -65,9 +87,14 @@ const App = () => {
   const [pendingDeleteId, setPendingDeleteId] = useState<ContactId | null>(
     null
   );
+  const [pendingCashuDeleteId, setPendingCashuDeleteId] =
+    useState<CashuTokenId | null>(null);
   const [isPasteArmed, setIsPasteArmed] = useState(false);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>(() => getInitialLang());
+  const [useBitcoinSymbol, setUseBitcoinSymbol] = useState<boolean>(() =>
+    getInitialUseBitcoinSymbol()
+  );
   const [owner, setOwner] = useState<Awaited<typeof evolu.appOwner> | null>(
     null
   );
@@ -75,6 +102,12 @@ const App = () => {
   const [nostrPictureByNpub, setNostrPictureByNpub] = useState<
     Record<string, string | null>
   >(() => ({}));
+
+  const [cashuDraft, setCashuDraft] = useState("");
+  const cashuDraftRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const [cashuIsBusy, setCashuIsBusy] = useState(false);
+
+  const [payAmount, setPayAmount] = useState<string>("");
 
   const nostrInFlight = React.useRef<Set<string>>(new Set());
   const nostrMetadataInFlight = React.useRef<Set<string>>(new Set());
@@ -112,12 +145,24 @@ const App = () => {
       }),
     [lang]
   );
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(lang), [lang]);
+  const formatInteger = (value: number) =>
+    numberFormatter.format(
+      Number.isFinite(value) ? Math.trunc(value) : Math.trunc(0)
+    );
 
   React.useEffect(() => {
     const onHashChange = () => setRoute(parseRouteFromHash());
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
+
+  React.useEffect(() => {
+    // Reset pay amount when leaving the pay page.
+    if (route.kind !== "contactPay") {
+      setPayAmount("");
+    }
+  }, [route.kind]);
 
   const navigateToContacts = () => {
     window.location.assign("#");
@@ -131,8 +176,20 @@ const App = () => {
     window.location.assign(`#contact/${encodeURIComponent(String(id))}`);
   };
 
+  const navigateToContactEdit = (id: ContactId) => {
+    window.location.assign(`#contact/${encodeURIComponent(String(id))}/edit`);
+  };
+
+  const navigateToContactPay = (id: ContactId) => {
+    window.location.assign(`#contact/${encodeURIComponent(String(id))}/pay`);
+  };
+
   const navigateToNewContact = () => {
     window.location.assign("#contact/new");
+  };
+
+  const navigateToWallet = () => {
+    window.location.assign("#wallet");
   };
 
   React.useEffect(() => {
@@ -149,12 +206,31 @@ const App = () => {
   }, [lang]);
 
   React.useEffect(() => {
+    try {
+      localStorage.setItem(
+        UNIT_TOGGLE_STORAGE_KEY,
+        useBitcoinSymbol ? "1" : "0"
+      );
+    } catch {
+      // ignore
+    }
+  }, [useBitcoinSymbol]);
+
+  React.useEffect(() => {
     if (!pendingDeleteId) return;
     const timeoutId = window.setTimeout(() => {
       setPendingDeleteId(null);
     }, 5000);
     return () => window.clearTimeout(timeoutId);
   }, [pendingDeleteId]);
+
+  React.useEffect(() => {
+    if (!pendingCashuDeleteId) return;
+    const timeoutId = window.setTimeout(() => {
+      setPendingCashuDeleteId(null);
+    }, 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [pendingCashuDeleteId]);
 
   React.useEffect(() => {
     if (!isPasteArmed) return;
@@ -186,6 +262,31 @@ const App = () => {
   );
 
   const contacts = useQuery(contactsQuery);
+
+  const cashuTokensQuery = useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("cashuToken")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue)
+          .orderBy("createdAt", "desc")
+      ),
+    []
+  );
+
+  const cashuTokens = useQuery(cashuTokensQuery);
+
+  const cashuBalance = useMemo(() => {
+    return cashuTokens.reduce((sum, token) => {
+      const state = String(token.state ?? "");
+      if (state !== "accepted") return sum;
+      const amount = Number((token.amount ?? 0) as unknown as number);
+      return sum + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
+  }, [cashuTokens]);
+
+  const canPayWithCashu = cashuBalance > 0;
 
   React.useEffect(() => {
     // Fill missing name / lightning address from Nostr on list page only,
@@ -385,8 +486,15 @@ const App = () => {
   }, [activeGroup, contactNameCollator, contacts]);
 
   const selectedContact = useMemo(() => {
-    if (route.kind !== "contact") return null;
-    return contacts.find((c) => c.id === route.id) ?? null;
+    const id =
+      route.kind === "contact" ||
+      route.kind === "contactEdit" ||
+      route.kind === "contactPay"
+        ? route.id
+        : null;
+
+    if (!id) return null;
+    return contacts.find((c) => c.id === id) ?? null;
   }, [contacts, route]);
 
   const clearContactForm = () => {
@@ -403,6 +511,7 @@ const App = () => {
   const openNewContactPage = () => {
     setPendingDeleteId(null);
     setIsPasteArmed(false);
+    setPayAmount("");
     setEditingId(null);
     setForm(makeEmptyForm());
     navigateToNewContact();
@@ -416,6 +525,187 @@ const App = () => {
     }
     setPendingDeleteId(null);
     setIsPasteArmed(false);
+    setPayAmount("");
+  };
+
+  const paySelectedContact = async () => {
+    if (route.kind !== "contactPay") return;
+    if (!selectedContact) return;
+    const lnAddress = String(selectedContact.lnAddress ?? "").trim();
+    if (!lnAddress) return;
+    if (!canPayWithCashu) return;
+
+    const amountSat = Number.parseInt(payAmount.trim(), 10);
+    if (!Number.isFinite(amountSat) || amountSat <= 0) {
+      setStatus(`${t("errorPrefix")}: ${t("payInvalidAmount")}`);
+      return;
+    }
+
+    if (amountSat > cashuBalance) {
+      setStatus(t("payInsufficient"));
+      return;
+    }
+
+    if (cashuIsBusy) return;
+    setCashuIsBusy(true);
+
+    try {
+      setStatus(t("payFetchingInvoice"));
+      const { fetchLnurlInvoiceForLightningAddress } = await import(
+        "./lnurlPay"
+      );
+      const invoice = await fetchLnurlInvoiceForLightningAddress(
+        lnAddress,
+        amountSat
+      );
+
+      setStatus(t("payPaying"));
+
+      // Try mints (largest balance first) until one succeeds.
+      const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
+      for (const row of cashuTokens) {
+        if (String(row.state ?? "") !== "accepted") continue;
+        const mint = String(row.mint ?? "").trim();
+        if (!mint) continue;
+        const tokenText = String(row.token ?? "").trim();
+        if (!tokenText) continue;
+
+        const amount = Number((row.amount ?? 0) as unknown as number) || 0;
+        const entry = mintGroups.get(mint) ?? { tokens: [], sum: 0 };
+        entry.tokens.push(tokenText);
+        entry.sum += amount;
+        mintGroups.set(mint, entry);
+      }
+
+      const candidates = Array.from(mintGroups.entries())
+        .map(([mint, info]) => ({ mint, ...info }))
+        .filter((c) => c.sum >= amountSat)
+        .sort((a, b) => b.sum - a.sum);
+
+      if (candidates.length === 0) {
+        setStatus(t("payInsufficient"));
+        return;
+      }
+
+      let lastError: unknown = null;
+      for (const candidate of candidates) {
+        try {
+          const { meltInvoiceWithTokensAtMint } = await import("./cashuMelt");
+          const result = await meltInvoiceWithTokensAtMint({
+            invoice,
+            mint: candidate.mint,
+            tokens: candidate.tokens,
+            unit: "sat",
+          });
+
+          // Remove old rows for that mint and insert a single new holding (change).
+          for (const row of cashuTokens) {
+            if (
+              String(row.state ?? "") === "accepted" &&
+              String(row.mint ?? "").trim() === candidate.mint
+            ) {
+              update("cashuToken", {
+                id: row.id as CashuTokenId,
+                isDeleted: Evolu.sqliteTrue,
+              });
+            }
+          }
+
+          if (result.remainingToken && result.remainingAmount > 0) {
+            insert("cashuToken", {
+              token: result.remainingToken as typeof Evolu.NonEmptyString.Type,
+              rawToken: null,
+              mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
+              unit: result.unit
+                ? (result.unit as typeof Evolu.NonEmptyString100.Type)
+                : null,
+              amount:
+                result.remainingAmount > 0
+                  ? (result.remainingAmount as typeof Evolu.PositiveInt.Type)
+                  : null,
+              state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+              error: null,
+            });
+          }
+
+          setStatus(t("paySuccess"));
+          navigateToContact(selectedContact.id);
+          return;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+
+      setStatus(`${t("payFailed")}: ${String(lastError ?? "unknown")}`);
+    } finally {
+      setCashuIsBusy(false);
+    }
+  };
+
+  const saveCashuFromText = async (tokenText: string) => {
+    const tokenRaw = tokenText.trim();
+    if (!tokenRaw) {
+      setStatus(t("pasteEmpty"));
+      return;
+    }
+
+    if (cashuIsBusy) return;
+    setCashuIsBusy(true);
+    setCashuDraft("");
+    setStatus(t("cashuAccepting"));
+
+    // Parse best-effort metadata for display / fallback.
+    const parsed = parseCashuToken(tokenRaw);
+    const parsedMint = parsed?.mint?.trim() ? parsed.mint.trim() : null;
+    const parsedAmount =
+      parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
+
+    try {
+      const { acceptCashuToken } = await import("./cashuAccept");
+      const accepted = await acceptCashuToken(tokenRaw);
+      const result = insert("cashuToken", {
+        token: accepted.token as typeof Evolu.NonEmptyString.Type,
+        rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+        mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
+        unit: accepted.unit
+          ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
+          : null,
+        amount:
+          accepted.amount > 0
+            ? (accepted.amount as typeof Evolu.PositiveInt.Type)
+            : null,
+        state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+        error: null,
+      });
+      if (result.ok) {
+        setStatus(t("cashuAccepted"));
+      } else {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+      }
+    } catch (error) {
+      const message = String(error).trim() || "Accept failed";
+      const result = insert("cashuToken", {
+        token: tokenRaw as typeof Evolu.NonEmptyString.Type,
+        rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+        mint: parsedMint
+          ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
+          : null,
+        unit: null,
+        amount:
+          typeof parsedAmount === "number"
+            ? (parsedAmount as typeof Evolu.PositiveInt.Type)
+            : null,
+        state: "error" as typeof Evolu.NonEmptyString100.Type,
+        error: message.slice(0, 1000) as typeof Evolu.NonEmptyString1000.Type,
+      });
+      if (result.ok) {
+        setStatus(`${t("cashuAcceptFailed")}: ${message}`);
+      } else {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+      }
+    } finally {
+      setCashuIsBusy(false);
+    }
   };
 
   const handleDelete = (id: ContactId) => {
@@ -428,6 +718,34 @@ const App = () => {
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
   };
 
+  const handleDeleteCashuToken = (id: CashuTokenId) => {
+    const result = update("cashuToken", { id, isDeleted: Evolu.sqliteTrue });
+    if (result.ok) {
+      setStatus(t("cashuDeleted"));
+      setPendingCashuDeleteId(null);
+      return;
+    }
+    setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+  };
+
+  const requestDeleteCashuToken = (id: CashuTokenId) => {
+    if (pendingCashuDeleteId === id) {
+      handleDeleteCashuToken(id);
+      return;
+    }
+    setPendingCashuDeleteId(id);
+    setStatus(t("deleteArmedHint"));
+  };
+
+  const copyText = async (value: string) => {
+    try {
+      await navigator.clipboard?.writeText(value);
+      setStatus(t("copiedToClipboard"));
+    } catch {
+      setStatus(t("copyFailed"));
+    }
+  };
+
   const requestDeleteCurrentContact = () => {
     if (!editingId) return;
     if (pendingDeleteId === editingId) {
@@ -437,15 +755,6 @@ const App = () => {
     }
     setPendingDeleteId(editingId);
     setStatus(t("deleteArmedHint"));
-  };
-
-  const copyToClipboard = async (value: string) => {
-    try {
-      await navigator.clipboard?.writeText(value);
-      setStatus(t("copiedToClipboard"));
-    } catch {
-      setStatus(t("copyFailed"));
-    }
   };
 
   const applyKeysFromText = async (value: string) => {
@@ -501,15 +810,6 @@ const App = () => {
   const openContactDetail = (contact: (typeof contacts)[number]) => {
     setPendingDeleteId(null);
     setIsPasteArmed(false);
-
-    setEditingId(contact.id);
-    setForm({
-      name: (contact.name ?? "") as string,
-      npub: (contact.npub ?? "") as string,
-      lnAddress: (contact.lnAddress ?? "") as string,
-      group: ((contact.groupName ?? "") as string) ?? "",
-    });
-
     navigateToContact(contact.id);
   };
 
@@ -522,22 +822,23 @@ const App = () => {
       return;
     }
 
-    if (route.kind !== "contact") return;
+    if (route.kind !== "contactEdit") return;
     setPendingDeleteId(null);
     setIsPasteArmed(false);
 
-    if (selectedContact) {
-      setEditingId(selectedContact.id);
-      setForm({
-        name: (selectedContact.name ?? "") as string,
-        npub: (selectedContact.npub ?? "") as string,
-        lnAddress: (selectedContact.lnAddress ?? "") as string,
-        group: ((selectedContact.groupName ?? "") as string) ?? "",
-      });
-    } else {
+    if (!selectedContact) {
       setEditingId(null);
       setForm(makeEmptyForm());
+      return;
     }
+
+    setEditingId(selectedContact.id);
+    setForm({
+      name: (selectedContact.name ?? "") as string,
+      npub: (selectedContact.npub ?? "") as string,
+      lnAddress: (selectedContact.lnAddress ?? "") as string,
+      group: ((selectedContact.groupName ?? "") as string) ?? "",
+    });
   }, [route, selectedContact]);
 
   const handleSaveContact = () => {
@@ -576,11 +877,12 @@ const App = () => {
       }
     }
 
-    if (route.kind === "contact" || route.kind === "contactNew") {
-      closeContactDetail();
-    } else {
-      navigateToContacts();
+    if (route.kind === "contactEdit" && editingId) {
+      navigateToContact(editingId);
+      return;
     }
+
+    closeContactDetail();
   };
 
   const copyMnemonic = async () => {
@@ -592,72 +894,276 @@ const App = () => {
   const showGroupFilter = route.kind === "contacts" && groupNames.length > 0;
   const showNoGroupFilter = ungroupedCount > 0;
   console.log("Rendering with contacts:", contacts.length, "owner:", owner);
+
+  const topbar = (() => {
+    if (route.kind === "settings") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToContacts,
+      };
+    }
+
+    if (route.kind === "wallet") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToContacts,
+      };
+    }
+
+    if (route.kind === "contactNew") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: closeContactDetail,
+      };
+    }
+
+    if (route.kind === "contact") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: closeContactDetail,
+      };
+    }
+
+    if (route.kind === "contactEdit" || route.kind === "contactPay") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: () => navigateToContact(route.id),
+      };
+    }
+
+    return {
+      icon: "☰",
+      label: t("settings"),
+      onClick: toggleSettings,
+    };
+  })();
+
+  const topbarRight = (() => {
+    if (route.kind === "contacts") {
+      return {
+        icon: "+",
+        label: t("addContact"),
+        onClick: openNewContactPage,
+      };
+    }
+
+    if (route.kind === "contact" && selectedContact) {
+      return {
+        icon: "✎",
+        label: t("editContact"),
+        onClick: () => navigateToContactEdit(selectedContact.id),
+      };
+    }
+
+    return null;
+  })();
+
+  const topbarTitle = (() => {
+    if (route.kind === "contacts") return t("contactsTitle");
+    if (route.kind === "wallet") return t("wallet");
+    return null;
+  })();
+
+  const displayUnit = useBitcoinSymbol ? "₿" : "sat";
+
   return (
     <div className={showGroupFilter ? "page has-group-filter" : "page"}>
-      <header className="hero">
-        <div className="hero-content">
-          <button className="title-button" onClick={navigateToContacts}>
-            {t("appTitle")}
-          </button>
-          <p className="eyebrow">{t("appTagline")}</p>
-        </div>
-        <div className="hero-actions">
+      <header className="topbar">
+        <button
+          className="topbar-btn"
+          onClick={topbar.onClick}
+          aria-label={topbar.label}
+          title={topbar.label}
+        >
+          <span aria-hidden="true">{topbar.icon}</span>
+        </button>
+
+        {topbarTitle ? (
+          <div className="topbar-title" aria-label={topbarTitle}>
+            {topbarTitle}
+          </div>
+        ) : (
+          <span className="topbar-title-spacer" aria-hidden="true" />
+        )}
+
+        {topbarRight ? (
           <button
-            className="ghost gear-button"
-            onClick={toggleSettings}
-            aria-label={route.kind === "settings" ? t("close") : t("settings")}
-            title={route.kind === "settings" ? t("close") : t("settings")}
+            className="topbar-btn"
+            onClick={topbarRight.onClick}
+            aria-label={topbarRight.label}
+            title={topbarRight.label}
           >
-            <span className="gear-icon">⚙︎</span>
-            <span className="gear-label">{t("settings")}</span>
+            <span aria-hidden="true">{topbarRight.icon}</span>
           </button>
-        </div>
+        ) : (
+          <span className="topbar-spacer" aria-hidden="true" />
+        )}
       </header>
 
       {route.kind === "settings" && (
         <section className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">{t("settings")}</p>
-              <h2>{t("keys")}</h2>
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-icon" aria-hidden="true">
+                🔑
+              </span>
+              <span className="settings-label">{t("keys")}</span>
             </div>
-            <div className="badge-box">
-              <button
-                className="ghost"
-                onClick={copyMnemonic}
-                disabled={!owner?.mnemonic}
-              >
-                {t("copyCurrent")}
-              </button>
-              <button
-                className={isPasteArmed ? "danger" : "ghost"}
-                onClick={requestPasteKeys}
-                aria-label={t("paste")}
-                title={isPasteArmed ? t("pasteArmedHint") : t("paste")}
-              >
-                {t("paste")}
-              </button>
+            <div className="settings-right">
+              <div className="badge-box">
+                <button
+                  className="ghost"
+                  onClick={copyMnemonic}
+                  disabled={!owner?.mnemonic}
+                >
+                  {t("copyCurrent")}
+                </button>
+                <button
+                  className={isPasteArmed ? "danger" : "ghost"}
+                  onClick={requestPasteKeys}
+                  aria-label={t("paste")}
+                  title={isPasteArmed ? t("pasteArmedHint") : t("paste")}
+                >
+                  {t("paste")}
+                </button>
+              </div>
             </div>
           </div>
 
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-icon" aria-hidden="true">
+                🌐
+              </span>
+              <span className="settings-label">{t("language")}</span>
+            </div>
+            <div className="settings-right">
+              <select
+                className="select"
+                value={lang}
+                onChange={(e) => setLang(e.target.value as Lang)}
+                aria-label={t("language")}
+              >
+                <option value="cs">{t("czech")}</option>
+                <option value="en">{t("english")}</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-icon" aria-hidden="true">
+                ₿
+              </span>
+              <span className="settings-label">{t("unit")}</span>
+            </div>
+            <div className="settings-right">
+              <label className="switch">
+                <input
+                  className="switch-input"
+                  type="checkbox"
+                  aria-label={t("unitUseBitcoin")}
+                  checked={useBitcoinSymbol}
+                  onChange={(e) => setUseBitcoinSymbol(e.target.checked)}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <button className="btn-wide" onClick={navigateToWallet}>
+              {t("walletOpen")}
+            </button>
+          </div>
+
+          {status && <p className="status">{status}</p>}
+        </section>
+      )}
+
+      {route.kind === "wallet" && (
+        <section className="panel">
           <div className="panel-header">
-            <div>
-              <h2>{t("language")}</h2>
+            <div className="wallet-hero">
+              <div className="balance-hero" aria-label={t("cashuBalance")}>
+                <span className="balance-number">
+                  {formatInteger(cashuBalance)}
+                </span>
+                <span className="balance-unit">{displayUnit}</span>
+              </div>
             </div>
-            <div className="badge-box">
-              <button
-                className={lang === "cs" ? "" : "secondary"}
-                onClick={() => setLang("cs")}
-              >
-                {t("czech")}
-              </button>
-              <button
-                className={lang === "en" ? "" : "secondary"}
-                onClick={() => setLang("en")}
-              >
-                {t("english")}
-              </button>
-            </div>
+          </div>
+
+          <label>{t("cashuToken")}</label>
+          <textarea
+            ref={cashuDraftRef}
+            value={cashuDraft}
+            onChange={(e) => setCashuDraft(e.target.value)}
+            onPaste={(e) => {
+              const text = e.clipboardData?.getData("text") ?? "";
+              const tokenRaw = String(text).trim();
+              if (!tokenRaw) return;
+              e.preventDefault();
+              void saveCashuFromText(tokenRaw);
+            }}
+            placeholder={t("cashuPasteManualHint")}
+          />
+
+          <div className="ln-list">
+            {cashuTokens.length === 0 ? (
+              <p className="muted">{t("cashuEmpty")}</p>
+            ) : (
+              cashuTokens.map((token) => (
+                <div
+                  key={token.id as unknown as CashuTokenId}
+                  className="ln-row"
+                >
+                  <div className="card-main">
+                    <h4 className="cashu-mint">
+                      {token.mint ? String(token.mint) : t("cashuToken")}
+                    </h4>
+                    {token.error ? (
+                      <p className="muted">
+                        {t("errorPrefix")}: {String(token.error)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="ln-actions">
+                    <span className="pill">
+                      {formatInteger(
+                        Number((token.amount ?? 0) as unknown as number) || 0
+                      )}
+                    </span>
+                    <button
+                      className="ghost"
+                      onClick={() => copyText(String(token.token ?? ""))}
+                      disabled={!String(token.token ?? "").trim()}
+                    >
+                      {t("copy")}
+                    </button>
+                    <button
+                      className={
+                        pendingCashuDeleteId ===
+                        (token.id as unknown as CashuTokenId)
+                          ? "danger"
+                          : "secondary"
+                      }
+                      onClick={() =>
+                        requestDeleteCashuToken(
+                          token.id as unknown as CashuTokenId
+                        )
+                      }
+                    >
+                      {t("delete")}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           {status && <p className="status">{status}</p>}
@@ -666,23 +1172,13 @@ const App = () => {
 
       {route.kind === "contact" && (
         <section className="panel">
-          <div className="panel-header keep-right">
-            <div>
-              <p className="eyebrow">{t("contact")}</p>
-              <h2>{t("editContact")}</h2>
-            </div>
-            <button className="ghost" onClick={closeContactDetail}>
-              {t("close")}
-            </button>
-          </div>
-
           {!selectedContact ? (
             <p className="muted">Kontakt nenalezen.</p>
           ) : null}
 
           {selectedContact ? (
-            <div className="contact-header">
-              <div className="contact-avatar is-large" aria-hidden="true">
+            <div className="contact-detail">
+              <div className="contact-avatar is-xl" aria-hidden="true">
                 {(() => {
                   const npub = String(selectedContact.npub ?? "").trim();
                   const url = npub ? nostrPictureByNpub[npub] : null;
@@ -700,10 +1196,203 @@ const App = () => {
                   );
                 })()}
               </div>
-              <div className="contact-header-text">
-                {selectedContact.name ? <h3>{selectedContact.name}</h3> : null}
+
+              {selectedContact.name ? (
+                <h2 className="contact-detail-name">{selectedContact.name}</h2>
+              ) : null}
+
+              {(() => {
+                const group = String(selectedContact.groupName ?? "").trim();
+                if (!group) return null;
+                return <p className="contact-detail-group">{group}</p>;
+              })()}
+
+              {(() => {
+                const ln = String(selectedContact.lnAddress ?? "").trim();
+                if (!ln) return null;
+                return <p className="contact-detail-ln">{ln}</p>;
+              })()}
+
+              <div className="contact-detail-actions">
+                {(() => {
+                  const ln = String(selectedContact.lnAddress ?? "").trim();
+                  if (!ln) return null;
+                  return (
+                    <button
+                      className="btn-wide"
+                      onClick={() => navigateToContactPay(selectedContact.id)}
+                      disabled={cashuIsBusy || !canPayWithCashu}
+                      title={
+                        !canPayWithCashu ? t("payInsufficient") : undefined
+                      }
+                    >
+                      {t("pay")}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
+          ) : null}
+
+          {status && <p className="status">{status}</p>}
+        </section>
+      )}
+
+      {route.kind === "contactPay" && (
+        <section className="panel">
+          {!selectedContact ? (
+            <p className="muted">Kontakt nenalezen.</p>
+          ) : null}
+
+          {selectedContact ? (
+            <>
+              <div className="contact-header">
+                <div className="contact-avatar is-large" aria-hidden="true">
+                  {(() => {
+                    const npub = String(selectedContact.npub ?? "").trim();
+                    const url = npub ? nostrPictureByNpub[npub] : null;
+                    return url ? (
+                      <img
+                        src={url}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="contact-avatar-fallback">
+                        {getInitials(String(selectedContact.name ?? ""))}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="contact-header-text">
+                  {selectedContact.name ? (
+                    <h3>{selectedContact.name}</h3>
+                  ) : null}
+                  <p className="muted">
+                    {t("availablePrefix")} {formatInteger(cashuBalance)}{" "}
+                    {displayUnit}
+                  </p>
+                </div>
+              </div>
+
+              {(() => {
+                const ln = String(selectedContact.lnAddress ?? "").trim();
+                if (!ln) return <p className="muted">{t("payMissingLn")}</p>;
+                if (!canPayWithCashu)
+                  return <p className="muted">{t("payInsufficient")}</p>;
+                return null;
+              })()}
+
+              <div className="amount-display" aria-live="polite">
+                {(() => {
+                  const amountSat = Number.parseInt(payAmount.trim(), 10);
+                  const display =
+                    Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0;
+                  return (
+                    <>
+                      <span className="amount-number">
+                        {formatInteger(display)}
+                      </span>
+                      <span className="amount-unit">{displayUnit}</span>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div
+                className="keypad"
+                role="group"
+                aria-label={`${t("payAmount")} (${displayUnit})`}
+              >
+                {(
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "C",
+                    "0",
+                    "⌫",
+                  ] as const
+                ).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={
+                      key === "C" || key === "⌫" ? "secondary" : "ghost"
+                    }
+                    onClick={() => {
+                      if (cashuIsBusy) return;
+                      if (key === "C") {
+                        setPayAmount("");
+                        return;
+                      }
+                      if (key === "⌫") {
+                        setPayAmount((v) => v.slice(0, -1));
+                        return;
+                      }
+                      setPayAmount((v) => {
+                        const next = (v + key).replace(/^0+(\d)/, "$1");
+                        return next;
+                      });
+                    }}
+                    disabled={cashuIsBusy}
+                    aria-label={
+                      key === "C"
+                        ? t("clearForm")
+                        : key === "⌫"
+                        ? t("delete")
+                        : key
+                    }
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+
+              {(() => {
+                const ln = String(selectedContact.lnAddress ?? "").trim();
+                const amountSat = Number.parseInt(payAmount.trim(), 10);
+                const invalid =
+                  !ln ||
+                  !canPayWithCashu ||
+                  !Number.isFinite(amountSat) ||
+                  amountSat <= 0 ||
+                  amountSat > cashuBalance;
+                return (
+                  <div className="actions">
+                    <button
+                      className="btn-wide"
+                      onClick={() => void paySelectedContact()}
+                      disabled={cashuIsBusy || invalid}
+                      title={
+                        amountSat > cashuBalance
+                          ? t("payInsufficient")
+                          : undefined
+                      }
+                    >
+                      {t("paySend")}
+                    </button>
+                  </div>
+                );
+              })()}
+            </>
+          ) : null}
+
+          {status && <p className="status">{status}</p>}
+        </section>
+      )}
+
+      {route.kind === "contactEdit" && (
+        <section className="panel">
+          {!selectedContact ? (
+            <p className="muted">Kontakt nenalezen.</p>
           ) : null}
 
           <div className="form-grid">
@@ -834,12 +1523,7 @@ const App = () => {
 
       {route.kind === "contacts" && (
         <>
-          <section className="panel">
-            <div className="list-header">
-              <h3>{t("list")}</h3>
-
-              <button onClick={openNewContactPage}>{t("addContact")}</button>
-            </div>
+          <section className="panel panel-plain">
             <div className="contact-list">
               {contacts.length === 0 && (
                 <p className="muted">{t("noContactsYet")}</p>
@@ -880,37 +1564,9 @@ const App = () => {
                       </div>
                       <div className="card-main">
                         <div className="card-title-row">
-                          {contact.name ? <h4>{contact.name}</h4> : null}
-                          <div className="contact-badges">
-                            {contact.lnAddress ? (
-                              <button
-                                type="button"
-                                className="tag tag-button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPendingDeleteId(null);
-                                  copyToClipboard(contact.lnAddress!);
-                                }}
-                                title="Kliknutím zkopírujete lightning adresu"
-                              >
-                                {contact.lnAddress}
-                              </button>
-                            ) : null}
-                            {contact.npub ? (
-                              <button
-                                type="button"
-                                className="tag tag-button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPendingDeleteId(null);
-                                  copyToClipboard(contact.npub!);
-                                }}
-                                title="Kliknutím zkopírujete npub"
-                              >
-                                {t("npub")}
-                              </button>
-                            ) : null}
-                          </div>
+                          {contact.name ? (
+                            <h4 className="contact-title">{contact.name}</h4>
+                          ) : null}
                         </div>
                       </div>
                     </div>

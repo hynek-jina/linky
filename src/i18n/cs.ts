@@ -12,6 +12,7 @@ export const cs = {
   english: "Angličtina",
 
   list: "Seznam",
+  contactsTitle: "Kontakty",
   addContact: "Přidat kontakt",
   noContactsYet: "Zatím žádné kontakty.",
 
@@ -43,6 +44,7 @@ export const cs = {
 
   copiedToClipboard: "Zkopírováno do schránky.",
   copyFailed: "Kopírování do schránky se nepovedlo.",
+  copy: "Kopírovat",
 
   pasteArmedHint:
     "Vložením klíčů vymažete aktuální data. Klikněte ještě jednou pro potvrzení.",
@@ -52,4 +54,37 @@ export const cs = {
   keysPasting:
     "Klíče byly ověřeny. Obnovujeme (dojde k vymazání aktuálních dat)…",
   errorPrefix: "Chyba",
+
+  wallet: "Peněženka",
+  walletOpen: "Otevřít peněženku",
+
+  unit: "Jednotky",
+  unitUseBitcoin: "Zobrazit ₿ místo sat",
+
+  cashuBalance: "Dostupný zůstatek",
+  pasteCashu: "Vložit cashu",
+  cashuSaved: "Cashu token uložen.",
+  cashuAccepting: "Přijímám token…",
+  cashuAccepted: "Token přijat.",
+  cashuAcceptFailed: "Nepodařilo se přijmout token",
+  cashuStatus: "Stav",
+  cashuDeleted: "Token byl smazán.",
+  cashuEmpty: "Zatím žádné Cashu tokeny.",
+  cashuToken: "Token",
+  cashuPasteManualHint: "Vložte sem Cashu token",
+  cashuSave: "Uložit token",
+
+  pay: "Zaplatit",
+  payTo: "Platba pro",
+  availablePrefix: "dostupné:",
+  payAmount: "Kolik poslat",
+  paySend: "Zaplatit",
+  payCancel: "Zrušit",
+  payMissingLn: "Chybí lightning adresa.",
+  payInvalidAmount: "Neplatná částka",
+  payInsufficient: "Nemáte dostatek Cashu tokenů.",
+  payFetchingInvoice: "Získávám fakturu…",
+  payPaying: "Platím…",
+  paySuccess: "Zaplaceno.",
+  payFailed: "Platba se nepovedla",
 } as const;

@@ -11,6 +11,10 @@ import {
 const ContactId = Evolu.id("Contact");
 export type ContactId = typeof ContactId.Type;
 
+// Primary key pro CashuToken tabulku
+const CashuTokenId = Evolu.id("CashuToken");
+export type CashuTokenId = typeof CashuTokenId.Type;
+
 // Schema pro Linky app
 export const Schema = {
   contact: {
@@ -19,6 +23,21 @@ export const Schema = {
     npub: Evolu.nullOr(Evolu.NonEmptyString1000),
     lnAddress: Evolu.nullOr(Evolu.NonEmptyString1000),
     groupName: Evolu.nullOr(Evolu.NonEmptyString1000),
+  },
+  cashuToken: {
+    id: CashuTokenId,
+    // Most recent (accepted) token.
+    token: Evolu.NonEmptyString,
+    // Original pasted token (useful for debugging/re-accept).
+    rawToken: Evolu.nullOr(Evolu.NonEmptyString),
+    // Stored only if token references exactly one mint.
+    mint: Evolu.nullOr(Evolu.NonEmptyString1000),
+    unit: Evolu.nullOr(Evolu.NonEmptyString100),
+    // Stored total amount (usually in sats) when known.
+    amount: Evolu.nullOr(Evolu.PositiveInt),
+    // "pending" | "accepted" | "error"
+    state: Evolu.nullOr(Evolu.NonEmptyString100),
+    error: Evolu.nullOr(Evolu.NonEmptyString1000),
   },
 };
 

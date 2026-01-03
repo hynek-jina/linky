@@ -1,9 +1,16 @@
+import { Buffer } from "buffer";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import App from "./App.tsx";
 import { evolu, EvoluProvider } from "./evolu.ts";
 import "./index.css";
+
+// Some dependencies (e.g. Cashu libs) expect Node's global Buffer.
+// Provide a safe browser polyfill.
+if (!("Buffer" in globalThis)) {
+  (globalThis as unknown as { Buffer: typeof Buffer }).Buffer = Buffer;
+}
 
 // Dev-only cleanup: if a Service Worker was registered earlier (e.g. from a
 // previous PROD preview), it can keep serving stale cached assets on localhost

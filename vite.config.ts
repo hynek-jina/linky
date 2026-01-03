@@ -43,6 +43,9 @@ const serveSqliteWasm = (): Plugin => ({
 });
 
 export default defineConfig({
+  define: {
+    global: "globalThis",
+  },
   optimizeDeps: {
     exclude: ["@evolu/react-web"],
     include: [
@@ -91,4 +94,19 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("react")) return "react";
+          if (id.includes("@evolu")) return "evolu";
+          if (id.includes("nostr-tools")) return "nostr";
+          if (id.includes("@cashu")) return "cashu";
+          if (id.includes("buffer")) return "polyfills";
+          return "vendor";
+        },
+      },
+    },
+  },
 });
