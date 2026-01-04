@@ -17,6 +17,13 @@ export const en = {
     "Pasting Nostr keys will overwrite the current ones. Click once more to confirm.",
   nostrPasteInvalid: "Invalid Nostr key (expected nsec…).",
 
+  nostrRelay: "Nostr relay",
+  addRelay: "Add relay",
+  newRelay: "Add relay",
+  relayUrl: "Relay URL",
+
+  mints: "Mints",
+
   chat: "Chat",
   sendMessage: "Send message",
   chatEmpty: "No messages yet.",
@@ -44,6 +51,9 @@ export const en = {
 
   contact: "Contact",
   editContact: "Edit contact",
+  contactEditTitle: "Edit contact",
+  contactPayTitle: "Pay to contact",
+  messagesTitle: "Messages",
   newContact: "Add new contact",
   close: "Close",
 

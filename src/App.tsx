@@ -1,5 +1,6 @@
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
+import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React, { useMemo, useState } from "react";
 import "./App.css";
 import { parseCashuToken } from "./cashu";
@@ -8,13 +9,17 @@ import { evolu, useEvolu } from "./evolu";
 import { getInitialLang, persistLang, translations, type Lang } from "./i18n";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
 import {
-  NOSTR_RELAYS,
+  cacheProfileAvatarFromUrl,
+  deleteCachedProfileAvatar,
   fetchNostrProfileMetadata,
   fetchNostrProfilePicture,
+  loadCachedProfileAvatarObjectUrl,
   loadCachedProfileMetadata,
   loadCachedProfilePicture,
+  NOSTR_RELAYS,
   saveCachedProfileMetadata,
   saveCachedProfilePicture,
+  type NostrProfileMetadata,
 } from "./nostrProfile";
 
 type ContactFormState = {
@@ -46,6 +51,9 @@ type Route =
   | { kind: "settings" }
   | { kind: "profile" }
   | { kind: "wallet" }
+  | { kind: "nostrRelays" }
+  | { kind: "nostrRelay"; id: string }
+  | { kind: "nostrRelayNew" }
   | { kind: "contactNew" }
   | { kind: "contact"; id: ContactId }
   | { kind: "contactEdit"; id: ContactId }
@@ -58,6 +66,15 @@ const parseRouteFromHash = (): Route => {
   if (hash === "#settings") return { kind: "settings" };
   if (hash === "#profile") return { kind: "profile" };
   if (hash === "#wallet") return { kind: "wallet" };
+  if (hash === "#nostr-relays") return { kind: "nostrRelays" };
+  if (hash === "#nostr-relay/new") return { kind: "nostrRelayNew" };
+
+  const relayPrefix = "#nostr-relay/";
+  if (hash.startsWith(relayPrefix)) {
+    const rest = hash.slice(relayPrefix.length);
+    const id = decodeURIComponent(String(rest ?? "")).trim();
+    if (id) return { kind: "nostrRelay", id };
+  }
 
   const chatPrefix = "#chat/";
   if (hash.startsWith(chatPrefix)) {
@@ -99,6 +116,9 @@ const App = () => {
   );
   const [pendingCashuDeleteId, setPendingCashuDeleteId] =
     useState<CashuTokenId | null>(null);
+  const [pendingRelayDeleteUrl, setPendingRelayDeleteUrl] = useState<
+    string | null
+  >(null);
   const [isPasteArmed, setIsPasteArmed] = useState(false);
   const [isNostrPasteArmed, setIsNostrPasteArmed] = useState(false);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
@@ -114,9 +134,67 @@ const App = () => {
     Record<string, string | null>
   >(() => ({}));
 
+  const avatarObjectUrlsByNpubRef = React.useRef<Map<string, string>>(
+    new Map()
+  );
+
+  const rememberBlobAvatarUrl = React.useCallback(
+    (npub: string, url: string | null): string | null => {
+      const key = String(npub ?? "").trim();
+      if (!key) return url;
+
+      const existing = avatarObjectUrlsByNpubRef.current.get(key);
+
+      if (url && url.startsWith("blob:")) {
+        if (existing && existing !== url) {
+          try {
+            URL.revokeObjectURL(existing);
+          } catch {
+            // ignore
+          }
+        }
+        avatarObjectUrlsByNpubRef.current.set(key, url);
+        return url;
+      }
+
+      if (existing) {
+        try {
+          URL.revokeObjectURL(existing);
+        } catch {
+          // ignore
+        }
+        avatarObjectUrlsByNpubRef.current.delete(key);
+      }
+
+      return url;
+    },
+    []
+  );
+
+  React.useEffect(() => {
+    return () => {
+      for (const url of avatarObjectUrlsByNpubRef.current.values()) {
+        if (!url || !url.startsWith("blob:")) continue;
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      }
+      avatarObjectUrlsByNpubRef.current.clear();
+    };
+  }, []);
+
   const [cashuDraft, setCashuDraft] = useState("");
   const cashuDraftRef = React.useRef<HTMLTextAreaElement | null>(null);
   const [cashuIsBusy, setCashuIsBusy] = useState(false);
+
+  const [defaultMintUrl, setDefaultMintUrl] = useState<string | null>(null);
+
+  const [newRelayUrl, setNewRelayUrl] = useState<string>("");
+  const [relayStatusByUrl, setRelayStatusByUrl] = useState<
+    Record<string, "checking" | "connected" | "disconnected">
+  >(() => ({}));
 
   const [payAmount, setPayAmount] = useState<string>("");
 
@@ -131,6 +209,17 @@ const App = () => {
   const [myProfileName, setMyProfileName] = useState<string | null>(null);
   const [myProfilePicture, setMyProfilePicture] = useState<string | null>(null);
   const [myProfileQr, setMyProfileQr] = useState<string | null>(null);
+  const [myProfileLnAddress, setMyProfileLnAddress] = useState<string | null>(
+    null
+  );
+  const [myProfileMetadata, setMyProfileMetadata] =
+    useState<NostrProfileMetadata | null>(null);
+
+  const [isProfileEditing, setIsProfileEditing] = useState(false);
+  const [profileEditName, setProfileEditName] = useState<string>("");
+  const [profileEditLnAddress, setProfileEditLnAddress] = useState<string>("");
+
+  const npubCashClaimInFlightRef = React.useRef(false);
 
   const nostrInFlight = React.useRef<Set<string>>(new Set());
   const nostrMetadataInFlight = React.useRef<Set<string>>(new Set());
@@ -157,6 +246,13 @@ const App = () => {
     const name = String(metadata.name ?? "").trim();
     if (name) return name;
     return null;
+  };
+
+  const formatShortNpub = (npub: string): string => {
+    const trimmed = String(npub ?? "").trim();
+    if (!trimmed) return "";
+    if (trimmed.length <= 18) return trimmed;
+    return `${trimmed.slice(0, 10)}…${trimmed.slice(-6)}`;
   };
 
   const contactNameCollator = useMemo(
@@ -223,6 +319,18 @@ const App = () => {
     window.location.assign("#profile");
   };
 
+  const navigateToNostrRelays = () => {
+    window.location.assign("#nostr-relays");
+  };
+
+  const navigateToNostrRelay = (id: string) => {
+    window.location.assign(`#nostr-relay/${encodeURIComponent(id)}`);
+  };
+
+  const navigateToNewRelay = () => {
+    window.location.assign("#nostr-relay/new");
+  };
+
   React.useEffect(() => {
     evolu.appOwner.then(setOwner);
   }, []);
@@ -262,6 +370,14 @@ const App = () => {
     }, 5000);
     return () => window.clearTimeout(timeoutId);
   }, [pendingCashuDeleteId]);
+
+  React.useEffect(() => {
+    if (!pendingRelayDeleteUrl) return;
+    const timeoutId = window.setTimeout(() => {
+      setPendingRelayDeleteUrl(null);
+    }, 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [pendingRelayDeleteUrl]);
 
   React.useEffect(() => {
     if (!isPasteArmed) return;
@@ -317,6 +433,339 @@ const App = () => {
   const nostrIdentities = useQuery(nostrIdentityQuery);
   const storedNostrIdentity = nostrIdentities[0] ?? null;
 
+  const [storedNpubFromNsec, setStoredNpubFromNsec] = useState<string | null>(
+    null
+  );
+
+  React.useEffect(() => {
+    const nsec = String((storedNostrIdentity as any)?.nsec ?? "").trim();
+    if (!nsec) {
+      setStoredNpubFromNsec(null);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const { nip19, getPublicKey } = await import("nostr-tools");
+        const decoded = nip19.decode(nsec);
+        if (decoded.type !== "nsec") return;
+        const privBytes = decoded.data as Uint8Array;
+        const pubHex = getPublicKey(privBytes);
+        const npub = nip19.npubEncode(pubHex);
+        if (cancelled) return;
+        setStoredNpubFromNsec(npub);
+      } catch {
+        if (cancelled) return;
+        setStoredNpubFromNsec(null);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [storedNostrIdentity]);
+
+  const storedNsec = String((storedNostrIdentity as any)?.nsec ?? "").trim();
+  const defaultNsec = String(derivedNostrIdentity?.nsec ?? "").trim();
+  const hasStoredOverride = Boolean(
+    storedNsec && defaultNsec && storedNsec !== defaultNsec
+  );
+
+  const currentNsec =
+    (hasStoredOverride
+      ? storedNsec
+      : defaultNsec || storedNsec || derivedNostrIdentity?.nsec) ?? null;
+
+  const currentNpub =
+    (hasStoredOverride ? storedNpubFromNsec : null) ??
+    storedNpubFromNsec ??
+    derivedNostrIdentity?.npub ??
+    null;
+
+  const [relayUrls, setRelayUrls] = useState<string[]>(() => [...NOSTR_RELAYS]);
+
+  const relayUrlsKey = useMemo(() => relayUrls.join("|"), [relayUrls]);
+
+  const nostrFetchRelays = useMemo(() => {
+    const merged = [...relayUrls, ...NOSTR_RELAYS];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of merged) {
+      const url = String(raw ?? "").trim();
+      if (!url) continue;
+      if (!(url.startsWith("wss://") || url.startsWith("ws://"))) continue;
+      if (seen.has(url)) continue;
+      seen.add(url);
+      out.push(url);
+    }
+    return out;
+  }, [relayUrlsKey]);
+
+  const nostrFetchRelaysKey = useMemo(
+    () => nostrFetchRelays.join("|"),
+    [nostrFetchRelays]
+  );
+
+  const checkRelayConnection = React.useCallback(
+    (url: string, timeoutMs = 2500) => {
+      return new Promise<boolean>((resolve) => {
+        let ws: WebSocket | null = null;
+        let done = false;
+
+        const finish = (ok: boolean) => {
+          if (done) return;
+          done = true;
+          try {
+            ws?.close();
+          } catch {
+            // ignore
+          }
+          resolve(ok);
+        };
+
+        try {
+          ws = new WebSocket(url);
+        } catch {
+          finish(false);
+          return;
+        }
+
+        const timer = window.setTimeout(() => finish(false), timeoutMs);
+
+        ws.addEventListener("open", () => {
+          window.clearTimeout(timer);
+          finish(true);
+        });
+
+        ws.addEventListener("error", () => {
+          window.clearTimeout(timer);
+          finish(false);
+        });
+
+        ws.addEventListener("close", () => {
+          window.clearTimeout(timer);
+          finish(false);
+        });
+      });
+    },
+    []
+  );
+
+  React.useEffect(() => {
+    if (relayUrls.length === 0) return;
+
+    let cancelled = false;
+    setRelayStatusByUrl((prev) => {
+      const next = { ...prev };
+      for (const url of relayUrls) next[url] = "checking";
+      return next;
+    });
+
+    (async () => {
+      const results = await Promise.all(
+        relayUrls.map(async (url) => {
+          const ok = await checkRelayConnection(url);
+          return [url, ok] as const;
+        })
+      );
+
+      if (cancelled) return;
+      setRelayStatusByUrl((prev) => {
+        const next = { ...prev };
+        for (const [url, ok] of results) {
+          next[url] = ok ? "connected" : "disconnected";
+        }
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [relayUrlsKey, checkRelayConnection, relayUrls]);
+
+  const connectedRelayCount = useMemo(() => {
+    return relayUrls.reduce((sum, url) => {
+      return sum + (relayStatusByUrl[url] === "connected" ? 1 : 0);
+    }, 0);
+  }, [relayUrls, relayStatusByUrl]);
+
+  const selectedRelayUrl = useMemo(() => {
+    if (route.kind !== "nostrRelay") return null;
+    const url = String(route.id ?? "").trim();
+    return url || null;
+  }, [route]);
+
+  const publishNostrRelayList = React.useCallback(
+    async (urls: string[]) => {
+      if (!currentNsec) throw new Error("Missing nsec");
+
+      const { SimplePool, finalizeEvent, getPublicKey, nip19 } = await import(
+        "nostr-tools"
+      );
+
+      const decoded = nip19.decode(currentNsec);
+      if (decoded.type !== "nsec") throw new Error("Invalid nsec");
+      const privBytes = decoded.data as Uint8Array;
+      const pubkey = getPublicKey(privBytes);
+
+      const cleanUrls = urls.map((u) => String(u ?? "").trim()).filter(Boolean);
+      const unique: string[] = [];
+      const seen = new Set<string>();
+      for (const u of cleanUrls) {
+        if (seen.has(u)) continue;
+        seen.add(u);
+        unique.push(u);
+      }
+
+      console.log("[linky][nostr] publish relay list", {
+        count: unique.length,
+        urls: unique,
+      });
+
+      const baseEvent = {
+        kind: 10002,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: unique.map((u) => ["r", u] as string[]),
+        content: "",
+        pubkey,
+      } satisfies UnsignedEvent;
+
+      const signed: NostrToolsEvent = finalizeEvent(baseEvent, privBytes);
+
+      const relaysToUse = (() => {
+        const combined = [...NOSTR_RELAYS, ...unique];
+        const out: string[] = [];
+        const seen2 = new Set<string>();
+        for (const u of combined) {
+          const s = String(u ?? "").trim();
+          if (!s) continue;
+          if (seen2.has(s)) continue;
+          seen2.add(s);
+          out.push(s);
+        }
+        return out;
+      })();
+
+      const pool = new SimplePool();
+      try {
+        const publishResults = await Promise.allSettled(
+          pool.publish(relaysToUse, signed)
+        );
+        const anySuccess = publishResults.some((r) => r.status === "fulfilled");
+        if (!anySuccess) {
+          const firstError = publishResults.find(
+            (r): r is PromiseRejectedResult => r.status === "rejected"
+          )?.reason;
+          throw new Error(String(firstError ?? "publish failed"));
+        }
+      } finally {
+        pool.close(relaysToUse);
+      }
+    },
+    [currentNsec]
+  );
+
+  const relayProfileSyncForNpubRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    // Source of truth: user's Nostr relay list (kind 10002, NIP-65).
+    // If missing, use defaults and publish them when we have a key.
+    if (!currentNpub) return;
+
+    if (relayProfileSyncForNpubRef.current === currentNpub) return;
+    relayProfileSyncForNpubRef.current = currentNpub;
+
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const { SimplePool, nip19 } = await import("nostr-tools");
+
+        const decoded = nip19.decode(currentNpub);
+        if (decoded.type !== "npub") return;
+        const pubkey = decoded.data as string;
+
+        const pool = new SimplePool();
+        const queryRelays = (() => {
+          const combined = [...NOSTR_RELAYS, ...relayUrls];
+          const out: string[] = [];
+          const seen = new Set<string>();
+          for (const u of combined) {
+            const s = String(u ?? "").trim();
+            if (!s) continue;
+            if (seen.has(s)) continue;
+            seen.add(s);
+            out.push(s);
+          }
+          return out;
+        })();
+
+        try {
+          const events = await pool.querySync(
+            queryRelays,
+            { kinds: [10002], authors: [pubkey], limit: 5 },
+            { maxWait: 5000 }
+          );
+
+          const newest = (events as any[])
+            .slice()
+            .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0];
+
+          const urls = (() => {
+            const tags = Array.isArray(newest?.tags) ? newest.tags : [];
+            const extracted: string[] = [];
+            for (const tag of tags) {
+              if (!Array.isArray(tag)) continue;
+              if (tag[0] !== "r") continue;
+              const url = String(tag[1] ?? "").trim();
+              if (!url) continue;
+              extracted.push(url);
+            }
+            const unique: string[] = [];
+            const seen = new Set<string>();
+            for (const u of extracted) {
+              if (seen.has(u)) continue;
+              seen.add(u);
+              unique.push(u);
+            }
+            return unique;
+          })();
+
+          console.log("[linky][nostr] relay list", {
+            eventId: String(newest?.id ?? ""),
+            createdAt: newest?.created_at ?? null,
+            urls,
+          });
+
+          if (cancelled) return;
+
+          if (urls.length > 0) {
+            setRelayUrls(urls);
+            return;
+          }
+
+          setRelayUrls([...NOSTR_RELAYS]);
+          if (!currentNsec) return;
+          await publishNostrRelayList(NOSTR_RELAYS);
+        } finally {
+          pool.close(queryRelays);
+        }
+      } catch (e) {
+        console.log("[linky][nostr] relay sync failed", {
+          error: String(e ?? "unknown"),
+        });
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentNpub, currentNsec, publishNostrRelayList, relayUrls]);
+
   const cashuTokensQuery = useMemo(
     () =>
       evolu.createQuery((db) =>
@@ -330,6 +779,55 @@ const App = () => {
   );
 
   const cashuTokens = useQuery(cashuTokensQuery);
+
+  const cashuTokensAllQuery = useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db.selectFrom("cashuToken").selectAll().orderBy("createdAt", "desc")
+      ),
+    []
+  );
+  const cashuTokensAll = useQuery(cashuTokensAllQuery);
+
+  React.useEffect(() => {
+    // Debug: log Evolu state without secrets.
+    // NOTE: Relays and derived npub are Nostr/runtime state, not stored in Evolu.
+    console.log("[linky][evolu] snapshot", {
+      nostrIdentity: {
+        hasStoredIdentityRow: Boolean(storedNostrIdentity?.id),
+        hasStoredOverride,
+        derivedReady: Boolean(defaultNsec),
+        storedEqualsDefault: Boolean(
+          storedNsec && defaultNsec && storedNsec === defaultNsec
+        ),
+        hasNsec: Boolean(currentNsec),
+      },
+      cashuTokens: cashuTokens.map((t) => ({
+        id: String((t as any).id ?? ""),
+        mint: String((t as any).mint ?? ""),
+        amount: Number((t as any).amount ?? 0) || 0,
+        state: String((t as any).state ?? ""),
+      })),
+      cashuTokensAll: {
+        count: cashuTokensAll.length,
+        newest10: cashuTokensAll.slice(0, 10).map((t) => ({
+          id: String((t as any).id ?? ""),
+          mint: String((t as any).mint ?? ""),
+          amount: Number((t as any).amount ?? 0) || 0,
+          state: String((t as any).state ?? ""),
+          isDeleted: Boolean((t as any).isDeleted),
+        })),
+      },
+    });
+  }, [
+    cashuTokens,
+    cashuTokensAll,
+    currentNsec,
+    storedNostrIdentity?.id,
+    hasStoredOverride,
+    defaultNsec,
+    storedNsec,
+  ]);
 
   const chatContactId = route.kind === "chat" ? route.id : null;
 
@@ -363,15 +861,93 @@ const App = () => {
 
   const canPayWithCashu = cashuBalance > 0;
 
-  const currentNpub =
-    (storedNostrIdentity?.npub
-      ? String(storedNostrIdentity.npub)
-      : derivedNostrIdentity?.npub) ?? null;
+  const npubCashLightningAddress = useMemo(() => {
+    if (!currentNpub) return null;
+    return `${currentNpub}@npub.cash`;
+  }, [currentNpub]);
 
-  const currentNsec =
-    (storedNostrIdentity?.nsec
-      ? String(storedNostrIdentity.nsec)
-      : derivedNostrIdentity?.nsec) ?? null;
+  const effectiveMyLightningAddress =
+    myProfileLnAddress ?? npubCashLightningAddress;
+
+  const defaultMintDisplay = useMemo(() => {
+    if (!defaultMintUrl) return null;
+    try {
+      const u = new URL(defaultMintUrl);
+      return u.host;
+    } catch {
+      return defaultMintUrl;
+    }
+  }, [defaultMintUrl]);
+
+  const makeNip98AuthHeader = React.useCallback(
+    async (url: string, method: string, payload?: Record<string, any>) => {
+      if (!currentNsec) throw new Error("Missing nsec");
+      const { nip19, nip98, finalizeEvent } = await import("nostr-tools");
+      const decoded = nip19.decode(currentNsec);
+      if (decoded.type !== "nsec") throw new Error("Invalid nsec");
+      const privBytes = decoded.data as Uint8Array;
+
+      const token = await nip98.getToken(
+        url,
+        method,
+        async (event) => finalizeEvent(event as any, privBytes),
+        true,
+        payload
+      );
+      return token;
+    },
+    [currentNsec]
+  );
+
+  const acceptAndStoreCashuToken = React.useCallback(
+    async (tokenText: string) => {
+      const tokenRaw = tokenText.trim();
+      if (!tokenRaw) return;
+
+      // Parse best-effort metadata for display / fallback.
+      const parsed = parseCashuToken(tokenRaw);
+      const parsedMint = parsed?.mint?.trim() ? parsed.mint.trim() : null;
+      const parsedAmount =
+        parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
+
+      try {
+        const { acceptCashuToken } = await import("./cashuAccept");
+        const accepted = await acceptCashuToken(tokenRaw);
+        insert("cashuToken", {
+          token: accepted.token as typeof Evolu.NonEmptyString.Type,
+          rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+          mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
+          unit: accepted.unit
+            ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
+            : null,
+          amount:
+            accepted.amount > 0
+              ? (accepted.amount as typeof Evolu.PositiveInt.Type)
+              : null,
+          state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+          error: null,
+        });
+        setStatus(t("cashuAccepted"));
+      } catch (error) {
+        const message = String(error).trim() || "Accept failed";
+        insert("cashuToken", {
+          token: tokenRaw as typeof Evolu.NonEmptyString.Type,
+          rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+          mint: parsedMint
+            ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
+            : null,
+          unit: null,
+          amount:
+            typeof parsedAmount === "number"
+              ? (parsedAmount as typeof Evolu.PositiveInt.Type)
+              : null,
+          state: "error" as typeof Evolu.NonEmptyString100.Type,
+          error: message.slice(0, 1000) as typeof Evolu.NonEmptyString1000.Type,
+        });
+      }
+    },
+    [insert, t]
+  );
 
   const deriveNostrIdentityFromMnemonic = React.useCallback(
     async (
@@ -442,32 +1018,58 @@ const App = () => {
   }, [deriveNostrIdentityFromMnemonic, owner?.mnemonic]);
 
   React.useEffect(() => {
-    // Store derived Nostr identity into Evolu if none is present yet.
-    if (!owner?.mnemonic) return;
-    if (storedNostrIdentity) return;
-    if (!derivedNostrIdentity) return;
+    // If we have a stored nsec that equals the default (mnemonic-derived) one,
+    // drop it from Evolu so only user-changed keys remain persisted.
+    if (!storedNostrIdentity?.id) return;
+    const storedNsec = String((storedNostrIdentity as any)?.nsec ?? "").trim();
+    if (!storedNsec) return;
 
-    const result = insert("nostrIdentity", {
-      nsec: derivedNostrIdentity.nsec as typeof Evolu.NonEmptyString1000.Type,
-      npub: derivedNostrIdentity.npub as typeof Evolu.NonEmptyString1000.Type,
+    const defaultNsec = String(derivedNostrIdentity?.nsec ?? "").trim();
+    if (!defaultNsec) return;
+    if (storedNsec !== defaultNsec) return;
+
+    update("nostrIdentity", {
+      id: storedNostrIdentity.id as unknown as NostrIdentityId,
+      isDeleted: Evolu.sqliteTrue,
     });
-
-    if (!result.ok) {
-      // no status; keep silent
-    }
-  }, [owner?.mnemonic, storedNostrIdentity, derivedNostrIdentity, insert]);
+  }, [
+    derivedNostrIdentity?.nsec,
+    storedNostrIdentity?.id,
+    storedNostrIdentity?.nsec,
+    update,
+  ]);
 
   React.useEffect(() => {
     // Load current user's Nostr profile (name + picture) from relays.
     if (!currentNpub) return;
+
+    const cachedBlobController = new AbortController();
+    let cancelledBlob = false;
+    void (async () => {
+      try {
+        const blobUrl = await loadCachedProfileAvatarObjectUrl(currentNpub);
+        if (cancelledBlob) return;
+        if (blobUrl) {
+          setMyProfilePicture(rememberBlobAvatarUrl(currentNpub, blobUrl));
+        }
+      } catch {
+        // ignore
+      }
+    })();
 
     const cachedPic = loadCachedProfilePicture(currentNpub);
     if (cachedPic) setMyProfilePicture(cachedPic.url);
 
     const cachedMeta = loadCachedProfileMetadata(currentNpub);
     if (cachedMeta?.metadata) {
+      setMyProfileMetadata(cachedMeta.metadata);
       const bestName = getBestNostrName(cachedMeta.metadata);
       if (bestName) setMyProfileName(bestName);
+
+      const lud16 = String(cachedMeta.metadata.lud16 ?? "").trim();
+      const lud06 = String(cachedMeta.metadata.lud06 ?? "").trim();
+      const ln = lud16 || lud06;
+      if (ln) setMyProfileLnAddress(ln);
     }
 
     const controller = new AbortController();
@@ -476,18 +1078,68 @@ const App = () => {
     const run = async () => {
       try {
         const [picture, metadata] = await Promise.all([
-          fetchNostrProfilePicture(currentNpub, { signal: controller.signal }),
-          fetchNostrProfileMetadata(currentNpub, { signal: controller.signal }),
+          fetchNostrProfilePicture(currentNpub, {
+            signal: controller.signal,
+            relays: nostrFetchRelays,
+          }),
+          fetchNostrProfileMetadata(currentNpub, {
+            signal: controller.signal,
+            relays: nostrFetchRelays,
+          }),
         ]);
 
         if (cancelled) return;
 
-        saveCachedProfilePicture(currentNpub, picture);
-        if (picture) setMyProfilePicture(picture);
+        if (picture) {
+          // Persist the source URL (for future refresh), but display a cached blob when possible.
+          saveCachedProfilePicture(currentNpub, picture);
 
-        saveCachedProfileMetadata(currentNpub, metadata);
+          const blobUrl = await cacheProfileAvatarFromUrl(
+            currentNpub,
+            picture,
+            { signal: controller.signal }
+          );
+          if (cancelled) return;
+          setMyProfilePicture(
+            rememberBlobAvatarUrl(currentNpub, blobUrl || picture)
+          );
+        }
+
+        if (metadata) {
+          saveCachedProfileMetadata(currentNpub, metadata);
+          setMyProfileMetadata(metadata);
+        }
+
         const bestName = metadata ? getBestNostrName(metadata) : null;
         if (bestName) setMyProfileName(bestName);
+
+        // Only clear avatar if we positively observed kind-0 metadata without picture/image.
+        if (
+          metadata &&
+          !String(metadata.picture ?? "").trim() &&
+          !String(metadata.image ?? "").trim()
+        ) {
+          saveCachedProfilePicture(currentNpub, null);
+          void deleteCachedProfileAvatar(currentNpub);
+          rememberBlobAvatarUrl(currentNpub, null);
+          setMyProfilePicture(null);
+        }
+
+        if (!picture) {
+          console.log("[linky][nostr] profile picture missing", {
+            npub: currentNpub,
+            relays: { count: nostrFetchRelays.length, urls: nostrFetchRelays },
+            metadataHasPicture: Boolean(
+              String(metadata?.picture ?? "").trim() ||
+                String(metadata?.image ?? "").trim()
+            ),
+          });
+        }
+
+        const lud16 = String(metadata?.lud16 ?? "").trim();
+        const lud06 = String(metadata?.lud06 ?? "").trim();
+        const ln = lud16 || lud06;
+        setMyProfileLnAddress(ln || null);
       } catch {
         // ignore
       }
@@ -497,8 +1149,22 @@ const App = () => {
     return () => {
       cancelled = true;
       controller.abort();
+      cancelledBlob = true;
+      cachedBlobController.abort();
     };
-  }, [currentNpub]);
+  }, [
+    currentNpub,
+    nostrFetchRelaysKey,
+    rememberBlobAvatarUrl,
+    cacheProfileAvatarFromUrl,
+  ]);
+
+  React.useEffect(() => {
+    // Leave edit mode when leaving the profile screen.
+    if (route.kind !== "profile") {
+      setIsProfileEditing(false);
+    }
+  }, [route.kind]);
 
   React.useEffect(() => {
     // Generate QR code for the current npub on the profile page.
@@ -533,6 +1199,111 @@ const App = () => {
       cancelled = true;
     };
   }, [route.kind, currentNpub]);
+
+  React.useEffect(() => {
+    // npub.cash integration:
+    // - read default mint (preferred mint) for the user
+    // - auto-claim pending payments and store them as Cashu tokens
+    // Active whenever the effective Lightning address is @npub.cash.
+    if (!currentNpub) return;
+    if (!currentNsec) return;
+
+    const activeLnAddress = String(
+      myProfileLnAddress ?? npubCashLightningAddress ?? ""
+    ).trim();
+    if (!activeLnAddress) return;
+    if (!activeLnAddress.endsWith("@npub.cash")) return;
+
+    let cancelled = false;
+    const baseUrl = "https://npub.cash";
+
+    const loadInfo = async () => {
+      try {
+        const url = `${baseUrl}/api/v1/info`;
+        const auth = await makeNip98AuthHeader(url, "GET");
+        const res = await fetch(url, {
+          method: "GET",
+          headers: { Authorization: auth },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as unknown;
+        const mintUrl = (() => {
+          if (!data || typeof data !== "object") return "";
+          const direct = String((data as any).mintUrl ?? "").trim();
+          if (direct) return direct;
+          const wrapped = (data as any).data;
+          if (!wrapped || typeof wrapped !== "object") return "";
+          return String(
+            (wrapped as any).mintUrl ?? (wrapped as any).mintURL ?? ""
+          ).trim();
+        })();
+        if (cancelled) return;
+        if (mintUrl) setDefaultMintUrl(mintUrl);
+      } catch {
+        // ignore
+      }
+    };
+
+    const claimOnce = async () => {
+      if (npubCashClaimInFlightRef.current) return;
+      npubCashClaimInFlightRef.current = true;
+
+      try {
+        const url = `${baseUrl}/api/v1/claim`;
+        const auth = await makeNip98AuthHeader(url, "GET");
+        const res = await fetch(url, {
+          method: "GET",
+          headers: { Authorization: auth },
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as any;
+        if (!json || json.error) return;
+        if (cancelled) return;
+
+        const tokens: string[] = [];
+        const token = String(json.data?.token ?? json.token ?? "").trim();
+        if (token) tokens.push(token);
+        if (Array.isArray(json.data?.tokens)) {
+          for (const t of json.data.tokens) {
+            const txt = String(t ?? "").trim();
+            if (txt) tokens.push(txt);
+          }
+        }
+        if (tokens.length === 0) return;
+
+        for (const tkn of tokens) {
+          if (cancelled) return;
+          await acceptAndStoreCashuToken(tkn);
+        }
+      } catch {
+        // ignore
+      } finally {
+        npubCashClaimInFlightRef.current = false;
+      }
+    };
+
+    void loadInfo();
+    void claimOnce();
+
+    const intervalId = window.setInterval(() => {
+      void claimOnce();
+    }, 30_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [
+    acceptAndStoreCashuToken,
+    currentNpub,
+    currentNsec,
+    makeNip98AuthHeader,
+    myProfileLnAddress,
+    npubCashLightningAddress,
+  ]);
+
+  // Intentionally no automatic publishing of kind-0 profile metadata.
+  // We only publish profile changes when the user does so explicitly.
 
   React.useEffect(() => {
     // Fill missing name / lightning address from Nostr on list page only,
@@ -583,6 +1354,7 @@ const App = () => {
         try {
           const metadata = await fetchNostrProfileMetadata(npub, {
             signal: controller.signal,
+            relays: nostrFetchRelays,
           });
 
           saveCachedProfileMetadata(npub, metadata);
@@ -622,7 +1394,7 @@ const App = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [contacts, route.kind, update]);
+  }, [contacts, route.kind, update, nostrFetchRelaysKey]);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -643,6 +1415,20 @@ const App = () => {
       for (const npub of uniqueNpubs) {
         if (nostrPictureByNpub[npub] !== undefined) continue;
 
+        try {
+          const blobUrl = await loadCachedProfileAvatarObjectUrl(npub);
+          if (cancelled) return;
+          if (blobUrl) {
+            setNostrPictureByNpub((prev) => ({
+              ...prev,
+              [npub]: rememberBlobAvatarUrl(npub, blobUrl),
+            }));
+            continue;
+          }
+        } catch {
+          // ignore
+        }
+
         const cached = loadCachedProfilePicture(npub);
         if (cached) {
           setNostrPictureByNpub((prev) =>
@@ -657,10 +1443,23 @@ const App = () => {
         try {
           const url = await fetchNostrProfilePicture(npub, {
             signal: controller.signal,
+            relays: nostrFetchRelays,
           });
           saveCachedProfilePicture(npub, url);
           if (cancelled) return;
-          setNostrPictureByNpub((prev) => ({ ...prev, [npub]: url }));
+
+          if (url) {
+            const blobUrl = await cacheProfileAvatarFromUrl(npub, url, {
+              signal: controller.signal,
+            });
+            if (cancelled) return;
+            setNostrPictureByNpub((prev) => ({
+              ...prev,
+              [npub]: rememberBlobAvatarUrl(npub, blobUrl || url),
+            }));
+          } else {
+            setNostrPictureByNpub((prev) => ({ ...prev, [npub]: null }));
+          }
         } catch {
           saveCachedProfilePicture(npub, null);
           if (cancelled) return;
@@ -677,7 +1476,12 @@ const App = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [contacts, nostrPictureByNpub]);
+  }, [
+    contacts,
+    nostrPictureByNpub,
+    nostrFetchRelaysKey,
+    rememberBlobAvatarUrl,
+  ]);
 
   const { groupNames, ungroupedCount } = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1152,22 +1956,30 @@ const App = () => {
     }
 
     try {
-      const { nip19, getPublicKey } = await import("nostr-tools");
+      const { nip19 } = await import("nostr-tools");
       const decoded = nip19.decode(text);
       if (decoded.type !== "nsec") {
         setStatus(t("nostrPasteInvalid"));
         return;
       }
 
-      const privBytes = decoded.data as Uint8Array;
-      const pubHex = getPublicKey(privBytes);
-      const npub = nip19.npubEncode(pubHex);
+      const defaultNsec = String(derivedNostrIdentity?.nsec ?? "").trim();
+      if (defaultNsec && text === defaultNsec) {
+        // User set keys back to default; don't persist an override.
+        if (storedNostrIdentity?.id) {
+          update("nostrIdentity", {
+            id: storedNostrIdentity.id as unknown as NostrIdentityId,
+            isDeleted: Evolu.sqliteTrue,
+          });
+        }
+        setStatus(t("nostrKeysUpdated"));
+        return;
+      }
 
       if (storedNostrIdentity?.id) {
         const result = update("nostrIdentity", {
           id: storedNostrIdentity.id as unknown as NostrIdentityId,
           nsec: text as typeof Evolu.NonEmptyString1000.Type,
-          npub: npub as typeof Evolu.NonEmptyString1000.Type,
         });
         if (!result.ok) {
           setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -1176,7 +1988,6 @@ const App = () => {
       } else {
         const result = insert("nostrIdentity", {
           nsec: text as typeof Evolu.NonEmptyString1000.Type,
-          npub: npub as typeof Evolu.NonEmptyString1000.Type,
         });
         if (!result.ok) {
           setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -1229,28 +2040,16 @@ const App = () => {
       return;
     }
 
+    // Derived keys are the default; do not persist them as an override.
     if (storedNostrIdentity?.id) {
-      const result = update("nostrIdentity", {
+      update("nostrIdentity", {
         id: storedNostrIdentity.id as unknown as NostrIdentityId,
-        nsec: derived.nsec as typeof Evolu.NonEmptyString1000.Type,
-        npub: derived.npub as typeof Evolu.NonEmptyString1000.Type,
+        isDeleted: Evolu.sqliteTrue,
       });
-      if (!result.ok) {
-        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
-        return;
-      }
-    } else {
-      const result = insert("nostrIdentity", {
-        nsec: derived.nsec as typeof Evolu.NonEmptyString1000.Type,
-        npub: derived.npub as typeof Evolu.NonEmptyString1000.Type,
-      });
-      if (!result.ok) {
-        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
-        return;
-      }
     }
 
     setStatus(t("nostrKeysDerived"));
+    return;
   };
 
   React.useEffect(() => {
@@ -1497,6 +2296,30 @@ const App = () => {
       };
     }
 
+    if (route.kind === "nostrRelays") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToSettings,
+      };
+    }
+
+    if (route.kind === "nostrRelay") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToNostrRelays,
+      };
+    }
+
+    if (route.kind === "nostrRelayNew") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToNostrRelays,
+      };
+    }
+
     if (route.kind === "contactNew") {
       return {
         icon: "<",
@@ -1545,11 +2368,39 @@ const App = () => {
       };
     }
 
+    if (route.kind === "nostrRelays") {
+      return {
+        icon: "+",
+        label: t("addRelay"),
+        onClick: navigateToNewRelay,
+      };
+    }
+
     if (route.kind === "contact" && selectedContact) {
       return {
         icon: "✎",
         label: t("editContact"),
         onClick: () => navigateToContactEdit(selectedContact.id),
+      };
+    }
+
+    if (route.kind === "profile") {
+      return {
+        icon: "✎",
+        label: t("edit"),
+        onClick: () => {
+          if (isProfileEditing) {
+            setIsProfileEditing(false);
+            return;
+          }
+
+          const bestName = myProfileMetadata
+            ? getBestNostrName(myProfileMetadata)
+            : null;
+          setProfileEditName(bestName ?? myProfileName ?? "");
+          setProfileEditLnAddress(myProfileLnAddress ?? "");
+          setIsProfileEditing(true);
+        },
       };
     }
 
@@ -1561,12 +2412,159 @@ const App = () => {
     if (route.kind === "wallet") return t("wallet");
     if (route.kind === "settings") return t("menu");
     if (route.kind === "profile") return t("profile");
+    if (route.kind === "nostrRelays") return t("nostrRelay");
+    if (route.kind === "nostrRelay") return t("nostrRelay");
+    if (route.kind === "nostrRelayNew") return t("nostrRelay");
     if (route.kind === "contactNew") return t("newContact");
-    if (route.kind === "chat") {
-      return selectedContact?.name ? String(selectedContact.name) : t("chat");
-    }
+    if (route.kind === "contact") return t("contact");
+    if (route.kind === "contactEdit") return t("contactEditTitle");
+    if (route.kind === "contactPay") return t("contactPayTitle");
+    if (route.kind === "chat") return t("messagesTitle");
     return null;
   })();
+
+  const saveProfileEdits = async () => {
+    try {
+      if (!currentNpub || !currentNsec) {
+        setStatus(t("profileMissingNpub"));
+        return;
+      }
+
+      const name = profileEditName.trim();
+      const ln = profileEditLnAddress.trim();
+
+      const { SimplePool, finalizeEvent, getPublicKey, nip19 } = await import(
+        "nostr-tools"
+      );
+
+      const decoded = nip19.decode(currentNsec);
+      if (decoded.type !== "nsec") throw new Error("Invalid nsec");
+      const privBytes = decoded.data as Uint8Array;
+      const pubkey = getPublicKey(privBytes);
+
+      const cachedPrev =
+        loadCachedProfileMetadata(currentNpub)?.metadata ?? null;
+      const livePrev = await fetchNostrProfileMetadata(currentNpub, {
+        relays: nostrFetchRelays,
+      }).catch(() => null);
+
+      const prev = (livePrev ??
+        cachedPrev ??
+        myProfileMetadata ??
+        {}) as NostrProfileMetadata;
+
+      const contentObj: Record<string, unknown> = {
+        ...(prev.name ? { name: prev.name } : {}),
+        ...(prev.displayName ? { display_name: prev.displayName } : {}),
+        ...(prev.picture ? { picture: prev.picture } : {}),
+        ...(prev.image ? { image: prev.image } : {}),
+        ...(prev.lud16 ? { lud16: prev.lud16 } : {}),
+        ...(prev.lud06 ? { lud06: prev.lud06 } : {}),
+      };
+
+      if (name) {
+        contentObj.name = name;
+        contentObj.display_name = name;
+      }
+
+      if (ln) {
+        contentObj.lud16 = ln;
+      }
+
+      const baseEvent = {
+        kind: 0,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [] as string[][],
+        content: JSON.stringify(contentObj),
+        pubkey,
+      } satisfies UnsignedEvent;
+
+      const signed: NostrToolsEvent = finalizeEvent(baseEvent, privBytes);
+
+      const relaysToUse =
+        nostrFetchRelays.length > 0 ? nostrFetchRelays : NOSTR_RELAYS;
+      const pool = new SimplePool();
+      try {
+        const publishResults = await Promise.allSettled(
+          pool.publish(relaysToUse, signed)
+        );
+
+        const anySuccess = publishResults.some((r) => r.status === "fulfilled");
+        if (!anySuccess) {
+          const firstError = publishResults.find(
+            (r): r is PromiseRejectedResult => r.status === "rejected"
+          )?.reason;
+          throw new Error(String(firstError ?? "publish failed"));
+        }
+      } finally {
+        pool.close(relaysToUse);
+      }
+
+      const updatedMeta: NostrProfileMetadata = {
+        ...prev,
+        ...(name ? { name, displayName: name } : {}),
+        ...(ln ? { lud16: ln } : {}),
+      };
+
+      saveCachedProfileMetadata(currentNpub, updatedMeta);
+      setMyProfileMetadata(updatedMeta);
+      if (name) setMyProfileName(name);
+      setMyProfileLnAddress(ln || null);
+      setIsProfileEditing(false);
+    } catch (e) {
+      setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
+    }
+  };
+
+  const saveNewRelay = () => {
+    const url = newRelayUrl.trim();
+    if (!url) {
+      setStatus(`${t("errorPrefix")}: ${t("fillAtLeastOne")}`);
+      return;
+    }
+
+    const already = relayUrls.some((u) => u === url);
+    if (already) {
+      navigateToNostrRelays();
+      return;
+    }
+
+    const nextUrls = [...relayUrls, url];
+    setRelayUrls(nextUrls);
+    void publishNostrRelayList(nextUrls).catch((e) => {
+      console.log("[linky][nostr] publish relay list failed", {
+        error: String(e ?? "unknown"),
+      });
+    });
+
+    setNewRelayUrl("");
+    navigateToNostrRelays();
+  };
+
+  const requestDeleteSelectedRelay = () => {
+    if (route.kind !== "nostrRelay") return;
+    if (!selectedRelayUrl) return;
+    if (relayUrls.length <= 1) {
+      setStatus(`${t("errorPrefix")}: ${t("fillAtLeastOne")}`);
+      return;
+    }
+
+    if (pendingRelayDeleteUrl === selectedRelayUrl) {
+      const nextUrls = relayUrls.filter((u) => u !== selectedRelayUrl);
+      setRelayUrls(nextUrls);
+      setPendingRelayDeleteUrl(null);
+      void publishNostrRelayList(nextUrls).catch((e) => {
+        console.log("[linky][nostr] publish relay list failed", {
+          error: String(e ?? "unknown"),
+        });
+      });
+      navigateToNostrRelays();
+      return;
+    }
+
+    setPendingRelayDeleteUrl(selectedRelayUrl);
+    setStatus(t("deleteArmedHint"));
+  };
 
   const displayUnit = useBitcoinSymbol ? "₿" : "sat";
 
@@ -1630,11 +2628,11 @@ const App = () => {
             </span>
             <span className="profile-text">
               <span className="profile-name">
-                {myProfileName ?? t("profileNoName")}
+                {myProfileName ??
+                  (currentNpub
+                    ? formatShortNpub(currentNpub)
+                    : t("profileNoName"))}
               </span>
-              {currentNpub ? (
-                <span className="profile-npub">{currentNpub}</span>
-              ) : null}
             </span>
           </button>
 
@@ -1703,6 +2701,45 @@ const App = () => {
             </div>
           </div>
 
+          <button
+            type="button"
+            className="settings-row settings-link"
+            onClick={navigateToNostrRelays}
+            aria-label={t("nostrRelay")}
+            title={t("nostrRelay")}
+          >
+            <div className="settings-left">
+              <span className="settings-icon" aria-hidden="true">
+                📡
+              </span>
+              <span className="settings-label">{t("nostrRelay")}</span>
+            </div>
+            <div className="settings-right">
+              <span className="relay-count" aria-label="relay status">
+                {connectedRelayCount}/{relayUrls.length}
+              </span>
+              <span className="settings-chevron" aria-hidden="true">
+                &gt;
+              </span>
+            </div>
+          </button>
+
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-icon" aria-hidden="true">
+                🏦
+              </span>
+              <span className="settings-label">{t("mints")}</span>
+            </div>
+            <div className="settings-right">
+              {defaultMintDisplay ? (
+                <span className="relay-url">{defaultMintDisplay}</span>
+              ) : (
+                <span className="muted">—</span>
+              )}
+            </div>
+          </div>
+
           <div className="settings-row">
             <div className="settings-left">
               <span className="settings-icon" aria-hidden="true">
@@ -1748,6 +2785,101 @@ const App = () => {
               {t("walletOpen")}
             </button>
           </div>
+
+          {status && <p className="status">{status}</p>}
+        </section>
+      )}
+
+      {route.kind === "nostrRelays" && (
+        <section className="panel">
+          {relayUrls.length === 0 ? (
+            <p className="lede">{t("noContactsYet")}</p>
+          ) : (
+            <div>
+              {relayUrls.map((url) => {
+                const state = relayStatusByUrl[url] ?? "checking";
+                const dotClass =
+                  state === "connected"
+                    ? "status-dot connected"
+                    : "status-dot disconnected";
+
+                return (
+                  <button
+                    type="button"
+                    className="settings-row settings-link"
+                    key={url}
+                    onClick={() => navigateToNostrRelay(url)}
+                  >
+                    <div className="settings-left">
+                      <span className="relay-url">{url}</span>
+                    </div>
+                    <div className="settings-right">
+                      <span
+                        className={dotClass}
+                        aria-label={state}
+                        title={state}
+                      />
+                      <span className="settings-chevron" aria-hidden="true">
+                        &gt;
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {status && <p className="status">{status}</p>}
+        </section>
+      )}
+
+      {route.kind === "nostrRelayNew" && (
+        <section className="panel">
+          <label htmlFor="relayUrl">{t("relayUrl")}</label>
+          <input
+            id="relayUrl"
+            value={newRelayUrl}
+            onChange={(e) => setNewRelayUrl(e.target.value)}
+            placeholder="wss://..."
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+
+          <div className="panel-header" style={{ marginTop: 14 }}>
+            <button onClick={saveNewRelay}>{t("saveChanges")}</button>
+          </div>
+
+          {status && <p className="status">{status}</p>}
+        </section>
+      )}
+
+      {route.kind === "nostrRelay" && (
+        <section className="panel">
+          {selectedRelayUrl ? (
+            <>
+              <div className="settings-row">
+                <div className="settings-left">
+                  <span className="relay-url">{selectedRelayUrl}</span>
+                </div>
+              </div>
+
+              <div className="settings-row">
+                <button
+                  className={
+                    pendingRelayDeleteUrl === selectedRelayUrl
+                      ? "btn-wide danger"
+                      : "btn-wide"
+                  }
+                  onClick={requestDeleteSelectedRelay}
+                >
+                  {t("delete")}
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="lede">{t("errorPrefix")}</p>
+          )}
 
           {status && <p className="status">{status}</p>}
         </section>
@@ -2390,19 +3522,78 @@ const App = () => {
             <p className="muted">{t("profileMissingNpub")}</p>
           ) : (
             <>
-              <p className="muted">{t("myNpubQr")}</p>
-              {myProfileQr ? (
-                <img
-                  className="qr"
-                  src={myProfileQr}
-                  alt={t("myNpubQr")}
-                  onClick={() => {
-                    if (!currentNpub) return;
-                    void copyText(currentNpub);
-                  }}
-                />
+              {isProfileEditing ? (
+                <>
+                  <label htmlFor="profileName">{t("name")}</label>
+                  <input
+                    id="profileName"
+                    value={profileEditName}
+                    onChange={(e) => setProfileEditName(e.target.value)}
+                    placeholder={t("name")}
+                  />
+
+                  <label htmlFor="profileLn">{t("lightningAddress")}</label>
+                  <input
+                    id="profileLn"
+                    value={profileEditLnAddress}
+                    onChange={(e) => setProfileEditLnAddress(e.target.value)}
+                    placeholder={t("lightningAddress")}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+
+                  <div className="panel-header" style={{ marginTop: 14 }}>
+                    <button onClick={() => void saveProfileEdits()}>
+                      {t("saveChanges")}
+                    </button>
+                  </div>
+                </>
               ) : (
-                <p className="muted">{currentNpub}</p>
+                <>
+                  <div className="profile-detail">
+                    <div className="contact-avatar is-xl" aria-hidden="true">
+                      {myProfilePicture ? (
+                        <img
+                          src={myProfilePicture}
+                          alt=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span className="contact-avatar-fallback">
+                          {getInitials(
+                            myProfileName ?? formatShortNpub(currentNpub)
+                          )}
+                        </span>
+                      )}
+                    </div>
+
+                    {myProfileQr ? (
+                      <img
+                        className="qr"
+                        src={myProfileQr}
+                        alt=""
+                        onClick={() => {
+                          if (!currentNpub) return;
+                          void copyText(currentNpub);
+                        }}
+                      />
+                    ) : (
+                      <p className="muted">{currentNpub}</p>
+                    )}
+
+                    <h2 className="contact-detail-name">
+                      {myProfileName ?? formatShortNpub(currentNpub)}
+                    </h2>
+
+                    {effectiveMyLightningAddress ? (
+                      <p className="contact-detail-ln">
+                        {effectiveMyLightningAddress}
+                      </p>
+                    ) : null}
+                  </div>
+                </>
               )}
             </>
           )}

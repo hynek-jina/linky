@@ -170,7 +170,60 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 48px;
   margin-bottom: 12px;
+}
+
+button.settings-link {
+  width: 100%;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+  text-align: left;
+}
+
+button.settings-link:hover {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.settings-chevron {
+  color: #94a3b8;
+  font-weight: 800;
+  margin-left: 10px;
+}
+
+.relay-count {
+  color: #cbd5e1;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.status-dot.connected {
+  background: #22c55e;
+}
+
+.status-dot.disconnected {
+  background: #ef4444;
+}
+
+.relay-url {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-weight: 600;
+  color: #e2e8f0;
+  font-size: 13px;
+  word-break: break-word;
 }
 
 .settings-left {
@@ -267,6 +320,14 @@
   display: block;
   margin: 12px auto 0;
   cursor: pointer;
+}
+
+.profile-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
 }
 
 .chat-messages {

@@ -22,11 +22,105 @@ const getNostrTools = () => {
 export const NOSTR_RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol",
-  "wss://relay.nostr.band",
+  "wss://relay.0xchat.com",
 ];
 
 const STORAGE_PICTURE_PREFIX = "linky_nostr_profile_picture_v1:";
 const STORAGE_METADATA_PREFIX = "linky_nostr_profile_metadata_v1:";
+
+const AVATAR_CACHE_NAME = "linky_nostr_avatar_cache_v1";
+
+const canUseCacheStorage = (): boolean => {
+  try {
+    return typeof caches !== "undefined" && typeof Request !== "undefined";
+  } catch {
+    return false;
+  }
+};
+
+const makeAvatarCacheRequest = (npub: string): Request | null => {
+  try {
+    const origin = (globalThis as any)?.location?.origin as string | undefined;
+    if (!origin) return null;
+    const url = new URL(
+      `/__linky_cache/nostr_avatar/${encodeURIComponent(npub)}`,
+      origin
+    );
+    return new Request(url.toString());
+  } catch {
+    return null;
+  }
+};
+
+export const loadCachedProfileAvatarObjectUrl = async (
+  npub: string
+): Promise<string | null> => {
+  const trimmed = String(npub ?? "").trim();
+  if (!trimmed) return null;
+  if (!canUseCacheStorage()) return null;
+
+  const req = makeAvatarCacheRequest(trimmed);
+  if (!req) return null;
+
+  try {
+    const cache = await caches.open(AVATAR_CACHE_NAME);
+    const match = await cache.match(req);
+    if (!match) return null;
+    const blob = await match.blob();
+    if (!blob || blob.size <= 0) return null;
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
+};
+
+export const cacheProfileAvatarFromUrl = async (
+  npub: string,
+  avatarUrl: string,
+  options?: { signal?: AbortSignal }
+): Promise<string | null> => {
+  const trimmed = String(npub ?? "").trim();
+  if (!trimmed) return null;
+  if (!isHttpUrl(avatarUrl)) return null;
+  if (!canUseCacheStorage()) return null;
+  if (options?.signal?.aborted) return null;
+
+  const req = makeAvatarCacheRequest(trimmed);
+  if (!req) return null;
+
+  try {
+    const init: RequestInit = options?.signal ? { signal: options.signal } : {};
+    const res = await fetch(avatarUrl, init);
+    if (!res.ok) return null;
+
+    const cache = await caches.open(AVATAR_CACHE_NAME);
+    // Store by npub so we can retrieve offline deterministically.
+    await cache.put(req, res.clone());
+
+    const blob = await res.blob();
+    if (!blob || blob.size <= 0) return null;
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
+};
+
+export const deleteCachedProfileAvatar = async (
+  npub: string
+): Promise<void> => {
+  const trimmed = String(npub ?? "").trim();
+  if (!trimmed) return;
+  if (!canUseCacheStorage()) return;
+  const req = makeAvatarCacheRequest(trimmed);
+  if (!req) return;
+
+  try {
+    const cache = await caches.open(AVATAR_CACHE_NAME);
+    await cache.delete(req);
+  } catch {
+    // ignore
+  }
+};
 
 type CachedValue = {
   url: string | null;
@@ -38,6 +132,22 @@ const PICTURE_NONE_TTL_MS = 2 * 60 * 1000;
 const METADATA_NONE_TTL_MS = 2 * 60 * 1000;
 
 const now = () => Date.now();
+
+const normalizeRelayUrls = (urls: string[]): string[] => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of urls) {
+    const url = String(raw ?? "").trim();
+    if (!url) continue;
+    if (!(url.startsWith("wss://") || url.startsWith("ws://"))) continue;
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+  }
+
+  return out;
+};
 
 const isHttpUrl = (value: unknown): value is string => {
   if (typeof value !== "string") return false;
@@ -139,11 +249,16 @@ const asTrimmedNonEmptyString = (value: unknown): string | undefined => {
 
 export const fetchNostrProfileMetadata = async (
   npub: string,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; relays?: string[] }
 ): Promise<NostrProfileMetadata | null> => {
   const trimmed = npub.trim();
   if (!trimmed) return null;
   if (options?.signal?.aborted) return null;
+
+  const relays = normalizeRelayUrls(
+    options?.relays && options.relays.length > 0 ? options.relays : NOSTR_RELAYS
+  );
+  if (relays.length === 0) return null;
 
   const { SimplePool, nip19 } = await getNostrTools();
 
@@ -159,11 +274,16 @@ export const fetchNostrProfileMetadata = async (
   const pool = new SimplePool();
 
   try {
-    const events = await pool.querySync(
-      NOSTR_RELAYS,
-      { kinds: [0], authors: [pubkey], limit: 5 },
-      { maxWait: 5000 }
-    );
+    let events: unknown = [];
+    try {
+      events = await pool.querySync(
+        relays,
+        { kinds: [0], authors: [pubkey], limit: 5 },
+        { maxWait: 8000 }
+      );
+    } catch {
+      return null;
+    }
 
     const newest = (events as NostrEvent[])
       .slice()
@@ -207,20 +327,25 @@ export const fetchNostrProfileMetadata = async (
     if (Object.keys(metadata).length === 0) return null;
     return metadata;
   } finally {
-    pool.close(NOSTR_RELAYS);
+    pool.close(relays);
   }
 };
 
 export const fetchNostrProfilePicture = async (
   npub: string,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; relays?: string[] }
 ): Promise<string | null> => {
   const cached = loadCachedProfileMetadata(npub);
-  let metadata = cached?.metadata;
-  if (metadata == null) {
-    metadata = await fetchNostrProfileMetadata(npub, options);
-    saveCachedProfileMetadata(npub, metadata);
-  }
+  const cachedMeta = cached?.metadata ?? null;
+
+  const cachedPicture = cachedMeta?.picture;
+  if (isHttpUrl(cachedPicture)) return cachedPicture;
+  const cachedImage = cachedMeta?.image;
+  if (isHttpUrl(cachedImage)) return cachedImage;
+
+  // If there's no cached picture, try fetching (important when switching relays).
+  const metadata = await fetchNostrProfileMetadata(npub, options);
+  saveCachedProfileMetadata(npub, metadata);
 
   const picture = metadata?.picture;
   if (isHttpUrl(picture)) return picture;

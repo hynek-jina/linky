@@ -17,6 +17,13 @@ export const cs = {
     "Vložením Nostr klíčů přepíšete aktuální. Klikněte ještě jednou pro potvrzení.",
   nostrPasteInvalid: "Neplatný Nostr klíč (očekávám nsec…).",
 
+  nostrRelay: "Nostr relay",
+  addRelay: "Přidat relay",
+  newRelay: "Přidat relay",
+  relayUrl: "Relay URL",
+
+  mints: "Minty",
+
   chat: "Chat",
   sendMessage: "Poslat zprávu",
   chatEmpty: "Zatím žádné zprávy.",
@@ -44,6 +51,9 @@ export const cs = {
 
   contact: "Kontakt",
   editContact: "Upravit kontakt",
+  contactEditTitle: "Úprava kontaktu",
+  contactPayTitle: "Platba na kontakt",
+  messagesTitle: "Zprávy",
   newContact: "Přidat nový kontakt",
   close: "Zavřít",
 

@@ -10,6 +10,48 @@ if (!("Buffer" in globalThis)) {
   (globalThis as unknown as { Buffer: typeof Buffer }).Buffer = Buffer;
 }
 
+// The `buffer` polyfill doesn't implement Node's newer "base64url" encoding.
+// Some deps (e.g. Evolu) use it for compact URL-safe IDs.
+// Patch in minimal support to avoid boot crashes in the browser.
+(() => {
+  const B = (globalThis as any).Buffer as typeof Buffer | undefined;
+  if (!B) return;
+
+  const proto = (B as any).prototype;
+  if (proto && proto.__linkyBase64UrlPatched) return;
+
+  const toBase64Url = (base64: string) =>
+    base64.replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/g, "");
+
+  const fromBase64Url = (base64url: string) => {
+    const base64 = base64url.replaceAll("-", "+").replaceAll("_", "/");
+    const pad = base64.length % 4;
+    return pad === 0 ? base64 : base64 + "=".repeat(4 - pad);
+  };
+
+  const origToString = proto.toString;
+  proto.toString = function (encoding?: string, start?: number, end?: number) {
+    if (encoding === "base64url") {
+      return toBase64Url(origToString.call(this, "base64", start, end));
+    }
+    return origToString.call(this, encoding, start, end);
+  };
+
+  const origFrom = (B as any).from;
+  (B as any).from = function (
+    value: unknown,
+    encodingOrOffset?: unknown,
+    length?: unknown
+  ) {
+    if (typeof value === "string" && encodingOrOffset === "base64url") {
+      return origFrom.call(this, fromBase64Url(value), "base64");
+    }
+    return origFrom.call(this, value, encodingOrOffset, length);
+  };
+
+  proto.__linkyBase64UrlPatched = true;
+})();
+
 // Dev-only cleanup: if a Service Worker was registered earlier (e.g. from a
 // previous PROD preview), it can keep serving stale cached assets on localhost
 // and cause a blank screen until a hard refresh.
@@ -29,7 +71,58 @@ if (import.meta.env.DEV && "serviceWorker" in navigator) {
 }
 
 if (import.meta.env.PROD) {
-  registerSW({ immediate: true });
+  registerSW({
+    immediate: true,
+    onOfflineReady() {
+      console.log("[linky][pwa] offline ready");
+    },
+    onNeedRefresh() {
+      console.log("[linky][pwa] update available");
+    },
+    onRegisteredSW(swUrl, registration) {
+      console.log("[linky][pwa] sw registered", {
+        swUrl,
+        scope: registration?.scope,
+        hasActive: Boolean(registration?.active),
+        hasWaiting: Boolean(registration?.waiting),
+        hasInstalling: Boolean(registration?.installing),
+      });
+    },
+    onRegisterError(error) {
+      console.log("[linky][pwa] sw register error", { error });
+    },
+  });
+
+  if ("serviceWorker" in navigator) {
+    console.log("[linky][pwa] controller", {
+      hasController: Boolean(navigator.serviceWorker.controller),
+    });
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      console.log("[linky][pwa] controller change", {
+        hasController: Boolean(navigator.serviceWorker.controller),
+      });
+    });
+
+    void navigator.serviceWorker.ready
+      .then(async (reg) => {
+        console.log("[linky][pwa] sw ready", {
+          scope: reg.scope,
+          hasActive: Boolean(reg.active),
+        });
+
+        if ("caches" in globalThis) {
+          const keys = await caches.keys();
+          const relevant = keys.filter(
+            (k) => k.includes("workbox") || k.includes("linky")
+          );
+          console.log("[linky][pwa] cache keys", { keys: relevant });
+        }
+      })
+      .catch((error) => {
+        console.log("[linky][pwa] sw ready error", { error });
+      });
+  }
 }
 
 const escapeHtml = (value: string) =>

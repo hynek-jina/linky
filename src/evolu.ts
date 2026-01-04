@@ -36,8 +36,6 @@ export const Schema = {
     id: NostrIdentityId,
     // Bech32 NIP-19 secret key, must start with "nsec".
     nsec: Evolu.NonEmptyString1000,
-    // Bech32 NIP-19 public key (derived from nsec), starts with "npub".
-    npub: Evolu.NonEmptyString1000,
   },
   nostrMessage: {
     id: NostrMessageId,
