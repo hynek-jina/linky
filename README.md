@@ -17,15 +17,19 @@ It is local-first: your data is stored locally and the app works offline.
 - Payments
   - If a contact has a Lightning address and you have balance, you can create an invoice via LNURL-pay and pay it via Cashu melt.
 - Settings
-  - Keys: copy the current mnemonic and paste another mnemonic from the clipboard.
   - Language: Czech / English.
   - Unit toggle: switches the displayed unit label between `sat` and `₿`.
+  - Advanced
+    - Keys (seed): copy the current mnemonic and paste another mnemonic from the clipboard.
+    - Nostr keys: derive keys from seed, copy/paste keys.
+    - Nostr relays: view/add/remove relays.
+    - Mints: shows the current default mint.
 
 ## Keys (seed) and data
 
 The app uses a BIP39 mnemonic (12 words) as the identity of the data owner.
 
-- “Copy current” copies the current seed to the clipboard.
+- “Copy current” copies the current seed to the clipboard (Settings → Advanced → Keys).
 - “Paste” reads a seed from the clipboard and switches the app to a different owner.
   This effectively wipes/replaces the current local dataset in the app (that’s why paste requires a second click to confirm).
 

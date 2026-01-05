@@ -4,6 +4,7 @@ export const en = {
 
   settings: "Settings",
   menu: "Menu",
+  advanced: "Advanced",
   keys: "Keys",
   copyCurrent: "Copy",
   paste: "Paste",
@@ -25,7 +26,7 @@ export const en = {
   mints: "Mints",
 
   chat: "Chat",
-  sendMessage: "Send message",
+  sendMessage: "Messages",
   chatEmpty: "No messages yet.",
   chatPlaceholder: "Message",
   chatMissingContactNpub: "Missing contact npub.",
@@ -88,6 +89,11 @@ export const en = {
 
   wallet: "Wallet",
   walletOpen: "Open wallet",
+
+  scan: "Scan",
+  scanUnsupported: "Unsupported QR code.",
+  scanCameraError: "Camera not available.",
+  contactExists: "Contact already exists.",
 
   unit: "Units",
   unitUseBitcoin: "Show ₿ instead of sat",

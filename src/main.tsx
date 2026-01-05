@@ -58,11 +58,27 @@ if (!("Buffer" in globalThis)) {
 if (import.meta.env.DEV && "serviceWorker" in navigator) {
   void (async () => {
     try {
+      const reloadKey = "linky_dev_sw_cleanup_reload_v1";
+      const hadController = Boolean(navigator.serviceWorker.controller);
+
       const regs = await navigator.serviceWorker.getRegistrations();
       await Promise.all(regs.map((r) => r.unregister()));
       if ("caches" in globalThis) {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+
+      // Unregistering doesn't immediately stop an already-controlling SW.
+      // Force a one-time reload so the page is no longer under SW control.
+      if (hadController) {
+        try {
+          if (sessionStorage.getItem(reloadKey) !== "1") {
+            sessionStorage.setItem(reloadKey, "1");
+            window.location.reload();
+          }
+        } catch {
+          // ignore
+        }
       }
     } catch {
       // ignore

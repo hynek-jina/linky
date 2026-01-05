@@ -4,6 +4,7 @@ export const cs = {
 
   settings: "Nastavení",
   menu: "Menu",
+  advanced: "Pokročilé",
   keys: "Klíče",
   copyCurrent: "Zkopírovat",
   paste: "Vložit",
@@ -25,7 +26,7 @@ export const cs = {
   mints: "Minty",
 
   chat: "Chat",
-  sendMessage: "Poslat zprávu",
+  sendMessage: "Zprávy",
   chatEmpty: "Zatím žádné zprávy.",
   chatPlaceholder: "Zpráva",
   chatMissingContactNpub: "Chybí npub u kontaktu.",
@@ -89,6 +90,11 @@ export const cs = {
 
   wallet: "Peněženka",
   walletOpen: "Otevřít peněženku",
+
+  scan: "Skenovat",
+  scanUnsupported: "Nepodporovaný QR kód.",
+  scanCameraError: "Kamera není dostupná.",
+  contactExists: "Kontakt už existuje.",
 
   unit: "Jednotky",
   unitUseBitcoin: "Zobrazit ₿ místo sat",

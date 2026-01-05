@@ -31,6 +31,11 @@ type ContactFormState = {
 
 const UNIT_TOGGLE_STORAGE_KEY = "linky_use_btc_symbol";
 
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== "object") return null;
+  return value as Record<string, unknown>;
+};
+
 const getInitialUseBitcoinSymbol = (): boolean => {
   try {
     return localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1";
@@ -49,6 +54,7 @@ const makeEmptyForm = (): ContactFormState => ({
 type Route =
   | { kind: "contacts" }
   | { kind: "settings" }
+  | { kind: "advanced" }
   | { kind: "profile" }
   | { kind: "wallet" }
   | { kind: "cashuTokenNew" }
@@ -66,6 +72,7 @@ const parseRouteFromHash = (): Route => {
   const hash = globalThis.location?.hash ?? "";
   if (hash === "#") return { kind: "contacts" };
   if (hash === "#settings") return { kind: "settings" };
+  if (hash === "#advanced") return { kind: "advanced" };
   if (hash === "#profile") return { kind: "profile" };
   if (hash === "#wallet") return { kind: "wallet" };
   if (hash === "#wallet/token/new") return { kind: "cashuTokenNew" };
@@ -121,6 +128,13 @@ const App = () => {
   const [editingId, setEditingId] = useState<ContactId | null>(null);
   const [route, setRoute] = useState<Route>(() => parseRouteFromHash());
   const [status, setStatus] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>(
+    []
+  );
+  const toastTimersRef = React.useRef<Map<string, number>>(new Map());
+
+  const [paidOverlayIsOpen, setPaidOverlayIsOpen] = useState(false);
+  const paidOverlayTimerRef = React.useRef<number | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<ContactId | null>(
     null
   );
@@ -182,8 +196,10 @@ const App = () => {
   );
 
   React.useEffect(() => {
+    const urlMap = avatarObjectUrlsByNpubRef.current;
+
     return () => {
-      for (const url of avatarObjectUrlsByNpubRef.current.values()) {
+      for (const url of urlMap.values()) {
         if (!url || !url.startsWith("blob:")) continue;
         try {
           URL.revokeObjectURL(url);
@@ -191,7 +207,7 @@ const App = () => {
           // ignore
         }
       }
-      avatarObjectUrlsByNpubRef.current.clear();
+      urlMap.clear();
     };
   }, []);
 
@@ -220,6 +236,16 @@ const App = () => {
   const [mintIconUrlByMint, setMintIconUrlByMint] = useState<
     Record<string, string | null>
   >(() => ({}));
+
+  const [scanIsOpen, setScanIsOpen] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const scanVideoRef = React.useRef<HTMLVideoElement | null>(null);
+
+  const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
+  const chatMessageElByIdRef = React.useRef<Map<string, HTMLDivElement>>(
+    new Map()
+  );
+  const chatDidInitialScrollForContactRef = React.useRef<string | null>(null);
 
   const getMintOriginAndHost = React.useCallback(
     (mint: unknown): { origin: string | null; host: string | null } => {
@@ -256,6 +282,108 @@ const App = () => {
   const t = React.useCallback(
     <K extends keyof typeof translations.cs>(key: K) => translations[lang][key],
     [lang]
+  );
+
+  const pushToast = React.useCallback((message: string) => {
+    const text = String(message ?? "").trim();
+    if (!text) return;
+
+    const id = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    setToasts((prev) => [...prev, { id, message: text }]);
+
+    const timeoutId = window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+      toastTimersRef.current.delete(id);
+    }, 2500);
+
+    toastTimersRef.current.set(id, timeoutId);
+  }, []);
+
+  React.useEffect(() => {
+    const toastTimers = toastTimersRef.current;
+    const paidTimerRef = paidOverlayTimerRef;
+    return () => {
+      for (const timeoutId of toastTimers.values()) {
+        try {
+          window.clearTimeout(timeoutId);
+        } catch {
+          // ignore
+        }
+      }
+      toastTimers.clear();
+      if (paidTimerRef.current !== null) {
+        try {
+          window.clearTimeout(paidTimerRef.current);
+        } catch {
+          // ignore
+        }
+      }
+      paidTimerRef.current = null;
+    };
+  }, []);
+
+  const showPaidOverlay = React.useCallback(() => {
+    setPaidOverlayIsOpen(true);
+    if (paidOverlayTimerRef.current !== null) {
+      try {
+        window.clearTimeout(paidOverlayTimerRef.current);
+      } catch {
+        // ignore
+      }
+    }
+    paidOverlayTimerRef.current = window.setTimeout(() => {
+      setPaidOverlayIsOpen(false);
+      paidOverlayTimerRef.current = null;
+    }, 3000);
+  }, []);
+
+  const maybeShowPwaNotification = React.useCallback(
+    async (title: string, body: string, tag?: string) => {
+      // Best-effort: only notify when the app isn't currently visible.
+      try {
+        if (document.visibilityState === "visible") return;
+      } catch {
+        // ignore
+      }
+
+      if (!("Notification" in globalThis)) return;
+
+      let permission = Notification.permission;
+      if (permission === "default") {
+        try {
+          permission = await Notification.requestPermission();
+        } catch {
+          return;
+        }
+      }
+      if (permission !== "granted") return;
+
+      const safeTitle = String(title ?? "").trim() || t("appTitle");
+      const safeBody = String(body ?? "").trim();
+      const options: NotificationOptions = tag
+        ? { body: safeBody, tag: String(tag) }
+        : { body: safeBody };
+
+      try {
+        if ("serviceWorker" in navigator) {
+          const reg = await navigator.serviceWorker.ready.catch(() => null);
+          if (reg) {
+            await reg.showNotification(safeTitle, options);
+            return;
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        // Fallback for browsers that allow direct notifications.
+        new Notification(safeTitle, options);
+      } catch {
+        // ignore
+      }
+    },
+    [t]
   );
 
   const getInitials = (name: string) => {
@@ -322,6 +450,10 @@ const App = () => {
     window.location.assign("#settings");
   };
 
+  const navigateToAdvanced = () => {
+    window.location.assign("#advanced");
+  };
+
   const navigateToContact = (id: ContactId) => {
     window.location.assign(`#contact/${encodeURIComponent(String(id))}`);
   };
@@ -342,9 +474,9 @@ const App = () => {
     window.location.assign("#contact/new");
   };
 
-  const navigateToWallet = () => {
+  const navigateToWallet = React.useCallback(() => {
     window.location.assign("#wallet");
-  };
+  }, []);
 
   const navigateToCashuTokenNew = () => {
     window.location.assign("#wallet/token/new");
@@ -438,11 +570,9 @@ const App = () => {
 
   React.useEffect(() => {
     if (!status) return;
-    const timeoutId = window.setTimeout(() => {
-      setStatus(null);
-    }, 5000);
-    return () => window.clearTimeout(timeoutId);
-  }, [status]);
+    pushToast(status);
+    setStatus(null);
+  }, [pushToast, status]);
 
   // Query pro všechny aktivní kontakty
   const contactsQuery = useMemo(
@@ -479,7 +609,7 @@ const App = () => {
   );
 
   React.useEffect(() => {
-    const nsec = String((storedNostrIdentity as any)?.nsec ?? "").trim();
+    const nsec = String(asRecord(storedNostrIdentity)?.nsec ?? "").trim();
     if (!nsec) {
       setStoredNpubFromNsec(null);
       return;
@@ -508,7 +638,7 @@ const App = () => {
     };
   }, [storedNostrIdentity]);
 
-  const storedNsec = String((storedNostrIdentity as any)?.nsec ?? "").trim();
+  const storedNsec = String(asRecord(storedNostrIdentity)?.nsec ?? "").trim();
   const defaultNsec = String(derivedNostrIdentity?.nsec ?? "").trim();
   const hasStoredOverride = Boolean(
     storedNsec && defaultNsec && storedNsec !== defaultNsec
@@ -527,8 +657,6 @@ const App = () => {
 
   const [relayUrls, setRelayUrls] = useState<string[]>(() => [...NOSTR_RELAYS]);
 
-  const relayUrlsKey = useMemo(() => relayUrls.join("|"), [relayUrls]);
-
   const nostrFetchRelays = useMemo(() => {
     const merged = [...relayUrls, ...NOSTR_RELAYS];
     const seen = new Set<string>();
@@ -542,12 +670,7 @@ const App = () => {
       out.push(url);
     }
     return out;
-  }, [relayUrlsKey]);
-
-  const nostrFetchRelaysKey = useMemo(
-    () => nostrFetchRelays.join("|"),
-    [nostrFetchRelays]
-  );
+  }, [relayUrls]);
 
   const checkRelayConnection = React.useCallback(
     (url: string, timeoutMs = 2500) => {
@@ -625,7 +748,7 @@ const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [relayUrlsKey, checkRelayConnection, relayUrls]);
+  }, [checkRelayConnection, relayUrls]);
 
   const connectedRelayCount = useMemo(() => {
     return relayUrls.reduce((sum, url) => {
@@ -751,7 +874,11 @@ const App = () => {
             { maxWait: 5000 }
           );
 
-          const newest = (events as any[])
+          const relayListEvents = Array.isArray(events)
+            ? (events as NostrToolsEvent[])
+            : [];
+
+          const newest = relayListEvents
             .slice()
             .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0];
 
@@ -844,19 +971,19 @@ const App = () => {
         hasNsec: Boolean(currentNsec),
       },
       cashuTokens: cashuTokens.map((t) => ({
-        id: String((t as any).id ?? ""),
-        mint: String((t as any).mint ?? ""),
-        amount: Number((t as any).amount ?? 0) || 0,
-        state: String((t as any).state ?? ""),
+        id: String(t.id ?? ""),
+        mint: String(t.mint ?? ""),
+        amount: Number(t.amount ?? 0) || 0,
+        state: String(t.state ?? ""),
       })),
       cashuTokensAll: {
         count: cashuTokensAll.length,
         newest10: cashuTokensAll.slice(0, 10).map((t) => ({
-          id: String((t as any).id ?? ""),
-          mint: String((t as any).mint ?? ""),
-          amount: Number((t as any).amount ?? 0) || 0,
-          state: String((t as any).state ?? ""),
-          isDeleted: Boolean((t as any).isDeleted),
+          id: String(t.id ?? ""),
+          mint: String(t.mint ?? ""),
+          amount: Number(t.amount ?? 0) || 0,
+          state: String(t.state ?? ""),
+          isDeleted: Boolean(t.isDeleted),
         })),
       },
     });
@@ -891,6 +1018,20 @@ const App = () => {
 
   const chatMessages = useQuery(chatMessagesQuery);
 
+  const nostrMessagesRecentQuery = useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("nostrMessage")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue)
+          .orderBy("createdAtSec", "desc")
+          .limit(100)
+      ),
+    []
+  );
+  const nostrMessagesRecent = useQuery(nostrMessagesRecentQuery);
+
   const cashuBalance = useMemo(() => {
     return cashuTokens.reduce((sum, token) => {
       const state = String(token.state ?? "");
@@ -921,7 +1062,7 @@ const App = () => {
   }, [defaultMintUrl]);
 
   const makeNip98AuthHeader = React.useCallback(
-    async (url: string, method: string, payload?: Record<string, any>) => {
+    async (url: string, method: string, payload?: Record<string, unknown>) => {
       if (!currentNsec) throw new Error("Missing nsec");
       const { nip19, nip98, finalizeEvent } = await import("nostr-tools");
       const decoded = nip19.decode(currentNsec);
@@ -931,7 +1072,7 @@ const App = () => {
       const token = await nip98.getToken(
         url,
         method,
-        async (event) => finalizeEvent(event as any, privBytes),
+        async (event) => finalizeEvent(event, privBytes),
         true,
         payload
       );
@@ -1062,7 +1203,7 @@ const App = () => {
     // If we have a stored nsec that equals the default (mnemonic-derived) one,
     // drop it from Evolu so only user-changed keys remain persisted.
     if (!storedNostrIdentity?.id) return;
-    const storedNsec = String((storedNostrIdentity as any)?.nsec ?? "").trim();
+    const storedNsec = String(asRecord(storedNostrIdentity)?.nsec ?? "").trim();
     if (!storedNsec) return;
 
     const defaultNsec = String(derivedNostrIdentity?.nsec ?? "").trim();
@@ -1073,12 +1214,7 @@ const App = () => {
       id: storedNostrIdentity.id as unknown as NostrIdentityId,
       isDeleted: Evolu.sqliteTrue,
     });
-  }, [
-    derivedNostrIdentity?.nsec,
-    storedNostrIdentity?.id,
-    storedNostrIdentity?.nsec,
-    update,
-  ]);
+  }, [derivedNostrIdentity?.nsec, storedNostrIdentity, update]);
 
   React.useEffect(() => {
     // Load current user's Nostr profile (name + picture) from relays.
@@ -1193,12 +1329,7 @@ const App = () => {
       cancelledBlob = true;
       cachedBlobController.abort();
     };
-  }, [
-    currentNpub,
-    nostrFetchRelaysKey,
-    rememberBlobAvatarUrl,
-    cacheProfileAvatarFromUrl,
-  ]);
+  }, [currentNpub, nostrFetchRelays, rememberBlobAvatarUrl]);
 
   React.useEffect(() => {
     // Leave edit mode when leaving the profile screen.
@@ -1269,14 +1400,15 @@ const App = () => {
         if (!res.ok) return;
         const data = (await res.json()) as unknown;
         const mintUrl = (() => {
-          if (!data || typeof data !== "object") return "";
-          const direct = String((data as any).mintUrl ?? "").trim();
+          const root = asRecord(data);
+          if (!root) return "";
+
+          const direct = String(root.mintUrl ?? "").trim();
           if (direct) return direct;
-          const wrapped = (data as any).data;
-          if (!wrapped || typeof wrapped !== "object") return "";
-          return String(
-            (wrapped as any).mintUrl ?? (wrapped as any).mintURL ?? ""
-          ).trim();
+
+          const wrapped = asRecord(root.data);
+          if (!wrapped) return "";
+          return String(wrapped.mintUrl ?? wrapped.mintURL ?? "").trim();
         })();
         if (cancelled) return;
         if (mintUrl) setDefaultMintUrl(mintUrl);
@@ -1297,15 +1429,18 @@ const App = () => {
           headers: { Authorization: auth },
         });
         if (!res.ok) return;
-        const json = (await res.json()) as any;
-        if (!json || json.error) return;
+        const json = (await res.json()) as unknown;
+        const root = asRecord(json);
+        if (!root || root.error) return;
         if (cancelled) return;
 
         const tokens: string[] = [];
-        const token = String(json.data?.token ?? json.token ?? "").trim();
+        const data = asRecord(root.data);
+        const token = String(data?.token ?? root.token ?? "").trim();
         if (token) tokens.push(token);
-        if (Array.isArray(json.data?.tokens)) {
-          for (const t of json.data.tokens) {
+        const dataTokens = data?.tokens;
+        if (Array.isArray(dataTokens)) {
+          for (const t of dataTokens) {
             const txt = String(t ?? "").trim();
             if (txt) tokens.push(txt);
           }
@@ -1435,7 +1570,7 @@ const App = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [contacts, route.kind, update, nostrFetchRelaysKey]);
+  }, [contacts, route.kind, update, nostrFetchRelays]);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -1517,12 +1652,7 @@ const App = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [
-    contacts,
-    nostrPictureByNpub,
-    nostrFetchRelaysKey,
-    rememberBlobAvatarUrl,
-  ]);
+  }, [contacts, nostrPictureByNpub, rememberBlobAvatarUrl, nostrFetchRelays]);
 
   const { groupNames, ungroupedCount } = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1643,13 +1773,19 @@ const App = () => {
 
     try {
       setStatus(t("payFetchingInvoice"));
-      const { fetchLnurlInvoiceForLightningAddress } = await import(
-        "./lnurlPay"
-      );
-      const invoice = await fetchLnurlInvoiceForLightningAddress(
-        lnAddress,
-        amountSat
-      );
+      let invoice: string;
+      try {
+        const { fetchLnurlInvoiceForLightningAddress } = await import(
+          "./lnurlPay"
+        );
+        invoice = await fetchLnurlInvoiceForLightningAddress(
+          lnAddress,
+          amountSat
+        );
+      } catch (e) {
+        setStatus(`${t("payFailed")}: ${String(e)}`);
+        return;
+      }
 
       setStatus(t("payPaying"));
 
@@ -1721,6 +1857,7 @@ const App = () => {
           }
 
           setStatus(t("paySuccess"));
+          showPaidOverlay();
           navigateToContact(selectedContact.id);
           return;
         } catch (e) {
@@ -1734,8 +1871,109 @@ const App = () => {
     }
   };
 
+  const payLightningInvoiceWithCashu = React.useCallback(
+    async (invoice: string) => {
+      const normalized = invoice.trim();
+      if (!normalized) return;
+
+      if (cashuIsBusy) return;
+      if (cashuBalance <= 0) {
+        setStatus(t("payInsufficient"));
+        return;
+      }
+
+      setCashuIsBusy(true);
+      try {
+        setStatus(t("payPaying"));
+
+        const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
+        for (const row of cashuTokens) {
+          if (String(row.state ?? "") !== "accepted") continue;
+          const mint = String(row.mint ?? "").trim();
+          if (!mint) continue;
+          const tokenText = String(row.token ?? "").trim();
+          if (!tokenText) continue;
+
+          const amount = Number((row.amount ?? 0) as unknown as number) || 0;
+          const entry = mintGroups.get(mint) ?? { tokens: [], sum: 0 };
+          entry.tokens.push(tokenText);
+          entry.sum += amount;
+          mintGroups.set(mint, entry);
+        }
+
+        const candidates = Array.from(mintGroups.entries())
+          .map(([mint, info]) => ({ mint, ...info }))
+          .sort((a, b) => b.sum - a.sum);
+
+        if (candidates.length === 0) {
+          setStatus(t("payInsufficient"));
+          return;
+        }
+
+        let lastError: unknown = null;
+        for (const candidate of candidates) {
+          try {
+            const { meltInvoiceWithTokensAtMint } = await import("./cashuMelt");
+            const result = await meltInvoiceWithTokensAtMint({
+              invoice: normalized,
+              mint: candidate.mint,
+              tokens: candidate.tokens,
+              unit: "sat",
+            });
+
+            for (const row of cashuTokens) {
+              if (
+                String(row.state ?? "") === "accepted" &&
+                String(row.mint ?? "").trim() === candidate.mint
+              ) {
+                update("cashuToken", {
+                  id: row.id as CashuTokenId,
+                  isDeleted: Evolu.sqliteTrue,
+                });
+              }
+            }
+
+            if (result.remainingToken && result.remainingAmount > 0) {
+              insert("cashuToken", {
+                token:
+                  result.remainingToken as typeof Evolu.NonEmptyString.Type,
+                rawToken: null,
+                mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
+                unit: result.unit
+                  ? (result.unit as typeof Evolu.NonEmptyString100.Type)
+                  : null,
+                amount:
+                  result.remainingAmount > 0
+                    ? (result.remainingAmount as typeof Evolu.PositiveInt.Type)
+                    : null,
+                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                error: null,
+              });
+            }
+
+            setStatus(t("paySuccess"));
+            showPaidOverlay();
+            return;
+          } catch (e) {
+            lastError = e;
+          }
+        }
+
+        setStatus(`${t("payFailed")}: ${String(lastError ?? "unknown")}`);
+      } finally {
+        setCashuIsBusy(false);
+      }
+    },
+    [cashuBalance, cashuIsBusy, cashuTokens, insert, showPaidOverlay, t, update]
+  );
+
   const saveCashuFromText = React.useCallback(
-    async (tokenText: string) => {
+    async (
+      tokenText: string,
+      options?: {
+        navigateToWallet?: boolean;
+      }
+    ) => {
       const tokenRaw = tokenText.trim();
       if (!tokenRaw) {
         setStatus(t("pasteEmpty"));
@@ -1772,6 +2010,10 @@ const App = () => {
         });
         if (result.ok) {
           setStatus(t("cashuAccepted"));
+          pushToast(t("cashuAccepted"));
+          if (options?.navigateToWallet) {
+            navigateToWallet();
+          }
         } else {
           setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
         }
@@ -1800,13 +2042,14 @@ const App = () => {
         setCashuIsBusy(false);
       }
     },
-    [cashuIsBusy, insert, t]
+    [cashuIsBusy, insert, navigateToWallet, pushToast, t]
   );
 
   const handleDelete = (id: ContactId) => {
     const result = update("contact", { id, isDeleted: Evolu.sqliteTrue });
     if (result.ok) {
       setStatus(t("contactDeleted"));
+      pushToast(t("contactDeleted"));
       closeContactDetail();
       return;
     }
@@ -1817,10 +2060,9 @@ const App = () => {
     const result = update("cashuToken", { id, isDeleted: Evolu.sqliteTrue });
     if (result.ok) {
       setStatus(t("cashuDeleted"));
+      pushToast(t("cashuDeleted"));
       setPendingCashuDeleteId(null);
-      if (route.kind === "cashuToken") {
-        navigateToWallet();
-      }
+      navigateToWallet();
       return;
     }
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -1838,9 +2080,9 @@ const App = () => {
   const copyText = async (value: string) => {
     try {
       await navigator.clipboard?.writeText(value);
-      setStatus(t("copiedToClipboard"));
+      pushToast(t("copiedToClipboard"));
     } catch {
-      setStatus(t("copyFailed"));
+      pushToast(t("copyFailed"));
     }
   };
 
@@ -1963,6 +2205,7 @@ const App = () => {
       const result = update("contact", { id: editingId, ...payload });
       if (result.ok) {
         setStatus(t("contactUpdated"));
+        pushToast(t("contactUpdated"));
       } else {
         setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
       }
@@ -1970,6 +2213,7 @@ const App = () => {
       const result = insert("contact", payload);
       if (result.ok) {
         setStatus(t("contactSaved"));
+        pushToast(t("contactSaved"));
       } else {
         setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
       }
@@ -1986,13 +2230,13 @@ const App = () => {
   const copyMnemonic = async () => {
     if (!owner || !owner.mnemonic) return;
     await navigator.clipboard?.writeText(owner.mnemonic);
-    setStatus(t("keysCopied"));
+    pushToast(t("keysCopied"));
   };
 
   const copyNostrKeys = async () => {
     if (!currentNsec) return;
     await navigator.clipboard?.writeText(currentNsec);
-    setStatus(t("nostrKeysCopied"));
+    pushToast(t("nostrKeysCopied"));
   };
 
   const applyNostrKeysFromText = async (value: string) => {
@@ -2133,19 +2377,19 @@ const App = () => {
 
         const pool = new SimplePool();
 
-        const processWrap = (wrap: any) => {
+        const processWrap = (wrap: NostrToolsEvent) => {
           try {
             const wrapId = String(wrap?.id ?? "");
             if (!wrapId) return;
             if (existingWrapIds.has(wrapId)) return;
             existingWrapIds.add(wrapId);
 
-            const inner = unwrapEvent(wrap, privBytes) as any;
+            const inner = unwrapEvent(wrap, privBytes) as NostrToolsEvent;
             if (!inner || inner.kind !== 14) return;
 
             const innerPub = String(inner.pubkey ?? "");
+            const tags = Array.isArray(inner.tags) ? inner.tags : [];
             const content = String(inner.content ?? "").trim();
-            if (!content) return;
 
             const createdAtSecRaw = Number(inner.created_at ?? 0);
             const createdAtSec =
@@ -2157,12 +2401,12 @@ const App = () => {
             const isOutgoing = innerPub === myPubHex;
             if (!isIncoming && !isOutgoing) return;
 
+            if (!content) return;
+
             // Ensure outgoing messages are for this contact.
-            const pTags = Array.isArray(inner.tags)
-              ? (inner.tags as any[])
-                  .filter((t) => Array.isArray(t) && t[0] === "p")
-                  .map((t) => String(t[1] ?? "").trim())
-              : [];
+            const pTags = tags
+              .filter((t) => Array.isArray(t) && t[0] === "p")
+              .map((t) => String(t[1] ?? "").trim());
             const mentionsContact = pTags.includes(contactPubHex);
             if (isOutgoing && !mentionsContact) return;
 
@@ -2193,14 +2437,17 @@ const App = () => {
         );
 
         if (!cancelled) {
-          for (const e of existing as any[]) processWrap(e);
+          for (const e of Array.isArray(existing)
+            ? (existing as NostrToolsEvent[])
+            : [])
+            processWrap(e);
         }
 
         const sub = pool.subscribe(
           NOSTR_RELAYS,
           { kinds: [1059], "#p": [myPubHex] },
           {
-            onevent: (e: any) => {
+            onevent: (e: NostrToolsEvent) => {
               if (cancelled) return;
               processWrap(e);
             },
@@ -2225,13 +2472,7 @@ const App = () => {
       cancelled = true;
       cleanup?.();
     };
-  }, [
-    currentNsec,
-    insert,
-    route.kind,
-    selectedContact?.id,
-    selectedContact?.npub,
-  ]);
+  }, [currentNsec, insert, route.kind, selectedContact, chatMessages]);
 
   const sendChatMessage = async () => {
     if (route.kind !== "chat") return;
@@ -2263,19 +2504,24 @@ const App = () => {
       const baseEvent = {
         created_at: Math.ceil(Date.now() / 1e3),
         kind: 14,
+        pubkey: myPubHex,
         tags: [
           ["p", contactPubHex],
           ["p", myPubHex],
         ],
         content: text,
-      };
+      } satisfies UnsignedEvent;
 
-      const wrapForMe = wrapEvent(baseEvent as any, privBytes, myPubHex) as any;
+      const wrapForMe = wrapEvent(
+        baseEvent,
+        privBytes,
+        myPubHex
+      ) as NostrToolsEvent;
       const wrapForContact = wrapEvent(
-        baseEvent as any,
+        baseEvent,
         privBytes,
         contactPubHex
-      ) as any;
+      ) as NostrToolsEvent;
 
       chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
 
@@ -2324,6 +2570,14 @@ const App = () => {
         icon: "<",
         label: t("close"),
         onClick: navigateToContacts,
+      };
+    }
+
+    if (route.kind === "advanced") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToSettings,
       };
     }
 
@@ -2476,6 +2730,7 @@ const App = () => {
     if (route.kind === "cashuTokenNew") return t("cashuToken");
     if (route.kind === "cashuToken") return t("cashuToken");
     if (route.kind === "settings") return t("menu");
+    if (route.kind === "advanced") return t("advanced");
     if (route.kind === "profile") return t("profile");
     if (route.kind === "nostrRelays") return t("nostrRelay");
     if (route.kind === "nostrRelay") return t("nostrRelay");
@@ -2768,32 +3023,125 @@ const App = () => {
 
   const extractCashuTokenFromText = React.useCallback(
     (text: string): string | null => {
-      const raw = text.trim();
-      if (!raw) return null;
-      if (parseCashuToken(raw)) return raw;
+      const raw0 = String(text ?? "").trim();
+      if (!raw0) return null;
 
-      // Try to find token embedded in text.
-      for (const m of raw.matchAll(/cashu[0-9A-Za-z_-]+/g)) {
-        const candidate = String(m[0] ?? "").trim();
-        if (candidate && parseCashuToken(candidate)) return candidate;
-      }
+      const normalizeCandidate = (value: string): string =>
+        value.replace(/^cashu/i, "cashu");
 
-      // Some clients wrap long tokens by inserting whitespace/newlines.
-      const compact = raw.replace(/\s+/g, "");
-      if (compact && compact !== raw) {
-        if (parseCashuToken(compact)) return compact;
-        for (const m of compact.matchAll(/cashu[0-9A-Za-z_-]+/g)) {
-          const candidate = String(m[0] ?? "").trim();
-          if (candidate && parseCashuToken(candidate)) return candidate;
+      const tryToken = (value: string): string | null => {
+        const trimmed = String(value ?? "").trim();
+        if (!trimmed) return null;
+        const normalized = normalizeCandidate(trimmed);
+        return parseCashuToken(normalized) ? normalized : null;
+      };
+
+      const tokenRegex = /cashu[0-9A-Za-z_-]+={0,2}/gi;
+
+      const tryInText = (value: string): string | null => {
+        const raw = String(value ?? "").trim();
+        if (!raw) return null;
+
+        const stripped = raw
+          .replace(/^web\+cashu:/i, "")
+          .replace(/^cashu:/i, "")
+          .replace(/^nostr:/i, "")
+          .replace(/^lightning:/i, "")
+          .trim();
+
+        const direct = tryToken(stripped);
+        if (direct) return direct;
+
+        for (const m of stripped.matchAll(tokenRegex)) {
+          const candidate = tryToken(String(m[0] ?? ""));
+          if (candidate) return candidate;
         }
-      }
 
-      // Fallback: try JSON token embedded in text.
-      const firstBrace = raw.indexOf("{");
-      const lastBrace = raw.lastIndexOf("}");
-      if (firstBrace >= 0 && lastBrace > firstBrace) {
-        const candidate = raw.slice(firstBrace, lastBrace + 1).trim();
-        if (candidate && parseCashuToken(candidate)) return candidate;
+        const compact = stripped.replace(/\s+/g, "");
+        if (compact && compact !== stripped) {
+          const compactDirect = tryToken(compact);
+          if (compactDirect) return compactDirect;
+          for (const m of compact.matchAll(tokenRegex)) {
+            const candidate = tryToken(String(m[0] ?? ""));
+            if (candidate) return candidate;
+          }
+        }
+
+        // URL formats: try common query params and fragments.
+        if (/^https?:\/\//i.test(stripped)) {
+          try {
+            const u = new URL(stripped);
+            const keys = ["token", "cashu", "cashutoken", "cashu_token", "t"];
+            for (const key of keys) {
+              const v = u.searchParams.get(key);
+              if (v) {
+                const decoded = (() => {
+                  try {
+                    return decodeURIComponent(v);
+                  } catch {
+                    return v;
+                  }
+                })();
+                const found = tryInText(decoded);
+                if (found) return found;
+              }
+            }
+
+            const hash = String(u.hash ?? "").replace(/^#/, "");
+            if (hash) {
+              const decodedHash = (() => {
+                try {
+                  return decodeURIComponent(hash);
+                } catch {
+                  return hash;
+                }
+              })();
+              const found = tryInText(decodedHash);
+              if (found) return found;
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        // JSON wrapper formats (e.g. {"token":"cashuA..."}).
+        const tokenField = stripped.match(/"token"\s*:\s*"([^"]+)"/i);
+        if (tokenField?.[1]) {
+          const decoded = (() => {
+            try {
+              return decodeURIComponent(tokenField[1]);
+            } catch {
+              return tokenField[1];
+            }
+          })();
+          const found = tryInText(decoded);
+          if (found) return found;
+        }
+
+        // Last resort: parse JSON object directly if supported by parseCashuToken.
+        const firstBrace = stripped.indexOf("{");
+        const lastBrace = stripped.lastIndexOf("}");
+        if (firstBrace >= 0 && lastBrace > firstBrace) {
+          const candidate = stripped.slice(firstBrace, lastBrace + 1).trim();
+          const maybe = tryToken(candidate);
+          if (maybe) return maybe;
+        }
+
+        return null;
+      };
+
+      const foundRaw = tryInText(raw0);
+      if (foundRaw) return foundRaw;
+
+      // Some QR generators percent-encode the full payload.
+      if (/%[0-9A-Fa-f]{2}/.test(raw0)) {
+        try {
+          const decoded = decodeURIComponent(raw0);
+          const foundDecoded = tryInText(decoded);
+          if (foundDecoded) return foundDecoded;
+        } catch {
+          // ignore
+        }
       }
 
       return null;
@@ -2807,6 +3155,7 @@ const App = () => {
     ): {
       tokenRaw: string;
       mintDisplay: string | null;
+      mintUrl: string | null;
       amount: number | null;
       isValid: boolean;
     } | null => {
@@ -2839,6 +3188,7 @@ const App = () => {
       return {
         tokenRaw,
         mintDisplay,
+        mintUrl: parsed.mint ? String(parsed.mint) : null,
         amount: Number.isFinite(parsed.amount) ? parsed.amount : null,
         // Best-effort: "valid" means not yet imported into wallet.
         isValid: !known,
@@ -2846,6 +3196,411 @@ const App = () => {
     },
     [cashuTokensAll, extractCashuTokenFromText]
   );
+
+  React.useEffect(() => {
+    // Best-effort: keep syncing NIP-17 inbox when not inside a chat so we can
+    // show PWA notifications for new messages / incoming Cashu tokens.
+    if (route.kind === "chat") return;
+    if (!currentNsec) return;
+
+    let cancelled = false;
+
+    const seenWrapIds = new Set<string>();
+    for (const m of nostrMessagesRecent) {
+      const wrapId = String(
+        (m as unknown as { wrapId?: unknown } | null)?.wrapId ?? ""
+      ).trim();
+      if (wrapId) seenWrapIds.add(wrapId);
+    }
+
+    const run = async () => {
+      try {
+        const { nip19, getPublicKey, SimplePool } = await import("nostr-tools");
+        const { unwrapEvent } = await import("nostr-tools/nip17");
+
+        const decodedMe = nip19.decode(currentNsec);
+        if (decodedMe.type !== "nsec") return;
+        const privBytes = decodedMe.data as Uint8Array;
+        const myPubHex = getPublicKey(privBytes);
+
+        // Map known contact pubkeys -> contact info.
+        const contactByPubHex = new Map<
+          string,
+          { id: ContactId; name: string | null }
+        >();
+        for (const c of contacts) {
+          const npub = String(c.npub ?? "").trim();
+          if (!npub) continue;
+          try {
+            const d = nip19.decode(npub);
+            if (d.type !== "npub") continue;
+            const pub = String(d.data ?? "").trim();
+            if (!pub) continue;
+            const name = String(c.name ?? "").trim() || null;
+            contactByPubHex.set(pub, { id: c.id as ContactId, name });
+          } catch {
+            // ignore
+          }
+        }
+
+        const pool = new SimplePool();
+
+        const processWrap = (wrap: NostrToolsEvent) => {
+          try {
+            const wrapId = String(wrap?.id ?? "");
+            if (!wrapId) return;
+            if (seenWrapIds.has(wrapId)) return;
+            seenWrapIds.add(wrapId);
+
+            const inner = unwrapEvent(wrap, privBytes) as NostrToolsEvent;
+            if (!inner || inner.kind !== 14) return;
+
+            const senderPub = String(inner.pubkey ?? "");
+            const content = String(inner.content ?? "").trim();
+            if (!senderPub) return;
+
+            const createdAtSecRaw = Number(inner.created_at ?? 0);
+            const createdAtSec =
+              Number.isFinite(createdAtSecRaw) && createdAtSecRaw > 0
+                ? Math.trunc(createdAtSecRaw)
+                : Math.ceil(Date.now() / 1e3);
+
+            const pTags = Array.isArray(inner.tags)
+              ? inner.tags
+                  .filter((t) => Array.isArray(t) && t[0] === "p")
+                  .map((t) => String(t[1] ?? "").trim())
+                  .filter(Boolean)
+              : [];
+
+            // Only accept messages addressed to us.
+            if (!pTags.includes(myPubHex) && senderPub !== myPubHex) return;
+
+            const isOutgoing = senderPub === myPubHex;
+            const otherPub = isOutgoing
+              ? pTags.find((p) => p && p !== myPubHex) ?? ""
+              : senderPub;
+            if (!otherPub) return;
+
+            const contact = contactByPubHex.get(otherPub);
+            if (!contact) return;
+
+            if (!content) return;
+
+            if (cancelled) return;
+
+            insert("nostrMessage", {
+              contactId: contact.id,
+              direction: (isOutgoing
+                ? "out"
+                : "in") as typeof Evolu.NonEmptyString100.Type,
+              content: content as typeof Evolu.NonEmptyString.Type,
+              wrapId: wrapId as typeof Evolu.NonEmptyString1000.Type,
+              rumorId: inner.id
+                ? (String(inner.id) as typeof Evolu.NonEmptyString1000.Type)
+                : null,
+              pubkey: senderPub as typeof Evolu.NonEmptyString1000.Type,
+              createdAtSec: createdAtSec as typeof Evolu.PositiveInt.Type,
+            });
+
+            if (!isOutgoing) {
+              const title = contact.name ?? t("appTitle");
+              void maybeShowPwaNotification(title, content, `msg_${otherPub}`);
+
+              const tokenInfo = getCashuTokenMessageInfo(content);
+              if (tokenInfo?.isValid) {
+                const body = tokenInfo.amount
+                  ? `${tokenInfo.amount} sat`
+                  : t("cashuAccepted");
+                void maybeShowPwaNotification(
+                  t("mints"),
+                  body,
+                  `cashu_${otherPub}`
+                );
+              }
+            }
+          } catch {
+            // ignore individual events
+          }
+        };
+
+        const relays = nostrFetchRelays.length
+          ? nostrFetchRelays
+          : NOSTR_RELAYS;
+
+        const existing = await pool.querySync(
+          relays,
+          { kinds: [1059], "#p": [myPubHex], limit: 50 },
+          { maxWait: 5000 }
+        );
+
+        if (!cancelled) {
+          for (const e of Array.isArray(existing)
+            ? (existing as NostrToolsEvent[])
+            : [])
+            processWrap(e);
+        }
+
+        const sub = pool.subscribe(
+          relays,
+          { kinds: [1059], "#p": [myPubHex] },
+          {
+            onevent: (e: NostrToolsEvent) => {
+              if (cancelled) return;
+              processWrap(e);
+            },
+          }
+        );
+
+        return () => {
+          void sub.close("inbox sync closed");
+          pool.close(relays);
+        };
+      } catch {
+        return;
+      }
+    };
+
+    let cleanup: (() => void) | undefined;
+    void run().then((c) => {
+      cleanup = c;
+    });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [
+    contacts,
+    currentNsec,
+    getCashuTokenMessageInfo,
+    insert,
+    maybeShowPwaNotification,
+    nostrFetchRelays,
+    nostrMessagesRecent,
+    route.kind,
+    t,
+  ]);
+
+  const handleScannedText = React.useCallback(
+    async (rawValue: string) => {
+      const raw = String(rawValue ?? "").trim();
+      if (!raw) return;
+
+      const normalized = raw
+        .replace(/^nostr:/i, "")
+        .replace(/^lightning:/i, "")
+        .replace(/^cashu:/i, "")
+        .trim();
+
+      const cashu =
+        extractCashuTokenFromText(normalized) ?? extractCashuTokenFromText(raw);
+      if (cashu) {
+        setScanIsOpen(false);
+        setScanError(null);
+        await saveCashuFromText(cashu, { navigateToWallet: true });
+        return;
+      }
+
+      try {
+        const { nip19 } = await import("nostr-tools");
+        const decoded = nip19.decode(normalized);
+        if (decoded.type === "npub") {
+          const already = contacts.some(
+            (c) => String(c.npub ?? "").trim() === normalized
+          );
+          if (already) {
+            setStatus(t("contactExists"));
+            setScanIsOpen(false);
+            return;
+          }
+
+          const result = insert("contact", {
+            name: null,
+            npub: normalized as typeof Evolu.NonEmptyString1000.Type,
+            lnAddress: null,
+            groupName: null,
+          });
+
+          if (result.ok) setStatus(t("contactSaved"));
+          else setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+          if (result.ok) pushToast(t("contactSaved"));
+
+          setScanIsOpen(false);
+          return;
+        }
+      } catch {
+        // ignore
+      }
+
+      if (/^(lnbc|lntb|lnbcrt)/i.test(normalized)) {
+        setScanIsOpen(false);
+        setScanError(null);
+        await payLightningInvoiceWithCashu(normalized);
+        return;
+      }
+
+      setStatus(`${t("errorPrefix")}: ${t("scanUnsupported")}`);
+      setScanIsOpen(false);
+    },
+    [
+      contacts,
+      extractCashuTokenFromText,
+      insert,
+      payLightningInvoiceWithCashu,
+      pushToast,
+      saveCashuFromText,
+      t,
+    ]
+  );
+
+  React.useEffect(() => {
+    if (!scanIsOpen) return;
+
+    let cancelled = false;
+    let stream: MediaStream | null = null;
+    let rafId: number | null = null;
+    let lastScanAt = 0;
+    let handled = false;
+
+    const stop = () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      rafId = null;
+      if (stream) {
+        for (const track of stream.getTracks()) {
+          try {
+            track.stop();
+          } catch {
+            // ignore
+          }
+        }
+      }
+      stream = null;
+    };
+
+    const run = async () => {
+      setScanError(null);
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false,
+        });
+      } catch (e) {
+        setScanError(String(e ?? t("scanCameraError")));
+        return;
+      }
+
+      if (cancelled) {
+        stop();
+        return;
+      }
+
+      const video = scanVideoRef.current;
+      if (!video) {
+        stop();
+        return;
+      }
+
+      try {
+        video.srcObject = stream;
+      } catch {
+        // ignore
+      }
+
+      try {
+        video.setAttribute("playsinline", "true");
+        video.muted = true;
+      } catch {
+        // ignore
+      }
+
+      try {
+        await video.play();
+      } catch {
+        // ignore
+      }
+
+      type BarcodeDetectorInstance = {
+        detect: (
+          image: HTMLVideoElement
+        ) => Promise<Array<{ rawValue?: unknown }>>;
+      };
+      type BarcodeDetectorConstructor = new (options: {
+        formats: string[];
+      }) => BarcodeDetectorInstance;
+
+      const detectorCtor = (
+        window as unknown as { BarcodeDetector?: BarcodeDetectorConstructor }
+      ).BarcodeDetector;
+
+      const detector = detectorCtor
+        ? new detectorCtor({ formats: ["qr_code"] })
+        : null;
+
+      const jsQr = detector ? null : (await import("jsqr")).default;
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+      const tick = async () => {
+        if (cancelled) return;
+        if (!video || video.readyState < 2) {
+          rafId = window.requestAnimationFrame(() => void tick());
+          return;
+        }
+
+        const now = Date.now();
+        if (now - lastScanAt < 200) {
+          rafId = window.requestAnimationFrame(() => void tick());
+          return;
+        }
+        lastScanAt = now;
+
+        try {
+          if (handled) return;
+
+          if (detector) {
+            const codes = await detector.detect(video);
+            const value = String(codes?.[0]?.rawValue ?? "").trim();
+            if (value) {
+              handled = true;
+              stop();
+              await handleScannedText(value);
+              return;
+            }
+          } else if (jsQr && ctx) {
+            const w = video.videoWidth || 0;
+            const h = video.videoHeight || 0;
+            if (w > 0 && h > 0) {
+              canvas.width = w;
+              canvas.height = h;
+              ctx.drawImage(video, 0, 0, w, h);
+              const imageData = ctx.getImageData(0, 0, w, h);
+              const result = jsQr(imageData.data, w, h);
+              const value = String(result?.data ?? "").trim();
+              if (value) {
+                handled = true;
+                stop();
+                await handleScannedText(value);
+                return;
+              }
+            }
+          }
+        } catch {
+          // ignore and continue scanning
+        }
+
+        rafId = window.requestAnimationFrame(() => void tick());
+      };
+
+      rafId = window.requestAnimationFrame(() => void tick());
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [handleScannedText, scanIsOpen, t]);
 
   React.useEffect(() => {
     // Auto-accept Cashu tokens received from others into the wallet.
@@ -2887,8 +3642,115 @@ const App = () => {
     saveCashuFromText,
   ]);
 
+  React.useEffect(() => {
+    // Auto-accept Cashu tokens from incoming messages even when chat isn't open.
+    if (cashuIsBusy) return;
+
+    for (const m of nostrMessagesRecent) {
+      const id = String((m as unknown as { id?: unknown } | null)?.id ?? "");
+      if (!id) continue;
+      if (autoAcceptedChatMessageIdsRef.current.has(id)) continue;
+
+      const dir = String(
+        (m as unknown as { direction?: unknown } | null)?.direction ?? ""
+      );
+      if (dir !== "in") continue;
+
+      const content = String(
+        (m as unknown as { content?: unknown } | null)?.content ?? ""
+      );
+      const info = getCashuTokenMessageInfo(content);
+      if (!info) continue;
+
+      autoAcceptedChatMessageIdsRef.current.add(id);
+      if (!info.isValid) continue;
+
+      void saveCashuFromText(info.tokenRaw);
+      break;
+    }
+  }, [
+    cashuIsBusy,
+    getCashuTokenMessageInfo,
+    nostrMessagesRecent,
+    saveCashuFromText,
+  ]);
+
+  React.useEffect(() => {
+    if (route.kind !== "chat") {
+      chatDidInitialScrollForContactRef.current = null;
+    }
+  }, [route.kind]);
+
+  React.useEffect(() => {
+    // Scroll chat to newest message on open.
+    if (route.kind !== "chat") return;
+    if (!selectedContact) return;
+
+    const contactId = String(selectedContact.id ?? "");
+    if (!contactId) return;
+
+    const container = chatMessagesRef.current;
+    if (!container) return;
+
+    const last = chatMessages.length
+      ? chatMessages[chatMessages.length - 1]
+      : null;
+
+    const firstForThisContact =
+      chatDidInitialScrollForContactRef.current !== contactId;
+
+    if (firstForThisContact) {
+      chatDidInitialScrollForContactRef.current = contactId;
+
+      const target = last;
+      const targetId = String(
+        (target as unknown as { id?: unknown } | null)?.id ?? ""
+      );
+
+      const tryScroll = (attempt: number) => {
+        const el = targetId ? chatMessageElByIdRef.current.get(targetId) : null;
+        if (el) {
+          el.scrollIntoView({ block: "end" });
+          return;
+        }
+        if (attempt < 6) {
+          requestAnimationFrame(() => tryScroll(attempt + 1));
+          return;
+        }
+        const c = chatMessagesRef.current;
+        if (c) c.scrollTop = c.scrollHeight;
+      };
+
+      requestAnimationFrame(() => {
+        tryScroll(0);
+      });
+      return;
+    }
+
+    // Keep pinned to bottom if already near bottom.
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom < 120) {
+      requestAnimationFrame(() => {
+        const c = chatMessagesRef.current;
+        if (!c) return;
+        c.scrollTop = c.scrollHeight;
+      });
+    }
+  }, [route.kind, selectedContact, chatMessages]);
+
   return (
     <div className={showGroupFilter ? "page has-group-filter" : "page"}>
+      {toasts.length ? (
+        <div className="toast-container" aria-live="polite">
+          {toasts.map((toast) => (
+            <div key={toast.id} className="toast">
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <header className="topbar">
         <button
           className="topbar-btn"
@@ -2980,6 +3842,88 @@ const App = () => {
             </span>
           </button>
 
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-icon" aria-hidden="true">
+                🌐
+              </span>
+              <span className="settings-label">{t("language")}</span>
+            </div>
+            <div className="settings-right">
+              <select
+                className="select"
+                value={lang}
+                onChange={(e) => setLang(e.target.value as Lang)}
+                aria-label={t("language")}
+              >
+                <option value="cs">{t("czech")}</option>
+                <option value="en">{t("english")}</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-icon" aria-hidden="true">
+                ₿
+              </span>
+              <span className="settings-label">{t("unit")}</span>
+            </div>
+            <div className="settings-right">
+              <label className="switch">
+                <input
+                  className="switch-input"
+                  type="checkbox"
+                  aria-label={t("unitUseBitcoin")}
+                  checked={useBitcoinSymbol}
+                  onChange={(e) => setUseBitcoinSymbol(e.target.checked)}
+                />
+              </label>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="settings-row settings-link"
+            onClick={navigateToAdvanced}
+            aria-label={t("advanced")}
+            title={t("advanced")}
+          >
+            <div className="settings-left">
+              <span className="settings-icon" aria-hidden="true">
+                ⚙️
+              </span>
+              <span className="settings-label">{t("advanced")}</span>
+            </div>
+            <div className="settings-right">
+              <span className="settings-chevron" aria-hidden="true">
+                &gt;
+              </span>
+            </div>
+          </button>
+
+          <div className="settings-row">
+            <button className="btn-wide" onClick={navigateToWallet}>
+              {t("walletOpen")}
+            </button>
+          </div>
+
+          <div className="settings-row">
+            <button
+              className="btn-wide secondary"
+              onClick={() => {
+                setScanError(null);
+                setScanIsOpen(true);
+              }}
+            >
+              {t("scan")}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {route.kind === "advanced" && (
+        <section className="panel">
           <div className="settings-row">
             <div className="settings-left">
               <span className="settings-icon" aria-hidden="true">
@@ -3083,54 +4027,6 @@ const App = () => {
               )}
             </div>
           </div>
-
-          <div className="settings-row">
-            <div className="settings-left">
-              <span className="settings-icon" aria-hidden="true">
-                🌐
-              </span>
-              <span className="settings-label">{t("language")}</span>
-            </div>
-            <div className="settings-right">
-              <select
-                className="select"
-                value={lang}
-                onChange={(e) => setLang(e.target.value as Lang)}
-                aria-label={t("language")}
-              >
-                <option value="cs">{t("czech")}</option>
-                <option value="en">{t("english")}</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-left">
-              <span className="settings-icon" aria-hidden="true">
-                ₿
-              </span>
-              <span className="settings-label">{t("unit")}</span>
-            </div>
-            <div className="settings-right">
-              <label className="switch">
-                <input
-                  className="switch-input"
-                  type="checkbox"
-                  aria-label={t("unitUseBitcoin")}
-                  checked={useBitcoinSymbol}
-                  onChange={(e) => setUseBitcoinSymbol(e.target.checked)}
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <button className="btn-wide" onClick={navigateToWallet}>
-              {t("walletOpen")}
-            </button>
-          </div>
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3172,8 +4068,6 @@ const App = () => {
               })}
             </div>
           )}
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3193,8 +4087,6 @@ const App = () => {
           <div className="panel-header" style={{ marginTop: 14 }}>
             <button onClick={saveNewRelay}>{t("saveChanges")}</button>
           </div>
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3224,8 +4116,6 @@ const App = () => {
           ) : (
             <p className="lede">{t("errorPrefix")}</p>
           )}
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3249,7 +4139,11 @@ const App = () => {
                 {cashuTokens.map((token) => (
                   <button
                     key={token.id as unknown as CashuTokenId}
-                    className="pill"
+                    className={
+                      String(token.state ?? "") === "error"
+                        ? "pill pill-error"
+                        : "pill"
+                    }
                     onClick={() =>
                       navigateToCashuToken(token.id as unknown as CashuTokenId)
                     }
@@ -3308,8 +4202,6 @@ const App = () => {
               </div>
             )}
           </div>
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3325,7 +4217,7 @@ const App = () => {
               const tokenRaw = String(text).trim();
               if (!tokenRaw) return;
               e.preventDefault();
-              void saveCashuFromText(tokenRaw);
+              void saveCashuFromText(tokenRaw, { navigateToWallet: true });
             }}
             placeholder={t("cashuPasteManualHint")}
           />
@@ -3333,14 +4225,14 @@ const App = () => {
           <div className="settings-row">
             <button
               className="btn-wide"
-              onClick={() => void saveCashuFromText(cashuDraft)}
+              onClick={() =>
+                void saveCashuFromText(cashuDraft, { navigateToWallet: true })
+              }
               disabled={!cashuDraft.trim() || cashuIsBusy}
             >
               {t("cashuSave")}
             </button>
           </div>
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3349,17 +4241,16 @@ const App = () => {
           {(() => {
             const row = cashuTokensAll.find(
               (tkn) =>
-                String((tkn as any)?.id ?? "") ===
-                  String(route.id as unknown as string) &&
-                !(tkn as any)?.isDeleted
+                String(tkn?.id ?? "") ===
+                  String(route.id as unknown as string) && !tkn?.isDeleted
             );
 
             if (!row) {
               return <p className="muted">{t("errorPrefix")}</p>;
             }
 
-            const tokenText = String((row as any).rawToken ?? row.token ?? "");
-            const mintText = String((row as any).mint ?? "").trim();
+            const tokenText = String(row.rawToken ?? row.token ?? "");
+            const mintText = String(row.mint ?? "").trim();
             const mintDisplay = (() => {
               if (!mintText) return null;
               try {
@@ -3401,8 +4292,6 @@ const App = () => {
                     {t("delete")}
                   </button>
                 </div>
-
-                {status && <p className="status">{status}</p>}
               </>
             );
           })()}
@@ -3485,8 +4374,6 @@ const App = () => {
               </div>
             </div>
           ) : null}
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3636,8 +4523,6 @@ const App = () => {
               })()}
             </>
           ) : null}
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3655,13 +4540,19 @@ const App = () => {
                 return <p className="muted">{t("chatMissingContactNpub")}</p>;
               })()}
 
-              <div className="chat-messages" role="log" aria-live="polite">
+              <div
+                className="chat-messages"
+                role="log"
+                aria-live="polite"
+                ref={chatMessagesRef}
+              >
                 {chatMessages.length === 0 ? (
                   <p className="muted">{t("chatEmpty")}</p>
                 ) : (
                   chatMessages.map((m, idx) => {
                     const isOut = String(m.direction ?? "") === "out";
                     const content = String(m.content ?? "");
+                    const messageId = String(m.id ?? "");
                     const createdAtSec = Number(m.createdAtSec ?? 0) || 0;
                     const ms = createdAtSec * 1000;
                     const d = new Date(ms);
@@ -3702,14 +4593,6 @@ const App = () => {
                     }).format(d);
 
                     const tokenInfo = getCashuTokenMessageInfo(content);
-                    const tokenValidLabel =
-                      lang === "cs"
-                        ? tokenInfo?.isValid
-                          ? "Platný"
-                          : "Už přijatý"
-                        : tokenInfo?.isValid
-                        ? "Valid"
-                        : "Already accepted";
 
                     return (
                       <React.Fragment key={String(m.id)}>
@@ -3726,27 +4609,105 @@ const App = () => {
                           className={
                             isOut ? "chat-message out" : "chat-message in"
                           }
+                          ref={(el) => {
+                            if (!messageId) return;
+                            const map = chatMessageElByIdRef.current;
+                            if (el) map.set(messageId, el);
+                            else map.delete(messageId);
+                          }}
                         >
                           <div
                             className={
                               isOut ? "chat-bubble out" : "chat-bubble in"
                             }
                           >
-                            {tokenInfo ? (
-                              <div className="chat-token">
-                                <div className="chat-token-title">
-                                  {tokenInfo.mintDisplay ?? "—"}
-                                </div>
-                                <div className="chat-token-amount">
-                                  {formatInteger(tokenInfo.amount ?? 0)} sat
-                                </div>
-                                <div className="chat-token-status">
-                                  {tokenValidLabel}
-                                </div>
-                              </div>
-                            ) : (
-                              content
-                            )}
+                            {tokenInfo
+                              ? (() => {
+                                  const icon = getMintIconUrl(
+                                    tokenInfo.mintUrl
+                                  );
+                                  const showMintFallback = !icon.url;
+                                  return (
+                                    <span
+                                      className={
+                                        tokenInfo.isValid
+                                          ? "pill"
+                                          : "pill pill-muted"
+                                      }
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 6,
+                                      }}
+                                      aria-label={
+                                        tokenInfo.mintDisplay
+                                          ? `${formatInteger(
+                                              tokenInfo.amount ?? 0
+                                            )} sat · ${tokenInfo.mintDisplay}`
+                                          : `${formatInteger(
+                                              tokenInfo.amount ?? 0
+                                            )} sat`
+                                      }
+                                    >
+                                      {icon.url ? (
+                                        <img
+                                          src={icon.url}
+                                          alt=""
+                                          width={14}
+                                          height={14}
+                                          style={{
+                                            borderRadius: 9999,
+                                            objectFit: "cover",
+                                          }}
+                                          loading="lazy"
+                                          referrerPolicy="no-referrer"
+                                          onError={(e) => {
+                                            (
+                                              e.currentTarget as HTMLImageElement
+                                            ).style.display = "none";
+                                            if (icon.origin) {
+                                              setMintIconUrlByMint((prev) => ({
+                                                ...prev,
+                                                [icon.origin as string]: null,
+                                              }));
+                                            }
+                                          }}
+                                        />
+                                      ) : null}
+                                      {showMintFallback && icon.host ? (
+                                        <span
+                                          className="muted"
+                                          style={{
+                                            fontSize: 10,
+                                            lineHeight: "14px",
+                                          }}
+                                        >
+                                          {icon.host}
+                                        </span>
+                                      ) : null}
+                                      {!showMintFallback &&
+                                      tokenInfo.mintDisplay ? (
+                                        <span
+                                          className="muted"
+                                          style={{
+                                            fontSize: 10,
+                                            lineHeight: "14px",
+                                            maxWidth: 140,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                          }}
+                                        >
+                                          {tokenInfo.mintDisplay}
+                                        </span>
+                                      ) : null}
+                                      <span>
+                                        {formatInteger(tokenInfo.amount ?? 0)}
+                                      </span>
+                                    </span>
+                                  );
+                                })()
+                              : content}
                           </div>
 
                           {showTime ? (
@@ -3779,8 +4740,6 @@ const App = () => {
               </div>
             </>
           ) : null}
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3849,8 +4808,6 @@ const App = () => {
               </div>
             </div>
           </div>
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3901,8 +4858,6 @@ const App = () => {
               </div>
             </div>
           </div>
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
 
@@ -3959,7 +4914,6 @@ const App = () => {
                 );
               })}
             </div>
-            {status && <p className="status">{status}</p>}
           </section>
 
           {showGroupFilter && (
@@ -4091,10 +5045,43 @@ const App = () => {
               )}
             </>
           )}
-
-          {status && <p className="status">{status}</p>}
         </section>
       )}
+
+      {scanIsOpen && (
+        <div className="scan-overlay" role="dialog" aria-label={t("scan")}>
+          <div className="scan-sheet">
+            <div className="scan-header">
+              <div className="scan-title">{t("scan")}</div>
+              <button
+                className="topbar-btn"
+                onClick={() => setScanIsOpen(false)}
+                aria-label={t("close")}
+                title={t("close")}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+
+            <video ref={scanVideoRef} className="scan-video" />
+
+            {scanError ? <p className="muted">{scanError}</p> : null}
+          </div>
+        </div>
+      )}
+
+      {paidOverlayIsOpen ? (
+        <div className="paid-overlay" role="status" aria-live="assertive">
+          <div className="paid-sheet">
+            <div className="paid-check" aria-hidden="true">
+              ✓
+            </div>
+            <div className="paid-title">
+              {lang === "cs" ? "Zaplaceno" : "Paid"}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

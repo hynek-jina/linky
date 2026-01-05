@@ -20,6 +20,47 @@
   z-index: 10;
 }
 
+.scan-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.scan-sheet {
+  width: min(520px, 100%);
+  background: #0b1222;
+  border: 1px solid #1f2937;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.scan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.scan-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.scan-video {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  background: #0f172a;
+  object-fit: cover;
+}
+
 .topbar-title {
   flex: 1;
   text-align: center;
@@ -356,6 +397,15 @@ button.settings-link:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.settings-section-title {
+  margin: 6px 0 10px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .qr {
@@ -874,6 +924,18 @@ button.icon {
   font-weight: 700;
 }
 
+.pill.pill-error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+  border: 1px solid rgba(248, 113, 113, 0.6);
+}
+
+.pill.pill-muted {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
 .contact-list {
   display: flex;
   flex-direction: column;
@@ -1151,6 +1213,66 @@ button.tag-button {
 .tag em {
   font-style: normal;
   color: #94a3b8;
+}
+
+.toast-container {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 24px));
+}
+
+.toast {
+  border: 1px solid #1f2937;
+  background: #0b1222;
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.paid-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.78);
+}
+
+.paid-sheet {
+  width: min(420px, calc(100vw - 48px));
+  border: 1px solid #1f2937;
+  background: #0b1222;
+  border-radius: 18px;
+  padding: 28px 22px;
+  text-align: center;
+}
+
+.paid-check {
+  width: 92px;
+  height: 92px;
+  margin: 0 auto 14px;
+  border-radius: 999px;
+  border: 2px solid #22c55e;
+  color: #22c55e;
+  display: grid;
+  place-items: center;
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.paid-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #e2e8f0;
 }
 
 @media (max-width: 960px) {
