@@ -2,10 +2,7 @@ import * as Evolu from "@evolu/common";
 import { createEvolu, SimpleName } from "@evolu/common";
 import { createUseEvolu, EvoluProvider } from "@evolu/react";
 import { evoluReactWebDeps } from "@evolu/react-web";
-import {
-  generate12WordMnemonic,
-  INITIAL_MNEMONIC_STORAGE_KEY,
-} from "./mnemonic";
+import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
 
 // Primary key pro Contact tabulku
 const ContactId = Evolu.id("Contact");
@@ -71,7 +68,7 @@ export const Schema = {
 };
 
 // Vytvoř Evolu instanci
-const getOrCreateInitialMnemonic = (): Evolu.Mnemonic | undefined => {
+const getInitialMnemonicFromStorage = (): Evolu.Mnemonic | undefined => {
   // During SSR/tests, localStorage may not exist.
   if (typeof localStorage === "undefined") return undefined;
 
@@ -81,16 +78,14 @@ const getOrCreateInitialMnemonic = (): Evolu.Mnemonic | undefined => {
       const validated = Evolu.Mnemonic.fromUnknown(stored);
       if (validated.ok) return validated.value;
     }
-
-    const mnemonic = generate12WordMnemonic() as unknown as Evolu.Mnemonic;
-    localStorage.setItem(INITIAL_MNEMONIC_STORAGE_KEY, mnemonic);
-    return mnemonic;
   } catch {
     return undefined;
   }
+
+  return undefined;
 };
 
-const initialMnemonic = getOrCreateInitialMnemonic();
+const initialMnemonic = getInitialMnemonicFromStorage();
 const externalAppOwner = initialMnemonic
   ? // Evolu's runtime supports 12-word mnemonics; the types are stricter than runtime.
     (Evolu.createAppOwner(

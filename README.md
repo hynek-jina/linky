@@ -20,18 +20,22 @@ It is local-first: your data is stored locally and the app works offline.
   - Language: Czech / English.
   - Unit toggle: switches the displayed unit label between `sat` and `₿`.
   - Advanced
-    - Keys (seed): copy the current mnemonic and paste another mnemonic from the clipboard.
-    - Nostr keys: derive keys from seed, copy/paste keys.
+    - Data: export/import contacts and Cashu tokens.
+    - Nostr keys: copy your current `nsec`.
+    - Log out: requires a second click to confirm.
     - Nostr relays: view/add/remove relays.
     - Mints: shows the current default mint.
 
-## Keys (seed) and data
+## Identity and data
 
-The app uses a BIP39 mnemonic (12 words) as the identity of the data owner.
+On first run, the app shows onboarding where you either:
 
-- “Copy current” copies the current seed to the clipboard (Settings → Advanced → Keys).
-- “Paste” reads a seed from the clipboard and switches the app to a different owner.
-  This effectively wipes/replaces the current local dataset in the app (that’s why paste requires a second click to confirm).
+- Create a new account (generates a Nostr `nsec`), or
+- Paste an existing `nsec`.
+
+The Nostr `nsec` is the primary identity. A 12-word Evolu mnemonic is derived deterministically from it and stored locally.
+
+Logging out removes the stored `nsec` and returns you to onboarding.
 
 ## Running the project
 

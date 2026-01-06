@@ -1,10 +1,12 @@
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
+import { entropyToMnemonic } from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React, { useMemo, useState } from "react";
 import "./App.css";
 import { parseCashuToken } from "./cashu";
-import type { CashuTokenId, ContactId, NostrIdentityId } from "./evolu";
+import type { CashuTokenId, ContactId } from "./evolu";
 import { evolu, useEvolu } from "./evolu";
 import { getInitialLang, persistLang, translations, type Lang } from "./i18n";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
@@ -30,6 +32,7 @@ type ContactFormState = {
 };
 
 const UNIT_TOGGLE_STORAGE_KEY = "linky_use_btc_symbol";
+const NOSTR_NSEC_STORAGE_KEY = "linky.nostr_nsec";
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== "object") return null;
@@ -41,6 +44,16 @@ const getInitialUseBitcoinSymbol = (): boolean => {
     return localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1";
   } catch {
     return false;
+  }
+};
+
+const getInitialNostrNsec = (): string | null => {
+  try {
+    const raw = localStorage.getItem(NOSTR_NSEC_STORAGE_KEY);
+    const v = String(raw ?? "").trim();
+    return v ? v : null;
+  } catch {
+    return null;
   }
 };
 
@@ -132,6 +145,7 @@ const App = () => {
     []
   );
   const toastTimersRef = React.useRef<Map<string, number>>(new Map());
+  const importDataFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const [paidOverlayIsOpen, setPaidOverlayIsOpen] = useState(false);
   const paidOverlayTimerRef = React.useRef<number | null>(null);
@@ -143,16 +157,18 @@ const App = () => {
   const [pendingRelayDeleteUrl, setPendingRelayDeleteUrl] = useState<
     string | null
   >(null);
-  const [isPasteArmed, setIsPasteArmed] = useState(false);
-  const [isNostrPasteArmed, setIsNostrPasteArmed] = useState(false);
+  const [logoutArmed, setLogoutArmed] = useState(false);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>(() => getInitialLang());
   const [useBitcoinSymbol, setUseBitcoinSymbol] = useState<boolean>(() =>
     getInitialUseBitcoinSymbol()
   );
-  const [owner, setOwner] = useState<Awaited<typeof evolu.appOwner> | null>(
-    null
-  );
+
+  const [currentNsec] = useState<string | null>(() => getInitialNostrNsec());
+  const [currentNpub, setCurrentNpub] = useState<string | null>(null);
+
+  const [onboardingNsec, setOnboardingNsec] = useState<string>("");
+  const [onboardingIsBusy, setOnboardingIsBusy] = useState(false);
 
   const [nostrPictureByNpub, setNostrPictureByNpub] = useState<
     Record<string, string | null>
@@ -223,11 +239,6 @@ const App = () => {
   >(() => ({}));
 
   const [payAmount, setPayAmount] = useState<string>("");
-
-  const [derivedNostrIdentity, setDerivedNostrIdentity] = useState<{
-    nsec: string;
-    npub: string;
-  } | null>(null);
 
   const [chatDraft, setChatDraft] = useState<string>("");
   const chatSeenWrapIdsRef = React.useRef<Set<string>>(new Set());
@@ -505,10 +516,6 @@ const App = () => {
   };
 
   React.useEffect(() => {
-    evolu.appOwner.then(setOwner);
-  }, []);
-
-  React.useEffect(() => {
     persistLang(lang);
     try {
       document.documentElement.lang = lang;
@@ -553,20 +560,12 @@ const App = () => {
   }, [pendingRelayDeleteUrl]);
 
   React.useEffect(() => {
-    if (!isPasteArmed) return;
+    if (!logoutArmed) return;
     const timeoutId = window.setTimeout(() => {
-      setIsPasteArmed(false);
+      setLogoutArmed(false);
     }, 5000);
     return () => window.clearTimeout(timeoutId);
-  }, [isPasteArmed]);
-
-  React.useEffect(() => {
-    if (!isNostrPasteArmed) return;
-    const timeoutId = window.setTimeout(() => {
-      setIsNostrPasteArmed(false);
-    }, 5000);
-    return () => window.clearTimeout(timeoutId);
-  }, [isNostrPasteArmed]);
+  }, [logoutArmed]);
 
   React.useEffect(() => {
     if (!status) return;
@@ -589,29 +588,10 @@ const App = () => {
 
   const contacts = useQuery(contactsQuery);
 
-  const nostrIdentityQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db
-          .selectFrom("nostrIdentity")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .orderBy("createdAt", "desc")
-      ),
-    []
-  );
-
-  const nostrIdentities = useQuery(nostrIdentityQuery);
-  const storedNostrIdentity = nostrIdentities[0] ?? null;
-
-  const [storedNpubFromNsec, setStoredNpubFromNsec] = useState<string | null>(
-    null
-  );
-
   React.useEffect(() => {
-    const nsec = String(asRecord(storedNostrIdentity)?.nsec ?? "").trim();
+    const nsec = String(currentNsec ?? "").trim();
     if (!nsec) {
-      setStoredNpubFromNsec(null);
+      setCurrentNpub(null);
       return;
     }
 
@@ -625,10 +605,10 @@ const App = () => {
         const pubHex = getPublicKey(privBytes);
         const npub = nip19.npubEncode(pubHex);
         if (cancelled) return;
-        setStoredNpubFromNsec(npub);
+        setCurrentNpub(npub);
       } catch {
         if (cancelled) return;
-        setStoredNpubFromNsec(null);
+        setCurrentNpub(null);
       }
     };
 
@@ -636,24 +616,7 @@ const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [storedNostrIdentity]);
-
-  const storedNsec = String(asRecord(storedNostrIdentity)?.nsec ?? "").trim();
-  const defaultNsec = String(derivedNostrIdentity?.nsec ?? "").trim();
-  const hasStoredOverride = Boolean(
-    storedNsec && defaultNsec && storedNsec !== defaultNsec
-  );
-
-  const currentNsec =
-    (hasStoredOverride
-      ? storedNsec
-      : defaultNsec || storedNsec || derivedNostrIdentity?.nsec) ?? null;
-
-  const currentNpub =
-    (hasStoredOverride ? storedNpubFromNsec : null) ??
-    storedNpubFromNsec ??
-    derivedNostrIdentity?.npub ??
-    null;
+  }, [currentNsec]);
 
   const [relayUrls, setRelayUrls] = useState<string[]>(() => [...NOSTR_RELAYS]);
 
@@ -962,13 +925,8 @@ const App = () => {
     // NOTE: Relays and derived npub are Nostr/runtime state, not stored in Evolu.
     console.log("[linky][evolu] snapshot", {
       nostrIdentity: {
-        hasStoredIdentityRow: Boolean(storedNostrIdentity?.id),
-        hasStoredOverride,
-        derivedReady: Boolean(defaultNsec),
-        storedEqualsDefault: Boolean(
-          storedNsec && defaultNsec && storedNsec === defaultNsec
-        ),
         hasNsec: Boolean(currentNsec),
+        hasNpub: Boolean(currentNpub),
       },
       cashuTokens: cashuTokens.map((t) => ({
         id: String(t.id ?? ""),
@@ -987,15 +945,7 @@ const App = () => {
         })),
       },
     });
-  }, [
-    cashuTokens,
-    cashuTokensAll,
-    currentNsec,
-    storedNostrIdentity?.id,
-    hasStoredOverride,
-    defaultNsec,
-    storedNsec,
-  ]);
+  }, [cashuTokens, cashuTokensAll, currentNpub, currentNsec]);
 
   const chatContactId = route.kind === "chat" ? route.id : null;
 
@@ -1130,91 +1080,6 @@ const App = () => {
     },
     [insert, t]
   );
-
-  const deriveNostrIdentityFromMnemonic = React.useCallback(
-    async (
-      mnemonic: string
-    ): Promise<{ nsec: string; npub: string } | null> => {
-      const sha256 = async (input: Uint8Array) => {
-        const out = await crypto.subtle.digest(
-          "SHA-256",
-          input as unknown as BufferSource
-        );
-        return new Uint8Array(out);
-      };
-
-      try {
-        const { mnemonicToSeedSync } = await import("@scure/bip39");
-        const { getPublicKey, nip19 } = await import("nostr-tools");
-
-        const seed = mnemonicToSeedSync(String(mnemonic));
-        const prefix = new TextEncoder().encode("linky-nostr-v1:");
-        const data = new Uint8Array(prefix.length + seed.length);
-        data.set(prefix);
-        data.set(seed, prefix.length);
-
-        // Try a couple of variants to guarantee a valid secp256k1 private key.
-        for (let attempt = 0; attempt < 5; attempt++) {
-          const attemptData = new Uint8Array(data.length + 1);
-          attemptData.set(data);
-          attemptData.set(new Uint8Array([attempt]), data.length);
-
-          const privBytes = await sha256(attemptData);
-
-          try {
-            const pubHex = getPublicKey(privBytes);
-            const nsec = nip19.nsecEncode(privBytes);
-            const npub = nip19.npubEncode(pubHex);
-            return { nsec, npub };
-          } catch {
-            // try next attempt
-          }
-        }
-      } catch {
-        // ignore
-      }
-
-      return null;
-    },
-    []
-  );
-
-  React.useEffect(() => {
-    // Derive Nostr keys from owner's mnemonic (once available). Do not overwrite stored keys.
-    if (!owner?.mnemonic) return;
-
-    let cancelled = false;
-    const run = async () => {
-      const derived = await deriveNostrIdentityFromMnemonic(
-        String(owner.mnemonic)
-      );
-      if (!derived) return;
-      if (cancelled) return;
-      setDerivedNostrIdentity(derived);
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [deriveNostrIdentityFromMnemonic, owner?.mnemonic]);
-
-  React.useEffect(() => {
-    // If we have a stored nsec that equals the default (mnemonic-derived) one,
-    // drop it from Evolu so only user-changed keys remain persisted.
-    if (!storedNostrIdentity?.id) return;
-    const storedNsec = String(asRecord(storedNostrIdentity)?.nsec ?? "").trim();
-    if (!storedNsec) return;
-
-    const defaultNsec = String(derivedNostrIdentity?.nsec ?? "").trim();
-    if (!defaultNsec) return;
-    if (storedNsec !== defaultNsec) return;
-
-    update("nostrIdentity", {
-      id: storedNostrIdentity.id as unknown as NostrIdentityId,
-      isDeleted: Evolu.sqliteTrue,
-    });
-  }, [derivedNostrIdentity?.nsec, storedNostrIdentity, update]);
 
   React.useEffect(() => {
     // Load current user's Nostr profile (name + picture) from relays.
@@ -1732,7 +1597,6 @@ const App = () => {
 
   const openNewContactPage = () => {
     setPendingDeleteId(null);
-    setIsPasteArmed(false);
     setPayAmount("");
     setEditingId(null);
     setForm(makeEmptyForm());
@@ -1746,7 +1610,6 @@ const App = () => {
       navigateToSettings();
     }
     setPendingDeleteId(null);
-    setIsPasteArmed(false);
     setPayAmount("");
   };
 
@@ -2097,66 +1960,144 @@ const App = () => {
     setStatus(t("deleteArmedHint"));
   };
 
-  const applyKeysFromText = async (value: string) => {
-    try {
-      const mnemonicResult = Evolu.Mnemonic.fromUnknown(value);
-      if (!mnemonicResult.ok) {
-        setStatus(Evolu.createFormatTypeError()(mnemonicResult.error));
+  const deriveEvoluMnemonicFromNsec = React.useCallback(
+    async (nsec: string): Promise<Evolu.Mnemonic | null> => {
+      const raw = String(nsec ?? "").trim();
+      if (!raw) return null;
+      try {
+        const { nip19 } = await import("nostr-tools");
+        const decoded = nip19.decode(raw);
+        if (decoded.type !== "nsec") return null;
+        const privBytes = decoded.data as Uint8Array;
+
+        const prefix = new TextEncoder().encode("linky-evolu-v1:");
+        const data = new Uint8Array(prefix.length + privBytes.length);
+        data.set(prefix);
+        data.set(privBytes, prefix.length);
+
+        const hashBuf = await crypto.subtle.digest(
+          "SHA-256",
+          data as unknown as BufferSource
+        );
+        const hash = new Uint8Array(hashBuf);
+        const entropy = hash.slice(0, 16); // 128-bit -> 12 words
+        const phrase = entropyToMnemonic(entropy, wordlist);
+        const validated = Evolu.Mnemonic.fromUnknown(phrase);
+        if (!validated.ok) return null;
+        return validated.value;
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
+  const setIdentityFromNsecAndReload = React.useCallback(
+    async (nsec: string) => {
+      const raw = String(nsec ?? "").trim();
+      if (!raw) {
+        pushToast(t("onboardingInvalidNsec"));
         return;
       }
 
-      const mnemonic = mnemonicResult.value;
-      setStatus(t("keysPasting"));
-      await evolu.restoreAppOwner(mnemonic, { reload: false });
+      const mnemonic = await deriveEvoluMnemonicFromNsec(raw);
+      if (!mnemonic) {
+        pushToast(t("onboardingInvalidNsec"));
+        return;
+      }
+
       try {
+        localStorage.setItem(NOSTR_NSEC_STORAGE_KEY, raw);
         localStorage.setItem(INITIAL_MNEMONIC_STORAGE_KEY, mnemonic);
       } catch {
         // ignore
       }
+
+      try {
+        window.location.hash = "#";
+      } catch {
+        // ignore
+      }
       globalThis.location.reload();
-    } catch (error) {
-      setStatus(`${t("errorPrefix")}: ${String(error)}`);
-    }
-  };
+    },
+    [deriveEvoluMnemonicFromNsec, pushToast, t]
+  );
 
-  const pasteKeysFromClipboard = async () => {
-    if (!navigator.clipboard?.readText) {
-      setStatus(t("pasteNotAvailable"));
-      return;
-    }
-
+  const createNewAccount = React.useCallback(async () => {
+    if (onboardingIsBusy) return;
+    setOnboardingIsBusy(true);
     try {
-      const text = (await navigator.clipboard.readText()).trim();
-      if (!text) {
-        setStatus(t("pasteEmpty"));
+      const { nip19, getPublicKey } = await import("nostr-tools");
+      const generateRandomSecretKey = (): Uint8Array => {
+        const bytes = new Uint8Array(32);
+        crypto.getRandomValues(bytes);
+        return bytes;
+      };
+
+      let privBytes: Uint8Array | null = null;
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const candidate = generateRandomSecretKey();
+        try {
+          getPublicKey(candidate);
+          privBytes = candidate;
+          break;
+        } catch {
+          // try again
+        }
+      }
+
+      if (!privBytes) {
+        pushToast(t("onboardingCreateFailed"));
         return;
       }
-      await applyKeysFromText(text);
-    } catch {
-      setStatus(t("pasteNotAvailable"));
-    }
-  };
 
-  const requestPasteKeys = async () => {
-    if (isPasteArmed) {
-      setIsPasteArmed(false);
-      await pasteKeysFromClipboard();
+      const nsec = nip19.nsecEncode(privBytes);
+      await setIdentityFromNsecAndReload(nsec);
+    } finally {
+      setOnboardingIsBusy(false);
+    }
+  }, [onboardingIsBusy, pushToast, setIdentityFromNsecAndReload, t]);
+
+  const useExistingNsec = React.useCallback(async () => {
+    if (onboardingIsBusy) return;
+    setOnboardingIsBusy(true);
+    try {
+      await setIdentityFromNsecAndReload(onboardingNsec);
+    } finally {
+      setOnboardingIsBusy(false);
+    }
+  }, [onboardingIsBusy, onboardingNsec, setIdentityFromNsecAndReload]);
+
+  const requestLogout = React.useCallback(() => {
+    if (!logoutArmed) {
+      setLogoutArmed(true);
+      pushToast(t("logoutArmedHint"));
       return;
     }
-    setIsPasteArmed(true);
-    setStatus(t("pasteArmedHint"));
-  };
+
+    setLogoutArmed(false);
+    try {
+      localStorage.removeItem(NOSTR_NSEC_STORAGE_KEY);
+      localStorage.removeItem(INITIAL_MNEMONIC_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    try {
+      window.location.hash = "#";
+    } catch {
+      // ignore
+    }
+    globalThis.location.reload();
+  }, [logoutArmed, pushToast, t]);
 
   const openContactDetail = (contact: (typeof contacts)[number]) => {
     setPendingDeleteId(null);
-    setIsPasteArmed(false);
     navigateToContact(contact.id);
   };
 
   React.useEffect(() => {
     if (route.kind === "contactNew") {
       setPendingDeleteId(null);
-      setIsPasteArmed(false);
       setEditingId(null);
       setForm(makeEmptyForm());
       return;
@@ -2164,7 +2105,6 @@ const App = () => {
 
     if (route.kind !== "contactEdit") return;
     setPendingDeleteId(null);
-    setIsPasteArmed(false);
 
     if (!selectedContact) {
       setEditingId(null);
@@ -2227,120 +2167,260 @@ const App = () => {
     closeContactDetail();
   };
 
-  const copyMnemonic = async () => {
-    if (!owner || !owner.mnemonic) return;
-    await navigator.clipboard?.writeText(owner.mnemonic);
-    pushToast(t("keysCopied"));
-  };
+  const exportAppData = React.useCallback(() => {
+    try {
+      const now = new Date();
+      const filenameDate = now.toISOString().slice(0, 10);
+
+      const payload = {
+        app: "linky",
+        version: 1,
+        exportedAt: now.toISOString(),
+        contacts: contacts.map((c) => ({
+          name: String(c.name ?? "").trim() || null,
+          npub: String(c.npub ?? "").trim() || null,
+          lnAddress: String(c.lnAddress ?? "").trim() || null,
+          groupName: String(c.groupName ?? "").trim() || null,
+        })),
+        cashuTokens: cashuTokens.map((t) => ({
+          token: String(t.token ?? "").trim(),
+          rawToken: String(t.rawToken ?? "").trim() || null,
+          mint: String(t.mint ?? "").trim() || null,
+          unit: String(t.unit ?? "").trim() || null,
+          amount:
+            typeof t.amount === "number" && Number.isFinite(t.amount)
+              ? t.amount
+              : t.amount
+              ? Number(t.amount)
+              : null,
+          state: String(t.state ?? "").trim() || null,
+          error: String(t.error ?? "").trim() || null,
+        })),
+      };
+
+      const text = JSON.stringify(payload, null, 2);
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `linky-export-${filenameDate}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      }, 1000);
+
+      pushToast(t("exportDone"));
+    } catch {
+      pushToast(t("exportFailed"));
+    }
+  }, [cashuTokens, contacts, pushToast, t]);
+
+  const requestImportAppData = React.useCallback(() => {
+    const el = importDataFileInputRef.current;
+    if (!el) return;
+    try {
+      el.click();
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const importAppDataFromText = React.useCallback(
+    (text: string) => {
+      const sanitizeText = (value: unknown, maxLen: number): string | null => {
+        const raw = String(value ?? "").trim();
+        if (!raw) return null;
+        return raw.length > maxLen ? raw.slice(0, maxLen) : raw;
+      };
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(String(text ?? ""));
+      } catch {
+        pushToast(t("importInvalid"));
+        return;
+      }
+
+      const root = asRecord(parsed);
+      if (!root) {
+        pushToast(t("importInvalid"));
+        return;
+      }
+
+      const importedContacts = Array.isArray(root.contacts)
+        ? root.contacts
+        : [];
+      const importedTokens = Array.isArray(root.cashuTokens)
+        ? root.cashuTokens
+        : [];
+
+      const existingByNpub = new Map<string, (typeof contacts)[number]>();
+      const existingByLn = new Map<string, (typeof contacts)[number]>();
+      for (const c of contacts) {
+        const npub = String(c.npub ?? "").trim();
+        const ln = String(c.lnAddress ?? "")
+          .trim()
+          .toLowerCase();
+        if (npub) existingByNpub.set(npub, c);
+        if (ln) existingByLn.set(ln, c);
+      }
+
+      const existingTokenSet = new Set<string>();
+      for (const tok of cashuTokensAll) {
+        const token = String(tok.token ?? "").trim();
+        const raw = String(tok.rawToken ?? "").trim();
+        if (token) existingTokenSet.add(token);
+        if (raw) existingTokenSet.add(raw);
+      }
+
+      let addedContacts = 0;
+      let updatedContacts = 0;
+      let addedTokens = 0;
+
+      for (const item of importedContacts) {
+        const rec = asRecord(item);
+        if (!rec) continue;
+
+        const name = sanitizeText(rec.name, 1000);
+        const npub = sanitizeText(rec.npub, 1000);
+        const lnAddressRaw = sanitizeText(rec.lnAddress, 1000);
+        const lnAddress = lnAddressRaw ? lnAddressRaw : null;
+        const groupName = sanitizeText(rec.groupName, 1000);
+
+        if (!name && !npub && !lnAddress) continue;
+
+        const existing =
+          (npub ? existingByNpub.get(npub) : undefined) ??
+          (lnAddress
+            ? existingByLn.get(String(lnAddress).toLowerCase())
+            : undefined);
+
+        const payload = {
+          name: name ? (name as typeof Evolu.NonEmptyString1000.Type) : null,
+          npub: npub ? (npub as typeof Evolu.NonEmptyString1000.Type) : null,
+          lnAddress: lnAddress
+            ? (lnAddress as typeof Evolu.NonEmptyString1000.Type)
+            : null,
+          groupName: groupName
+            ? (groupName as typeof Evolu.NonEmptyString1000.Type)
+            : null,
+        };
+
+        if (existing && existing.id) {
+          const id = existing.id as ContactId;
+          const merged = {
+            id,
+            name:
+              payload.name ??
+              (String(existing.name ?? "").trim()
+                ? (String(
+                    existing.name ?? ""
+                  ).trim() as typeof Evolu.NonEmptyString1000.Type)
+                : null),
+            npub:
+              payload.npub ??
+              (String(existing.npub ?? "").trim()
+                ? (String(
+                    existing.npub ?? ""
+                  ).trim() as typeof Evolu.NonEmptyString1000.Type)
+                : null),
+            lnAddress:
+              payload.lnAddress ??
+              (String(existing.lnAddress ?? "").trim()
+                ? (String(
+                    existing.lnAddress ?? ""
+                  ).trim() as typeof Evolu.NonEmptyString1000.Type)
+                : null),
+            groupName:
+              payload.groupName ??
+              (String(existing.groupName ?? "").trim()
+                ? (String(
+                    existing.groupName ?? ""
+                  ).trim() as typeof Evolu.NonEmptyString1000.Type)
+                : null),
+          };
+
+          const r = update("contact", merged);
+          if (r.ok) updatedContacts += 1;
+        } else {
+          const r = insert("contact", payload);
+          if (r.ok) addedContacts += 1;
+        }
+      }
+
+      for (const item of importedTokens) {
+        const rec = asRecord(item);
+        if (!rec) continue;
+        const token = String(rec.token ?? "").trim();
+        if (!token) continue;
+        if (existingTokenSet.has(token)) continue;
+
+        const rawToken = sanitizeText(rec.rawToken, 100000);
+        const mint = sanitizeText(rec.mint, 1000);
+        const unit = sanitizeText(rec.unit, 100);
+        const state = sanitizeText(rec.state, 100);
+        const error = sanitizeText(rec.error, 1000);
+        const amountNum = Math.trunc(
+          Number((rec as Record<string, unknown>).amount ?? 0)
+        );
+        const amount =
+          Number.isFinite(amountNum) && amountNum > 0 ? amountNum : null;
+
+        const r = insert("cashuToken", {
+          token: token as typeof Evolu.NonEmptyString.Type,
+          rawToken: rawToken
+            ? (rawToken as typeof Evolu.NonEmptyString.Type)
+            : null,
+          mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
+          unit: unit ? (unit as typeof Evolu.NonEmptyString100.Type) : null,
+          amount: amount ? (amount as typeof Evolu.PositiveInt.Type) : null,
+          state: state ? (state as typeof Evolu.NonEmptyString100.Type) : null,
+          error: error ? (error as typeof Evolu.NonEmptyString1000.Type) : null,
+        });
+        if (r.ok) {
+          addedTokens += 1;
+          existingTokenSet.add(token);
+          if (rawToken) existingTokenSet.add(rawToken);
+        }
+      }
+
+      if (addedContacts === 0 && updatedContacts === 0 && addedTokens === 0) {
+        pushToast(t("importNothing"));
+        return;
+      }
+
+      pushToast(
+        `${t(
+          "importDone"
+        )} (${addedContacts}/${updatedContacts}/${addedTokens})`
+      );
+    },
+    [cashuTokensAll, contacts, insert, pushToast, t, update]
+  );
+
+  const handleImportAppDataFilePicked = React.useCallback(
+    async (file: File | null) => {
+      if (!file) return;
+      try {
+        const text = await file.text();
+        importAppDataFromText(text);
+      } catch {
+        pushToast(t("importFailed"));
+      }
+    },
+    [importAppDataFromText, pushToast, t]
+  );
 
   const copyNostrKeys = async () => {
     if (!currentNsec) return;
     await navigator.clipboard?.writeText(currentNsec);
     pushToast(t("nostrKeysCopied"));
-  };
-
-  const applyNostrKeysFromText = async (value: string) => {
-    const text = value.trim();
-    if (!text || !text.startsWith("nsec")) {
-      setStatus(t("nostrPasteInvalid"));
-      return;
-    }
-
-    try {
-      const { nip19 } = await import("nostr-tools");
-      const decoded = nip19.decode(text);
-      if (decoded.type !== "nsec") {
-        setStatus(t("nostrPasteInvalid"));
-        return;
-      }
-
-      const defaultNsec = String(derivedNostrIdentity?.nsec ?? "").trim();
-      if (defaultNsec && text === defaultNsec) {
-        // User set keys back to default; don't persist an override.
-        if (storedNostrIdentity?.id) {
-          update("nostrIdentity", {
-            id: storedNostrIdentity.id as unknown as NostrIdentityId,
-            isDeleted: Evolu.sqliteTrue,
-          });
-        }
-        setStatus(t("nostrKeysUpdated"));
-        return;
-      }
-
-      if (storedNostrIdentity?.id) {
-        const result = update("nostrIdentity", {
-          id: storedNostrIdentity.id as unknown as NostrIdentityId,
-          nsec: text as typeof Evolu.NonEmptyString1000.Type,
-        });
-        if (!result.ok) {
-          setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
-          return;
-        }
-      } else {
-        const result = insert("nostrIdentity", {
-          nsec: text as typeof Evolu.NonEmptyString1000.Type,
-        });
-        if (!result.ok) {
-          setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
-          return;
-        }
-      }
-
-      setStatus(t("nostrKeysUpdated"));
-    } catch {
-      setStatus(t("nostrPasteInvalid"));
-    }
-  };
-
-  const pasteNostrKeysFromClipboard = async () => {
-    if (!navigator.clipboard?.readText) {
-      setStatus(t("pasteNotAvailable"));
-      return;
-    }
-
-    try {
-      const text = (await navigator.clipboard.readText()).trim();
-      if (!text) {
-        setStatus(t("pasteEmpty"));
-        return;
-      }
-      await applyNostrKeysFromText(text);
-    } catch {
-      setStatus(t("pasteNotAvailable"));
-    }
-  };
-
-  const requestPasteNostrKeys = async () => {
-    if (isNostrPasteArmed) {
-      setIsNostrPasteArmed(false);
-      await pasteNostrKeysFromClipboard();
-      return;
-    }
-    setIsNostrPasteArmed(true);
-    setStatus(t("nostrPasteArmedHint"));
-  };
-
-  const deriveAndStoreNostrKeys = async () => {
-    if (!owner?.mnemonic) return;
-
-    const derived = await deriveNostrIdentityFromMnemonic(
-      String(owner.mnemonic)
-    );
-    if (!derived) {
-      setStatus(`${t("errorPrefix")}: ${t("nostrPasteInvalid")}`);
-      return;
-    }
-
-    // Derived keys are the default; do not persist them as an override.
-    if (storedNostrIdentity?.id) {
-      update("nostrIdentity", {
-        id: storedNostrIdentity.id as unknown as NostrIdentityId,
-        isDeleted: Evolu.sqliteTrue,
-      });
-    }
-
-    setStatus(t("nostrKeysDerived"));
-    return;
   };
 
   React.useEffect(() => {
@@ -3751,644 +3831,62 @@ const App = () => {
         </div>
       ) : null}
 
-      <header className="topbar">
-        <button
-          className="topbar-btn"
-          onClick={topbar.onClick}
-          aria-label={topbar.label}
-          title={topbar.label}
-        >
-          <span aria-hidden="true">{topbar.icon}</span>
-        </button>
-
-        {chatTopbarContact ? (
-          <div className="topbar-chat" aria-label={t("messagesTitle")}>
-            <span className="topbar-chat-avatar" aria-hidden="true">
-              {(() => {
-                const npub = String(chatTopbarContact.npub ?? "").trim();
-                const url = npub ? nostrPictureByNpub[npub] : null;
-                return url ? (
-                  <img
-                    src={url}
-                    alt=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span className="topbar-chat-avatar-fallback">
-                    {getInitials(String(chatTopbarContact.name ?? ""))}
-                  </span>
-                );
-              })()}
-            </span>
-            <span className="topbar-chat-name">
-              {String(chatTopbarContact.name ?? "").trim() ||
-                t("messagesTitle")}
-            </span>
-          </div>
-        ) : topbarTitle ? (
-          <div className="topbar-title" aria-label={topbarTitle}>
-            {topbarTitle}
-          </div>
-        ) : (
-          <span className="topbar-title-spacer" aria-hidden="true" />
-        )}
-
-        {topbarRight ? (
-          <button
-            className="topbar-btn"
-            onClick={topbarRight.onClick}
-            aria-label={topbarRight.label}
-            title={topbarRight.label}
-          >
-            <span aria-hidden="true">{topbarRight.icon}</span>
-          </button>
-        ) : (
-          <span className="topbar-spacer" aria-hidden="true" />
-        )}
-      </header>
-
-      {route.kind === "settings" && (
+      {!currentNsec ? (
         <section className="panel">
-          <button
-            type="button"
-            className="profile-button"
-            onClick={navigateToProfile}
-            disabled={!currentNpub}
-            aria-label={t("profile")}
-            title={t("profile")}
-          >
-            <span className="profile-avatar" aria-hidden="true">
-              {myProfilePicture ? (
-                <img
-                  src={myProfilePicture}
-                  alt=""
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="profile-avatar-fallback">
-                  {getInitials(myProfileName ?? t("profileNoName"))}
-                </span>
-              )}
-            </span>
-            <span className="profile-text">
-              <span className="profile-name">
-                {myProfileName ??
-                  (currentNpub
-                    ? formatShortNpub(currentNpub)
-                    : t("profileNoName"))}
-              </span>
-            </span>
-          </button>
-
-          <div className="settings-row">
-            <div className="settings-left">
-              <span className="settings-icon" aria-hidden="true">
-                🌐
-              </span>
-              <span className="settings-label">{t("language")}</span>
-            </div>
-            <div className="settings-right">
-              <select
-                className="select"
-                value={lang}
-                onChange={(e) => setLang(e.target.value as Lang)}
-                aria-label={t("language")}
-              >
-                <option value="cs">{t("czech")}</option>
-                <option value="en">{t("english")}</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-left">
-              <span className="settings-icon" aria-hidden="true">
-                ₿
-              </span>
-              <span className="settings-label">{t("unit")}</span>
-            </div>
-            <div className="settings-right">
-              <label className="switch">
-                <input
-                  className="switch-input"
-                  type="checkbox"
-                  aria-label={t("unitUseBitcoin")}
-                  checked={useBitcoinSymbol}
-                  onChange={(e) => setUseBitcoinSymbol(e.target.checked)}
-                />
-              </label>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="settings-row settings-link"
-            onClick={navigateToAdvanced}
-            aria-label={t("advanced")}
-            title={t("advanced")}
-          >
-            <div className="settings-left">
-              <span className="settings-icon" aria-hidden="true">
-                ⚙️
-              </span>
-              <span className="settings-label">{t("advanced")}</span>
-            </div>
-            <div className="settings-right">
-              <span className="settings-chevron" aria-hidden="true">
-                &gt;
-              </span>
-            </div>
-          </button>
-
-          <div className="settings-row">
-            <button className="btn-wide" onClick={navigateToWallet}>
-              {t("walletOpen")}
-            </button>
-          </div>
+          <h1 className="page-title">{t("onboardingTitle")}</h1>
 
           <div className="settings-row">
             <button
-              className="btn-wide secondary"
-              onClick={() => {
-                setScanError(null);
-                setScanIsOpen(true);
-              }}
+              type="button"
+              className="btn-wide"
+              onClick={() => void createNewAccount()}
+              disabled={onboardingIsBusy}
             >
-              {t("scan")}
+              {t("onboardingCreate")}
             </button>
           </div>
-        </section>
-      )}
 
-      {route.kind === "advanced" && (
-        <section className="panel">
-          <div className="settings-row">
-            <div className="settings-left">
-              <span className="settings-icon" aria-hidden="true">
-                🔑
-              </span>
-              <span className="settings-label">{t("keys")}</span>
-            </div>
-            <div className="settings-right">
-              <div className="badge-box">
-                <button
-                  className="ghost"
-                  onClick={copyMnemonic}
-                  disabled={!owner?.mnemonic}
-                >
-                  {t("copyCurrent")}
-                </button>
-                <button
-                  className={isPasteArmed ? "danger" : "ghost"}
-                  onClick={requestPasteKeys}
-                  aria-label={t("paste")}
-                  title={isPasteArmed ? t("pasteArmedHint") : t("paste")}
-                >
-                  {t("paste")}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-left">
-              <span className="settings-icon" aria-hidden="true">
-                🦤
-              </span>
-              <span className="settings-label">{t("nostrKeys")}</span>
-            </div>
-            <div className="settings-right">
-              <div className="badge-box">
-                <button
-                  className="ghost"
-                  onClick={deriveAndStoreNostrKeys}
-                  disabled={!owner?.mnemonic}
-                >
-                  {t("derive")}
-                </button>
-                <button
-                  className="ghost"
-                  onClick={copyNostrKeys}
-                  disabled={!currentNsec}
-                >
-                  {t("copyCurrent")}
-                </button>
-                <button
-                  className={isNostrPasteArmed ? "danger" : "ghost"}
-                  onClick={requestPasteNostrKeys}
-                  aria-label={t("paste")}
-                  title={
-                    isNostrPasteArmed ? t("nostrPasteArmedHint") : t("paste")
-                  }
-                >
-                  {t("paste")}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="settings-row settings-link"
-            onClick={navigateToNostrRelays}
-            aria-label={t("nostrRelay")}
-            title={t("nostrRelay")}
-          >
-            <div className="settings-left">
-              <span className="settings-icon" aria-hidden="true">
-                📡
-              </span>
-              <span className="settings-label">{t("nostrRelay")}</span>
-            </div>
-            <div className="settings-right">
-              <span className="relay-count" aria-label="relay status">
-                {connectedRelayCount}/{relayUrls.length}
-              </span>
-              <span className="settings-chevron" aria-hidden="true">
-                &gt;
-              </span>
-            </div>
-          </button>
-
-          <div className="settings-row">
-            <div className="settings-left">
-              <span className="settings-icon" aria-hidden="true">
-                🏦
-              </span>
-              <span className="settings-label">{t("mints")}</span>
-            </div>
-            <div className="settings-right">
-              {defaultMintDisplay ? (
-                <span className="relay-url">{defaultMintDisplay}</span>
-              ) : (
-                <span className="muted">—</span>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {route.kind === "nostrRelays" && (
-        <section className="panel">
-          {relayUrls.length === 0 ? (
-            <p className="lede">{t("noContactsYet")}</p>
-          ) : (
-            <div>
-              {relayUrls.map((url) => {
-                const state = relayStatusByUrl[url] ?? "checking";
-                const dotClass =
-                  state === "connected"
-                    ? "status-dot connected"
-                    : "status-dot disconnected";
-
-                return (
-                  <button
-                    type="button"
-                    className="settings-row settings-link"
-                    key={url}
-                    onClick={() => navigateToNostrRelay(url)}
-                  >
-                    <div className="settings-left">
-                      <span className="relay-url">{url}</span>
-                    </div>
-                    <div className="settings-right">
-                      <span
-                        className={dotClass}
-                        aria-label={state}
-                        title={state}
-                      />
-                      <span className="settings-chevron" aria-hidden="true">
-                        &gt;
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
-
-      {route.kind === "nostrRelayNew" && (
-        <section className="panel">
-          <label htmlFor="relayUrl">{t("relayUrl")}</label>
+          <label htmlFor="onboardingNsec">{t("onboardingNsec")}</label>
           <input
-            id="relayUrl"
-            value={newRelayUrl}
-            onChange={(e) => setNewRelayUrl(e.target.value)}
-            placeholder="wss://..."
+            id="onboardingNsec"
+            value={onboardingNsec}
+            onChange={(e) => setOnboardingNsec(e.target.value)}
+            placeholder={t("onboardingNsecPlaceholder")}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
           />
 
-          <div className="panel-header" style={{ marginTop: 14 }}>
-            <button onClick={saveNewRelay}>{t("saveChanges")}</button>
-          </div>
-        </section>
-      )}
-
-      {route.kind === "nostrRelay" && (
-        <section className="panel">
-          {selectedRelayUrl ? (
-            <>
-              <div className="settings-row">
-                <div className="settings-left">
-                  <span className="relay-url">{selectedRelayUrl}</span>
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <button
-                  className={
-                    pendingRelayDeleteUrl === selectedRelayUrl
-                      ? "btn-wide danger"
-                      : "btn-wide"
-                  }
-                  onClick={requestDeleteSelectedRelay}
-                >
-                  {t("delete")}
-                </button>
-              </div>
-            </>
-          ) : (
-            <p className="lede">{t("errorPrefix")}</p>
-          )}
-        </section>
-      )}
-
-      {route.kind === "wallet" && (
-        <section className="panel">
-          <div className="panel-header">
-            <div className="wallet-hero">
-              <div className="balance-hero" aria-label={t("cashuBalance")}>
-                <span className="balance-number">
-                  {formatInteger(cashuBalance)}
-                </span>
-                <span className="balance-unit">{displayUnit}</span>
-              </div>
-            </div>
-          </div>
-          <div className="ln-list">
-            {cashuTokens.length === 0 ? (
-              <p className="muted">{t("cashuEmpty")}</p>
-            ) : (
-              <div className="ln-tags">
-                {cashuTokens.map((token) => (
-                  <button
-                    key={token.id as unknown as CashuTokenId}
-                    className={
-                      String(token.state ?? "") === "error"
-                        ? "pill pill-error"
-                        : "pill"
-                    }
-                    onClick={() =>
-                      navigateToCashuToken(token.id as unknown as CashuTokenId)
-                    }
-                    style={{ cursor: "pointer" }}
-                    aria-label={t("cashuToken")}
-                  >
-                    {(() => {
-                      const amount =
-                        Number((token.amount ?? 0) as unknown as number) || 0;
-                      const icon = getMintIconUrl(token.mint);
-                      const showMintFallback = !icon.url;
-                      return (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          {icon.url ? (
-                            <img
-                              src={icon.url}
-                              alt=""
-                              width={14}
-                              height={14}
-                              style={{ borderRadius: 9999, objectFit: "cover" }}
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                (
-                                  e.currentTarget as HTMLImageElement
-                                ).style.display = "none";
-                                if (icon.origin) {
-                                  setMintIconUrlByMint((prev) => ({
-                                    ...prev,
-                                    [icon.origin as string]: null,
-                                  }));
-                                }
-                              }}
-                            />
-                          ) : null}
-                          {showMintFallback && icon.host ? (
-                            <span
-                              className="muted"
-                              style={{ fontSize: 10, lineHeight: "14px" }}
-                            >
-                              {icon.host}
-                            </span>
-                          ) : null}
-                          <span>{formatInteger(amount)}</span>
-                        </span>
-                      );
-                    })()}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {route.kind === "cashuTokenNew" && (
-        <section className="panel">
-          <label>{t("cashuToken")}</label>
-          <textarea
-            ref={cashuDraftRef}
-            value={cashuDraft}
-            onChange={(e) => setCashuDraft(e.target.value)}
-            onPaste={(e) => {
-              const text = e.clipboardData?.getData("text") ?? "";
-              const tokenRaw = String(text).trim();
-              if (!tokenRaw) return;
-              e.preventDefault();
-              void saveCashuFromText(tokenRaw, { navigateToWallet: true });
-            }}
-            placeholder={t("cashuPasteManualHint")}
-          />
-
           <div className="settings-row">
             <button
-              className="btn-wide"
-              onClick={() =>
-                void saveCashuFromText(cashuDraft, { navigateToWallet: true })
-              }
-              disabled={!cashuDraft.trim() || cashuIsBusy}
+              type="button"
+              className="btn-wide secondary"
+              onClick={() => void useExistingNsec()}
+              disabled={onboardingIsBusy || !onboardingNsec.trim()}
             >
-              {t("cashuSave")}
+              {t("onboardingUseExisting")}
             </button>
           </div>
         </section>
-      )}
+      ) : null}
 
-      {route.kind === "cashuToken" && (
-        <section className="panel">
-          {(() => {
-            const row = cashuTokensAll.find(
-              (tkn) =>
-                String(tkn?.id ?? "") ===
-                  String(route.id as unknown as string) && !tkn?.isDeleted
-            );
+      {currentNsec ? (
+        <>
+          <header className="topbar">
+            <button
+              className="topbar-btn"
+              onClick={topbar.onClick}
+              aria-label={topbar.label}
+              title={topbar.label}
+            >
+              <span aria-hidden="true">{topbar.icon}</span>
+            </button>
 
-            if (!row) {
-              return <p className="muted">{t("errorPrefix")}</p>;
-            }
-
-            const tokenText = String(row.rawToken ?? row.token ?? "");
-            const mintText = String(row.mint ?? "").trim();
-            const mintDisplay = (() => {
-              if (!mintText) return null;
-              try {
-                return new URL(mintText).host;
-              } catch {
-                return mintText;
-              }
-            })();
-
-            return (
-              <>
-                {mintDisplay ? (
-                  <p className="muted" style={{ margin: "0 0 10px" }}>
-                    {mintDisplay}
-                  </p>
-                ) : null}
-                <label>{t("cashuToken")}</label>
-                <textarea readOnly value={tokenText} />
-
-                <div className="settings-row">
-                  <button
-                    className="btn-wide secondary"
-                    onClick={() => void copyText(tokenText)}
-                    disabled={!tokenText.trim()}
-                  >
-                    {t("copy")}
-                  </button>
-                </div>
-
-                <div className="settings-row">
-                  <button
-                    className={
-                      pendingCashuDeleteId === (route.id as CashuTokenId)
-                        ? "btn-wide secondary danger-armed"
-                        : "btn-wide secondary"
-                    }
-                    onClick={() => requestDeleteCashuToken(route.id)}
-                  >
-                    {t("delete")}
-                  </button>
-                </div>
-              </>
-            );
-          })()}
-        </section>
-      )}
-
-      {route.kind === "contact" && (
-        <section className="panel">
-          {!selectedContact ? (
-            <p className="muted">Kontakt nenalezen.</p>
-          ) : null}
-
-          {selectedContact ? (
-            <div className="contact-detail">
-              <div className="contact-avatar is-xl" aria-hidden="true">
-                {(() => {
-                  const npub = String(selectedContact.npub ?? "").trim();
-                  const url = npub ? nostrPictureByNpub[npub] : null;
-                  return url ? (
-                    <img
-                      src={url}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="contact-avatar-fallback">
-                      {getInitials(String(selectedContact.name ?? ""))}
-                    </span>
-                  );
-                })()}
-              </div>
-
-              {selectedContact.name ? (
-                <h2 className="contact-detail-name">{selectedContact.name}</h2>
-              ) : null}
-
-              {(() => {
-                const group = String(selectedContact.groupName ?? "").trim();
-                if (!group) return null;
-                return <p className="contact-detail-group">{group}</p>;
-              })()}
-
-              {(() => {
-                const ln = String(selectedContact.lnAddress ?? "").trim();
-                if (!ln) return null;
-                return <p className="contact-detail-ln">{ln}</p>;
-              })()}
-
-              <div className="contact-detail-actions">
-                {(() => {
-                  const ln = String(selectedContact.lnAddress ?? "").trim();
-                  if (!ln) return null;
-                  return (
-                    <button
-                      className="btn-wide"
-                      onClick={() => navigateToContactPay(selectedContact.id)}
-                      disabled={cashuIsBusy || !canPayWithCashu}
-                      title={
-                        !canPayWithCashu ? t("payInsufficient") : undefined
-                      }
-                    >
-                      {t("pay")}
-                    </button>
-                  );
-                })()}
-
-                {(() => {
-                  const npub = String(selectedContact.npub ?? "").trim();
-                  if (!npub) return null;
-                  return (
-                    <button
-                      className="btn-wide secondary"
-                      onClick={() => navigateToChat(selectedContact.id)}
-                    >
-                      {t("sendMessage")}
-                    </button>
-                  );
-                })()}
-              </div>
-            </div>
-          ) : null}
-        </section>
-      )}
-
-      {route.kind === "contactPay" && (
-        <section className="panel">
-          {!selectedContact ? (
-            <p className="muted">Kontakt nenalezen.</p>
-          ) : null}
-
-          {selectedContact ? (
-            <>
-              <div className="contact-header">
-                <div className="contact-avatar is-large" aria-hidden="true">
+            {chatTopbarContact ? (
+              <div className="topbar-chat" aria-label={t("messagesTitle")}>
+                <span className="topbar-chat-avatar" aria-hidden="true">
                   {(() => {
-                    const npub = String(selectedContact.npub ?? "").trim();
+                    const npub = String(chatTopbarContact.npub ?? "").trim();
                     const url = npub ? nostrPictureByNpub[npub] : null;
                     return url ? (
                       <img
@@ -4398,689 +3896,1351 @@ const App = () => {
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <span className="contact-avatar-fallback">
-                        {getInitials(String(selectedContact.name ?? ""))}
+                      <span className="topbar-chat-avatar-fallback">
+                        {getInitials(String(chatTopbarContact.name ?? ""))}
                       </span>
                     );
                   })()}
-                </div>
-                <div className="contact-header-text">
-                  {selectedContact.name ? (
-                    <h3>{selectedContact.name}</h3>
-                  ) : null}
-                  <p className="muted">
-                    {t("availablePrefix")} {formatInteger(cashuBalance)}{" "}
-                    {displayUnit}
-                  </p>
-                </div>
+                </span>
+                <span className="topbar-chat-name">
+                  {String(chatTopbarContact.name ?? "").trim() ||
+                    t("messagesTitle")}
+                </span>
               </div>
-
-              {(() => {
-                const ln = String(selectedContact.lnAddress ?? "").trim();
-                if (!ln) return <p className="muted">{t("payMissingLn")}</p>;
-                if (!canPayWithCashu)
-                  return <p className="muted">{t("payInsufficient")}</p>;
-                return null;
-              })()}
-
-              <div className="amount-display" aria-live="polite">
-                {(() => {
-                  const amountSat = Number.parseInt(payAmount.trim(), 10);
-                  const display =
-                    Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0;
-                  return (
-                    <>
-                      <span className="amount-number">
-                        {formatInteger(display)}
-                      </span>
-                      <span className="amount-unit">{displayUnit}</span>
-                    </>
-                  );
-                })()}
+            ) : topbarTitle ? (
+              <div className="topbar-title" aria-label={topbarTitle}>
+                {topbarTitle}
               </div>
+            ) : (
+              <span className="topbar-title-spacer" aria-hidden="true" />
+            )}
 
-              <div
-                className="keypad"
-                role="group"
-                aria-label={`${t("payAmount")} (${displayUnit})`}
+            {topbarRight ? (
+              <button
+                className="topbar-btn"
+                onClick={topbarRight.onClick}
+                aria-label={topbarRight.label}
+                title={topbarRight.label}
               >
-                {(
-                  [
-                    "1",
-                    "2",
-                    "3",
-                    "4",
-                    "5",
-                    "6",
-                    "7",
-                    "8",
-                    "9",
-                    "C",
-                    "0",
-                    "⌫",
-                  ] as const
-                ).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={
-                      key === "C" || key === "⌫" ? "secondary" : "ghost"
-                    }
-                    onClick={() => {
-                      if (cashuIsBusy) return;
-                      if (key === "C") {
-                        setPayAmount("");
-                        return;
-                      }
-                      if (key === "⌫") {
-                        setPayAmount((v) => v.slice(0, -1));
-                        return;
-                      }
-                      setPayAmount((v) => {
-                        const next = (v + key).replace(/^0+(\d)/, "$1");
-                        return next;
-                      });
-                    }}
-                    disabled={cashuIsBusy}
-                    aria-label={
-                      key === "C"
-                        ? t("clearForm")
-                        : key === "⌫"
-                        ? t("delete")
-                        : key
-                    }
+                <span aria-hidden="true">{topbarRight.icon}</span>
+              </button>
+            ) : (
+              <span className="topbar-spacer" aria-hidden="true" />
+            )}
+          </header>
+
+          {route.kind === "settings" && (
+            <section className="panel">
+              <button
+                type="button"
+                className="profile-button"
+                onClick={navigateToProfile}
+                disabled={!currentNpub}
+                aria-label={t("profile")}
+                title={t("profile")}
+              >
+                <span className="profile-avatar" aria-hidden="true">
+                  {myProfilePicture ? (
+                    <img
+                      src={myProfilePicture}
+                      alt=""
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="profile-avatar-fallback">
+                      {getInitials(myProfileName ?? t("profileNoName"))}
+                    </span>
+                  )}
+                </span>
+                <span className="profile-text">
+                  <span className="profile-name">
+                    {myProfileName ??
+                      (currentNpub
+                        ? formatShortNpub(currentNpub)
+                        : t("profileNoName"))}
+                  </span>
+                </span>
+              </button>
+
+              <div className="settings-row">
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    🌐
+                  </span>
+                  <span className="settings-label">{t("language")}</span>
+                </div>
+                <div className="settings-right">
+                  <select
+                    className="select"
+                    value={lang}
+                    onChange={(e) => setLang(e.target.value as Lang)}
+                    aria-label={t("language")}
                   >
-                    {key}
-                  </button>
-                ))}
+                    <option value="cs">{t("czech")}</option>
+                    <option value="en">{t("english")}</option>
+                  </select>
+                </div>
               </div>
 
-              {(() => {
-                const ln = String(selectedContact.lnAddress ?? "").trim();
-                const amountSat = Number.parseInt(payAmount.trim(), 10);
-                const invalid =
-                  !ln ||
-                  !canPayWithCashu ||
-                  !Number.isFinite(amountSat) ||
-                  amountSat <= 0 ||
-                  amountSat > cashuBalance;
-                return (
-                  <div className="actions">
+              <div className="settings-row">
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    ₿
+                  </span>
+                  <span className="settings-label">{t("unit")}</span>
+                </div>
+                <div className="settings-right">
+                  <label className="switch">
+                    <input
+                      className="switch-input"
+                      type="checkbox"
+                      aria-label={t("unitUseBitcoin")}
+                      checked={useBitcoinSymbol}
+                      onChange={(e) => setUseBitcoinSymbol(e.target.checked)}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="settings-row settings-link"
+                onClick={navigateToAdvanced}
+                aria-label={t("advanced")}
+                title={t("advanced")}
+              >
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    ⚙️
+                  </span>
+                  <span className="settings-label">{t("advanced")}</span>
+                </div>
+                <div className="settings-right">
+                  <span className="settings-chevron" aria-hidden="true">
+                    &gt;
+                  </span>
+                </div>
+              </button>
+
+              <div className="settings-row">
+                <button className="btn-wide" onClick={navigateToWallet}>
+                  {t("walletOpen")}
+                </button>
+              </div>
+
+              <div className="settings-row">
+                <button
+                  className="btn-wide secondary"
+                  onClick={() => {
+                    setScanError(null);
+                    setScanIsOpen(true);
+                  }}
+                >
+                  {t("scan")}
+                </button>
+              </div>
+            </section>
+          )}
+
+          {route.kind === "advanced" && (
+            <section className="panel">
+              <div className="settings-row">
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    🦤
+                  </span>
+                  <span className="settings-label">{t("nostrKeys")}</span>
+                </div>
+                <div className="settings-right">
+                  <div className="badge-box">
                     <button
-                      className="btn-wide"
-                      onClick={() => void paySelectedContact()}
-                      disabled={cashuIsBusy || invalid}
-                      title={
-                        amountSat > cashuBalance
-                          ? t("payInsufficient")
-                          : undefined
-                      }
+                      className="ghost"
+                      onClick={copyNostrKeys}
+                      disabled={!currentNsec}
                     >
-                      {t("paySend")}
+                      {t("copyCurrent")}
                     </button>
                   </div>
-                );
-              })()}
-            </>
-          ) : null}
-        </section>
-      )}
+                </div>
+              </div>
 
-      {route.kind === "chat" && (
-        <section className="panel">
-          {!selectedContact ? (
-            <p className="muted">Kontakt nenalezen.</p>
-          ) : null}
-
-          {selectedContact ? (
-            <>
-              {(() => {
-                const npub = String(selectedContact.npub ?? "").trim();
-                if (npub) return null;
-                return <p className="muted">{t("chatMissingContactNpub")}</p>;
-              })()}
-
-              <div
-                className="chat-messages"
-                role="log"
-                aria-live="polite"
-                ref={chatMessagesRef}
+              <button
+                type="button"
+                className="settings-row settings-link"
+                onClick={navigateToNostrRelays}
+                aria-label={t("nostrRelay")}
+                title={t("nostrRelay")}
               >
-                {chatMessages.length === 0 ? (
-                  <p className="muted">{t("chatEmpty")}</p>
-                ) : (
-                  chatMessages.map((m, idx) => {
-                    const isOut = String(m.direction ?? "") === "out";
-                    const content = String(m.content ?? "");
-                    const messageId = String(m.id ?? "");
-                    const createdAtSec = Number(m.createdAtSec ?? 0) || 0;
-                    const ms = createdAtSec * 1000;
-                    const d = new Date(ms);
-                    const dayKey = `${d.getFullYear()}-${
-                      d.getMonth() + 1
-                    }-${d.getDate()}`;
-                    const minuteKey = Math.floor(createdAtSec / 60);
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    📡
+                  </span>
+                  <span className="settings-label">{t("nostrRelay")}</span>
+                </div>
+                <div className="settings-right">
+                  <span className="relay-count" aria-label="relay status">
+                    {connectedRelayCount}/{relayUrls.length}
+                  </span>
+                  <span className="settings-chevron" aria-hidden="true">
+                    &gt;
+                  </span>
+                </div>
+              </button>
 
-                    const prev = idx > 0 ? chatMessages[idx - 1] : null;
-                    const prevSec = prev
-                      ? Number(prev.createdAtSec ?? 0) || 0
-                      : 0;
-                    const prevDate = prev ? new Date(prevSec * 1000) : null;
-                    const prevDayKey = prevDate
-                      ? `${prevDate.getFullYear()}-${
-                          prevDate.getMonth() + 1
-                        }-${prevDate.getDate()}`
-                      : null;
-
-                    const next =
-                      idx + 1 < chatMessages.length
-                        ? chatMessages[idx + 1]
-                        : null;
-                    const nextSec = next
-                      ? Number(next.createdAtSec ?? 0) || 0
-                      : 0;
-                    const nextMinuteKey = next
-                      ? Math.floor(nextSec / 60)
-                      : null;
-
-                    const showDaySeparator = prevDayKey !== dayKey;
-                    const showTime = nextMinuteKey !== minuteKey;
-
-                    const locale = lang === "cs" ? "cs-CZ" : "en-US";
-                    const timeLabel = new Intl.DateTimeFormat(locale, {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }).format(d);
-
-                    const tokenInfo = getCashuTokenMessageInfo(content);
-
-                    return (
-                      <React.Fragment key={String(m.id)}>
-                        {showDaySeparator ? (
-                          <div
-                            className="chat-day-separator"
-                            aria-hidden="true"
-                          >
-                            {formatChatDayLabel(ms)}
-                          </div>
-                        ) : null}
-
-                        <div
-                          className={
-                            isOut ? "chat-message out" : "chat-message in"
-                          }
-                          ref={(el) => {
-                            if (!messageId) return;
-                            const map = chatMessageElByIdRef.current;
-                            if (el) map.set(messageId, el);
-                            else map.delete(messageId);
-                          }}
-                        >
-                          <div
-                            className={
-                              isOut ? "chat-bubble out" : "chat-bubble in"
-                            }
-                          >
-                            {tokenInfo
-                              ? (() => {
-                                  const icon = getMintIconUrl(
-                                    tokenInfo.mintUrl
-                                  );
-                                  const showMintFallback = !icon.url;
-                                  return (
-                                    <span
-                                      className={
-                                        tokenInfo.isValid
-                                          ? "pill"
-                                          : "pill pill-muted"
-                                      }
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: 6,
-                                      }}
-                                      aria-label={
-                                        tokenInfo.mintDisplay
-                                          ? `${formatInteger(
-                                              tokenInfo.amount ?? 0
-                                            )} sat · ${tokenInfo.mintDisplay}`
-                                          : `${formatInteger(
-                                              tokenInfo.amount ?? 0
-                                            )} sat`
-                                      }
-                                    >
-                                      {icon.url ? (
-                                        <img
-                                          src={icon.url}
-                                          alt=""
-                                          width={14}
-                                          height={14}
-                                          style={{
-                                            borderRadius: 9999,
-                                            objectFit: "cover",
-                                          }}
-                                          loading="lazy"
-                                          referrerPolicy="no-referrer"
-                                          onError={(e) => {
-                                            (
-                                              e.currentTarget as HTMLImageElement
-                                            ).style.display = "none";
-                                            if (icon.origin) {
-                                              setMintIconUrlByMint((prev) => ({
-                                                ...prev,
-                                                [icon.origin as string]: null,
-                                              }));
-                                            }
-                                          }}
-                                        />
-                                      ) : null}
-                                      {showMintFallback && icon.host ? (
-                                        <span
-                                          className="muted"
-                                          style={{
-                                            fontSize: 10,
-                                            lineHeight: "14px",
-                                          }}
-                                        >
-                                          {icon.host}
-                                        </span>
-                                      ) : null}
-                                      {!showMintFallback &&
-                                      tokenInfo.mintDisplay ? (
-                                        <span
-                                          className="muted"
-                                          style={{
-                                            fontSize: 10,
-                                            lineHeight: "14px",
-                                            maxWidth: 140,
-                                            overflow: "hidden",
-                                            textOverflow: "ellipsis",
-                                            whiteSpace: "nowrap",
-                                          }}
-                                        >
-                                          {tokenInfo.mintDisplay}
-                                        </span>
-                                      ) : null}
-                                      <span>
-                                        {formatInteger(tokenInfo.amount ?? 0)}
-                                      </span>
-                                    </span>
-                                  );
-                                })()
-                              : content}
-                          </div>
-
-                          {showTime ? (
-                            <div className="chat-time">{timeLabel}</div>
-                          ) : null}
-                        </div>
-                      </React.Fragment>
-                    );
-                  })
-                )}
+              <div className="settings-row">
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    🏦
+                  </span>
+                  <span className="settings-label">{t("mints")}</span>
+                </div>
+                <div className="settings-right">
+                  {defaultMintDisplay ? (
+                    <span className="relay-url">{defaultMintDisplay}</span>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </div>
               </div>
 
-              <div className="chat-compose">
-                <textarea
-                  value={chatDraft}
-                  onChange={(e) => setChatDraft(e.target.value)}
-                  placeholder={t("chatPlaceholder")}
-                  disabled={!String(selectedContact.npub ?? "").trim()}
-                />
-                <button
-                  className="btn-wide"
-                  onClick={() => void sendChatMessage()}
-                  disabled={
-                    !chatDraft.trim() ||
-                    !String(selectedContact.npub ?? "").trim()
-                  }
-                >
-                  {t("send")}
-                </button>
+              <div className="settings-row">
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    📦
+                  </span>
+                  <span className="settings-label">{t("data")}</span>
+                </div>
+                <div className="settings-right">
+                  <div className="badge-box">
+                    <button className="ghost" onClick={exportAppData}>
+                      {t("exportData")}
+                    </button>
+                    <button className="ghost" onClick={requestImportAppData}>
+                      {t("importData")}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </>
-          ) : null}
-        </section>
-      )}
 
-      {route.kind === "contactEdit" && (
-        <section className="panel panel-plain">
-          {!selectedContact ? (
-            <p className="muted">Kontakt nenalezen.</p>
-          ) : null}
-
-          <div className="form-grid">
-            <div className="form-col">
-              <label>Jméno</label>
               <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Např. Alice"
+                ref={importDataFileInputRef}
+                type="file"
+                accept=".txt,.json,application/json,text/plain"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  e.currentTarget.value = "";
+                  void handleImportAppDataFilePicked(file);
+                }}
               />
 
-              <label>npub</label>
-              <input
-                value={form.npub}
-                onChange={(e) => setForm({ ...form, npub: e.target.value })}
-                placeholder="nostr veřejný klíč"
-              />
-
-              <label>{t("lightningAddress")}</label>
-              <input
-                value={form.lnAddress}
-                onChange={(e) =>
-                  setForm({ ...form, lnAddress: e.target.value })
-                }
-                placeholder="např. alice@zapsat.cz"
-              />
-
-              <label>{t("group")}</label>
-              <input
-                value={form.group}
-                onChange={(e) => setForm({ ...form, group: e.target.value })}
-                placeholder="např. Friends"
-                list={groupNames.length ? "group-options" : undefined}
-              />
-              {groupNames.length ? (
-                <datalist id="group-options">
-                  {groupNames.map((group) => (
-                    <option key={group} value={group} />
-                  ))}
-                </datalist>
-              ) : null}
-
-              <div className="actions">
-                <button onClick={handleSaveContact}>
-                  {editingId ? t("saveChanges") : t("saveContact")}
-                </button>
-                <button
-                  className={pendingDeleteId === editingId ? "danger" : "ghost"}
-                  onClick={requestDeleteCurrentContact}
-                  disabled={!editingId}
-                  title={
-                    pendingDeleteId === editingId
-                      ? "Klikněte znovu pro smazání"
-                      : t("delete")
-                  }
-                >
-                  {t("delete")}
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {route.kind === "contactNew" && (
-        <section className="panel panel-plain">
-          <div className="form-grid">
-            <div className="form-col">
-              <label>Jméno</label>
-              <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Např. Alice"
-              />
-
-              <label>npub</label>
-              <input
-                value={form.npub}
-                onChange={(e) => setForm({ ...form, npub: e.target.value })}
-                placeholder="nostr veřejný klíč"
-              />
-
-              <label>{t("lightningAddress")}</label>
-              <input
-                value={form.lnAddress}
-                onChange={(e) =>
-                  setForm({ ...form, lnAddress: e.target.value })
-                }
-                placeholder="např. alice@zapsat.cz"
-              />
-
-              <label>{t("group")}</label>
-              <input
-                value={form.group}
-                onChange={(e) => setForm({ ...form, group: e.target.value })}
-                placeholder="např. Friends"
-                list={groupNames.length ? "group-options" : undefined}
-              />
-              {groupNames.length ? (
-                <datalist id="group-options">
-                  {groupNames.map((group) => (
-                    <option key={group} value={group} />
-                  ))}
-                </datalist>
-              ) : null}
-
-              <div className="actions">
-                <button onClick={handleSaveContact}>{t("saveContact")}</button>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {route.kind === "contacts" && (
-        <>
-          <section className="panel panel-plain">
-            <div className="contact-list">
-              {contacts.length === 0 && (
-                <p className="muted">{t("noContactsYet")}</p>
-              )}
-              {visibleContacts.map((contact) => {
-                const npub = String(contact.npub ?? "").trim();
-                const avatarUrl = npub ? nostrPictureByNpub[npub] : null;
-                const initials = getInitials(String(contact.name ?? ""));
-
-                return (
-                  <article
-                    key={contact.id}
-                    className="contact-card is-clickable"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openContactDetail(contact)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openContactDetail(contact);
-                      }
-                    }}
-                  >
-                    <div className="card-header">
-                      <div className="contact-avatar" aria-hidden="true">
-                        {avatarUrl ? (
-                          <img
-                            src={avatarUrl}
-                            alt=""
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <span className="contact-avatar-fallback">
-                            {initials}
-                          </span>
-                        )}
-                      </div>
-                      <div className="card-main">
-                        <div className="card-title-row">
-                          {contact.name ? (
-                            <h4 className="contact-title">{contact.name}</h4>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-
-          {showGroupFilter && (
-            <nav className="group-filter-bar" aria-label={t("group")}>
-              <div className="group-filter-inner">
+              <div className="settings-row">
                 <button
                   type="button"
-                  className={
-                    activeGroup === null
-                      ? "group-filter-btn is-active"
-                      : "group-filter-btn"
-                  }
-                  onClick={() => setActiveGroup(null)}
+                  className={logoutArmed ? "btn-wide danger" : "btn-wide"}
+                  onClick={requestLogout}
                 >
-                  {t("all")}
+                  {t("logout")}
                 </button>
-                {showNoGroupFilter ? (
-                  <button
-                    type="button"
-                    className={
-                      activeGroup === NO_GROUP_FILTER
-                        ? "group-filter-btn is-active"
-                        : "group-filter-btn"
-                    }
-                    onClick={() => setActiveGroup(NO_GROUP_FILTER)}
-                  >
-                    {t("noGroup")}
-                  </button>
-                ) : null}
-                {groupNames.map((group) => (
-                  <button
-                    key={group}
-                    type="button"
-                    className={
-                      activeGroup === group
-                        ? "group-filter-btn is-active"
-                        : "group-filter-btn"
-                    }
-                    onClick={() => setActiveGroup(group)}
-                    title={group}
-                  >
-                    {group}
-                  </button>
-                ))}
               </div>
-            </nav>
+            </section>
           )}
-        </>
-      )}
 
-      {route.kind === "profile" && (
-        <section className="panel">
-          {!currentNpub ? (
-            <p className="muted">{t("profileMissingNpub")}</p>
-          ) : (
-            <>
-              {isProfileEditing ? (
+          {route.kind === "nostrRelays" && (
+            <section className="panel">
+              {relayUrls.length === 0 ? (
+                <p className="lede">{t("noContactsYet")}</p>
+              ) : (
+                <div>
+                  {relayUrls.map((url) => {
+                    const state = relayStatusByUrl[url] ?? "checking";
+                    const dotClass =
+                      state === "connected"
+                        ? "status-dot connected"
+                        : "status-dot disconnected";
+
+                    return (
+                      <button
+                        type="button"
+                        className="settings-row settings-link"
+                        key={url}
+                        onClick={() => navigateToNostrRelay(url)}
+                      >
+                        <div className="settings-left">
+                          <span className="relay-url">{url}</span>
+                        </div>
+                        <div className="settings-right">
+                          <span
+                            className={dotClass}
+                            aria-label={state}
+                            title={state}
+                          />
+                          <span className="settings-chevron" aria-hidden="true">
+                            &gt;
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {route.kind === "nostrRelayNew" && (
+            <section className="panel">
+              <label htmlFor="relayUrl">{t("relayUrl")}</label>
+              <input
+                id="relayUrl"
+                value={newRelayUrl}
+                onChange={(e) => setNewRelayUrl(e.target.value)}
+                placeholder="wss://..."
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+
+              <div className="panel-header" style={{ marginTop: 14 }}>
+                <button onClick={saveNewRelay}>{t("saveChanges")}</button>
+              </div>
+            </section>
+          )}
+
+          {route.kind === "nostrRelay" && (
+            <section className="panel">
+              {selectedRelayUrl ? (
                 <>
-                  <label htmlFor="profileName">{t("name")}</label>
-                  <input
-                    id="profileName"
-                    value={profileEditName}
-                    onChange={(e) => setProfileEditName(e.target.value)}
-                    placeholder={t("name")}
-                  />
+                  <div className="settings-row">
+                    <div className="settings-left">
+                      <span className="relay-url">{selectedRelayUrl}</span>
+                    </div>
+                  </div>
 
-                  <label htmlFor="profileLn">{t("lightningAddress")}</label>
-                  <input
-                    id="profileLn"
-                    value={profileEditLnAddress}
-                    onChange={(e) => setProfileEditLnAddress(e.target.value)}
-                    placeholder={t("lightningAddress")}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-
-                  <div className="panel-header" style={{ marginTop: 14 }}>
-                    <button onClick={() => void saveProfileEdits()}>
-                      {t("saveChanges")}
+                  <div className="settings-row">
+                    <button
+                      className={
+                        pendingRelayDeleteUrl === selectedRelayUrl
+                          ? "btn-wide danger"
+                          : "btn-wide"
+                      }
+                      onClick={requestDeleteSelectedRelay}
+                    >
+                      {t("delete")}
                     </button>
                   </div>
                 </>
               ) : (
-                <>
-                  <div className="profile-detail">
-                    <div className="contact-avatar is-xl" aria-hidden="true">
-                      {myProfilePicture ? (
+                <p className="lede">{t("errorPrefix")}</p>
+              )}
+            </section>
+          )}
+
+          {route.kind === "wallet" && (
+            <section className="panel">
+              <div className="panel-header">
+                <div className="wallet-hero">
+                  <div className="balance-hero" aria-label={t("cashuBalance")}>
+                    <span className="balance-number">
+                      {formatInteger(cashuBalance)}
+                    </span>
+                    <span className="balance-unit">{displayUnit}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="ln-list">
+                {cashuTokens.length === 0 ? (
+                  <p className="muted">{t("cashuEmpty")}</p>
+                ) : (
+                  <div className="ln-tags">
+                    {cashuTokens.map((token) => (
+                      <button
+                        key={token.id as unknown as CashuTokenId}
+                        className={
+                          String(token.state ?? "") === "error"
+                            ? "pill pill-error"
+                            : "pill"
+                        }
+                        onClick={() =>
+                          navigateToCashuToken(
+                            token.id as unknown as CashuTokenId
+                          )
+                        }
+                        style={{ cursor: "pointer" }}
+                        aria-label={t("cashuToken")}
+                      >
+                        {(() => {
+                          const amount =
+                            Number((token.amount ?? 0) as unknown as number) ||
+                            0;
+                          const icon = getMintIconUrl(token.mint);
+                          const showMintFallback = !icon.url;
+                          return (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              {icon.url ? (
+                                <img
+                                  src={icon.url}
+                                  alt=""
+                                  width={14}
+                                  height={14}
+                                  style={{
+                                    borderRadius: 9999,
+                                    objectFit: "cover",
+                                  }}
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    (
+                                      e.currentTarget as HTMLImageElement
+                                    ).style.display = "none";
+                                    if (icon.origin) {
+                                      setMintIconUrlByMint((prev) => ({
+                                        ...prev,
+                                        [icon.origin as string]: null,
+                                      }));
+                                    }
+                                  }}
+                                />
+                              ) : null}
+                              {showMintFallback && icon.host ? (
+                                <span
+                                  className="muted"
+                                  style={{ fontSize: 10, lineHeight: "14px" }}
+                                >
+                                  {icon.host}
+                                </span>
+                              ) : null}
+                              <span>{formatInteger(amount)}</span>
+                            </span>
+                          );
+                        })()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {route.kind === "cashuTokenNew" && (
+            <section className="panel">
+              <label>{t("cashuToken")}</label>
+              <textarea
+                ref={cashuDraftRef}
+                value={cashuDraft}
+                onChange={(e) => setCashuDraft(e.target.value)}
+                onPaste={(e) => {
+                  const text = e.clipboardData?.getData("text") ?? "";
+                  const tokenRaw = String(text).trim();
+                  if (!tokenRaw) return;
+                  e.preventDefault();
+                  void saveCashuFromText(tokenRaw, { navigateToWallet: true });
+                }}
+                placeholder={t("cashuPasteManualHint")}
+              />
+
+              <div className="settings-row">
+                <button
+                  className="btn-wide"
+                  onClick={() =>
+                    void saveCashuFromText(cashuDraft, {
+                      navigateToWallet: true,
+                    })
+                  }
+                  disabled={!cashuDraft.trim() || cashuIsBusy}
+                >
+                  {t("cashuSave")}
+                </button>
+              </div>
+            </section>
+          )}
+
+          {route.kind === "cashuToken" && (
+            <section className="panel">
+              {(() => {
+                const row = cashuTokensAll.find(
+                  (tkn) =>
+                    String(tkn?.id ?? "") ===
+                      String(route.id as unknown as string) && !tkn?.isDeleted
+                );
+
+                if (!row) {
+                  return <p className="muted">{t("errorPrefix")}</p>;
+                }
+
+                const tokenText = String(row.rawToken ?? row.token ?? "");
+                const mintText = String(row.mint ?? "").trim();
+                const mintDisplay = (() => {
+                  if (!mintText) return null;
+                  try {
+                    return new URL(mintText).host;
+                  } catch {
+                    return mintText;
+                  }
+                })();
+
+                return (
+                  <>
+                    {mintDisplay ? (
+                      <p className="muted" style={{ margin: "0 0 10px" }}>
+                        {mintDisplay}
+                      </p>
+                    ) : null}
+                    <label>{t("cashuToken")}</label>
+                    <textarea readOnly value={tokenText} />
+
+                    <div className="settings-row">
+                      <button
+                        className="btn-wide secondary"
+                        onClick={() => void copyText(tokenText)}
+                        disabled={!tokenText.trim()}
+                      >
+                        {t("copy")}
+                      </button>
+                    </div>
+
+                    <div className="settings-row">
+                      <button
+                        className={
+                          pendingCashuDeleteId === (route.id as CashuTokenId)
+                            ? "btn-wide secondary danger-armed"
+                            : "btn-wide secondary"
+                        }
+                        onClick={() => requestDeleteCashuToken(route.id)}
+                      >
+                        {t("delete")}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </section>
+          )}
+
+          {route.kind === "contact" && (
+            <section className="panel">
+              {!selectedContact ? (
+                <p className="muted">Kontakt nenalezen.</p>
+              ) : null}
+
+              {selectedContact ? (
+                <div className="contact-detail">
+                  <div className="contact-avatar is-xl" aria-hidden="true">
+                    {(() => {
+                      const npub = String(selectedContact.npub ?? "").trim();
+                      const url = npub ? nostrPictureByNpub[npub] : null;
+                      return url ? (
                         <img
-                          src={myProfilePicture}
+                          src={url}
                           alt=""
                           loading="lazy"
                           referrerPolicy="no-referrer"
                         />
                       ) : (
                         <span className="contact-avatar-fallback">
-                          {getInitials(
-                            myProfileName ?? formatShortNpub(currentNpub)
-                          )}
+                          {getInitials(String(selectedContact.name ?? ""))}
                         </span>
-                      )}
-                    </div>
+                      );
+                    })()}
+                  </div>
 
-                    {myProfileQr ? (
-                      <img
-                        className="qr"
-                        src={myProfileQr}
-                        alt=""
-                        onClick={() => {
-                          if (!currentNpub) return;
-                          void copyText(currentNpub);
-                        }}
-                      />
-                    ) : (
-                      <p className="muted">{currentNpub}</p>
-                    )}
-
+                  {selectedContact.name ? (
                     <h2 className="contact-detail-name">
-                      {myProfileName ?? formatShortNpub(currentNpub)}
+                      {selectedContact.name}
                     </h2>
+                  ) : null}
 
-                    {effectiveMyLightningAddress ? (
-                      <p className="contact-detail-ln">
-                        {effectiveMyLightningAddress}
+                  {(() => {
+                    const group = String(
+                      selectedContact.groupName ?? ""
+                    ).trim();
+                    if (!group) return null;
+                    return <p className="contact-detail-group">{group}</p>;
+                  })()}
+
+                  {(() => {
+                    const ln = String(selectedContact.lnAddress ?? "").trim();
+                    if (!ln) return null;
+                    return <p className="contact-detail-ln">{ln}</p>;
+                  })()}
+
+                  <div className="contact-detail-actions">
+                    {(() => {
+                      const ln = String(selectedContact.lnAddress ?? "").trim();
+                      if (!ln) return null;
+                      return (
+                        <button
+                          className="btn-wide"
+                          onClick={() =>
+                            navigateToContactPay(selectedContact.id)
+                          }
+                          disabled={cashuIsBusy || !canPayWithCashu}
+                          title={
+                            !canPayWithCashu ? t("payInsufficient") : undefined
+                          }
+                        >
+                          {t("pay")}
+                        </button>
+                      );
+                    })()}
+
+                    {(() => {
+                      const npub = String(selectedContact.npub ?? "").trim();
+                      if (!npub) return null;
+                      return (
+                        <button
+                          className="btn-wide secondary"
+                          onClick={() => navigateToChat(selectedContact.id)}
+                        >
+                          {t("sendMessage")}
+                        </button>
+                      );
+                    })()}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          )}
+
+          {route.kind === "contactPay" && (
+            <section className="panel">
+              {!selectedContact ? (
+                <p className="muted">Kontakt nenalezen.</p>
+              ) : null}
+
+              {selectedContact ? (
+                <>
+                  <div className="contact-header">
+                    <div className="contact-avatar is-large" aria-hidden="true">
+                      {(() => {
+                        const npub = String(selectedContact.npub ?? "").trim();
+                        const url = npub ? nostrPictureByNpub[npub] : null;
+                        return url ? (
+                          <img
+                            src={url}
+                            alt=""
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="contact-avatar-fallback">
+                            {getInitials(String(selectedContact.name ?? ""))}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <div className="contact-header-text">
+                      {selectedContact.name ? (
+                        <h3>{selectedContact.name}</h3>
+                      ) : null}
+                      <p className="muted">
+                        {t("availablePrefix")} {formatInteger(cashuBalance)}{" "}
+                        {displayUnit}
                       </p>
-                    ) : null}
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const ln = String(selectedContact.lnAddress ?? "").trim();
+                    if (!ln)
+                      return <p className="muted">{t("payMissingLn")}</p>;
+                    if (!canPayWithCashu)
+                      return <p className="muted">{t("payInsufficient")}</p>;
+                    return null;
+                  })()}
+
+                  <div className="amount-display" aria-live="polite">
+                    {(() => {
+                      const amountSat = Number.parseInt(payAmount.trim(), 10);
+                      const display =
+                        Number.isFinite(amountSat) && amountSat > 0
+                          ? amountSat
+                          : 0;
+                      return (
+                        <>
+                          <span className="amount-number">
+                            {formatInteger(display)}
+                          </span>
+                          <span className="amount-unit">{displayUnit}</span>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  <div
+                    className="keypad"
+                    role="group"
+                    aria-label={`${t("payAmount")} (${displayUnit})`}
+                  >
+                    {(
+                      [
+                        "1",
+                        "2",
+                        "3",
+                        "4",
+                        "5",
+                        "6",
+                        "7",
+                        "8",
+                        "9",
+                        "C",
+                        "0",
+                        "⌫",
+                      ] as const
+                    ).map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={
+                          key === "C" || key === "⌫" ? "secondary" : "ghost"
+                        }
+                        onClick={() => {
+                          if (cashuIsBusy) return;
+                          if (key === "C") {
+                            setPayAmount("");
+                            return;
+                          }
+                          if (key === "⌫") {
+                            setPayAmount((v) => v.slice(0, -1));
+                            return;
+                          }
+                          setPayAmount((v) => {
+                            const next = (v + key).replace(/^0+(\d)/, "$1");
+                            return next;
+                          });
+                        }}
+                        disabled={cashuIsBusy}
+                        aria-label={
+                          key === "C"
+                            ? t("clearForm")
+                            : key === "⌫"
+                            ? t("delete")
+                            : key
+                        }
+                      >
+                        {key}
+                      </button>
+                    ))}
+                  </div>
+
+                  {(() => {
+                    const ln = String(selectedContact.lnAddress ?? "").trim();
+                    const amountSat = Number.parseInt(payAmount.trim(), 10);
+                    const invalid =
+                      !ln ||
+                      !canPayWithCashu ||
+                      !Number.isFinite(amountSat) ||
+                      amountSat <= 0 ||
+                      amountSat > cashuBalance;
+                    return (
+                      <div className="actions">
+                        <button
+                          className="btn-wide"
+                          onClick={() => void paySelectedContact()}
+                          disabled={cashuIsBusy || invalid}
+                          title={
+                            amountSat > cashuBalance
+                              ? t("payInsufficient")
+                              : undefined
+                          }
+                        >
+                          {t("paySend")}
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </>
+              ) : null}
+            </section>
+          )}
+
+          {route.kind === "chat" && (
+            <section className="panel">
+              {!selectedContact ? (
+                <p className="muted">Kontakt nenalezen.</p>
+              ) : null}
+
+              {selectedContact ? (
+                <>
+                  {(() => {
+                    const npub = String(selectedContact.npub ?? "").trim();
+                    if (npub) return null;
+                    return (
+                      <p className="muted">{t("chatMissingContactNpub")}</p>
+                    );
+                  })()}
+
+                  <div
+                    className="chat-messages"
+                    role="log"
+                    aria-live="polite"
+                    ref={chatMessagesRef}
+                  >
+                    {chatMessages.length === 0 ? (
+                      <p className="muted">{t("chatEmpty")}</p>
+                    ) : (
+                      chatMessages.map((m, idx) => {
+                        const isOut = String(m.direction ?? "") === "out";
+                        const content = String(m.content ?? "");
+                        const messageId = String(m.id ?? "");
+                        const createdAtSec = Number(m.createdAtSec ?? 0) || 0;
+                        const ms = createdAtSec * 1000;
+                        const d = new Date(ms);
+                        const dayKey = `${d.getFullYear()}-${
+                          d.getMonth() + 1
+                        }-${d.getDate()}`;
+                        const minuteKey = Math.floor(createdAtSec / 60);
+
+                        const prev = idx > 0 ? chatMessages[idx - 1] : null;
+                        const prevSec = prev
+                          ? Number(prev.createdAtSec ?? 0) || 0
+                          : 0;
+                        const prevDate = prev ? new Date(prevSec * 1000) : null;
+                        const prevDayKey = prevDate
+                          ? `${prevDate.getFullYear()}-${
+                              prevDate.getMonth() + 1
+                            }-${prevDate.getDate()}`
+                          : null;
+
+                        const next =
+                          idx + 1 < chatMessages.length
+                            ? chatMessages[idx + 1]
+                            : null;
+                        const nextSec = next
+                          ? Number(next.createdAtSec ?? 0) || 0
+                          : 0;
+                        const nextMinuteKey = next
+                          ? Math.floor(nextSec / 60)
+                          : null;
+
+                        const showDaySeparator = prevDayKey !== dayKey;
+                        const showTime = nextMinuteKey !== minuteKey;
+
+                        const locale = lang === "cs" ? "cs-CZ" : "en-US";
+                        const timeLabel = new Intl.DateTimeFormat(locale, {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }).format(d);
+
+                        const tokenInfo = getCashuTokenMessageInfo(content);
+
+                        return (
+                          <React.Fragment key={String(m.id)}>
+                            {showDaySeparator ? (
+                              <div
+                                className="chat-day-separator"
+                                aria-hidden="true"
+                              >
+                                {formatChatDayLabel(ms)}
+                              </div>
+                            ) : null}
+
+                            <div
+                              className={
+                                isOut ? "chat-message out" : "chat-message in"
+                              }
+                              ref={(el) => {
+                                if (!messageId) return;
+                                const map = chatMessageElByIdRef.current;
+                                if (el) map.set(messageId, el);
+                                else map.delete(messageId);
+                              }}
+                            >
+                              <div
+                                className={
+                                  isOut ? "chat-bubble out" : "chat-bubble in"
+                                }
+                              >
+                                {tokenInfo
+                                  ? (() => {
+                                      const icon = getMintIconUrl(
+                                        tokenInfo.mintUrl
+                                      );
+                                      const showMintFallback = !icon.url;
+                                      return (
+                                        <span
+                                          className={
+                                            tokenInfo.isValid
+                                              ? "pill"
+                                              : "pill pill-muted"
+                                          }
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 6,
+                                          }}
+                                          aria-label={
+                                            tokenInfo.mintDisplay
+                                              ? `${formatInteger(
+                                                  tokenInfo.amount ?? 0
+                                                )} sat · ${
+                                                  tokenInfo.mintDisplay
+                                                }`
+                                              : `${formatInteger(
+                                                  tokenInfo.amount ?? 0
+                                                )} sat`
+                                          }
+                                        >
+                                          {icon.url ? (
+                                            <img
+                                              src={icon.url}
+                                              alt=""
+                                              width={14}
+                                              height={14}
+                                              style={{
+                                                borderRadius: 9999,
+                                                objectFit: "cover",
+                                              }}
+                                              loading="lazy"
+                                              referrerPolicy="no-referrer"
+                                              onError={(e) => {
+                                                (
+                                                  e.currentTarget as HTMLImageElement
+                                                ).style.display = "none";
+                                                if (icon.origin) {
+                                                  setMintIconUrlByMint(
+                                                    (prev) => ({
+                                                      ...prev,
+                                                      [icon.origin as string]:
+                                                        null,
+                                                    })
+                                                  );
+                                                }
+                                              }}
+                                            />
+                                          ) : null}
+                                          {showMintFallback && icon.host ? (
+                                            <span
+                                              className="muted"
+                                              style={{
+                                                fontSize: 10,
+                                                lineHeight: "14px",
+                                              }}
+                                            >
+                                              {icon.host}
+                                            </span>
+                                          ) : null}
+                                          {!showMintFallback &&
+                                          tokenInfo.mintDisplay ? (
+                                            <span
+                                              className="muted"
+                                              style={{
+                                                fontSize: 10,
+                                                lineHeight: "14px",
+                                                maxWidth: 140,
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                                whiteSpace: "nowrap",
+                                              }}
+                                            >
+                                              {tokenInfo.mintDisplay}
+                                            </span>
+                                          ) : null}
+                                          <span>
+                                            {formatInteger(
+                                              tokenInfo.amount ?? 0
+                                            )}
+                                          </span>
+                                        </span>
+                                      );
+                                    })()
+                                  : content}
+                              </div>
+
+                              {showTime ? (
+                                <div className="chat-time">{timeLabel}</div>
+                              ) : null}
+                            </div>
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="chat-compose">
+                    <textarea
+                      value={chatDraft}
+                      onChange={(e) => setChatDraft(e.target.value)}
+                      placeholder={t("chatPlaceholder")}
+                      disabled={!String(selectedContact.npub ?? "").trim()}
+                    />
+                    <button
+                      className="btn-wide"
+                      onClick={() => void sendChatMessage()}
+                      disabled={
+                        !chatDraft.trim() ||
+                        !String(selectedContact.npub ?? "").trim()
+                      }
+                    >
+                      {t("send")}
+                    </button>
                   </div>
                 </>
+              ) : null}
+            </section>
+          )}
+
+          {route.kind === "contactEdit" && (
+            <section className="panel panel-plain">
+              {!selectedContact ? (
+                <p className="muted">Kontakt nenalezen.</p>
+              ) : null}
+
+              <div className="form-grid">
+                <div className="form-col">
+                  <label>Jméno</label>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Např. Alice"
+                  />
+
+                  <label>npub</label>
+                  <input
+                    value={form.npub}
+                    onChange={(e) => setForm({ ...form, npub: e.target.value })}
+                    placeholder="nostr veřejný klíč"
+                  />
+
+                  <label>{t("lightningAddress")}</label>
+                  <input
+                    value={form.lnAddress}
+                    onChange={(e) =>
+                      setForm({ ...form, lnAddress: e.target.value })
+                    }
+                    placeholder="např. alice@zapsat.cz"
+                  />
+
+                  <label>{t("group")}</label>
+                  <input
+                    value={form.group}
+                    onChange={(e) =>
+                      setForm({ ...form, group: e.target.value })
+                    }
+                    placeholder="např. Friends"
+                    list={groupNames.length ? "group-options" : undefined}
+                  />
+                  {groupNames.length ? (
+                    <datalist id="group-options">
+                      {groupNames.map((group) => (
+                        <option key={group} value={group} />
+                      ))}
+                    </datalist>
+                  ) : null}
+
+                  <div className="actions">
+                    <button onClick={handleSaveContact}>
+                      {editingId ? t("saveChanges") : t("saveContact")}
+                    </button>
+                    <button
+                      className={
+                        pendingDeleteId === editingId ? "danger" : "ghost"
+                      }
+                      onClick={requestDeleteCurrentContact}
+                      disabled={!editingId}
+                      title={
+                        pendingDeleteId === editingId
+                          ? "Klikněte znovu pro smazání"
+                          : t("delete")
+                      }
+                    >
+                      {t("delete")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {route.kind === "contactNew" && (
+            <section className="panel panel-plain">
+              <div className="form-grid">
+                <div className="form-col">
+                  <label>Jméno</label>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Např. Alice"
+                  />
+
+                  <label>npub</label>
+                  <input
+                    value={form.npub}
+                    onChange={(e) => setForm({ ...form, npub: e.target.value })}
+                    placeholder="nostr veřejný klíč"
+                  />
+
+                  <label>{t("lightningAddress")}</label>
+                  <input
+                    value={form.lnAddress}
+                    onChange={(e) =>
+                      setForm({ ...form, lnAddress: e.target.value })
+                    }
+                    placeholder="např. alice@zapsat.cz"
+                  />
+
+                  <label>{t("group")}</label>
+                  <input
+                    value={form.group}
+                    onChange={(e) =>
+                      setForm({ ...form, group: e.target.value })
+                    }
+                    placeholder="např. Friends"
+                    list={groupNames.length ? "group-options" : undefined}
+                  />
+                  {groupNames.length ? (
+                    <datalist id="group-options">
+                      {groupNames.map((group) => (
+                        <option key={group} value={group} />
+                      ))}
+                    </datalist>
+                  ) : null}
+
+                  <div className="actions">
+                    <button onClick={handleSaveContact}>
+                      {t("saveContact")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {route.kind === "contacts" && (
+            <>
+              <section className="panel panel-plain">
+                <div className="contact-list">
+                  {contacts.length === 0 && (
+                    <p className="muted">{t("noContactsYet")}</p>
+                  )}
+                  {visibleContacts.map((contact) => {
+                    const npub = String(contact.npub ?? "").trim();
+                    const avatarUrl = npub ? nostrPictureByNpub[npub] : null;
+                    const initials = getInitials(String(contact.name ?? ""));
+
+                    return (
+                      <article
+                        key={contact.id}
+                        className="contact-card is-clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openContactDetail(contact)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openContactDetail(contact);
+                          }
+                        }}
+                      >
+                        <div className="card-header">
+                          <div className="contact-avatar" aria-hidden="true">
+                            {avatarUrl ? (
+                              <img
+                                src={avatarUrl}
+                                alt=""
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <span className="contact-avatar-fallback">
+                                {initials}
+                              </span>
+                            )}
+                          </div>
+                          <div className="card-main">
+                            <div className="card-title-row">
+                              {contact.name ? (
+                                <h4 className="contact-title">
+                                  {contact.name}
+                                </h4>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {showGroupFilter && (
+                <nav className="group-filter-bar" aria-label={t("group")}>
+                  <div className="group-filter-inner">
+                    <button
+                      type="button"
+                      className={
+                        activeGroup === null
+                          ? "group-filter-btn is-active"
+                          : "group-filter-btn"
+                      }
+                      onClick={() => setActiveGroup(null)}
+                    >
+                      {t("all")}
+                    </button>
+                    {showNoGroupFilter ? (
+                      <button
+                        type="button"
+                        className={
+                          activeGroup === NO_GROUP_FILTER
+                            ? "group-filter-btn is-active"
+                            : "group-filter-btn"
+                        }
+                        onClick={() => setActiveGroup(NO_GROUP_FILTER)}
+                      >
+                        {t("noGroup")}
+                      </button>
+                    ) : null}
+                    {groupNames.map((group) => (
+                      <button
+                        key={group}
+                        type="button"
+                        className={
+                          activeGroup === group
+                            ? "group-filter-btn is-active"
+                            : "group-filter-btn"
+                        }
+                        onClick={() => setActiveGroup(group)}
+                        title={group}
+                      >
+                        {group}
+                      </button>
+                    ))}
+                  </div>
+                </nav>
               )}
             </>
           )}
-        </section>
-      )}
 
-      {scanIsOpen && (
-        <div className="scan-overlay" role="dialog" aria-label={t("scan")}>
-          <div className="scan-sheet">
-            <div className="scan-header">
-              <div className="scan-title">{t("scan")}</div>
-              <button
-                className="topbar-btn"
-                onClick={() => setScanIsOpen(false)}
-                aria-label={t("close")}
-                title={t("close")}
-              >
-                <span aria-hidden="true">×</span>
-              </button>
+          {route.kind === "profile" && (
+            <section className="panel">
+              {!currentNpub ? (
+                <p className="muted">{t("profileMissingNpub")}</p>
+              ) : (
+                <>
+                  {isProfileEditing ? (
+                    <>
+                      <label htmlFor="profileName">{t("name")}</label>
+                      <input
+                        id="profileName"
+                        value={profileEditName}
+                        onChange={(e) => setProfileEditName(e.target.value)}
+                        placeholder={t("name")}
+                      />
+
+                      <label htmlFor="profileLn">{t("lightningAddress")}</label>
+                      <input
+                        id="profileLn"
+                        value={profileEditLnAddress}
+                        onChange={(e) =>
+                          setProfileEditLnAddress(e.target.value)
+                        }
+                        placeholder={t("lightningAddress")}
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                      />
+
+                      <div className="panel-header" style={{ marginTop: 14 }}>
+                        <button onClick={() => void saveProfileEdits()}>
+                          {t("saveChanges")}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="profile-detail">
+                        <div
+                          className="contact-avatar is-xl"
+                          aria-hidden="true"
+                        >
+                          {myProfilePicture ? (
+                            <img
+                              src={myProfilePicture}
+                              alt=""
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <span className="contact-avatar-fallback">
+                              {getInitials(
+                                myProfileName ?? formatShortNpub(currentNpub)
+                              )}
+                            </span>
+                          )}
+                        </div>
+
+                        {myProfileQr ? (
+                          <img
+                            className="qr"
+                            src={myProfileQr}
+                            alt=""
+                            onClick={() => {
+                              if (!currentNpub) return;
+                              void copyText(currentNpub);
+                            }}
+                          />
+                        ) : (
+                          <p className="muted">{currentNpub}</p>
+                        )}
+
+                        <h2 className="contact-detail-name">
+                          {myProfileName ?? formatShortNpub(currentNpub)}
+                        </h2>
+
+                        {effectiveMyLightningAddress ? (
+                          <p className="contact-detail-ln">
+                            {effectiveMyLightningAddress}
+                          </p>
+                        ) : null}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+
+          {scanIsOpen && (
+            <div className="scan-overlay" role="dialog" aria-label={t("scan")}>
+              <div className="scan-sheet">
+                <div className="scan-header">
+                  <div className="scan-title">{t("scan")}</div>
+                  <button
+                    className="topbar-btn"
+                    onClick={() => setScanIsOpen(false)}
+                    aria-label={t("close")}
+                    title={t("close")}
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </div>
+
+                <video ref={scanVideoRef} className="scan-video" />
+
+                {scanError ? <p className="muted">{scanError}</p> : null}
+              </div>
             </div>
+          )}
 
-            <video ref={scanVideoRef} className="scan-video" />
-
-            {scanError ? <p className="muted">{scanError}</p> : null}
-          </div>
-        </div>
-      )}
-
-      {paidOverlayIsOpen ? (
-        <div className="paid-overlay" role="status" aria-live="assertive">
-          <div className="paid-sheet">
-            <div className="paid-check" aria-hidden="true">
-              ✓
+          {paidOverlayIsOpen ? (
+            <div className="paid-overlay" role="status" aria-live="assertive">
+              <div className="paid-sheet">
+                <div className="paid-check" aria-hidden="true">
+                  ✓
+                </div>
+                <div className="paid-title">
+                  {lang === "cs" ? "Zaplaceno" : "Paid"}
+                </div>
+              </div>
             </div>
-            <div className="paid-title">
-              {lang === "cs" ? "Zaplaceno" : "Paid"}
-            </div>
-          </div>
-        </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
