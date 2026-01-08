@@ -26,6 +26,32 @@ import {
   type NostrProfileMetadata,
 } from "./nostrProfile";
 import { publishKind0ProfileMetadata } from "./nostrPublish";
+import {
+  useRouting,
+  navigateToContacts,
+  navigateToSettings,
+  navigateToAdvanced,
+  navigateToContact,
+  navigateToContactEdit,
+  navigateToContactPay,
+  navigateToChat,
+  navigateToNewContact,
+  navigateToWallet,
+  navigateToCashuTokenNew,
+  navigateToCashuToken,
+  navigateToProfile,
+  navigateToNostrRelays,
+  navigateToNostrRelay,
+  navigateToNewRelay,
+} from "./hooks/useRouting";
+import {
+  NO_GROUP_FILTER,
+  UNIT_TOGGLE_STORAGE_KEY,
+  NOSTR_NSEC_STORAGE_KEY,
+  FEEDBACK_CONTACT_NPUB,
+} from "./utils/constants";
+import { useToasts } from "./hooks/useToasts";
+import { useInit } from "./hooks/useInit";
 
 type AppNostrPool = {
   publish: (
@@ -67,12 +93,6 @@ type ContactFormState = {
   group: string;
 };
 
-const UNIT_TOGGLE_STORAGE_KEY = "linky_use_btc_symbol";
-const NOSTR_NSEC_STORAGE_KEY = "linky.nostr_nsec";
-
-const FEEDBACK_CONTACT_NPUB =
-  "npub1kkht6jvgr8mt4844saf80j5jjwyy6fdy90sxsuxt4hfv8pel499s96jvz8";
-
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== "object") return null;
   return value as Record<string, unknown>;
@@ -103,87 +123,15 @@ const makeEmptyForm = (): ContactFormState => ({
   group: "",
 });
 
-type Route =
-  | { kind: "contacts" }
-  | { kind: "settings" }
-  | { kind: "advanced" }
-  | { kind: "profile" }
-  | { kind: "wallet" }
-  | { kind: "cashuTokenNew" }
-  | { kind: "cashuToken"; id: CashuTokenId }
-  | { kind: "nostrRelays" }
-  | { kind: "nostrRelay"; id: string }
-  | { kind: "nostrRelayNew" }
-  | { kind: "contactNew" }
-  | { kind: "contact"; id: ContactId }
-  | { kind: "contactEdit"; id: ContactId }
-  | { kind: "contactPay"; id: ContactId }
-  | { kind: "chat"; id: ContactId };
-
-const parseRouteFromHash = (): Route => {
-  const hash = globalThis.location?.hash ?? "";
-  if (hash === "#") return { kind: "contacts" };
-  if (hash === "#settings") return { kind: "settings" };
-  if (hash === "#advanced") return { kind: "advanced" };
-  if (hash === "#profile") return { kind: "profile" };
-  if (hash === "#wallet") return { kind: "wallet" };
-  if (hash === "#wallet/token/new") return { kind: "cashuTokenNew" };
-
-  const walletTokenPrefix = "#wallet/token/";
-  if (hash.startsWith(walletTokenPrefix)) {
-    const rest = hash.slice(walletTokenPrefix.length);
-    const id = decodeURIComponent(String(rest ?? "")).trim();
-    if (id) return { kind: "cashuToken", id: id as CashuTokenId };
-  }
-  if (hash === "#nostr-relays") return { kind: "nostrRelays" };
-  if (hash === "#nostr-relay/new") return { kind: "nostrRelayNew" };
-
-  const relayPrefix = "#nostr-relay/";
-  if (hash.startsWith(relayPrefix)) {
-    const rest = hash.slice(relayPrefix.length);
-    const id = decodeURIComponent(String(rest ?? "")).trim();
-    if (id) return { kind: "nostrRelay", id };
-  }
-
-  const chatPrefix = "#chat/";
-  if (hash.startsWith(chatPrefix)) {
-    const rest = hash.slice(chatPrefix.length);
-    const id = decodeURIComponent(String(rest ?? "")).trim();
-    if (id) return { kind: "chat", id: id as ContactId };
-  }
-
-  if (hash === "#contact/new") return { kind: "contactNew" };
-
-  const contactPrefix = "#contact/";
-  if (hash.startsWith(contactPrefix)) {
-    const rest = hash.slice(contactPrefix.length);
-    const [rawId, rawSub] = rest.split("/");
-    const id = decodeURIComponent(String(rawId ?? "")).trim();
-    const sub = String(rawSub ?? "").trim();
-
-    if (id) {
-      if (sub === "edit") return { kind: "contactEdit", id: id as ContactId };
-      if (sub === "pay") return { kind: "contactPay", id: id as ContactId };
-      return { kind: "contact", id: id as ContactId };
-    }
-  }
-
-  return { kind: "contacts" };
-};
-
 const App = () => {
   const { insert, update, upsert } = useEvolu();
 
-  const NO_GROUP_FILTER = "__linky_no_group__";
+  const route = useRouting();
+  const { toasts, pushToast } = useToasts();
 
   const [form, setForm] = useState<ContactFormState>(makeEmptyForm());
   const [editingId, setEditingId] = useState<ContactId | null>(null);
-  const [route, setRoute] = useState<Route>(() => parseRouteFromHash());
   const [status, setStatus] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>(
-    []
-  );
-  const toastTimersRef = React.useRef<Map<string, number>>(new Map());
   const importDataFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const [paidOverlayIsOpen, setPaidOverlayIsOpen] = useState(false);
@@ -245,7 +193,7 @@ const App = () => {
     error: string | null;
   }>(null);
 
-  React.useEffect(() => {
+  useInit(() => {
     // Surface Evolu sync/storage issues (network errors, protocol errors, etc.)
     // so cross-browser sync debugging is straightforward.
     const unsub = evolu.subscribeError(() => {
@@ -259,7 +207,7 @@ const App = () => {
         // ignore
       }
     };
-  }, []);
+  });
 
   const [nostrPictureByNpub, setNostrPictureByNpub] = useState<
     Record<string, string | null>
@@ -302,7 +250,7 @@ const App = () => {
     []
   );
 
-  React.useEffect(() => {
+  useInit(() => {
     const urlMap = avatarObjectUrlsByNpubRef.current;
 
     return () => {
@@ -316,7 +264,7 @@ const App = () => {
       }
       urlMap.clear();
     };
-  }, []);
+  });
 
   const [cashuDraft, setCashuDraft] = useState("");
   const cashuDraftRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -404,33 +352,9 @@ const App = () => {
     [lang]
   );
 
-  const pushToast = React.useCallback((message: string) => {
-    const text = String(message ?? "").trim();
-    if (!text) return;
-
-    const id = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    setToasts((prev) => [...prev, { id, message: text }]);
-
-    const timeoutId = window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-      toastTimersRef.current.delete(id);
-    }, 2500);
-
-    toastTimersRef.current.set(id, timeoutId);
-  }, []);
-
-  React.useEffect(() => {
-    const toastTimers = toastTimersRef.current;
+  useInit(() => {
     const paidTimerRef = paidOverlayTimerRef;
     return () => {
-      for (const timeoutId of toastTimers.values()) {
-        try {
-          window.clearTimeout(timeoutId);
-        } catch {
-          // ignore
-        }
-      }
-      toastTimers.clear();
       if (paidTimerRef.current !== null) {
         try {
           window.clearTimeout(paidTimerRef.current);
@@ -440,7 +364,7 @@ const App = () => {
       }
       paidTimerRef.current = null;
     };
-  }, []);
+  });
 
   const showPaidOverlay = React.useCallback(() => {
     setPaidOverlayIsOpen(true);
@@ -550,79 +474,11 @@ const App = () => {
     );
 
   React.useEffect(() => {
-    const onHashChange = () => setRoute(parseRouteFromHash());
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
-  }, []);
-
-  React.useEffect(() => {
     // Reset pay amount when leaving the pay page.
     if (route.kind !== "contactPay") {
       setPayAmount("");
     }
   }, [route.kind]);
-
-  const navigateToContacts = () => {
-    window.location.assign("#");
-  };
-
-  const navigateToSettings = () => {
-    window.location.assign("#settings");
-  };
-
-  const navigateToAdvanced = () => {
-    window.location.assign("#advanced");
-  };
-
-  const navigateToContact = React.useCallback((id: ContactId) => {
-    window.location.assign(`#contact/${encodeURIComponent(String(id))}`);
-  }, []);
-
-  const navigateToContactEdit = (id: ContactId) => {
-    window.location.assign(`#contact/${encodeURIComponent(String(id))}/edit`);
-  };
-
-  const navigateToContactPay = (id: ContactId) => {
-    window.location.assign(`#contact/${encodeURIComponent(String(id))}/pay`);
-  };
-
-  const navigateToChat = (id: ContactId) => {
-    window.location.assign(`#chat/${encodeURIComponent(String(id))}`);
-  };
-
-  const navigateToNewContact = () => {
-    window.location.assign("#contact/new");
-  };
-
-  const navigateToWallet = React.useCallback(() => {
-    window.location.assign("#wallet");
-  }, []);
-
-  const navigateToCashuTokenNew = () => {
-    window.location.assign("#wallet/token/new");
-  };
-
-  const navigateToCashuToken = (id: CashuTokenId) => {
-    window.location.assign(
-      `#wallet/token/${encodeURIComponent(String(id as unknown as string))}`
-    );
-  };
-
-  const navigateToProfile = () => {
-    window.location.assign("#profile");
-  };
-
-  const navigateToNostrRelays = () => {
-    window.location.assign("#nostr-relays");
-  };
-
-  const navigateToNostrRelay = (id: string) => {
-    window.location.assign(`#nostr-relay/${encodeURIComponent(id)}`);
-  };
-
-  const navigateToNewRelay = () => {
-    window.location.assign("#nostr-relay/new");
-  };
 
   React.useEffect(() => {
     persistLang(lang);

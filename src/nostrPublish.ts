@@ -1,24 +1,9 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import { getSharedNostrPool } from "./utils/nostrPool";
 
 export type PublishResult = {
   anySuccess: boolean;
   publishedTo: string[];
-};
-
-type PublishPool = {
-  publish: (
-    relays: string[],
-    event: NostrToolsEvent
-  ) => Array<Promise<unknown>>;
-};
-
-let sharedPool: PublishPool | null = null;
-const getSharedPool = async (): Promise<PublishPool> => {
-  if (sharedPool) return sharedPool;
-  const { SimplePool } = await import("nostr-tools");
-  const pool = new SimplePool();
-  sharedPool = pool as unknown as PublishPool;
-  return sharedPool;
 };
 
 export const publishKind0ProfileMetadata = async (params: {
@@ -41,7 +26,7 @@ export const publishKind0ProfileMetadata = async (params: {
 
   const signed: NostrToolsEvent = finalizeEvent(baseEvent, privBytes);
 
-  const pool = await getSharedPool();
+  const pool = await getSharedNostrPool();
   const publishResults = await Promise.allSettled(pool.publish(relays, signed));
   const anySuccess = publishResults.some((r) => r.status === "fulfilled");
   return {
