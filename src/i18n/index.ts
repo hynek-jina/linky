@@ -7,7 +7,7 @@ export type I18nKey = keyof typeof translations.cs;
 
 const STORAGE_KEY = "linky.lang";
 
-export const getSystemLang = (): Lang => {
+const getSystemLang = (): Lang => {
   if (typeof navigator === "undefined") return "en";
   return navigator.language?.toLowerCase().startsWith("cs") ? "cs" : "en";
 };

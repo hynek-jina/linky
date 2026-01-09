@@ -1,3 +1,6 @@
+import { getSharedNostrPool } from "./utils/nostrPool";
+import { isHttpUrl } from "./utils/validation";
+
 type NostrEvent = {
   created_at?: number;
   content: string;
@@ -17,23 +20,6 @@ let nostrToolsPromise: Promise<typeof import("nostr-tools")> | null = null;
 const getNostrTools = () => {
   if (!nostrToolsPromise) nostrToolsPromise = import("nostr-tools");
   return nostrToolsPromise;
-};
-
-type QuerySyncPool = {
-  querySync: (
-    relays: string[],
-    filter: Record<string, unknown>,
-    opts: { maxWait: number }
-  ) => Promise<unknown>;
-};
-
-let sharedPool: QuerySyncPool | null = null;
-const getSharedPool = async (): Promise<QuerySyncPool> => {
-  if (sharedPool) return sharedPool;
-  const { SimplePool } = await getNostrTools();
-  const pool = new SimplePool();
-  sharedPool = pool as unknown as QuerySyncPool;
-  return sharedPool;
 };
 
 export const NOSTR_RELAYS = [
@@ -168,16 +154,6 @@ const normalizeRelayUrls = (urls: string[]): string[] => {
   return out;
 };
 
-function isHttpUrl(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 function canFetchAvatarAsBlob(avatarUrl: string): boolean {
   // Fetching cross-origin images as blobs requires permissive CORS headers.
   // Many image hosts block this (and the browser logs a CORS error).
@@ -310,7 +286,7 @@ export const fetchNostrProfileMetadata = async (
     return null;
   }
 
-  const pool = await getSharedPool();
+  const pool = await getSharedNostrPool();
 
   try {
     let events: unknown = [];

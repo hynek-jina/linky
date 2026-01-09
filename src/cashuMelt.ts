@@ -1,3 +1,5 @@
+import { getCashuLib } from "./utils/cashuLib";
+
 type CashuPayResult = {
   mint: string;
   unit: string | null;
@@ -14,14 +16,7 @@ type Proof = {
   id: string;
 };
 
-let cashuLibPromise: Promise<typeof import("@cashu/cashu-ts")> | null = null;
-
-const getCashuLib = () => {
-  if (!cashuLibPromise) cashuLibPromise = import("@cashu/cashu-ts");
-  return cashuLibPromise;
-};
-
-export const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
+const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
   proofs.reduce((sum, proof) => sum + proof.amount, 0);
 
 export const meltInvoiceWithTokensAtMint = async (args: {

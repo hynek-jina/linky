@@ -24,7 +24,7 @@ const hash32 = (input: string): number => {
   return hash >>> 0;
 };
 
-export const pickDeterministicName = (npub: string): string => {
+const pickDeterministicName = (npub: string): string => {
   const key = String(npub ?? "").trim();
   const list = FIRST_NAMES;
   if (!key) return list[0] ?? "Linky";
@@ -33,7 +33,7 @@ export const pickDeterministicName = (npub: string): string => {
   return list[idx] ?? list[0] ?? "Linky";
 };
 
-export const dicebearAvataaarsUrlForNpub = (npub: string): string => {
+const dicebearAvataaarsUrlForNpub = (npub: string): string => {
   const seed = String(npub ?? "").trim() || "linky";
   // DiceBear avatar URL (deterministic by seed). Using SVG keeps it crisp.
   return `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(

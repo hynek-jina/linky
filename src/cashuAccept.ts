@@ -1,15 +1,10 @@
+import { getCashuLib } from "./utils/cashuLib";
+
 type CashuAcceptResult = {
   mint: string;
   unit: string | null;
   amount: number;
   token: string;
-};
-
-let cashuLibPromise: Promise<typeof import("@cashu/cashu-ts")> | null = null;
-
-const getCashuLib = () => {
-  if (!cashuLibPromise) cashuLibPromise = import("@cashu/cashu-ts");
-  return cashuLibPromise;
 };
 
 export const acceptCashuToken = async (

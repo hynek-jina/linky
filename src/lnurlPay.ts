@@ -1,4 +1,7 @@
-export type LnurlPayRequest = {
+import { fetchJson } from "./utils/http";
+import { asNonEmptyString } from "./utils/validation";
+
+type LnurlPayRequest = {
   tag?: string;
   callback?: string;
   minSendable?: number;
@@ -15,12 +18,7 @@ type LnurlInvoiceResponse = {
   reason?: string;
 };
 
-const asNonEmptyString = (value: unknown): string | null => {
-  const text = String(value ?? "").trim();
-  return text ? text : null;
-};
-
-export const getLnurlpUrlFromLightningAddress = (
+const getLnurlpUrlFromLightningAddress = (
   lightningAddress: string
 ): string => {
   const raw = lightningAddress.trim();
@@ -45,17 +43,7 @@ export const fetchLnurlInvoiceForLightningAddress = async (
   }
 
   const lnurlpUrl = getLnurlpUrlFromLightningAddress(lightningAddress);
-  const res = await fetch(lnurlpUrl, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`LNURL request failed (${res.status})`);
-  }
-
-  const payReq = (await res.json()) as LnurlPayRequest;
+  const payReq = await fetchJson<LnurlPayRequest>(lnurlpUrl);
   if (String(payReq.status ?? "").toUpperCase() === "ERROR") {
     throw new Error(asNonEmptyString(payReq.reason) ?? "LNURL error");
   }
@@ -77,17 +65,9 @@ export const fetchLnurlInvoiceForLightningAddress = async (
   const callbackUrl = new URL(callback);
   callbackUrl.searchParams.set("amount", String(amountMsat));
 
-  const invoiceRes = await fetch(callbackUrl.toString(), {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
-  });
-  if (!invoiceRes.ok) {
-    throw new Error(`LNURL invoice request failed (${invoiceRes.status})`);
-  }
-
-  const invoiceJson = (await invoiceRes.json()) as LnurlInvoiceResponse;
+  const invoiceJson = await fetchJson<LnurlInvoiceResponse>(
+    callbackUrl.toString()
+  );
   if (String(invoiceJson.status ?? "").toUpperCase() === "ERROR") {
     throw new Error(
       asNonEmptyString(invoiceJson.reason) ?? "LNURL invoice error"
