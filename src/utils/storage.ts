@@ -21,3 +21,7 @@ export const safeLocalStorageRemove = (key: string): void => {
     // ignore
   }
 };
+
+// Onboarding localStorage keys
+export const ONBOARDING_COMPLETED_KEY = "linky.onboarding_completed";
+export const ONBOARDING_DEMO_ADDED_KEY = "linky.demo_added";

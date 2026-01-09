@@ -35,6 +35,38 @@ export const cs = {
     "A ještě vám vytvářím lightning adresu - Nyní umíte přijímat bitcoin",
   onboardingRetry: "Zkusit znovu",
 
+  // Onboarding tour
+  tourWelcomeTitle: "Vítejte v Linky!",
+  tourWelcomeDesc: "Pojďte se rychle podívat, jak aplikace funguje.",
+  tourStart: "Spustit prohlídku",
+  tourSkip: "Přeskočit",
+  tourNext: "Další",
+  tourBack: "Zpět",
+  tourDone: "Hotovo",
+  tourStep: "Krok",
+  tourReplay: "Spustit prohlídku znovu",
+
+  tourStep1Title: "Vaše kontakty",
+  tourStep1Desc: "Zde se zobrazí všechny vaše kontakty. Můžete jim psát zprávy nebo posílat platby.",
+  tourStep2Title: "Přidání kontaktů",
+  tourStep2Desc: "Klepnutím sem přidáte nové kontakty pomocí QR kódu nebo ručně.",
+  tourStep3Title: "Vaše peněženka",
+  tourStep3Desc: "Zde najdete svou Bitcoin peněženku.",
+  tourStep4Title: "Váš zůstatek",
+  tourStep4Desc: "Zde vidíte zůstatek vašich Cashu tokenů v satoshi.",
+  tourStep5Title: "Dobití",
+  tourStep5Desc: "Přidejte prostředky zaplacením Lightning faktury.",
+  tourStep6Title: "Váš profil",
+  tourStep6Desc: "Sdílejte svůj QR kód, aby vás ostatní mohli přidat a posílat vám platby.",
+
+  tourDemoTitle: "Chcete to vyzkoušet?",
+  tourDemoDesc: "Přidejte demo kontakt pro prozkoumání aplikace.",
+  tourDemoAdd: "Přidat demo kontakt",
+  tourDemoNo: "Ne, děkuji",
+  tourDemoAdded: "Demo kontakt přidán!",
+  tourClearDemo: "Smazat demo data",
+  tourDemoCleared: "Demo data odstraněna.",
+
   logout: "Odhlásit se",
   logoutArmedHint: "Pro odhlášení klikněte ještě jednou.",
 

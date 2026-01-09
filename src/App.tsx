@@ -54,6 +54,14 @@ import {
   NOSTR_NSEC_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "./utils/constants";
+import {
+  safeLocalStorageGet,
+  safeLocalStorageSet,
+  safeLocalStorageRemove,
+  ONBOARDING_COMPLETED_KEY,
+  ONBOARDING_DEMO_ADDED_KEY,
+} from "./utils/storage";
+import { TourOverlay, WelcomeModal, DemoDataOffer } from "./onboarding";
 
 type AppNostrPool = {
   publish: (
@@ -142,6 +150,15 @@ const App = () => {
   const topupPaidNavTimerRef = React.useRef<number | null>(null);
   const topupInvoiceStartBalanceRef = React.useRef<number | null>(null);
   const topupInvoicePaidHandledRef = React.useRef(false);
+
+  // Onboarding tour state
+  const [tourActive, setTourActive] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(() => {
+    // Show welcome modal if onboarding not completed
+    return !safeLocalStorageGet(ONBOARDING_COMPLETED_KEY);
+  });
+  const [showDemoOffer, setShowDemoOffer] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<ContactId | null>(
     null
   );
@@ -372,6 +389,48 @@ const App = () => {
     <K extends keyof typeof translations.cs>(key: K) => translations[lang][key],
     [lang]
   );
+
+  // Onboarding tour handlers
+  const completeOnboarding = React.useCallback(() => {
+    safeLocalStorageSet(ONBOARDING_COMPLETED_KEY, "1");
+    setTourActive(false);
+    setTourStep(0);
+    setShowWelcomeModal(false);
+    setShowDemoOffer(false);
+  }, []);
+
+  const startTour = React.useCallback(() => {
+    setShowWelcomeModal(false);
+    setTourActive(true);
+    setTourStep(0);
+    navigateToContacts();
+  }, []);
+
+  const handleTourComplete = React.useCallback(() => {
+    setTourActive(false);
+    setShowDemoOffer(true);
+  }, []);
+
+  const addDemoContact = React.useCallback(() => {
+    const result = insert("contact", {
+      name: "Demo Contact" as Evolu.NonEmptyString1000,
+      npub: null,
+      lnAddress: "demo@getalby.com" as Evolu.NonEmptyString1000,
+      groupName: "Demo" as Evolu.NonEmptyString1000,
+    });
+    if (result.ok) {
+      safeLocalStorageSet(ONBOARDING_DEMO_ADDED_KEY, "1");
+      pushToast(t("tourDemoAdded"));
+    }
+    completeOnboarding();
+  }, [completeOnboarding, insert, pushToast, t]);
+
+  const replayTour = React.useCallback(() => {
+    safeLocalStorageRemove(ONBOARDING_COMPLETED_KEY);
+    setTourActive(true);
+    setTourStep(0);
+    navigateToContacts();
+  }, []);
 
   useInit(() => {
     const paidTimerRef = paidOverlayTimerRef;
@@ -693,6 +752,21 @@ const App = () => {
   );
 
   const contacts = useQuery(contactsQuery);
+
+  // Clear demo data (defined here because it needs contacts)
+  const clearDemoData = React.useCallback(() => {
+    const demoContacts = contacts.filter(
+      (c) => String(c.groupName ?? "") === "Demo"
+    );
+    for (const contact of demoContacts) {
+      update("contact", {
+        id: contact.id,
+        isDeleted: Evolu.sqliteTrue,
+      });
+    }
+    safeLocalStorageRemove(ONBOARDING_DEMO_ADDED_KEY);
+    pushToast(t("tourDemoCleared"));
+  }, [contacts, update, pushToast, t]);
 
   const dedupeContacts = React.useCallback(async () => {
     if (dedupeContactsIsBusy) return;
@@ -5093,6 +5167,43 @@ const App = () => {
                 </div>
               </button>
 
+              <button
+                type="button"
+                className="settings-row settings-link"
+                onClick={replayTour}
+                aria-label={t("tourReplay")}
+                title={t("tourReplay")}
+              >
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    ?
+                  </span>
+                  <span className="settings-label">{t("tourReplay")}</span>
+                </div>
+                <div className="settings-right">
+                  <span className="settings-chevron" aria-hidden="true">
+                    &gt;
+                  </span>
+                </div>
+              </button>
+
+              {safeLocalStorageGet(ONBOARDING_DEMO_ADDED_KEY) && (
+                <button
+                  type="button"
+                  className="settings-row settings-link"
+                  onClick={clearDemoData}
+                  aria-label={t("tourClearDemo")}
+                  title={t("tourClearDemo")}
+                >
+                  <div className="settings-left">
+                    <span className="settings-icon" aria-hidden="true">
+                      🗑️
+                    </span>
+                    <span className="settings-label">{t("tourClearDemo")}</span>
+                  </div>
+                </button>
+              )}
+
               <div className="settings-row">
                 <button className="btn-wide" onClick={navigateToWallet}>
                   {t("walletOpen")}
@@ -6680,6 +6791,37 @@ const App = () => {
               </div>
             </div>
           ) : null}
+
+          {/* Onboarding Welcome Modal */}
+          {showWelcomeModal && contacts.length === 0 && !tourActive && (
+            <WelcomeModal
+              onStart={startTour}
+              onSkip={completeOnboarding}
+              t={t}
+            />
+          )}
+
+          {/* Onboarding Tour */}
+          {tourActive && (
+            <TourOverlay
+              step={tourStep}
+              onNext={() => setTourStep((s) => s + 1)}
+              onBack={() => setTourStep((s) => Math.max(0, s - 1))}
+              onComplete={handleTourComplete}
+              onSkip={completeOnboarding}
+              t={t}
+              currentRoute={route.kind}
+            />
+          )}
+
+          {/* Demo Data Offer (after tour) */}
+          {showDemoOffer && (
+            <DemoDataOffer
+              onAddDemo={addDemoContact}
+              onSkip={completeOnboarding}
+              t={t}
+            />
+          )}
         </>
       ) : null}
     </div>

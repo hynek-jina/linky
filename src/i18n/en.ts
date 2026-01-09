@@ -35,6 +35,38 @@ export const en = {
     "Creating your lightning address — you can now receive bitcoin",
   onboardingRetry: "Try again",
 
+  // Onboarding tour
+  tourWelcomeTitle: "Welcome to Linky!",
+  tourWelcomeDesc: "Take a quick tour to learn the basics.",
+  tourStart: "Start Tour",
+  tourSkip: "Skip",
+  tourNext: "Next",
+  tourBack: "Back",
+  tourDone: "Done",
+  tourStep: "Step",
+  tourReplay: "Replay tutorial",
+
+  tourStep1Title: "Your Contacts",
+  tourStep1Desc: "All your contacts appear here. Message them or send payments.",
+  tourStep2Title: "Add Contacts",
+  tourStep2Desc: "Tap here to add new contacts by QR code or manually.",
+  tourStep3Title: "Your Wallet",
+  tourStep3Desc: "Access your Bitcoin wallet from here.",
+  tourStep4Title: "Your Balance",
+  tourStep4Desc: "This shows your Cashu token balance in satoshis.",
+  tourStep5Title: "Top Up",
+  tourStep5Desc: "Add funds by paying a Lightning invoice.",
+  tourStep6Title: "Your Profile",
+  tourStep6Desc: "Share your QR code so others can add you and send payments.",
+
+  tourDemoTitle: "Want to try it out?",
+  tourDemoDesc: "Add a demo contact to explore the app.",
+  tourDemoAdd: "Add Demo Contact",
+  tourDemoNo: "No Thanks",
+  tourDemoAdded: "Demo contact added!",
+  tourClearDemo: "Clear demo data",
+  tourDemoCleared: "Demo data removed.",
+
   logout: "Log out",
   logoutArmedHint: "Click once more to log out.",
 
