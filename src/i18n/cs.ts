@@ -127,6 +127,13 @@ export const cs = {
   wallet: "Peněženka",
   walletOpen: "Otevřít peněženku",
 
+  topup: "Dobít",
+  topupTitle: "Dobít účet",
+  topupShowInvoice: "Zobrazit fakturu pro dobití",
+  topupInvoiceTitle: "Faktura pro dobití",
+  topupFetchingInvoice: "Načítám fakturu…",
+  topupInvoiceFailed: "Nepodařilo se načíst fakturu",
+
   scan: "Skenovat",
   scanUnsupported: "Nepodporovaný QR kód.",
   scanCameraError: "Kamera není dostupná.",

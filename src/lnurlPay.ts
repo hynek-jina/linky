@@ -7,6 +7,7 @@ type LnurlPayRequest = {
   minSendable?: number;
   maxSendable?: number;
   metadata?: string;
+  commentAllowed?: number;
   status?: string;
   reason?: string;
 };
@@ -36,7 +37,8 @@ const getLnurlpUrlFromLightningAddress = (
 
 export const fetchLnurlInvoiceForLightningAddress = async (
   lightningAddress: string,
-  amountSat: number
+  amountSat: number,
+  comment?: string
 ): Promise<string> => {
   if (!Number.isFinite(amountSat) || amountSat <= 0) {
     throw new Error("Invalid amount");
@@ -64,6 +66,12 @@ export const fetchLnurlInvoiceForLightningAddress = async (
 
   const callbackUrl = new URL(callback);
   callbackUrl.searchParams.set("amount", String(amountMsat));
+
+  const commentAllowed = Number(payReq.commentAllowed ?? 0);
+  const rawComment = String(comment ?? "").trim();
+  if (rawComment && Number.isFinite(commentAllowed) && commentAllowed > 0) {
+    callbackUrl.searchParams.set("comment", rawComment.slice(0, commentAllowed));
+  }
 
   const invoiceJson = await fetchJson<LnurlInvoiceResponse>(
     callbackUrl.toString()

@@ -25,6 +25,8 @@ import {
   navigateToNostrRelays,
   navigateToProfile,
   navigateToSettings,
+  navigateToTopup,
+  navigateToTopupInvoice,
   navigateToWallet,
   useRouting,
 } from "./hooks/useRouting";
@@ -135,7 +137,11 @@ const App = () => {
   const importDataFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const [paidOverlayIsOpen, setPaidOverlayIsOpen] = useState(false);
+  const [paidOverlayTitle, setPaidOverlayTitle] = useState<string | null>(null);
   const paidOverlayTimerRef = React.useRef<number | null>(null);
+  const topupPaidNavTimerRef = React.useRef<number | null>(null);
+  const topupInvoiceStartBalanceRef = React.useRef<number | null>(null);
+  const topupInvoicePaidHandledRef = React.useRef(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<ContactId | null>(
     null
   );
@@ -286,6 +292,14 @@ const App = () => {
 
   const [payAmount, setPayAmount] = useState<string>("");
 
+  const [topupAmount, setTopupAmount] = useState<string>("");
+  const [topupInvoice, setTopupInvoice] = useState<string | null>(null);
+  const [topupInvoiceQr, setTopupInvoiceQr] = useState<string | null>(null);
+  const [topupInvoiceError, setTopupInvoiceError] = useState<string | null>(
+    null
+  );
+  const [topupInvoiceIsBusy, setTopupInvoiceIsBusy] = useState(false);
+
   const [chatDraft, setChatDraft] = useState<string>("");
   const chatSeenWrapIdsRef = React.useRef<Set<string>>(new Set());
   const autoAcceptedChatMessageIdsRef = React.useRef<Set<string>>(new Set());
@@ -361,6 +375,7 @@ const App = () => {
 
   useInit(() => {
     const paidTimerRef = paidOverlayTimerRef;
+    const topupNavTimerRef = topupPaidNavTimerRef;
     return () => {
       if (paidTimerRef.current !== null) {
         try {
@@ -370,10 +385,22 @@ const App = () => {
         }
       }
       paidTimerRef.current = null;
+
+      if (topupNavTimerRef.current !== null) {
+        try {
+          window.clearTimeout(topupNavTimerRef.current);
+        } catch {
+          // ignore
+        }
+      }
+      topupNavTimerRef.current = null;
     };
   });
 
-  const showPaidOverlay = React.useCallback(() => {
+  const showPaidOverlay = React.useCallback((title?: string) => {
+    const resolved =
+      title ?? (lang === "cs" ? "Zaplaceno" : "Paid");
+    setPaidOverlayTitle(resolved);
     setPaidOverlayIsOpen(true);
     if (paidOverlayTimerRef.current !== null) {
       try {
@@ -386,7 +413,7 @@ const App = () => {
       setPaidOverlayIsOpen(false);
       paidOverlayTimerRef.current = null;
     }, 3000);
-  }, []);
+  }, [lang]);
 
   const maybeShowPwaNotification = React.useCallback(
     async (title: string, body: string, tag?: string) => {
@@ -465,6 +492,19 @@ const App = () => {
     return `${trimmed.slice(0, 10)}…${trimmed.slice(-6)}`;
   };
 
+  const formatMiddleDots = (value: string, maxLen: number): string => {
+    const trimmed = String(value ?? "").trim();
+    if (!trimmed) return "";
+    if (!Number.isFinite(maxLen) || maxLen <= 0) return trimmed;
+    if (trimmed.length <= maxLen) return trimmed;
+    if (maxLen <= 6) return `${trimmed.slice(0, maxLen)}`;
+
+    const remaining = maxLen - 3;
+    const startLen = Math.ceil(remaining / 2);
+    const endLen = Math.floor(remaining / 2);
+    return `${trimmed.slice(0, startLen)}...${trimmed.slice(-endLen)}`;
+  };
+
   const contactNameCollator = useMemo(
     () =>
       new Intl.Collator(lang, {
@@ -475,10 +515,13 @@ const App = () => {
     [lang]
   );
   const numberFormatter = useMemo(() => new Intl.NumberFormat(lang), [lang]);
-  const formatInteger = (value: number) =>
-    numberFormatter.format(
-      Number.isFinite(value) ? Math.trunc(value) : Math.trunc(0)
-    );
+  const formatInteger = React.useCallback(
+    (value: number) =>
+      numberFormatter.format(
+        Number.isFinite(value) ? Math.trunc(value) : Math.trunc(0)
+      ),
+    [numberFormatter]
+  );
 
   React.useEffect(() => {
     // Reset pay amount when leaving the pay page.
@@ -486,6 +529,97 @@ const App = () => {
       setPayAmount("");
     }
   }, [route.kind]);
+
+  React.useEffect(() => {
+    // Reset topup state when leaving the topup flow.
+    if (route.kind !== "topup" && route.kind !== "topupInvoice") {
+      setTopupAmount("");
+      setTopupInvoice(null);
+      setTopupInvoiceQr(null);
+      setTopupInvoiceError(null);
+      setTopupInvoiceIsBusy(false);
+
+      topupInvoiceStartBalanceRef.current = null;
+      topupInvoicePaidHandledRef.current = false;
+      if (topupPaidNavTimerRef.current !== null) {
+        try {
+          window.clearTimeout(topupPaidNavTimerRef.current);
+        } catch {
+          // ignore
+        }
+        topupPaidNavTimerRef.current = null;
+      }
+    }
+  }, [route.kind]);
+
+  React.useEffect(() => {
+    if (route.kind !== "topupInvoice") return;
+
+    const lnAddress = currentNpub ? `${currentNpub}@npub.cash` : "";
+    const amountSat = Number.parseInt(topupAmount.trim(), 10);
+    const invalid =
+      !lnAddress || !Number.isFinite(amountSat) || amountSat <= 0;
+    if (invalid) {
+      setTopupInvoice(null);
+      setTopupInvoiceQr(null);
+      setTopupInvoiceError(null);
+      setTopupInvoiceIsBusy(false);
+      return;
+    }
+
+    let cancelled = false;
+    setTopupInvoice(null);
+    setTopupInvoiceQr(null);
+    setTopupInvoiceError(null);
+    setTopupInvoiceIsBusy(true);
+
+    topupInvoiceStartBalanceRef.current = null;
+    topupInvoicePaidHandledRef.current = false;
+
+    void (async () => {
+      try {
+        const { fetchLnurlInvoiceForLightningAddress } = await import(
+          "./lnurlPay"
+        );
+
+        const displayName = (() => {
+          if (myProfileName) return String(myProfileName).trim();
+          if (!currentNpub) return "";
+          return (
+            deriveDefaultProfile(currentNpub)?.name ??
+            formatShortNpub(currentNpub)
+          );
+        })();
+
+        const invoiceComment = `${displayName || t("appTitle")}, dobití`;
+
+        const invoice = await fetchLnurlInvoiceForLightningAddress(
+          lnAddress,
+          amountSat,
+          invoiceComment
+        );
+        if (cancelled) return;
+
+        setTopupInvoice(invoice);
+
+        const QRCode = await import("qrcode");
+        const qr = await QRCode.toDataURL(invoice, {
+          margin: 1,
+          width: 320,
+        });
+        if (cancelled) return;
+        setTopupInvoiceQr(qr);
+      } catch {
+        if (!cancelled) setTopupInvoiceError(t("topupInvoiceFailed"));
+      } finally {
+        if (!cancelled) setTopupInvoiceIsBusy(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentNpub, myProfileName, route.kind, t, topupAmount]);
 
   React.useEffect(() => {
     persistLang(lang);
@@ -1240,6 +1374,55 @@ const App = () => {
   }, [cashuTokens]);
 
   const canPayWithCashu = cashuBalance > 0;
+
+  React.useEffect(() => {
+    if (route.kind !== "topupInvoice") return;
+    if (topupInvoiceIsBusy) return;
+    if (!topupInvoice || !topupInvoiceQr) return;
+
+    const amountSat = Number.parseInt(topupAmount.trim(), 10);
+    if (!Number.isFinite(amountSat) || amountSat <= 0) return;
+
+    if (topupInvoiceStartBalanceRef.current === null) {
+      topupInvoiceStartBalanceRef.current = cashuBalance;
+      return;
+    }
+
+    if (topupInvoicePaidHandledRef.current) return;
+
+    const start = topupInvoiceStartBalanceRef.current ?? 0;
+    const expected = start + amountSat;
+    if (cashuBalance < expected) return;
+
+    topupInvoicePaidHandledRef.current = true;
+    showPaidOverlay(
+      `${lang === "cs" ? "Dobito" : "Topped up"} ${formatInteger(
+        amountSat
+      )} sat`
+    );
+
+    if (topupPaidNavTimerRef.current !== null) {
+      try {
+        window.clearTimeout(topupPaidNavTimerRef.current);
+      } catch {
+        // ignore
+      }
+    }
+    topupPaidNavTimerRef.current = window.setTimeout(() => {
+      topupPaidNavTimerRef.current = null;
+      navigateToWallet();
+    }, 1400);
+  }, [
+    cashuBalance,
+    formatInteger,
+    lang,
+    route.kind,
+    showPaidOverlay,
+    topupAmount,
+    topupInvoice,
+    topupInvoiceIsBusy,
+    topupInvoiceQr,
+  ]);
 
   const npubCashLightningAddress = useMemo(() => {
     if (!currentNpub) return null;
@@ -3302,6 +3485,22 @@ const App = () => {
       };
     }
 
+    if (route.kind === "topup") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToWallet,
+      };
+    }
+
+    if (route.kind === "topupInvoice") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToTopup,
+      };
+    }
+
     if (route.kind === "cashuTokenNew" || route.kind === "cashuToken") {
       return {
         icon: "<",
@@ -3451,6 +3650,8 @@ const App = () => {
   const topbarTitle = (() => {
     if (route.kind === "contacts") return t("contactsTitle");
     if (route.kind === "wallet") return t("wallet");
+    if (route.kind === "topup") return t("topupTitle");
+    if (route.kind === "topupInvoice") return t("topupInvoiceTitle");
     if (route.kind === "cashuTokenNew") return t("cashuToken");
     if (route.kind === "cashuToken") return t("cashuToken");
     if (route.kind === "settings") return t("menu");
@@ -5120,7 +5321,7 @@ const App = () => {
           )}
 
           {route.kind === "wallet" && (
-            <section className="panel">
+            <section className="panel wallet-panel">
               <div className="panel-header">
                 <div className="wallet-hero">
                   <div className="balance-hero" aria-label={t("cashuBalance")}>
@@ -5131,7 +5332,7 @@ const App = () => {
                   </div>
                 </div>
               </div>
-              <div className="ln-list">
+              <div className="ln-list wallet-token-list">
                 {cashuTokens.length === 0 ? (
                   <p className="muted">{t("cashuEmpty")}</p>
                 ) : (
@@ -5208,6 +5409,163 @@ const App = () => {
                   </div>
                 )}
               </div>
+
+              <div className="wallet-bottom-bar">
+                <div className="wallet-bottom-inner">
+                  <button className="btn-wide" onClick={navigateToTopup}>
+                    {t("topup")}
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {route.kind === "topup" && (
+            <section className="panel">
+              <div className="contact-header">
+                <div className="contact-avatar is-large" aria-hidden="true">
+                  {effectiveProfilePicture ? (
+                    <img
+                      src={effectiveProfilePicture}
+                      alt=""
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="contact-avatar-fallback">
+                      {getInitials(
+                        effectiveProfileName ??
+                          (currentNpub ? formatShortNpub(currentNpub) : "")
+                      )}
+                    </span>
+                  )}
+                </div>
+                <div className="contact-header-text">
+                  <h3>
+                    {effectiveProfileName ??
+                      (currentNpub ? formatShortNpub(currentNpub) : t("appTitle"))}
+                  </h3>
+                  <p className="muted">
+                    {formatMiddleDots(
+                      String(npubCashLightningAddress ?? ""),
+                      36
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="amount-display" aria-live="polite">
+                {(() => {
+                  const amountSat = Number.parseInt(topupAmount.trim(), 10);
+                  const display =
+                    Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0;
+                  return (
+                    <>
+                      <span className="amount-number">
+                        {formatInteger(display)}
+                      </span>
+                      <span className="amount-unit">{displayUnit}</span>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div
+                className="keypad"
+                role="group"
+                aria-label={`${t("payAmount")} (${displayUnit})`}
+              >
+                {(
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "C",
+                    "0",
+                    "⌫",
+                  ] as const
+                ).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={key === "C" || key === "⌫" ? "secondary" : "ghost"}
+                    onClick={() => {
+                      if (topupInvoiceIsBusy) return;
+                      if (key === "C") {
+                        setTopupAmount("");
+                        return;
+                      }
+                      if (key === "⌫") {
+                        setTopupAmount((v) => v.slice(0, -1));
+                        return;
+                      }
+                      setTopupAmount((v) => {
+                        const next = (v + key).replace(/^0+(\d)/, "$1");
+                        return next;
+                      });
+                    }}
+                    disabled={topupInvoiceIsBusy}
+                    aria-label={
+                      key === "C" ? t("clearForm") : key === "⌫" ? t("delete") : key
+                    }
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+
+              {(() => {
+                const ln = String(npubCashLightningAddress ?? "").trim();
+                const amountSat = Number.parseInt(topupAmount.trim(), 10);
+                const invalid =
+                  !ln ||
+                  !Number.isFinite(amountSat) ||
+                  amountSat <= 0 ||
+                  topupInvoiceIsBusy;
+
+                return (
+                  <div className="actions">
+                    <button
+                      className="btn-wide"
+                      onClick={() => {
+                        if (invalid) return;
+                        navigateToTopupInvoice();
+                      }}
+                      disabled={invalid}
+                    >
+                      {t("topupShowInvoice")}
+                    </button>
+                  </div>
+                );
+              })()}
+            </section>
+          )}
+
+          {route.kind === "topupInvoice" && (
+            <section className="panel">
+              {topupInvoiceQr ? (
+                <img
+                  className="qr"
+                  src={topupInvoiceQr}
+                  alt=""
+                  onClick={() => {
+                    if (!topupInvoice) return;
+                    void copyText(topupInvoice);
+                  }}
+                />
+              ) : topupInvoiceError ? (
+                <p className="muted">{topupInvoiceError}</p>
+              ) : topupInvoiceIsBusy ? (
+                <p className="muted">{t("topupFetchingInvoice")}</p>
+              ) : (
+                <p className="muted">{t("topupFetchingInvoice")}</p>
+              )}
             </section>
           )}
 
@@ -6317,7 +6675,7 @@ const App = () => {
                   ✓
                 </div>
                 <div className="paid-title">
-                  {lang === "cs" ? "Zaplaceno" : "Paid"}
+                  {paidOverlayTitle ?? (lang === "cs" ? "Zaplaceno" : "Paid")}
                 </div>
               </div>
             </div>

@@ -51,6 +51,14 @@ export const navigateToWallet = () => {
   window.location.assign("#wallet");
 };
 
+export const navigateToTopup = () => {
+  window.location.assign("#wallet/topup");
+};
+
+export const navigateToTopupInvoice = () => {
+  window.location.assign("#wallet/topup/invoice");
+};
+
 export const navigateToCashuTokenNew = () => {
   window.location.assign("#wallet/token/new");
 };

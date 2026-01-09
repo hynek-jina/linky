@@ -124,6 +124,12 @@ export const en = {
   errorPrefix: "Error",
 
   wallet: "Wallet",
+  topup: "Top-up",
+  topupTitle: "Top-up your account",
+  topupShowInvoice: "Show top-up invoice",
+  topupInvoiceTitle: "Top-up invoice",
+  topupFetchingInvoice: "Fetching invoice…",
+  topupInvoiceFailed: "Failed to fetch invoice",
   walletOpen: "Open wallet",
 
   scan: "Scan",
