@@ -48,12 +48,16 @@ import {
   type NostrProfileMetadata,
 } from "./nostrProfile";
 import { publishKind0ProfileMetadata } from "./nostrPublish";
+import type { Route } from "./types/route";
 import {
+  CONTACTS_ONBOARDING_DISMISSED_STORAGE_KEY,
+  CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
   FEEDBACK_CONTACT_NPUB,
   NO_GROUP_FILTER,
   NOSTR_NSEC_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "./utils/constants";
+import { safeLocalStorageGet, safeLocalStorageSet } from "./utils/storage";
 
 type AppNostrPool = {
   publish: (
@@ -70,6 +74,16 @@ type AppNostrPool = {
     filter: Record<string, unknown>,
     opts: { onevent: (event: NostrToolsEvent) => void }
   ) => { close: (reason?: string) => Promise<void> | void };
+};
+
+type ContactsGuideKey = "add_contact" | "topup" | "pay" | "message";
+
+type ContactsGuideStep = {
+  id: string;
+  selector: string;
+  titleKey: keyof typeof translations.cs;
+  bodyKey: keyof typeof translations.cs;
+  ensure?: () => void;
 };
 
 let sharedAppNostrPoolPromise: Promise<AppNostrPool> | null = null;
@@ -153,6 +167,34 @@ const App = () => {
   const [logoutArmed, setLogoutArmed] = useState(false);
   const [dedupeContactsIsBusy, setDedupeContactsIsBusy] = useState(false);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
+
+  const [contactsOnboardingDismissed, setContactsOnboardingDismissed] =
+    useState<boolean>(
+      () =>
+        safeLocalStorageGet(CONTACTS_ONBOARDING_DISMISSED_STORAGE_KEY) === "1"
+    );
+
+  const [contactsOnboardingHasPaid, setContactsOnboardingHasPaid] =
+    useState<boolean>(
+      () =>
+        safeLocalStorageGet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY) === "1"
+    );
+
+  const [contactsOnboardingCelebrating, setContactsOnboardingCelebrating] =
+    useState(false);
+
+  const [contactsGuide, setContactsGuide] = useState<null | {
+    task: ContactsGuideKey;
+    step: number;
+  }>(null);
+
+  const [contactsGuideHighlightRect, setContactsGuideHighlightRect] =
+    useState<null | {
+      top: number;
+      left: number;
+      width: number;
+      height: number;
+    }>(null);
 
   // Ephemeral per-contact activity indicator.
   // When a message/payment arrives, we show a dot and temporarily bump the
@@ -397,23 +439,25 @@ const App = () => {
     };
   });
 
-  const showPaidOverlay = React.useCallback((title?: string) => {
-    const resolved =
-      title ?? (lang === "cs" ? "Zaplaceno" : "Paid");
-    setPaidOverlayTitle(resolved);
-    setPaidOverlayIsOpen(true);
-    if (paidOverlayTimerRef.current !== null) {
-      try {
-        window.clearTimeout(paidOverlayTimerRef.current);
-      } catch {
-        // ignore
+  const showPaidOverlay = React.useCallback(
+    (title?: string) => {
+      const resolved = title ?? (lang === "cs" ? "Zaplaceno" : "Paid");
+      setPaidOverlayTitle(resolved);
+      setPaidOverlayIsOpen(true);
+      if (paidOverlayTimerRef.current !== null) {
+        try {
+          window.clearTimeout(paidOverlayTimerRef.current);
+        } catch {
+          // ignore
+        }
       }
-    }
-    paidOverlayTimerRef.current = window.setTimeout(() => {
-      setPaidOverlayIsOpen(false);
-      paidOverlayTimerRef.current = null;
-    }, 3000);
-  }, [lang]);
+      paidOverlayTimerRef.current = window.setTimeout(() => {
+        setPaidOverlayIsOpen(false);
+        paidOverlayTimerRef.current = null;
+      }, 3000);
+    },
+    [lang]
+  );
 
   const maybeShowPwaNotification = React.useCallback(
     async (title: string, body: string, tag?: string) => {
@@ -557,8 +601,7 @@ const App = () => {
 
     const lnAddress = currentNpub ? `${currentNpub}@npub.cash` : "";
     const amountSat = Number.parseInt(topupAmount.trim(), 10);
-    const invalid =
-      !lnAddress || !Number.isFinite(amountSat) || amountSat <= 0;
+    const invalid = !lnAddress || !Number.isFinite(amountSat) || amountSat <= 0;
     if (invalid) {
       setTopupInvoice(null);
       setTopupInvoiceQr(null);
@@ -2168,6 +2211,8 @@ const App = () => {
           }
 
           setStatus(t("paySuccess"));
+          safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
+          setContactsOnboardingHasPaid(true);
           showPaidOverlay();
           navigateToContact(selectedContact.id);
           return;
@@ -2263,6 +2308,8 @@ const App = () => {
             }
 
             setStatus(t("paySuccess"));
+            safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
+            setContactsOnboardingHasPaid(true);
             showPaidOverlay();
             return;
           } catch (e) {
@@ -2277,6 +2324,322 @@ const App = () => {
     },
     [cashuBalance, cashuIsBusy, cashuTokens, insert, showPaidOverlay, t, update]
   );
+
+  const contactsOnboardingHasSentMessage = useMemo(() => {
+    return nostrMessagesRecent.some(
+      (m) =>
+        String((m as unknown as { direction?: unknown }).direction ?? "") ===
+        "out"
+    );
+  }, [nostrMessagesRecent]);
+
+  const contactsOnboardingTasks = useMemo(() => {
+    const tasks = [
+      {
+        key: "add_contact",
+        label: t("contactsOnboardingTaskAddContact"),
+        done: contacts.length > 0,
+      },
+      {
+        key: "topup",
+        label: t("contactsOnboardingTaskTopup"),
+        done: cashuBalance > 0,
+      },
+      {
+        key: "pay",
+        label: t("contactsOnboardingTaskPay"),
+        done: contactsOnboardingHasPaid,
+      },
+      {
+        key: "message",
+        label: t("contactsOnboardingTaskMessage"),
+        done: contactsOnboardingHasSentMessage,
+      },
+    ] as const;
+
+    const done = tasks.reduce((sum, t) => sum + (t.done ? 1 : 0), 0);
+    const total = tasks.length;
+    const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+    return { tasks, done, total, percent };
+  }, [
+    cashuBalance,
+    contacts.length,
+    contactsOnboardingHasPaid,
+    contactsOnboardingHasSentMessage,
+    t,
+  ]);
+
+  const showContactsOnboarding =
+    !contactsOnboardingDismissed &&
+    (route.kind === "contacts" ||
+      route.kind === "contact" ||
+      route.kind === "contactEdit" ||
+      route.kind === "contactNew" ||
+      route.kind === "contactPay" ||
+      route.kind === "chat");
+
+  const dismissContactsOnboarding = () => {
+    safeLocalStorageSet(CONTACTS_ONBOARDING_DISMISSED_STORAGE_KEY, "1");
+    setContactsOnboardingDismissed(true);
+    setContactsGuide(null);
+  };
+
+  const startContactsGuide = (task: ContactsGuideKey) => {
+    setContactsGuide({ task, step: 0 });
+  };
+
+  const stopContactsGuide = () => {
+    setContactsGuide(null);
+  };
+
+  const firstIncompleteContactsTask = useMemo(() => {
+    const tsk = contactsOnboardingTasks.tasks.find((x) => !x.done);
+    return (tsk?.key ?? null) as ContactsGuideKey | null;
+  }, [contactsOnboardingTasks.tasks]);
+
+  const contactsGuideSteps = useMemo(() => {
+    if (!contactsGuide) return null;
+
+    const firstContactId = (contacts[0]?.id ?? null) as ContactId | null;
+
+    const ensureRoute = (kind: Route["kind"], contactId?: ContactId | null) => {
+      if (route.kind === kind) {
+        if (kind === "contact" || kind === "contactPay" || kind === "chat") {
+          const currentId = (route as unknown as { id?: unknown }).id as
+            | ContactId
+            | undefined;
+          if (contactId && currentId && currentId !== contactId) {
+            if (kind === "contact") navigateToContact(contactId);
+            if (kind === "contactPay") navigateToContactPay(contactId);
+            if (kind === "chat") navigateToChat(contactId);
+          }
+        }
+        return;
+      }
+
+      if (kind === "contacts") navigateToContacts();
+      if (kind === "settings") navigateToSettings();
+      if (kind === "wallet") navigateToWallet();
+      if (kind === "topup") navigateToTopup();
+      if (kind === "topupInvoice") navigateToTopupInvoice();
+      if (kind === "contactNew") openNewContactPage();
+      if (kind === "contact" && contactId) navigateToContact(contactId);
+      if (kind === "contactPay" && contactId) navigateToContactPay(contactId);
+      if (kind === "chat" && contactId) navigateToChat(contactId);
+    };
+
+    const stepsByTask: Record<ContactsGuideKey, ContactsGuideStep[]> = {
+      add_contact: [
+        {
+          id: "add_contact_1",
+          selector: '[data-guide="contacts-add"]',
+          titleKey: "guideAddContactStep1Title",
+          bodyKey: "guideAddContactStep1Body",
+          ensure: () => ensureRoute("contacts"),
+        },
+        {
+          id: "add_contact_2",
+          selector: '[data-guide="contact-save"]',
+          titleKey: "guideAddContactStep2Title",
+          bodyKey: "guideAddContactStep2Body",
+          ensure: () => ensureRoute("contactNew"),
+        },
+      ],
+      topup: [
+        {
+          id: "topup_1",
+          selector: '[data-guide="topbar-menu"]',
+          titleKey: "guideTopupStep1Title",
+          bodyKey: "guideTopupStep1Body",
+          ensure: () => ensureRoute("contacts"),
+        },
+        {
+          id: "topup_2",
+          selector: '[data-guide="open-wallet"]',
+          titleKey: "guideTopupStep2Title",
+          bodyKey: "guideTopupStep2Body",
+          ensure: () => ensureRoute("settings"),
+        },
+        {
+          id: "topup_3",
+          selector: '[data-guide="wallet-topup"]',
+          titleKey: "guideTopupStep3Title",
+          bodyKey: "guideTopupStep3Body",
+          ensure: () => ensureRoute("wallet"),
+        },
+        {
+          id: "topup_4",
+          selector: '[data-guide="topup-show-invoice"]',
+          titleKey: "guideTopupStep4Title",
+          bodyKey: "guideTopupStep4Body",
+          ensure: () => ensureRoute("topup"),
+        },
+      ],
+      pay: [
+        {
+          id: "pay_1",
+          selector: '[data-guide="contact-card"]',
+          titleKey: "guidePayStep1Title",
+          bodyKey: "guidePayStep1Body",
+          ensure: () => ensureRoute("contacts"),
+        },
+        {
+          id: "pay_2",
+          selector: '[data-guide="contact-pay"]',
+          titleKey: "guidePayStep2Title",
+          bodyKey: "guidePayStep2Body",
+          ensure: () => ensureRoute("contact", firstContactId),
+        },
+        {
+          id: "pay_3",
+          selector: '[data-guide="pay-send"]',
+          titleKey: "guidePayStep3Title",
+          bodyKey: "guidePayStep3Body",
+          ensure: () => ensureRoute("contactPay", firstContactId),
+        },
+      ],
+      message: [
+        {
+          id: "message_1",
+          selector: '[data-guide="contact-card"]',
+          titleKey: "guideMessageStep1Title",
+          bodyKey: "guideMessageStep1Body",
+          ensure: () => ensureRoute("contacts"),
+        },
+        {
+          id: "message_2",
+          selector: '[data-guide="contact-message"]',
+          titleKey: "guideMessageStep2Title",
+          bodyKey: "guideMessageStep2Body",
+          ensure: () => ensureRoute("contact", firstContactId),
+        },
+        {
+          id: "message_3",
+          selector: '[data-guide="chat-input"]',
+          titleKey: "guideMessageStep3Title",
+          bodyKey: "guideMessageStep3Body",
+          ensure: () => ensureRoute("chat", firstContactId),
+        },
+        {
+          id: "message_4",
+          selector: '[data-guide="chat-send"]',
+          titleKey: "guideMessageStep4Title",
+          bodyKey: "guideMessageStep4Body",
+          ensure: () => ensureRoute("chat", firstContactId),
+        },
+      ],
+    };
+
+    return stepsByTask[contactsGuide.task] ?? null;
+  }, [contacts, contactsGuide, openNewContactPage, route, t]);
+
+  const contactsGuideActiveStep = useMemo(() => {
+    if (!contactsGuide || !contactsGuideSteps) return null;
+    const idx = Math.min(
+      Math.max(contactsGuide.step, 0),
+      Math.max(contactsGuideSteps.length - 1, 0)
+    );
+    return {
+      idx,
+      step: contactsGuideSteps[idx] ?? null,
+      total: contactsGuideSteps.length,
+    };
+  }, [contactsGuide, contactsGuideSteps]);
+
+  React.useEffect(() => {
+    const active = contactsGuideActiveStep?.step ?? null;
+    if (!contactsGuide || !active) return;
+    try {
+      active.ensure?.();
+    } catch {
+      // ignore
+    }
+  }, [contactsGuide, contactsGuideActiveStep]);
+
+  React.useEffect(() => {
+    const active = contactsGuideActiveStep?.step ?? null;
+    if (!contactsGuide || !active) {
+      setContactsGuideHighlightRect(null);
+      return;
+    }
+
+    const updateRect = () => {
+      const el = document.querySelector(active.selector) as HTMLElement | null;
+      if (!el) {
+        setContactsGuideHighlightRect(null);
+        return;
+      }
+      try {
+        el.scrollIntoView({ block: "center", inline: "center" });
+      } catch {
+        // ignore
+      }
+      const r = el.getBoundingClientRect();
+      const pad = 8;
+      setContactsGuideHighlightRect({
+        top: Math.max(r.top - pad, 8),
+        left: Math.max(r.left - pad, 8),
+        width: Math.min(r.width + pad * 2, window.innerWidth - 16),
+        height: Math.min(r.height + pad * 2, window.innerHeight - 16),
+      });
+    };
+
+    updateRect();
+
+    const onResize = () => updateRect();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onResize, { passive: true });
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onResize);
+    };
+  }, [contactsGuide, contactsGuideActiveStep, route.kind]);
+
+  const contactsGuideNav = {
+    back: () => {
+      if (!contactsGuide) return;
+      setContactsGuide((prev) =>
+        prev ? { ...prev, step: Math.max(prev.step - 1, 0) } : prev
+      );
+    },
+    next: () => {
+      if (!contactsGuideSteps || !contactsGuide) return;
+      setContactsGuide((prev) => {
+        if (!prev) return prev;
+        const max = Math.max(contactsGuideSteps.length - 1, 0);
+        if (prev.step >= max) return null;
+        return { ...prev, step: prev.step + 1 };
+      });
+    },
+  };
+
+  React.useEffect(() => {
+    if (contactsOnboardingDismissed) return;
+    if (!showContactsOnboarding) return;
+    if (contactsOnboardingCelebrating) return;
+
+    const total = contactsOnboardingTasks.total;
+    if (!total) return;
+    if (contactsOnboardingTasks.done !== total) return;
+
+    setContactsOnboardingCelebrating(true);
+    setContactsGuide(null);
+    const timeoutId = window.setTimeout(() => {
+      dismissContactsOnboarding();
+      setContactsOnboardingCelebrating(false);
+    }, 1400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    contactsOnboardingCelebrating,
+    contactsOnboardingDismissed,
+    contactsOnboardingTasks.done,
+    contactsOnboardingTasks.total,
+    dismissContactsOnboarding,
+    showContactsOnboarding,
+  ]);
 
   const saveCashuFromText = React.useCallback(
     async (
@@ -4928,6 +5291,7 @@ const App = () => {
               onClick={topbar.onClick}
               aria-label={topbar.label}
               title={topbar.label}
+              data-guide={route.kind === "contacts" ? "topbar-menu" : undefined}
             >
               <span aria-hidden="true">{topbar.icon}</span>
             </button>
@@ -4971,6 +5335,9 @@ const App = () => {
                 onClick={topbarRight.onClick}
                 aria-label={topbarRight.label}
                 title={topbarRight.label}
+                data-guide={
+                  route.kind === "contacts" ? "contacts-add" : undefined
+                }
               >
                 <span aria-hidden="true">{topbarRight.icon}</span>
               </button>
@@ -4978,6 +5345,63 @@ const App = () => {
               <span className="topbar-spacer" aria-hidden="true" />
             )}
           </header>
+
+          {contactsGuide && contactsGuideActiveStep?.step ? (
+            <div className="guide-overlay" aria-live="polite">
+              {contactsGuideHighlightRect ? (
+                <div
+                  className="guide-highlight"
+                  aria-hidden="true"
+                  style={{
+                    top: contactsGuideHighlightRect.top,
+                    left: contactsGuideHighlightRect.left,
+                    width: contactsGuideHighlightRect.width,
+                    height: contactsGuideHighlightRect.height,
+                  }}
+                />
+              ) : null}
+
+              <div className="guide-card" role="dialog" aria-modal="false">
+                <div className="guide-step">
+                  {contactsGuideActiveStep.idx + 1} /{" "}
+                  {contactsGuideActiveStep.total}
+                </div>
+                <div className="guide-title">
+                  {t(contactsGuideActiveStep.step.titleKey)}
+                </div>
+                <div className="guide-body">
+                  {t(contactsGuideActiveStep.step.bodyKey)}
+                </div>
+                <div className="guide-actions">
+                  <button
+                    type="button"
+                    className="guide-btn secondary"
+                    onClick={stopContactsGuide}
+                  >
+                    {t("guideSkip")}
+                  </button>
+                  <button
+                    type="button"
+                    className="guide-btn secondary"
+                    onClick={contactsGuideNav.back}
+                    disabled={contactsGuideActiveStep.idx === 0}
+                  >
+                    {t("guideBack")}
+                  </button>
+                  <button
+                    type="button"
+                    className="guide-btn primary"
+                    onClick={contactsGuideNav.next}
+                  >
+                    {contactsGuideActiveStep.idx + 1 >=
+                    contactsGuideActiveStep.total
+                      ? t("guideDone")
+                      : t("guideNext")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {route.kind === "settings" && (
             <section className="panel">
@@ -5094,7 +5518,11 @@ const App = () => {
               </button>
 
               <div className="settings-row">
-                <button className="btn-wide" onClick={navigateToWallet}>
+                <button
+                  className="btn-wide"
+                  onClick={navigateToWallet}
+                  data-guide="open-wallet"
+                >
                   {t("walletOpen")}
                 </button>
               </div>
@@ -5412,7 +5840,11 @@ const App = () => {
 
               <div className="wallet-bottom-bar">
                 <div className="wallet-bottom-inner">
-                  <button className="btn-wide" onClick={navigateToTopup}>
+                  <button
+                    className="btn-wide"
+                    onClick={navigateToTopup}
+                    data-guide="wallet-topup"
+                  >
                     {t("topup")}
                   </button>
                 </div>
@@ -5443,7 +5875,9 @@ const App = () => {
                 <div className="contact-header-text">
                   <h3>
                     {effectiveProfileName ??
-                      (currentNpub ? formatShortNpub(currentNpub) : t("appTitle"))}
+                      (currentNpub
+                        ? formatShortNpub(currentNpub)
+                        : t("appTitle"))}
                   </h3>
                   <p className="muted">
                     {formatMiddleDots(
@@ -5494,7 +5928,9 @@ const App = () => {
                   <button
                     key={key}
                     type="button"
-                    className={key === "C" || key === "⌫" ? "secondary" : "ghost"}
+                    className={
+                      key === "C" || key === "⌫" ? "secondary" : "ghost"
+                    }
                     onClick={() => {
                       if (topupInvoiceIsBusy) return;
                       if (key === "C") {
@@ -5512,7 +5948,11 @@ const App = () => {
                     }}
                     disabled={topupInvoiceIsBusy}
                     aria-label={
-                      key === "C" ? t("clearForm") : key === "⌫" ? t("delete") : key
+                      key === "C"
+                        ? t("clearForm")
+                        : key === "⌫"
+                        ? t("delete")
+                        : key
                     }
                   >
                     {key}
@@ -5538,6 +5978,7 @@ const App = () => {
                         navigateToTopupInvoice();
                       }}
                       disabled={invalid}
+                      data-guide="topup-show-invoice"
                     >
                       {t("topupShowInvoice")}
                     </button>
@@ -5728,6 +6169,7 @@ const App = () => {
                           title={
                             !canPayWithCashu ? t("payInsufficient") : undefined
                           }
+                          data-guide="contact-pay"
                         >
                           {isFeedbackContact ? "Donate" : t("pay")}
                         </button>
@@ -5742,6 +6184,7 @@ const App = () => {
                         <button
                           className="btn-wide secondary"
                           onClick={() => navigateToChat(selectedContact.id)}
+                          data-guide="contact-message"
                         >
                           {isFeedbackContact ? "Feedback" : t("sendMessage")}
                         </button>
@@ -5894,6 +6337,7 @@ const App = () => {
                               ? t("payInsufficient")
                               : undefined
                           }
+                          data-guide="pay-send"
                         >
                           {t("paySend")}
                         </button>
@@ -6114,6 +6558,7 @@ const App = () => {
                       onChange={(e) => setChatDraft(e.target.value)}
                       placeholder={t("chatPlaceholder")}
                       disabled={!String(selectedContact.npub ?? "").trim()}
+                      data-guide="chat-input"
                     />
                     <button
                       className="btn-wide"
@@ -6122,6 +6567,7 @@ const App = () => {
                         !chatDraft.trim() ||
                         !String(selectedContact.npub ?? "").trim()
                       }
+                      data-guide="chat-send"
                     >
                       {t("send")}
                     </button>
@@ -6233,7 +6679,10 @@ const App = () => {
                         </button>
                       ) : null
                     ) : (
-                      <button onClick={handleSaveContact}>
+                      <button
+                        onClick={handleSaveContact}
+                        data-guide="contact-save"
+                      >
                         {t("saveContact")}
                       </button>
                     )}
@@ -6311,6 +6760,96 @@ const App = () => {
             </section>
           )}
 
+          {showContactsOnboarding && (
+            <section className="panel panel-plain contacts-checklist">
+              <div className="contacts-checklist-header">
+                <div className="contacts-checklist-title">
+                  {t("contactsOnboardingTitle")}
+                </div>
+                <button
+                  type="button"
+                  className="contacts-checklist-close"
+                  onClick={dismissContactsOnboarding}
+                  aria-label={t("contactsOnboardingDismiss")}
+                  title={t("contactsOnboardingDismiss")}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="contacts-checklist-progressRow">
+                <div className="contacts-checklist-progress" aria-hidden="true">
+                  <div
+                    className="contacts-checklist-progressFill"
+                    style={{ width: `${contactsOnboardingTasks.percent}%` }}
+                  />
+                </div>
+                <div className="contacts-checklist-progressText">
+                  {String(t("contactsOnboardingProgress"))
+                    .replace(/\{done\}/g, String(contactsOnboardingTasks.done))
+                    .replace(
+                      /\{total\}/g,
+                      String(contactsOnboardingTasks.total)
+                    )}
+                </div>
+              </div>
+
+              {contactsOnboardingCelebrating ||
+              contactsOnboardingTasks.done === contactsOnboardingTasks.total ? (
+                <div className="contacts-checklist-done" role="status">
+                  <span
+                    className="contacts-checklist-doneIcon"
+                    aria-hidden="true"
+                  >
+                    ✓
+                  </span>
+                  <span>
+                    <div className="contacts-checklist-doneTitle">
+                      {t("contactsOnboardingCompletedTitle")}
+                    </div>
+                    <div className="contacts-checklist-doneBody">
+                      {t("contactsOnboardingCompletedBody")}
+                    </div>
+                  </span>
+                </div>
+              ) : (
+                <div className="contacts-checklist-items" role="list">
+                  {contactsOnboardingTasks.tasks.map((task) => (
+                    <div
+                      key={task.key}
+                      className={
+                        task.done
+                          ? "contacts-checklist-item is-done"
+                          : "contacts-checklist-item"
+                      }
+                      role="listitem"
+                    >
+                      <span
+                        className="contacts-checklist-check"
+                        aria-hidden="true"
+                      >
+                        ✓
+                      </span>
+                      <span className="contacts-checklist-label">
+                        {task.label}
+                      </span>
+                      {!task.done &&
+                      task.key === firstIncompleteContactsTask ? (
+                        <button
+                          type="button"
+                          className="contacts-checklist-how"
+                          onClick={() => startContactsGuide(task.key)}
+                        >
+                          {t("contactsOnboardingShowHow")}
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           {route.kind === "contacts" && (
             <>
               <section className="panel panel-plain">
@@ -6330,6 +6869,7 @@ const App = () => {
                       <article
                         key={contact.id}
                         className="contact-card is-clickable"
+                        data-guide="contact-card"
                         role="button"
                         tabIndex={0}
                         onClick={() => openContactDetail(contact)}

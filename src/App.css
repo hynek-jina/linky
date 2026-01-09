@@ -163,6 +163,257 @@
   padding-top: 8px;
 }
 
+.contacts-checklist {
+  position: relative;
+}
+
+.contacts-checklist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.contacts-checklist-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #cbd5e1;
+}
+
+.contacts-checklist-close {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #0b1222;
+  border: none;
+  color: #94a3b8;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+
+.contacts-checklist-close:hover {
+  transform: none;
+  box-shadow: none;
+  color: #e2e8f0;
+}
+
+.contacts-checklist-progressRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.contacts-checklist-progress {
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: #0b1222;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+.contacts-checklist-progressFill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.contacts-checklist-progressText {
+  font-size: 12px;
+  font-weight: 800;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.contacts-checklist-items {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.contacts-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #cbd5e1;
+  font-weight: 700;
+}
+
+.contacts-checklist-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(148, 163, 184, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.22);
+  color: transparent;
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+
+.contacts-checklist-item.is-done {
+  color: #94a3b8;
+}
+
+.contacts-checklist-item.is-done .contacts-checklist-check {
+  background: rgba(34, 197, 94, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
+  color: #22c55e;
+}
+
+.contacts-checklist-item.is-done .contacts-checklist-label {
+  text-decoration: line-through;
+  text-decoration-color: rgba(148, 163, 184, 0.6);
+}
+
+.contacts-checklist-how {
+  margin-left: auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(20, 184, 166, 0.22);
+  color: #5eead4;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.contacts-checklist-how:hover {
+  transform: none;
+  box-shadow: none;
+  background: rgba(20, 184, 166, 0.28);
+}
+
+.contacts-checklist-done {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(34, 197, 94, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: checklistDonePop 560ms ease-out both;
+}
+
+.contacts-checklist-doneIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(34, 197, 94, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
+  color: #22c55e;
+  font-weight: 900;
+}
+
+.contacts-checklist-doneTitle {
+  color: #cbd5e1;
+  font-weight: 900;
+}
+
+.contacts-checklist-doneBody {
+  color: #94a3b8;
+  font-weight: 700;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+@keyframes checklistDonePop {
+  from {
+    transform: translateY(8px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+
+.guide-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.78);
+}
+
+.guide-highlight {
+  position: fixed;
+  border-radius: 16px;
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.9),
+    0 0 0 9999px rgba(2, 6, 23, 0.78);
+}
+
+.guide-card {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 86px;
+  background: rgba(8, 13, 25, 0.92);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.guide-step {
+  color: #94a3b8;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.guide-title {
+  margin-top: 8px;
+  color: #e2e8f0;
+  font-weight: 900;
+  font-size: 18px;
+}
+
+.guide-body {
+  margin-top: 6px;
+  color: #94a3b8;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.guide-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.guide-actions .guide-btn {
+  padding: 10px 14px;
+  border-radius: 14px;
+  min-width: 88px;
+}
+
+.guide-actions .guide-btn.primary {
+  background: #14b8a6;
+  color: #042f2e;
+  font-weight: 900;
+}
+
 .onboarding-logo-svg {
   width: min(520px, 100%);
   height: 168px;
