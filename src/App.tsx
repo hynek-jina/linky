@@ -494,6 +494,12 @@ const App = () => {
   const [scanIsOpen, setScanIsOpen] = useState(false);
   const [scanStream, setScanStream] = useState<MediaStream | null>(null);
   const scanVideoRef = React.useRef<HTMLVideoElement | null>(null);
+  const scanOpenRequestIdRef = React.useRef(0);
+  const scanIsOpenRef = React.useRef(false);
+
+  React.useEffect(() => {
+    scanIsOpenRef.current = scanIsOpen;
+  }, [scanIsOpen]);
 
   const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
   const chatMessageElByIdRef = React.useRef<Map<string, HTMLDivElement>>(
@@ -6947,7 +6953,26 @@ const App = () => {
   ]);
 
   const closeScan = React.useCallback(() => {
+    // Invalidate any in-flight getUserMedia request.
+    scanOpenRequestIdRef.current += 1;
+
     setScanIsOpen(false);
+
+    const video = scanVideoRef.current;
+    if (video) {
+      try {
+        video.pause();
+      } catch {
+        // ignore
+      }
+      try {
+        (video as unknown as { srcObject: MediaStream | null }).srcObject =
+          null;
+      } catch {
+        // ignore
+      }
+    }
+
     setScanStream((prev) => {
       if (prev) {
         for (const track of prev.getTracks()) {
@@ -6964,6 +6989,10 @@ const App = () => {
 
   const openScan = React.useCallback(() => {
     setScanIsOpen(true);
+
+    // Make this call cancelable: if the user closes the scan dialog before
+    // getUserMedia resolves, immediately stop the acquired stream.
+    const requestId = (scanOpenRequestIdRef.current += 1);
 
     const media = navigator.mediaDevices as
       | { getUserMedia?: (c: MediaStreamConstraints) => Promise<MediaStream> }
@@ -6988,10 +7017,28 @@ const App = () => {
     // after denying permission.
     void (async () => {
       try {
-        const tryGet = async (constraints: MediaStreamConstraints) => {
-          const stream = await media.getUserMedia!(constraints);
+        const acceptStream = (stream: MediaStream) => {
+          if (
+            requestId !== scanOpenRequestIdRef.current ||
+            !scanIsOpenRef.current
+          ) {
+            for (const track of stream.getTracks()) {
+              try {
+                track.stop();
+              } catch {
+                // ignore
+              }
+            }
+            return false;
+          }
+
           setScanStream(stream);
           return true;
+        };
+
+        const tryGet = async (constraints: MediaStreamConstraints) => {
+          const stream = await media.getUserMedia!(constraints);
+          return acceptStream(stream);
         };
 
         // Prefer back camera but keep it as an *ideal* constraint to avoid
@@ -7160,6 +7207,13 @@ const App = () => {
     ]
   );
 
+  // Keep a stable ref so the scan loop effect doesn't restart and stop the
+  // camera whenever dependent state (e.g. contacts) changes.
+  const handleScannedTextRef = React.useRef(handleScannedText);
+  React.useEffect(() => {
+    handleScannedTextRef.current = handleScannedText;
+  }, [handleScannedText]);
+
   React.useEffect(() => {
     if (!scanIsOpen) return;
     if (!scanStream) return;
@@ -7173,6 +7227,22 @@ const App = () => {
     const stop = () => {
       if (rafId !== null) window.cancelAnimationFrame(rafId);
       rafId = null;
+
+      const video = scanVideoRef.current;
+      if (video) {
+        try {
+          video.pause();
+        } catch {
+          // ignore
+        }
+        try {
+          (video as unknown as { srcObject: MediaStream | null }).srcObject =
+            null;
+        } catch {
+          // ignore
+        }
+      }
+
       if (stream) {
         for (const track of stream.getTracks()) {
           try {
@@ -7260,7 +7330,7 @@ const App = () => {
             if (value) {
               handled = true;
               stop();
-              await handleScannedText(value);
+              await handleScannedTextRef.current(value);
               return;
             }
           } else if (jsQr && ctx) {
@@ -7276,7 +7346,7 @@ const App = () => {
               if (value) {
                 handled = true;
                 stop();
-                await handleScannedText(value);
+                await handleScannedTextRef.current(value);
                 return;
               }
             }
@@ -7296,7 +7366,7 @@ const App = () => {
       cancelled = true;
       stop();
     };
-  }, [handleScannedText, scanIsOpen, scanStream]);
+  }, [scanIsOpen, scanStream]);
 
   React.useEffect(() => {
     // Auto-accept Cashu tokens received from others into the wallet.
