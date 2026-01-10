@@ -148,6 +148,36 @@ const makeEmptyForm = (): ContactFormState => ({
 const App = () => {
   const { insert, update, upsert } = useEvolu();
 
+  const normalizeMintUrl = (value: unknown): string => {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "";
+    const stripped = raw.replace(/\/+$/, "");
+
+    try {
+      const u = new URL(stripped);
+      const host = u.host.toLowerCase();
+      const pathname = u.pathname.replace(/\/+$/, "");
+
+      // Canonicalize our main mint: always use the /Bitcoin variant.
+      if (host === "mint.minibits.cash") {
+        return "https://mint.minibits.cash/Bitcoin";
+      }
+
+      // Keep path for other mints (some are hosted under a path), but drop
+      // search/hash for stable identity.
+      return `${u.origin}${pathname}`.replace(/\/+$/, "");
+    } catch {
+      return stripped;
+    }
+  };
+
+  const MAIN_MINT_URL = "https://mint.minibits.cash/Bitcoin";
+
+  const appOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const pendingPaymentEventRowsRef = React.useRef<
+    Array<Record<string, unknown>>
+  >([]);
+
   const route = useRouting();
   const { toasts, pushToast } = useToasts();
 
@@ -177,20 +207,30 @@ const App = () => {
       const unit = String(event.unit ?? "").trim();
       const err = String(event.error ?? "").trim();
 
+      const row = {
+        createdAtSec: nowSec as typeof Evolu.PositiveInt.Type,
+        direction: event.direction as typeof Evolu.NonEmptyString100.Type,
+        amount,
+        fee,
+        mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
+        unit: unit ? (unit as typeof Evolu.NonEmptyString100.Type) : null,
+        status: event.status as typeof Evolu.NonEmptyString100.Type,
+        error: err
+          ? (err.slice(0, 1000) as typeof Evolu.NonEmptyString1000.Type)
+          : null,
+        contactId: (event.contactId ?? null) as ContactId | null,
+      };
+
       try {
-        insert("paymentEvent", {
-          createdAtSec: nowSec as typeof Evolu.PositiveInt.Type,
-          direction: event.direction as typeof Evolu.NonEmptyString100.Type,
-          amount,
-          fee,
-          mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
-          unit: unit ? (unit as typeof Evolu.NonEmptyString100.Type) : null,
-          status: event.status as typeof Evolu.NonEmptyString100.Type,
-          error: err
-            ? (err.slice(0, 1000) as typeof Evolu.NonEmptyString1000.Type)
-            : null,
-          contactId: (event.contactId ?? null) as ContactId | null,
-        });
+        const ownerId = appOwnerIdRef.current;
+        if (!ownerId) {
+          pendingPaymentEventRowsRef.current.push(
+            row as unknown as Record<string, unknown>
+          );
+          return;
+        }
+
+        insert("paymentEvent", row, { ownerId });
       } catch {
         // ignore
       }
@@ -307,6 +347,33 @@ const App = () => {
 
   const appOwnerId =
     (syncOwner as unknown as { id?: Evolu.OwnerId } | null)?.id ?? null;
+
+  React.useEffect(() => {
+    appOwnerIdRef.current = appOwnerId;
+    if (!appOwnerId) return;
+
+    const pending = pendingPaymentEventRowsRef.current;
+    if (pending.length === 0) return;
+    pendingPaymentEventRowsRef.current = [];
+
+    for (const row of pending) {
+      try {
+        insert("paymentEvent", row as never, { ownerId: appOwnerId });
+      } catch {
+        // ignore
+      }
+    }
+  }, [appOwnerId, insert]);
+
+  const resolveOwnerIdForWrite = React.useCallback(async () => {
+    if (appOwnerIdRef.current) return appOwnerIdRef.current;
+    try {
+      const owner = await evolu.appOwner;
+      return (owner as unknown as { id?: Evolu.OwnerId } | null)?.id ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const [onboardingIsBusy, setOnboardingIsBusy] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<null | {
@@ -817,6 +884,14 @@ const App = () => {
     }, 5000);
     return () => window.clearTimeout(timeoutId);
   }, [pendingRelayDeleteUrl]);
+
+  React.useEffect(() => {
+    if (!pendingMintDeleteUrl) return;
+    const timeoutId = window.setTimeout(() => {
+      setPendingMintDeleteUrl(null);
+    }, 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [pendingMintDeleteUrl]);
 
   React.useEffect(() => {
     if (!logoutArmed) return;
@@ -1469,6 +1544,9 @@ const App = () => {
       // Delay to give Evolu time to reflect the insert in queries.
       window.setTimeout(() => {
         try {
+          const ownerId = appOwnerIdRef.current;
+          if (!ownerId) return;
+
           const current = cashuTokensAllRef.current;
           const exists = current.some((row) => {
             const r = row as unknown as {
@@ -1494,18 +1572,24 @@ const App = () => {
           const amount =
             parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
 
-          const r = insert("cashuToken", {
-            token: remembered as typeof Evolu.NonEmptyString.Type,
-            rawToken: null,
-            mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
-            unit: null,
-            amount:
-              typeof amount === "number" && amount > 0
-                ? (Math.floor(amount) as typeof Evolu.PositiveInt.Type)
+          const r = insert(
+            "cashuToken",
+            {
+              token: remembered as typeof Evolu.NonEmptyString.Type,
+              rawToken: null,
+              mint: mint
+                ? (mint as typeof Evolu.NonEmptyString1000.Type)
                 : null,
-            state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-            error: null,
-          });
+              unit: null,
+              amount:
+                typeof amount === "number" && amount > 0
+                  ? (Math.floor(amount) as typeof Evolu.PositiveInt.Type)
+                  : null,
+              state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+              error: null,
+            },
+            { ownerId }
+          );
 
           if (r.ok) {
             logPaymentEvent({
@@ -1551,6 +1635,9 @@ const App = () => {
     ).trim();
     if (!remembered) return;
 
+    const ownerId = appOwnerIdRef.current;
+    if (!ownerId) return;
+
     const exists = cashuTokensAll.some((row) => {
       const r = row as unknown as {
         token?: unknown;
@@ -1571,18 +1658,22 @@ const App = () => {
     const mint = parsed?.mint?.trim() ? parsed.mint.trim() : null;
     const amount = parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
 
-    const r = insert("cashuToken", {
-      token: remembered as typeof Evolu.NonEmptyString.Type,
-      rawToken: null,
-      mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
-      unit: null,
-      amount:
-        typeof amount === "number" && amount > 0
-          ? (Math.floor(amount) as typeof Evolu.PositiveInt.Type)
-          : null,
-      state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-      error: null,
-    });
+    const r = insert(
+      "cashuToken",
+      {
+        token: remembered as typeof Evolu.NonEmptyString.Type,
+        rawToken: null,
+        mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
+        unit: null,
+        amount:
+          typeof amount === "number" && amount > 0
+            ? (Math.floor(amount) as typeof Evolu.PositiveInt.Type)
+            : null,
+        state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+        error: null,
+      },
+      { ownerId }
+    );
 
     if (r.ok) {
       logPaymentEvent({
@@ -1621,17 +1712,174 @@ const App = () => {
   );
   const mintInfo = useQuery(mintInfoQuery);
 
+  const mintInfoDeduped = useMemo(() => {
+    const bestByUrl = new Map<string, (typeof mintInfo)[number]>();
+    for (const row of mintInfo) {
+      const urlRaw = String((row as unknown as { url?: unknown }).url ?? "");
+      const key = normalizeMintUrl(urlRaw);
+      if (!key) continue;
+
+      const existing = bestByUrl.get(key);
+      if (!existing) {
+        bestByUrl.set(key, row);
+        continue;
+      }
+
+      const existingSeen =
+        Number(
+          (existing as unknown as { lastSeenAtSec?: unknown }).lastSeenAtSec ??
+            0
+        ) || 0;
+      const rowSeen =
+        Number(
+          (row as unknown as { lastSeenAtSec?: unknown }).lastSeenAtSec ?? 0
+        ) || 0;
+
+      const existingHasInfo = Boolean(
+        String(
+          (existing as unknown as { infoJson?: unknown }).infoJson ?? ""
+        ).trim().length
+      );
+      const rowHasInfo = Boolean(
+        String((row as unknown as { infoJson?: unknown }).infoJson ?? "").trim()
+          .length
+      );
+
+      const existingHasFees = Boolean(
+        String(
+          (existing as unknown as { feesJson?: unknown }).feesJson ?? ""
+        ).trim().length
+      );
+      const rowHasFees = Boolean(
+        String((row as unknown as { feesJson?: unknown }).feesJson ?? "").trim()
+          .length
+      );
+
+      // Prefer the row with more metadata, then most recently seen.
+      const existingScore =
+        (existingHasInfo ? 2 : 0) + (existingHasFees ? 1 : 0) + existingSeen;
+      const rowScore = (rowHasInfo ? 2 : 0) + (rowHasFees ? 1 : 0) + rowSeen;
+      if (rowScore > existingScore) bestByUrl.set(key, row);
+    }
+
+    const main = normalizeMintUrl(MAIN_MINT_URL);
+
+    return Array.from(bestByUrl.entries())
+      .sort((a, b) => {
+        const aIsMain = main ? a[0] === main : false;
+        const bIsMain = main ? b[0] === main : false;
+        if (aIsMain !== bIsMain) return aIsMain ? -1 : 1;
+
+        const aSeen =
+          Number(
+            (a[1] as unknown as { lastSeenAtSec?: unknown }).lastSeenAtSec ?? 0
+          ) || 0;
+        const bSeen =
+          Number(
+            (b[1] as unknown as { lastSeenAtSec?: unknown }).lastSeenAtSec ?? 0
+          ) || 0;
+        return bSeen - aSeen;
+      })
+      .map(([canonicalUrl, row]) => ({ canonicalUrl, row }));
+  }, [mintInfo, normalizeMintUrl]);
+
   const mintInfoByUrl = useMemo(() => {
     const map = new Map<string, (typeof mintInfoAll)[number]>();
     for (const row of mintInfoAll) {
-      const url = String((row as unknown as { url?: unknown }).url ?? "")
-        .trim()
-        .replace(/\/+$/, "");
+      const url = normalizeMintUrl(
+        String((row as unknown as { url?: unknown }).url ?? "")
+      );
       if (!url) continue;
-      if (!map.has(url)) map.set(url, row);
+      const existing = map.get(url) as
+        | (Record<string, unknown> & { isDeleted?: unknown })
+        | undefined;
+      if (!existing) {
+        map.set(url, row);
+        continue;
+      }
+
+      const existingDeleted =
+        String(existing.isDeleted ?? "") === String(Evolu.sqliteTrue);
+      const rowDeleted =
+        String((row as unknown as { isDeleted?: unknown }).isDeleted ?? "") ===
+        String(Evolu.sqliteTrue);
+
+      // Prefer a non-deleted row if we have one.
+      if (existingDeleted && !rowDeleted) map.set(url, row);
     }
     return map;
   }, [mintInfoAll]);
+
+  const isMintDeleted = React.useCallback(
+    (mintUrl: string): boolean => {
+      const cleaned = normalizeMintUrl(mintUrl);
+      if (!cleaned) return false;
+      return mintInfoAll.some((row) => {
+        const url = normalizeMintUrl(
+          String((row as unknown as { url?: unknown }).url ?? "")
+        );
+        if (url !== cleaned) return false;
+        return (
+          String(
+            (row as unknown as { isDeleted?: unknown }).isDeleted ?? ""
+          ) === String(Evolu.sqliteTrue)
+        );
+      });
+    },
+    [mintInfoAll]
+  );
+
+  const touchMintInfo = React.useCallback(
+    (mintUrl: string, nowSec: number, ownerId: Evolu.OwnerId | null): void => {
+      const cleaned = normalizeMintUrl(mintUrl);
+      if (!cleaned) return;
+      if (isMintDeleted(cleaned)) return;
+
+      const existing = mintInfoByUrl.get(cleaned) as
+        | (Record<string, unknown> & {
+            id?: unknown;
+            isDeleted?: unknown;
+            firstSeenAtSec?: unknown;
+          })
+        | undefined;
+
+      const now = Math.floor(nowSec) as typeof Evolu.PositiveInt.Type;
+
+      if (
+        existing &&
+        String(existing.isDeleted ?? "") !== String(Evolu.sqliteTrue)
+      ) {
+        const id = existing.id as MintId;
+        const firstSeen =
+          Number(existing.firstSeenAtSec ?? 0) > 0
+            ? (Number(existing.firstSeenAtSec) as typeof Evolu.PositiveInt.Type)
+            : now;
+
+        const patch = {
+          id,
+          url: cleaned as typeof Evolu.NonEmptyString1000.Type,
+          firstSeenAtSec: firstSeen,
+          lastSeenAtSec: now,
+        };
+
+        if (ownerId) update("mintInfo", patch, { ownerId });
+        else update("mintInfo", patch);
+        return;
+      }
+
+      const payload = {
+        url: cleaned as typeof Evolu.NonEmptyString1000.Type,
+        firstSeenAtSec: now,
+        lastSeenAtSec: now,
+        supportsMpp: null,
+        feesJson: null,
+        infoJson: null,
+      };
+      if (ownerId) insert("mintInfo", payload, { ownerId });
+      else insert("mintInfo", payload);
+    },
+    [insert, isMintDeleted, mintInfoByUrl, update]
+  );
 
   const encounteredMintUrls = useMemo(() => {
     const set = new Set<string>();
@@ -1641,21 +1889,83 @@ const App = () => {
       const mint = String(
         (row as unknown as { mint?: unknown }).mint ?? ""
       ).trim();
-      if (mint) set.add(mint);
+      const normalized = normalizeMintUrl(mint);
+      if (normalized) set.add(normalized);
     }
     return Array.from(set.values()).sort();
-  }, [cashuTokensAll]);
+  }, [cashuTokensAll, normalizeMintUrl]);
+
+  const [mintRuntimeByUrl, setMintRuntimeByUrl] = useState<
+    Record<string, { lastCheckedAtSec: number; latencyMs: number | null }>
+  >(() => ({}));
+
+  const getMintRuntime = React.useCallback(
+    (mintUrl: string) => {
+      const key = normalizeMintUrl(mintUrl);
+      if (!key) return null;
+      return mintRuntimeByUrl[key] ?? null;
+    },
+    [mintRuntimeByUrl, normalizeMintUrl]
+  );
+
+  const recordMintRuntime = React.useCallback(
+    (
+      mintUrl: string,
+      patch: { lastCheckedAtSec: number; latencyMs: number | null }
+    ) => {
+      const key = normalizeMintUrl(mintUrl);
+      if (!key) return;
+      setMintRuntimeByUrl((prev) => ({ ...prev, [key]: patch }));
+    },
+    [normalizeMintUrl]
+  );
+
+  const extractPpk = (value: unknown): number | null => {
+    const seen = new Set<unknown>();
+    const queue: Array<{ v: unknown; depth: number }> = [
+      { v: value, depth: 0 },
+    ];
+    while (queue.length) {
+      const item = queue.shift();
+      if (!item) break;
+      const { v, depth } = item;
+      if (!v || typeof v !== "object") continue;
+      if (seen.has(v)) continue;
+      seen.add(v);
+
+      const rec = v as Record<string, unknown>;
+      for (const [k, inner] of Object.entries(rec)) {
+        if (k.toLowerCase() === "ppk") {
+          if (typeof inner === "number" && Number.isFinite(inner)) return inner;
+          const num = Number(String(inner ?? "").trim());
+          if (Number.isFinite(num)) return num;
+        }
+        if (depth < 3 && inner && typeof inner === "object") {
+          queue.push({ v: inner, depth: depth + 1 });
+        }
+      }
+    }
+    return null;
+  };
 
   const refreshMintInfo = React.useCallback(
     async (mintUrl: string) => {
-      const cleaned = String(mintUrl ?? "")
-        .trim()
-        .replace(/\/+$/, "");
+      const cleaned = normalizeMintUrl(mintUrl);
       if (!cleaned) return;
+
+      if (isMintDeleted(cleaned)) return;
+
+      const ownerId = await resolveOwnerIdForWrite();
 
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), 8000);
       try {
+        const startedAt =
+          typeof performance !== "undefined" &&
+          typeof performance.now === "function"
+            ? performance.now()
+            : Date.now();
+
         const tryUrls = [`${cleaned}/v1/info`, `${cleaned}/info`];
         let info: unknown = null;
         let lastErr: unknown = null;
@@ -1687,10 +1997,12 @@ const App = () => {
         })();
         const supportsMpp = Boolean(nut15);
 
-        const fees =
+        const feesRaw =
           (info as unknown as { fees?: unknown }).fees ??
           (info as unknown as { fee?: unknown }).fee ??
           null;
+        const ppk = extractPpk(feesRaw) ?? extractPpk(info);
+        const fees = ppk !== null ? { ppk, raw: feesRaw } : feesRaw;
 
         const nowSec = Math.floor(Date.now() / 1000);
         const toJson = (value: unknown): string | null => {
@@ -1710,29 +2022,79 @@ const App = () => {
           }
         };
 
-        update("mintInfo", {
-          id: cleaned as unknown as MintId,
-          supportsMpp: supportsMpp
-            ? ("1" as typeof Evolu.NonEmptyString100.Type)
-            : null,
-          feesJson: toJson(fees) as typeof Evolu.NonEmptyString1000.Type | null,
-          infoJson: toJson(info) as typeof Evolu.NonEmptyString1000.Type | null,
-          lastCheckedAtSec: nowSec as typeof Evolu.PositiveInt.Type,
-        });
+        const existing = mintInfoByUrl.get(cleaned) as
+          | (Record<string, unknown> & {
+              id?: unknown;
+              isDeleted?: unknown;
+              firstSeenAtSec?: unknown;
+            })
+          | undefined;
+
+        if (
+          existing &&
+          String(existing.isDeleted ?? "") !== String(Evolu.sqliteTrue)
+        ) {
+          const patch = {
+            id: existing.id as MintId,
+            supportsMpp: supportsMpp
+              ? ("1" as typeof Evolu.NonEmptyString100.Type)
+              : null,
+            feesJson: toJson(fees) as
+              | typeof Evolu.NonEmptyString1000.Type
+              | null,
+            infoJson: toJson(info) as
+              | typeof Evolu.NonEmptyString1000.Type
+              | null,
+          };
+
+          if (ownerId) update("mintInfo", patch, { ownerId });
+          else update("mintInfo", patch);
+
+          const finishedAt =
+            typeof performance !== "undefined" &&
+            typeof performance.now === "function"
+              ? performance.now()
+              : Date.now();
+          const latencyMs = Math.max(0, Math.round(finishedAt - startedAt));
+          recordMintRuntime(cleaned, { lastCheckedAtSec: nowSec, latencyMs });
+          return;
+        }
+
+        // If no row exists yet (or it was deleted), just ensure it exists.
+        // A subsequent render can refresh again without creating duplicates.
+        touchMintInfo(cleaned, nowSec, ownerId);
+
+        const finishedAt =
+          typeof performance !== "undefined" &&
+          typeof performance.now === "function"
+            ? performance.now()
+            : Date.now();
+        const latencyMs = Math.max(0, Math.round(finishedAt - startedAt));
+        recordMintRuntime(cleaned, { lastCheckedAtSec: nowSec, latencyMs });
       } catch {
         // ignore
       } finally {
         window.clearTimeout(timeout);
       }
     },
-    [update]
+    [
+      extractPpk,
+      isMintDeleted,
+      mintInfoByUrl,
+      normalizeMintUrl,
+      recordMintRuntime,
+      resolveOwnerIdForWrite,
+      touchMintInfo,
+      update,
+    ]
   );
 
   React.useEffect(() => {
     // Ensure every user has the default mint in their mint list.
-    const bootstrap = "https://mint.minibits.cash";
-    const cleaned = bootstrap.trim().replace(/\/+$/, "");
+    const cleaned = normalizeMintUrl(MAIN_MINT_URL);
     if (!cleaned) return;
+
+    if (isMintDeleted(cleaned)) return;
 
     const existing = mintInfoByUrl.get(cleaned) as
       | (Record<string, unknown> & {
@@ -1742,20 +2104,23 @@ const App = () => {
         })
       | undefined;
 
-    // Respect user deletion.
-    if (String(existing?.isDeleted ?? "") === String(Evolu.sqliteTrue)) return;
-
+    const nowSec = Math.floor(Date.now() / 1000);
     if (!existing) {
-      const nowSec = Math.floor(Date.now() / 1000);
-      upsert("mintInfo", {
-        id: cleaned as unknown as MintId,
-        url: cleaned as typeof Evolu.NonEmptyString1000.Type,
-        firstSeenAtSec: nowSec as typeof Evolu.PositiveInt.Type,
-        lastSeenAtSec: nowSec as typeof Evolu.PositiveInt.Type,
-      });
-      void refreshMintInfo(cleaned);
+      touchMintInfo(cleaned, nowSec, appOwnerId);
+      return;
     }
-  }, [mintInfoByUrl, refreshMintInfo, upsert]);
+
+    const runtime = getMintRuntime(cleaned);
+    if (!runtime) void refreshMintInfo(cleaned);
+  }, [
+    appOwnerId,
+    getMintRuntime,
+    isMintDeleted,
+    mintInfoByUrl,
+    normalizeMintUrl,
+    refreshMintInfo,
+    touchMintInfo,
+  ]);
 
   React.useEffect(() => {
     if (encounteredMintUrls.length === 0) return;
@@ -1775,26 +2140,119 @@ const App = () => {
           })
         | undefined;
 
-      // Respect user deletion (don't auto-recreate).
-      if (String(existing?.isDeleted ?? "") === String(Evolu.sqliteTrue)) {
+      // Respect user deletion across any owner scope (don't auto-recreate).
+      if (isMintDeleted(cleaned)) continue;
+
+      // If we don't have a row yet, create it first and let a later rerender
+      // trigger the refresh to avoid duplicate inserts.
+      if (!existing) {
+        touchMintInfo(cleaned, nowSec, appOwnerId);
         continue;
       }
 
-      const firstSeen = Number(existing?.firstSeenAtSec ?? 0) || nowSec;
-      upsert("mintInfo", {
-        id: cleaned as unknown as MintId,
-        url: cleaned as typeof Evolu.NonEmptyString1000.Type,
-        firstSeenAtSec: firstSeen as typeof Evolu.PositiveInt.Type,
-        lastSeenAtSec: nowSec as typeof Evolu.PositiveInt.Type,
-      });
+      touchMintInfo(cleaned, nowSec, appOwnerId);
 
-      const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
+      const lastChecked = getMintRuntime(cleaned)?.lastCheckedAtSec ?? 0;
       const oneDay = 86_400;
       if (lastChecked === 0 || nowSec - lastChecked > oneDay) {
         void refreshMintInfo(cleaned);
       }
     }
-  }, [encounteredMintUrls, mintInfoByUrl, refreshMintInfo, upsert]);
+  }, [
+    appOwnerId,
+    encounteredMintUrls,
+    getMintRuntime,
+    isMintDeleted,
+    mintInfoByUrl,
+    refreshMintInfo,
+    touchMintInfo,
+  ]);
+
+  const mintDedupeRanRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    // Best-effort: remove duplicate mint rows (same canonical URL) by marking
+    // all but the best row as deleted, and normalize the kept row's url.
+    const active = mintInfoAll.filter(
+      (row) =>
+        String((row as unknown as { isDeleted?: unknown }).isDeleted ?? "") !==
+        String(Evolu.sqliteTrue)
+    ) as Array<Record<string, unknown> & { id?: unknown; url?: unknown }>;
+    if (active.length < 2) return;
+
+    const groups = new Map<string, typeof active>();
+    for (const row of active) {
+      const key = normalizeMintUrl(String(row.url ?? ""));
+      if (!key) continue;
+      const arr = groups.get(key);
+      if (arr) arr.push(row);
+      else groups.set(key, [row]);
+    }
+
+    const signature = Array.from(groups.entries())
+      .filter(([, rows]) => rows.length > 1)
+      .map(
+        ([k, rows]) =>
+          `${k}:${rows
+            .map((r) => String(r.id ?? ""))
+            .sort()
+            .join(",")}`
+      )
+      .sort()
+      .join("|");
+
+    if (!signature) return;
+    if (mintDedupeRanRef.current === signature) return;
+    mintDedupeRanRef.current = signature;
+
+    const updateNoThrow = (
+      patch: Record<string, unknown> & { id: MintId }
+    ): void => {
+      try {
+        if (appOwnerId) {
+          update("mintInfo", patch as never, { ownerId: appOwnerId });
+          return;
+        }
+      } catch {
+        // fall through
+      }
+      try {
+        update("mintInfo", patch as never);
+      } catch {
+        // ignore
+      }
+    };
+
+    for (const [key, rows] of groups.entries()) {
+      if (rows.length <= 1) continue;
+
+      const best = [...rows].sort((a, b) => {
+        const aSeen = Number(a.lastSeenAtSec ?? 0) || 0;
+        const bSeen = Number(b.lastSeenAtSec ?? 0) || 0;
+        const aInfo = String(a.infoJson ?? "").trim() ? 1 : 0;
+        const bInfo = String(b.infoJson ?? "").trim() ? 1 : 0;
+        const aFees = String(a.feesJson ?? "").trim() ? 1 : 0;
+        const bFees = String(b.feesJson ?? "").trim() ? 1 : 0;
+        const aScore = aInfo * 2 + aFees + aSeen;
+        const bScore = bInfo * 2 + bFees + bSeen;
+        return bScore - aScore;
+      })[0];
+
+      const bestId = best?.id as MintId | undefined;
+      if (!bestId) continue;
+
+      const bestUrl = normalizeMintUrl(String(best.url ?? ""));
+      if (bestUrl && bestUrl !== key) {
+        updateNoThrow({ id: bestId, url: key });
+      }
+
+      for (const row of rows) {
+        const id = row.id as MintId | undefined;
+        if (!id) continue;
+        if (String(id) === String(bestId)) continue;
+        updateNoThrow({ id, isDeleted: Evolu.sqliteTrue });
+      }
+    }
+  }, [appOwnerId, mintInfoAll, normalizeMintUrl, update]);
 
   const paymentEventsQuery = useMemo(
     () =>
@@ -1825,6 +2283,7 @@ const App = () => {
   const appStateLatest = useQuery(appStateLatestQuery);
 
   const skipPersistContactsTutorialRef = React.useRef(false);
+  const restoredAppStateRowIdRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     const row = appStateLatest[0] as
@@ -1839,6 +2298,10 @@ const App = () => {
 
     if (!row) return;
 
+    const rowId = String((row as unknown as { id?: unknown })?.id ?? "");
+    if (rowId && restoredAppStateRowIdRef.current === rowId) return;
+    if (rowId) restoredAppStateRowIdRef.current = rowId;
+
     const dismissed = String(row.contactsOnboardingDismissed ?? "") === "1";
     const hasPaid = String(row.contactsOnboardingHasPaid ?? "") === "1";
 
@@ -1851,17 +2314,26 @@ const App = () => {
       (row.contactsGuideTargetContactId as ContactId | null | undefined) ??
       null;
 
-    skipPersistContactsTutorialRef.current = true;
-
-    setContactsOnboardingDismissed(dismissed);
-    setContactsOnboardingHasPaid(hasPaid);
+    const needsApply =
+      dismissed !== contactsOnboardingDismissed ||
+      hasPaid !== contactsOnboardingHasPaid;
+    if (needsApply) {
+      skipPersistContactsTutorialRef.current = true;
+      setContactsOnboardingDismissed(dismissed);
+      setContactsOnboardingHasPaid(hasPaid);
+    }
 
     // Restore guide only if it's currently closed.
     if (!contactsGuide && task) {
       setContactsGuide({ task: task as ContactsGuideKey, step });
       setContactsGuideTargetContactId(targetContactId);
     }
-  }, [appStateLatest, contactsGuide]);
+  }, [
+    appStateLatest,
+    contactsGuide,
+    contactsOnboardingDismissed,
+    contactsOnboardingHasPaid,
+  ]);
 
   const contactsTutorialSnapshotRef = React.useRef<string | null>(null);
   React.useEffect(() => {
@@ -1893,27 +2365,33 @@ const App = () => {
         : null;
 
     try {
-      insert("appState", {
-        contactsOnboardingDismissed: dismissed
-          ? (dismissed as typeof Evolu.NonEmptyString100.Type)
-          : null,
-        contactsOnboardingHasPaid: hasPaid
-          ? (hasPaid as typeof Evolu.NonEmptyString100.Type)
-          : null,
-        contactsGuideTask: guideTask
-          ? (guideTask as typeof Evolu.NonEmptyString100.Type)
-          : null,
-        contactsGuideStepPlusOne:
-          stepPlusOneRaw && stepPlusOneRaw > 0
-            ? (stepPlusOneRaw as typeof Evolu.PositiveInt.Type)
+      if (!appOwnerId) return;
+      insert(
+        "appState",
+        {
+          contactsOnboardingDismissed: dismissed
+            ? (dismissed as typeof Evolu.NonEmptyString100.Type)
             : null,
-        contactsGuideTargetContactId: (contactsGuideTargetContactId ??
-          null) as ContactId | null,
-      });
+          contactsOnboardingHasPaid: hasPaid
+            ? (hasPaid as typeof Evolu.NonEmptyString100.Type)
+            : null,
+          contactsGuideTask: guideTask
+            ? (guideTask as typeof Evolu.NonEmptyString100.Type)
+            : null,
+          contactsGuideStepPlusOne:
+            stepPlusOneRaw && stepPlusOneRaw > 0
+              ? (stepPlusOneRaw as typeof Evolu.PositiveInt.Type)
+              : null,
+          contactsGuideTargetContactId: (contactsGuideTargetContactId ??
+            null) as ContactId | null,
+        },
+        { ownerId: appOwnerId }
+      );
     } catch {
       // ignore
     }
   }, [
+    appOwnerId,
     contactsGuide,
     contactsGuideTargetContactId,
     contactsOnboardingDismissed,
@@ -2139,23 +2617,44 @@ const App = () => {
           });
           if (alreadyStored) return;
 
+          const ownerId = await resolveOwnerIdForWrite();
+
           const { acceptCashuToken } = await import("./cashuAccept");
           const accepted = await acceptCashuToken(tokenRaw);
 
-          const result = insert("cashuToken", {
-            token: accepted.token as typeof Evolu.NonEmptyString.Type,
-            rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-            mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
-            unit: accepted.unit
-              ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
-              : null,
-            amount:
-              accepted.amount > 0
-                ? (accepted.amount as typeof Evolu.PositiveInt.Type)
-                : null,
-            state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-            error: null,
-          });
+          const result = ownerId
+            ? insert(
+                "cashuToken",
+                {
+                  token: accepted.token as typeof Evolu.NonEmptyString.Type,
+                  rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+                  mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
+                  unit: accepted.unit
+                    ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
+                    : null,
+                  amount:
+                    accepted.amount > 0
+                      ? (accepted.amount as typeof Evolu.PositiveInt.Type)
+                      : null,
+                  state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                  error: null,
+                },
+                { ownerId }
+              )
+            : insert("cashuToken", {
+                token: accepted.token as typeof Evolu.NonEmptyString.Type,
+                rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+                mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
+                unit: accepted.unit
+                  ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
+                  : null,
+                amount:
+                  accepted.amount > 0
+                    ? (accepted.amount as typeof Evolu.PositiveInt.Type)
+                    : null,
+                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                error: null,
+              });
           if (!result.ok) {
             setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
             return;
@@ -2198,23 +2697,17 @@ const App = () => {
             const existing = mintInfoByUrl.get(cleanedMint) as
               | (Record<string, unknown> & {
                   isDeleted?: unknown;
-                  firstSeenAtSec?: unknown;
                   lastCheckedAtSec?: unknown;
                 })
               | undefined;
-            if (
-              String(existing?.isDeleted ?? "") !== String(Evolu.sqliteTrue)
-            ) {
-              const firstSeen = Number(existing?.firstSeenAtSec ?? 0) || nowSec;
-              upsert("mintInfo", {
-                id: cleanedMint as unknown as MintId,
-                url: cleanedMint as typeof Evolu.NonEmptyString1000.Type,
-                firstSeenAtSec: firstSeen as typeof Evolu.PositiveInt.Type,
-                lastSeenAtSec: nowSec as typeof Evolu.PositiveInt.Type,
-              });
+
+            if (isMintDeleted(cleanedMint)) {
+              // Respect user deletion across any owner scope.
+            } else {
+              touchMintInfo(cleanedMint, nowSec, ownerId);
 
               const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
-              if (!lastChecked) void refreshMintInfo(cleanedMint);
+              if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
             }
           }
 
@@ -2257,23 +2750,49 @@ const App = () => {
             error: message,
             contactId: null,
           });
-          insert("cashuToken", {
-            token: tokenRaw as typeof Evolu.NonEmptyString.Type,
-            rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-            mint: parsedMint
-              ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
-              : null,
-            unit: null,
-            amount:
-              typeof parsedAmount === "number"
-                ? (parsedAmount as typeof Evolu.PositiveInt.Type)
+
+          const ownerId = await resolveOwnerIdForWrite();
+          if (ownerId) {
+            insert(
+              "cashuToken",
+              {
+                token: tokenRaw as typeof Evolu.NonEmptyString.Type,
+                rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+                mint: parsedMint
+                  ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
+                  : null,
+                unit: null,
+                amount:
+                  typeof parsedAmount === "number"
+                    ? (parsedAmount as typeof Evolu.PositiveInt.Type)
+                    : null,
+                state: "error" as typeof Evolu.NonEmptyString100.Type,
+                error: message.slice(
+                  0,
+                  1000
+                ) as typeof Evolu.NonEmptyString1000.Type,
+              },
+              { ownerId }
+            );
+          } else {
+            insert("cashuToken", {
+              token: tokenRaw as typeof Evolu.NonEmptyString.Type,
+              rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+              mint: parsedMint
+                ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
                 : null,
-            state: "error" as typeof Evolu.NonEmptyString100.Type,
-            error: message.slice(
-              0,
-              1000
-            ) as typeof Evolu.NonEmptyString1000.Type,
-          });
+              unit: null,
+              amount:
+                typeof parsedAmount === "number"
+                  ? (parsedAmount as typeof Evolu.PositiveInt.Type)
+                  : null,
+              state: "error" as typeof Evolu.NonEmptyString100.Type,
+              error: message.slice(
+                0,
+                1000
+              ) as typeof Evolu.NonEmptyString1000.Type,
+            });
+          }
           setStatus(`${t("cashuAcceptFailed")}: ${message}`);
         } finally {
           setCashuIsBusy(false);
@@ -2291,6 +2810,7 @@ const App = () => {
       maybeShowPwaNotification,
       route.kind,
       refreshMintInfo,
+      resolveOwnerIdForWrite,
       showPaidOverlay,
       t,
       upsert,
@@ -4029,23 +4549,44 @@ const App = () => {
       await enqueueCashuOp(async () => {
         setCashuIsBusy(true);
         try {
+          const ownerId = await resolveOwnerIdForWrite();
+
           const { acceptCashuToken } = await import("./cashuAccept");
           const accepted = await acceptCashuToken(tokenRaw);
 
-          const result = insert("cashuToken", {
-            token: accepted.token as typeof Evolu.NonEmptyString.Type,
-            rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-            mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
-            unit: accepted.unit
-              ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
-              : null,
-            amount:
-              accepted.amount > 0
-                ? (accepted.amount as typeof Evolu.PositiveInt.Type)
-                : null,
-            state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-            error: null,
-          });
+          const result = ownerId
+            ? insert(
+                "cashuToken",
+                {
+                  token: accepted.token as typeof Evolu.NonEmptyString.Type,
+                  rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+                  mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
+                  unit: accepted.unit
+                    ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
+                    : null,
+                  amount:
+                    accepted.amount > 0
+                      ? (accepted.amount as typeof Evolu.PositiveInt.Type)
+                      : null,
+                  state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                  error: null,
+                },
+                { ownerId }
+              )
+            : insert("cashuToken", {
+                token: accepted.token as typeof Evolu.NonEmptyString.Type,
+                rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+                mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
+                unit: accepted.unit
+                  ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
+                  : null,
+                amount:
+                  accepted.amount > 0
+                    ? (accepted.amount as typeof Evolu.PositiveInt.Type)
+                    : null,
+                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                error: null,
+              });
           if (!result.ok) {
             setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
             return;
@@ -4084,23 +4625,17 @@ const App = () => {
             const existing = mintInfoByUrl.get(cleanedMint) as
               | (Record<string, unknown> & {
                   isDeleted?: unknown;
-                  firstSeenAtSec?: unknown;
                   lastCheckedAtSec?: unknown;
                 })
               | undefined;
-            if (
-              String(existing?.isDeleted ?? "") !== String(Evolu.sqliteTrue)
-            ) {
-              const firstSeen = Number(existing?.firstSeenAtSec ?? 0) || nowSec;
-              upsert("mintInfo", {
-                id: cleanedMint as unknown as MintId,
-                url: cleanedMint as typeof Evolu.NonEmptyString1000.Type,
-                firstSeenAtSec: firstSeen as typeof Evolu.PositiveInt.Type,
-                lastSeenAtSec: nowSec as typeof Evolu.PositiveInt.Type,
-              });
+
+            if (isMintDeleted(cleanedMint)) {
+              // Respect user deletion across any owner scope.
+            } else {
+              touchMintInfo(cleanedMint, nowSec, ownerId);
 
               const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
-              if (!lastChecked) void refreshMintInfo(cleanedMint);
+              if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
             }
           }
 
@@ -4138,23 +4673,46 @@ const App = () => {
             error: message,
             contactId: null,
           });
-          const result = insert("cashuToken", {
-            token: tokenRaw as typeof Evolu.NonEmptyString.Type,
-            rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-            mint: parsedMint
-              ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
-              : null,
-            unit: null,
-            amount:
-              typeof parsedAmount === "number"
-                ? (parsedAmount as typeof Evolu.PositiveInt.Type)
-                : null,
-            state: "error" as typeof Evolu.NonEmptyString100.Type,
-            error: message.slice(
-              0,
-              1000
-            ) as typeof Evolu.NonEmptyString1000.Type,
-          });
+          const ownerId = await resolveOwnerIdForWrite();
+          const result = ownerId
+            ? insert(
+                "cashuToken",
+                {
+                  token: tokenRaw as typeof Evolu.NonEmptyString.Type,
+                  rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+                  mint: parsedMint
+                    ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
+                    : null,
+                  unit: null,
+                  amount:
+                    typeof parsedAmount === "number"
+                      ? (parsedAmount as typeof Evolu.PositiveInt.Type)
+                      : null,
+                  state: "error" as typeof Evolu.NonEmptyString100.Type,
+                  error: message.slice(
+                    0,
+                    1000
+                  ) as typeof Evolu.NonEmptyString1000.Type,
+                },
+                { ownerId }
+              )
+            : insert("cashuToken", {
+                token: tokenRaw as typeof Evolu.NonEmptyString.Type,
+                rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
+                mint: parsedMint
+                  ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
+                  : null,
+                unit: null,
+                amount:
+                  typeof parsedAmount === "number"
+                    ? (parsedAmount as typeof Evolu.PositiveInt.Type)
+                    : null,
+                state: "error" as typeof Evolu.NonEmptyString100.Type,
+                error: message.slice(
+                  0,
+                  1000
+                ) as typeof Evolu.NonEmptyString1000.Type,
+              });
           if (result.ok) {
             setStatus(`${t("cashuAcceptFailed")}: ${message}`);
           } else {
@@ -4173,6 +4731,7 @@ const App = () => {
       logPaymentEvent,
       mintInfoByUrl,
       refreshMintInfo,
+      resolveOwnerIdForWrite,
       showPaidOverlay,
       t,
       upsert,
@@ -4196,7 +4755,13 @@ const App = () => {
   };
 
   const handleDeleteCashuToken = (id: CashuTokenId) => {
-    const result = update("cashuToken", { id, isDeleted: Evolu.sqliteTrue });
+    const result = appOwnerId
+      ? update(
+          "cashuToken",
+          { id, isDeleted: Evolu.sqliteTrue },
+          { ownerId: appOwnerId }
+        )
+      : update("cashuToken", { id, isDeleted: Evolu.sqliteTrue });
     if (result.ok) {
       setStatus(t("cashuDeleted"));
       setPendingCashuDeleteId(null);
@@ -7549,32 +8114,15 @@ const App = () => {
 
           {route.kind === "mints" && (
             <section className="panel">
-              {mintInfo.length === 0 ? (
+              {mintInfoDeduped.length === 0 ? (
                 <p className="muted">{t("mintsEmpty")}</p>
               ) : (
                 <div>
-                  {mintInfo.map((row) => {
-                    const url = String(
-                      (row as unknown as { url?: unknown }).url ?? ""
-                    ).trim();
+                  {mintInfoDeduped.map(({ canonicalUrl }) => {
+                    const url = String(canonicalUrl ?? "").trim();
                     if (!url) return null;
 
-                    const supportsMpp =
-                      String(
-                        (row as unknown as { supportsMpp?: unknown })
-                          .supportsMpp ?? ""
-                      ) === "1";
-                    const lastSeenAtSec =
-                      Number(
-                        (row as unknown as { lastSeenAtSec?: unknown })
-                          .lastSeenAtSec ?? 0
-                      ) || 0;
-
-                    const when = lastSeenAtSec
-                      ? new Date(lastSeenAtSec * 1000).toLocaleString(
-                          lang === "cs" ? "cs-CZ" : "en-US"
-                        )
-                      : null;
+                    const isMain = normalizeMintUrl(url) === MAIN_MINT_URL;
 
                     return (
                       <button
@@ -7587,19 +8135,50 @@ const App = () => {
                       >
                         <div className="settings-left">
                           <span className="settings-icon" aria-hidden="true">
-                            🏦
+                            {(() => {
+                              const icon = getMintIconUrl(url);
+                              if (!icon.url) return "🏦";
+                              return (
+                                <img
+                                  src={icon.url}
+                                  alt=""
+                                  width={18}
+                                  height={18}
+                                  style={{
+                                    borderRadius: 9999,
+                                    objectFit: "cover",
+                                  }}
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    (
+                                      e.currentTarget as HTMLImageElement
+                                    ).style.display = "none";
+                                    if (icon.origin) {
+                                      setMintIconUrlByMint((prev) => ({
+                                        ...prev,
+                                        [icon.origin as string]: null,
+                                      }));
+                                    }
+                                  }}
+                                />
+                              );
+                            })()}
                           </span>
-                          <span className="settings-label">{url}</span>
+                          <span className="settings-label">
+                            {url}
+                            {isMain ? (
+                              <span
+                                className="relay-count"
+                                title="Main mint"
+                                style={{ marginLeft: 8 }}
+                              >
+                                ★
+                              </span>
+                            ) : null}
+                          </span>
                         </div>
                         <div className="settings-right">
-                          {supportsMpp ? (
-                            <span className="relay-count">MPP</span>
-                          ) : null}
-                          {when ? (
-                            <span className="muted" style={{ fontSize: 12 }}>
-                              {when}
-                            </span>
-                          ) : null}
                           <span className="settings-chevron" aria-hidden="true">
                             &gt;
                           </span>
@@ -7615,9 +8194,7 @@ const App = () => {
           {route.kind === "mint" && (
             <section className="panel">
               {(() => {
-                const cleaned = String(route.mintUrl ?? "")
-                  .trim()
-                  .replace(/\/+$/, "");
+                const cleaned = normalizeMintUrl(route.mintUrl);
                 const row = mintInfoByUrl.get(cleaned) ?? null;
                 if (!row) return <p className="muted">{t("mintNotFound")}</p>;
 
@@ -7626,14 +8203,27 @@ const App = () => {
                     (row as unknown as { supportsMpp?: unknown }).supportsMpp ??
                       ""
                   ) === "1";
-                const lastCheckedAtSec =
-                  Number(
-                    (row as unknown as { lastCheckedAtSec?: unknown })
-                      .lastCheckedAtSec ?? 0
-                  ) || 0;
                 const feesJson = String(
                   (row as unknown as { feesJson?: unknown }).feesJson ?? ""
                 ).trim();
+
+                const runtime = getMintRuntime(cleaned);
+                const lastCheckedAtSec = runtime?.lastCheckedAtSec ?? 0;
+                const latencyMs = runtime?.latencyMs ?? null;
+
+                const ppk = (() => {
+                  if (!feesJson) return null;
+                  try {
+                    const parsed = JSON.parse(feesJson) as unknown;
+                    const found = extractPpk(parsed);
+                    if (typeof found === "number" && Number.isFinite(found)) {
+                      return found;
+                    }
+                    return null;
+                  } catch {
+                    return null;
+                  }
+                })();
 
                 return (
                   <div>
@@ -7671,8 +8261,26 @@ const App = () => {
                         <span className="settings-label">{t("mintFees")}</span>
                       </div>
                       <div className="settings-right">
-                        {feesJson ? (
+                        {ppk !== null ? (
+                          <span className="relay-url">ppk: {ppk}</span>
+                        ) : feesJson ? (
                           <span className="relay-url">{feesJson}</span>
+                        ) : (
+                          <span className="muted">{t("unknown")}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="settings-row">
+                      <div className="settings-left">
+                        <span className="settings-icon" aria-hidden="true">
+                          ⏱
+                        </span>
+                        <span className="settings-label">Latency</span>
+                      </div>
+                      <div className="settings-right">
+                        {latencyMs !== null ? (
+                          <span className="relay-url">{latencyMs} ms</span>
                         ) : (
                           <span className="muted">{t("unknown")}</span>
                         )}
@@ -7701,24 +8309,55 @@ const App = () => {
                         }
                         onClick={() => {
                           if (pendingMintDeleteUrl === cleaned) {
-                            update("mintInfo", {
-                              id: cleaned as unknown as MintId,
-                              isDeleted: Evolu.sqliteTrue,
-                            });
+                            const toDelete = mintInfoAll.filter((row) => {
+                              const url = String(
+                                (row as unknown as { url?: unknown }).url ?? ""
+                              )
+                                .trim()
+                                .replace(/\/+$/, "");
+                              return url === cleaned;
+                            }) as Array<
+                              Record<string, unknown> & { id?: unknown }
+                            >;
+
+                            for (const row of toDelete) {
+                              const id = row.id as MintId;
+                              if (!id) continue;
+                              try {
+                                if (appOwnerId) {
+                                  update(
+                                    "mintInfo",
+                                    { id, isDeleted: Evolu.sqliteTrue },
+                                    { ownerId: appOwnerId }
+                                  );
+                                } else {
+                                  update("mintInfo", {
+                                    id,
+                                    isDeleted: Evolu.sqliteTrue,
+                                  });
+                                }
+                              } catch {
+                                try {
+                                  update("mintInfo", {
+                                    id,
+                                    isDeleted: Evolu.sqliteTrue,
+                                  });
+                                } catch {
+                                  // ignore
+                                }
+                              }
+                            }
+
                             setPendingMintDeleteUrl(null);
                             navigateToMints();
                             return;
                           }
+                          setStatus(t("deleteArmedHint"));
                           setPendingMintDeleteUrl(cleaned);
                         }}
                       >
                         {t("mintDelete")}
                       </button>
-                      {pendingMintDeleteUrl === cleaned ? (
-                        <p className="muted" style={{ marginTop: 10 }}>
-                          {t("deleteArmedHint")}
-                        </p>
-                      ) : null}
                     </div>
 
                     {lastCheckedAtSec ? (
