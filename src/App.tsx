@@ -23,6 +23,7 @@ import {
   navigateToNewRelay,
   navigateToNostrRelay,
   navigateToNostrRelays,
+  navigateToPaymentsHistory,
   navigateToProfile,
   navigateToSettings,
   navigateToTopup,
@@ -144,6 +145,53 @@ const App = () => {
 
   const route = useRouting();
   const { toasts, pushToast } = useToasts();
+
+  const logPaymentEvent = React.useCallback(
+    (event: {
+      direction: "in" | "out";
+      status: "ok" | "error";
+      amount?: number | null;
+      fee?: number | null;
+      mint?: string | null;
+      unit?: string | null;
+      error?: string | null;
+      contactId?: ContactId | null;
+    }) => {
+      const nowSec = Math.floor(Date.now() / 1000);
+
+      const amount =
+        typeof event.amount === "number" && event.amount > 0
+          ? (Math.floor(event.amount) as typeof Evolu.PositiveInt.Type)
+          : null;
+      const fee =
+        typeof event.fee === "number" && event.fee >= 0
+          ? (Math.floor(event.fee) as typeof Evolu.PositiveInt.Type)
+          : null;
+
+      const mint = String(event.mint ?? "").trim();
+      const unit = String(event.unit ?? "").trim();
+      const err = String(event.error ?? "").trim();
+
+      try {
+        insert("paymentEvent", {
+          createdAtSec: nowSec as typeof Evolu.PositiveInt.Type,
+          direction: event.direction as typeof Evolu.NonEmptyString100.Type,
+          amount,
+          fee,
+          mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
+          unit: unit ? (unit as typeof Evolu.NonEmptyString100.Type) : null,
+          status: event.status as typeof Evolu.NonEmptyString100.Type,
+          error: err
+            ? (err.slice(0, 1000) as typeof Evolu.NonEmptyString1000.Type)
+            : null,
+          contactId: (event.contactId ?? null) as ContactId | null,
+        });
+      } catch {
+        // ignore
+      }
+    },
+    [insert]
+  );
 
   const [form, setForm] = useState<ContactFormState>(makeEmptyForm());
   const [editingId, setEditingId] = useState<ContactId | null>(null);
@@ -1345,6 +1393,20 @@ const App = () => {
   );
   const cashuTokensAll = useQuery(cashuTokensAllQuery);
 
+  const paymentEventsQuery = useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("paymentEvent")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue)
+          .orderBy("createdAtSec", "desc")
+          .limit(250)
+      ),
+    []
+  );
+  const paymentEvents = useQuery(paymentEventsQuery);
+
   React.useEffect(() => {
     // Debug: log Evolu state without secrets.
     // NOTE: Relays and derived npub are Nostr/runtime state, not stored in Evolu.
@@ -2170,6 +2232,7 @@ const App = () => {
       }
 
       let lastError: unknown = null;
+      let lastMint: string | null = null;
       for (const candidate of candidates) {
         try {
           const { meltInvoiceWithTokensAtMint } = await import("./cashuMelt");
@@ -2210,6 +2273,17 @@ const App = () => {
             });
           }
 
+          logPaymentEvent({
+            direction: "out",
+            status: "ok",
+            amount: result.paidAmount,
+            fee: result.feeReserve,
+            mint: result.mint,
+            unit: result.unit,
+            error: null,
+            contactId: selectedContact.id,
+          });
+
           setStatus(t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
@@ -2218,9 +2292,20 @@ const App = () => {
           return;
         } catch (e) {
           lastError = e;
+          lastMint = candidate.mint;
         }
       }
 
+      logPaymentEvent({
+        direction: "out",
+        status: "error",
+        amount: amountSat,
+        fee: null,
+        mint: lastMint,
+        unit: "sat",
+        error: String(lastError ?? "unknown"),
+        contactId: selectedContact.id,
+      });
       setStatus(`${t("payFailed")}: ${String(lastError ?? "unknown")}`);
     } finally {
       setCashuIsBusy(false);
@@ -2267,6 +2352,7 @@ const App = () => {
         }
 
         let lastError: unknown = null;
+        let lastMint: string | null = null;
         for (const candidate of candidates) {
           try {
             const { meltInvoiceWithTokensAtMint } = await import("./cashuMelt");
@@ -2307,6 +2393,17 @@ const App = () => {
               });
             }
 
+            logPaymentEvent({
+              direction: "out",
+              status: "ok",
+              amount: result.paidAmount,
+              fee: result.feeReserve,
+              mint: result.mint,
+              unit: result.unit,
+              error: null,
+              contactId: null,
+            });
+
             setStatus(t("paySuccess"));
             safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
             setContactsOnboardingHasPaid(true);
@@ -2314,15 +2411,35 @@ const App = () => {
             return;
           } catch (e) {
             lastError = e;
+            lastMint = candidate.mint;
           }
         }
 
+        logPaymentEvent({
+          direction: "out",
+          status: "error",
+          amount: null,
+          fee: null,
+          mint: lastMint,
+          unit: "sat",
+          error: String(lastError ?? "unknown"),
+          contactId: null,
+        });
         setStatus(`${t("payFailed")}: ${String(lastError ?? "unknown")}`);
       } finally {
         setCashuIsBusy(false);
       }
     },
-    [cashuBalance, cashuIsBusy, cashuTokens, insert, showPaidOverlay, t, update]
+    [
+      cashuBalance,
+      cashuIsBusy,
+      cashuTokens,
+      insert,
+      logPaymentEvent,
+      showPaidOverlay,
+      t,
+      update,
+    ]
   );
 
   const contactsOnboardingHasSentMessage = useMemo(() => {
@@ -2793,6 +2910,16 @@ const App = () => {
           error: null,
         });
         if (result.ok) {
+          logPaymentEvent({
+            direction: "in",
+            status: "ok",
+            amount: accepted.amount,
+            fee: null,
+            mint: accepted.mint,
+            unit: accepted.unit,
+            error: null,
+            contactId: null,
+          });
           setStatus(t("cashuAccepted"));
           if (options?.navigateToWallet) {
             navigateToWallet();
@@ -2802,6 +2929,16 @@ const App = () => {
         }
       } catch (error) {
         const message = String(error).trim() || "Accept failed";
+        logPaymentEvent({
+          direction: "in",
+          status: "error",
+          amount: parsedAmount,
+          fee: null,
+          mint: parsedMint,
+          unit: null,
+          error: message,
+          contactId: null,
+        });
         const result = insert("cashuToken", {
           token: tokenRaw as typeof Evolu.NonEmptyString.Type,
           rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
@@ -2854,6 +2991,115 @@ const App = () => {
     }
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
   };
+
+  const checkAndRefreshCashuToken = React.useCallback(
+    async (id: CashuTokenId) => {
+      const row = cashuTokensAll.find(
+        (tkn) =>
+          String(tkn?.id ?? "") === String(id as unknown as string) &&
+          !tkn?.isDeleted
+      );
+
+      if (!row) {
+        pushToast(t("errorPrefix"));
+        return;
+      }
+
+      const tokenText = String(row.rawToken ?? row.token ?? "").trim();
+      if (!tokenText) {
+        pushToast(t("errorPrefix"));
+        return;
+      }
+
+      if (cashuIsBusy) return;
+      setCashuIsBusy(true);
+      setStatus(t("cashuChecking"));
+
+      try {
+        const { getCashuLib } = await import("./utils/cashuLib");
+        const { CashuMint, CashuWallet, getDecodedToken, getEncodedToken } =
+          await getCashuLib();
+
+        const decoded = getDecodedToken(tokenText);
+        const mint = String(decoded?.mint ?? row.mint ?? "").trim();
+        if (!mint) throw new Error("Token mint missing");
+
+        const unit = String(decoded?.unit ?? row.unit ?? "").trim() || null;
+        const proofs = Array.isArray(decoded?.proofs) ? decoded.proofs : [];
+        if (!proofs.length) throw new Error("Token proofs missing");
+
+        const total = proofs.reduce(
+          (sum: number, p: { amount?: unknown }) =>
+            sum + (Number(p?.amount ?? 0) || 0),
+          0
+        );
+        if (!Number.isFinite(total) || total <= 0) {
+          throw new Error("Invalid token amount");
+        }
+
+        const wallet = new CashuWallet(
+          new CashuMint(mint),
+          unit ? { unit } : undefined
+        );
+        await wallet.loadMint();
+
+        const swapped = await wallet.swap(total, proofs);
+        const newProofs = [
+          ...((swapped?.keep as unknown as unknown[]) ?? []),
+          ...((swapped?.send as unknown as unknown[]) ?? []),
+        ] as Array<{ amount: number; secret: string; C: string; id: string }>;
+
+        const newTotal = newProofs.reduce(
+          (sum, p) => sum + (Number(p?.amount ?? 0) || 0),
+          0
+        );
+        if (!Number.isFinite(newTotal) || newTotal <= 0) {
+          throw new Error("Swap produced empty token");
+        }
+
+        const refreshedToken = getEncodedToken({
+          mint,
+          proofs: newProofs,
+          ...(unit ? { unit } : {}),
+        });
+
+        const result = update("cashuToken", {
+          id: row.id as CashuTokenId,
+          token: refreshedToken as typeof Evolu.NonEmptyString.Type,
+          rawToken: null,
+          mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
+          unit: unit ? (unit as typeof Evolu.NonEmptyString100.Type) : null,
+          amount:
+            newTotal > 0
+              ? (Math.floor(newTotal) as typeof Evolu.PositiveInt.Type)
+              : null,
+          state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+          error: null,
+        });
+
+        if (!result.ok) {
+          throw new Error(String(result.error));
+        }
+
+        setStatus(t("cashuCheckOk"));
+        pushToast(t("cashuCheckOk"));
+      } catch (e) {
+        const message = String(e).trim() || "Token invalid";
+        update("cashuToken", {
+          id: row.id as CashuTokenId,
+          state: "error" as typeof Evolu.NonEmptyString100.Type,
+          error: t("cashuInvalid")
+            ? (t("cashuInvalid") as typeof Evolu.NonEmptyString1000.Type)
+            : (message.slice(0, 1000) as typeof Evolu.NonEmptyString1000.Type),
+        });
+        setStatus(`${t("cashuCheckFailed")}: ${message}`);
+        pushToast(t("cashuInvalid"));
+      } finally {
+        setCashuIsBusy(false);
+      }
+    },
+    [cashuIsBusy, cashuTokensAll, pushToast, t, update]
+  );
 
   const requestDeleteCashuToken = (id: CashuTokenId) => {
     if (pendingCashuDeleteId === id) {
@@ -3942,6 +4188,14 @@ const App = () => {
       };
     }
 
+    if (route.kind === "paymentsHistory") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToAdvanced,
+      };
+    }
+
     if (route.kind === "profile") {
       return {
         icon: "<",
@@ -4129,6 +4383,7 @@ const App = () => {
     if (route.kind === "cashuToken") return t("cashuToken");
     if (route.kind === "settings") return t("menu");
     if (route.kind === "advanced") return t("advanced");
+    if (route.kind === "paymentsHistory") return t("paymentsHistory");
     if (route.kind === "profile") return t("profile");
     if (route.kind === "nostrRelays") return t("nostrRelay");
     if (route.kind === "nostrRelay") return t("nostrRelay");
@@ -5324,6 +5579,13 @@ const App = () => {
           </div>
           <h1 className="page-title">{t("onboardingTitle")}</h1>
 
+          <p
+            className="muted"
+            style={{ margin: "6px 0 12px", lineHeight: 1.4 }}
+          >
+            {t("onboardingSubtitle")}
+          </p>
+
           {onboardingStep ? (
             <>
               <div className="settings-row">
@@ -5712,6 +5974,26 @@ const App = () => {
                 </div>
               </div>
 
+              <button
+                type="button"
+                className="settings-row settings-link"
+                onClick={navigateToPaymentsHistory}
+                aria-label={t("paymentsHistory")}
+                title={t("paymentsHistory")}
+              >
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    🧾
+                  </span>
+                  <span className="settings-label">{t("paymentsHistory")}</span>
+                </div>
+                <div className="settings-right">
+                  <span className="settings-chevron" aria-hidden="true">
+                    &gt;
+                  </span>
+                </div>
+              </button>
+
               <div className="settings-row">
                 <div className="settings-left">
                   <span className="settings-icon" aria-hidden="true">
@@ -5765,6 +6047,126 @@ const App = () => {
                   {t("logout")}
                 </button>
               </div>
+            </section>
+          )}
+
+          {route.kind === "paymentsHistory" && (
+            <section className="panel">
+              {paymentEvents.length === 0 ? (
+                <p className="muted">{t("paymentsHistoryEmpty")}</p>
+              ) : (
+                <div>
+                  {paymentEvents.map((ev) => {
+                    const createdAtSec =
+                      Number(
+                        (ev as unknown as { createdAtSec?: unknown })
+                          .createdAtSec ?? 0
+                      ) || 0;
+                    const direction = String(
+                      (ev as unknown as { direction?: unknown }).direction ?? ""
+                    ).trim();
+                    const status = String(
+                      (ev as unknown as { status?: unknown }).status ?? ""
+                    ).trim();
+                    const amount =
+                      Number(
+                        (ev as unknown as { amount?: unknown }).amount ?? 0
+                      ) || 0;
+                    const fee =
+                      Number((ev as unknown as { fee?: unknown }).fee ?? 0) ||
+                      0;
+                    const mintText = String(
+                      (ev as unknown as { mint?: unknown }).mint ?? ""
+                    ).trim();
+                    const errorText = String(
+                      (ev as unknown as { error?: unknown }).error ?? ""
+                    ).trim();
+
+                    const locale = lang === "cs" ? "cs-CZ" : "en-US";
+                    const timeLabel = createdAtSec
+                      ? new Intl.DateTimeFormat(locale, {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        }).format(new Date(createdAtSec * 1000))
+                      : "";
+
+                    const mintDisplay = (() => {
+                      if (!mintText) return null;
+                      try {
+                        return new URL(mintText).host;
+                      } catch {
+                        return mintText;
+                      }
+                    })();
+
+                    const isError = status === "error";
+                    const directionLabel =
+                      direction === "in"
+                        ? t("paymentsHistoryIncoming")
+                        : t("paymentsHistoryOutgoing");
+
+                    return (
+                      <div
+                        key={
+                          String(
+                            (ev as unknown as { id?: unknown }).id ?? ""
+                          ) || timeLabel
+                        }
+                      >
+                        <div
+                          className="settings-row"
+                          style={{ alignItems: "flex-start" }}
+                        >
+                          <div
+                            className="settings-left"
+                            style={{ minWidth: 0 }}
+                          >
+                            <div style={{ fontWeight: 900, color: "#e2e8f0" }}>
+                              {directionLabel}
+                              {isError
+                                ? ` · ${t("paymentsHistoryFailed")}`
+                                : ""}
+                            </div>
+                            <div
+                              className="muted"
+                              style={{ marginTop: 2, lineHeight: 1.35 }}
+                            >
+                              {timeLabel}
+                              {mintDisplay ? ` · ${mintDisplay}` : ""}
+                            </div>
+                            {isError && errorText ? (
+                              <div
+                                className="muted"
+                                style={{ marginTop: 6, lineHeight: 1.35 }}
+                              >
+                                {errorText}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div
+                            className="settings-right"
+                            style={{ textAlign: "right" }}
+                          >
+                            <div style={{ fontWeight: 900, color: "#e2e8f0" }}>
+                              {amount > 0
+                                ? `${formatInteger(amount)} ${displayUnit}`
+                                : "—"}
+                            </div>
+                            <div className="muted" style={{ marginTop: 2 }}>
+                              {fee > 0
+                                ? `${t("paymentsHistoryFee")}: ${formatInteger(
+                                    fee
+                                  )} ${displayUnit}`
+                                : ""}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           )}
 
@@ -5861,6 +6263,19 @@ const App = () => {
 
           {route.kind === "wallet" && (
             <section className="panel wallet-panel">
+              <div className="wallet-warning" role="alert">
+                <div className="wallet-warning-icon" aria-hidden="true">
+                  ⚠
+                </div>
+                <div className="wallet-warning-text">
+                  <div className="wallet-warning-title">
+                    {t("walletEarlyWarningTitle")}
+                  </div>
+                  <div className="wallet-warning-body">
+                    {t("walletEarlyWarningBody")}
+                  </div>
+                </div>
+              </div>
               <div className="panel-header">
                 <div className="wallet-hero">
                   <div className="balance-hero" aria-label={t("cashuBalance")}>
@@ -6185,6 +6600,29 @@ const App = () => {
                         {mintDisplay}
                       </p>
                     ) : null}
+
+                    {String(row.state ?? "") === "error" ? (
+                      <p
+                        className="muted"
+                        style={{ margin: "0 0 10px", color: "#fca5a5" }}
+                      >
+                        {String(row.error ?? "").trim() || t("cashuInvalid")}
+                      </p>
+                    ) : null}
+
+                    <div className="settings-row">
+                      <button
+                        className="btn-wide"
+                        onClick={() =>
+                          void checkAndRefreshCashuToken(
+                            route.id as unknown as CashuTokenId
+                          )
+                        }
+                        disabled={cashuIsBusy}
+                      >
+                        {t("cashuCheckToken")}
+                      </button>
+                    </div>
                     <label>{t("cashuToken")}</label>
                     <textarea readOnly value={tokenText} />
 

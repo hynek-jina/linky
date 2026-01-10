@@ -4,6 +4,7 @@ export type Route =
   | { kind: "contacts" }
   | { kind: "settings" }
   | { kind: "advanced" }
+  | { kind: "paymentsHistory" }
   | { kind: "profile" }
   | { kind: "wallet" }
   | { kind: "topup" }
@@ -24,6 +25,7 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#") return { kind: "contacts" };
   if (hash === "#settings") return { kind: "settings" };
   if (hash === "#advanced") return { kind: "advanced" };
+  if (hash === "#advanced/payments") return { kind: "paymentsHistory" };
   if (hash === "#profile") return { kind: "profile" };
   if (hash === "#wallet") return { kind: "wallet" };
   if (hash === "#wallet/topup") return { kind: "topup" };

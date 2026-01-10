@@ -20,6 +20,10 @@ export type NostrIdentityId = typeof NostrIdentityId.Type;
 const NostrMessageId = Evolu.id("NostrMessage");
 export type NostrMessageId = typeof NostrMessageId.Type;
 
+// Primary key pro PaymentEvent tabulku
+const PaymentEventId = Evolu.id("PaymentEvent");
+export type PaymentEventId = typeof PaymentEventId.Type;
+
 // Schema pro Linky app
 export const Schema = {
   contact: {
@@ -64,6 +68,26 @@ export const Schema = {
     // "pending" | "accepted" | "error"
     state: Evolu.nullOr(Evolu.NonEmptyString100),
     error: Evolu.nullOr(Evolu.NonEmptyString1000),
+  },
+
+  paymentEvent: {
+    id: PaymentEventId,
+    // Seconds since epoch.
+    createdAtSec: Evolu.PositiveInt,
+    // "in" | "out"
+    direction: Evolu.NonEmptyString100,
+    // Amount in sats (or unit's base), when known.
+    amount: Evolu.nullOr(Evolu.PositiveInt),
+    // Fee reserve / fee paid, when known.
+    fee: Evolu.nullOr(Evolu.PositiveInt),
+    // Mint URL when known.
+    mint: Evolu.nullOr(Evolu.NonEmptyString1000),
+    unit: Evolu.nullOr(Evolu.NonEmptyString100),
+    // "ok" | "error"
+    status: Evolu.NonEmptyString100,
+    error: Evolu.nullOr(Evolu.NonEmptyString1000),
+    // Optional: link to a contact (e.g., pay-to-contact).
+    contactId: Evolu.nullOr(ContactId),
   },
 };
 

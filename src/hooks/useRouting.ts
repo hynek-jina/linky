@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { parseRouteFromHash, type Route } from "../types/route";
+import { useEffect, useState } from "react";
 import type { CashuTokenId, ContactId } from "../evolu";
+import { parseRouteFromHash, type Route } from "../types/route";
 
 export const useRouting = () => {
   const [route, setRoute] = useState<Route>(() => parseRouteFromHash());
@@ -25,6 +25,10 @@ export const navigateToSettings = () => {
 
 export const navigateToAdvanced = () => {
   window.location.assign("#advanced");
+};
+
+export const navigateToPaymentsHistory = () => {
+  window.location.assign("#advanced/payments");
 };
 
 export const navigateToContact = (id: ContactId) => {

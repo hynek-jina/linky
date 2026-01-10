@@ -5,6 +5,7 @@ export const cs = {
   settings: "Nastavení",
   menu: "Menu",
   advanced: "Pokročilé",
+  paymentsHistory: "Historie plateb",
   feedback: "Feedback",
   data: "Data",
   exportData: "Export",
@@ -24,16 +25,22 @@ export const cs = {
   copyCurrent: "Zkopírovat",
   paste: "Vložit",
 
-  onboardingTitle: "Vítejte",
+  onboardingTitle: "Linky",
+  onboardingSubtitle: "Lightning kontakty pro platby a zprávy.",
   onboardingCreate: "Vytvořit účet",
   onboardingPasteNsec: "Vložit nsec",
   onboardingInvalidNsec: "Neplatný nsec.",
   onboardingCreateFailed: "Nepodařilo se vytvořit účet.",
   onboardingStep1: "Vymýšlím pro vás správné jméno… Budete {name}",
   onboardingStep2: "Zkouším si představit jak vypadáte… Už to mám",
-  onboardingStep3:
-    "A ještě vám vytvářím lightning adresu - Nyní umíte přijímat bitcoin",
+  onboardingStep3: "Vytvářím lightning adresu… chvíli strpení.",
   onboardingRetry: "Zkusit znovu",
+
+  paymentsHistoryEmpty: "Zatím žádné transakce.",
+  paymentsHistoryIncoming: "Příjem",
+  paymentsHistoryOutgoing: "Odeslání",
+  paymentsHistoryFailed: "Chyba",
+  paymentsHistoryFee: "Poplatek",
 
   logout: "Odhlásit se",
   logoutArmedHint: "Pro odhlášení klikněte ještě jednou.",
@@ -79,7 +86,7 @@ export const cs = {
 
   list: "Seznam",
   contactsTitle: "Kontakty",
-  contactsOnboardingTitle: "Checklist: začínáme",
+  contactsOnboardingTitle: "Začínáme",
   contactsOnboardingProgress: "Splněno {done}/{total}",
   contactsOnboardingDismiss: "Skrýt checklist",
   contactsOnboardingShowHow: "Ukázat",
@@ -176,6 +183,9 @@ export const cs = {
 
   wallet: "Peněženka",
   walletOpen: "Otevřít peněženku",
+  walletEarlyWarningTitle: "Upozornění",
+  walletEarlyWarningBody:
+    "Linky je ve velmi rané fázi. Můžete ztratit přístup k prostředkům, které sem nahrajete. Používejte jen malé částky.",
 
   topup: "Dobít",
   topupTitle: "Dobít účet",
@@ -205,6 +215,11 @@ export const cs = {
   cashuAccepting: "Přijímám token…",
   cashuAccepted: "Token přijat.",
   cashuAcceptFailed: "Nepodařilo se přijmout token",
+  cashuCheckToken: "Zkontrolovat token",
+  cashuChecking: "Kontroluji token…",
+  cashuCheckOk: "Token je v pořádku (obnoven).",
+  cashuCheckFailed: "Kontrola selhala",
+  cashuInvalid: "Token je neplatný nebo už byl použit.",
   cashuStatus: "Stav",
   cashuDeleted: "Token byl smazán.",
   cashuEmpty: "Zatím žádné Cashu tokeny.",
