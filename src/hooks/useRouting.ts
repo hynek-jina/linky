@@ -102,3 +102,11 @@ export const navigateToNostrRelay = (id: string) => {
 export const navigateToNewRelay = () => {
   window.location.assign("#nostr-relay/new");
 };
+
+export const navigateToEvoluServers = () => {
+  window.location.assign("#evolu-servers");
+};
+
+export const navigateToEvoluServer = (id: string) => {
+  window.location.assign(`#evolu-server/${encodeURIComponent(String(id))}`);
+};

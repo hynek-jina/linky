@@ -8,7 +8,7 @@ import "./App.css";
 import { parseCashuToken } from "./cashu";
 import { deriveDefaultProfile } from "./derivedProfile";
 import type { CashuTokenId, ContactId, MintId } from "./evolu";
-import { evolu, useEvolu } from "./evolu";
+import { evolu, EVOLU_SERVER_URLS, useEvolu } from "./evolu";
 import { useInit } from "./hooks/useInit";
 import {
   navigateToAdvanced,
@@ -19,6 +19,8 @@ import {
   navigateToContactEdit,
   navigateToContactPay,
   navigateToContacts,
+  navigateToEvoluServer,
+  navigateToEvoluServers,
   navigateToLnAddressPay,
   navigateToMint,
   navigateToMints,
@@ -61,9 +63,54 @@ import {
   NOSTR_NSEC_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "./utils/constants";
-import { safeLocalStorageGet, safeLocalStorageSet } from "./utils/storage";
+import {
+  safeLocalStorageGet,
+  safeLocalStorageGetJson,
+  safeLocalStorageSet,
+  safeLocalStorageSetJson,
+} from "./utils/storage";
 
 const LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY = "linky.lastAcceptedCashuToken.v1";
+
+const LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX = "linky.local.paymentEvents.v1";
+const LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX = "linky.local.nostrMessages.v1";
+const LOCAL_MINT_INFO_STORAGE_KEY_PREFIX = "linky.local.mintInfo.v1";
+
+type LocalPaymentEvent = {
+  id: string;
+  createdAtSec: number;
+  direction: "in" | "out";
+  status: "ok" | "error";
+  amount: number | null;
+  fee: number | null;
+  mint: string | null;
+  unit: string | null;
+  error: string | null;
+  contactId: string | null;
+};
+
+type LocalNostrMessage = {
+  id: string;
+  contactId: string;
+  direction: "in" | "out";
+  content: string;
+  wrapId: string;
+  rumorId: string | null;
+  pubkey: string;
+  createdAtSec: number;
+};
+
+type LocalMintInfoRow = {
+  id: string;
+  url: string;
+  isDeleted?: unknown;
+  firstSeenAtSec?: unknown;
+  lastSeenAtSec?: unknown;
+  supportsMpp?: unknown;
+  feesJson?: unknown;
+  infoJson?: unknown;
+  lastCheckedAtSec?: unknown;
+};
 
 type AppNostrPool = {
   publish: (
@@ -145,8 +192,22 @@ const makeEmptyForm = (): ContactFormState => ({
   group: "",
 });
 
+const formatBytes = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KiB", "MiB", "GiB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const digits = unitIndex === 0 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+};
+
 const App = () => {
   const { insert, update, upsert } = useEvolu();
+  const evoluServerUrls = EVOLU_SERVER_URLS;
 
   const normalizeMintUrl = (value: unknown): string => {
     const raw = String(value ?? "").trim();
@@ -174,9 +235,24 @@ const App = () => {
   const MAIN_MINT_URL = "https://mint.minibits.cash/Bitcoin";
 
   const appOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
-  const pendingPaymentEventRowsRef = React.useRef<
-    Array<Record<string, unknown>>
-  >([]);
+
+  const makeLocalStorageKey = React.useCallback((prefix: string): string => {
+    const ownerId = appOwnerIdRef.current;
+    return `${prefix}.${String(ownerId ?? "anon")}`;
+  }, []);
+
+  const makeLocalId = (): string => {
+    try {
+      return globalThis.crypto?.randomUUID?.() ?? "";
+    } catch {
+      // ignore
+    }
+    return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  };
+
+  const [paymentEvents, setPaymentEvents] = useState<LocalPaymentEvent[]>(
+    () => []
+  );
 
   const route = useRouting();
   const { toasts, pushToast } = useToasts();
@@ -192,50 +268,46 @@ const App = () => {
       error?: string | null;
       contactId?: ContactId | null;
     }) => {
-      const nowSec = Math.floor(Date.now() / 1000);
+      const ownerId = appOwnerIdRef.current;
+      if (!ownerId) return;
 
+      const nowSec = Math.floor(Date.now() / 1000);
       const amount =
         typeof event.amount === "number" && event.amount > 0
-          ? (Math.floor(event.amount) as typeof Evolu.PositiveInt.Type)
+          ? Math.floor(event.amount)
           : null;
       const fee =
         typeof event.fee === "number" && event.fee > 0
-          ? (Math.floor(event.fee) as typeof Evolu.PositiveInt.Type)
+          ? Math.floor(event.fee)
           : null;
 
       const mint = String(event.mint ?? "").trim();
       const unit = String(event.unit ?? "").trim();
       const err = String(event.error ?? "").trim();
 
-      const row = {
-        createdAtSec: nowSec as typeof Evolu.PositiveInt.Type,
-        direction: event.direction as typeof Evolu.NonEmptyString100.Type,
+      const entry: LocalPaymentEvent = {
+        id: makeLocalId(),
+        createdAtSec: nowSec,
+        direction: event.direction,
+        status: event.status,
         amount,
         fee,
-        mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
-        unit: unit ? (unit as typeof Evolu.NonEmptyString100.Type) : null,
-        status: event.status as typeof Evolu.NonEmptyString100.Type,
-        error: err
-          ? (err.slice(0, 1000) as typeof Evolu.NonEmptyString1000.Type)
-          : null,
-        contactId: (event.contactId ?? null) as ContactId | null,
+        mint: mint || null,
+        unit: unit || null,
+        error: err ? err.slice(0, 1000) : null,
+        contactId: event.contactId ? String(event.contactId) : null,
       };
 
-      try {
-        const ownerId = appOwnerIdRef.current;
-        if (!ownerId) {
-          pendingPaymentEventRowsRef.current.push(
-            row as unknown as Record<string, unknown>
-          );
-          return;
-        }
-
-        insert("paymentEvent", row, { ownerId });
-      } catch {
-        // ignore
-      }
+      setPaymentEvents((prev) => {
+        const next = [entry, ...prev].slice(0, 250);
+        safeLocalStorageSetJson(
+          makeLocalStorageKey(LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX),
+          next
+        );
+        return next;
+      });
     },
-    [insert]
+    [makeLocalStorageKey]
   );
 
   const [form, setForm] = useState<ContactFormState>(makeEmptyForm());
@@ -351,19 +423,13 @@ const App = () => {
   React.useEffect(() => {
     appOwnerIdRef.current = appOwnerId;
     if (!appOwnerId) return;
-
-    const pending = pendingPaymentEventRowsRef.current;
-    if (pending.length === 0) return;
-    pendingPaymentEventRowsRef.current = [];
-
-    for (const row of pending) {
-      try {
-        insert("paymentEvent", row as never, { ownerId: appOwnerId });
-      } catch {
-        // ignore
-      }
-    }
-  }, [appOwnerId, insert]);
+    setPaymentEvents(
+      safeLocalStorageGetJson(
+        `${LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX}.${String(appOwnerId)}`,
+        [] as LocalPaymentEvent[]
+      )
+    );
+  }, [appOwnerId]);
 
   const resolveOwnerIdForWrite = React.useCallback(async () => {
     if (appOwnerIdRef.current) return appOwnerIdRef.current;
@@ -382,11 +448,14 @@ const App = () => {
     error: string | null;
   }>(null);
 
+  const [evoluLastError, setEvoluLastError] = useState<unknown>(null);
+
   useInit(() => {
     // Surface Evolu sync/storage issues (network errors, protocol errors, etc.)
     // so cross-browser sync debugging is straightforward.
     const unsub = evolu.subscribeError(() => {
       const err = evolu.getError();
+      setEvoluLastError(err);
       if (err) console.log("[linky][evolu] error", err);
     });
     return () => {
@@ -397,6 +466,67 @@ const App = () => {
       }
     };
   });
+
+  const evoluErrorInfo = useMemo(() => {
+    const rec = asRecord(evoluLastError);
+    const type = String(rec?.type ?? "").trim() || null;
+    const ownerId = String(rec?.ownerId ?? "").trim() || null;
+    return { type, ownerId };
+  }, [evoluLastError]);
+
+  const evoluHasError = Boolean(evoluErrorInfo.type);
+
+  const [evoluCleanupIsBusy, setEvoluCleanupIsBusy] = useState<boolean>(false);
+
+  const cleanupEvoluSyncedLogs = React.useCallback(async () => {
+    if (!appOwnerId) return;
+    if (evoluCleanupIsBusy) return;
+    setEvoluCleanupIsBusy(true);
+
+    try {
+      const tables = [
+        "paymentEvent",
+        "nostrMessage",
+        "mintInfo",
+        "appState",
+      ] as const;
+
+      for (const table of tables) {
+        const q = evolu.createQuery((db) =>
+          db
+            .selectFrom(table)
+            .select(["id"])
+            .where("isDeleted", "is not", Evolu.sqliteTrue)
+            .limit(5000)
+        );
+
+        // Best-effort: delete up to 5000 rows per table.
+        // If the dataset is larger, pressing the button again will continue.
+        const rows = await evolu.loadQuery(q);
+        for (const row of rows) {
+          const id = String(
+            (row as unknown as { id?: unknown })?.id ?? ""
+          ).trim();
+          if (!id) continue;
+          try {
+            update(
+              table,
+              { id: id as never, isDeleted: Evolu.sqliteTrue } as never,
+              { ownerId: appOwnerId }
+            );
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } finally {
+      setEvoluCleanupIsBusy(false);
+    }
+  }, [appOwnerId, evoluCleanupIsBusy, update]);
+
+  // NOTE: We intentionally do not use evolu.exportDatabase() for size
+  // estimates: it includes browser-local metadata/caches and differs between
+  // browsers. We show a deterministic estimate of synced user data instead.
 
   const [nostrPictureByNpub, setNostrPictureByNpub] = useState<
     Record<string, string | null>
@@ -1090,37 +1220,6 @@ const App = () => {
           const dupId = c.id as ContactId;
           if (dupId === keepId) continue;
 
-          // Move messages to the kept contact.
-          const msgIdsQuery = evolu.createQuery((db) =>
-            db
-              .selectFrom("nostrMessage")
-              .select(["id"])
-              .where("isDeleted", "is not", Evolu.sqliteTrue)
-              .where("contactId", "=", dupId)
-          );
-          const msgRows = await evolu.loadQuery(msgIdsQuery);
-          for (const row of msgRows) {
-            const msgId = String(
-              (row as unknown as { id?: unknown }).id ?? ""
-            ).trim();
-            if (!msgId) continue;
-
-            const r = appOwnerId
-              ? update(
-                  "nostrMessage",
-                  {
-                    id: msgId as unknown as typeof Evolu.NonEmptyString1000.Type,
-                    contactId: keepId,
-                  },
-                  { ownerId: appOwnerId }
-                )
-              : update("nostrMessage", {
-                  id: msgId as unknown as typeof Evolu.NonEmptyString1000.Type,
-                  contactId: keepId,
-                });
-            if (r.ok) movedMessages += 1;
-          }
-
           const del = appOwnerId
             ? update(
                 "contact",
@@ -1244,6 +1343,10 @@ const App = () => {
 
   const [relayUrls, setRelayUrls] = useState<string[]>(() => [...NOSTR_RELAYS]);
 
+  const [evoluServerStatusByUrl, setEvoluServerStatusByUrl] = useState<
+    Record<string, "checking" | "connected" | "disconnected">
+  >(() => ({}));
+
   const nostrFetchRelays = useMemo(() => {
     const merged = [...relayUrls, ...NOSTR_RELAYS];
     const seen = new Set<string>();
@@ -1305,6 +1408,57 @@ const App = () => {
   );
 
   React.useEffect(() => {
+    if (evoluServerUrls.length === 0) return;
+
+    const ownerId = String(appOwnerId ?? "").trim();
+    if (!ownerId) {
+      setEvoluServerStatusByUrl((prev) => {
+        const next = { ...prev };
+        for (const url of evoluServerUrls) next[url] = "disconnected";
+        return next;
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setEvoluServerStatusByUrl((prev) => {
+      const next = { ...prev };
+      for (const url of evoluServerUrls) next[url] = "checking";
+      return next;
+    });
+
+    const withOwnerId = (baseUrl: string) => {
+      const u = String(baseUrl ?? "").trim();
+      if (!u) return u;
+      return u.includes("?")
+        ? `${u}&ownerId=${encodeURIComponent(ownerId)}`
+        : `${u}?ownerId=${encodeURIComponent(ownerId)}`;
+    };
+
+    (async () => {
+      const results = await Promise.all(
+        evoluServerUrls.map(async (url) => {
+          const ok = await checkRelayConnection(withOwnerId(url));
+          return [url, ok] as const;
+        })
+      );
+
+      if (cancelled) return;
+      setEvoluServerStatusByUrl((prev) => {
+        const next = { ...prev };
+        for (const [url, ok] of results) {
+          next[url] = ok ? "connected" : "disconnected";
+        }
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appOwnerId, checkRelayConnection, evoluServerUrls]);
+
+  React.useEffect(() => {
     if (relayUrls.length === 0) return;
 
     let cancelled = false;
@@ -1348,6 +1502,30 @@ const App = () => {
     const url = String(route.id ?? "").trim();
     return url || null;
   }, [route]);
+
+  const selectedEvoluServerUrl = useMemo(() => {
+    if (route.kind !== "evoluServer") return null;
+    const url = String(route.id ?? "").trim();
+    return url || null;
+  }, [route]);
+
+  const evoluConnectedServerCount = useMemo(() => {
+    if (evoluHasError) return 0;
+    return evoluServerUrls.reduce((sum, url) => {
+      return sum + (evoluServerStatusByUrl[url] === "connected" ? 1 : 0);
+    }, 0);
+  }, [evoluHasError, evoluServerStatusByUrl, evoluServerUrls]);
+
+  const evoluOverallStatus = useMemo(() => {
+    if (evoluHasError) return "disconnected" as const;
+    if (evoluServerUrls.length === 0) return "disconnected" as const;
+    const states = evoluServerUrls.map(
+      (url) => evoluServerStatusByUrl[url] ?? "checking"
+    );
+    if (states.some((s) => s === "checking")) return "checking" as const;
+    if (states.every((s) => s === "connected")) return "connected" as const;
+    return "disconnected" as const;
+  }, [evoluHasError, evoluServerStatusByUrl, evoluServerUrls]);
 
   const publishNostrRelayList = React.useCallback(
     async (urls: string[]) => {
@@ -1541,6 +1719,53 @@ const App = () => {
     cashuTokensAllRef.current = cashuTokensAll;
   }, [cashuTokensAll]);
 
+  const evoluSyncedDataBytes = useMemo(() => {
+    try {
+      const encoder = new TextEncoder();
+
+      const normalizedContacts = contacts
+        .map((c) => ({
+          id: String(c.id ?? ""),
+          name: String(c.name ?? ""),
+          npub: String(c.npub ?? ""),
+          lnAddress: String(c.lnAddress ?? ""),
+          groupName: String(c.groupName ?? ""),
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+      const normalizedTokens = cashuTokensAll
+        .filter(
+          (t) =>
+            String(
+              (t as unknown as { isDeleted?: unknown }).isDeleted ?? ""
+            ) !== String(Evolu.sqliteTrue)
+        )
+        .map((t) => ({
+          id: String((t as unknown as { id?: unknown }).id ?? ""),
+          token: String((t as unknown as { token?: unknown }).token ?? ""),
+          rawToken: String(
+            (t as unknown as { rawToken?: unknown }).rawToken ?? ""
+          ),
+          mint: String((t as unknown as { mint?: unknown }).mint ?? ""),
+          unit: String((t as unknown as { unit?: unknown }).unit ?? ""),
+          amount:
+            Number((t as unknown as { amount?: unknown }).amount ?? 0) || 0,
+          state: String((t as unknown as { state?: unknown }).state ?? ""),
+          error: String((t as unknown as { error?: unknown }).error ?? ""),
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+      const payload = {
+        contacts: normalizedContacts,
+        cashuTokens: normalizedTokens,
+      };
+
+      return encoder.encode(JSON.stringify(payload)).byteLength;
+    } catch {
+      return null;
+    }
+  }, [cashuTokensAll, contacts]);
+
   const ensuredTokenRef = React.useRef<Set<string>>(new Set());
   const ensureCashuTokenPersisted = React.useCallback(
     (token: string) => {
@@ -1696,27 +1921,36 @@ const App = () => {
     }
   }, [cashuTokensAll, insert, logPaymentEvent]);
 
-  const mintInfoAllQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db.selectFrom("mintInfo").selectAll().orderBy("lastSeenAtSec", "desc")
-      ),
-    []
-  );
-  const mintInfoAll = useQuery(mintInfoAllQuery);
+  const [mintInfoAll, setMintInfoAll] = useState<LocalMintInfoRow[]>(() => []);
 
-  const mintInfoQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db
-          .selectFrom("mintInfo")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .orderBy("lastSeenAtSec", "desc")
-      ),
-    []
-  );
-  const mintInfo = useQuery(mintInfoQuery);
+  React.useEffect(() => {
+    const ownerId = appOwnerIdRef.current;
+    if (!ownerId) {
+      setMintInfoAll([]);
+      return;
+    }
+    setMintInfoAll(
+      safeLocalStorageGetJson(
+        `${LOCAL_MINT_INFO_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+        [] as LocalMintInfoRow[]
+      )
+    );
+  }, [appOwnerId]);
+
+  const mintInfo = useMemo(() => {
+    return [...mintInfoAll]
+      .filter(
+        (row) =>
+          String(
+            (row as unknown as { isDeleted?: unknown }).isDeleted ?? ""
+          ) !== String(Evolu.sqliteTrue)
+      )
+      .sort((a, b) => {
+        const aSeen = Number(a.lastSeenAtSec ?? 0) || 0;
+        const bSeen = Number(b.lastSeenAtSec ?? 0) || 0;
+        return bSeen - aSeen;
+      });
+  }, [mintInfoAll]);
 
   const mintInfoDeduped = useMemo(() => {
     const bestByUrl = new Map<string, (typeof mintInfo)[number]>();
@@ -1836,8 +2070,12 @@ const App = () => {
   );
 
   const touchMintInfo = React.useCallback(
-    (mintUrl: string, nowSec: number, ownerId: Evolu.OwnerId | null): void => {
-      const cleaned = normalizeMintUrl(mintUrl);
+    (
+      _mintUrl: string,
+      nowSec: number,
+      _ownerId: Evolu.OwnerId | null
+    ): void => {
+      const cleaned = normalizeMintUrl(_mintUrl);
       if (!cleaned) return;
       if (isMintDeleted(cleaned)) return;
 
@@ -1851,40 +2089,50 @@ const App = () => {
 
       const now = Math.floor(nowSec) as typeof Evolu.PositiveInt.Type;
 
-      if (
-        existing &&
-        String(existing.isDeleted ?? "") !== String(Evolu.sqliteTrue)
-      ) {
-        const id = existing.id as MintId;
+      const ownerId = appOwnerIdRef.current;
+      if (!ownerId) return;
+
+      setMintInfoAll((prev) => {
+        const next = [...prev];
         const firstSeen =
-          Number(existing.firstSeenAtSec ?? 0) > 0
-            ? (Number(existing.firstSeenAtSec) as typeof Evolu.PositiveInt.Type)
+          existing && Number(existing.firstSeenAtSec ?? 0) > 0
+            ? Math.floor(Number(existing.firstSeenAtSec))
             : now;
 
-        const patch = {
-          id,
-          url: cleaned as typeof Evolu.NonEmptyString1000.Type,
-          firstSeenAtSec: firstSeen,
-          lastSeenAtSec: now,
-        };
+        if (
+          existing &&
+          String(existing.isDeleted ?? "") !== String(Evolu.sqliteTrue)
+        ) {
+          const id = String(existing.id ?? "");
+          const idx = next.findIndex((r) => String(r.id ?? "") === id);
+          if (idx >= 0) {
+            next[idx] = {
+              ...next[idx],
+              url: cleaned,
+              firstSeenAtSec: firstSeen,
+              lastSeenAtSec: now,
+            };
+          }
+        } else {
+          next.push({
+            id: makeLocalId(),
+            url: cleaned,
+            firstSeenAtSec: now,
+            lastSeenAtSec: now,
+            supportsMpp: null,
+            feesJson: null,
+            infoJson: null,
+          });
+        }
 
-        if (ownerId) update("mintInfo", patch, { ownerId });
-        else update("mintInfo", patch);
-        return;
-      }
-
-      const payload = {
-        url: cleaned as typeof Evolu.NonEmptyString1000.Type,
-        firstSeenAtSec: now,
-        lastSeenAtSec: now,
-        supportsMpp: null,
-        feesJson: null,
-        infoJson: null,
-      };
-      if (ownerId) insert("mintInfo", payload, { ownerId });
-      else insert("mintInfo", payload);
+        safeLocalStorageSetJson(
+          `${LOCAL_MINT_INFO_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+          next
+        );
+        return next;
+      });
     },
-    [insert, isMintDeleted, mintInfoByUrl, update]
+    [isMintDeleted, makeLocalId, mintInfoByUrl, normalizeMintUrl]
   );
 
   const encounteredMintUrls = useMemo(() => {
@@ -1961,7 +2209,8 @@ const App = () => {
 
       if (isMintDeleted(cleaned)) return;
 
-      const ownerId = await resolveOwnerIdForWrite();
+      const ownerId = appOwnerIdRef.current;
+      if (!ownerId) return;
 
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), 8000);
@@ -2040,21 +2289,25 @@ const App = () => {
           existing &&
           String(existing.isDeleted ?? "") !== String(Evolu.sqliteTrue)
         ) {
-          const patch = {
-            id: existing.id as MintId,
-            supportsMpp: supportsMpp
-              ? ("1" as typeof Evolu.NonEmptyString100.Type)
-              : null,
-            feesJson: toJson(fees) as
-              | typeof Evolu.NonEmptyString1000.Type
-              | null,
-            infoJson: toJson(info) as
-              | typeof Evolu.NonEmptyString1000.Type
-              | null,
-          };
-
-          if (ownerId) update("mintInfo", patch, { ownerId });
-          else update("mintInfo", patch);
+          setMintInfoAll((prev) => {
+            const next = [...prev];
+            const id = String(existing.id ?? "");
+            const idx = next.findIndex((r) => String(r.id ?? "") === id);
+            if (idx >= 0) {
+              next[idx] = {
+                ...next[idx],
+                supportsMpp: supportsMpp ? "1" : null,
+                feesJson: toJson(fees),
+                infoJson: toJson(info),
+                lastCheckedAtSec: nowSec,
+              };
+              safeLocalStorageSetJson(
+                `${LOCAL_MINT_INFO_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+                next
+              );
+            }
+            return next;
+          });
 
           const finishedAt =
             typeof performance !== "undefined" &&
@@ -2069,6 +2322,28 @@ const App = () => {
         // If no row exists yet (or it was deleted), just ensure it exists.
         // A subsequent render can refresh again without creating duplicates.
         touchMintInfo(cleaned, nowSec, ownerId);
+
+        // Also store fetched metadata.
+        setMintInfoAll((prev) => {
+          const next = [...prev];
+          const idx = next
+            .map((r) => ({ r, url: normalizeMintUrl(String(r.url ?? "")) }))
+            .findIndex((x) => x.url === cleaned);
+          if (idx >= 0) {
+            next[idx] = {
+              ...next[idx],
+              supportsMpp: supportsMpp ? "1" : null,
+              feesJson: toJson(fees),
+              infoJson: toJson(info),
+              lastCheckedAtSec: nowSec,
+            };
+            safeLocalStorageSetJson(
+              `${LOCAL_MINT_INFO_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+              next
+            );
+          }
+          return next;
+        });
 
         const finishedAt =
           typeof performance !== "undefined" &&
@@ -2089,9 +2364,8 @@ const App = () => {
       mintInfoByUrl,
       normalizeMintUrl,
       recordMintRuntime,
-      resolveOwnerIdForWrite,
       touchMintInfo,
-      update,
+      setMintInfoAll,
     ]
   );
 
@@ -2210,22 +2484,18 @@ const App = () => {
     if (mintDedupeRanRef.current === signature) return;
     mintDedupeRanRef.current = signature;
 
-    const updateNoThrow = (
-      patch: Record<string, unknown> & { id: MintId }
-    ): void => {
-      try {
-        if (appOwnerId) {
-          update("mintInfo", patch as never, { ownerId: appOwnerId });
-          return;
-        }
-      } catch {
-        // fall through
-      }
-      try {
-        update("mintInfo", patch as never);
-      } catch {
-        // ignore
-      }
+    const ownerId = appOwnerIdRef.current;
+    if (!ownerId) return;
+
+    let didChange = false;
+    const next = [...mintInfoAll];
+    const applyPatch = (patch: Record<string, unknown> & { id: MintId }) => {
+      const id = String(patch.id ?? "");
+      if (!id) return;
+      const idx = next.findIndex((r) => String((r as any).id ?? "") === id);
+      if (idx < 0) return;
+      next[idx] = { ...(next[idx] as any), ...(patch as any) };
+      didChange = true;
     };
 
     for (const [key, rows] of groups.entries()) {
@@ -2248,165 +2518,35 @@ const App = () => {
 
       const bestUrl = normalizeMintUrl(String(best.url ?? ""));
       if (bestUrl && bestUrl !== key) {
-        updateNoThrow({ id: bestId, url: key });
+        applyPatch({ id: bestId, url: key });
       }
 
       for (const row of rows) {
         const id = row.id as MintId | undefined;
         if (!id) continue;
         if (String(id) === String(bestId)) continue;
-        updateNoThrow({ id, isDeleted: Evolu.sqliteTrue });
+        applyPatch({ id, isDeleted: Evolu.sqliteTrue });
       }
     }
-  }, [appOwnerId, mintInfoAll, normalizeMintUrl, update]);
 
-  const paymentEventsQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db
-          .selectFrom("paymentEvent")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .orderBy("createdAtSec", "desc")
-          .limit(250)
-      ),
-    []
-  );
-  const paymentEvents = useQuery(paymentEventsQuery);
+    if (!didChange) return;
+    setMintInfoAll(next);
+    safeLocalStorageSetJson(
+      `${LOCAL_MINT_INFO_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+      next
+    );
+  }, [mintInfoAll, normalizeMintUrl]);
 
-  const appStateLatestQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db
-          .selectFrom("appState")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .orderBy("createdAt", "desc")
-          .limit(1)
-      ),
-    []
-  );
-  const appStateLatest = useQuery(appStateLatestQuery);
-
-  const skipPersistContactsTutorialRef = React.useRef(false);
-  const restoredAppStateRowIdRef = React.useRef<string | null>(null);
-
-  React.useEffect(() => {
-    const row = appStateLatest[0] as
-      | (Record<string, unknown> & {
-          contactsOnboardingDismissed?: unknown;
-          contactsOnboardingHasPaid?: unknown;
-          contactsGuideTask?: unknown;
-          contactsGuideStepPlusOne?: unknown;
-          contactsGuideTargetContactId?: unknown;
-        })
-      | undefined;
-
-    if (!row) return;
-
-    const rowId = String((row as unknown as { id?: unknown })?.id ?? "");
-    if (rowId && restoredAppStateRowIdRef.current === rowId) return;
-    if (rowId) restoredAppStateRowIdRef.current = rowId;
-
-    const dismissed = String(row.contactsOnboardingDismissed ?? "") === "1";
-    const hasPaid = String(row.contactsOnboardingHasPaid ?? "") === "1";
-
-    const task = String(row.contactsGuideTask ?? "").trim();
-    const stepPlusOne =
-      Number(row.contactsGuideStepPlusOne ?? 0) || (task ? 1 : 0);
-    const step = Math.max(stepPlusOne - 1, 0);
-
-    const targetContactId =
-      (row.contactsGuideTargetContactId as ContactId | null | undefined) ??
-      null;
-
-    const needsApply =
-      dismissed !== contactsOnboardingDismissed ||
-      hasPaid !== contactsOnboardingHasPaid;
-    if (needsApply) {
-      skipPersistContactsTutorialRef.current = true;
-      setContactsOnboardingDismissed(dismissed);
-      setContactsOnboardingHasPaid(hasPaid);
-    }
-
-    // Restore guide only if it's currently closed.
-    if (!contactsGuide && task) {
-      setContactsGuide({ task: task as ContactsGuideKey, step });
-      setContactsGuideTargetContactId(targetContactId);
-    }
-  }, [
-    appStateLatest,
-    contactsGuide,
-    contactsOnboardingDismissed,
-    contactsOnboardingHasPaid,
-  ]);
-
-  const contactsTutorialSnapshotRef = React.useRef<string | null>(null);
-  React.useEffect(() => {
-    if (skipPersistContactsTutorialRef.current) {
-      skipPersistContactsTutorialRef.current = false;
-      return;
-    }
-
-    const snapshot = JSON.stringify({
-      dismissed: contactsOnboardingDismissed,
-      hasPaid: contactsOnboardingHasPaid,
-      guide: contactsGuide
-        ? { task: contactsGuide.task, step: Math.max(contactsGuide.step, 0) }
-        : null,
-      target: contactsGuideTargetContactId
-        ? String(contactsGuideTargetContactId)
-        : null,
-    });
-
-    if (contactsTutorialSnapshotRef.current === snapshot) return;
-    contactsTutorialSnapshotRef.current = snapshot;
-
-    const dismissed = contactsOnboardingDismissed ? "1" : null;
-    const hasPaid = contactsOnboardingHasPaid ? "1" : null;
-    const guideTask = contactsGuide?.task ? String(contactsGuide.task) : null;
-    const stepPlusOneRaw =
-      contactsGuide && Number.isFinite(contactsGuide.step)
-        ? Math.floor(Math.max(contactsGuide.step, 0)) + 1
-        : null;
-
-    try {
-      if (!appOwnerId) return;
-      insert(
-        "appState",
-        {
-          contactsOnboardingDismissed: dismissed
-            ? (dismissed as typeof Evolu.NonEmptyString100.Type)
-            : null,
-          contactsOnboardingHasPaid: hasPaid
-            ? (hasPaid as typeof Evolu.NonEmptyString100.Type)
-            : null,
-          contactsGuideTask: guideTask
-            ? (guideTask as typeof Evolu.NonEmptyString100.Type)
-            : null,
-          contactsGuideStepPlusOne:
-            stepPlusOneRaw && stepPlusOneRaw > 0
-              ? (stepPlusOneRaw as typeof Evolu.PositiveInt.Type)
-              : null,
-          contactsGuideTargetContactId: (contactsGuideTargetContactId ??
-            null) as ContactId | null,
-        },
-        { ownerId: appOwnerId }
-      );
-    } catch {
-      // ignore
-    }
-  }, [
-    appOwnerId,
-    contactsGuide,
-    contactsGuideTargetContactId,
-    contactsOnboardingDismissed,
-    contactsOnboardingHasPaid,
-    insert,
-  ]);
+  // Payment history and tutorial state are local-only (not stored in Evolu).
 
   React.useEffect(() => {
     if (!import.meta.env.DEV) return;
+
+    try {
+      if (localStorage.getItem("linky_debug_evolu_snapshot") !== "1") return;
+    } catch {
+      return;
+    }
 
     // Debug: log Evolu state without secrets.
     // NOTE: Relays and derived npub are Nostr/runtime state, not stored in Evolu.
@@ -2434,40 +2574,68 @@ const App = () => {
     });
   }, [cashuTokens, cashuTokensAll, currentNpub, currentNsec]);
 
+  const [nostrMessagesLocal, setNostrMessagesLocal] = useState<
+    LocalNostrMessage[]
+  >(() => []);
+
+  React.useEffect(() => {
+    const ownerId = appOwnerIdRef.current;
+    if (!ownerId) {
+      setNostrMessagesLocal([]);
+      return;
+    }
+    setNostrMessagesLocal(
+      safeLocalStorageGetJson(
+        `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+        [] as LocalNostrMessage[]
+      )
+    );
+  }, [appOwnerId]);
+
+  const appendLocalNostrMessage = React.useCallback(
+    (msg: Omit<LocalNostrMessage, "id">) => {
+      const ownerId = appOwnerIdRef.current;
+      if (!ownerId) return;
+
+      const entry: LocalNostrMessage = {
+        id: makeLocalId(),
+        ...msg,
+      };
+
+      setNostrMessagesLocal((prev) => {
+        // Avoid duplicates by wrapId.
+        if (prev.some((m) => String(m.wrapId) === String(entry.wrapId)))
+          return prev;
+
+        const next = [...prev, entry]
+          .sort((a, b) => a.createdAtSec - b.createdAtSec)
+          .slice(-500);
+
+        safeLocalStorageSetJson(
+          `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+          next
+        );
+        return next;
+      });
+    },
+    [appOwnerId]
+  );
+
   const chatContactId = route.kind === "chat" ? route.id : null;
 
-  const chatMessagesQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db
-          .selectFrom("nostrMessage")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .where(
-            "contactId",
-            "=",
-            (chatContactId ?? "__linky_none__") as unknown as ContactId
-          )
-          .orderBy("createdAtSec", "asc")
-      ),
-    [chatContactId]
-  );
+  const chatMessages = useMemo(() => {
+    const id = String(chatContactId ?? "").trim();
+    if (!id) return [] as LocalNostrMessage[];
+    return nostrMessagesLocal
+      .filter((m) => String(m.contactId) === id)
+      .sort((a, b) => a.createdAtSec - b.createdAtSec);
+  }, [chatContactId, nostrMessagesLocal]);
 
-  const chatMessages = useQuery(chatMessagesQuery);
-
-  const nostrMessagesRecentQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db
-          .selectFrom("nostrMessage")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .orderBy("createdAtSec", "desc")
-          .limit(100)
-      ),
-    []
-  );
-  const nostrMessagesRecent = useQuery(nostrMessagesRecentQuery);
+  const nostrMessagesRecent = useMemo(() => {
+    return [...nostrMessagesLocal]
+      .sort((a, b) => b.createdAtSec - a.createdAtSec)
+      .slice(0, 100);
+  }, [nostrMessagesLocal]);
 
   const cashuBalance = useMemo(() => {
     return cashuTokens.reduce((sum, token) => {
@@ -5858,18 +6026,14 @@ const App = () => {
 
             if (cancelled) return;
 
-            insert("nostrMessage", {
-              contactId: selectedContact.id,
-              direction: (isIncoming
-                ? "in"
-                : "out") as typeof Evolu.NonEmptyString100.Type,
-              content: content as typeof Evolu.NonEmptyString.Type,
-              wrapId: wrapId as typeof Evolu.NonEmptyString1000.Type,
-              rumorId: inner.id
-                ? (String(inner.id) as typeof Evolu.NonEmptyString1000.Type)
-                : null,
-              pubkey: innerPub as typeof Evolu.NonEmptyString1000.Type,
-              createdAtSec: createdAtSec as typeof Evolu.PositiveInt.Type,
+            appendLocalNostrMessage({
+              contactId: String(selectedContact.id),
+              direction: isIncoming ? "in" : "out",
+              content,
+              wrapId,
+              rumorId: inner.id ? String(inner.id) : null,
+              pubkey: innerPub,
+              createdAtSec,
             });
           } catch {
             // ignore individual events
@@ -5917,7 +6081,13 @@ const App = () => {
       cancelled = true;
       cleanup?.();
     };
-  }, [currentNsec, insert, route.kind, selectedContact, chatMessages]);
+  }, [
+    appendLocalNostrMessage,
+    currentNsec,
+    route.kind,
+    selectedContact,
+    chatMessages,
+  ]);
 
   const sendChatMessage = async () => {
     if (route.kind !== "chat") return;
@@ -5986,14 +6156,14 @@ const App = () => {
         throw new Error(String(firstError ?? "publish failed"));
       }
 
-      insert("nostrMessage", {
-        contactId: selectedContact.id,
-        direction: "out" as typeof Evolu.NonEmptyString100.Type,
-        content: text as typeof Evolu.NonEmptyString.Type,
-        wrapId: String(wrapForMe.id) as typeof Evolu.NonEmptyString1000.Type,
+      appendLocalNostrMessage({
+        contactId: String(selectedContact.id),
+        direction: "out",
+        content: text,
+        wrapId: String(wrapForMe.id ?? ""),
         rumorId: null,
-        pubkey: myPubHex as typeof Evolu.NonEmptyString1000.Type,
-        createdAtSec: baseEvent.created_at as typeof Evolu.PositiveInt.Type,
+        pubkey: myPubHex,
+        createdAtSec: baseEvent.created_at,
       });
 
       setChatDraft("");
@@ -6102,11 +6272,27 @@ const App = () => {
       };
     }
 
+    if (route.kind === "evoluServers") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToSettings,
+      };
+    }
+
     if (route.kind === "nostrRelay") {
       return {
         icon: "<",
         label: t("close"),
         onClick: navigateToNostrRelays,
+      };
+    }
+
+    if (route.kind === "evoluServer") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: navigateToEvoluServers,
       };
     }
 
@@ -6249,6 +6435,8 @@ const App = () => {
     if (route.kind === "nostrRelays") return t("nostrRelay");
     if (route.kind === "nostrRelay") return t("nostrRelay");
     if (route.kind === "nostrRelayNew") return t("nostrRelay");
+    if (route.kind === "evoluServers") return t("evoluServer");
+    if (route.kind === "evoluServer") return t("evoluServer");
     if (route.kind === "contactNew") return t("newContact");
     if (route.kind === "contact") return t("contact");
     if (route.kind === "contactEdit") return t("contactEditTitle");
@@ -6877,18 +7065,14 @@ const App = () => {
             // handling messages for that contact.
             if (isActiveChatContact) return;
 
-            insert("nostrMessage", {
-              contactId: contact.id,
-              direction: (isOutgoing
-                ? "out"
-                : "in") as typeof Evolu.NonEmptyString100.Type,
-              content: content as typeof Evolu.NonEmptyString.Type,
-              wrapId: wrapId as typeof Evolu.NonEmptyString1000.Type,
-              rumorId: inner.id
-                ? (String(inner.id) as typeof Evolu.NonEmptyString1000.Type)
-                : null,
-              pubkey: senderPub as typeof Evolu.NonEmptyString1000.Type,
-              createdAtSec: createdAtSec as typeof Evolu.PositiveInt.Type,
+            appendLocalNostrMessage({
+              contactId: String(contact.id),
+              direction: isOutgoing ? "out" : "in",
+              content,
+              wrapId,
+              rumorId: inner.id ? String(inner.id) : null,
+              pubkey: senderPub,
+              createdAtSec,
             });
           } catch {
             // ignore individual events
@@ -7957,6 +8141,41 @@ const App = () => {
               <button
                 type="button"
                 className="settings-row settings-link"
+                onClick={navigateToEvoluServers}
+                aria-label={t("evoluServer")}
+                title={t("evoluServer")}
+              >
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    ☁
+                  </span>
+                  <span className="settings-label">{t("evoluServer")}</span>
+                </div>
+                <div className="settings-right">
+                  <span className="relay-count" aria-label="evolu sync status">
+                    {evoluConnectedServerCount}/{evoluServerUrls.length}
+                  </span>
+                  <span
+                    className={
+                      evoluOverallStatus === "connected"
+                        ? "status-dot connected"
+                        : evoluOverallStatus === "checking"
+                        ? "status-dot disconnected"
+                        : "status-dot disconnected"
+                    }
+                    aria-label={evoluOverallStatus}
+                    title={evoluOverallStatus}
+                    style={{ marginLeft: 10 }}
+                  />
+                  <span className="settings-chevron" aria-hidden="true">
+                    &gt;
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="settings-row settings-link"
                 onClick={navigateToMints}
                 aria-label={t("mints")}
                 title={t("mints")}
@@ -8379,43 +8598,30 @@ const App = () => {
                         }
                         onClick={() => {
                           if (pendingMintDeleteUrl === cleaned) {
-                            const toDelete = mintInfoAll.filter((row) => {
-                              const url = String(
-                                (row as unknown as { url?: unknown }).url ?? ""
-                              )
-                                .trim()
-                                .replace(/\/+$/, "");
-                              return url === cleaned;
-                            }) as Array<
-                              Record<string, unknown> & { id?: unknown }
-                            >;
-
-                            for (const row of toDelete) {
-                              const id = row.id as MintId;
-                              if (!id) continue;
-                              try {
-                                if (appOwnerId) {
-                                  update(
-                                    "mintInfo",
-                                    { id, isDeleted: Evolu.sqliteTrue },
-                                    { ownerId: appOwnerId }
+                            const ownerId = appOwnerIdRef.current;
+                            if (ownerId) {
+                              setMintInfoAll((prev) => {
+                                const next = prev.map((row) => {
+                                  const url = normalizeMintUrl(
+                                    String(
+                                      (row as unknown as { url?: unknown })
+                                        .url ?? ""
+                                    )
                                   );
-                                } else {
-                                  update("mintInfo", {
-                                    id,
+                                  if (url !== cleaned) return row;
+                                  return {
+                                    ...row,
                                     isDeleted: Evolu.sqliteTrue,
-                                  });
-                                }
-                              } catch {
-                                try {
-                                  update("mintInfo", {
-                                    id,
-                                    isDeleted: Evolu.sqliteTrue,
-                                  });
-                                } catch {
-                                  // ignore
-                                }
-                              }
+                                  };
+                                });
+                                safeLocalStorageSetJson(
+                                  `${LOCAL_MINT_INFO_STORAGE_KEY_PREFIX}.${String(
+                                    ownerId
+                                  )}`,
+                                  next
+                                );
+                                return next;
+                              });
                             }
 
                             setPendingMintDeleteUrl(null);
@@ -8441,6 +8647,166 @@ const App = () => {
                   </div>
                 );
               })()}
+            </section>
+          )}
+
+          {route.kind === "evoluServers" && (
+            <section className="panel">
+              {evoluServerUrls.length === 0 ? (
+                <p className="lede">{t("errorPrefix")}</p>
+              ) : (
+                <div>
+                  {evoluServerUrls.map((url) => {
+                    const state = evoluHasError
+                      ? "disconnected"
+                      : evoluServerStatusByUrl[url] ?? "checking";
+                    const dotClass =
+                      state === "connected"
+                        ? "status-dot connected"
+                        : "status-dot disconnected";
+
+                    return (
+                      <button
+                        type="button"
+                        className="settings-row settings-link"
+                        key={url}
+                        onClick={() => navigateToEvoluServer(url)}
+                      >
+                        <div className="settings-left">
+                          <span className="relay-url">{url}</span>
+                        </div>
+                        <div className="settings-right">
+                          <span
+                            className={dotClass}
+                            aria-label={state}
+                            title={state}
+                          />
+                          <span className="settings-chevron" aria-hidden="true">
+                            &gt;
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {route.kind === "evoluServer" && (
+            <section className="panel">
+              {selectedEvoluServerUrl ? (
+                <>
+                  {(() => {
+                    const state = evoluHasError
+                      ? "disconnected"
+                      : evoluServerStatusByUrl[selectedEvoluServerUrl] ??
+                        "checking";
+
+                    return (
+                      <>
+                        <div className="settings-row">
+                          <div className="settings-left">
+                            <span className="relay-url">
+                              {selectedEvoluServerUrl}
+                            </span>
+                          </div>
+                          <div className="settings-right">
+                            <span
+                              className={
+                                state === "connected"
+                                  ? "status-dot connected"
+                                  : "status-dot disconnected"
+                              }
+                              aria-label={state}
+                              title={state}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="settings-row">
+                          <div className="settings-left">
+                            <span className="settings-label">
+                              {t("evoluSyncLabel")}
+                            </span>
+                          </div>
+                          <div className="settings-right">
+                            <span className="muted">
+                              {state === "connected"
+                                ? t("evoluSyncOk")
+                                : state === "checking"
+                                ? t("evoluSyncing")
+                                : t("evoluNotSynced")}
+                            </span>
+                          </div>
+                        </div>
+
+                        {evoluHasError ? (
+                          <div className="settings-row">
+                            <div className="settings-left">
+                              <span className="settings-label">
+                                {t("errorPrefix")}
+                              </span>
+                            </div>
+                            <div className="settings-right">
+                              <span className="muted">
+                                {evoluErrorInfo.type ?? "Unknown"}
+                              </span>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="settings-row">
+                          <div className="settings-left">
+                            <span className="settings-label">
+                              {t("evoluLocalDataSize")}
+                            </span>
+                          </div>
+                          <div className="settings-right">
+                            <span className="muted">
+                              {evoluSyncedDataBytes === null
+                                ? "—"
+                                : formatBytes(evoluSyncedDataBytes)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="settings-row">
+                          <div className="settings-left">
+                            <span className="settings-label">
+                              {t("evoluServerLimit")}
+                            </span>
+                          </div>
+                          <div className="settings-right">
+                            <span className="muted">
+                              {evoluErrorInfo.type === "ProtocolQuotaError"
+                                ? t("evoluServerLimitPaymentRequired")
+                                : t("evoluServerLimitUnknown")}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="settings-row">
+                          <button
+                            type="button"
+                            className="btn-wide secondary"
+                            onClick={() => {
+                              void cleanupEvoluSyncedLogs();
+                            }}
+                            disabled={!appOwnerId || evoluCleanupIsBusy}
+                          >
+                            {evoluCleanupIsBusy
+                              ? t("evoluCleanupLogsBusy")
+                              : t("evoluCleanupLogs")}
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </>
+              ) : (
+                <p className="lede">{t("errorPrefix")}</p>
+              )}
             </section>
           )}
 

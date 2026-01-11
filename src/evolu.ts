@@ -4,6 +4,27 @@ import { createUseEvolu, EvoluProvider } from "@evolu/react";
 import { evoluReactWebDeps } from "@evolu/react-web";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
 
+const isEvoluLoggingEnabled = (): boolean => {
+  if (!import.meta.env.DEV) return false;
+
+  // Enable only when explicitly requested, because SQL logging is very noisy.
+  // Toggle in devtools: localStorage.setItem('linky_debug_evolu_sql', '1')
+  try {
+    return localStorage.getItem("linky_debug_evolu_sql") === "1";
+  } catch {
+    return false;
+  }
+};
+
+export const EVOLU_SERVER_URLS: ReadonlyArray<string> = [
+  "wss://free.evoluhq.com",
+];
+
+export const EVOLU_TRANSPORTS: ReadonlyArray<{
+  type: "WebSocket";
+  url: string;
+}> = EVOLU_SERVER_URLS.map((url) => ({ type: "WebSocket", url }));
+
 // Primary key pro Contact tabulku
 const ContactId = Evolu.id("Contact");
 export type ContactId = typeof ContactId.Type;
@@ -158,7 +179,8 @@ const externalAppOwner = initialMnemonic
 export const evolu = createEvolu(evoluReactWebDeps)(Schema, {
   name: SimpleName.orThrow("linky"),
   // Použijeme default free sync server
-  enableLogging: import.meta.env.DEV,
+  transports: EVOLU_TRANSPORTS,
+  enableLogging: isEvoluLoggingEnabled(),
   ...(externalAppOwner ? { externalAppOwner } : {}),
 });
 

@@ -56,9 +56,20 @@ export const en = {
   nostrPasteInvalid: "Invalid Nostr key (expected nsec…).",
 
   nostrRelay: "Nostr relay",
+  evoluServer: "Evolu server",
   addRelay: "Add relay",
   newRelay: "Add relay",
   relayUrl: "Relay URL",
+  evoluSyncLabel: "Sync",
+  evoluSyncOk: "Synced",
+  evoluSyncing: "Syncing…",
+  evoluNotSynced: "Not synced",
+  evoluLocalDataSize: "Evolu data (estimate)",
+  evoluServerLimit: "Server limit",
+  evoluServerLimitUnknown: "Unknown (not provided by server)",
+  evoluServerLimitPaymentRequired: "Payment required / quota",
+  evoluCleanupLogs: "Remove synced logs",
+  evoluCleanupLogsBusy: "Removing synced logs…",
 
   mints: "Mints",
 

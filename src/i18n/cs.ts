@@ -56,9 +56,20 @@ export const cs = {
   nostrPasteInvalid: "Neplatný Nostr klíč (očekávám nsec…).",
 
   nostrRelay: "Nostr relay",
+  evoluServer: "Evolu server",
   addRelay: "Přidat relay",
   newRelay: "Přidat relay",
   relayUrl: "Relay URL",
+  evoluSyncLabel: "Synchronizace",
+  evoluSyncOk: "Synchronizováno",
+  evoluSyncing: "Synchronizuji…",
+  evoluNotSynced: "Nesynchronizuje se",
+  evoluLocalDataSize: "Data v Evolu (odhad)",
+  evoluServerLimit: "Limit serveru",
+  evoluServerLimitUnknown: "Neznámý (server neposílá info)",
+  evoluServerLimitPaymentRequired: "Vyžaduje platbu / quota",
+  evoluCleanupLogs: "Smazat syncované logy",
+  evoluCleanupLogsBusy: "Mažu syncované logy…",
 
   mints: "Minty",
 
