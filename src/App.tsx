@@ -39,7 +39,6 @@ import {
   navigateToNostrRelay,
   navigateToNostrRelays,
   navigateToPaymentsHistory,
-  navigateToProfile,
   navigateToSettings,
   navigateToTopup,
   navigateToTopupInvoice,
@@ -583,6 +582,8 @@ const App = () => {
   const scanVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const scanOpenRequestIdRef = React.useRef(0);
   const scanIsOpenRef = React.useRef(false);
+
+  const [profileQrIsOpen, setProfileQrIsOpen] = useState(false);
 
   React.useEffect(() => {
     scanIsOpenRef.current = scanIsOpen;
@@ -2998,9 +2999,11 @@ const App = () => {
     }
   }, [route.kind]);
 
+  const showProfileQr = profileQrIsOpen || route.kind === "profile";
+
   React.useEffect(() => {
-    // Generate QR code for the current npub on the profile page.
-    if (route.kind !== "profile") {
+    // Generate QR code for the current npub when profile QR is visible.
+    if (!showProfileQr) {
       setMyProfileQr(null);
       return;
     }
@@ -3030,7 +3033,7 @@ const App = () => {
     return () => {
       cancelled = true;
     };
-  }, [route.kind, currentNpub]);
+  }, [showProfileQr, currentNpub]);
 
   React.useEffect(() => {
     // npub.cash integration:
@@ -3394,12 +3397,24 @@ const App = () => {
     navigateToNewContact();
   };
 
+  const settingsReturnRouteRef = React.useRef<Route>({ kind: "contacts" });
+
+  const closeSettings = () => {
+    setPendingDeleteId(null);
+    setPayAmount("");
+    const target = settingsReturnRouteRef.current ?? { kind: "contacts" };
+    if (target.kind === "wallet") navigateToWallet();
+    else navigateToContacts();
+  };
+
   const toggleSettings = () => {
     if (route.kind === "settings") {
-      navigateToContacts();
+      closeSettings();
     } else {
+      settingsReturnRouteRef.current = route;
       navigateToSettings();
     }
+
     setPendingDeleteId(null);
     setPayAmount("");
   };
@@ -4243,30 +4258,23 @@ const App = () => {
       topup: [
         {
           id: "topup_1",
-          selector: '[data-guide="topbar-menu"]',
+          selector: '[data-guide="open-wallet"]',
           titleKey: "guideTopupStep1Title",
           bodyKey: "guideTopupStep1Body",
           ensure: () => ensureRoute("contacts"),
         },
         {
           id: "topup_2",
-          selector: '[data-guide="open-wallet"]',
+          selector: '[data-guide="wallet-topup"]',
           titleKey: "guideTopupStep2Title",
           bodyKey: "guideTopupStep2Body",
-          ensure: () => ensureRoute("settings"),
-        },
-        {
-          id: "topup_3",
-          selector: '[data-guide="wallet-topup"]',
-          titleKey: "guideTopupStep3Title",
-          bodyKey: "guideTopupStep3Body",
           ensure: () => ensureRoute("wallet"),
         },
         {
-          id: "topup_4",
+          id: "topup_3",
           selector: '[data-guide="topup-show-invoice"]',
-          titleKey: "guideTopupStep4Title",
-          bodyKey: "guideTopupStep4Body",
+          titleKey: "guideTopupStep3Title",
+          bodyKey: "guideTopupStep3Body",
           ensure: () => ensureRoute("topup"),
         },
       ],
@@ -4424,10 +4432,9 @@ const App = () => {
       goToStep(2);
     }
 
-    if (id === "topup_1" && transition("contacts", "settings")) goToStep(1);
-    if (id === "topup_2" && transition("settings", "wallet")) goToStep(2);
-    if (id === "topup_3" && transition("wallet", "topup")) goToStep(3);
-    if (id === "topup_4" && transition("topup", "topupInvoice"))
+    if (id === "topup_1" && transition("contacts", "wallet")) goToStep(1);
+    if (id === "topup_2" && transition("wallet", "topup")) goToStep(2);
+    if (id === "topup_3" && transition("topup", "topupInvoice"))
       stopContactsGuide();
 
     if (id === "pay_1" && transition("contacts", "contact")) goToStep(1);
@@ -6130,7 +6137,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToContacts,
+        onClick: closeSettings,
       };
     }
 
@@ -6171,14 +6178,6 @@ const App = () => {
         icon: "<",
         label: t("close"),
         onClick: navigateToSettings,
-      };
-    }
-
-    if (route.kind === "wallet") {
-      return {
-        icon: "<",
-        label: t("close"),
-        onClick: navigateToContacts,
       };
     }
 
@@ -7245,6 +7244,14 @@ const App = () => {
     })();
   }, [closeScan, pushToast, t]);
 
+  const openProfileQr = React.useCallback(() => {
+    setProfileQrIsOpen(true);
+  }, []);
+
+  const closeProfileQr = React.useCallback(() => {
+    setProfileQrIsOpen(false);
+  }, []);
+
   const handleScannedText = React.useCallback(
     async (rawValue: string) => {
       const raw = String(rawValue ?? "").trim();
@@ -7924,38 +7931,6 @@ const App = () => {
 
           {route.kind === "settings" && (
             <section className="panel">
-              <button
-                type="button"
-                className="profile-button"
-                onClick={navigateToProfile}
-                disabled={!currentNpub}
-                aria-label={t("profile")}
-                title={t("profile")}
-              >
-                <span className="profile-avatar" aria-hidden="true">
-                  {myProfilePicture ? (
-                    <img
-                      src={myProfilePicture}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="profile-avatar-fallback">
-                      {getInitials(myProfileName ?? t("profileNoName"))}
-                    </span>
-                  )}
-                </span>
-                <span className="profile-text">
-                  <span className="profile-name">
-                    {myProfileName ??
-                      (currentNpub
-                        ? formatShortNpub(currentNpub)
-                        : t("profileNoName"))}
-                  </span>
-                </span>
-              </button>
-
               <div className="settings-row">
                 <div className="settings-left">
                   <span className="settings-icon" aria-hidden="true">
@@ -8035,28 +8010,6 @@ const App = () => {
                   </span>
                 </div>
               </button>
-
-              <div className="settings-row">
-                <button
-                  className="btn-wide"
-                  onClick={navigateToWallet}
-                  data-guide="open-wallet"
-                >
-                  {t("walletOpen")}
-                </button>
-              </div>
-
-              <div className="settings-row">
-                <button
-                  className="btn-wide secondary"
-                  onClick={() => {
-                    openScan();
-                  }}
-                  data-guide="scan-button"
-                >
-                  {t("scan")}
-                </button>
-              </div>
             </section>
           )}
 
@@ -9066,13 +9019,64 @@ const App = () => {
 
               <div className="wallet-bottom-bar">
                 <div className="wallet-bottom-inner">
-                  <button
-                    className="btn-wide"
-                    onClick={navigateToTopup}
-                    data-guide="wallet-topup"
-                  >
-                    {t("topup")}
-                  </button>
+                  <div className="wallet-actions">
+                    <button
+                      className="wallet-action-btn"
+                      onClick={navigateToTopup}
+                      data-guide="wallet-topup"
+                    >
+                      {t("walletReceive")}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="wallet-action-round"
+                      onClick={navigateToContacts}
+                      aria-label={t("contactsTitle")}
+                      title={t("contactsTitle")}
+                    >
+                      <span aria-hidden="true">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M16 11c1.657 0 3-1.567 3-3.5S17.657 4 16 4s-3 1.567-3 3.5S14.343 11 16 11Z"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          />
+                          <path
+                            d="M8 12c2.209 0 4-1.791 4-4S10.209 4 8 4 4 5.791 4 8s1.791 4 4 4Z"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          />
+                          <path
+                            d="M2 20c0-3.314 2.686-6 6-6s6 2.686 6 6"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M13 20c0-2.761 2.239-5 5-5s5 2.239 5 5"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </span>
+                    </button>
+
+                    <button
+                      className="wallet-action-btn secondary"
+                      onClick={openScan}
+                      disabled={scanIsOpen}
+                    >
+                      {t("walletSend")}
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
@@ -10369,11 +10373,42 @@ const App = () => {
               </section>
 
               <div className="contacts-qr-bar" role="region">
+                {contacts.length === 0 ? (
+                  <div className="contacts-empty-hint">
+                    <svg
+                      className="contacts-empty-hint-arrow"
+                      width="140"
+                      height="90"
+                      viewBox="0 0 140 90"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M132 76C105 77 88 68 75 54C62 40 53 27 35 22C22 18 12 22 6 29"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M18 18L5 30L20 34"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <div className="contacts-empty-hint-text">
+                      Zde je váš profil - nechte ho nascanovat vašemu kontaktu
+                    </div>
+                  </div>
+                ) : null}
                 <div className="contacts-qr-inner">
                   <button
                     type="button"
                     className="contacts-qr-btn secondary"
-                    onClick={navigateToProfile}
+                    onClick={openProfileQr}
+                    disabled={!currentNpub}
                     data-guide="profile-qr-button"
                   >
                     <span className="contacts-qr-btn-icon" aria-hidden="true">
@@ -10411,6 +10446,44 @@ const App = () => {
                       {t("contactsShowProfileQr")}
                     </span>
                   </button>
+
+                  <button
+                    type="button"
+                    className="contacts-qr-btn is-round"
+                    onClick={navigateToWallet}
+                    aria-label={t("wallet")}
+                    title={t("wallet")}
+                    data-guide="open-wallet"
+                  >
+                    <span className="contacts-qr-btn-icon" aria-hidden="true">
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M3 7.5C3 6.12 4.12 5 5.5 5H18.5C19.88 5 21 6.12 21 7.5V16.5C21 17.88 19.88 19 18.5 19H5.5C4.12 19 3 17.88 3 16.5V7.5Z"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M17 12H21"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        />
+                        <path
+                          d="M15.5 10.5H18.5C19.33 10.5 20 11.17 20 12C20 12.83 19.33 13.5 18.5 13.5H15.5C14.67 13.5 14 12.83 14 12C14 11.17 14.67 10.5 15.5 10.5Z"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        />
+                      </svg>
+                    </span>
+                  </button>
+
                   <button
                     type="button"
                     className="contacts-qr-btn"
@@ -10664,6 +10737,84 @@ const App = () => {
                   {t("scanHintInvoice")}, {t("scanHintContact")},{" "}
                   {t("scanHintWithdraw")}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {profileQrIsOpen && (
+            <div
+              className="modal-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("profile")}
+              onClick={closeProfileQr}
+            >
+              <div
+                className="modal-sheet profile-qr-sheet"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="modal-header">
+                  <div className="modal-title">{t("profile")}</div>
+                  <button
+                    className="topbar-btn"
+                    onClick={closeProfileQr}
+                    aria-label={t("close")}
+                    title={t("close")}
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </div>
+
+                {!currentNpub ? (
+                  <p className="muted">{t("profileMissingNpub")}</p>
+                ) : (
+                  <div className="profile-detail" style={{ marginTop: 8 }}>
+                    <div className="contact-avatar is-xl" aria-hidden="true">
+                      {effectiveProfilePicture ? (
+                        <img
+                          src={effectiveProfilePicture}
+                          alt=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span className="contact-avatar-fallback">
+                          {getInitials(
+                            effectiveProfileName ?? formatShortNpub(currentNpub)
+                          )}
+                        </span>
+                      )}
+                    </div>
+
+                    {myProfileQr ? (
+                      <img
+                        className="qr"
+                        src={myProfileQr}
+                        alt=""
+                        onClick={() => {
+                          if (!currentNpub) return;
+                          void copyText(currentNpub);
+                        }}
+                      />
+                    ) : (
+                      <p className="muted">{currentNpub}</p>
+                    )}
+
+                    <h2 className="contact-detail-name">
+                      {effectiveProfileName ?? formatShortNpub(currentNpub)}
+                    </h2>
+
+                    {effectiveMyLightningAddress ? (
+                      <p className="contact-detail-ln">
+                        {effectiveMyLightningAddress}
+                      </p>
+                    ) : null}
+
+                    <p className="muted profile-note">
+                      {t("profileMessagesHint")}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}

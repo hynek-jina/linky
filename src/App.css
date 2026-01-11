@@ -1199,6 +1199,40 @@ button.danger {
   margin: 0 auto;
 }
 
+.wallet-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.wallet-action-btn {
+  flex: 0 0 auto;
+  min-width: 140px;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 900;
+}
+
+.wallet-action-round {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: none;
+  background: #111827;
+  color: #e2e8f0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wallet-action-round:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .ln-row {
   display: flex;
   gap: 10px;
@@ -1391,6 +1425,50 @@ button.icon {
   align-items: center;
   justify-content: center;
   gap: 10px;
+}
+
+.contacts-qr-btn.is-round {
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.contacts-empty-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%) translateX(-115px);
+  z-index: 9;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 10px;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.contacts-empty-hint-text {
+  max-width: 260px;
+  font-weight: 900;
+  line-height: 1.15;
+  font-size: 14px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.contacts-empty-hint-arrow {
+  opacity: 0.95;
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.5));
+}
+
+@media (max-width: 420px) {
+  .contacts-empty-hint {
+    transform: translateX(-50%) translateX(-85px);
+  }
+  .contacts-empty-hint-text {
+    max-width: 220px;
+    font-size: 13px;
+  }
 }
 
 .contacts-qr-btn-icon {
@@ -1728,6 +1806,22 @@ button.tag-button {
   background: #0b1222;
   border-radius: 18px;
   padding: 20px 18px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.modal-header .modal-title {
+  margin-bottom: 0;
+}
+
+.profile-qr-sheet {
+  max-width: 520px;
 }
 
 .modal-title {

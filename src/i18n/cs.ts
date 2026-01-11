@@ -162,8 +162,8 @@ export const cs = {
   guideNext: "Další",
   guideDone: "Hotovo",
 
-  contactsShowProfileQr: "Ukázat QR profilu",
-  contactsScanContactQr: "Scanovat QR kontaktu",
+  contactsShowProfileQr: "Ukázat profilu",
+  contactsScanContactQr: "Scanovat kontakt",
 
   guideAddContactStep1Title: "Ukázat svůj QR",
   guideAddContactStep1Body:
@@ -176,12 +176,12 @@ export const cs = {
   guideAddContactStep3Body:
     "Po naskenování se otevře kontakt. Doplňte jméno / skupinu a uložte.",
 
-  guideTopupStep1Title: "Dobít bitcoin",
-  guideTopupStep1Body: "Otevřete menu (☰).",
-  guideTopupStep2Title: "Peněženka",
-  guideTopupStep2Body: "Otevřete peněženku.",
-  guideTopupStep3Title: "Dobít",
-  guideTopupStep3Body: "Klepněte na Dobít.",
+  guideTopupStep1Title: "Peněženka",
+  guideTopupStep1Body: "Klepněte na ikonu peněženky dole.",
+  guideTopupStep2Title: "Receive",
+  guideTopupStep2Body: "Klepněte na Receive.",
+  guideTopupStep3Title: "Faktura",
+  guideTopupStep3Body: "Zadejte částku a zobrazte fakturu pro dobití.",
   guideTopupStep4Title: "Faktura",
   guideTopupStep4Body: "Zadejte částku a zobrazte fakturu pro dobití.",
 
@@ -251,6 +251,8 @@ export const cs = {
 
   wallet: "Peněženka",
   walletOpen: "Otevřít peněženku",
+  walletReceive: "Receive",
+  walletSend: "Send",
   walletEarlyWarningTitle: "Upozornění",
   walletEarlyWarningBody:
     "Linky je ve velmi rané fázi. Můžete ztratit přístup k prostředkům, které sem nahrajete. Používejte jen malé částky.",

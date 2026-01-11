@@ -162,8 +162,8 @@ export const en = {
   guideNext: "Next",
   guideDone: "Done",
 
-  contactsShowProfileQr: "Show profile QR",
-  contactsScanContactQr: "Scan contact QR",
+  contactsShowProfileQr: "Show profile",
+  contactsScanContactQr: "Scan contact",
 
   guideAddContactStep1Title: "Show your QR",
   guideAddContactStep1Body:
@@ -176,12 +176,12 @@ export const en = {
   guideAddContactStep3Body:
     "After scanning, the contact screen will open. Add a name / group and save.",
 
-  guideTopupStep1Title: "Load bitcoin",
-  guideTopupStep1Body: "Open the menu (☰).",
-  guideTopupStep2Title: "Wallet",
-  guideTopupStep2Body: "Open the wallet.",
-  guideTopupStep3Title: "Top-up",
-  guideTopupStep3Body: "Tap Top-up.",
+  guideTopupStep1Title: "Wallet",
+  guideTopupStep1Body: "Tap the wallet button below.",
+  guideTopupStep2Title: "Receive",
+  guideTopupStep2Body: "Tap Receive.",
+  guideTopupStep3Title: "Invoice",
+  guideTopupStep3Body: "Enter an amount and show the top-up invoice.",
   guideTopupStep4Title: "Invoice",
   guideTopupStep4Body: "Enter an amount and show the top-up invoice.",
 
@@ -262,6 +262,8 @@ export const en = {
   topupFetchingInvoice: "Fetching invoice…",
   topupInvoiceFailed: "Failed to fetch invoice",
   walletOpen: "Open wallet",
+  walletReceive: "Receive",
+  walletSend: "Send",
 
   scan: "Scan",
   scanUnsupported: "Unsupported QR code.",
