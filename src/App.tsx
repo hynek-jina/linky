@@ -2994,10 +2994,10 @@ const App = () => {
 
   React.useEffect(() => {
     // Leave edit mode when leaving the profile screen.
-    if (route.kind !== "profile") {
+    if (route.kind !== "profile" && !profileQrIsOpen) {
       setIsProfileEditing(false);
     }
-  }, [route.kind]);
+  }, [route.kind, profileQrIsOpen]);
 
   const showProfileQr = profileQrIsOpen || route.kind === "profile";
 
@@ -6300,6 +6300,39 @@ const App = () => {
     };
   })();
 
+  const toggleProfileEditing = () => {
+    if (isProfileEditing) {
+      setIsProfileEditing(false);
+      profileEditInitialRef.current = null;
+      return;
+    }
+
+    const bestName = myProfileMetadata
+      ? getBestNostrName(myProfileMetadata)
+      : null;
+    const initialName = bestName ?? effectiveProfileName ?? "";
+    const initialLn = effectiveMyLightningAddress ?? "";
+
+    const metaPic = String(
+      myProfileMetadata?.picture ??
+        myProfileMetadata?.image ??
+        effectiveProfilePicture ??
+        ""
+    ).trim();
+
+    setProfileEditName(initialName);
+    setProfileEditLnAddress(initialLn);
+    setProfileEditPicture(metaPic);
+
+    profileEditInitialRef.current = {
+      name: initialName,
+      lnAddress: initialLn,
+      picture: metaPic,
+    };
+
+    setIsProfileEditing(true);
+  };
+
   const topbarRight = (() => {
     if (route.kind === "contacts") {
       return {
@@ -6345,38 +6378,7 @@ const App = () => {
       return {
         icon: "✎",
         label: t("edit"),
-        onClick: () => {
-          if (isProfileEditing) {
-            setIsProfileEditing(false);
-            profileEditInitialRef.current = null;
-            return;
-          }
-
-          const bestName = myProfileMetadata
-            ? getBestNostrName(myProfileMetadata)
-            : null;
-          const initialName = bestName ?? effectiveProfileName ?? "";
-          const initialLn = effectiveMyLightningAddress ?? "";
-
-          const metaPic = String(
-            myProfileMetadata?.picture ??
-              myProfileMetadata?.image ??
-              effectiveProfilePicture ??
-              ""
-          ).trim();
-
-          setProfileEditName(initialName);
-          setProfileEditLnAddress(initialLn);
-          setProfileEditPicture(metaPic);
-
-          profileEditInitialRef.current = {
-            name: initialName,
-            lnAddress: initialLn,
-            picture: metaPic,
-          };
-
-          setIsProfileEditing(true);
-        },
+        onClick: toggleProfileEditing,
       };
     }
 
@@ -8915,7 +8917,7 @@ const App = () => {
           )}
 
           {route.kind === "wallet" && (
-            <section className="panel wallet-panel">
+            <section className="panel panel-plain wallet-panel">
               <div className="wallet-warning" role="alert">
                 <div className="wallet-warning-icon" aria-hidden="true">
                   ⚠
@@ -9021,16 +9023,45 @@ const App = () => {
                 <div className="wallet-bottom-inner">
                   <div className="wallet-actions">
                     <button
-                      className="wallet-action-btn"
+                      className="wallet-action-btn secondary"
                       onClick={navigateToTopup}
                       data-guide="wallet-topup"
                     >
+                      <span aria-hidden="true">
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M12 3v10"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M8 9l4 4 4-4"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M4 14h16v6H4v-6Z"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </span>
                       {t("walletReceive")}
                     </button>
 
                     <button
                       type="button"
-                      className="wallet-action-round"
+                      className="wallet-action-round is-primary"
                       onClick={navigateToContacts}
                       aria-label={t("contactsTitle")}
                       title={t("contactsTitle")}
@@ -9074,6 +9105,9 @@ const App = () => {
                       onClick={openScan}
                       disabled={scanIsOpen}
                     >
+                      <span aria-hidden="true">
+                        <span className="contacts-qr-scanIcon" />
+                      </span>
                       {t("walletSend")}
                     </button>
                   </div>
@@ -10373,37 +10407,37 @@ const App = () => {
               </section>
 
               <div className="contacts-qr-bar" role="region">
-                {contacts.length === 0 ? (
-                  <div className="contacts-empty-hint">
-                    <svg
-                      className="contacts-empty-hint-arrow"
-                      width="140"
-                      height="90"
-                      viewBox="0 0 140 90"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M132 76C105 77 88 68 75 54C62 40 53 27 35 22C22 18 12 22 6 29"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M18 18L5 30L20 34"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    <div className="contacts-empty-hint-text">
-                      Zde je váš profil - nechte ho nascanovat vašemu kontaktu
-                    </div>
-                  </div>
-                ) : null}
                 <div className="contacts-qr-inner">
+                  {contacts.length === 0 ? (
+                    <div className="contacts-empty-hint">
+                      <div className="contacts-empty-hint-text">
+                        Zde je váš profil - nechte ho nascanovat vašemu kontaktu
+                      </div>
+                      <svg
+                        className="contacts-empty-hint-arrow"
+                        width="120"
+                        height="70"
+                        viewBox="0 0 120 70"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14 14C36 10 52 14 64 24C78 36 78 48 60 60"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                        />
+                        <path
+                          d="M70 52L60 60L50 52"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     className="contacts-qr-btn secondary"
@@ -10486,7 +10520,7 @@ const App = () => {
 
                   <button
                     type="button"
-                    className="contacts-qr-btn"
+                    className="contacts-qr-btn secondary"
                     onClick={openScan}
                     disabled={scanIsOpen}
                     data-guide="scan-contact-button"
@@ -10755,18 +10789,174 @@ const App = () => {
               >
                 <div className="modal-header">
                   <div className="modal-title">{t("profile")}</div>
-                  <button
-                    className="topbar-btn"
-                    onClick={closeProfileQr}
-                    aria-label={t("close")}
-                    title={t("close")}
-                  >
-                    <span aria-hidden="true">×</span>
-                  </button>
+                  <div style={{ display: "inline-flex", gap: 8 }}>
+                    <button
+                      className="topbar-btn"
+                      onClick={toggleProfileEditing}
+                      aria-label={t("edit")}
+                      title={t("edit")}
+                      disabled={!currentNpub || !currentNsec}
+                    >
+                      <span aria-hidden="true">✎</span>
+                    </button>
+                    <button
+                      className="topbar-btn"
+                      onClick={() => {
+                        setIsProfileEditing(false);
+                        profileEditInitialRef.current = null;
+                        closeProfileQr();
+                      }}
+                      aria-label={t("close")}
+                      title={t("close")}
+                    >
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  </div>
                 </div>
 
                 {!currentNpub ? (
                   <p className="muted">{t("profileMissingNpub")}</p>
+                ) : isProfileEditing ? (
+                  <>
+                    <div
+                      className="profile-detail"
+                      style={{ marginBottom: 10 }}
+                    >
+                      <div className="contact-avatar is-xl" aria-hidden="true">
+                        {profileEditPicture ? (
+                          <img
+                            src={profileEditPicture}
+                            alt=""
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : effectiveProfilePicture ? (
+                          <img
+                            src={effectiveProfilePicture}
+                            alt=""
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="contact-avatar-fallback">
+                            {getInitials(
+                              effectiveProfileName ??
+                                formatShortNpub(currentNpub)
+                            )}
+                          </span>
+                        )}
+                      </div>
+
+                      <input
+                        ref={profilePhotoInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => void onProfilePhotoSelected(e)}
+                        style={{ display: "none" }}
+                      />
+
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => void onPickProfilePhoto()}
+                        >
+                          {t("profileUploadPhoto")}
+                        </button>
+
+                        {derivedProfile &&
+                        profileEditPicture.trim() !==
+                          derivedProfile.pictureUrl ? (
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() =>
+                              setProfileEditPicture(derivedProfile.pictureUrl)
+                            }
+                            title={lang === "cs" ? "Obnovit" : "Reset"}
+                            aria-label={lang === "cs" ? "Obnovit" : "Reset"}
+                            style={{ paddingInline: 10, minWidth: 40 }}
+                          >
+                            ↺
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <label htmlFor="profileName">{t("name")}</label>
+                      {derivedProfile &&
+                      profileEditName.trim() !== derivedProfile.name ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() =>
+                            setProfileEditName(derivedProfile.name)
+                          }
+                          title={lang === "cs" ? "Obnovit" : "Reset"}
+                          aria-label={lang === "cs" ? "Obnovit" : "Reset"}
+                          style={{ paddingInline: 10, minWidth: 40 }}
+                        >
+                          ↺
+                        </button>
+                      ) : null}
+                    </div>
+                    <input
+                      id="profileName"
+                      value={profileEditName}
+                      onChange={(e) => setProfileEditName(e.target.value)}
+                      placeholder={t("name")}
+                    />
+
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <label htmlFor="profileLn">{t("lightningAddress")}</label>
+                      {derivedProfile &&
+                      profileEditLnAddress.trim() !==
+                        derivedProfile.lnAddress ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() =>
+                            setProfileEditLnAddress(derivedProfile.lnAddress)
+                          }
+                          title={lang === "cs" ? "Obnovit" : "Reset"}
+                          aria-label={lang === "cs" ? "Obnovit" : "Reset"}
+                          style={{ paddingInline: 10, minWidth: 40 }}
+                        >
+                          ↺
+                        </button>
+                      ) : null}
+                    </div>
+                    <input
+                      id="profileLn"
+                      value={profileEditLnAddress}
+                      onChange={(e) => setProfileEditLnAddress(e.target.value)}
+                      placeholder={t("lightningAddress")}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+
+                    <div className="panel-header" style={{ marginTop: 14 }}>
+                      {profileEditsSavable ? (
+                        <button onClick={() => void saveProfileEdits()}>
+                          {t("saveChanges")}
+                        </button>
+                      ) : null}
+                    </div>
+                  </>
                 ) : (
                   <div className="profile-detail" style={{ marginTop: 8 }}>
                     <div className="contact-avatar is-xl" aria-hidden="true">

@@ -1208,11 +1208,16 @@ button.danger {
 
 .wallet-action-btn {
   flex: 0 0 auto;
-  min-width: 140px;
+  min-width: 160px;
+  width: 160px;
   border: none;
   border-radius: 12px;
   padding: 12px 14px;
   font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .wallet-action-round {
@@ -1226,10 +1231,26 @@ button.danger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: none;
 }
 
-.wallet-action-round:hover {
+.wallet-action-round.is-primary {
+  width: 62px;
+  height: 62px;
+  margin-inline: -10px;
+  transform: translateY(-10px);
+  z-index: 2;
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  color: #f8fafc;
+}
+
+.wallet-action-round:not(.is-primary):hover {
   transform: none;
+  box-shadow: none;
+}
+
+.wallet-action-round.is-primary:hover {
+  transform: translateY(-10px);
   box-shadow: none;
 }
 
@@ -1412,6 +1433,9 @@ button.icon {
   display: flex;
   gap: 8px;
   justify-content: center;
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .contacts-qr-btn {
@@ -1428,32 +1452,44 @@ button.icon {
 }
 
 .contacts-qr-btn.is-round {
-  min-width: 44px;
-  width: 44px;
-  height: 44px;
+  min-width: 58px;
+  width: 58px;
+  height: 58px;
   padding: 0;
   border-radius: 999px;
+  margin-inline: -10px;
+  transform: translateY(-8px);
+  z-index: 2;
+  transition: none;
+}
+
+.contacts-qr-btn.is-round:hover {
+  transform: translateY(-8px);
+  box-shadow: none;
 }
 
 .contacts-empty-hint {
-  position: fixed;
-  left: 50%;
-  bottom: 76px;
-  transform: translateX(-50%) translateX(-115px);
-  z-index: 9;
+  position: absolute;
+  left: 80px;
+  bottom: 70px;
+  transform: translateX(-50%);
+  z-index: 3;
   pointer-events: none;
   display: inline-flex;
-  align-items: flex-end;
-  gap: 10px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   color: rgba(226, 232, 240, 0.92);
 }
 
 .contacts-empty-hint-text {
   max-width: 260px;
-  font-weight: 900;
+  font-family: "Bradley Hand", "Marker Felt", "Comic Sans MS", cursive;
+  font-weight: 800;
   line-height: 1.15;
-  font-size: 14px;
+  font-size: 18px;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  text-align: center;
 }
 
 .contacts-empty-hint-arrow {
@@ -1463,12 +1499,17 @@ button.icon {
 
 @media (max-width: 420px) {
   .contacts-empty-hint {
-    transform: translateX(-50%) translateX(-85px);
+    left: 78px;
+    bottom: 66px;
   }
   .contacts-empty-hint-text {
     max-width: 220px;
-    font-size: 13px;
+    font-size: 16px;
   }
+}
+
+.wallet-panel.panel-plain {
+  margin-top: 18px;
 }
 
 .contacts-qr-btn-icon {
