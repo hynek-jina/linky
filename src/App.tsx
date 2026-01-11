@@ -9,11 +9,17 @@ import { parseCashuToken } from "./cashu";
 import { deriveDefaultProfile } from "./derivedProfile";
 import type { CashuTokenId, ContactId, MintId } from "./evolu";
 import {
-  DEFAULT_EVOLU_SERVER_URLS,
+  createJournalEntryPayload,
   evolu,
-  getEvoluServerUrls,
-  setEvoluServerUrls as persistEvoluServerUrls,
+  formatBytes,
+  makeJournalEntriesQuery,
+  normalizeEvoluServerUrl,
   useEvolu,
+  useEvoluDatabaseInfoState,
+  useEvoluLastError,
+  useEvoluServersManager,
+  useEvoluSyncOwner,
+  wipeEvoluStorage as wipeEvoluStorageImpl,
 } from "./evolu";
 import { useInit } from "./hooks/useInit";
 import {
@@ -136,18 +142,6 @@ type AppNostrPool = {
   ) => { close: (reason?: string) => Promise<void> | void };
 };
 
-type WebSocketProbe = {
-  ok: boolean;
-  checkedAtMs: number;
-  latencyMs: number | null;
-  close?: { code: number | null; reason: string | null };
-  error: string | null;
-  firstMessage:
-    | null
-    | { kind: "text"; text: string }
-    | { kind: "binary"; type: string; size: number | null };
-};
-
 type ContactsGuideKey = "add_contact" | "topup" | "pay" | "message";
 
 type ContactsGuideStep = {
@@ -211,58 +205,8 @@ const makeEmptyForm = (): ContactFormState => ({
   group: "",
 });
 
-const formatBytes = (bytes: number): string => {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-  const units = ["B", "KiB", "MiB", "GiB"];
-  let value = bytes;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  const digits = unitIndex === 0 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0;
-  return `${value.toFixed(digits)} ${units[unitIndex]}`;
-};
-
 const App = () => {
   const { insert, update, upsert } = useEvolu();
-
-  const [evoluServerUrls, setEvoluServerUrls] = useState<string[]>(() => [
-    ...getEvoluServerUrls(),
-  ]);
-  const [evoluServersReloadRequired, setEvoluServersReloadRequired] =
-    useState(false);
-  const [newEvoluServerUrl, setNewEvoluServerUrl] = useState("");
-  const [pendingEvoluServerDeleteUrl, setPendingEvoluServerDeleteUrl] =
-    useState<string | null>(null);
-
-  const [evoluShowLocalDataJson, setEvoluShowLocalDataJson] = useState(false);
-  const [evoluShowServerDebugJson, setEvoluShowServerDebugJson] =
-    useState(false);
-
-  const normalizeEvoluServerUrl = React.useCallback((value: string) => {
-    const raw = String(value ?? "")
-      .trim()
-      .replace(/\/+$/, "");
-    if (!raw) return null;
-    try {
-      const u = new URL(raw);
-      if (u.protocol !== "wss:" && u.protocol !== "ws:") return null;
-      const pathname = u.pathname.replace(/\/+$/, "");
-      return `${u.origin}${pathname === "/" ? "" : pathname}`.replace(
-        /\/+$/,
-        ""
-      );
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const saveEvoluServerUrls = React.useCallback((nextUrls: string[]) => {
-    persistEvoluServerUrls(nextUrls);
-    setEvoluServerUrls([...getEvoluServerUrls()]);
-    setEvoluServersReloadRequired(true);
-  }, []);
 
   const normalizeMintUrl = (value: unknown): string => {
     const raw = String(value ?? "").trim();
@@ -311,6 +255,17 @@ const App = () => {
 
   const route = useRouting();
   const { toasts, pushToast } = useToasts();
+
+  const evoluServers = useEvoluServersManager();
+  const evoluServerUrls = evoluServers.configuredUrls;
+  const evoluActiveServerUrls = evoluServers.activeUrls;
+  const evoluServerStatusByUrl = evoluServers.statusByUrl;
+  const evoluServersReloadRequired = evoluServers.reloadRequired;
+  const saveEvoluServerUrls = evoluServers.setServerUrls;
+  const isEvoluServerOffline = evoluServers.isOffline;
+  const setEvoluServerOffline = evoluServers.setServerOffline;
+
+  const [newEvoluServerUrl, setNewEvoluServerUrl] = useState("");
 
   const logPaymentEvent = React.useCallback(
     (event: {
@@ -447,30 +402,37 @@ const App = () => {
   // Evolu is local-first; to get automatic cross-device/browser sync you must
   // "use" an owner (which starts syncing over configured transports).
   // We only enable it after the user has an nsec (our identity gate).
-  const [syncOwner, setSyncOwner] = useState<Evolu.SyncOwner | null>(null);
-  React.useEffect(() => {
-    if (!currentNsec) {
-      setSyncOwner(null);
-      return;
-    }
-
-    let cancelled = false;
-    void evolu.appOwner
-      .then((owner) => {
-        if (cancelled) return;
-        setSyncOwner(owner as unknown as Evolu.SyncOwner);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setSyncOwner(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentNsec]);
+  const syncOwner = useEvoluSyncOwner(Boolean(currentNsec));
 
   useOwner(syncOwner);
+
+  const evoluLastError = useEvoluLastError({ logToConsole: true });
+  const evoluHasError = Boolean(evoluLastError);
+
+  const evoluConnectedServerCount = useMemo(() => {
+    if (evoluHasError) return 0;
+    return evoluActiveServerUrls.reduce((sum, url) => {
+      return sum + (evoluServerStatusByUrl[url] === "connected" ? 1 : 0);
+    }, 0);
+  }, [evoluActiveServerUrls, evoluHasError, evoluServerStatusByUrl]);
+
+  const evoluOverallStatus = useMemo(() => {
+    if (!syncOwner) return "disconnected" as const;
+    if (evoluHasError) return "disconnected" as const;
+    if (evoluActiveServerUrls.length === 0) return "disconnected" as const;
+    const states = evoluActiveServerUrls.map(
+      (url) => evoluServerStatusByUrl[url] ?? "checking"
+    );
+    if (states.some((s) => s === "connected")) return "connected" as const;
+    if (states.some((s) => s === "checking")) return "checking" as const;
+    return "disconnected" as const;
+  }, [evoluActiveServerUrls, evoluHasError, evoluServerStatusByUrl, syncOwner]);
+
+  const selectedEvoluServerUrl = useMemo(() => {
+    if (route.kind !== "evoluServer") return null;
+    const url = String(route.id ?? "").trim();
+    return url || null;
+  }, [route]);
 
   const appOwnerId =
     (syncOwner as unknown as { id?: Evolu.OwnerId } | null)?.id ?? null;
@@ -503,85 +465,51 @@ const App = () => {
     error: string | null;
   }>(null);
 
-  const [evoluLastError, setEvoluLastError] = useState<unknown>(null);
+  // Evolu error subscription handled by useEvoluLastError.
 
-  useInit(() => {
-    // Surface Evolu sync/storage issues (network errors, protocol errors, etc.)
-    // so cross-browser sync debugging is straightforward.
-    const unsub = evolu.subscribeError(() => {
-      const err = evolu.getError();
-      setEvoluLastError(err);
-      if (err) console.log("[linky][evolu] error", err);
-    });
-    return () => {
-      try {
-        unsub();
-      } catch {
-        // ignore
-      }
-    };
+  const [evoluWipeStorageIsBusy, setEvoluWipeStorageIsBusy] =
+    useState<boolean>(false);
+
+  const evoluDb = useEvoluDatabaseInfoState({
+    enabled: route.kind === "evoluServers",
+    onError: (e) => {
+      pushToast(
+        lang === "cs"
+          ? `Nepodařilo se načíst Evolu DB info: ${String(e ?? "")}`
+          : `Failed to read Evolu DB info: ${String(e ?? "")}`
+      );
+    },
   });
 
-  const evoluErrorInfo = useMemo(() => {
-    const rec = asRecord(evoluLastError);
-    const type = String(rec?.type ?? "").trim() || null;
-    const ownerId = String(rec?.ownerId ?? "").trim() || null;
-    return { type, ownerId };
-  }, [evoluLastError]);
+  const evoluDbInfo = evoluDb.info;
+  const evoluDbInfoIsBusy = evoluDb.isBusy;
+  const refreshEvoluDbInfo = evoluDb.refresh;
 
-  const evoluHasError = Boolean(evoluErrorInfo.type);
+  const evoluJournalQuery = useMemo(() => makeJournalEntriesQuery(200), []);
+  const evoluJournalRows = useQuery(evoluJournalQuery);
+  const evoluJournalApproxBytes = useMemo(() => {
+    return evoluJournalRows.reduce((sum, r) => {
+      const b = Number((r as any)?.payloadBytes ?? 0) || 0;
+      return sum + b;
+    }, 0);
+  }, [evoluJournalRows]);
 
-  const [evoluCleanupIsBusy, setEvoluCleanupIsBusy] = useState<boolean>(false);
-
-  const cleanupEvoluSyncedLogs = React.useCallback(async () => {
-    if (!appOwnerId) return;
-    if (evoluCleanupIsBusy) return;
-    setEvoluCleanupIsBusy(true);
+  const wipeEvoluStorage = React.useCallback(async () => {
+    if (evoluWipeStorageIsBusy) return;
+    setEvoluWipeStorageIsBusy(true);
 
     try {
-      const tables = [
-        "paymentEvent",
-        "nostrMessage",
-        "mintInfo",
-        "appState",
-      ] as const;
-
-      for (const table of tables) {
-        const q = evolu.createQuery((db) =>
-          db
-            .selectFrom(table)
-            .select(["id"])
-            .where("isDeleted", "is not", Evolu.sqliteTrue)
-            .limit(5000)
-        );
-
-        // Best-effort: delete up to 5000 rows per table.
-        // If the dataset is larger, pressing the button again will continue.
-        const rows = await evolu.loadQuery(q);
-        for (const row of rows) {
-          const id = String(
-            (row as unknown as { id?: unknown })?.id ?? ""
-          ).trim();
-          if (!id) continue;
-          try {
-            update(
-              table,
-              { id: id as never, isDeleted: Evolu.sqliteTrue } as never,
-              { ownerId: appOwnerId }
-            );
-          } catch {
-            // ignore
-          }
-        }
-      }
+      wipeEvoluStorageImpl();
+    } catch {
+      pushToast(
+        lang === "cs"
+          ? "Chybí uložený mnemonic (nelze vyčistit Evolu storage)."
+          : "Missing stored mnemonic (cannot clear Evolu storage)."
+      );
     } finally {
-      setEvoluCleanupIsBusy(false);
+      setEvoluWipeStorageIsBusy(false);
     }
-  }, [appOwnerId, evoluCleanupIsBusy, update]);
-
-  // NOTE: We intentionally do not use evolu.exportDatabase() for size
-  // estimates: it includes browser-local metadata/caches and differs between
-  // browsers. We show a deterministic estimate of synced user data instead.
+  }, [evoluWipeStorageIsBusy, lang, pushToast]);
 
   const [nostrPictureByNpub, setNostrPictureByNpub] = useState<
     Record<string, string | null>
@@ -743,7 +671,8 @@ const App = () => {
   const nostrMetadataInFlight = React.useRef<Set<string>>(new Set());
 
   const t = React.useCallback(
-    <K extends keyof typeof translations.cs>(key: K) => translations[lang][key],
+    (key: string) =>
+      (translations[lang] as unknown as Record<string, string>)[key] ?? key,
     [lang]
   );
 
@@ -1398,14 +1327,6 @@ const App = () => {
 
   const [relayUrls, setRelayUrls] = useState<string[]>(() => [...NOSTR_RELAYS]);
 
-  const [evoluServerStatusByUrl, setEvoluServerStatusByUrl] = useState<
-    Record<string, "checking" | "connected" | "disconnected">
-  >(() => ({}));
-
-  const [evoluServerProbeByUrl, setEvoluServerProbeByUrl] = useState<
-    Record<string, WebSocketProbe>
-  >(() => ({}));
-
   const nostrFetchRelays = useMemo(() => {
     const merged = [...relayUrls, ...NOSTR_RELAYS];
     const seen = new Set<string>();
@@ -1466,144 +1387,6 @@ const App = () => {
     []
   );
 
-  const probeWebSocket = React.useCallback((url: string, timeoutMs = 3500) => {
-    return new Promise<WebSocketProbe>((resolve) => {
-      let ws: WebSocket | null = null;
-      let done = false;
-      const started = performance.now();
-      let firstMessage: WebSocketProbe["firstMessage"] = null;
-
-      const finish = (ok: boolean, extra?: Partial<WebSocketProbe>) => {
-        if (done) return;
-        done = true;
-        const latencyMs = ok ? Math.max(0, performance.now() - started) : null;
-        try {
-          ws?.close();
-        } catch {
-          // ignore
-        }
-        resolve({
-          ok,
-          checkedAtMs: Date.now(),
-          latencyMs,
-          error: null,
-          firstMessage,
-          ...extra,
-        });
-      };
-
-      try {
-        ws = new WebSocket(url);
-      } catch (e) {
-        finish(false, { error: String(e ?? "unknown") });
-        return;
-      }
-
-      const timer = window.setTimeout(() => {
-        finish(false, { error: "timeout" });
-      }, timeoutMs);
-
-      ws.addEventListener("message", (ev) => {
-        if (firstMessage) return;
-        try {
-          const data = (ev as MessageEvent).data;
-          if (typeof data === "string") {
-            firstMessage = {
-              kind: "text",
-              text: data.length > 2000 ? `${data.slice(0, 2000)}…` : data,
-            };
-            return;
-          }
-          if (data instanceof ArrayBuffer) {
-            firstMessage = {
-              kind: "binary",
-              type: "ArrayBuffer",
-              size: data.byteLength,
-            };
-            return;
-          }
-          if (data instanceof Blob) {
-            firstMessage = {
-              kind: "binary",
-              type: data.type || "Blob",
-              size: data.size,
-            };
-            return;
-          }
-          firstMessage = { kind: "binary", type: typeof data, size: null };
-        } catch {
-          // ignore
-        }
-      });
-
-      ws.addEventListener("open", () => {
-        window.clearTimeout(timer);
-        finish(true);
-      });
-
-      ws.addEventListener("error", () => {
-        window.clearTimeout(timer);
-        finish(false, { error: "error" });
-      });
-
-      ws.addEventListener("close", (ev) => {
-        window.clearTimeout(timer);
-        finish(false, {
-          error: "close",
-          close: {
-            code: Number.isFinite((ev as CloseEvent).code)
-              ? (ev as CloseEvent).code
-              : null,
-            reason: String((ev as CloseEvent).reason ?? "") || null,
-          },
-        });
-      });
-    });
-  }, []);
-
-  React.useEffect(() => {
-    if (evoluServerUrls.length === 0) return;
-    let cancelled = false;
-
-    const run = async () => {
-      setEvoluServerStatusByUrl((prev) => {
-        const next = { ...prev };
-        for (const url of evoluServerUrls) next[url] = "checking";
-        return next;
-      });
-
-      const results = await Promise.all(
-        evoluServerUrls.map(async (url) => {
-          // Evolu servers don't need (and may reject) extra query params.
-          const probe = await probeWebSocket(url, 3500);
-          return [url, probe] as const;
-        })
-      );
-
-      if (cancelled) return;
-      setEvoluServerStatusByUrl((prev) => {
-        const next = { ...prev };
-        for (const [url, probe] of results)
-          next[url] = probe.ok ? "connected" : "disconnected";
-        return next;
-      });
-
-      setEvoluServerProbeByUrl((prev) => {
-        const next = { ...prev };
-        for (const [url, probe] of results) next[url] = probe;
-        return next;
-      });
-    };
-
-    void run();
-    const intervalId = window.setInterval(run, 15000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [evoluServerUrls, probeWebSocket]);
-
   React.useEffect(() => {
     if (relayUrls.length === 0) return;
 
@@ -1648,30 +1431,6 @@ const App = () => {
     const url = String(route.id ?? "").trim();
     return url || null;
   }, [route]);
-
-  const selectedEvoluServerUrl = useMemo(() => {
-    if (route.kind !== "evoluServer") return null;
-    const url = String(route.id ?? "").trim();
-    return url || null;
-  }, [route]);
-
-  const evoluConnectedServerCount = useMemo(() => {
-    if (evoluHasError) return 0;
-    return evoluServerUrls.reduce((sum, url) => {
-      return sum + (evoluServerStatusByUrl[url] === "connected" ? 1 : 0);
-    }, 0);
-  }, [evoluHasError, evoluServerStatusByUrl, evoluServerUrls]);
-
-  const evoluOverallStatus = useMemo(() => {
-    if (evoluHasError) return "disconnected" as const;
-    if (evoluServerUrls.length === 0) return "disconnected" as const;
-    const states = evoluServerUrls.map(
-      (url) => evoluServerStatusByUrl[url] ?? "checking"
-    );
-    if (states.some((s) => s === "connected")) return "connected" as const;
-    if (states.some((s) => s === "checking")) return "checking" as const;
-    return "disconnected" as const;
-  }, [evoluHasError, evoluServerStatusByUrl, evoluServerUrls]);
 
   const publishNostrRelayList = React.useCallback(
     async (urls: string[]) => {
@@ -1864,53 +1623,6 @@ const App = () => {
   React.useEffect(() => {
     cashuTokensAllRef.current = cashuTokensAll;
   }, [cashuTokensAll]);
-
-  const evoluSyncedDataBytes = useMemo(() => {
-    try {
-      const encoder = new TextEncoder();
-
-      const normalizedContacts = contacts
-        .map((c) => ({
-          id: String(c.id ?? ""),
-          name: String(c.name ?? ""),
-          npub: String(c.npub ?? ""),
-          lnAddress: String(c.lnAddress ?? ""),
-          groupName: String(c.groupName ?? ""),
-        }))
-        .sort((a, b) => a.id.localeCompare(b.id));
-
-      const normalizedTokens = cashuTokensAll
-        .filter(
-          (t) =>
-            String(
-              (t as unknown as { isDeleted?: unknown }).isDeleted ?? ""
-            ) !== String(Evolu.sqliteTrue)
-        )
-        .map((t) => ({
-          id: String((t as unknown as { id?: unknown }).id ?? ""),
-          token: String((t as unknown as { token?: unknown }).token ?? ""),
-          rawToken: String(
-            (t as unknown as { rawToken?: unknown }).rawToken ?? ""
-          ),
-          mint: String((t as unknown as { mint?: unknown }).mint ?? ""),
-          unit: String((t as unknown as { unit?: unknown }).unit ?? ""),
-          amount:
-            Number((t as unknown as { amount?: unknown }).amount ?? 0) || 0,
-          state: String((t as unknown as { state?: unknown }).state ?? ""),
-          error: String((t as unknown as { error?: unknown }).error ?? ""),
-        }))
-        .sort((a, b) => a.id.localeCompare(b.id));
-
-      const payload = {
-        contacts: normalizedContacts,
-        cashuTokens: normalizedTokens,
-      };
-
-      return encoder.encode(JSON.stringify(payload)).byteLength;
-    } catch {
-      return null;
-    }
-  }, [cashuTokensAll, contacts]);
 
   const ensuredTokenRef = React.useRef<Set<string>>(new Set());
   const ensureCashuTokenPersisted = React.useCallback(
@@ -2216,11 +1928,7 @@ const App = () => {
   );
 
   const touchMintInfo = React.useCallback(
-    (
-      _mintUrl: string,
-      nowSec: number,
-      _ownerId: Evolu.OwnerId | null
-    ): void => {
+    (_mintUrl: string, nowSec: number): void => {
       const cleaned = normalizeMintUrl(_mintUrl);
       if (!cleaned) return;
       if (isMintDeleted(cleaned)) return;
@@ -2467,7 +2175,7 @@ const App = () => {
 
         // If no row exists yet (or it was deleted), just ensure it exists.
         // A subsequent render can refresh again without creating duplicates.
-        touchMintInfo(cleaned, nowSec, ownerId);
+        touchMintInfo(cleaned, nowSec);
 
         // Also store fetched metadata.
         setMintInfoAll((prev) => {
@@ -2532,7 +2240,7 @@ const App = () => {
 
     const nowSec = Math.floor(Date.now() / 1000);
     if (!existing) {
-      touchMintInfo(cleaned, nowSec, appOwnerId);
+      touchMintInfo(cleaned, nowSec);
       return;
     }
 
@@ -2572,11 +2280,11 @@ const App = () => {
       // If we don't have a row yet, create it first and let a later rerender
       // trigger the refresh to avoid duplicate inserts.
       if (!existing) {
-        touchMintInfo(cleaned, nowSec, appOwnerId);
+        touchMintInfo(cleaned, nowSec);
         continue;
       }
 
-      touchMintInfo(cleaned, nowSec, appOwnerId);
+      touchMintInfo(cleaned, nowSec);
 
       const lastChecked = getMintRuntime(cleaned)?.lastCheckedAtSec ?? 0;
       const oneDay = 86_400;
@@ -2635,12 +2343,12 @@ const App = () => {
 
     let didChange = false;
     const next = [...mintInfoAll];
-    const applyPatch = (patch: Record<string, unknown> & { id: MintId }) => {
+    const applyPatch = (patch: Partial<LocalMintInfoRow> & { id: MintId }) => {
       const id = String(patch.id ?? "");
       if (!id) return;
-      const idx = next.findIndex((r) => String((r as any).id ?? "") === id);
+      const idx = next.findIndex((r) => String(r.id ?? "") === id);
       if (idx < 0) return;
-      next[idx] = { ...(next[idx] as any), ...(patch as any) };
+      next[idx] = { ...next[idx], ...patch };
       didChange = true;
     };
 
@@ -3024,7 +2732,7 @@ const App = () => {
             if (isMintDeleted(cleanedMint)) {
               // Respect user deletion across any owner scope.
             } else {
-              touchMintInfo(cleanedMint, nowSec, ownerId);
+              touchMintInfo(cleanedMint, nowSec);
 
               const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
               if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
@@ -4952,7 +4660,7 @@ const App = () => {
             if (isMintDeleted(cleanedMint)) {
               // Respect user deletion across any owner scope.
             } else {
-              touchMintInfo(cleanedMint, nowSec, ownerId);
+              touchMintInfo(cleanedMint, nowSec);
 
               const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
               if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
@@ -5059,6 +4767,9 @@ const App = () => {
   );
 
   const handleDelete = (id: ContactId) => {
+    const existing = contacts.find(
+      (c) => String(c.id ?? "") === String(id as unknown as string)
+    );
     const result = appOwnerId
       ? update(
           "contact",
@@ -5067,6 +4778,31 @@ const App = () => {
         )
       : update("contact", { id, isDeleted: Evolu.sqliteTrue });
     if (result.ok) {
+      const journalPayload = createJournalEntryPayload({
+        action: "contact.delete",
+        entity: "contact",
+        entityId: id,
+        summary:
+          String(existing?.name ?? "").trim() ||
+          String(existing?.npub ?? "").trim() ||
+          String(existing?.lnAddress ?? "").trim() ||
+          String(id as unknown as string),
+        payload: {
+          name: String(existing?.name ?? "").trim() || null,
+          npub: String(existing?.npub ?? "").trim() || null,
+          lnAddress: String(existing?.lnAddress ?? "").trim() || null,
+          groupName: String(existing?.groupName ?? "").trim() || null,
+        },
+      });
+      try {
+        appOwnerId
+          ? insert("journalEntry", journalPayload as any, {
+              ownerId: appOwnerId,
+            })
+          : insert("journalEntry", journalPayload as any);
+      } catch {
+        // ignore
+      }
       setStatus(t("contactDeleted"));
       closeContactDetail();
       return;
@@ -5713,6 +5449,61 @@ const App = () => {
           )
         : update("contact", { id: editingId, ...payload });
       if (result.ok) {
+        const initial = contactEditInitialRef.current;
+        const changes: Record<
+          string,
+          { from: string | null; to: string | null }
+        > = {};
+        if (initial?.id === editingId) {
+          const nextName = payload.name ? String(payload.name) : null;
+          const nextNpub = payload.npub ? String(payload.npub) : null;
+          const nextLn = payload.lnAddress ? String(payload.lnAddress) : null;
+          const nextGroup = payload.groupName
+            ? String(payload.groupName)
+            : null;
+
+          const prevName = initial.name || null;
+          const prevNpub = initial.npub || null;
+          const prevLn = initial.lnAddress || null;
+          const prevGroup = initial.group || null;
+
+          if ((prevName ?? "") !== (nextName ?? ""))
+            changes.name = { from: prevName, to: nextName };
+          if ((prevNpub ?? "") !== (nextNpub ?? ""))
+            changes.npub = { from: prevNpub, to: nextNpub };
+          if ((prevLn ?? "") !== (nextLn ?? ""))
+            changes.lnAddress = { from: prevLn, to: nextLn };
+          if ((prevGroup ?? "") !== (nextGroup ?? ""))
+            changes.group = { from: prevGroup, to: nextGroup };
+        }
+
+        const journalPayload = createJournalEntryPayload({
+          action: "contact.edit",
+          entity: "contact",
+          entityId: editingId,
+          summary:
+            (payload.name ? String(payload.name) : "") ||
+            (payload.npub ? String(payload.npub) : "") ||
+            (payload.lnAddress ? String(payload.lnAddress) : ""),
+          payload: {
+            changes,
+            next: {
+              name: payload.name ? String(payload.name) : null,
+              npub: payload.npub ? String(payload.npub) : null,
+              lnAddress: payload.lnAddress ? String(payload.lnAddress) : null,
+              groupName: payload.groupName ? String(payload.groupName) : null,
+            },
+          },
+        });
+        try {
+          appOwnerId
+            ? insert("journalEntry", journalPayload as any, {
+                ownerId: appOwnerId,
+              })
+            : insert("journalEntry", journalPayload as any);
+        } catch {
+          // ignore
+        }
         setStatus(t("contactUpdated"));
       } else {
         setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -5722,6 +5513,30 @@ const App = () => {
         ? insert("contact", payload, { ownerId: appOwnerId })
         : insert("contact", payload);
       if (result.ok) {
+        const journalPayload = createJournalEntryPayload({
+          action: "contact.add",
+          entity: "contact",
+          entityId: result.value.id,
+          summary:
+            (payload.name ? String(payload.name) : "") ||
+            (payload.npub ? String(payload.npub) : "") ||
+            (payload.lnAddress ? String(payload.lnAddress) : ""),
+          payload: {
+            name: payload.name ? String(payload.name) : null,
+            npub: payload.npub ? String(payload.npub) : null,
+            lnAddress: payload.lnAddress ? String(payload.lnAddress) : null,
+            groupName: payload.groupName ? String(payload.groupName) : null,
+          },
+        });
+        try {
+          appOwnerId
+            ? insert("journalEntry", journalPayload as any, {
+                ownerId: appOwnerId,
+              })
+            : insert("journalEntry", journalPayload as any);
+        } catch {
+          // ignore
+        }
         setStatus(t("contactSaved"));
       } else {
         setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -8323,7 +8138,7 @@ const App = () => {
                       evoluOverallStatus === "connected"
                         ? "status-dot connected"
                         : evoluOverallStatus === "checking"
-                        ? "status-dot disconnected"
+                        ? "status-dot checking"
                         : "status-dot disconnected"
                     }
                     aria-label={evoluOverallStatus}
@@ -8824,9 +8639,7 @@ const App = () => {
                     <button
                       type="button"
                       className="btn-wide secondary"
-                      onClick={() => {
-                        window.location.reload();
-                      }}
+                      onClick={() => window.location.reload()}
                     >
                       {t("evoluServersReloadButton")}
                     </button>
@@ -8835,121 +8648,240 @@ const App = () => {
               ) : null}
 
               <div className="settings-row">
+                <div className="settings-left">
+                  <span className="settings-label">
+                    {t("evoluLocalDataSize")}
+                  </span>
+                </div>
+                <div className="settings-right">
+                  <span className="muted">
+                    {evoluDbInfo.bytes === null
+                      ? "—"
+                      : formatBytes(evoluDbInfo.bytes)}
+                  </span>
+                </div>
+              </div>
+
+              {Object.keys(evoluDbInfo.tableCounts).length ? (
+                <div style={{ marginTop: 6 }}>
+                  {Object.entries(evoluDbInfo.tableCounts).map(
+                    ([table, count]) => (
+                      <div className="settings-row" key={table}>
+                        <div className="settings-left">
+                          <span className="settings-label">{table}</span>
+                        </div>
+                        <div className="settings-right">
+                          <span className="muted">
+                            {count === null ? "—" : String(count)}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              ) : null}
+
+              <div className="settings-row" style={{ marginTop: 8 }}>
                 <button
                   type="button"
                   className="btn-wide secondary"
-                  onClick={() => setEvoluShowLocalDataJson((v) => !v)}
+                  onClick={() => void refreshEvoluDbInfo()}
+                  disabled={evoluDbInfoIsBusy}
                 >
-                  {evoluShowLocalDataJson
-                    ? t("evoluHideLocalDataJson")
-                    : t("evoluShowLocalDataJson")}
+                  {evoluDbInfoIsBusy
+                    ? t("evoluDbRefreshBusy")
+                    : t("evoluDbRefresh")}
                 </button>
               </div>
 
-              {evoluShowLocalDataJson ? (
-                <pre className="debug-json">
-                  {JSON.stringify(
-                    {
-                      ownerId: appOwnerId ? String(appOwnerId) : null,
-                      estimateBytes: evoluSyncedDataBytes,
-                      estimateHuman:
-                        evoluSyncedDataBytes === null
-                          ? null
-                          : formatBytes(evoluSyncedDataBytes),
-                      contacts: {
-                        count: contacts.length,
-                        rows: contacts.map((c) => ({
-                          id: String((c as any).id ?? ""),
-                          name: String((c as any).name ?? ""),
-                          npub: String((c as any).npub ?? ""),
-                          lnAddress: String((c as any).lnAddress ?? ""),
-                          groupName: String((c as any).groupName ?? ""),
-                        })),
-                      },
-                      cashuTokens: {
-                        count: cashuTokensAll.length,
-                        rows: cashuTokensAll.map((t) => {
-                          const token = String((t as any).token ?? "");
-                          const rawToken = String((t as any).rawToken ?? "");
-                          const redact = (s: string) => {
-                            const v = String(s ?? "").trim();
-                            if (!v) return "";
-                            if (v.length <= 18) return `${v.slice(0, 6)}…`;
-                            return `${v.slice(0, 10)}…${v.slice(-6)}`;
-                          };
-                          return {
-                            id: String((t as any).id ?? ""),
-                            mint: String((t as any).mint ?? ""),
-                            unit: String((t as any).unit ?? ""),
-                            amount: (t as any).amount ?? null,
-                            state: String((t as any).state ?? ""),
-                            error: String((t as any).error ?? ""),
-                            token: token ? redact(token) : null,
-                            rawToken: rawToken ? redact(rawToken) : null,
-                            isDeleted: Boolean((t as any).isDeleted),
-                          };
-                        }),
-                      },
-                      lastEvoluError: evoluLastError ?? null,
-                    },
-                    null,
-                    2
-                  )}
-                </pre>
-              ) : null}
-
-              {evoluServerUrls.length === 0 ? (
-                <p className="lede">{t("errorPrefix")}</p>
-              ) : (
-                <div>
-                  {evoluServerUrls.map((url) => {
-                    const state = evoluHasError
-                      ? "disconnected"
-                      : evoluServerStatusByUrl[url] ?? "checking";
-                    const dotClass =
-                      state === "connected"
-                        ? "status-dot connected"
-                        : state === "checking"
-                        ? "status-dot checking"
-                        : "status-dot disconnected";
-
-                    return (
-                      <button
-                        type="button"
-                        className="settings-row settings-link"
-                        key={url}
-                        onClick={() => navigateToEvoluServer(url)}
-                      >
-                        <div className="settings-left">
-                          <span className="relay-url">{url}</span>
-                        </div>
-                        <div className="settings-right">
-                          <span
-                            className={dotClass}
-                            aria-label={state}
-                            title={state}
-                          />
-                          <span className="settings-chevron" aria-hidden="true">
-                            &gt;
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
+              <div className="settings-row" style={{ marginTop: 14 }}>
+                <div className="settings-left">
+                  <span className="settings-label">{t("evoluJournal")}</span>
                 </div>
-              )}
+                <div className="settings-right">
+                  <span className="muted">
+                    {formatBytes(evoluJournalApproxBytes)}
+                  </span>
+                </div>
+              </div>
+
+              <p className="muted" style={{ marginTop: 2 }}>
+                {t("evoluJournalApproxBytesHint")}
+              </p>
+
+              <div style={{ marginTop: 10 }}>
+                {evoluJournalRows.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    {t("evoluJournalEmpty")}
+                  </p>
+                ) : (
+                  <div>
+                    {evoluJournalRows.slice(0, 50).map((row: any) => {
+                      const createdAtSec = Number(row?.createdAtSec ?? 0) || 0;
+                      const action = String(row?.action ?? "");
+                      const summary = String(row?.summary ?? "");
+                      const payloadBytes = Number(row?.payloadBytes ?? 0) || 0;
+
+                      const actionLabel =
+                        action === "contact.add"
+                          ? t("evoluJournalContactAdded")
+                          : action === "contact.edit"
+                          ? t("evoluJournalContactEdited")
+                          : action === "contact.delete"
+                          ? t("evoluJournalContactDeleted")
+                          : action || t("unknown");
+
+                      const when = createdAtSec
+                        ? new Date(createdAtSec * 1000).toLocaleString(
+                            lang === "cs" ? "cs-CZ" : "en-US"
+                          )
+                        : "—";
+
+                      return (
+                        <div
+                          className="settings-row"
+                          key={String(row?.id ?? when)}
+                        >
+                          <div className="settings-left">
+                            <span className="settings-label">
+                              {actionLabel}
+                            </span>
+                            <div className="muted" style={{ marginTop: 4 }}>
+                              {when}
+                              {summary ? ` · ${summary}` : ""}
+                            </div>
+                          </div>
+                          <div className="settings-right">
+                            <span className="muted">
+                              {payloadBytes ? formatBytes(payloadBytes) : "—"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginTop: 10 }}>
+                {evoluServerUrls.length === 0 ? (
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    {t("evoluServersEmpty")}
+                  </p>
+                ) : (
+                  <div>
+                    {evoluServerUrls.map((url) => {
+                      const offline = isEvoluServerOffline(url);
+                      const state = offline
+                        ? "disconnected"
+                        : evoluHasError
+                        ? "disconnected"
+                        : evoluServerStatusByUrl[url] ?? "checking";
+
+                      const isSynced =
+                        Boolean(syncOwner) &&
+                        !evoluHasError &&
+                        !offline &&
+                        state === "connected";
+
+                      return (
+                        <button
+                          type="button"
+                          className="settings-row settings-link"
+                          key={url}
+                          onClick={() => navigateToEvoluServer(url)}
+                        >
+                          <div className="settings-left">
+                            <span className="relay-url">{url}</span>
+                          </div>
+                          <div className="settings-right">
+                            <span
+                              className={
+                                state === "connected"
+                                  ? "status-dot connected"
+                                  : state === "checking"
+                                  ? "status-dot checking"
+                                  : "status-dot disconnected"
+                              }
+                              aria-label={state}
+                              title={state}
+                            />
+                            <span className="muted" style={{ marginLeft: 10 }}>
+                              {offline
+                                ? t("evoluServerOfflineStatus")
+                                : isSynced
+                                ? t("evoluSyncOk")
+                                : state === "checking"
+                                ? t("evoluSyncing")
+                                : t("evoluNotSynced")}
+                            </span>
+                            <span
+                              className="settings-chevron"
+                              aria-hidden="true"
+                            >
+                              &gt;
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="settings-row" style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn-wide danger"
+                  onClick={() => {
+                    void wipeEvoluStorage();
+                  }}
+                  disabled={evoluWipeStorageIsBusy}
+                >
+                  {evoluWipeStorageIsBusy
+                    ? t("evoluWipeStorageBusy")
+                    : t("evoluWipeStorage")}
+                </button>
+              </div>
             </section>
           )}
 
           {route.kind === "evoluServer" && (
             <section className="panel">
+              {evoluServersReloadRequired ? (
+                <>
+                  <p className="muted" style={{ marginTop: 2 }}>
+                    {t("evoluServersReloadHint")}
+                  </p>
+                  <div className="settings-row">
+                    <button
+                      type="button"
+                      className="btn-wide secondary"
+                      onClick={() => window.location.reload()}
+                    >
+                      {t("evoluServersReloadButton")}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+
               {selectedEvoluServerUrl ? (
                 <>
                   {(() => {
+                    const offline = isEvoluServerOffline(
+                      selectedEvoluServerUrl
+                    );
                     const state = evoluHasError
+                      ? "disconnected"
+                      : offline
                       ? "disconnected"
                       : evoluServerStatusByUrl[selectedEvoluServerUrl] ??
                         "checking";
+                    const isSynced =
+                      Boolean(syncOwner) &&
+                      !evoluHasError &&
+                      !offline &&
+                      state === "connected";
 
                     return (
                       <>
@@ -8982,7 +8914,9 @@ const App = () => {
                           </div>
                           <div className="settings-right">
                             <span className="muted">
-                              {state === "connected"
+                              {offline
+                                ? t("evoluServerOfflineStatus")
+                                : isSynced
                                 ? t("evoluSyncOk")
                                 : state === "checking"
                                 ? t("evoluSyncing")
@@ -8991,135 +8925,112 @@ const App = () => {
                           </div>
                         </div>
 
-                        {evoluHasError ? (
-                          <div className="settings-row">
-                            <div className="settings-left">
-                              <span className="settings-label">
-                                {t("errorPrefix")}
-                              </span>
-                            </div>
-                            <div className="settings-right">
-                              <span className="muted">
-                                {evoluErrorInfo.type ?? "Unknown"}
-                              </span>
-                            </div>
-                          </div>
-                        ) : null}
-
                         <div className="settings-row">
                           <div className="settings-left">
                             <span className="settings-label">
-                              {t("evoluLocalDataSize")}
+                              {t("evoluServerOfflineLabel")}
                             </span>
                           </div>
                           <div className="settings-right">
-                            <span className="muted">
-                              {evoluSyncedDataBytes === null
-                                ? "—"
-                                : formatBytes(evoluSyncedDataBytes)}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="settings-row">
-                          <button
-                            type="button"
-                            className="btn-wide secondary"
-                            onClick={() =>
-                              setEvoluShowServerDebugJson((v) => !v)
-                            }
-                          >
-                            {evoluShowServerDebugJson
-                              ? t("evoluHideServerDebugJson")
-                              : t("evoluShowServerDebugJson")}
-                          </button>
-                        </div>
-
-                        {evoluShowServerDebugJson ? (
-                          <pre className="debug-json">
-                            {JSON.stringify(
-                              {
-                                url: selectedEvoluServerUrl,
-                                state,
-                                probe:
-                                  evoluServerProbeByUrl[
-                                    selectedEvoluServerUrl
-                                  ] ?? null,
-                                lastEvoluError: evoluLastError ?? null,
-                              },
-                              null,
-                              2
-                            )}
-                          </pre>
-                        ) : null}
-
-                        <div className="settings-row">
-                          <button
-                            type="button"
-                            className="btn-wide secondary"
-                            onClick={() => {
-                              void cleanupEvoluSyncedLogs();
-                            }}
-                            disabled={!appOwnerId || evoluCleanupIsBusy}
-                          >
-                            {evoluCleanupIsBusy
-                              ? t("evoluCleanupLogsBusy")
-                              : t("evoluCleanupLogs")}
-                          </button>
-                        </div>
-
-                        <div className="settings-row">
-                          <button
-                            type="button"
-                            className={
-                              pendingEvoluServerDeleteUrl ===
-                              selectedEvoluServerUrl
-                                ? "btn-wide danger"
-                                : "btn-wide"
-                            }
-                            onClick={() => {
-                              const isDefault = DEFAULT_EVOLU_SERVER_URLS.some(
-                                (d) =>
-                                  d.toLowerCase() ===
-                                  selectedEvoluServerUrl.toLowerCase()
-                              );
-                              if (isDefault) {
-                                pushToast(t("evoluDefaultServerCannotRemove"));
-                                return;
-                              }
-
-                              if (
-                                pendingEvoluServerDeleteUrl ===
-                                selectedEvoluServerUrl
-                              ) {
-                                saveEvoluServerUrls(
-                                  evoluServerUrls.filter(
-                                    (u) =>
-                                      u.toLowerCase() !==
-                                      selectedEvoluServerUrl.toLowerCase()
-                                  )
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={() => {
+                                setEvoluServerOffline(
+                                  selectedEvoluServerUrl,
+                                  !offline
                                 );
-                                setPendingEvoluServerDeleteUrl(null);
-                                navigateToEvoluServers();
-                                return;
-                              }
-
-                              setStatus(t("deleteArmedHint"));
-                              setPendingEvoluServerDeleteUrl(
-                                selectedEvoluServerUrl
-                              );
-                            }}
-                          >
-                            {t("evoluServerRemove")}
-                          </button>
+                              }}
+                            >
+                              {offline
+                                ? t("evoluServerOfflineEnable")
+                                : t("evoluServerOfflineDisable")}
+                            </button>
+                          </div>
                         </div>
                       </>
                     );
                   })()}
+
+                  <div className="settings-row" style={{ marginTop: 10 }}>
+                    <button
+                      type="button"
+                      className="btn-wide danger"
+                      onClick={() => {
+                        void wipeEvoluStorage();
+                      }}
+                      disabled={evoluWipeStorageIsBusy}
+                    >
+                      {evoluWipeStorageIsBusy
+                        ? t("evoluWipeStorageBusy")
+                        : t("evoluWipeStorage")}
+                    </button>
+                  </div>
                 </>
               ) : (
                 <p className="lede">{t("errorPrefix")}</p>
               )}
+            </section>
+          )}
+
+          {route.kind === "evoluServerNew" && (
+            <section className="panel">
+              <label htmlFor="evoluServerUrl">{t("evoluAddServerLabel")}</label>
+              <input
+                id="evoluServerUrl"
+                value={newEvoluServerUrl}
+                onChange={(e) => setNewEvoluServerUrl(e.target.value)}
+                placeholder="wss://..."
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+
+              <div className="panel-header" style={{ marginTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const normalized =
+                      normalizeEvoluServerUrl(newEvoluServerUrl);
+                    if (!normalized) {
+                      pushToast(t("evoluAddServerInvalid"));
+                      return;
+                    }
+                    if (
+                      evoluServerUrls.some(
+                        (u) => u.toLowerCase() === normalized.toLowerCase()
+                      )
+                    ) {
+                      pushToast(t("evoluAddServerAlready"));
+                      navigateToEvoluServers();
+                      return;
+                    }
+
+                    saveEvoluServerUrls([...evoluServerUrls, normalized]);
+                    setNewEvoluServerUrl("");
+                    setStatus(t("evoluAddServerSaved"));
+                    navigateToEvoluServers();
+                  }}
+                  disabled={!normalizeEvoluServerUrl(newEvoluServerUrl)}
+                >
+                  {t("evoluAddServerButton")}
+                </button>
+              </div>
+
+              <div className="settings-row">
+                <button
+                  type="button"
+                  className="btn-wide danger"
+                  onClick={() => {
+                    void wipeEvoluStorage();
+                  }}
+                  disabled={evoluWipeStorageIsBusy}
+                >
+                  {evoluWipeStorageIsBusy
+                    ? t("evoluWipeStorageBusy")
+                    : t("evoluWipeStorage")}
+                </button>
+              </div>
             </section>
           )}
 
@@ -9181,53 +9092,6 @@ const App = () => {
                 {canSaveNewRelay ? (
                   <button onClick={saveNewRelay}>{t("saveChanges")}</button>
                 ) : null}
-              </div>
-            </section>
-          )}
-
-          {route.kind === "evoluServerNew" && (
-            <section className="panel">
-              <label htmlFor="evoluServerUrl">{t("evoluAddServerLabel")}</label>
-              <input
-                id="evoluServerUrl"
-                value={newEvoluServerUrl}
-                onChange={(e) => setNewEvoluServerUrl(e.target.value)}
-                placeholder="wss://..."
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-
-              <div className="panel-header" style={{ marginTop: 14 }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const normalized =
-                      normalizeEvoluServerUrl(newEvoluServerUrl);
-                    if (!normalized) {
-                      pushToast(t("evoluAddServerInvalid"));
-                      return;
-                    }
-                    if (
-                      evoluServerUrls.some(
-                        (u) => u.toLowerCase() === normalized.toLowerCase()
-                      )
-                    ) {
-                      pushToast(t("evoluAddServerAlready"));
-                      navigateToEvoluServers();
-                      return;
-                    }
-
-                    saveEvoluServerUrls([...evoluServerUrls, normalized]);
-                    setNewEvoluServerUrl("");
-                    setPendingEvoluServerDeleteUrl(null);
-                    setStatus(t("evoluAddServerSaved"));
-                    navigateToEvoluServers();
-                  }}
-                  disabled={!normalizeEvoluServerUrl(newEvoluServerUrl)}
-                >
-                  {t("evoluAddServerButton")}
-                </button>
               </div>
             </section>
           )}

@@ -2,6 +2,7 @@ import * as Evolu from "@evolu/common";
 import { createEvolu, SimpleName } from "@evolu/common";
 import { createUseEvolu, EvoluProvider } from "@evolu/react";
 import { evoluReactWebDeps } from "@evolu/react-web";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
 import {
   safeLocalStorageGetJson,
@@ -22,11 +23,33 @@ const isEvoluLoggingEnabled = (): boolean => {
 
 export const EVOLU_SERVERS_STORAGE_KEY = "linky.evoluServers.v1";
 
+// Backwards-compatible flag that allows removing the built-in default servers.
+// Without this, we can only store "extras" and the defaults would always be re-added.
+export const EVOLU_SERVERS_DEFAULT_REMOVED_STORAGE_KEY =
+  "linky.evoluServers.defaultRemoved.v1";
+
+export const EVOLU_SERVERS_DISABLED_STORAGE_KEY =
+  "linky.evoluServers.disabled.v1";
+
+export type EvoluServerStatus = "checking" | "connected" | "disconnected";
+
+export type EvoluDatabaseInfo = {
+  bytes: number | null;
+  tableCounts: Record<string, number | null>;
+  updatedAtMs: number | null;
+};
+
+export type JournalAction =
+  | "contact.add"
+  | "contact.edit"
+  | "contact.delete"
+  | (string & {});
+
 export const DEFAULT_EVOLU_SERVER_URLS: ReadonlyArray<string> = [
   "wss://free.evoluhq.com",
 ];
 
-const normalizeEvoluServerUrl = (value: unknown): string | null => {
+export const normalizeEvoluServerUrl = (value: unknown): string | null => {
   const raw = String(value ?? "")
     .trim()
     .replace(/\/+$/, "");
@@ -43,14 +66,23 @@ const normalizeEvoluServerUrl = (value: unknown): string | null => {
   }
 };
 
-export const getEvoluServerUrls = (): ReadonlyArray<string> => {
-  const stored = safeLocalStorageGetJson<unknown>(
-    EVOLU_SERVERS_STORAGE_KEY,
-    []
-  );
-  const arr = Array.isArray(stored) ? stored : [];
+export const formatBytes = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KiB", "MiB", "GiB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const digits = unitIndex === 0 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+};
 
-  const combined = [...DEFAULT_EVOLU_SERVER_URLS, ...arr]
+const normalizeUrlList = (
+  urls: ReadonlyArray<unknown>
+): ReadonlyArray<string> => {
+  const combined = urls
     .map(normalizeEvoluServerUrl)
     .filter((v): v is string => Boolean(v));
 
@@ -63,9 +95,81 @@ export const getEvoluServerUrls = (): ReadonlyArray<string> => {
     unique.push(url);
   }
 
-  // If storage was invalid/empty, ensure we always have at least the default.
-  if (unique.length === 0) return [...DEFAULT_EVOLU_SERVER_URLS];
   return unique;
+};
+
+export const getEvoluDisabledServerUrls = (): ReadonlyArray<string> => {
+  const stored = safeLocalStorageGetJson<unknown>(
+    EVOLU_SERVERS_DISABLED_STORAGE_KEY,
+    []
+  );
+  const arr = Array.isArray(stored) ? stored : [];
+  return normalizeUrlList(arr);
+};
+
+export const isEvoluServerDisabled = (url: string): boolean => {
+  const normalized = normalizeEvoluServerUrl(url);
+  if (!normalized) return false;
+  const disabled = getEvoluDisabledServerUrls();
+  return disabled.some((u) => u.toLowerCase() === normalized.toLowerCase());
+};
+
+export const setEvoluServerDisabled = (
+  url: string,
+  disabled: boolean
+): void => {
+  const normalized = normalizeEvoluServerUrl(url);
+  if (!normalized) return;
+  const current = [...getEvoluDisabledServerUrls()];
+  const lower = normalized.toLowerCase();
+  const next = disabled
+    ? normalizeUrlList([...current, normalized])
+    : normalizeUrlList(current.filter((u) => u.toLowerCase() !== lower));
+  safeLocalStorageSetJson(EVOLU_SERVERS_DISABLED_STORAGE_KEY, next);
+};
+
+export const toggleEvoluServerDisabled = (url: string): boolean => {
+  const next = !isEvoluServerDisabled(url);
+  setEvoluServerDisabled(url, next);
+  return next;
+};
+
+export const getEvoluConfiguredServerUrls = (): ReadonlyArray<string> => {
+  const stored = safeLocalStorageGetJson<unknown>(
+    EVOLU_SERVERS_STORAGE_KEY,
+    []
+  );
+  const arr = Array.isArray(stored) ? stored : [];
+
+  const defaultRemoved = Boolean(
+    safeLocalStorageGetJson<unknown>(
+      EVOLU_SERVERS_DEFAULT_REMOVED_STORAGE_KEY,
+      false
+    )
+  );
+
+  const combined = [
+    ...(defaultRemoved ? [] : DEFAULT_EVOLU_SERVER_URLS),
+    ...arr,
+  ];
+
+  const unique = normalizeUrlList(combined);
+
+  // If everything is removed, return empty list (= local-only instance).
+  return unique;
+};
+
+export const getEvoluServerUrls = (): ReadonlyArray<string> => {
+  // Back-compat alias: historically used as "the server list".
+  // Now returns configured (including disabled) so UIs can display everything.
+  return getEvoluConfiguredServerUrls();
+};
+
+export const getEvoluActiveServerUrls = (): ReadonlyArray<string> => {
+  const configured = getEvoluConfiguredServerUrls();
+  const disabled = getEvoluDisabledServerUrls();
+  const disabledLower = new Set(disabled.map((u) => u.toLowerCase()));
+  return configured.filter((u) => !disabledLower.has(u.toLowerCase()));
 };
 
 export const setEvoluServerUrls = (urls: ReadonlyArray<string>): void => {
@@ -82,20 +186,77 @@ export const setEvoluServerUrls = (urls: ReadonlyArray<string>): void => {
     unique.push(url);
   }
 
-  // We persist only non-default extras.
+  // Persist whether defaults are removed, and persist only non-default extras.
   const defaultsLower = new Set(
     DEFAULT_EVOLU_SERVER_URLS.map((u) => u.toLowerCase())
   );
+  const hasAnyDefault = unique.some((u) => defaultsLower.has(u.toLowerCase()));
+  safeLocalStorageSetJson(
+    EVOLU_SERVERS_DEFAULT_REMOVED_STORAGE_KEY,
+    !hasAnyDefault
+  );
+
   const extras = unique.filter((u) => !defaultsLower.has(u.toLowerCase()));
   safeLocalStorageSetJson(EVOLU_SERVERS_STORAGE_KEY, extras);
 };
 
-export const EVOLU_SERVER_URLS: ReadonlyArray<string> = getEvoluServerUrls();
+export const EVOLU_SERVER_URLS: ReadonlyArray<string> =
+  getEvoluActiveServerUrls();
+
+export const buildEvoluTransports = (
+  urls: ReadonlyArray<string>
+): ReadonlyArray<{ type: "WebSocket"; url: string }> =>
+  urls.map((url) => ({ type: "WebSocket", url }));
 
 export const EVOLU_TRANSPORTS: ReadonlyArray<{
   type: "WebSocket";
   url: string;
-}> = EVOLU_SERVER_URLS.map((url) => ({ type: "WebSocket", url }));
+}> = buildEvoluTransports(EVOLU_SERVER_URLS);
+
+export const probeWebSocketConnection = (
+  url: string,
+  timeoutMs = 2500
+): Promise<boolean> => {
+  return new Promise<boolean>((resolve) => {
+    let ws: WebSocket | null = null;
+    let done = false;
+
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      try {
+        ws?.close();
+      } catch {
+        // ignore
+      }
+      resolve(ok);
+    };
+
+    try {
+      ws = new WebSocket(url);
+    } catch {
+      finish(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
+
+    ws.addEventListener("open", () => {
+      window.clearTimeout(timer);
+      finish(true);
+    });
+
+    ws.addEventListener("error", () => {
+      window.clearTimeout(timer);
+      finish(false);
+    });
+
+    ws.addEventListener("close", () => {
+      window.clearTimeout(timer);
+      finish(false);
+    });
+  });
+};
 
 // Primary key pro Contact tabulku
 const ContactId = Evolu.id("Contact");
@@ -124,6 +285,10 @@ export type AppStateId = typeof AppStateId.Type;
 // Primary key pro MintInfo tabulku (metadata o mintech)
 const MintId = Evolu.id("Mint");
 export type MintId = typeof MintId.Type;
+
+// Primary key pro JournalEntry tabulku (audit změn)
+const JournalEntryId = Evolu.id("JournalEntry");
+export type JournalEntryId = typeof JournalEntryId.Type;
 
 // Schema pro Linky app
 export const Schema = {
@@ -218,6 +383,24 @@ export const Schema = {
     infoJson: Evolu.nullOr(Evolu.NonEmptyString1000),
     lastCheckedAtSec: Evolu.nullOr(Evolu.PositiveInt),
   },
+
+  journalEntry: {
+    id: JournalEntryId,
+    // Seconds since epoch.
+    createdAtSec: Evolu.PositiveInt,
+    // e.g. "contact.add" | "contact.edit" | "contact.delete"
+    action: Evolu.NonEmptyString100,
+    // e.g. "contact"
+    entity: Evolu.NonEmptyString100,
+    // id of mutated entity (best-effort string)
+    entityId: Evolu.nullOr(Evolu.NonEmptyString1000),
+    // short human-readable summary
+    summary: Evolu.nullOr(Evolu.NonEmptyString1000),
+    // estimated UTF-8 bytes of payloadJson (full JSON before truncation)
+    payloadBytes: Evolu.PositiveInt,
+    // JSON payload (best-effort, truncated)
+    payloadJson: Evolu.nullOr(Evolu.NonEmptyString1000),
+  },
 };
 
 // Vytvoř Evolu instanci
@@ -255,6 +438,329 @@ export const evolu = createEvolu(evoluReactWebDeps)(Schema, {
   enableLogging: isEvoluLoggingEnabled(),
   ...(externalAppOwner ? { externalAppOwner } : {}),
 });
+
+export const useEvoluSyncOwner = (enabled: boolean): Evolu.SyncOwner | null => {
+  const [syncOwner, setSyncOwner] = useState<Evolu.SyncOwner | null>(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      setSyncOwner(null);
+      return;
+    }
+
+    let cancelled = false;
+    void evolu.appOwner
+      .then((owner) => {
+        if (cancelled) return;
+        setSyncOwner(owner as unknown as Evolu.SyncOwner);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSyncOwner(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  return syncOwner;
+};
+
+export const useEvoluLastError = (opts?: {
+  logToConsole?: boolean;
+}): unknown => {
+  const logToConsole = opts?.logToConsole ?? false;
+  const [lastError, setLastError] = useState<unknown>(null);
+
+  useEffect(() => {
+    const unsub = evolu.subscribeError(() => {
+      const err = evolu.getError();
+      setLastError(err);
+      if (logToConsole && err) console.log("[linky][evolu] error", err);
+    });
+
+    return () => {
+      try {
+        unsub();
+      } catch {
+        // ignore
+      }
+    };
+  }, [logToConsole]);
+
+  return lastError;
+};
+
+export const getEvoluDatabaseInfo = async (): Promise<{
+  bytes: number;
+  tableCounts: Record<string, number | null>;
+}> => {
+  const tables = [
+    "contact",
+    "cashuToken",
+    "nostrIdentity",
+    "nostrMessage",
+    "paymentEvent",
+    "appState",
+    "mintInfo",
+    "journalEntry",
+  ] as const;
+
+  const dbBytesPromise = evolu
+    .exportDatabase()
+    .then((bytes) => bytes.byteLength);
+
+  const tableCountsPromise = (async () => {
+    const out: Record<string, number | null> = {};
+    for (const table of tables) {
+      try {
+        const q = evolu.createQuery((db: any) =>
+          db.selectFrom(table).select((eb: any) => eb.fn.countAll().as("count"))
+        );
+        const rows = await evolu.loadQuery(q as any);
+        out[table] = Number((rows?.[0] as any)?.count ?? 0);
+      } catch {
+        out[table] = null;
+      }
+    }
+    return out;
+  })();
+
+  const [bytes, tableCounts] = await Promise.all([
+    dbBytesPromise,
+    tableCountsPromise,
+  ]);
+
+  return { bytes, tableCounts };
+};
+
+const estimateUtf8Bytes = (value: string): number => {
+  try {
+    return new TextEncoder().encode(value).byteLength;
+  } catch {
+    // Fallback: rough approximation.
+    return value.length;
+  }
+};
+
+export const createJournalEntryPayload = (args: {
+  action: JournalAction;
+  entity: string;
+  entityId?: unknown;
+  summary?: unknown;
+  payload?: unknown;
+  createdAtSec?: number;
+}): any => {
+  const createdAtSec =
+    typeof args.createdAtSec === "number" && args.createdAtSec > 0
+      ? Math.floor(args.createdAtSec)
+      : Math.floor(Date.now() / 1000);
+
+  const payloadJsonFull =
+    args.payload === undefined ? "" : JSON.stringify(args.payload);
+  const payloadBytes = Math.max(1, estimateUtf8Bytes(payloadJsonFull));
+
+  const payloadJsonTruncated = payloadJsonFull
+    ? payloadJsonFull.slice(0, 1000)
+    : null;
+
+  const summary = String(args.summary ?? "").trim();
+  const entityId = String(args.entityId ?? "").trim();
+
+  return {
+    createdAtSec,
+    action: String(args.action).slice(0, 100),
+    entity: String(args.entity).slice(0, 100),
+    entityId: entityId ? entityId.slice(0, 1000) : null,
+    summary: summary ? summary.slice(0, 1000) : null,
+    payloadBytes,
+    payloadJson: payloadJsonTruncated ? payloadJsonTruncated : null,
+  };
+};
+
+export const makeJournalEntriesQuery = (limit = 100) =>
+  evolu.createQuery((db: any) =>
+    db
+      .selectFrom("journalEntry")
+      .selectAll()
+      .orderBy("createdAtSec", "desc")
+      .limit(Math.max(1, Math.min(1000, Math.floor(limit))))
+  );
+
+export const wipeEvoluStorage = (): void => {
+  const storedMnemonic = (() => {
+    try {
+      return localStorage.getItem(INITIAL_MNEMONIC_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  })();
+
+  const mnemonicResult = Evolu.Mnemonic.fromUnknown(storedMnemonic);
+  if (!mnemonicResult.ok) {
+    throw new Error("Missing stored mnemonic");
+  }
+
+  // Clear any leftover internal snapshot from older builds.
+  try {
+    localStorage.removeItem("linky.evolu.compactionSnapshot.v1");
+  } catch {
+    // ignore
+  }
+
+  // Hard wipe Evolu local storage (journal + state) and reload.
+  void evolu.restoreAppOwner(mnemonicResult.value, { reload: true });
+};
+
+export const useEvoluDatabaseInfoState = (opts?: {
+  enabled?: boolean;
+  onError?: (err: unknown) => void;
+}) => {
+  const enabled = opts?.enabled ?? true;
+  const onError = opts?.onError;
+
+  const [info, setInfo] = useState<EvoluDatabaseInfo>(() => ({
+    bytes: null,
+    tableCounts: {},
+    updatedAtMs: null,
+  }));
+  const [isBusy, setIsBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    try {
+      const next = await getEvoluDatabaseInfo();
+      setInfo({
+        bytes: next.bytes,
+        tableCounts: next.tableCounts,
+        updatedAtMs: Date.now(),
+      });
+    } catch (err) {
+      onError?.(err);
+    } finally {
+      setIsBusy(false);
+    }
+  }, [isBusy, onError]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    if (info.bytes !== null) return;
+    void refresh();
+  }, [enabled, info.bytes, refresh]);
+
+  return {
+    info,
+    isBusy,
+    refresh,
+  } as const;
+};
+
+export const useEvoluServersManager = (opts?: {
+  probeIntervalMs?: number;
+  probeTimeoutMs?: number;
+}) => {
+  const probeIntervalMs = opts?.probeIntervalMs ?? 15000;
+  const probeTimeoutMs = opts?.probeTimeoutMs ?? 3500;
+
+  const [configuredUrls, setConfiguredUrlsState] = useState<string[]>(() => [
+    ...getEvoluConfiguredServerUrls(),
+  ]);
+  const [disabledUrls, setDisabledUrlsState] = useState<string[]>(() => [
+    ...getEvoluDisabledServerUrls(),
+  ]);
+  const [statusByUrl, setStatusByUrl] = useState<
+    Record<string, EvoluServerStatus>
+  >(() => ({}));
+  const [reloadRequired, setReloadRequired] = useState(false);
+
+  const disabledLower = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of disabledUrls) s.add(u.toLowerCase());
+    return s;
+  }, [disabledUrls]);
+
+  const isOffline = useCallback(
+    (url: string): boolean => disabledLower.has(url.toLowerCase()),
+    [disabledLower]
+  );
+
+  const activeUrls = useMemo(
+    () => configuredUrls.filter((u) => !isOffline(u)),
+    [configuredUrls, isOffline]
+  );
+
+  const refreshFromStorage = useCallback(() => {
+    setConfiguredUrlsState([...getEvoluConfiguredServerUrls()]);
+    setDisabledUrlsState([...getEvoluDisabledServerUrls()]);
+  }, []);
+
+  const setServerUrls = useCallback(
+    (nextUrls: string[]) => {
+      setEvoluServerUrls(nextUrls);
+      refreshFromStorage();
+      setReloadRequired(true);
+    },
+    [refreshFromStorage]
+  );
+
+  const setServerOffline = useCallback(
+    (url: string, offline: boolean) => {
+      setEvoluServerDisabled(url, offline);
+      refreshFromStorage();
+      setReloadRequired(true);
+    },
+    [refreshFromStorage]
+  );
+
+  useEffect(() => {
+    if (activeUrls.length === 0) return;
+    let cancelled = false;
+
+    const run = async () => {
+      setStatusByUrl((prev) => {
+        const next = { ...prev };
+        for (const url of activeUrls) next[url] = "checking";
+        return next;
+      });
+
+      const results = await Promise.all(
+        activeUrls.map(async (url) => {
+          const ok = await probeWebSocketConnection(url, probeTimeoutMs);
+          return [url, ok] as const;
+        })
+      );
+
+      if (cancelled) return;
+      setStatusByUrl((prev) => {
+        const next = { ...prev };
+        for (const [url, ok] of results)
+          next[url] = ok ? "connected" : "disconnected";
+        return next;
+      });
+    };
+
+    void run();
+    const intervalId = window.setInterval(run, probeIntervalMs);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [activeUrls, probeIntervalMs, probeTimeoutMs]);
+
+  return {
+    configuredUrls,
+    disabledUrls,
+    activeUrls,
+    statusByUrl,
+    reloadRequired,
+    refreshFromStorage,
+    setServerUrls,
+    isOffline,
+    setServerOffline,
+  } as const;
+};
 
 // Export EvoluProvider pro použití v main.tsx
 export { EvoluProvider };
