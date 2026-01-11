@@ -11,11 +11,8 @@ import type { CashuTokenId, ContactId, MintId } from "./evolu";
 import {
   createJournalEntryPayload,
   evolu,
-  formatBytes,
-  makeJournalEntriesQuery,
   normalizeEvoluServerUrl,
   useEvolu,
-  useEvoluDatabaseInfoState,
   useEvoluLastError,
   useEvoluServersManager,
   useEvoluSyncOwner,
@@ -469,30 +466,6 @@ const App = () => {
 
   const [evoluWipeStorageIsBusy, setEvoluWipeStorageIsBusy] =
     useState<boolean>(false);
-
-  const evoluDb = useEvoluDatabaseInfoState({
-    enabled: route.kind === "evoluServers",
-    onError: (e) => {
-      pushToast(
-        lang === "cs"
-          ? `Nepodařilo se načíst Evolu DB info: ${String(e ?? "")}`
-          : `Failed to read Evolu DB info: ${String(e ?? "")}`
-      );
-    },
-  });
-
-  const evoluDbInfo = evoluDb.info;
-  const evoluDbInfoIsBusy = evoluDb.isBusy;
-  const refreshEvoluDbInfo = evoluDb.refresh;
-
-  const evoluJournalQuery = useMemo(() => makeJournalEntriesQuery(200), []);
-  const evoluJournalRows = useQuery(evoluJournalQuery);
-  const evoluJournalApproxBytes = useMemo(() => {
-    return evoluJournalRows.reduce((sum, r) => {
-      const b = Number((r as any)?.payloadBytes ?? 0) || 0;
-      return sum + b;
-    }, 0);
-  }, [evoluJournalRows]);
 
   const wipeEvoluStorage = React.useCallback(async () => {
     if (evoluWipeStorageIsBusy) return;
@@ -8630,219 +8603,66 @@ const App = () => {
 
           {route.kind === "evoluServers" && (
             <section className="panel">
-              {evoluServersReloadRequired ? (
-                <>
-                  <p className="muted" style={{ marginTop: 2 }}>
-                    {t("evoluServersReloadHint")}
-                  </p>
-                  <div className="settings-row">
-                    <button
-                      type="button"
-                      className="btn-wide secondary"
-                      onClick={() => window.location.reload()}
-                    >
-                      {t("evoluServersReloadButton")}
-                    </button>
-                  </div>
-                </>
-              ) : null}
+              {evoluServerUrls.length === 0 ? (
+                <p className="muted" style={{ marginTop: 0 }}>
+                  {t("evoluServersEmpty")}
+                </p>
+              ) : (
+                <div>
+                  {evoluServerUrls.map((url) => {
+                    const offline = isEvoluServerOffline(url);
+                    const state = offline
+                      ? "disconnected"
+                      : evoluHasError
+                      ? "disconnected"
+                      : evoluServerStatusByUrl[url] ?? "checking";
 
-              <div className="settings-row">
-                <div className="settings-left">
-                  <span className="settings-label">
-                    {t("evoluLocalDataSize")}
-                  </span>
-                </div>
-                <div className="settings-right">
-                  <span className="muted">
-                    {evoluDbInfo.bytes === null
-                      ? "—"
-                      : formatBytes(evoluDbInfo.bytes)}
-                  </span>
-                </div>
-              </div>
+                    const isSynced =
+                      Boolean(syncOwner) &&
+                      !evoluHasError &&
+                      !offline &&
+                      state === "connected";
 
-              {Object.keys(evoluDbInfo.tableCounts).length ? (
-                <div style={{ marginTop: 6 }}>
-                  {Object.entries(evoluDbInfo.tableCounts).map(
-                    ([table, count]) => (
-                      <div className="settings-row" key={table}>
+                    return (
+                      <button
+                        type="button"
+                        className="settings-row settings-link"
+                        key={url}
+                        onClick={() => navigateToEvoluServer(url)}
+                      >
                         <div className="settings-left">
-                          <span className="settings-label">{table}</span>
+                          <span className="relay-url">{url}</span>
                         </div>
                         <div className="settings-right">
-                          <span className="muted">
-                            {count === null ? "—" : String(count)}
+                          <span
+                            className={
+                              state === "connected"
+                                ? "status-dot connected"
+                                : state === "checking"
+                                ? "status-dot checking"
+                                : "status-dot disconnected"
+                            }
+                            aria-label={state}
+                            title={state}
+                          />
+                          <span className="muted" style={{ marginLeft: 10 }}>
+                            {offline
+                              ? t("evoluServerOfflineStatus")
+                              : isSynced
+                              ? t("evoluSyncOk")
+                              : state === "checking"
+                              ? t("evoluSyncing")
+                              : t("evoluNotSynced")}
+                          </span>
+                          <span className="settings-chevron" aria-hidden="true">
+                            &gt;
                           </span>
                         </div>
-                      </div>
-                    )
-                  )}
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : null}
-
-              <div className="settings-row" style={{ marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="btn-wide secondary"
-                  onClick={() => void refreshEvoluDbInfo()}
-                  disabled={evoluDbInfoIsBusy}
-                >
-                  {evoluDbInfoIsBusy
-                    ? t("evoluDbRefreshBusy")
-                    : t("evoluDbRefresh")}
-                </button>
-              </div>
-
-              <div className="settings-row" style={{ marginTop: 14 }}>
-                <div className="settings-left">
-                  <span className="settings-label">{t("evoluJournal")}</span>
-                </div>
-                <div className="settings-right">
-                  <span className="muted">
-                    {formatBytes(evoluJournalApproxBytes)}
-                  </span>
-                </div>
-              </div>
-
-              <p className="muted" style={{ marginTop: 2 }}>
-                {t("evoluJournalApproxBytesHint")}
-              </p>
-
-              <div style={{ marginTop: 10 }}>
-                {evoluJournalRows.length === 0 ? (
-                  <p className="muted" style={{ marginTop: 0 }}>
-                    {t("evoluJournalEmpty")}
-                  </p>
-                ) : (
-                  <div>
-                    {evoluJournalRows.slice(0, 50).map((row: any) => {
-                      const createdAtSec = Number(row?.createdAtSec ?? 0) || 0;
-                      const action = String(row?.action ?? "");
-                      const summary = String(row?.summary ?? "");
-                      const payloadBytes = Number(row?.payloadBytes ?? 0) || 0;
-
-                      const actionLabel =
-                        action === "contact.add"
-                          ? t("evoluJournalContactAdded")
-                          : action === "contact.edit"
-                          ? t("evoluJournalContactEdited")
-                          : action === "contact.delete"
-                          ? t("evoluJournalContactDeleted")
-                          : action || t("unknown");
-
-                      const when = createdAtSec
-                        ? new Date(createdAtSec * 1000).toLocaleString(
-                            lang === "cs" ? "cs-CZ" : "en-US"
-                          )
-                        : "—";
-
-                      return (
-                        <div
-                          className="settings-row"
-                          key={String(row?.id ?? when)}
-                        >
-                          <div className="settings-left">
-                            <span className="settings-label">
-                              {actionLabel}
-                            </span>
-                            <div className="muted" style={{ marginTop: 4 }}>
-                              {when}
-                              {summary ? ` · ${summary}` : ""}
-                            </div>
-                          </div>
-                          <div className="settings-right">
-                            <span className="muted">
-                              {payloadBytes ? formatBytes(payloadBytes) : "—"}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ marginTop: 10 }}>
-                {evoluServerUrls.length === 0 ? (
-                  <p className="muted" style={{ marginTop: 0 }}>
-                    {t("evoluServersEmpty")}
-                  </p>
-                ) : (
-                  <div>
-                    {evoluServerUrls.map((url) => {
-                      const offline = isEvoluServerOffline(url);
-                      const state = offline
-                        ? "disconnected"
-                        : evoluHasError
-                        ? "disconnected"
-                        : evoluServerStatusByUrl[url] ?? "checking";
-
-                      const isSynced =
-                        Boolean(syncOwner) &&
-                        !evoluHasError &&
-                        !offline &&
-                        state === "connected";
-
-                      return (
-                        <button
-                          type="button"
-                          className="settings-row settings-link"
-                          key={url}
-                          onClick={() => navigateToEvoluServer(url)}
-                        >
-                          <div className="settings-left">
-                            <span className="relay-url">{url}</span>
-                          </div>
-                          <div className="settings-right">
-                            <span
-                              className={
-                                state === "connected"
-                                  ? "status-dot connected"
-                                  : state === "checking"
-                                  ? "status-dot checking"
-                                  : "status-dot disconnected"
-                              }
-                              aria-label={state}
-                              title={state}
-                            />
-                            <span className="muted" style={{ marginLeft: 10 }}>
-                              {offline
-                                ? t("evoluServerOfflineStatus")
-                                : isSynced
-                                ? t("evoluSyncOk")
-                                : state === "checking"
-                                ? t("evoluSyncing")
-                                : t("evoluNotSynced")}
-                            </span>
-                            <span
-                              className="settings-chevron"
-                              aria-hidden="true"
-                            >
-                              &gt;
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="settings-row" style={{ marginTop: 12 }}>
-                <button
-                  type="button"
-                  className="btn-wide danger"
-                  onClick={() => {
-                    void wipeEvoluStorage();
-                  }}
-                  disabled={evoluWipeStorageIsBusy}
-                >
-                  {evoluWipeStorageIsBusy
-                    ? t("evoluWipeStorageBusy")
-                    : t("evoluWipeStorage")}
-                </button>
-              </div>
+              )}
             </section>
           )}
 
