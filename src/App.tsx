@@ -570,6 +570,7 @@ const App = () => {
   const [topupInvoiceIsBusy, setTopupInvoiceIsBusy] = useState(false);
 
   const [chatDraft, setChatDraft] = useState<string>("");
+  const [chatSendIsBusy, setChatSendIsBusy] = useState(false);
   const chatSeenWrapIdsRef = React.useRef<Set<string>>(new Set());
   const autoAcceptedChatMessageIdsRef = React.useRef<Set<string>>(new Set());
 
@@ -3260,12 +3261,22 @@ const App = () => {
               [npub]: rememberBlobAvatarUrl(npub, blobUrl || url),
             }));
           } else {
-            setNostrPictureByNpub((prev) => ({ ...prev, [npub]: null }));
+            setNostrPictureByNpub((prev) => {
+              const existing = prev[npub];
+              if (typeof existing === "string" && existing.trim()) return prev;
+              if (existing === null) return prev;
+              return { ...prev, [npub]: null };
+            });
           }
         } catch {
           saveCachedProfilePicture(npub, null);
           if (cancelled) return;
-          setNostrPictureByNpub((prev) => ({ ...prev, [npub]: null }));
+          setNostrPictureByNpub((prev) => {
+            const existing = prev[npub];
+            if (typeof existing === "string" && existing.trim()) return prev;
+            if (existing === null) return prev;
+            return { ...prev, [npub]: null };
+          });
         } finally {
           nostrInFlight.current.delete(npub);
         }
@@ -4209,24 +4220,24 @@ const App = () => {
       add_contact: [
         {
           id: "add_contact_1",
-          selector: '[data-guide="contacts-add"]',
+          selector: '[data-guide="profile-qr-button"]',
           titleKey: "guideAddContactStep1Title",
           bodyKey: "guideAddContactStep1Body",
           ensure: () => ensureRoute("contacts"),
         },
         {
           id: "add_contact_2",
-          selector: '[data-guide="contact-save"]',
+          selector: '[data-guide="scan-contact-button"]',
           titleKey: "guideAddContactStep2Title",
           bodyKey: "guideAddContactStep2Body",
-          ensure: () => ensureRoute("contactNew"),
+          ensure: () => ensureRoute("contacts"),
         },
         {
           id: "add_contact_3",
-          selector: '[data-guide="scan-button"]',
+          selector: '[data-guide="contact-save"]',
           titleKey: "guideAddContactStep3Title",
           bodyKey: "guideAddContactStep3Body",
-          ensure: () => ensureRoute("settings"),
+          ensure: () => ensureRoute("contactNew"),
         },
       ],
       topup: [
@@ -6037,6 +6048,9 @@ const App = () => {
       return;
     }
 
+    if (chatSendIsBusy) return;
+    setChatSendIsBusy(true);
+
     try {
       const { nip19, getPublicKey } = await import("nostr-tools");
       const { wrapEvent } = await import("nostr-tools/nip59");
@@ -6103,6 +6117,8 @@ const App = () => {
       setChatDraft("");
     } catch (e) {
       setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
+    } finally {
+      setChatSendIsBusy(false);
     }
   };
 
@@ -9937,19 +9953,23 @@ const App = () => {
                       value={chatDraft}
                       onChange={(e) => setChatDraft(e.target.value)}
                       placeholder={t("chatPlaceholder")}
-                      disabled={!String(selectedContact.npub ?? "").trim()}
+                      disabled={
+                        chatSendIsBusy ||
+                        !String(selectedContact.npub ?? "").trim()
+                      }
                       data-guide="chat-input"
                     />
                     <button
                       className="btn-wide"
                       onClick={() => void sendChatMessage()}
                       disabled={
+                        chatSendIsBusy ||
                         !chatDraft.trim() ||
                         !String(selectedContact.npub ?? "").trim()
                       }
                       data-guide="chat-send"
                     >
-                      {t("send")}
+                      {chatSendIsBusy ? `${t("send")}…` : t("send")}
                     </button>
                   </div>
                 </>
@@ -10231,6 +10251,52 @@ const App = () => {
 
           {route.kind === "contacts" && (
             <>
+              {showGroupFilter && (
+                <nav className="group-filter-bar" aria-label={t("group")}>
+                  <div className="group-filter-inner">
+                    <button
+                      type="button"
+                      className={
+                        activeGroup === null
+                          ? "group-filter-btn is-active"
+                          : "group-filter-btn"
+                      }
+                      onClick={() => setActiveGroup(null)}
+                    >
+                      {t("all")}
+                    </button>
+                    {showNoGroupFilter ? (
+                      <button
+                        type="button"
+                        className={
+                          activeGroup === NO_GROUP_FILTER
+                            ? "group-filter-btn is-active"
+                            : "group-filter-btn"
+                        }
+                        onClick={() => setActiveGroup(NO_GROUP_FILTER)}
+                      >
+                        {t("noGroup")}
+                      </button>
+                    ) : null}
+                    {groupNames.map((group) => (
+                      <button
+                        key={group}
+                        type="button"
+                        className={
+                          activeGroup === group
+                            ? "group-filter-btn is-active"
+                            : "group-filter-btn"
+                        }
+                        onClick={() => setActiveGroup(group)}
+                        title={group}
+                      >
+                        {group}
+                      </button>
+                    ))}
+                  </div>
+                </nav>
+              )}
+
               <section className="panel panel-plain">
                 <div className="contact-list">
                   {contacts.length === 0 && (
@@ -10302,51 +10368,65 @@ const App = () => {
                 </div>
               </section>
 
-              {showGroupFilter && (
-                <nav className="group-filter-bar" aria-label={t("group")}>
-                  <div className="group-filter-inner">
-                    <button
-                      type="button"
-                      className={
-                        activeGroup === null
-                          ? "group-filter-btn is-active"
-                          : "group-filter-btn"
-                      }
-                      onClick={() => setActiveGroup(null)}
-                    >
-                      {t("all")}
-                    </button>
-                    {showNoGroupFilter ? (
-                      <button
-                        type="button"
-                        className={
-                          activeGroup === NO_GROUP_FILTER
-                            ? "group-filter-btn is-active"
-                            : "group-filter-btn"
-                        }
-                        onClick={() => setActiveGroup(NO_GROUP_FILTER)}
-                      >
-                        {t("noGroup")}
-                      </button>
-                    ) : null}
-                    {groupNames.map((group) => (
-                      <button
-                        key={group}
-                        type="button"
-                        className={
-                          activeGroup === group
-                            ? "group-filter-btn is-active"
-                            : "group-filter-btn"
-                        }
-                        onClick={() => setActiveGroup(group)}
-                        title={group}
-                      >
-                        {group}
-                      </button>
-                    ))}
-                  </div>
-                </nav>
-              )}
+              <div className="contacts-qr-bar" role="region">
+                <div className="contacts-qr-inner">
+                  <button
+                    type="button"
+                    className="contacts-qr-btn secondary"
+                    onClick={navigateToProfile}
+                    data-guide="profile-qr-button"
+                  >
+                    <span className="contacts-qr-btn-icon" aria-hidden="true">
+                      {myProfilePicture ? (
+                        <img
+                          className="contacts-qr-avatar"
+                          src={myProfilePicture}
+                          alt=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            d="M12 12c2.761 0 5-2.239 5-5S14.761 2 12 2 7 4.239 7 7s2.239 5 5 5Z"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          />
+                          <path
+                            d="M4 22c0-4.418 3.582-8 8-8s8 3.582 8 8"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="contacts-qr-btn-label">
+                      {t("contactsShowProfileQr")}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="contacts-qr-btn"
+                    onClick={openScan}
+                    disabled={scanIsOpen}
+                    data-guide="scan-contact-button"
+                  >
+                    <span className="contacts-qr-btn-icon" aria-hidden="true">
+                      <span className="contacts-qr-scanIcon" />
+                    </span>
+                    <span className="contacts-qr-btn-label">
+                      {t("contactsScanContactQr")}
+                    </span>
+                  </button>
+                </div>
+              </div>
             </>
           )}
 

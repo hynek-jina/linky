@@ -162,15 +162,19 @@ export const en = {
   guideNext: "Next",
   guideDone: "Done",
 
-  guideAddContactStep1Title: "Add a contact",
-  guideAddContactStep1Body: "Tap + to create your first contact.",
-  guideAddContactStep2Title: "Save contact",
-  guideAddContactStep2Body:
-    "Fill at least one field and save the contact. If you paste an npub, other details will load automatically. You can also set a contact group.",
+  contactsShowProfileQr: "Show profile QR",
+  contactsScanContactQr: "Scan contact QR",
 
-  guideAddContactStep3Title: "Add via scan",
+  guideAddContactStep1Title: "Show your QR",
+  guideAddContactStep1Body:
+    "Tap Show profile QR and show your QR code (npub) to the other person.",
+  guideAddContactStep2Title: "Scan their QR",
+  guideAddContactStep2Body:
+    "Tap Scan contact QR and scan the other person’s QR code (npub).",
+
+  guideAddContactStep3Title: "Save contact",
   guideAddContactStep3Body:
-    "You can also add a contact by scanning their QR code (npub) via Settings → Scan.",
+    "After scanning, the contact screen will open. Add a name / group and save.",
 
   guideTopupStep1Title: "Load bitcoin",
   guideTopupStep1Body: "Open the menu (☰).",

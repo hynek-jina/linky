@@ -1343,14 +1343,13 @@ button.icon {
 }
 
 .group-filter-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 12px 20px;
-  background: rgba(15, 23, 42, 0.9);
+  position: sticky;
+  top: 48px;
+  z-index: 9;
+  padding: 10px 0 6px;
+  background: transparent;
   border-top: none;
-  backdrop-filter: blur(8px);
+  backdrop-filter: none;
 }
 
 .group-filter-inner {
@@ -1360,6 +1359,64 @@ button.icon {
   gap: 10px;
   overflow-x: auto;
   padding-bottom: 4px;
+}
+
+.contacts-qr-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  padding: 12px 20px;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.contacts-qr-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.contacts-qr-btn {
+  flex: 0 0 auto;
+  min-width: 160px;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.contacts-qr-btn-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.contacts-qr-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: block;
+}
+
+.contacts-qr-scanIcon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  border: 2px dashed currentColor;
+  border-radius: 5px;
+  box-sizing: border-box;
+  opacity: 0.9;
 }
 
 .group-filter-btn {

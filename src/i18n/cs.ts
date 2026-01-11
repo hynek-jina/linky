@@ -162,15 +162,19 @@ export const cs = {
   guideNext: "Další",
   guideDone: "Hotovo",
 
-  guideAddContactStep1Title: "Přidat kontakt",
-  guideAddContactStep1Body: "Klepněte na + a vytvořte svůj první kontakt.",
-  guideAddContactStep2Title: "Uložit kontakt",
-  guideAddContactStep2Body:
-    "Vyplňte alespoň jedno pole a uložte kontakt. Když vložíte npub, ostatní informace se načtou automaticky. Můžete taky vyplnit skupinu kontaktu.",
+  contactsShowProfileQr: "Ukázat QR profilu",
+  contactsScanContactQr: "Scanovat QR kontaktu",
 
-  guideAddContactStep3Title: "Přidat přes scan",
+  guideAddContactStep1Title: "Ukázat svůj QR",
+  guideAddContactStep1Body:
+    "Klepněte na Ukázat QR profilu a ukažte svůj QR kód (npub) druhému uživateli.",
+  guideAddContactStep2Title: "Naskenovat QR kontaktu",
+  guideAddContactStep2Body:
+    "Klepněte na Scanovat QR kontaktu a naskenujte QR kód (npub) od druhého uživatele.",
+
+  guideAddContactStep3Title: "Uložit kontakt",
   guideAddContactStep3Body:
-    "Kontakt můžete přidat také naskenováním QR kódu (npub) druhého uživatele v Nastavení → Scan.",
+    "Po naskenování se otevře kontakt. Doplňte jméno / skupinu a uložte.",
 
   guideTopupStep1Title: "Dobít bitcoin",
   guideTopupStep1Body: "Otevřete menu (☰).",
