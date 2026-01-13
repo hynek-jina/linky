@@ -677,8 +677,6 @@ const App = () => {
     picture: string;
   } | null>(null);
 
-  const profileFetchToastShownForNpubRef = React.useRef<string | null>(null);
-
   const contactEditInitialRef = React.useRef<{
     id: ContactId;
     name: string;
@@ -1450,6 +1448,17 @@ const App = () => {
       return sum + (relayStatusByUrl[url] === "connected" ? 1 : 0);
     }, 0);
   }, [relayUrls, relayStatusByUrl]);
+
+  const nostrRelayOverallStatus = useMemo<
+    "connected" | "checking" | "disconnected"
+  >(() => {
+    if (relayUrls.length === 0) return "disconnected";
+    if (connectedRelayCount > 0) return "connected";
+    const anyChecking = relayUrls.some(
+      (url) => (relayStatusByUrl[url] ?? "checking") === "checking"
+    );
+    return anyChecking ? "checking" : "disconnected";
+  }, [connectedRelayCount, relayStatusByUrl, relayUrls]);
 
   const selectedRelayUrl = useMemo(() => {
     if (route.kind !== "nostrRelay") return null;
@@ -2942,12 +2951,6 @@ const App = () => {
     // Load current user's Nostr profile (name + picture) from relays.
     if (!currentNpub) return;
 
-    // One toast per npub so we don't spam when deps change.
-    if (profileFetchToastShownForNpubRef.current !== currentNpub) {
-      profileFetchToastShownForNpubRef.current = currentNpub;
-      pushToast(t("profileFetching"));
-    }
-
     const cachedBlobController = new AbortController();
     let cancelledBlob = false;
     void (async () => {
@@ -3057,7 +3060,7 @@ const App = () => {
       cancelledBlob = true;
       cachedBlobController.abort();
     };
-  }, [currentNpub, nostrFetchRelays, pushToast, rememberBlobAvatarUrl, t]);
+  }, [currentNpub, nostrFetchRelays, rememberBlobAvatarUrl]);
 
   React.useEffect(() => {
     // Leave edit mode when leaving the profile screen.
@@ -8556,29 +8559,6 @@ const App = () => {
                 </div>
               </div>
 
-              <button
-                type="button"
-                className="settings-row settings-link"
-                onClick={navigateToNostrRelays}
-                aria-label={t("nostrRelay")}
-                title={t("nostrRelay")}
-              >
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    📡
-                  </span>
-                  <span className="settings-label">{t("nostrRelay")}</span>
-                </div>
-                <div className="settings-right">
-                  <span className="relay-count" aria-label="relay status">
-                    {connectedRelayCount}/{relayUrls.length}
-                  </span>
-                  <span className="settings-chevron" aria-hidden="true">
-                    &gt;
-                  </span>
-                </div>
-              </button>
-
               <div className="settings-row">
                 <div className="settings-left">
                   <span className="settings-icon" aria-hidden="true">
@@ -8622,6 +8602,41 @@ const App = () => {
                   </div>
                 </div>
               </div>
+
+              <button
+                type="button"
+                className="settings-row settings-link"
+                onClick={navigateToNostrRelays}
+                aria-label={t("nostrRelay")}
+                title={t("nostrRelay")}
+              >
+                <div className="settings-left">
+                  <span className="settings-icon" aria-hidden="true">
+                    📡
+                  </span>
+                  <span className="settings-label">{t("nostrRelay")}</span>
+                </div>
+                <div className="settings-right">
+                  <span className="relay-count" aria-label="relay status">
+                    {connectedRelayCount}/{relayUrls.length}
+                  </span>
+                  <span
+                    className={
+                      nostrRelayOverallStatus === "connected"
+                        ? "status-dot connected"
+                        : nostrRelayOverallStatus === "checking"
+                        ? "status-dot checking"
+                        : "status-dot disconnected"
+                    }
+                    aria-label={nostrRelayOverallStatus}
+                    title={nostrRelayOverallStatus}
+                    style={{ marginLeft: 10 }}
+                  />
+                  <span className="settings-chevron" aria-hidden="true">
+                    &gt;
+                  </span>
+                </div>
+              </button>
 
               <button
                 type="button"

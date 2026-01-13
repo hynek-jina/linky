@@ -6,7 +6,7 @@ export const cs = {
   menu: "Menu",
   advanced: "Pokročilé",
   paymentsHistory: "Historie plateb",
-  feedback: "Feedback",
+  feedback: "Zpětná vazba",
   data: "Data",
   exportData: "Export",
   importData: "Import",
@@ -152,7 +152,8 @@ export const cs = {
   profileManual: "Ručně",
   profileUseDefault: "Použít výchozí",
   profileClearField: "Smazat",
-  profileNavigationHint: "Nechte vás profil nascanovat známému",
+  profileNavigationHint:
+    "Přátelé si vás mohou přidat naskenováním vašeho profilu",
 
   language: "Jazyk",
   czech: "Čeština",
@@ -172,15 +173,15 @@ export const cs = {
   guideNext: "Další",
   guideDone: "Hotovo",
 
-  contactsShowProfileQr: "Ukázat profilu",
-  contactsScanContactQr: "Scanovat kontakt",
+  contactsShowProfileQr: "Ukázat profil",
+  contactsScanContactQr: "Přidat kontakt",
 
   guideAddContactStep1Title: "Ukázat svůj QR",
   guideAddContactStep1Body:
     "Klepněte na Ukázat QR profilu a ukažte svůj QR kód (npub) druhému uživateli.",
   guideAddContactStep2Title: "Naskenovat QR kontaktu",
   guideAddContactStep2Body:
-    "Klepněte na Scanovat QR kontaktu a naskenujte QR kód (npub) od druhého uživatele.",
+    "Klepněte na Přidat kontakt a naskenujte QR kód (npub) od druhého uživatele.",
 
   guideAddContactStep3Title: "Uložit kontakt",
   guideAddContactStep3Body:
@@ -188,8 +189,8 @@ export const cs = {
 
   guideTopupStep1Title: "Peněženka",
   guideTopupStep1Body: "Klepněte na ikonu peněženky dole.",
-  guideTopupStep2Title: "Receive",
-  guideTopupStep2Body: "Klepněte na Receive.",
+  guideTopupStep2Title: "Přijmout",
+  guideTopupStep2Body: "Klepněte na Přijmout.",
   guideTopupStep3Title: "Faktura",
   guideTopupStep3Body: "Zadejte částku a zobrazte fakturu pro dobití.",
   guideTopupStep4Title: "Faktura",
@@ -261,8 +262,8 @@ export const cs = {
 
   wallet: "Peněženka",
   walletOpen: "Otevřít peněženku",
-  walletReceive: "Receive",
-  walletSend: "Send",
+  walletReceive: "Přijmout",
+  walletSend: "Odeslat",
   walletEarlyWarningTitle: "Upozornění",
   walletEarlyWarningBody:
     "Linky je ve velmi rané fázi. Můžete ztratit přístup k prostředkům, které sem nahrajete. Používejte jen malé částky.",

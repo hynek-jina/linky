@@ -152,7 +152,7 @@ export const en = {
   profileManual: "Manual",
   profileUseDefault: "Use default",
   profileClearField: "Clear",
-  profileNavigationHint: "Let your contact scan your profile",
+  profileNavigationHint: "Friends can add you by scanning your profile",
 
   language: "Language",
   czech: "Czech",
@@ -173,14 +173,14 @@ export const en = {
   guideDone: "Done",
 
   contactsShowProfileQr: "Show profile",
-  contactsScanContactQr: "Scan contact",
+  contactsScanContactQr: "Add contact",
 
   guideAddContactStep1Title: "Show your QR",
   guideAddContactStep1Body:
     "Tap Show profile QR and show your QR code (npub) to the other person.",
-  guideAddContactStep2Title: "Scan their QR",
+  guideAddContactStep2Title: "Add their QR",
   guideAddContactStep2Body:
-    "Tap Scan contact QR and scan the other person’s QR code (npub).",
+    "Tap Add contact and scan the other person’s QR code (npub).",
 
   guideAddContactStep3Title: "Save contact",
   guideAddContactStep3Body:
