@@ -31,7 +31,6 @@ import {
   navigateToEvoluServer,
   navigateToEvoluServers,
   navigateToLnAddressPay,
-  navigateToMint,
   navigateToMints,
   navigateToNewContact,
   navigateToNewEvoluServer,
@@ -72,6 +71,7 @@ import {
   setCashuRestoreCursor,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
+import { getCashuLib } from "./utils/cashuLib";
 import {
   CONTACTS_ONBOARDING_DISMISSED_STORAGE_KEY,
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
@@ -84,6 +84,7 @@ import {
 import {
   safeLocalStorageGet,
   safeLocalStorageGetJson,
+  safeLocalStorageRemove,
   safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "./utils/storage";
@@ -225,7 +226,7 @@ const makeEmptyForm = (): ContactFormState => ({
 const App = () => {
   const { insert, update, upsert } = useEvolu();
 
-  const normalizeMintUrl = (value: unknown): string => {
+  const normalizeMintUrl = React.useCallback((value: unknown): string => {
     const raw = String(value ?? "").trim();
     if (!raw) return "";
     const stripped = raw.replace(/\/+$/, "");
@@ -246,9 +247,13 @@ const App = () => {
     } catch {
       return stripped;
     }
-  };
+  }, []);
 
   const MAIN_MINT_URL = "https://mint.minibits.cash/Bitcoin";
+
+  const CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY =
+    "linky.cashu.defaultMintOverride.v1";
+  const hasMintOverrideRef = React.useRef(false);
 
   const appOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
 
@@ -503,6 +508,18 @@ const App = () => {
         [] as LocalPaymentEvent[]
       )
     );
+
+    const overrideRaw = safeLocalStorageGet(
+      makeLocalStorageKey(CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY)
+    );
+    const override = normalizeMintUrl(overrideRaw);
+    if (override) {
+      hasMintOverrideRef.current = true;
+      setDefaultMintUrl(override);
+      setDefaultMintUrlDraft(override);
+    } else {
+      hasMintOverrideRef.current = false;
+    }
   }, [appOwnerId]);
 
   const resolveOwnerIdForWrite = React.useCallback(async () => {
@@ -615,6 +632,7 @@ const App = () => {
   }, []);
 
   const [defaultMintUrl, setDefaultMintUrl] = useState<string | null>(null);
+  const [defaultMintUrlDraft, setDefaultMintUrlDraft] = useState<string>("");
 
   const [newRelayUrl, setNewRelayUrl] = useState<string>("");
   const [relayStatusByUrl, setRelayStatusByUrl] = useState<
@@ -630,6 +648,13 @@ const App = () => {
     null
   );
   const [topupInvoiceIsBusy, setTopupInvoiceIsBusy] = useState(false);
+  const [topupDebug, setTopupDebug] = useState<string | null>(null);
+  const [topupMintQuote, setTopupMintQuote] = useState<null | {
+    mintUrl: string;
+    quote: string;
+    amount: number;
+    unit: string | null;
+  }>(null);
 
   const [chatDraft, setChatDraft] = useState<string>("");
   const [chatSendIsBusy, setChatSendIsBusy] = useState(false);
@@ -666,7 +691,13 @@ const App = () => {
         const u = new URL(raw);
         return { origin: u.origin, host: u.host };
       } catch {
-        return { origin: null, host: raw };
+        const candidate = raw.match(/^https?:\/\//i) ? raw : `https://${raw}`;
+        try {
+          const u = new URL(candidate);
+          return { origin: u.origin, host: u.host };
+        } catch {
+          return { origin: null, host: raw };
+        }
       }
     },
     []
@@ -705,6 +736,7 @@ const App = () => {
   const npubCashInfoInFlightRef = React.useRef(false);
   const npubCashInfoLoadedForNpubRef = React.useRef<string | null>(null);
   const npubCashInfoLoadedAtMsRef = React.useRef<number>(0);
+  const npubCashMintSyncRef = React.useRef<string | null>(null);
 
   const nostrInFlight = React.useRef<Set<string>>(new Set());
   const nostrMetadataInFlight = React.useRef<Set<string>>(new Set());
@@ -918,6 +950,8 @@ const App = () => {
       setTopupInvoiceQr(null);
       setTopupInvoiceError(null);
       setTopupInvoiceIsBusy(false);
+      setTopupMintQuote(null);
+      setTopupDebug(null);
 
       topupInvoiceStartBalanceRef.current = null;
       topupInvoicePaidHandledRef.current = false;
@@ -934,6 +968,9 @@ const App = () => {
 
   React.useEffect(() => {
     if (route.kind !== "topupInvoice") return;
+    if (topupInvoiceIsBusy) return;
+    if (topupInvoice && topupInvoiceQr) return;
+    if (topupInvoiceError) return;
 
     const lnAddress = currentNpub ? `${currentNpub}@npub.cash` : "";
     const amountSat = Number.parseInt(topupAmount.trim(), 10);
@@ -946,20 +983,124 @@ const App = () => {
       return;
     }
 
+    const mintUrl = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
+    if (!mintUrl) {
+      setTopupInvoice(null);
+      setTopupInvoiceQr(null);
+      setTopupInvoiceError(t("topupInvoiceFailed"));
+      setTopupInvoiceIsBusy(false);
+      return;
+    }
+
     let cancelled = false;
     setTopupInvoice(null);
     setTopupInvoiceQr(null);
     setTopupInvoiceError(null);
     setTopupInvoiceIsBusy(true);
+    setTopupDebug(`quote: ${mintUrl}`);
 
     topupInvoiceStartBalanceRef.current = null;
     topupInvoicePaidHandledRef.current = false;
 
+    let controller: AbortController | null = null;
     void (async () => {
       try {
-        const { fetchLnurlInvoiceForLightningAddress } = await import(
-          "./lnurlPay"
-        );
+        const fetchWithTimeout = async (
+          url: string,
+          options: RequestInit,
+          ms: number
+        ) => {
+          controller = new AbortController();
+          let timeoutId: number | null = null;
+          const timeout = new Promise<never>((_, reject) => {
+            timeoutId = window.setTimeout(() => {
+              try {
+                controller?.abort();
+              } catch {
+                // ignore
+              }
+              reject(new Error("Mint quote timeout"));
+            }, ms);
+          });
+          try {
+            return await Promise.race([
+              fetch(url, { ...options, signal: controller.signal }),
+              timeout,
+            ]);
+          } finally {
+            if (timeoutId !== null) window.clearTimeout(timeoutId);
+          }
+        };
+
+        const requestQuote = async (baseUrl: string) => {
+          const shouldProxy =
+            typeof window !== "undefined" &&
+            (window.location.hostname === "localhost" ||
+              window.location.hostname === "127.0.0.1");
+          const targetUrl = shouldProxy
+            ? `/__mint-quote?mint=${encodeURIComponent(baseUrl)}`
+            : `${baseUrl}/v1/mint/quote/bolt11`;
+
+          setTopupDebug(
+            `quote: ${baseUrl} (${shouldProxy ? "proxy" : "direct"} fetch)`
+          );
+
+          const quoteRes = await fetchWithTimeout(
+            targetUrl,
+            {
+              method: "POST",
+              headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ amount: amountSat, unit: "sat" }),
+            },
+            12_000
+          );
+
+          setTopupDebug(`quote: ${baseUrl} (response ${quoteRes.status})`);
+
+          if (!quoteRes.ok) {
+            throw new Error(`Mint quote HTTP ${quoteRes.status}`);
+          }
+
+          const rawText = await quoteRes.text();
+          let mintQuote: unknown = null;
+          try {
+            mintQuote = rawText ? JSON.parse(rawText) : null;
+          } catch (parseError) {
+            throw new Error(
+              `Mint quote parse failed (${quoteRes.status}): ${rawText.slice(
+                0,
+                200
+              )}`
+            );
+          }
+          const quoteId = String(
+            (mintQuote as unknown as { quote?: unknown; id?: unknown }).quote ??
+              (mintQuote as unknown as { id?: unknown }).id ??
+              ""
+          ).trim();
+          const invoice = String(
+            (mintQuote as unknown as { request?: unknown }).request ??
+              (mintQuote as unknown as { pr?: unknown }).pr ??
+              (mintQuote as unknown as { paymentRequest?: unknown })
+                .paymentRequest ??
+              ""
+          ).trim();
+
+          return { quoteId, invoice };
+        };
+
+        const { quoteId, invoice } = await requestQuote(mintUrl);
+
+        if (!quoteId || !invoice) {
+          throw new Error(
+            `Missing mint quote (quote=${quoteId || "-"}, invoice=${
+              invoice || "-"
+            })`
+          );
+        }
 
         const displayName = (() => {
           if (myProfileName) return String(myProfileName).trim();
@@ -970,14 +1111,15 @@ const App = () => {
           );
         })();
 
-        const invoiceComment = `${displayName || t("appTitle")}`;
-
-        const invoice = await fetchLnurlInvoiceForLightningAddress(
-          lnAddress,
-          amountSat,
-          invoiceComment
-        );
         if (cancelled) return;
+
+        setTopupMintQuote({
+          mintUrl,
+          quote: quoteId,
+          amount: amountSat,
+          unit: "sat",
+        });
+        setTopupDebug(`quote: ${mintUrl} (invoice ready)`);
 
         setTopupInvoice(invoice);
 
@@ -988,17 +1130,81 @@ const App = () => {
         });
         if (cancelled) return;
         setTopupInvoiceQr(qr);
-      } catch {
-        if (!cancelled) setTopupInvoiceError(t("topupInvoiceFailed"));
+      } catch (error) {
+        if (!cancelled) {
+          const message = String(error ?? "");
+          const lower = message.toLowerCase();
+          const corsHint =
+            lower.includes("failed to fetch") ||
+            lower.includes("cors") ||
+            lower.includes("networkerror")
+              ? "CORS blocked"
+              : "";
+          console.log("[linky][topup] mint quote failed", {
+            mintUrl,
+            amountSat,
+            error: message,
+          });
+          setTopupDebug(`quote: ${mintUrl} (error)`);
+          setTopupInvoiceError(
+            message
+              ? `${t("topupInvoiceFailed")}: ${corsHint || message}`
+              : t("topupInvoiceFailed")
+          );
+        }
       } finally {
         if (!cancelled) setTopupInvoiceIsBusy(false);
+        if (controller && cancelled) {
+          try {
+            controller.abort();
+          } catch {
+            // ignore
+          }
+        }
       }
     })();
 
     return () => {
       cancelled = true;
+      if (controller) {
+        try {
+          controller.abort();
+        } catch {
+          // ignore
+        }
+      }
     };
-  }, [currentNpub, myProfileName, route.kind, t, topupAmount]);
+  }, [
+    currentNpub,
+    defaultMintUrl,
+    myProfileName,
+    route.kind,
+    t,
+    topupAmount,
+    normalizeMintUrl,
+  ]);
+
+  React.useEffect(() => {
+    if (route.kind !== "topupInvoice") return;
+    if (!topupInvoiceIsBusy) return;
+    if (topupInvoice || topupInvoiceQr || topupInvoiceError) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setTopupInvoiceError(`${t("topupInvoiceFailed")}: timeout`);
+      setTopupInvoiceIsBusy(false);
+    }, 15_000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    route.kind,
+    t,
+    topupInvoice,
+    topupInvoiceError,
+    topupInvoiceIsBusy,
+    topupInvoiceQr,
+  ]);
 
   React.useEffect(() => {
     persistLang(lang);
@@ -1772,6 +1978,94 @@ const App = () => {
     ensureCashuTokenPersisted(remembered);
   }, [cashuTokensAll, ensureCashuTokenPersisted]);
 
+  React.useEffect(() => {
+    if (route.kind !== "topupInvoice") return;
+    if (!topupMintQuote) return;
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const { CashuMint, CashuWallet, MintQuoteState, getEncodedToken } =
+          await getCashuLib();
+        const det = getCashuDeterministicSeedFromStorage();
+        const wallet = new CashuWallet(new CashuMint(topupMintQuote.mintUrl), {
+          ...(topupMintQuote.unit ? { unit: topupMintQuote.unit } : {}),
+          ...(det ? { bip39seed: det.bip39seed } : {}),
+        });
+        await wallet.loadMint();
+
+        const quoteId = String(topupMintQuote.quote ?? "").trim();
+        if (!quoteId) return;
+
+        const status = await wallet.checkMintQuote(quoteId);
+        const state = String(
+          (status as unknown as { state?: unknown; status?: unknown }).state ??
+            (status as unknown as { status?: unknown }).status ??
+            ""
+        ).toLowerCase();
+        const paid =
+          state === "paid" ||
+          (typeof MintQuoteState === "object" &&
+            (status as unknown as { state?: unknown }).state ===
+              (MintQuoteState as unknown as { PAID?: unknown }).PAID);
+        if (!paid) return;
+
+        const proofs = await wallet.mintProofs(topupMintQuote.amount, quoteId);
+        const unit = wallet.unit ?? null;
+        const token = getEncodedToken({
+          mint: topupMintQuote.mintUrl,
+          proofs,
+          ...(unit ? { unit } : {}),
+        });
+
+        const amount = Array.isArray(proofs)
+          ? proofs.reduce((sum, p) => sum + (Number(p.amount ?? 0) || 0), 0)
+          : 0;
+
+        const ownerId = await resolveOwnerIdForWrite();
+        const payload = {
+          token: token as typeof Evolu.NonEmptyString.Type,
+          rawToken: null,
+          mint: topupMintQuote.mintUrl as typeof Evolu.NonEmptyString1000.Type,
+          unit: unit ? (unit as typeof Evolu.NonEmptyString100.Type) : null,
+          amount: amount > 0 ? (amount as typeof Evolu.PositiveInt.Type) : null,
+          state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+          error: null,
+        };
+
+        const result = ownerId
+          ? insert("cashuToken", payload, { ownerId })
+          : insert("cashuToken", payload);
+        if (!result.ok) {
+          setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+          return;
+        }
+
+        ensureCashuTokenPersisted(String(token ?? ""));
+        if (!cancelled) setTopupMintQuote(null);
+      } catch {
+        // ignore
+      }
+    };
+
+    void run();
+    const intervalId = window.setInterval(() => {
+      void run();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [
+    insert,
+    resolveOwnerIdForWrite,
+    route.kind,
+    topupMintQuote,
+    t,
+    ensureCashuTokenPersisted,
+  ]);
+
   const autoRestoreLastAcceptedTokenAttemptedRef = React.useRef(false);
   React.useEffect(() => {
     // Best-effort recovery: if the app previously accepted a token but the
@@ -1921,7 +2215,7 @@ const App = () => {
       if (rowScore > existingScore) bestByUrl.set(key, row);
     }
 
-    const main = normalizeMintUrl(MAIN_MINT_URL);
+    const main = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
 
     return Array.from(bestByUrl.entries())
       .sort((a, b) => {
@@ -1940,7 +2234,7 @@ const App = () => {
         return bSeen - aSeen;
       })
       .map(([canonicalUrl, row]) => ({ canonicalUrl, row }));
-  }, [mintInfo, normalizeMintUrl]);
+  }, [defaultMintUrl, mintInfo, normalizeMintUrl]);
 
   const mintInfoByUrl = useMemo(() => {
     const map = new Map<string, (typeof mintInfoAll)[number]>();
@@ -2033,6 +2327,21 @@ const App = () => {
           const id = String(existing.id ?? "");
           const idx = next.findIndex((r) => String(r.id ?? "") === id);
           if (idx >= 0) {
+            const prevRow = next[idx] as {
+              url?: unknown;
+              firstSeenAtSec?: unknown;
+              lastSeenAtSec?: unknown;
+            };
+            const prevUrl = String(prevRow.url ?? "");
+            const prevFirst = Number(prevRow.firstSeenAtSec ?? 0) || 0;
+            const prevLast = Number(prevRow.lastSeenAtSec ?? 0) || 0;
+            if (
+              prevUrl === cleaned &&
+              prevFirst === firstSeen &&
+              prevLast === now
+            ) {
+              return prev;
+            }
             next[idx] = {
               ...next[idx],
               url: cleaned,
@@ -2298,7 +2607,7 @@ const App = () => {
 
   React.useEffect(() => {
     // Ensure every user has the default mint in their mint list.
-    const cleaned = normalizeMintUrl(MAIN_MINT_URL);
+    const cleaned = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
     if (!cleaned) return;
 
     if (isMintDeleted(cleaned)) return;
@@ -2321,6 +2630,7 @@ const App = () => {
     if (!runtime) void refreshMintInfo(cleaned);
   }, [
     appOwnerId,
+    defaultMintUrl,
     getMintRuntime,
     isMintDeleted,
     mintInfoByUrl,
@@ -2332,12 +2642,16 @@ const App = () => {
   React.useEffect(() => {
     if (encounteredMintUrls.length === 0) return;
 
+    const preferredMint = normalizeMintUrl(defaultMintUrl ?? "");
+
     const nowSec = Math.floor(Date.now() / 1000);
     for (const mintUrl of encounteredMintUrls) {
       const cleaned = String(mintUrl ?? "")
         .trim()
         .replace(/\/+$/, "");
       if (!cleaned) continue;
+
+      if (preferredMint && cleaned !== preferredMint) continue;
 
       const existing = mintInfoByUrl.get(cleaned) as
         | (Record<string, unknown> & {
@@ -2367,6 +2681,7 @@ const App = () => {
     }
   }, [
     appOwnerId,
+    defaultMintUrl,
     encounteredMintUrls,
     getMintRuntime,
     isMintDeleted,
@@ -2671,6 +2986,13 @@ const App = () => {
     }
   }, [defaultMintUrl]);
 
+  React.useEffect(() => {
+    if (!defaultMintUrl) return;
+    const draft = String(defaultMintUrlDraft ?? "").trim();
+    if (draft) return;
+    setDefaultMintUrlDraft(normalizeMintUrl(defaultMintUrl));
+  }, [defaultMintUrl, defaultMintUrlDraft, normalizeMintUrl]);
+
   const makeNip98AuthHeader = React.useCallback(
     async (url: string, method: string, payload?: Record<string, unknown>) => {
       if (!currentNsec) throw new Error("Missing nsec");
@@ -2690,6 +3012,46 @@ const App = () => {
     },
     [currentNsec]
   );
+
+  const updateNpubCashMint = React.useCallback(
+    async (mintUrl: string): Promise<void> => {
+      if (!currentNpub) throw new Error("Missing npub");
+      if (!currentNsec) throw new Error("Missing nsec");
+      const cleaned = normalizeMintUrl(mintUrl);
+      if (!cleaned) return;
+
+      const baseUrl = "https://npub.cash";
+      const url = `${baseUrl}/api/v1/info/mint`;
+
+      const payload = { mintUrl: cleaned };
+      const auth = await makeNip98AuthHeader(url, "PUT", payload);
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: {
+          Authorization: auth,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        throw new Error("npub.cash mint update failed");
+      }
+    },
+    [currentNpub, currentNsec, makeNip98AuthHeader, normalizeMintUrl]
+  );
+
+  React.useEffect(() => {
+    const cleaned = normalizeMintUrl(defaultMintUrl ?? "");
+    if (!cleaned) return;
+    if (!hasMintOverrideRef.current) return;
+    if (npubCashMintSyncRef.current === cleaned) return;
+
+    npubCashMintSyncRef.current = cleaned;
+    void updateNpubCashMint(cleaned).catch(() => {
+      npubCashMintSyncRef.current = null;
+      pushToast(t("mintUpdateFailed"));
+    });
+  }, [defaultMintUrl, normalizeMintUrl, pushToast, t, updateNpubCashMint]);
 
   const acceptAndStoreCashuToken = React.useCallback(
     async (tokenText: string) => {
@@ -3178,7 +3540,13 @@ const App = () => {
           return String(wrapped.mintUrl ?? wrapped.mintURL ?? "").trim();
         })();
         if (cancelled) return;
-        if (mintUrl) setDefaultMintUrl(mintUrl);
+        if (mintUrl && !hasMintOverrideRef.current) {
+          const cleaned = normalizeMintUrl(mintUrl);
+          if (cleaned) {
+            setDefaultMintUrl(cleaned);
+            setDefaultMintUrlDraft(cleaned);
+          }
+        }
 
         npubCashInfoLoadedForNpubRef.current = currentNpub;
         npubCashInfoLoadedAtMsRef.current = Date.now();
@@ -7500,21 +7868,124 @@ const App = () => {
     navigateToNostrRelays();
   };
 
+  const getMintInfoIconUrl = React.useCallback(
+    (mint: unknown): string | null => {
+      const raw = String(mint ?? "").trim();
+      const { origin } = getMintOriginAndHost(raw);
+      const normalized = normalizeMintUrl(origin ?? raw);
+      if (!normalized) return null;
+      const row = mintInfoByUrl.get(normalized) as
+        | (Record<string, unknown> & { infoJson?: unknown })
+        | undefined;
+      const infoText = String(row?.infoJson ?? "").trim();
+      if (!infoText) return null;
+
+      const { origin: normalizedOrigin } = getMintOriginAndHost(normalized);
+      if (!normalizedOrigin) return null;
+
+      const findIcon = (value: unknown): string | null => {
+        if (!value || typeof value !== "object") return null;
+        const rec = value as Record<string, unknown>;
+        const keys = [
+          "icon_url",
+          "iconUrl",
+          "icon",
+          "logo",
+          "image",
+          "image_url",
+          "imageUrl",
+        ];
+        for (const key of keys) {
+          const raw = String(rec[key] ?? "").trim();
+          if (raw) return raw;
+        }
+        for (const inner of Object.values(rec)) {
+          if (inner && typeof inner === "object") {
+            const found = findIcon(inner);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+
+      try {
+        const info = JSON.parse(infoText) as unknown;
+        const rawIcon = findIcon(info);
+        if (!rawIcon) return null;
+        try {
+          return new URL(rawIcon, normalizedOrigin).toString();
+        } catch {
+          return null;
+        }
+      } catch {
+        return null;
+      }
+    },
+    [getMintOriginAndHost, mintInfoByUrl, normalizeMintUrl]
+  );
+
+  const getMintDuckDuckGoIcon = React.useCallback((host: string | null) => {
+    if (!host) return null;
+    return `https://icons.duckduckgo.com/ip3/${host}.ico`;
+  }, []);
+
+  const getMintIconOverride = React.useCallback((host: string | null) => {
+    if (!host) return null;
+    const key = host.toLowerCase();
+    if (key === "mint.minibits.cash") {
+      return "https://play-lh.googleusercontent.com/raLGxOOzbxOsEx25gr-rISzJOdbgVPG11JHuI2yV57TxqPD_fYBof9TRh-vUE-XyhgmN=w40-h480-rw";
+    }
+    if (key === "linky.cashu.cz") {
+      return "https://linky-weld.vercel.app/icon.svg";
+    }
+    return null;
+  }, []);
+
   const getMintIconUrl = React.useCallback(
     (
       mint: unknown
-    ): { origin: string | null; url: string | null; host: string | null } => {
+    ): {
+      origin: string | null;
+      url: string | null;
+      host: string | null;
+      failed: boolean;
+    } => {
       const { origin, host } = getMintOriginAndHost(mint);
-      if (!origin) return { origin: null, url: null, host };
+      if (!origin) return { origin: null, url: null, host, failed: true };
 
       if (Object.prototype.hasOwnProperty.call(mintIconUrlByMint, origin)) {
         const stored = mintIconUrlByMint[origin];
-        return { origin, url: stored ?? null, host };
+        return {
+          origin,
+          url: stored ?? null,
+          host,
+          failed: stored === null,
+        };
       }
 
-      return { origin, url: `${origin}/favicon.ico`, host };
+      const override = getMintIconOverride(host);
+      if (override) return { origin, url: override, host, failed: false };
+
+      const infoIcon = getMintInfoIconUrl(mint);
+      if (infoIcon) return { origin, url: infoIcon, host, failed: false };
+
+      const duckIcon = getMintDuckDuckGoIcon(host);
+      if (duckIcon) return { origin, url: duckIcon, host, failed: false };
+
+      return {
+        origin,
+        url: `${origin}/favicon.ico`,
+        host,
+        failed: false,
+      };
     },
-    [getMintOriginAndHost, mintIconUrlByMint]
+    [
+      getMintIconOverride,
+      getMintDuckDuckGoIcon,
+      getMintInfoIconUrl,
+      getMintOriginAndHost,
+      mintIconUrlByMint,
+    ]
   );
 
   const requestDeleteSelectedRelay = () => {
@@ -9250,80 +9721,94 @@ const App = () => {
 
           {route.kind === "mints" && (
             <section className="panel">
-              {mintInfoDeduped.length === 0 ? (
-                <p className="muted">{t("mintsEmpty")}</p>
-              ) : (
-                <div>
-                  {mintInfoDeduped.map(({ canonicalUrl }) => {
-                    const url = String(canonicalUrl ?? "").trim();
-                    if (!url) return null;
+              <label htmlFor="defaultMintUrl">{t("defaultMint")}</label>
+              <input
+                id="defaultMintUrl"
+                value={defaultMintUrlDraft}
+                onChange={(e) => setDefaultMintUrlDraft(e.target.value)}
+                placeholder="https://…"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
 
-                    const isMain = normalizeMintUrl(url) === MAIN_MINT_URL;
+              <div className="panel-header" style={{ marginTop: 14 }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const cleaned = normalizeMintUrl(defaultMintUrlDraft);
+                    if (!cleaned) {
+                      pushToast(t("mintUrlInvalid"));
+                      return;
+                    }
+                    try {
+                      new URL(cleaned);
+                    } catch {
+                      pushToast(t("mintUrlInvalid"));
+                      return;
+                    }
 
-                    return (
-                      <button
-                        key={url}
-                        type="button"
-                        className="settings-row settings-link"
-                        onClick={() => navigateToMint(url)}
-                        aria-label={url}
-                        title={url}
-                      >
-                        <div className="settings-left">
-                          <span className="settings-icon" aria-hidden="true">
-                            {(() => {
-                              const icon = getMintIconUrl(url);
-                              if (!icon.url) return "🏦";
-                              return (
-                                <img
-                                  src={icon.url}
-                                  alt=""
-                                  width={18}
-                                  height={18}
-                                  style={{
-                                    borderRadius: 9999,
-                                    objectFit: "cover",
-                                  }}
-                                  loading="lazy"
-                                  referrerPolicy="no-referrer"
-                                  onError={(e) => {
-                                    (
-                                      e.currentTarget as HTMLImageElement
-                                    ).style.display = "none";
-                                    if (icon.origin) {
-                                      setMintIconUrlByMint((prev) => ({
-                                        ...prev,
-                                        [icon.origin as string]: null,
-                                      }));
-                                    }
-                                  }}
-                                />
-                              );
-                            })()}
-                          </span>
-                          <span className="settings-label">
-                            {url}
-                            {isMain ? (
-                              <span
-                                className="relay-count"
-                                title="Main mint"
-                                style={{ marginLeft: 8 }}
-                              >
-                                ★
-                              </span>
-                            ) : null}
-                          </span>
-                        </div>
-                        <div className="settings-right">
-                          <span className="settings-chevron" aria-hidden="true">
-                            &gt;
-                          </span>
-                        </div>
-                      </button>
+                    try {
+                      setStatus(t("mintUpdating"));
+                      await updateNpubCashMint(cleaned);
+                    } catch (error) {
+                      const message = String(error ?? "");
+                      if (message.includes("Missing nsec")) {
+                        pushToast(t("profileMissingNpub"));
+                      } else {
+                        pushToast(t("mintUpdateFailed"));
+                      }
+                      return;
+                    }
+
+                    const key = makeLocalStorageKey(
+                      CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY
                     );
-                  })}
-                </div>
-              )}
+                    safeLocalStorageSet(key, cleaned);
+                    hasMintOverrideRef.current = true;
+                    setDefaultMintUrl(cleaned);
+                    npubCashMintSyncRef.current = cleaned;
+                    setStatus(t("mintSaved"));
+                  }}
+                  disabled={!String(defaultMintUrlDraft ?? "").trim()}
+                >
+                  {t("saveChanges")}
+                </button>
+
+                {hasMintOverrideRef.current ? (
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={async () => {
+                      try {
+                        setStatus(t("mintUpdating"));
+                        await updateNpubCashMint(MAIN_MINT_URL);
+                      } catch (error) {
+                        const message = String(error ?? "");
+                        if (message.includes("Missing nsec")) {
+                          pushToast(t("profileMissingNpub"));
+                        } else {
+                          pushToast(t("mintUpdateFailed"));
+                        }
+                        return;
+                      }
+
+                      const key = makeLocalStorageKey(
+                        CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY
+                      );
+                      safeLocalStorageRemove(key);
+                      hasMintOverrideRef.current = false;
+                      setDefaultMintUrl(MAIN_MINT_URL);
+                      setDefaultMintUrlDraft(normalizeMintUrl(MAIN_MINT_URL));
+                      npubCashMintSyncRef.current =
+                        normalizeMintUrl(MAIN_MINT_URL);
+                      setStatus(t("mintSaved"));
+                    }}
+                  >
+                    {t("useDefault")}
+                  </button>
+                ) : null}
+              </div>
             </section>
           )}
 
@@ -9892,7 +10377,7 @@ const App = () => {
                             Number((token.amount ?? 0) as unknown as number) ||
                             0;
                           const icon = getMintIconUrl(token.mint);
-                          const showMintFallback = !icon.url;
+                          const showMintFallback = icon.failed || !icon.url;
                           return (
                             <span
                               style={{
@@ -9913,14 +10398,32 @@ const App = () => {
                                   }}
                                   loading="lazy"
                                   referrerPolicy="no-referrer"
+                                  onLoad={() => {
+                                    if (icon.origin) {
+                                      setMintIconUrlByMint((prev) => ({
+                                        ...prev,
+                                        [icon.origin as string]: icon.url,
+                                      }));
+                                    }
+                                  }}
                                   onError={(e) => {
                                     (
                                       e.currentTarget as HTMLImageElement
                                     ).style.display = "none";
                                     if (icon.origin) {
+                                      const duck = icon.host
+                                        ? `https://icons.duckduckgo.com/ip3/${icon.host}.ico`
+                                        : null;
+                                      const favicon = `${icon.origin}/favicon.ico`;
+                                      let next: string | null = null;
+                                      if (duck && icon.url !== duck) {
+                                        next = duck;
+                                      } else if (icon.url !== favicon) {
+                                        next = favicon;
+                                      }
                                       setMintIconUrlByMint((prev) => ({
                                         ...prev,
-                                        [icon.origin as string]: null,
+                                        [icon.origin as string]: next ?? null,
                                       }));
                                     }
                                   }}
@@ -10193,6 +10696,12 @@ const App = () => {
                 );
               })()}
 
+              {topupDebug ? (
+                <p className="muted" style={{ margin: "0 0 8px" }}>
+                  {topupDebug}
+                </p>
+              ) : null}
+
               {topupInvoiceQr ? (
                 <img
                   className="qr"
@@ -10205,6 +10714,19 @@ const App = () => {
                 />
               ) : topupInvoiceError ? (
                 <p className="muted">{topupInvoiceError}</p>
+              ) : topupInvoice ? (
+                <div>
+                  <div className="mono-box" style={{ marginBottom: 12 }}>
+                    {topupInvoice}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-wide"
+                    onClick={() => void copyText(topupInvoice)}
+                  >
+                    {t("copy")}
+                  </button>
+                </div>
               ) : topupInvoiceIsBusy ? (
                 <p className="muted">{t("topupFetchingInvoice")}</p>
               ) : (
@@ -10898,7 +11420,8 @@ const App = () => {
                                       const icon = getMintIconUrl(
                                         tokenInfo.mintUrl
                                       );
-                                      const showMintFallback = !icon.url;
+                                      const showMintFallback =
+                                        icon.failed || !icon.url;
                                       return (
                                         <span
                                           className={
@@ -10935,16 +11458,43 @@ const App = () => {
                                               }}
                                               loading="lazy"
                                               referrerPolicy="no-referrer"
-                                              onError={(e) => {
-                                                (
-                                                  e.currentTarget as HTMLImageElement
-                                                ).style.display = "none";
+                                              onLoad={() => {
                                                 if (icon.origin) {
                                                   setMintIconUrlByMint(
                                                     (prev) => ({
                                                       ...prev,
                                                       [icon.origin as string]:
-                                                        null,
+                                                        icon.url,
+                                                    })
+                                                  );
+                                                }
+                                              }}
+                                              onError={(e) => {
+                                                (
+                                                  e.currentTarget as HTMLImageElement
+                                                ).style.display = "none";
+                                                if (icon.origin) {
+                                                  const duck = icon.host
+                                                    ? `https://icons.duckduckgo.com/ip3/${icon.host}.ico`
+                                                    : null;
+                                                  const favicon = `${icon.origin}/favicon.ico`;
+                                                  let next: string | null =
+                                                    null;
+                                                  if (
+                                                    duck &&
+                                                    icon.url !== duck
+                                                  ) {
+                                                    next = duck;
+                                                  } else if (
+                                                    icon.url !== favicon
+                                                  ) {
+                                                    next = favicon;
+                                                  }
+                                                  setMintIconUrlByMint(
+                                                    (prev) => ({
+                                                      ...prev,
+                                                      [icon.origin as string]:
+                                                        next ?? null,
                                                     })
                                                   );
                                                 }

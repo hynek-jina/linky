@@ -126,6 +126,13 @@ export const cs = {
 
   mints: "Minty",
 
+  defaultMint: "Výchozí mint",
+  mintUrlInvalid: "Neplatná URL mintu.",
+  mintSaved: "Mint uložen.",
+  mintUpdateFailed: "Aktualizace mintu selhala.",
+  mintUpdating: "Aktualizuji mint…",
+  useDefault: "Použít výchozí",
+
   unknown: "Neznámé",
   mintsEmpty: "Zatím žádné minty. Minty se objeví po přijetí tokenu.",
   mintNotFound: "Mint nenalezen.",

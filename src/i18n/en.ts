@@ -126,6 +126,13 @@ export const en = {
 
   mints: "Mints",
 
+  defaultMint: "Default mint",
+  mintUrlInvalid: "Invalid mint URL.",
+  mintSaved: "Mint saved.",
+  mintUpdateFailed: "Mint update failed.",
+  mintUpdating: "Updating mint…",
+  useDefault: "Use default",
+
   unknown: "Unknown",
   mintsEmpty: "No mints yet. Mints appear here after you accept tokens.",
   mintNotFound: "Mint not found.",
