@@ -1008,7 +1008,7 @@ const App = () => {
     topupInvoiceStartBalanceRef.current = null;
     topupInvoicePaidHandledRef.current = false;
 
-    let controller: AbortController | null = null;
+    let quoteController: AbortController | null = null;
     void (async () => {
       try {
         const fetchWithTimeout = async (
@@ -1016,12 +1016,12 @@ const App = () => {
           options: RequestInit,
           ms: number
         ) => {
-          controller = new AbortController();
+          quoteController = new AbortController();
           let timeoutId: number | null = null;
           const timeout = new Promise<never>((_, reject) => {
             timeoutId = window.setTimeout(() => {
               try {
-                controller?.abort();
+                quoteController?.abort();
               } catch {
                 // ignore
               }
@@ -1030,7 +1030,7 @@ const App = () => {
           });
           try {
             return await Promise.race([
-              fetch(url, { ...options, signal: controller.signal }),
+              fetch(url, { ...options, signal: quoteController.signal }),
               timeout,
             ]);
           } finally {
@@ -1108,15 +1108,6 @@ const App = () => {
           );
         }
 
-        const displayName = (() => {
-          if (myProfileName) return String(myProfileName).trim();
-          if (!currentNpub) return "";
-          return (
-            deriveDefaultProfile(currentNpub)?.name ??
-            formatShortNpub(currentNpub)
-          );
-        })();
-
         if (cancelled) return;
 
         setTopupMintQuote({
@@ -1160,9 +1151,9 @@ const App = () => {
         }
       } finally {
         if (!cancelled) setTopupInvoiceIsBusy(false);
-        if (controller && cancelled) {
+        if (quoteController && cancelled) {
           try {
-            controller.abort();
+            quoteController.abort();
           } catch {
             // ignore
           }
@@ -1172,9 +1163,9 @@ const App = () => {
 
     return () => {
       cancelled = true;
-      if (controller) {
+      if (quoteController) {
         try {
-          controller.abort();
+          quoteController.abort();
         } catch {
           // ignore
         }
@@ -5832,13 +5823,16 @@ const App = () => {
             : wallet.swap(amountToSend, proofs);
         };
 
-        let swapped: unknown;
+        let swapped: { keep?: unknown[]; send?: unknown[] };
         try {
-          swapped = await runSwap(total);
+          swapped = (await runSwap(total)) as { keep?: unknown[]; send?: unknown[] };
         } catch (error) {
           const fee = parseSwapFee(error);
           if (!fee || total - fee <= 0) throw error;
-          swapped = await runSwap(total - fee);
+          swapped = (await runSwap(total - fee)) as {
+            keep?: unknown[];
+            send?: unknown[];
+          };
         }
         const newProofs = [
           ...((swapped?.keep as unknown as unknown[]) ?? []),
