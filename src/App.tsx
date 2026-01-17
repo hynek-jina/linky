@@ -1153,7 +1153,7 @@ const App = () => {
         if (!cancelled) setTopupInvoiceIsBusy(false);
         if (quoteController && cancelled) {
           try {
-            quoteController.abort();
+            (quoteController as AbortController).abort();
           } catch {
             // ignore
           }
@@ -1165,7 +1165,7 @@ const App = () => {
       cancelled = true;
       if (quoteController) {
         try {
-          quoteController.abort();
+          (quoteController as AbortController).abort();
         } catch {
           // ignore
         }
