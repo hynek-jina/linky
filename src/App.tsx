@@ -38,7 +38,6 @@ import {
   navigateToNostrRelay,
   navigateToNostrRelays,
   navigateToPaymentsHistory,
-  navigateToSettings,
   navigateToTopup,
   navigateToTopupInvoice,
   navigateToWallet,
@@ -251,7 +250,7 @@ const App = () => {
   const MAIN_MINT_URL = "https://mint.minibits.cash/Bitcoin";
 
   const PRESET_MINTS = [
-    "https://linky.cashu.cz",
+    "https://cashu.cz",
     "https://mint.minibits.cash/Bitcoin",
     "https://kashu.me",
     "https://cashu.21m.lol",
@@ -3946,27 +3945,61 @@ const App = () => {
     navigateToNewContact();
   };
 
-  const settingsReturnRouteRef = React.useRef<Route>({ kind: "contacts" });
+  const [menuIsOpen, setMenuIsOpen] = useState(false);
 
-  const closeSettings = () => {
-    setPendingDeleteId(null);
-    setPayAmount("");
-    const target = settingsReturnRouteRef.current ?? { kind: "contacts" };
+  const mainReturnRouteRef = React.useRef<Route>({ kind: "contacts" });
+
+  const setMainReturnFromRoute = (r: Route) => {
+    // Menu modal is intended as an overlay for the main screens.
+    if (r.kind === "wallet") mainReturnRouteRef.current = { kind: "wallet" };
+    else mainReturnRouteRef.current = { kind: "contacts" };
+  };
+
+  React.useEffect(() => {
+    if (route.kind === "wallet") {
+      mainReturnRouteRef.current = { kind: "wallet" };
+      return;
+    }
+    if (route.kind === "contacts") {
+      mainReturnRouteRef.current = { kind: "contacts" };
+    }
+  }, [route.kind]);
+
+  const navigateToMainReturn = React.useCallback(() => {
+    const target = mainReturnRouteRef.current ?? { kind: "contacts" };
     if (target.kind === "wallet") navigateToWallet();
     else navigateToContacts();
-  };
+  }, []);
 
-  const toggleSettings = () => {
-    if (route.kind === "settings") {
-      closeSettings();
-    } else {
-      settingsReturnRouteRef.current = route;
-      navigateToSettings();
-    }
+  const menuOpenRouteRef = React.useRef<Route["kind"] | null>(null);
 
+  const openMenu = () => {
+    setMainReturnFromRoute(route);
+    setMenuIsOpen(true);
     setPendingDeleteId(null);
     setPayAmount("");
+    menuOpenRouteRef.current = route.kind;
   };
+
+  const closeMenu = React.useCallback(() => {
+    setMenuIsOpen(false);
+    setPendingDeleteId(null);
+    setPayAmount("");
+  }, []);
+
+  const toggleMenu = () => {
+    if (menuIsOpen) closeMenu();
+    else openMenu();
+  };
+
+  // Close the menu only if navigation happens while it is open.
+  React.useEffect(() => {
+    if (!menuIsOpen) return;
+    const openedAt = menuOpenRouteRef.current;
+    if (openedAt && openedAt !== route.kind) {
+      setMenuIsOpen(false);
+    }
+  }, [menuIsOpen, route.kind]);
 
   const [contactPayMethod, setContactPayMethod] = useState<
     null | "cashu" | "lightning"
@@ -5098,7 +5131,6 @@ const App = () => {
       }
 
       if (kind === "contacts") navigateToContacts();
-      if (kind === "settings") navigateToSettings();
       if (kind === "wallet") navigateToWallet();
       if (kind === "topup") navigateToTopup();
       if (kind === "topupInvoice") navigateToTopupInvoice();
@@ -5825,7 +5857,10 @@ const App = () => {
 
         let swapped: { keep?: unknown[]; send?: unknown[] };
         try {
-          swapped = (await runSwap(total)) as { keep?: unknown[]; send?: unknown[] };
+          swapped = (await runSwap(total)) as {
+            keep?: unknown[];
+            send?: unknown[];
+          };
         } catch (error) {
           const fee = parseSwapFee(error);
           if (!fee || total - fee <= 0) throw error;
@@ -7475,19 +7510,11 @@ const App = () => {
   const showNoGroupFilter = ungroupedCount > 0;
 
   const topbar = (() => {
-    if (route.kind === "settings") {
-      return {
-        icon: "<",
-        label: t("close"),
-        onClick: closeSettings,
-      };
-    }
-
     if (route.kind === "advanced") {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToSettings,
+        onClick: navigateToMainReturn,
       };
     }
 
@@ -7519,7 +7546,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToSettings,
+        onClick: navigateToMainReturn,
       };
     }
 
@@ -7637,8 +7664,8 @@ const App = () => {
 
     return {
       icon: "☰",
-      label: t("settings"),
-      onClick: toggleSettings,
+      label: t("menu"),
+      onClick: toggleMenu,
     };
   })();
 
@@ -7735,7 +7762,6 @@ const App = () => {
     if (route.kind === "lnAddressPay") return t("pay");
     if (route.kind === "cashuTokenNew") return t("cashuToken");
     if (route.kind === "cashuToken") return t("cashuToken");
-    if (route.kind === "settings") return t("menu");
     if (route.kind === "advanced") return t("advanced");
     if (route.kind === "paymentsHistory") return t("paymentsHistory");
     if (route.kind === "mints") return t("mints");
@@ -9390,89 +9416,108 @@ const App = () => {
             </div>
           ) : null}
 
-          {route.kind === "settings" && (
-            <section className="panel">
-              <div className="settings-row">
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    🌐
-                  </span>
-                  <span className="settings-label">{t("language")}</span>
-                </div>
-                <div className="settings-right">
-                  <select
-                    className="select"
-                    value={lang}
-                    onChange={(e) => setLang(e.target.value as Lang)}
-                    aria-label={t("language")}
-                  >
-                    <option value="cs">{t("czech")}</option>
-                    <option value="en">{t("english")}</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    ₿
-                  </span>
-                  <span className="settings-label">{t("unit")}</span>
-                </div>
-                <div className="settings-right">
-                  <label className="switch">
-                    <input
-                      className="switch-input"
-                      type="checkbox"
-                      aria-label={t("unitUseBitcoin")}
-                      checked={useBitcoinSymbol}
-                      onChange={(e) => setUseBitcoinSymbol(e.target.checked)}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="settings-row settings-link"
-                onClick={navigateToAdvanced}
-                aria-label={t("advanced")}
-                title={t("advanced")}
+          {menuIsOpen ? (
+            <div
+              className="menu-modal-overlay"
+              role="dialog"
+              aria-modal="false"
+              aria-label={t("menu")}
+              onClick={closeMenu}
+            >
+              <div
+                className="menu-modal-sheet"
+                onClick={(e) => e.stopPropagation()}
               >
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    ⚙️
-                  </span>
-                  <span className="settings-label">{t("advanced")}</span>
+                <div className="settings-row">
+                  <div className="settings-left">
+                    <span className="settings-icon" aria-hidden="true">
+                      🌐
+                    </span>
+                    <span className="settings-label">{t("language")}</span>
+                  </div>
+                  <div className="settings-right">
+                    <select
+                      className="select"
+                      value={lang}
+                      onChange={(e) => setLang(e.target.value as Lang)}
+                      aria-label={t("language")}
+                    >
+                      <option value="cs">{t("czech")}</option>
+                      <option value="en">{t("english")}</option>
+                    </select>
+                  </div>
                 </div>
-                <div className="settings-right">
-                  <span className="settings-chevron" aria-hidden="true">
-                    &gt;
-                  </span>
-                </div>
-              </button>
 
-              <button
-                type="button"
-                className="settings-row settings-link"
-                onClick={openFeedbackContact}
-                aria-label={t("feedback")}
-                title={t("feedback")}
-              >
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    💬
-                  </span>
-                  <span className="settings-label">{t("feedback")}</span>
+                <div className="settings-row">
+                  <div className="settings-left">
+                    <span className="settings-icon" aria-hidden="true">
+                      ₿
+                    </span>
+                    <span className="settings-label">{t("unit")}</span>
+                  </div>
+                  <div className="settings-right">
+                    <label className="switch">
+                      <input
+                        className="switch-input"
+                        type="checkbox"
+                        aria-label={t("unitUseBitcoin")}
+                        checked={useBitcoinSymbol}
+                        onChange={(e) =>
+                          setUseBitcoinSymbol(e.target.checked)
+                        }
+                      />
+                    </label>
+                  </div>
                 </div>
-                <div className="settings-right">
-                  <span className="settings-chevron" aria-hidden="true">
-                    &gt;
-                  </span>
-                </div>
-              </button>
-            </section>
-          )}
+
+                <button
+                  type="button"
+                  className="settings-row settings-link"
+                  onClick={() => {
+                    closeMenu();
+                    navigateToAdvanced();
+                  }}
+                  aria-label={t("advanced")}
+                  title={t("advanced")}
+                >
+                  <div className="settings-left">
+                    <span className="settings-icon" aria-hidden="true">
+                      ⚙️
+                    </span>
+                    <span className="settings-label">{t("advanced")}</span>
+                  </div>
+                  <div className="settings-right">
+                    <span className="settings-chevron" aria-hidden="true">
+                      &gt;
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  className="settings-row settings-link"
+                  onClick={() => {
+                    closeMenu();
+                    openFeedbackContact();
+                  }}
+                  aria-label={t("feedback")}
+                  title={t("feedback")}
+                >
+                  <div className="settings-left">
+                    <span className="settings-icon" aria-hidden="true">
+                      💬
+                    </span>
+                    <span className="settings-label">{t("feedback")}</span>
+                  </div>
+                  <div className="settings-right">
+                    <span className="settings-chevron" aria-hidden="true">
+                      &gt;
+                    </span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {route.kind === "advanced" && (
             <section className="panel">

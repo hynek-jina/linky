@@ -1805,6 +1805,27 @@ button.tag-button {
   padding: 20px 18px;
 }
 
+/* Small menu modal (top-left) */
+.menu-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 56px 12px 12px;
+  background: rgba(15, 23, 42, 0.18);
+}
+
+.menu-modal-sheet {
+  width: min(360px, calc(100vw - 24px));
+  border: 1px solid #1f2937;
+  background: #0b1222;
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
 .modal-header {
   display: flex;
   align-items: center;
