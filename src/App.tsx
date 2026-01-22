@@ -4786,7 +4786,10 @@ const App = () => {
 
           const pool = await getSharedAppNostrPool();
 
-          const messageTexts: string[] = [];
+          const messagePlans: Array<{
+            text: string;
+            onSuccess?: () => void;
+          }> = [];
           const nowSec = Math.floor(Date.now() / 1000);
 
           for (const plan of settlementPlans) {
@@ -4804,11 +4807,14 @@ const App = () => {
               unit: "sat",
               settledAtSec: nowSec,
             });
-            messageTexts.push(settlement.token);
-            applyCredoSettlement({
-              promiseId,
-              amount: plan.amount,
-              settledAtSec: nowSec,
+            messagePlans.push({
+              text: settlement.token,
+              onSuccess: () =>
+                applyCredoSettlement({
+                  promiseId,
+                  amount: plan.amount,
+                  settledAtSec: nowSec,
+                }),
             });
           }
 
@@ -4823,25 +4829,31 @@ const App = () => {
               expiresAtSec,
               createdAtSec: nowSec,
             });
-            messageTexts.push(promiseCreated.token);
-            insertCredoPromise({
-              promiseId: promiseCreated.promiseId,
-              token: promiseCreated.token,
-              issuer: currentNpub,
-              recipient: contactNpub,
-              amount: promiseAmount,
-              unit: "sat",
-              createdAtSec: nowSec,
-              expiresAtSec,
-              direction: "out",
+            messagePlans.push({
+              text: promiseCreated.token,
+              onSuccess: () =>
+                insertCredoPromise({
+                  promiseId: promiseCreated.promiseId,
+                  token: promiseCreated.token,
+                  issuer: currentNpub,
+                  recipient: contactNpub,
+                  amount: promiseAmount,
+                  unit: "sat",
+                  createdAtSec: nowSec,
+                  expiresAtSec,
+                  direction: "out",
+                }),
             });
           }
 
           for (const batch of sendBatches) {
-            messageTexts.unshift(String(batch.token ?? "").trim());
+            messagePlans.unshift({
+              text: String(batch.token ?? "").trim(),
+            });
           }
 
-          for (const messageText of messageTexts) {
+          for (const plan of messagePlans) {
+            const messageText = plan.text;
             const baseEvent = {
               created_at: Math.ceil(Date.now() / 1e3),
               kind: 14,
@@ -4886,6 +4898,8 @@ const App = () => {
                 `${t("payFailed")}: ${String(firstError ?? "publish failed")}`,
               );
             }
+
+            if (anySuccess) plan.onSuccess?.();
 
             if (anySuccess || isCredoMessage) {
               appendLocalNostrMessage({
@@ -5002,7 +5016,10 @@ const App = () => {
 
           const pool = await getSharedAppNostrPool();
           const nowSec = Math.floor(Date.now() / 1000);
-          const messageTexts: string[] = [];
+          const messagePlans: Array<{
+            text: string;
+            onSuccess?: () => void;
+          }> = [];
 
           for (const plan of settlementPlans) {
             const row = plan.row as CredoTokenRow;
@@ -5019,15 +5036,19 @@ const App = () => {
               unit: "sat",
               settledAtSec: nowSec,
             });
-            messageTexts.push(settlement.token);
-            applyCredoSettlement({
-              promiseId,
-              amount: plan.amount,
-              settledAtSec: nowSec,
+            messagePlans.push({
+              text: settlement.token,
+              onSuccess: () =>
+                applyCredoSettlement({
+                  promiseId,
+                  amount: plan.amount,
+                  settledAtSec: nowSec,
+                }),
             });
           }
 
-          for (const messageText of messageTexts) {
+          for (const plan of messagePlans) {
+            const messageText = plan.text;
             const baseEvent = {
               created_at: Math.ceil(Date.now() / 1e3),
               kind: 14,
@@ -5068,6 +5089,8 @@ const App = () => {
                 `${t("payFailed")}: ${String(firstError ?? "publish failed")}`,
               );
             }
+
+            if (anySuccess) plan.onSuccess?.();
 
             appendLocalNostrMessage({
               contactId: String(selectedContact.id),
@@ -7127,11 +7150,18 @@ const App = () => {
     if (onboardingIsBusy) return;
     setOnboardingIsBusy(true);
     try {
-      if (!navigator.clipboard?.readText) {
+      let text = "";
+      if (navigator.clipboard?.readText) {
+        text = await navigator.clipboard.readText();
+      } else if (
+        typeof window !== "undefined" &&
+        typeof window.prompt === "function"
+      ) {
+        text = String(window.prompt(t("onboardingPasteNsec")) ?? "");
+      } else {
         pushToast(t("pasteNotAvailable"));
         return;
       }
-      const text = await navigator.clipboard.readText();
       const raw = String(text ?? "").trim();
       if (!raw) {
         pushToast(t("pasteEmpty"));
@@ -8607,6 +8637,16 @@ const App = () => {
 
       chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
 
+      appendLocalNostrMessage({
+        contactId: String(selectedContact.id),
+        direction: "out",
+        content: text,
+        wrapId: String(wrapForMe.id ?? ""),
+        rumorId: null,
+        pubkey: myPubHex,
+        createdAtSec: baseEvent.created_at,
+      });
+
       const pool = await getSharedAppNostrPool();
       const publishResults = await Promise.allSettled([
         ...pool.publish(NOSTR_RELAYS, wrapForMe),
@@ -8622,16 +8662,6 @@ const App = () => {
         )?.reason;
         throw new Error(String(firstError ?? "publish failed"));
       }
-
-      appendLocalNostrMessage({
-        contactId: String(selectedContact.id),
-        direction: "out",
-        content: text,
-        wrapId: String(wrapForMe.id ?? ""),
-        rumorId: null,
-        pubkey: myPubHex,
-        createdAtSec: baseEvent.created_at,
-      });
 
       setChatDraft("");
     } catch (e) {
