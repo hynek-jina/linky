@@ -61,6 +61,7 @@ It is local-first: your data is stored locally and the app works offline.
 Requirements: Node.js + npm.
 
 ```bash
+nvm i
 npm install
 npm run dev
 ```
