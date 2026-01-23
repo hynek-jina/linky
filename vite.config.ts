@@ -32,7 +32,7 @@ const serveSqliteWasm = (): Plugin => ({
       async (
         req: Connect.IncomingMessage,
         res: ServerResponse,
-        next: Connect.NextFunction
+        next: Connect.NextFunction,
       ) => {
         const url = req.url ?? "";
         if (!url.includes("sqlite3.wasm")) return next();
@@ -46,12 +46,12 @@ const serveSqliteWasm = (): Plugin => ({
         } catch (error) {
           server.config.logger.error(
             `Failed to serve sqlite3.wasm from ${sqliteWasmPath}: ${String(
-              error
-            )}`
+              error,
+            )}`,
           );
           next();
         }
-      }
+      },
     );
   },
 });
@@ -63,7 +63,7 @@ const mintQuoteProxy = (): Plugin => ({
       async (
         req: Connect.IncomingMessage,
         res: ServerResponse,
-        next: Connect.NextFunction
+        next: Connect.NextFunction,
       ) => {
         const url = req.url ?? "";
         if (!url.startsWith("/__mint-quote")) return next();
@@ -116,7 +116,7 @@ const mintQuoteProxy = (): Plugin => ({
                 }
                 res.setHeader("Cache-Control", "no-store");
                 proxyRes.pipe(res);
-              }
+              },
             );
 
             proxyReq.on("timeout", () => {
@@ -136,7 +136,7 @@ const mintQuoteProxy = (): Plugin => ({
             res.end(`Proxy error: ${String(error ?? "")}`);
           }
         });
-      }
+      },
     );
   },
 });
@@ -148,7 +148,7 @@ const lnurlProxy = (): Plugin => ({
       async (
         req: Connect.IncomingMessage,
         res: ServerResponse,
-        next: Connect.NextFunction
+        next: Connect.NextFunction,
       ) => {
         const url = req.url ?? "";
         if (!url.startsWith("/api/lnurlp")) return next();
@@ -176,7 +176,11 @@ const lnurlProxy = (): Plugin => ({
             {
               method: "GET",
               hostname: targetUrl.hostname,
-              port: targetUrl.port ? Number(targetUrl.port) : isHttps ? 443 : 80,
+              port: targetUrl.port
+                ? Number(targetUrl.port)
+                : isHttps
+                  ? 443
+                  : 80,
               path: `${targetUrl.pathname}${targetUrl.search}`,
               headers: {
                 Accept: "application/json",
@@ -193,7 +197,7 @@ const lnurlProxy = (): Plugin => ({
               }
               res.setHeader("Cache-Control", "no-store");
               proxyRes.pipe(res);
-            }
+            },
           );
 
           proxyReq.on("timeout", () => {
@@ -209,12 +213,12 @@ const lnurlProxy = (): Plugin => ({
           proxyReq.end();
         } catch (error) {
           server.config.logger.error(
-            `LNURL proxy error: ${String(error ?? "unknown")}`
+            `LNURL proxy error: ${String(error ?? "unknown")}`,
           );
           res.statusCode = 502;
           res.end(`Proxy error: ${String(error ?? "")}`);
         }
-      }
+      },
     );
   },
 });
