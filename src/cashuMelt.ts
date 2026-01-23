@@ -197,7 +197,8 @@ export const meltInvoiceWithTokensAtMint = async (args: {
             feePaid?: unknown;
             fee?: unknown;
           }
-        | (Record<string, unknown> & { change?: Proof[] });
+        | (Record<string, unknown> & { change?: Proof[] })
+        | null = null;
 
       try {
         const meltOnce = async (counter: number) =>
@@ -250,12 +251,12 @@ export const meltInvoiceWithTokensAtMint = async (args: {
           mintUrl: mint,
           unit: walletUnit,
           keysetId,
-          used: Array.isArray(melt.change) ? melt.change.length : 0,
+          used: Array.isArray(melt?.change) ? melt.change.length : 0,
         });
       }
 
       const feePaid = (() => {
-        const m = melt as unknown as Record<string, unknown>;
+        const m = (melt ?? {}) as Record<string, unknown>;
         const raw =
           (m.fee_paid as unknown) ??
           (m.feePaid as unknown) ??
@@ -265,7 +266,10 @@ export const meltInvoiceWithTokensAtMint = async (args: {
         return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
       })();
 
-      const remainingProofs = [...(swapped.keep ?? []), ...(melt.change ?? [])];
+      const remainingProofs = [
+        ...(swapped.keep ?? []),
+        ...(melt?.change ?? []),
+      ];
       const remainingAmount = getProofAmountSum(remainingProofs);
 
       const remainingToken =

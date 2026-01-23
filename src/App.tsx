@@ -10715,6 +10715,13 @@ const App = () => {
     }
   }, [route.kind, selectedContact, chatMessages]);
 
+  const bottomTabActive =
+    route.kind === "wallet"
+      ? "wallet"
+      : route.kind === "contacts"
+        ? "contacts"
+        : null;
+
   return (
     <div
       className={showGroupFilter ? "page has-group-filter" : "page"}
@@ -12325,13 +12332,13 @@ const App = () => {
                     <button
                       type="button"
                       className={
-                        route.kind === "contacts"
+                        bottomTabActive === "contacts"
                           ? "bottom-tab is-active"
                           : "bottom-tab"
                       }
                       onClick={navigateToContacts}
                       aria-current={
-                        route.kind === "contacts" ? "page" : undefined
+                        bottomTabActive === "contacts" ? "page" : undefined
                       }
                     >
                       <span className="bottom-tab-icon" aria-hidden="true">
@@ -12374,13 +12381,13 @@ const App = () => {
                     <button
                       type="button"
                       className={
-                        route.kind === "wallet"
+                        bottomTabActive === "wallet"
                           ? "bottom-tab is-active"
                           : "bottom-tab"
                       }
                       onClick={navigateToWallet}
                       aria-current={
-                        route.kind === "wallet" ? "page" : undefined
+                        bottomTabActive === "wallet" ? "page" : undefined
                       }
                     >
                       <span className="bottom-tab-icon" aria-hidden="true">
@@ -14339,13 +14346,13 @@ const App = () => {
                     <button
                       type="button"
                       className={
-                        route.kind === "contacts"
+                        bottomTabActive === "contacts"
                           ? "bottom-tab is-active"
                           : "bottom-tab"
                       }
                       onClick={navigateToContacts}
                       aria-current={
-                        route.kind === "contacts" ? "page" : undefined
+                        bottomTabActive === "contacts" ? "page" : undefined
                       }
                     >
                       <span className="bottom-tab-icon" aria-hidden="true">
@@ -14388,13 +14395,13 @@ const App = () => {
                     <button
                       type="button"
                       className={
-                        route.kind === "wallet"
+                        bottomTabActive === "wallet"
                           ? "bottom-tab is-active"
                           : "bottom-tab"
                       }
                       onClick={navigateToWallet}
                       aria-current={
-                        route.kind === "wallet" ? "page" : undefined
+                        bottomTabActive === "wallet" ? "page" : undefined
                       }
                     >
                       <span className="bottom-tab-icon" aria-hidden="true">
