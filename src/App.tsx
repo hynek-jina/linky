@@ -2606,14 +2606,6 @@ const App = () => {
         isDeleted?: unknown;
         firstSeenAtSec?: unknown;
       };
-      [
-        appOwnerId,
-        insert,
-        isMintDeleted,
-        mintInfoByUrl,
-        normalizeMintUrl,
-        rememberSeenMint,
-      ];
 
       const now = Math.floor(nowSec) as typeof Evolu.PositiveInt.Type;
 
@@ -8886,8 +8878,6 @@ const App = () => {
   const showContactsToolbar = contactsToolbarProgress > 0;
   const showGroupFilter = showContactsToolbar && groupNames.length > 0;
   const showNoGroupFilter = ungroupedCount > 0;
-  const mainTab = route.kind === "wallet" ? "wallet" : "contacts";
-  const isWalletTab = mainTab === "wallet";
 
   const contactsToolbarStyle = {
     opacity: contactsToolbarProgress,
@@ -11173,9 +11163,6 @@ const App = () => {
 
               <div className="settings-row">
                 <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    🪙
-                  </span>
                   <span className="settings-label">{t("tokens")}</span>
                 </div>
                 <div className="settings-right">
@@ -12338,12 +12325,14 @@ const App = () => {
                     <button
                       type="button"
                       className={
-                        isWalletTab
-                          ? "bottom-tab"
-                          : "bottom-tab is-active"
+                        route.kind === "contacts"
+                          ? "bottom-tab is-active"
+                          : "bottom-tab"
                       }
                       onClick={navigateToContacts}
-                      aria-current={!isWalletTab ? "page" : undefined}
+                      aria-current={
+                        route.kind === "contacts" ? "page" : undefined
+                      }
                     >
                       <span className="bottom-tab-icon" aria-hidden="true">
                         <svg
@@ -12385,12 +12374,14 @@ const App = () => {
                     <button
                       type="button"
                       className={
-                        isWalletTab
+                        route.kind === "wallet"
                           ? "bottom-tab is-active"
                           : "bottom-tab"
                       }
                       onClick={navigateToWallet}
-                      aria-current={isWalletTab ? "page" : undefined}
+                      aria-current={
+                        route.kind === "wallet" ? "page" : undefined
+                      }
                     >
                       <span className="bottom-tab-icon" aria-hidden="true">
                         <svg
@@ -14348,12 +14339,14 @@ const App = () => {
                     <button
                       type="button"
                       className={
-                        isWalletTab
-                          ? "bottom-tab"
-                          : "bottom-tab is-active"
+                        route.kind === "contacts"
+                          ? "bottom-tab is-active"
+                          : "bottom-tab"
                       }
                       onClick={navigateToContacts}
-                      aria-current={!isWalletTab ? "page" : undefined}
+                      aria-current={
+                        route.kind === "contacts" ? "page" : undefined
+                      }
                     >
                       <span className="bottom-tab-icon" aria-hidden="true">
                         <svg
@@ -14395,12 +14388,14 @@ const App = () => {
                     <button
                       type="button"
                       className={
-                        isWalletTab
+                        route.kind === "wallet"
                           ? "bottom-tab is-active"
                           : "bottom-tab"
                       }
                       onClick={navigateToWallet}
-                      aria-current={isWalletTab ? "page" : undefined}
+                      aria-current={
+                        route.kind === "wallet" ? "page" : undefined
+                      }
                     >
                       <span className="bottom-tab-icon" aria-hidden="true">
                         <svg

@@ -99,7 +99,8 @@ export const createSendTokenWithTokensAtMint = async (args: {
     const m = String(e ?? "").toLowerCase();
     return (
       m.includes("outputs have already been signed") ||
-      m.includes("already been signed before")
+      m.includes("already been signed before") ||
+      m.includes("keyset id already signed")
     );
   };
 
@@ -136,24 +137,31 @@ export const createSendTokenWithTokensAtMint = async (args: {
               await wallet.swap(sendAmount, allProofs, { counter });
 
             let counter = counter0;
-            let swapped: { keep?: unknown[]; send?: unknown[] };
-            try {
-              swapped = await swapOnce(counter);
-            } catch (e) {
-              if (!isOutputsAlreadySignedError(e)) throw e;
-              bumpCashuDeterministicCounter({
-                mintUrl: mint,
-                unit: walletUnit,
-                keysetId,
-                used: 64,
-              });
-              counter = getCashuDeterministicCounter({
-                mintUrl: mint,
-                unit: walletUnit,
-                keysetId,
-              });
-              swapped = await swapOnce(counter);
+            let swapped: { keep?: unknown[]; send?: unknown[] } | undefined;
+            let lastError: unknown;
+            for (let attempt = 0; attempt < 5; attempt += 1) {
+              try {
+                swapped = await swapOnce(counter);
+                lastError = null;
+                break;
+              } catch (e) {
+                lastError = e;
+                if (!isOutputsAlreadySignedError(e)) throw e;
+                bumpCashuDeterministicCounter({
+                  mintUrl: mint,
+                  unit: walletUnit,
+                  keysetId,
+                  used: 64,
+                });
+                counter = getCashuDeterministicCounter({
+                  mintUrl: mint,
+                  unit: walletUnit,
+                  keysetId,
+                });
+              }
             }
+
+            if (!swapped) throw lastError ?? new Error("swap failed");
 
             const keepLen = Array.isArray(swapped.keep)
               ? swapped.keep.length
@@ -169,7 +177,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
             });
 
             return swapped as any;
-          }
+          },
         )
       : wallet.swap(sendAmount, allProofs));
 

@@ -92,7 +92,8 @@ export const meltInvoiceWithTokensAtMint = async (args: {
     const m = String(e ?? "").toLowerCase();
     return (
       m.includes("outputs have already been signed") ||
-      m.includes("already been signed before")
+      m.includes("already been signed before") ||
+      m.includes("keyset id already signed")
     );
   };
 
@@ -136,31 +137,33 @@ export const meltInvoiceWithTokensAtMint = async (args: {
         await wallet.swap(total, allProofs, { counter });
 
       let swapped: any;
-      try {
-        swapped =
-          typeof counter0 === "number"
-            ? await swapOnce(counter0)
-            : await wallet.swap(total, allProofs);
-      } catch (e) {
-        if (
-          !isOutputsAlreadySignedError(e) ||
-          !det ||
-          typeof counter0 !== "number"
-        ) {
-          throw e;
+      let lastError: unknown;
+      if (typeof counter0 === "number") {
+        let counter = counter0;
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          try {
+            swapped = await swapOnce(counter);
+            lastError = null;
+            break;
+          } catch (e) {
+            lastError = e;
+            if (!isOutputsAlreadySignedError(e) || !det) throw e;
+            bumpCashuDeterministicCounter({
+              mintUrl: mint,
+              unit: walletUnit,
+              keysetId,
+              used: 64,
+            });
+            counter = getCashuDeterministicCounter({
+              mintUrl: mint,
+              unit: walletUnit,
+              keysetId,
+            });
+          }
         }
-        bumpCashuDeterministicCounter({
-          mintUrl: mint,
-          unit: walletUnit,
-          keysetId,
-          used: 64,
-        });
-        const counter1 = getCashuDeterministicCounter({
-          mintUrl: mint,
-          unit: walletUnit,
-          keysetId,
-        });
-        swapped = await swapOnce(counter1);
+        if (!swapped) throw lastError ?? new Error("swap failed");
+      } else {
+        swapped = await wallet.swap(total, allProofs);
       }
 
       const keepLen = Array.isArray(swapped.keep) ? swapped.keep.length : 0;
@@ -201,23 +204,30 @@ export const meltInvoiceWithTokensAtMint = async (args: {
           (await wallet.meltProofs(quote, swapped.send, { counter })) as any;
 
         if (typeof counterAfterSwap === "number") {
-          try {
-            melt = await meltOnce(counterAfterSwap);
-          } catch (e) {
-            if (!isOutputsAlreadySignedError(e) || !det) throw e;
-            bumpCashuDeterministicCounter({
-              mintUrl: mint,
-              unit: walletUnit,
-              keysetId,
-              used: 64,
-            });
-            const counter2 = getCashuDeterministicCounter({
-              mintUrl: mint,
-              unit: walletUnit,
-              keysetId,
-            });
-            melt = await meltOnce(counter2);
+          let counter = counterAfterSwap;
+          let lastError: unknown;
+          for (let attempt = 0; attempt < 5; attempt += 1) {
+            try {
+              melt = await meltOnce(counter);
+              lastError = null;
+              break;
+            } catch (e) {
+              lastError = e;
+              if (!isOutputsAlreadySignedError(e) || !det) throw e;
+              bumpCashuDeterministicCounter({
+                mintUrl: mint,
+                unit: walletUnit,
+                keysetId,
+                used: 64,
+              });
+              counter = getCashuDeterministicCounter({
+                mintUrl: mint,
+                unit: walletUnit,
+                keysetId,
+              });
+            }
           }
+          if (!melt) throw lastError ?? new Error("melt failed");
         } else {
           melt = (await wallet.meltProofs(quote, swapped.send)) as any;
         }
@@ -282,7 +292,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
     return det
       ? await withCashuDeterministicCounterLock(
           { mintUrl: mint, unit: walletUnit, keysetId },
-          run
+          run,
         )
       : await run();
   } catch (e) {

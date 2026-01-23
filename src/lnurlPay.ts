@@ -33,17 +33,27 @@ const getLnurlpUrlFromLightningAddress = (lightningAddress: string): string => {
   return `https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`;
 };
 
+const fetchLnurlJson = async <T = unknown>(url: string): Promise<T> => {
+  try {
+    return await fetchJson<T>(url);
+  } catch (error) {
+    if (typeof window === "undefined") throw error;
+    const proxyUrl = `/api/lnurlp?url=${encodeURIComponent(url)}`;
+    return await fetchJson<T>(proxyUrl);
+  }
+};
+
 export const fetchLnurlInvoiceForLightningAddress = async (
   lightningAddress: string,
   amountSat: number,
-  comment?: string
+  comment?: string,
 ): Promise<string> => {
   if (!Number.isFinite(amountSat) || amountSat <= 0) {
     throw new Error("Invalid amount");
   }
 
   const lnurlpUrl = getLnurlpUrlFromLightningAddress(lightningAddress);
-  const payReq = await fetchJson<LnurlPayRequest>(lnurlpUrl);
+  const payReq = await fetchLnurlJson<LnurlPayRequest>(lnurlpUrl);
   if (String(payReq.status ?? "").toUpperCase() === "ERROR") {
     throw new Error(asNonEmptyString(payReq.reason) ?? "LNURL error");
   }
@@ -88,16 +98,16 @@ export const fetchLnurlInvoiceForLightningAddress = async (
   const invoiceJson = await (async () => {
     if (maybeWithCommentUrl && !providerAdvertisesComment) {
       try {
-        return await fetchJson<LnurlInvoiceResponse>(maybeWithCommentUrl);
+        return await fetchLnurlJson<LnurlInvoiceResponse>(maybeWithCommentUrl);
       } catch {
         // Retry without comment.
       }
     }
-    return await fetchJson<LnurlInvoiceResponse>(callbackUrl.toString());
+    return await fetchLnurlJson<LnurlInvoiceResponse>(callbackUrl.toString());
   })();
   if (String(invoiceJson.status ?? "").toUpperCase() === "ERROR") {
     throw new Error(
-      asNonEmptyString(invoiceJson.reason) ?? "LNURL invoice error"
+      asNonEmptyString(invoiceJson.reason) ?? "LNURL invoice error",
     );
   }
 

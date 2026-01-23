@@ -14,7 +14,7 @@ type CashuAcceptResult = {
 };
 
 export const acceptCashuToken = async (
-  rawToken: string
+  rawToken: string,
 ): Promise<CashuAcceptResult> => {
   const tokenText = rawToken.trim();
   if (!tokenText) throw new Error("Empty token");
@@ -42,7 +42,8 @@ export const acceptCashuToken = async (
     const m = String(e ?? "").toLowerCase();
     return (
       m.includes("outputs have already been signed") ||
-      m.includes("already been signed before")
+      m.includes("already been signed before") ||
+      m.includes("keyset id already signed")
     );
   };
 
@@ -61,20 +62,30 @@ export const acceptCashuToken = async (
 
           // This performs a swap at the mint, returning fresh proofs.
           let proofs: unknown;
-          try {
-            proofs = await receiveOnce(counter);
-          } catch (e) {
-            // If the counter got out-of-sync (e.g. previous crash), bump forward and retry once.
-            if (!isOutputsAlreadySignedError(e)) throw e;
-            bumpCashuDeterministicCounter({
-              mintUrl,
-              unit,
-              keysetId,
-              used: 64,
-            });
-            counter = getCashuDeterministicCounter({ mintUrl, unit, keysetId });
-            proofs = await receiveOnce(counter);
+          let lastError: unknown;
+          for (let attempt = 0; attempt < 5; attempt += 1) {
+            try {
+              proofs = await receiveOnce(counter);
+              lastError = null;
+              break;
+            } catch (e) {
+              lastError = e;
+              if (!isOutputsAlreadySignedError(e)) throw e;
+              bumpCashuDeterministicCounter({
+                mintUrl,
+                unit,
+                keysetId,
+                used: 64,
+              });
+              counter = getCashuDeterministicCounter({
+                mintUrl,
+                unit,
+                keysetId,
+              });
+            }
           }
+
+          if (!proofs) throw lastError ?? new Error("receive failed");
 
           bumpCashuDeterministicCounter({
             mintUrl,
@@ -84,7 +95,7 @@ export const acceptCashuToken = async (
           });
 
           return proofs as any;
-        }
+        },
       )
     : wallet.receive(decoded))) as Array<{
     amount: number;
