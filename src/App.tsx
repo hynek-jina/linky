@@ -105,6 +105,9 @@ const LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX = "linky.local.paymentEvents.v1";
 const LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX = "linky.local.nostrMessages.v1";
 const LOCAL_MINT_INFO_STORAGE_KEY_PREFIX = "linky.local.mintInfo.v1";
 
+const inMemoryNostrPictureCache = new Map<string, string | null>();
+const inMemoryMintIconCache = new Map<string, string | null>();
+
 type LocalPaymentEvent = {
   id: string;
   createdAtSec: number;
@@ -623,7 +626,7 @@ const App = () => {
 
   const [nostrPictureByNpub, setNostrPictureByNpub] = useState<
     Record<string, string | null>
-  >(() => ({}));
+  >(() => Object.fromEntries(inMemoryNostrPictureCache.entries()));
 
   const avatarObjectUrlsByNpubRef = React.useRef<Map<string, string>>(
     new Map(),
@@ -675,6 +678,11 @@ const App = () => {
         }
       }
       urlMap.clear();
+      for (const [key, url] of inMemoryNostrPictureCache.entries()) {
+        if (url && url.startsWith("blob:")) {
+          inMemoryNostrPictureCache.delete(key);
+        }
+      }
     };
   });
 
@@ -723,7 +731,19 @@ const App = () => {
 
   const [mintIconUrlByMint, setMintIconUrlByMint] = useState<
     Record<string, string | null>
-  >(() => ({}));
+  >(() => Object.fromEntries(inMemoryMintIconCache.entries()));
+
+  React.useEffect(() => {
+    for (const [npub, url] of Object.entries(nostrPictureByNpub)) {
+      inMemoryNostrPictureCache.set(npub, url ?? null);
+    }
+  }, [nostrPictureByNpub]);
+
+  React.useEffect(() => {
+    for (const [origin, url] of Object.entries(mintIconUrlByMint)) {
+      inMemoryMintIconCache.set(origin, url ?? null);
+    }
+  }, [mintIconUrlByMint]);
 
   const [scanIsOpen, setScanIsOpen] = useState(false);
   const [scanStream, setScanStream] = useState<MediaStream | null>(null);
@@ -3153,19 +3173,33 @@ const App = () => {
   const [nostrMessagesLocal, setNostrMessagesLocal] = useState<
     LocalNostrMessage[]
   >(() => []);
+  const nostrMessageWrapIdsRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     const ownerId = appOwnerIdRef.current;
     if (!ownerId) {
       setNostrMessagesLocal([]);
+      nostrMessageWrapIdsRef.current = new Set();
       return;
     }
-    setNostrMessagesLocal(
-      safeLocalStorageGetJson(
-        `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
-        [] as LocalNostrMessage[],
-      ),
+    const raw = safeLocalStorageGetJson(
+      `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+      [] as LocalNostrMessage[],
     );
+    const wrapIds = new Set<string>();
+    const deduped: LocalNostrMessage[] = [];
+    for (const msg of raw) {
+      const key = String(msg.wrapId ?? "").trim() || String(msg.id ?? "");
+      if (key && wrapIds.has(key)) continue;
+      if (key) wrapIds.add(key);
+      deduped.push(msg);
+    }
+    deduped.sort((a, b) => a.createdAtSec - b.createdAtSec);
+    const trimmed = deduped.slice(-500);
+    nostrMessageWrapIdsRef.current = new Set(
+      trimmed.map((m) => String(m.wrapId ?? "").trim() || String(m.id ?? "")),
+    );
+    setNostrMessagesLocal(trimmed);
   }, [appOwnerId]);
 
   const appendLocalNostrMessage = React.useCallback(
@@ -3179,13 +3213,46 @@ const App = () => {
       };
 
       setNostrMessagesLocal((prev) => {
-        // Avoid duplicates by wrapId.
-        if (prev.some((m) => String(m.wrapId) === String(entry.wrapId)))
-          return prev;
+        const wrapIds = nostrMessageWrapIdsRef.current;
+        const dedupeKey =
+          String(entry.wrapId ?? "").trim() || String(entry.id ?? "");
+        if (dedupeKey && wrapIds.has(dedupeKey)) return prev;
 
-        const next = [...prev, entry]
-          .sort((a, b) => a.createdAtSec - b.createdAtSec)
-          .slice(-500);
+        const insertSorted = (
+          list: LocalNostrMessage[],
+          value: LocalNostrMessage,
+        ) => {
+          const len = list.length;
+          if (len === 0) return [value];
+          const last = list[len - 1];
+          if ((last?.createdAtSec ?? 0) <= value.createdAtSec) {
+            return [...list, value];
+          }
+          let lo = 0;
+          let hi = len;
+          while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if ((list[mid]?.createdAtSec ?? 0) <= value.createdAtSec) {
+              lo = mid + 1;
+            } else {
+              hi = mid;
+            }
+          }
+          return [...list.slice(0, lo), value, ...list.slice(lo)];
+        };
+
+        let next = insertSorted(prev, entry);
+        if (next.length > 500) {
+          const removeCount = next.length - 500;
+          const removed = next.slice(0, removeCount);
+          next = next.slice(-500);
+          for (const msg of removed) {
+            const key = String(msg.wrapId ?? "").trim() || String(msg.id ?? "");
+            if (key) wrapIds.delete(key);
+          }
+        }
+
+        if (dedupeKey) wrapIds.add(dedupeKey);
 
         safeLocalStorageSetJson(
           `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
@@ -3199,19 +3266,37 @@ const App = () => {
 
   const chatContactId = route.kind === "chat" ? route.id : null;
 
+  const { messagesByContactId, lastMessageByContactId, nostrMessagesRecent } =
+    useMemo(() => {
+      const byContact = new Map<string, LocalNostrMessage[]>();
+      const lastBy = new Map<string, LocalNostrMessage>();
+
+      for (const msg of nostrMessagesLocal) {
+        const id = String(msg.contactId ?? "").trim();
+        if (!id) continue;
+        const list = byContact.get(id);
+        if (list) list.push(msg);
+        else byContact.set(id, [msg]);
+        lastBy.set(id, msg);
+      }
+
+      const recentSlice =
+        nostrMessagesLocal.length > 100
+          ? nostrMessagesLocal.slice(-100)
+          : [...nostrMessagesLocal];
+
+      return {
+        messagesByContactId: byContact,
+        lastMessageByContactId: lastBy,
+        nostrMessagesRecent: [...recentSlice].reverse(),
+      };
+    }, [nostrMessagesLocal]);
+
   const chatMessages = useMemo(() => {
     const id = String(chatContactId ?? "").trim();
     if (!id) return [] as LocalNostrMessage[];
-    return nostrMessagesLocal
-      .filter((m) => String(m.contactId) === id)
-      .sort((a, b) => a.createdAtSec - b.createdAtSec);
-  }, [chatContactId, nostrMessagesLocal]);
-
-  const nostrMessagesRecent = useMemo(() => {
-    return [...nostrMessagesLocal]
-      .sort((a, b) => b.createdAtSec - a.createdAtSec)
-      .slice(0, 100);
-  }, [nostrMessagesLocal]);
+    return messagesByContactId.get(id) ?? [];
+  }, [chatContactId, messagesByContactId]);
 
   React.useEffect(() => {
     const pendingTokens = cashuTokensAll.filter((row) => {
@@ -3244,18 +3329,7 @@ const App = () => {
     }
   }, [cashuTokensAll, nostrMessagesLocal, update]);
 
-  const lastMessageByContactId = useMemo(() => {
-    const map = new Map<string, LocalNostrMessage>();
-    for (const msg of nostrMessagesLocal) {
-      const id = String(msg.contactId ?? "").trim();
-      if (!id) continue;
-      const createdAt = Number(msg.createdAtSec ?? 0) || 0;
-      const existing = map.get(id);
-      const existingAt = existing ? Number(existing.createdAtSec ?? 0) || 0 : 0;
-      if (!existing || createdAt >= existingAt) map.set(id, msg);
-    }
-    return map;
-  }, [nostrMessagesLocal]);
+  // lastMessageByContactId provided by the derived Nostr index above.
 
   const cashuBalance = useMemo(() => {
     return cashuTokens.reduce((sum, token) => {
@@ -4487,9 +4561,10 @@ const App = () => {
         }
       : undefined;
 
-  const visibleContacts = useMemo(() => {
-    const matchesSearch = (contact: (typeof contacts)[number]) => {
-      if (contactsSearchParts.length === 0) return true;
+  const contactsSearchData = useMemo(() => {
+    return contacts.map((contact) => {
+      const idKey = String(contact.id ?? "").trim();
+      const groupName = String(contact.groupName ?? "").trim();
       const haystack = [
         contact.name,
         contact.npub,
@@ -4503,21 +4578,25 @@ const App = () => {
         )
         .filter(Boolean)
         .join(" ");
-      return contactsSearchParts.every((part) => haystack.includes(part));
+
+      return { contact, idKey, groupName, haystack };
+    });
+  }, [contacts]);
+
+  const visibleContacts = useMemo(() => {
+    const matchesSearch = (item: (typeof contactsSearchData)[number]) => {
+      if (contactsSearchParts.length === 0) return true;
+      return contactsSearchParts.every((part) => item.haystack.includes(part));
     };
 
     const filtered = (() => {
-      if (!activeGroup) return contacts;
+      if (!activeGroup) return contactsSearchData;
       if (activeGroup === NO_GROUP_FILTER) {
-        return contacts.filter((contact) => {
-          const raw = (contact.groupName ?? null) as unknown as string | null;
-          return !(raw ?? "").trim();
-        });
+        return contactsSearchData.filter((item) => !item.groupName);
       }
-      return contacts.filter((contact) => {
-        const raw = (contact.groupName ?? null) as unknown as string | null;
-        return (raw ?? "").trim() === activeGroup;
-      });
+      return contactsSearchData.filter(
+        (item) => item.groupName === activeGroup,
+      );
     })();
 
     const searchFiltered = contactsSearchParts.length
@@ -4527,8 +4606,9 @@ const App = () => {
     const withConversation: (typeof contacts)[number][] = [];
     const withoutConversation: (typeof contacts)[number][] = [];
 
-    for (const contact of searchFiltered) {
-      const key = String(contact.id ?? "").trim();
+    for (const item of searchFiltered) {
+      const key = item.idKey;
+      const contact = item.contact;
       if (key && lastMessageByContactId.has(key))
         withConversation.push(contact);
       else withoutConversation.push(contact);
@@ -4577,7 +4657,7 @@ const App = () => {
     activeGroup,
     contactAttentionById,
     contactNameCollator,
-    contacts,
+    contactsSearchData,
     contactsSearchParts,
     lastMessageByContactId,
   ]);
