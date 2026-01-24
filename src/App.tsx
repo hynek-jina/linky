@@ -4748,20 +4748,72 @@ const App = () => {
 
   const PUBLISH_RETRY_DELAY_MS = 1500;
   const PUBLISH_MAX_ATTEMPTS = 2;
+  const PUBLISH_CONFIRM_TIMEOUT_MS = 4000;
+
+  const confirmPublishById = React.useCallback(
+    async (
+      pool: AppNostrPool,
+      relays: string[],
+      ids: string[],
+    ): Promise<boolean> => {
+      const uniqueIds = ids
+        .map((id) => String(id ?? "").trim())
+        .filter(Boolean);
+      if (uniqueIds.length === 0) return false;
+      return await new Promise((resolve) => {
+        let done = false;
+        const timeoutId = window.setTimeout(() => {
+          if (done) return;
+          done = true;
+          try {
+            sub?.close?.("timeout");
+          } catch {
+            // ignore
+          }
+          resolve(false);
+        }, PUBLISH_CONFIRM_TIMEOUT_MS);
+
+        const sub = pool.subscribe(
+          relays,
+          { ids: uniqueIds },
+          {
+            onevent: () => {
+              if (done) return;
+              done = true;
+              window.clearTimeout(timeoutId);
+              try {
+                sub.close?.("confirmed");
+              } catch {
+                // ignore
+              }
+              resolve(true);
+            },
+          },
+        );
+      });
+    },
+    [],
+  );
 
   const publishToRelaysWithRetry = React.useCallback(
     async (
       pool: AppNostrPool,
       relays: string[],
       event: NostrToolsEvent,
-    ): Promise<{ anySuccess: boolean; error: unknown | null }> => {
+    ): Promise<{
+      anySuccess: boolean;
+      error: unknown | null;
+      timedOut: boolean;
+    }> => {
       let lastError: unknown = null;
+      let timedOut = false;
       for (let attempt = 0; attempt < PUBLISH_MAX_ATTEMPTS; attempt += 1) {
         const publishResults = await Promise.allSettled(
           pool.publish(relays, event),
         );
         const anySuccess = publishResults.some((r) => r.status === "fulfilled");
-        if (anySuccess) return { anySuccess: true, error: null };
+        if (anySuccess)
+          return { anySuccess: true, error: null, timedOut: false };
 
         lastError = publishResults.find(
           (r): r is PromiseRejectedResult => r.status === "rejected",
@@ -4769,12 +4821,13 @@ const App = () => {
         const message = String(lastError ?? "").toLowerCase();
         const isTimeout =
           message.includes("timed out") || message.includes("timeout");
+        timedOut = isTimeout;
         if (!isTimeout || attempt >= PUBLISH_MAX_ATTEMPTS - 1) break;
         await new Promise((resolve) =>
           window.setTimeout(resolve, PUBLISH_RETRY_DELAY_MS),
         );
       }
-      return { anySuccess: false, error: lastError };
+      return { anySuccess: false, error: lastError, timedOut };
     },
     [],
   );
@@ -4790,12 +4843,25 @@ const App = () => {
         publishToRelaysWithRetry(pool, relays, wrapForMe),
         publishToRelaysWithRetry(pool, relays, wrapForContact),
       ]);
+      if (me.anySuccess || contact.anySuccess) {
+        return { anySuccess: true, error: null };
+      }
+
+      const timedOut = Boolean(me.timedOut || contact.timedOut);
+      if (timedOut) {
+        const confirmed = await confirmPublishById(pool, relays, [
+          String(wrapForMe.id ?? "").trim(),
+          String(wrapForContact.id ?? "").trim(),
+        ]);
+        if (confirmed) return { anySuccess: true, error: null };
+      }
+
       return {
-        anySuccess: Boolean(me.anySuccess || contact.anySuccess),
+        anySuccess: false,
         error: me.error ?? contact.error ?? null,
       };
     },
-    [publishToRelaysWithRetry],
+    [confirmPublishById, publishToRelaysWithRetry],
   );
 
   const paySelectedContact = async () => {
