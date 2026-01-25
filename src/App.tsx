@@ -17,6 +17,7 @@ import { deriveDefaultProfile } from "./derivedProfile";
 import type { CashuTokenId, ContactId, CredoTokenId, MintId } from "./evolu";
 import {
   createJournalEntryPayload,
+  DEFAULT_EVOLU_SERVER_URLS,
   evolu,
   normalizeEvoluServerUrl,
   useEvolu,
@@ -468,6 +469,8 @@ const App = () => {
   const [pendingMintDeleteUrl, setPendingMintDeleteUrl] = useState<
     string | null
   >(null);
+  const [pendingEvoluServerDeleteUrl, setPendingEvoluServerDeleteUrl] =
+    useState<string | null>(null);
   const [logoutArmed, setLogoutArmed] = useState(false);
   const [dedupeContactsIsBusy, setDedupeContactsIsBusy] = useState(false);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
@@ -1354,6 +1357,14 @@ const App = () => {
     }, 5000);
     return () => window.clearTimeout(timeoutId);
   }, [pendingMintDeleteUrl]);
+
+  React.useEffect(() => {
+    if (!pendingEvoluServerDeleteUrl) return;
+    const timeoutId = window.setTimeout(() => {
+      setPendingEvoluServerDeleteUrl(null);
+    }, 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [pendingEvoluServerDeleteUrl]);
 
   React.useEffect(() => {
     if (!logoutArmed) return;
@@ -13301,6 +13312,11 @@ const App = () => {
                     const offline = isEvoluServerOffline(
                       selectedEvoluServerUrl,
                     );
+                    const isDefaultEvoluServer = DEFAULT_EVOLU_SERVER_URLS.some(
+                      (u) =>
+                        u.toLowerCase() ===
+                        selectedEvoluServerUrl.toLowerCase(),
+                    );
                     const state = evoluHasError
                       ? "disconnected"
                       : offline
@@ -13378,6 +13394,49 @@ const App = () => {
                             </button>
                           </div>
                         </div>
+
+                        {isDefaultEvoluServer ? (
+                          <p className="muted" style={{ marginTop: 10 }}>
+                            {t("evoluDefaultServerCannotRemove")}
+                          </p>
+                        ) : (
+                          <div
+                            className="settings-row"
+                            style={{ marginTop: 10 }}
+                          >
+                            <button
+                              type="button"
+                              className="btn-wide danger"
+                              onClick={() => {
+                                if (
+                                  pendingEvoluServerDeleteUrl ===
+                                  selectedEvoluServerUrl
+                                ) {
+                                  const selectedLower =
+                                    selectedEvoluServerUrl.toLowerCase();
+                                  const nextUrls = evoluServerUrls.filter(
+                                    (u) => u.toLowerCase() !== selectedLower,
+                                  );
+                                  setPendingEvoluServerDeleteUrl(null);
+                                  setEvoluServerOffline(
+                                    selectedEvoluServerUrl,
+                                    false,
+                                  );
+                                  saveEvoluServerUrls(nextUrls);
+                                  navigateToEvoluServers();
+                                  return;
+                                }
+
+                                setStatus(t("deleteArmedHint"));
+                                setPendingEvoluServerDeleteUrl(
+                                  selectedEvoluServerUrl,
+                                );
+                              }}
+                            >
+                              {t("evoluServerRemove")}
+                            </button>
+                          </div>
+                        )}
                       </>
                     );
                   })()}
