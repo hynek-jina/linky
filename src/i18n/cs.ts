@@ -351,6 +351,7 @@ export const cs = {
   payPaying: "Platím…",
   paySuccess: "Zaplaceno.",
   payQueued: "Platba čeká na odeslání.",
+  payQueuedMessage: "Platba čeká: {amount} {unit} → {name}.",
   payFailed: "Platba se nepovedla",
   payPromiseLimit: "Dosažen limit slibů.",
 

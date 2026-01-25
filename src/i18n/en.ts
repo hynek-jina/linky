@@ -348,6 +348,7 @@ export const en = {
   payPaying: "Paying…",
   paySuccess: "Paid.",
   payQueued: "Payment queued for delivery.",
+  payQueuedMessage: "Queued payment {amount} {unit} → {name}.",
   payFailed: "Payment failed",
   payPromiseLimit: "Promise limit reached.",
 

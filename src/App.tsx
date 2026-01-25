@@ -133,6 +133,7 @@ type LocalNostrMessage = {
   pubkey: string;
   createdAtSec: number;
   status?: "sent" | "pending";
+  clientId?: string;
 };
 
 type LocalPendingPayment = {
@@ -140,6 +141,7 @@ type LocalPendingPayment = {
   contactId: string;
   amountSat: number;
   createdAtSec: number;
+  messageId?: string;
 };
 
 type LocalMintInfoRow = {
@@ -661,40 +663,19 @@ const App = () => {
         return url;
       }
 
-      if (existing) {
+      if (existing && existing.startsWith("blob:")) {
         try {
           URL.revokeObjectURL(existing);
         } catch {
           // ignore
         }
-        avatarObjectUrlsByNpubRef.current.delete(key);
       }
 
+      avatarObjectUrlsByNpubRef.current.delete(key);
       return url;
     },
     [],
   );
-
-  useInit(() => {
-    const urlMap = avatarObjectUrlsByNpubRef.current;
-
-    return () => {
-      for (const url of urlMap.values()) {
-        if (!url || !url.startsWith("blob:")) continue;
-        try {
-          URL.revokeObjectURL(url);
-        } catch {
-          // ignore
-        }
-      }
-      urlMap.clear();
-      for (const [key, url] of inMemoryNostrPictureCache.entries()) {
-        if (url && url.startsWith("blob:")) {
-          inMemoryNostrPictureCache.delete(key);
-        }
-      }
-    };
-  });
 
   const [cashuDraft, setCashuDraft] = useState("");
   const cashuDraftRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -3204,9 +3185,14 @@ const App = () => {
     for (const msg of raw) {
       const normalizedStatus =
         msg.status === "pending" || msg.status === "sent" ? msg.status : "sent";
+      const normalizedClientId =
+        typeof msg.clientId === "string" && msg.clientId.trim()
+          ? msg.clientId.trim()
+          : null;
       const normalized = {
         ...msg,
         status: normalizedStatus,
+        ...(normalizedClientId ? { clientId: normalizedClientId } : {}),
       } as LocalNostrMessage;
       const key =
         String(normalized.wrapId ?? "").trim() || String(normalized.id ?? "");
@@ -3231,10 +3217,15 @@ const App = () => {
       const ownerId = appOwnerIdRef.current;
       if (!ownerId) return "";
 
+      const normalizedClientId =
+        typeof msg.clientId === "string" && msg.clientId.trim()
+          ? msg.clientId.trim()
+          : null;
       const entry: LocalNostrMessage = {
         id: makeLocalId(),
         ...msg,
         status: msg.status ?? "sent",
+        ...(normalizedClientId ? { clientId: normalizedClientId } : {}),
       };
 
       setNostrMessagesLocal((prev) => {
@@ -3293,7 +3284,12 @@ const App = () => {
   const updateLocalNostrMessage = React.useCallback(
     (
       id: string,
-      updates: Partial<Pick<LocalNostrMessage, "wrapId" | "status" | "pubkey">>,
+      updates: Partial<
+        Pick<
+          LocalNostrMessage,
+          "wrapId" | "status" | "pubkey" | "content" | "clientId"
+        >
+      >,
     ) => {
       const ownerId = appOwnerIdRef.current;
       if (!ownerId || !id) return;
@@ -3302,6 +3298,13 @@ const App = () => {
         const idx = prev.findIndex((m) => String(m.id ?? "") === id);
         if (idx < 0) return prev;
         const current = prev[idx];
+        const normalizedClientId =
+          typeof updates.clientId === "string" && updates.clientId.trim()
+            ? updates.clientId.trim()
+            : updates.clientId === null
+              ? null
+              : (current.clientId ?? null);
+
         const nextEntry: LocalNostrMessage = {
           ...current,
           ...updates,
@@ -3309,6 +3312,7 @@ const App = () => {
             updates.status === "pending" || updates.status === "sent"
               ? updates.status
               : (current.status ?? "sent"),
+          ...(normalizedClientId ? { clientId: normalizedClientId } : {}),
         };
 
         const wrapIds = nostrMessageWrapIdsRef.current;
@@ -3358,7 +3362,11 @@ const App = () => {
   }, [appOwnerId]);
 
   const enqueuePendingPayment = React.useCallback(
-    (payload: { contactId: ContactId; amountSat: number }) => {
+    (payload: {
+      contactId: ContactId;
+      amountSat: number;
+      messageId?: string;
+    }) => {
       const ownerId = appOwnerIdRef.current;
       if (!ownerId) return;
       const amountSat =
@@ -3371,6 +3379,7 @@ const App = () => {
         contactId: String(payload.contactId ?? ""),
         amountSat,
         createdAtSec: Math.floor(Date.now() / 1000),
+        ...(payload.messageId ? { messageId: payload.messageId } : {}),
       };
       setPendingPayments((prev) => {
         const next = [...prev, entry].slice(-200);
@@ -5086,9 +5095,15 @@ const App = () => {
       contact: (typeof contacts)[number];
       amountSat: number;
       fromQueue?: boolean;
+      pendingMessageId?: string;
     }): Promise<{ ok: boolean; queued: boolean; error?: string }> => {
-      const { contact, amountSat, fromQueue } = args;
+      const { contact, amountSat, fromQueue, pendingMessageId } = args;
       const notify = !fromQueue;
+
+      const normalizedPendingMessageId =
+        typeof pendingMessageId === "string" && pendingMessageId.trim()
+          ? pendingMessageId.trim()
+          : null;
 
       if (!currentNsec || !currentNpub) {
         if (notify) setStatus(t("profileMissingNpub"));
@@ -5104,9 +5119,29 @@ const App = () => {
       const isOffline =
         typeof navigator !== "undefined" && navigator.onLine === false;
       if (isOffline) {
+        const displayName =
+          String(contact.name ?? "").trim() ||
+          String(contact.lnAddress ?? "").trim() ||
+          t("appTitle");
+        const clientId = makeLocalId();
+        const messageId = appendLocalNostrMessage({
+          contactId: String(contact.id ?? ""),
+          direction: "out",
+          content: t("payQueuedMessage")
+            .replace("{amount}", formatInteger(amountSat))
+            .replace("{unit}", displayUnit)
+            .replace("{name}", displayName),
+          wrapId: `pending:pay:${clientId}`,
+          rumorId: null,
+          pubkey: "",
+          createdAtSec: Math.floor(Date.now() / 1000),
+          status: "pending",
+          clientId,
+        });
         enqueuePendingPayment({
           contactId: contact.id as ContactId,
           amountSat,
+          messageId,
         });
         if (notify) {
           setStatus(t("payQueued"));
@@ -5114,12 +5149,7 @@ const App = () => {
             t("paidQueuedTo")
               .replace("{amount}", formatInteger(amountSat))
               .replace("{unit}", displayUnit)
-              .replace(
-                "{name}",
-                String(contact.name ?? "").trim() ||
-                  String(contact.lnAddress ?? "").trim() ||
-                  t("appTitle"),
-              ),
+              .replace("{name}", displayName),
           );
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
@@ -5396,9 +5426,17 @@ const App = () => {
 
         const publishedSendTokens = new Set<string>();
         let hasPendingMessages = false;
+        const canReusePendingMessage = Boolean(
+          normalizedPendingMessageId &&
+          nostrMessagesLocal.some(
+            (m) => String(m.id ?? "") === normalizedPendingMessageId,
+          ),
+        );
+        let reusedPendingMessage = false;
 
         for (const plan of messagePlans) {
           const messageText = plan.text;
+          const clientId = makeLocalId();
           const baseEvent = {
             created_at: Math.ceil(Date.now() / 1e3),
             kind: 14,
@@ -5406,20 +5444,35 @@ const App = () => {
             tags: [
               ["p", contactPubHex],
               ["p", myPubHex],
+              ["client", clientId],
             ],
             content: messageText,
           } satisfies UnsignedEvent;
 
-          const pendingId = appendLocalNostrMessage({
-            contactId: String(contact.id ?? ""),
-            direction: "out",
-            content: messageText,
-            wrapId: `pending:${makeLocalId()}`,
-            rumorId: null,
-            pubkey: myPubHex,
-            createdAtSec: baseEvent.created_at,
-            status: "pending",
-          });
+          let pendingId = "";
+          if (canReusePendingMessage && !reusedPendingMessage) {
+            pendingId = normalizedPendingMessageId ?? "";
+            reusedPendingMessage = true;
+            updateLocalNostrMessage(pendingId, {
+              status: "pending",
+              wrapId: `pending:${clientId}`,
+              pubkey: myPubHex,
+              content: messageText,
+              clientId,
+            });
+          } else {
+            pendingId = appendLocalNostrMessage({
+              contactId: String(contact.id ?? ""),
+              direction: "out",
+              content: messageText,
+              wrapId: `pending:${clientId}`,
+              rumorId: null,
+              pubkey: myPubHex,
+              createdAtSec: baseEvent.created_at,
+              status: "pending",
+              clientId,
+            });
+          }
 
           const wrapForMe = wrapEvent(
             baseEvent,
@@ -5581,6 +5634,7 @@ const App = () => {
       appendLocalNostrMessage,
       publishWrappedWithRetry,
       credoTokensActive,
+      nostrMessagesLocal,
       safeLocalStorageSet,
       setContactsOnboardingHasPaid,
     ],
@@ -5625,15 +5679,19 @@ const App = () => {
           if (decodedContact.type !== "npub") continue;
           const contactPubHex = decodedContact.data as string;
 
+          const tags: string[][] = [
+            ["p", contactPubHex],
+            ["p", myPubHex],
+          ];
+          const clientId = String(msg.clientId ?? "").trim();
+          if (clientId) tags.push(["client", clientId]);
+
           const createdAt = Number(msg.createdAtSec ?? 0) || 0;
           const baseEvent = {
             created_at: createdAt > 0 ? createdAt : Math.ceil(Date.now() / 1e3),
             kind: 14,
             pubkey: myPubHex,
-            tags: [
-              ["p", contactPubHex],
-              ["p", myPubHex],
-            ],
+            tags,
             content: String(msg.content ?? ""),
           } satisfies UnsignedEvent;
 
@@ -5724,11 +5782,15 @@ const App = () => {
           if (cashuIsBusy) break;
           setCashuIsBusy(true);
           try {
-            const result = await payContactWithCashuMessage({
+            const args: Parameters<typeof payContactWithCashuMessage>[0] = {
               contact,
               amountSat,
               fromQueue: true,
-            });
+            };
+            if (pending.messageId) {
+              args.pendingMessageId = pending.messageId;
+            }
+            const result = await payContactWithCashuMessage(args);
             if (result.ok) {
               removePendingPayment(pending.id);
             } else {
@@ -5812,8 +5874,13 @@ const App = () => {
       // Continue as cashu.
     }
 
+    const isOffline =
+      typeof navigator !== "undefined" && navigator.onLine === false;
     const effectiveMethod: "cashu" | "lightning" =
-      method === "lightning" && !canPayViaLightning && canPayViaCashuMessage
+      (method === "lightning" &&
+        !canPayViaLightning &&
+        canPayViaCashuMessage) ||
+      (isOffline && canPayViaCashuMessage)
         ? "cashu"
         : method;
 
@@ -5864,6 +5931,44 @@ const App = () => {
         }
         if (!contactNpub) {
           setStatus(t("chatMissingContactNpub"));
+          return;
+        }
+
+        const isOffline =
+          typeof navigator !== "undefined" && navigator.onLine === false;
+        if (isOffline) {
+          const displayName =
+            String(selectedContact.name ?? "").trim() ||
+            String(selectedContact.lnAddress ?? "").trim() ||
+            t("appTitle");
+          const messageId = appendLocalNostrMessage({
+            contactId: String(selectedContact.id),
+            direction: "out",
+            content: t("payQueuedMessage")
+              .replace("{amount}", formatInteger(amountSat))
+              .replace("{unit}", displayUnit)
+              .replace("{name}", displayName),
+            wrapId: `pending:pay:${makeLocalId()}`,
+            rumorId: null,
+            pubkey: "",
+            createdAtSec: Math.floor(Date.now() / 1000),
+            status: "pending",
+          });
+          enqueuePendingPayment({
+            contactId: selectedContact.id,
+            amountSat,
+            messageId,
+          });
+          setStatus(t("payQueued"));
+          showPaidOverlay(
+            t("paidQueuedTo")
+              .replace("{amount}", formatInteger(amountSat))
+              .replace("{unit}", displayUnit)
+              .replace("{name}", displayName),
+          );
+          safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
+          setContactsOnboardingHasPaid(true);
+          navigateToChat(selectedContact.id);
           return;
         }
 
@@ -6126,6 +6231,7 @@ const App = () => {
 
           for (const plan of messagePlans) {
             const messageText = plan.text;
+            const clientId = makeLocalId();
             const baseEvent = {
               created_at: Math.ceil(Date.now() / 1e3),
               kind: 14,
@@ -6133,9 +6239,22 @@ const App = () => {
               tags: [
                 ["p", contactPubHex],
                 ["p", myPubHex],
+                ["client", clientId],
               ],
               content: messageText,
             } satisfies UnsignedEvent;
+
+            const pendingId = appendLocalNostrMessage({
+              contactId: String(selectedContact.id),
+              direction: "out",
+              content: messageText,
+              wrapId: `pending:${clientId}`,
+              rumorId: null,
+              pubkey: myPubHex,
+              createdAtSec: baseEvent.created_at,
+              status: "pending",
+              clientId,
+            });
 
             const wrapForMe = wrapEvent(
               baseEvent,
@@ -6147,8 +6266,6 @@ const App = () => {
               privBytes,
               contactPubHex,
             ) as NostrToolsEvent;
-
-            chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
 
             const publishOutcome = await publishWrappedWithRetry(
               pool,
@@ -6171,22 +6288,18 @@ const App = () => {
             }
 
             if (anySuccess) {
+              chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
+              if (pendingId) {
+                updateLocalNostrMessage(pendingId, {
+                  status: "sent",
+                  wrapId: String(wrapForMe.id ?? ""),
+                  pubkey: myPubHex,
+                });
+              }
               plan.onSuccess?.();
               if (sendTokenMetaByText.has(messageText)) {
                 publishedSendTokens.add(messageText);
               }
-            }
-
-            if (anySuccess || isCredoMessage) {
-              appendLocalNostrMessage({
-                contactId: String(selectedContact.id),
-                direction: "out",
-                content: messageText,
-                wrapId: String(wrapForMe.id ?? ""),
-                rumorId: null,
-                pubkey: myPubHex,
-                createdAtSec: baseEvent.created_at,
-              });
             }
           }
 
@@ -6362,6 +6475,7 @@ const App = () => {
 
           for (const plan of messagePlans) {
             const messageText = plan.text;
+            const clientId = makeLocalId();
             const baseEvent = {
               created_at: Math.ceil(Date.now() / 1e3),
               kind: 14,
@@ -6369,9 +6483,22 @@ const App = () => {
               tags: [
                 ["p", contactPubHex],
                 ["p", myPubHex],
+                ["client", clientId],
               ],
               content: messageText,
             } satisfies UnsignedEvent;
+
+            const pendingId = appendLocalNostrMessage({
+              contactId: String(selectedContact.id),
+              direction: "out",
+              content: messageText,
+              wrapId: `pending:${clientId}`,
+              rumorId: null,
+              pubkey: myPubHex,
+              createdAtSec: baseEvent.created_at,
+              status: "pending",
+              clientId,
+            });
 
             const wrapForMe = wrapEvent(
               baseEvent,
@@ -6383,8 +6510,6 @@ const App = () => {
               privBytes,
               contactPubHex,
             ) as NostrToolsEvent;
-
-            chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
 
             const publishOutcome = await publishWrappedWithRetry(
               pool,
@@ -6401,17 +6526,17 @@ const App = () => {
               );
             }
 
-            if (anySuccess) plan.onSuccess?.();
-
-            appendLocalNostrMessage({
-              contactId: String(selectedContact.id),
-              direction: "out",
-              content: messageText,
-              wrapId: String(wrapForMe.id ?? ""),
-              rumorId: null,
-              pubkey: myPubHex,
-              createdAtSec: baseEvent.created_at,
-            });
+            if (anySuccess) {
+              chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
+              if (pendingId) {
+                updateLocalNostrMessage(pendingId, {
+                  status: "sent",
+                  wrapId: String(wrapForMe.id ?? ""),
+                  pubkey: myPubHex,
+                });
+              }
+              plan.onSuccess?.();
+            }
           }
 
           logPaymentEvent({
@@ -6448,6 +6573,13 @@ const App = () => {
         }
       }
 
+      const isLightningOffline =
+        typeof navigator !== "undefined" && navigator.onLine === false;
+      if (isLightningOffline) {
+        setStatus(`${t("payFailed")}: ${t("evoluServerOfflineStatus")}`);
+        return;
+      }
+
       setStatus(t("payFetchingInvoice"));
       let invoice: string;
       try {
@@ -6458,7 +6590,19 @@ const App = () => {
           remainingAfterCredo,
         );
       } catch (e) {
-        setStatus(`${t("payFailed")}: ${String(e)}`);
+        const message = String(e ?? "unknown");
+        const lower = message.toLowerCase();
+        const isNetworkError =
+          lower.includes("failed to fetch") ||
+          lower.includes("networkerror") ||
+          lower.includes("network error");
+        const offline =
+          typeof navigator !== "undefined" && navigator.onLine === false;
+        if (offline && isNetworkError) {
+          setStatus(`${t("payFailed")}: ${t("evoluServerOfflineStatus")}`);
+        } else {
+          setStatus(`${t("payFailed")}: ${message}`);
+        }
         return;
       }
 
@@ -9829,6 +9973,47 @@ const App = () => {
 
             if (cancelled) return;
 
+            if (isOutgoing) {
+              const clientId = tags
+                .find((t) => Array.isArray(t) && t[0] === "client")
+                ?.at(1);
+              const pending = chatMessages.find((m) => {
+                const isOut = String(m.direction ?? "") === "out";
+                const isPending = String(m.status ?? "sent") === "pending";
+                if (!isOut || !isPending) return false;
+                if (clientId)
+                  return String(m.clientId ?? "") === String(clientId);
+                return String(m.content ?? "").trim() === content;
+              });
+              if (pending) {
+                updateLocalNostrMessage(String(pending.id ?? ""), {
+                  status: "sent",
+                  wrapId,
+                  pubkey: innerPub,
+                });
+                return;
+              }
+
+              const existing = chatMessages.find((m) => {
+                const isOut = String(m.direction ?? "") === "out";
+                if (!isOut) return false;
+                if (clientId)
+                  return String(m.clientId ?? "") === String(clientId);
+                return String(m.content ?? "").trim() === content;
+              });
+              if (existing) {
+                updateLocalNostrMessage(String(existing.id ?? ""), {
+                  status: "sent",
+                  wrapId,
+                  pubkey: innerPub,
+                });
+                return;
+              }
+            }
+
+            const tagClientId = tags.find(
+              (t) => Array.isArray(t) && t[0] === "client",
+            )?.[1];
             appendLocalNostrMessage({
               contactId: String(selectedContact.id),
               direction: isIncoming ? "in" : "out",
@@ -9837,6 +10022,7 @@ const App = () => {
               rumorId: inner.id ? String(inner.id) : null,
               pubkey: innerPub,
               createdAtSec,
+              ...(tagClientId ? { clientId: String(tagClientId) } : {}),
             });
           } catch {
             // ignore individual events
@@ -9890,6 +10076,7 @@ const App = () => {
     route.kind,
     selectedContact,
     chatMessages,
+    updateLocalNostrMessage,
   ]);
 
   const sendChatMessage = async () => {
@@ -9922,6 +10109,7 @@ const App = () => {
       if (decodedContact.type !== "npub") throw new Error("invalid npub");
       const contactPubHex = decodedContact.data as string;
 
+      const clientId = makeLocalId();
       const baseEvent = {
         created_at: Math.ceil(Date.now() / 1e3),
         kind: 14,
@@ -9929,6 +10117,7 @@ const App = () => {
         tags: [
           ["p", contactPubHex],
           ["p", myPubHex],
+          ["client", clientId],
         ],
         content: text,
       } satisfies UnsignedEvent;
@@ -9937,11 +10126,12 @@ const App = () => {
         contactId: String(selectedContact.id),
         direction: "out",
         content: text,
-        wrapId: `pending:${makeLocalId()}`,
+        wrapId: `pending:${clientId}`,
         rumorId: null,
         pubkey: myPubHex,
         createdAtSec: baseEvent.created_at,
         status: "pending",
+        clientId,
       });
 
       const isOffline =
