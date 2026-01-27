@@ -246,10 +246,16 @@ export const cs = {
   newContact: "Přidat nový kontakt",
   close: "Zavřít",
 
+  contactNotFound: "Kontakt nenalezen.",
   name: "Jméno",
   npub: "npub",
   lightningAddress: "Lightning adresa",
   group: "Skupina",
+
+  namePlaceholder: "Např. Alice",
+  npubPlaceholder: "nostr veřejný klíč",
+  lightningAddressPlaceholder: "např. alice@zapsat.cz",
+  groupPlaceholder: "např. Friends",
 
   all: "Vše",
   noGroup: "Bez skupiny",

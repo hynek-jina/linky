@@ -12991,7 +12991,7 @@ const App = () => {
           {route.kind === "contact" && (
             <section className="panel">
               {!selectedContact ? (
-                <p className="muted">Kontakt nenalezen.</p>
+                <p className="muted">{t("contactNotFound")}</p>
               ) : null}
 
               {selectedContact ? (
@@ -13092,7 +13092,7 @@ const App = () => {
           {route.kind === "contactPay" && (
             <section className="panel">
               {!selectedContact ? (
-                <p className="muted">Kontakt nenalezen.</p>
+                <p className="muted">{t("contactNotFound")}</p>
               ) : null}
 
               {selectedContact ? (
@@ -13480,7 +13480,7 @@ const App = () => {
           {route.kind === "chat" && (
             <section className="panel">
               {!selectedContact ? (
-                <p className="muted">Kontakt nenalezen.</p>
+                <p className="muted">{t("contactNotFound")}</p>
               ) : null}
 
               {selectedContact ? (
@@ -13614,7 +13614,7 @@ const App = () => {
           {route.kind === "contactEdit" && (
             <section className="panel panel-plain">
               {!selectedContact ? (
-                <p className="muted">Kontakt nenalezen.</p>
+                <p className="muted">{t("contactNotFound")}</p>
               ) : null}
 
               <div className="form-grid">
@@ -13646,14 +13646,14 @@ const App = () => {
                   <input
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="Např. Alice"
+                    placeholder={t("namePlaceholder")}
                   />
 
-                  <label>npub</label>
+                  <label>{t("npub")}</label>
                   <input
                     value={form.npub}
                     onChange={(e) => setForm({ ...form, npub: e.target.value })}
-                    placeholder="nostr veřejný klíč"
+                    placeholder={t("npubPlaceholder")}
                   />
 
                   <div
@@ -13685,7 +13685,7 @@ const App = () => {
                     onChange={(e) =>
                       setForm({ ...form, lnAddress: e.target.value })
                     }
-                    placeholder="např. alice@zapsat.cz"
+                    placeholder={t("lightningAddressPlaceholder")}
                   />
 
                   <label>{t("group")}</label>
@@ -13694,7 +13694,7 @@ const App = () => {
                     onChange={(e) =>
                       setForm({ ...form, group: e.target.value })
                     }
-                    placeholder="např. Friends"
+                    placeholder={t("groupPlaceholder")}
                     list={groupNames.length ? "group-options" : undefined}
                   />
                   {groupNames.length ? (
@@ -13744,18 +13744,18 @@ const App = () => {
             <section className="panel panel-plain">
               <div className="form-grid">
                 <div className="form-col">
-                  <label>Jméno</label>
+                  <label>{t("name")}</label>
                   <input
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="Např. Alice"
+                    placeholder={t("namePlaceholder")}
                   />
 
-                  <label>npub</label>
+                  <label>{t("npub")}</label>
                   <input
                     value={form.npub}
                     onChange={(e) => setForm({ ...form, npub: e.target.value })}
-                    placeholder="nostr veřejný klíč"
+                    placeholder={t("npubPlaceholder")}
                   />
 
                   <label>{t("lightningAddress")}</label>
@@ -13764,7 +13764,7 @@ const App = () => {
                     onChange={(e) =>
                       setForm({ ...form, lnAddress: e.target.value })
                     }
-                    placeholder="např. alice@zapsat.cz"
+                    placeholder={t("lightningAddressPlaceholder")}
                   />
 
                   <label>{t("group")}</label>
@@ -13773,7 +13773,7 @@ const App = () => {
                     onChange={(e) =>
                       setForm({ ...form, group: e.target.value })
                     }
-                    placeholder="např. Friends"
+                    placeholder={t("groupPlaceholder")}
                     list={groupNames.length ? "group-options" : undefined}
                   />
                   {groupNames.length ? (

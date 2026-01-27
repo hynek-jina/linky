@@ -245,10 +245,16 @@ export const en = {
   newContact: "Add new contact",
   close: "Close",
 
+  contactNotFound: "Contact not found.",
   name: "Name",
   npub: "npub",
   lightningAddress: "Lightning address",
   group: "Group",
+
+  namePlaceholder: "E.g. Alice",
+  npubPlaceholder: "nostr public key",
+  lightningAddressPlaceholder: "e.g. alice@getalby.com",
+  groupPlaceholder: "e.g. Friends",
 
   all: "All",
   noGroup: "No group",
