@@ -71,14 +71,24 @@ import {
 import { publishKind0ProfileMetadata } from "./nostrPublish";
 import { ContactCard } from "./components/ContactCard";
 import { WalletBalance } from "./components/WalletBalance";
-import { PaymentHistoryRow } from "./components/PaymentHistoryRow";
 import { ChatMessage } from "./components/ChatMessage";
 import { CashuTokenPill } from "./components/CashuTokenPill";
 import { CredoTokenPill } from "./components/CredoTokenPill";
-import { MintButton } from "./components/MintButton";
-import { NostrRelayRow } from "./components/NostrRelayRow";
 import { WalletActionButton } from "./components/WalletActionButton";
 import { BottomTab } from "./components/BottomTab";
+import {
+  PaymentsHistoryPage,
+  MintsPage,
+  MintDetailPage,
+  AdvancedPage,
+  NostrRelaysPage,
+  NostrRelayNewPage,
+  NostrRelayPage,
+  EvoluServersPage,
+  EvoluServerPage,
+  EvoluServerNewPage,
+  ProfilePage,
+} from "./pages";
 import type { Route } from "./types/route";
 import {
   bumpCashuDeterministicCounter,
@@ -12268,986 +12278,171 @@ const App = () => {
           ) : null}
 
           {route.kind === "advanced" && (
-            <section className="panel">
-              <div className="settings-row">
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    🦤
-                  </span>
-                  <span className="settings-label">{t("nostrKeys")}</span>
-                </div>
-                <div className="settings-right">
-                  <div className="badge-box">
-                    <button
-                      className="ghost"
-                      onClick={copyNostrKeys}
-                      disabled={!currentNsec}
-                    >
-                      {t("copyCurrent")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    🌱
-                  </span>
-                  <span className="settings-label">{t("seed")}</span>
-                </div>
-                <div className="settings-right">
-                  <div className="badge-box">
-                    <button
-                      className="ghost"
-                      onClick={copySeed}
-                      disabled={!seedMnemonic}
-                    >
-                      {t("copyCurrent")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    🪙
-                  </span>
-                  <span className="settings-label">{t("tokens")}</span>
-                </div>
-                <div className="settings-right">
-                  <div className="badge-box">
-                    <button
-                      className="ghost"
-                      onClick={() => {
-                        void restoreMissingTokens();
-                      }}
-                      disabled={
-                        !seedMnemonic || tokensRestoreIsBusy || cashuIsBusy
-                      }
-                    >
-                      {tokensRestoreIsBusy ? t("restoring") : t("restore")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    🥜
-                  </span>
-                  <span className="settings-label">{t("payWithCashu")}</span>
-                </div>
-                <div className="settings-right">
-                  <label className="switch">
-                    <input
-                      className="switch-input"
-                      type="checkbox"
-                      aria-label={t("payWithCashu")}
-                      checked={payWithCashuEnabled}
-                      onChange={(e) => setPayWithCashuEnabled(e.target.checked)}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    ❤️
-                  </span>
-                  <span className="settings-label">{t("allowPromises")}</span>
-                </div>
-                <div className="settings-right">
-                  <label className="switch">
-                    <input
-                      className="switch-input"
-                      type="checkbox"
-                      aria-label={t("allowPromises")}
-                      checked={allowPromisesEnabled}
-                      onChange={(e) =>
-                        setAllowPromisesEnabled(e.target.checked)
-                      }
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="settings-row settings-link"
-                onClick={navigateToNostrRelays}
-                aria-label={t("nostrRelay")}
-                title={t("nostrRelay")}
-              >
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    📡
-                  </span>
-                  <span className="settings-label">{t("nostrRelay")}</span>
-                </div>
-                <div className="settings-right">
-                  <span className="relay-count" aria-label="relay status">
-                    {connectedRelayCount}/{relayUrls.length}
-                  </span>
-                  <span
-                    className={
-                      nostrRelayOverallStatus === "connected"
-                        ? "status-dot connected"
-                        : nostrRelayOverallStatus === "checking"
-                          ? "status-dot checking"
-                          : "status-dot disconnected"
-                    }
-                    aria-label={nostrRelayOverallStatus}
-                    title={nostrRelayOverallStatus}
-                    style={{ marginLeft: 10 }}
-                  />
-                  <span className="settings-chevron" aria-hidden="true">
-                    &gt;
-                  </span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className="settings-row settings-link"
-                onClick={navigateToEvoluServers}
-                aria-label={t("evoluServer")}
-                title={t("evoluServer")}
-              >
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    ☁
-                  </span>
-                  <span className="settings-label">{t("evoluServer")}</span>
-                </div>
-                <div className="settings-right">
-                  <span className="relay-count" aria-label="evolu sync status">
-                    {evoluConnectedServerCount}/{evoluServerUrls.length}
-                  </span>
-                  <span
-                    className={
-                      evoluOverallStatus === "connected"
-                        ? "status-dot connected"
-                        : evoluOverallStatus === "checking"
-                          ? "status-dot checking"
-                          : "status-dot disconnected"
-                    }
-                    aria-label={evoluOverallStatus}
-                    title={evoluOverallStatus}
-                    style={{ marginLeft: 10 }}
-                  />
-                  <span className="settings-chevron" aria-hidden="true">
-                    &gt;
-                  </span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className="settings-row settings-link"
-                onClick={navigateToMints}
-                aria-label={t("mints")}
-                title={t("mints")}
-              >
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    🏦
-                  </span>
-                  <span className="settings-label">{t("mints")}</span>
-                </div>
-                <div className="settings-right">
-                  {defaultMintDisplay ? (
-                    <span className="relay-url">{defaultMintDisplay}</span>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
-                  <span className="settings-chevron" aria-hidden="true">
-                    &gt;
-                  </span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className="settings-row settings-link"
-                onClick={navigateToPaymentsHistory}
-                aria-label={t("paymentsHistory")}
-                title={t("paymentsHistory")}
-              >
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    🧾
-                  </span>
-                  <span className="settings-label">{t("paymentsHistory")}</span>
-                </div>
-                <div className="settings-right">
-                  <span className="settings-chevron" aria-hidden="true">
-                    &gt;
-                  </span>
-                </div>
-              </button>
-
-              <div className="settings-row">
-                <div className="settings-left">
-                  <span className="settings-icon" aria-hidden="true">
-                    📦
-                  </span>
-                  <span className="settings-label">{t("data")}</span>
-                </div>
-                <div className="settings-right">
-                  <div className="badge-box">
-                    <button className="ghost" onClick={exportAppData}>
-                      {t("exportData")}
-                    </button>
-                    <button className="ghost" onClick={requestImportAppData}>
-                      {t("importData")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <button
-                  type="button"
-                  className="btn-wide secondary"
-                  onClick={() => {
-                    void dedupeContacts();
-                  }}
-                  disabled={dedupeContactsIsBusy}
-                >
-                  {t("dedupeContacts")}
-                </button>
-              </div>
-
-              <input
-                ref={importDataFileInputRef}
-                type="file"
-                accept=".txt,.json,application/json,text/plain"
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0] ?? null;
-                  e.currentTarget.value = "";
-                  void handleImportAppDataFilePicked(file);
-                }}
-              />
-
-              <div className="settings-row">
-                <button
-                  type="button"
-                  className={logoutArmed ? "btn-wide danger" : "btn-wide"}
-                  onClick={requestLogout}
-                >
-                  {t("logout")}
-                </button>
-              </div>
-
-              <div
-                className="muted"
-                style={{ marginTop: 14, textAlign: "center", fontSize: 12 }}
-              >
-                {t("appVersionLabel")}: v{__APP_VERSION__}
-              </div>
-            </section>
+            <AdvancedPage
+              currentNsec={currentNsec}
+              seedMnemonic={seedMnemonic}
+              tokensRestoreIsBusy={tokensRestoreIsBusy}
+              cashuIsBusy={cashuIsBusy}
+              payWithCashuEnabled={payWithCashuEnabled}
+              allowPromisesEnabled={allowPromisesEnabled}
+              relayUrls={relayUrls}
+              connectedRelayCount={connectedRelayCount}
+              nostrRelayOverallStatus={nostrRelayOverallStatus}
+              evoluServerUrls={evoluServerUrls}
+              evoluConnectedServerCount={evoluConnectedServerCount}
+              evoluOverallStatus={evoluOverallStatus}
+              defaultMintDisplay={defaultMintDisplay}
+              dedupeContactsIsBusy={dedupeContactsIsBusy}
+              logoutArmed={logoutArmed}
+              importDataFileInputRef={importDataFileInputRef}
+              copyNostrKeys={copyNostrKeys}
+              copySeed={copySeed}
+              restoreMissingTokens={restoreMissingTokens}
+              setPayWithCashuEnabled={setPayWithCashuEnabled}
+              setAllowPromisesEnabled={setAllowPromisesEnabled}
+              navigateToNostrRelays={navigateToNostrRelays}
+              navigateToEvoluServers={navigateToEvoluServers}
+              navigateToMints={navigateToMints}
+              navigateToPaymentsHistory={navigateToPaymentsHistory}
+              exportAppData={exportAppData}
+              requestImportAppData={requestImportAppData}
+              dedupeContacts={dedupeContacts}
+              handleImportAppDataFilePicked={handleImportAppDataFilePicked}
+              requestLogout={requestLogout}
+              t={t}
+              __APP_VERSION__={__APP_VERSION__}
+            />
           )}
 
           {route.kind === "paymentsHistory" && (
-            <section className="panel">
-              {paymentEvents.length === 0 ? (
-                <p className="muted">{t("paymentsHistoryEmpty")}</p>
-              ) : (
-                <div>
-                  {paymentEvents.map((ev) => {
-                    const eventId = String(
-                      (ev as unknown as { id?: unknown }).id ?? "",
-                    );
-                    const createdAtSec =
-                      Number(
-                        (ev as unknown as { createdAtSec?: unknown })
-                          .createdAtSec ?? 0,
-                      ) || 0;
-                    const timeLabel = createdAtSec
-                      ? new Intl.DateTimeFormat(
-                          lang === "cs" ? "cs-CZ" : "en-US",
-                          {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          },
-                        ).format(new Date(createdAtSec * 1000))
-                      : "";
-
-                    return (
-                      <div key={eventId || timeLabel}>
-                        <PaymentHistoryRow
-                          event={ev}
-                          locale={lang === "cs" ? "cs-CZ" : "en-US"}
-                          formatInteger={formatInteger}
-                          displayUnit={displayUnit}
-                          translations={{
-                            paymentsHistoryFailed: t("paymentsHistoryFailed"),
-                            paymentsHistoryIncoming: t(
-                              "paymentsHistoryIncoming",
-                            ),
-                            paymentsHistoryOutgoing: t(
-                              "paymentsHistoryOutgoing",
-                            ),
-                            paymentsHistoryFee: t("paymentsHistoryFee"),
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+            <PaymentsHistoryPage
+              paymentEvents={paymentEvents}
+              lang={lang}
+              formatInteger={formatInteger}
+              displayUnit={displayUnit}
+              t={t}
+            />
           )}
 
           {route.kind === "mints" && (
-            <section className="panel">
-              {(() => {
-                const selectedMint =
-                  normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ||
-                  MAIN_MINT_URL;
-                const stripped = (value: string) =>
-                  value.replace(/^https?:\/\//i, "");
-                const draftValue = String(defaultMintUrlDraft ?? "").trim();
-                const cleanedDraft = normalizeMintUrl(draftValue);
-                const isDraftValid = (() => {
-                  if (!cleanedDraft) return false;
-                  try {
-                    new URL(cleanedDraft);
-                    return true;
-                  } catch {
-                    return false;
-                  }
-                })();
-                const canSave =
-                  Boolean(draftValue) &&
-                  isDraftValid &&
-                  cleanedDraft !== selectedMint;
-
-                const buttonMints = (() => {
-                  const set = new Set<string>(PRESET_MINTS);
-                  if (selectedMint) set.add(selectedMint);
-                  return Array.from(set.values());
-                })();
-
-                return (
-                  <>
-                    <div className="settings-row" style={{ marginBottom: 6 }}>
-                      <div className="settings-left">
-                        <label className="muted">{t("selectedMint")}</label>
-                      </div>
-                    </div>
-
-                    <div className="settings-row" style={{ marginBottom: 10 }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 8,
-                        }}
-                      >
-                        {buttonMints.map((mint) => {
-                          const isSelected =
-                            normalizeMintUrl(mint) === selectedMint;
-                          const label = stripped(mint);
-                          const fallbackLetter = (
-                            label.match(/[a-z]/i)?.[0] ?? "?"
-                          ).toUpperCase();
-                          return (
-                            <MintButton
-                              key={mint}
-                              mint={mint}
-                              getMintIconUrl={getMintIconUrl}
-                              isSelected={isSelected}
-                              label={label}
-                              fallbackLetter={fallbackLetter}
-                              onClick={() =>
-                                void applyDefaultMintSelection(mint)
-                              }
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <label htmlFor="defaultMintUrl">{t("setCustomMint")}</label>
-                    <input
-                      id="defaultMintUrl"
-                      value={defaultMintUrlDraft}
-                      onChange={(e) => setDefaultMintUrlDraft(e.target.value)}
-                      placeholder="https://…"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                    />
-
-                    <div className="panel-header" style={{ marginTop: 14 }}>
-                      {canSave ? (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await applyDefaultMintSelection(
-                              defaultMintUrlDraft,
-                            );
-                          }}
-                        >
-                          {t("saveChanges")}
-                        </button>
-                      ) : null}
-
-                      {hasMintOverrideRef.current ? null : null}
-                    </div>
-                  </>
-                );
-              })()}
-            </section>
+            <MintsPage
+              defaultMintUrl={defaultMintUrl}
+              defaultMintUrlDraft={defaultMintUrlDraft}
+              setDefaultMintUrlDraft={setDefaultMintUrlDraft}
+              normalizeMintUrl={normalizeMintUrl}
+              MAIN_MINT_URL={MAIN_MINT_URL}
+              PRESET_MINTS={PRESET_MINTS}
+              getMintIconUrl={getMintIconUrl}
+              applyDefaultMintSelection={applyDefaultMintSelection}
+              hasMintOverrideRef={hasMintOverrideRef}
+              t={t}
+            />
           )}
 
           {route.kind === "mint" && (
-            <section className="panel">
-              {(() => {
-                const cleaned = normalizeMintUrl(route.mintUrl);
-                const row = mintInfoByUrl.get(cleaned) ?? null;
-                if (!row) return <p className="muted">{t("mintNotFound")}</p>;
-
-                const supportsMpp =
-                  String(
-                    (row as unknown as { supportsMpp?: unknown }).supportsMpp ??
-                      "",
-                  ) === "1";
-                const feesJson = String(
-                  (row as unknown as { feesJson?: unknown }).feesJson ?? "",
-                ).trim();
-
-                const runtime = getMintRuntime(cleaned);
-                const lastCheckedAtSec = runtime?.lastCheckedAtSec ?? 0;
-                const latencyMs = runtime?.latencyMs ?? null;
-
-                const ppk = (() => {
-                  if (!feesJson) return null;
-                  try {
-                    const parsed = JSON.parse(feesJson) as unknown;
-                    const found = extractPpk(parsed);
-                    if (typeof found === "number" && Number.isFinite(found)) {
-                      return found;
-                    }
-                    return null;
-                  } catch {
-                    return null;
-                  }
-                })();
-
-                return (
-                  <div>
-                    <div className="settings-row">
-                      <div className="settings-left">
-                        <span className="settings-icon" aria-hidden="true">
-                          🔗
-                        </span>
-                        <span className="settings-label">{t("mintUrl")}</span>
-                      </div>
-                      <div className="settings-right">
-                        <span className="relay-url">{cleaned}</span>
-                      </div>
-                    </div>
-
-                    <div className="settings-row">
-                      <div className="settings-left">
-                        <span className="settings-icon" aria-hidden="true">
-                          🧩
-                        </span>
-                        <span className="settings-label">{t("mintMpp")}</span>
-                      </div>
-                      <div className="settings-right">
-                        <span className={supportsMpp ? "relay-count" : "muted"}>
-                          {supportsMpp ? "MPP" : t("unknown")}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="settings-row">
-                      <div className="settings-left">
-                        <span className="settings-icon" aria-hidden="true">
-                          💸
-                        </span>
-                        <span className="settings-label">{t("mintFees")}</span>
-                      </div>
-                      <div className="settings-right">
-                        {ppk !== null ? (
-                          <span className="relay-url">ppk: {ppk}</span>
-                        ) : feesJson ? (
-                          <span className="relay-url">{feesJson}</span>
-                        ) : (
-                          <span className="muted">{t("unknown")}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="settings-row">
-                      <div className="settings-left">
-                        <span className="settings-icon" aria-hidden="true">
-                          ⏱
-                        </span>
-                        <span className="settings-label">Latency</span>
-                      </div>
-                      <div className="settings-right">
-                        {latencyMs !== null ? (
-                          <span className="relay-url">{latencyMs} ms</span>
-                        ) : (
-                          <span className="muted">{t("unknown")}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="settings-row">
-                      <button
-                        type="button"
-                        className="btn-wide secondary"
-                        onClick={() => {
-                          void refreshMintInfo(cleaned);
-                        }}
-                      >
-                        {t("mintRefresh")}
-                      </button>
-                    </div>
-
-                    <div className="settings-row">
-                      <button
-                        type="button"
-                        className={
-                          pendingMintDeleteUrl === cleaned
-                            ? "btn-wide danger"
-                            : "btn-wide"
-                        }
-                        onClick={() => {
-                          if (pendingMintDeleteUrl === cleaned) {
-                            const ownerId = appOwnerIdRef.current;
-                            if (ownerId) {
-                              setMintInfoAll((prev) => {
-                                const next = prev.map((row) => {
-                                  const url = normalizeMintUrl(
-                                    String(
-                                      (row as unknown as { url?: unknown })
-                                        .url ?? "",
-                                    ),
-                                  );
-                                  if (url !== cleaned) return row;
-                                  return {
-                                    ...row,
-                                    isDeleted: Evolu.sqliteTrue,
-                                  };
-                                });
-                                safeLocalStorageSetJson(
-                                  `${LOCAL_MINT_INFO_STORAGE_KEY_PREFIX}.${String(
-                                    ownerId,
-                                  )}`,
-                                  next,
-                                );
-                                return next;
-                              });
-                            }
-
-                            setPendingMintDeleteUrl(null);
-                            navigateToMints();
-                            return;
-                          }
-                          setStatus(t("deleteArmedHint"));
-                          setPendingMintDeleteUrl(cleaned);
-                        }}
-                      >
-                        {t("mintDelete")}
-                      </button>
-                    </div>
-
-                    {lastCheckedAtSec ? (
-                      <p className="muted" style={{ marginTop: 10 }}>
-                        {t("mintLastChecked")}:{" "}
-                        {new Date(lastCheckedAtSec * 1000).toLocaleString(
-                          lang === "cs" ? "cs-CZ" : "en-US",
-                        )}
-                      </p>
-                    ) : null}
-                  </div>
-                );
-              })()}
-            </section>
+            <MintDetailPage
+              mintUrl={route.mintUrl}
+              normalizeMintUrl={normalizeMintUrl}
+              mintInfoByUrl={mintInfoByUrl}
+              getMintRuntime={getMintRuntime}
+              refreshMintInfo={refreshMintInfo}
+              pendingMintDeleteUrl={pendingMintDeleteUrl}
+              setPendingMintDeleteUrl={setPendingMintDeleteUrl}
+              navigateToMints={navigateToMints}
+              setStatus={setStatus}
+              setMintInfoAll={
+                setMintInfoAll as (
+                  updater: (prev: unknown[]) => unknown[],
+                ) => void
+              }
+              appOwnerIdRef={appOwnerIdRef}
+              Evolu={Evolu}
+              LOCAL_MINT_INFO_STORAGE_KEY_PREFIX={
+                LOCAL_MINT_INFO_STORAGE_KEY_PREFIX
+              }
+              safeLocalStorageSetJson={safeLocalStorageSetJson}
+              extractPpk={extractPpk}
+              lang={lang}
+              t={t}
+            />
           )}
 
           {route.kind === "evoluServers" && (
-            <section className="panel">
-              {evoluServerUrls.length === 0 ? (
-                <p className="muted" style={{ marginTop: 0 }}>
-                  {t("evoluServersEmpty")}
-                </p>
-              ) : (
-                <div>
-                  {evoluServerUrls.map((url) => {
-                    const offline = isEvoluServerOffline(url);
-                    const state = offline
-                      ? "disconnected"
-                      : evoluHasError
-                        ? "disconnected"
-                        : (evoluServerStatusByUrl[url] ?? "checking");
-
-                    const isSynced =
-                      Boolean(syncOwner) &&
-                      !evoluHasError &&
-                      !offline &&
-                      state === "connected";
-
-                    return (
-                      <button
-                        type="button"
-                        className="settings-row settings-link"
-                        key={url}
-                        onClick={() => navigateToEvoluServer(url)}
-                      >
-                        <div className="settings-left">
-                          <span className="relay-url">{url}</span>
-                        </div>
-                        <div className="settings-right">
-                          <span
-                            className={
-                              state === "connected"
-                                ? "status-dot connected"
-                                : state === "checking"
-                                  ? "status-dot checking"
-                                  : "status-dot disconnected"
-                            }
-                            aria-label={state}
-                            title={state}
-                          />
-                          <span className="muted" style={{ marginLeft: 10 }}>
-                            {offline
-                              ? t("evoluServerOfflineStatus")
-                              : isSynced
-                                ? t("evoluSyncOk")
-                                : state === "checking"
-                                  ? t("evoluSyncing")
-                                  : t("evoluNotSynced")}
-                          </span>
-                          <span className="settings-chevron" aria-hidden="true">
-                            &gt;
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+            <EvoluServersPage
+              evoluServerUrls={evoluServerUrls}
+              evoluServerStatusByUrl={evoluServerStatusByUrl}
+              evoluHasError={evoluHasError}
+              syncOwner={syncOwner}
+              isEvoluServerOffline={isEvoluServerOffline}
+              navigateToEvoluServer={navigateToEvoluServer}
+              t={t}
+            />
           )}
 
           {route.kind === "evoluServer" && (
-            <section className="panel">
-              {evoluServersReloadRequired ? (
-                <>
-                  <p className="muted" style={{ marginTop: 2 }}>
-                    {t("evoluServersReloadHint")}
-                  </p>
-                  <div className="settings-row">
-                    <button
-                      type="button"
-                      className="btn-wide secondary"
-                      onClick={() => window.location.reload()}
-                    >
-                      {t("evoluServersReloadButton")}
-                    </button>
-                  </div>
-                </>
-              ) : null}
-
-              {selectedEvoluServerUrl ? (
-                <>
-                  {(() => {
-                    const offline = isEvoluServerOffline(
-                      selectedEvoluServerUrl,
-                    );
-                    const isDefaultEvoluServer = DEFAULT_EVOLU_SERVER_URLS.some(
-                      (u) =>
-                        u.toLowerCase() ===
-                        selectedEvoluServerUrl.toLowerCase(),
-                    );
-                    const state = evoluHasError
-                      ? "disconnected"
-                      : offline
-                        ? "disconnected"
-                        : (evoluServerStatusByUrl[selectedEvoluServerUrl] ??
-                          "checking");
-                    const isSynced =
-                      Boolean(syncOwner) &&
-                      !evoluHasError &&
-                      !offline &&
-                      state === "connected";
-
-                    return (
-                      <>
-                        <div className="settings-row">
-                          <div className="settings-left">
-                            <span className="relay-url">
-                              {selectedEvoluServerUrl}
-                            </span>
-                          </div>
-                          <div className="settings-right">
-                            <span
-                              className={
-                                state === "connected"
-                                  ? "status-dot connected"
-                                  : state === "checking"
-                                    ? "status-dot checking"
-                                    : "status-dot disconnected"
-                              }
-                              aria-label={state}
-                              title={state}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="settings-row">
-                          <div className="settings-left">
-                            <span className="settings-label">
-                              {t("evoluSyncLabel")}
-                            </span>
-                          </div>
-                          <div className="settings-right">
-                            <span className="muted">
-                              {offline
-                                ? t("evoluServerOfflineStatus")
-                                : isSynced
-                                  ? t("evoluSyncOk")
-                                  : state === "checking"
-                                    ? t("evoluSyncing")
-                                    : t("evoluNotSynced")}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="settings-row">
-                          <div className="settings-left">
-                            <span className="settings-label">
-                              {t("evoluServerOfflineLabel")}
-                            </span>
-                          </div>
-                          <div className="settings-right">
-                            <button
-                              type="button"
-                              className="secondary"
-                              onClick={() => {
-                                setEvoluServerOffline(
-                                  selectedEvoluServerUrl,
-                                  !offline,
-                                );
-                              }}
-                            >
-                              {offline
-                                ? t("evoluServerOfflineEnable")
-                                : t("evoluServerOfflineDisable")}
-                            </button>
-                          </div>
-                        </div>
-
-                        {isDefaultEvoluServer ? (
-                          <p className="muted" style={{ marginTop: 10 }}>
-                            {t("evoluDefaultServerCannotRemove")}
-                          </p>
-                        ) : (
-                          <div
-                            className="settings-row"
-                            style={{ marginTop: 10 }}
-                          >
-                            <button
-                              type="button"
-                              className="btn-wide danger"
-                              onClick={() => {
-                                if (
-                                  pendingEvoluServerDeleteUrl ===
-                                  selectedEvoluServerUrl
-                                ) {
-                                  const selectedLower =
-                                    selectedEvoluServerUrl.toLowerCase();
-                                  const nextUrls = evoluServerUrls.filter(
-                                    (u) => u.toLowerCase() !== selectedLower,
-                                  );
-                                  setPendingEvoluServerDeleteUrl(null);
-                                  setEvoluServerOffline(
-                                    selectedEvoluServerUrl,
-                                    false,
-                                  );
-                                  saveEvoluServerUrls(nextUrls);
-                                  navigateToEvoluServers();
-                                  return;
-                                }
-
-                                setStatus(t("deleteArmedHint"));
-                                setPendingEvoluServerDeleteUrl(
-                                  selectedEvoluServerUrl,
-                                );
-                              }}
-                            >
-                              {t("evoluServerRemove")}
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-
-                  <div className="settings-row" style={{ marginTop: 10 }}>
-                    <button
-                      type="button"
-                      className="btn-wide danger"
-                      onClick={() => {
-                        void wipeEvoluStorage();
-                      }}
-                      disabled={evoluWipeStorageIsBusy}
-                    >
-                      {evoluWipeStorageIsBusy
-                        ? t("evoluWipeStorageBusy")
-                        : t("evoluWipeStorage")}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <p className="lede">{t("errorPrefix")}</p>
-              )}
-            </section>
+            <EvoluServerPage
+              selectedEvoluServerUrl={selectedEvoluServerUrl}
+              evoluServersReloadRequired={evoluServersReloadRequired}
+              evoluServerStatusByUrl={evoluServerStatusByUrl}
+              evoluHasError={evoluHasError}
+              syncOwner={syncOwner}
+              DEFAULT_EVOLU_SERVER_URLS={DEFAULT_EVOLU_SERVER_URLS}
+              isEvoluServerOffline={isEvoluServerOffline}
+              setEvoluServerOffline={setEvoluServerOffline}
+              pendingEvoluServerDeleteUrl={pendingEvoluServerDeleteUrl}
+              setPendingEvoluServerDeleteUrl={setPendingEvoluServerDeleteUrl}
+              evoluServerUrls={evoluServerUrls}
+              saveEvoluServerUrls={saveEvoluServerUrls}
+              navigateToEvoluServers={navigateToEvoluServers}
+              setStatus={setStatus}
+              wipeEvoluStorage={wipeEvoluStorage}
+              evoluWipeStorageIsBusy={evoluWipeStorageIsBusy}
+              t={t}
+            />
           )}
 
           {route.kind === "evoluServerNew" && (
-            <section className="panel">
-              <label htmlFor="evoluServerUrl">{t("evoluAddServerLabel")}</label>
-              <input
-                id="evoluServerUrl"
-                value={newEvoluServerUrl}
-                onChange={(e) => setNewEvoluServerUrl(e.target.value)}
-                placeholder="wss://..."
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-
-              <div className="panel-header" style={{ marginTop: 14 }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const normalized =
-                      normalizeEvoluServerUrl(newEvoluServerUrl);
-                    if (!normalized) {
-                      pushToast(t("evoluAddServerInvalid"));
-                      return;
-                    }
-                    if (
-                      evoluServerUrls.some(
-                        (u) => u.toLowerCase() === normalized.toLowerCase(),
-                      )
-                    ) {
-                      pushToast(t("evoluAddServerAlready"));
-                      navigateToEvoluServers();
-                      return;
-                    }
-
-                    saveEvoluServerUrls([...evoluServerUrls, normalized]);
-                    setNewEvoluServerUrl("");
-                    setStatus(t("evoluAddServerSaved"));
-                    navigateToEvoluServers();
-                  }}
-                  disabled={!normalizeEvoluServerUrl(newEvoluServerUrl)}
-                >
-                  {t("evoluAddServerButton")}
-                </button>
-              </div>
-
-              <div className="settings-row">
-                <button
-                  type="button"
-                  className="btn-wide danger"
-                  onClick={() => {
-                    void wipeEvoluStorage();
-                  }}
-                  disabled={evoluWipeStorageIsBusy}
-                >
-                  {evoluWipeStorageIsBusy
-                    ? t("evoluWipeStorageBusy")
-                    : t("evoluWipeStorage")}
-                </button>
-              </div>
-            </section>
+            <EvoluServerNewPage
+              newEvoluServerUrl={newEvoluServerUrl}
+              evoluServerUrls={evoluServerUrls}
+              evoluWipeStorageIsBusy={evoluWipeStorageIsBusy}
+              setNewEvoluServerUrl={setNewEvoluServerUrl}
+              normalizeEvoluServerUrl={normalizeEvoluServerUrl}
+              saveEvoluServerUrls={saveEvoluServerUrls}
+              navigateToEvoluServers={navigateToEvoluServers}
+              setStatus={setStatus}
+              pushToast={pushToast}
+              wipeEvoluStorage={wipeEvoluStorage}
+              t={t}
+            />
           )}
 
           {route.kind === "nostrRelays" && (
-            <section className="panel">
-              {relayUrls.length === 0 ? (
-                <p className="lede">{t("noContactsYet")}</p>
-              ) : (
-                <div>
-                  {relayUrls.map((url) => {
-                    const state = relayStatusByUrl[url] ?? "checking";
-                    return (
-                      <NostrRelayRow
-                        key={url}
-                        url={url}
-                        state={state}
-                        onNavigate={navigateToNostrRelay}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+            <NostrRelaysPage
+              relayUrls={relayUrls}
+              relayStatusByUrl={relayStatusByUrl}
+              navigateToNostrRelay={navigateToNostrRelay}
+              t={t}
+            />
           )}
 
           {route.kind === "nostrRelayNew" && (
-            <section className="panel">
-              <label htmlFor="relayUrl">{t("relayUrl")}</label>
-              <input
-                id="relayUrl"
-                value={newRelayUrl}
-                onChange={(e) => setNewRelayUrl(e.target.value)}
-                placeholder="wss://..."
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-
-              <div className="panel-header" style={{ marginTop: 14 }}>
-                {canSaveNewRelay ? (
-                  <button onClick={saveNewRelay}>{t("saveChanges")}</button>
-                ) : null}
-              </div>
-            </section>
+            <NostrRelayNewPage
+              newRelayUrl={newRelayUrl}
+              canSaveNewRelay={canSaveNewRelay}
+              setNewRelayUrl={setNewRelayUrl}
+              saveNewRelay={saveNewRelay}
+              t={t}
+            />
           )}
 
           {route.kind === "nostrRelay" && (
-            <section className="panel">
-              {selectedRelayUrl ? (
-                <>
-                  <div className="settings-row">
-                    <div className="settings-left">
-                      <span className="relay-url">{selectedRelayUrl}</span>
-                    </div>
-                  </div>
-
-                  <div className="settings-row">
-                    <button
-                      className={
-                        pendingRelayDeleteUrl === selectedRelayUrl
-                          ? "btn-wide danger"
-                          : "btn-wide"
-                      }
-                      onClick={requestDeleteSelectedRelay}
-                    >
-                      {t("delete")}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <p className="lede">{t("errorPrefix")}</p>
-              )}
-            </section>
+            <NostrRelayPage
+              selectedRelayUrl={selectedRelayUrl}
+              pendingRelayDeleteUrl={pendingRelayDeleteUrl}
+              requestDeleteSelectedRelay={requestDeleteSelectedRelay}
+              t={t}
+            />
           )}
 
           {route.kind === "wallet" && (
@@ -14957,216 +14152,30 @@ const App = () => {
           )}
 
           {route.kind === "profile" && (
-            <section className="panel">
-              {!currentNpub ? (
-                <p className="muted">{t("profileMissingNpub")}</p>
-              ) : (
-                <>
-                  {isProfileEditing ? (
-                    <>
-                      <div
-                        className="profile-detail"
-                        style={{ marginBottom: 10 }}
-                      >
-                        <div
-                          className="contact-avatar is-xl"
-                          aria-hidden="true"
-                        >
-                          {profileEditPicture ? (
-                            <img
-                              src={profileEditPicture}
-                              alt=""
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : effectiveProfilePicture ? (
-                            <img
-                              src={effectiveProfilePicture}
-                              alt=""
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <span className="contact-avatar-fallback">
-                              {getInitials(
-                                effectiveProfileName ??
-                                  formatShortNpub(currentNpub),
-                              )}
-                            </span>
-                          )}
-                        </div>
-
-                        <input
-                          ref={profilePhotoInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => void onProfilePhotoSelected(e)}
-                          style={{ display: "none" }}
-                        />
-
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() => void onPickProfilePhoto()}
-                          >
-                            {t("profileUploadPhoto")}
-                          </button>
-
-                          {derivedProfile &&
-                          profileEditPicture.trim() !==
-                            derivedProfile.pictureUrl ? (
-                            <button
-                              type="button"
-                              className="secondary"
-                              onClick={() =>
-                                setProfileEditPicture(derivedProfile.pictureUrl)
-                              }
-                              title={t("restore")}
-                              aria-label={t("restore")}
-                              style={{ paddingInline: 10, minWidth: 40 }}
-                            >
-                              ↺
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <label htmlFor="profileName">{t("name")}</label>
-                        {derivedProfile &&
-                        profileEditName.trim() !== derivedProfile.name ? (
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() =>
-                              setProfileEditName(derivedProfile.name)
-                            }
-                            title={t("restore")}
-                            aria-label={t("restore")}
-                            style={{ paddingInline: 10, minWidth: 40 }}
-                          >
-                            ↺
-                          </button>
-                        ) : null}
-                      </div>
-                      <input
-                        id="profileName"
-                        value={profileEditName}
-                        onChange={(e) => setProfileEditName(e.target.value)}
-                        placeholder={t("name")}
-                      />
-
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <label htmlFor="profileLn">
-                          {t("lightningAddress")}
-                        </label>
-                        {derivedProfile &&
-                        profileEditLnAddress.trim() !==
-                          derivedProfile.lnAddress ? (
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() =>
-                              setProfileEditLnAddress(derivedProfile.lnAddress)
-                            }
-                            title={t("restore")}
-                            aria-label={t("restore")}
-                            style={{ paddingInline: 10, minWidth: 40 }}
-                          >
-                            ↺
-                          </button>
-                        ) : null}
-                      </div>
-                      <input
-                        id="profileLn"
-                        value={profileEditLnAddress}
-                        onChange={(e) =>
-                          setProfileEditLnAddress(e.target.value)
-                        }
-                        placeholder={t("lightningAddress")}
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck={false}
-                      />
-
-                      <div className="panel-header" style={{ marginTop: 14 }}>
-                        {profileEditsSavable ? (
-                          <button onClick={() => void saveProfileEdits()}>
-                            {t("saveChanges")}
-                          </button>
-                        ) : null}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="profile-detail">
-                        <div
-                          className="contact-avatar is-xl"
-                          aria-hidden="true"
-                        >
-                          {effectiveProfilePicture ? (
-                            <img
-                              src={effectiveProfilePicture}
-                              alt=""
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <span className="contact-avatar-fallback">
-                              {getInitials(
-                                effectiveProfileName ??
-                                  formatShortNpub(currentNpub),
-                              )}
-                            </span>
-                          )}
-                        </div>
-
-                        {myProfileQr ? (
-                          <img
-                            className="qr"
-                            src={myProfileQr}
-                            alt=""
-                            onClick={() => {
-                              if (!currentNpub) return;
-                              void copyText(currentNpub);
-                            }}
-                          />
-                        ) : (
-                          <p className="muted">{currentNpub}</p>
-                        )}
-
-                        <h2 className="contact-detail-name">
-                          {effectiveProfileName ?? formatShortNpub(currentNpub)}
-                        </h2>
-
-                        {effectiveMyLightningAddress ? (
-                          <p className="contact-detail-ln">
-                            {effectiveMyLightningAddress}
-                          </p>
-                        ) : null}
-
-                        <p className="muted profile-note">
-                          {t("profileMessagesHint")}
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-            </section>
+            <ProfilePage
+              currentNpub={currentNpub}
+              isProfileEditing={isProfileEditing}
+              profileEditPicture={profileEditPicture}
+              effectiveProfilePicture={effectiveProfilePicture}
+              effectiveProfileName={effectiveProfileName}
+              profileEditName={profileEditName}
+              profileEditLnAddress={profileEditLnAddress}
+              derivedProfile={derivedProfile}
+              profileEditsSavable={profileEditsSavable}
+              myProfileQr={myProfileQr}
+              effectiveMyLightningAddress={effectiveMyLightningAddress}
+              profilePhotoInputRef={profilePhotoInputRef}
+              setProfileEditPicture={setProfileEditPicture}
+              setProfileEditName={setProfileEditName}
+              setProfileEditLnAddress={setProfileEditLnAddress}
+              onProfilePhotoSelected={onProfilePhotoSelected}
+              onPickProfilePhoto={onPickProfilePhoto}
+              saveProfileEdits={saveProfileEdits}
+              copyText={copyText}
+              formatShortNpub={formatShortNpub}
+              getInitials={getInitials}
+              t={t}
+            />
           )}
 
           {scanIsOpen && (
