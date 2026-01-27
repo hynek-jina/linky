@@ -76,6 +76,7 @@ import { ChatMessage } from "./components/ChatMessage";
 import { CashuTokenPill } from "./components/CashuTokenPill";
 import { CredoTokenPill } from "./components/CredoTokenPill";
 import { MintButton } from "./components/MintButton";
+import { NostrRelayRow } from "./components/NostrRelayRow";
 import type { Route } from "./types/route";
 import {
   bumpCashuDeterministicCounter,
@@ -13184,32 +13185,13 @@ const App = () => {
                 <div>
                   {relayUrls.map((url) => {
                     const state = relayStatusByUrl[url] ?? "checking";
-                    const dotClass =
-                      state === "connected"
-                        ? "status-dot connected"
-                        : "status-dot disconnected";
-
                     return (
-                      <button
-                        type="button"
-                        className="settings-row settings-link"
+                      <NostrRelayRow
                         key={url}
-                        onClick={() => navigateToNostrRelay(url)}
-                      >
-                        <div className="settings-left">
-                          <span className="relay-url">{url}</span>
-                        </div>
-                        <div className="settings-right">
-                          <span
-                            className={dotClass}
-                            aria-label={state}
-                            title={state}
-                          />
-                          <span className="settings-chevron" aria-hidden="true">
-                            &gt;
-                          </span>
-                        </div>
-                      </button>
+                        url={url}
+                        state={state}
+                        onNavigate={navigateToNostrRelay}
+                      />
                     );
                   })}
                 </div>
