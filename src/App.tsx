@@ -76,6 +76,7 @@ import { CashuTokenPill } from "./components/CashuTokenPill";
 import { CredoTokenPill } from "./components/CredoTokenPill";
 import { WalletActionButton } from "./components/WalletActionButton";
 import { BottomTab } from "./components/BottomTab";
+import { Keypad } from "./components/Keypad";
 import {
   PaymentsHistoryPage,
   MintsPage,
@@ -12572,61 +12573,29 @@ const App = () => {
                 })()}
               </div>
 
-              <div
-                className="keypad"
-                role="group"
-                aria-label={`${t("payAmount")} (${displayUnit})`}
-              >
-                {(
-                  [
-                    "1",
-                    "2",
-                    "3",
-                    "4",
-                    "5",
-                    "6",
-                    "7",
-                    "8",
-                    "9",
-                    "C",
-                    "0",
-                    "⌫",
-                  ] as const
-                ).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={
-                      key === "C" || key === "⌫" ? "secondary" : "ghost"
-                    }
-                    onClick={() => {
-                      if (topupInvoiceIsBusy) return;
-                      if (key === "C") {
-                        setTopupAmount("");
-                        return;
-                      }
-                      if (key === "⌫") {
-                        setTopupAmount((v) => v.slice(0, -1));
-                        return;
-                      }
-                      setTopupAmount((v) => {
-                        const next = (v + key).replace(/^0+(\d)/, "$1");
-                        return next;
-                      });
-                    }}
-                    disabled={topupInvoiceIsBusy}
-                    aria-label={
-                      key === "C"
-                        ? t("clearForm")
-                        : key === "⌫"
-                          ? t("delete")
-                          : key
-                    }
-                  >
-                    {key}
-                  </button>
-                ))}
-              </div>
+              <Keypad
+                ariaLabel={`${t("payAmount")} (${displayUnit})`}
+                disabled={topupInvoiceIsBusy}
+                onKeyPress={(key) => {
+                  if (topupInvoiceIsBusy) return;
+                  if (key === "C") {
+                    setTopupAmount("");
+                    return;
+                  }
+                  if (key === "⌫") {
+                    setTopupAmount((v) => v.slice(0, -1));
+                    return;
+                  }
+                  setTopupAmount((v) => {
+                    const next = (v + key).replace(/^0+(\d)/, "$1");
+                    return next;
+                  });
+                }}
+                translations={{
+                  clearForm: t("clearForm"),
+                  delete: t("delete"),
+                }}
+              />
 
               {(() => {
                 const ln = String(npubCashLightningAddress ?? "").trim();
@@ -13314,61 +13283,29 @@ const App = () => {
                       })()}
                     </div>
 
-                    <div
-                      className="keypad"
-                      role="group"
-                      aria-label={`${t("payAmount")} (${displayUnit})`}
-                    >
-                      {(
-                        [
-                          "1",
-                          "2",
-                          "3",
-                          "4",
-                          "5",
-                          "6",
-                          "7",
-                          "8",
-                          "9",
-                          "C",
-                          "0",
-                          "⌫",
-                        ] as const
-                      ).map((key) => (
-                        <button
-                          key={key}
-                          type="button"
-                          className={
-                            key === "C" || key === "⌫" ? "secondary" : "ghost"
-                          }
-                          onClick={() => {
-                            if (cashuIsBusy) return;
-                            if (key === "C") {
-                              setPayAmount("");
-                              return;
-                            }
-                            if (key === "⌫") {
-                              setPayAmount((v) => v.slice(0, -1));
-                              return;
-                            }
-                            setPayAmount((v) => {
-                              const next = (v + key).replace(/^0+(\d)/, "$1");
-                              return next;
-                            });
-                          }}
-                          disabled={cashuIsBusy}
-                          aria-label={
-                            key === "C"
-                              ? t("clearForm")
-                              : key === "⌫"
-                                ? t("delete")
-                                : key
-                          }
-                        >
-                          {key}
-                        </button>
-                      ))}
-                    </div>
+                    <Keypad
+                      ariaLabel={`${t("payAmount")} (${displayUnit})`}
+                      disabled={cashuIsBusy}
+                      onKeyPress={(key) => {
+                        if (cashuIsBusy) return;
+                        if (key === "C") {
+                          setPayAmount("");
+                          return;
+                        }
+                        if (key === "⌫") {
+                          setPayAmount((v) => v.slice(0, -1));
+                          return;
+                        }
+                        setPayAmount((v) => {
+                          const next = (v + key).replace(/^0+(\d)/, "$1");
+                          return next;
+                        });
+                      }}
+                      translations={{
+                        clearForm: t("clearForm"),
+                        delete: t("delete"),
+                      }}
+                    />
 
                     {(() => {
                       const ln = String(selectedContact.lnAddress ?? "").trim();
@@ -13480,61 +13417,29 @@ const App = () => {
                 })()}
               </div>
 
-              <div
-                className="keypad"
-                role="group"
-                aria-label={`${t("payAmount")} (${displayUnit})`}
-              >
-                {(
-                  [
-                    "1",
-                    "2",
-                    "3",
-                    "4",
-                    "5",
-                    "6",
-                    "7",
-                    "8",
-                    "9",
-                    "C",
-                    "0",
-                    "⌫",
-                  ] as const
-                ).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={
-                      key === "C" || key === "⌫" ? "secondary" : "ghost"
-                    }
-                    onClick={() => {
-                      if (cashuIsBusy) return;
-                      if (key === "C") {
-                        setLnAddressPayAmount("");
-                        return;
-                      }
-                      if (key === "⌫") {
-                        setLnAddressPayAmount((v) => v.slice(0, -1));
-                        return;
-                      }
-                      setLnAddressPayAmount((v) => {
-                        const next = (v + key).replace(/^0+(\d)/, "$1");
-                        return next;
-                      });
-                    }}
-                    disabled={cashuIsBusy}
-                    aria-label={
-                      key === "C"
-                        ? t("clearForm")
-                        : key === "⌫"
-                          ? t("delete")
-                          : key
-                    }
-                  >
-                    {key}
-                  </button>
-                ))}
-              </div>
+              <Keypad
+                ariaLabel={`${t("payAmount")} (${displayUnit})`}
+                disabled={cashuIsBusy}
+                onKeyPress={(key) => {
+                  if (cashuIsBusy) return;
+                  if (key === "C") {
+                    setLnAddressPayAmount("");
+                    return;
+                  }
+                  if (key === "⌫") {
+                    setLnAddressPayAmount((v) => v.slice(0, -1));
+                    return;
+                  }
+                  setLnAddressPayAmount((v) => {
+                    const next = (v + key).replace(/^0+(\d)/, "$1");
+                    return next;
+                  });
+                }}
+                translations={{
+                  clearForm: t("clearForm"),
+                  delete: t("delete"),
+                }}
+              />
 
               {(() => {
                 const amountSat = Number.parseInt(
