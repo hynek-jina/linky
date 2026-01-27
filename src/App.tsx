@@ -71,6 +71,7 @@ import {
 import { publishKind0ProfileMetadata } from "./nostrPublish";
 import { ContactCard } from "./components/ContactCard";
 import { WalletBalance } from "./components/WalletBalance";
+import { PaymentHistoryRow } from "./components/PaymentHistoryRow";
 import type { Route } from "./types/route";
 import {
   bumpCashuDeterministicCounter,
@@ -12553,155 +12554,42 @@ const App = () => {
               ) : (
                 <div>
                   {paymentEvents.map((ev) => {
+                    const eventId = String(
+                      (ev as unknown as { id?: unknown }).id ?? "",
+                    );
                     const createdAtSec =
                       Number(
                         (ev as unknown as { createdAtSec?: unknown })
                           .createdAtSec ?? 0,
                       ) || 0;
-                    const direction = String(
-                      (ev as unknown as { direction?: unknown }).direction ??
-                        "",
-                    ).trim();
-                    const status = String(
-                      (ev as unknown as { status?: unknown }).status ?? "",
-                    ).trim();
-                    const amount =
-                      Number(
-                        (ev as unknown as { amount?: unknown }).amount ?? 0,
-                      ) || 0;
-                    const fee =
-                      Number((ev as unknown as { fee?: unknown }).fee ?? 0) ||
-                      0;
-                    const mintText = String(
-                      (ev as unknown as { mint?: unknown }).mint ?? "",
-                    ).trim();
-                    const errorText = String(
-                      (ev as unknown as { error?: unknown }).error ?? "",
-                    ).trim();
-
-                    const locale = lang === "cs" ? "cs-CZ" : "en-US";
                     const timeLabel = createdAtSec
-                      ? new Intl.DateTimeFormat(locale, {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        }).format(new Date(createdAtSec * 1000))
+                      ? new Intl.DateTimeFormat(
+                          lang === "cs" ? "cs-CZ" : "en-US",
+                          {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          },
+                        ).format(new Date(createdAtSec * 1000))
                       : "";
 
-                    const mintDisplay = (() => {
-                      if (!mintText) return null;
-                      try {
-                        return new URL(mintText).host;
-                      } catch {
-                        return mintText;
-                      }
-                    })();
-
-                    const isError = status === "error";
-                    const directionIcon = isError
-                      ? "⚠️"
-                      : direction === "in"
-                        ? "↘︎"
-                        : "↗︎";
-                    const directionLabel = isError
-                      ? t("paymentsHistoryFailed")
-                      : direction === "in"
-                        ? t("paymentsHistoryIncoming")
-                        : t("paymentsHistoryOutgoing");
-
                     return (
-                      <div
-                        key={
-                          String(
-                            (ev as unknown as { id?: unknown }).id ?? "",
-                          ) || timeLabel
-                        }
-                      >
-                        <div
-                          className="settings-row"
-                          style={{
-                            alignItems: "flex-start",
-                            display: "grid",
-                            gridTemplateColumns: "20px 1fr auto",
-                            columnGap: 10,
+                      <div key={eventId || timeLabel}>
+                        <PaymentHistoryRow
+                          event={ev}
+                          locale={lang === "cs" ? "cs-CZ" : "en-US"}
+                          formatInteger={formatInteger}
+                          displayUnit={displayUnit}
+                          translations={{
+                            paymentsHistoryFailed: t("paymentsHistoryFailed"),
+                            paymentsHistoryIncoming: t(
+                              "paymentsHistoryIncoming",
+                            ),
+                            paymentsHistoryOutgoing: t(
+                              "paymentsHistoryOutgoing",
+                            ),
+                            paymentsHistoryFee: t("paymentsHistoryFee"),
                           }}
-                        >
-                          <span
-                            role="img"
-                            aria-label={directionLabel}
-                            style={{
-                              gridColumn: "1",
-                              fontSize: 14,
-                              lineHeight: "18px",
-                              marginTop: 2,
-                            }}
-                          >
-                            {directionIcon}
-                          </span>
-                          <div
-                            className="settings-left"
-                            style={{ minWidth: 0, gridColumn: "2" }}
-                          >
-                            <div
-                              className="muted"
-                              style={{
-                                marginTop: 1,
-                                lineHeight: 1.25,
-                                fontSize: 11,
-                              }}
-                            >
-                              {timeLabel}
-                              {mintDisplay ? ` · ${mintDisplay}` : ""}
-                            </div>
-                            {isError && errorText ? (
-                              <div
-                                className="muted"
-                                style={{
-                                  marginTop: 4,
-                                  lineHeight: 1.25,
-                                  fontSize: 11,
-                                }}
-                              >
-                                {errorText}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div
-                            className="settings-right"
-                            style={{
-                              textAlign: "right",
-                              minWidth: 80,
-                              gridColumn: "3",
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontWeight: 800,
-                                color: "#e2e8f0",
-                                fontSize: 13,
-                                lineHeight: 1.2,
-                              }}
-                            >
-                              {amount > 0
-                                ? `${formatInteger(amount)} ${displayUnit}`
-                                : "—"}
-                            </div>
-                            <div
-                              className="muted"
-                              style={{
-                                marginTop: 2,
-                                fontSize: 11,
-                                lineHeight: 1.2,
-                              }}
-                            >
-                              {fee > 0
-                                ? `${t("paymentsHistoryFee")}: ${formatInteger(
-                                    fee,
-                                  )} ${displayUnit}`
-                                : ""}
-                            </div>
-                          </div>
-                        </div>
+                        />
                       </div>
                     );
                   })}
