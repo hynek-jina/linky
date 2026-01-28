@@ -75,8 +75,14 @@ import { ChatMessage } from "./components/ChatMessage";
 import { CashuTokenPill } from "./components/CashuTokenPill";
 import { CredoTokenPill } from "./components/CredoTokenPill";
 import { WalletActionButton } from "./components/WalletActionButton";
-import { BottomTab } from "./components/BottomTab";
 import { Keypad } from "./components/Keypad";
+import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
+import { UnauthenticatedLayout } from "./components/UnauthenticatedLayout";
+import { ToastNotifications } from "./components/ToastNotifications";
+import { AmountDisplay } from "./components/AmountDisplay";
+import { ContactsChecklist } from "./components/ContactsChecklist";
+import { BottomTabBar } from "./components/BottomTabBar";
+import { WalletWarning } from "./components/WalletWarning";
 import {
   PaymentsHistoryPage,
   MintsPage,
@@ -11880,404 +11886,90 @@ const App = () => {
       onTouchStart={handleBottomSwipeStart}
       onTouchEnd={handleBottomSwipeEnd}
     >
-      {recentlyReceivedToken?.token ? (
-        <div className="toast-container" aria-live="polite">
-          <div
-            className="toast"
-            role="status"
-            onClick={() => {
-              const token = String(recentlyReceivedToken.token ?? "").trim();
-              if (!token) return;
-              void (async () => {
-                try {
-                  await navigator.clipboard?.writeText(token);
-                  pushToast(t("copiedToClipboard"));
-                  setRecentlyReceivedToken(null);
-                } catch {
-                  pushToast(t("copyFailed"));
-                }
-              })();
-            }}
-            style={{ cursor: "pointer" }}
-            title={
-              lang === "cs"
-                ? "Klikni pro zkopírování tokenu"
-                : "Click to copy token"
-            }
-          >
-            {(() => {
-              const amount =
-                typeof recentlyReceivedToken.amount === "number"
-                  ? recentlyReceivedToken.amount
-                  : null;
-              if (lang === "cs") {
-                return amount
-                  ? `Přijato ${formatInteger(
-                      amount,
-                    )} ${displayUnit}. Klikni pro zkopírování tokenu.`
-                  : "Token přijat. Klikni pro zkopírování tokenu.";
-              }
-              return amount
-                ? `Received ${formatInteger(
-                    amount,
-                  )} ${displayUnit}. Click to copy token.`
-                : "Token accepted. Click to copy token.";
-            })()}
-          </div>
-        </div>
-      ) : null}
-
-      {toasts.length ? (
-        <div className="toast-container" aria-live="polite">
-          {toasts.map((toast) => (
-            <div key={toast.id} className="toast">
-              {toast.message}
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <ToastNotifications
+        recentlyReceivedToken={recentlyReceivedToken}
+        toasts={toasts}
+        lang={lang}
+        displayUnit={displayUnit}
+        formatInteger={formatInteger}
+        pushToast={pushToast}
+        setRecentlyReceivedToken={setRecentlyReceivedToken}
+        t={t}
+      />
 
       {!currentNsec ? (
-        <section className="panel panel-plain onboarding-panel">
-          <div className="onboarding-logo" aria-hidden="true">
-            <img
-              className="onboarding-logo-svg"
-              src="/icon.svg"
-              alt=""
-              width={256}
-              height={256}
-              loading="eager"
-              decoding="async"
-            />
-          </div>
-          <h1 className="page-title">{t("onboardingTitle")}</h1>
-
-          <p
-            className="muted"
-            style={{
-              margin: "6px 0 12px",
-              lineHeight: 1.4,
-              textAlign: "center",
-            }}
-          >
-            {t("onboardingSubtitle")}
-          </p>
-
-          {onboardingStep ? (
-            <>
-              <div className="settings-row">
-                <div className="muted" style={{ lineHeight: 1.4 }}>
-                  {(() => {
-                    const format = (
-                      template: string,
-                      vars: Record<string, string>,
-                    ) =>
-                      template.replace(/\{(\w+)\}/g, (_m, k: string) =>
-                        String(vars[k] ?? ""),
-                      );
-
-                    const name = onboardingStep.derivedName ?? "";
-                    if (onboardingStep.step === 1)
-                      return format(t("onboardingStep1"), { name });
-                    if (onboardingStep.step === 2) return t("onboardingStep2");
-                    return t("onboardingStep3");
-                  })()}
-                </div>
-              </div>
-
-              {onboardingStep.error ? (
-                <div className="settings-row">
-                  <div className="status" role="status">
-                    {onboardingStep.error}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="settings-row">
-                <button
-                  type="button"
-                  className="btn-wide secondary"
-                  onClick={() => setOnboardingStep(null)}
-                  disabled={onboardingIsBusy}
-                >
-                  {t("onboardingRetry")}
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="settings-row">
-                <button
-                  type="button"
-                  className="btn-wide"
-                  onClick={() => void createNewAccount()}
-                  disabled={onboardingIsBusy}
-                >
-                  {t("onboardingCreate")}
-                </button>
-              </div>
-
-              <div className="settings-row">
-                <button
-                  type="button"
-                  className="btn-wide secondary"
-                  onClick={() => void pasteExistingNsec()}
-                  disabled={onboardingIsBusy}
-                >
-                  {t("onboardingPasteNsec")}
-                </button>
-              </div>
-            </>
-          )}
-        </section>
+        <UnauthenticatedLayout
+          onboardingStep={onboardingStep}
+          onboardingIsBusy={onboardingIsBusy}
+          setOnboardingStep={setOnboardingStep}
+          createNewAccount={createNewAccount}
+          pasteExistingNsec={pasteExistingNsec}
+          t={t}
+        />
       ) : null}
 
       {currentNsec ? (
-        <>
-          <header className="topbar">
-            <div className="topbar-left">
-              {route.kind === "contacts" || route.kind === "wallet" ? (
-                <button
-                  className="topbar-btn topbar-profile-btn"
-                  onClick={openProfileQr}
-                  aria-label={t("profile")}
-                  title={t("profile")}
-                >
-                  {effectiveProfilePicture ? (
-                    <img
-                      src={effectiveProfilePicture}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="topbar-profile-fallback">
-                      {getInitials(
-                        effectiveProfileName ??
-                          (currentNpub ? formatShortNpub(currentNpub) : "?"),
-                      )}
-                    </span>
-                  )}
-                </button>
-              ) : null}
-
-              {topbar ? (
-                <button
-                  className="topbar-btn"
-                  onClick={topbar.onClick}
-                  aria-label={topbar.label}
-                  title={topbar.label}
-                >
-                  <span aria-hidden="true">{topbar.icon}</span>
-                </button>
-              ) : null}
-            </div>
-
-            {chatTopbarContact ? (
-              <div className="topbar-chat" aria-label={t("messagesTitle")}>
-                <span className="topbar-chat-avatar" aria-hidden="true">
-                  {(() => {
-                    const npub = String(chatTopbarContact.npub ?? "").trim();
-                    const url = npub ? nostrPictureByNpub[npub] : null;
-                    return url ? (
-                      <img
-                        src={url}
-                        alt=""
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="topbar-chat-avatar-fallback">
-                        {getInitials(String(chatTopbarContact.name ?? ""))}
-                      </span>
-                    );
-                  })()}
-                </span>
-                <span className="topbar-chat-name">
-                  {String(chatTopbarContact.name ?? "").trim() ||
-                    t("messagesTitle")}
-                </span>
-              </div>
-            ) : topbarTitle ? (
-              <div className="topbar-title" aria-label={topbarTitle}>
-                {topbarTitle}
-              </div>
-            ) : (
-              <span className="topbar-title-spacer" aria-hidden="true" />
-            )}
-
-            {topbarRight ? (
-              <button
-                className="topbar-btn"
-                onClick={topbarRight.onClick}
-                aria-label={topbarRight.label}
-                title={topbarRight.label}
-              >
-                <span aria-hidden="true">{topbarRight.icon}</span>
-              </button>
-            ) : (
-              <span className="topbar-spacer" aria-hidden="true" />
-            )}
-          </header>
-
-          {contactsGuide && contactsGuideActiveStep?.step ? (
-            <div className="guide-overlay" aria-live="polite">
-              {contactsGuideHighlightRect ? (
-                <div
-                  className="guide-highlight"
-                  aria-hidden="true"
-                  style={{
-                    top: contactsGuideHighlightRect.top,
-                    left: contactsGuideHighlightRect.left,
-                    width: contactsGuideHighlightRect.width,
-                    height: contactsGuideHighlightRect.height,
-                  }}
-                />
-              ) : null}
-
-              <div className="guide-card" role="dialog" aria-modal="false">
-                <div className="guide-step">
-                  {contactsGuideActiveStep.idx + 1} /{" "}
-                  {contactsGuideActiveStep.total}
-                </div>
-                <div className="guide-title">
-                  {t(contactsGuideActiveStep.step.titleKey)}
-                </div>
-                <div className="guide-body">
-                  {t(contactsGuideActiveStep.step.bodyKey)}
-                </div>
-                <div className="guide-actions">
-                  <button
-                    type="button"
-                    className="guide-btn secondary"
-                    onClick={stopContactsGuide}
-                  >
-                    {t("guideSkip")}
-                  </button>
-                  <button
-                    type="button"
-                    className="guide-btn secondary"
-                    onClick={contactsGuideNav.back}
-                    disabled={contactsGuideActiveStep.idx === 0}
-                  >
-                    {t("guideBack")}
-                  </button>
-                  <button
-                    type="button"
-                    className="guide-btn primary"
-                    onClick={contactsGuideNav.next}
-                  >
-                    {contactsGuideActiveStep.idx + 1 >=
-                    contactsGuideActiveStep.total
-                      ? t("guideDone")
-                      : t("guideNext")}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {menuIsOpen ? (
-            <div
-              className="menu-modal-overlay"
-              role="dialog"
-              aria-modal="false"
-              aria-label={t("menu")}
-              onClick={closeMenu}
-            >
-              <div
-                className="menu-modal-sheet"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="settings-row">
-                  <div className="settings-left">
-                    <span className="settings-icon" aria-hidden="true">
-                      🌐
-                    </span>
-                    <span className="settings-label">{t("language")}</span>
-                  </div>
-                  <div className="settings-right">
-                    <select
-                      className="select"
-                      value={lang}
-                      onChange={(e) => setLang(e.target.value as Lang)}
-                      aria-label={t("language")}
-                    >
-                      <option value="cs">{t("czech")}</option>
-                      <option value="en">{t("english")}</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="settings-row">
-                  <div className="settings-left">
-                    <span className="settings-icon" aria-hidden="true">
-                      ₿
-                    </span>
-                    <span className="settings-label">{t("unit")}</span>
-                  </div>
-                  <div className="settings-right">
-                    <label className="switch">
-                      <input
-                        className="switch-input"
-                        type="checkbox"
-                        aria-label={t("unitUseBitcoin")}
-                        checked={useBitcoinSymbol}
-                        onChange={(e) => setUseBitcoinSymbol(e.target.checked)}
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="settings-row settings-link"
-                  onClick={() => {
-                    closeMenu();
-                    navigateToAdvanced();
-                  }}
-                  aria-label={t("advanced")}
-                  title={t("advanced")}
-                >
-                  <div className="settings-left">
-                    <span className="settings-icon" aria-hidden="true">
-                      ⚙️
-                    </span>
-                    <span className="settings-label">{t("advanced")}</span>
-                  </div>
-                  <div className="settings-right">
-                    <span className="settings-chevron" aria-hidden="true">
-                      &gt;
-                    </span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  className="settings-row settings-link"
-                  onClick={() => {
-                    closeMenu();
-                    openFeedbackContact();
-                  }}
-                  aria-label={t("feedback")}
-                  title={t("feedback")}
-                >
-                  <div className="settings-left">
-                    <span className="settings-icon" aria-hidden="true">
-                      💬
-                    </span>
-                    <span className="settings-label">{t("feedback")}</span>
-                  </div>
-                  <div className="settings-right">
-                    <span className="settings-chevron" aria-hidden="true">
-                      &gt;
-                    </span>
-                  </div>
-                </button>
-              </div>
-            </div>
-          ) : null}
-
+        <AuthenticatedLayout
+          chatTopbarContact={chatTopbarContact}
+          closeMenu={closeMenu}
+          closeProfileQr={closeProfileQr}
+          closeScan={closeScan}
+          contactsGuide={contactsGuide}
+          contactsGuideActiveStep={contactsGuideActiveStep}
+          contactsGuideHighlightRect={contactsGuideHighlightRect}
+          contactsGuideNav={contactsGuideNav}
+          copyText={copyText}
+          currentNpub={currentNpub}
+          currentNsec={currentNsec}
+          derivedProfile={derivedProfile}
+          displayUnit={displayUnit}
+          effectiveMyLightningAddress={effectiveMyLightningAddress}
+          effectiveProfileName={effectiveProfileName}
+          effectiveProfilePicture={effectiveProfilePicture}
+          formatInteger={formatInteger}
+          formatShortNpub={formatShortNpub}
+          getInitials={getInitials}
+          isProfileEditing={isProfileEditing}
+          lang={lang}
+          menuIsOpen={menuIsOpen}
+          myProfileQr={myProfileQr}
+          navigateToAdvanced={navigateToAdvanced}
+          navigateToNewContact={navigateToNewContact}
+          nostrPictureByNpub={nostrPictureByNpub}
+          onPickProfilePhoto={onPickProfilePhoto}
+          onProfilePhotoSelected={onProfilePhotoSelected}
+          openFeedbackContact={openFeedbackContact}
+          openProfileQr={openProfileQr}
+          paidOverlayIsOpen={paidOverlayIsOpen}
+          paidOverlayTitle={paidOverlayTitle}
+          postPaySaveContact={postPaySaveContact}
+          profileEditInitialRef={profileEditInitialRef}
+          profileEditLnAddress={profileEditLnAddress}
+          profileEditName={profileEditName}
+          profileEditPicture={profileEditPicture}
+          profileEditsSavable={profileEditsSavable}
+          profilePhotoInputRef={profilePhotoInputRef}
+          profileQrIsOpen={profileQrIsOpen}
+          route={route}
+          saveProfileEdits={saveProfileEdits}
+          scanIsOpen={scanIsOpen}
+          scanVideoRef={scanVideoRef}
+          setContactNewPrefill={setContactNewPrefill}
+          setIsProfileEditing={setIsProfileEditing}
+          setLang={setLang}
+          setPostPaySaveContact={setPostPaySaveContact}
+          setProfileEditLnAddress={setProfileEditLnAddress}
+          setProfileEditName={setProfileEditName}
+          setProfileEditPicture={setProfileEditPicture}
+          setUseBitcoinSymbol={setUseBitcoinSymbol}
+          stopContactsGuide={stopContactsGuide}
+          t={t}
+          toggleProfileEditing={toggleProfileEditing}
+          topbar={topbar}
+          topbarRight={topbarRight}
+          topbarTitle={topbarTitle}
+          useBitcoinSymbol={useBitcoinSymbol}
+        >
           {route.kind === "advanced" && (
             <AdvancedPage
               currentNsec={currentNsec}
@@ -12448,19 +12140,7 @@ const App = () => {
 
           {route.kind === "wallet" && (
             <section className="panel panel-plain wallet-panel">
-              <div className="wallet-warning" role="alert">
-                <div className="wallet-warning-icon" aria-hidden="true">
-                  ⚠
-                </div>
-                <div className="wallet-warning-text">
-                  <div className="wallet-warning-title">
-                    {t("walletEarlyWarningTitle")}
-                  </div>
-                  <div className="wallet-warning-body">
-                    {t("walletEarlyWarningBody")}
-                  </div>
-                </div>
-              </div>
+              <WalletWarning t={t} />
               <div className="panel-header">
                 <div className="wallet-hero">
                   <WalletBalance
@@ -12492,29 +12172,14 @@ const App = () => {
                   </div>
                 </div>
               </div>
-              <div className="contacts-qr-bar" role="region">
-                <div
-                  className="bottom-tabs-bar"
-                  role="tablist"
-                  aria-label={t("list")}
-                >
-                  <div className="bottom-tabs">
-                    <BottomTab
-                      icon="contacts"
-                      label={t("contactsTitle")}
-                      isActive={bottomTabActive === "contacts"}
-                      onClick={navigateToContacts}
-                    />
-                    <BottomTab
-                      icon="wallet"
-                      label={t("wallet")}
-                      isActive={bottomTabActive === "wallet"}
-                      onClick={navigateToWallet}
-                    />
-                  </div>
-                </div>
-                <div className="contacts-qr-inner"></div>
-              </div>
+              <BottomTabBar
+                activeTab={bottomTabActive}
+                contactsLabel={t("contactsTitle")}
+                navigateToContacts={navigateToContacts}
+                navigateToWallet={navigateToWallet}
+                t={t}
+                walletLabel={t("wallet")}
+              />
             </section>
           )}
 
@@ -12557,21 +12222,11 @@ const App = () => {
                 </div>
               </div>
 
-              <div className="amount-display" aria-live="polite">
-                {(() => {
-                  const amountSat = Number.parseInt(topupAmount.trim(), 10);
-                  const display =
-                    Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0;
-                  return (
-                    <>
-                      <span className="amount-number">
-                        {formatInteger(display)}
-                      </span>
-                      <span className="amount-unit">{displayUnit}</span>
-                    </>
-                  );
-                })()}
-              </div>
+              <AmountDisplay
+                amount={topupAmount}
+                displayUnit={displayUnit}
+                formatInteger={formatInteger}
+              />
 
               <Keypad
                 ariaLabel={`${t("payAmount")} (${displayUnit})`}
@@ -13265,23 +12920,11 @@ const App = () => {
                   })()}
 
                   <div data-guide="pay-step3">
-                    <div className="amount-display" aria-live="polite">
-                      {(() => {
-                        const amountSat = Number.parseInt(payAmount.trim(), 10);
-                        const display =
-                          Number.isFinite(amountSat) && amountSat > 0
-                            ? amountSat
-                            : 0;
-                        return (
-                          <>
-                            <span className="amount-number">
-                              {formatInteger(display)}
-                            </span>
-                            <span className="amount-unit">{displayUnit}</span>
-                          </>
-                        );
-                      })()}
-                    </div>
+                    <AmountDisplay
+                      amount={payAmount}
+                      displayUnit={displayUnit}
+                      formatInteger={formatInteger}
+                    />
 
                     <Keypad
                       ariaLabel={`${t("payAmount")} (${displayUnit})`}
@@ -13398,24 +13041,11 @@ const App = () => {
                 <p className="muted">{t("payInsufficient")}</p>
               ) : null}
 
-              <div className="amount-display" aria-live="polite">
-                {(() => {
-                  const amountSat = Number.parseInt(
-                    lnAddressPayAmount.trim(),
-                    10,
-                  );
-                  const display =
-                    Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0;
-                  return (
-                    <>
-                      <span className="amount-number">
-                        {formatInteger(display)}
-                      </span>
-                      <span className="amount-unit">{displayUnit}</span>
-                    </>
-                  );
-                })()}
-              </div>
+              <AmountDisplay
+                amount={lnAddressPayAmount}
+                displayUnit={displayUnit}
+                formatInteger={formatInteger}
+              />
 
               <Keypad
                 ariaLabel={`${t("payAmount")} (${displayUnit})`}
@@ -13804,93 +13434,16 @@ const App = () => {
           )}
 
           {showContactsOnboarding && (
-            <section className="panel panel-plain contacts-checklist">
-              <div className="contacts-checklist-header">
-                <div className="contacts-checklist-title">
-                  {t("contactsOnboardingTitle")}
-                </div>
-                <button
-                  type="button"
-                  className="contacts-checklist-close"
-                  onClick={dismissContactsOnboarding}
-                  aria-label={t("contactsOnboardingDismiss")}
-                  title={t("contactsOnboardingDismiss")}
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="contacts-checklist-progressRow">
-                <div className="contacts-checklist-progress" aria-hidden="true">
-                  <div
-                    className="contacts-checklist-progressFill"
-                    style={{ width: `${contactsOnboardingTasks.percent}%` }}
-                  />
-                </div>
-                <div className="contacts-checklist-progressText">
-                  {String(t("contactsOnboardingProgress"))
-                    .replace(/\{done\}/g, String(contactsOnboardingTasks.done))
-                    .replace(
-                      /\{total\}/g,
-                      String(contactsOnboardingTasks.total),
-                    )}
-                </div>
-              </div>
-
-              {contactsOnboardingCelebrating ||
-              contactsOnboardingTasks.done === contactsOnboardingTasks.total ? (
-                <div className="contacts-checklist-done" role="status">
-                  <span
-                    className="contacts-checklist-doneIcon"
-                    aria-hidden="true"
-                  >
-                    ✓
-                  </span>
-                  <span>
-                    <div className="contacts-checklist-doneTitle">
-                      {t("contactsOnboardingCompletedTitle")}
-                    </div>
-                    <div className="contacts-checklist-doneBody">
-                      {t("contactsOnboardingCompletedBody")}
-                    </div>
-                  </span>
-                </div>
-              ) : (
-                <div className="contacts-checklist-items" role="list">
-                  {contactsOnboardingTasks.tasks.map((task) => (
-                    <div
-                      key={task.key}
-                      className={
-                        task.done
-                          ? "contacts-checklist-item is-done"
-                          : "contacts-checklist-item"
-                      }
-                      role="listitem"
-                    >
-                      <span
-                        className="contacts-checklist-check"
-                        aria-hidden="true"
-                      >
-                        ✓
-                      </span>
-                      <span className="contacts-checklist-label">
-                        {task.label}
-                      </span>
-
-                      {!task.done ? (
-                        <button
-                          type="button"
-                          className="contacts-checklist-how"
-                          onClick={() => startContactsGuide(task.key)}
-                        >
-                          {t("contactsOnboardingShowHow")}
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+            <ContactsChecklist
+              contactsOnboardingCelebrating={contactsOnboardingCelebrating}
+              dismissContactsOnboarding={dismissContactsOnboarding}
+              onShowHow={(key) => startContactsGuide(key as ContactsGuideKey)}
+              progressPercent={contactsOnboardingTasks.percent}
+              t={t}
+              tasks={contactsOnboardingTasks.tasks}
+              tasksCompleted={contactsOnboardingTasks.done}
+              tasksTotal={contactsOnboardingTasks.total}
+            />
           )}
 
           {route.kind === "contacts" && (
@@ -14021,28 +13574,14 @@ const App = () => {
                 </div>
               </section>
 
-              <div className="contacts-qr-bar" role="region">
-                <div
-                  className="bottom-tabs-bar"
-                  role="tablist"
-                  aria-label={t("list")}
-                >
-                  <div className="bottom-tabs">
-                    <BottomTab
-                      icon="contacts"
-                      label={t("contactsTitle")}
-                      isActive={bottomTabActive === "contacts"}
-                      onClick={navigateToContacts}
-                    />
-                    <BottomTab
-                      icon="wallet"
-                      label={t("wallet")}
-                      isActive={bottomTabActive === "wallet"}
-                      onClick={navigateToWallet}
-                    />
-                  </div>
-                </div>
-              </div>
+              <BottomTabBar
+                activeTab={bottomTabActive}
+                contactsLabel={t("contactsTitle")}
+                navigateToContacts={navigateToContacts}
+                navigateToWallet={navigateToWallet}
+                t={t}
+                walletLabel={t("wallet")}
+              />
 
               <button
                 type="button"
@@ -14082,335 +13621,7 @@ const App = () => {
               t={t}
             />
           )}
-
-          {scanIsOpen && (
-            <div className="scan-overlay" role="dialog" aria-label={t("scan")}>
-              <div className="scan-sheet">
-                <div className="scan-header">
-                  <div className="scan-title">{t("scan")}</div>
-                  <button
-                    className="topbar-btn"
-                    onClick={closeScan}
-                    aria-label={t("close")}
-                    title={t("close")}
-                  >
-                    <span aria-hidden="true">×</span>
-                  </button>
-                </div>
-
-                <video ref={scanVideoRef} className="scan-video" />
-
-                <div className="scan-hints" aria-label={t("scan")}>
-                  {t("scanHintInvoice")}, {t("scanHintContact")},{" "}
-                  {t("scanHintWithdraw")}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {profileQrIsOpen && (
-            <div
-              className="modal-overlay"
-              role="dialog"
-              aria-modal="true"
-              aria-label={t("profile")}
-              onClick={closeProfileQr}
-            >
-              <div
-                className="modal-sheet profile-qr-sheet"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="modal-header">
-                  <div className="modal-title">{t("profile")}</div>
-                  <div style={{ display: "inline-flex", gap: 8 }}>
-                    <button
-                      className="topbar-btn"
-                      onClick={toggleProfileEditing}
-                      aria-label={t("edit")}
-                      title={t("edit")}
-                      disabled={!currentNpub || !currentNsec}
-                    >
-                      <span aria-hidden="true">✎</span>
-                    </button>
-                    <button
-                      className="topbar-btn"
-                      onClick={() => {
-                        setIsProfileEditing(false);
-                        profileEditInitialRef.current = null;
-                        closeProfileQr();
-                      }}
-                      aria-label={t("close")}
-                      title={t("close")}
-                    >
-                      <span aria-hidden="true">×</span>
-                    </button>
-                  </div>
-                </div>
-
-                {!currentNpub ? (
-                  <p className="muted">{t("profileMissingNpub")}</p>
-                ) : isProfileEditing ? (
-                  <>
-                    <div
-                      className="profile-detail"
-                      style={{ marginBottom: 10 }}
-                    >
-                      <div className="contact-avatar is-xl" aria-hidden="true">
-                        {profileEditPicture ? (
-                          <img
-                            src={profileEditPicture}
-                            alt=""
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : effectiveProfilePicture ? (
-                          <img
-                            src={effectiveProfilePicture}
-                            alt=""
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <span className="contact-avatar-fallback">
-                            {getInitials(
-                              effectiveProfileName ??
-                                formatShortNpub(currentNpub),
-                            )}
-                          </span>
-                        )}
-                      </div>
-
-                      <input
-                        ref={profilePhotoInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => void onProfilePhotoSelected(e)}
-                        style={{ display: "none" }}
-                      />
-
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => void onPickProfilePhoto()}
-                        >
-                          {t("profileUploadPhoto")}
-                        </button>
-
-                        {derivedProfile &&
-                        profileEditPicture.trim() !==
-                          derivedProfile.pictureUrl ? (
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() =>
-                              setProfileEditPicture(derivedProfile.pictureUrl)
-                            }
-                            title={t("restore")}
-                            aria-label={t("restore")}
-                            style={{ paddingInline: 10, minWidth: 40 }}
-                          >
-                            ↺
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <label htmlFor="profileName">{t("name")}</label>
-                      {derivedProfile &&
-                      profileEditName.trim() !== derivedProfile.name ? (
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() =>
-                            setProfileEditName(derivedProfile.name)
-                          }
-                          title={t("restore")}
-                          aria-label={t("restore")}
-                          style={{ paddingInline: 10, minWidth: 40 }}
-                        >
-                          ↺
-                        </button>
-                      ) : null}
-                    </div>
-                    <input
-                      id="profileName"
-                      value={profileEditName}
-                      onChange={(e) => setProfileEditName(e.target.value)}
-                      placeholder={t("name")}
-                    />
-
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <label htmlFor="profileLn">{t("lightningAddress")}</label>
-                      {derivedProfile &&
-                      profileEditLnAddress.trim() !==
-                        derivedProfile.lnAddress ? (
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() =>
-                            setProfileEditLnAddress(derivedProfile.lnAddress)
-                          }
-                          title={t("restore")}
-                          aria-label={t("restore")}
-                          style={{ paddingInline: 10, minWidth: 40 }}
-                        >
-                          ↺
-                        </button>
-                      ) : null}
-                    </div>
-                    <input
-                      id="profileLn"
-                      value={profileEditLnAddress}
-                      onChange={(e) => setProfileEditLnAddress(e.target.value)}
-                      placeholder={t("lightningAddress")}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                    />
-
-                    <div className="panel-header" style={{ marginTop: 14 }}>
-                      {profileEditsSavable ? (
-                        <button onClick={() => void saveProfileEdits()}>
-                          {t("saveChanges")}
-                        </button>
-                      ) : null}
-                    </div>
-                  </>
-                ) : (
-                  <div className="profile-detail" style={{ marginTop: 8 }}>
-                    <div className="contact-avatar is-xl" aria-hidden="true">
-                      {effectiveProfilePicture ? (
-                        <img
-                          src={effectiveProfilePicture}
-                          alt=""
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="contact-avatar-fallback">
-                          {getInitials(
-                            effectiveProfileName ??
-                              formatShortNpub(currentNpub),
-                          )}
-                        </span>
-                      )}
-                    </div>
-
-                    {myProfileQr ? (
-                      <img
-                        className="qr"
-                        src={myProfileQr}
-                        alt=""
-                        onClick={() => {
-                          if (!currentNpub) return;
-                          void copyText(currentNpub);
-                        }}
-                      />
-                    ) : (
-                      <p className="muted">{currentNpub}</p>
-                    )}
-
-                    <h2 className="contact-detail-name">
-                      {effectiveProfileName ?? formatShortNpub(currentNpub)}
-                    </h2>
-
-                    {effectiveMyLightningAddress ? (
-                      <p className="contact-detail-ln">
-                        {effectiveMyLightningAddress}
-                      </p>
-                    ) : null}
-
-                    <p className="muted profile-note">
-                      {t("profileMessagesHint")}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {postPaySaveContact && !paidOverlayIsOpen ? (
-            <div
-              className="modal-overlay"
-              role="dialog"
-              aria-modal="true"
-              aria-label={t("saveContactPromptTitle")}
-            >
-              <div className="modal-sheet">
-                <div className="modal-title">{t("saveContactPromptTitle")}</div>
-                <div className="modal-body">
-                  {t("saveContactPromptBody")
-                    .replace(
-                      "{amount}",
-                      formatInteger(postPaySaveContact.amountSat),
-                    )
-                    .replace("{unit}", displayUnit)
-                    .replace("{lnAddress}", postPaySaveContact.lnAddress)}
-                </div>
-                <div className="modal-actions">
-                  <button
-                    className="btn-wide"
-                    onClick={() => {
-                      const ln = String(
-                        postPaySaveContact.lnAddress ?? "",
-                      ).trim();
-
-                      const npub = (() => {
-                        const lower = ln.toLowerCase();
-                        if (!lower.endsWith("@npub.cash")) return null;
-                        const left = ln.slice(0, -"@npub.cash".length).trim();
-                        return left || null;
-                      })();
-
-                      setPostPaySaveContact(null);
-                      setContactNewPrefill({
-                        lnAddress: ln,
-                        npub,
-                        suggestedName: null,
-                      });
-                      navigateToNewContact();
-                    }}
-                  >
-                    {t("saveContactPromptSave")}
-                  </button>
-                  <button
-                    className="btn-wide secondary"
-                    onClick={() => setPostPaySaveContact(null)}
-                  >
-                    {t("saveContactPromptSkip")}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {paidOverlayIsOpen ? (
-            <div className="paid-overlay" role="status" aria-live="assertive">
-              <div className="paid-sheet">
-                <div className="paid-check" aria-hidden="true">
-                  ✓
-                </div>
-                <div className="paid-title">
-                  {paidOverlayTitle ?? t("paid")}
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </>
+        </AuthenticatedLayout>
       ) : null}
     </div>
   );
