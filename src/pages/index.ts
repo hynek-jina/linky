@@ -11,3 +11,4 @@ export { EvoluServerNewPage } from "./EvoluServerNewPage";
 export { ProfilePage } from "./ProfilePage";
 export { WalletPage } from "./WalletPage";
 export { default as TopupPage } from "./TopupPage";
+export { default as TopupInvoicePage } from "./TopupInvoicePage";

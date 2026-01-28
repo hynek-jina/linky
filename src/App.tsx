@@ -94,6 +94,7 @@ import {
   ProfilePage,
   WalletPage,
   TopupPage,
+  TopupInvoicePage,
 } from "./pages";
 import type { Route } from "./types/route";
 import {
@@ -12168,56 +12169,18 @@ const App = () => {
           )}
 
           {route.kind === "topupInvoice" && (
-            <section className="panel">
-              {(() => {
-                const amountSat = Number.parseInt(topupAmount.trim(), 10);
-                if (!Number.isFinite(amountSat) || amountSat <= 0) return null;
-                return (
-                  <p className="muted" style={{ margin: "0 0 10px" }}>
-                    {t("topupInvoiceAmount")
-                      .replace("{amount}", formatInteger(amountSat))
-                      .replace("{unit}", displayUnit)}
-                  </p>
-                );
-              })()}
-
-              {topupDebug ? (
-                <p className="muted" style={{ margin: "0 0 8px" }}>
-                  {topupDebug}
-                </p>
-              ) : null}
-
-              {topupInvoiceQr ? (
-                <img
-                  className="qr"
-                  src={topupInvoiceQr}
-                  alt=""
-                  onClick={() => {
-                    if (!topupInvoice) return;
-                    void copyText(topupInvoice);
-                  }}
-                />
-              ) : topupInvoiceError ? (
-                <p className="muted">{topupInvoiceError}</p>
-              ) : topupInvoice ? (
-                <div>
-                  <div className="mono-box" style={{ marginBottom: 12 }}>
-                    {topupInvoice}
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-wide"
-                    onClick={() => void copyText(topupInvoice)}
-                  >
-                    {t("copy")}
-                  </button>
-                </div>
-              ) : topupInvoiceIsBusy ? (
-                <p className="muted">{t("topupFetchingInvoice")}</p>
-              ) : (
-                <p className="muted">{t("topupFetchingInvoice")}</p>
-              )}
-            </section>
+            <TopupInvoicePage
+              topupAmount={topupAmount}
+              topupDebug={topupDebug}
+              topupInvoiceQr={topupInvoiceQr}
+              topupInvoice={topupInvoice}
+              topupInvoiceError={topupInvoiceError}
+              topupInvoiceIsBusy={topupInvoiceIsBusy}
+              displayUnit={displayUnit}
+              copyText={copyText}
+              formatInteger={formatInteger}
+              t={t}
+            />
           )}
 
           {route.kind === "cashuTokenNew" && (

@@ -38,10 +38,7 @@ const TopupPage: FC<TopupPageProps> = ({
   const ln = String(npubCashLightningAddress ?? "").trim();
   const amountSat = Number.parseInt(topupAmount.trim(), 10);
   const invalid =
-    !ln ||
-    !Number.isFinite(amountSat) ||
-    amountSat <= 0 ||
-    topupInvoiceIsBusy;
+    !ln || !Number.isFinite(amountSat) || amountSat <= 0 || topupInvoiceIsBusy;
 
   return (
     <section className="panel">
@@ -68,10 +65,7 @@ const TopupPage: FC<TopupPageProps> = ({
             {effectiveProfileName ??
               (currentNpub ? formatShortNpub(currentNpub) : t("appTitle"))}
           </h3>
-          <p
-            className="muted"
-            style={{ maxWidth: "100%", overflow: "hidden" }}
-          >
+          <p className="muted" style={{ maxWidth: "100%", overflow: "hidden" }}>
             {formatMiddleDots(String(npubCashLightningAddress ?? ""), 28)}
           </p>
         </div>
