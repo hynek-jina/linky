@@ -28,28 +28,7 @@ import {
 } from "./evolu";
 import { useInit } from "./hooks/useInit";
 import {
-  navigateToAdvanced,
-  navigateToCashuToken,
-  navigateToCashuTokenNew,
-  navigateToChat,
-  navigateToContact,
-  navigateToContactEdit,
-  navigateToContactPay,
-  navigateToContacts,
-  navigateToCredoToken,
-  navigateToEvoluServer,
-  navigateToEvoluServers,
-  navigateToLnAddressPay,
-  navigateToMints,
-  navigateToNewContact,
-  navigateToNewEvoluServer,
-  navigateToNewRelay,
-  navigateToNostrRelay,
-  navigateToNostrRelays,
-  navigateToPaymentsHistory,
-  navigateToTopup,
-  navigateToTopupInvoice,
-  navigateToWallet,
+  navigateTo,
   useRouting,
 } from "./hooks/useRouting";
 import { useToasts } from "./hooks/useToasts";
@@ -408,6 +387,24 @@ const App = () => {
 
   const route = useRouting();
   const { toasts, pushToast } = useToasts();
+
+  // Navigation wrapper functions for backwards compatibility with component props
+  const navigateToAdvanced = React.useCallback(() => navigateTo({ route: "advanced" }), []);
+  const navigateToCashuToken = React.useCallback((id: CashuTokenId) => navigateTo({ route: "cashuToken", id }), []);
+  const navigateToCashuTokenNew = React.useCallback(() => navigateTo({ route: "cashuTokenNew" }), []);
+  const navigateToChat = React.useCallback((id: ContactId) => navigateTo({ route: "chat", id }), []);
+  const navigateToContacts = React.useCallback(() => navigateTo({ route: "contacts" }), []);
+  const navigateToCredoToken = React.useCallback((id: CredoTokenId) => navigateTo({ route: "credoToken", id }), []);
+  const navigateToEvoluServer = React.useCallback((id: string) => navigateTo({ route: "evoluServer", id }), []);
+  const navigateToEvoluServers = React.useCallback(() => navigateTo({ route: "evoluServers" }), []);
+  const navigateToMints = React.useCallback(() => navigateTo({ route: "mints" }), []);
+  const navigateToNewContact = React.useCallback(() => navigateTo({ route: "contactNew" }), []);
+  const navigateToNostrRelay = React.useCallback((id: string) => navigateTo({ route: "nostrRelay", id }), []);
+  const navigateToNostrRelays = React.useCallback(() => navigateTo({ route: "nostrRelays" }), []);
+  const navigateToPaymentsHistory = React.useCallback(() => navigateTo({ route: "paymentsHistory" }), []);
+  const navigateToTopup = React.useCallback(() => navigateTo({ route: "topup" }), []);
+  const navigateToTopupInvoice = React.useCallback(() => navigateTo({ route: "topupInvoice" }), []);
+  const navigateToWallet = React.useCallback(() => navigateTo({ route: "wallet" }), []);
 
   const evoluServers = useEvoluServersManager();
   const evoluServerUrls = evoluServers.configuredUrls;
@@ -3647,7 +3644,7 @@ const App = () => {
     }
     topupPaidNavTimerRef.current = window.setTimeout(() => {
       topupPaidNavTimerRef.current = null;
-      navigateToWallet();
+      navigateTo({ route: "wallet" });
     }, 1400);
   }, [
     cashuBalance,
@@ -4738,11 +4735,11 @@ const App = () => {
           if (absX < 60 || absX < absY * 1.5) return;
 
           if (dx < 0 && route.kind === "contacts") {
-            navigateToWallet();
+            navigateTo({ route: "wallet" });
             return;
           }
           if (dx > 0 && route.kind === "wallet") {
-            navigateToContacts();
+            navigateTo({ route: "contacts" });
           }
         }
       : undefined;
@@ -4869,7 +4866,7 @@ const App = () => {
   const closeContactDetail = () => {
     clearContactForm();
     setPendingDeleteId(null);
-    navigateToContacts();
+    navigateTo({ route: "contacts" });
   };
 
   const openNewContactPage = () => {
@@ -4888,7 +4885,7 @@ const App = () => {
           }
         : makeEmptyForm(),
     );
-    navigateToNewContact();
+    navigateTo({ route: "contactNew" });
   };
 
   const [menuIsOpen, setMenuIsOpen] = useState(false);
@@ -4913,8 +4910,8 @@ const App = () => {
 
   const navigateToMainReturn = React.useCallback(() => {
     const target = mainReturnRouteRef.current ?? { kind: "contacts" };
-    if (target.kind === "wallet") navigateToWallet();
-    else navigateToContacts();
+    if (target.kind === "wallet") navigateTo({ route: "wallet" });
+    else navigateTo({ route: "contacts" });
   }, []);
 
   const menuOpenRouteRef = React.useRef<Route["kind"] | null>(null);
@@ -5194,7 +5191,7 @@ const App = () => {
           );
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(contact.id as ContactId);
+          navigateTo({ route: "chat", id: contact.id as ContactId });
         }
         return { ok: true, queued: true };
       }
@@ -5628,7 +5625,7 @@ const App = () => {
           setStatus(hasPendingMessages ? t("payQueued") : t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(contact.id as ContactId);
+          navigateTo({ route: "chat", id: contact.id as ContactId });
         }
 
         return { ok: true, queued: hasPendingMessages };
@@ -6011,7 +6008,7 @@ const App = () => {
           );
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(selectedContact.id);
+          navigateTo({ route: "chat", id: selectedContact.id });
           return;
         }
 
@@ -6416,7 +6413,7 @@ const App = () => {
           setStatus(t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(selectedContact.id);
+          navigateTo({ route: "chat", id: selectedContact.id });
           return;
         } catch (e) {
           lastError = e;
@@ -6608,7 +6605,7 @@ const App = () => {
           setStatus(t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(selectedContact.id);
+          navigateTo({ route: "chat", id: selectedContact.id });
           return;
         } catch (e) {
           setStatus(`${t("payFailed")}: ${String(e ?? "unknown")}`);
@@ -6938,7 +6935,7 @@ const App = () => {
           setStatus(t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(selectedContact.id);
+          navigateTo({ route: "chat", id: selectedContact.id });
           return;
         } catch (e) {
           lastError = e;
@@ -7498,22 +7495,22 @@ const App = () => {
             | ContactId
             | undefined;
           if (contactId && currentId && currentId !== contactId) {
-            if (kind === "contact") navigateToContact(contactId);
-            if (kind === "contactPay") navigateToContactPay(contactId);
-            if (kind === "chat") navigateToChat(contactId);
+            if (kind === "contact") navigateTo({ route: "contact", id: contactId });
+            if (kind === "contactPay") navigateTo({ route: "contactPay", id: contactId });
+            if (kind === "chat") navigateTo({ route: "chat", id: contactId });
           }
         }
         return;
       }
 
-      if (kind === "contacts") navigateToContacts();
-      if (kind === "wallet") navigateToWallet();
-      if (kind === "topup") navigateToTopup();
-      if (kind === "topupInvoice") navigateToTopupInvoice();
+      if (kind === "contacts") navigateTo({ route: "contacts" });
+      if (kind === "wallet") navigateTo({ route: "wallet" });
+      if (kind === "topup") navigateTo({ route: "topup" });
+      if (kind === "topupInvoice") navigateTo({ route: "topupInvoice" });
       if (kind === "contactNew") openNewContactPage();
-      if (kind === "contact" && contactId) navigateToContact(contactId);
-      if (kind === "contactPay" && contactId) navigateToContactPay(contactId);
-      if (kind === "chat" && contactId) navigateToChat(contactId);
+      if (kind === "contact" && contactId) navigateTo({ route: "contact", id: contactId });
+      if (kind === "contactPay" && contactId) navigateTo({ route: "contactPay", id: contactId });
+      if (kind === "chat" && contactId) navigateTo({ route: "chat", id: contactId });
     };
 
     const stepsByTask: Record<ContactsGuideKey, ContactsGuideStep[]> = {
@@ -7963,7 +7960,7 @@ const App = () => {
           showPaidOverlay(title);
 
           if (options?.navigateToWallet) {
-            navigateToWallet();
+            navigateTo({ route: "wallet" });
           }
         } catch (error) {
           const message = String(error).trim() || "Accept failed";
@@ -8111,7 +8108,7 @@ const App = () => {
       }
       setStatus(t("cashuDeleted"));
       setPendingCashuDeleteId(null);
-      navigateToWallet();
+      navigateTo({ route: "wallet" });
       return;
     }
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -8708,7 +8705,7 @@ const App = () => {
         update("contact", { id: existing.id, name: null });
       }
       openFeedbackContactPendingRef.current = false;
-      navigateToContact(existing.id);
+      navigateTo({ route: "contact", id: existing.id });
       return;
     }
 
@@ -8739,12 +8736,12 @@ const App = () => {
     );
     if (!existing?.id) return;
     openFeedbackContactPendingRef.current = false;
-    navigateToContact(existing.id);
+    navigateTo({ route: "contact", id: existing.id });
   }, [contacts]);
 
   const openContactPay = (contactId: ContactId, fromChat = false) => {
     contactPayBackToChatRef.current = fromChat ? contactId : null;
-    navigateToContactPay(contactId);
+    navigateTo({ route: "contactPay", id: contactId });
   };
 
   const openContactDetail = (contact: (typeof contacts)[number]) => {
@@ -8764,10 +8761,10 @@ const App = () => {
         openContactPay(contact.id as ContactId);
         return;
       }
-      navigateToContact(contact.id);
+      navigateTo({ route: "contact", id: contact.id });
       return;
     }
-    navigateToChat(contact.id);
+    navigateTo({ route: "chat", id: contact.id });
   };
 
   const renderContactCard = (contact: (typeof contacts)[number]) => {
@@ -8986,7 +8983,7 @@ const App = () => {
     }
 
     if (route.kind === "contactEdit" && editingId) {
-      navigateToContact(editingId);
+      navigateTo({ route: "contact", id: editingId });
       return;
     }
 
@@ -9041,7 +9038,7 @@ const App = () => {
     );
     if (!existing?.id) return;
     openScannedContactPendingNpubRef.current = null;
-    navigateToContact(existing.id);
+    navigateTo({ route: "contact", id: existing.id });
     void refreshContactFromNostr(existing.id, targetNpub);
   }, [contacts, refreshContactFromNostr]);
 
@@ -10079,7 +10076,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToAdvanced,
+        onClick: () => navigateTo({ route: "advanced" }),
       };
     }
 
@@ -10087,7 +10084,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToAdvanced,
+        onClick: () => navigateTo({ route: "advanced" }),
       };
     }
 
@@ -10095,7 +10092,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToMints,
+        onClick: () => navigateTo({ route: "mints" }),
       };
     }
 
@@ -10111,7 +10108,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToWallet,
+        onClick: () => navigateTo({ route: "wallet" }),
       };
     }
 
@@ -10119,7 +10116,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToTopup,
+        onClick: () => navigateTo({ route: "topup" }),
       };
     }
 
@@ -10127,7 +10124,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToWallet,
+        onClick: () => navigateTo({ route: "wallet" }),
       };
     }
 
@@ -10135,7 +10132,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToCashuTokenNew,
+        onClick: () => navigateTo({ route: "cashuTokenNew" }),
       };
     }
 
@@ -10143,7 +10140,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToContacts,
+        onClick: () => navigateTo({ route: "contacts" }),
       };
     }
 
@@ -10151,7 +10148,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToAdvanced,
+        onClick: () => navigateTo({ route: "advanced" }),
       };
     }
 
@@ -10159,7 +10156,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToAdvanced,
+        onClick: () => navigateTo({ route: "advanced" }),
       };
     }
 
@@ -10167,7 +10164,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToNostrRelays,
+        onClick: () => navigateTo({ route: "nostrRelays" }),
       };
     }
 
@@ -10175,7 +10172,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToEvoluServers,
+        onClick: () => navigateTo({ route: "evoluServers" }),
       };
     }
 
@@ -10183,7 +10180,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToEvoluServers,
+        onClick: () => navigateTo({ route: "evoluServers" }),
       };
     }
 
@@ -10191,7 +10188,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToNostrRelays,
+        onClick: () => navigateTo({ route: "nostrRelays" }),
       };
     }
 
@@ -10215,7 +10212,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: () => navigateToContact(route.id),
+        onClick: () => navigateTo({ route: "contact", id: route.id }),
       };
     }
 
@@ -10229,14 +10226,14 @@ const App = () => {
         label: t("close"),
         onClick: () => {
           if (backToChat && contactId) {
-            navigateToChat(contactId);
+            navigateTo({ route: "chat", id: contactId });
             return;
           }
           if (contactId) {
-            navigateToContact(contactId);
+            navigateTo({ route: "contact", id: contactId });
             return;
           }
-          navigateToContacts();
+          navigateTo({ route: "contacts" });
         },
       };
     }
@@ -10245,7 +10242,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToContacts,
+        onClick: () => navigateTo({ route: "contacts" }),
       };
     }
 
@@ -10290,7 +10287,7 @@ const App = () => {
       return {
         icon: "+",
         label: t("addRelay"),
-        onClick: navigateToNewRelay,
+        onClick: () => navigateTo({ route: "nostrRelayNew" }),
       };
     }
 
@@ -10298,7 +10295,7 @@ const App = () => {
       return {
         icon: "+",
         label: t("evoluAddServerLabel"),
-        onClick: navigateToNewEvoluServer,
+        onClick: () => navigateTo({ route: "evoluServerNew" }),
       };
     }
 
@@ -10306,7 +10303,7 @@ const App = () => {
       return {
         icon: "✎",
         label: t("editContact"),
-        onClick: () => navigateToContactEdit(selectedContact.id),
+        onClick: () => navigateTo({ route: "contactEdit", id: selectedContact.id }),
       };
     }
 
@@ -10314,7 +10311,7 @@ const App = () => {
       return {
         icon: "✎",
         label: t("editContact"),
-        onClick: () => navigateToContactEdit(selectedContact.id),
+        onClick: () => navigateTo({ route: "contactEdit", id: selectedContact.id }),
       };
     }
 
@@ -10591,7 +10588,7 @@ const App = () => {
 
     const already = relayUrls.some((u) => u === url);
     if (already) {
-      navigateToNostrRelays();
+      navigateTo({ route: "nostrRelays" });
       return;
     }
 
@@ -10604,7 +10601,7 @@ const App = () => {
     });
 
     setNewRelayUrl("");
-    navigateToNostrRelays();
+    navigateTo({ route: "nostrRelays" });
   };
 
   const getMintInfoIconUrl = React.useCallback(
@@ -10754,7 +10751,7 @@ const App = () => {
           error: String(e ?? "unknown"),
         });
       });
-      navigateToNostrRelays();
+      navigateTo({ route: "nostrRelays" });
       return;
     }
 
@@ -11404,7 +11401,7 @@ const App = () => {
             );
             closeScan();
             if (existing?.id) {
-              navigateToContact(existing.id);
+              navigateTo({ route: "contact", id: existing.id });
               void refreshContactFromNostr(existing.id, normalized);
             }
             return;
@@ -11453,12 +11450,12 @@ const App = () => {
 
         closeScan();
         if (existing?.id) {
-          navigateToContactPay(existing.id);
+          navigateTo({ route: "contactPay", id: existing.id });
           return;
         }
 
         // New address: open pay screen and offer to save contact after success.
-        navigateToLnAddressPay(maybeLnAddress);
+        navigateTo({ route: "lnAddressPay", lnAddress: maybeLnAddress });
         return;
       }
 

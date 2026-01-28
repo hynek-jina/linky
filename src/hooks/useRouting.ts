@@ -14,109 +14,126 @@ export const useRouting = () => {
   return route;
 };
 
-// Navigation functions
-export const navigateToContacts = () => {
-  window.location.assign("#");
-};
+// Navigation types
+type NavigationAction =
+  | { route: "advanced" }
+  | { route: "cashuToken"; id: CashuTokenId }
+  | { route: "cashuTokenNew" }
+  | { route: "chat"; id: ContactId }
+  | { route: "contact"; id: ContactId }
+  | { route: "contactEdit"; id: ContactId }
+  | { route: "contactNew" }
+  | { route: "contactPay"; id: ContactId }
+  | { route: "contacts" }
+  | { route: "credoToken"; id: CredoTokenId }
+  | { route: "evoluServer"; id: string }
+  | { route: "evoluServerNew" }
+  | { route: "evoluServers" }
+  | { route: "lnAddressPay"; lnAddress: string }
+  | { route: "mint"; mintUrl: string }
+  | { route: "mints" }
+  | { route: "nostrRelay"; id: string }
+  | { route: "nostrRelayNew" }
+  | { route: "nostrRelays" }
+  | { route: "paymentsHistory" }
+  | { route: "profile" }
+  | { route: "settings" }
+  | { route: "topup" }
+  | { route: "topupInvoice" }
+  | { route: "wallet" };
 
-export const navigateToSettings = () => {
-  window.location.assign("#settings");
-};
-
-export const navigateToAdvanced = () => {
-  window.location.assign("#advanced");
-};
-
-export const navigateToPaymentsHistory = () => {
-  window.location.assign("#advanced/payments");
-};
-
-export const navigateToMints = () => {
-  window.location.assign("#advanced/mints");
-};
-
-export const navigateToMint = (mintUrl: string) => {
-  window.location.assign(
-    `#advanced/mint/${encodeURIComponent(String(mintUrl ?? "").trim())}`,
-  );
-};
-
-export const navigateToContact = (id: ContactId) => {
-  window.location.assign(`#contact/${encodeURIComponent(String(id))}`);
-};
-
-export const navigateToContactEdit = (id: ContactId) => {
-  window.location.assign(`#contact/${encodeURIComponent(String(id))}/edit`);
-};
-
-export const navigateToContactPay = (id: ContactId) => {
-  window.location.assign(`#contact/${encodeURIComponent(String(id))}/pay`);
-};
-
-export const navigateToChat = (id: ContactId) => {
-  window.location.assign(`#chat/${encodeURIComponent(String(id))}`);
-};
-
-export const navigateToNewContact = () => {
-  window.location.assign("#contact/new");
-};
-
-export const navigateToWallet = () => {
-  window.location.assign("#wallet");
-};
-
-export const navigateToTopup = () => {
-  window.location.assign("#wallet/topup");
-};
-
-export const navigateToTopupInvoice = () => {
-  window.location.assign("#wallet/topup/invoice");
-};
-
-export const navigateToLnAddressPay = (lnAddress: string) => {
-  window.location.assign(`#payln/${encodeURIComponent(String(lnAddress))}`);
-};
-
-export const navigateToCashuTokenNew = () => {
-  window.location.assign("#wallet/token/new");
-};
-
-export const navigateToCashuToken = (id: CashuTokenId) => {
-  window.location.assign(
-    `#wallet/token/${encodeURIComponent(String(id as unknown as string))}`,
-  );
-};
-
-export const navigateToCredoToken = (id: CredoTokenId) => {
-  window.location.assign(
-    `#wallet/credo/${encodeURIComponent(String(id as unknown as string))}`,
-  );
-};
-
-export const navigateToProfile = () => {
-  window.location.assign("#profile");
-};
-
-export const navigateToNostrRelays = () => {
-  window.location.assign("#nostr-relays");
-};
-
-export const navigateToNostrRelay = (id: string) => {
-  window.location.assign(`#nostr-relay/${encodeURIComponent(id)}`);
-};
-
-export const navigateToNewRelay = () => {
-  window.location.assign("#nostr-relay/new");
-};
-
-export const navigateToEvoluServers = () => {
-  window.location.assign("#evolu-servers");
-};
-
-export const navigateToEvoluServer = (id: string) => {
-  window.location.assign(`#evolu-server/${encodeURIComponent(String(id))}`);
-};
-
-export const navigateToNewEvoluServer = () => {
-  window.location.assign("#evolu-server/new");
+export const navigateTo = (action: NavigationAction): void => {
+  switch (action.route) {
+    case "contacts":
+      window.location.assign("#");
+      break;
+    case "settings":
+      window.location.assign("#settings");
+      break;
+    case "advanced":
+      window.location.assign("#advanced");
+      break;
+    case "paymentsHistory":
+      window.location.assign("#advanced/payments");
+      break;
+    case "mints":
+      window.location.assign("#advanced/mints");
+      break;
+    case "mint":
+      window.location.assign(
+        `#advanced/mint/${encodeURIComponent(String(action.mintUrl ?? "").trim())}`,
+      );
+      break;
+    case "contact":
+      window.location.assign(
+        `#contact/${encodeURIComponent(String(action.id))}`,
+      );
+      break;
+    case "contactEdit":
+      window.location.assign(
+        `#contact/${encodeURIComponent(String(action.id))}/edit`,
+      );
+      break;
+    case "contactPay":
+      window.location.assign(
+        `#contact/${encodeURIComponent(String(action.id))}/pay`,
+      );
+      break;
+    case "chat":
+      window.location.assign(`#chat/${encodeURIComponent(String(action.id))}`);
+      break;
+    case "contactNew":
+      window.location.assign("#contact/new");
+      break;
+    case "wallet":
+      window.location.assign("#wallet");
+      break;
+    case "topup":
+      window.location.assign("#wallet/topup");
+      break;
+    case "topupInvoice":
+      window.location.assign("#wallet/topup/invoice");
+      break;
+    case "lnAddressPay":
+      window.location.assign(
+        `#payln/${encodeURIComponent(String(action.lnAddress))}`,
+      );
+      break;
+    case "cashuTokenNew":
+      window.location.assign("#wallet/token/new");
+      break;
+    case "cashuToken":
+      window.location.assign(
+        `#wallet/token/${encodeURIComponent(String(action.id as unknown as string))}`,
+      );
+      break;
+    case "credoToken":
+      window.location.assign(
+        `#wallet/credo/${encodeURIComponent(String(action.id as unknown as string))}`,
+      );
+      break;
+    case "profile":
+      window.location.assign("#profile");
+      break;
+    case "nostrRelays":
+      window.location.assign("#nostr-relays");
+      break;
+    case "nostrRelay":
+      window.location.assign(`#nostr-relay/${encodeURIComponent(action.id)}`);
+      break;
+    case "nostrRelayNew":
+      window.location.assign("#nostr-relay/new");
+      break;
+    case "evoluServers":
+      window.location.assign("#evolu-servers");
+      break;
+    case "evoluServer":
+      window.location.assign(
+        `#evolu-server/${encodeURIComponent(String(action.id))}`,
+      );
+      break;
+    case "evoluServerNew":
+      window.location.assign("#evolu-server/new");
+      break;
+  }
 };
