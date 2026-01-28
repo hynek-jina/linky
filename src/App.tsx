@@ -75,7 +75,6 @@ import { ChatMessage } from "./components/ChatMessage";
 import { CashuTokenPill } from "./components/CashuTokenPill";
 import { CredoTokenPill } from "./components/CredoTokenPill";
 import { WalletActionButton } from "./components/WalletActionButton";
-import { BottomTab } from "./components/BottomTab";
 import { Keypad } from "./components/Keypad";
 import { ScanModal } from "./components/ScanModal";
 import { PaidOverlay } from "./components/PaidOverlay";
@@ -86,6 +85,7 @@ import { MenuModal } from "./components/MenuModal";
 import { AmountDisplay } from "./components/AmountDisplay";
 import { ContactsChecklist } from "./components/ContactsChecklist";
 import { Topbar } from "./components/Topbar";
+import { BottomTabBar } from "./components/BottomTabBar";
 import {
   PaymentsHistoryPage,
   MintsPage,
@@ -12300,29 +12300,14 @@ const App = () => {
                   </div>
                 </div>
               </div>
-              <div className="contacts-qr-bar" role="region">
-                <div
-                  className="bottom-tabs-bar"
-                  role="tablist"
-                  aria-label={t("list")}
-                >
-                  <div className="bottom-tabs">
-                    <BottomTab
-                      icon="contacts"
-                      label={t("contactsTitle")}
-                      isActive={bottomTabActive === "contacts"}
-                      onClick={navigateToContacts}
-                    />
-                    <BottomTab
-                      icon="wallet"
-                      label={t("wallet")}
-                      isActive={bottomTabActive === "wallet"}
-                      onClick={navigateToWallet}
-                    />
-                  </div>
-                </div>
-                <div className="contacts-qr-inner"></div>
-              </div>
+              <BottomTabBar
+                activeTab={bottomTabActive}
+                contactsLabel={t("contactsTitle")}
+                navigateToContacts={navigateToContacts}
+                navigateToWallet={navigateToWallet}
+                t={t}
+                walletLabel={t("wallet")}
+              />
             </section>
           )}
 
@@ -13717,28 +13702,14 @@ const App = () => {
                 </div>
               </section>
 
-              <div className="contacts-qr-bar" role="region">
-                <div
-                  className="bottom-tabs-bar"
-                  role="tablist"
-                  aria-label={t("list")}
-                >
-                  <div className="bottom-tabs">
-                    <BottomTab
-                      icon="contacts"
-                      label={t("contactsTitle")}
-                      isActive={bottomTabActive === "contacts"}
-                      onClick={navigateToContacts}
-                    />
-                    <BottomTab
-                      icon="wallet"
-                      label={t("wallet")}
-                      isActive={bottomTabActive === "wallet"}
-                      onClick={navigateToWallet}
-                    />
-                  </div>
-                </div>
-              </div>
+              <BottomTabBar
+                activeTab={bottomTabActive}
+                contactsLabel={t("contactsTitle")}
+                navigateToContacts={navigateToContacts}
+                navigateToWallet={navigateToWallet}
+                t={t}
+                walletLabel={t("wallet")}
+              />
 
               <button
                 type="button"
