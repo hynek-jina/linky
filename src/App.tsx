@@ -96,6 +96,7 @@ import {
   CashuTokenNewPage,
   CashuTokenPage,
   CredoTokenPage,
+  ContactPage,
 } from "./pages";
 import type { Route } from "./types/route";
 import {
@@ -12238,104 +12239,20 @@ const App = () => {
           )}
 
           {route.kind === "contact" && (
-            <section className="panel">
-              {!selectedContact ? (
-                <p className="muted">{t("contactNotFound")}</p>
-              ) : null}
-
-              {selectedContact ? (
-                <div className="contact-detail">
-                  <div className="contact-avatar is-xl" aria-hidden="true">
-                    {(() => {
-                      const npub = String(selectedContact.npub ?? "").trim();
-                      const url = npub ? nostrPictureByNpub[npub] : null;
-                      return url ? (
-                        <img
-                          src={url}
-                          alt=""
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="contact-avatar-fallback">
-                          {getInitials(String(selectedContact.name ?? ""))}
-                        </span>
-                      );
-                    })()}
-                  </div>
-
-                  {selectedContact.name ? (
-                    <h2 className="contact-detail-name">
-                      {selectedContact.name}
-                    </h2>
-                  ) : null}
-
-                  {(() => {
-                    const group = String(
-                      selectedContact.groupName ?? "",
-                    ).trim();
-                    if (!group) return null;
-                    return <p className="contact-detail-group">{group}</p>;
-                  })()}
-
-                  {(() => {
-                    const ln = String(selectedContact.lnAddress ?? "").trim();
-                    if (!ln) return null;
-                    return <p className="contact-detail-ln">{ln}</p>;
-                  })()}
-
-                  <div className="contact-detail-actions">
-                    {(() => {
-                      const ln = String(selectedContact.lnAddress ?? "").trim();
-                      const npub = String(selectedContact.npub ?? "").trim();
-                      const canPayThisContact =
-                        Boolean(ln) ||
-                        ((payWithCashuEnabled || allowPromisesEnabled) &&
-                          Boolean(npub));
-                      if (!canPayThisContact) return null;
-                      const availableCredo = npub
-                        ? getCredoAvailableForContact(npub)
-                        : 0;
-                      const canStartPay =
-                        (Boolean(ln) && cashuBalance > 0) ||
-                        (Boolean(npub) &&
-                          (cashuBalance > 0 ||
-                            availableCredo > 0 ||
-                            allowPromisesEnabled));
-                      const isFeedbackContact = npub === FEEDBACK_CONTACT_NPUB;
-                      return (
-                        <button
-                          className="btn-wide"
-                          onClick={() => openContactPay(selectedContact.id)}
-                          disabled={cashuIsBusy || !canStartPay}
-                          title={
-                            !canStartPay ? t("payInsufficient") : undefined
-                          }
-                          data-guide="contact-pay"
-                        >
-                          {isFeedbackContact ? "Donate" : t("pay")}
-                        </button>
-                      );
-                    })()}
-
-                    {(() => {
-                      const npub = String(selectedContact.npub ?? "").trim();
-                      if (!npub) return null;
-                      const isFeedbackContact = npub === FEEDBACK_CONTACT_NPUB;
-                      return (
-                        <button
-                          className="btn-wide secondary"
-                          onClick={() => navigateToChat(selectedContact.id)}
-                          data-guide="contact-message"
-                        >
-                          {isFeedbackContact ? "Feedback" : t("sendMessage")}
-                        </button>
-                      );
-                    })()}
-                  </div>
-                </div>
-              ) : null}
-            </section>
+            <ContactPage
+              selectedContact={selectedContact}
+              nostrPictureByNpub={nostrPictureByNpub}
+              cashuBalance={cashuBalance}
+              cashuIsBusy={cashuIsBusy}
+              payWithCashuEnabled={payWithCashuEnabled}
+              allowPromisesEnabled={allowPromisesEnabled}
+              feedbackContactNpub={FEEDBACK_CONTACT_NPUB}
+              getInitials={getInitials}
+              getCredoAvailableForContact={getCredoAvailableForContact}
+              openContactPay={openContactPay}
+              navigateToChat={navigateToChat}
+              t={t}
+            />
           )}
 
           {route.kind === "contactPay" && (
