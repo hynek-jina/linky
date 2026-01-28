@@ -77,6 +77,7 @@ import { CredoTokenPill } from "./components/CredoTokenPill";
 import { WalletActionButton } from "./components/WalletActionButton";
 import { BottomTab } from "./components/BottomTab";
 import { Keypad } from "./components/Keypad";
+import { ScanModal } from "./components/ScanModal";
 import {
   PaymentsHistoryPage,
   MintsPage,
@@ -14084,28 +14085,11 @@ const App = () => {
           )}
 
           {scanIsOpen && (
-            <div className="scan-overlay" role="dialog" aria-label={t("scan")}>
-              <div className="scan-sheet">
-                <div className="scan-header">
-                  <div className="scan-title">{t("scan")}</div>
-                  <button
-                    className="topbar-btn"
-                    onClick={closeScan}
-                    aria-label={t("close")}
-                    title={t("close")}
-                  >
-                    <span aria-hidden="true">×</span>
-                  </button>
-                </div>
-
-                <video ref={scanVideoRef} className="scan-video" />
-
-                <div className="scan-hints" aria-label={t("scan")}>
-                  {t("scanHintInvoice")}, {t("scanHintContact")},{" "}
-                  {t("scanHintWithdraw")}
-                </div>
-              </div>
-            </div>
+            <ScanModal
+              closeScan={closeScan}
+              scanVideoRef={scanVideoRef}
+              t={t}
+            />
           )}
 
           {profileQrIsOpen && (
