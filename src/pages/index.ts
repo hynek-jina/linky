@@ -9,3 +9,4 @@ export { EvoluServersPage } from "./EvoluServersPage";
 export { EvoluServerPage } from "./EvoluServerPage";
 export { EvoluServerNewPage } from "./EvoluServerNewPage";
 export { ProfilePage } from "./ProfilePage";
+export { WalletPage } from "./WalletPage";

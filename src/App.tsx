@@ -70,11 +70,9 @@ import {
 } from "./nostrProfile";
 import { publishKind0ProfileMetadata } from "./nostrPublish";
 import { ContactCard } from "./components/ContactCard";
-import { WalletBalance } from "./components/WalletBalance";
 import { ChatMessage } from "./components/ChatMessage";
 import { CashuTokenPill } from "./components/CashuTokenPill";
 import { CredoTokenPill } from "./components/CredoTokenPill";
-import { WalletActionButton } from "./components/WalletActionButton";
 import { Keypad } from "./components/Keypad";
 import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
 import { UnauthenticatedLayout } from "./components/UnauthenticatedLayout";
@@ -82,7 +80,6 @@ import { ToastNotifications } from "./components/ToastNotifications";
 import { AmountDisplay } from "./components/AmountDisplay";
 import { ContactsChecklist } from "./components/ContactsChecklist";
 import { BottomTabBar } from "./components/BottomTabBar";
-import { WalletWarning } from "./components/WalletWarning";
 import {
   PaymentsHistoryPage,
   MintsPage,
@@ -95,6 +92,7 @@ import {
   EvoluServerPage,
   EvoluServerNewPage,
   ProfilePage,
+  WalletPage,
 } from "./pages";
 import type { Route } from "./types/route";
 import {
@@ -12134,48 +12132,19 @@ const App = () => {
           )}
 
           {route.kind === "wallet" && (
-            <section className="panel panel-plain wallet-panel">
-              <WalletWarning t={t} />
-              <div className="panel-header">
-                <div className="wallet-hero">
-                  <WalletBalance
-                    balance={cashuBalance}
-                    displayUnit={displayUnit}
-                    formatInteger={formatInteger}
-                    ariaLabel={t("cashuBalance")}
-                  />
-                  <button
-                    type="button"
-                    className="wallet-tokens-link"
-                    onClick={navigateToCashuTokenNew}
-                  >
-                    {t("tokens")}
-                  </button>
-                  <div className="wallet-actions">
-                    <WalletActionButton
-                      icon="topup"
-                      label={t("walletReceive")}
-                      onClick={navigateToTopup}
-                      dataGuide="wallet-topup"
-                    />
-                    <WalletActionButton
-                      icon="send"
-                      label={t("walletSend")}
-                      onClick={openScan}
-                      disabled={scanIsOpen}
-                    />
-                  </div>
-                </div>
-              </div>
-              <BottomTabBar
-                activeTab={bottomTabActive}
-                contactsLabel={t("contactsTitle")}
-                navigateToContacts={navigateToContacts}
-                navigateToWallet={navigateToWallet}
-                t={t}
-                walletLabel={t("wallet")}
-              />
-            </section>
+            <WalletPage
+              cashuBalance={cashuBalance}
+              displayUnit={displayUnit}
+              formatInteger={formatInteger}
+              navigateToCashuTokenNew={navigateToCashuTokenNew}
+              navigateToTopup={navigateToTopup}
+              openScan={openScan}
+              scanIsOpen={scanIsOpen}
+              bottomTabActive={bottomTabActive}
+              navigateToContacts={navigateToContacts}
+              navigateToWallet={navigateToWallet}
+              t={t}
+            />
           )}
 
           {route.kind === "topup" && (
