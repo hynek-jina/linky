@@ -70,7 +70,6 @@ import {
 } from "./nostrProfile";
 import { publishKind0ProfileMetadata } from "./nostrPublish";
 import { ContactCard } from "./components/ContactCard";
-import { ChatMessage } from "./components/ChatMessage";
 import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
 import { UnauthenticatedLayout } from "./components/UnauthenticatedLayout";
 import { ToastNotifications } from "./components/ToastNotifications";
@@ -97,6 +96,7 @@ import {
   ContactPage,
   ContactPayPage,
   LnAddressPayPage,
+  ChatPage,
 } from "./pages";
 import type { Route } from "./types/route";
 import {
@@ -12295,137 +12295,33 @@ const App = () => {
           )}
 
           {route.kind === "chat" && (
-            <section className="panel">
-              {!selectedContact ? (
-                <p className="muted">{t("contactNotFound")}</p>
-              ) : null}
-
-              {selectedContact ? (
-                <>
-                  {(() => {
-                    const npub = String(selectedContact.npub ?? "").trim();
-                    if (npub) return null;
-                    return (
-                      <p className="muted">{t("chatMissingContactNpub")}</p>
-                    );
-                  })()}
-
-                  <div
-                    className="chat-messages"
-                    role="log"
-                    aria-live="polite"
-                    ref={chatMessagesRef}
-                  >
-                    {chatMessages.length === 0 ? (
-                      <p className="muted">{t("chatEmpty")}</p>
-                    ) : (
-                      chatMessages.map((m, idx) => {
-                        const prev = idx > 0 ? chatMessages[idx - 1] : null;
-                        const next =
-                          idx + 1 < chatMessages.length
-                            ? chatMessages[idx + 1]
-                            : null;
-                        const npub = String(selectedContact?.npub ?? "").trim();
-                        const avatar = npub ? nostrPictureByNpub[npub] : null;
-
-                        return (
-                          <ChatMessage
-                            key={String(m.id)}
-                            message={m}
-                            previousMessage={prev}
-                            nextMessage={next}
-                            locale={lang === "cs" ? "cs-CZ" : "en-US"}
-                            contactAvatar={avatar}
-                            formatInteger={formatInteger}
-                            formatChatDayLabel={formatChatDayLabel}
-                            getCashuTokenMessageInfo={getCashuTokenMessageInfo}
-                            getCredoTokenMessageInfo={getCredoTokenMessageInfo}
-                            getMintIconUrl={getMintIconUrl}
-                            onMintIconLoad={(origin, url) => {
-                              setMintIconUrlByMint((prev) => ({
-                                ...prev,
-                                [origin]: url,
-                              }));
-                            }}
-                            onMintIconError={(origin, nextUrl) => {
-                              setMintIconUrlByMint((prev) => ({
-                                ...prev,
-                                [origin]: nextUrl,
-                              }));
-                            }}
-                            chatPendingLabel={t("chatPendingShort")}
-                            messageElRef={(el, messageId) => {
-                              const map = chatMessageElByIdRef.current;
-                              if (el) map.set(messageId, el as HTMLDivElement);
-                              else map.delete(messageId);
-                            }}
-                          />
-                        );
-                      })
-                    )}
-                  </div>
-
-                  <div className="chat-compose">
-                    <textarea
-                      value={chatDraft}
-                      onChange={(e) => setChatDraft(e.target.value)}
-                      placeholder={t("chatPlaceholder")}
-                      disabled={
-                        chatSendIsBusy ||
-                        !String(selectedContact.npub ?? "").trim()
-                      }
-                      data-guide="chat-input"
-                    />
-                    <button
-                      className="btn-wide"
-                      onClick={() => void sendChatMessage()}
-                      disabled={
-                        chatSendIsBusy ||
-                        !chatDraft.trim() ||
-                        !String(selectedContact.npub ?? "").trim()
-                      }
-                      data-guide="chat-send"
-                    >
-                      {chatSendIsBusy ? `${t("send")}…` : t("send")}
-                    </button>
-                    {(() => {
-                      const ln = String(selectedContact.lnAddress ?? "").trim();
-                      const npub = String(selectedContact.npub ?? "").trim();
-                      const canPayThisContact =
-                        Boolean(ln) ||
-                        ((payWithCashuEnabled || allowPromisesEnabled) &&
-                          Boolean(npub));
-                      if (!canPayThisContact) return null;
-                      const availableCredo = npub
-                        ? getCredoAvailableForContact(npub)
-                        : 0;
-                      const canStartPay =
-                        (Boolean(ln) && cashuBalance > 0) ||
-                        (Boolean(npub) &&
-                          (cashuBalance > 0 ||
-                            availableCredo > 0 ||
-                            allowPromisesEnabled));
-                      const isFeedbackContact = npub === FEEDBACK_CONTACT_NPUB;
-                      return (
-                        <button
-                          className="btn-wide secondary"
-                          onClick={() =>
-                            openContactPay(selectedContact.id, true)
-                          }
-                          disabled={cashuIsBusy || !canStartPay}
-                          title={
-                            !canStartPay ? t("payInsufficient") : undefined
-                          }
-                          data-guide="chat-pay"
-                        >
-                          {isFeedbackContact ? "Donate" : t("pay")}
-                        </button>
-                      );
-                    })()}
-                  </div>
-                </>
-              ) : null}
-            </section>
+            <ChatPage
+              selectedContact={selectedContact}
+              chatMessages={chatMessages}
+              chatMessagesRef={chatMessagesRef}
+              chatDraft={chatDraft}
+              setChatDraft={setChatDraft}
+              chatSendIsBusy={chatSendIsBusy}
+              cashuBalance={cashuBalance}
+              cashuIsBusy={cashuIsBusy}
+              payWithCashuEnabled={payWithCashuEnabled}
+              allowPromisesEnabled={allowPromisesEnabled}
+              feedbackContactNpub={FEEDBACK_CONTACT_NPUB}
+              lang={lang}
+              nostrPictureByNpub={nostrPictureByNpub}
+              mintIconUrlByMint={mintIconUrlByMint}
+              setMintIconUrlByMint={setMintIconUrlByMint}
+              chatMessageElByIdRef={chatMessageElByIdRef}
+              formatInteger={formatInteger}
+              formatChatDayLabel={formatChatDayLabel}
+              getCashuTokenMessageInfo={getCashuTokenMessageInfo}
+              getCredoTokenMessageInfo={getCredoTokenMessageInfo}
+              getMintIconUrl={getMintIconUrl}
+              getCredoAvailableForContact={getCredoAvailableForContact}
+              sendChatMessage={sendChatMessage}
+              openContactPay={openContactPay}
+              t={t}
+            />
           )}
 
           {route.kind === "contactEdit" && (
