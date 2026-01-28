@@ -85,6 +85,7 @@ import { ProfileQrModal } from "./components/ProfileQrModal";
 import { MenuModal } from "./components/MenuModal";
 import { AmountDisplay } from "./components/AmountDisplay";
 import { ContactsChecklist } from "./components/ContactsChecklist";
+import { Topbar } from "./components/Topbar";
 import {
   PaymentsHistoryPage,
   MintsPage,
@@ -12042,91 +12043,21 @@ const App = () => {
 
       {currentNsec ? (
         <>
-          <header className="topbar">
-            <div className="topbar-left">
-              {route.kind === "contacts" || route.kind === "wallet" ? (
-                <button
-                  className="topbar-btn topbar-profile-btn"
-                  onClick={openProfileQr}
-                  aria-label={t("profile")}
-                  title={t("profile")}
-                >
-                  {effectiveProfilePicture ? (
-                    <img
-                      src={effectiveProfilePicture}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="topbar-profile-fallback">
-                      {getInitials(
-                        effectiveProfileName ??
-                          (currentNpub ? formatShortNpub(currentNpub) : "?"),
-                      )}
-                    </span>
-                  )}
-                </button>
-              ) : null}
-
-              {topbar ? (
-                <button
-                  className="topbar-btn"
-                  onClick={topbar.onClick}
-                  aria-label={topbar.label}
-                  title={topbar.label}
-                >
-                  <span aria-hidden="true">{topbar.icon}</span>
-                </button>
-              ) : null}
-            </div>
-
-            {chatTopbarContact ? (
-              <div className="topbar-chat" aria-label={t("messagesTitle")}>
-                <span className="topbar-chat-avatar" aria-hidden="true">
-                  {(() => {
-                    const npub = String(chatTopbarContact.npub ?? "").trim();
-                    const url = npub ? nostrPictureByNpub[npub] : null;
-                    return url ? (
-                      <img
-                        src={url}
-                        alt=""
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="topbar-chat-avatar-fallback">
-                        {getInitials(String(chatTopbarContact.name ?? ""))}
-                      </span>
-                    );
-                  })()}
-                </span>
-                <span className="topbar-chat-name">
-                  {String(chatTopbarContact.name ?? "").trim() ||
-                    t("messagesTitle")}
-                </span>
-              </div>
-            ) : topbarTitle ? (
-              <div className="topbar-title" aria-label={topbarTitle}>
-                {topbarTitle}
-              </div>
-            ) : (
-              <span className="topbar-title-spacer" aria-hidden="true" />
-            )}
-
-            {topbarRight ? (
-              <button
-                className="topbar-btn"
-                onClick={topbarRight.onClick}
-                aria-label={topbarRight.label}
-                title={topbarRight.label}
-              >
-                <span aria-hidden="true">{topbarRight.icon}</span>
-              </button>
-            ) : (
-              <span className="topbar-spacer" aria-hidden="true" />
-            )}
-          </header>
+          <Topbar
+            chatTopbarContact={chatTopbarContact}
+            currentNpub={currentNpub}
+            effectiveProfileName={effectiveProfileName}
+            effectiveProfilePicture={effectiveProfilePicture}
+            formatShortNpub={formatShortNpub}
+            getInitials={getInitials}
+            nostrPictureByNpub={nostrPictureByNpub}
+            openProfileQr={openProfileQr}
+            route={route}
+            t={t}
+            topbar={topbar}
+            topbarRight={topbarRight}
+            topbarTitle={topbarTitle}
+          />
 
           {contactsGuide && contactsGuideActiveStep?.step ? (
             <ContactsGuideOverlay
