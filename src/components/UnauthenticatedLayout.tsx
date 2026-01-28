@@ -1,4 +1,4 @@
-import * as React from "react";
+import React from "react";
 
 type OnboardingStep = {
   step: 1 | 2 | 3;

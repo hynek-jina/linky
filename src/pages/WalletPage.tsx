@@ -1,4 +1,4 @@
-import * as React from "react";
+import React from "react";
 import { WalletWarning } from "../components/WalletWarning";
 import { WalletBalance } from "../components/WalletBalance";
 import { WalletActionButton } from "../components/WalletActionButton";
