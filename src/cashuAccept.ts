@@ -7,10 +7,10 @@ import {
 import { getCashuLib } from "./utils/cashuLib";
 
 type CashuAcceptResult = {
-  mint: string;
-  unit: string | null;
   amount: number;
+  mint: string;
   token: string;
+  unit: string | null;
 };
 
 export const acceptCashuToken = async (

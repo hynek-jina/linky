@@ -245,10 +245,16 @@ export const en = {
   newContact: "Add new contact",
   close: "Close",
 
+  contactNotFound: "Contact not found.",
   name: "Name",
   npub: "npub",
   lightningAddress: "Lightning address",
   group: "Group",
+
+  namePlaceholder: "E.g. Alice",
+  npubPlaceholder: "nostr public key",
+  lightningAddressPlaceholder: "e.g. alice@getalby.com",
+  groupPlaceholder: "e.g. Friends",
 
   all: "All",
   noGroup: "No group",
@@ -363,4 +369,11 @@ export const en = {
     "Paid {amount} {unit} to {lnAddress}. Save it as a contact?",
   saveContactPromptSave: "Save contact",
   saveContactPromptSkip: "Not now",
+
+  // Locale-specific strings
+  paid: "Paid",
+  conversations: "Conversations",
+  otherContacts: "Other contacts",
+  today: "Today",
+  yesterday: "Yesterday",
 } as const;

@@ -8,34 +8,34 @@ import { getCashuLib } from "./utils/cashuLib";
 
 type CashuPayResult = {
   ok: true;
-  mint: string;
-  unit: string | null;
-  paidAmount: number;
-  feeReserve: number;
   // Actual fee charged by the mint (may be 0 even if feeReserve > 0).
   feePaid: number;
+  feeReserve: number;
+  mint: string;
+  paidAmount: number;
   remainingAmount: number;
   remainingToken: string | null;
+  unit: string | null;
 };
 
 type CashuPayErrorResult = {
   ok: false;
-  mint: string;
-  unit: string | null;
-  paidAmount: number;
-  feeReserve: number;
+  error: string;
   feePaid: number;
+  feeReserve: number;
+  mint: string;
+  paidAmount: number;
   // If we already swapped, this token should represent the user's funds.
   remainingAmount: number;
   remainingToken: string | null;
-  error: string;
+  unit: string | null;
 };
 
 type Proof = {
-  amount: number;
-  secret: string;
   C: string;
+  amount: number;
   id: string;
+  secret: string;
 };
 
 const getProofAmountSum = (proofs: Array<{ amount: number }>) =>

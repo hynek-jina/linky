@@ -10,9 +10,9 @@ type CashuTokenEntry = {
 };
 
 type CashuTokenV3 = {
-  token?: CashuTokenEntry[];
   mint?: string;
   proofs?: CashuProof[];
+  token?: CashuTokenEntry[];
 };
 
 const base64UrlToString = (input: string): string => {

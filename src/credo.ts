@@ -8,55 +8,55 @@ export const CREDO_WIRE_PREFIX = "credoA";
 export type CredoPromisePayload = {
   type: "promise";
   version: 1;
-  issuer: string;
-  recipient: string;
   amount: number;
-  unit: string;
-  nonce: string;
-  expires_at: number;
   created_at: number;
+  expires_at: number;
+  issuer: string;
+  nonce: string;
+  recipient: string;
+  unit: string;
 };
 
 export type CredoPromiseMessage = {
+  issuer_sig: string;
   promise: CredoPromisePayload;
   promise_id: string;
-  issuer_sig: string;
 };
 
 export type CredoSettlementPayload = {
   type: "settlement";
   version: 1;
+  amount?: number;
+  issuer: string;
+  nonce?: string;
   promise_id: string;
   recipient: string;
-  issuer: string;
-  amount?: number;
-  unit?: string;
-  nonce?: string;
   settled_at: number;
+  unit?: string;
 };
 
 export type CredoSettlementMessage = {
+  recipient_sig: string;
   settlement: CredoSettlementPayload;
   settlement_id: string;
-  recipient_sig: string;
 };
 
 export type CredoParsedMessage =
   | {
       kind: "promise";
-      token: string;
+      isValid: boolean;
+      issuerSig: string;
       promise: CredoPromisePayload;
       promiseId: string;
-      issuerSig: string;
-      isValid: boolean;
+      token: string;
     }
   | {
       kind: "settlement";
-      token: string;
+      isValid: boolean;
+      recipientSig: string;
       settlement: CredoSettlementPayload;
       settlementId: string;
-      recipientSig: string;
-      isValid: boolean;
+      token: string;
     };
 
 const encodeBase64Url = (input: Uint8Array): string => {

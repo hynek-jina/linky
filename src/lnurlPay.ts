@@ -2,21 +2,21 @@ import { fetchJson } from "./utils/http";
 import { asNonEmptyString } from "./utils/validation";
 
 type LnurlPayRequest = {
-  tag?: string;
   callback?: string;
-  minSendable?: number;
+  commentAllowed?: number;
   maxSendable?: number;
   metadata?: string;
-  commentAllowed?: number;
-  status?: string;
+  minSendable?: number;
   reason?: string;
+  status?: string;
+  tag?: string;
 };
 
 type LnurlInvoiceResponse = {
-  pr?: string;
   paymentRequest?: string;
-  status?: string;
+  pr?: string;
   reason?: string;
+  status?: string;
 };
 
 const getLnurlpUrlFromLightningAddress = (lightningAddress: string): string => {

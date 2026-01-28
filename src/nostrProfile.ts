@@ -2,17 +2,17 @@ import { getSharedNostrPool } from "./utils/nostrPool";
 import { isHttpUrl } from "./utils/validation";
 
 type NostrEvent = {
-  created_at?: number;
   content: string;
+  created_at?: number;
 };
 
 export type NostrProfileMetadata = {
-  name?: string;
   displayName?: string;
-  lud16?: string;
-  lud06?: string;
-  picture?: string;
   image?: string;
+  lud06?: string;
+  lud16?: string;
+  name?: string;
+  picture?: string;
 };
 
 let nostrToolsPromise: Promise<typeof import("nostr-tools")> | null = null;
@@ -48,7 +48,7 @@ const makeAvatarCacheRequest = (npub: string): Request | null => {
     if (!origin) return null;
     const url = new URL(
       `/__linky_cache/nostr_avatar/${encodeURIComponent(npub)}`,
-      origin
+      origin,
     );
     return new Request(url.toString());
   } catch {
@@ -57,7 +57,7 @@ const makeAvatarCacheRequest = (npub: string): Request | null => {
 };
 
 export const loadCachedProfileAvatarObjectUrl = async (
-  npub: string
+  npub: string,
 ): Promise<string | null> => {
   const trimmed = String(npub ?? "").trim();
   if (!trimmed) return null;
@@ -81,7 +81,7 @@ export const loadCachedProfileAvatarObjectUrl = async (
 export const cacheProfileAvatarFromUrl = async (
   npub: string,
   avatarUrl: string,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal },
 ): Promise<string | null> => {
   const trimmed = String(npub ?? "").trim();
   if (!trimmed) return null;
@@ -111,7 +111,7 @@ export const cacheProfileAvatarFromUrl = async (
 };
 
 export const deleteCachedProfileAvatar = async (
-  npub: string
+  npub: string,
 ): Promise<void> => {
   const trimmed = String(npub ?? "").trim();
   if (!trimmed) return;
@@ -128,8 +128,8 @@ export const deleteCachedProfileAvatar = async (
 };
 
 type CachedValue = {
-  url: string | null;
   fetchedAt: number;
+  url: string | null;
 };
 
 // Negative cache (null results) should be short; relays can be slow/unreliable.
@@ -175,7 +175,7 @@ function canFetchAvatarAsBlob(avatarUrl: string): boolean {
 }
 
 export const loadCachedProfilePicture = (
-  npub: string
+  npub: string,
 ): CachedValue | undefined => {
   try {
     const raw = localStorage.getItem(STORAGE_PICTURE_PREFIX + npub);
@@ -209,12 +209,12 @@ export const saveCachedProfilePicture = (npub: string, url: string | null) => {
 };
 
 type CachedMetadataValue = {
-  metadata: NostrProfileMetadata | null;
   fetchedAt: number;
+  metadata: NostrProfileMetadata | null;
 };
 
 export const loadCachedProfileMetadata = (
-  npub: string
+  npub: string,
 ): CachedMetadataValue | undefined => {
   try {
     const raw = localStorage.getItem(STORAGE_METADATA_PREFIX + npub);
@@ -246,7 +246,7 @@ export const loadCachedProfileMetadata = (
 
 export const saveCachedProfileMetadata = (
   npub: string,
-  metadata: NostrProfileMetadata | null
+  metadata: NostrProfileMetadata | null,
 ) => {
   try {
     const value: CachedMetadataValue = { metadata, fetchedAt: now() };
@@ -264,14 +264,16 @@ const asTrimmedNonEmptyString = (value: unknown): string | undefined => {
 
 export const fetchNostrProfileMetadata = async (
   npub: string,
-  options?: { signal?: AbortSignal; relays?: string[] }
+  options?: { signal?: AbortSignal; relays?: string[] },
 ): Promise<NostrProfileMetadata | null> => {
   const trimmed = npub.trim();
   if (!trimmed) return null;
   if (options?.signal?.aborted) return null;
 
   const relays = normalizeRelayUrls(
-    options?.relays && options.relays.length > 0 ? options.relays : NOSTR_RELAYS
+    options?.relays && options.relays.length > 0
+      ? options.relays
+      : NOSTR_RELAYS,
   );
   if (relays.length === 0) return null;
 
@@ -294,7 +296,7 @@ export const fetchNostrProfileMetadata = async (
       events = await pool.querySync(
         relays,
         { kinds: [0], authors: [pubkey], limit: 5 },
-        { maxWait: 8000 }
+        { maxWait: 8000 },
       );
     } catch {
       return null;
@@ -304,7 +306,7 @@ export const fetchNostrProfileMetadata = async (
       .slice()
       .sort(
         (a: NostrEvent, b: NostrEvent) =>
-          (b.created_at ?? 0) - (a.created_at ?? 0)
+          (b.created_at ?? 0) - (a.created_at ?? 0),
       )[0];
 
     if (!newest?.content) return null;
@@ -349,7 +351,7 @@ export const fetchNostrProfileMetadata = async (
 
 export const fetchNostrProfilePicture = async (
   npub: string,
-  options?: { signal?: AbortSignal; relays?: string[] }
+  options?: { signal?: AbortSignal; relays?: string[] },
 ): Promise<string | null> => {
   const cached = loadCachedProfileMetadata(npub);
   const cachedMeta = cached?.metadata ?? null;

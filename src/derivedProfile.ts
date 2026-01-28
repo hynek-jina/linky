@@ -1,8 +1,8 @@
 import { FIRST_NAMES } from "./firstNames";
 
 export type DerivedProfileDefaults = {
-  name: string;
   lnAddress: string;
+  name: string;
   pictureUrl: string;
 };
 
@@ -37,7 +37,7 @@ const dicebearAvataaarsUrlForNpub = (npub: string): string => {
   const seed = String(npub ?? "").trim() || "linky";
   // DiceBear avatar URL (deterministic by seed). Using SVG keeps it crisp.
   return `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(
-    seed
+    seed,
   )}`;
 };
 

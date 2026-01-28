@@ -1,0 +1,38 @@
+import React from "react";
+import { NostrRelayRow } from "../components/NostrRelayRow";
+
+interface NostrRelaysPageProps {
+  navigateToNostrRelay: (url: string) => void;
+  relayStatusByUrl: Record<string, "connected" | "checking" | "disconnected">;
+  relayUrls: string[];
+  t: (key: string) => string;
+}
+
+export function NostrRelaysPage({
+  relayUrls,
+  relayStatusByUrl,
+  navigateToNostrRelay,
+  t,
+}: NostrRelaysPageProps): React.ReactElement {
+  return (
+    <section className="panel">
+      {relayUrls.length === 0 ? (
+        <p className="lede">{t("noContactsYet")}</p>
+      ) : (
+        <div>
+          {relayUrls.map((url) => {
+            const state = relayStatusByUrl[url] ?? "checking";
+            return (
+              <NostrRelayRow
+                key={url}
+                url={url}
+                state={state}
+                onNavigate={navigateToNostrRelay}
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}

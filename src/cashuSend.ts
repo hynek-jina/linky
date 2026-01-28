@@ -7,10 +7,10 @@ import {
 import { getCashuLib } from "./utils/cashuLib";
 
 type Proof = {
-  amount: number;
-  secret: string;
   C: string;
+  amount: number;
   id: string;
+  secret: string;
 };
 
 const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
@@ -20,20 +20,20 @@ export type CashuSendResult =
   | {
       ok: true;
       mint: string;
-      unit: string | null;
-      sendAmount: number;
-      sendToken: string;
       remainingAmount: number;
       remainingToken: string | null;
+      sendAmount: number;
+      sendToken: string;
+      unit: string | null;
     }
   | {
       ok: false;
+      error: string;
       mint: string;
-      unit: string | null;
-      sendAmount: number;
       remainingAmount: number;
       remainingToken: string | null;
-      error: string;
+      sendAmount: number;
+      unit: string | null;
     };
 
 export const createSendTokenWithTokensAtMint = async (args: {

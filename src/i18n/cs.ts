@@ -246,10 +246,16 @@ export const cs = {
   newContact: "Přidat nový kontakt",
   close: "Zavřít",
 
+  contactNotFound: "Kontakt nenalezen.",
   name: "Jméno",
   npub: "npub",
   lightningAddress: "Lightning adresa",
   group: "Skupina",
+
+  namePlaceholder: "Např. Alice",
+  npubPlaceholder: "nostr veřejný klíč",
+  lightningAddressPlaceholder: "např. alice@zapsat.cz",
+  groupPlaceholder: "např. Friends",
 
   all: "Vše",
   noGroup: "Bez skupiny",
@@ -366,4 +372,11 @@ export const cs = {
     "Zaplaceno {amount} {unit} na {lnAddress}. Chcete adresu uložit jako kontakt?",
   saveContactPromptSave: "Uložit kontakt",
   saveContactPromptSkip: "Teď ne",
+
+  // Locale-specific strings
+  paid: "Zaplaceno",
+  conversations: "Konverzace",
+  otherContacts: "Ostatní kontakty",
+  today: "Dnes",
+  yesterday: "Včera",
 } as const;
