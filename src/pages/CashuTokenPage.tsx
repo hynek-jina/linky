@@ -56,10 +56,7 @@ const CashuTokenPage: FC<CashuTokenPageProps> = ({
       )}
 
       {String(row.state ?? "") === "error" && (
-        <p
-          className="muted"
-          style={{ margin: "0 0 10px", color: "#fca5a5" }}
-        >
+        <p className="muted" style={{ margin: "0 0 10px", color: "#fca5a5" }}>
           {String(row.error ?? "").trim() || t("cashuInvalid")}
         </p>
       )}

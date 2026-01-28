@@ -75,9 +75,10 @@ const ContactPayPage: FC<ContactPayPageProps> = ({
         ? "cashu"
         : "lightning";
   const icon = contactPayMethod === "lightning" ? "⚡" : "🥜";
-  
+
   const amountSat = Number.parseInt(payAmount.trim(), 10);
-  const validAmount = Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0;
+  const validAmount =
+    Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0;
   const availableCredo = npub ? getCredoAvailableForContact(npub) : 0;
   const useCredo = Math.min(availableCredo, validAmount);
   const remaining = Math.max(0, validAmount - useCredo);
@@ -105,12 +106,7 @@ const ContactPayPage: FC<ContactPayPageProps> = ({
       <div className="contact-header">
         <div className="contact-avatar is-large" aria-hidden="true">
           {url ? (
-            <img
-              src={url}
-              alt=""
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
+            <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" />
           ) : (
             <span className="contact-avatar-fallback">
               {getInitials(String(selectedContact.name ?? ""))}

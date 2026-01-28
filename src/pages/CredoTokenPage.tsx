@@ -84,9 +84,7 @@ const CredoTokenPage: FC<CredoTokenPageProps> = ({
       </p>
       <div className="settings-row">
         <div className="settings-left">
-          <span className="settings-label">
-            {displayName ?? t("appTitle")}
-          </span>
+          <span className="settings-label">{displayName ?? t("appTitle")}</span>
         </div>
         <div className="settings-right">
           <span className="badge-box">

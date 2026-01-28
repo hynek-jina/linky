@@ -65,12 +65,7 @@ const ContactPage: FC<ContactPageProps> = ({
       <div className="contact-detail">
         <div className="contact-avatar is-xl" aria-hidden="true">
           {url ? (
-            <img
-              src={url}
-              alt=""
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
+            <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" />
           ) : (
             <span className="contact-avatar-fallback">
               {getInitials(String(selectedContact.name ?? ""))}

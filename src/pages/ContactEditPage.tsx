@@ -60,9 +60,7 @@ const ContactEditPage: FC<ContactEditPageProps> = ({
                 <button
                   type="button"
                   className="secondary"
-                  onClick={() =>
-                    void resetEditedContactFieldFromNostr("name")
-                  }
+                  onClick={() => void resetEditedContactFieldFromNostr("name")}
                   title={t("restore")}
                   aria-label={t("restore")}
                   style={{ paddingInline: 10, minWidth: 40 }}
@@ -132,9 +130,7 @@ const ContactEditPage: FC<ContactEditPageProps> = ({
           <div className="actions">
             {editingId ? (
               contactEditsSavable && (
-                <button onClick={handleSaveContact}>
-                  {t("saveChanges")}
-                </button>
+                <button onClick={handleSaveContact}>{t("saveChanges")}</button>
               )
             ) : (
               <button onClick={handleSaveContact} data-guide="contact-save">

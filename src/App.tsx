@@ -74,7 +74,6 @@ import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
 import { UnauthenticatedLayout } from "./components/UnauthenticatedLayout";
 import { ToastNotifications } from "./components/ToastNotifications";
 import { ContactsChecklist } from "./components/ContactsChecklist";
-import { BottomTabBar } from "./components/BottomTabBar";
 import {
   PaymentsHistoryPage,
   MintsPage,
@@ -99,6 +98,7 @@ import {
   ChatPage,
   ContactEditPage,
   ContactNewPage,
+  ContactsPage,
 } from "./pages";
 import type { Route } from "./types/route";
 import {
@@ -12370,152 +12370,28 @@ const App = () => {
           )}
 
           {route.kind === "contacts" && (
-            <>
-              <div className="contacts-toolbar" style={contactsToolbarStyle}>
-                <div className="contacts-search-bar" role="search">
-                  <input
-                    ref={contactsSearchInputRef}
-                    type="search"
-                    placeholder={t("contactsSearchPlaceholder")}
-                    value={contactsSearch}
-                    onChange={(e) => setContactsSearch(e.target.value)}
-                    autoComplete="off"
-                  />
-                  {contactsSearch.trim() ? (
-                    <button
-                      type="button"
-                      className="contacts-search-clear"
-                      aria-label={t("contactsSearchClear")}
-                      onClick={() => {
-                        setContactsSearch("");
-                        requestAnimationFrame(() => {
-                          contactsSearchInputRef.current?.focus();
-                        });
-                      }}
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </div>
-
-                {showGroupFilter ? (
-                  <nav className="group-filter-bar" aria-label={t("group")}>
-                    <div className="group-filter-inner">
-                      <button
-                        type="button"
-                        className={
-                          activeGroup === null
-                            ? "group-filter-btn is-active"
-                            : "group-filter-btn"
-                        }
-                        onClick={() => setActiveGroup(null)}
-                      >
-                        {t("all")}
-                      </button>
-                      {showNoGroupFilter ? (
-                        <button
-                          type="button"
-                          className={
-                            activeGroup === NO_GROUP_FILTER
-                              ? "group-filter-btn is-active"
-                              : "group-filter-btn"
-                          }
-                          onClick={() => setActiveGroup(NO_GROUP_FILTER)}
-                        >
-                          {t("noGroup")}
-                        </button>
-                      ) : null}
-                      {groupNames.map((group) => (
-                        <button
-                          key={group}
-                          type="button"
-                          className={
-                            activeGroup === group
-                              ? "group-filter-btn is-active"
-                              : "group-filter-btn"
-                          }
-                          onClick={() => setActiveGroup(group)}
-                          title={group}
-                        >
-                          {group}
-                        </button>
-                      ))}
-                    </div>
-                  </nav>
-                ) : null}
-              </div>
-
-              <section className="panel panel-plain">
-                <div className="contact-list">
-                  {(() => {
-                    const totalVisible =
-                      visibleContacts.conversations.length +
-                      visibleContacts.others.length;
-                    if (contacts.length === 0 || totalVisible === 0) {
-                      return <p className="muted">{t("noContactsYet")}</p>;
-                    }
-                    return (
-                      <>
-                        {visibleContacts.conversations.length > 0 && (
-                          <React.Fragment key="conversations">
-                            <div
-                              className="muted"
-                              style={{
-                                fontSize: 11,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.08em",
-                                margin: "6px 0 6px",
-                              }}
-                            >
-                              {conversationsLabel}
-                            </div>
-                            {visibleContacts.conversations.map(
-                              renderContactCard,
-                            )}
-                          </React.Fragment>
-                        )}
-
-                        {visibleContacts.others.length > 0 && (
-                          <React.Fragment key="others">
-                            <div
-                              className="muted"
-                              style={{
-                                fontSize: 11,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.08em",
-                                margin: "10px 0 6px",
-                              }}
-                            >
-                              {otherContactsLabel}
-                            </div>
-                            {visibleContacts.others.map(renderContactCard)}
-                          </React.Fragment>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              </section>
-
-              <BottomTabBar
-                activeTab={bottomTabActive}
-                contactsLabel={t("contactsTitle")}
-                navigateToContacts={navigateToContacts}
-                navigateToWallet={navigateToWallet}
-                t={t}
-                walletLabel={t("wallet")}
-              />
-
-              <button
-                type="button"
-                className="contacts-fab"
-                onClick={openNewContactPage}
-                aria-label={t("addContact")}
-                title={t("addContact")}
-              >
-                <span aria-hidden="true">+</span>
-              </button>
-            </>
+            <ContactsPage
+              contactsToolbarStyle={contactsToolbarStyle}
+              contactsSearchInputRef={contactsSearchInputRef}
+              contactsSearch={contactsSearch}
+              setContactsSearch={setContactsSearch}
+              showGroupFilter={showGroupFilter}
+              activeGroup={activeGroup}
+              setActiveGroup={setActiveGroup}
+              showNoGroupFilter={showNoGroupFilter}
+              noGroupFilterValue={NO_GROUP_FILTER}
+              groupNames={groupNames}
+              contacts={contacts}
+              visibleContacts={visibleContacts}
+              conversationsLabel={conversationsLabel}
+              otherContactsLabel={otherContactsLabel}
+              renderContactCard={renderContactCard}
+              bottomTabActive={bottomTabActive}
+              openNewContactPage={openNewContactPage}
+              navigateToContacts={navigateToContacts}
+              navigateToWallet={navigateToWallet}
+              t={t}
+            />
           )}
 
           {route.kind === "profile" && (
