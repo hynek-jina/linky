@@ -76,15 +76,9 @@ import { CashuTokenPill } from "./components/CashuTokenPill";
 import { CredoTokenPill } from "./components/CredoTokenPill";
 import { WalletActionButton } from "./components/WalletActionButton";
 import { Keypad } from "./components/Keypad";
-import { ScanModal } from "./components/ScanModal";
-import { PaidOverlay } from "./components/PaidOverlay";
-import { SaveContactPromptModal } from "./components/SaveContactPromptModal";
-import { ContactsGuideOverlay } from "./components/ContactsGuideOverlay";
-import { ProfileQrModal } from "./components/ProfileQrModal";
-import { MenuModal } from "./components/MenuModal";
+import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
 import { AmountDisplay } from "./components/AmountDisplay";
 import { ContactsChecklist } from "./components/ContactsChecklist";
-import { Topbar } from "./components/Topbar";
 import { BottomTabBar } from "./components/BottomTabBar";
 import { WalletWarning } from "./components/WalletWarning";
 import {
@@ -12043,50 +12037,67 @@ const App = () => {
       ) : null}
 
       {currentNsec ? (
-        <>
-          <Topbar
-            chatTopbarContact={chatTopbarContact}
-            currentNpub={currentNpub}
-            effectiveProfileName={effectiveProfileName}
-            effectiveProfilePicture={effectiveProfilePicture}
-            formatShortNpub={formatShortNpub}
-            getInitials={getInitials}
-            nostrPictureByNpub={nostrPictureByNpub}
-            openProfileQr={openProfileQr}
-            route={route}
-            t={t}
-            topbar={topbar}
-            topbarRight={topbarRight}
-            topbarTitle={topbarTitle}
-          />
-
-          {contactsGuide && contactsGuideActiveStep?.step ? (
-            <ContactsGuideOverlay
-              currentIdx={contactsGuideActiveStep.idx}
-              highlightRect={contactsGuideHighlightRect}
-              onBack={contactsGuideNav.back}
-              onNext={contactsGuideNav.next}
-              onSkip={stopContactsGuide}
-              stepBodyKey={contactsGuideActiveStep.step.bodyKey}
-              stepTitleKey={contactsGuideActiveStep.step.titleKey}
-              t={t}
-              totalSteps={contactsGuideActiveStep.total}
-            />
-          ) : null}
-
-          {menuIsOpen ? (
-            <MenuModal
-              closeMenu={closeMenu}
-              lang={lang}
-              navigateToAdvanced={navigateToAdvanced}
-              openFeedbackContact={openFeedbackContact}
-              setLang={setLang}
-              setUseBitcoinSymbol={setUseBitcoinSymbol}
-              t={t}
-              useBitcoinSymbol={useBitcoinSymbol}
-            />
-          ) : null}
-
+        <AuthenticatedLayout
+          chatTopbarContact={chatTopbarContact}
+          closeMenu={closeMenu}
+          closeProfileQr={closeProfileQr}
+          closeScan={closeScan}
+          contactsGuide={contactsGuide}
+          contactsGuideActiveStep={contactsGuideActiveStep}
+          contactsGuideHighlightRect={contactsGuideHighlightRect}
+          contactsGuideNav={contactsGuideNav}
+          copyText={copyText}
+          currentNpub={currentNpub}
+          currentNsec={currentNsec}
+          derivedProfile={derivedProfile}
+          displayUnit={displayUnit}
+          effectiveMyLightningAddress={effectiveMyLightningAddress}
+          effectiveProfileName={effectiveProfileName}
+          effectiveProfilePicture={effectiveProfilePicture}
+          formatInteger={formatInteger}
+          formatShortNpub={formatShortNpub}
+          getInitials={getInitials}
+          isProfileEditing={isProfileEditing}
+          lang={lang}
+          menuIsOpen={menuIsOpen}
+          myProfileQr={myProfileQr}
+          navigateToAdvanced={navigateToAdvanced}
+          navigateToNewContact={navigateToNewContact}
+          nostrPictureByNpub={nostrPictureByNpub}
+          onPickProfilePhoto={onPickProfilePhoto}
+          onProfilePhotoSelected={onProfilePhotoSelected}
+          openFeedbackContact={openFeedbackContact}
+          openProfileQr={openProfileQr}
+          paidOverlayIsOpen={paidOverlayIsOpen}
+          paidOverlayTitle={paidOverlayTitle}
+          postPaySaveContact={postPaySaveContact}
+          profileEditInitialRef={profileEditInitialRef}
+          profileEditLnAddress={profileEditLnAddress}
+          profileEditName={profileEditName}
+          profileEditPicture={profileEditPicture}
+          profileEditsSavable={profileEditsSavable}
+          profilePhotoInputRef={profilePhotoInputRef}
+          profileQrIsOpen={profileQrIsOpen}
+          route={route}
+          saveProfileEdits={saveProfileEdits}
+          scanIsOpen={scanIsOpen}
+          scanVideoRef={scanVideoRef}
+          setContactNewPrefill={setContactNewPrefill}
+          setIsProfileEditing={setIsProfileEditing}
+          setLang={setLang}
+          setPostPaySaveContact={setPostPaySaveContact}
+          setProfileEditLnAddress={setProfileEditLnAddress}
+          setProfileEditName={setProfileEditName}
+          setProfileEditPicture={setProfileEditPicture}
+          setUseBitcoinSymbol={setUseBitcoinSymbol}
+          stopContactsGuide={stopContactsGuide}
+          t={t}
+          toggleProfileEditing={toggleProfileEditing}
+          topbar={topbar}
+          topbarRight={topbarRight}
+          topbarTitle={topbarTitle}
+          useBitcoinSymbol={useBitcoinSymbol}
+        >
           {route.kind === "advanced" && (
             <AdvancedPage
               currentNsec={currentNsec}
@@ -13738,68 +13749,7 @@ const App = () => {
               t={t}
             />
           )}
-
-          {scanIsOpen && (
-            <ScanModal
-              closeScan={closeScan}
-              scanVideoRef={scanVideoRef}
-              t={t}
-            />
-          )}
-
-          {profileQrIsOpen && (
-            <ProfileQrModal
-              closeProfileQr={closeProfileQr}
-              currentNpub={currentNpub}
-              currentNsec={currentNsec}
-              derivedProfile={derivedProfile}
-              effectiveMyLightningAddress={effectiveMyLightningAddress}
-              effectiveProfileName={effectiveProfileName}
-              effectiveProfilePicture={effectiveProfilePicture}
-              formatShortNpub={formatShortNpub}
-              getInitials={getInitials}
-              isProfileEditing={isProfileEditing}
-              myProfileQr={myProfileQr}
-              onClose={closeProfileQr}
-              onCopyNpub={() => {
-                if (!currentNpub) return;
-                void copyText(currentNpub);
-              }}
-              onPickProfilePhoto={onPickProfilePhoto}
-              onProfilePhotoSelected={onProfilePhotoSelected}
-              onSaveProfileEdits={saveProfileEdits}
-              profileEditInitialRef={profileEditInitialRef}
-              profileEditLnAddress={profileEditLnAddress}
-              profileEditName={profileEditName}
-              profileEditPicture={profileEditPicture}
-              profileEditsSavable={profileEditsSavable}
-              profilePhotoInputRef={profilePhotoInputRef}
-              setIsProfileEditing={setIsProfileEditing}
-              setProfileEditLnAddress={setProfileEditLnAddress}
-              setProfileEditName={setProfileEditName}
-              setProfileEditPicture={setProfileEditPicture}
-              t={t}
-              toggleProfileEditing={toggleProfileEditing}
-            />
-          )}
-
-          {postPaySaveContact && !paidOverlayIsOpen ? (
-            <SaveContactPromptModal
-              amountSat={postPaySaveContact.amountSat}
-              displayUnit={displayUnit}
-              formatInteger={formatInteger}
-              lnAddress={postPaySaveContact.lnAddress}
-              navigateToNewContact={navigateToNewContact}
-              onClose={() => setPostPaySaveContact(null)}
-              setContactNewPrefill={setContactNewPrefill}
-              t={t}
-            />
-          ) : null}
-
-          {paidOverlayIsOpen ? (
-            <PaidOverlay paidOverlayTitle={paidOverlayTitle} t={t} />
-          ) : null}
-        </>
+        </AuthenticatedLayout>
       ) : null}
     </div>
   );
