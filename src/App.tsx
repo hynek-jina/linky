@@ -97,6 +97,8 @@ import {
   ContactPayPage,
   LnAddressPayPage,
   ChatPage,
+  ContactEditPage,
+  ContactNewPage,
 } from "./pages";
 import type { Route } from "./types/route";
 import {
@@ -12325,195 +12327,33 @@ const App = () => {
           )}
 
           {route.kind === "contactEdit" && (
-            <section className="panel panel-plain">
-              {!selectedContact ? (
-                <p className="muted">{t("contactNotFound")}</p>
-              ) : null}
-
-              <div className="form-grid">
-                <div className="form-col">
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <label>Jméno</label>
-                    {String(form.npub ?? "").trim() &&
-                    String(form.name ?? "").trim() ? (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() =>
-                          void resetEditedContactFieldFromNostr("name")
-                        }
-                        title={t("restore")}
-                        aria-label={t("restore")}
-                        style={{ paddingInline: 10, minWidth: 40 }}
-                      >
-                        ↺
-                      </button>
-                    ) : null}
-                  </div>
-                  <input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder={t("namePlaceholder")}
-                  />
-
-                  <label>{t("npub")}</label>
-                  <input
-                    value={form.npub}
-                    onChange={(e) => setForm({ ...form, npub: e.target.value })}
-                    placeholder={t("npubPlaceholder")}
-                  />
-
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <label>{t("lightningAddress")}</label>
-                    {String(form.npub ?? "").trim() &&
-                    String(form.lnAddress ?? "").trim() ? (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() =>
-                          void resetEditedContactFieldFromNostr("lnAddress")
-                        }
-                        title={t("restore")}
-                        aria-label={t("restore")}
-                        style={{ paddingInline: 10, minWidth: 40 }}
-                      >
-                        ↺
-                      </button>
-                    ) : null}
-                  </div>
-                  <input
-                    value={form.lnAddress}
-                    onChange={(e) =>
-                      setForm({ ...form, lnAddress: e.target.value })
-                    }
-                    placeholder={t("lightningAddressPlaceholder")}
-                  />
-
-                  <label>{t("group")}</label>
-                  <input
-                    value={form.group}
-                    onChange={(e) =>
-                      setForm({ ...form, group: e.target.value })
-                    }
-                    placeholder={t("groupPlaceholder")}
-                    list={groupNames.length ? "group-options" : undefined}
-                  />
-                  {groupNames.length ? (
-                    <datalist id="group-options">
-                      {groupNames.map((group) => (
-                        <option key={group} value={group} />
-                      ))}
-                    </datalist>
-                  ) : null}
-
-                  <div className="actions">
-                    {editingId ? (
-                      contactEditsSavable ? (
-                        <button onClick={handleSaveContact}>
-                          {t("saveChanges")}
-                        </button>
-                      ) : null
-                    ) : (
-                      <button
-                        onClick={handleSaveContact}
-                        data-guide="contact-save"
-                      >
-                        {t("saveContact")}
-                      </button>
-                    )}
-                    <button
-                      className={
-                        pendingDeleteId === editingId ? "danger" : "ghost"
-                      }
-                      onClick={requestDeleteCurrentContact}
-                      disabled={!editingId}
-                      title={
-                        pendingDeleteId === editingId
-                          ? "Klikněte znovu pro smazání"
-                          : t("delete")
-                      }
-                    >
-                      {t("delete")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
+            <ContactEditPage
+              selectedContact={selectedContact}
+              form={form}
+              setForm={setForm}
+              groupNames={groupNames}
+              editingId={editingId}
+              contactEditsSavable={contactEditsSavable}
+              pendingDeleteId={pendingDeleteId}
+              handleSaveContact={handleSaveContact}
+              requestDeleteCurrentContact={requestDeleteCurrentContact}
+              resetEditedContactFieldFromNostr={
+                resetEditedContactFieldFromNostr
+              }
+              t={t}
+            />
           )}
 
           {route.kind === "contactNew" && (
-            <section className="panel panel-plain">
-              <div className="form-grid">
-                <div className="form-col">
-                  <label>{t("name")}</label>
-                  <input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder={t("namePlaceholder")}
-                  />
-
-                  <label>{t("npub")}</label>
-                  <input
-                    value={form.npub}
-                    onChange={(e) => setForm({ ...form, npub: e.target.value })}
-                    placeholder={t("npubPlaceholder")}
-                  />
-
-                  <label>{t("lightningAddress")}</label>
-                  <input
-                    value={form.lnAddress}
-                    onChange={(e) =>
-                      setForm({ ...form, lnAddress: e.target.value })
-                    }
-                    placeholder={t("lightningAddressPlaceholder")}
-                  />
-
-                  <label>{t("group")}</label>
-                  <input
-                    value={form.group}
-                    onChange={(e) =>
-                      setForm({ ...form, group: e.target.value })
-                    }
-                    placeholder={t("groupPlaceholder")}
-                    list={groupNames.length ? "group-options" : undefined}
-                  />
-                  {groupNames.length ? (
-                    <datalist id="group-options">
-                      {groupNames.map((group) => (
-                        <option key={group} value={group} />
-                      ))}
-                    </datalist>
-                  ) : null}
-
-                  <div className="actions">
-                    <button onClick={handleSaveContact}>
-                      {t("saveContact")}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={openScan}
-                      disabled={scanIsOpen}
-                      data-guide="scan-contact-button"
-                    >
-                      {t("contactLoadQr")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
+            <ContactNewPage
+              form={form}
+              setForm={setForm}
+              groupNames={groupNames}
+              scanIsOpen={scanIsOpen}
+              handleSaveContact={handleSaveContact}
+              openScan={openScan}
+              t={t}
+            />
           )}
 
           {showContactsOnboarding && (

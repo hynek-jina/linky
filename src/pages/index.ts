@@ -19,3 +19,5 @@ export { default as ContactPage } from "./ContactPage";
 export { default as ContactPayPage } from "./ContactPayPage";
 export { default as LnAddressPayPage } from "./LnAddressPayPage";
 export { default as ChatPage } from "./ChatPage";
+export { default as ContactEditPage } from "./ContactEditPage";
+export { default as ContactNewPage } from "./ContactNewPage";
