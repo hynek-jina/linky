@@ -78,6 +78,7 @@ import { WalletActionButton } from "./components/WalletActionButton";
 import { Keypad } from "./components/Keypad";
 import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
 import { UnauthenticatedLayout } from "./components/UnauthenticatedLayout";
+import { ToastNotifications } from "./components/ToastNotifications";
 import { AmountDisplay } from "./components/AmountDisplay";
 import { ContactsChecklist } from "./components/ContactsChecklist";
 import { BottomTabBar } from "./components/BottomTabBar";
@@ -11885,62 +11886,16 @@ const App = () => {
       onTouchStart={handleBottomSwipeStart}
       onTouchEnd={handleBottomSwipeEnd}
     >
-      {recentlyReceivedToken?.token ? (
-        <div className="toast-container" aria-live="polite">
-          <div
-            className="toast"
-            role="status"
-            onClick={() => {
-              const token = String(recentlyReceivedToken.token ?? "").trim();
-              if (!token) return;
-              void (async () => {
-                try {
-                  await navigator.clipboard?.writeText(token);
-                  pushToast(t("copiedToClipboard"));
-                  setRecentlyReceivedToken(null);
-                } catch {
-                  pushToast(t("copyFailed"));
-                }
-              })();
-            }}
-            style={{ cursor: "pointer" }}
-            title={
-              lang === "cs"
-                ? "Klikni pro zkopírování tokenu"
-                : "Click to copy token"
-            }
-          >
-            {(() => {
-              const amount =
-                typeof recentlyReceivedToken.amount === "number"
-                  ? recentlyReceivedToken.amount
-                  : null;
-              if (lang === "cs") {
-                return amount
-                  ? `Přijato ${formatInteger(
-                      amount,
-                    )} ${displayUnit}. Klikni pro zkopírování tokenu.`
-                  : "Token přijat. Klikni pro zkopírování tokenu.";
-              }
-              return amount
-                ? `Received ${formatInteger(
-                    amount,
-                  )} ${displayUnit}. Click to copy token.`
-                : "Token accepted. Click to copy token.";
-            })()}
-          </div>
-        </div>
-      ) : null}
-
-      {toasts.length ? (
-        <div className="toast-container" aria-live="polite">
-          {toasts.map((toast) => (
-            <div key={toast.id} className="toast">
-              {toast.message}
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <ToastNotifications
+        recentlyReceivedToken={recentlyReceivedToken}
+        toasts={toasts}
+        lang={lang}
+        displayUnit={displayUnit}
+        formatInteger={formatInteger}
+        pushToast={pushToast}
+        setRecentlyReceivedToken={setRecentlyReceivedToken}
+        t={t}
+      />
 
       {!currentNsec ? (
         <UnauthenticatedLayout
