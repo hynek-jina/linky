@@ -657,11 +657,7 @@ const App = () => {
     try {
       wipeEvoluStorageImpl();
     } catch {
-      pushToast(
-        lang === "cs"
-          ? "Chybí uložený mnemonic (nelze vyčistit Evolu storage)."
-          : "Missing stored mnemonic (cannot clear Evolu storage).",
-      );
+      pushToast(t("evoluWipeStorageFailed"));
     } finally {
       setEvoluWipeStorageIsBusy(false);
     }
@@ -11889,7 +11885,6 @@ const App = () => {
       <ToastNotifications
         recentlyReceivedToken={recentlyReceivedToken}
         toasts={toasts}
-        lang={lang}
         displayUnit={displayUnit}
         formatInteger={formatInteger}
         pushToast={pushToast}

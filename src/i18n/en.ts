@@ -376,4 +376,11 @@ export const en = {
   otherContacts: "Other contacts",
   today: "Today",
   yesterday: "Yesterday",
+
+  // Error and UI strings
+  evoluWipeStorageFailed:
+    "Missing stored mnemonic (cannot clear Evolu storage).",
+  copyTokenTitle: "Click to copy token",
+  tokenReceivedClickToCopy: "Received {amount} {unit}. Click to copy token.",
+  tokenReceived: "Token accepted. Click to copy token.",
 } as const;
