@@ -4,7 +4,7 @@ import { WalletBalance } from "../components/WalletBalance";
 import { WalletActionButton } from "../components/WalletActionButton";
 import { BottomTabBar } from "../components/BottomTabBar";
 
-type WalletPageProps = {
+interface WalletPageProps {
   bottomTabActive: "wallet" | "contacts" | null;
   cashuBalance: number;
   displayUnit: string;
@@ -16,7 +16,7 @@ type WalletPageProps = {
   openScan: () => void;
   scanIsOpen: boolean;
   t: (key: string) => string;
-};
+}
 
 export const WalletPage: React.FC<WalletPageProps> = ({
   bottomTabActive,
