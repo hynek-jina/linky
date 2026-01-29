@@ -8,10 +8,10 @@ interface WalletBalanceProps {
 }
 
 export const WalletBalance: React.FC<WalletBalanceProps> = ({
+  ariaLabel,
   balance,
   displayUnit,
   formatInteger,
-  ariaLabel,
 }) => {
   return (
     <div className="balance-hero" aria-label={ariaLabel}>

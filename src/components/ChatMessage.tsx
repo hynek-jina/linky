@@ -34,37 +34,37 @@ interface LocalNostrMessage {
 }
 
 interface ChatMessageProps {
-  message: LocalNostrMessage;
-  previousMessage: LocalNostrMessage | null;
-  nextMessage: LocalNostrMessage | null;
-  locale: string;
+  chatPendingLabel: string;
   contactAvatar: string | null;
-  formatInteger: (n: number) => string;
   formatChatDayLabel: (ms: number) => string;
+  formatInteger: (n: number) => string;
   getCashuTokenMessageInfo: (text: string) => CashuTokenInfo | null;
   getCredoTokenMessageInfo: (text: string) => CredoTokenInfo | null;
   getMintIconUrl: (mint: unknown) => MintIcon;
-  onMintIconLoad: (origin: string, url: string | null) => void;
-  onMintIconError: (origin: string, nextUrl: string | null) => void;
-  chatPendingLabel: string;
+  locale: string;
+  message: LocalNostrMessage;
   messageElRef?: (el: HTMLElement | null, messageId: string) => void;
+  nextMessage: LocalNostrMessage | null;
+  onMintIconError: (origin: string, nextUrl: string | null) => void;
+  onMintIconLoad: (origin: string, url: string | null) => void;
+  previousMessage: LocalNostrMessage | null;
 }
 
 export function ChatMessage({
-  message,
-  previousMessage,
-  nextMessage,
-  locale,
+  chatPendingLabel,
   contactAvatar,
-  formatInteger,
   formatChatDayLabel,
+  formatInteger,
   getCashuTokenMessageInfo,
   getCredoTokenMessageInfo,
   getMintIconUrl,
-  onMintIconLoad,
-  onMintIconError,
-  chatPendingLabel,
+  locale,
+  message,
   messageElRef,
+  nextMessage,
+  onMintIconError,
+  onMintIconLoad,
+  previousMessage,
 }: ChatMessageProps) {
   const isOut = String(message.direction ?? "") === "out";
   const isPending = isOut && String(message.status ?? "sent") === "pending";

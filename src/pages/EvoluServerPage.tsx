@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigation } from "../hooks/useRouting";
 
 interface EvoluServerPageProps {
   DEFAULT_EVOLU_SERVER_URLS: readonly string[];
@@ -11,7 +12,6 @@ interface EvoluServerPageProps {
   evoluServerUrls: string[];
   evoluWipeStorageIsBusy: boolean;
   isEvoluServerOffline: (url: string) => boolean;
-  navigateToEvoluServers: () => void;
   pendingEvoluServerDeleteUrl: string | null;
   saveEvoluServerUrls: (urls: string[]) => void;
   selectedEvoluServerUrl: string | null;
@@ -24,24 +24,24 @@ interface EvoluServerPageProps {
 }
 
 export function EvoluServerPage({
-  selectedEvoluServerUrl,
-  evoluServersReloadRequired,
-  evoluServerStatusByUrl,
-  evoluHasError,
-  syncOwner,
   DEFAULT_EVOLU_SERVER_URLS,
-  isEvoluServerOffline,
-  setEvoluServerOffline,
-  pendingEvoluServerDeleteUrl,
-  setPendingEvoluServerDeleteUrl,
+  evoluHasError,
+  evoluServerStatusByUrl,
+  evoluServersReloadRequired,
   evoluServerUrls,
-  saveEvoluServerUrls,
-  navigateToEvoluServers,
-  setStatus,
-  wipeEvoluStorage,
   evoluWipeStorageIsBusy,
+  isEvoluServerOffline,
+  pendingEvoluServerDeleteUrl,
+  saveEvoluServerUrls,
+  selectedEvoluServerUrl,
+  setEvoluServerOffline,
+  setPendingEvoluServerDeleteUrl,
+  setStatus,
+  syncOwner,
   t,
+  wipeEvoluStorage,
 }: EvoluServerPageProps): React.ReactElement {
+  const navigateTo = useNavigation();
   return (
     <section className="panel">
       {evoluServersReloadRequired ? (
@@ -162,7 +162,7 @@ export function EvoluServerPage({
                           setPendingEvoluServerDeleteUrl(null);
                           setEvoluServerOffline(selectedEvoluServerUrl, false);
                           saveEvoluServerUrls(nextUrls);
-                          navigateToEvoluServers();
+                          navigateTo({ route: "evoluServers" });
                           return;
                         }
 

@@ -8,9 +8,9 @@ interface NostrRelayPageProps {
 }
 
 export function NostrRelayPage({
-  selectedRelayUrl,
   pendingRelayDeleteUrl,
   requestDeleteSelectedRelay,
+  selectedRelayUrl,
   t,
 }: NostrRelayPageProps): React.ReactElement {
   return (

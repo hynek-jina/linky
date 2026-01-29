@@ -1,11 +1,11 @@
 import React from "react";
+import { useNavigation } from "../hooks/useRouting";
 
 interface SaveContactPromptModalProps {
   amountSat: number;
   displayUnit: string;
   formatInteger: (value: number) => string;
   lnAddress: string;
-  navigateToNewContact: () => void;
   onClose: () => void;
   setContactNewPrefill: (prefill: {
     lnAddress: string;
@@ -20,11 +20,11 @@ export function SaveContactPromptModal({
   displayUnit,
   formatInteger,
   lnAddress,
-  navigateToNewContact,
   onClose,
   setContactNewPrefill,
   t,
 }: SaveContactPromptModalProps): React.ReactElement {
+  const navigateTo = useNavigation();
   const handleSave = () => {
     const ln = String(lnAddress ?? "").trim();
 
@@ -41,7 +41,7 @@ export function SaveContactPromptModal({
       npub,
       suggestedName: null,
     });
-    navigateToNewContact();
+    navigateTo({ route: "contactNew" });
   };
 
   return (

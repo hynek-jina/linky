@@ -1,4 +1,4 @@
-import * as React from "react";
+import React from "react";
 
 type Toast = {
   id: string;
@@ -11,25 +11,23 @@ type RecentlyReceivedToken = {
 } | null;
 
 type ToastNotificationsProps = {
-  recentlyReceivedToken: RecentlyReceivedToken;
-  toasts: Toast[];
-  lang: string;
   displayUnit: string;
   formatInteger: (value: number) => string;
   pushToast: (message: string) => void;
+  recentlyReceivedToken: RecentlyReceivedToken;
   setRecentlyReceivedToken: (token: RecentlyReceivedToken) => void;
   t: (key: string) => string;
+  toasts: Toast[];
 };
 
 export const ToastNotifications: React.FC<ToastNotificationsProps> = ({
-  recentlyReceivedToken,
-  toasts,
-  lang,
   displayUnit,
   formatInteger,
   pushToast,
+  recentlyReceivedToken,
   setRecentlyReceivedToken,
   t,
+  toasts,
 }) => {
   return (
     <>
@@ -52,29 +50,19 @@ export const ToastNotifications: React.FC<ToastNotificationsProps> = ({
               })();
             }}
             style={{ cursor: "pointer" }}
-            title={
-              lang === "cs"
-                ? "Klikni pro zkopírování tokenu"
-                : "Click to copy token"
-            }
+            title={t("copyTokenTitle")}
           >
             {(() => {
               const amount =
                 typeof recentlyReceivedToken.amount === "number"
                   ? recentlyReceivedToken.amount
                   : null;
-              if (lang === "cs") {
-                return amount
-                  ? `Přijato ${formatInteger(
-                      amount,
-                    )} ${displayUnit}. Klikni pro zkopírování tokenu.`
-                  : "Token přijat. Klikni pro zkopírování tokenu.";
+              if (amount) {
+                return t("tokenReceivedClickToCopy")
+                  .replace("{amount}", formatInteger(amount))
+                  .replace("{unit}", displayUnit);
               }
-              return amount
-                ? `Received ${formatInteger(
-                    amount,
-                  )} ${displayUnit}. Click to copy token.`
-                : "Token accepted. Click to copy token.";
+              return t("tokenReceived");
             })()}
           </div>
         </div>

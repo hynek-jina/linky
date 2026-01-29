@@ -23,10 +23,10 @@ interface PaymentHistoryRowProps {
 }
 
 export function PaymentHistoryRow({
-  event,
-  locale,
-  formatInteger,
   displayUnit,
+  event,
+  formatInteger,
+  locale,
   translations,
 }: PaymentHistoryRowProps) {
   const createdAtSec =

@@ -51,6 +51,7 @@ export function ProfileQrModal({
   getInitials,
   isProfileEditing,
   myProfileQr,
+  onClose,
   onCopyNpub,
   onPickProfilePhoto,
   onProfilePhotoSelected,
@@ -97,7 +98,7 @@ export function ProfileQrModal({
               onClick={() => {
                 setIsProfileEditing(false);
                 profileEditInitialRef.current = null;
-                closeProfileQr();
+                onClose();
               }}
               aria-label={t("close")}
               title={t("close")}

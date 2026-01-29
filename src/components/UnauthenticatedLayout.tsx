@@ -1,4 +1,4 @@
-import * as React from "react";
+import React from "react";
 
 type OnboardingStep = {
   step: 1 | 2 | 3;
@@ -7,20 +7,20 @@ type OnboardingStep = {
 } | null;
 
 type UnauthenticatedLayoutProps = {
-  onboardingStep: OnboardingStep;
-  onboardingIsBusy: boolean;
-  setOnboardingStep: React.Dispatch<React.SetStateAction<OnboardingStep>>;
   createNewAccount: () => Promise<void>;
+  onboardingIsBusy: boolean;
+  onboardingStep: OnboardingStep;
   pasteExistingNsec: () => Promise<void>;
+  setOnboardingStep: React.Dispatch<React.SetStateAction<OnboardingStep>>;
   t: (key: string) => string;
 };
 
 export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
-  onboardingStep,
-  onboardingIsBusy,
-  setOnboardingStep,
   createNewAccount,
+  onboardingIsBusy,
+  onboardingStep,
   pasteExistingNsec,
+  setOnboardingStep,
   t,
 }) => {
   return (

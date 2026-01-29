@@ -1,10 +1,12 @@
+import { useNavigation } from "../hooks/useRouting";
+
 interface NostrRelayRowProps {
-  onNavigate: (url: string) => void;
   state: string;
   url: string;
 }
 
-export function NostrRelayRow({ url, state, onNavigate }: NostrRelayRowProps) {
+export function NostrRelayRow({ state, url }: NostrRelayRowProps) {
+  const navigateTo = useNavigation();
   const dotClass =
     state === "connected" ? "status-dot connected" : "status-dot disconnected";
 
@@ -12,7 +14,7 @@ export function NostrRelayRow({ url, state, onNavigate }: NostrRelayRowProps) {
     <button
       type="button"
       className="settings-row settings-link"
-      onClick={() => onNavigate(url)}
+      onClick={() => navigateTo({ route: "nostrRelay", id: url })}
     >
       <div className="settings-left">
         <span className="relay-url">{url}</span>

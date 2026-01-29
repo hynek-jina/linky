@@ -1,3 +1,5 @@
+import { useNavigation } from "../hooks/useRouting";
+
 interface MintDetailPageProps {
   Evolu: { sqliteTrue: unknown };
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX: string;
@@ -9,7 +11,6 @@ interface MintDetailPageProps {
   lang: string;
   mintInfoByUrl: Map<string, unknown>;
   mintUrl: string;
-  navigateToMints: () => void;
   normalizeMintUrl: (url: string) => string;
   pendingMintDeleteUrl: string | null;
   refreshMintInfo: (url: string) => Promise<void>;
@@ -21,24 +22,24 @@ interface MintDetailPageProps {
 }
 
 export function MintDetailPage({
-  mintUrl,
-  normalizeMintUrl,
-  mintInfoByUrl,
-  getMintRuntime,
-  refreshMintInfo,
-  pendingMintDeleteUrl,
-  setPendingMintDeleteUrl,
-  navigateToMints,
-  setStatus,
-  setMintInfoAll,
-  appOwnerIdRef,
   Evolu,
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
-  safeLocalStorageSetJson,
+  appOwnerIdRef,
   extractPpk,
+  getMintRuntime,
   lang,
+  mintInfoByUrl,
+  mintUrl,
+  normalizeMintUrl,
+  pendingMintDeleteUrl,
+  refreshMintInfo,
+  safeLocalStorageSetJson,
+  setMintInfoAll,
+  setPendingMintDeleteUrl,
+  setStatus,
   t,
 }: MintDetailPageProps) {
+  const navigateTo = useNavigation();
   const cleaned = normalizeMintUrl(mintUrl);
   const row = mintInfoByUrl.get(cleaned) ?? null;
 
@@ -180,7 +181,7 @@ export function MintDetailPage({
                 }
 
                 setPendingMintDeleteUrl(null);
-                navigateToMints();
+                navigateTo({ route: "mints" });
                 return;
               }
               setStatus(t("deleteArmedHint"));

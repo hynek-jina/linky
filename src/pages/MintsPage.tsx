@@ -13,21 +13,20 @@ interface MintsPageProps {
   defaultMintUrl: string | null;
   defaultMintUrlDraft: string;
   getMintIconUrl: (mint: unknown) => MintIcon;
-  hasMintOverrideRef: React.RefObject<boolean>;
   normalizeMintUrl: (url: string) => string;
   setDefaultMintUrlDraft: (value: string) => void;
   t: (key: string) => string;
 }
 
 export function MintsPage({
-  defaultMintUrl,
-  defaultMintUrlDraft,
-  setDefaultMintUrlDraft,
-  normalizeMintUrl,
   MAIN_MINT_URL,
   PRESET_MINTS,
-  getMintIconUrl,
   applyDefaultMintSelection,
+  defaultMintUrl,
+  defaultMintUrlDraft,
+  getMintIconUrl,
+  normalizeMintUrl,
+  setDefaultMintUrlDraft,
   t,
 }: MintsPageProps) {
   const selectedMint =

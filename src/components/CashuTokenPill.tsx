@@ -17,14 +17,14 @@ interface CashuTokenPillProps {
 }
 
 export function CashuTokenPill({
-  token,
-  getMintIconUrl,
-  formatInteger,
-  isError = false,
-  onMintIconLoad,
-  onMintIconError,
-  onClick,
   ariaLabel,
+  formatInteger,
+  getMintIconUrl,
+  isError = false,
+  onClick,
+  onMintIconError,
+  onMintIconLoad,
+  token,
 }: CashuTokenPillProps) {
   const amount =
     Number((token as unknown as { amount?: unknown }).amount ?? 0) || 0;

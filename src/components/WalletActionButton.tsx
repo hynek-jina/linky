@@ -7,11 +7,11 @@ interface WalletActionButtonProps {
 }
 
 export function WalletActionButton({
+  dataGuide,
+  disabled = false,
+  icon,
   label,
   onClick,
-  disabled = false,
-  dataGuide,
-  icon,
 }: WalletActionButtonProps) {
   const iconContent =
     icon === "topup" ? (

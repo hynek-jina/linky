@@ -27,31 +27,7 @@ import {
   wipeEvoluStorage as wipeEvoluStorageImpl,
 } from "./evolu";
 import { useInit } from "./hooks/useInit";
-import {
-  navigateToAdvanced,
-  navigateToCashuToken,
-  navigateToCashuTokenNew,
-  navigateToChat,
-  navigateToContact,
-  navigateToContactEdit,
-  navigateToContactPay,
-  navigateToContacts,
-  navigateToCredoToken,
-  navigateToEvoluServer,
-  navigateToEvoluServers,
-  navigateToLnAddressPay,
-  navigateToMints,
-  navigateToNewContact,
-  navigateToNewEvoluServer,
-  navigateToNewRelay,
-  navigateToNostrRelay,
-  navigateToNostrRelays,
-  navigateToPaymentsHistory,
-  navigateToTopup,
-  navigateToTopupInvoice,
-  navigateToWallet,
-  useRouting,
-} from "./hooks/useRouting";
+import { navigateTo, useRouting } from "./hooks/useRouting";
 import { useToasts } from "./hooks/useToasts";
 import { getInitialLang, persistLang, translations, type Lang } from "./i18n";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
@@ -70,19 +46,10 @@ import {
 } from "./nostrProfile";
 import { publishKind0ProfileMetadata } from "./nostrPublish";
 import { ContactCard } from "./components/ContactCard";
-import { WalletBalance } from "./components/WalletBalance";
-import { ChatMessage } from "./components/ChatMessage";
-import { CashuTokenPill } from "./components/CashuTokenPill";
-import { CredoTokenPill } from "./components/CredoTokenPill";
-import { WalletActionButton } from "./components/WalletActionButton";
-import { Keypad } from "./components/Keypad";
 import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
 import { UnauthenticatedLayout } from "./components/UnauthenticatedLayout";
 import { ToastNotifications } from "./components/ToastNotifications";
-import { AmountDisplay } from "./components/AmountDisplay";
 import { ContactsChecklist } from "./components/ContactsChecklist";
-import { BottomTabBar } from "./components/BottomTabBar";
-import { WalletWarning } from "./components/WalletWarning";
 import {
   PaymentsHistoryPage,
   MintsPage,
@@ -95,6 +62,19 @@ import {
   EvoluServerPage,
   EvoluServerNewPage,
   ProfilePage,
+  WalletPage,
+  TopupPage,
+  TopupInvoicePage,
+  CashuTokenNewPage,
+  CashuTokenPage,
+  CredoTokenPage,
+  ContactPage,
+  ContactPayPage,
+  LnAddressPayPage,
+  ChatPage,
+  ContactEditPage,
+  ContactNewPage,
+  ContactsPage,
 } from "./pages";
 import type { Route } from "./types/route";
 import {
@@ -657,11 +637,7 @@ const App = () => {
     try {
       wipeEvoluStorageImpl();
     } catch {
-      pushToast(
-        lang === "cs"
-          ? "Chybí uložený mnemonic (nelze vyčistit Evolu storage)."
-          : "Missing stored mnemonic (cannot clear Evolu storage).",
-      );
+      pushToast(t("evoluWipeStorageFailed"));
     } finally {
       setEvoluWipeStorageIsBusy(false);
     }
@@ -3647,7 +3623,7 @@ const App = () => {
     }
     topupPaidNavTimerRef.current = window.setTimeout(() => {
       topupPaidNavTimerRef.current = null;
-      navigateToWallet();
+      navigateTo({ route: "wallet" });
     }, 1400);
   }, [
     cashuBalance,
@@ -4738,11 +4714,11 @@ const App = () => {
           if (absX < 60 || absX < absY * 1.5) return;
 
           if (dx < 0 && route.kind === "contacts") {
-            navigateToWallet();
+            navigateTo({ route: "wallet" });
             return;
           }
           if (dx > 0 && route.kind === "wallet") {
-            navigateToContacts();
+            navigateTo({ route: "contacts" });
           }
         }
       : undefined;
@@ -4869,7 +4845,7 @@ const App = () => {
   const closeContactDetail = () => {
     clearContactForm();
     setPendingDeleteId(null);
-    navigateToContacts();
+    navigateTo({ route: "contacts" });
   };
 
   const openNewContactPage = () => {
@@ -4888,7 +4864,7 @@ const App = () => {
           }
         : makeEmptyForm(),
     );
-    navigateToNewContact();
+    navigateTo({ route: "contactNew" });
   };
 
   const [menuIsOpen, setMenuIsOpen] = useState(false);
@@ -4913,8 +4889,8 @@ const App = () => {
 
   const navigateToMainReturn = React.useCallback(() => {
     const target = mainReturnRouteRef.current ?? { kind: "contacts" };
-    if (target.kind === "wallet") navigateToWallet();
-    else navigateToContacts();
+    if (target.kind === "wallet") navigateTo({ route: "wallet" });
+    else navigateTo({ route: "contacts" });
   }, []);
 
   const menuOpenRouteRef = React.useRef<Route["kind"] | null>(null);
@@ -5194,7 +5170,7 @@ const App = () => {
           );
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(contact.id as ContactId);
+          navigateTo({ route: "chat", id: contact.id as ContactId });
         }
         return { ok: true, queued: true };
       }
@@ -5628,7 +5604,7 @@ const App = () => {
           setStatus(hasPendingMessages ? t("payQueued") : t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(contact.id as ContactId);
+          navigateTo({ route: "chat", id: contact.id as ContactId });
         }
 
         return { ok: true, queued: hasPendingMessages };
@@ -5671,7 +5647,6 @@ const App = () => {
       update,
       applyCredoSettlement,
       buildCashuMintCandidates,
-      navigateToChat,
       updateLocalNostrMessage,
       appendLocalNostrMessage,
       publishWrappedWithRetry,
@@ -6011,7 +5986,7 @@ const App = () => {
           );
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(selectedContact.id);
+          navigateTo({ route: "chat", id: selectedContact.id });
           return;
         }
 
@@ -6416,7 +6391,7 @@ const App = () => {
           setStatus(t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(selectedContact.id);
+          navigateTo({ route: "chat", id: selectedContact.id });
           return;
         } catch (e) {
           lastError = e;
@@ -6608,7 +6583,7 @@ const App = () => {
           setStatus(t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(selectedContact.id);
+          navigateTo({ route: "chat", id: selectedContact.id });
           return;
         } catch (e) {
           setStatus(`${t("payFailed")}: ${String(e ?? "unknown")}`);
@@ -6938,7 +6913,7 @@ const App = () => {
           setStatus(t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateToChat(selectedContact.id);
+          navigateTo({ route: "chat", id: selectedContact.id });
           return;
         } catch (e) {
           lastError = e;
@@ -7498,22 +7473,27 @@ const App = () => {
             | ContactId
             | undefined;
           if (contactId && currentId && currentId !== contactId) {
-            if (kind === "contact") navigateToContact(contactId);
-            if (kind === "contactPay") navigateToContactPay(contactId);
-            if (kind === "chat") navigateToChat(contactId);
+            if (kind === "contact")
+              navigateTo({ route: "contact", id: contactId });
+            if (kind === "contactPay")
+              navigateTo({ route: "contactPay", id: contactId });
+            if (kind === "chat") navigateTo({ route: "chat", id: contactId });
           }
         }
         return;
       }
 
-      if (kind === "contacts") navigateToContacts();
-      if (kind === "wallet") navigateToWallet();
-      if (kind === "topup") navigateToTopup();
-      if (kind === "topupInvoice") navigateToTopupInvoice();
+      if (kind === "contacts") navigateTo({ route: "contacts" });
+      if (kind === "wallet") navigateTo({ route: "wallet" });
+      if (kind === "topup") navigateTo({ route: "topup" });
+      if (kind === "topupInvoice") navigateTo({ route: "topupInvoice" });
       if (kind === "contactNew") openNewContactPage();
-      if (kind === "contact" && contactId) navigateToContact(contactId);
-      if (kind === "contactPay" && contactId) navigateToContactPay(contactId);
-      if (kind === "chat" && contactId) navigateToChat(contactId);
+      if (kind === "contact" && contactId)
+        navigateTo({ route: "contact", id: contactId });
+      if (kind === "contactPay" && contactId)
+        navigateTo({ route: "contactPay", id: contactId });
+      if (kind === "chat" && contactId)
+        navigateTo({ route: "chat", id: contactId });
     };
 
     const stepsByTask: Record<ContactsGuideKey, ContactsGuideStep[]> = {
@@ -7963,7 +7943,7 @@ const App = () => {
           showPaidOverlay(title);
 
           if (options?.navigateToWallet) {
-            navigateToWallet();
+            navigateTo({ route: "wallet" });
           }
         } catch (error) {
           const message = String(error).trim() || "Accept failed";
@@ -8111,7 +8091,7 @@ const App = () => {
       }
       setStatus(t("cashuDeleted"));
       setPendingCashuDeleteId(null);
-      navigateToWallet();
+      navigateTo({ route: "wallet" });
       return;
     }
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -8708,7 +8688,7 @@ const App = () => {
         update("contact", { id: existing.id, name: null });
       }
       openFeedbackContactPendingRef.current = false;
-      navigateToContact(existing.id);
+      navigateTo({ route: "contact", id: existing.id });
       return;
     }
 
@@ -8739,12 +8719,12 @@ const App = () => {
     );
     if (!existing?.id) return;
     openFeedbackContactPendingRef.current = false;
-    navigateToContact(existing.id);
+    navigateTo({ route: "contact", id: existing.id });
   }, [contacts]);
 
   const openContactPay = (contactId: ContactId, fromChat = false) => {
     contactPayBackToChatRef.current = fromChat ? contactId : null;
-    navigateToContactPay(contactId);
+    navigateTo({ route: "contactPay", id: contactId });
   };
 
   const openContactDetail = (contact: (typeof contacts)[number]) => {
@@ -8764,10 +8744,10 @@ const App = () => {
         openContactPay(contact.id as ContactId);
         return;
       }
-      navigateToContact(contact.id);
+      navigateTo({ route: "contact", id: contact.id });
       return;
     }
-    navigateToChat(contact.id);
+    navigateTo({ route: "chat", id: contact.id });
   };
 
   const renderContactCard = (contact: (typeof contacts)[number]) => {
@@ -8986,7 +8966,7 @@ const App = () => {
     }
 
     if (route.kind === "contactEdit" && editingId) {
-      navigateToContact(editingId);
+      navigateTo({ route: "contact", id: editingId });
       return;
     }
 
@@ -9041,7 +9021,7 @@ const App = () => {
     );
     if (!existing?.id) return;
     openScannedContactPendingNpubRef.current = null;
-    navigateToContact(existing.id);
+    navigateTo({ route: "contact", id: existing.id });
     void refreshContactFromNostr(existing.id, targetNpub);
   }, [contacts, refreshContactFromNostr]);
 
@@ -10079,7 +10059,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToAdvanced,
+        onClick: () => navigateTo({ route: "advanced" }),
       };
     }
 
@@ -10087,7 +10067,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToAdvanced,
+        onClick: () => navigateTo({ route: "advanced" }),
       };
     }
 
@@ -10095,7 +10075,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToMints,
+        onClick: () => navigateTo({ route: "mints" }),
       };
     }
 
@@ -10111,7 +10091,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToWallet,
+        onClick: () => navigateTo({ route: "wallet" }),
       };
     }
 
@@ -10119,7 +10099,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToTopup,
+        onClick: () => navigateTo({ route: "topup" }),
       };
     }
 
@@ -10127,7 +10107,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToWallet,
+        onClick: () => navigateTo({ route: "wallet" }),
       };
     }
 
@@ -10135,7 +10115,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToCashuTokenNew,
+        onClick: () => navigateTo({ route: "cashuTokenNew" }),
       };
     }
 
@@ -10143,7 +10123,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToContacts,
+        onClick: () => navigateTo({ route: "contacts" }),
       };
     }
 
@@ -10151,7 +10131,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToAdvanced,
+        onClick: () => navigateTo({ route: "advanced" }),
       };
     }
 
@@ -10159,7 +10139,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToAdvanced,
+        onClick: () => navigateTo({ route: "advanced" }),
       };
     }
 
@@ -10167,7 +10147,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToNostrRelays,
+        onClick: () => navigateTo({ route: "nostrRelays" }),
       };
     }
 
@@ -10175,7 +10155,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToEvoluServers,
+        onClick: () => navigateTo({ route: "evoluServers" }),
       };
     }
 
@@ -10183,7 +10163,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToEvoluServers,
+        onClick: () => navigateTo({ route: "evoluServers" }),
       };
     }
 
@@ -10191,7 +10171,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToNostrRelays,
+        onClick: () => navigateTo({ route: "nostrRelays" }),
       };
     }
 
@@ -10215,7 +10195,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: () => navigateToContact(route.id),
+        onClick: () => navigateTo({ route: "contact", id: route.id }),
       };
     }
 
@@ -10229,14 +10209,14 @@ const App = () => {
         label: t("close"),
         onClick: () => {
           if (backToChat && contactId) {
-            navigateToChat(contactId);
+            navigateTo({ route: "chat", id: contactId });
             return;
           }
           if (contactId) {
-            navigateToContact(contactId);
+            navigateTo({ route: "contact", id: contactId });
             return;
           }
-          navigateToContacts();
+          navigateTo({ route: "contacts" });
         },
       };
     }
@@ -10245,7 +10225,7 @@ const App = () => {
       return {
         icon: "<",
         label: t("close"),
-        onClick: navigateToContacts,
+        onClick: () => navigateTo({ route: "contacts" }),
       };
     }
 
@@ -10290,7 +10270,7 @@ const App = () => {
       return {
         icon: "+",
         label: t("addRelay"),
-        onClick: navigateToNewRelay,
+        onClick: () => navigateTo({ route: "nostrRelayNew" }),
       };
     }
 
@@ -10298,7 +10278,7 @@ const App = () => {
       return {
         icon: "+",
         label: t("evoluAddServerLabel"),
-        onClick: navigateToNewEvoluServer,
+        onClick: () => navigateTo({ route: "evoluServerNew" }),
       };
     }
 
@@ -10306,7 +10286,8 @@ const App = () => {
       return {
         icon: "✎",
         label: t("editContact"),
-        onClick: () => navigateToContactEdit(selectedContact.id),
+        onClick: () =>
+          navigateTo({ route: "contactEdit", id: selectedContact.id }),
       };
     }
 
@@ -10314,7 +10295,8 @@ const App = () => {
       return {
         icon: "✎",
         label: t("editContact"),
-        onClick: () => navigateToContactEdit(selectedContact.id),
+        onClick: () =>
+          navigateTo({ route: "contactEdit", id: selectedContact.id }),
       };
     }
 
@@ -10591,7 +10573,7 @@ const App = () => {
 
     const already = relayUrls.some((u) => u === url);
     if (already) {
-      navigateToNostrRelays();
+      navigateTo({ route: "nostrRelays" });
       return;
     }
 
@@ -10604,7 +10586,7 @@ const App = () => {
     });
 
     setNewRelayUrl("");
-    navigateToNostrRelays();
+    navigateTo({ route: "nostrRelays" });
   };
 
   const getMintInfoIconUrl = React.useCallback(
@@ -10754,7 +10736,7 @@ const App = () => {
           error: String(e ?? "unknown"),
         });
       });
-      navigateToNostrRelays();
+      navigateTo({ route: "nostrRelays" });
       return;
     }
 
@@ -11404,7 +11386,7 @@ const App = () => {
             );
             closeScan();
             if (existing?.id) {
-              navigateToContact(existing.id);
+              navigateTo({ route: "contact", id: existing.id });
               void refreshContactFromNostr(existing.id, normalized);
             }
             return;
@@ -11453,12 +11435,12 @@ const App = () => {
 
         closeScan();
         if (existing?.id) {
-          navigateToContactPay(existing.id);
+          navigateTo({ route: "contactPay", id: existing.id });
           return;
         }
 
         // New address: open pay screen and offer to save contact after success.
-        navigateToLnAddressPay(maybeLnAddress);
+        navigateTo({ route: "lnAddressPay", lnAddress: maybeLnAddress });
         return;
       }
 
@@ -11889,7 +11871,6 @@ const App = () => {
       <ToastNotifications
         recentlyReceivedToken={recentlyReceivedToken}
         toasts={toasts}
-        lang={lang}
         displayUnit={displayUnit}
         formatInteger={formatInteger}
         pushToast={pushToast}
@@ -11933,8 +11914,6 @@ const App = () => {
           lang={lang}
           menuIsOpen={menuIsOpen}
           myProfileQr={myProfileQr}
-          navigateToAdvanced={navigateToAdvanced}
-          navigateToNewContact={navigateToNewContact}
           nostrPictureByNpub={nostrPictureByNpub}
           onPickProfilePhoto={onPickProfilePhoto}
           onProfilePhotoSelected={onProfilePhotoSelected}
@@ -11993,10 +11972,6 @@ const App = () => {
               restoreMissingTokens={restoreMissingTokens}
               setPayWithCashuEnabled={setPayWithCashuEnabled}
               setAllowPromisesEnabled={setAllowPromisesEnabled}
-              navigateToNostrRelays={navigateToNostrRelays}
-              navigateToEvoluServers={navigateToEvoluServers}
-              navigateToMints={navigateToMints}
-              navigateToPaymentsHistory={navigateToPaymentsHistory}
               exportAppData={exportAppData}
               requestImportAppData={requestImportAppData}
               dedupeContacts={dedupeContacts}
@@ -12027,7 +12002,6 @@ const App = () => {
               PRESET_MINTS={PRESET_MINTS}
               getMintIconUrl={getMintIconUrl}
               applyDefaultMintSelection={applyDefaultMintSelection}
-              hasMintOverrideRef={hasMintOverrideRef}
               t={t}
             />
           )}
@@ -12041,7 +12015,6 @@ const App = () => {
               refreshMintInfo={refreshMintInfo}
               pendingMintDeleteUrl={pendingMintDeleteUrl}
               setPendingMintDeleteUrl={setPendingMintDeleteUrl}
-              navigateToMints={navigateToMints}
               setStatus={setStatus}
               setMintInfoAll={
                 setMintInfoAll as (
@@ -12067,7 +12040,6 @@ const App = () => {
               evoluHasError={evoluHasError}
               syncOwner={syncOwner}
               isEvoluServerOffline={isEvoluServerOffline}
-              navigateToEvoluServer={navigateToEvoluServer}
               t={t}
             />
           )}
@@ -12086,7 +12058,6 @@ const App = () => {
               setPendingEvoluServerDeleteUrl={setPendingEvoluServerDeleteUrl}
               evoluServerUrls={evoluServerUrls}
               saveEvoluServerUrls={saveEvoluServerUrls}
-              navigateToEvoluServers={navigateToEvoluServers}
               setStatus={setStatus}
               wipeEvoluStorage={wipeEvoluStorage}
               evoluWipeStorageIsBusy={evoluWipeStorageIsBusy}
@@ -12102,7 +12073,6 @@ const App = () => {
               setNewEvoluServerUrl={setNewEvoluServerUrl}
               normalizeEvoluServerUrl={normalizeEvoluServerUrl}
               saveEvoluServerUrls={saveEvoluServerUrls}
-              navigateToEvoluServers={navigateToEvoluServers}
               setStatus={setStatus}
               pushToast={pushToast}
               wipeEvoluStorage={wipeEvoluStorage}
@@ -12114,7 +12084,6 @@ const App = () => {
             <NostrRelaysPage
               relayUrls={relayUrls}
               relayStatusByUrl={relayStatusByUrl}
-              navigateToNostrRelay={navigateToNostrRelay}
               t={t}
             />
           )}
@@ -12139,1298 +12108,212 @@ const App = () => {
           )}
 
           {route.kind === "wallet" && (
-            <section className="panel panel-plain wallet-panel">
-              <WalletWarning t={t} />
-              <div className="panel-header">
-                <div className="wallet-hero">
-                  <WalletBalance
-                    balance={cashuBalance}
-                    displayUnit={displayUnit}
-                    formatInteger={formatInteger}
-                    ariaLabel={t("cashuBalance")}
-                  />
-                  <button
-                    type="button"
-                    className="wallet-tokens-link"
-                    onClick={navigateToCashuTokenNew}
-                  >
-                    {t("tokens")}
-                  </button>
-                  <div className="wallet-actions">
-                    <WalletActionButton
-                      icon="topup"
-                      label={t("walletReceive")}
-                      onClick={navigateToTopup}
-                      dataGuide="wallet-topup"
-                    />
-                    <WalletActionButton
-                      icon="send"
-                      label={t("walletSend")}
-                      onClick={openScan}
-                      disabled={scanIsOpen}
-                    />
-                  </div>
-                </div>
-              </div>
-              <BottomTabBar
-                activeTab={bottomTabActive}
-                contactsLabel={t("contactsTitle")}
-                navigateToContacts={navigateToContacts}
-                navigateToWallet={navigateToWallet}
-                t={t}
-                walletLabel={t("wallet")}
-              />
-            </section>
+            <WalletPage
+              cashuBalance={cashuBalance}
+              displayUnit={displayUnit}
+              formatInteger={formatInteger}
+              openScan={openScan}
+              scanIsOpen={scanIsOpen}
+              bottomTabActive={bottomTabActive}
+              t={t}
+            />
           )}
 
           {route.kind === "topup" && (
-            <section className="panel">
-              <div className="contact-header">
-                <div className="contact-avatar is-large" aria-hidden="true">
-                  {effectiveProfilePicture ? (
-                    <img
-                      src={effectiveProfilePicture}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="contact-avatar-fallback">
-                      {getInitials(
-                        effectiveProfileName ??
-                          (currentNpub ? formatShortNpub(currentNpub) : ""),
-                      )}
-                    </span>
-                  )}
-                </div>
-                <div className="contact-header-text">
-                  <h3>
-                    {effectiveProfileName ??
-                      (currentNpub
-                        ? formatShortNpub(currentNpub)
-                        : t("appTitle"))}
-                  </h3>
-                  <p
-                    className="muted"
-                    style={{ maxWidth: "100%", overflow: "hidden" }}
-                  >
-                    {formatMiddleDots(
-                      String(npubCashLightningAddress ?? ""),
-                      28,
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <AmountDisplay
-                amount={topupAmount}
-                displayUnit={displayUnit}
-                formatInteger={formatInteger}
-              />
-
-              <Keypad
-                ariaLabel={`${t("payAmount")} (${displayUnit})`}
-                disabled={topupInvoiceIsBusy}
-                onKeyPress={(key) => {
-                  if (topupInvoiceIsBusy) return;
-                  if (key === "C") {
-                    setTopupAmount("");
-                    return;
-                  }
-                  if (key === "⌫") {
-                    setTopupAmount((v) => v.slice(0, -1));
-                    return;
-                  }
-                  setTopupAmount((v) => {
-                    const next = (v + key).replace(/^0+(\d)/, "$1");
-                    return next;
-                  });
-                }}
-                translations={{
-                  clearForm: t("clearForm"),
-                  delete: t("delete"),
-                }}
-              />
-
-              {(() => {
-                const ln = String(npubCashLightningAddress ?? "").trim();
-                const amountSat = Number.parseInt(topupAmount.trim(), 10);
-                const invalid =
-                  !ln ||
-                  !Number.isFinite(amountSat) ||
-                  amountSat <= 0 ||
-                  topupInvoiceIsBusy;
-
-                return (
-                  <div className="actions">
-                    <button
-                      className="btn-wide"
-                      onClick={() => {
-                        if (invalid) return;
-                        navigateToTopupInvoice();
-                      }}
-                      disabled={invalid}
-                      data-guide="topup-show-invoice"
-                    >
-                      {t("topupShowInvoice")}
-                    </button>
-                  </div>
-                );
-              })()}
-            </section>
+            <TopupPage
+              effectiveProfilePicture={effectiveProfilePicture}
+              effectiveProfileName={effectiveProfileName}
+              currentNpub={currentNpub}
+              npubCashLightningAddress={npubCashLightningAddress}
+              topupAmount={topupAmount}
+              setTopupAmount={setTopupAmount}
+              topupInvoiceIsBusy={topupInvoiceIsBusy}
+              displayUnit={displayUnit}
+              formatShortNpub={formatShortNpub}
+              formatMiddleDots={formatMiddleDots}
+              formatInteger={formatInteger}
+              getInitials={getInitials}
+              t={t}
+            />
           )}
 
           {route.kind === "topupInvoice" && (
-            <section className="panel">
-              {(() => {
-                const amountSat = Number.parseInt(topupAmount.trim(), 10);
-                if (!Number.isFinite(amountSat) || amountSat <= 0) return null;
-                return (
-                  <p className="muted" style={{ margin: "0 0 10px" }}>
-                    {t("topupInvoiceAmount")
-                      .replace("{amount}", formatInteger(amountSat))
-                      .replace("{unit}", displayUnit)}
-                  </p>
-                );
-              })()}
-
-              {topupDebug ? (
-                <p className="muted" style={{ margin: "0 0 8px" }}>
-                  {topupDebug}
-                </p>
-              ) : null}
-
-              {topupInvoiceQr ? (
-                <img
-                  className="qr"
-                  src={topupInvoiceQr}
-                  alt=""
-                  onClick={() => {
-                    if (!topupInvoice) return;
-                    void copyText(topupInvoice);
-                  }}
-                />
-              ) : topupInvoiceError ? (
-                <p className="muted">{topupInvoiceError}</p>
-              ) : topupInvoice ? (
-                <div>
-                  <div className="mono-box" style={{ marginBottom: 12 }}>
-                    {topupInvoice}
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-wide"
-                    onClick={() => void copyText(topupInvoice)}
-                  >
-                    {t("copy")}
-                  </button>
-                </div>
-              ) : topupInvoiceIsBusy ? (
-                <p className="muted">{t("topupFetchingInvoice")}</p>
-              ) : (
-                <p className="muted">{t("topupFetchingInvoice")}</p>
-              )}
-            </section>
+            <TopupInvoicePage
+              topupAmount={topupAmount}
+              topupDebug={topupDebug}
+              topupInvoiceQr={topupInvoiceQr}
+              topupInvoice={topupInvoice}
+              topupInvoiceError={topupInvoiceError}
+              topupInvoiceIsBusy={topupInvoiceIsBusy}
+              displayUnit={displayUnit}
+              copyText={copyText}
+              formatInteger={formatInteger}
+              t={t}
+            />
           )}
 
           {route.kind === "cashuTokenNew" && (
-            <section className="panel">
-              <div className="ln-list wallet-token-list">
-                <div className="list-header">
-                  <span>{t("totalBalanceWithPromises")}</span>
-                  <span>
-                    {formatInteger(
-                      cashuBalance +
-                        totalCredoOutstandingIn -
-                        totalCredoOutstandingOut,
-                    )}{" "}
-                    {displayUnit}
-                  </span>
-                </div>
-                <div className="list-header">
-                  <span>
-                    Cashu · {formatInteger(cashuBalance)} {displayUnit}
-                  </span>
-                </div>
-                {cashuTokens.length === 0 ? (
-                  <p className="muted">{t("cashuEmpty")}</p>
-                ) : (
-                  <div className="ln-tags">
-                    {cashuTokens.map((token) => (
-                      <CashuTokenPill
-                        key={token.id as unknown as CashuTokenId}
-                        token={token}
-                        getMintIconUrl={getMintIconUrl}
-                        formatInteger={formatInteger}
-                        isError={String(token.state ?? "") === "error"}
-                        onMintIconLoad={(origin, url) => {
-                          setMintIconUrlByMint((prev) => ({
-                            ...prev,
-                            [origin]: url,
-                          }));
-                        }}
-                        onMintIconError={(origin, nextUrl) => {
-                          setMintIconUrlByMint((prev) => ({
-                            ...prev,
-                            [origin]: nextUrl,
-                          }));
-                        }}
-                        onClick={() =>
-                          navigateToCashuToken(
-                            token.id as unknown as CashuTokenId,
-                          )
-                        }
-                        ariaLabel={t("cashuToken")}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                <div className="list-header" style={{ marginTop: 12 }}>
-                  <span>
-                    {t("credoOwe")} · {formatInteger(totalCredoOutstandingOut)}{" "}
-                    {displayUnit}
-                  </span>
-                </div>
-                {credoOweTokens.length === 0 ? (
-                  <p className="muted">—</p>
-                ) : (
-                  <div className="ln-tags">
-                    {credoOweTokens.map((token) => {
-                      const row = token as CredoTokenRow;
-                      const amount = getCredoRemainingAmount(row);
-                      const npub = String(row.recipient ?? "").trim();
-                      const avatar = npub ? nostrPictureByNpub[npub] : null;
-                      return (
-                        <CredoTokenPill
-                          key={row.id as unknown as CredoTokenId}
-                          token={row}
-                          amount={amount}
-                          avatar={avatar}
-                          onClick={() =>
-                            navigateToCredoToken(
-                              row.id as unknown as CredoTokenId,
-                            )
-                          }
-                          ariaLabel={t("credoOwe")}
-                          formatInteger={formatInteger}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className="list-header" style={{ marginTop: 12 }}>
-                  <span>
-                    {t("credoPromisedToMe")} ·{" "}
-                    {formatInteger(totalCredoOutstandingIn)} {displayUnit}
-                  </span>
-                </div>
-                {credoPromisedTokens.length === 0 ? (
-                  <p className="muted">—</p>
-                ) : (
-                  <div className="ln-tags">
-                    {credoPromisedTokens.map((token) => {
-                      const row = token as CredoTokenRow;
-                      const amount = getCredoRemainingAmount(row);
-                      const npub = String(row.issuer ?? "").trim();
-                      const avatar = npub ? nostrPictureByNpub[npub] : null;
-                      return (
-                        <CredoTokenPill
-                          key={row.id as unknown as CredoTokenId}
-                          token={row}
-                          amount={amount}
-                          avatar={avatar}
-                          onClick={() =>
-                            navigateToCredoToken(
-                              row.id as unknown as CredoTokenId,
-                            )
-                          }
-                          ariaLabel={t("credoPromisedToMe")}
-                          formatInteger={formatInteger}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <label>{t("cashuToken")}</label>
-              <textarea
-                ref={cashuDraftRef}
-                value={cashuDraft}
-                onChange={(e) => setCashuDraft(e.target.value)}
-                onPaste={(e) => {
-                  const text = e.clipboardData?.getData("text") ?? "";
-                  const tokenRaw = String(text).trim();
-                  if (!tokenRaw) return;
-                  e.preventDefault();
-                  void saveCashuFromText(tokenRaw, { navigateToWallet: true });
-                }}
-                placeholder={t("cashuPasteManualHint")}
-              />
-
-              <div className="settings-row">
-                <button
-                  className="btn-wide"
-                  onClick={() =>
-                    void saveCashuFromText(cashuDraft, {
-                      navigateToWallet: true,
-                    })
-                  }
-                  disabled={!cashuDraft.trim() || cashuIsBusy}
-                >
-                  {t("cashuSave")}
-                </button>
-              </div>
-            </section>
+            <CashuTokenNewPage
+              cashuBalance={cashuBalance}
+              totalCredoOutstandingIn={totalCredoOutstandingIn}
+              totalCredoOutstandingOut={totalCredoOutstandingOut}
+              displayUnit={displayUnit}
+              cashuTokens={cashuTokens}
+              cashuDraft={cashuDraft}
+              setCashuDraft={setCashuDraft}
+              cashuDraftRef={cashuDraftRef}
+              cashuIsBusy={cashuIsBusy}
+              credoOweTokens={credoOweTokens}
+              credoPromisedTokens={credoPromisedTokens}
+              nostrPictureByNpub={nostrPictureByNpub}
+              setMintIconUrlByMint={setMintIconUrlByMint}
+              saveCashuFromText={saveCashuFromText}
+              getMintIconUrl={getMintIconUrl}
+              formatInteger={formatInteger}
+              getCredoRemainingAmount={getCredoRemainingAmount}
+              t={t}
+            />
           )}
 
           {route.kind === "cashuToken" && (
-            <section className="panel">
-              {(() => {
-                const row = cashuTokensAll.find(
-                  (tkn) =>
-                    String(tkn?.id ?? "") ===
-                      String(route.id as unknown as string) && !tkn?.isDeleted,
-                );
-
-                if (!row) {
-                  return <p className="muted">{t("errorPrefix")}</p>;
-                }
-
-                const tokenText = String(row.token ?? row.rawToken ?? "");
-                const mintText = String(row.mint ?? "").trim();
-                const mintDisplay = (() => {
-                  if (!mintText) return null;
-                  try {
-                    return new URL(mintText).host;
-                  } catch {
-                    return mintText;
-                  }
-                })();
-
-                return (
-                  <>
-                    {mintDisplay ? (
-                      <p className="muted" style={{ margin: "0 0 10px" }}>
-                        {mintDisplay}
-                      </p>
-                    ) : null}
-
-                    {String(row.state ?? "") === "error" ? (
-                      <p
-                        className="muted"
-                        style={{ margin: "0 0 10px", color: "#fca5a5" }}
-                      >
-                        {String(row.error ?? "").trim() || t("cashuInvalid")}
-                      </p>
-                    ) : null}
-
-                    <div className="settings-row">
-                      <button
-                        className="btn-wide"
-                        onClick={() =>
-                          void checkAndRefreshCashuToken(
-                            route.id as unknown as CashuTokenId,
-                          )
-                        }
-                        disabled={cashuIsBusy}
-                      >
-                        {t("cashuCheckToken")}
-                      </button>
-                    </div>
-                    <label>{t("cashuToken")}</label>
-                    <textarea readOnly value={tokenText} />
-
-                    <div className="settings-row">
-                      <button
-                        className="btn-wide secondary"
-                        onClick={() => void copyText(tokenText)}
-                        disabled={!tokenText.trim()}
-                      >
-                        {t("copy")}
-                      </button>
-                    </div>
-
-                    <div className="settings-row">
-                      <button
-                        className={
-                          pendingCashuDeleteId === (route.id as CashuTokenId)
-                            ? "btn-wide secondary danger-armed"
-                            : "btn-wide secondary"
-                        }
-                        onClick={() => requestDeleteCashuToken(route.id)}
-                      >
-                        {t("delete")}
-                      </button>
-                    </div>
-                  </>
-                );
-              })()}
-            </section>
+            <CashuTokenPage
+              cashuTokensAll={cashuTokensAll}
+              routeId={route.id}
+              cashuIsBusy={cashuIsBusy}
+              pendingCashuDeleteId={pendingCashuDeleteId}
+              checkAndRefreshCashuToken={checkAndRefreshCashuToken}
+              copyText={copyText}
+              requestDeleteCashuToken={requestDeleteCashuToken}
+              t={t}
+            />
           )}
 
           {route.kind === "credoToken" && (
-            <section className="panel">
-              {(() => {
-                const row = credoTokensAll.find(
-                  (tkn) =>
-                    String(tkn?.id ?? "") ===
-                      String(route.id as unknown as string) && !tkn?.isDeleted,
-                );
-
-                if (!row) {
-                  return <p className="muted">{t("errorPrefix")}</p>;
-                }
-
-                const amount = getCredoRemainingAmount(row);
-                const direction = String(
-                  (row as CredoTokenRow)?.direction ?? "",
-                );
-                const isOwe = direction === "out";
-                const issuer = String(
-                  (row as CredoTokenRow)?.issuer ?? "",
-                ).trim();
-                const recipient = String(
-                  (row as CredoTokenRow)?.recipient ?? "",
-                ).trim();
-                const counterpartyNpub = isOwe ? recipient : issuer;
-                const counterparty = counterpartyNpub
-                  ? contacts.find(
-                      (c) => String(c.npub ?? "").trim() === counterpartyNpub,
-                    )
-                  : null;
-                const displayName = counterparty?.name
-                  ? String(counterparty.name ?? "").trim()
-                  : counterpartyNpub
-                    ? formatShortNpub(counterpartyNpub)
-                    : null;
-                const expiresAtSec =
-                  Number((row as CredoTokenRow)?.expiresAtSec ?? 0) || 0;
-                const nowSec = Math.floor(Date.now() / 1000);
-                const remainingSec = expiresAtSec - nowSec;
-                const expiryLabel =
-                  remainingSec <= 0
-                    ? t("credoExpired")
-                    : t("credoExpiresIn").replace(
-                        "{time}",
-                        formatDurationShort(remainingSec),
-                      );
-
-                return (
-                  <>
-                    <p className="muted" style={{ margin: "0 0 10px" }}>
-                      {isOwe ? t("credoOwe") : t("credoPromisedToMe")}
-                    </p>
-                    <div className="settings-row">
-                      <div className="settings-left">
-                        <span className="settings-label">
-                          {displayName ?? t("appTitle")}
-                        </span>
-                      </div>
-                      <div className="settings-right">
-                        <span className="badge-box">
-                          {(isOwe ? "-" : "") + formatInteger(amount)}{" "}
-                          {displayUnit}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="muted">{expiryLabel}</p>
-                  </>
-                );
-              })()}
-            </section>
+            <CredoTokenPage
+              credoTokensAll={credoTokensAll}
+              routeId={route.id}
+              contacts={contacts}
+              displayUnit={displayUnit}
+              getCredoRemainingAmount={getCredoRemainingAmount}
+              formatShortNpub={formatShortNpub}
+              formatInteger={formatInteger}
+              formatDurationShort={formatDurationShort}
+              t={t}
+            />
           )}
 
           {route.kind === "contact" && (
-            <section className="panel">
-              {!selectedContact ? (
-                <p className="muted">{t("contactNotFound")}</p>
-              ) : null}
-
-              {selectedContact ? (
-                <div className="contact-detail">
-                  <div className="contact-avatar is-xl" aria-hidden="true">
-                    {(() => {
-                      const npub = String(selectedContact.npub ?? "").trim();
-                      const url = npub ? nostrPictureByNpub[npub] : null;
-                      return url ? (
-                        <img
-                          src={url}
-                          alt=""
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="contact-avatar-fallback">
-                          {getInitials(String(selectedContact.name ?? ""))}
-                        </span>
-                      );
-                    })()}
-                  </div>
-
-                  {selectedContact.name ? (
-                    <h2 className="contact-detail-name">
-                      {selectedContact.name}
-                    </h2>
-                  ) : null}
-
-                  {(() => {
-                    const group = String(
-                      selectedContact.groupName ?? "",
-                    ).trim();
-                    if (!group) return null;
-                    return <p className="contact-detail-group">{group}</p>;
-                  })()}
-
-                  {(() => {
-                    const ln = String(selectedContact.lnAddress ?? "").trim();
-                    if (!ln) return null;
-                    return <p className="contact-detail-ln">{ln}</p>;
-                  })()}
-
-                  <div className="contact-detail-actions">
-                    {(() => {
-                      const ln = String(selectedContact.lnAddress ?? "").trim();
-                      const npub = String(selectedContact.npub ?? "").trim();
-                      const canPayThisContact =
-                        Boolean(ln) ||
-                        ((payWithCashuEnabled || allowPromisesEnabled) &&
-                          Boolean(npub));
-                      if (!canPayThisContact) return null;
-                      const availableCredo = npub
-                        ? getCredoAvailableForContact(npub)
-                        : 0;
-                      const canStartPay =
-                        (Boolean(ln) && cashuBalance > 0) ||
-                        (Boolean(npub) &&
-                          (cashuBalance > 0 ||
-                            availableCredo > 0 ||
-                            allowPromisesEnabled));
-                      const isFeedbackContact = npub === FEEDBACK_CONTACT_NPUB;
-                      return (
-                        <button
-                          className="btn-wide"
-                          onClick={() => openContactPay(selectedContact.id)}
-                          disabled={cashuIsBusy || !canStartPay}
-                          title={
-                            !canStartPay ? t("payInsufficient") : undefined
-                          }
-                          data-guide="contact-pay"
-                        >
-                          {isFeedbackContact ? "Donate" : t("pay")}
-                        </button>
-                      );
-                    })()}
-
-                    {(() => {
-                      const npub = String(selectedContact.npub ?? "").trim();
-                      if (!npub) return null;
-                      const isFeedbackContact = npub === FEEDBACK_CONTACT_NPUB;
-                      return (
-                        <button
-                          className="btn-wide secondary"
-                          onClick={() => navigateToChat(selectedContact.id)}
-                          data-guide="contact-message"
-                        >
-                          {isFeedbackContact ? "Feedback" : t("sendMessage")}
-                        </button>
-                      );
-                    })()}
-                  </div>
-                </div>
-              ) : null}
-            </section>
+            <ContactPage
+              selectedContact={selectedContact}
+              nostrPictureByNpub={nostrPictureByNpub}
+              cashuBalance={cashuBalance}
+              cashuIsBusy={cashuIsBusy}
+              payWithCashuEnabled={payWithCashuEnabled}
+              allowPromisesEnabled={allowPromisesEnabled}
+              feedbackContactNpub={FEEDBACK_CONTACT_NPUB}
+              getInitials={getInitials}
+              getCredoAvailableForContact={getCredoAvailableForContact}
+              openContactPay={openContactPay}
+              t={t}
+            />
           )}
 
           {route.kind === "contactPay" && (
-            <section className="panel">
-              {!selectedContact ? (
-                <p className="muted">{t("contactNotFound")}</p>
-              ) : null}
-
-              {selectedContact ? (
-                <>
-                  <div className="contact-header">
-                    <div className="contact-avatar is-large" aria-hidden="true">
-                      {(() => {
-                        const npub = String(selectedContact.npub ?? "").trim();
-                        const url = npub ? nostrPictureByNpub[npub] : null;
-                        return url ? (
-                          <img
-                            src={url}
-                            alt=""
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <span className="contact-avatar-fallback">
-                            {getInitials(String(selectedContact.name ?? ""))}
-                          </span>
-                        );
-                      })()}
-                    </div>
-                    <div className="contact-header-text">
-                      {(() => {
-                        const ln = String(
-                          selectedContact.lnAddress ?? "",
-                        ).trim();
-                        const npub = String(selectedContact.npub ?? "").trim();
-                        const canUseCashu =
-                          (payWithCashuEnabled || allowPromisesEnabled) &&
-                          Boolean(npub);
-                        const canUseLightning = Boolean(ln);
-                        const showToggle = canUseCashu && canUseLightning;
-                        const icon =
-                          contactPayMethod === "lightning" ? "⚡" : "🥜";
-
-                        return selectedContact.name ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              gap: 10,
-                            }}
-                          >
-                            <h3 style={{ margin: 0 }}>
-                              {selectedContact.name}
-                            </h3>
-                            <button
-                              type="button"
-                              className={
-                                showToggle
-                                  ? "pay-method-toggle"
-                                  : "pay-method-toggle is-disabled"
-                              }
-                              onClick={() => {
-                                if (!showToggle) return;
-                                setContactPayMethod((prev) =>
-                                  prev === "lightning" ? "cashu" : "lightning",
-                                );
-                              }}
-                              aria-label={
-                                contactPayMethod === "lightning"
-                                  ? "Lightning"
-                                  : "Cashu"
-                              }
-                              title={
-                                showToggle
-                                  ? contactPayMethod === "lightning"
-                                    ? "Lightning"
-                                    : "Cashu"
-                                  : undefined
-                              }
-                            >
-                              {icon}
-                            </button>
-                          </div>
-                        ) : null;
-                      })()}
-                      <p className="muted">
-                        {(() => {
-                          const npub = String(
-                            selectedContact.npub ?? "",
-                          ).trim();
-                          const canUseCashu =
-                            payWithCashuEnabled && Boolean(npub);
-                          const method =
-                            contactPayMethod === "lightning" ||
-                            contactPayMethod === "cashu"
-                              ? contactPayMethod
-                              : canUseCashu
-                                ? "cashu"
-                                : "lightning";
-                          const amountSat = Number.parseInt(
-                            payAmount.trim(),
-                            10,
-                          );
-                          const validAmount =
-                            Number.isFinite(amountSat) && amountSat > 0
-                              ? amountSat
-                              : 0;
-                          const availableCredo = npub
-                            ? getCredoAvailableForContact(npub)
-                            : 0;
-                          const useCredo = Math.min(
-                            availableCredo,
-                            validAmount,
-                          );
-                          const remaining = Math.max(0, validAmount - useCredo);
-                          const promiseAmount =
-                            method === "cashu" && allowPromisesEnabled
-                              ? Math.max(0, remaining - cashuBalance)
-                              : 0;
-
-                          return (
-                            <>
-                              {t("availablePrefix")}{" "}
-                              {formatInteger(cashuBalance)} {displayUnit}
-                              {" · "}
-                              {t("promisedPrefix")}{" "}
-                              {formatInteger(promiseAmount)} {displayUnit}
-                            </>
-                          );
-                        })()}
-                      </p>
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const ln = String(selectedContact.lnAddress ?? "").trim();
-                    const npub = String(selectedContact.npub ?? "").trim();
-                    const canUseCashu =
-                      (payWithCashuEnabled || allowPromisesEnabled) &&
-                      Boolean(npub);
-                    const method =
-                      contactPayMethod === "lightning" ||
-                      contactPayMethod === "cashu"
-                        ? contactPayMethod
-                        : canUseCashu
-                          ? "cashu"
-                          : "lightning";
-
-                    if (method === "cashu") {
-                      if (!payWithCashuEnabled && !allowPromisesEnabled)
-                        return (
-                          <p className="muted">{t("payWithCashuDisabled")}</p>
-                        );
-                      if (!npub)
-                        return (
-                          <p className="muted">{t("chatMissingContactNpub")}</p>
-                        );
-                    }
-
-                    if (method === "lightning") {
-                      if (!ln)
-                        return <p className="muted">{t("payMissingLn")}</p>;
-                    }
-
-                    const availableCredo = npub
-                      ? getCredoAvailableForContact(npub)
-                      : 0;
-                    const canCoverAnything =
-                      cashuBalance > 0 ||
-                      availableCredo > 0 ||
-                      (allowPromisesEnabled && method === "cashu");
-                    if (!canCoverAnything)
-                      return <p className="muted">{t("payInsufficient")}</p>;
-                    return null;
-                  })()}
-
-                  <div data-guide="pay-step3">
-                    <AmountDisplay
-                      amount={payAmount}
-                      displayUnit={displayUnit}
-                      formatInteger={formatInteger}
-                    />
-
-                    <Keypad
-                      ariaLabel={`${t("payAmount")} (${displayUnit})`}
-                      disabled={cashuIsBusy}
-                      onKeyPress={(key) => {
-                        if (cashuIsBusy) return;
-                        if (key === "C") {
-                          setPayAmount("");
-                          return;
-                        }
-                        if (key === "⌫") {
-                          setPayAmount((v) => v.slice(0, -1));
-                          return;
-                        }
-                        setPayAmount((v) => {
-                          const next = (v + key).replace(/^0+(\d)/, "$1");
-                          return next;
-                        });
-                      }}
-                      translations={{
-                        clearForm: t("clearForm"),
-                        delete: t("delete"),
-                      }}
-                    />
-
-                    {(() => {
-                      const ln = String(selectedContact.lnAddress ?? "").trim();
-                      const npub = String(selectedContact.npub ?? "").trim();
-                      const canUseCashu =
-                        (payWithCashuEnabled || allowPromisesEnabled) &&
-                        Boolean(npub);
-                      const method =
-                        contactPayMethod === "lightning" ||
-                        contactPayMethod === "cashu"
-                          ? contactPayMethod
-                          : canUseCashu
-                            ? "cashu"
-                            : "lightning";
-                      const amountSat = Number.parseInt(payAmount.trim(), 10);
-                      const validAmount =
-                        Number.isFinite(amountSat) && amountSat > 0
-                          ? amountSat
-                          : 0;
-                      const availableCredo = npub
-                        ? getCredoAvailableForContact(npub)
-                        : 0;
-                      const useCredo = Math.min(availableCredo, validAmount);
-                      const remaining = Math.max(0, validAmount - useCredo);
-                      const promiseAmount =
-                        method === "cashu"
-                          ? Math.max(0, remaining - cashuBalance)
-                          : 0;
-                      const promiseLimitExceeded =
-                        promiseAmount > 0 &&
-                        totalCredoOutstandingOut + promiseAmount >
-                          PROMISE_TOTAL_CAP_SAT;
-                      const invalid =
-                        (method === "lightning" ? !ln : !canUseCashu) ||
-                        !Number.isFinite(amountSat) ||
-                        amountSat <= 0 ||
-                        (method === "lightning"
-                          ? remaining > cashuBalance
-                          : promiseAmount > 0 &&
-                            (!allowPromisesEnabled || promiseLimitExceeded));
-                      return (
-                        <div className="actions">
-                          <button
-                            className="btn-wide"
-                            onClick={() => void paySelectedContact()}
-                            disabled={cashuIsBusy || invalid}
-                            title={
-                              method === "lightning" && remaining > cashuBalance
-                                ? t("payInsufficient")
-                                : promiseAmount > 0 &&
-                                    (!allowPromisesEnabled ||
-                                      promiseLimitExceeded)
-                                  ? allowPromisesEnabled
-                                    ? t("payPromiseLimit")
-                                    : t("payInsufficient")
-                                  : undefined
-                            }
-                            data-guide="pay-send"
-                          >
-                            {t("paySend")}
-                          </button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </>
-              ) : null}
-            </section>
+            <ContactPayPage
+              selectedContact={selectedContact}
+              nostrPictureByNpub={nostrPictureByNpub}
+              cashuBalance={cashuBalance}
+              totalCredoOutstandingOut={totalCredoOutstandingOut}
+              promiseTotalCapSat={PROMISE_TOTAL_CAP_SAT}
+              cashuIsBusy={cashuIsBusy}
+              payWithCashuEnabled={payWithCashuEnabled}
+              allowPromisesEnabled={allowPromisesEnabled}
+              contactPayMethod={contactPayMethod}
+              setContactPayMethod={setContactPayMethod}
+              payAmount={payAmount}
+              setPayAmount={setPayAmount}
+              displayUnit={displayUnit}
+              getInitials={getInitials}
+              getCredoAvailableForContact={getCredoAvailableForContact}
+              formatInteger={formatInteger}
+              paySelectedContact={paySelectedContact}
+              t={t}
+            />
           )}
 
           {route.kind === "lnAddressPay" && (
-            <section className="panel">
-              <div className="contact-header">
-                <div className="contact-avatar is-large" aria-hidden="true">
-                  <span className="contact-avatar-fallback">⚡</span>
-                </div>
-                <div className="contact-header-text">
-                  <h3>{t("payTo")}</h3>
-                  <p className="muted">
-                    {formatMiddleDots(String(route.lnAddress ?? ""), 36)}
-                  </p>
-                  <p className="muted">
-                    {t("availablePrefix")} {formatInteger(cashuBalance)}{" "}
-                    {displayUnit}
-                  </p>
-                </div>
-              </div>
-
-              {!canPayWithCashu ? (
-                <p className="muted">{t("payInsufficient")}</p>
-              ) : null}
-
-              <AmountDisplay
-                amount={lnAddressPayAmount}
-                displayUnit={displayUnit}
-                formatInteger={formatInteger}
-              />
-
-              <Keypad
-                ariaLabel={`${t("payAmount")} (${displayUnit})`}
-                disabled={cashuIsBusy}
-                onKeyPress={(key) => {
-                  if (cashuIsBusy) return;
-                  if (key === "C") {
-                    setLnAddressPayAmount("");
-                    return;
-                  }
-                  if (key === "⌫") {
-                    setLnAddressPayAmount((v) => v.slice(0, -1));
-                    return;
-                  }
-                  setLnAddressPayAmount((v) => {
-                    const next = (v + key).replace(/^0+(\d)/, "$1");
-                    return next;
-                  });
-                }}
-                translations={{
-                  clearForm: t("clearForm"),
-                  delete: t("delete"),
-                }}
-              />
-
-              {(() => {
-                const amountSat = Number.parseInt(
-                  lnAddressPayAmount.trim(),
-                  10,
-                );
-                const invalid =
-                  !canPayWithCashu ||
-                  !Number.isFinite(amountSat) ||
-                  amountSat <= 0 ||
-                  amountSat > cashuBalance;
-                return (
-                  <div className="actions">
-                    <button
-                      className="btn-wide"
-                      onClick={() => {
-                        if (invalid) return;
-                        void payLightningAddressWithCashu(
-                          route.lnAddress,
-                          amountSat,
-                        );
-                      }}
-                      disabled={cashuIsBusy || invalid}
-                      title={
-                        amountSat > cashuBalance
-                          ? t("payInsufficient")
-                          : undefined
-                      }
-                    >
-                      {t("paySend")}
-                    </button>
-                  </div>
-                );
-              })()}
-            </section>
+            <LnAddressPayPage
+              lnAddress={route.lnAddress}
+              cashuBalance={cashuBalance}
+              canPayWithCashu={canPayWithCashu}
+              cashuIsBusy={cashuIsBusy}
+              lnAddressPayAmount={lnAddressPayAmount}
+              setLnAddressPayAmount={setLnAddressPayAmount}
+              displayUnit={displayUnit}
+              payLightningAddressWithCashu={payLightningAddressWithCashu}
+              formatMiddleDots={formatMiddleDots}
+              formatInteger={formatInteger}
+              t={t}
+            />
           )}
 
           {route.kind === "chat" && (
-            <section className="panel">
-              {!selectedContact ? (
-                <p className="muted">{t("contactNotFound")}</p>
-              ) : null}
-
-              {selectedContact ? (
-                <>
-                  {(() => {
-                    const npub = String(selectedContact.npub ?? "").trim();
-                    if (npub) return null;
-                    return (
-                      <p className="muted">{t("chatMissingContactNpub")}</p>
-                    );
-                  })()}
-
-                  <div
-                    className="chat-messages"
-                    role="log"
-                    aria-live="polite"
-                    ref={chatMessagesRef}
-                  >
-                    {chatMessages.length === 0 ? (
-                      <p className="muted">{t("chatEmpty")}</p>
-                    ) : (
-                      chatMessages.map((m, idx) => {
-                        const prev = idx > 0 ? chatMessages[idx - 1] : null;
-                        const next =
-                          idx + 1 < chatMessages.length
-                            ? chatMessages[idx + 1]
-                            : null;
-                        const npub = String(selectedContact?.npub ?? "").trim();
-                        const avatar = npub ? nostrPictureByNpub[npub] : null;
-
-                        return (
-                          <ChatMessage
-                            key={String(m.id)}
-                            message={m}
-                            previousMessage={prev}
-                            nextMessage={next}
-                            locale={lang === "cs" ? "cs-CZ" : "en-US"}
-                            contactAvatar={avatar}
-                            formatInteger={formatInteger}
-                            formatChatDayLabel={formatChatDayLabel}
-                            getCashuTokenMessageInfo={getCashuTokenMessageInfo}
-                            getCredoTokenMessageInfo={getCredoTokenMessageInfo}
-                            getMintIconUrl={getMintIconUrl}
-                            onMintIconLoad={(origin, url) => {
-                              setMintIconUrlByMint((prev) => ({
-                                ...prev,
-                                [origin]: url,
-                              }));
-                            }}
-                            onMintIconError={(origin, nextUrl) => {
-                              setMintIconUrlByMint((prev) => ({
-                                ...prev,
-                                [origin]: nextUrl,
-                              }));
-                            }}
-                            chatPendingLabel={t("chatPendingShort")}
-                            messageElRef={(el, messageId) => {
-                              const map = chatMessageElByIdRef.current;
-                              if (el) map.set(messageId, el as HTMLDivElement);
-                              else map.delete(messageId);
-                            }}
-                          />
-                        );
-                      })
-                    )}
-                  </div>
-
-                  <div className="chat-compose">
-                    <textarea
-                      value={chatDraft}
-                      onChange={(e) => setChatDraft(e.target.value)}
-                      placeholder={t("chatPlaceholder")}
-                      disabled={
-                        chatSendIsBusy ||
-                        !String(selectedContact.npub ?? "").trim()
-                      }
-                      data-guide="chat-input"
-                    />
-                    <button
-                      className="btn-wide"
-                      onClick={() => void sendChatMessage()}
-                      disabled={
-                        chatSendIsBusy ||
-                        !chatDraft.trim() ||
-                        !String(selectedContact.npub ?? "").trim()
-                      }
-                      data-guide="chat-send"
-                    >
-                      {chatSendIsBusy ? `${t("send")}…` : t("send")}
-                    </button>
-                    {(() => {
-                      const ln = String(selectedContact.lnAddress ?? "").trim();
-                      const npub = String(selectedContact.npub ?? "").trim();
-                      const canPayThisContact =
-                        Boolean(ln) ||
-                        ((payWithCashuEnabled || allowPromisesEnabled) &&
-                          Boolean(npub));
-                      if (!canPayThisContact) return null;
-                      const availableCredo = npub
-                        ? getCredoAvailableForContact(npub)
-                        : 0;
-                      const canStartPay =
-                        (Boolean(ln) && cashuBalance > 0) ||
-                        (Boolean(npub) &&
-                          (cashuBalance > 0 ||
-                            availableCredo > 0 ||
-                            allowPromisesEnabled));
-                      const isFeedbackContact = npub === FEEDBACK_CONTACT_NPUB;
-                      return (
-                        <button
-                          className="btn-wide secondary"
-                          onClick={() =>
-                            openContactPay(selectedContact.id, true)
-                          }
-                          disabled={cashuIsBusy || !canStartPay}
-                          title={
-                            !canStartPay ? t("payInsufficient") : undefined
-                          }
-                          data-guide="chat-pay"
-                        >
-                          {isFeedbackContact ? "Donate" : t("pay")}
-                        </button>
-                      );
-                    })()}
-                  </div>
-                </>
-              ) : null}
-            </section>
+            <ChatPage
+              selectedContact={selectedContact}
+              chatMessages={chatMessages}
+              chatMessagesRef={chatMessagesRef}
+              chatDraft={chatDraft}
+              setChatDraft={setChatDraft}
+              chatSendIsBusy={chatSendIsBusy}
+              cashuBalance={cashuBalance}
+              cashuIsBusy={cashuIsBusy}
+              payWithCashuEnabled={payWithCashuEnabled}
+              allowPromisesEnabled={allowPromisesEnabled}
+              feedbackContactNpub={FEEDBACK_CONTACT_NPUB}
+              lang={lang}
+              nostrPictureByNpub={nostrPictureByNpub}
+              setMintIconUrlByMint={setMintIconUrlByMint}
+              chatMessageElByIdRef={chatMessageElByIdRef}
+              formatInteger={formatInteger}
+              formatChatDayLabel={formatChatDayLabel}
+              getCashuTokenMessageInfo={getCashuTokenMessageInfo}
+              getCredoTokenMessageInfo={getCredoTokenMessageInfo}
+              getMintIconUrl={getMintIconUrl}
+              getCredoAvailableForContact={getCredoAvailableForContact}
+              sendChatMessage={sendChatMessage}
+              openContactPay={openContactPay}
+              t={t}
+            />
           )}
 
           {route.kind === "contactEdit" && (
-            <section className="panel panel-plain">
-              {!selectedContact ? (
-                <p className="muted">{t("contactNotFound")}</p>
-              ) : null}
-
-              <div className="form-grid">
-                <div className="form-col">
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <label>Jméno</label>
-                    {String(form.npub ?? "").trim() &&
-                    String(form.name ?? "").trim() ? (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() =>
-                          void resetEditedContactFieldFromNostr("name")
-                        }
-                        title={t("restore")}
-                        aria-label={t("restore")}
-                        style={{ paddingInline: 10, minWidth: 40 }}
-                      >
-                        ↺
-                      </button>
-                    ) : null}
-                  </div>
-                  <input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder={t("namePlaceholder")}
-                  />
-
-                  <label>{t("npub")}</label>
-                  <input
-                    value={form.npub}
-                    onChange={(e) => setForm({ ...form, npub: e.target.value })}
-                    placeholder={t("npubPlaceholder")}
-                  />
-
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <label>{t("lightningAddress")}</label>
-                    {String(form.npub ?? "").trim() &&
-                    String(form.lnAddress ?? "").trim() ? (
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() =>
-                          void resetEditedContactFieldFromNostr("lnAddress")
-                        }
-                        title={t("restore")}
-                        aria-label={t("restore")}
-                        style={{ paddingInline: 10, minWidth: 40 }}
-                      >
-                        ↺
-                      </button>
-                    ) : null}
-                  </div>
-                  <input
-                    value={form.lnAddress}
-                    onChange={(e) =>
-                      setForm({ ...form, lnAddress: e.target.value })
-                    }
-                    placeholder={t("lightningAddressPlaceholder")}
-                  />
-
-                  <label>{t("group")}</label>
-                  <input
-                    value={form.group}
-                    onChange={(e) =>
-                      setForm({ ...form, group: e.target.value })
-                    }
-                    placeholder={t("groupPlaceholder")}
-                    list={groupNames.length ? "group-options" : undefined}
-                  />
-                  {groupNames.length ? (
-                    <datalist id="group-options">
-                      {groupNames.map((group) => (
-                        <option key={group} value={group} />
-                      ))}
-                    </datalist>
-                  ) : null}
-
-                  <div className="actions">
-                    {editingId ? (
-                      contactEditsSavable ? (
-                        <button onClick={handleSaveContact}>
-                          {t("saveChanges")}
-                        </button>
-                      ) : null
-                    ) : (
-                      <button
-                        onClick={handleSaveContact}
-                        data-guide="contact-save"
-                      >
-                        {t("saveContact")}
-                      </button>
-                    )}
-                    <button
-                      className={
-                        pendingDeleteId === editingId ? "danger" : "ghost"
-                      }
-                      onClick={requestDeleteCurrentContact}
-                      disabled={!editingId}
-                      title={
-                        pendingDeleteId === editingId
-                          ? "Klikněte znovu pro smazání"
-                          : t("delete")
-                      }
-                    >
-                      {t("delete")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
+            <ContactEditPage
+              selectedContact={selectedContact}
+              form={form}
+              setForm={setForm}
+              groupNames={groupNames}
+              editingId={editingId}
+              contactEditsSavable={contactEditsSavable}
+              pendingDeleteId={pendingDeleteId}
+              handleSaveContact={handleSaveContact}
+              requestDeleteCurrentContact={requestDeleteCurrentContact}
+              resetEditedContactFieldFromNostr={
+                resetEditedContactFieldFromNostr
+              }
+              t={t}
+            />
           )}
 
           {route.kind === "contactNew" && (
-            <section className="panel panel-plain">
-              <div className="form-grid">
-                <div className="form-col">
-                  <label>{t("name")}</label>
-                  <input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder={t("namePlaceholder")}
-                  />
-
-                  <label>{t("npub")}</label>
-                  <input
-                    value={form.npub}
-                    onChange={(e) => setForm({ ...form, npub: e.target.value })}
-                    placeholder={t("npubPlaceholder")}
-                  />
-
-                  <label>{t("lightningAddress")}</label>
-                  <input
-                    value={form.lnAddress}
-                    onChange={(e) =>
-                      setForm({ ...form, lnAddress: e.target.value })
-                    }
-                    placeholder={t("lightningAddressPlaceholder")}
-                  />
-
-                  <label>{t("group")}</label>
-                  <input
-                    value={form.group}
-                    onChange={(e) =>
-                      setForm({ ...form, group: e.target.value })
-                    }
-                    placeholder={t("groupPlaceholder")}
-                    list={groupNames.length ? "group-options" : undefined}
-                  />
-                  {groupNames.length ? (
-                    <datalist id="group-options">
-                      {groupNames.map((group) => (
-                        <option key={group} value={group} />
-                      ))}
-                    </datalist>
-                  ) : null}
-
-                  <div className="actions">
-                    <button onClick={handleSaveContact}>
-                      {t("saveContact")}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={openScan}
-                      disabled={scanIsOpen}
-                      data-guide="scan-contact-button"
-                    >
-                      {t("contactLoadQr")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
+            <ContactNewPage
+              form={form}
+              setForm={setForm}
+              groupNames={groupNames}
+              scanIsOpen={scanIsOpen}
+              handleSaveContact={handleSaveContact}
+              openScan={openScan}
+              t={t}
+            />
           )}
 
           {showContactsOnboarding && (
@@ -13447,152 +12330,26 @@ const App = () => {
           )}
 
           {route.kind === "contacts" && (
-            <>
-              <div className="contacts-toolbar" style={contactsToolbarStyle}>
-                <div className="contacts-search-bar" role="search">
-                  <input
-                    ref={contactsSearchInputRef}
-                    type="search"
-                    placeholder={t("contactsSearchPlaceholder")}
-                    value={contactsSearch}
-                    onChange={(e) => setContactsSearch(e.target.value)}
-                    autoComplete="off"
-                  />
-                  {contactsSearch.trim() ? (
-                    <button
-                      type="button"
-                      className="contacts-search-clear"
-                      aria-label={t("contactsSearchClear")}
-                      onClick={() => {
-                        setContactsSearch("");
-                        requestAnimationFrame(() => {
-                          contactsSearchInputRef.current?.focus();
-                        });
-                      }}
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </div>
-
-                {showGroupFilter ? (
-                  <nav className="group-filter-bar" aria-label={t("group")}>
-                    <div className="group-filter-inner">
-                      <button
-                        type="button"
-                        className={
-                          activeGroup === null
-                            ? "group-filter-btn is-active"
-                            : "group-filter-btn"
-                        }
-                        onClick={() => setActiveGroup(null)}
-                      >
-                        {t("all")}
-                      </button>
-                      {showNoGroupFilter ? (
-                        <button
-                          type="button"
-                          className={
-                            activeGroup === NO_GROUP_FILTER
-                              ? "group-filter-btn is-active"
-                              : "group-filter-btn"
-                          }
-                          onClick={() => setActiveGroup(NO_GROUP_FILTER)}
-                        >
-                          {t("noGroup")}
-                        </button>
-                      ) : null}
-                      {groupNames.map((group) => (
-                        <button
-                          key={group}
-                          type="button"
-                          className={
-                            activeGroup === group
-                              ? "group-filter-btn is-active"
-                              : "group-filter-btn"
-                          }
-                          onClick={() => setActiveGroup(group)}
-                          title={group}
-                        >
-                          {group}
-                        </button>
-                      ))}
-                    </div>
-                  </nav>
-                ) : null}
-              </div>
-
-              <section className="panel panel-plain">
-                <div className="contact-list">
-                  {(() => {
-                    const totalVisible =
-                      visibleContacts.conversations.length +
-                      visibleContacts.others.length;
-                    if (contacts.length === 0 || totalVisible === 0) {
-                      return <p className="muted">{t("noContactsYet")}</p>;
-                    }
-                    return (
-                      <>
-                        {visibleContacts.conversations.length > 0 && (
-                          <React.Fragment key="conversations">
-                            <div
-                              className="muted"
-                              style={{
-                                fontSize: 11,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.08em",
-                                margin: "6px 0 6px",
-                              }}
-                            >
-                              {conversationsLabel}
-                            </div>
-                            {visibleContacts.conversations.map(
-                              renderContactCard,
-                            )}
-                          </React.Fragment>
-                        )}
-
-                        {visibleContacts.others.length > 0 && (
-                          <React.Fragment key="others">
-                            <div
-                              className="muted"
-                              style={{
-                                fontSize: 11,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.08em",
-                                margin: "10px 0 6px",
-                              }}
-                            >
-                              {otherContactsLabel}
-                            </div>
-                            {visibleContacts.others.map(renderContactCard)}
-                          </React.Fragment>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              </section>
-
-              <BottomTabBar
-                activeTab={bottomTabActive}
-                contactsLabel={t("contactsTitle")}
-                navigateToContacts={navigateToContacts}
-                navigateToWallet={navigateToWallet}
-                t={t}
-                walletLabel={t("wallet")}
-              />
-
-              <button
-                type="button"
-                className="contacts-fab"
-                onClick={openNewContactPage}
-                aria-label={t("addContact")}
-                title={t("addContact")}
-              >
-                <span aria-hidden="true">+</span>
-              </button>
-            </>
+            <ContactsPage
+              contactsToolbarStyle={contactsToolbarStyle}
+              contactsSearchInputRef={contactsSearchInputRef}
+              contactsSearch={contactsSearch}
+              setContactsSearch={setContactsSearch}
+              showGroupFilter={showGroupFilter}
+              activeGroup={activeGroup}
+              setActiveGroup={setActiveGroup}
+              showNoGroupFilter={showNoGroupFilter}
+              noGroupFilterValue={NO_GROUP_FILTER}
+              groupNames={groupNames}
+              contacts={contacts}
+              visibleContacts={visibleContacts}
+              conversationsLabel={conversationsLabel}
+              otherContactsLabel={otherContactsLabel}
+              renderContactCard={renderContactCard}
+              bottomTabActive={bottomTabActive}
+              openNewContactPage={openNewContactPage}
+              t={t}
+            />
           )}
 
           {route.kind === "profile" && (

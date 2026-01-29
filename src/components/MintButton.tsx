@@ -14,11 +14,11 @@ interface MintButtonProps {
 }
 
 export function MintButton({
-  mint,
+  fallbackLetter,
   getMintIconUrl,
   isSelected,
   label,
-  fallbackLetter,
+  mint,
   onClick,
 }: MintButtonProps) {
   const icon = getMintIconUrl(mint);

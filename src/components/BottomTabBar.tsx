@@ -1,11 +1,10 @@
 import React from "react";
+import { useNavigation } from "../hooks/useRouting";
 import { BottomTab } from "./BottomTab";
 
 interface BottomTabBarProps {
   activeTab: "contacts" | "wallet" | null;
   contactsLabel: string;
-  navigateToContacts: () => void;
-  navigateToWallet: () => void;
   t: (key: string) => string;
   walletLabel: string;
 }
@@ -13,11 +12,10 @@ interface BottomTabBarProps {
 export function BottomTabBar({
   activeTab,
   contactsLabel,
-  navigateToContacts,
-  navigateToWallet,
   t,
   walletLabel,
 }: BottomTabBarProps): React.ReactElement {
+  const navigateTo = useNavigation();
   return (
     <div className="contacts-qr-bar" role="region">
       <div className="bottom-tabs-bar" role="tablist" aria-label={t("list")}>
@@ -26,13 +24,13 @@ export function BottomTabBar({
             icon="contacts"
             label={contactsLabel}
             isActive={activeTab === "contacts"}
-            onClick={navigateToContacts}
+            onClick={() => navigateTo({ route: "contacts" })}
           />
           <BottomTab
             icon="wallet"
             label={walletLabel}
             isActive={activeTab === "wallet"}
-            onClick={navigateToWallet}
+            onClick={() => navigateTo({ route: "wallet" })}
           />
         </div>
       </div>

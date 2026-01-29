@@ -1,10 +1,10 @@
 import React from "react";
+import { useNavigation } from "../hooks/useRouting";
 import type { Lang } from "../i18n";
 
 interface MenuModalProps {
   closeMenu: () => void;
   lang: Lang;
-  navigateToAdvanced: () => void;
   openFeedbackContact: () => void;
   setLang: (lang: Lang) => void;
   setUseBitcoinSymbol: (value: boolean) => void;
@@ -15,13 +15,13 @@ interface MenuModalProps {
 export function MenuModal({
   closeMenu,
   lang,
-  navigateToAdvanced,
   openFeedbackContact,
   setLang,
   setUseBitcoinSymbol,
   t,
   useBitcoinSymbol,
 }: MenuModalProps): React.ReactElement {
+  const navigateTo = useNavigation();
   return (
     <div
       className="menu-modal-overlay"
@@ -76,7 +76,7 @@ export function MenuModal({
           className="settings-row settings-link"
           onClick={() => {
             closeMenu();
-            navigateToAdvanced();
+            navigateTo({ route: "advanced" });
           }}
           aria-label={t("advanced")}
           title={t("advanced")}

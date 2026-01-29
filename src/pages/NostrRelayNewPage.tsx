@@ -9,10 +9,10 @@ interface NostrRelayNewPageProps {
 }
 
 export function NostrRelayNewPage({
-  newRelayUrl,
   canSaveNewRelay,
-  setNewRelayUrl,
+  newRelayUrl,
   saveNewRelay,
+  setNewRelayUrl,
   t,
 }: NostrRelayNewPageProps): React.ReactElement {
   return (

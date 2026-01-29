@@ -20,10 +20,10 @@ interface PaymentsHistoryPageProps {
 }
 
 export function PaymentsHistoryPage({
-  paymentEvents,
-  lang,
-  formatInteger,
   displayUnit,
+  formatInteger,
+  lang,
+  paymentEvents,
   t,
 }: PaymentsHistoryPageProps) {
   return (

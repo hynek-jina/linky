@@ -67,8 +67,6 @@ interface AuthenticatedLayoutProps {
   lang: Lang;
   menuIsOpen: boolean;
   myProfileQr: string | null;
-  navigateToAdvanced: () => void;
-  navigateToNewContact: () => void;
   nostrPictureByNpub: Record<string, string | null>;
   onPickProfilePhoto: () => void;
   onProfilePhotoSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -141,8 +139,6 @@ export function AuthenticatedLayout({
   lang,
   menuIsOpen,
   myProfileQr,
-  navigateToAdvanced,
-  navigateToNewContact,
   nostrPictureByNpub,
   onPickProfilePhoto,
   onProfilePhotoSelected,
@@ -214,7 +210,6 @@ export function AuthenticatedLayout({
         <MenuModal
           closeMenu={closeMenu}
           lang={lang}
-          navigateToAdvanced={navigateToAdvanced}
           openFeedbackContact={openFeedbackContact}
           setLang={setLang}
           setUseBitcoinSymbol={setUseBitcoinSymbol}
@@ -271,7 +266,6 @@ export function AuthenticatedLayout({
           displayUnit={displayUnit}
           formatInteger={formatInteger}
           lnAddress={postPaySaveContact.lnAddress}
-          navigateToNewContact={navigateToNewContact}
           onClose={() => setPostPaySaveContact(null)}
           setContactNewPrefill={setContactNewPrefill}
           t={t}

@@ -5,7 +5,7 @@ interface BottomTabProps {
   onClick: () => void;
 }
 
-export function BottomTab({ label, isActive, onClick, icon }: BottomTabProps) {
+export function BottomTab({ icon, isActive, label, onClick }: BottomTabProps) {
   const iconContent =
     icon === "contacts" ? (
       <svg

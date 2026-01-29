@@ -1,9 +1,9 @@
 import React from "react";
+import { useNavigation } from "../hooks/useRouting";
 
 interface EvoluServerNewPageProps {
   evoluServerUrls: string[];
   evoluWipeStorageIsBusy: boolean;
-  navigateToEvoluServers: () => void;
   newEvoluServerUrl: string;
   normalizeEvoluServerUrl: (url: string) => string | null;
   pushToast: (message: string) => void;
@@ -15,18 +15,18 @@ interface EvoluServerNewPageProps {
 }
 
 export function EvoluServerNewPage({
-  newEvoluServerUrl,
   evoluServerUrls,
   evoluWipeStorageIsBusy,
-  setNewEvoluServerUrl,
+  newEvoluServerUrl,
   normalizeEvoluServerUrl,
-  saveEvoluServerUrls,
-  navigateToEvoluServers,
-  setStatus,
   pushToast,
-  wipeEvoluStorage,
+  saveEvoluServerUrls,
+  setNewEvoluServerUrl,
+  setStatus,
   t,
+  wipeEvoluStorage,
 }: EvoluServerNewPageProps): React.ReactElement {
+  const navigateTo = useNavigation();
   return (
     <section className="panel">
       <label htmlFor="evoluServerUrl">{t("evoluAddServerLabel")}</label>
@@ -55,14 +55,14 @@ export function EvoluServerNewPage({
               )
             ) {
               pushToast(t("evoluAddServerAlready"));
-              navigateToEvoluServers();
+              navigateTo({ route: "evoluServers" });
               return;
             }
 
             saveEvoluServerUrls([...evoluServerUrls, normalized]);
             setNewEvoluServerUrl("");
             setStatus(t("evoluAddServerSaved"));
-            navigateToEvoluServers();
+            navigateTo({ route: "evoluServers" });
           }}
           disabled={!normalizeEvoluServerUrl(newEvoluServerUrl)}
         >

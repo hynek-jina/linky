@@ -8,12 +8,12 @@ interface CredoTokenPillProps {
 }
 
 export function CredoTokenPill({
-  token,
   amount,
-  avatar,
-  onClick,
   ariaLabel,
+  avatar,
   formatInteger,
+  onClick,
+  token,
 }: CredoTokenPillProps) {
   return (
     <button

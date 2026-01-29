@@ -379,4 +379,12 @@ export const cs = {
   otherContacts: "Ostatní kontakty",
   today: "Dnes",
   yesterday: "Včera",
+
+  // Error and UI strings
+  evoluWipeStorageFailed:
+    "Chybí uložený mnemonic (nelze vyčistit Evolu storage).",
+  copyTokenTitle: "Klikni pro zkopírování tokenu",
+  tokenReceivedClickToCopy:
+    "Přijato {amount} {unit}. Klikni pro zkopírování tokenu.",
+  tokenReceived: "Token přijat. Klikni pro zkopírování tokenu.",
 } as const;

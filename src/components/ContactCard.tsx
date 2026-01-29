@@ -34,37 +34,37 @@ interface ContactCardProps {
   formatContactMessageTimestamp: (sec: number) => string;
   formatInteger: (num: number) => string;
   getInitials: (name: string) => string;
-  hasAttention: boolean;
-  lastMessage: LocalNostrMessage | null | undefined;
-  promiseNet: number;
-  tokenInfo: CashuTokenInfo | null;
   getMintIconUrl: (url: unknown) => {
     url: string | null;
     origin?: string | null;
     host?: string | null;
     failed?: boolean;
   };
-  onSelect: (contact: Contact) => void;
-  onMintIconLoad: (origin: string, url: string) => void;
+  hasAttention: boolean;
+  lastMessage: LocalNostrMessage | null | undefined;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
+  onMintIconLoad: (origin: string, url: string) => void;
+  onSelect: (contact: Contact) => void;
+  promiseNet: number;
+  tokenInfo: CashuTokenInfo | null;
 }
 
 export const ContactCard: React.FC<ContactCardProps> = ({
-  contact,
   avatarUrl,
-  lastMessage,
-  hasAttention,
-  promiseNet,
-  displayUnit,
-  tokenInfo,
+  contact,
   credoInfo,
+  displayUnit,
+  formatContactMessageTimestamp,
   formatInteger,
   getInitials,
-  formatContactMessageTimestamp,
   getMintIconUrl,
-  onSelect,
-  onMintIconLoad,
+  hasAttention,
+  lastMessage,
   onMintIconError,
+  onMintIconLoad,
+  onSelect,
+  promiseNet,
+  tokenInfo,
 }) => {
   const initials = getInitials(String(contact.name ?? ""));
   const lastText = String(lastMessage?.content ?? "").trim();
@@ -231,7 +231,6 @@ export const ContactCard: React.FC<ContactCardProps> = ({
 };
 
 interface TokenPreviewProps {
-  tokenInfo: CashuTokenInfo;
   directionSymbol: string;
   formatInteger: (num: number) => string;
   getMintIconUrl: (url: unknown) => {
@@ -240,17 +239,18 @@ interface TokenPreviewProps {
     host?: string | null;
     failed?: boolean;
   };
-  onIconLoad: (origin: string, url: string) => void;
   onIconError: (origin: string, nextUrl: string | null) => void;
+  onIconLoad: (origin: string, url: string) => void;
+  tokenInfo: CashuTokenInfo;
 }
 
 const TokenPreview: React.FC<TokenPreviewProps> = ({
-  tokenInfo,
   directionSymbol,
   formatInteger,
   getMintIconUrl,
-  onIconLoad,
   onIconError,
+  onIconLoad,
+  tokenInfo,
 }) => {
   const icon = getMintIconUrl(tokenInfo.mintUrl);
 
