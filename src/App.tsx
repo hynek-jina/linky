@@ -8725,7 +8725,6 @@ const App = () => {
         tokenInfo={tokenInfo}
         credoInfo={credoInfo}
         formatInteger={formatInteger}
-        formatContactMessageTimestamp={formatContactMessageTimestamp}
         getMintIconUrl={getMintIconUrl}
         onSelect={() => openContactDetail(contact)}
         onMintIconLoad={(origin, url) => {
@@ -9973,28 +9972,6 @@ const App = () => {
     pointerEvents: contactsToolbarProgress > 0.02 ? "auto" : "none",
   } satisfies React.CSSProperties;
 
-  const formatContactMessageTimestamp = (createdAtSec: number): string => {
-    const ms = Number(createdAtSec ?? 0) * 1000;
-    if (!Number.isFinite(ms) || ms <= 0) return "";
-    const d = new Date(ms);
-    const now = new Date();
-    const sameDay =
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate();
-    const locale = lang === "cs" ? "cs-CZ" : "en-US";
-    if (sameDay) {
-      return new Intl.DateTimeFormat(locale, {
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(d);
-    }
-    return new Intl.DateTimeFormat(locale, {
-      day: "2-digit",
-      month: "2-digit",
-    }).format(d);
-  };
-
   const topbar = (() => {
     if (route.kind === "advanced") {
       return {
@@ -10695,35 +10672,6 @@ const App = () => {
 
   const chatTopbarContact =
     route.kind === "chat" && selectedContact ? selectedContact : null;
-
-  const formatChatDayLabel = (ms: number): string => {
-    const d = new Date(ms);
-    const now = new Date();
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    ).getTime();
-    const startOfThatDay = new Date(
-      d.getFullYear(),
-      d.getMonth(),
-      d.getDate(),
-    ).getTime();
-
-    const diffDays = Math.round((startOfToday - startOfThatDay) / 86_400_000);
-    if (diffDays === 0) return t("today");
-    if (diffDays === 1) return t("yesterday");
-
-    const locale = lang === "cs" ? "cs-CZ" : "en-US";
-    const weekday = new Intl.DateTimeFormat(locale, {
-      weekday: "short",
-    }).format(d);
-    const day = d.getDate();
-    const month = d.getMonth() + 1;
-    // Match desired style like "Pá 2. 1." (cs) / "Fri 1/2" (en-ish).
-    if (lang === "cs") return `${weekday} ${day}. ${month}.`;
-    return `${weekday} ${month}/${day}`;
-  };
 
   const extractCashuTokenFromText = React.useCallback(
     (text: string): string | null => {
@@ -12091,7 +12039,6 @@ const App = () => {
               topupInvoiceIsBusy={topupInvoiceIsBusy}
               displayUnit={displayUnit}
               copyText={copyText}
-              formatInteger={formatInteger}
               t={t}
             />
           )}
@@ -12214,7 +12161,6 @@ const App = () => {
               setMintIconUrlByMint={setMintIconUrlByMint}
               chatMessageElByIdRef={chatMessageElByIdRef}
               formatInteger={formatInteger}
-              formatChatDayLabel={formatChatDayLabel}
               getCashuTokenMessageInfo={getCashuTokenMessageInfo}
               getCredoTokenMessageInfo={getCredoTokenMessageInfo}
               getMintIconUrl={getMintIconUrl}

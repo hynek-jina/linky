@@ -48,3 +48,92 @@ export const getBestNostrName = (metadata: {
   if (name) return name;
   return null;
 };
+
+const normalizeLocale = (lang?: string): string => {
+  const raw = String(lang ?? "").trim();
+  if (raw) {
+    if (raw === "cs") return "cs-CZ";
+    if (raw === "en") return "en-US";
+    return raw;
+  }
+  if (typeof document !== "undefined") {
+    const docLang = String(document.documentElement?.lang ?? "").trim();
+    if (docLang) return docLang === "cs" ? "cs-CZ" : docLang;
+  }
+  if (typeof navigator !== "undefined") {
+    const navLang = String(navigator.language ?? "").trim();
+    if (navLang) return navLang === "cs" ? "cs-CZ" : navLang;
+  }
+  return "en-US";
+};
+
+const numberFormatters = new Map<string, Intl.NumberFormat>();
+
+export const formatInteger = (value: number, lang?: string): string => {
+  const locale = normalizeLocale(lang);
+  let formatter = numberFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale);
+    numberFormatters.set(locale, formatter);
+  }
+  return formatter.format(
+    Number.isFinite(value) ? Math.trunc(value) : Math.trunc(0),
+  );
+};
+
+export const formatContactMessageTimestamp = (
+  createdAtSec: number,
+  lang?: string,
+): string => {
+  const ms = Number(createdAtSec ?? 0) * 1000;
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+  const d = new Date(ms);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  const locale = normalizeLocale(lang);
+  if (sameDay) {
+    return new Intl.DateTimeFormat(locale, {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(d);
+  }
+  return new Intl.DateTimeFormat(locale, {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(d);
+};
+
+export const formatChatDayLabel = (
+  ms: number,
+  lang: string | undefined,
+  t: (key: string) => string,
+): string => {
+  const d = new Date(ms);
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  const startOfThatDay = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+  ).getTime();
+
+  const diffDays = Math.round((startOfToday - startOfThatDay) / 86_400_000);
+  if (diffDays === 0) return t("today");
+  if (diffDays === 1) return t("yesterday");
+
+  const locale = normalizeLocale(lang);
+  const weekday = new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+  }).format(d);
+  const day = d.getDate();
+  const month = d.getMonth() + 1;
+  if (locale.startsWith("cs")) return `${weekday} ${day}. ${month}.`;
+  return `${weekday} ${month}/${day}`;
+};

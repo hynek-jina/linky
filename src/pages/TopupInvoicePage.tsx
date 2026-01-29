@@ -1,9 +1,9 @@
 import type { FC } from "react";
+import { formatInteger } from "../utils/formatting";
 
 interface TopupInvoicePageProps {
   copyText: (text: string) => Promise<void>;
   displayUnit: string;
-  formatInteger: (val: number) => string;
   t: (key: string) => string;
   topupAmount: string;
   topupDebug: string | null;
@@ -16,7 +16,6 @@ interface TopupInvoicePageProps {
 export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
   copyText,
   displayUnit,
-  formatInteger,
   t,
   topupAmount,
   topupDebug,

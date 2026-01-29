@@ -1,6 +1,7 @@
 import type { FC } from "react";
 import { ChatMessage } from "../components/ChatMessage";
 import type { ContactId } from "../evolu";
+import { formatChatDayLabel } from "../utils/formatting";
 
 interface Contact {
   id: ContactId;
@@ -18,7 +19,6 @@ interface ChatPageProps {
   chatMessagesRef: React.RefObject<HTMLDivElement | null>;
   chatSendIsBusy: boolean;
   feedbackContactNpub: string;
-  formatChatDayLabel: (timestamp: number) => string;
   formatInteger: (val: number) => string;
   getCashuTokenMessageInfo: (id: string) => any;
   getCredoAvailableForContact: (npub: string) => number;
@@ -52,7 +52,6 @@ export const ChatPage: FC<ChatPageProps> = ({
   chatMessagesRef,
   chatSendIsBusy,
   feedbackContactNpub,
-  formatChatDayLabel,
   formatInteger,
   getCashuTokenMessageInfo,
   getCredoAvailableForContact,
@@ -107,6 +106,9 @@ export const ChatPage: FC<ChatPageProps> = ({
               idx + 1 < chatMessages.length ? chatMessages[idx + 1] : null;
             const avatar = npub ? nostrPictureByNpub[npub] : null;
 
+            const formatChatDayLabelForLang = (timestamp: number) =>
+              formatChatDayLabel(timestamp, lang, t);
+
             return (
               <ChatMessage
                 key={String(m.id)}
@@ -116,7 +118,7 @@ export const ChatPage: FC<ChatPageProps> = ({
                 locale={lang === "cs" ? "cs-CZ" : "en-US"}
                 contactAvatar={avatar}
                 formatInteger={formatInteger}
-                formatChatDayLabel={formatChatDayLabel}
+                formatChatDayLabel={formatChatDayLabelForLang}
                 getCashuTokenMessageInfo={getCashuTokenMessageInfo}
                 getCredoTokenMessageInfo={getCredoTokenMessageInfo}
                 getMintIconUrl={getMintIconUrl}
