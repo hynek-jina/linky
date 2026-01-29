@@ -103,6 +103,7 @@ import {
   safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "./utils/storage";
+import { getBestNostrName } from "./utils/formatting";
 
 const LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY = "linky.lastAcceptedCashuToken.v1";
 
@@ -954,47 +955,6 @@ const App = () => {
     [t],
   );
 
-  const getInitials = (name: string) => {
-    const normalized = name.trim();
-    if (!normalized) return "?";
-    const parts = normalized.split(/\s+/).filter(Boolean);
-    const letters = parts
-      .slice(0, 2)
-      .map((part) => part.slice(0, 1).toUpperCase());
-    return letters.join("") || "?";
-  };
-
-  const getBestNostrName = (metadata: {
-    displayName?: string;
-    name?: string;
-  }): string | null => {
-    const display = String(metadata.displayName ?? "").trim();
-    if (display) return display;
-    const name = String(metadata.name ?? "").trim();
-    if (name) return name;
-    return null;
-  };
-
-  const formatShortNpub = (npub: string): string => {
-    const trimmed = String(npub ?? "").trim();
-    if (!trimmed) return "";
-    if (trimmed.length <= 18) return trimmed;
-    return `${trimmed.slice(0, 10)}…${trimmed.slice(-6)}`;
-  };
-
-  const formatMiddleDots = (value: string, maxLen: number): string => {
-    const trimmed = String(value ?? "").trim();
-    if (!trimmed) return "";
-    if (!Number.isFinite(maxLen) || maxLen <= 0) return trimmed;
-    if (trimmed.length <= maxLen) return trimmed;
-    if (maxLen <= 6) return `${trimmed.slice(0, maxLen)}`;
-
-    const remaining = maxLen - 3;
-    const startLen = Math.ceil(remaining / 2);
-    const endLen = Math.floor(remaining / 2);
-    return `${trimmed.slice(0, startLen)}...${trimmed.slice(-endLen)}`;
-  };
-
   const contactNameCollator = useMemo(
     () =>
       new Intl.Collator(lang, {
@@ -1012,16 +972,6 @@ const App = () => {
       ),
     [numberFormatter],
   );
-
-  const formatDurationShort = React.useCallback((seconds: number): string => {
-    const total = Math.max(0, Math.floor(seconds));
-    const days = Math.floor(total / 86400);
-    const hours = Math.floor((total % 86400) / 3600);
-    const minutes = Math.floor((total % 3600) / 60);
-    if (days > 0) return `${days}d ${hours}h`;
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  }, []);
 
   const contactPayBackToChatRef = React.useRef<ContactId | null>(null);
 
@@ -8775,7 +8725,6 @@ const App = () => {
         tokenInfo={tokenInfo}
         credoInfo={credoInfo}
         formatInteger={formatInteger}
-        getInitials={getInitials}
         formatContactMessageTimestamp={formatContactMessageTimestamp}
         getMintIconUrl={getMintIconUrl}
         onSelect={() => openContactDetail(contact)}
@@ -11908,8 +11857,6 @@ const App = () => {
           effectiveProfileName={effectiveProfileName}
           effectiveProfilePicture={effectiveProfilePicture}
           formatInteger={formatInteger}
-          formatShortNpub={formatShortNpub}
-          getInitials={getInitials}
           isProfileEditing={isProfileEditing}
           lang={lang}
           menuIsOpen={menuIsOpen}
@@ -12129,10 +12076,7 @@ const App = () => {
               setTopupAmount={setTopupAmount}
               topupInvoiceIsBusy={topupInvoiceIsBusy}
               displayUnit={displayUnit}
-              formatShortNpub={formatShortNpub}
-              formatMiddleDots={formatMiddleDots}
               formatInteger={formatInteger}
-              getInitials={getInitials}
               t={t}
             />
           )}
@@ -12195,9 +12139,7 @@ const App = () => {
               contacts={contacts}
               displayUnit={displayUnit}
               getCredoRemainingAmount={getCredoRemainingAmount}
-              formatShortNpub={formatShortNpub}
               formatInteger={formatInteger}
-              formatDurationShort={formatDurationShort}
               t={t}
             />
           )}
@@ -12211,7 +12153,6 @@ const App = () => {
               payWithCashuEnabled={payWithCashuEnabled}
               allowPromisesEnabled={allowPromisesEnabled}
               feedbackContactNpub={FEEDBACK_CONTACT_NPUB}
-              getInitials={getInitials}
               getCredoAvailableForContact={getCredoAvailableForContact}
               openContactPay={openContactPay}
               t={t}
@@ -12233,7 +12174,6 @@ const App = () => {
               payAmount={payAmount}
               setPayAmount={setPayAmount}
               displayUnit={displayUnit}
-              getInitials={getInitials}
               getCredoAvailableForContact={getCredoAvailableForContact}
               formatInteger={formatInteger}
               paySelectedContact={paySelectedContact}
@@ -12251,7 +12191,6 @@ const App = () => {
               setLnAddressPayAmount={setLnAddressPayAmount}
               displayUnit={displayUnit}
               payLightningAddressWithCashu={payLightningAddressWithCashu}
-              formatMiddleDots={formatMiddleDots}
               formatInteger={formatInteger}
               t={t}
             />
@@ -12373,8 +12312,6 @@ const App = () => {
               onPickProfilePhoto={onPickProfilePhoto}
               saveProfileEdits={saveProfileEdits}
               copyText={copyText}
-              formatShortNpub={formatShortNpub}
-              getInitials={getInitials}
               t={t}
             />
           )}

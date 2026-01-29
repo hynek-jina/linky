@@ -1,4 +1,5 @@
 import React from "react";
+import { getInitials } from "../utils/formatting";
 
 interface CashuTokenInfo {
   amount: number | null;
@@ -33,7 +34,6 @@ interface ContactCardProps {
   displayUnit: string;
   formatContactMessageTimestamp: (sec: number) => string;
   formatInteger: (num: number) => string;
-  getInitials: (name: string) => string;
   getMintIconUrl: (url: unknown) => {
     url: string | null;
     origin?: string | null;
@@ -56,7 +56,6 @@ export const ContactCard: React.FC<ContactCardProps> = ({
   displayUnit,
   formatContactMessageTimestamp,
   formatInteger,
-  getInitials,
   getMintIconUrl,
   hasAttention,
   lastMessage,

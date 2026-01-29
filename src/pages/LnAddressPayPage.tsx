@@ -1,6 +1,7 @@
 import type { FC } from "react";
 import { AmountDisplay } from "../components/AmountDisplay";
 import { Keypad } from "../components/Keypad";
+import { formatMiddleDots } from "../utils/formatting";
 
 interface LnAddressPayPageProps {
   canPayWithCashu: boolean;
@@ -8,7 +9,6 @@ interface LnAddressPayPageProps {
   cashuIsBusy: boolean;
   displayUnit: string;
   formatInteger: (val: number) => string;
-  formatMiddleDots: (str: string, maxLen: number) => string;
   lnAddress: string;
   lnAddressPayAmount: string;
   payLightningAddressWithCashu: (
@@ -25,7 +25,6 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
   cashuIsBusy,
   displayUnit,
   formatInteger,
-  formatMiddleDots,
   lnAddress,
   lnAddressPayAmount,
   payLightningAddressWithCashu,

@@ -1,5 +1,6 @@
 import React from "react";
 import type { Route } from "../types/route";
+import { formatShortNpub, getInitials } from "../utils/formatting";
 
 interface TopbarButton {
   icon: string;
@@ -17,8 +18,6 @@ interface TopbarProps {
   currentNpub: string | null;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
-  formatShortNpub: (npub: string) => string;
-  getInitials: (name: string) => string;
   nostrPictureByNpub: Record<string, string | null>;
   openProfileQr: () => void;
   route: Route;
@@ -33,8 +32,6 @@ export function Topbar({
   currentNpub,
   effectiveProfileName,
   effectiveProfilePicture,
-  formatShortNpub,
-  getInitials,
   nostrPictureByNpub,
   openProfileQr,
   route,

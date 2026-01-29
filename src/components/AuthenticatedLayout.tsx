@@ -61,8 +61,6 @@ interface AuthenticatedLayoutProps {
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
   formatInteger: (value: number) => string;
-  formatShortNpub: (npub: string) => string;
-  getInitials: (name: string) => string;
   isProfileEditing: boolean;
   lang: Lang;
   menuIsOpen: boolean;
@@ -133,8 +131,6 @@ export function AuthenticatedLayout({
   effectiveProfileName,
   effectiveProfilePicture,
   formatInteger,
-  formatShortNpub,
-  getInitials,
   isProfileEditing,
   lang,
   menuIsOpen,
@@ -181,8 +177,6 @@ export function AuthenticatedLayout({
         currentNpub={currentNpub}
         effectiveProfileName={effectiveProfileName}
         effectiveProfilePicture={effectiveProfilePicture}
-        formatShortNpub={formatShortNpub}
-        getInitials={getInitials}
         nostrPictureByNpub={nostrPictureByNpub}
         openProfileQr={openProfileQr}
         route={route}
@@ -233,8 +227,6 @@ export function AuthenticatedLayout({
           effectiveMyLightningAddress={effectiveMyLightningAddress}
           effectiveProfileName={effectiveProfileName}
           effectiveProfilePicture={effectiveProfilePicture}
-          formatShortNpub={formatShortNpub}
-          getInitials={getInitials}
           isProfileEditing={isProfileEditing}
           myProfileQr={myProfileQr}
           onClose={closeProfileQr}

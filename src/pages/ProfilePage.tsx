@@ -1,4 +1,5 @@
 import React from "react";
+import { formatShortNpub, getInitials } from "../utils/formatting";
 
 interface DerivedProfile {
   lnAddress: string;
@@ -13,8 +14,6 @@ interface ProfilePageProps {
   effectiveMyLightningAddress: string | null;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
-  formatShortNpub: (npub: string) => string;
-  getInitials: (name: string) => string;
   isProfileEditing: boolean;
   myProfileQr: string | null;
   onPickProfilePhoto: () => Promise<void>;
@@ -40,8 +39,6 @@ export function ProfilePage({
   effectiveMyLightningAddress,
   effectiveProfileName,
   effectiveProfilePicture,
-  formatShortNpub,
-  getInitials,
   isProfileEditing,
   myProfileQr,
   onPickProfilePhoto,
