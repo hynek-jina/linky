@@ -1,17 +1,19 @@
 import type { FC } from "react";
-import { useNavigation } from "../hooks/useRouting";
 import { AmountDisplay } from "../components/AmountDisplay";
 import { Keypad } from "../components/Keypad";
+import { useNavigation } from "../hooks/useRouting";
+import {
+  formatInteger,
+  formatMiddleDots,
+  formatShortNpub,
+  getInitials,
+} from "../utils/formatting";
 
 interface TopupPageProps {
   currentNpub: string | null;
   displayUnit: string;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
-  formatInteger: (val: number) => string;
-  formatMiddleDots: (str: string, maxLen: number) => string;
-  formatShortNpub: (npub: string) => string;
-  getInitials: (name: string) => string;
   npubCashLightningAddress: string | null;
   setTopupAmount: (value: string | ((prev: string) => string)) => void;
   t: (key: string) => string;
@@ -24,10 +26,6 @@ export const TopupPage: FC<TopupPageProps> = ({
   displayUnit,
   effectiveProfileName,
   effectiveProfilePicture,
-  formatInteger,
-  formatMiddleDots,
-  formatShortNpub,
-  getInitials,
   npubCashLightningAddress,
   setTopupAmount,
   t,

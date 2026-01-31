@@ -1,6 +1,7 @@
 import type { FC } from "react";
-import { useNavigation } from "../hooks/useRouting";
 import type { ContactId } from "../evolu";
+import { useNavigation } from "../hooks/useRouting";
+import { getInitials } from "../utils/formatting";
 
 interface Contact {
   id: ContactId;
@@ -16,7 +17,6 @@ interface ContactPageProps {
   cashuIsBusy: boolean;
   feedbackContactNpub: string;
   getCredoAvailableForContact: (npub: string) => number;
-  getInitials: (name: string) => string;
   nostrPictureByNpub: Record<string, string | null>;
   openContactPay: (id: ContactId) => void;
   payWithCashuEnabled: boolean;
@@ -30,7 +30,6 @@ export const ContactPage: FC<ContactPageProps> = ({
   cashuIsBusy,
   feedbackContactNpub,
   getCredoAvailableForContact,
-  getInitials,
   nostrPictureByNpub,
   openContactPay,
   payWithCashuEnabled,

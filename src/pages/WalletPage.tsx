@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigation } from "../hooks/useRouting";
+import { formatInteger } from "../utils/formatting";
 import { WalletWarning } from "../components/WalletWarning";
 import { WalletBalance } from "../components/WalletBalance";
 import { WalletActionButton } from "../components/WalletActionButton";
@@ -9,7 +10,6 @@ interface WalletPageProps {
   bottomTabActive: "wallet" | "contacts" | null;
   cashuBalance: number;
   displayUnit: string;
-  formatInteger: (value: number) => string;
   openScan: () => void;
   scanIsOpen: boolean;
   t: (key: string) => string;
@@ -19,7 +19,6 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   bottomTabActive,
   cashuBalance,
   displayUnit,
-  formatInteger,
   openScan,
   scanIsOpen,
   t,

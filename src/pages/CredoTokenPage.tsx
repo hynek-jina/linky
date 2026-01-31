@@ -1,5 +1,10 @@
 import type { FC } from "react";
 import type { CredoTokenId } from "../evolu";
+import {
+  formatDurationShort,
+  formatInteger,
+  formatShortNpub,
+} from "../utils/formatting";
 
 interface CredoTokenRow {
   id: CredoTokenId;
@@ -19,9 +24,6 @@ interface CredoTokenPageProps {
   contacts: readonly Contact[];
   credoTokensAll: readonly any[];
   displayUnit: string;
-  formatDurationShort: (sec: number) => string;
-  formatInteger: (val: number) => string;
-  formatShortNpub: (npub: string) => string;
   getCredoRemainingAmount: (row: any) => number;
   routeId: CredoTokenId;
   t: (key: string) => string;
@@ -31,9 +33,6 @@ export const CredoTokenPage: FC<CredoTokenPageProps> = ({
   contacts,
   credoTokensAll,
   displayUnit,
-  formatDurationShort,
-  formatInteger,
-  formatShortNpub,
   getCredoRemainingAmount,
   routeId,
   t,

@@ -1,10 +1,10 @@
 import React from "react";
+import { formatInteger } from "../utils/formatting";
 import { useNavigation } from "../hooks/useRouting";
 
 interface SaveContactPromptModalProps {
   amountSat: number;
   displayUnit: string;
-  formatInteger: (value: number) => string;
   lnAddress: string;
   onClose: () => void;
   setContactNewPrefill: (prefill: {
@@ -18,7 +18,6 @@ interface SaveContactPromptModalProps {
 export function SaveContactPromptModal({
   amountSat,
   displayUnit,
-  formatInteger,
   lnAddress,
   onClose,
   setContactNewPrefill,

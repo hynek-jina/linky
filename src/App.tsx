@@ -103,6 +103,7 @@ import {
   safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "./utils/storage";
+import { formatInteger, getBestNostrName } from "./utils/formatting";
 
 const LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY = "linky.lastAcceptedCashuToken.v1";
 
@@ -954,47 +955,6 @@ const App = () => {
     [t],
   );
 
-  const getInitials = (name: string) => {
-    const normalized = name.trim();
-    if (!normalized) return "?";
-    const parts = normalized.split(/\s+/).filter(Boolean);
-    const letters = parts
-      .slice(0, 2)
-      .map((part) => part.slice(0, 1).toUpperCase());
-    return letters.join("") || "?";
-  };
-
-  const getBestNostrName = (metadata: {
-    displayName?: string;
-    name?: string;
-  }): string | null => {
-    const display = String(metadata.displayName ?? "").trim();
-    if (display) return display;
-    const name = String(metadata.name ?? "").trim();
-    if (name) return name;
-    return null;
-  };
-
-  const formatShortNpub = (npub: string): string => {
-    const trimmed = String(npub ?? "").trim();
-    if (!trimmed) return "";
-    if (trimmed.length <= 18) return trimmed;
-    return `${trimmed.slice(0, 10)}…${trimmed.slice(-6)}`;
-  };
-
-  const formatMiddleDots = (value: string, maxLen: number): string => {
-    const trimmed = String(value ?? "").trim();
-    if (!trimmed) return "";
-    if (!Number.isFinite(maxLen) || maxLen <= 0) return trimmed;
-    if (trimmed.length <= maxLen) return trimmed;
-    if (maxLen <= 6) return `${trimmed.slice(0, maxLen)}`;
-
-    const remaining = maxLen - 3;
-    const startLen = Math.ceil(remaining / 2);
-    const endLen = Math.floor(remaining / 2);
-    return `${trimmed.slice(0, startLen)}...${trimmed.slice(-endLen)}`;
-  };
-
   const contactNameCollator = useMemo(
     () =>
       new Intl.Collator(lang, {
@@ -1004,24 +964,6 @@ const App = () => {
       }),
     [lang],
   );
-  const numberFormatter = useMemo(() => new Intl.NumberFormat(lang), [lang]);
-  const formatInteger = React.useCallback(
-    (value: number) =>
-      numberFormatter.format(
-        Number.isFinite(value) ? Math.trunc(value) : Math.trunc(0),
-      ),
-    [numberFormatter],
-  );
-
-  const formatDurationShort = React.useCallback((seconds: number): string => {
-    const total = Math.max(0, Math.floor(seconds));
-    const days = Math.floor(total / 86400);
-    const hours = Math.floor((total % 86400) / 3600);
-    const minutes = Math.floor((total % 3600) / 60);
-    if (days > 0) return `${days}d ${hours}h`;
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  }, []);
 
   const contactPayBackToChatRef = React.useRef<ContactId | null>(null);
 
@@ -8774,9 +8716,6 @@ const App = () => {
         displayUnit={displayUnit}
         tokenInfo={tokenInfo}
         credoInfo={credoInfo}
-        formatInteger={formatInteger}
-        getInitials={getInitials}
-        formatContactMessageTimestamp={formatContactMessageTimestamp}
         getMintIconUrl={getMintIconUrl}
         onSelect={() => openContactDetail(contact)}
         onMintIconLoad={(origin, url) => {
@@ -10024,28 +9963,6 @@ const App = () => {
     pointerEvents: contactsToolbarProgress > 0.02 ? "auto" : "none",
   } satisfies React.CSSProperties;
 
-  const formatContactMessageTimestamp = (createdAtSec: number): string => {
-    const ms = Number(createdAtSec ?? 0) * 1000;
-    if (!Number.isFinite(ms) || ms <= 0) return "";
-    const d = new Date(ms);
-    const now = new Date();
-    const sameDay =
-      d.getFullYear() === now.getFullYear() &&
-      d.getMonth() === now.getMonth() &&
-      d.getDate() === now.getDate();
-    const locale = lang === "cs" ? "cs-CZ" : "en-US";
-    if (sameDay) {
-      return new Intl.DateTimeFormat(locale, {
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(d);
-    }
-    return new Intl.DateTimeFormat(locale, {
-      day: "2-digit",
-      month: "2-digit",
-    }).format(d);
-  };
-
   const topbar = (() => {
     if (route.kind === "advanced") {
       return {
@@ -10746,35 +10663,6 @@ const App = () => {
 
   const chatTopbarContact =
     route.kind === "chat" && selectedContact ? selectedContact : null;
-
-  const formatChatDayLabel = (ms: number): string => {
-    const d = new Date(ms);
-    const now = new Date();
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    ).getTime();
-    const startOfThatDay = new Date(
-      d.getFullYear(),
-      d.getMonth(),
-      d.getDate(),
-    ).getTime();
-
-    const diffDays = Math.round((startOfToday - startOfThatDay) / 86_400_000);
-    if (diffDays === 0) return t("today");
-    if (diffDays === 1) return t("yesterday");
-
-    const locale = lang === "cs" ? "cs-CZ" : "en-US";
-    const weekday = new Intl.DateTimeFormat(locale, {
-      weekday: "short",
-    }).format(d);
-    const day = d.getDate();
-    const month = d.getMonth() + 1;
-    // Match desired style like "Pá 2. 1." (cs) / "Fri 1/2" (en-ish).
-    if (lang === "cs") return `${weekday} ${day}. ${month}.`;
-    return `${weekday} ${month}/${day}`;
-  };
 
   const extractCashuTokenFromText = React.useCallback(
     (text: string): string | null => {
@@ -11872,7 +11760,6 @@ const App = () => {
         recentlyReceivedToken={recentlyReceivedToken}
         toasts={toasts}
         displayUnit={displayUnit}
-        formatInteger={formatInteger}
         pushToast={pushToast}
         setRecentlyReceivedToken={setRecentlyReceivedToken}
         t={t}
@@ -11907,9 +11794,6 @@ const App = () => {
           effectiveMyLightningAddress={effectiveMyLightningAddress}
           effectiveProfileName={effectiveProfileName}
           effectiveProfilePicture={effectiveProfilePicture}
-          formatInteger={formatInteger}
-          formatShortNpub={formatShortNpub}
-          getInitials={getInitials}
           isProfileEditing={isProfileEditing}
           lang={lang}
           menuIsOpen={menuIsOpen}
@@ -11986,7 +11870,6 @@ const App = () => {
             <PaymentsHistoryPage
               paymentEvents={paymentEvents}
               lang={lang}
-              formatInteger={formatInteger}
               displayUnit={displayUnit}
               t={t}
             />
@@ -12111,7 +11994,6 @@ const App = () => {
             <WalletPage
               cashuBalance={cashuBalance}
               displayUnit={displayUnit}
-              formatInteger={formatInteger}
               openScan={openScan}
               scanIsOpen={scanIsOpen}
               bottomTabActive={bottomTabActive}
@@ -12129,10 +12011,6 @@ const App = () => {
               setTopupAmount={setTopupAmount}
               topupInvoiceIsBusy={topupInvoiceIsBusy}
               displayUnit={displayUnit}
-              formatShortNpub={formatShortNpub}
-              formatMiddleDots={formatMiddleDots}
-              formatInteger={formatInteger}
-              getInitials={getInitials}
               t={t}
             />
           )}
@@ -12147,7 +12025,6 @@ const App = () => {
               topupInvoiceIsBusy={topupInvoiceIsBusy}
               displayUnit={displayUnit}
               copyText={copyText}
-              formatInteger={formatInteger}
               t={t}
             />
           )}
@@ -12169,7 +12046,6 @@ const App = () => {
               setMintIconUrlByMint={setMintIconUrlByMint}
               saveCashuFromText={saveCashuFromText}
               getMintIconUrl={getMintIconUrl}
-              formatInteger={formatInteger}
               getCredoRemainingAmount={getCredoRemainingAmount}
               t={t}
             />
@@ -12195,9 +12071,6 @@ const App = () => {
               contacts={contacts}
               displayUnit={displayUnit}
               getCredoRemainingAmount={getCredoRemainingAmount}
-              formatShortNpub={formatShortNpub}
-              formatInteger={formatInteger}
-              formatDurationShort={formatDurationShort}
               t={t}
             />
           )}
@@ -12211,7 +12084,6 @@ const App = () => {
               payWithCashuEnabled={payWithCashuEnabled}
               allowPromisesEnabled={allowPromisesEnabled}
               feedbackContactNpub={FEEDBACK_CONTACT_NPUB}
-              getInitials={getInitials}
               getCredoAvailableForContact={getCredoAvailableForContact}
               openContactPay={openContactPay}
               t={t}
@@ -12233,9 +12105,7 @@ const App = () => {
               payAmount={payAmount}
               setPayAmount={setPayAmount}
               displayUnit={displayUnit}
-              getInitials={getInitials}
               getCredoAvailableForContact={getCredoAvailableForContact}
-              formatInteger={formatInteger}
               paySelectedContact={paySelectedContact}
               t={t}
             />
@@ -12251,8 +12121,6 @@ const App = () => {
               setLnAddressPayAmount={setLnAddressPayAmount}
               displayUnit={displayUnit}
               payLightningAddressWithCashu={payLightningAddressWithCashu}
-              formatMiddleDots={formatMiddleDots}
-              formatInteger={formatInteger}
               t={t}
             />
           )}
@@ -12274,8 +12142,6 @@ const App = () => {
               nostrPictureByNpub={nostrPictureByNpub}
               setMintIconUrlByMint={setMintIconUrlByMint}
               chatMessageElByIdRef={chatMessageElByIdRef}
-              formatInteger={formatInteger}
-              formatChatDayLabel={formatChatDayLabel}
               getCashuTokenMessageInfo={getCashuTokenMessageInfo}
               getCredoTokenMessageInfo={getCredoTokenMessageInfo}
               getMintIconUrl={getMintIconUrl}
@@ -12373,8 +12239,6 @@ const App = () => {
               onPickProfilePhoto={onPickProfilePhoto}
               saveProfileEdits={saveProfileEdits}
               copyText={copyText}
-              formatShortNpub={formatShortNpub}
-              getInitials={getInitials}
               t={t}
             />
           )}

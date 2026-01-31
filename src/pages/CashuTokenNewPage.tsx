@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import { formatInteger } from "../utils/formatting";
 import { useNavigation } from "../hooks/useRouting";
 import { CashuTokenPill } from "../components/CashuTokenPill";
 import { CredoTokenPill } from "../components/CredoTokenPill";
@@ -13,7 +14,6 @@ interface CashuTokenNewPageProps {
   credoOweTokens: any[];
   credoPromisedTokens: any[];
   displayUnit: string;
-  formatInteger: (val: number) => string;
   getCredoRemainingAmount: (row: any) => number;
   getMintIconUrl: (mint: unknown) => {
     origin: string | null;
@@ -44,7 +44,6 @@ export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
   credoOweTokens,
   credoPromisedTokens,
   displayUnit,
-  formatInteger,
   getCredoRemainingAmount,
   getMintIconUrl,
   nostrPictureByNpub,

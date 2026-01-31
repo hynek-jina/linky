@@ -2,6 +2,7 @@ import type { FC } from "react";
 import { AmountDisplay } from "../components/AmountDisplay";
 import { Keypad } from "../components/Keypad";
 import type { ContactId } from "../evolu";
+import { formatInteger, getInitials } from "../utils/formatting";
 
 interface Contact {
   id: ContactId;
@@ -16,9 +17,7 @@ interface ContactPayPageProps {
   cashuIsBusy: boolean;
   contactPayMethod: "lightning" | "cashu" | null;
   displayUnit: string;
-  formatInteger: (val: number) => string;
   getCredoAvailableForContact: (npub: string) => number;
-  getInitials: (name: string) => string;
   nostrPictureByNpub: Record<string, string | null>;
   payAmount: string;
   paySelectedContact: () => Promise<void>;
@@ -39,9 +38,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
   cashuIsBusy,
   contactPayMethod,
   displayUnit,
-  formatInteger,
   getCredoAvailableForContact,
-  getInitials,
   nostrPictureByNpub,
   payAmount,
   paySelectedContact,

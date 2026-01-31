@@ -1,4 +1,5 @@
 import React from "react";
+import { formatShortNpub, getInitials } from "../utils/formatting";
 
 interface ProfileQrModalProps {
   closeProfileQr: () => void;
@@ -12,8 +13,6 @@ interface ProfileQrModalProps {
   effectiveMyLightningAddress: string | null;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
-  formatShortNpub: (npub: string) => string;
-  getInitials: (name: string) => string;
   isProfileEditing: boolean;
   myProfileQr: string | null;
   onClose: () => void;
@@ -47,8 +46,6 @@ export function ProfileQrModal({
   effectiveMyLightningAddress,
   effectiveProfileName,
   effectiveProfilePicture,
-  formatShortNpub,
-  getInitials,
   isProfileEditing,
   myProfileQr,
   onClose,

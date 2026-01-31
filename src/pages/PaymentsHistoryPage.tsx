@@ -1,3 +1,4 @@
+import { formatInteger } from "../utils/formatting";
 import { PaymentHistoryRow } from "../components/PaymentHistoryRow";
 
 interface PaymentEvent {
@@ -13,7 +14,6 @@ interface PaymentEvent {
 
 interface PaymentsHistoryPageProps {
   displayUnit: string;
-  formatInteger: (value: number) => string;
   lang: string;
   paymentEvents: unknown[];
   t: (key: string) => string;
@@ -21,7 +21,6 @@ interface PaymentsHistoryPageProps {
 
 export function PaymentsHistoryPage({
   displayUnit,
-  formatInteger,
   lang,
   paymentEvents,
   t,

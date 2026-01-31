@@ -60,9 +60,6 @@ interface AuthenticatedLayoutProps {
   effectiveMyLightningAddress: string | null;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
-  formatInteger: (value: number) => string;
-  formatShortNpub: (npub: string) => string;
-  getInitials: (name: string) => string;
   isProfileEditing: boolean;
   lang: Lang;
   menuIsOpen: boolean;
@@ -132,9 +129,6 @@ export function AuthenticatedLayout({
   effectiveMyLightningAddress,
   effectiveProfileName,
   effectiveProfilePicture,
-  formatInteger,
-  formatShortNpub,
-  getInitials,
   isProfileEditing,
   lang,
   menuIsOpen,
@@ -181,8 +175,6 @@ export function AuthenticatedLayout({
         currentNpub={currentNpub}
         effectiveProfileName={effectiveProfileName}
         effectiveProfilePicture={effectiveProfilePicture}
-        formatShortNpub={formatShortNpub}
-        getInitials={getInitials}
         nostrPictureByNpub={nostrPictureByNpub}
         openProfileQr={openProfileQr}
         route={route}
@@ -233,8 +225,6 @@ export function AuthenticatedLayout({
           effectiveMyLightningAddress={effectiveMyLightningAddress}
           effectiveProfileName={effectiveProfileName}
           effectiveProfilePicture={effectiveProfilePicture}
-          formatShortNpub={formatShortNpub}
-          getInitials={getInitials}
           isProfileEditing={isProfileEditing}
           myProfileQr={myProfileQr}
           onClose={closeProfileQr}
@@ -264,7 +254,6 @@ export function AuthenticatedLayout({
         <SaveContactPromptModal
           amountSat={postPaySaveContact.amountSat}
           displayUnit={displayUnit}
-          formatInteger={formatInteger}
           lnAddress={postPaySaveContact.lnAddress}
           onClose={() => setPostPaySaveContact(null)}
           setContactNewPrefill={setContactNewPrefill}

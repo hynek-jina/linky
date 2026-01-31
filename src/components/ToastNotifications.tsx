@@ -1,4 +1,5 @@
 import React from "react";
+import { formatInteger } from "../utils/formatting";
 
 type Toast = {
   id: string;
@@ -12,7 +13,6 @@ type RecentlyReceivedToken = {
 
 type ToastNotificationsProps = {
   displayUnit: string;
-  formatInteger: (value: number) => string;
   pushToast: (message: string) => void;
   recentlyReceivedToken: RecentlyReceivedToken;
   setRecentlyReceivedToken: (token: RecentlyReceivedToken) => void;
@@ -22,7 +22,6 @@ type ToastNotificationsProps = {
 
 export const ToastNotifications: React.FC<ToastNotificationsProps> = ({
   displayUnit,
-  formatInteger,
   pushToast,
   recentlyReceivedToken,
   setRecentlyReceivedToken,
