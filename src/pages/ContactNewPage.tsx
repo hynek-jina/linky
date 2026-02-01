@@ -11,6 +11,7 @@ interface ContactNewPageProps {
   form: ContactFormData;
   groupNames: string[];
   handleSaveContact: () => void;
+  isSavingContact: boolean;
   openScan: () => void;
   scanIsOpen: boolean;
   setForm: (value: ContactFormData) => void;
@@ -21,6 +22,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   form,
   groupNames,
   handleSaveContact,
+  isSavingContact,
   openScan,
   scanIsOpen,
   setForm,
@@ -67,7 +69,9 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
           )}
 
           <div className="actions">
-            <button onClick={handleSaveContact}>{t("saveContact")}</button>
+            <button onClick={handleSaveContact} disabled={isSavingContact}>
+              {isSavingContact ? t("saving") : t("saveContact")}
+            </button>
             <button
               type="button"
               className="secondary"

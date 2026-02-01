@@ -16,11 +16,13 @@ import {
 import { deriveDefaultProfile } from "./derivedProfile";
 import type { CashuTokenId, ContactId, CredoTokenId, MintId } from "./evolu";
 import {
-  createJournalEntryPayload,
   DEFAULT_EVOLU_SERVER_URLS,
   evolu,
+  loadEvoluCurrentData,
+  loadEvoluHistoryData,
   normalizeEvoluServerUrl,
   useEvolu,
+  useEvoluDatabaseInfoState,
   useEvoluLastError,
   useEvoluServersManager,
   useEvoluSyncOwner,
@@ -58,6 +60,9 @@ import {
   NostrRelaysPage,
   NostrRelayNewPage,
   NostrRelayPage,
+  EvoluCurrentDataPage,
+  EvoluDataDetailPage,
+  EvoluHistoryDataPage,
   EvoluServersPage,
   EvoluServerPage,
   EvoluServerNewPage,
@@ -452,6 +457,7 @@ const App = () => {
 
   const [form, setForm] = useState<ContactFormState>(makeEmptyForm());
   const [editingId, setEditingId] = useState<ContactId | null>(null);
+  const [isSavingContact, setIsSavingContact] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const importDataFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -557,6 +563,8 @@ const App = () => {
 
   const evoluLastError = useEvoluLastError({ logToConsole: true });
   const evoluHasError = Boolean(evoluLastError);
+
+  const evoluDbInfo = useEvoluDatabaseInfoState({ enabled: true });
 
   const evoluConnectedServerCount = useMemo(() => {
     if (evoluHasError) return 0;
@@ -7966,9 +7974,6 @@ const App = () => {
   );
 
   const handleDelete = (id: ContactId) => {
-    const existing = contacts.find(
-      (c) => String(c.id ?? "") === String(id as unknown as string),
-    );
     const result = appOwnerId
       ? update(
           "contact",
@@ -7977,31 +7982,6 @@ const App = () => {
         )
       : update("contact", { id, isDeleted: Evolu.sqliteTrue });
     if (result.ok) {
-      const journalPayload = createJournalEntryPayload({
-        action: "contact.delete",
-        entity: "contact",
-        entityId: id,
-        summary:
-          String(existing?.name ?? "").trim() ||
-          String(existing?.npub ?? "").trim() ||
-          String(existing?.lnAddress ?? "").trim() ||
-          String(id as unknown as string),
-        payload: {
-          name: String(existing?.name ?? "").trim() || null,
-          npub: String(existing?.npub ?? "").trim() || null,
-          lnAddress: String(existing?.lnAddress ?? "").trim() || null,
-          groupName: String(existing?.groupName ?? "").trim() || null,
-        },
-      });
-      try {
-        appOwnerId
-          ? insert("journalEntry", journalPayload as any, {
-              ownerId: appOwnerId,
-            })
-          : insert("journalEntry", journalPayload as any);
-      } catch {
-        // ignore
-      }
       setStatus(t("contactDeleted"));
       closeContactDetail();
       return;
@@ -8782,6 +8762,8 @@ const App = () => {
   }, [route, selectedContact]);
 
   const handleSaveContact = () => {
+    if (isSavingContact) return; // Prevent double-click
+    
     const name = form.name.trim();
     const npub = form.npub.trim();
     const lnAddress = form.lnAddress.trim();
@@ -8791,6 +8773,8 @@ const App = () => {
       setStatus(t("fillAtLeastOne"));
       return;
     }
+
+    setIsSavingContact(true);
 
     const payload = {
       name: name ? (name as typeof Evolu.NonEmptyString1000.Type) : null,
@@ -8802,114 +8786,66 @@ const App = () => {
     };
 
     if (editingId) {
-      const result = appOwnerId
-        ? update(
-            "contact",
-            { id: editingId, ...payload },
-            { ownerId: appOwnerId },
-          )
-        : update("contact", { id: editingId, ...payload });
-      if (result.ok) {
-        const initial = contactEditInitialRef.current;
-        const changes: Record<
-          string,
-          { from: string | null; to: string | null }
-        > = {};
-        if (initial?.id === editingId) {
-          const nextName = payload.name ? String(payload.name) : null;
-          const nextNpub = payload.npub ? String(payload.npub) : null;
-          const nextLn = payload.lnAddress ? String(payload.lnAddress) : null;
-          const nextGroup = payload.groupName
-            ? String(payload.groupName)
-            : null;
+      // Build update payload with only changed fields to minimize history entries
+      const initial = contactEditInitialRef.current;
+      const changedFields: any = { id: editingId };
 
-          const prevName = initial.name || null;
-          const prevNpub = initial.npub || null;
-          const prevLn = initial.lnAddress || null;
-          const prevGroup = initial.group || null;
+      if (initial?.id === editingId) {
+        const nextName = payload.name ? String(payload.name) : null;
+        const nextNpub = payload.npub ? String(payload.npub) : null;
+        const nextLn = payload.lnAddress ? String(payload.lnAddress) : null;
+        const nextGroup = payload.groupName ? String(payload.groupName) : null;
 
-          if ((prevName ?? "") !== (nextName ?? ""))
-            changes.name = { from: prevName, to: nextName };
-          if ((prevNpub ?? "") !== (nextNpub ?? ""))
-            changes.npub = { from: prevNpub, to: nextNpub };
-          if ((prevLn ?? "") !== (nextLn ?? ""))
-            changes.lnAddress = { from: prevLn, to: nextLn };
-          if ((prevGroup ?? "") !== (nextGroup ?? ""))
-            changes.group = { from: prevGroup, to: nextGroup };
-        }
+        const prevName = initial.name || null;
+        const prevNpub = initial.npub || null;
+        const prevLn = initial.lnAddress || null;
+        const prevGroup = initial.group || null;
 
-        const journalPayload = createJournalEntryPayload({
-          action: "contact.edit",
-          entity: "contact",
-          entityId: editingId,
-          summary:
-            (payload.name ? String(payload.name) : "") ||
-            (payload.npub ? String(payload.npub) : "") ||
-            (payload.lnAddress ? String(payload.lnAddress) : ""),
-          payload: {
-            changes,
-            next: {
-              name: payload.name ? String(payload.name) : null,
-              npub: payload.npub ? String(payload.npub) : null,
-              lnAddress: payload.lnAddress ? String(payload.lnAddress) : null,
-              groupName: payload.groupName ? String(payload.groupName) : null,
-            },
-          },
-        });
-        try {
-          appOwnerId
-            ? insert("journalEntry", journalPayload as any, {
-                ownerId: appOwnerId,
-              })
-            : insert("journalEntry", journalPayload as any);
-        } catch {
-          // ignore
-        }
-        setStatus(t("contactUpdated"));
+        if ((prevName ?? "") !== (nextName ?? "")) changedFields.name = payload.name;
+        if ((prevNpub ?? "") !== (nextNpub ?? "")) changedFields.npub = payload.npub;
+        if ((prevLn ?? "") !== (nextLn ?? "")) changedFields.lnAddress = payload.lnAddress;
+        if ((prevGroup ?? "") !== (nextGroup ?? "")) changedFields.groupName = payload.groupName;
       } else {
-        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+        // Fallback: if we don't have initial data, update all fields
+        Object.assign(changedFields, payload);
+      }
+
+      // Only update if there are actual changes (besides just the id)
+      if (Object.keys(changedFields).length > 1) {
+        const result = appOwnerId
+          ? update("contact", changedFields, { ownerId: appOwnerId })
+          : update("contact", changedFields);
+        if (result.ok) {
+          setStatus(t("contactUpdated"));
+        } else {
+          setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+          setIsSavingContact(false);
+          return;
+        }
+      } else {
+        setStatus(t("contactUpdated"));
       }
     } else {
       const result = appOwnerId
         ? insert("contact", payload, { ownerId: appOwnerId })
         : insert("contact", payload);
       if (result.ok) {
-        const journalPayload = createJournalEntryPayload({
-          action: "contact.add",
-          entity: "contact",
-          entityId: result.value.id,
-          summary:
-            (payload.name ? String(payload.name) : "") ||
-            (payload.npub ? String(payload.npub) : "") ||
-            (payload.lnAddress ? String(payload.lnAddress) : ""),
-          payload: {
-            name: payload.name ? String(payload.name) : null,
-            npub: payload.npub ? String(payload.npub) : null,
-            lnAddress: payload.lnAddress ? String(payload.lnAddress) : null,
-            groupName: payload.groupName ? String(payload.groupName) : null,
-          },
-        });
-        try {
-          appOwnerId
-            ? insert("journalEntry", journalPayload as any, {
-                ownerId: appOwnerId,
-              })
-            : insert("journalEntry", journalPayload as any);
-        } catch {
-          // ignore
-        }
         setStatus(t("contactSaved"));
       } else {
         setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+        setIsSavingContact(false);
+        return;
       }
     }
 
     if (route.kind === "contactEdit" && editingId) {
       navigateTo({ route: "contact", id: editingId });
+      setIsSavingContact(false);
       return;
     }
 
     closeContactDetail();
+    setIsSavingContact(false);
   };
 
   const refreshContactFromNostr = React.useCallback(
@@ -10036,6 +9972,14 @@ const App = () => {
       };
     }
 
+    if (route.kind === "evoluData") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: () => navigateTo({ route: "advanced" }),
+      };
+    }
+
     if (route.kind === "lnAddressPay") {
       return {
         icon: "<",
@@ -10077,6 +10021,22 @@ const App = () => {
     }
 
     if (route.kind === "evoluServerNew") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: () => navigateTo({ route: "evoluServers" }),
+      };
+    }
+
+    if (route.kind === "evoluCurrentData") {
+      return {
+        icon: "<",
+        label: t("close"),
+        onClick: () => navigateTo({ route: "evoluServers" }),
+      };
+    }
+
+    if (route.kind === "evoluHistoryData") {
       return {
         icon: "<",
         label: t("close"),
@@ -10225,6 +10185,11 @@ const App = () => {
       };
     }
 
+    // No menu button for nested settings pages
+    if (route.kind === "evoluCurrentData" || route.kind === "evoluHistoryData" || route.kind === "contactEdit") {
+      return null;
+    }
+
     return {
       icon: "☰",
       label: t("menu"),
@@ -10252,6 +10217,8 @@ const App = () => {
     if (route.kind === "evoluServers") return t("evoluServer");
     if (route.kind === "evoluServer") return t("evoluServer");
     if (route.kind === "evoluServerNew") return t("evoluAddServerLabel");
+    if (route.kind === "evoluCurrentData") return t("evoluData");
+    if (route.kind === "evoluHistoryData") return t("evoluHistory");
     if (route.kind === "contactNew") return t("newContact");
     if (route.kind === "contact") return t("contact");
     if (route.kind === "contactEdit") return t("contactEditTitle");
@@ -11918,11 +11885,33 @@ const App = () => {
 
           {route.kind === "evoluServers" && (
             <EvoluServersPage
-              evoluServerUrls={evoluServerUrls}
-              evoluServerStatusByUrl={evoluServerStatusByUrl}
+              evoluDatabaseBytes={evoluDbInfo.info.bytes}
               evoluHasError={evoluHasError}
-              syncOwner={syncOwner}
+              evoluHistoryCount={evoluDbInfo.info.historyCount}
+              evoluServerStatusByUrl={evoluServerStatusByUrl}
+              evoluServerUrls={evoluServerUrls}
+              evoluTableCounts={evoluDbInfo.info.tableCounts}
               isEvoluServerOffline={isEvoluServerOffline}
+              onClearDatabase={() => {
+                if (window.confirm(t("evoluClearDatabaseConfirm"))) {
+                  void wipeEvoluStorage();
+                }
+              }}
+              syncOwner={syncOwner}
+              t={t}
+            />
+          )}
+
+          {route.kind === "evoluCurrentData" && (
+            <EvoluCurrentDataPage
+              loadCurrentData={loadEvoluCurrentData}
+              t={t}
+            />
+          )}
+
+          {route.kind === "evoluHistoryData" && (
+            <EvoluHistoryDataPage
+              loadHistoryData={loadEvoluHistoryData}
               t={t}
             />
           )}
@@ -11959,6 +11948,22 @@ const App = () => {
               setStatus={setStatus}
               pushToast={pushToast}
               wipeEvoluStorage={wipeEvoluStorage}
+              t={t}
+            />
+          )}
+
+          {route.kind === "evoluData" && (
+            <EvoluDataDetailPage
+              evoluDatabaseBytes={evoluDbInfo.info.bytes}
+              evoluTableCounts={evoluDbInfo.info.tableCounts}
+              evoluHistoryCount={evoluDbInfo.info.historyCount}
+              onClearDatabase={() => {
+                if (window.confirm(t("evoluClearDatabaseConfirm"))) {
+                  void wipeEvoluStorage();
+                }
+              }}
+              loadHistoryData={loadEvoluHistoryData}
+              loadCurrentData={loadEvoluCurrentData}
               t={t}
             />
           )}
@@ -12162,6 +12167,7 @@ const App = () => {
               contactEditsSavable={contactEditsSavable}
               pendingDeleteId={pendingDeleteId}
               handleSaveContact={handleSaveContact}
+              isSavingContact={isSavingContact}
               requestDeleteCurrentContact={requestDeleteCurrentContact}
               resetEditedContactFieldFromNostr={
                 resetEditedContactFieldFromNostr
@@ -12177,6 +12183,7 @@ const App = () => {
               groupNames={groupNames}
               scanIsOpen={scanIsOpen}
               handleSaveContact={handleSaveContact}
+              isSavingContact={isSavingContact}
               openScan={openScan}
               t={t}
             />
