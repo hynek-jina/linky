@@ -18,6 +18,7 @@ interface ContactEditPageProps {
   form: ContactFormData;
   groupNames: string[];
   handleSaveContact: () => void;
+  isSavingContact: boolean;
   pendingDeleteId: ContactId | null;
   requestDeleteCurrentContact: () => void;
   resetEditedContactFieldFromNostr: (
@@ -34,6 +35,7 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
   form,
   groupNames,
   handleSaveContact,
+  isSavingContact,
   pendingDeleteId,
   requestDeleteCurrentContact,
   resetEditedContactFieldFromNostr,
@@ -130,11 +132,13 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
           <div className="actions">
             {editingId ? (
               contactEditsSavable && (
-                <button onClick={handleSaveContact}>{t("saveChanges")}</button>
+                <button onClick={handleSaveContact} disabled={isSavingContact}>
+                  {isSavingContact ? t("saving") : t("saveChanges")}
+                </button>
               )
             ) : (
-              <button onClick={handleSaveContact} data-guide="contact-save">
-                {t("saveContact")}
+              <button onClick={handleSaveContact} data-guide="contact-save" disabled={isSavingContact}>
+                {isSavingContact ? t("saving") : t("saveContact")}
               </button>
             )}
             <button

@@ -26,6 +26,9 @@ type NavigationAction =
   | { route: "contactPay"; id: ContactId }
   | { route: "contacts" }
   | { route: "credoToken"; id: CredoTokenId }
+  | { route: "evoluCurrentData" }
+  | { route: "evoluData" }
+  | { route: "evoluHistoryData" }
   | { route: "evoluServer"; id: string }
   | { route: "evoluServerNew" }
   | { route: "evoluServers" }
@@ -126,6 +129,15 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "evoluServers":
       window.location.assign("#evolu-servers");
+      break;
+    case "evoluData":
+      window.location.assign("#evolu-data");
+      break;
+    case "evoluCurrentData":
+      window.location.assign("#evolu-current-data");
+      break;
+    case "evoluHistoryData":
+      window.location.assign("#evolu-history-data");
       break;
     case "evoluServer":
       window.location.assign(

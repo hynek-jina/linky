@@ -36,18 +36,28 @@ export type EvoluServerStatus = "checking" | "connected" | "disconnected";
 export type EvoluDatabaseInfo = {
   bytes: number | null;
   tableCounts: Record<string, number | null>;
+  historyCount: number | null;
   updatedAtMs: number | null;
 };
 
-export type JournalAction =
-  | "contact.add"
-  | "contact.edit"
-  | "contact.delete"
-  | (string & {});
 
 export const DEFAULT_EVOLU_SERVER_URLS: ReadonlyArray<string> = [
   "wss://free.evoluhq.com",
 ];
+
+// Generate a valid SimpleName (1-42 chars, alphanumeric + dash) from mnemonic
+// Each user gets their own SQLite database file
+const generateDbNameFromMnemonic = (mnemonic: string): string => {
+  // Simple hash function to create a short unique identifier
+  let hash = 0;
+  for (let i = 0; i < mnemonic.length; i++) {
+    const char = mnemonic.charCodeAt(i);
+    hash = ((hash << 5) - hash + char) | 0;
+  }
+  // Convert to positive hex string, take first 8 chars for brevity
+  const hashHex = Math.abs(hash).toString(16).padStart(8, "0").slice(0, 8);
+  return `linky-${hashHex}`;
+};
 
 export const normalizeEvoluServerUrl = (value: unknown): string | null => {
   const raw = String(value ?? "")
@@ -290,9 +300,6 @@ export type AppStateId = typeof AppStateId.Type;
 const MintId = Evolu.id("Mint");
 export type MintId = typeof MintId.Type;
 
-// Primary key pro JournalEntry tabulku (audit změn)
-const JournalEntryId = Evolu.id("JournalEntry");
-export type JournalEntryId = typeof JournalEntryId.Type;
 
 // Schema pro Linky app
 export const Schema = {
@@ -405,61 +412,68 @@ export const Schema = {
     infoJson: Evolu.nullOr(Evolu.NonEmptyString1000),
     lastCheckedAtSec: Evolu.nullOr(Evolu.PositiveInt),
   },
-
-  journalEntry: {
-    id: JournalEntryId,
-    // Seconds since epoch.
-    createdAtSec: Evolu.PositiveInt,
-    // e.g. "contact.add" | "contact.edit" | "contact.delete"
-    action: Evolu.NonEmptyString100,
-    // e.g. "contact"
-    entity: Evolu.NonEmptyString100,
-    // id of mutated entity (best-effort string)
-    entityId: Evolu.nullOr(Evolu.NonEmptyString1000),
-    // short human-readable summary
-    summary: Evolu.nullOr(Evolu.NonEmptyString1000),
-    // estimated UTF-8 bytes of payloadJson (full JSON before truncation)
-    payloadBytes: Evolu.PositiveInt,
-    // JSON payload (best-effort, truncated)
-    payloadJson: Evolu.nullOr(Evolu.NonEmptyString1000),
-  },
 };
 
-// Vytvoř Evolu instanci
-const getInitialMnemonicFromStorage = (): Evolu.Mnemonic | undefined => {
-  // During SSR/tests, localStorage may not exist.
-  if (typeof localStorage === "undefined") return undefined;
+// Create Evolu instance for a specific user (mnemonic)
+// Each user gets their own SQLite database file based on their mnemonic
+export const createEvoluForUser = (mnemonic: string | null) => {
+  const dbName = mnemonic
+    ? generateDbNameFromMnemonic(mnemonic)
+    : "linky-anon";
 
-  try {
-    const stored = localStorage.getItem(INITIAL_MNEMONIC_STORAGE_KEY);
-    if (stored) {
-      const validated = Evolu.Mnemonic.fromUnknown(stored);
-      if (validated.ok) return validated.value;
-    }
-  } catch {
-    return undefined;
+  const validatedName = SimpleName.from(dbName);
+  // Fallback to a safe name if generation fails
+  const finalName = validatedName.ok
+    ? validatedName.value
+    : SimpleName.orThrow("linky-default");
+
+  const externalAppOwner = mnemonic
+    ? (Evolu.createAppOwner(
+        Evolu.mnemonicToOwnerSecret(
+          mnemonic as unknown as Evolu.Mnemonic,
+        ) as unknown as Evolu.OwnerSecret,
+      ) as Evolu.AppOwner)
+    : null;
+
+  return createEvolu(evoluReactWebDeps)(Schema, {
+    name: finalName,
+    transports: EVOLU_TRANSPORTS,
+    enableLogging: isEvoluLoggingEnabled(),
+    ...(externalAppOwner ? { externalAppOwner } : {}),
+  });
+};
+
+// Type for the Evolu instance
+type EvoluInstance = ReturnType<typeof createEvoluForUser>;
+
+// Global evolu instance - will be set when user is determined
+let globalEvoluInstance: EvoluInstance | null = null;
+
+// Initialize or get the Evolu instance for current user
+export const getEvolu = (mnemonic?: string | null): EvoluInstance => {
+  if (mnemonic !== undefined) {
+    // Create new instance for this specific mnemonic
+    globalEvoluInstance = createEvoluForUser(mnemonic);
   }
 
-  return undefined;
+  if (!globalEvoluInstance) {
+    // Try to get mnemonic from storage on first call
+    const storedMnemonic = (() => {
+      if (typeof localStorage === "undefined") return null;
+      try {
+        return localStorage.getItem(INITIAL_MNEMONIC_STORAGE_KEY);
+      } catch {
+        return null;
+      }
+    })();
+    globalEvoluInstance = createEvoluForUser(storedMnemonic);
+  }
+
+  return globalEvoluInstance;
 };
 
-const initialMnemonic = getInitialMnemonicFromStorage();
-const externalAppOwner = initialMnemonic
-  ? // Evolu's runtime supports 12-word mnemonics; the types are stricter than runtime.
-    (Evolu.createAppOwner(
-      Evolu.mnemonicToOwnerSecret(
-        initialMnemonic as unknown as Evolu.Mnemonic,
-      ) as unknown as Evolu.OwnerSecret,
-    ) as Evolu.AppOwner)
-  : null;
-
-export const evolu = createEvolu(evoluReactWebDeps)(Schema, {
-  name: SimpleName.orThrow("linky"),
-  // Použijeme default free sync server
-  transports: EVOLU_TRANSPORTS,
-  enableLogging: isEvoluLoggingEnabled(),
-  ...(externalAppOwner ? { externalAppOwner } : {}),
-});
+// Legacy export for backward compatibility - gets the current global instance
+export const evolu = getEvolu();
 
 export const useEvoluSyncOwner = (enabled: boolean): Evolu.SyncOwner | null => {
   const [syncOwner, setSyncOwner] = useState<Evolu.SyncOwner | null>(null);
@@ -471,8 +485,8 @@ export const useEvoluSyncOwner = (enabled: boolean): Evolu.SyncOwner | null => {
     }
 
     let cancelled = false;
-    void evolu.appOwner
-      .then((owner) => {
+    void getEvolu()
+      .appOwner.then((owner) => {
         if (cancelled) return;
         setSyncOwner(owner as unknown as Evolu.SyncOwner);
       })
@@ -496,8 +510,9 @@ export const useEvoluLastError = (opts?: {
   const [lastError, setLastError] = useState<unknown>(null);
 
   useEffect(() => {
-    const unsub = evolu.subscribeError(() => {
-      const err = evolu.getError();
+    const instance = getEvolu();
+    const unsub = instance.subscribeError(() => {
+      const err = instance.getError();
       setLastError(err);
       if (logToConsole && err) console.log("[linky][evolu] error", err);
     });
@@ -517,6 +532,7 @@ export const useEvoluLastError = (opts?: {
 export const getEvoluDatabaseInfo = async (): Promise<{
   bytes: number;
   tableCounts: Record<string, number | null>;
+  historyCount: number | null;
 }> => {
   const tables = [
     "contact",
@@ -527,10 +543,11 @@ export const getEvoluDatabaseInfo = async (): Promise<{
     "paymentEvent",
     "appState",
     "mintInfo",
-    "journalEntry",
   ] as const;
 
-  const dbBytesPromise = evolu
+  const instance = getEvolu();
+
+  const dbBytesPromise = instance
     .exportDatabase()
     .then((bytes) => bytes.byteLength);
 
@@ -538,12 +555,12 @@ export const getEvoluDatabaseInfo = async (): Promise<{
     const out: Record<string, number | null> = {};
     for (const table of tables) {
       try {
-        const q = evolu.createQuery((db: any) =>
+        const q = instance.createQuery((db: any) =>
           db
             .selectFrom(table)
             .select((eb: any) => eb.fn.countAll().as("count")),
         );
-        const rows = await evolu.loadQuery(q as any);
+        const rows = await instance.loadQuery(q as any);
         out[table] = Number((rows?.[0] as any)?.count ?? 0);
       } catch {
         out[table] = null;
@@ -552,66 +569,126 @@ export const getEvoluDatabaseInfo = async (): Promise<{
     return out;
   })();
 
-  const [bytes, tableCounts] = await Promise.all([
+  // Count history entries (time travel mutations)
+  const historyCountPromise = (async () => {
+    try {
+      const q = instance.createQuery((db: any) =>
+        db
+          .selectFrom("evolu_history")
+          .select((eb: any) => eb.fn.countAll().as("count")),
+      );
+      const rows = await instance.loadQuery(q as any);
+      return Number((rows?.[0] as any)?.count ?? 0);
+    } catch {
+      return null;
+    }
+  })();
+
+  const [bytes, tableCounts, historyCount] = await Promise.all([
     dbBytesPromise,
     tableCountsPromise,
+    historyCountPromise,
   ]);
 
-  return { bytes, tableCounts };
+  return { bytes, tableCounts, historyCount };
 };
 
-const estimateUtf8Bytes = (value: string): number => {
+// Helper to convert Uint8Array to base64
+const uint8ArrayToBase64 = (bytes: any): string => {
+  if (!bytes || typeof bytes !== "object") return "";
+  const arr = Object.values(bytes) as number[];
+  if (arr.length === 0) return "";
   try {
-    return new TextEncoder().encode(value).byteLength;
+    const binString = arr.map((x) => String.fromCharCode(x)).join("");
+    return btoa(binString);
   } catch {
-    // Fallback: rough approximation.
-    return value.length;
+    return "";
   }
 };
 
-export const createJournalEntryPayload = (args: {
-  action: JournalAction;
-  entity: string;
-  entityId?: unknown;
-  summary?: unknown;
-  payload?: unknown;
-  createdAtSec?: number;
-}): any => {
-  const createdAtSec =
-    typeof args.createdAtSec === "number" && args.createdAtSec > 0
-      ? Math.floor(args.createdAtSec)
-      : Math.floor(Date.now() / 1000);
-
-  const payloadJsonFull =
-    args.payload === undefined ? "" : JSON.stringify(args.payload);
-  const payloadBytes = Math.max(1, estimateUtf8Bytes(payloadJsonFull));
-
-  const payloadJsonTruncated = payloadJsonFull
-    ? payloadJsonFull.slice(0, 1000)
-    : null;
-
-  const summary = String(args.summary ?? "").trim();
-  const entityId = String(args.entityId ?? "").trim();
-
-  return {
-    createdAtSec,
-    action: String(args.action).slice(0, 100),
-    entity: String(args.entity).slice(0, 100),
-    entityId: entityId ? entityId.slice(0, 1000) : null,
-    summary: summary ? summary.slice(0, 1000) : null,
-    payloadBytes,
-    payloadJson: payloadJsonTruncated ? payloadJsonTruncated : null,
-  };
+// Helper to convert timestamp bytes to readable date
+// Evolu timestamp format: 16 bytes, hybrid logical clock (HLC)
+// First 8 bytes: [millis (48 bits) + counter (16 bits)] in big-endian
+// Reference: https://evolu.dev/docs/how-evolu-works
+const timestampToDate = (timestampBytes: any): string => {
+  if (!timestampBytes || typeof timestampBytes !== "object") return "";
+  const arr = Object.values(timestampBytes) as number[];
+  if (arr.length < 8) return "";
+  try {
+    // Convert bytes to milliseconds since epoch
+    // First 6 bytes = 48-bit milliseconds timestamp (big-endian)
+    let millis = 0;
+    for (let i = 0; i < 6; i++) {
+      millis = (millis * 256) + arr[i];
+    }
+    const date = new Date(millis);
+    if (isNaN(date.getTime())) return "Invalid timestamp";
+    return date.toLocaleString("cs-CZ");
+  } catch (err) {
+    console.error("Timestamp conversion error:", err);
+    return "Invalid timestamp";
+  }
 };
 
-export const makeJournalEntriesQuery = (limit = 100) =>
-  evolu.createQuery((db: any) =>
-    db
-      .selectFrom("journalEntry")
-      .selectAll()
-      .orderBy("createdAtSec", "desc")
-      .limit(Math.max(1, Math.min(1000, Math.floor(limit)))),
-  );
+// Load history data from evolu_history table with pagination support
+export const loadEvoluHistoryData = async (limit = 100, offset = 0): Promise<any[]> => {
+  const instance = getEvolu();
+  try {
+    const q = instance.createQuery((db: any) =>
+      db
+        .selectFrom("evolu_history")
+        .selectAll()
+        .orderBy("timestamp", "desc")
+        .limit(limit)
+        .offset(offset),
+    );
+    const rows = await instance.loadQuery(q as any);
+    const formattedRows = (rows as any[] ?? []).map((row) => ({
+      ...row,
+      ownerId: uint8ArrayToBase64(row.ownerId),
+      id: uint8ArrayToBase64(row.id),
+      timestamp: timestampToDate(row.timestamp),
+    }));
+    return formattedRows;
+  } catch (err) {
+    console.error("Failed to load evolu_history:", err);
+    return [];
+  }
+};
+
+// Load current data from all tables
+export const loadEvoluCurrentData = async (): Promise<Record<string, any[]>> => {
+  const tables = [
+    "contact",
+    "cashuToken",
+    "credoToken",
+    "nostrIdentity",
+    "nostrMessage",
+    "paymentEvent",
+    "appState",
+    "mintInfo",
+  ] as const;
+
+  const instance = getEvolu();
+  const result: Record<string, any[]> = {};
+
+  for (const table of tables) {
+    try {
+      const q = instance.createQuery((db: any) =>
+        db
+          .selectFrom(table)
+          .selectAll()
+          .limit(100),
+      );
+      const rows = await instance.loadQuery(q as any);
+      result[table] = (rows as any[]) ?? [];
+    } catch {
+      result[table] = [];
+    }
+  }
+
+  return result;
+};
 
 export const wipeEvoluStorage = (): void => {
   const storedMnemonic = (() => {
@@ -635,7 +712,7 @@ export const wipeEvoluStorage = (): void => {
   }
 
   // Hard wipe Evolu local storage (journal + state) and reload.
-  void evolu.restoreAppOwner(mnemonicResult.value, { reload: true });
+  void getEvolu().restoreAppOwner(mnemonicResult.value, { reload: true });
 };
 
 export const useEvoluDatabaseInfoState = (opts?: {
@@ -648,6 +725,7 @@ export const useEvoluDatabaseInfoState = (opts?: {
   const [info, setInfo] = useState<EvoluDatabaseInfo>(() => ({
     bytes: null,
     tableCounts: {},
+    historyCount: null,
     updatedAtMs: null,
   }));
   const [isBusy, setIsBusy] = useState(false);
@@ -660,6 +738,7 @@ export const useEvoluDatabaseInfoState = (opts?: {
       setInfo({
         bytes: next.bytes,
         tableCounts: next.tableCounts,
+        historyCount: next.historyCount,
         updatedAtMs: Date.now(),
       });
     } catch (err) {
@@ -790,5 +869,5 @@ export const useEvoluServersManager = (opts?: {
 // Export EvoluProvider pro použití v main.tsx
 export { EvoluProvider };
 
-// Vytvoř typovaný React Hook
-export const useEvolu = createUseEvolu(evolu);
+// Vytvoř typovaný React Hook - now using getEvolu() to ensure we get the right instance
+export const useEvolu = createUseEvolu(getEvolu());
