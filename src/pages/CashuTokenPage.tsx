@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import { parseCashuToken } from "../cashu";
 import type { CashuTokenId } from "../evolu";
 
 interface CashuTokenPageProps {
@@ -36,8 +37,11 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
     );
   }
 
-  const tokenText = String(row.token ?? row.rawToken ?? "");
-  const mintText = String(row.mint ?? "").trim();
+  const tokenText = String(row.token ?? row.rawToken ?? "").trim();
+  const parsed = tokenText ? parseCashuToken(tokenText) : null;
+  const mintText =
+    String(row.mint ?? "").trim() ||
+    (parsed?.mint ? String(parsed.mint).trim() : "");
   const mintDisplay = (() => {
     if (!mintText) return null;
     try {

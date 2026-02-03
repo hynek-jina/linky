@@ -2,7 +2,6 @@ import React from "react";
 import { useNavigation } from "../hooks/useRouting";
 
 interface EvoluServerPageProps {
-  DEFAULT_EVOLU_SERVER_URLS: readonly string[];
   evoluHasError: boolean;
   evoluServerStatusByUrl: Record<
     string,
@@ -10,7 +9,6 @@ interface EvoluServerPageProps {
   >;
   evoluServersReloadRequired: boolean;
   evoluServerUrls: string[];
-  evoluWipeStorageIsBusy: boolean;
   isEvoluServerOffline: (url: string) => boolean;
   pendingEvoluServerDeleteUrl: string | null;
   saveEvoluServerUrls: (urls: string[]) => void;
@@ -20,16 +18,13 @@ interface EvoluServerPageProps {
   setStatus: (message: string) => void;
   syncOwner: unknown;
   t: (key: string) => string;
-  wipeEvoluStorage: () => Promise<void>;
 }
 
 export function EvoluServerPage({
-  DEFAULT_EVOLU_SERVER_URLS,
   evoluHasError,
   evoluServerStatusByUrl,
   evoluServersReloadRequired,
   evoluServerUrls,
-  evoluWipeStorageIsBusy,
   isEvoluServerOffline,
   pendingEvoluServerDeleteUrl,
   saveEvoluServerUrls,
@@ -39,7 +34,6 @@ export function EvoluServerPage({
   setStatus,
   syncOwner,
   t,
-  wipeEvoluStorage,
 }: EvoluServerPageProps): React.ReactElement {
   const navigateTo = useNavigation();
   return (
@@ -65,9 +59,7 @@ export function EvoluServerPage({
         <>
           {(() => {
             const offline = isEvoluServerOffline(selectedEvoluServerUrl);
-            const isDefaultEvoluServer = DEFAULT_EVOLU_SERVER_URLS.some(
-              (u) => u.toLowerCase() === selectedEvoluServerUrl.toLowerCase(),
-            );
+            const isLastServer = evoluServerUrls.length <= 1;
             const state = evoluHasError
               ? "disconnected"
               : offline
@@ -141,7 +133,7 @@ export function EvoluServerPage({
                   </div>
                 </div>
 
-                {isDefaultEvoluServer ? (
+                {isLastServer ? (
                   <p className="muted" style={{ marginTop: 10 }}>
                     {t("evoluDefaultServerCannotRemove")}
                   </p>
@@ -178,20 +170,6 @@ export function EvoluServerPage({
             );
           })()}
 
-          <div className="settings-row" style={{ marginTop: 10 }}>
-            <button
-              type="button"
-              className="btn-wide danger"
-              onClick={() => {
-                void wipeEvoluStorage();
-              }}
-              disabled={evoluWipeStorageIsBusy}
-            >
-              {evoluWipeStorageIsBusy
-                ? t("evoluWipeStorageBusy")
-                : t("evoluWipeStorage")}
-            </button>
-          </div>
         </>
       ) : (
         <p className="lede">{t("errorPrefix")}</p>

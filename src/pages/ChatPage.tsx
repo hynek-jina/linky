@@ -86,7 +86,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   const isFeedbackContact = npub === feedbackContactNpub;
 
   return (
-    <section className="panel">
+    <section className="panel chat-panel">
       {!npub && <p className="muted">{t("chatMissingContactNpub")}</p>}
 
       <div

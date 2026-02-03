@@ -779,14 +779,16 @@ button.settings-link:hover {
 
 .chat-messages {
   margin-top: 14px;
-  padding: 6px 2px;
+  padding: 6px 2px 180px;
   border-radius: 12px;
   border: none;
   background: transparent;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 50vh;
+  max-height: none;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -896,11 +898,26 @@ button.settings-link:hover {
   color: #94a3b8;
 }
 
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 140px);
+}
+
 .chat-compose {
-  margin-top: 12px;
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: min(1200px, calc(100% - 24px));
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 12px;
+  background: rgba(15, 23, 42, 0.95);
+  border-radius: 14px;
+  z-index: 30;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
 .chat-compose textarea {
@@ -1966,7 +1983,7 @@ button.tag-button {
 
 .toast-container {
   position: fixed;
-  top: 12px;
+  top: 70px;
   right: 12px;
   z-index: 60;
   display: flex;

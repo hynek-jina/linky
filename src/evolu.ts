@@ -40,7 +40,6 @@ export type EvoluDatabaseInfo = {
   updatedAtMs: number | null;
 };
 
-
 export const DEFAULT_EVOLU_SERVER_URLS: ReadonlyArray<string> = [
   "wss://free.evoluhq.com",
 ];
@@ -300,7 +299,6 @@ export type AppStateId = typeof AppStateId.Type;
 const MintId = Evolu.id("Mint");
 export type MintId = typeof MintId.Type;
 
-
 // Schema pro Linky app
 export const Schema = {
   contact: {
@@ -417,9 +415,7 @@ export const Schema = {
 // Create Evolu instance for a specific user (mnemonic)
 // Each user gets their own SQLite database file based on their mnemonic
 export const createEvoluForUser = (mnemonic: string | null) => {
-  const dbName = mnemonic
-    ? generateDbNameFromMnemonic(mnemonic)
-    : "linky-anon";
+  const dbName = mnemonic ? generateDbNameFromMnemonic(mnemonic) : "linky-anon";
 
   const validatedName = SimpleName.from(dbName);
   // Fallback to a safe name if generation fails
@@ -547,9 +543,60 @@ export const getEvoluDatabaseInfo = async (): Promise<{
 
   const instance = getEvolu();
 
-  const dbBytesPromise = instance
-    .exportDatabase()
-    .then((bytes) => bytes.byteLength);
+  // Get SQLite file size from OPFS for current user only
+  const dbBytesPromise = (async () => {
+    try {
+      const root = await navigator.storage?.getDirectory?.();
+      if (!root) return 0;
+
+      // Get current user's mnemonic
+      const mnemonic = (() => {
+        try {
+          return localStorage.getItem(INITIAL_MNEMONIC_STORAGE_KEY);
+        } catch {
+          return null;
+        }
+      })();
+
+      // Generate expected directory name
+      const expectedDir = mnemonic
+        ? (() => {
+            let hash = 0;
+            for (let i = 0; i < mnemonic.length; i++) {
+              hash = ((hash << 5) - hash + mnemonic.charCodeAt(i)) | 0;
+            }
+            return `.linky-${Math.abs(hash).toString(16).padStart(8, "0").slice(0, 8)}`;
+          })()
+        : ".linky-anon";
+
+      let totalSize = 0;
+      const allDirs: string[] = [];
+      // @ts-ignore
+      for await (const [name, handle] of root.entries()) {
+        if (handle.kind === "directory") allDirs.push(name);
+        if (name === expectedDir && handle.kind === "directory") {
+          // @ts-ignore
+          for await (const [sub, subH] of handle.entries()) {
+            if (sub === ".opaque" && subH.kind === "directory") {
+              // @ts-ignore
+              let maxSize = 0;
+              for await (const [file, fileH] of subH.entries()) {
+                if (fileH.kind === "file") {
+                  const f = await fileH.getFile();
+                  if (f.size > maxSize) maxSize = f.size;
+                }
+              }
+              totalSize = maxSize; // Take only the largest file (main SQLite)
+            }
+          }
+          break;
+        }
+      }
+      return totalSize;
+    } catch {
+      return 0;
+    }
+  })();
 
   const tableCountsPromise = (async () => {
     const out: Record<string, number | null> = {};
@@ -619,7 +666,7 @@ const timestampToDate = (timestampBytes: any): string => {
     // First 6 bytes = 48-bit milliseconds timestamp (big-endian)
     let millis = 0;
     for (let i = 0; i < 6; i++) {
-      millis = (millis * 256) + arr[i];
+      millis = millis * 256 + arr[i];
     }
     const date = new Date(millis);
     if (isNaN(date.getTime())) return "Invalid timestamp";
@@ -631,7 +678,10 @@ const timestampToDate = (timestampBytes: any): string => {
 };
 
 // Load history data from evolu_history table with pagination support
-export const loadEvoluHistoryData = async (limit = 100, offset = 0): Promise<any[]> => {
+export const loadEvoluHistoryData = async (
+  limit = 100,
+  offset = 0,
+): Promise<any[]> => {
   const instance = getEvolu();
   try {
     const q = instance.createQuery((db: any) =>
@@ -643,7 +693,7 @@ export const loadEvoluHistoryData = async (limit = 100, offset = 0): Promise<any
         .offset(offset),
     );
     const rows = await instance.loadQuery(q as any);
-    const formattedRows = (rows as any[] ?? []).map((row) => ({
+    const formattedRows = ((rows as any[]) ?? []).map((row) => ({
       ...row,
       ownerId: uint8ArrayToBase64(row.ownerId),
       id: uint8ArrayToBase64(row.id),
@@ -657,7 +707,9 @@ export const loadEvoluHistoryData = async (limit = 100, offset = 0): Promise<any
 };
 
 // Load current data from all tables
-export const loadEvoluCurrentData = async (): Promise<Record<string, any[]>> => {
+export const loadEvoluCurrentData = async (): Promise<
+  Record<string, any[]>
+> => {
   const tables = [
     "contact",
     "cashuToken",
@@ -675,10 +727,7 @@ export const loadEvoluCurrentData = async (): Promise<Record<string, any[]>> => 
   for (const table of tables) {
     try {
       const q = instance.createQuery((db: any) =>
-        db
-          .selectFrom(table)
-          .selectAll()
-          .limit(100),
+        db.selectFrom(table).selectAll().limit(100),
       );
       const rows = await instance.loadQuery(q as any);
       result[table] = (rows as any[]) ?? [];

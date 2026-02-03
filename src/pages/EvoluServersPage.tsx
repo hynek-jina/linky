@@ -12,13 +12,14 @@ interface EvoluServersPageProps {
   evoluServerUrls: string[];
   evoluTableCounts: Record<string, number | null>;
   isEvoluServerOffline: (url: string) => boolean;
-  onClearDatabase: () => void;
+  pendingClearDatabase: boolean;
+  requestClearDatabase: () => void;
   syncOwner: unknown;
   t: (key: string) => string;
 }
 
 const ONE_MB = 1024 * 1024;
-const OVERHEAD_BYTES = 168 * 1024; // 168 KB overhead prázdné DB
+const OVERHEAD_BYTES = 172 * 1024; // 172 KB overhead prázdné SQLite DB
 
 export function EvoluServersPage({
   evoluDatabaseBytes,
@@ -28,28 +29,16 @@ export function EvoluServersPage({
   evoluServerUrls,
   evoluTableCounts,
   isEvoluServerOffline,
-  onClearDatabase,
+  pendingClearDatabase,
+  requestClearDatabase,
   syncOwner,
   t,
 }: EvoluServersPageProps): React.ReactElement {
   const navigateTo = useNavigation();
 
-  const formatBytes = (bytes: number): string => {
-    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-    const units = ["B", "KiB", "MiB", "GiB"];
-    let value = bytes;
-    let unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex += 1;
-    }
-    const digits = unitIndex === 0 ? 0 : value < 10 ? 2 : value < 100 ? 1 : 0;
-    return `${value.toFixed(digits)} ${units[unitIndex]}`;
-  };
-
   const rawDbBytes = evoluDatabaseBytes ?? 0;
-  const dataBytes = Math.max(0, rawDbBytes - OVERHEAD_BYTES);
-  const percentage = Math.min((dataBytes / ONE_MB) * 100, 100);
+  const dataBytes = rawDbBytes - OVERHEAD_BYTES;
+  const percentage = Math.min(Math.max((dataBytes / ONE_MB) * 100, -100), 100);
 
   // Determine color based percentage - using direct colors instead of CSS variables
   const getProgressColor = () => {
@@ -131,16 +120,12 @@ export function EvoluServersPage({
       {/* Database info section */}
       {evoluDatabaseBytes !== null && (
         <>
-          <h3 style={{ marginTop: 24, marginBottom: 12 }}>
-            {t("evoluLocalDataSize")}
-          </h3>
-
-          <div className="settings-row">
+          <div className="settings-row" style={{ marginTop: 24 }}>
             <div className="settings-left">
-              <span className="settings-label">{t("evoluRawDbSize")}</span>
+              <span className="settings-label">Used data</span>
             </div>
             <div className="settings-right">
-              <span className="muted">{formatBytes(dataBytes)} / 1 MiB</span>
+              <span className="muted" />
             </div>
           </div>
 
@@ -172,8 +157,8 @@ export function EvoluServersPage({
           <div className="settings-row" style={{ marginTop: 16 }}>
             <button
               type="button"
-              className="btn-wide danger"
-              onClick={onClearDatabase}
+              className={pendingClearDatabase ? "btn-wide danger" : "btn-wide"}
+              onClick={requestClearDatabase}
             >
               {t("evoluClearDatabase")}
             </button>

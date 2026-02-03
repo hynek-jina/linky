@@ -20,7 +20,6 @@ export { MintsPage } from "./MintsPage";
 export { NostrRelayNewPage } from "./NostrRelayNewPage";
 export { NostrRelayPage } from "./NostrRelayPage";
 export { NostrRelaysPage } from "./NostrRelaysPage";
-export { PaymentsHistoryPage } from "./PaymentsHistoryPage";
 export { ProfilePage } from "./ProfilePage";
 export { TopupInvoicePage } from "./TopupInvoicePage";
 export { TopupPage } from "./TopupPage";

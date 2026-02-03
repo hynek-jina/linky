@@ -38,7 +38,6 @@ type NavigationAction =
   | { route: "nostrRelay"; id: string }
   | { route: "nostrRelayNew" }
   | { route: "nostrRelays" }
-  | { route: "paymentsHistory" }
   | { route: "profile" }
   | { route: "settings" }
   | { route: "topup" }
@@ -55,9 +54,6 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "advanced":
       window.location.assign("#advanced");
-      break;
-    case "paymentsHistory":
-      window.location.assign("#advanced/payments");
       break;
     case "mints":
       window.location.assign("#advanced/mints");

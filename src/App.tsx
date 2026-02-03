@@ -8,6 +8,11 @@ import "./App.css";
 import { parseCashuToken } from "./cashu";
 import { acceptCashuToken } from "./cashuAccept";
 import { createSendTokenWithTokensAtMint } from "./cashuSend";
+import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
+import { ContactCard } from "./components/ContactCard";
+import { ContactsChecklist } from "./components/ContactsChecklist";
+import { ToastNotifications } from "./components/ToastNotifications";
+import { UnauthenticatedLayout } from "./components/UnauthenticatedLayout";
 import {
   createCredoPromiseToken,
   createCredoSettlementToken,
@@ -16,7 +21,6 @@ import {
 import { deriveDefaultProfile } from "./derivedProfile";
 import type { CashuTokenId, ContactId, CredoTokenId, MintId } from "./evolu";
 import {
-  DEFAULT_EVOLU_SERVER_URLS,
   evolu,
   loadEvoluCurrentData,
   loadEvoluHistoryData,
@@ -47,39 +51,33 @@ import {
   type NostrProfileMetadata,
 } from "./nostrProfile";
 import { publishKind0ProfileMetadata } from "./nostrPublish";
-import { ContactCard } from "./components/ContactCard";
-import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
-import { UnauthenticatedLayout } from "./components/UnauthenticatedLayout";
-import { ToastNotifications } from "./components/ToastNotifications";
-import { ContactsChecklist } from "./components/ContactsChecklist";
 import {
-  PaymentsHistoryPage,
-  MintsPage,
-  MintDetailPage,
   AdvancedPage,
-  NostrRelaysPage,
-  NostrRelayNewPage,
-  NostrRelayPage,
-  EvoluCurrentDataPage,
-  EvoluDataDetailPage,
-  EvoluHistoryDataPage,
-  EvoluServersPage,
-  EvoluServerPage,
-  EvoluServerNewPage,
-  ProfilePage,
-  WalletPage,
-  TopupPage,
-  TopupInvoicePage,
   CashuTokenNewPage,
   CashuTokenPage,
-  CredoTokenPage,
-  ContactPage,
-  ContactPayPage,
-  LnAddressPayPage,
   ChatPage,
   ContactEditPage,
   ContactNewPage,
+  ContactPage,
+  ContactPayPage,
   ContactsPage,
+  CredoTokenPage,
+  EvoluCurrentDataPage,
+  EvoluDataDetailPage,
+  EvoluHistoryDataPage,
+  EvoluServerNewPage,
+  EvoluServerPage,
+  EvoluServersPage,
+  LnAddressPayPage,
+  MintDetailPage,
+  MintsPage,
+  NostrRelayNewPage,
+  NostrRelayPage,
+  NostrRelaysPage,
+  ProfilePage,
+  TopupInvoicePage,
+  TopupPage,
+  WalletPage,
 } from "./pages";
 import type { Route } from "./types/route";
 import {
@@ -102,13 +100,13 @@ import {
   PAY_WITH_CASHU_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "./utils/constants";
+import { formatInteger, getBestNostrName } from "./utils/formatting";
 import {
   safeLocalStorageGet,
   safeLocalStorageGetJson,
   safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "./utils/storage";
-import { formatInteger, getBestNostrName } from "./utils/formatting";
 
 const LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY = "linky.lastAcceptedCashuToken.v1";
 
@@ -243,6 +241,21 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
   return value as Record<string, unknown>;
 };
 
+const previewTokenText = (token: string | null): string | null => {
+  if (!token) return null;
+  const trimmed = String(token).trim();
+  if (!trimmed) return null;
+  return trimmed.length > 16 ? `${trimmed.slice(0, 16)}…` : trimmed;
+};
+
+const logPayStep = (step: string, data?: Record<string, unknown>): void => {
+  try {
+    console.log("[linky][pay]", step, data ?? {});
+  } catch {
+    // ignore logging errors
+  }
+};
+
 const getInitialUseBitcoinSymbol = (): boolean => {
   try {
     return localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1";
@@ -291,6 +304,73 @@ const makeEmptyForm = (): ContactFormState => ({
   lnAddress: "",
   group: "",
 });
+
+type CashuTokenMeta = {
+  amount: number | null;
+  mint: string | null;
+  tokenText: string;
+  unit: string | null;
+};
+
+const extractCashuTokenMeta = (row: {
+  token?: unknown;
+  rawToken?: unknown;
+  mint?: unknown;
+  unit?: unknown;
+  amount?: unknown;
+}): CashuTokenMeta => {
+  const tokenText = String(row.token ?? row.rawToken ?? "").trim();
+  const storedMint = String(row.mint ?? "").trim();
+  const storedUnit = String(row.unit ?? "").trim() || null;
+  const storedAmount = Number(row.amount ?? 0);
+
+  let mint = storedMint ? storedMint : null;
+  const unit = storedUnit;
+  let amount =
+    Number.isFinite(storedAmount) && storedAmount > 0
+      ? Math.floor(storedAmount)
+      : null;
+
+  if ((!mint || !amount) && tokenText) {
+    const parsed = parseCashuToken(tokenText);
+    if (parsed) {
+      if (!mint && parsed.mint) {
+        const parsedMint = String(parsed.mint).trim();
+        mint = parsedMint ? parsedMint : null;
+      }
+      if (!amount && Number.isFinite(parsed.amount) && parsed.amount > 0) {
+        amount = Math.floor(parsed.amount);
+      }
+    }
+  }
+
+  return { tokenText, mint, unit, amount };
+};
+
+// Helper to decode Cashu token and extract mint, unit, amount
+const decodeCashuTokenSync = (
+  token: string,
+): { mint: string; unit: string | null; amount: number; ok: boolean } => {
+  try {
+    // Try to use cached module from window if available (set by getCashuLib)
+    const cashuModule = (window as any).__CASHU_MODULE__;
+    if (cashuModule?.getDecodedToken) {
+      const decoded = cashuModule.getDecodedToken(token);
+      const mint = String(decoded?.mint ?? "").trim();
+      const unit = String(decoded?.unit ?? "").trim() || null;
+      const proofs = Array.isArray(decoded?.proofs) ? decoded.proofs : [];
+      const amount = proofs.reduce(
+        (sum: number, p: { amount?: unknown }) =>
+          sum + (Number(p?.amount ?? 0) || 0),
+        0,
+      );
+      return { mint, unit, amount, ok: true };
+    }
+  } catch {
+    // Ignore decode errors
+  }
+  return { mint: "", unit: null, amount: 0, ok: false };
+};
 
 const App = () => {
   const { insert, update, upsert } = useEvolu();
@@ -384,10 +464,6 @@ const App = () => {
     return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
   };
 
-  const [paymentEvents, setPaymentEvents] = useState<LocalPaymentEvent[]>(
-    () => [],
-  );
-
   const route = useRouting();
   const { toasts, pushToast } = useToasts();
 
@@ -443,14 +519,15 @@ const App = () => {
         contactId: event.contactId ? String(event.contactId) : null,
       };
 
-      setPaymentEvents((prev) => {
-        const next = [entry, ...prev].slice(0, 250);
-        safeLocalStorageSetJson(
-          makeLocalStorageKey(LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX),
-          next,
-        );
-        return next;
-      });
+      const existing = safeLocalStorageGetJson(
+        makeLocalStorageKey(LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX),
+        [] as LocalPaymentEvent[],
+      );
+      const next = [entry, ...existing].slice(0, 250);
+      safeLocalStorageSetJson(
+        makeLocalStorageKey(LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX),
+        next,
+      );
     },
     [makeLocalStorageKey],
   );
@@ -564,6 +641,24 @@ const App = () => {
   const evoluLastError = useEvoluLastError({ logToConsole: true });
   const evoluHasError = Boolean(evoluLastError);
 
+  React.useEffect(() => {
+    if (!evoluLastError) return;
+    const message = String(evoluLastError ?? "");
+    if (!message.includes("WebAssembly.Memory(): could not allocate memory")) {
+      return;
+    }
+    const key = "linky.evolu.autoWipeOnWasmOom.v1";
+    const alreadyTried = String(safeLocalStorageGet(key) ?? "").trim() === "1";
+    if (alreadyTried) return;
+    safeLocalStorageSet(key, "1");
+    // Last-resort recovery: wipe local Evolu storage and reload.
+    try {
+      wipeEvoluStorageImpl();
+    } catch {
+      // ignore
+    }
+  }, [evoluLastError]);
+
   const evoluDbInfo = useEvoluDatabaseInfoState({ enabled: true });
 
   const evoluConnectedServerCount = useMemo(() => {
@@ -597,13 +692,6 @@ const App = () => {
   React.useEffect(() => {
     appOwnerIdRef.current = appOwnerId;
     if (!appOwnerId) return;
-    setPaymentEvents(
-      safeLocalStorageGetJson(
-        `${LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX}.${String(appOwnerId)}`,
-        [] as LocalPaymentEvent[],
-      ),
-    );
-
     const overrideRaw = safeLocalStorageGet(
       makeLocalStorageKey(CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY),
     );
@@ -769,6 +857,8 @@ const App = () => {
     new Map(),
   );
   const chatDidInitialScrollForContactRef = React.useRef<string | null>(null);
+  const chatForceScrollToBottomRef = React.useRef(false);
+  const chatLastMessageCountRef = React.useRef<Record<string, number>>({});
 
   const getMintOriginAndHost = React.useCallback(
     (mint: unknown): { origin: string | null; host: string | null } => {
@@ -1960,6 +2050,21 @@ const App = () => {
   );
   const cashuTokensAll = useQuery(cashuTokensAllQuery);
 
+  const cashuTokensWithMeta = useMemo(
+    () =>
+      cashuTokens.map((row) => {
+        const meta = extractCashuTokenMeta(row as any);
+        return {
+          ...row,
+          mint: meta.mint ?? null,
+          unit: meta.unit ?? null,
+          amount: meta.amount ?? null,
+          tokenText: meta.tokenText,
+        };
+      }),
+    [cashuTokens],
+  );
+
   const credoTokensQuery = useMemo(
     () =>
       evolu.createQuery((db) =>
@@ -2298,17 +2403,9 @@ const App = () => {
           ...(unit ? { unit } : {}),
         });
 
-        const amount = Array.isArray(proofs)
-          ? proofs.reduce((sum, p) => sum + (Number(p.amount ?? 0) || 0), 0)
-          : 0;
-
         const ownerId = await resolveOwnerIdForWrite();
         const payload = {
           token: token as typeof Evolu.NonEmptyString.Type,
-          rawToken: null,
-          mint: topupMintQuote.mintUrl as typeof Evolu.NonEmptyString1000.Type,
-          unit: unit ? (unit as typeof Evolu.NonEmptyString100.Type) : null,
-          amount: amount > 0 ? (amount as typeof Evolu.PositiveInt.Type) : null,
           state: "accepted" as typeof Evolu.NonEmptyString100.Type,
           error: null,
         };
@@ -3137,41 +3234,45 @@ const App = () => {
   React.useEffect(() => {
     const ownerId = appOwnerIdRef.current;
     if (!ownerId) {
-      setNostrMessagesLocal([]);
-      nostrMessageWrapIdsRef.current = new Set();
       return;
     }
     const raw = safeLocalStorageGetJson(
       `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
       [] as LocalNostrMessage[],
     );
-    const wrapIds = new Set<string>();
-    const deduped: LocalNostrMessage[] = [];
-    for (const msg of raw) {
+    const normalizeMessage = (msg: LocalNostrMessage): LocalNostrMessage => {
       const normalizedStatus =
         msg.status === "pending" || msg.status === "sent" ? msg.status : "sent";
       const normalizedClientId =
         typeof msg.clientId === "string" && msg.clientId.trim()
           ? msg.clientId.trim()
           : null;
-      const normalized = {
+      return {
         ...msg,
         status: normalizedStatus,
         ...(normalizedClientId ? { clientId: normalizedClientId } : {}),
         ...(msg.localOnly ? { localOnly: true } : {}),
       } as LocalNostrMessage;
-      const key =
-        String(normalized.wrapId ?? "").trim() || String(normalized.id ?? "");
-      if (key && wrapIds.has(key)) continue;
-      if (key) wrapIds.add(key);
-      deduped.push(normalized);
-    }
-    deduped.sort((a, b) => a.createdAtSec - b.createdAtSec);
-    const trimmed = deduped.slice(-500);
-    nostrMessageWrapIdsRef.current = new Set(
-      trimmed.map((m) => String(m.wrapId ?? "").trim() || String(m.id ?? "")),
-    );
-    setNostrMessagesLocal(trimmed);
+    };
+
+    setNostrMessagesLocal((prev) => {
+      const wrapIds = new Set<string>();
+      const deduped: LocalNostrMessage[] = [];
+      for (const msg of [...raw, ...prev]) {
+        const normalized = normalizeMessage(msg);
+        const key =
+          String(normalized.wrapId ?? "").trim() || String(normalized.id ?? "");
+        if (key && wrapIds.has(key)) continue;
+        if (key) wrapIds.add(key);
+        deduped.push(normalized);
+      }
+      deduped.sort((a, b) => a.createdAtSec - b.createdAtSec);
+      const trimmed = deduped.slice(-500);
+      nostrMessageWrapIdsRef.current = new Set(
+        trimmed.map((m) => String(m.wrapId ?? "").trim() || String(m.id ?? "")),
+      );
+      return trimmed;
+    });
   }, [appOwnerId]);
 
   const appendLocalNostrMessage = React.useCallback(
@@ -3181,7 +3282,6 @@ const App = () => {
       },
     ): string => {
       const ownerId = appOwnerIdRef.current;
-      if (!ownerId) return "";
 
       const normalizedClientId =
         typeof msg.clientId === "string" && msg.clientId.trim()
@@ -3236,15 +3336,28 @@ const App = () => {
 
         if (dedupeKey) wrapIds.add(dedupeKey);
 
-        safeLocalStorageSetJson(
-          `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
-          next,
-        );
+        if (ownerId) {
+          safeLocalStorageSetJson(
+            `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+            next,
+          );
+        }
         return next;
       });
+
+      if (
+        route.kind === "chat" &&
+        String(msg.contactId ?? "") === String(route.id ?? "")
+      ) {
+        chatForceScrollToBottomRef.current = true;
+        requestAnimationFrame(() => {
+          const c = chatMessagesRef.current;
+          if (c) c.scrollTop = c.scrollHeight;
+        });
+      }
       return entry.id;
     },
-    [appOwnerId],
+    [appOwnerId, route.kind, route.id],
   );
 
   const updateLocalNostrMessage = React.useCallback(
@@ -3258,7 +3371,7 @@ const App = () => {
       >,
     ) => {
       const ownerId = appOwnerIdRef.current;
-      if (!ownerId || !id) return;
+      if (!id) return;
 
       setNostrMessagesLocal((prev) => {
         const idx = prev.findIndex((m) => String(m.id ?? "") === id);
@@ -3291,10 +3404,12 @@ const App = () => {
         const next = [...prev];
         next[idx] = nextEntry;
 
-        safeLocalStorageSetJson(
-          `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
-          next,
-        );
+        if (ownerId) {
+          safeLocalStorageSetJson(
+            `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.${String(ownerId)}`,
+            next,
+          );
+        }
         return next;
       });
     },
@@ -3444,13 +3559,13 @@ const App = () => {
   // lastMessageByContactId provided by the derived Nostr index above.
 
   const cashuBalance = useMemo(() => {
-    return cashuTokens.reduce((sum, token) => {
+    return cashuTokensWithMeta.reduce((sum, token) => {
       const state = String(token.state ?? "");
       if (state !== "accepted") return sum;
       const amount = Number((token.amount ?? 0) as unknown as number);
       return sum + (Number.isFinite(amount) ? amount : 0);
     }, 0);
-  }, [cashuTokens]);
+  }, [cashuTokensWithMeta]);
 
   const credoTokensActive = useMemo(() => {
     const nowSec = Math.floor(Date.now() / 1000);
@@ -5082,6 +5197,15 @@ const App = () => {
         return { ok: false, queued: false, error: "missing contact npub" };
       }
 
+      logPayStep("start", {
+        contactId: String(contact.id ?? ""),
+        amountSat,
+        fromQueue: Boolean(fromQueue),
+        cashuBalance,
+        allowPromisesEnabled,
+        payWithCashuEnabled,
+      });
+
       const isOffline =
         typeof navigator !== "undefined" && navigator.onLine === false;
       if (isOffline) {
@@ -5104,6 +5228,11 @@ const App = () => {
           status: "pending",
           clientId,
           localOnly: true,
+        });
+        logPayStep("queued-offline", {
+          contactId: String(contact.id ?? ""),
+          amountSat,
+          messageId,
         });
         enqueuePendingPayment({
           contactId: contact.id as ContactId,
@@ -5163,11 +5292,11 @@ const App = () => {
 
       if (cashuToSend > 0) {
         const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
-        for (const row of cashuTokens) {
+        for (const row of cashuTokensWithMeta) {
           if (String(row.state ?? "") !== "accepted") continue;
           const mint = String(row.mint ?? "").trim();
           if (!mint) continue;
-          const tokenText = String(row.token ?? "").trim();
+          const tokenText = String(row.token ?? row.rawToken ?? "").trim();
           if (!tokenText) continue;
 
           const amount = Number((row.amount ?? 0) as unknown as number) || 0;
@@ -5179,6 +5308,15 @@ const App = () => {
 
         const preferredMint = normalizeMintUrl(defaultMintUrl ?? "");
         const candidates = buildCashuMintCandidates(mintGroups, preferredMint);
+
+        logPayStep("mint-candidates", {
+          count: candidates.length,
+          candidates: candidates.map((c) => ({
+            mint: c.mint,
+            sum: c.sum,
+            tokenCount: c.tokens.length,
+          })),
+        });
 
         if (candidates.length === 0) {
           if (notify) setStatus(t("payInsufficient"));
@@ -5193,6 +5331,11 @@ const App = () => {
           if (useAmount <= 0) continue;
 
           try {
+            logPayStep("swap-request", {
+              mint: candidate.mint,
+              amount: useAmount,
+              tokenCount: candidate.tokens.length,
+            });
             const split = await createSendTokenWithTokensAtMint({
               amount: useAmount,
               mint: candidate.mint,
@@ -5211,6 +5354,13 @@ const App = () => {
               amount: split.sendAmount,
               mint: split.mint,
               unit: split.unit ?? null,
+            });
+            logPayStep("swap-ok", {
+              mint: split.mint,
+              sendAmount: split.sendAmount,
+              remainingAmount: split.remainingAmount,
+              sendToken: previewTokenText(split.sendToken),
+              remainingToken: previewTokenText(split.remainingToken),
             });
             sendTokenMetaByText.set(split.sendToken, {
               mint: split.mint,
@@ -5241,7 +5391,7 @@ const App = () => {
             }
 
             if (!tokensToDeleteByMint.has(candidate.mint)) {
-              const ids = cashuTokens
+              const ids = cashuTokensWithMeta
                 .filter(
                   (row) =>
                     String(row.state ?? "") === "accepted" &&
@@ -5386,6 +5536,11 @@ const App = () => {
         }
 
         for (const batch of sendBatches) {
+          logPayStep("plan-send-token", {
+            mint: batch.mint,
+            amount: batch.amount,
+            token: previewTokenText(batch.token),
+          });
           messagePlans.unshift({
             text: String(batch.token ?? "").trim(),
           });
@@ -5404,6 +5559,12 @@ const App = () => {
         for (const plan of messagePlans) {
           const messageText = plan.text;
           const clientId = makeLocalId();
+          const isCredoMessage = messageText.startsWith("credoA");
+          logPayStep("publish-pending", {
+            clientId,
+            isCredoMessage,
+            token: previewTokenText(messageText),
+          });
           const baseEvent = {
             created_at: Math.ceil(Date.now() / 1e3),
             kind: 14,
@@ -5463,6 +5624,11 @@ const App = () => {
           const anySuccess = publishOutcome.anySuccess;
           if (!anySuccess) {
             const firstError = publishOutcome.error;
+            logPayStep("publish-failed", {
+              clientId,
+              error: String(firstError ?? "publish failed"),
+              isCredoMessage,
+            });
             hasPendingMessages = true;
             if (notify) {
               pushToast(
@@ -5480,6 +5646,11 @@ const App = () => {
               pubkey: myPubHex,
             });
           }
+          logPayStep("publish-ok", {
+            clientId,
+            wrapId: String(wrapForMe.id ?? ""),
+            isCredoMessage,
+          });
 
           plan.onSuccess?.();
           if (sendTokenMetaByText.has(messageText)) {
@@ -5809,6 +5980,8 @@ const App = () => {
     if (route.kind !== "contactPay") return;
     if (!selectedContact) return;
 
+    const selectedContactId = selectedContact.id;
+
     const lnAddress = String(selectedContact.lnAddress ?? "").trim();
     const contactNpub = String(selectedContact.npub ?? "").trim();
     const canPayViaLightning = Boolean(lnAddress);
@@ -5868,6 +6041,23 @@ const App = () => {
     const useCredoAmount = Math.min(availableCredo, amountSat);
     const remainingAfterCredo = Math.max(0, amountSat - useCredoAmount);
 
+    logPayStep("start", {
+      contactId: String(selectedContact.id ?? ""),
+      method,
+      effectiveMethod,
+      amountSat,
+      availableCredo,
+      remainingAfterCredo,
+      cashuBalance,
+      allowPromisesEnabled,
+      payWithCashuEnabled,
+    });
+
+    if (effectiveMethod === "cashu" && selectedContactId) {
+      chatForceScrollToBottomRef.current = true;
+      navigateTo({ route: "chat", id: selectedContactId });
+    }
+
     if (effectiveMethod === "lightning") {
       if (remainingAfterCredo > cashuBalance) {
         setStatus(t("payInsufficient"));
@@ -5922,6 +6112,11 @@ const App = () => {
             createdAtSec: Math.floor(Date.now() / 1000),
             status: "pending",
           });
+          logPayStep("queued-offline", {
+            contactId: String(selectedContact.id ?? ""),
+            amountSat,
+            messageId,
+          });
           enqueuePendingPayment({
             contactId: selectedContact.id,
             amountSat,
@@ -5936,7 +6131,6 @@ const App = () => {
           );
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateTo({ route: "chat", id: selectedContact.id });
           return;
         }
 
@@ -5965,11 +6159,11 @@ const App = () => {
             string,
             { tokens: string[]; sum: number }
           >();
-          for (const row of cashuTokens) {
+          for (const row of cashuTokensWithMeta) {
             if (String(row.state ?? "") !== "accepted") continue;
             const mint = String(row.mint ?? "").trim();
             if (!mint) continue;
-            const tokenText = String(row.token ?? "").trim();
+            const tokenText = String(row.token ?? row.rawToken ?? "").trim();
             if (!tokenText) continue;
 
             const amount = Number((row.amount ?? 0) as unknown as number) || 0;
@@ -5985,6 +6179,15 @@ const App = () => {
             preferredMint,
           );
 
+          logPayStep("mint-candidates", {
+            count: candidates.length,
+            candidates: candidates.map((c) => ({
+              mint: c.mint,
+              sum: c.sum,
+              tokenCount: c.tokens.length,
+            })),
+          });
+
           if (candidates.length === 0) {
             setStatus(t("payInsufficient"));
             return;
@@ -5998,6 +6201,11 @@ const App = () => {
             if (useAmount <= 0) continue;
 
             try {
+              logPayStep("swap-request", {
+                mint: candidate.mint,
+                amount: useAmount,
+                tokenCount: candidate.tokens.length,
+              });
               const split = await createSendTokenWithTokensAtMint({
                 amount: useAmount,
                 mint: candidate.mint,
@@ -6016,6 +6224,13 @@ const App = () => {
                 amount: split.sendAmount,
                 mint: split.mint,
                 unit: split.unit ?? null,
+              });
+              logPayStep("swap-ok", {
+                mint: split.mint,
+                sendAmount: split.sendAmount,
+                remainingAmount: split.remainingAmount,
+                sendToken: previewTokenText(split.sendToken),
+                remainingToken: previewTokenText(split.remainingToken),
               });
               sendTokenMetaByText.set(split.sendToken, {
                 mint: split.mint,
@@ -6046,7 +6261,7 @@ const App = () => {
               }
 
               if (!tokensToDeleteByMint.has(candidate.mint)) {
-                const ids = cashuTokens
+                const ids = cashuTokensWithMeta
                   .filter(
                     (row) =>
                       String(row.state ?? "") === "accepted" &&
@@ -6189,6 +6404,11 @@ const App = () => {
           }
 
           for (const batch of sendBatches) {
+            logPayStep("plan-send-token", {
+              mint: batch.mint,
+              amount: batch.amount,
+              token: previewTokenText(batch.token),
+            });
             messagePlans.unshift({
               text: String(batch.token ?? "").trim(),
             });
@@ -6196,10 +6416,17 @@ const App = () => {
 
           const publishedSendTokens = new Set<string>();
           let publishFailedError: unknown = null;
+          let hasPendingMessages = false;
 
           for (const plan of messagePlans) {
             const messageText = plan.text;
             const clientId = makeLocalId();
+            const isCredoMessage = messageText.startsWith("credoA");
+            logPayStep("publish-pending", {
+              clientId,
+              isCredoMessage,
+              token: previewTokenText(messageText),
+            });
             const baseEvent = {
               created_at: Math.ceil(Date.now() / 1e3),
               kind: 14,
@@ -6243,9 +6470,14 @@ const App = () => {
             );
 
             const anySuccess = publishOutcome.anySuccess;
-            const isCredoMessage = messageText.startsWith("credoA");
             if (!anySuccess) {
               const firstError = publishOutcome.error;
+              hasPendingMessages = true;
+              logPayStep("publish-failed", {
+                clientId,
+                error: String(firstError ?? "publish failed"),
+                isCredoMessage,
+              });
               if (!isCredoMessage) {
                 publishFailedError = firstError ?? new Error("publish failed");
                 break;
@@ -6264,6 +6496,11 @@ const App = () => {
                   pubkey: myPubHex,
                 });
               }
+              logPayStep("publish-ok", {
+                clientId,
+                wrapId: String(wrapForMe.id ?? ""),
+                isCredoMessage,
+              });
               plan.onSuccess?.();
               if (sendTokenMetaByText.has(messageText)) {
                 publishedSendTokens.add(messageText);
@@ -6305,7 +6542,9 @@ const App = () => {
           }
 
           if (publishFailedError) {
-            throw publishFailedError;
+            logPayStep("publish-queued", {
+              error: String(publishFailedError ?? "publish failed"),
+            });
           }
 
           const usedMints = Array.from(new Set(sendBatches.map((b) => b.mint)));
@@ -6332,15 +6571,16 @@ const App = () => {
             t("appTitle");
 
           showPaidOverlay(
-            t("paidSentTo")
+            (hasPendingMessages ? t("paidQueuedTo") : t("paidSentTo"))
               .replace("{amount}", formatInteger(amountSat))
               .replace("{unit}", displayUnit)
               .replace("{name}", displayName),
           );
 
-          setStatus(t("paySuccess"));
+          setStatus(hasPendingMessages ? t("payQueued") : t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
+          chatForceScrollToBottomRef.current = true;
           navigateTo({ route: "chat", id: selectedContact.id });
           return;
         } catch (e) {
@@ -6533,6 +6773,7 @@ const App = () => {
           setStatus(t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
+          chatForceScrollToBottomRef.current = true;
           navigateTo({ route: "chat", id: selectedContact.id });
           return;
         } catch (e) {
@@ -6578,11 +6819,11 @@ const App = () => {
 
       // Try mints (largest balance first) until one succeeds.
       const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
-      for (const row of cashuTokens) {
+      for (const row of cashuTokensWithMeta) {
         if (String(row.state ?? "") !== "accepted") continue;
         const mint = String(row.mint ?? "").trim();
         if (!mint) continue;
-        const tokenText = String(row.token ?? "").trim();
+        const tokenText = String(row.token ?? row.rawToken ?? "").trim();
         if (!tokenText) continue;
 
         const amount = Number((row.amount ?? 0) as unknown as number) || 0;
@@ -6633,7 +6874,7 @@ const App = () => {
               });
 
               if (inserted.ok) {
-                for (const row of cashuTokens) {
+                for (const row of cashuTokensWithMeta) {
                   if (
                     String(row.state ?? "") === "accepted" &&
                     String(row.mint ?? "").trim() === candidate.mint
@@ -6693,7 +6934,7 @@ const App = () => {
             if (!inserted.ok) throw inserted.error;
           }
 
-          for (const row of cashuTokens) {
+          for (const row of cashuTokensWithMeta) {
             if (
               String(row.state ?? "") === "accepted" &&
               String(row.mint ?? "").trim() === candidate.mint
@@ -6903,11 +7144,11 @@ const App = () => {
         setStatus(t("payPaying"));
 
         const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
-        for (const row of cashuTokens) {
+        for (const row of cashuTokensWithMeta) {
           if (String(row.state ?? "") !== "accepted") continue;
           const mint = String(row.mint ?? "").trim();
           if (!mint) continue;
-          const tokenText = String(row.token ?? "").trim();
+          const tokenText = String(row.token ?? row.rawToken ?? "").trim();
           if (!tokenText) continue;
 
           const amount = Number((row.amount ?? 0) as unknown as number) || 0;
@@ -6956,7 +7197,7 @@ const App = () => {
                 });
 
                 if (inserted.ok) {
-                  for (const row of cashuTokens) {
+                  for (const row of cashuTokensWithMeta) {
                     if (
                       String(row.state ?? "") === "accepted" &&
                       String(row.mint ?? "").trim() === candidate.mint
@@ -7014,7 +7255,7 @@ const App = () => {
               if (!inserted.ok) throw inserted.error;
             }
 
-            for (const row of cashuTokens) {
+            for (const row of cashuTokensWithMeta) {
               if (
                 String(row.state ?? "") === "accepted" &&
                 String(row.mint ?? "").trim() === candidate.mint
@@ -7126,11 +7367,11 @@ const App = () => {
         setStatus(t("payPaying"));
 
         const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
-        for (const row of cashuTokens) {
+        for (const row of cashuTokensWithMeta) {
           if (String(row.state ?? "") !== "accepted") continue;
           const mint = String(row.mint ?? "").trim();
           if (!mint) continue;
-          const tokenText = String(row.token ?? "").trim();
+          const tokenText = String(row.token ?? row.rawToken ?? "").trim();
           if (!tokenText) continue;
 
           const amount = Number((row.amount ?? 0) as unknown as number) || 0;
@@ -7197,7 +7438,7 @@ const App = () => {
                 });
 
                 if (inserted.ok) {
-                  for (const row of cashuTokens) {
+                  for (const row of cashuTokensWithMeta) {
                     if (
                       String(row.state ?? "") === "accepted" &&
                       String(row.mint ?? "").trim() === candidate.mint
@@ -7254,7 +7495,7 @@ const App = () => {
               if (!inserted.ok) throw inserted.error;
             }
 
-            for (const row of cashuTokens) {
+            for (const row of cashuTokensWithMeta) {
               if (
                 String(row.state ?? "") === "accepted" &&
                 String(row.mint ?? "").trim() === candidate.mint
@@ -8379,29 +8620,7 @@ const App = () => {
       const previewId = (id: string | null) =>
         id ? (id.length > 10 ? `${id.slice(0, 10)}…` : id) : null;
 
-      console.log("[linky][debug] identity", {
-        origin: globalThis.location?.origin ?? null,
-        href: globalThis.location?.href ?? null,
-        npub: currentNpub,
-        hasNsec: Boolean(nsec),
-        contactsCount: contacts.length,
-        contactsIdPreview: contacts.slice(0, 5).map((c) => c.id),
-        evoluAppOwnerId: previewId(evoluOwnerInfo),
-        expectedAppOwnerId: previewId(expectedOwnerId),
-        appOwnerMatchesExpected: Boolean(
-          evoluOwnerInfo &&
-          expectedOwnerId &&
-          evoluOwnerInfo === expectedOwnerId,
-        ),
-        storedMnemonic: storedMnemonic || null,
-        derivedMnemonic: derivedMnemonic ?? null,
-        mnemonicMatches: Boolean(
-          derivedMnemonic &&
-          storedMnemonic &&
-          derivedMnemonic === storedMnemonic,
-        ),
-        ownerSecretPreview,
-      });
+      // debug logging removed
     })();
 
     return () => {
@@ -8763,7 +8982,7 @@ const App = () => {
 
   const handleSaveContact = () => {
     if (isSavingContact) return; // Prevent double-click
-    
+
     const name = form.name.trim();
     const npub = form.npub.trim();
     const lnAddress = form.lnAddress.trim();
@@ -8801,10 +9020,14 @@ const App = () => {
         const prevLn = initial.lnAddress || null;
         const prevGroup = initial.group || null;
 
-        if ((prevName ?? "") !== (nextName ?? "")) changedFields.name = payload.name;
-        if ((prevNpub ?? "") !== (nextNpub ?? "")) changedFields.npub = payload.npub;
-        if ((prevLn ?? "") !== (nextLn ?? "")) changedFields.lnAddress = payload.lnAddress;
-        if ((prevGroup ?? "") !== (nextGroup ?? "")) changedFields.groupName = payload.groupName;
+        if ((prevName ?? "") !== (nextName ?? ""))
+          changedFields.name = payload.name;
+        if ((prevNpub ?? "") !== (nextNpub ?? ""))
+          changedFields.npub = payload.npub;
+        if ((prevLn ?? "") !== (nextLn ?? ""))
+          changedFields.lnAddress = payload.lnAddress;
+        if ((prevGroup ?? "") !== (nextGroup ?? ""))
+          changedFields.groupName = payload.groupName;
       } else {
         // Fallback: if we don't have initial data, update all fields
         Object.assign(changedFields, payload);
@@ -9689,6 +9912,11 @@ const App = () => {
                   wrapId,
                   pubkey: innerPub,
                 });
+                logPayStep("message-ack", {
+                  contactId: String(selectedContact.id ?? ""),
+                  clientId: clientId ? String(clientId) : null,
+                  wrapId,
+                });
                 return;
               }
 
@@ -9704,6 +9932,11 @@ const App = () => {
                   status: "sent",
                   wrapId,
                   pubkey: innerPub,
+                });
+                logPayStep("message-ack", {
+                  contactId: String(selectedContact.id ?? ""),
+                  clientId: clientId ? String(clientId) : null,
+                  wrapId,
                 });
                 return;
               }
@@ -9905,14 +10138,6 @@ const App = () => {
         icon: "<",
         label: t("close"),
         onClick: navigateToMainReturn,
-      };
-    }
-
-    if (route.kind === "paymentsHistory") {
-      return {
-        icon: "<",
-        label: t("close"),
-        onClick: () => navigateTo({ route: "advanced" }),
       };
     }
 
@@ -10186,7 +10411,11 @@ const App = () => {
     }
 
     // No menu button for nested settings pages
-    if (route.kind === "evoluCurrentData" || route.kind === "evoluHistoryData" || route.kind === "contactEdit") {
+    if (
+      route.kind === "evoluCurrentData" ||
+      route.kind === "evoluHistoryData" ||
+      route.kind === "contactEdit"
+    ) {
       return null;
     }
 
@@ -10207,7 +10436,6 @@ const App = () => {
     if (route.kind === "cashuToken") return t("cashuToken");
     if (route.kind === "credoToken") return t("credoTokenTitle");
     if (route.kind === "advanced") return t("advanced");
-    if (route.kind === "paymentsHistory") return t("paymentsHistory");
     if (route.kind === "mints") return t("mints");
     if (route.kind === "mint") return t("mints");
     if (route.kind === "profile") return t("profile");
@@ -11667,6 +11895,11 @@ const App = () => {
       ? chatMessages[chatMessages.length - 1]
       : null;
 
+    if (!last) return;
+
+    const prevCount = chatLastMessageCountRef.current[contactId] ?? 0;
+    chatLastMessageCountRef.current[contactId] = chatMessages.length;
+
     const firstForThisContact =
       chatDidInitialScrollForContactRef.current !== contactId;
 
@@ -11696,6 +11929,27 @@ const App = () => {
         tryScroll(0);
       });
       return;
+    }
+
+    if (chatForceScrollToBottomRef.current) {
+      chatForceScrollToBottomRef.current = false;
+      requestAnimationFrame(() => {
+        const c = chatMessagesRef.current;
+        if (c) c.scrollTop = c.scrollHeight;
+      });
+      return;
+    }
+
+    if (chatMessages.length > prevCount) {
+      const isOut =
+        String((last as LocalNostrMessage).direction ?? "") === "out";
+      if (isOut) {
+        requestAnimationFrame(() => {
+          const c = chatMessagesRef.current;
+          if (c) c.scrollTop = c.scrollHeight;
+        });
+        return;
+      }
     }
 
     // Keep pinned to bottom if already near bottom.
@@ -11833,15 +12087,6 @@ const App = () => {
             />
           )}
 
-          {route.kind === "paymentsHistory" && (
-            <PaymentsHistoryPage
-              paymentEvents={paymentEvents}
-              lang={lang}
-              displayUnit={displayUnit}
-              t={t}
-            />
-          )}
-
           {route.kind === "mints" && (
             <MintsPage
               defaultMintUrl={defaultMintUrl}
@@ -11892,7 +12137,8 @@ const App = () => {
               evoluServerUrls={evoluServerUrls}
               evoluTableCounts={evoluDbInfo.info.tableCounts}
               isEvoluServerOffline={isEvoluServerOffline}
-              onClearDatabase={() => {
+              pendingClearDatabase={evoluWipeStorageIsBusy}
+              requestClearDatabase={() => {
                 if (window.confirm(t("evoluClearDatabaseConfirm"))) {
                   void wipeEvoluStorage();
                 }
@@ -11923,7 +12169,6 @@ const App = () => {
               evoluServerStatusByUrl={evoluServerStatusByUrl}
               evoluHasError={evoluHasError}
               syncOwner={syncOwner}
-              DEFAULT_EVOLU_SERVER_URLS={DEFAULT_EVOLU_SERVER_URLS}
               isEvoluServerOffline={isEvoluServerOffline}
               setEvoluServerOffline={setEvoluServerOffline}
               pendingEvoluServerDeleteUrl={pendingEvoluServerDeleteUrl}
@@ -11931,8 +12176,6 @@ const App = () => {
               evoluServerUrls={evoluServerUrls}
               saveEvoluServerUrls={saveEvoluServerUrls}
               setStatus={setStatus}
-              wipeEvoluStorage={wipeEvoluStorage}
-              evoluWipeStorageIsBusy={evoluWipeStorageIsBusy}
               t={t}
             />
           )}
@@ -11957,7 +12200,8 @@ const App = () => {
               evoluDatabaseBytes={evoluDbInfo.info.bytes}
               evoluTableCounts={evoluDbInfo.info.tableCounts}
               evoluHistoryCount={evoluDbInfo.info.historyCount}
-              onClearDatabase={() => {
+              pendingClearDatabase={evoluWipeStorageIsBusy}
+              requestClearDatabase={() => {
                 if (window.confirm(t("evoluClearDatabaseConfirm"))) {
                   void wipeEvoluStorage();
                 }
@@ -12040,7 +12284,7 @@ const App = () => {
               totalCredoOutstandingIn={totalCredoOutstandingIn}
               totalCredoOutstandingOut={totalCredoOutstandingOut}
               displayUnit={displayUnit}
-              cashuTokens={cashuTokens}
+              cashuTokens={cashuTokensWithMeta}
               cashuDraft={cashuDraft}
               setCashuDraft={setCashuDraft}
               cashuDraftRef={cashuDraftRef}

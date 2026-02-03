@@ -151,8 +151,13 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
           )}
           <p className="muted">
             {t("availablePrefix")} {formatInteger(cashuBalance)} {displayUnit}
-            {" · "}
-            {t("promisedPrefix")} {formatInteger(promiseAmount)} {displayUnit}
+            {allowPromisesEnabled ? (
+              <>
+                {" · "}
+                {t("promisedPrefix")} {formatInteger(promiseAmount)}{" "}
+                {displayUnit}
+              </>
+            ) : null}
           </p>
         </div>
       </div>

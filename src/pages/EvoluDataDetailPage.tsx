@@ -4,7 +4,8 @@ interface EvoluDataDetailPageProps {
   evoluDatabaseBytes: number | null;
   evoluTableCounts: Record<string, number | null>;
   evoluHistoryCount: number | null;
-  onClearDatabase: () => void;
+  pendingClearDatabase: boolean;
+  requestClearDatabase: () => void;
   loadHistoryData: () => Promise<any[]>;
   loadCurrentData: () => Promise<Record<string, any[]>>;
   t: (key: string) => string;
@@ -16,7 +17,8 @@ export function EvoluDataDetailPage({
   evoluDatabaseBytes,
   evoluTableCounts,
   evoluHistoryCount,
-  onClearDatabase,
+  pendingClearDatabase,
+  requestClearDatabase,
   loadHistoryData,
   loadCurrentData,
   t,
@@ -97,10 +99,6 @@ export function EvoluDataDetailPage({
 
   return (
     <section className="panel">
-      <h2 style={{ marginTop: 16, marginBottom: 8 }}>
-        {t("evoluLocalDataSize")}
-      </h2>
-
       {evoluDatabaseBytes !== null ? (
         <>
           <div className="settings-row">
@@ -140,8 +138,8 @@ export function EvoluDataDetailPage({
           <div className="settings-row" style={{ marginTop: 16 }}>
             <button
               type="button"
-              className="btn-wide danger"
-              onClick={onClearDatabase}
+              className={pendingClearDatabase ? "btn-wide danger" : "btn-wide"}
+              onClick={requestClearDatabase}
             >
               {t("evoluClearDatabase")}
             </button>

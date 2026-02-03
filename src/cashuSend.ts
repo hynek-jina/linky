@@ -227,6 +227,22 @@ export const createSendTokenWithTokensAtMint = async (args: {
           })
         : null;
 
+    try {
+      const denomSummary = (proofs: Array<{ amount?: number }>) =>
+        proofs.reduce<Record<string, number>>((acc, p) => {
+          const amt = Number(p?.amount ?? 0) || 0;
+          if (amt > 0) acc[String(amt)] = (acc[String(amt)] ?? 0) + 1;
+          return acc;
+        }, {});
+      console.log("[linky][pay] swap-denoms", {
+        mint,
+        send: denomSummary(sendProofs as Array<{ amount?: number }>),
+        keep: denomSummary(remainingProofs as Array<{ amount?: number }>),
+      });
+    } catch {
+      // ignore logging errors
+    }
+
     return {
       ok: true,
       mint,

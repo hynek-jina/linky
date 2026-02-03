@@ -80,7 +80,7 @@ export function EvoluCurrentDataPage({
               <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ backgroundColor: "var(--color-bg-tertiary)", borderBottom: "1px solid var(--color-border)" }}>
-                    {Object.keys(rows[0]).map((key) => (
+                    {Object.keys(rows[0]).filter(k => !['createdAt', 'updatedAt'].includes(k)).map((key) => (
                       <th key={key} style={{ padding: 4, textAlign: "left" }}>
                         {key}
                       </th>
@@ -90,7 +90,7 @@ export function EvoluCurrentDataPage({
                 <tbody>
                   {rows.map((row, idx) => (
                     <tr key={idx}>
-                      {Object.values(row).map((val, vidx) => (
+                      {Object.entries(row).filter(([k]) => !['createdAt', 'updatedAt'].includes(k)).map(([_, val], vidx) => (
                         <td key={vidx} style={{ padding: 4, borderBottom: "1px solid var(--color-border)" }}>
                           {typeof val === "object" && val !== null
                             ? JSON.stringify(val).slice(0, 50)

@@ -1,3 +1,5 @@
+import { parseCashuToken } from "../cashu";
+
 interface MintIcon {
   failed: boolean;
   host: string | null;
@@ -26,9 +28,38 @@ export function CashuTokenPill({
   onMintIconLoad,
   token,
 }: CashuTokenPillProps) {
+  const tokenText = String(
+    (token as unknown as { token?: unknown; rawToken?: unknown }).token ??
+      (token as unknown as { rawToken?: unknown }).rawToken ??
+      "",
+  ).trim();
+
+  const storedAmount = Number(
+    (token as unknown as { amount?: unknown }).amount ?? 0,
+  );
+  const storedMint = String(
+    (token as unknown as { mint?: unknown }).mint ?? "",
+  ).trim();
+
+  const parsed =
+    !storedMint || !(storedAmount > 0)
+      ? tokenText
+        ? parseCashuToken(tokenText)
+        : null
+      : null;
+
   const amount =
-    Number((token as unknown as { amount?: unknown }).amount ?? 0) || 0;
-  const mint = (token as unknown as { mint?: unknown }).mint;
+    (Number.isFinite(storedAmount) && storedAmount > 0
+      ? storedAmount
+      : parsed && Number.isFinite(parsed.amount) && parsed.amount > 0
+        ? parsed.amount
+        : 0) || 0;
+
+  const mint = storedMint
+    ? storedMint
+    : parsed?.mint
+      ? String(parsed.mint).trim()
+      : null;
   const icon = getMintIconUrl(mint);
   const showMintFallback = icon.failed || !icon.url;
 

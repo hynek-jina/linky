@@ -262,26 +262,6 @@ export function AdvancedPage({
         </div>
       </button>
 
-      <button
-        type="button"
-        className="settings-row settings-link"
-        onClick={() => navigateTo({ route: "paymentsHistory" })}
-        aria-label={t("paymentsHistory")}
-        title={t("paymentsHistory")}
-      >
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🧾
-          </span>
-          <span className="settings-label">{t("paymentsHistory")}</span>
-        </div>
-        <div className="settings-right">
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </div>
-      </button>
-
       <div className="settings-row">
         <div className="settings-left">
           <span className="settings-icon" aria-hidden="true">
