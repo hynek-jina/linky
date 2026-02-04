@@ -131,11 +131,13 @@ export const cs = {
   evoluOfLimit: "z 1 MiB limitu",
   filterByTable: "Filtrovat podle tabulky",
   allTables: "Všechny tabulky",
-  evoluSizeEstimateHint: "Velikost tabulky je odhad na základě poměru řádků k celkové velikosti databáze.",
+  evoluSizeEstimateHint:
+    "Velikost tabulky je odhad na základě poměru řádků k celkové velikosti databáze.",
   evoluUserTables: "Uživatelská data",
   evoluSystemTables: "Systémové tabulky",
   evoluClearDatabase: "Smazat SQLite soubor",
-  evoluClearDatabaseConfirm: "Opravdu chcete smazat všechna lokální data? Tato akce je nevratná.",
+  evoluClearDatabaseConfirm:
+    "Opravdu chcete smazat všechna lokální data? Tato akce je nevratná.",
   evoluShowCurrentData: "Zobrazit aktuální data",
   evoluHideCurrentData: "Skrýt aktuální data",
   evoluShowHistoryData: "Zobrazit historii",
@@ -351,6 +353,7 @@ export const cs = {
   cashuAccepted: "Token přijat.",
   cashuAcceptFailed: "Nepodařilo se přijmout token",
   cashuCheckToken: "Zkontrolovat token",
+  cashuCheckAllTokens: "Zkontrolovat vše",
   cashuChecking: "Kontroluji token…",
   cashuCheckOk: "Token je v pořádku (obnoven).",
   cashuCheckFailed: "Kontrola selhala",

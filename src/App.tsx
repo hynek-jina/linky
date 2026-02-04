@@ -379,6 +379,7 @@ const App = () => {
 
   const PRESET_MINTS = [
     "https://cashu.cz",
+    "https://testnut.cashu.space",
     "https://mint.minibits.cash/Bitcoin",
     "https://kashu.me",
     "https://cashu.21m.lol",
@@ -761,6 +762,7 @@ const App = () => {
   const [cashuDraft, setCashuDraft] = useState("");
   const cashuDraftRef = React.useRef<HTMLTextAreaElement | null>(null);
   const [cashuIsBusy, setCashuIsBusy] = useState(false);
+  const [cashuBulkCheckIsBusy, setCashuBulkCheckIsBusy] = useState(false);
   const [seedMnemonic, setSeedMnemonic] = useState<string | null>(null);
   const [tokensRestoreIsBusy, setTokensRestoreIsBusy] = useState(false);
 
@@ -8291,7 +8293,12 @@ const App = () => {
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
   };
 
-  const handleDeleteCashuToken = (id: CashuTokenId) => {
+  const handleDeleteCashuToken = (
+    id: CashuTokenId,
+    options?: { navigate?: boolean; setStatus?: boolean },
+  ) => {
+    const { navigate = true, setStatus: setStatusEnabled = true } =
+      options ?? {};
     const row = cashuTokensAll.find(
       (tkn) => String(tkn?.id ?? "") === String(id as unknown as string),
     );
@@ -8313,16 +8320,24 @@ const App = () => {
           safeLocalStorageSet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY, "");
         }
       }
-      setStatus(t("cashuDeleted"));
+      if (setStatusEnabled) {
+        setStatus(t("cashuDeleted"));
+      }
       setPendingCashuDeleteId(null);
-      navigateTo({ route: "wallet" });
+      if (navigate) {
+        navigateTo({ route: "wallet" });
+      }
       return;
     }
-    setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+    if (setStatusEnabled) {
+      setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+    }
   };
 
   const checkAndRefreshCashuToken = React.useCallback(
-    async (id: CashuTokenId) => {
+    async (
+      id: CashuTokenId,
+    ): Promise<"ok" | "invalid" | "transient" | "skipped"> => {
       const row = cashuTokensAll.find(
         (tkn) =>
           String(tkn?.id ?? "") === String(id as unknown as string) &&
@@ -8331,16 +8346,19 @@ const App = () => {
 
       if (!row) {
         pushToast(t("errorPrefix"));
-        return;
+        return "skipped";
       }
 
-      const tokenText = String(row.token ?? row.rawToken ?? "").trim();
+      const state = String((row as { state?: unknown }).state ?? "").trim();
+      const storedTokenText = String(row.token ?? "").trim();
+      const rawTokenText = String(row.rawToken ?? "").trim();
+      const tokenText = storedTokenText || rawTokenText;
       if (!tokenText) {
         pushToast(t("errorPrefix"));
-        return;
+        return "skipped";
       }
 
-      if (cashuIsBusy) return;
+      if (cashuIsBusy) return "skipped";
       setCashuIsBusy(true);
       setStatus(t("cashuChecking"));
 
@@ -8367,6 +8385,8 @@ const App = () => {
         return (
           m.includes("spent") ||
           m.includes("already spent") ||
+          m.includes("not enough funds") ||
+          m.includes("insufficient funds") ||
           m.includes("invalid proof") ||
           m.includes("invalid proofs") ||
           m.includes("token proofs missing") ||
@@ -8375,6 +8395,67 @@ const App = () => {
       };
 
       try {
+        if (state && state !== "accepted") {
+          if (state === "pending") {
+            return "skipped";
+          }
+
+          if (state === "error" && rawTokenText) {
+            try {
+              const accepted = await acceptCashuToken(rawTokenText);
+              const result = update("cashuToken", {
+                id: row.id as CashuTokenId,
+                token: accepted.token as typeof Evolu.NonEmptyString.Type,
+                rawToken: rawTokenText
+                  ? (rawTokenText as typeof Evolu.NonEmptyString.Type)
+                  : null,
+                mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
+                unit: accepted.unit
+                  ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
+                  : null,
+                amount:
+                  accepted.amount > 0
+                    ? (accepted.amount as typeof Evolu.PositiveInt.Type)
+                    : null,
+                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                error: null,
+              });
+
+              if (!result.ok) {
+                throw new Error(String(result.error));
+              }
+
+              setStatus(t("cashuCheckOk"));
+              pushToast(t("cashuCheckOk"));
+              return "ok";
+            } catch (e) {
+              const message = String(e).trim() || "Token invalid";
+              const definitive = looksLikeDefinitiveInvalid(message);
+              const transient = looksLikeTransientError(message);
+
+              if (definitive && !transient) {
+                update("cashuToken", {
+                  id: row.id as CashuTokenId,
+                  state: "error" as typeof Evolu.NonEmptyString100.Type,
+                  error: message.slice(
+                    0,
+                    1000,
+                  ) as typeof Evolu.NonEmptyString1000.Type,
+                });
+                setStatus(`${t("cashuCheckFailed")}: ${message}`);
+                pushToast(t("cashuInvalid"));
+                return "invalid";
+              }
+
+              setStatus(`${t("cashuCheckFailed")}: ${message}`);
+              pushToast(`${t("cashuCheckFailed")}: ${message}`);
+              return "transient";
+            }
+          }
+
+          return "skipped";
+        }
+
         const { getCashuLib } = await import("./utils/cashuLib");
         const { CashuMint, CashuWallet, getDecodedToken, getEncodedToken } =
           await getCashuLib();
@@ -8383,8 +8464,80 @@ const App = () => {
         const mint = String(decoded?.mint ?? row.mint ?? "").trim();
         if (!mint) throw new Error("Token mint missing");
 
-        const unit = String(decoded?.unit ?? row.unit ?? "").trim() || null;
-        const proofs = Array.isArray(decoded?.proofs) ? decoded.proofs : [];
+        const unit = String(decoded?.unit ?? row.unit ?? "").trim() || "sat";
+        const normalizedMint = normalizeMintUrl(mint);
+        const normalizedUnit = String(unit ?? "").trim() || "sat";
+        const mergedProofs: Array<{
+          amount?: unknown;
+          secret?: unknown;
+          C?: unknown;
+          id?: unknown;
+        }> = [];
+        const mergeIds: CashuTokenId[] = [];
+
+        for (const candidate of cashuTokensAll) {
+          const c = candidate as {
+            id?: unknown;
+            isDeleted?: unknown;
+            state?: unknown;
+            token?: unknown;
+            rawToken?: unknown;
+            mint?: unknown;
+            unit?: unknown;
+          };
+          if (c.isDeleted) continue;
+          if (String(c.state ?? "").trim() !== "accepted") continue;
+
+          const candidateText = String(c.token ?? c.rawToken ?? "").trim();
+          if (!candidateText) continue;
+
+          let candidateDecoded: any = null;
+          try {
+            candidateDecoded = getDecodedToken(candidateText);
+          } catch {
+            continue;
+          }
+
+          const candidateMint = String(
+            candidateDecoded?.mint ?? c.mint ?? "",
+          ).trim();
+          if (!candidateMint) continue;
+          if (normalizeMintUrl(candidateMint) !== normalizedMint) continue;
+
+          const candidateUnit =
+            String(candidateDecoded?.unit ?? c.unit ?? "").trim() || "sat";
+          if (candidateUnit !== normalizedUnit) continue;
+
+          const candidateProofs = Array.isArray(candidateDecoded?.proofs)
+            ? candidateDecoded.proofs
+            : [];
+          if (!candidateProofs.length) continue;
+
+          mergedProofs.push(...candidateProofs);
+          if (c.id) mergeIds.push(c.id as CashuTokenId);
+        }
+
+        const normalizeProofs = (
+          items: unknown[],
+        ): Array<{ amount: number; secret: string; C: string; id: string }> =>
+          items.filter(
+            (
+              p,
+            ): p is { amount: number; secret: string; C: string; id: string } =>
+              !!p &&
+              typeof (p as { amount?: unknown }).amount === "number" &&
+              typeof (p as { secret?: unknown }).secret === "string" &&
+              typeof (p as { C?: unknown }).C === "string" &&
+              typeof (p as { id?: unknown }).id === "string",
+          );
+
+        const proofs = normalizeProofs(
+          mergedProofs.length
+            ? mergedProofs
+            : Array.isArray(decoded?.proofs)
+              ? decoded.proofs
+              : [],
+        );
         if (!proofs.length) throw new Error("Token proofs missing");
 
         const total = proofs.reduce(
@@ -8405,6 +8558,17 @@ const App = () => {
 
         const walletUnit = wallet.unit;
         const keysetId = wallet.keysetId;
+        const getSwapFeeForProofs = (): number | null => {
+          const fn = (wallet as unknown as { getFeesForProofs?: unknown })
+            .getFeesForProofs;
+          if (typeof fn !== "function") return null;
+          try {
+            const fee = Number((fn as (p: unknown[]) => unknown)(proofs));
+            return Number.isFinite(fee) && fee > 0 ? fee : null;
+          } catch {
+            return null;
+          }
+        };
         const parseSwapFee = (error: unknown): number | null => {
           const message = String(error ?? "");
           const feeMatch = message.match(/fee\s*:\s*(\d+)/i);
@@ -8450,15 +8614,79 @@ const App = () => {
         };
 
         let swapped: { keep?: unknown[]; send?: unknown[] };
+        const initialFee = getSwapFeeForProofs();
+        const applyLocalMerge = (): boolean => {
+          if (mergeIds.length <= 1) return false;
+          const mergedToken = getEncodedToken({
+            mint,
+            proofs,
+            unit: walletUnit,
+          });
+          const result = update("cashuToken", {
+            id: row.id as CashuTokenId,
+            token: mergedToken as typeof Evolu.NonEmptyString.Type,
+            rawToken: null,
+            mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
+            unit: walletUnit
+              ? (walletUnit as typeof Evolu.NonEmptyString100.Type)
+              : null,
+            amount:
+              total > 0
+                ? (Math.floor(total) as typeof Evolu.PositiveInt.Type)
+                : null,
+            state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+            error: null,
+          });
+
+          if (!result.ok) {
+            throw new Error(String(result.error));
+          }
+
+          for (const id of mergeIds) {
+            if (String(id) === String(row.id ?? "")) continue;
+            update("cashuToken", {
+              id,
+              isDeleted: Evolu.sqliteTrue,
+            });
+          }
+          return true;
+        };
+
+        if (initialFee && total - initialFee <= 0) {
+          // Token is too small to pay swap fees; merge locally if possible.
+          if (applyLocalMerge()) {
+            setStatus(t("cashuCheckOk"));
+            pushToast(t("cashuCheckOk"));
+            return "ok";
+          }
+          setStatus(t("cashuCheckOk"));
+          pushToast(t("cashuCheckOk"));
+          return "ok";
+        }
+        const initialAmount =
+          initialFee && total - initialFee > 0 ? total - initialFee : total;
         try {
-          swapped = (await runSwap(total)) as {
+          swapped = (await runSwap(initialAmount)) as {
             keep?: unknown[];
             send?: unknown[];
           };
         } catch (error) {
-          const fee = parseSwapFee(error);
-          if (!fee || total - fee <= 0) throw error;
-          swapped = (await runSwap(total - fee)) as {
+          const message = String(error ?? "").toLowerCase();
+          if (message.includes("not enough funds available for swap")) {
+            // Fee/mint constraints: try local merge instead of failing.
+            if (applyLocalMerge()) {
+              setStatus(t("cashuCheckOk"));
+              pushToast(t("cashuCheckOk"));
+              return "ok";
+            }
+            setStatus(t("cashuCheckOk"));
+            pushToast(t("cashuCheckOk"));
+            return "ok";
+          }
+          const fee = parseSwapFee(error) ?? getSwapFeeForProofs();
+          const retryAmount = fee && total - fee > 0 ? total - fee : null;
+          if (!retryAmount || retryAmount === initialAmount) throw error;
+          swapped = (await runSwap(retryAmount)) as {
             keep?: unknown[];
             send?: unknown[];
           };
@@ -8502,8 +8730,19 @@ const App = () => {
           throw new Error(String(result.error));
         }
 
+        if (mergeIds.length > 0) {
+          for (const id of mergeIds) {
+            if (String(id) === String(row.id ?? "")) continue;
+            update("cashuToken", {
+              id,
+              isDeleted: Evolu.sqliteTrue,
+            });
+          }
+        }
+
         setStatus(t("cashuCheckOk"));
         pushToast(t("cashuCheckOk"));
+        return "ok";
       } catch (e) {
         const message = String(e).trim() || "Token invalid";
         const definitive = looksLikeDefinitiveInvalid(message);
@@ -8520,17 +8759,55 @@ const App = () => {
           });
           setStatus(`${t("cashuCheckFailed")}: ${message}`);
           pushToast(t("cashuInvalid"));
+          return "invalid";
         } else {
           // Don't mark token invalid on transient mint/network issues.
           setStatus(`${t("cashuCheckFailed")}: ${message}`);
           pushToast(`${t("cashuCheckFailed")}: ${message}`);
+          return "transient";
         }
       } finally {
         setCashuIsBusy(false);
       }
     },
-    [cashuIsBusy, cashuTokensAll, pushToast, t, update],
+    [cashuIsBusy, cashuTokensAll, normalizeMintUrl, pushToast, t, update],
   );
+
+  const checkAllCashuTokensAndDeleteInvalid = React.useCallback(async () => {
+    if (cashuBulkCheckIsBusy) return;
+    setCashuBulkCheckIsBusy(true);
+    try {
+      const processedKeys = new Set<string>();
+      for (const row of cashuTokensAll) {
+        if (row?.isDeleted) continue;
+        const id = row?.id as CashuTokenId | undefined;
+        if (!id) continue;
+
+        const tokenText = String(row.token ?? row.rawToken ?? "").trim();
+        const parsed = tokenText ? parseCashuToken(tokenText) : null;
+        const mintRaw = String(row.mint ?? parsed?.mint ?? "").trim();
+        const mintKey = mintRaw ? normalizeMintUrl(mintRaw) : "";
+        const unitKey = String(row.unit ?? "").trim() || "sat";
+        const groupKey = mintKey ? `${mintKey}|${unitKey}` : `id:${String(id)}`;
+
+        if (processedKeys.has(groupKey)) continue;
+        processedKeys.add(groupKey);
+
+        const result = await checkAndRefreshCashuToken(id);
+        if (result === "invalid") {
+          handleDeleteCashuToken(id, { navigate: false, setStatus: false });
+        }
+      }
+    } finally {
+      setCashuBulkCheckIsBusy(false);
+    }
+  }, [
+    cashuBulkCheckIsBusy,
+    cashuTokensAll,
+    checkAndRefreshCashuToken,
+    handleDeleteCashuToken,
+    normalizeMintUrl,
+  ]);
 
   const requestDeleteCashuToken = (id: CashuTokenId) => {
     if (pendingCashuDeleteId === id) {
@@ -12377,6 +12654,7 @@ const App = () => {
           {route.kind === "cashuTokenNew" && (
             <CashuTokenNewPage
               cashuBalance={cashuBalance}
+              cashuBulkCheckIsBusy={cashuBulkCheckIsBusy}
               totalCredoOutstandingIn={totalCredoOutstandingIn}
               totalCredoOutstandingOut={totalCredoOutstandingOut}
               displayUnit={displayUnit}
@@ -12385,6 +12663,9 @@ const App = () => {
               setCashuDraft={setCashuDraft}
               cashuDraftRef={cashuDraftRef}
               cashuIsBusy={cashuIsBusy}
+              checkAllCashuTokensAndDeleteInvalid={
+                checkAllCashuTokensAndDeleteInvalid
+              }
               credoOweTokens={credoOweTokens}
               credoPromisedTokens={credoPromisedTokens}
               nostrPictureByNpub={nostrPictureByNpub}

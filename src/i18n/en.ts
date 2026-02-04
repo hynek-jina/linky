@@ -131,11 +131,13 @@ export const en = {
   evoluOfLimit: "of 1 MiB limit",
   filterByTable: "Filter by table",
   allTables: "All tables",
-  evoluSizeEstimateHint: "Table size is estimated based on row ratio to total database size.",
+  evoluSizeEstimateHint:
+    "Table size is estimated based on row ratio to total database size.",
   evoluUserTables: "User data",
   evoluSystemTables: "System tables",
   evoluClearDatabase: "Clear SQLite file",
-  evoluClearDatabaseConfirm: "Are you sure you want to delete all local data? This action cannot be undone.",
+  evoluClearDatabaseConfirm:
+    "Are you sure you want to delete all local data? This action cannot be undone.",
   evoluShowCurrentData: "Show current data",
   evoluHideCurrentData: "Hide current data",
   evoluShowHistoryData: "Show history",
@@ -348,6 +350,7 @@ export const en = {
   cashuAccepted: "Token accepted.",
   cashuAcceptFailed: "Failed to accept token",
   cashuCheckToken: "Check token",
+  cashuCheckAllTokens: "Check all",
   cashuChecking: "Checking token…",
   cashuCheckOk: "Token is OK (refreshed).",
   cashuCheckFailed: "Check failed",

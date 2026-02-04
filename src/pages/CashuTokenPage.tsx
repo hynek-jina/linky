@@ -5,7 +5,9 @@ import type { CashuTokenId } from "../evolu";
 interface CashuTokenPageProps {
   cashuIsBusy: boolean;
   cashuTokensAll: readonly any[];
-  checkAndRefreshCashuToken: (id: CashuTokenId) => Promise<void>;
+  checkAndRefreshCashuToken: (
+    id: CashuTokenId,
+  ) => Promise<"ok" | "invalid" | "transient" | "skipped">;
   copyText: (text: string) => Promise<void>;
   pendingCashuDeleteId: CashuTokenId | null;
   requestDeleteCashuToken: (id: CashuTokenId) => void;

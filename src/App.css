@@ -1169,6 +1169,12 @@ button.secondary:hover {
   background: #111827;
 }
 
+button.btn-small {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+}
+
 button.ghost {
   background: #0b1222;
   border: none;

@@ -1,16 +1,18 @@
 import type { FC } from "react";
-import { formatInteger } from "../utils/formatting";
-import { useNavigation } from "../hooks/useRouting";
 import { CashuTokenPill } from "../components/CashuTokenPill";
 import { CredoTokenPill } from "../components/CredoTokenPill";
 import type { CashuTokenId, CredoTokenId } from "../evolu";
+import { useNavigation } from "../hooks/useRouting";
+import { formatInteger } from "../utils/formatting";
 
 interface CashuTokenNewPageProps {
   cashuBalance: number;
+  cashuBulkCheckIsBusy: boolean;
   cashuDraft: string;
   cashuDraftRef: React.RefObject<HTMLTextAreaElement | null>;
   cashuIsBusy: boolean;
   cashuTokens: readonly any[];
+  checkAllCashuTokensAndDeleteInvalid: () => Promise<void>;
   credoOweTokens: any[];
   credoPromisedTokens: any[];
   displayUnit: string;
@@ -37,10 +39,12 @@ interface CashuTokenNewPageProps {
 
 export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
   cashuBalance,
+  cashuBulkCheckIsBusy,
   cashuDraft,
   cashuDraftRef,
   cashuIsBusy,
   cashuTokens,
+  checkAllCashuTokensAndDeleteInvalid,
   credoOweTokens,
   credoPromisedTokens,
   displayUnit,
@@ -71,6 +75,16 @@ export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
           <span>
             Cashu · {formatInteger(cashuBalance)} {displayUnit}
           </span>
+          <button
+            type="button"
+            className="btn-small secondary"
+            onClick={() => void checkAllCashuTokensAndDeleteInvalid()}
+            disabled={
+              cashuIsBusy || cashuBulkCheckIsBusy || cashuTokens.length === 0
+            }
+          >
+            {t("cashuCheckAllTokens")}
+          </button>
         </div>
         {cashuTokens.length === 0 ? (
           <p className="muted">{t("cashuEmpty")}</p>
