@@ -12,6 +12,7 @@ interface WalletPageProps {
   displayUnit: string;
   openScan: () => void;
   scanIsOpen: boolean;
+  showBottomTabBar?: boolean;
   t: (key: string) => string;
 }
 
@@ -21,6 +22,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   displayUnit,
   openScan,
   scanIsOpen,
+  showBottomTabBar = true,
   t,
 }) => {
   const navigateTo = useNavigation();
@@ -58,12 +60,14 @@ export const WalletPage: React.FC<WalletPageProps> = ({
           </div>
         </div>
       </div>
-      <BottomTabBar
-        activeTab={bottomTabActive}
-        contactsLabel={t("contactsTitle")}
-        t={t}
-        walletLabel={t("wallet")}
-      />
+      {showBottomTabBar ? (
+        <BottomTabBar
+          activeTab={bottomTabActive}
+          contactsLabel={t("contactsTitle")}
+          t={t}
+          walletLabel={t("wallet")}
+        />
+      ) : null}
     </section>
   );
 };

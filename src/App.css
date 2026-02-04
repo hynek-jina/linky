@@ -1585,6 +1585,22 @@ button.icon {
   background: rgba(15, 23, 42, 0.88);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(6px);
+  position: relative;
+}
+
+.bottom-tabs-indicator {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 0;
+  border-radius: 999px;
+  background: #0b1222;
+  transition: transform 220ms ease, width 220ms ease;
+  z-index: 0;
+}
+
+.bottom-tabs.no-indicator .bottom-tabs-indicator {
+  display: none;
 }
 
 .bottom-tab {
@@ -1598,6 +1614,8 @@ button.icon {
   align-items: center;
   gap: 10px;
   box-shadow: none;
+  position: relative;
+  z-index: 1;
 }
 
 .bottom-tab:hover {
@@ -1607,8 +1625,46 @@ button.icon {
 }
 
 .bottom-tab.is-active {
-  background: #0b1222;
+  background: transparent;
   color: #e2e8f0;
+}
+
+.bottom-tabs.no-indicator .bottom-tab.is-active {
+  background: #0b1222;
+}
+
+.main-swipe {
+  position: relative;
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-width: none;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.main-swipe::-webkit-scrollbar {
+  display: none;
+}
+
+.main-swipe-fab {
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+
+.main-swipe-page {
+  flex: 0 0 100%;
+  min-width: 100%;
+  scroll-snap-align: start;
+}
+
+.page.main-swipe-active {
+  touch-action: pan-y;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 .bottom-tab-icon {

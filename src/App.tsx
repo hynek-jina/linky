@@ -9,6 +9,7 @@ import { parseCashuToken } from "./cashu";
 import { acceptCashuToken } from "./cashuAccept";
 import { createSendTokenWithTokensAtMint } from "./cashuSend";
 import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
+import { BottomTabBar } from "./components/BottomTabBar";
 import { ContactCard } from "./components/ContactCard";
 import { ContactsChecklist } from "./components/ContactsChecklist";
 import { ToastNotifications } from "./components/ToastNotifications";
@@ -549,12 +550,15 @@ const App = () => {
   const [contactsPullProgress, setContactsPullProgress] = useState(0);
   const contactsSearchInputRef = React.useRef<HTMLInputElement | null>(null);
   const contactsPullDistanceRef = React.useRef(0);
-  const swipeNavRef = React.useRef({
-    x: 0,
-    y: 0,
-    time: 0,
-    active: false,
-  });
+  const mainSwipeRef = React.useRef<HTMLDivElement | null>(null);
+  const [mainSwipeProgress, setMainSwipeProgress] = useState(() =>
+    route.kind === "wallet" ? 1 : 0,
+  );
+  const [mainSwipeScrollY, setMainSwipeScrollY] = useState(0);
+  const mainSwipeProgressRef = React.useRef(
+    route.kind === "wallet" ? 1 : 0,
+  );
+  const mainSwipeScrollTimerRef = React.useRef<number | null>(null);
 
   const [contactsOnboardingDismissed, setContactsOnboardingDismissed] =
     useState<boolean>(
@@ -4693,6 +4697,7 @@ const App = () => {
     };
 
     const onScroll = () => {
+      if (isMainSwipeRoute) setMainSwipeScrollY(window.scrollY);
       if (window.scrollY > 0) {
         resetPull();
         if (contactsHeaderVisible) setContactsHeaderVisible(false);
@@ -4793,6 +4798,12 @@ const App = () => {
 
     html.style.overflow = "hidden";
     body.style.overflow = "hidden";
+    try {
+      window.scrollTo(0, 0);
+    } catch {
+      // ignore
+    }
+    setMainSwipeScrollY(0);
 
     return () => {
       html.style.overflow = prevHtmlOverflow;
@@ -4800,52 +4811,57 @@ const App = () => {
     };
   }, [route.kind]);
 
-  const handleBottomSwipeStart =
-    route.kind === "contacts" || route.kind === "wallet"
-      ? (event: React.TouchEvent<HTMLDivElement>) => {
-          if (event.touches.length !== 1) return;
-          const target = event.target as HTMLElement | null;
-          if (
-            target?.closest("input, textarea, select, [contenteditable='true']")
-          )
-            return;
-          const touch = event.touches[0];
-          if (!touch) return;
-          swipeNavRef.current = {
-            x: touch.clientX,
-            y: touch.clientY,
-            time: Date.now(),
-            active: true,
-          };
+  const isMainSwipeRoute = route.kind === "contacts" || route.kind === "wallet";
+
+  const updateMainSwipeProgress = React.useCallback((value: number) => {
+    const clamped = Math.min(1, Math.max(0, value));
+    mainSwipeProgressRef.current = clamped;
+    setMainSwipeProgress(clamped);
+  }, []);
+
+  const commitMainSwipe = React.useCallback(
+    (target: "contacts" | "wallet") => {
+      updateMainSwipeProgress(target === "wallet" ? 1 : 0);
+      if (target !== route.kind) {
+        navigateTo({ route: target });
+      }
+    },
+    [route.kind, updateMainSwipeProgress],
+  );
+
+  React.useEffect(() => {
+    if (!isMainSwipeRoute) return;
+    const el = mainSwipeRef.current;
+    if (!el) return;
+    const width = el.clientWidth || 1;
+    const targetLeft = route.kind === "wallet" ? width : 0;
+    if (Math.abs(el.scrollLeft - targetLeft) > 1) {
+      el.scrollTo({ left: targetLeft, behavior: "auto" });
+    }
+    updateMainSwipeProgress(route.kind === "wallet" ? 1 : 0);
+  }, [isMainSwipeRoute, route.kind, updateMainSwipeProgress]);
+
+  React.useEffect(() => {
+    if (isMainSwipeRoute) return;
+  }, [isMainSwipeRoute]);
+
+  const handleMainSwipeScroll = isMainSwipeRoute
+    ? (event: React.UIEvent<HTMLDivElement>) => {
+        const el = event.currentTarget;
+        const width = el.clientWidth || 1;
+        const progress = el.scrollLeft / width;
+        updateMainSwipeProgress(progress);
+
+        if (mainSwipeScrollTimerRef.current !== null) {
+          window.clearTimeout(mainSwipeScrollTimerRef.current);
         }
-      : undefined;
-
-  const handleBottomSwipeEnd =
-    route.kind === "contacts" || route.kind === "wallet"
-      ? (event: React.TouchEvent<HTMLDivElement>) => {
-          const state = swipeNavRef.current;
-          if (!state.active) return;
-          state.active = false;
-          const touch = event.changedTouches[0];
-          if (!touch) return;
-          const dx = touch.clientX - state.x;
-          const dy = touch.clientY - state.y;
-          const absX = Math.abs(dx);
-          const absY = Math.abs(dy);
-          const dt = Date.now() - state.time;
-
-          if (dt > 800) return;
-          if (absX < 60 || absX < absY * 1.5) return;
-
-          if (dx < 0 && route.kind === "contacts") {
-            navigateTo({ route: "wallet" });
-            return;
-          }
-          if (dx > 0 && route.kind === "wallet") {
-            navigateTo({ route: "contacts" });
-          }
-        }
-      : undefined;
+        mainSwipeScrollTimerRef.current = window.setTimeout(() => {
+          mainSwipeScrollTimerRef.current = null;
+          const current = mainSwipeProgressRef.current;
+          commitMainSwipe(current > 0.5 ? "wallet" : "contacts");
+        }, 140);
+      }
+    : undefined;
 
   const contactsSearchData = useMemo(() => {
     return contacts.map((contact) => {
@@ -12338,17 +12354,18 @@ const App = () => {
         ? "contacts"
         : null;
 
+  const pageClassName = showGroupFilter
+    ? "page has-group-filter"
+    : route.kind === "chat"
+      ? "page chat-page"
+      : "page";
+  const pageClassNameWithSwipe = isMainSwipeRoute
+    ? `${pageClassName} main-swipe-active`
+    : pageClassName;
+
   return (
     <div
-      className={
-        showGroupFilter
-          ? "page has-group-filter"
-          : route.kind === "chat"
-            ? "page chat-page"
-            : "page"
-      }
-      onTouchStart={handleBottomSwipeStart}
-      onTouchEnd={handleBottomSwipeEnd}
+      className={pageClassNameWithSwipe}
     >
       <ToastNotifications
         recentlyReceivedToken={recentlyReceivedToken}
@@ -12612,15 +12629,96 @@ const App = () => {
             />
           )}
 
-          {route.kind === "wallet" && (
-            <WalletPage
-              cashuBalance={cashuBalance}
-              displayUnit={displayUnit}
-              openScan={openScan}
-              scanIsOpen={scanIsOpen}
-              bottomTabActive={bottomTabActive}
-              t={t}
-            />
+          {isMainSwipeRoute && (
+            <div className="main-swipe" ref={mainSwipeRef} onScroll={handleMainSwipeScroll}>
+              <div
+                className="main-swipe-page"
+                aria-hidden={route.kind !== "contacts"}
+              >
+                <ContactsPage
+                  onboardingContent={
+                    showContactsOnboarding ? (
+                      <ContactsChecklist
+                        contactsOnboardingCelebrating={
+                          contactsOnboardingCelebrating
+                        }
+                        dismissContactsOnboarding={
+                          dismissContactsOnboarding
+                        }
+                        onShowHow={(key) =>
+                          startContactsGuide(key as ContactsGuideKey)
+                        }
+                        progressPercent={contactsOnboardingTasks.percent}
+                        t={t}
+                        tasks={contactsOnboardingTasks.tasks}
+                        tasksCompleted={contactsOnboardingTasks.done}
+                        tasksTotal={contactsOnboardingTasks.total}
+                      />
+                    ) : null
+                  }
+                  contactsToolbarStyle={contactsToolbarStyle}
+                  contactsSearchInputRef={contactsSearchInputRef}
+                  contactsSearch={contactsSearch}
+                  setContactsSearch={setContactsSearch}
+                  showGroupFilter={showGroupFilter}
+                  activeGroup={activeGroup}
+                  setActiveGroup={setActiveGroup}
+                  showNoGroupFilter={showNoGroupFilter}
+                  noGroupFilterValue={NO_GROUP_FILTER}
+                  groupNames={groupNames}
+                  contacts={contacts}
+                  visibleContacts={visibleContacts}
+                  conversationsLabel={conversationsLabel}
+                  otherContactsLabel={otherContactsLabel}
+                  renderContactCard={renderContactCard}
+                  bottomTabActive={bottomTabActive}
+                  openNewContactPage={openNewContactPage}
+                  showBottomTabBar={false}
+                  showFab={false}
+                  t={t}
+                />
+              </div>
+              <div
+                className="main-swipe-page"
+                aria-hidden={route.kind !== "wallet"}
+                style={
+                  mainSwipeScrollY
+                    ? { transform: `translateY(${mainSwipeScrollY}px)` }
+                    : undefined
+                }
+              >
+                <WalletPage
+                  cashuBalance={cashuBalance}
+                  displayUnit={displayUnit}
+                  openScan={openScan}
+                  scanIsOpen={scanIsOpen}
+                  bottomTabActive={bottomTabActive}
+                  showBottomTabBar={false}
+                  t={t}
+                />
+              </div>
+              <BottomTabBar
+                activeTab={bottomTabActive}
+                activeProgress={mainSwipeProgress}
+                contactsLabel={t("contactsTitle")}
+                t={t}
+                walletLabel={t("wallet")}
+              />
+              <button
+                type="button"
+                className="contacts-fab main-swipe-fab"
+                onClick={openNewContactPage}
+                aria-label={t("addContact")}
+                title={t("addContact")}
+                style={{
+                  transform: `translateX(${-mainSwipeProgress * 100}%)`,
+                  opacity: Math.max(0, 1 - mainSwipeProgress * 1.1),
+                  pointerEvents: mainSwipeProgress < 0.5 ? "auto" : "none",
+                }}
+              >
+                <span aria-hidden="true">+</span>
+              </button>
+            </div>
           )}
 
           {route.kind === "topup" && (
@@ -12810,41 +12908,7 @@ const App = () => {
             />
           )}
 
-          {showContactsOnboarding && (
-            <ContactsChecklist
-              contactsOnboardingCelebrating={contactsOnboardingCelebrating}
-              dismissContactsOnboarding={dismissContactsOnboarding}
-              onShowHow={(key) => startContactsGuide(key as ContactsGuideKey)}
-              progressPercent={contactsOnboardingTasks.percent}
-              t={t}
-              tasks={contactsOnboardingTasks.tasks}
-              tasksCompleted={contactsOnboardingTasks.done}
-              tasksTotal={contactsOnboardingTasks.total}
-            />
-          )}
 
-          {route.kind === "contacts" && (
-            <ContactsPage
-              contactsToolbarStyle={contactsToolbarStyle}
-              contactsSearchInputRef={contactsSearchInputRef}
-              contactsSearch={contactsSearch}
-              setContactsSearch={setContactsSearch}
-              showGroupFilter={showGroupFilter}
-              activeGroup={activeGroup}
-              setActiveGroup={setActiveGroup}
-              showNoGroupFilter={showNoGroupFilter}
-              noGroupFilterValue={NO_GROUP_FILTER}
-              groupNames={groupNames}
-              contacts={contacts}
-              visibleContacts={visibleContacts}
-              conversationsLabel={conversationsLabel}
-              otherContactsLabel={otherContactsLabel}
-              renderContactCard={renderContactCard}
-              bottomTabActive={bottomTabActive}
-              openNewContactPage={openNewContactPage}
-              t={t}
-            />
-          )}
 
           {route.kind === "profile" && (
             <ProfilePage

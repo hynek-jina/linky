@@ -13,12 +13,15 @@ interface ContactsPageProps {
   groupNames: string[];
   noGroupFilterValue: string;
   openNewContactPage: () => void;
+  onboardingContent?: React.ReactNode;
   otherContactsLabel: string;
   renderContactCard: (contact: any) => React.ReactNode;
   setActiveGroup: (value: string | null) => void;
   setContactsSearch: (value: string) => void;
   showGroupFilter: boolean;
   showNoGroupFilter: boolean;
+  showBottomTabBar?: boolean;
+  showFab?: boolean;
   t: (key: string) => string;
   visibleContacts: {
     conversations: any[];
@@ -37,12 +40,15 @@ export const ContactsPage: FC<ContactsPageProps> = ({
   groupNames,
   noGroupFilterValue,
   openNewContactPage,
+  onboardingContent,
   otherContactsLabel,
   renderContactCard,
   setActiveGroup,
   setContactsSearch,
   showGroupFilter,
   showNoGroupFilter,
+  showBottomTabBar = true,
+  showFab = true,
   t,
   visibleContacts,
 }) => {
@@ -51,6 +57,7 @@ export const ContactsPage: FC<ContactsPageProps> = ({
 
   return (
     <>
+      {onboardingContent}
       <div className="contacts-toolbar" style={contactsToolbarStyle}>
         <div className="contacts-search-bar" role="search">
           <input
@@ -169,22 +176,26 @@ export const ContactsPage: FC<ContactsPageProps> = ({
         </div>
       </section>
 
-      <BottomTabBar
-        activeTab={bottomTabActive}
-        contactsLabel={t("contactsTitle")}
-        t={t}
-        walletLabel={t("wallet")}
-      />
+      {showBottomTabBar ? (
+        <BottomTabBar
+          activeTab={bottomTabActive}
+          contactsLabel={t("contactsTitle")}
+          t={t}
+          walletLabel={t("wallet")}
+        />
+      ) : null}
 
-      <button
-        type="button"
-        className="contacts-fab"
-        onClick={openNewContactPage}
-        aria-label={t("addContact")}
-        title={t("addContact")}
-      >
-        <span aria-hidden="true">+</span>
-      </button>
+      {showFab ? (
+        <button
+          type="button"
+          className="contacts-fab"
+          onClick={openNewContactPage}
+          aria-label={t("addContact")}
+          title={t("addContact")}
+        >
+          <span aria-hidden="true">+</span>
+        </button>
+      ) : null}
     </>
   );
 };
