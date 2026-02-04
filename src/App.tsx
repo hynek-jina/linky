@@ -555,9 +555,7 @@ const App = () => {
     route.kind === "wallet" ? 1 : 0,
   );
   const [mainSwipeScrollY, setMainSwipeScrollY] = useState(0);
-  const mainSwipeProgressRef = React.useRef(
-    route.kind === "wallet" ? 1 : 0,
-  );
+  const mainSwipeProgressRef = React.useRef(route.kind === "wallet" ? 1 : 0);
   const mainSwipeScrollTimerRef = React.useRef<number | null>(null);
 
   const [contactsOnboardingDismissed, setContactsOnboardingDismissed] =
@@ -12364,9 +12362,7 @@ const App = () => {
     : pageClassName;
 
   return (
-    <div
-      className={pageClassNameWithSwipe}
-    >
+    <div className={pageClassNameWithSwipe}>
       <ToastNotifications
         recentlyReceivedToken={recentlyReceivedToken}
         toasts={toasts}
@@ -12630,7 +12626,11 @@ const App = () => {
           )}
 
           {isMainSwipeRoute && (
-            <div className="main-swipe" ref={mainSwipeRef} onScroll={handleMainSwipeScroll}>
+            <div
+              className="main-swipe"
+              ref={mainSwipeRef}
+              onScroll={handleMainSwipeScroll}
+            >
               <div
                 className="main-swipe-page"
                 aria-hidden={route.kind !== "contacts"}
@@ -12642,9 +12642,7 @@ const App = () => {
                         contactsOnboardingCelebrating={
                           contactsOnboardingCelebrating
                         }
-                        dismissContactsOnboarding={
-                          dismissContactsOnboarding
-                        }
+                        dismissContactsOnboarding={dismissContactsOnboarding}
                         onShowHow={(key) =>
                           startContactsGuide(key as ContactsGuideKey)
                         }
@@ -12907,8 +12905,6 @@ const App = () => {
               t={t}
             />
           )}
-
-
 
           {route.kind === "profile" && (
             <ProfilePage

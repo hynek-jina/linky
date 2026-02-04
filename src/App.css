@@ -1595,7 +1595,9 @@ button.icon {
   left: 0;
   border-radius: 999px;
   background: #0b1222;
-  transition: transform 220ms ease, width 220ms ease;
+  transition:
+    transform 220ms ease,
+    width 220ms ease;
   z-index: 0;
 }
 
@@ -1651,7 +1653,9 @@ button.icon {
 }
 
 .main-swipe-fab {
-  transition: transform 220ms ease, opacity 220ms ease;
+  transition:
+    transform 220ms ease,
+    opacity 220ms ease;
 }
 
 .main-swipe-page {

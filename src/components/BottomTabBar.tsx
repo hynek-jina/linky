@@ -95,9 +95,7 @@ export function BottomTabBar({
       <div className="bottom-tabs-bar" role="tablist" aria-label={t("list")}>
         <div
           className={
-            tabMetrics.ready
-              ? "bottom-tabs"
-              : "bottom-tabs no-indicator"
+            tabMetrics.ready ? "bottom-tabs" : "bottom-tabs no-indicator"
           }
           ref={tabsRef}
         >

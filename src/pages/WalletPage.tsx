@@ -1,10 +1,10 @@
 import React from "react";
+import { BottomTabBar } from "../components/BottomTabBar";
+import { WalletActionButton } from "../components/WalletActionButton";
+import { WalletBalance } from "../components/WalletBalance";
+import { WalletWarning } from "../components/WalletWarning";
 import { useNavigation } from "../hooks/useRouting";
 import { formatInteger } from "../utils/formatting";
-import { WalletWarning } from "../components/WalletWarning";
-import { WalletBalance } from "../components/WalletBalance";
-import { WalletActionButton } from "../components/WalletActionButton";
-import { BottomTabBar } from "../components/BottomTabBar";
 
 interface WalletPageProps {
   bottomTabActive: "wallet" | "contacts" | null;
