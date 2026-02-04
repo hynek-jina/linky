@@ -78,6 +78,7 @@ export function AdvancedPage({
               className="ghost"
               onClick={copyNostrKeys}
               disabled={!currentNsec}
+              data-guide="copy-nostr-keys"
             >
               {t("copyCurrent")}
             </button>

@@ -192,6 +192,7 @@ export const ContactsPage: FC<ContactsPageProps> = ({
           onClick={openNewContactPage}
           aria-label={t("addContact")}
           title={t("addContact")}
+          data-guide="contact-add-button"
         >
           <span aria-hidden="true">+</span>
         </button>

@@ -49,6 +49,7 @@ export function Topbar({
             onClick={openProfileQr}
             aria-label={t("profile")}
             title={t("profile")}
+            data-guide="profile-qr-button"
           >
             {effectiveProfilePicture ? (
               <img
@@ -118,6 +119,9 @@ export function Topbar({
           onClick={topbarRight.onClick}
           aria-label={topbarRight.label}
           title={topbarRight.label}
+          {...(topbarRight.label === t("menu")
+            ? { "data-guide": "open-menu" }
+            : {})}
         >
           <span aria-hidden="true">{topbarRight.icon}</span>
         </button>

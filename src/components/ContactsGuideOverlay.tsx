@@ -28,6 +28,11 @@ export function ContactsGuideOverlay({
   t,
   totalSteps,
 }: ContactsGuideOverlayProps): React.ReactElement {
+  const moveGuideTop =
+    Boolean(highlightRect) &&
+    typeof window !== "undefined" &&
+    highlightRect.top > window.innerHeight * 0.55;
+
   return (
     <div className="guide-overlay" aria-live="polite">
       {highlightRect ? (
@@ -43,7 +48,12 @@ export function ContactsGuideOverlay({
         />
       ) : null}
 
-      <div className="guide-card" role="dialog" aria-modal="false">
+      <div
+        className="guide-card"
+        role="dialog"
+        aria-modal="false"
+        style={moveGuideTop ? { top: 64, bottom: "auto" } : undefined}
+      >
         <div className="guide-step">
           {currentIdx + 1} / {totalSteps}
         </div>

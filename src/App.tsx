@@ -94,6 +94,7 @@ import { getCashuLib } from "./utils/cashuLib";
 import {
   ALLOW_PROMISES_STORAGE_KEY,
   CONTACTS_ONBOARDING_DISMISSED_STORAGE_KEY,
+  CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY,
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
   FEEDBACK_CONTACT_NPUB,
   NO_GROUP_FILTER,
@@ -204,7 +205,12 @@ type AppNostrPool = {
   ) => { close: (reason?: string) => Promise<void> | void };
 };
 
-type ContactsGuideKey = "add_contact" | "topup" | "pay" | "message";
+type ContactsGuideKey =
+  | "add_contact"
+  | "topup"
+  | "pay"
+  | "message"
+  | "backup_keys";
 
 type ContactsGuideStep = {
   bodyKey: keyof typeof translations.cs;
@@ -569,6 +575,15 @@ const App = () => {
       () =>
         safeLocalStorageGet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY) === "1",
     );
+
+  const [
+    contactsOnboardingHasBackedUpKeys,
+    setContactsOnboardingHasBackedUpKeys,
+  ] = useState<boolean>(
+    () =>
+      safeLocalStorageGet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY) ===
+      "1",
+  );
 
   const [contactsOnboardingCelebrating, setContactsOnboardingCelebrating] =
     useState(false);
@@ -7674,19 +7689,24 @@ const App = () => {
         done: contacts.length > 0,
       },
       {
+        key: "message",
+        label: t("contactsOnboardingTaskMessage"),
+        done: contactsOnboardingHasSentMessage,
+      },
+      {
         key: "topup",
         label: t("contactsOnboardingTaskTopup"),
         done: cashuBalance > 0,
       },
       {
+        key: "backup_keys",
+        label: t("contactsOnboardingTaskBackupKeys"),
+        done: contactsOnboardingHasBackedUpKeys,
+      },
+      {
         key: "pay",
         label: t("contactsOnboardingTaskPay"),
         done: contactsOnboardingHasPaid,
-      },
-      {
-        key: "message",
-        label: t("contactsOnboardingTaskMessage"),
-        done: contactsOnboardingHasSentMessage,
       },
     ] as const;
 
@@ -7697,6 +7717,7 @@ const App = () => {
   }, [
     cashuBalance,
     contacts.length,
+    contactsOnboardingHasBackedUpKeys,
     contactsOnboardingHasPaid,
     contactsOnboardingHasSentMessage,
     t,
@@ -7753,6 +7774,7 @@ const App = () => {
 
       if (kind === "contacts") navigateTo({ route: "contacts" });
       if (kind === "wallet") navigateTo({ route: "wallet" });
+      if (kind === "advanced") navigateTo({ route: "advanced" });
       if (kind === "topup") navigateTo({ route: "topup" });
       if (kind === "topupInvoice") navigateTo({ route: "topupInvoice" });
       if (kind === "contactNew") openNewContactPage();
@@ -7775,7 +7797,7 @@ const App = () => {
         },
         {
           id: "add_contact_2",
-          selector: '[data-guide="scan-contact-button"]',
+          selector: '[data-guide="contact-add-button"]',
           titleKey: "guideAddContactStep2Title",
           bodyKey: "guideAddContactStep2Body",
           ensure: () => ensureRoute("contacts"),
@@ -7864,6 +7886,32 @@ const App = () => {
           ensure: () => ensureRoute("chat", targetContactId),
         },
       ],
+      backup_keys: [
+        {
+          id: "backup_keys_1",
+          selector: '[data-guide="open-menu"]',
+          titleKey: "guideBackupKeysStep1Title",
+          bodyKey: "guideBackupKeysStep1Body",
+          ensure: () => ensureRoute("contacts"),
+        },
+        {
+          id: "backup_keys_2",
+          selector: '[data-guide="open-advanced"]',
+          titleKey: "guideBackupKeysStep2Title",
+          bodyKey: "guideBackupKeysStep2Body",
+          ensure: () => {
+            ensureRoute("contacts");
+            openMenu();
+          },
+        },
+        {
+          id: "backup_keys_3",
+          selector: '[data-guide="copy-nostr-keys"]',
+          titleKey: "guideBackupKeysStep3Title",
+          bodyKey: "guideBackupKeysStep3Body",
+          ensure: () => ensureRoute("advanced"),
+        },
+      ],
     };
 
     return stepsByTask[contactsGuide.task] ?? null;
@@ -7871,6 +7919,7 @@ const App = () => {
     contacts,
     contactsGuide,
     contactsGuideTargetContactId,
+    openMenu,
     openNewContactPage,
     route,
     t,
@@ -9712,6 +9761,8 @@ const App = () => {
   const copyNostrKeys = async () => {
     if (!currentNsec) return;
     await navigator.clipboard?.writeText(currentNsec);
+    safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY, "1");
+    setContactsOnboardingHasBackedUpKeys(true);
     pushToast(t("nostrKeysCopied"));
   };
 
@@ -12708,6 +12759,7 @@ const App = () => {
                 onClick={openNewContactPage}
                 aria-label={t("addContact")}
                 title={t("addContact")}
+                data-guide="contact-add-button"
                 style={{
                   transform: `translateX(${-mainSwipeProgress * 100}%)`,
                   opacity: Math.max(0, 1 - mainSwipeProgress * 1.1),

@@ -80,6 +80,7 @@ export function MenuModal({
           }}
           aria-label={t("advanced")}
           title={t("advanced")}
+          data-guide="open-advanced"
         >
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
