@@ -1,3 +1,4 @@
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import react from "@vitejs/plugin-react-swc";
 import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
@@ -24,6 +25,8 @@ const appVersion = (() => {
     return "0.0.0";
   }
 })();
+
+const useHttps = process.env.VITE_HTTPS === "1";
 
 const serveSqliteWasm = (): Plugin => ({
   name: "serve-sqlite-wasm",
@@ -247,6 +250,7 @@ export default defineConfig({
     serveSqliteWasm(),
     mintQuoteProxy(),
     lnurlProxy(),
+    ...(useHttps ? [basicSsl()] : []),
     react(),
     VitePWA({
       registerType: "autoUpdate",
@@ -294,6 +298,7 @@ export default defineConfig({
       },
     }),
   ],
+  server: useHttps ? { host: true, https: true } : undefined,
   build: {
     rollupOptions: {
       output: {

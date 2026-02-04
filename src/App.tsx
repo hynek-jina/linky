@@ -12677,74 +12677,76 @@ const App = () => {
           )}
 
           {isMainSwipeRoute && (
-            <div
-              className="main-swipe"
-              ref={mainSwipeRef}
-              onScroll={handleMainSwipeScroll}
-            >
+            <>
               <div
-                className="main-swipe-page"
-                aria-hidden={route.kind !== "contacts"}
+                className="main-swipe"
+                ref={mainSwipeRef}
+                onScroll={handleMainSwipeScroll}
               >
-                <ContactsPage
-                  onboardingContent={
-                    showContactsOnboarding ? (
-                      <ContactsChecklist
-                        contactsOnboardingCelebrating={
-                          contactsOnboardingCelebrating
-                        }
-                        dismissContactsOnboarding={dismissContactsOnboarding}
-                        onShowHow={(key) =>
-                          startContactsGuide(key as ContactsGuideKey)
-                        }
-                        progressPercent={contactsOnboardingTasks.percent}
-                        t={t}
-                        tasks={contactsOnboardingTasks.tasks}
-                        tasksCompleted={contactsOnboardingTasks.done}
-                        tasksTotal={contactsOnboardingTasks.total}
-                      />
-                    ) : null
+                <div
+                  className="main-swipe-page"
+                  aria-hidden={route.kind !== "contacts"}
+                >
+                  <ContactsPage
+                    onboardingContent={
+                      showContactsOnboarding ? (
+                        <ContactsChecklist
+                          contactsOnboardingCelebrating={
+                            contactsOnboardingCelebrating
+                          }
+                          dismissContactsOnboarding={dismissContactsOnboarding}
+                          onShowHow={(key) =>
+                            startContactsGuide(key as ContactsGuideKey)
+                          }
+                          progressPercent={contactsOnboardingTasks.percent}
+                          t={t}
+                          tasks={contactsOnboardingTasks.tasks}
+                          tasksCompleted={contactsOnboardingTasks.done}
+                          tasksTotal={contactsOnboardingTasks.total}
+                        />
+                      ) : null
+                    }
+                    contactsToolbarStyle={contactsToolbarStyle}
+                    contactsSearchInputRef={contactsSearchInputRef}
+                    contactsSearch={contactsSearch}
+                    setContactsSearch={setContactsSearch}
+                    showGroupFilter={showGroupFilter}
+                    activeGroup={activeGroup}
+                    setActiveGroup={setActiveGroup}
+                    showNoGroupFilter={showNoGroupFilter}
+                    noGroupFilterValue={NO_GROUP_FILTER}
+                    groupNames={groupNames}
+                    contacts={contacts}
+                    visibleContacts={visibleContacts}
+                    conversationsLabel={conversationsLabel}
+                    otherContactsLabel={otherContactsLabel}
+                    renderContactCard={renderContactCard}
+                    bottomTabActive={bottomTabActive}
+                    openNewContactPage={openNewContactPage}
+                    showBottomTabBar={false}
+                    showFab={false}
+                    t={t}
+                  />
+                </div>
+                <div
+                  className="main-swipe-page"
+                  aria-hidden={route.kind !== "wallet"}
+                  style={
+                    mainSwipeScrollY
+                      ? { transform: `translateY(${mainSwipeScrollY}px)` }
+                      : undefined
                   }
-                  contactsToolbarStyle={contactsToolbarStyle}
-                  contactsSearchInputRef={contactsSearchInputRef}
-                  contactsSearch={contactsSearch}
-                  setContactsSearch={setContactsSearch}
-                  showGroupFilter={showGroupFilter}
-                  activeGroup={activeGroup}
-                  setActiveGroup={setActiveGroup}
-                  showNoGroupFilter={showNoGroupFilter}
-                  noGroupFilterValue={NO_GROUP_FILTER}
-                  groupNames={groupNames}
-                  contacts={contacts}
-                  visibleContacts={visibleContacts}
-                  conversationsLabel={conversationsLabel}
-                  otherContactsLabel={otherContactsLabel}
-                  renderContactCard={renderContactCard}
-                  bottomTabActive={bottomTabActive}
-                  openNewContactPage={openNewContactPage}
-                  showBottomTabBar={false}
-                  showFab={false}
-                  t={t}
-                />
-              </div>
-              <div
-                className="main-swipe-page"
-                aria-hidden={route.kind !== "wallet"}
-                style={
-                  mainSwipeScrollY
-                    ? { transform: `translateY(${mainSwipeScrollY}px)` }
-                    : undefined
-                }
-              >
-                <WalletPage
-                  cashuBalance={cashuBalance}
-                  displayUnit={displayUnit}
-                  openScan={openScan}
-                  scanIsOpen={scanIsOpen}
-                  bottomTabActive={bottomTabActive}
-                  showBottomTabBar={false}
-                  t={t}
-                />
+                >
+                  <WalletPage
+                    cashuBalance={cashuBalance}
+                    displayUnit={displayUnit}
+                    openScan={openScan}
+                    scanIsOpen={scanIsOpen}
+                    bottomTabActive={bottomTabActive}
+                    showBottomTabBar={false}
+                    t={t}
+                  />
+                </div>
               </div>
               <BottomTabBar
                 activeTab={bottomTabActive}
@@ -12768,7 +12770,7 @@ const App = () => {
               >
                 <span aria-hidden="true">+</span>
               </button>
-            </div>
+            </>
           )}
 
           {route.kind === "topup" && (

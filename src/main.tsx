@@ -45,7 +45,7 @@ if (!("Buffer" in globalThis)) {
   (B as unknown as { from: (...args: unknown[]) => Buffer }).from = function (
     value: unknown,
     encodingOrOffset?: unknown,
-    length?: unknown
+    length?: unknown,
   ) {
     if (typeof value === "string" && encodingOrOffset === "base64url") {
       return origFrom.call(this, fromBase64Url(value), "base64");
@@ -134,7 +134,7 @@ if (import.meta.env.PROD) {
         if ("caches" in globalThis) {
           const keys = await caches.keys();
           const relevant = keys.filter(
-            (k) => k.includes("workbox") || k.includes("linky")
+            (k) => k.includes("workbox") || k.includes("linky"),
           );
           console.log("[linky][pwa] cache keys", { keys: relevant });
         }
@@ -160,10 +160,20 @@ const applyEvoluWebCompatPolyfills = () => {
   // back to a single-tab worker model instead of crashing during boot.
   if (typeof document === "undefined") return;
 
-  if (
-    typeof (globalThis as unknown as { BroadcastChannel?: unknown })
-      .BroadcastChannel === "undefined"
-  ) {
+  const ensureBroadcastChannel = () => {
+    const BC = (globalThis as unknown as { BroadcastChannel?: unknown })
+      .BroadcastChannel;
+    if (typeof BC === "undefined") return false;
+    try {
+      const test = new (BC as typeof BroadcastChannel)("__linky_test__");
+      test.close();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  if (!ensureBroadcastChannel()) {
     type Listener = ((event: MessageEvent<unknown>) => void) | null;
     const channelsByName = new Map<string, Set<PolyBroadcastChannel>>();
 
@@ -221,15 +231,27 @@ const applyEvoluWebCompatPolyfills = () => {
     | {
         request?: (
           name: string,
-          cb: () => Promise<unknown>
+          cb: () => Promise<unknown>,
         ) => Promise<unknown>;
       }
     | undefined;
 
   if (!locks?.request) {
-    (navigator as unknown as { locks: unknown }).locks = {
+    const lockPolyfill = {
       request: async (_name: string, cb: () => Promise<unknown>) => cb(),
     };
+    try {
+      (navigator as unknown as { locks: unknown }).locks = lockPolyfill;
+    } catch {
+      try {
+        Object.defineProperty(navigator, "locks", {
+          value: lockPolyfill,
+          configurable: true,
+        });
+      } catch {
+        // ignore
+      }
+    }
   }
 };
 
@@ -241,8 +263,8 @@ const renderBootError = (error: unknown) => {
     error instanceof Error
       ? `${error.message}\n\n${error.stack ?? ""}`
       : typeof error === "string"
-      ? error
-      : JSON.stringify(error, null, 2);
+        ? error
+        : JSON.stringify(error, null, 2);
 
   const diagnostics = {
     href: globalThis.location?.href ?? null,
@@ -256,7 +278,7 @@ const renderBootError = (error: unknown) => {
       typeof (globalThis as unknown as { BroadcastChannel?: unknown })
         .BroadcastChannel !== "undefined",
     hasLocks: Boolean(
-      (globalThis.navigator as unknown as { locks?: unknown })?.locks
+      (globalThis.navigator as unknown as { locks?: unknown })?.locks,
     ),
     hasIndexedDB: typeof globalThis.indexedDB !== "undefined",
     hasStorage:
@@ -268,10 +290,10 @@ const renderBootError = (error: unknown) => {
     <div style="padding: 40px; color: #ff6b6b; font-family: monospace;">
       <h2>Boot error</h2>
       <pre style="overflow: auto; background: #1a1a1a; padding: 10px; white-space: pre-wrap;">${escapeHtml(
-        message
+        message,
       )}</pre>
       <pre style="overflow: auto; background: #111827; padding: 10px; white-space: pre-wrap; margin-top: 12px;">${escapeHtml(
-        JSON.stringify(diagnostics, null, 2)
+        JSON.stringify(diagnostics, null, 2),
       )}</pre>
     </div>
   `;
@@ -279,12 +301,12 @@ const renderBootError = (error: unknown) => {
 
 const bootstrap = async () => {
   try {
+    applyEvoluWebCompatPolyfills();
+
     const [{ default: App }, { ErrorBoundary }] = await Promise.all([
       import("./App.tsx"),
       import("./ErrorBoundary.tsx"),
     ]);
-
-    applyEvoluWebCompatPolyfills();
 
     const { evolu, EvoluProvider } = await import("./evolu.ts");
 
@@ -295,7 +317,7 @@ const bootstrap = async () => {
             <App />
           </ErrorBoundary>
         </EvoluProvider>
-      </StrictMode>
+      </StrictMode>,
     );
   } catch (error) {
     console.error("Boot failed:", error);
