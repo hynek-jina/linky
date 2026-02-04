@@ -580,7 +580,7 @@ export const getEvoluDatabaseInfo = async (): Promise<{
             if (sub === ".opaque" && subH.kind === "directory") {
               // @ts-ignore
               let maxSize = 0;
-              for await (const [file, fileH] of subH.entries()) {
+              for await (const [_file, fileH] of subH.entries()) {
                 if (fileH.kind === "file") {
                   const f = await fileH.getFile();
                   if (f.size > maxSize) maxSize = f.size;

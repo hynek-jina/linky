@@ -347,30 +347,7 @@ const extractCashuTokenMeta = (row: {
   return { tokenText, mint, unit, amount };
 };
 
-// Helper to decode Cashu token and extract mint, unit, amount
-const decodeCashuTokenSync = (
-  token: string,
-): { mint: string; unit: string | null; amount: number; ok: boolean } => {
-  try {
-    // Try to use cached module from window if available (set by getCashuLib)
-    const cashuModule = (window as any).__CASHU_MODULE__;
-    if (cashuModule?.getDecodedToken) {
-      const decoded = cashuModule.getDecodedToken(token);
-      const mint = String(decoded?.mint ?? "").trim();
-      const unit = String(decoded?.unit ?? "").trim() || null;
-      const proofs = Array.isArray(decoded?.proofs) ? decoded.proofs : [];
-      const amount = proofs.reduce(
-        (sum: number, p: { amount?: unknown }) =>
-          sum + (Number(p?.amount ?? 0) || 0),
-        0,
-      );
-      return { mint, unit, amount, ok: true };
-    }
-  } catch {
-    // Ignore decode errors
-  }
-  return { mint: "", unit: null, amount: 0, ok: false };
-};
+// Helper removed: unused decodeCashuTokenSync
 
 const App = () => {
   const { insert, update, upsert } = useEvolu();
@@ -3345,9 +3322,10 @@ const App = () => {
         return next;
       });
 
+      const chatRouteId = route.kind === "chat" ? route.id : null;
       if (
-        route.kind === "chat" &&
-        String(msg.contactId ?? "") === String(route.id ?? "")
+        chatRouteId &&
+        String(msg.contactId ?? "") === String(chatRouteId ?? "")
       ) {
         chatForceScrollToBottomRef.current = true;
         requestAnimationFrame(() => {
@@ -3357,7 +3335,7 @@ const App = () => {
       }
       return entry.id;
     },
-    [appOwnerId, route.kind, route.id],
+    [appOwnerId, route.kind, route.kind === "chat" ? route.id : null],
   );
 
   const updateLocalNostrMessage = React.useCallback(
@@ -8551,82 +8529,7 @@ const App = () => {
     };
   }, [currentNsec, deriveEvoluMnemonicFromNsec]);
 
-  React.useEffect(() => {
-    if (!currentNsec) return;
-    let cancelled = false;
-
-    (async () => {
-      const nsec = String(currentNsec).trim();
-      const storedMnemonic = (() => {
-        try {
-          return String(
-            localStorage.getItem(INITIAL_MNEMONIC_STORAGE_KEY) ?? "",
-          ).trim();
-        } catch {
-          return "";
-        }
-      })();
-
-      const derivedMnemonic = await deriveEvoluMnemonicFromNsec(nsec);
-      if (cancelled) return;
-
-      const ownerSecretPreview = (() => {
-        if (!derivedMnemonic) return null;
-        try {
-          const ownerSecret = Evolu.mnemonicToOwnerSecret(
-            derivedMnemonic as unknown as Evolu.Mnemonic,
-          ) as unknown;
-
-          if (ownerSecret instanceof Uint8Array) {
-            const hex = Array.from(ownerSecret.slice(0, 8))
-              .map((b) => b.toString(16).padStart(2, "0"))
-              .join("");
-            return `${hex}…`;
-          }
-
-          const s = String(ownerSecret);
-          return s.length > 24 ? `${s.slice(0, 24)}…` : s;
-        } catch {
-          return null;
-        }
-      })();
-
-      const evoluOwnerInfo = await (async () => {
-        try {
-          const owner = await evolu.appOwner;
-          const ownerId = String((owner as unknown as { id?: unknown })?.id);
-          return ownerId ? ownerId : null;
-        } catch {
-          return null;
-        }
-      })();
-
-      const expectedOwnerId = (() => {
-        if (!derivedMnemonic) return null;
-        try {
-          const appOwner = Evolu.createAppOwner(
-            Evolu.mnemonicToOwnerSecret(
-              derivedMnemonic as unknown as Evolu.Mnemonic,
-            ) as unknown as Evolu.OwnerSecret,
-          ) as unknown as { id?: unknown };
-
-          const id = String(appOwner?.id ?? "").trim();
-          return id ? id : null;
-        } catch {
-          return null;
-        }
-      })();
-
-      const previewId = (id: string | null) =>
-        id ? (id.length > 10 ? `${id.slice(0, 10)}…` : id) : null;
-
-      // debug logging removed
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [contacts, currentNpub, currentNsec, deriveEvoluMnemonicFromNsec]);
+  // Removed unused debug effect
 
   const setIdentityFromNsecAndReload = React.useCallback(
     async (nsec: string) => {
