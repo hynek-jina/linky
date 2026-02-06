@@ -102,7 +102,7 @@ Linky supports push notifications for new Nostr messages using Web Push API and 
 You can manually trigger the check by calling the endpoint with a secret:
 
 ```bash
-curl -X GET "https://your-app.vercel.app/api/cron/check-messages?secret=YOUR_SECRET"
+curl -X GET "https://your-app.vercel.app/api/check-messages?secret=YOUR_SECRET"
 ```
 
 Add `CRON_SECRET` to your environment variables.
@@ -114,7 +114,7 @@ For more frequent checks, use a free external cron service like [cron-job.org](h
 1. Sign up at cron-job.org (free)
 2. Create a job that calls your endpoint every minute:
    ```
-   GET https://your-app.vercel.app/api/cron/check-messages?cron=1
+   GET https://your-app.vercel.app/api/check-messages?cron=1
    ```
 3. Set the cron schedule to every minute
 
