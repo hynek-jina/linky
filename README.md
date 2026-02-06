@@ -88,10 +88,37 @@ Linky supports push notifications for new Nostr messages using Web Push API and 
 
 ### How it works
 
-- Cron job runs every minute, queries user's relays for new DM events
+- Cron job runs daily (Hobby tier limitation), queries user's relays for new DM events
 - When new message found, sends push notification via web-push
 - User receives notification even when app is closed
 - Clicking notification opens Linky with chat
+
+### Hobby Tier Limitation
+
+**Vercel Hobby tier only allows 1 cron job per day.** The cron is configured to run once daily at midnight UTC.
+
+#### Manual Trigger
+
+You can manually trigger the check by calling the endpoint with a secret:
+
+```bash
+curl -X GET "https://your-app.vercel.app/api/cron/check-messages?secret=YOUR_SECRET"
+```
+
+Add `CRON_SECRET` to your environment variables.
+
+#### Alternative: External Cron Service
+
+For more frequent checks, use a free external cron service like [cron-job.org](https://cron-job.org):
+
+1. Sign up at cron-job.org (free)
+2. Create a job that calls your endpoint every minute:
+   ```
+   GET https://your-app.vercel.app/api/cron/check-messages?cron=1
+   ```
+3. Set the cron schedule to every minute
+
+This bypasses Vercel's cron limitations while staying on the free tier.
 
 ## Running the project
 

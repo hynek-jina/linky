@@ -51,9 +51,11 @@ const DEFAULT_RELAYS = [
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Verify this is a cron job request (Vercel sends specific headers)
-  const isCron = req.headers["x-vercel-cron"] === "1" || req.query.cron === "1";
+  // Or verify secret for manual triggers
+  const isCron = req.headers["x-vercel-cron"] === "1";
+  const hasValidSecret = req.query.secret === process.env.CRON_SECRET;
 
-  if (!isCron && process.env.NODE_ENV !== "development") {
+  if (!isCron && !hasValidSecret && process.env.NODE_ENV !== "development") {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
