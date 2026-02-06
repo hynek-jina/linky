@@ -1,53 +1,34 @@
 import { createClient } from "@vercel/kv";
-import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const kv = createClient({
   url: process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
 });
 
-type PushSubscription = {
-  endpoint: string;
-  expirationTime: number | null;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-};
-
-type SubscriptionData = {
-  subscription: PushSubscription;
-  relays: string[];
-  lastCheck: number;
-  updatedAt: number;
-};
-
-const isValidNpub = (npub: string): boolean => {
+const isValidNpub = (npub) => {
   if (!npub || typeof npub !== "string") return false;
   if (!npub.startsWith("npub1")) return false;
   if (npub.length < 20) return false;
   return true;
 };
 
-const isValidSubscription = (sub: unknown): sub is PushSubscription => {
+const isValidSubscription = (sub) => {
   if (!sub || typeof sub !== "object") return false;
-  const s = sub as Record<string, unknown>;
-  if (typeof s.endpoint !== "string") return false;
-  if (!s.keys || typeof s.keys !== "object") return false;
-  const keys = s.keys as Record<string, unknown>;
-  if (typeof keys.p256dh !== "string") return false;
-  if (typeof keys.auth !== "string") return false;
+  if (typeof sub.endpoint !== "string") return false;
+  if (!sub.keys || typeof sub.keys !== "object") return false;
+  if (typeof sub.keys.p256dh !== "string") return false;
+  if (typeof sub.keys.auth !== "string") return false;
   return true;
 };
 
-const isValidRelays = (relays: unknown): relays is string[] => {
+const isValidRelays = (relays) => {
   if (!Array.isArray(relays)) return false;
   return relays.every(
     (r) => typeof r === "string" && r.startsWith("wss://")
   );
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -71,9 +52,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const data: SubscriptionData = {
+    const data = {
       subscription,
-      relays: relays.slice(0, 3), // Max 3 relays
+      relays: relays.slice(0, 3),
       lastCheck: Math.floor(Date.now() / 1000),
       updatedAt: Date.now(),
     };

@@ -1,19 +1,18 @@
 import { createClient } from "@vercel/kv";
-import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const kv = createClient({
   url: process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
 });
 
-const isValidNpub = (npub: string): boolean => {
+const isValidNpub = (npub) => {
   if (!npub || typeof npub !== "string") return false;
   if (!npub.startsWith("npub1")) return false;
   if (npub.length < 20) return false;
   return true;
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
