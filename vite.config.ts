@@ -255,22 +255,9 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       devOptions: { enabled: false },
-      workbox: {
-        runtimeCaching: [
-          {
-            urlPattern: ({ request }) => request.destination === "image",
-            handler: "CacheFirst",
-            options: {
-              cacheName: "linky-runtime-images-v1",
-              cacheableResponse: { statuses: [0, 200] },
-              expiration: {
-                maxEntries: 256,
-                maxAgeSeconds: 60 * 60 * 24 * 30,
-              },
-            },
-          },
-        ],
-      },
+      strategies: "injectManifest",
+      srcDir: "public",
+      filename: "sw.ts",
       manifest: {
         name: "Linky",
         short_name: "Linky",

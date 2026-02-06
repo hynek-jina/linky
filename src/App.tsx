@@ -3,7 +3,7 @@ import { useOwner, useQuery } from "@evolu/react";
 import { entropyToMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { parseCashuToken } from "./cashu";
 import { acceptCashuToken } from "./cashuAccept";
@@ -1769,6 +1769,36 @@ const App = () => {
   }, [currentNsec]);
 
   const [relayUrls, setRelayUrls] = useState<string[]>(() => [...NOSTR_RELAYS]);
+
+  // Initialize push notifications when currentNpub or relayUrls change
+  useEffect(() => {
+    if (!currentNpub) return;
+
+    const initPush = async () => {
+      try {
+        const { isPushRegistered, registerPushNotifications, updatePushSubscriptionRelays } = await import("./utils/pushNotifications");
+
+        // Check if already registered
+        if (isPushRegistered()) {
+          // Update relays if changed
+          await updatePushSubscriptionRelays(relayUrls.slice(0, 3));
+        } else {
+          // Register for the first time
+          const granted = await Notification.requestPermission();
+          if (granted === "granted") {
+            await registerPushNotifications(currentNpub, relayUrls.slice(0, 3));
+          }
+        }
+      } catch (error) {
+        console.error("Push notification initialization error:", error);
+      }
+    };
+
+    // Only run on supported browsers
+    if ("serviceWorker" in navigator && "PushManager" in window) {
+      void initPush();
+    }
+  }, [currentNpub, relayUrls]);
 
   const nostrFetchRelays = useMemo(() => {
     const merged = [...relayUrls, ...NOSTR_RELAYS];
