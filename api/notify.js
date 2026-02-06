@@ -1,23 +1,22 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@vercel/kv';
 import webpush from 'web-push';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+webpush.setVapidDetails(
+  'mailto:admin@linky.app',
+  process.env.VAPID_PUBLIC_KEY || '',
+  process.env.VAPID_PRIVATE_KEY || ''
+);
+
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { createClient } = await import('@vercel/kv');
     const kv = createClient({
       url: process.env.KV_REST_API_URL,
       token: process.env.KV_REST_API_TOKEN,
     });
-
-    webpush.setVapidDetails(
-      'mailto:admin@linky.app',
-      process.env.VAPID_PUBLIC_KEY || '',
-      process.env.VAPID_PRIVATE_KEY || ''
-    );
 
     const { npub, payload } = req.body;
 
@@ -25,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid npub' });
     }
 
-    const data = await kv.get<any>(`push:sub:${npub}`);
+    const data = await kv.get(`push:sub:${npub}`);
     if (!data) {
       return res.status(404).json({ error: 'Subscription not found' });
     }
@@ -38,11 +37,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await webpush.sendNotification(data.subscription, pushPayload);
     return res.status(200).json({ success: true });
-  } catch (error: any) {
+  } catch (error) {
     if (error.statusCode === 404 || error.statusCode === 410) {
       const { npub } = req.body;
-      const { createClient } = await import('@vercel/kv');
-      const kv = createClient({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
+      const kv = createClient({ 
+        url: process.env.KV_REST_API_URL, 
+        token: process.env.KV_REST_API_TOKEN 
+      });
       await kv.del(`push:sub:${npub}`);
       return res.status(410).json({ error: 'Subscription expired' });
     }

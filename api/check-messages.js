@@ -1,9 +1,14 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@vercel/kv';
+import { SimplePool, nip19 } from 'nostr-tools';
+import webpush from 'web-push';
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
+webpush.setVapidDetails(
+  'mailto:admin@linky.app',
+  process.env.VAPID_PUBLIC_KEY || '',
+  process.env.VAPID_PRIVATE_KEY || ''
+);
+
+export default async function handler(req, res) {
   const isCron = req.headers['x-vercel-cron'] === '1';
   const hasValidSecret = req.query.secret === process.env.CRON_SECRET;
 
@@ -12,20 +17,13 @@ export default async function handler(
   }
 
   try {
-    // Import modules dynamically
-    const [{ createClient }, { SimplePool }, { nip19 }] = await Promise.all([
-      import('@vercel/kv'),
-      import('nostr-tools'),
-      import('nostr-tools')
-    ]);
-
     const kv = createClient({
       url: process.env.KV_REST_API_URL,
       token: process.env.KV_REST_API_TOKEN,
     });
 
     const keys = await kv.keys('push:sub:*');
-    const results: any[] = [];
+    const results = [];
 
     const pool = new SimplePool();
     const now = Math.floor(Date.now() / 1000);
@@ -38,16 +36,16 @@ export default async function handler(
 
     for (const key of keys) {
       try {
-        const data = await kv.get<any>(key);
+        const data = await kv.get(key);
         if (!data) continue;
 
         const npub = key.replace('push:sub:', '');
 
-        let pubkey: string;
+        let pubkey;
         try {
           const decoded = nip19.decode(npub);
           if (decoded.type !== 'npub') continue;
-          pubkey = decoded.data as string;
+          pubkey = decoded.data;
         } catch {
           continue;
         }
@@ -61,7 +59,24 @@ export default async function handler(
         }, { maxWait: 5000 });
 
         if (events && events.length > 0) {
-          results.push({ npub, newMessages: events.length, notified: true });
+          // Send notification
+          const pushPayload = JSON.stringify({
+            title: 'Nová zpráva',
+            body: `Máš ${events.length} nových zpráv`,
+            data: { type: 'dm', contactNpub: npub },
+          });
+
+          try {
+            await webpush.sendNotification(data.subscription, pushPayload);
+            results.push({ npub, newMessages: events.length, notified: true });
+          } catch (pushError) {
+            if (pushError.statusCode === 404 || pushError.statusCode === 410) {
+              await kv.del(key);
+              results.push({ npub, error: 'Subscription expired' });
+            } else {
+              throw pushError;
+            }
+          }
 
           await kv.set(key, {
             ...data,
