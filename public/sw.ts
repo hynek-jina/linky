@@ -59,24 +59,75 @@ self.addEventListener("push", (event) => {
     const data = event.data.json();
     console.log("[SW] Push data:", data);
 
+    const contactNpub = data.data?.contactNpub;
     const title = data.title || "Nová zpráva";
+    
+    // Show initial notification immediately
     const options: NotificationOptions = {
       body: data.body || "Máš novou zprávu v Linky",
       icon: "/pwa-192x192.png",
       badge: "/pwa-192x192.png",
-      tag: data.data?.contactNpub || "linky-message",
+      tag: contactNpub || "linky-message",
       requireInteraction: false,
       data: data.data || { type: "dm" },
     };
 
-    console.log("[SW] Showing notification:", title, options);
-    event.waitUntil(
-      self.registration.showNotification(title, options)
-        .then(() => console.log("[SW] Notification shown successfully"))
-        .catch(err => console.error("[SW] Error showing notification:", err))
-    );
+    console.log("[SW] Showing initial notification:", title, options);
+    
+    // Show notification immediately
+    const showNotification = self.registration.showNotification(title, options);
+    
+    // Try to get decrypted content from the app
+    if (contactNpub) {
+      const updateNotification = self.clients.matchAll({ type: "window", includeUncontrolled: true })
+        .then(clients => {
+          if (clients.length > 0) {
+            // Send message to app to decrypt the latest message
+            clients.forEach(client => {
+              client.postMessage({
+                type: "GET_MESSAGE_CONTENT",
+                contactNpub: contactNpub,
+                notificationTag: contactNpub,
+              });
+            });
+          }
+        })
+        .catch(err => console.error("[SW] Error contacting clients:", err));
+      
+      event.waitUntil(Promise.all([showNotification, updateNotification]));
+    } else {
+      event.waitUntil(showNotification);
+    }
   } catch (error) {
     console.error("[SW] Error showing notification:", error);
+  }
+});
+
+// Listen for messages from the app
+self.addEventListener("message", (event) => {
+  console.log("[SW] Received message from app:", event.data);
+  
+  if (event.data.type === "UPDATE_NOTIFICATION") {
+    const { title, body, tag, language } = event.data;
+    
+    // Localize based on language
+    const localizedTitle = title;
+    const localizedBody = body;
+    
+    // Update the notification
+    self.registration.showNotification(localizedTitle, {
+      body: localizedBody,
+      icon: "/pwa-192x192.png",
+      badge: "/pwa-192x192.png",
+      tag: tag,
+      requireInteraction: false,
+      data: { type: "dm", contactNpub: tag },
+      renotify: true, // Replace existing notification with same tag
+    }).then(() => {
+      console.log("[SW] Notification updated with decrypted content");
+    }).catch(err => {
+      console.error("[SW] Error updating notification:", err);
+    });
   }
 });
 
