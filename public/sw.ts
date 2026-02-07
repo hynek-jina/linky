@@ -77,6 +77,13 @@ self.addEventListener("push", (event) => {
     // Show notification immediately
     const showNotification = self.registration.showNotification(title, options);
     
+    // Update badge count on app icon (iOS support)
+    if ("setAppBadge" in navigator) {
+      navigator.setAppBadge().catch((err: unknown) => {
+        console.error("[SW] Error setting badge:", err);
+      });
+    }
+    
     // Try to get decrypted content from the app
     if (contactNpub) {
       const updateNotification = self.clients.matchAll({ type: "window", includeUncontrolled: true })
@@ -140,6 +147,13 @@ self.addEventListener("notificationclick", (event) => {
 
   if (data?.type === "dm" && data?.contactNpub) {
     url = `/#/chat/${encodeURIComponent(data.contactNpub)}`;
+  }
+
+  // Clear badge when user clicks notification
+  if ("clearAppBadge" in navigator) {
+    navigator.clearAppBadge().catch((err: unknown) => {
+      console.error("[SW] Error clearing badge:", err);
+    });
   }
 
   event.waitUntil(
