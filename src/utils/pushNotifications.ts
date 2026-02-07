@@ -1,5 +1,5 @@
 const NOTIFICATION_SERVER_URL = import.meta.env.VITE_NOTIFICATION_SERVER_URL || 'https://linky-notifications.onrender.com';
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'OAdsz3JAFv_K_27q8AcGoZDtuE8oNmH_gKYpGnEZeTU';
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BAtEOB4vWdrCLIJndc-VjK9bxRNAyZcH2XmVfpnRuCJE70mNnIlVpfoGuvwJmYNGUmnXYhIoUOMDSkthf6_IyTo';
 
 type PushSubscriptionData = {
   endpoint: string;
