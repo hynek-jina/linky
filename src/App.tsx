@@ -1776,7 +1776,11 @@ const App = () => {
 
     const initPush = async () => {
       try {
-        const { isPushRegistered, registerPushNotifications, updatePushSubscriptionRelays } = await import("./utils/pushNotifications");
+        const {
+          isPushRegistered,
+          registerPushNotifications,
+          updatePushSubscriptionRelays,
+        } = await import("./utils/pushNotifications");
 
         // Check if already registered
         if (isPushRegistered()) {
@@ -10817,6 +10821,9 @@ const App = () => {
 
     // No menu button for nested settings pages
     if (
+      route.kind === "advanced" ||
+      route.kind === "mints" ||
+      route.kind === "cashuToken" ||
       route.kind === "evoluCurrentData" ||
       route.kind === "evoluHistoryData" ||
       route.kind === "contactEdit"
