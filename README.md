@@ -58,22 +58,43 @@ It is local-first: your data is stored locally and the app works offline.
 
 ## Running the project
 
-Requirements: Node.js + npm.
+Requirements: Bun
 
 ```bash
-nvm i
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Production build:
 
 ```bash
-npm run build
+bun run build
 ```
 
 Preview production build:
 
 ```bash
-npm run preview
+bun run preview
+```
+
+Quality scripts (all workspaces):
+
+```bash
+bun run eslint
+bun run prettier
+bun run typecheck
+```
+
+or simly
+
+```bash
+bun run check-code
+```
+
+Run scripts only for the web app workspace:
+
+```bash
+bun run --filter @linky/web-app eslint
+bun run --filter @linky/web-app prettier
+bun run --filter @linky/web-app typecheck
 ```

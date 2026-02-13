@@ -1,0 +1,48 @@
+{
+  "name": "@linky/web-app",
+  "private": true,
+  "version": "26.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "eslint": "eslint --fix .",
+    "prettier": "prettier --write .",
+    "typecheck": "tsc -b",
+    "preview": "vite preview",
+    "prev": "vite preview"
+  },
+  "dependencies": {
+    "@cashu/cashu-ts": "^2.5.3",
+    "@evolu/common": "^7.4.1",
+    "@evolu/react": "^10.4.0",
+    "@evolu/react-web": "^2.4.0",
+    "@noble/curves": "^1.4.1",
+    "@noble/hashes": "^1.5.0",
+    "@scure/bip39": "^1.4.0",
+    "buffer": "^6.0.3",
+    "cbor-x": "^1.6.0",
+    "js-sha256": "^0.11.0",
+    "jsqr": "^1.4.0",
+    "nostr-tools": "^2.19.4",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "workbox-window": "^7.3.0"
+  },
+  "devDependencies": {
+    "@linky/config": "workspace:*",
+    "@playwright/test": "^1.58.1",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-basic-ssl": "^2.0.0",
+    "@vitejs/plugin-react-swc": "^4.2.2",
+    "eslint": "^9.39.1",
+    "playwright": "^1.58.1",
+    "prettier": "^3.4.2",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4",
+    "vite-plugin-pwa": "^1.2.0"
+  }
+}

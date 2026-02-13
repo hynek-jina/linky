@@ -1,0 +1,29 @@
+{
+  "name": "@linky/config",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint/index.js",
+    "./prettier": "./prettier/index.js",
+    "./tsconfig/base": "./tsconfig/base.json",
+    "./tsconfig/app": "./tsconfig/app.json",
+    "./tsconfig/node": "./tsconfig/node.json"
+  },
+  "scripts": {
+    "eslint": "eslint .",
+    "prettier": "prettier --check .",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "prettier": "^3.4.2",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.4"
+  }
+}
