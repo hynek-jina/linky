@@ -6,28 +6,24 @@ import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import type {
   ContactIdentityRowLike,
-  NewLocalNostrMessage,
   PublishWrappedResult,
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
 
-type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
-
-export interface ReplyContext {
-  rootMessageId: string | null;
-  replyToContent: string | null;
-  replyToId: string;
+export interface EditChatContext {
+  messageId: string;
+  originalContent: string;
+  rumorId: string;
 }
 
-interface UseSendChatMessageParams<
+interface UseEditChatMessageParams<
   TRoute extends { kind: string },
   TContact extends ContactIdentityRowLike,
 > {
-  appendLocalNostrMessage: AppendLocalNostrMessage;
   chatDraft: string;
-  chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   chatSendIsBusy: boolean;
   currentNsec: string | null;
+  editContext: EditChatContext | null;
   publishWrappedWithRetry: (
     pool: AppNostrPool,
     relays: string[],
@@ -35,43 +31,40 @@ interface UseSendChatMessageParams<
     wrapForContact: NostrToolsEvent,
   ) => Promise<PublishWrappedResult>;
   route: TRoute;
-  replyContext: ReplyContext | null;
-  replyContextRef: React.MutableRefObject<ReplyContext | null>;
   selectedContact: TContact | null;
-  setReplyContext: React.Dispatch<React.SetStateAction<ReplyContext | null>>;
   setChatDraft: React.Dispatch<React.SetStateAction<string>>;
   setChatSendIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
+  setEditContext: React.Dispatch<React.SetStateAction<EditChatContext | null>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
-  triggerChatScrollToBottom: (messageId?: string) => void;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
 }
 
-export const useSendChatMessage = <
+export const useEditChatMessage = <
   TRoute extends { kind: string },
   TContact extends ContactIdentityRowLike,
 >({
-  appendLocalNostrMessage,
   chatDraft,
-  chatSeenWrapIdsRef,
   chatSendIsBusy,
   currentNsec,
+  editContext,
   publishWrappedWithRetry,
   route,
-  replyContext,
-  replyContextRef,
   selectedContact,
-  setReplyContext,
   setChatDraft,
   setChatSendIsBusy,
+  setEditContext,
   setStatus,
   t,
-  triggerChatScrollToBottom,
   updateLocalNostrMessage,
-}: UseSendChatMessageParams<TRoute, TContact>) => {
+}: UseEditChatMessageParams<TRoute, TContact>) => {
   return React.useCallback(async () => {
     if (route.kind !== "chat") return;
     if (!selectedContact) return;
+    if (!editContext) return;
+
+    const editedFromId = String(editContext.rumorId ?? "").trim();
+    if (!editedFromId) return;
 
     const text = chatDraft.trim();
     if (!text) return;
@@ -116,69 +109,40 @@ export const useSendChatMessage = <
       const contactPubHex = decodedContact.data;
 
       const clientId = makeLocalId();
-      const activeReplyContext =
-        replyContextRef.current ?? replyContext ?? null;
-      const activeReplyToId = String(
-        activeReplyContext?.replyToId ?? "",
-      ).trim();
-      const clearReplyContextIfCurrent = () => {
-        if (!activeReplyToId) return;
-        setReplyContext((previous) => {
-          const previousReplyToId = String(previous?.replyToId ?? "").trim();
-          return previousReplyToId === activeReplyToId ? null : previous;
-        });
-      };
-      const tags: string[][] = [
-        ["p", contactPubHex],
-        ["p", myPubHex],
-        ["client", clientId],
-      ];
-
-      if (activeReplyContext?.replyToId) {
-        const rootId =
-          String(activeReplyContext.rootMessageId ?? "").trim() ||
-          String(activeReplyContext.replyToId ?? "").trim();
-        const replyId = String(activeReplyContext.replyToId ?? "").trim();
-        if (rootId) tags.push(["e", rootId, "", "root"]);
-        if (replyId) tags.push(["e", replyId, "", "reply"]);
-      }
-
       const baseEvent = {
         created_at: Math.ceil(Date.now() / 1e3),
         kind: 14,
         pubkey: myPubHex,
-        tags,
+        tags: [
+          ["p", contactPubHex],
+          ["p", myPubHex],
+          ["edited_from", editedFromId],
+          ["client", clientId],
+        ],
         content: text,
       } satisfies UnsignedEvent;
       const rumorId = getEventHash(baseEvent);
 
-      const pendingId = appendLocalNostrMessage({
-        contactId: String(selectedContact.id),
-        direction: "out",
+      updateLocalNostrMessage(String(editContext.messageId ?? ""), {
         content: text,
-        wrapId: `pending:${clientId}`,
-        rumorId,
-        pubkey: myPubHex,
-        createdAtSec: baseEvent.created_at,
         status: "pending",
+        wrapId: `pending:edit:${clientId}`,
+        pubkey: myPubHex,
         clientId,
-        ...(activeReplyContext?.replyToId
-          ? {
-              replyToId: activeReplyContext.replyToId,
-              replyToContent: activeReplyContext.replyToContent,
-              rootMessageId:
-                String(activeReplyContext.rootMessageId ?? "").trim() ||
-                activeReplyContext.replyToId,
-            }
-          : {}),
+        rumorId,
+        isEdited: true,
+        editedAtSec: baseEvent.created_at,
+        editedFromId,
+        originalContent: String(editContext.originalContent ?? "").trim()
+          ? editContext.originalContent
+          : null,
       });
-      triggerChatScrollToBottom(pendingId);
 
       const isOffline =
         typeof navigator !== "undefined" && navigator.onLine === false;
       if (isOffline) {
         setChatDraft("");
-        clearReplyContextIfCurrent();
+        setEditContext(null);
         setStatus(t("chatQueued"));
         return;
       }
@@ -204,45 +168,38 @@ export const useSendChatMessage = <
 
       if (!publishOutcome.anySuccess) {
         setChatDraft("");
-        clearReplyContextIfCurrent();
+        setEditContext(null);
         setStatus(t("chatQueued"));
         return;
       }
 
-      chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
-      if (pendingId) {
-        updateLocalNostrMessage(pendingId, {
-          status: "sent",
-          wrapId: String(wrapForMe.id ?? ""),
-          pubkey: myPubHex,
-          rumorId,
-        });
-      }
+      updateLocalNostrMessage(String(editContext.messageId ?? ""), {
+        status: "sent",
+        wrapId: String(wrapForMe.id ?? ""),
+        pubkey: myPubHex,
+        rumorId,
+      });
 
       setChatDraft("");
-      clearReplyContextIfCurrent();
+      setEditContext(null);
     } catch (e) {
       setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
     } finally {
       setChatSendIsBusy(false);
     }
   }, [
-    appendLocalNostrMessage,
     chatDraft,
-    chatSeenWrapIdsRef,
     chatSendIsBusy,
     currentNsec,
+    editContext,
     publishWrappedWithRetry,
-    replyContext,
-    replyContextRef,
     route.kind,
     selectedContact,
-    setReplyContext,
     setChatDraft,
     setChatSendIsBusy,
+    setEditContext,
     setStatus,
     t,
-    triggerChatScrollToBottom,
     updateLocalNostrMessage,
   ]);
 };

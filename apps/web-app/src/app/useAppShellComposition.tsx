@@ -81,7 +81,15 @@ import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardi
 import { useMainMenuState } from "./hooks/layout/useMainMenuState";
 import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
 import { useNostrPendingFlush } from "./hooks/messages/useNostrPendingFlush";
-import { useSendChatMessage } from "./hooks/messages/useSendChatMessage";
+import {
+  useSendChatMessage,
+  type ReplyContext,
+} from "./hooks/messages/useSendChatMessage";
+import {
+  useEditChatMessage,
+  type EditChatContext,
+} from "./hooks/messages/useEditChatMessage";
+import { useSendReaction } from "./hooks/messages/useSendReaction";
 import { useChatNostrSyncEffect } from "./hooks/messages/useChatNostrSyncEffect";
 import { useInboxNotificationsSync } from "./hooks/messages/useInboxNotificationsSync";
 import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
@@ -116,6 +124,7 @@ import { publishWrappedWithRetry as publishWrappedWithRetryBase } from "./lib/no
 import type {
   ContactRowLike,
   CredoTokenRow,
+  LocalNostrMessage,
   PaymentLogData,
   PublishWrappedResult,
 } from "./types/appTypes";
@@ -250,6 +259,7 @@ export const useAppShellComposition = () => {
   const displayUnit = useBitcoinSymbol ? "₿" : "sat";
 
   const [currentNsec] = useState<string | null>(() => getInitialNostrNsec());
+  const [chatOwnPubkeyHex, setChatOwnPubkeyHex] = useState<string | null>(null);
 
   // Evolu is local-first; to get automatic cross-device/browser sync you must
   // "use" an owner (which starts syncing over configured transports).
@@ -260,6 +270,33 @@ export const useAppShellComposition = () => {
 
   const evoluLastError = useEvoluLastError({ logToConsole: true });
   const evoluHasError = Boolean(evoluLastError);
+
+  React.useEffect(() => {
+    if (!currentNsec) {
+      setChatOwnPubkeyHex(null);
+      return;
+    }
+
+    let cancelled = false;
+    void import("nostr-tools")
+      .then(({ getPublicKey, nip19 }) => {
+        const decoded = nip19.decode(currentNsec);
+        if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
+          if (!cancelled) setChatOwnPubkeyHex(null);
+          return;
+        }
+        if (!cancelled) {
+          setChatOwnPubkeyHex(getPublicKey(decoded.data));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setChatOwnPubkeyHex(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentNsec]);
 
   React.useEffect(() => {
     if (!evoluLastError) return;
@@ -425,8 +462,28 @@ export const useAppShellComposition = () => {
 
   const [chatDraft, setChatDraft] = useState<string>("");
   const [chatSendIsBusy, setChatSendIsBusy] = useState(false);
+  const [replyContext, setReplyContext] = useState<ReplyContext | null>(null);
+  const replyContextRef = React.useRef<ReplyContext | null>(null);
+  const [editContext, setEditContext] = useState<EditChatContext | null>(null);
   const chatSeenWrapIdsRef = React.useRef<Set<string>>(new Set());
   const autoAcceptedChatMessageIdsRef = React.useRef<Set<string>>(new Set());
+  const activeChatRouteId = route.kind === "chat" ? String(route.id ?? "") : "";
+
+  React.useEffect(() => {
+    if (route.kind === "chat") return;
+    setReplyContext(null);
+    setEditContext(null);
+  }, [route.kind]);
+
+  React.useEffect(() => {
+    if (!activeChatRouteId) return;
+    setReplyContext(null);
+    setEditContext(null);
+  }, [activeChatRouteId]);
+
+  React.useEffect(() => {
+    replyContextRef.current = replyContext;
+  }, [replyContext]);
 
   React.useEffect(() => {
     for (const [npub, url] of Object.entries(nostrPictureByNpub)) {
@@ -892,6 +949,7 @@ export const useAppShellComposition = () => {
 
   const {
     appendLocalNostrMessage,
+    appendLocalNostrReaction,
     chatMessages,
     chatMessagesLatestRef,
     enqueuePendingPayment,
@@ -900,10 +958,17 @@ export const useAppShellComposition = () => {
     nostrMessagesLatestRef,
     nostrMessagesLocal,
     nostrMessagesRecent,
+    nostrReactionWrapIdsRef,
+    nostrReactionsLatestRef,
+    nostrReactionsLocal,
     pendingPayments,
+    reactionsByMessageId,
     refreshLocalNostrMessages,
     removePendingPayment,
+    softDeleteLocalNostrReaction,
+    softDeleteLocalNostrReactionsByWrapIds,
     updateLocalNostrMessage,
+    updateLocalNostrReaction,
   } = useMessagesDomain({
     appOwnerId,
     appOwnerIdRef,
@@ -1418,7 +1483,9 @@ export const useAppShellComposition = () => {
     contacts,
     currentNsec,
     nostrMessagesLocal,
+    nostrReactionsLocal,
     publishWrappedWithRetry,
+    updateLocalNostrReaction,
     updateLocalNostrMessage,
   });
 
@@ -1609,14 +1676,17 @@ export const useAppShellComposition = () => {
     update,
   });
 
-  const copyText = async (value: string) => {
-    try {
-      await navigator.clipboard?.writeText(value);
-      pushToast(t("copiedToClipboard"));
-    } catch {
-      pushToast(t("copyFailed"));
-    }
-  };
+  const copyText = React.useCallback(
+    async (value: string) => {
+      try {
+        await navigator.clipboard?.writeText(value);
+        pushToast(t("copiedToClipboard"));
+      } catch {
+        pushToast(t("copyFailed"));
+      }
+    },
+    [pushToast, t],
+  );
 
   const requestDeleteCurrentContact = () => {
     if (!editingId) return;
@@ -1775,15 +1845,20 @@ export const useAppShellComposition = () => {
 
   useChatNostrSyncEffect({
     appendLocalNostrMessage,
+    appendLocalNostrReaction,
     chatMessages,
     chatMessagesLatestRef,
     chatSeenWrapIdsRef,
     currentNsec,
     logPayStep,
     nostrMessageWrapIdsRef,
+    nostrReactionWrapIdsRef,
+    nostrReactionsLatestRef,
     route,
     selectedContact,
+    softDeleteLocalNostrReactionsByWrapIds,
     updateLocalNostrMessage,
+    updateLocalNostrReaction,
   });
 
   const sendChatMessage = useSendChatMessage({
@@ -1794,7 +1869,10 @@ export const useAppShellComposition = () => {
     currentNsec,
     publishWrappedWithRetry,
     route,
+    replyContext,
+    replyContextRef,
     selectedContact,
+    setReplyContext,
     setChatDraft,
     setChatSendIsBusy,
     setStatus,
@@ -1802,6 +1880,102 @@ export const useAppShellComposition = () => {
     triggerChatScrollToBottom,
     updateLocalNostrMessage,
   });
+
+  const editChatMessage = useEditChatMessage({
+    chatDraft,
+    chatSendIsBusy,
+    currentNsec,
+    editContext,
+    publishWrappedWithRetry,
+    route,
+    selectedContact,
+    setChatDraft,
+    setChatSendIsBusy,
+    setEditContext,
+    setStatus,
+    t,
+    updateLocalNostrMessage,
+  });
+
+  const sendReaction = useSendReaction({
+    appendLocalNostrReaction,
+    currentNsec,
+    publishWrappedWithRetry,
+    reactionsByMessageId,
+    route,
+    selectedContact,
+    setStatus,
+    softDeleteLocalNostrReaction,
+    t,
+    updateLocalNostrReaction,
+  });
+
+  const sendChatOrEditMessage = React.useCallback(async () => {
+    if (editContext) {
+      await editChatMessage();
+      return;
+    }
+    await sendChatMessage();
+  }, [editChatMessage, editContext, sendChatMessage]);
+
+  const onReplyToChatMessage = React.useCallback(
+    (message: LocalNostrMessage) => {
+      const rumorId = String(message.rumorId ?? "").trim();
+      if (!rumorId) return;
+      setEditContext(null);
+      setReplyContext({
+        replyToId: rumorId,
+        rootMessageId: String(message.rootMessageId ?? "").trim() || rumorId,
+        replyToContent: String(message.content ?? "").trim() || null,
+      });
+    },
+    [],
+  );
+
+  const onEditChatMessage = React.useCallback((message: LocalNostrMessage) => {
+    const isOut = String(message.direction ?? "") === "out";
+    if (!isOut) return;
+    const rumorId = String(message.rumorId ?? "").trim();
+    if (!rumorId) return;
+    const messageId = String(message.id ?? "").trim();
+    if (!messageId) return;
+
+    setReplyContext(null);
+    const content = String(message.content ?? "");
+    setEditContext({
+      messageId,
+      rumorId,
+      originalContent:
+        String(message.originalContent ?? "").trim() || content || "",
+    });
+    setChatDraft(content);
+  }, []);
+
+  const onReactToChatMessage = React.useCallback(
+    (message: LocalNostrMessage, emoji: string) => {
+      const messageRumorId = String(message.rumorId ?? "").trim();
+      const messageAuthorPubkey = String(message.pubkey ?? "").trim();
+      if (!messageRumorId || !messageAuthorPubkey) return;
+      void sendReaction({ emoji, messageAuthorPubkey, messageRumorId });
+    },
+    [sendReaction],
+  );
+
+  const onCopyChatMessage = React.useCallback(
+    (message: LocalNostrMessage) => {
+      void copyText(String(message.content ?? ""));
+    },
+    [copyText],
+  );
+
+  const onCancelReply = React.useCallback(() => {
+    setReplyContext(null);
+  }, []);
+
+  const onCancelEdit = React.useCallback(() => {
+    setEditContext(null);
+    setChatDraft("");
+  }, []);
 
   const topbar = buildTopbar({
     closeContactDetail,
@@ -1836,6 +2010,7 @@ export const useAppShellComposition = () => {
 
   useInboxNotificationsSync({
     appendLocalNostrMessage,
+    appendLocalNostrReaction,
     contacts,
     currentNsec,
     getCashuTokenMessageInfo,
@@ -1845,10 +2020,14 @@ export const useAppShellComposition = () => {
     nostrMessageWrapIdsRef,
     nostrMessagesLatestRef,
     nostrMessagesRecent,
+    nostrReactionWrapIdsRef,
+    nostrReactionsLatestRef,
     route,
     setContactAttentionById,
+    softDeleteLocalNostrReactionsByWrapIds,
     t,
     updateLocalNostrMessage,
+    updateLocalNostrReaction,
   });
 
   const openProfileQr = React.useCallback(() => {
@@ -1957,6 +2136,7 @@ export const useAppShellComposition = () => {
       chatMessageElByIdRef,
       chatMessages,
       chatMessagesRef,
+      chatOwnPubkeyHex,
       chatSendIsBusy,
       contactEditsSavable,
       contactPayMethod,
@@ -1965,6 +2145,7 @@ export const useAppShellComposition = () => {
       derivedProfile,
       displayUnit,
       editingId,
+      editContext,
       effectiveMyLightningAddress,
       effectiveProfileName,
       effectiveProfilePicture,
@@ -1981,14 +2162,21 @@ export const useAppShellComposition = () => {
       lang,
       myProfileQr,
       nostrPictureByNpub,
+      onCancelEdit,
+      onCancelReply,
+      onCopy: onCopyChatMessage,
+      onEdit: onEditChatMessage,
       onPickProfilePhoto,
       onProfilePhotoSelected,
+      onReact: onReactToChatMessage,
+      onReply: onReplyToChatMessage,
       openContactPay,
       openScan,
       payAmount,
       paySelectedContact,
       payWithCashuEnabled,
       pendingDeleteId,
+      reactionsByMessageId,
       profileEditLnAddress,
       profileEditName,
       profileEditPicture,
@@ -1997,10 +2185,11 @@ export const useAppShellComposition = () => {
       promiseTotalCapSat: PROMISE_TOTAL_CAP_SAT,
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
+      replyContext,
       saveProfileEdits,
       scanIsOpen,
       selectedContact,
-      sendChatMessage,
+      sendChatMessage: sendChatOrEditMessage,
       setChatDraft,
       setContactPayMethod,
       setForm,

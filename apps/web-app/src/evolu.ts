@@ -398,6 +398,10 @@ export type NostrIdentityId = typeof NostrIdentityId.Type;
 const NostrMessageId = Evolu.id("NostrMessage");
 export type NostrMessageId = typeof NostrMessageId.Type;
 
+// Primary key pro NostrReaction tabulku
+const NostrReactionId = Evolu.id("NostrReaction");
+export type NostrReactionId = typeof NostrReactionId.Type;
+
 // Primary key pro PaymentEvent tabulku
 const PaymentEventId = Evolu.id("PaymentEvent");
 export type PaymentEventId = typeof PaymentEventId.Type;
@@ -436,9 +440,41 @@ export const Schema = {
     // Inner (rumor) event id (kind 14, unsigned) if available.
     rumorId: Evolu.nullOr(Evolu.NonEmptyString1000),
     // Sender pubkey hex (64 chars) of the inner message.
-    pubkey: Evolu.NonEmptyString1000,
+    // Can be null for local-only queued placeholders.
+    pubkey: Evolu.nullOr(Evolu.NonEmptyString1000),
     // created_at (seconds) from the inner event when available.
     createdAtSec: Evolu.PositiveInt,
+    // Client-generated id for optimistic send/ack matching.
+    clientId: Evolu.nullOr(Evolu.NonEmptyString1000),
+    // "sent" | "pending"
+    status: Evolu.nullOr(Evolu.NonEmptyString100),
+    // "1" for local-only placeholders.
+    localOnly: Evolu.nullOr(Evolu.NonEmptyString100),
+    // Reply metadata (NIP-10).
+    replyToId: Evolu.nullOr(Evolu.NonEmptyString1000),
+    replyToContent: Evolu.nullOr(Evolu.NonEmptyString),
+    rootMessageId: Evolu.nullOr(Evolu.NonEmptyString1000),
+    // Edit metadata.
+    editedAtSec: Evolu.nullOr(Evolu.PositiveInt),
+    editedFromId: Evolu.nullOr(Evolu.NonEmptyString1000),
+    // "1" if the message content was edited.
+    isEdited: Evolu.nullOr(Evolu.NonEmptyString100),
+    // First known message content before edits.
+    originalContent: Evolu.nullOr(Evolu.NonEmptyString),
+  },
+  nostrReaction: {
+    id: NostrReactionId,
+    // Target message rumor id.
+    messageId: Evolu.NonEmptyString1000,
+    reactorPubkey: Evolu.NonEmptyString1000,
+    emoji: Evolu.NonEmptyString100,
+    createdAtSec: Evolu.PositiveInt,
+    // Gift-wrapped event id carrying the reaction or delete.
+    wrapId: Evolu.NonEmptyString1000,
+    // Client-generated id for optimistic send/ack matching.
+    clientId: Evolu.nullOr(Evolu.NonEmptyString1000),
+    // "sent" | "pending"
+    status: Evolu.nullOr(Evolu.NonEmptyString100),
   },
   cashuToken: {
     id: CashuTokenId,
@@ -653,6 +689,7 @@ export const getEvoluDatabaseInfo = async (): Promise<{
     "credoToken",
     "nostrIdentity",
     "nostrMessage",
+    "nostrReaction",
     "paymentEvent",
     "appState",
     "mintInfo",
@@ -841,6 +878,7 @@ export const loadEvoluCurrentData = async (): Promise<
     "credoToken",
     "nostrIdentity",
     "nostrMessage",
+    "nostrReaction",
     "paymentEvent",
     "appState",
     "mintInfo",

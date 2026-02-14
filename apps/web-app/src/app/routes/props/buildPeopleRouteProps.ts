@@ -8,6 +8,7 @@ interface BuildPeopleRoutePropsParams {
   chatMessageElByIdRef: PeopleRoutesProps["chatProps"]["chatMessageElByIdRef"];
   chatMessages: PeopleRoutesProps["chatProps"]["chatMessages"];
   chatMessagesRef: PeopleRoutesProps["chatProps"]["chatMessagesRef"];
+  chatOwnPubkeyHex: PeopleRoutesProps["chatProps"]["chatOwnPubkeyHex"];
   chatSendIsBusy: PeopleRoutesProps["chatProps"]["chatSendIsBusy"];
   contactEditsSavable: PeopleRoutesProps["contactEditProps"]["contactEditsSavable"];
   contactPayMethod: PeopleRoutesProps["contactPayProps"]["contactPayMethod"];
@@ -16,6 +17,7 @@ interface BuildPeopleRoutePropsParams {
   derivedProfile: PeopleRoutesProps["profileProps"]["derivedProfile"];
   displayUnit: PeopleRoutesProps["contactPayProps"]["displayUnit"];
   editingId: PeopleRoutesProps["contactEditProps"]["editingId"];
+  editContext: PeopleRoutesProps["chatProps"]["editContext"];
   effectiveMyLightningAddress: PeopleRoutesProps["profileProps"]["effectiveMyLightningAddress"];
   effectiveProfileName: PeopleRoutesProps["profileProps"]["effectiveProfileName"];
   effectiveProfilePicture: PeopleRoutesProps["profileProps"]["effectiveProfilePicture"];
@@ -32,13 +34,20 @@ interface BuildPeopleRoutePropsParams {
   lang: PeopleRoutesProps["chatProps"]["lang"];
   myProfileQr: PeopleRoutesProps["profileProps"]["myProfileQr"];
   nostrPictureByNpub: PeopleRoutesProps["chatProps"]["nostrPictureByNpub"];
+  onCancelEdit: PeopleRoutesProps["chatProps"]["onCancelEdit"];
+  onCancelReply: PeopleRoutesProps["chatProps"]["onCancelReply"];
+  onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
+  onEdit: PeopleRoutesProps["chatProps"]["onEdit"];
   onPickProfilePhoto: PeopleRoutesProps["profileProps"]["onPickProfilePhoto"];
   onProfilePhotoSelected: PeopleRoutesProps["profileProps"]["onProfilePhotoSelected"];
+  onReact: PeopleRoutesProps["chatProps"]["onReact"];
+  onReply: PeopleRoutesProps["chatProps"]["onReply"];
   openContactPay: PeopleRoutesProps["chatProps"]["openContactPay"];
   openScan: PeopleRoutesProps["contactNewProps"]["openScan"];
   payAmount: PeopleRoutesProps["contactPayProps"]["payAmount"];
   paySelectedContact: PeopleRoutesProps["contactPayProps"]["paySelectedContact"];
   payWithCashuEnabled: PeopleRoutesProps["chatProps"]["payWithCashuEnabled"];
+  reactionsByMessageId: PeopleRoutesProps["chatProps"]["reactionsByMessageId"];
   pendingDeleteId: PeopleRoutesProps["contactEditProps"]["pendingDeleteId"];
   profileEditLnAddress: PeopleRoutesProps["profileProps"]["profileEditLnAddress"];
   profileEditName: PeopleRoutesProps["profileProps"]["profileEditName"];
@@ -50,6 +59,7 @@ interface BuildPeopleRoutePropsParams {
   resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
   saveProfileEdits: PeopleRoutesProps["profileProps"]["saveProfileEdits"];
   scanIsOpen: PeopleRoutesProps["contactNewProps"]["scanIsOpen"];
+  replyContext: PeopleRoutesProps["chatProps"]["replyContext"];
   selectedContact: PeopleRoutesProps["chatProps"]["selectedContact"];
   sendChatMessage: PeopleRoutesProps["chatProps"]["sendChatMessage"];
   setChatDraft: PeopleRoutesProps["chatProps"]["setChatDraft"];
@@ -72,6 +82,7 @@ export const buildPeopleRouteProps = ({
   chatMessageElByIdRef,
   chatMessages,
   chatMessagesRef,
+  chatOwnPubkeyHex,
   chatSendIsBusy,
   contactEditsSavable,
   contactPayMethod,
@@ -80,6 +91,7 @@ export const buildPeopleRouteProps = ({
   derivedProfile,
   displayUnit,
   editingId,
+  editContext,
   effectiveMyLightningAddress,
   effectiveProfileName,
   effectiveProfilePicture,
@@ -96,13 +108,20 @@ export const buildPeopleRouteProps = ({
   lang,
   myProfileQr,
   nostrPictureByNpub,
+  onCancelEdit,
+  onCancelReply,
+  onCopy,
+  onEdit,
   onPickProfilePhoto,
   onProfilePhotoSelected,
+  onReact,
+  onReply,
   openContactPay,
   openScan,
   payAmount,
   paySelectedContact,
   payWithCashuEnabled,
+  reactionsByMessageId,
   pendingDeleteId,
   profileEditLnAddress,
   profileEditName,
@@ -114,6 +133,7 @@ export const buildPeopleRouteProps = ({
   resetEditedContactFieldFromNostr,
   saveProfileEdits,
   scanIsOpen,
+  replyContext,
   selectedContact,
   sendChatMessage,
   setChatDraft,
@@ -132,9 +152,12 @@ export const buildPeopleRouteProps = ({
       selectedContact,
       chatMessages,
       chatMessagesRef,
+      chatOwnPubkeyHex,
       chatDraft,
       setChatDraft,
       chatSendIsBusy,
+      editContext,
+      replyContext,
       cashuBalance,
       cashuIsBusy,
       payWithCashuEnabled,
@@ -142,12 +165,19 @@ export const buildPeopleRouteProps = ({
       feedbackContactNpub,
       lang,
       nostrPictureByNpub,
+      reactionsByMessageId,
       setMintIconUrlByMint,
       chatMessageElByIdRef,
       getCashuTokenMessageInfo,
       getCredoTokenMessageInfo,
       getMintIconUrl,
       getCredoAvailableForContact,
+      onReply,
+      onEdit,
+      onReact,
+      onCopy,
+      onCancelReply,
+      onCancelEdit,
       sendChatMessage,
       openContactPay,
       t,
