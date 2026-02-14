@@ -3,7 +3,14 @@ import type {
   CashuTokenMessageInfo,
   CredoTokenMessageInfo,
 } from "../app/lib/tokenMessageInfo";
-import type { LocalNostrMessage, MintUrlInput } from "../app/types/appTypes";
+import type {
+  ChatReactionChip,
+  LocalNostrMessage,
+  MintUrlInput,
+} from "../app/types/appTypes";
+import { EditIndicator } from "./EditIndicator";
+import { MessageActionsMenu } from "./MessageActionsMenu";
+import { MessageReactions } from "./MessageReactions";
 
 interface MintIcon {
   failed: boolean;
@@ -13,6 +20,15 @@ interface MintIcon {
 }
 
 interface ChatMessageProps {
+  actionLabels: {
+    copy: string;
+    edit: string;
+    edited: string;
+    react: string;
+    reply: string;
+  };
+  canEdit: boolean;
+  canReplyOrReact: boolean;
   chatPendingLabel: string;
   contactAvatar: string | null;
   formatChatDayLabel: (ms: number) => string;
@@ -24,12 +40,25 @@ interface ChatMessageProps {
   message: LocalNostrMessage;
   messageElRef?: (el: HTMLDivElement | null, messageId: string) => void;
   nextMessage: LocalNostrMessage | null;
+  onCopy: (message: LocalNostrMessage) => void;
+  onEdit: (message: LocalNostrMessage) => void;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
+  onReact: (message: LocalNostrMessage, emoji: string) => void;
+  onReply: (message: LocalNostrMessage) => void;
   previousMessage: LocalNostrMessage | null;
+  reactions: readonly ChatReactionChip[];
+  replyQuoteText: string | null;
 }
 
+const SWIPE_REPLY_THRESHOLD = 48;
+const SWIPE_REPLY_VERTICAL_TOLERANCE = 24;
+const LONG_PRESS_MS = 450;
+
 export function ChatMessage({
+  actionLabels,
+  canEdit,
+  canReplyOrReact,
   chatPendingLabel,
   contactAvatar,
   formatChatDayLabel,
@@ -41,14 +70,28 @@ export function ChatMessage({
   message,
   messageElRef,
   nextMessage,
+  onCopy,
+  onEdit,
   onMintIconError,
   onMintIconLoad,
+  onReact,
+  onReply,
   previousMessage,
+  reactions,
+  replyQuoteText,
 }: ChatMessageProps) {
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const longPressTimerRef = React.useRef<number | null>(null);
+  const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const swipeTriggeredRef = React.useRef(false);
+
   const isOut = String(message.direction ?? "") === "out";
   const isPending = isOut && String(message.status ?? "sent") === "pending";
   const content = String(message.content ?? "");
   const messageId = String(message.id ?? "");
+  const rumorId = String(message.rumorId ?? "").trim() || null;
+  const replyToId = String(message.replyToId ?? "").trim() || null;
+  const rootMessageId = String(message.rootMessageId ?? "").trim() || null;
   const createdAtSec = Number(message.createdAtSec ?? 0) || 0;
   const ms = createdAtSec * 1000;
   const d = new Date(ms);
@@ -77,6 +120,52 @@ export function ChatMessage({
   const tokenInfo = getCashuTokenMessageInfo(content);
   const credoInfo = getCredoTokenMessageInfo(content);
 
+  const openMenu = React.useCallback(() => {
+    setMenuOpen(true);
+  }, []);
+
+  const clearLongPress = React.useCallback(() => {
+    if (longPressTimerRef.current == null) return;
+    window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  }, []);
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch" || !canReplyOrReact) return;
+
+    touchStartRef.current = { x: event.clientX, y: event.clientY };
+    swipeTriggeredRef.current = false;
+    clearLongPress();
+    longPressTimerRef.current = window.setTimeout(() => {
+      openMenu();
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch" || !canReplyOrReact) return;
+    if (!touchStartRef.current) return;
+
+    const dx = event.clientX - touchStartRef.current.x;
+    const dy = event.clientY - touchStartRef.current.y;
+    if (Math.abs(dy) > SWIPE_REPLY_VERTICAL_TOLERANCE) {
+      clearLongPress();
+      touchStartRef.current = null;
+      return;
+    }
+
+    if (dx >= SWIPE_REPLY_THRESHOLD && !swipeTriggeredRef.current) {
+      swipeTriggeredRef.current = true;
+      clearLongPress();
+      onReply(message);
+    }
+  };
+
+  const handlePointerUp = () => {
+    clearLongPress();
+    touchStartRef.current = null;
+    swipeTriggeredRef.current = false;
+  };
+
   return (
     <React.Fragment key={messageId}>
       {showDaySeparator ? (
@@ -87,13 +176,52 @@ export function ChatMessage({
 
       <div
         className={`chat-message ${isOut ? "out" : "in"}${isPending ? " pending" : ""}`}
+        data-message-id={messageId || undefined}
+        data-rumor-id={rumorId ?? undefined}
+        data-reply-to-id={replyToId ?? undefined}
+        data-root-message-id={rootMessageId ?? undefined}
         ref={(el) => {
           if (messageElRef && messageId) {
             messageElRef(el, messageId);
           }
         }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          openMenu();
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
+        <div className="chat-message-tools">
+          <button
+            type="button"
+            className="chat-message-action-btn"
+            onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
+            aria-label="Message actions"
+          >
+            ⋯
+          </button>
+        </div>
+        <MessageActionsMenu
+          canEdit={canEdit}
+          canReplyOrReact={canReplyOrReact}
+          isOpen={menuOpen}
+          labels={actionLabels}
+          onReply={() => onReply(message)}
+          onEdit={() => onEdit(message)}
+          onReact={(emoji) => onReact(message, emoji)}
+          onCopy={() => onCopy(message)}
+          onClose={() => setMenuOpen(false)}
+        />
+
         <div className={isOut ? "chat-bubble out" : "chat-bubble in"}>
+          {replyQuoteText && (
+            <div className="chat-reply-quote">
+              <span>{replyQuoteText}</span>
+            </div>
+          )}
           {credoInfo ? (
             <span
               className={
@@ -210,9 +338,25 @@ export function ChatMessage({
           )}
         </div>
 
+        <MessageReactions
+          reactions={reactions}
+          showAddButton={false}
+          onReact={(emoji) => onReact(message, emoji)}
+        />
+
         {showTime ? (
           <div className="chat-time">
             {timeLabel}
+            {message.isEdited ? (
+              <>
+                {" "}
+                ·{" "}
+                <EditIndicator
+                  label={actionLabels.edited}
+                  originalContent={message.originalContent ?? null}
+                />
+              </>
+            ) : null}
             {isPending ? ` · ${chatPendingLabel}` : ""}
           </div>
         ) : null}
