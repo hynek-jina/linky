@@ -7,12 +7,14 @@ import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants"
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { asRecord } from "../../../utils/validation";
 import { parseCashuToken } from "../../../cashu";
+import type { JsonValue } from "../../../types/json";
+import type { CashuTokenRowLike, LocalMintInfoRow } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
 interface UseNpubCashClaimParams {
   cashuIsBusy: boolean;
-  cashuTokensAll: readonly unknown[];
+  cashuTokensAll: readonly CashuTokenRowLike[];
   currentNpub: string | null;
   currentNsec: string | null;
   displayUnit: string;
@@ -34,14 +36,14 @@ interface UseNpubCashClaimParams {
   makeNip98AuthHeader: (
     url: string,
     method: string,
-    payload?: Record<string, unknown>,
+    payload?: Record<string, string>,
   ) => Promise<string>;
   maybeShowPwaNotification: (
     title: string,
     body: string,
     tag?: string,
   ) => Promise<void>;
-  mintInfoByUrl: ReadonlyMap<string, unknown>;
+  mintInfoByUrl: ReadonlyMap<string, LocalMintInfoRow>;
   npubCashClaimInFlightRef: React.MutableRefObject<boolean>;
   recentlyReceivedTokenTimerRef: React.MutableRefObject<number | null>;
   refreshMintInfo: (mintUrl: string) => Promise<void> | void;
@@ -100,13 +102,8 @@ export const useNpubCashClaim = ({
         try {
           // De-dupe: don't accept/store the same token twice.
           const alreadyStored = cashuTokensAll.some((row) => {
-            const record = row as {
-              isDeleted?: unknown;
-              rawToken?: unknown;
-              token?: unknown;
-            };
-            if (record.isDeleted) return false;
-            const stored = String(record.rawToken ?? record.token ?? "").trim();
+            if (row.isDeleted) return false;
+            const stored = String(row.rawToken ?? row.token ?? "").trim();
             return stored && stored === tokenRaw;
           });
           if (alreadyStored) return;
@@ -187,12 +184,7 @@ export const useNpubCashClaim = ({
             .replace(/\/+$/, "");
           if (cleanedMint) {
             const nowSec = Math.floor(Date.now() / 1000);
-            const existing = mintInfoByUrl.get(cleanedMint) as
-              | (Record<string, unknown> & {
-                  isDeleted?: unknown;
-                  lastCheckedAtSec?: unknown;
-                })
-              | undefined;
+            const existing = mintInfoByUrl.get(cleanedMint);
 
             if (isMintDeleted(cleanedMint)) {
               // Respect user deletion across any owner scope.
@@ -334,7 +326,7 @@ export const useNpubCashClaim = ({
         headers: { Authorization: auth },
       });
       if (!res.ok) return;
-      const json = (await res.json()) as unknown;
+      const json = (await res.json()) as JsonValue;
       const root = asRecord(json);
       if (!root || root.error) return;
 

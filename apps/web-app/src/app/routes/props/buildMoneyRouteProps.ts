@@ -1,68 +1,61 @@
-import type { AppRouteContentProps } from "../AppRouteContent";
+import type { MoneyRoutesProps } from "../AppRouteContent";
+import type { Route } from "../../../types/route";
 
-type MoneyRouteProps = Pick<
-  AppRouteContentProps,
-  | "cashuTokenNewProps"
-  | "cashuTokenProps"
-  | "credoTokenProps"
-  | "lnAddressPayProps"
-  | "topupInvoiceProps"
-  | "topupProps"
->;
+type MoneyRouteProps = MoneyRoutesProps;
 
 interface BuildMoneyRoutePropsParams {
-  canPayWithCashu: AppRouteContentProps["lnAddressPayProps"]["canPayWithCashu"];
-  cashuBalance: AppRouteContentProps["cashuTokenNewProps"]["cashuBalance"];
-  cashuBulkCheckIsBusy: AppRouteContentProps["cashuTokenNewProps"]["cashuBulkCheckIsBusy"];
-  cashuDraft: AppRouteContentProps["cashuTokenNewProps"]["cashuDraft"];
-  cashuDraftRef: AppRouteContentProps["cashuTokenNewProps"]["cashuDraftRef"];
-  cashuIsBusy: AppRouteContentProps["cashuTokenNewProps"]["cashuIsBusy"];
+  canPayWithCashu: MoneyRoutesProps["lnAddressPayProps"]["canPayWithCashu"];
+  cashuBalance: MoneyRoutesProps["cashuTokenNewProps"]["cashuBalance"];
+  cashuBulkCheckIsBusy: MoneyRoutesProps["cashuTokenNewProps"]["cashuBulkCheckIsBusy"];
+  cashuDraft: MoneyRoutesProps["cashuTokenNewProps"]["cashuDraft"];
+  cashuDraftRef: MoneyRoutesProps["cashuTokenNewProps"]["cashuDraftRef"];
+  cashuIsBusy: MoneyRoutesProps["cashuTokenNewProps"]["cashuIsBusy"];
   cashuTokensAll: ReturnType<
-    AppRouteContentProps["cashuTokenProps"]
+    MoneyRoutesProps["cashuTokenProps"]
   >["cashuTokensAll"];
-  cashuTokensWithMeta: AppRouteContentProps["cashuTokenNewProps"]["cashuTokens"];
-  checkAllCashuTokensAndDeleteInvalid: AppRouteContentProps["cashuTokenNewProps"]["checkAllCashuTokensAndDeleteInvalid"];
+  cashuTokensWithMeta: MoneyRoutesProps["cashuTokenNewProps"]["cashuTokens"];
+  checkAllCashuTokensAndDeleteInvalid: MoneyRoutesProps["cashuTokenNewProps"]["checkAllCashuTokensAndDeleteInvalid"];
   checkAndRefreshCashuToken: ReturnType<
-    AppRouteContentProps["cashuTokenProps"]
+    MoneyRoutesProps["cashuTokenProps"]
   >["checkAndRefreshCashuToken"];
-  contacts: ReturnType<AppRouteContentProps["credoTokenProps"]>["contacts"];
-  copyText: ReturnType<AppRouteContentProps["cashuTokenProps"]>["copyText"];
-  credoOweTokens: AppRouteContentProps["cashuTokenNewProps"]["credoOweTokens"];
-  credoPromisedTokens: AppRouteContentProps["cashuTokenNewProps"]["credoPromisedTokens"];
+  contacts: ReturnType<MoneyRoutesProps["credoTokenProps"]>["contacts"];
+  copyText: ReturnType<MoneyRoutesProps["cashuTokenProps"]>["copyText"];
+  credoOweTokens: MoneyRoutesProps["cashuTokenNewProps"]["credoOweTokens"];
+  credoPromisedTokens: MoneyRoutesProps["cashuTokenNewProps"]["credoPromisedTokens"];
   credoTokensAll: ReturnType<
-    AppRouteContentProps["credoTokenProps"]
+    MoneyRoutesProps["credoTokenProps"]
   >["credoTokensAll"];
-  currentNpub: AppRouteContentProps["topupProps"]["currentNpub"];
-  displayUnit: AppRouteContentProps["cashuTokenNewProps"]["displayUnit"];
-  effectiveProfileName: AppRouteContentProps["topupProps"]["effectiveProfileName"];
-  effectiveProfilePicture: AppRouteContentProps["topupProps"]["effectiveProfilePicture"];
-  getCredoRemainingAmount: AppRouteContentProps["cashuTokenNewProps"]["getCredoRemainingAmount"];
-  getMintIconUrl: AppRouteContentProps["cashuTokenNewProps"]["getMintIconUrl"];
-  lnAddressPayAmount: AppRouteContentProps["lnAddressPayProps"]["lnAddressPayAmount"];
-  nostrPictureByNpub: AppRouteContentProps["cashuTokenNewProps"]["nostrPictureByNpub"];
-  npubCashLightningAddress: AppRouteContentProps["topupProps"]["npubCashLightningAddress"];
-  payLightningAddressWithCashu: AppRouteContentProps["lnAddressPayProps"]["payLightningAddressWithCashu"];
+  currentNpub: MoneyRoutesProps["topupProps"]["currentNpub"];
+  displayUnit: MoneyRoutesProps["cashuTokenNewProps"]["displayUnit"];
+  effectiveProfileName: MoneyRoutesProps["topupProps"]["effectiveProfileName"];
+  effectiveProfilePicture: MoneyRoutesProps["topupProps"]["effectiveProfilePicture"];
+  getCredoRemainingAmount: MoneyRoutesProps["cashuTokenNewProps"]["getCredoRemainingAmount"];
+  getMintIconUrl: MoneyRoutesProps["cashuTokenNewProps"]["getMintIconUrl"];
+  lnAddressPayAmount: MoneyRoutesProps["lnAddressPayProps"]["lnAddressPayAmount"];
+  nostrPictureByNpub: MoneyRoutesProps["cashuTokenNewProps"]["nostrPictureByNpub"];
+  npubCashLightningAddress: MoneyRoutesProps["topupProps"]["npubCashLightningAddress"];
+  payLightningAddressWithCashu: MoneyRoutesProps["lnAddressPayProps"]["payLightningAddressWithCashu"];
   pendingCashuDeleteId: ReturnType<
-    AppRouteContentProps["cashuTokenProps"]
+    MoneyRoutesProps["cashuTokenProps"]
   >["pendingCashuDeleteId"];
   requestDeleteCashuToken: ReturnType<
-    AppRouteContentProps["cashuTokenProps"]
+    MoneyRoutesProps["cashuTokenProps"]
   >["requestDeleteCashuToken"];
-  route: AppRouteContentProps["route"];
-  saveCashuFromText: AppRouteContentProps["cashuTokenNewProps"]["saveCashuFromText"];
-  setCashuDraft: AppRouteContentProps["cashuTokenNewProps"]["setCashuDraft"];
-  setLnAddressPayAmount: AppRouteContentProps["lnAddressPayProps"]["setLnAddressPayAmount"];
-  setMintIconUrlByMint: AppRouteContentProps["cashuTokenNewProps"]["setMintIconUrlByMint"];
-  setTopupAmount: AppRouteContentProps["topupProps"]["setTopupAmount"];
-  t: AppRouteContentProps["cashuTokenNewProps"]["t"];
-  topupAmount: AppRouteContentProps["topupProps"]["topupAmount"];
-  topupDebug: AppRouteContentProps["topupInvoiceProps"]["topupDebug"];
-  topupInvoice: AppRouteContentProps["topupInvoiceProps"]["topupInvoice"];
-  topupInvoiceError: AppRouteContentProps["topupInvoiceProps"]["topupInvoiceError"];
-  topupInvoiceIsBusy: AppRouteContentProps["topupInvoiceProps"]["topupInvoiceIsBusy"];
-  topupInvoiceQr: AppRouteContentProps["topupInvoiceProps"]["topupInvoiceQr"];
-  totalCredoOutstandingIn: AppRouteContentProps["cashuTokenNewProps"]["totalCredoOutstandingIn"];
-  totalCredoOutstandingOut: AppRouteContentProps["cashuTokenNewProps"]["totalCredoOutstandingOut"];
+  route: Route;
+  saveCashuFromText: MoneyRoutesProps["cashuTokenNewProps"]["saveCashuFromText"];
+  setCashuDraft: MoneyRoutesProps["cashuTokenNewProps"]["setCashuDraft"];
+  setLnAddressPayAmount: MoneyRoutesProps["lnAddressPayProps"]["setLnAddressPayAmount"];
+  setMintIconUrlByMint: MoneyRoutesProps["cashuTokenNewProps"]["setMintIconUrlByMint"];
+  setTopupAmount: MoneyRoutesProps["topupProps"]["setTopupAmount"];
+  t: MoneyRoutesProps["cashuTokenNewProps"]["t"];
+  topupAmount: MoneyRoutesProps["topupProps"]["topupAmount"];
+  topupDebug: MoneyRoutesProps["topupInvoiceProps"]["topupDebug"];
+  topupInvoice: MoneyRoutesProps["topupInvoiceProps"]["topupInvoice"];
+  topupInvoiceError: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceError"];
+  topupInvoiceIsBusy: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceIsBusy"];
+  topupInvoiceQr: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceQr"];
+  totalCredoOutstandingIn: MoneyRoutesProps["cashuTokenNewProps"]["totalCredoOutstandingIn"];
+  totalCredoOutstandingOut: MoneyRoutesProps["cashuTokenNewProps"]["totalCredoOutstandingOut"];
 }
 
 export const buildMoneyRouteProps = ({

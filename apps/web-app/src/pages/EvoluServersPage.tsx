@@ -1,3 +1,4 @@
+import type { SyncOwner } from "@evolu/common";
 import React from "react";
 import { useNavigation } from "../hooks/useRouting";
 
@@ -14,7 +15,7 @@ interface EvoluServersPageProps {
   isEvoluServerOffline: (url: string) => boolean;
   pendingClearDatabase: boolean;
   requestClearDatabase: () => void;
-  syncOwner: unknown;
+  syncOwner: SyncOwner | null;
   t: (key: string) => string;
 }
 

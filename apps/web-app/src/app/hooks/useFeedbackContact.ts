@@ -4,11 +4,12 @@ import type { OwnerId } from "@evolu/common";
 import type { ContactId } from "../../evolu";
 import { navigateTo } from "../../hooks/useRouting";
 import { FEEDBACK_CONTACT_NPUB } from "../../utils/constants";
+import type { ContactNameRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
 interface UseFeedbackContactParams<
-  TContact extends { id?: unknown; name?: unknown; npub?: unknown },
+  TContact extends ContactNameRowLike & { npub?: string | null | undefined },
 > {
   appOwnerId: OwnerId | null;
   contacts: readonly TContact[];
@@ -19,7 +20,7 @@ interface UseFeedbackContactParams<
 }
 
 export const useFeedbackContact = <
-  TContact extends { id?: unknown; name?: unknown; npub?: unknown },
+  TContact extends ContactNameRowLike & { npub?: string | null | undefined },
 >({
   appOwnerId,
   contacts,

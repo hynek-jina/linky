@@ -1,3 +1,4 @@
+import type { MintUrlInput } from "../app/types/appTypes";
 import { MintButton } from "../components/MintButton";
 
 interface MintIcon {
@@ -12,7 +13,7 @@ interface MintsPageProps {
   applyDefaultMintSelection: (mint: string) => Promise<void>;
   defaultMintUrl: string | null;
   defaultMintUrlDraft: string;
-  getMintIconUrl: (mint: unknown) => MintIcon;
+  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   normalizeMintUrl: (url: string) => string;
   setDefaultMintUrlDraft: (value: string) => void;
   t: (key: string) => string;

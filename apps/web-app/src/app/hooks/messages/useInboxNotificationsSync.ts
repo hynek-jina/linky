@@ -2,8 +2,14 @@ import type { ContactId } from "../../../evolu";
 import React from "react";
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
-import type { LocalNostrMessage } from "../../types/appTypes";
+import type {
+  ContactNameRowLike,
+  LocalNostrMessage,
+  NostrMessageSummaryRow,
+  RouteWithOptionalId,
+} from "../../types/appTypes";
 
 type AppendLocalNostrMessage = (
   message: Omit<LocalNostrMessage, "id" | "status"> & {
@@ -22,8 +28,8 @@ type UpdateLocalNostrMessage = (
 ) => void;
 
 interface UseInboxNotificationsSyncParams<
-  TContact extends { id?: unknown; name?: unknown; npub?: unknown },
-  TRoute extends { kind: string; id?: unknown },
+  TContact extends ContactNameRowLike & { npub?: string | null | undefined },
+  TRoute extends RouteWithOptionalId,
 > {
   appendLocalNostrMessage: AppendLocalNostrMessage;
   contacts: readonly TContact[];
@@ -44,7 +50,7 @@ interface UseInboxNotificationsSyncParams<
   nostrFetchRelays: string[];
   nostrMessageWrapIdsRef: React.MutableRefObject<Set<string>>;
   nostrMessagesLatestRef: React.MutableRefObject<LocalNostrMessage[]>;
-  nostrMessagesRecent: readonly Record<string, unknown>[];
+  nostrMessagesRecent: readonly NostrMessageSummaryRow[];
   route: TRoute;
   setContactAttentionById: React.Dispatch<
     React.SetStateAction<Record<string, number>>
@@ -54,8 +60,8 @@ interface UseInboxNotificationsSyncParams<
 }
 
 export const useInboxNotificationsSync = <
-  TContact extends { id?: unknown; name?: unknown; npub?: unknown },
-  TRoute extends { kind: string; id?: unknown },
+  TContact extends ContactNameRowLike & { npub?: string | null | undefined },
+  TRoute extends RouteWithOptionalId,
 >({
   appendLocalNostrMessage,
   contacts,
@@ -83,10 +89,19 @@ export const useInboxNotificationsSync = <
 
     const seenWrapIds = new Set<string>();
     for (const message of nostrMessagesRecent) {
-      const wrapId = String(
-        (message as { wrapId?: unknown } | null)?.wrapId ?? "",
-      ).trim();
+      const wrapId = String(message.wrapId ?? "").trim();
       if (wrapId) seenWrapIds.add(wrapId);
+    }
+    const seenRumorKeys = new Set<string>();
+    for (const message of nostrMessagesLatestRef.current) {
+      const rumorId = String(message.rumorId ?? "").trim();
+      if (!rumorId) continue;
+
+      const contactId = String(message.contactId ?? "").trim();
+      const direction = String(message.direction ?? "").trim();
+      if (!contactId || (direction !== "in" && direction !== "out")) continue;
+
+      seenRumorKeys.add(`${contactId}|${direction}|${rumorId}`);
     }
 
     const run = async () => {
@@ -95,8 +110,12 @@ export const useInboxNotificationsSync = <
         const { unwrapEvent } = await import("nostr-tools/nip17");
 
         const decodedMe = nip19.decode(currentNsec);
-        if (decodedMe.type !== "nsec") return;
-        const privBytes = decodedMe.data as Uint8Array;
+        if (
+          decodedMe.type !== "nsec" ||
+          !(decodedMe.data instanceof Uint8Array)
+        )
+          return;
+        const privBytes = decodedMe.data;
         const myPubHex = getPublicKey(privBytes);
 
         // Map known contact pubkeys -> contact info.
@@ -105,12 +124,13 @@ export const useInboxNotificationsSync = <
           { id: ContactId; name: string | null }
         >();
         for (const contact of contacts) {
-          const npub = String(contact.npub ?? "").trim();
+          const npub = normalizeNpubIdentifier(contact.npub);
           if (!npub) continue;
           try {
             const decoded = nip19.decode(npub);
-            if (decoded.type !== "npub") continue;
-            const pub = String(decoded.data ?? "").trim();
+            if (decoded.type !== "npub" || typeof decoded.data !== "string")
+              continue;
+            const pub = decoded.data.trim();
             if (!pub) continue;
             const name = String(contact.name ?? "").trim() || null;
             contactByPubHex.set(pub, { id: contact.id as ContactId, name });
@@ -166,6 +186,16 @@ export const useInboxNotificationsSync = <
               String(contact.id ?? "") === String(activeChatId);
 
             if (!content) return;
+
+            const messageDirection = isOutgoing ? "out" : "in";
+            const rumorId = inner.id ? String(inner.id).trim() : "";
+            const rumorKey = rumorId
+              ? `${String(contact.id ?? "")}|${messageDirection}|${rumorId}`
+              : "";
+            if (rumorKey) {
+              if (seenRumorKeys.has(rumorKey)) return;
+              seenRumorKeys.add(rumorKey);
+            }
 
             if (cancelled) return;
 
@@ -246,7 +276,7 @@ export const useInboxNotificationsSync = <
               direction: isOutgoing ? "out" : "in",
               content,
               wrapId,
-              rumorId: inner.id ? String(inner.id) : null,
+              rumorId: rumorId || null,
               pubkey: senderPub,
               createdAtSec,
             });
@@ -293,13 +323,18 @@ export const useInboxNotificationsSync = <
     };
 
     let cleanup: (() => void) | undefined;
-    void run().then((c) => {
-      cleanup = c;
+    void run().then((nextCleanup) => {
+      if (cancelled) {
+        nextCleanup?.();
+        return;
+      }
+      cleanup = nextCleanup;
     });
 
     return () => {
       cancelled = true;
       cleanup?.();
+      cleanup = undefined;
     };
   }, [
     contacts,

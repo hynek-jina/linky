@@ -1,6 +1,4 @@
 import React from "react";
-import type { Route } from "../types/route";
-import type { Lang } from "../i18n";
 import { Topbar } from "./Topbar";
 import { ContactsGuideOverlay } from "./ContactsGuideOverlay";
 import { MenuModal } from "./MenuModal";
@@ -8,111 +6,10 @@ import { ProfileQrModal } from "./ProfileQrModal";
 import { ScanModal } from "./ScanModal";
 import { SaveContactPromptModal } from "./SaveContactPromptModal";
 import { PaidOverlay } from "./PaidOverlay";
-import { useAppContext } from "../app/context/AppContext";
-
-interface TopbarButton {
-  icon: string;
-  label: string;
-  onClick: () => void;
-}
-
-interface ChatContact {
-  name: string | null;
-  npub: string | null;
-}
-
-interface ContactsGuideStep {
-  bodyKey: string;
-  id: string;
-  titleKey: string;
-}
-
-interface LayoutState {
-  chatTopbarContact: ChatContact | null;
-  contactsGuide: { step: number; task: string } | null;
-  contactsGuideActiveStep: {
-    idx: number;
-    step: ContactsGuideStep;
-    total: number;
-  } | null;
-  contactsGuideHighlightRect: {
-    height: number;
-    left: number;
-    top: number;
-    width: number;
-  } | null;
-  currentNpub: string | null;
-  currentNsec: string | null;
-  derivedProfile: {
-    lnAddress: string;
-    name: string;
-    pictureUrl: string;
-  } | null;
-  displayUnit: string;
-  effectiveMyLightningAddress: string | null;
-  effectiveProfileName: string | null;
-  effectiveProfilePicture: string | null;
-  isProfileEditing: boolean;
-  lang: Lang;
-  menuIsOpen: boolean;
-  myProfileQr: string | null;
-  nostrPictureByNpub: Record<string, string | null>;
-  paidOverlayIsOpen: boolean;
-  paidOverlayTitle: string | null;
-  postPaySaveContact: {
-    amountSat: number;
-    lnAddress: string;
-  } | null;
-  profileEditInitialRef: React.MutableRefObject<{
-    lnAddress: string;
-    name: string;
-    picture: string;
-  } | null>;
-  profileEditLnAddress: string;
-  profileEditName: string;
-  profileEditPicture: string;
-  profileEditsSavable: boolean;
-  profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
-  profileQrIsOpen: boolean;
-  route: Route;
-  scanIsOpen: boolean;
-  scanVideoRef: React.RefObject<HTMLVideoElement | null>;
-  t: (key: string) => string;
-  topbar: TopbarButton | null;
-  topbarRight: TopbarButton | null;
-  topbarTitle: string | null;
-  useBitcoinSymbol: boolean;
-}
-
-interface LayoutActions {
-  closeMenu: () => void;
-  closeProfileQr: () => void;
-  closeScan: () => void;
-  contactsGuideNav: {
-    back: () => void;
-    next: () => void;
-  };
-  copyText: (text: string) => Promise<void>;
-  onPickProfilePhoto: () => void;
-  onProfilePhotoSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  openFeedbackContact: () => void;
-  openProfileQr: () => void;
-  saveProfileEdits: () => void;
-  setContactNewPrefill: (prefill: {
-    lnAddress: string;
-    npub: string | null;
-    suggestedName: string | null;
-  }) => void;
-  setIsProfileEditing: (editing: boolean) => void;
-  setLang: (lang: Lang) => void;
-  setPostPaySaveContact: (value: null) => void;
-  setProfileEditLnAddress: (value: string) => void;
-  setProfileEditName: (value: string) => void;
-  setProfileEditPicture: (value: string) => void;
-  setUseBitcoinSymbol: (value: boolean) => void;
-  stopContactsGuide: () => void;
-  toggleProfileEditing: () => void;
-}
+import {
+  useAppShellActions,
+  useAppShellCore,
+} from "../app/context/AppShellContexts";
 
 interface AuthenticatedLayoutProps {
   children: React.ReactNode;
@@ -121,7 +18,8 @@ interface AuthenticatedLayoutProps {
 export function AuthenticatedLayout({
   children,
 }: AuthenticatedLayoutProps): React.ReactElement {
-  const { actions, state } = useAppContext<LayoutState, LayoutActions>();
+  const actions = useAppShellActions();
+  const state = useAppShellCore();
 
   return (
     <>

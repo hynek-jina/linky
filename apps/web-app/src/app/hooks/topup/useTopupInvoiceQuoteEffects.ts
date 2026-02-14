@@ -22,7 +22,7 @@ interface UseTopupInvoiceQuoteEffectsParams {
   topupInvoiceQr: string | null;
   topupInvoiceStartBalanceRef: React.MutableRefObject<number | null>;
   topupPaidNavTimerRef: React.MutableRefObject<number | null>;
-  topupRefreshKey: unknown;
+  topupRefreshKey: string | null;
   setTopupAmount: React.Dispatch<React.SetStateAction<string>>;
   setTopupDebug: React.Dispatch<React.SetStateAction<string | null>>;
   setTopupInvoice: React.Dispatch<React.SetStateAction<string | null>>;
@@ -195,9 +195,13 @@ export const useTopupInvoiceQuoteEffects = ({
           }
 
           const rawText = await quoteRes.text();
-          let mintQuote: unknown = null;
+          let mintQuote: Record<string, unknown> | null = null;
           try {
-            mintQuote = rawText ? JSON.parse(rawText) : null;
+            const parsed = rawText ? JSON.parse(rawText) : null;
+            mintQuote =
+              parsed && typeof parsed === "object"
+                ? (parsed as Record<string, unknown>)
+                : null;
           } catch {
             throw new Error(
               `Mint quote parse failed (${quoteRes.status}): ${rawText.slice(
@@ -207,15 +211,12 @@ export const useTopupInvoiceQuoteEffects = ({
             );
           }
           const quoteId = String(
-            (mintQuote as unknown as { quote?: unknown; id?: unknown }).quote ??
-              (mintQuote as unknown as { id?: unknown }).id ??
-              "",
+            mintQuote?.quote ?? mintQuote?.id ?? "",
           ).trim();
           const invoice = String(
-            (mintQuote as unknown as { request?: unknown }).request ??
-              (mintQuote as unknown as { pr?: unknown }).pr ??
-              (mintQuote as unknown as { paymentRequest?: unknown })
-                .paymentRequest ??
+            mintQuote?.request ??
+              mintQuote?.pr ??
+              mintQuote?.paymentRequest ??
               "",
           ).trim();
 

@@ -12,6 +12,7 @@ import {
 } from "../../nostrProfile";
 import { publishKind0ProfileMetadata } from "../../nostrPublish";
 import { NOSTR_NSEC_STORAGE_KEY } from "../../utils/constants";
+import type { JsonRecord } from "../../types/json";
 
 export type OnboardingStep = {
   step: 1 | 2 | 3;
@@ -98,10 +99,7 @@ export const useProfileAuthDomain = ({
         data.set(prefix);
         data.set(privBytes, prefix.length);
 
-        const hashBuf = await crypto.subtle.digest(
-          "SHA-256",
-          data as unknown as BufferSource,
-        );
+        const hashBuf = await crypto.subtle.digest("SHA-256", data);
         const hash = new Uint8Array(hashBuf);
         const entropy = hash.slice(0, 16);
         const phrase = entropyToMnemonic(entropy, wordlist);
@@ -157,7 +155,7 @@ export const useProfileAuthDomain = ({
       }
 
       try {
-        await evolu.restoreAppOwner(mnemonic as unknown as Evolu.Mnemonic, {
+        await evolu.restoreAppOwner(mnemonic, {
           reload: false,
         });
       } catch (e) {
@@ -221,7 +219,7 @@ export const useProfileAuthDomain = ({
       setOnboardingStep({ step: 3, derivedName: defaults.name, error: null });
 
       try {
-        const content: Record<string, unknown> = {
+        const content: JsonRecord = {
           name: defaults.name,
           display_name: defaults.name,
           picture: defaults.pictureUrl,

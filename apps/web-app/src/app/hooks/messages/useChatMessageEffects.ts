@@ -1,16 +1,13 @@
 import React from "react";
 import { parseCredoMessage } from "../../../credo";
 import type { Route } from "../../../types/route";
-import type { LocalNostrMessage } from "../../types/appTypes";
+import type {
+  ContactRowLike,
+  LocalNostrMessage,
+  NostrMessageSummaryRow,
+} from "../../types/appTypes";
 
-interface UseChatMessageEffectsParams<
-  TContact extends {
-    id?: unknown;
-    lnAddress?: unknown;
-    name?: unknown;
-    npub?: unknown;
-  },
-> {
+interface UseChatMessageEffectsParams<TContact extends ContactRowLike> {
   applyCredoSettlement: (args: {
     amount: number;
     promiseId: string;
@@ -44,7 +41,7 @@ interface UseChatMessageEffectsParams<
   isCashuTokenKnownAny: (tokenRaw: string) => boolean;
   isCashuTokenStored: (tokenRaw: string) => boolean;
   isCredoPromiseKnown: (promiseId: string) => boolean;
-  nostrMessagesRecent: readonly Record<string, unknown>[];
+  nostrMessagesRecent: readonly NostrMessageSummaryRow[];
   route: Route;
   saveCashuFromText: (
     text: string,
@@ -53,14 +50,7 @@ interface UseChatMessageEffectsParams<
   selectedContact: TContact | null;
 }
 
-export const useChatMessageEffects = <
-  TContact extends {
-    id?: unknown;
-    lnAddress?: unknown;
-    name?: unknown;
-    npub?: unknown;
-  },
->({
+export const useChatMessageEffects = <TContact extends ContactRowLike>({
   applyCredoSettlement,
   autoAcceptedChatMessageIdsRef,
   cashuIsBusy,
@@ -91,18 +81,14 @@ export const useChatMessageEffects = <
 
     for (let i = chatMessages.length - 1; i >= 0; i -= 1) {
       const message = chatMessages[i];
-      const id = String((message as { id?: unknown } | null)?.id ?? "");
+      const id = String(message.id ?? "");
       if (!id) continue;
       if (autoAcceptedChatMessageIdsRef.current.has(id)) continue;
 
-      const isOut =
-        String((message as { direction?: unknown } | null)?.direction ?? "") ===
-        "out";
+      const isOut = String(message.direction ?? "") === "out";
       if (isOut) continue;
 
-      const content = String(
-        (message as { content?: unknown } | null)?.content ?? "",
-      );
+      const content = String(message.content ?? "");
       const info = getCashuTokenMessageInfo(content);
       const credoParsed = parseCredoMessage(content);
       if (!info && !credoParsed) continue;
@@ -175,18 +161,14 @@ export const useChatMessageEffects = <
     if (!cashuTokensHydratedRef.current) return;
 
     for (const message of nostrMessagesRecent) {
-      const id = String((message as { id?: unknown } | null)?.id ?? "");
+      const id = String(message.id ?? "");
       if (!id) continue;
       if (autoAcceptedChatMessageIdsRef.current.has(id)) continue;
 
-      const direction = String(
-        (message as { direction?: unknown } | null)?.direction ?? "",
-      );
+      const direction = String(message.direction ?? "");
       if (direction !== "in") continue;
 
-      const content = String(
-        (message as { content?: unknown } | null)?.content ?? "",
-      );
+      const content = String(message.content ?? "");
       const info = getCashuTokenMessageInfo(content);
       const credoParsed = parseCredoMessage(content);
       if (!info && !credoParsed) continue;
@@ -281,7 +263,7 @@ export const useChatMessageEffects = <
       chatDidInitialScrollForContactRef.current = contactId;
 
       const target = last;
-      const targetId = String((target as { id?: unknown } | null)?.id ?? "");
+      const targetId = String(target.id ?? "");
 
       const tryScroll = (attempt: number) => {
         const el = targetId ? chatMessageElByIdRef.current.get(targetId) : null;

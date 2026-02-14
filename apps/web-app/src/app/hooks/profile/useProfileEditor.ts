@@ -1,4 +1,5 @@
 import React from "react";
+import type { JsonRecord } from "../../../types/json";
 import {
   deleteCachedProfileAvatar,
   fetchNostrProfileMetadata,
@@ -153,7 +154,7 @@ export const useProfileEditor = ({
         myProfileMetadata ??
         {}) as NostrProfileMetadata;
 
-      const contentObj: Record<string, unknown> = {
+      const contentObj: JsonRecord = {
         ...(prev.name ? { name: prev.name } : {}),
         ...(prev.displayName ? { display_name: prev.displayName } : {}),
         ...(prev.picture ? { picture: prev.picture } : {}),

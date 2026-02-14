@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import type { EvoluHistoryRow } from "../evolu";
+import type { EvoluHistoryRow, loadEvoluCurrentData } from "../evolu";
 
 interface EvoluDataDetailPageProps {
   evoluDatabaseBytes: number | null;
@@ -8,7 +8,7 @@ interface EvoluDataDetailPageProps {
   pendingClearDatabase: boolean;
   requestClearDatabase: () => void;
   loadHistoryData: () => Promise<EvoluHistoryRow[]>;
-  loadCurrentData: () => Promise<Record<string, Record<string, unknown>[]>>;
+  loadCurrentData: typeof loadEvoluCurrentData;
   t: (key: string) => string;
 }
 
@@ -28,7 +28,7 @@ export function EvoluDataDetailPage({
   const [showCurrentData, setShowCurrentData] = useState(false);
   const [historyData, setHistoryData] = useState<EvoluHistoryRow[]>([]);
   const [currentData, setCurrentData] = useState<
-    Record<string, Record<string, unknown>[]>
+    Awaited<ReturnType<typeof loadEvoluCurrentData>>
   >({});
   const [isLoading, setIsLoading] = useState(false);
 

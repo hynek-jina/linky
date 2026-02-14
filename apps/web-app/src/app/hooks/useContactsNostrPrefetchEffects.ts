@@ -11,17 +11,15 @@ import {
   saveCachedProfilePicture,
 } from "../../nostrProfile";
 import { getBestNostrName } from "../../utils/formatting";
+import { normalizeNpubIdentifier } from "../../utils/nostrNpub";
+import type { ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
 interface UseContactsNostrPrefetchEffectsParams<
-  TContact extends {
-    id: string;
-    lnAddress?: unknown;
-    name?: unknown;
-    npub?: unknown;
-  },
+  TContact extends ContactRowLike & { id: string },
 > {
+  appOwnerId: Evolu.OwnerId | null;
   contacts: readonly TContact[];
   nostrFetchRelays: string[];
   nostrInFlight: React.MutableRefObject<Set<string>>;
@@ -36,13 +34,9 @@ interface UseContactsNostrPrefetchEffectsParams<
 }
 
 export const useContactsNostrPrefetchEffects = <
-  TContact extends {
-    id: string;
-    lnAddress?: unknown;
-    name?: unknown;
-    npub?: unknown;
-  },
+  TContact extends ContactRowLike & { id: string },
 >({
+  appOwnerId,
   contacts,
   nostrFetchRelays,
   nostrInFlight,
@@ -53,45 +47,71 @@ export const useContactsNostrPrefetchEffects = <
   setNostrPictureByNpub,
   update,
 }: UseContactsNostrPrefetchEffectsParams<TContact>) => {
+  const updateContactFromNostr = React.useCallback(
+    (
+      payload: {
+        id: string;
+      } & Partial<
+        Record<
+          "lnAddress" | "name" | "npub",
+          typeof Evolu.NonEmptyString1000.Type | null
+        >
+      >,
+    ) => {
+      return appOwnerId
+        ? update("contact", payload, { ownerId: appOwnerId })
+        : update("contact", payload);
+    },
+    [appOwnerId, update],
+  );
+
   React.useEffect(() => {
-    // Fill missing name / lightning address from Nostr on list page only,
-    // so we don't overwrite user's in-progress edits.
-    if (routeKind !== "contacts") return;
+    // Fill missing name / lightning address from Nostr, but do not run while
+    // user is editing/creating a contact to avoid overwriting form state.
+    if (routeKind === "contactEdit" || routeKind === "contactNew") return;
 
     const controller = new AbortController();
     let cancelled = false;
 
     const run = async () => {
       for (const contact of contacts) {
-        const npub = String(contact.npub ?? "").trim();
+        const rawNpub = String(contact.npub ?? "").trim();
+        const npub = normalizeNpubIdentifier(rawNpub);
         if (!npub) continue;
 
         const currentName = String(contact.name ?? "").trim();
         const currentLn = String(contact.lnAddress ?? "").trim();
+        const shouldNormalizeNpub = rawNpub !== npub;
 
         const needsName = !currentName;
         const needsLn = !currentLn;
-        if (!needsName && !needsLn) continue;
+        if (!needsName && !needsLn && !shouldNormalizeNpub) continue;
 
         // Try cached metadata first.
         const cached = loadCachedProfileMetadata(npub);
         if (cached?.metadata) {
           const bestName = getBestNostrName(cached.metadata);
-          const lud16 = String(cached.metadata.lud16 ?? "").trim();
+          const ln =
+            String(cached.metadata.lud16 ?? "").trim() ||
+            String(cached.metadata.lud06 ?? "").trim();
           const patch: Partial<{
             name: typeof Evolu.NonEmptyString1000.Type;
             lnAddress: typeof Evolu.NonEmptyString1000.Type;
+            npub: typeof Evolu.NonEmptyString1000.Type;
           }> = {};
 
           if (needsName && bestName) {
             patch.name = bestName as typeof Evolu.NonEmptyString1000.Type;
           }
-          if (needsLn && lud16) {
-            patch.lnAddress = lud16 as typeof Evolu.NonEmptyString1000.Type;
+          if (needsLn && ln) {
+            patch.lnAddress = ln as typeof Evolu.NonEmptyString1000.Type;
+          }
+          if (shouldNormalizeNpub) {
+            patch.npub = npub as typeof Evolu.NonEmptyString1000.Type;
           }
 
           if (Object.keys(patch).length > 0) {
-            update("contact", { id: contact.id, ...patch });
+            updateContactFromNostr({ id: contact.id, ...patch });
           }
           continue;
         }
@@ -110,22 +130,28 @@ export const useContactsNostrPrefetchEffects = <
           if (!metadata) continue;
 
           const bestName = getBestNostrName(metadata);
-          const lud16 = String(metadata.lud16 ?? "").trim();
+          const ln =
+            String(metadata.lud16 ?? "").trim() ||
+            String(metadata.lud06 ?? "").trim();
 
           const patch: Partial<{
             name: typeof Evolu.NonEmptyString1000.Type;
             lnAddress: typeof Evolu.NonEmptyString1000.Type;
+            npub: typeof Evolu.NonEmptyString1000.Type;
           }> = {};
 
           if (needsName && bestName) {
             patch.name = bestName as typeof Evolu.NonEmptyString1000.Type;
           }
-          if (needsLn && lud16) {
-            patch.lnAddress = lud16 as typeof Evolu.NonEmptyString1000.Type;
+          if (needsLn && ln) {
+            patch.lnAddress = ln as typeof Evolu.NonEmptyString1000.Type;
+          }
+          if (shouldNormalizeNpub) {
+            patch.npub = npub as typeof Evolu.NonEmptyString1000.Type;
           }
 
           if (Object.keys(patch).length > 0) {
-            update("contact", { id: contact.id, ...patch });
+            updateContactFromNostr({ id: contact.id, ...patch });
           }
         } catch {
           saveCachedProfileMetadata(npub, null);
@@ -142,7 +168,13 @@ export const useContactsNostrPrefetchEffects = <
       cancelled = true;
       controller.abort();
     };
-  }, [contacts, routeKind, update, nostrFetchRelays, nostrMetadataInFlight]);
+  }, [
+    contacts,
+    routeKind,
+    updateContactFromNostr,
+    nostrFetchRelays,
+    nostrMetadataInFlight,
+  ]);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -151,8 +183,7 @@ export const useContactsNostrPrefetchEffects = <
     const uniqueNpubs: string[] = [];
     const seen = new Set<string>();
     for (const contact of contacts) {
-      const raw = (contact.npub ?? null) as string | null;
-      const npub = (raw ?? "").trim();
+      const npub = normalizeNpubIdentifier(contact.npub);
       if (!npub) continue;
       if (seen.has(npub)) continue;
       seen.add(npub);

@@ -1,10 +1,13 @@
 import type { FC } from "react";
+import type { CashuTokenRowLike } from "../app/types/appTypes";
 import { parseCashuToken } from "../cashu";
 import type { CashuTokenId } from "../evolu";
 
+type CashuTokenPageRow = CashuTokenRowLike & { id: CashuTokenId };
+
 interface CashuTokenPageProps {
   cashuIsBusy: boolean;
-  cashuTokensAll: readonly Record<string, unknown>[];
+  cashuTokensAll: readonly CashuTokenPageRow[];
   checkAndRefreshCashuToken: (
     id: CashuTokenId,
   ) => Promise<"ok" | "invalid" | "transient" | "skipped">;
@@ -26,9 +29,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   t,
 }) => {
   const row = cashuTokensAll.find(
-    (tkn) =>
-      String(tkn?.id ?? "") === String(routeId as unknown as string) &&
-      !tkn?.isDeleted,
+    (tkn) => tkn.id === routeId && !tkn.isDeleted,
   );
 
   if (!row) {

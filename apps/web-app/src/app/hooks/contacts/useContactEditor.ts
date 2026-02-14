@@ -8,7 +8,12 @@ import {
 } from "../../../nostrProfile";
 import type { Route } from "../../../types/route";
 import { getBestNostrName } from "../../../utils/formatting";
-import type { ContactFormState } from "../../types/appTypes";
+import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import type {
+  ContactFormState,
+  ContactIdentityRowLike,
+  ContactRowLike,
+} from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -18,18 +23,8 @@ export interface ContactNewPrefill {
   suggestedName: string | null;
 }
 
-interface ContactRow {
-  id?: unknown;
-  npub?: unknown;
-}
-
-interface SelectedContactRow {
-  groupName?: unknown;
-  id: ContactId;
-  lnAddress?: unknown;
-  name?: unknown;
-  npub?: unknown;
-}
+type ContactRow = ContactIdentityRowLike;
+type SelectedContactRow = ContactRowLike & { id: ContactId };
 
 interface UseContactEditorParams {
   appOwnerId: Evolu.OwnerId | null;
@@ -90,6 +85,24 @@ export const useContactEditor = ({
     setContactEditInitial(null);
   }, []);
 
+  const updateContactFields = React.useCallback(
+    (
+      payload: {
+        id: ContactId;
+      } & Partial<
+        Record<
+          "lnAddress" | "name" | "npub",
+          typeof Evolu.NonEmptyString1000.Type | null
+        >
+      >,
+    ) => {
+      return appOwnerId
+        ? update("contact", payload, { ownerId: appOwnerId })
+        : update("contact", payload);
+    },
+    [appOwnerId, update],
+  );
+
   React.useEffect(() => {
     if (route.kind === "contactNew") {
       setPendingDeleteId(null);
@@ -147,7 +160,8 @@ export const useContactEditor = ({
     if (isSavingContact) return; // Prevent double-click
 
     const name = form.name.trim();
-    const npub = form.npub.trim();
+    const rawNpub = form.npub.trim();
+    const npub = normalizeNpubIdentifier(rawNpub) ?? rawNpub;
     const lnAddress = form.lnAddress.trim();
     const group = form.group.trim();
 
@@ -170,10 +184,14 @@ export const useContactEditor = ({
     if (editingId) {
       // Build update payload with only changed fields to minimize history entries.
       const initial = contactEditInitial;
-      const changedFields: { id: typeof editingId } & Record<string, unknown> =
-        {
-          id: editingId,
-        };
+      const changedFields: {
+        id: typeof editingId;
+      } & Partial<
+        Record<
+          "groupName" | "lnAddress" | "name" | "npub",
+          typeof Evolu.NonEmptyString1000.Type | null
+        >
+      > = { id: editingId };
 
       if (initial?.id === editingId) {
         const nextName = payload.name ? String(payload.name) : null;
@@ -261,15 +279,16 @@ export const useContactEditor = ({
 
   const refreshContactFromNostr = React.useCallback(
     async (contactId: ContactId, npub: string) => {
-      const trimmed = String(npub ?? "").trim();
-      if (!trimmed) return;
+      const source = String(npub ?? "").trim();
+      const normalized = normalizeNpubIdentifier(source);
+      if (!normalized) return;
 
       try {
-        const metadata = await fetchNostrProfileMetadata(trimmed, {
+        const metadata = await fetchNostrProfileMetadata(normalized, {
           relays: nostrFetchRelays,
         });
 
-        saveCachedProfileMetadata(trimmed, metadata);
+        saveCachedProfileMetadata(normalized, metadata);
         if (!metadata) return;
 
         const bestName = getBestNostrName(metadata);
@@ -280,6 +299,7 @@ export const useContactEditor = ({
         const patch: Partial<{
           name: typeof Evolu.NonEmptyString1000.Type;
           lnAddress: typeof Evolu.NonEmptyString1000.Type;
+          npub: typeof Evolu.NonEmptyString1000.Type;
         }> = {};
 
         if (bestName) {
@@ -288,27 +308,32 @@ export const useContactEditor = ({
         if (ln) {
           patch.lnAddress = ln as typeof Evolu.NonEmptyString1000.Type;
         }
+        if (source !== normalized) {
+          patch.npub = normalized as typeof Evolu.NonEmptyString1000.Type;
+        }
 
         if (Object.keys(patch).length > 0) {
-          update("contact", { id: contactId, ...patch });
+          updateContactFields({ id: contactId, ...patch });
         }
       } catch {
         // ignore
       }
     },
-    [nostrFetchRelays, update],
+    [nostrFetchRelays, updateContactFields],
   );
 
   React.useEffect(() => {
     const targetNpub = openScannedContactPendingNpubRef.current;
     if (!targetNpub) return;
+    const normalizedTarget = normalizeNpubIdentifier(targetNpub);
+    if (!normalizedTarget) return;
     const existing = contacts.find(
-      (c) => String(c.npub ?? "").trim() === targetNpub,
+      (c) => normalizeNpubIdentifier(c.npub) === normalizedTarget,
     );
     if (!existing?.id) return;
     openScannedContactPendingNpubRef.current = null;
     navigateTo({ route: "contact", id: existing.id as ContactId });
-    void refreshContactFromNostr(existing.id as ContactId, targetNpub);
+    void refreshContactFromNostr(existing.id as ContactId, normalizedTarget);
   }, [contacts, refreshContactFromNostr]);
 
   const resetEditedContactFieldFromNostr = React.useCallback(
@@ -316,15 +341,16 @@ export const useContactEditor = ({
       if (route.kind !== "contactEdit") return;
       if (!editingId) return;
 
-      const npub = String(form.npub ?? "").trim();
+      const rawNpub = String(form.npub ?? "").trim();
+      const npub = normalizeNpubIdentifier(rawNpub);
 
       // First clear the custom value.
       if (field === "name") {
         setForm((prev) => ({ ...prev, name: "" }));
-        update("contact", { id: editingId, name: null });
+        updateContactFields({ id: editingId, name: null });
       } else {
         setForm((prev) => ({ ...prev, lnAddress: "" }));
-        update("contact", { id: editingId, lnAddress: null });
+        updateContactFields({ id: editingId, lnAddress: null });
       }
 
       if (!npub) return;
@@ -352,6 +378,7 @@ export const useContactEditor = ({
         const patch: Partial<{
           name: typeof Evolu.NonEmptyString1000.Type;
           lnAddress: typeof Evolu.NonEmptyString1000.Type;
+          npub: typeof Evolu.NonEmptyString1000.Type;
         }> = {};
         if (bestName) {
           patch.name = bestName as typeof Evolu.NonEmptyString1000.Type;
@@ -359,14 +386,17 @@ export const useContactEditor = ({
         if (ln) {
           patch.lnAddress = ln as typeof Evolu.NonEmptyString1000.Type;
         }
+        if (rawNpub !== npub) {
+          patch.npub = npub as typeof Evolu.NonEmptyString1000.Type;
+        }
         if (Object.keys(patch).length > 0) {
-          update("contact", { id: editingId, ...patch });
+          updateContactFields({ id: editingId, ...patch });
         }
       } catch {
         // ignore
       }
     },
-    [editingId, form.npub, nostrFetchRelays, route.kind, update],
+    [editingId, form.npub, nostrFetchRelays, route.kind, updateContactFields],
   );
 
   const contactEditsSavable = React.useMemo(() => {

@@ -52,6 +52,14 @@ export const useMainSwipeNavigation = ({
     updateMainSwipeProgress(routeKind === "wallet" ? 1 : 0);
   }, [isMainSwipeRoute, mainSwipeRef, routeKind, updateMainSwipeProgress]);
 
+  React.useEffect(() => {
+    if (isMainSwipeRoute) return;
+    if (mainSwipeScrollTimerRef.current === null) return;
+
+    window.clearTimeout(mainSwipeScrollTimerRef.current);
+    mainSwipeScrollTimerRef.current = null;
+  }, [isMainSwipeRoute, mainSwipeScrollTimerRef]);
+
   const handleMainSwipeScroll = isMainSwipeRoute
     ? (event: React.UIEvent<HTMLDivElement>) => {
         const element = event.currentTarget;

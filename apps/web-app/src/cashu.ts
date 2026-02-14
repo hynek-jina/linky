@@ -1,18 +1,12 @@
 import { decode as cborDecode } from "cbor-x";
+import type { JsonRecord, JsonValue } from "./types/json";
 
-type CashuProof = {
-  amount?: number;
+const isJsonRecord = (value: unknown): value is JsonRecord => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 };
 
-type CashuTokenEntry = {
-  mint?: string;
-  proofs?: CashuProof[];
-};
-
-type CashuTokenV3 = {
-  mint?: string;
-  proofs?: CashuProof[];
-  token?: CashuTokenEntry[];
+const asJsonArray = (value: JsonValue | null | undefined): JsonValue[] => {
+  return Array.isArray(value) ? value : [];
 };
 
 const base64UrlToString = (input: string): string => {
@@ -33,7 +27,7 @@ const base64UrlToBytes = (input: string): Uint8Array => {
   return out;
 };
 
-const safeParseJson = (text: string): unknown => {
+const safeParseJson = (text: string): JsonValue | null => {
   try {
     return JSON.parse(text);
   } catch {
@@ -41,13 +35,13 @@ const safeParseJson = (text: string): unknown => {
   }
 };
 
-const asString = (value: unknown): string | null => {
+const asString = (value: JsonValue | null | undefined): string | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
 };
 
-const asNumber = (value: unknown): number | null => {
+const asNumber = (value: JsonValue | null | undefined): number | null => {
   if (typeof value !== "number") return null;
   if (!Number.isFinite(value)) return null;
   return value;
@@ -62,7 +56,7 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
   const raw = rawToken.trim();
   if (!raw) return null;
 
-  let decoded: unknown = null;
+  let decoded: JsonValue | null = null;
   let decodedCbor: unknown = null;
 
   // Common formats:
@@ -91,27 +85,18 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
 
   // CBOR token (cashuB...) format observed:
   // { m: <mintUrl>, u: <unit>, t: [ { p: [ { a: <amount>, ... }, ... ], ... }, ... ] }
-  if (decodedCbor && typeof decodedCbor === "object") {
-    const rec = decodedCbor as Record<string, unknown>;
+  if (isJsonRecord(decodedCbor)) {
+    const rec = decodedCbor;
     const mint = asString(rec.m);
 
-    const t = rec.t;
-    const entries: unknown[] = Array.isArray(t) ? t : [];
+    const entries = asJsonArray(rec.t);
 
     let total = 0;
     for (const entry of entries) {
-      const entryRec =
-        entry && typeof entry === "object"
-          ? (entry as Record<string, unknown>)
-          : null;
-      const proofs = Array.isArray(entryRec?.p)
-        ? (entryRec?.p as unknown[])
-        : [];
+      const entryRec = isJsonRecord(entry) ? entry : null;
+      const proofs = asJsonArray(entryRec?.p);
       for (const proof of proofs) {
-        const proofRec =
-          proof && typeof proof === "object"
-            ? (proof as Record<string, unknown>)
-            : null;
+        const proofRec = isJsonRecord(proof) ? proof : null;
         const amt = asNumber(proofRec?.a);
         if (amt !== null) total += amt;
       }
@@ -120,33 +105,33 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
     return { amount: total, mint };
   }
 
-  if (!decoded || typeof decoded !== "object") return null;
+  if (!isJsonRecord(decoded)) return null;
 
-  const token = decoded as CashuTokenV3;
-
-  const entries: CashuTokenEntry[] = Array.isArray(token.token)
-    ? token.token
-    : [];
+  const token = decoded;
+  const entries = asJsonArray(token.token);
 
   const mints = new Set<string>();
   let total = 0;
 
   if (entries.length > 0) {
     for (const entry of entries) {
-      const mint = asString((entry as CashuTokenEntry).mint);
+      if (!isJsonRecord(entry)) continue;
+      const mint = asString(entry.mint);
       if (mint) mints.add(mint);
-      const proofs = Array.isArray(entry.proofs) ? entry.proofs : [];
+      const proofs = asJsonArray(entry.proofs);
       for (const proof of proofs) {
-        const amt = asNumber((proof as CashuProof).amount);
+        if (!isJsonRecord(proof)) continue;
+        const amt = asNumber(proof.amount);
         if (amt !== null) total += amt;
       }
     }
   } else {
-    const mint = asString((token as CashuTokenV3).mint);
+    const mint = asString(token.mint);
     if (mint) mints.add(mint);
-    const proofs = Array.isArray(token.proofs) ? token.proofs : [];
+    const proofs = asJsonArray(token.proofs);
     for (const proof of proofs) {
-      const amt = asNumber((proof as CashuProof).amount);
+      if (!isJsonRecord(proof)) continue;
+      const amt = asNumber(proof.amount);
       if (amt !== null) total += amt;
     }
   }

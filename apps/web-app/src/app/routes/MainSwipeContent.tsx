@@ -3,14 +3,15 @@ import { BottomTabBar } from "../../components/BottomTabBar";
 import { ContactsChecklist } from "../../components/ContactsChecklist";
 import { ContactsPage } from "../../pages/ContactsPage";
 import { WalletPage } from "../../pages/WalletPage";
-import type { ContactsGuideKey } from "../types/appTypes";
+import type { ContactRowLike, ContactsGuideKey } from "../types/appTypes";
 import type { Route } from "../../types/route";
+import { useMainSwipeRoutes } from "../context/AppShellContexts";
 
-interface MainSwipeContentProps {
+export interface MainSwipeRouteProps {
   activeGroup: string | null;
   bottomTabActive: "contacts" | "wallet" | null;
   cashuBalance: number;
-  contacts: readonly unknown[];
+  contacts: readonly ContactRowLike[];
   contactsOnboardingCelebrating: boolean;
   contactsOnboardingTasks: {
     done: number;
@@ -35,7 +36,7 @@ interface MainSwipeContentProps {
   openNewContactPage: () => void;
   openScan: () => void;
   otherContactsLabel: string;
-  renderContactCard: (contact: unknown) => React.ReactNode;
+  renderContactCard: (contact: ContactRowLike) => React.ReactNode;
   route: Route;
   scanIsOpen: boolean;
   setActiveGroup: (group: string | null) => void;
@@ -45,7 +46,10 @@ interface MainSwipeContentProps {
   showNoGroupFilter: boolean;
   startContactsGuide: (task: ContactsGuideKey) => void;
   t: (key: string) => string;
-  visibleContacts: { conversations: unknown[]; others: unknown[] };
+  visibleContacts: {
+    conversations: ContactRowLike[];
+    others: ContactRowLike[];
+  };
 }
 
 const isContactsGuideKey = (value: string): value is ContactsGuideKey =>
@@ -55,40 +59,43 @@ const isContactsGuideKey = (value: string): value is ContactsGuideKey =>
   value === "message" ||
   value === "backup_keys";
 
-export const MainSwipeContent = ({
-  activeGroup,
-  bottomTabActive,
-  cashuBalance,
-  contacts,
-  contactsOnboardingCelebrating,
-  contactsOnboardingTasks,
-  contactsSearch,
-  contactsSearchInputRef,
-  contactsToolbarStyle,
-  conversationsLabel,
-  displayUnit,
-  dismissContactsOnboarding,
-  groupNames,
-  handleMainSwipeScroll,
-  mainSwipeProgress,
-  mainSwipeRef,
-  mainSwipeScrollY,
-  NO_GROUP_FILTER,
-  openNewContactPage,
-  openScan,
-  otherContactsLabel,
-  renderContactCard,
-  route,
-  scanIsOpen,
-  setActiveGroup,
-  setContactsSearch,
-  showContactsOnboarding,
-  showGroupFilter,
-  showNoGroupFilter,
-  startContactsGuide,
-  t,
-  visibleContacts,
-}: MainSwipeContentProps): React.ReactElement => {
+export const MainSwipeContent = (): React.ReactElement => {
+  const { mainSwipeProps } = useMainSwipeRoutes();
+  const {
+    activeGroup,
+    bottomTabActive,
+    cashuBalance,
+    contacts,
+    contactsOnboardingCelebrating,
+    contactsOnboardingTasks,
+    contactsSearch,
+    contactsSearchInputRef,
+    contactsToolbarStyle,
+    conversationsLabel,
+    displayUnit,
+    dismissContactsOnboarding,
+    groupNames,
+    handleMainSwipeScroll,
+    mainSwipeProgress,
+    mainSwipeRef,
+    mainSwipeScrollY,
+    NO_GROUP_FILTER,
+    openNewContactPage,
+    openScan,
+    otherContactsLabel,
+    renderContactCard,
+    route,
+    scanIsOpen,
+    setActiveGroup,
+    setContactsSearch,
+    showContactsOnboarding,
+    showGroupFilter,
+    showNoGroupFilter,
+    startContactsGuide,
+    t,
+    visibleContacts,
+  } = mainSwipeProps;
+
   return (
     <>
       <div
@@ -132,7 +139,7 @@ export const MainSwipeContent = ({
             visibleContacts={visibleContacts}
             conversationsLabel={conversationsLabel}
             otherContactsLabel={otherContactsLabel}
-            renderContactCard={(contact) => renderContactCard(contact)}
+            renderContactCard={renderContactCard}
             bottomTabActive={bottomTabActive}
             openNewContactPage={openNewContactPage}
             showBottomTabBar={false}

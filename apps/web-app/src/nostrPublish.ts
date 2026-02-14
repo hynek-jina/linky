@@ -1,4 +1,5 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import type { JsonRecord } from "./types/json";
 import { getSharedNostrPool } from "./utils/nostrPool";
 
 export type PublishResult = {
@@ -9,17 +10,18 @@ export type PublishResult = {
 export const publishKind0ProfileMetadata = async (params: {
   privBytes: Uint8Array;
   relays: string[];
-  content: Record<string, unknown>;
+  content: JsonRecord;
 }): Promise<PublishResult> => {
   const { privBytes, relays, content } = params;
   const { finalizeEvent, getPublicKey } = await import("nostr-tools");
 
   const pubkey = getPublicKey(privBytes);
 
+  const tags: string[][] = [];
   const baseEvent = {
     kind: 0,
     created_at: Math.floor(Date.now() / 1000),
-    tags: [] as string[][],
+    tags,
     content: JSON.stringify(content),
     pubkey,
   } satisfies UnsignedEvent;

@@ -4,7 +4,9 @@ import {
   getCashuDeterministicSeedFromStorage,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
+import type { Proof } from "@cashu/cashu-ts";
 import { getCashuLib } from "./utils/cashuLib";
+import { getUnknownErrorMessage } from "./utils/unknown";
 
 type CashuAcceptResult = {
   amount: number;
@@ -39,7 +41,7 @@ export const acceptCashuToken = async (
   const keysetId = wallet.keysetId;
 
   const isOutputsAlreadySignedError = (e: unknown): boolean => {
-    const m = String(e ?? "").toLowerCase();
+    const m = getUnknownErrorMessage(e, "").toLowerCase();
     return (
       m.includes("outputs have already been signed") ||
       m.includes("already been signed before") ||
@@ -47,7 +49,7 @@ export const acceptCashuToken = async (
     );
   };
 
-  const proofs = (await (det
+  const proofs = await (det
     ? withCashuDeterministicCounterLock(
         { mintUrl, unit, keysetId },
         async () => {
@@ -61,11 +63,11 @@ export const acceptCashuToken = async (
           });
 
           // This performs a swap at the mint, returning fresh proofs.
-          let proofs: unknown;
+          let receivedProofs: Proof[] | null = null;
           let lastError: unknown;
           for (let attempt = 0; attempt < 5; attempt += 1) {
             try {
-              proofs = await receiveOnce(counter);
+              receivedProofs = await receiveOnce(counter);
               lastError = null;
               break;
             } catch (e) {
@@ -85,29 +87,19 @@ export const acceptCashuToken = async (
             }
           }
 
-          if (!proofs) throw lastError ?? new Error("receive failed");
+          if (!receivedProofs) throw lastError ?? new Error("receive failed");
 
           bumpCashuDeterministicCounter({
             mintUrl,
             unit,
             keysetId,
-            used: Array.isArray(proofs) ? proofs.length : 0,
+            used: receivedProofs.length,
           });
 
-          return proofs as Array<{
-            amount: number;
-            secret: string;
-            C: string;
-            id: string;
-          }>;
+          return receivedProofs;
         },
       )
-    : wallet.receive(decoded))) as Array<{
-    amount: number;
-    secret: string;
-    C: string;
-    id: string;
-  }>;
+    : wallet.receive(decoded));
 
   const amount = proofs.reduce((sum, proof) => sum + (proof.amount ?? 0), 0);
 

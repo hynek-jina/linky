@@ -6,13 +6,14 @@ import type { ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import { safeLocalStorageSet } from "../../../utils/storage";
+import type { OptionalNumber, OptionalText } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
 interface CashuTokenMetaRow {
   id: string;
-  isDeleted?: unknown;
-  lastCheckedAtSec?: unknown;
+  isDeleted?: OptionalText;
+  lastCheckedAtSec?: OptionalNumber;
 }
 
 interface UseSaveCashuFromTextParams {
@@ -273,6 +274,7 @@ export const useSaveCashuFromText = ({
       logPaymentEvent,
       mintInfoByUrl,
       refreshMintInfo,
+      recentlyReceivedTokenTimerRef,
       resolveOwnerIdForWrite,
       setCashuDraft,
       setCashuIsBusy,

@@ -1,4 +1,6 @@
-export const fetchJson = async <T = unknown>(
+import type { JsonValue } from "../types/json";
+
+export const fetchJson = async <T = JsonValue>(
   url: string,
   init?: RequestInit,
 ): Promise<T> => {

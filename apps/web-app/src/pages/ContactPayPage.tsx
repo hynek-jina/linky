@@ -3,6 +3,7 @@ import { AmountDisplay } from "../components/AmountDisplay";
 import { Keypad } from "../components/Keypad";
 import type { ContactId } from "../evolu";
 import { formatInteger, getInitials } from "../utils/formatting";
+import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
 interface Contact {
   id: ContactId;
@@ -59,7 +60,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
   }
 
   const ln = String(selectedContact.lnAddress ?? "").trim();
-  const npub = String(selectedContact.npub ?? "").trim();
+  const npub = normalizeNpubIdentifier(selectedContact.npub);
   const url = npub ? nostrPictureByNpub[npub] : null;
   const canUseCashu =
     (payWithCashuEnabled || allowPromisesEnabled) && Boolean(npub);

@@ -22,6 +22,19 @@ interface UseMessagesDomainParams {
   route: Route;
 }
 
+const getMessageRumorKey = (
+  message: Pick<LocalNostrMessage, "contactId" | "direction" | "rumorId">,
+): string => {
+  const rumorId = String(message.rumorId ?? "").trim();
+  if (!rumorId) return "";
+
+  const contactId = String(message.contactId ?? "").trim();
+  const direction = String(message.direction ?? "").trim();
+  if (!contactId || (direction !== "in" && direction !== "out")) return "";
+
+  return `${contactId}|${direction}|${rumorId}`;
+};
+
 export const useMessagesDomain = ({
   appOwnerId,
   appOwnerIdRef,
@@ -77,6 +90,7 @@ export const useMessagesDomain = ({
 
       setNostrMessagesLocal((prev) => {
         const wrapIds = new Set<string>();
+        const rumorKeys = new Set<string>();
         const deduped: LocalNostrMessage[] = [];
 
         for (const message of [...raw, ...prev]) {
@@ -84,9 +98,15 @@ export const useMessagesDomain = ({
           const key =
             String(normalized.wrapId ?? "").trim() ||
             String(normalized.id ?? "");
+          const rumorKey = getMessageRumorKey(normalized);
 
-          if (key && wrapIds.has(key)) continue;
+          if (
+            (key && wrapIds.has(key)) ||
+            (rumorKey && rumorKeys.has(rumorKey))
+          )
+            continue;
           if (key) wrapIds.add(key);
+          if (rumorKey) rumorKeys.add(rumorKey);
           deduped.push(normalized);
         }
 
@@ -132,13 +152,16 @@ export const useMessagesDomain = ({
       setNostrMessagesLocal((prev) => {
         const dedupeKey =
           String(entry.wrapId ?? "").trim() || String(entry.id ?? "");
+        const dedupeRumorKey = getMessageRumorKey(entry);
 
         // Check prev array for duplicates (not the ref) so this updater
         // is pure and works correctly under React strict-mode double-invocation.
-        if (dedupeKey) {
+        if (dedupeKey || dedupeRumorKey) {
           const hasDupe = prev.some((m) => {
             const key = String(m.wrapId ?? "").trim() || String(m.id ?? "");
-            return key === dedupeKey;
+            if (dedupeKey && key === dedupeKey) return true;
+            if (!dedupeRumorKey) return false;
+            return getMessageRumorKey(m) === dedupeRumorKey;
           });
           if (hasDupe) return prev;
         }

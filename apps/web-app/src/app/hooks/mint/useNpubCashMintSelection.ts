@@ -40,7 +40,7 @@ export const useNpubCashMintSelection = ({
   }, [defaultMintUrl, defaultMintUrlDraft, setDefaultMintUrlDraft]);
 
   const makeNip98AuthHeader = React.useCallback(
-    async (url: string, method: string, payload?: Record<string, unknown>) => {
+    async (url: string, method: string, payload?: Record<string, string>) => {
       if (!currentNsec) throw new Error("Missing nsec");
       const { nip19, nip98, finalizeEvent } = await import("nostr-tools");
       const decoded = nip19.decode(currentNsec);

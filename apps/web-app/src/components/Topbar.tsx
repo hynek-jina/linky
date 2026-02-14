@@ -1,6 +1,7 @@
 import React from "react";
 import type { Route } from "../types/route";
 import { formatShortNpub, getInitials } from "../utils/formatting";
+import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
 interface TopbarButton {
   icon: string;
@@ -85,7 +86,7 @@ export function Topbar({
         <div className="topbar-chat" aria-label={t("messagesTitle")}>
           <span className="topbar-chat-avatar" aria-hidden="true">
             {(() => {
-              const npub = String(chatTopbarContact.npub ?? "").trim();
+              const npub = normalizeNpubIdentifier(chatTopbarContact.npub);
               const url = npub ? nostrPictureByNpub[npub] : null;
               return url ? (
                 <img

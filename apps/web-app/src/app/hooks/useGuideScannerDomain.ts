@@ -1,10 +1,15 @@
 import React from "react";
+import type {
+  NavigatorWithOptionalCameraPermissions,
+  WindowWithOptionalBarcodeDetector,
+} from "../../types/browser";
 import type { Route } from "../../types/route";
+import type { ContactRowLike } from "../types/appTypes";
 import { useContactsGuide } from "./guide/useContactsGuide";
 
 interface UseGuideScannerDomainParams {
   cashuBalance: number;
-  contacts: readonly Record<string, unknown>[];
+  contacts: readonly ContactRowLike[];
   contactsOnboardingHasPaid: boolean;
   contactsOnboardingHasSentMessage: boolean;
   openMenu: () => void;
@@ -67,8 +72,7 @@ export const useGuideScannerDomain = ({
         // ignore
       }
       try {
-        (video as unknown as { srcObject: MediaStream | null }).srcObject =
-          null;
+        video.srcObject = null;
       } catch {
         // ignore
       }
@@ -144,18 +148,14 @@ export const useGuideScannerDomain = ({
           await tryGet({ video: true, audio: false });
         }
       } catch (e) {
-        const err = e as unknown as { name?: unknown; message?: unknown };
+        const err = e as { name?: unknown; message?: unknown };
         const name = String(err?.name ?? "").trim();
         const message = String(err?.message ?? e ?? "").trim();
 
         let permissionState: string | null = null;
         try {
           const permissions = (
-            navigator as unknown as {
-              permissions?: {
-                query?: (desc: unknown) => Promise<{ state?: unknown }>;
-              };
-            }
+            navigator as NavigatorWithOptionalCameraPermissions
           ).permissions;
           const res = await permissions?.query?.({ name: "camera" });
           permissionState = String(res?.state ?? "").trim() || null;
@@ -214,8 +214,7 @@ export const useGuideScannerDomain = ({
           // ignore
         }
         try {
-          (video as unknown as { srcObject: MediaStream | null }).srcObject =
-            null;
+          video.srcObject = null;
         } catch {
           // ignore
         }
@@ -264,18 +263,8 @@ export const useGuideScannerDomain = ({
         // ignore
       }
 
-      type BarcodeDetectorInstance = {
-        detect: (
-          image: HTMLVideoElement,
-        ) => Promise<Array<{ rawValue?: unknown }>>;
-      };
-      type BarcodeDetectorConstructor = new (options: {
-        formats: string[];
-      }) => BarcodeDetectorInstance;
-
-      const detectorCtor = (
-        window as unknown as { BarcodeDetector?: BarcodeDetectorConstructor }
-      ).BarcodeDetector;
+      const detectorCtor = (window as WindowWithOptionalBarcodeDetector)
+        .BarcodeDetector;
 
       const detector = detectorCtor
         ? new detectorCtor({ formats: ["qr_code"] })

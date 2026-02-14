@@ -1,10 +1,12 @@
+import type { CredoTokenRow } from "../app/types/appTypes";
+
 interface CredoTokenPillProps {
   amount: number;
   ariaLabel: string;
   avatar: string | null;
   formatInteger: (n: number) => string;
   onClick: () => void;
-  token: unknown;
+  token: Pick<CredoTokenRow, "id">;
 }
 
 export function CredoTokenPill({
@@ -17,7 +19,7 @@ export function CredoTokenPill({
 }: CredoTokenPillProps) {
   return (
     <button
-      key={String((token as unknown as { id?: unknown }).id ?? "")}
+      key={String(token.id)}
       className="pill pill-credo"
       onClick={onClick}
       style={{ cursor: "pointer" }}

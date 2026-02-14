@@ -1,22 +1,9 @@
 import React from "react";
-
-interface CashuTokenInfo {
-  amount: number | null;
-  isValid: boolean;
-  mintDisplay: string | null;
-  mintUrl: string | null;
-  tokenRaw: string;
-}
-
-interface CredoTokenInfo {
-  amount: number | null;
-  expiresAtSec: number | null;
-  isValid: boolean;
-  issuer: string | null;
-  kind: "promise" | "settlement";
-  recipient: string | null;
-  tokenRaw: string;
-}
+import type {
+  CashuTokenMessageInfo,
+  CredoTokenMessageInfo,
+} from "../app/lib/tokenMessageInfo";
+import type { LocalNostrMessage, MintUrlInput } from "../app/types/appTypes";
 
 interface MintIcon {
   failed: boolean;
@@ -25,25 +12,17 @@ interface MintIcon {
   url: string | null;
 }
 
-interface LocalNostrMessage {
-  id?: unknown;
-  direction?: unknown;
-  status?: unknown;
-  content?: unknown;
-  createdAtSec?: unknown;
-}
-
 interface ChatMessageProps {
   chatPendingLabel: string;
   contactAvatar: string | null;
   formatChatDayLabel: (ms: number) => string;
   formatInteger: (n: number) => string;
-  getCashuTokenMessageInfo: (text: string) => CashuTokenInfo | null;
-  getCredoTokenMessageInfo: (text: string) => CredoTokenInfo | null;
-  getMintIconUrl: (mint: unknown) => MintIcon;
+  getCashuTokenMessageInfo: (text: string) => CashuTokenMessageInfo | null;
+  getCredoTokenMessageInfo: (text: string) => CredoTokenMessageInfo | null;
+  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   locale: string;
   message: LocalNostrMessage;
-  messageElRef?: (el: HTMLElement | null, messageId: string) => void;
+  messageElRef?: (el: HTMLDivElement | null, messageId: string) => void;
   nextMessage: LocalNostrMessage | null;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
@@ -179,8 +158,7 @@ export function ChatMessage({
                         }
                       }}
                       onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.display =
-                          "none";
+                        e.currentTarget.style.display = "none";
                         if (icon.origin) {
                           const duck = icon.host
                             ? `https://icons.duckduckgo.com/ip3/${icon.host}.ico`

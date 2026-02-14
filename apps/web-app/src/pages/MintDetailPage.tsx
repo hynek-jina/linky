@@ -1,25 +1,45 @@
+import type { OwnerId } from "@evolu/common";
+import type { LocalMintInfoRow } from "../app/types/appTypes";
 import { useNavigation } from "../hooks/useRouting";
+import type { extractPpk } from "../utils/mint";
+import type { safeLocalStorageSetJson } from "../utils/storage";
 
 interface MintDetailPageProps {
-  Evolu: { sqliteTrue: unknown };
+  Evolu: { sqliteTrue: LocalMintInfoRow["isDeleted"] };
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX: string;
-  appOwnerIdRef: React.RefObject<string | null>;
-  extractPpk: (data: unknown) => number | null;
+  appOwnerIdRef: React.RefObject<OwnerId | null>;
+  extractPpk: (data: Parameters<typeof extractPpk>[0]) => number | null;
   getMintRuntime: (
     url: string,
   ) => { lastCheckedAtSec: number; latencyMs: number | null } | null;
   lang: string;
-  mintInfoByUrl: Map<string, unknown>;
+  mintInfoByUrl: Map<string, LocalMintInfoRow>;
   mintUrl: string;
   normalizeMintUrl: (url: string) => string;
   pendingMintDeleteUrl: string | null;
   refreshMintInfo: (url: string) => Promise<void>;
-  safeLocalStorageSetJson: (key: string, value: unknown) => void;
-  setMintInfoAll: (updater: (prev: unknown[]) => unknown[]) => void;
+  safeLocalStorageSetJson: typeof safeLocalStorageSetJson;
+  setMintInfoAll: React.Dispatch<React.SetStateAction<LocalMintInfoRow[]>>;
   setPendingMintDeleteUrl: (url: string | null) => void;
   setStatus: (message: string) => void;
   t: (key: string) => string;
 }
+
+const isPpkSearchInput = (
+  value: unknown,
+): value is Parameters<typeof extractPpk>[0] => {
+  if (value === null) return true;
+  if (Array.isArray(value)) return true;
+  const valueType = typeof value;
+  return (
+    valueType === "string" ||
+    valueType === "number" ||
+    valueType === "boolean" ||
+    valueType === "bigint" ||
+    valueType === "symbol" ||
+    valueType === "object"
+  );
+};
 
 export function MintDetailPage({
   Evolu,
@@ -51,12 +71,8 @@ export function MintDetailPage({
     );
   }
 
-  const supportsMpp =
-    String((row as unknown as { supportsMpp?: unknown }).supportsMpp ?? "") ===
-    "1";
-  const feesJson = String(
-    (row as unknown as { feesJson?: unknown }).feesJson ?? "",
-  ).trim();
+  const supportsMpp = String(row.supportsMpp ?? "") === "1";
+  const feesJson = String(row.feesJson ?? "").trim();
 
   const runtime = getMintRuntime(cleaned);
   const lastCheckedAtSec = runtime?.lastCheckedAtSec ?? 0;
@@ -65,7 +81,8 @@ export function MintDetailPage({
   const ppk = (() => {
     if (!feesJson) return null;
     try {
-      const parsed = JSON.parse(feesJson) as unknown;
+      const parsed: unknown = JSON.parse(feesJson);
+      if (!isPpkSearchInput(parsed)) return null;
       const found = extractPpk(parsed);
       if (typeof found === "number" && Number.isFinite(found)) {
         return found;
@@ -162,13 +179,13 @@ export function MintDetailPage({
                 const ownerId = appOwnerIdRef.current;
                 if (ownerId) {
                   setMintInfoAll((prev) => {
-                    const next = prev.map((row) => {
+                    const next = prev.map((mintInfoRow) => {
                       const url = normalizeMintUrl(
-                        String((row as unknown as { url?: unknown }).url ?? ""),
+                        String(mintInfoRow.url ?? ""),
                       );
-                      if (url !== cleaned) return row;
+                      if (url !== cleaned) return mintInfoRow;
                       return {
-                        ...(row as Record<string, unknown>),
+                        ...mintInfoRow,
                         isDeleted: Evolu.sqliteTrue,
                       };
                     });

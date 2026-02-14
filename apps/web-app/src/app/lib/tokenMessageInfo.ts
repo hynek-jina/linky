@@ -6,6 +6,7 @@ import {
   type CredoSettlementPayload,
 } from "../../credo";
 import { extractCashuTokenFromText } from "./tokenText";
+import type { CashuTokenRowLike, MintUrlInput } from "../types/appTypes";
 
 export interface CashuTokenMessageInfo {
   amount: number | null;
@@ -25,7 +26,7 @@ export interface CredoTokenMessageInfo {
   tokenRaw: string;
 }
 
-const getMintDisplay = (mintValue: unknown): string | null => {
+const getMintDisplay = (mintValue: MintUrlInput): string | null => {
   const mintText = String(mintValue ?? "").trim();
   if (!mintText) return null;
   try {
@@ -36,23 +37,19 @@ const getMintDisplay = (mintValue: unknown): string | null => {
 };
 
 const isKnownCashuToken = (
-  cashuTokensAll: readonly unknown[],
+  cashuTokensAll: readonly CashuTokenRowLike[],
   tokenRaw: string,
 ): boolean => {
   return cashuTokensAll.some((row) => {
-    const record =
-      row && typeof row === "object"
-        ? (row as { rawToken?: unknown; token?: unknown; isDeleted?: unknown })
-        : null;
-    if (!record || record.isDeleted) return false;
-    const stored = String(record.rawToken ?? record.token ?? "").trim();
+    if (row.isDeleted) return false;
+    const stored = String(row.rawToken ?? row.token ?? "").trim();
     return stored && stored === tokenRaw;
   });
 };
 
 export const getCashuTokenMessageInfo = (
   text: string,
-  cashuTokensAll: readonly unknown[],
+  cashuTokensAll: readonly CashuTokenRowLike[],
 ): CashuTokenMessageInfo | null => {
   const tokenRaw = extractCashuTokenFromText(text);
   if (!tokenRaw) return null;

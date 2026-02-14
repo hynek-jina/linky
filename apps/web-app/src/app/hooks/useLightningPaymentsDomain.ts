@@ -3,23 +3,18 @@ import React from "react";
 import type { CashuTokenId, ContactId } from "../../evolu";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../utils/constants";
 import { safeLocalStorageSet } from "../../utils/storage";
+import { getUnknownErrorMessage } from "../../utils/unknown";
+import type {
+  CashuTokenRowLike,
+  ContactPayRowLike,
+  LocalMintInfoRow,
+  MintUrlInput,
+} from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
-interface CashuTokenWithMetaRow {
-  amount?: unknown;
-  id: CashuTokenId;
-  mint?: unknown;
-  rawToken?: unknown;
-  state?: unknown;
-  token?: unknown;
-}
-
-interface ContactRow {
-  id?: unknown;
-  lnAddress?: unknown;
-  name?: unknown;
-}
+type CashuTokenWithMetaRow = CashuTokenRowLike & { id: CashuTokenId };
+type ContactRow = ContactPayRowLike;
 
 interface UseLightningPaymentsDomainParams {
   buildCashuMintCandidates: (
@@ -45,8 +40,8 @@ interface UseLightningPaymentsDomainParams {
     status: "ok" | "error";
     unit?: string | null;
   }) => void;
-  mintInfoByUrl: Map<string, unknown>;
-  normalizeMintUrl: (url: unknown) => string | null;
+  mintInfoByUrl: Map<string, LocalMintInfoRow>;
+  normalizeMintUrl: (url: MintUrlInput) => string | null;
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
   setContactsOnboardingHasPaid: React.Dispatch<React.SetStateAction<boolean>>;
   setPostPaySaveContact: React.Dispatch<
@@ -103,7 +98,7 @@ export const useLightningPaymentsDomain = ({
           const tokenText = String(row.token ?? row.rawToken ?? "").trim();
           if (!tokenText) continue;
 
-          const amount = Number((row.amount ?? 0) as unknown as number) || 0;
+          const amount = Number(row.amount ?? 0) || 0;
           const entry = mintGroups.get(mint) ?? { tokens: [], sum: 0 };
           entry.tokens.push(tokenText);
           entry.sum += amount;
@@ -226,7 +221,7 @@ export const useLightningPaymentsDomain = ({
               amount: result.paidAmount,
               fee: (() => {
                 const feePaid = Number(
-                  (result as unknown as { feePaid?: unknown }).feePaid ?? 0,
+                  (result as { feePaid?: unknown }).feePaid ?? 0,
                 );
                 return Number.isFinite(feePaid) && feePaid > 0 ? feePaid : null;
               })(),
@@ -259,10 +254,12 @@ export const useLightningPaymentsDomain = ({
           fee: null,
           mint: lastMint,
           unit: "sat",
-          error: String(lastError ?? "unknown"),
+          error: getUnknownErrorMessage(lastError, "unknown"),
           contactId: null,
         });
-        setStatus(`${t("payFailed")}: ${String(lastError ?? "unknown")}`);
+        setStatus(
+          `${t("payFailed")}: ${getUnknownErrorMessage(lastError, "unknown")}`,
+        );
       } finally {
         setCashuIsBusy(false);
       }
@@ -332,7 +329,7 @@ export const useLightningPaymentsDomain = ({
           const tokenText = String(row.token ?? row.rawToken ?? "").trim();
           if (!tokenText) continue;
 
-          const amount = Number((row.amount ?? 0) as unknown as number) || 0;
+          const amount = Number(row.amount ?? 0) || 0;
           const entry = mintGroups.get(mint) ?? { tokens: [], sum: 0 };
           entry.tokens.push(tokenText);
           entry.sum += amount;
@@ -348,12 +345,7 @@ export const useLightningPaymentsDomain = ({
                 .replace(/\/+$/, "");
             const mpp = (mint: string) => {
               const row = mintInfoByUrl.get(normalize(mint));
-              return String(
-                (row as unknown as { supportsMpp?: unknown })?.supportsMpp ??
-                  "",
-              ) === "1"
-                ? 1
-                : 0;
+              return String(row?.supportsMpp ?? "") === "1" ? 1 : 0;
             };
             const dmpp = mpp(b.mint) - mpp(a.mint);
             if (dmpp !== 0) return dmpp;
@@ -467,7 +459,7 @@ export const useLightningPaymentsDomain = ({
             }
 
             const feePaid = Number(
-              (result as unknown as { feePaid?: unknown }).feePaid ?? 0,
+              (result as { feePaid?: unknown }).feePaid ?? 0,
             );
 
             logPaymentEvent({
@@ -515,10 +507,12 @@ export const useLightningPaymentsDomain = ({
           fee: null,
           mint: lastMint,
           unit: "sat",
-          error: String(lastError ?? "unknown"),
+          error: getUnknownErrorMessage(lastError, "unknown"),
           contactId: null,
         });
-        setStatus(`${t("payFailed")}: ${String(lastError ?? "unknown")}`);
+        setStatus(
+          `${t("payFailed")}: ${getUnknownErrorMessage(lastError, "unknown")}`,
+        );
       } finally {
         setCashuIsBusy(false);
       }
