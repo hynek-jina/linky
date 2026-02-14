@@ -1,4 +1,5 @@
 import { parseCashuToken } from "../cashu";
+import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
 
 interface MintIcon {
   failed: boolean;
@@ -10,12 +11,12 @@ interface MintIcon {
 interface CashuTokenPillProps {
   ariaLabel: string;
   formatInteger: (n: number) => string;
-  getMintIconUrl: (mint: unknown) => MintIcon;
+  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   isError?: boolean;
   onClick: () => void;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
-  token: unknown;
+  token: CashuTokenRowLike;
 }
 
 export function CashuTokenPill({
@@ -28,18 +29,9 @@ export function CashuTokenPill({
   onMintIconLoad,
   token,
 }: CashuTokenPillProps) {
-  const tokenText = String(
-    (token as unknown as { token?: unknown; rawToken?: unknown }).token ??
-      (token as unknown as { rawToken?: unknown }).rawToken ??
-      "",
-  ).trim();
-
-  const storedAmount = Number(
-    (token as unknown as { amount?: unknown }).amount ?? 0,
-  );
-  const storedMint = String(
-    (token as unknown as { mint?: unknown }).mint ?? "",
-  ).trim();
+  const tokenText = String(token.token ?? token.rawToken ?? "").trim();
+  const storedAmount = Number(token.amount ?? 0);
+  const storedMint = String(token.mint ?? "").trim();
 
   const parsed =
     !storedMint || !(storedAmount > 0)
@@ -95,7 +87,7 @@ export function CashuTokenPill({
               }
             }}
             onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
+              e.currentTarget.style.display = "none";
               if (icon.origin) {
                 const duck = icon.host
                   ? `https://icons.duckduckgo.com/ip3/${icon.host}.ico`

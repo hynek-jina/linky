@@ -103,12 +103,12 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "cashuToken":
       window.location.assign(
-        `#wallet/token/${encodeURIComponent(String(action.id as unknown as string))}`,
+        `#wallet/token/${encodeURIComponent(String(action.id))}`,
       );
       break;
     case "credoToken":
       window.location.assign(
-        `#wallet/credo/${encodeURIComponent(String(action.id as unknown as string))}`,
+        `#wallet/credo/${encodeURIComponent(String(action.id))}`,
       );
       break;
     case "profile":

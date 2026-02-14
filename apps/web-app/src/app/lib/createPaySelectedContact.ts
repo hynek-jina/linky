@@ -16,28 +16,23 @@ import {
   PROMISE_TOTAL_CAP_SAT,
 } from "../../utils/constants";
 import { safeLocalStorageSet } from "../../utils/storage";
+import { getUnknownErrorMessage } from "../../utils/unknown";
 import { makeLocalId } from "../../utils/validation";
 import { previewTokenText } from "../../utils/formatting";
 import { getSharedAppNostrPool, type AppNostrPool } from "../lib/nostrPool";
-import type { CredoTokenRow } from "../types/appTypes";
+import type {
+  CashuTokenRowLike,
+  ContactRowLike,
+  CredoTokenRow,
+  MintUrlInput,
+  PaymentLogData,
+  PublishWrappedResult,
+} from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
-interface ContactRow {
-  id: ContactId;
-  lnAddress?: unknown;
-  name?: unknown;
-  npub?: unknown;
-}
-
-interface CashuTokenWithMetaRow {
-  amount?: unknown;
-  id: unknown;
-  mint?: unknown;
-  rawToken?: unknown;
-  state?: unknown;
-  token?: unknown;
-}
+type ContactRow = ContactRowLike & { id: ContactId };
+type CashuTokenWithMetaRow = CashuTokenRowLike & { id: CashuTokenId | string };
 
 interface UsePaySelectedContactParams {
   allowPromisesEnabled: boolean;
@@ -68,7 +63,7 @@ interface UsePaySelectedContactParams {
   chatForceScrollToBottomRef: React.MutableRefObject<boolean>;
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   contactPayMethod: "cashu" | "lightning" | null;
-  credoTokensActive: unknown[];
+  credoTokensActive: CredoTokenRow[];
   currentNpub: string | null;
   currentNsec: string | null;
   defaultMintUrl: string | null;
@@ -80,7 +75,7 @@ interface UsePaySelectedContactParams {
   }) => void;
   formatInteger: (value: number) => string;
   getCredoAvailableForContact: (contactNpub: string) => number;
-  getCredoRemainingAmount: (row: unknown) => number;
+  getCredoRemainingAmount: (row: CredoTokenRow) => number;
   insert: EvoluMutations["insert"];
   insertCredoPromise: (args: {
     amount: number;
@@ -93,7 +88,7 @@ interface UsePaySelectedContactParams {
     token: string;
     unit: string;
   }) => void;
-  logPayStep: (step: string, data?: Record<string, unknown>) => void;
+  logPayStep: (step: string, data?: PaymentLogData) => void;
   logPaymentEvent: (event: {
     amount?: number | null;
     contactId?: ContactId | null;
@@ -104,7 +99,7 @@ interface UsePaySelectedContactParams {
     status: "ok" | "error";
     unit?: string | null;
   }) => void;
-  normalizeMintUrl: (mintUrl: unknown) => string | null;
+  normalizeMintUrl: (mintUrl: MintUrlInput) => string | null;
   payAmount: string;
   payWithCashuEnabled: boolean;
   publishWrappedWithRetry: (
@@ -112,7 +107,7 @@ interface UsePaySelectedContactParams {
     relays: string[],
     wrapForMe: NostrToolsEvent,
     wrapForContact: NostrToolsEvent,
-  ) => Promise<{ anySuccess: boolean; error: unknown | null }>;
+  ) => Promise<PublishWrappedResult>;
   pushToast: (message: string) => void;
   refreshLocalNostrMessages: () => void;
   route: Route;
@@ -374,7 +369,7 @@ export const createPaySelectedContact = ({
             const tokenText = String(row.token ?? row.rawToken ?? "").trim();
             if (!tokenText) continue;
 
-            const amount = Number((row.amount ?? 0) as unknown as number) || 0;
+            const amount = Number(row.amount ?? 0) || 0;
             const entry = mintGroups.get(mint) ?? { tokens: [], sum: 0 };
             entry.tokens.push(tokenText);
             entry.sum += amount;
@@ -492,12 +487,12 @@ export const createPaySelectedContact = ({
               fee: null,
               mint: lastMint,
               unit: "sat",
-              error: String(lastError ?? "insufficient funds"),
+              error: getUnknownErrorMessage(lastError, "insufficient funds"),
               contactId: selectedContact.id,
             });
             setStatus(
               lastError
-                ? `${t("payFailed")}: ${String(lastError)}`
+                ? `${t("payFailed")}: ${getUnknownErrorMessage(lastError, "unknown")}`
                 : t("payInsufficient"),
             );
             return;
@@ -505,7 +500,7 @@ export const createPaySelectedContact = ({
         }
 
         const settlementPlans: Array<{
-          row: unknown;
+          row: CredoTokenRow;
           amount: number;
         }> = [];
 
@@ -690,7 +685,7 @@ export const createPaySelectedContact = ({
               hasPendingMessages = true;
               logPayStep("publish-failed", {
                 clientId,
-                error: String(firstError ?? "publish failed"),
+                error: getUnknownErrorMessage(firstError, "publish failed"),
                 isCredoMessage,
               });
               if (!isCredoMessage) {
@@ -698,7 +693,7 @@ export const createPaySelectedContact = ({
                 break;
               }
               pushToast(
-                `${t("payFailed")}: ${String(firstError ?? "publish failed")}`,
+                `${t("payFailed")}: ${getUnknownErrorMessage(firstError, "publish failed")}`,
               );
             }
 
@@ -758,7 +753,10 @@ export const createPaySelectedContact = ({
 
           if (publishFailedError) {
             logPayStep("publish-queued", {
-              error: String(publishFailedError ?? "publish failed"),
+              error: getUnknownErrorMessage(
+                publishFailedError,
+                "publish failed",
+              ),
             });
           }
 
@@ -809,10 +807,12 @@ export const createPaySelectedContact = ({
           fee: null,
           mint: lastMint,
           unit: "sat",
-          error: String(lastError ?? "unknown"),
+          error: getUnknownErrorMessage(lastError, "unknown"),
           contactId: selectedContact.id,
         });
-        setStatus(`${t("payFailed")}: ${String(lastError ?? "unknown")}`);
+        setStatus(
+          `${t("payFailed")}: ${getUnknownErrorMessage(lastError, "unknown")}`,
+        );
         return;
       }
 
@@ -823,7 +823,8 @@ export const createPaySelectedContact = ({
             return;
           }
 
-          const settlementPlans: Array<{ row: unknown; amount: number }> = [];
+          const settlementPlans: Array<{ row: CredoTokenRow; amount: number }> =
+            [];
           if (useCredoAmount > 0) {
             const candidates = credoTokensActive
               .filter((row) => {
@@ -945,7 +946,7 @@ export const createPaySelectedContact = ({
             if (!anySuccess) {
               const firstError = publishOutcome.error;
               pushToast(
-                `${t("payFailed")}: ${String(firstError ?? "publish failed")}`,
+                `${t("payFailed")}: ${getUnknownErrorMessage(firstError, "publish failed")}`,
               );
             }
 
@@ -992,7 +993,9 @@ export const createPaySelectedContact = ({
           navigateTo({ route: "chat", id: selectedContact.id });
           return;
         } catch (e) {
-          setStatus(`${t("payFailed")}: ${String(e ?? "unknown")}`);
+          setStatus(
+            `${t("payFailed")}: ${getUnknownErrorMessage(e, "unknown")}`,
+          );
           return;
         }
       }
@@ -1014,7 +1017,7 @@ export const createPaySelectedContact = ({
           remainingAfterCredo,
         );
       } catch (e) {
-        const message = String(e ?? "unknown");
+        const message = getUnknownErrorMessage(e, "unknown");
         const lower = message.toLowerCase();
         const isNetworkError =
           lower.includes("failed to fetch") ||
@@ -1041,7 +1044,7 @@ export const createPaySelectedContact = ({
         const tokenText = String(row.token ?? row.rawToken ?? "").trim();
         if (!tokenText) continue;
 
-        const amount = Number((row.amount ?? 0) as unknown as number) || 0;
+        const amount = Number(row.amount ?? 0) || 0;
         const entry = mintGroups.get(mint) ?? { tokens: [], sum: 0 };
         entry.tokens.push(tokenText);
         entry.sum += amount;
@@ -1168,8 +1171,10 @@ export const createPaySelectedContact = ({
                 throw new Error("missing credo context");
               }
 
-              const settlementPlans: Array<{ row: unknown; amount: number }> =
-                [];
+              const settlementPlans: Array<{
+                row: CredoTokenRow;
+                amount: number;
+              }> = [];
               const candidates = credoTokensActive
                 .filter((row) => {
                   const r = row as CredoTokenRow;
@@ -1264,7 +1269,7 @@ export const createPaySelectedContact = ({
                 if (!anySuccess) {
                   const firstError = publishOutcome.error;
                   pushToast(
-                    `${t("payFailed")}: ${String(firstError ?? "publish failed")}`,
+                    `${t("payFailed")}: ${getUnknownErrorMessage(firstError, "publish failed")}`,
                   );
                 }
 
@@ -1285,7 +1290,9 @@ export const createPaySelectedContact = ({
                 });
               }
             } catch (e) {
-              pushToast(`${t("payFailed")}: ${String(e ?? "unknown")}`);
+              pushToast(
+                `${t("payFailed")}: ${getUnknownErrorMessage(e, "unknown")}`,
+              );
             }
           }
 
@@ -1295,7 +1302,7 @@ export const createPaySelectedContact = ({
             amount: amountSat,
             fee: (() => {
               const feePaid = Number(
-                (result as unknown as { feePaid?: unknown }).feePaid ?? 0,
+                (result as { feePaid?: unknown }).feePaid ?? 0,
               );
               return Number.isFinite(feePaid) && feePaid > 0 ? feePaid : null;
             })(),
@@ -1335,10 +1342,12 @@ export const createPaySelectedContact = ({
         fee: null,
         mint: lastMint,
         unit: "sat",
-        error: String(lastError ?? "unknown"),
+        error: getUnknownErrorMessage(lastError, "unknown"),
         contactId: selectedContact.id,
       });
-      setStatus(`${t("payFailed")}: ${String(lastError ?? "unknown")}`);
+      setStatus(
+        `${t("payFailed")}: ${getUnknownErrorMessage(lastError, "unknown")}`,
+      );
     } finally {
       setCashuIsBusy(false);
     }

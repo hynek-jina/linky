@@ -1,13 +1,12 @@
 import { parseCashuToken } from "../../cashu";
-import type { CashuTokenMeta } from "../types/appTypes";
+import type { CashuTokenMeta, CashuTokenRowLike } from "../types/appTypes";
 
-export const extractCashuTokenMeta = (row: {
-  token?: unknown;
-  rawToken?: unknown;
-  mint?: unknown;
-  unit?: unknown;
-  amount?: unknown;
-}): CashuTokenMeta => {
+export const extractCashuTokenMeta = (
+  row: Pick<
+    CashuTokenRowLike,
+    "amount" | "mint" | "rawToken" | "token" | "unit"
+  >,
+): CashuTokenMeta => {
   const tokenText = String(row.token ?? row.rawToken ?? "").trim();
   const storedMint = String(row.mint ?? "").trim();
   const storedUnit = String(row.unit ?? "").trim() || null;

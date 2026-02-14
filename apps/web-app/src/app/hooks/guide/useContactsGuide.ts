@@ -2,11 +2,15 @@ import React from "react";
 import type { ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import type { Route } from "../../../types/route";
-import type { ContactsGuideKey, ContactsGuideStep } from "../../types/appTypes";
+import type {
+  ContactRowLike,
+  ContactsGuideKey,
+  ContactsGuideStep,
+} from "../../types/appTypes";
 
 interface UseContactsGuideParams {
   cashuBalance: number;
-  contacts: readonly Record<string, unknown>[];
+  contacts: readonly ContactRowLike[];
   contactsOnboardingHasPaid: boolean;
   contactsOnboardingHasSentMessage: boolean;
   openMenu: () => void;
@@ -18,6 +22,18 @@ interface ContactsGuideState {
   step: number;
   task: ContactsGuideKey;
 }
+
+const getRouteContactId = (route: Route): ContactId | null => {
+  if (
+    route.kind === "contact" ||
+    route.kind === "contactPay" ||
+    route.kind === "chat"
+  ) {
+    return route.id;
+  }
+
+  return null;
+};
 
 export const useContactsGuide = ({
   cashuBalance,
@@ -56,12 +72,7 @@ export const useContactsGuide = ({
     if (!contactsGuide) return null;
 
     const firstContactId = (contacts[0]?.id ?? null) as ContactId | null;
-    const routeContactId =
-      route.kind === "contact" ||
-      route.kind === "contactPay" ||
-      route.kind === "chat"
-        ? ((route as { id?: unknown }).id as ContactId | null)
-        : null;
+    const routeContactId = getRouteContactId(route);
 
     const targetContactId =
       contactsGuideTargetContactId ?? routeContactId ?? firstContactId;
@@ -69,9 +80,7 @@ export const useContactsGuide = ({
     const ensureRoute = (kind: Route["kind"], contactId?: ContactId | null) => {
       if (route.kind === kind) {
         if (kind === "contact" || kind === "contactPay" || kind === "chat") {
-          const currentId = (route as { id?: unknown }).id as
-            | ContactId
-            | undefined;
+          const currentId = getRouteContactId(route) ?? undefined;
 
           if (contactId && currentId && currentId !== contactId) {
             if (kind === "contact")
@@ -274,12 +283,7 @@ export const useContactsGuide = ({
     if (!contactsGuide || !contactsGuideActiveStep?.step) {
       contactsGuidePrevRouteRef.current = {
         kind: route.kind,
-        id:
-          route.kind === "contact" ||
-          route.kind === "contactPay" ||
-          route.kind === "chat"
-            ? String((route as { id?: unknown }).id ?? "") || null
-            : null,
+        id: getRouteContactId(route) ? String(getRouteContactId(route)) : null,
       };
       return;
     }
@@ -287,12 +291,7 @@ export const useContactsGuide = ({
     const prev = contactsGuidePrevRouteRef.current;
     const current = {
       kind: route.kind,
-      id:
-        route.kind === "contact" ||
-        route.kind === "contactPay" ||
-        route.kind === "chat"
-          ? String((route as { id?: unknown }).id ?? "") || null
-          : null,
+      id: getRouteContactId(route) ? String(getRouteContactId(route)) : null,
     };
 
     contactsGuidePrevRouteRef.current = current;

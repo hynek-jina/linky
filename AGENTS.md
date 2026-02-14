@@ -33,9 +33,13 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - **No backend** - pure client-side PWA with service worker caching
 - `apps/web-app/src/App.tsx` is a thin wrapper that default-exports `app/AppShell`
 - App shell structure lives under `apps/web-app/src/app/`:
-  - `AppShell.tsx` composes app state/actions and provides context
-  - `context/AppContext.tsx` provides `AppProvider`, `useAppState`, `useAppActions`
-  - `hooks/` contains app domain hooks (`useRelayDomain`, `useMintDomain`, `useContactsDomain`, `useMessagesDomain`, `usePaymentsDomain`, `useCashuDomain`, `useProfileAuthDomain`, `useGuideScannerDomain`) plus app-shell extraction hooks (`useAppDataTransfer`, `useContactsNostrPrefetchEffects`, `useMainSwipePageEffects`, `useProfileNpubCashEffects`, `useScannedTextHandler`, `useFeedbackContact`)
+  - `AppShell.tsx` is a thin renderer/auth gate that wires `AppShellContextsProvider` and route content
+  - `useAppShellComposition.tsx` owns AppShell orchestration, hook composition, and route-prop bundle assembly
+  - `AppShellBoundaryMap.md` defines AppShell ownership boundaries and behavior invariants for split work
+  - `context/ContextSplitContract.md` defines target context lanes, typed read hooks, and composition-to-context ownership mapping for the split plan
+  - `context/AppShellContexts.tsx` is the single authenticated shell context transport; it provides shell/route contexts and typed consumer hooks (`useAppShellCore`, `useAppShellActions`, `useAppShellRouteContext`)
+  - `hooks/` contains app domain hooks (`useRelayDomain`, `useMintDomain`, `useContactsDomain`, `useMessagesDomain`, `usePaymentsDomain`, `useCashuDomain`, `useProfileAuthDomain`, `useGuideScannerDomain`) plus app-shell extraction hooks (`useAppDataTransfer`, `useContactsNostrPrefetchEffects`, `useMainSwipePageEffects`, `useProfileNpubCashEffects`, `useScannedTextHandler`, `useFeedbackContact`, `useOwnerScopedStorage`, `usePaidOverlayState`, `useRouteDerivedShellState`)
+  - `hooks/composition/` contains sub-composition slices for shell orchestration concerns (`useProfileAuthComposition`, `useProfilePeopleComposition`, `usePaymentMoneyComposition`, `useRoutingViewComposition`, `useSystemSettingsComposition`)
   - `hooks/contacts/` contains contact-editor and contact-list view helpers (`useContactEditor`, `useVisibleContacts`)
   - `hooks/layout/` contains extracted shell layout/menu/swipe state helpers (`useMainMenuState`, `useMainSwipeNavigation`)
   - `hooks/profile/` contains extracted profile editor and profile metadata sync flows (`useProfileEditor`, `useProfileMetadataSyncEffect`)
@@ -47,7 +51,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
   - `routes/AppRouteContent.tsx` handles route-kind page rendering
   - `routes/MainSwipeContent.tsx` handles contacts/wallet swipe UI
   - `routes/useSystemRouteProps.ts` builds shared system/settings route prop groups
-  - `routes/props/` contains grouped route-prop builders (`buildPeopleRouteProps`, `buildMoneyRouteProps`)
+  - `routes/props/` contains grouped route-prop builders (`buildPeopleRouteProps`, `buildMoneyRouteProps`, `buildMainSwipeRouteProps`)
   - `lib/` contains shared app helpers (Nostr pool, token text parsing, topbar config)
   - `types/appTypes.ts` contains app-local shared types
 
@@ -70,6 +74,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 ## Gotchas
 
 - Evolu requires a Worker polyfill in test environments
+- In this workspace/Bun setup, `bunx --cwd apps/web-app playwright test tests` can resolve incorrectly; run `cd apps/web-app && bunx playwright test tests` instead
 - SQLite WASM files served from `public/sqlite-wasm/` with `cache-control: no-store` in dev
 - The `nsec` private key is in localStorage (`linky.nostr_nsec`) - never log or expose it
 - Vite proxies: `/__mint-quote` for Cashu mint quotes, `/api/lnurlp` for LNURL-pay (CORS workarounds)

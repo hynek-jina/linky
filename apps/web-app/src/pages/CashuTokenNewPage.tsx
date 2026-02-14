@@ -1,9 +1,17 @@
 import type { FC } from "react";
+import type {
+  CashuTokenRowLike,
+  CredoTokenRow,
+  MintUrlInput,
+} from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
 import { CredoTokenPill } from "../components/CredoTokenPill";
 import type { CashuTokenId, CredoTokenId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import { formatInteger } from "../utils/formatting";
+
+type CashuTokenListItem = CashuTokenRowLike & { id: CashuTokenId };
+type CredoTokenListItem = CredoTokenRow & { id: CredoTokenId };
 
 interface CashuTokenNewPageProps {
   cashuBalance: number;
@@ -11,13 +19,15 @@ interface CashuTokenNewPageProps {
   cashuDraft: string;
   cashuDraftRef: React.RefObject<HTMLTextAreaElement | null>;
   cashuIsBusy: boolean;
-  cashuTokens: readonly Record<string, unknown>[];
+  cashuTokens: readonly CashuTokenListItem[];
   checkAllCashuTokensAndDeleteInvalid: () => Promise<void>;
-  credoOweTokens: Record<string, unknown>[];
-  credoPromisedTokens: Record<string, unknown>[];
+  credoOweTokens: CredoTokenListItem[];
+  credoPromisedTokens: CredoTokenListItem[];
   displayUnit: string;
-  getCredoRemainingAmount: (row: Record<string, unknown>) => number;
-  getMintIconUrl: (mint: unknown) => {
+  getCredoRemainingAmount: (
+    row: Pick<CredoTokenRow, "amount" | "settledAmount">,
+  ) => number;
+  getMintIconUrl: (mint: MintUrlInput) => {
     origin: string | null;
     url: string | null;
     host: string | null;
@@ -92,7 +102,7 @@ export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
           <div className="ln-tags">
             {cashuTokens.map((token) => (
               <CashuTokenPill
-                key={token.id as unknown as CashuTokenId}
+                key={token.id}
                 token={token}
                 getMintIconUrl={getMintIconUrl}
                 formatInteger={formatInteger}
@@ -112,7 +122,7 @@ export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
                 onClick={() =>
                   navigateTo({
                     route: "cashuToken",
-                    id: token.id as unknown as CashuTokenId,
+                    id: token.id,
                   })
                 }
                 ariaLabel={t("cashuToken")}
@@ -137,14 +147,14 @@ export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
               const avatar = npub ? nostrPictureByNpub[npub] : null;
               return (
                 <CredoTokenPill
-                  key={token.id as unknown as CredoTokenId}
+                  key={token.id}
                   token={token}
                   amount={amount}
                   avatar={avatar}
                   onClick={() =>
                     navigateTo({
                       route: "credoToken",
-                      id: token.id as unknown as CredoTokenId,
+                      id: token.id,
                     })
                   }
                   ariaLabel={t("credoOwe")}
@@ -171,14 +181,14 @@ export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
               const avatar = npub ? nostrPictureByNpub[npub] : null;
               return (
                 <CredoTokenPill
-                  key={token.id as unknown as CredoTokenId}
+                  key={token.id}
                   token={token}
                   amount={amount}
                   avatar={avatar}
                   onClick={() =>
                     navigateTo({
                       route: "credoToken",
-                      id: token.id as unknown as CredoTokenId,
+                      id: token.id,
                     })
                   }
                   ariaLabel={t("credoPromisedToMe")}

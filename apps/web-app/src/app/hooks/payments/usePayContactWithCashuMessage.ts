@@ -18,9 +18,17 @@ import { getCredoRemainingAmount } from "../../../utils/credo";
 import { previewTokenText } from "../../../utils/formatting";
 import { normalizeMintUrl } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
+import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
-import type { CredoTokenRow, LocalNostrMessage } from "../../types/appTypes";
+import type {
+  CashuTokenRowLike,
+  ContactRowLike,
+  CredoTokenRow,
+  LocalNostrMessage,
+  PaymentLogData,
+  PublishWrappedResult,
+} from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -53,16 +61,9 @@ interface UsePayContactWithCashuMessageParams {
     preferredMint: string,
   ) => Array<{ mint: string; sum: number; tokens: string[] }>;
   cashuBalance: number;
-  cashuTokensWithMeta: readonly {
-    amount?: unknown;
-    id?: unknown;
-    mint?: unknown;
-    rawToken?: unknown;
-    state?: unknown;
-    token?: unknown;
-  }[];
+  cashuTokensWithMeta: readonly CashuTokenRowLike[];
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
-  credoTokensActive: readonly unknown[];
+  credoTokensActive: readonly CredoTokenRow[];
   currentNpub: string | null;
   currentNsec: string | null;
   defaultMintUrl: string | null;
@@ -86,7 +87,7 @@ interface UsePayContactWithCashuMessageParams {
     token: string;
     unit: string;
   }) => void;
-  logPayStep: (step: string, data?: Record<string, unknown>) => void;
+  logPayStep: (step: string, data?: PaymentLogData) => void;
   logPaymentEvent: (event: {
     amount?: number | null;
     contactId?: ContactId | null;
@@ -104,7 +105,7 @@ interface UsePayContactWithCashuMessageParams {
     relays: string[],
     wrapForMe: NostrToolsEvent,
     wrapForContact: NostrToolsEvent,
-  ) => Promise<{ anySuccess: boolean; error: unknown | null }>;
+  ) => Promise<PublishWrappedResult>;
   pushToast: (message: string) => void;
   setContactsOnboardingHasPaid: React.Dispatch<React.SetStateAction<boolean>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
@@ -115,14 +116,7 @@ interface UsePayContactWithCashuMessageParams {
   updateLocalNostrMessage: UpdateLocalNostrMessage;
 }
 
-export const usePayContactWithCashuMessage = <
-  TContact extends {
-    id?: unknown;
-    lnAddress?: unknown;
-    name?: unknown;
-    npub?: unknown;
-  },
->({
+export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   allowPromisesEnabled,
   appendLocalNostrMessage,
   applyCredoSettlement,
@@ -282,7 +276,7 @@ export const usePayContactWithCashuMessage = <
           const tokenText = String(row.token ?? row.rawToken ?? "").trim();
           if (!tokenText) continue;
 
-          const amount = Number((row.amount ?? 0) as unknown as number) || 0;
+          const amount = Number(row.amount ?? 0) || 0;
           const entry = mintGroups.get(mint) ?? { tokens: [], sum: 0 };
           entry.tokens.push(tokenText);
           entry.sum += amount;
@@ -397,22 +391,26 @@ export const usePayContactWithCashuMessage = <
             fee: null,
             mint: lastMint,
             unit: "sat",
-            error: String(lastError ?? "insufficient funds"),
+            error: getUnknownErrorMessage(lastError, "insufficient funds"),
             contactId: contact.id as ContactId,
           });
           if (notify) {
             setStatus(
               lastError
-                ? `${t("payFailed")}: ${String(lastError)}`
+                ? `${t("payFailed")}: ${getUnknownErrorMessage(lastError, "unknown")}`
                 : t("payInsufficient"),
             );
           }
-          return { ok: false, queued: false, error: String(lastError ?? "") };
+          return {
+            ok: false,
+            queued: false,
+            error: getUnknownErrorMessage(lastError, ""),
+          };
         }
       }
 
       const settlementPlans: Array<{
-        row: unknown;
+        row: CredoTokenRow;
         amount: number;
       }> = [];
 
@@ -609,13 +607,13 @@ export const usePayContactWithCashuMessage = <
             const firstError = publishOutcome.error;
             logPayStep("publish-failed", {
               clientId,
-              error: String(firstError ?? "publish failed"),
+              error: getUnknownErrorMessage(firstError, "publish failed"),
               isCredoMessage,
             });
             hasPendingMessages = true;
             if (notify) {
               pushToast(
-                `${t("payFailed")}: ${String(firstError ?? "publish failed")}`,
+                `${t("payFailed")}: ${getUnknownErrorMessage(firstError, "publish failed")}`,
               );
             }
             continue;
@@ -720,19 +718,26 @@ export const usePayContactWithCashuMessage = <
           fee: null,
           mint: lastMint,
           unit: "sat",
-          error: String(e ?? "unknown"),
+          error: getUnknownErrorMessage(e, "unknown"),
           contactId: contact.id as ContactId,
         });
         if (notify) {
-          setStatus(`${t("payFailed")}: ${String(e ?? "unknown")}`);
+          setStatus(
+            `${t("payFailed")}: ${getUnknownErrorMessage(e, "unknown")}`,
+          );
         }
-        return { ok: false, queued: false, error: String(e ?? "unknown") };
+        return {
+          ok: false,
+          queued: false,
+          error: getUnknownErrorMessage(e, "unknown"),
+        };
       }
     },
     [
       allowPromisesEnabled,
       cashuBalance,
       cashuTokensWithMeta,
+      chatSeenWrapIdsRef,
       currentNpub,
       currentNsec,
       displayUnit,
@@ -744,6 +749,7 @@ export const usePayContactWithCashuMessage = <
       logPayStep,
       logPaymentEvent,
       pushToast,
+      setStatus,
       showPaidOverlay,
       t,
       totalCredoOutstandingOut,

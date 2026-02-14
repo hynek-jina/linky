@@ -1,6 +1,10 @@
 import type { OwnerId } from "@evolu/common";
 import React from "react";
-import type { LocalMintInfoRow } from "../types/appTypes";
+import type {
+  CashuTokenRowLike,
+  LocalMintInfoRow,
+  MintUrlInput,
+} from "../types/appTypes";
 import {
   getMintDuckDuckGoIcon,
   getMintIconOverride,
@@ -12,13 +16,13 @@ import { useMintInfoStore } from "./mint/useMintInfoStore";
 interface UseMintDomainParams {
   appOwnerId: OwnerId | null;
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
-  cashuTokensAll: readonly Record<string, unknown>[];
+  cashuTokensAll: readonly CashuTokenRowLike[];
   defaultMintUrl: string | null;
-  rememberSeenMint: (mintUrl: unknown) => void;
+  rememberSeenMint: (mintUrl: MintUrlInput) => void;
 }
 
 interface UseMintDomainResult {
-  getMintIconUrl: (mint: unknown) => {
+  getMintIconUrl: (mint: MintUrlInput) => {
     failed: boolean;
     host: string | null;
     origin: string | null;
@@ -67,13 +71,11 @@ export const useMintDomain = ({
   });
 
   const getMintInfoIconUrl = React.useCallback(
-    (mint: unknown): string | null => {
+    (mint: MintUrlInput): string | null => {
       const raw = String(mint ?? "").trim();
       const normalized = normalizeMintUrl(raw);
       if (!normalized) return null;
-      const row = mintInfoByUrl.get(normalized) as
-        | (Record<string, unknown> & { infoJson?: unknown })
-        | undefined;
+      const row = mintInfoByUrl.get(normalized);
       const infoText = String(row?.infoJson ?? "").trim();
       if (!infoText) return null;
       let baseUrl: string | null = null;
@@ -128,7 +130,7 @@ export const useMintDomain = ({
 
   const getMintIconUrl = React.useCallback(
     (
-      mint: unknown,
+      mint: MintUrlInput,
     ): {
       origin: string | null;
       url: string | null;

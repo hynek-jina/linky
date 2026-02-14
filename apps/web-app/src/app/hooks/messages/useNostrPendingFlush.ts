@@ -1,8 +1,13 @@
 import React from "react";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
-import type { LocalNostrMessage } from "../../types/appTypes";
+import type {
+  ContactIdentityRowLike,
+  LocalNostrMessage,
+  PublishWrappedResult,
+} from "../../types/appTypes";
 
 type UpdateLocalNostrMessage = (
   id: string,
@@ -14,9 +19,7 @@ type UpdateLocalNostrMessage = (
   >,
 ) => void;
 
-interface UseNostrPendingFlushParams<
-  TContact extends { id?: unknown; npub?: unknown },
-> {
+interface UseNostrPendingFlushParams<TContact extends ContactIdentityRowLike> {
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   contacts: readonly TContact[];
   currentNsec: string | null;
@@ -26,13 +29,11 @@ interface UseNostrPendingFlushParams<
     relays: string[],
     wrapForMe: NostrToolsEvent,
     wrapForContact: NostrToolsEvent,
-  ) => Promise<{ anySuccess: boolean; error: unknown | null }>;
+  ) => Promise<PublishWrappedResult>;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
 }
 
-export const useNostrPendingFlush = <
-  TContact extends { id?: unknown; npub?: unknown },
->({
+export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
   chatSeenWrapIdsRef,
   contacts,
   currentNsec,
@@ -63,8 +64,12 @@ export const useNostrPendingFlush = <
         const { wrapEvent } = await import("nostr-tools/nip59");
 
         const decodedMe = nip19.decode(currentNsec);
-        if (decodedMe.type !== "nsec") return;
-        const privBytes = decodedMe.data as Uint8Array;
+        if (
+          decodedMe.type !== "nsec" ||
+          !(decodedMe.data instanceof Uint8Array)
+        )
+          return;
+        const privBytes = decodedMe.data;
         const myPubHex = getPublicKey(privBytes);
 
         const pool = await getSharedAppNostrPool();
@@ -74,12 +79,23 @@ export const useNostrPendingFlush = <
             (candidate) =>
               String(candidate.id ?? "") === String(message.contactId ?? ""),
           );
-          const contactNpub = String(contact?.npub ?? "").trim();
+          const contactNpub = normalizeNpubIdentifier(contact?.npub);
           if (!contactNpub) continue;
 
-          const decodedContact = nip19.decode(contactNpub);
-          if (decodedContact.type !== "npub") continue;
-          const contactPubHex = decodedContact.data as string;
+          let decodedContact: ReturnType<typeof nip19.decode> | null = null;
+          try {
+            decodedContact = nip19.decode(contactNpub);
+          } catch {
+            decodedContact = null;
+          }
+          if (
+            !decodedContact ||
+            decodedContact.type !== "npub" ||
+            typeof decodedContact.data !== "string"
+          ) {
+            continue;
+          }
+          const contactPubHex = decodedContact.data;
 
           const tags: string[][] = [
             ["p", contactPubHex],

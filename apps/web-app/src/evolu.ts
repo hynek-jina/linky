@@ -4,6 +4,7 @@ import { createUseEvolu, EvoluProvider } from "@evolu/react";
 import { evoluReactWebDeps } from "@evolu/react-web";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
+import type { JsonValue } from "./types/json";
 import {
   safeLocalStorageGetJson,
   safeLocalStorageSetJson,
@@ -58,7 +59,119 @@ const generateDbNameFromMnemonic = (mnemonic: string): string => {
   return `linky-${hashHex}`;
 };
 
-export const normalizeEvoluServerUrl = (value: unknown): string | null => {
+type Stringifiable =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | { toString(): string }
+  | null
+  | undefined;
+
+type EvoluServerUrlInput = Stringifiable;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isJsonValue = (value: unknown): value is JsonValue => {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  if (!isRecord(value)) return false;
+  return Object.values(value).every(isJsonValue);
+};
+
+const toJsonValue = (value: unknown): JsonValue => {
+  if (isJsonValue(value)) return value;
+  if (value === undefined) return null;
+  return String(value);
+};
+
+type EvoluQueryRow = Record<string, unknown>;
+
+const readCount = (rows: ReadonlyArray<EvoluQueryRow>): number => {
+  const first = rows[0];
+  if (!first) return 0;
+  return Number(first.count ?? 0);
+};
+
+const toByteArray = (value: unknown): number[] => {
+  if (value instanceof Uint8Array) return Array.from(value);
+  if (!isRecord(value)) return [];
+  const entries = Object.values(value);
+  if (entries.some((entry) => typeof entry !== "number")) return [];
+  const out: number[] = [];
+  for (const entry of entries) {
+    if (typeof entry === "number") out.push(entry);
+  }
+  return out;
+};
+
+const toJsonRows = (
+  rows: ReadonlyArray<EvoluQueryRow>,
+): Record<string, JsonValue>[] =>
+  rows.flatMap((row) => {
+    const normalized: Record<string, JsonValue> = {};
+    for (const [key, value] of Object.entries(row)) {
+      normalized[key] = toJsonValue(value);
+    }
+    return [normalized];
+  });
+
+interface EvoluSelectBuilder {
+  select(cb: (eb: EvoluExpressionBuilder) => unknown): EvoluSelectBuilder;
+  selectAll(): EvoluSelectBuilder;
+  orderBy(column: string, direction: string): EvoluSelectBuilder;
+  limit(n: number): EvoluSelectBuilder;
+  offset(n: number): EvoluSelectBuilder;
+}
+
+interface EvoluExpressionBuilder {
+  fn: { countAll(): { as(name: string): unknown } };
+}
+
+interface EvoluQueryBuilder {
+  selectFrom(table: string): EvoluSelectBuilder;
+}
+
+const createUntypedQuery = (
+  instance: EvoluInstance,
+  cb: (db: EvoluQueryBuilder) => EvoluSelectBuilder,
+): unknown => {
+  const fn = Reflect.get(Object(instance), "createQuery");
+  if (typeof fn !== "function") return null;
+  return fn.call(instance, cb);
+};
+
+const loadUntypedQueryRows = async (
+  instance: EvoluInstance,
+  query: unknown,
+): Promise<ReadonlyArray<EvoluQueryRow>> => {
+  const fn = Reflect.get(Object(instance), "loadQuery");
+  if (typeof fn !== "function") return [];
+  try {
+    const rows = await fn.call(instance, query);
+    if (!Array.isArray(rows)) return [];
+    const result: EvoluQueryRow[] = [];
+    for (const row of rows) {
+      if (isRecord(row)) result.push(row);
+    }
+    return result;
+  } catch {
+    return [];
+  }
+};
+
+export const normalizeEvoluServerUrl = (
+  value: EvoluServerUrlInput,
+): string | null => {
   const raw = String(value ?? "")
     .trim()
     .replace(/\/+$/, "");
@@ -89,7 +202,7 @@ export const formatBytes = (bytes: number): string => {
 };
 
 const normalizeUrlList = (
-  urls: ReadonlyArray<unknown>,
+  urls: ReadonlyArray<EvoluServerUrlInput>,
 ): ReadonlyArray<string> => {
   const combined = urls
     .map(normalizeEvoluServerUrl)
@@ -108,12 +221,11 @@ const normalizeUrlList = (
 };
 
 export const getEvoluDisabledServerUrls = (): ReadonlyArray<string> => {
-  const stored = safeLocalStorageGetJson<unknown>(
+  const stored = safeLocalStorageGetJson<ReadonlyArray<EvoluServerUrlInput>>(
     EVOLU_SERVERS_DISABLED_STORAGE_KEY,
     [],
   );
-  const arr = Array.isArray(stored) ? stored : [];
-  return normalizeUrlList(arr);
+  return normalizeUrlList(stored);
 };
 
 export const isEvoluServerDisabled = (url: string): boolean => {
@@ -144,14 +256,13 @@ export const toggleEvoluServerDisabled = (url: string): boolean => {
 };
 
 export const getEvoluConfiguredServerUrls = (): ReadonlyArray<string> => {
-  const stored = safeLocalStorageGetJson<unknown>(
+  const stored = safeLocalStorageGetJson<ReadonlyArray<EvoluServerUrlInput>>(
     EVOLU_SERVERS_STORAGE_KEY,
     [],
   );
-  const arr = Array.isArray(stored) ? stored : [];
 
   const defaultRemoved = Boolean(
-    safeLocalStorageGetJson<unknown>(
+    safeLocalStorageGetJson<boolean>(
       EVOLU_SERVERS_DEFAULT_REMOVED_STORAGE_KEY,
       false,
     ),
@@ -159,7 +270,7 @@ export const getEvoluConfiguredServerUrls = (): ReadonlyArray<string> => {
 
   const combined = [
     ...(defaultRemoved ? [] : DEFAULT_EVOLU_SERVER_URLS),
-    ...arr,
+    ...stored,
   ];
 
   const unique = normalizeUrlList(combined);
@@ -423,13 +534,13 @@ export const createEvoluForUser = (mnemonic: string | null) => {
     ? validatedName.value
     : SimpleName.orThrow("linky-default");
 
-  const externalAppOwner = mnemonic
-    ? (Evolu.createAppOwner(
-        Evolu.mnemonicToOwnerSecret(
-          mnemonic as unknown as Evolu.Mnemonic,
-        ) as unknown as Evolu.OwnerSecret,
-      ) as Evolu.AppOwner)
-    : null;
+  const externalAppOwner = (() => {
+    if (!mnemonic) return null;
+    const mnemonicResult = Evolu.Mnemonic.fromUnknown(mnemonic);
+    if (!mnemonicResult.ok) return null;
+    const ownerSecret = Evolu.mnemonicToOwnerSecret(mnemonicResult.value);
+    return Evolu.createAppOwner(ownerSecret);
+  })();
 
   return createEvolu(evoluReactWebDeps)(Schema, {
     name: finalName,
@@ -481,7 +592,7 @@ export const useEvoluSyncOwner = (enabled: boolean): Evolu.SyncOwner | null => {
     void getEvolu()
       .appOwner.then((owner) => {
         if (cancelled) return;
-        setSyncOwner(owner as unknown as Evolu.SyncOwner);
+        setSyncOwner(owner);
       })
       .catch(() => {
         if (cancelled) return;
@@ -497,16 +608,24 @@ export const useEvoluSyncOwner = (enabled: boolean): Evolu.SyncOwner | null => {
   return enabled ? syncOwner : null;
 };
 
+type EvoluLastError = Error | string | null;
+
+const toEvoluLastError = (value: unknown): EvoluLastError => {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Error) return value;
+  return String(value);
+};
+
 export const useEvoluLastError = (opts?: {
   logToConsole?: boolean;
-}): unknown => {
+}): EvoluLastError => {
   const logToConsole = opts?.logToConsole ?? false;
-  const [lastError, setLastError] = useState<unknown>(null);
+  const [lastError, setLastError] = useState<EvoluLastError>(null);
 
   useEffect(() => {
     const instance = getEvolu();
     const unsub = instance.subscribeError(() => {
-      const err = instance.getError();
+      const err = toEvoluLastError(instance.getError());
       setLastError(err);
       if (logToConsole && err) console.log("[linky][evolu] error", err);
     });
@@ -522,21 +641,6 @@ export const useEvoluLastError = (opts?: {
 
   return lastError;
 };
-
-/** Minimal query builder interfaces for Evolu's internal API. */
-interface EvoluSelectBuilder {
-  select(cb: (eb: EvoluEB) => unknown): EvoluSelectBuilder;
-  selectAll(): EvoluSelectBuilder;
-  orderBy(column: string, direction: string): EvoluSelectBuilder;
-  limit(n: number): EvoluSelectBuilder;
-  offset(n: number): EvoluSelectBuilder;
-}
-interface EvoluEB {
-  fn: { countAll(): { as(name: string): unknown } };
-}
-type EvoluUntypedCreateQuery = (
-  cb: (db: { selectFrom(table: string): EvoluSelectBuilder }) => unknown,
-) => Parameters<ReturnType<typeof getEvolu>["loadQuery"]>[0];
 
 export const getEvoluDatabaseInfo = async (): Promise<{
   bytes: number;
@@ -555,8 +659,6 @@ export const getEvoluDatabaseInfo = async (): Promise<{
   ] as const;
 
   const instance = getEvolu();
-  const createUntypedQuery =
-    instance.createQuery as unknown as EvoluUntypedCreateQuery;
 
   // Get SQLite file size from OPFS for current user only
   const dbBytesPromise = (async () => {
@@ -615,13 +717,11 @@ export const getEvoluDatabaseInfo = async (): Promise<{
     const out: Record<string, number | null> = {};
     for (const table of tables) {
       try {
-        const q = createUntypedQuery((db) =>
-          db
-            .selectFrom(table)
-            .select((eb: EvoluEB) => eb.fn.countAll().as("count")),
+        const q = createUntypedQuery(instance, (db) =>
+          db.selectFrom(table).select((eb) => eb.fn.countAll().as("count")),
         );
-        const rows = await instance.loadQuery(q);
-        out[table] = Number((rows?.[0] as Record<string, unknown>)?.count ?? 0);
+        const rows = await loadUntypedQueryRows(instance, q);
+        out[table] = readCount(rows);
       } catch {
         out[table] = null;
       }
@@ -632,13 +732,13 @@ export const getEvoluDatabaseInfo = async (): Promise<{
   // Count history entries (time travel mutations)
   const historyCountPromise = (async () => {
     try {
-      const q = createUntypedQuery((db) =>
+      const q = createUntypedQuery(instance, (db) =>
         db
           .selectFrom("evolu_history")
-          .select((eb: EvoluEB) => eb.fn.countAll().as("count")),
+          .select((eb) => eb.fn.countAll().as("count")),
       );
-      const rows = await instance.loadQuery(q);
-      return Number((rows?.[0] as Record<string, unknown>)?.count ?? 0);
+      const rows = await loadUntypedQueryRows(instance, q);
+      return readCount(rows);
     } catch {
       return null;
     }
@@ -655,8 +755,7 @@ export const getEvoluDatabaseInfo = async (): Promise<{
 
 // Helper to convert Uint8Array to base64
 const uint8ArrayToBase64 = (bytes: unknown): string => {
-  if (!bytes || typeof bytes !== "object") return "";
-  const arr = Object.values(bytes) as number[];
+  const arr = toByteArray(bytes);
   if (arr.length === 0) return "";
   try {
     const binString = arr.map((x) => String.fromCharCode(x)).join("");
@@ -671,8 +770,7 @@ const uint8ArrayToBase64 = (bytes: unknown): string => {
 // First 8 bytes: [millis (48 bits) + counter (16 bits)] in big-endian
 // Reference: https://evolu.dev/docs/how-evolu-works
 const timestampToDate = (timestampBytes: unknown): string => {
-  if (!timestampBytes || typeof timestampBytes !== "object") return "";
-  const arr = Object.values(timestampBytes) as number[];
+  const arr = toByteArray(timestampBytes);
   if (arr.length < 8) return "";
   try {
     // Convert bytes to milliseconds since epoch
@@ -695,9 +793,9 @@ export interface EvoluHistoryRow {
   table: string;
   column: string;
   id: string;
-  value: unknown;
+  value: JsonValue;
   timestamp: string;
-  [key: string]: unknown;
+  [key: string]: JsonValue;
 }
 
 // Load history data from evolu_history table with pagination support
@@ -706,10 +804,8 @@ export const loadEvoluHistoryData = async (
   offset = 0,
 ): Promise<EvoluHistoryRow[]> => {
   const instance = getEvolu();
-  const createUntypedQuery =
-    instance.createQuery as unknown as EvoluUntypedCreateQuery;
   try {
-    const q = createUntypedQuery((db) =>
+    const q = createUntypedQuery(instance, (db) =>
       db
         .selectFrom("evolu_history")
         .selectAll()
@@ -717,15 +813,15 @@ export const loadEvoluHistoryData = async (
         .limit(limit)
         .offset(offset),
     );
-    const rows = await instance.loadQuery(q);
-    const rawRows = (rows as Record<string, unknown>[]) ?? [];
+    const rows = await loadUntypedQueryRows(instance, q);
+    const rawRows = toJsonRows(rows);
     const formattedRows: EvoluHistoryRow[] = rawRows.map((row) => ({
       ...row,
       table: String(row.table ?? ""),
       column: String(row.column ?? ""),
       ownerId: uint8ArrayToBase64(row.ownerId),
       id: uint8ArrayToBase64(row.id),
-      value: row.value,
+      value: toJsonValue(row.value),
       timestamp: timestampToDate(row.timestamp),
     }));
     return formattedRows;
@@ -737,7 +833,7 @@ export const loadEvoluHistoryData = async (
 
 // Load current data from all tables
 export const loadEvoluCurrentData = async (): Promise<
-  Record<string, Record<string, unknown>[]>
+  Record<string, Record<string, JsonValue>[]>
 > => {
   const tables = [
     "contact",
@@ -751,17 +847,15 @@ export const loadEvoluCurrentData = async (): Promise<
   ] as const;
 
   const instance = getEvolu();
-  const createUntypedQuery =
-    instance.createQuery as unknown as EvoluUntypedCreateQuery;
-  const result: Record<string, Record<string, unknown>[]> = {};
+  const result: Record<string, Record<string, JsonValue>[]> = {};
 
   for (const table of tables) {
     try {
-      const q = createUntypedQuery((db) =>
+      const q = createUntypedQuery(instance, (db) =>
         db.selectFrom(table).selectAll().limit(100),
       );
-      const rows = await instance.loadQuery(q);
-      result[table] = (rows as Record<string, unknown>[]) ?? [];
+      const rows = await loadUntypedQueryRows(instance, q);
+      result[table] = toJsonRows(rows);
     } catch {
       result[table] = [];
     }

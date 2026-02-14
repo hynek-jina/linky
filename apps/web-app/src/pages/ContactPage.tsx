@@ -2,6 +2,7 @@ import type { FC } from "react";
 import type { ContactId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import { getInitials } from "../utils/formatting";
+import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
 interface Contact {
   id: ContactId;
@@ -45,7 +46,7 @@ export const ContactPage: FC<ContactPageProps> = ({
     );
   }
 
-  const npub = String(selectedContact.npub ?? "").trim();
+  const npub = normalizeNpubIdentifier(selectedContact.npub);
   const url = npub ? nostrPictureByNpub[npub] : null;
   const ln = String(selectedContact.lnAddress ?? "").trim();
   const group = String(selectedContact.groupName ?? "").trim();

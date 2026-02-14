@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
+import type { loadEvoluCurrentData } from "../evolu";
 
 interface EvoluCurrentDataPageProps {
-  loadCurrentData: () => Promise<Record<string, Record<string, unknown>[]>>;
+  loadCurrentData: typeof loadEvoluCurrentData;
   t: (key: string) => string;
 }
 
@@ -10,7 +11,7 @@ export function EvoluCurrentDataPage({
   t,
 }: EvoluCurrentDataPageProps): React.ReactElement {
   const [currentData, setCurrentData] = useState<
-    Record<string, Record<string, unknown>[]>
+    Awaited<ReturnType<typeof loadEvoluCurrentData>>
   >({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);

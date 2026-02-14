@@ -4,14 +4,9 @@ import {
   getCashuDeterministicSeedFromStorage,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
+import type { Proof, ProofState, SendResponse } from "@cashu/cashu-ts";
 import { getCashuLib } from "./utils/cashuLib";
-
-type Proof = {
-  C: string;
-  amount: number;
-  id: string;
-  secret: string;
-};
+import { getUnknownErrorMessage } from "./utils/unknown";
 
 const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
   proofs.reduce((sum, proof) => sum + proof.amount, 0);
@@ -86,7 +81,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
       sendAmount,
       remainingAmount: 0,
       remainingToken: null,
-      error: String(e ?? "decode failed"),
+      error: getUnknownErrorMessage(e, "decode failed"),
     };
   }
 
@@ -96,7 +91,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
   });
 
   const isOutputsAlreadySignedError = (e: unknown): boolean => {
-    const m = String(e ?? "").toLowerCase();
+    const m = getUnknownErrorMessage(e, "").toLowerCase();
     return (
       m.includes("outputs have already been signed") ||
       m.includes("already been signed before") ||
@@ -114,11 +109,9 @@ export const createSendTokenWithTokensAtMint = async (args: {
     try {
       // Ignore already-spent proofs so stale local token rows do not block send.
       const states = await wallet.checkProofsStates(allProofs);
-      const asArray = Array.isArray(states) ? states : [];
+      const asArray: ProofState[] = Array.isArray(states) ? states : [];
       const filtered = allProofs.filter((_, idx) => {
-        const state = String(
-          (asArray[idx] as { state?: unknown } | undefined)?.state ?? "",
-        ).trim();
+        const state = String(asArray[idx]?.state ?? "").trim();
         return state === "UNSPENT";
       });
       if (filtered.length > 0) {
@@ -155,7 +148,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
               await wallet.swap(sendAmount, spendableProofs, { counter });
 
             let counter = counter0;
-            let swapped: { keep?: unknown[]; send?: unknown[] } | undefined;
+            let swapped: SendResponse | null = null;
             let lastError: unknown;
             for (let attempt = 0; attempt < 5; attempt += 1) {
               try {
@@ -181,12 +174,8 @@ export const createSendTokenWithTokensAtMint = async (args: {
 
             if (!swapped) throw lastError ?? new Error("swap failed");
 
-            const keepLen = Array.isArray(swapped.keep)
-              ? swapped.keep.length
-              : 0;
-            const sendLen = Array.isArray(swapped.send)
-              ? swapped.send.length
-              : 0;
+            const keepLen = swapped.keep.length;
+            const sendLen = swapped.send.length;
             bumpCashuDeterministicCounter({
               mintUrl: mint,
               unit: walletUnit,
@@ -194,7 +183,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
               used: keepLen + sendLen,
             });
 
-            return swapped as { keep: Proof[]; send: Proof[] };
+            return swapped;
           },
         )
       : wallet.swap(sendAmount, spendableProofs));
@@ -246,16 +235,16 @@ export const createSendTokenWithTokensAtMint = async (args: {
         : null;
 
     try {
-      const denomSummary = (proofs: Array<{ amount?: number }>) =>
+      const denomSummary = (proofs: Proof[]) =>
         proofs.reduce<Record<string, number>>((acc, p) => {
-          const amt = Number(p?.amount ?? 0) || 0;
+          const amt = Number(p.amount ?? 0) || 0;
           if (amt > 0) acc[String(amt)] = (acc[String(amt)] ?? 0) + 1;
           return acc;
         }, {});
       console.log("[linky][pay] swap-denoms", {
         mint,
-        send: denomSummary(sendProofs as Array<{ amount?: number }>),
-        keep: denomSummary(remainingProofs as Array<{ amount?: number }>),
+        send: denomSummary(sendProofs),
+        keep: denomSummary(remainingProofs),
       });
     } catch {
       // ignore logging errors
@@ -278,7 +267,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
       sendAmount,
       remainingAmount: getProofAmountSum(spendableProofs),
       remainingToken: null,
-      error: String(e ?? "swap failed"),
+      error: getUnknownErrorMessage(e, "swap failed"),
     };
   }
 };

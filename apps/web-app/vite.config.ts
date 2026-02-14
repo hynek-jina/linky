@@ -15,12 +15,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const sqliteWasmPath = path.join(__dirname, "public/sqlite-wasm/sqlite3.wasm");
 
+const isUnknownRecord = (value: unknown): value is Record<string, unknown> => {
+  return value !== null && typeof value === "object";
+};
+
 const packageJsonPath = path.join(__dirname, "package.json");
 const appVersion = (() => {
   try {
     const raw = readFileSync(packageJsonPath, "utf8");
-    const pkg = JSON.parse(raw) as { version?: unknown };
-    return String(pkg.version ?? "").trim() || "0.0.0";
+    const pkg = JSON.parse(raw);
+    if (!isUnknownRecord(pkg)) return "0.0.0";
+    const version = pkg.version;
+    return typeof version === "string" && version.trim()
+      ? version.trim()
+      : "0.0.0";
   } catch {
     return "0.0.0";
   }

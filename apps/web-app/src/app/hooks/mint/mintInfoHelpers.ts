@@ -5,17 +5,21 @@ import {
   MAIN_MINT_URL,
   normalizeMintUrl,
 } from "../../../utils/mint";
-import type { LocalMintInfoRow } from "../../types/appTypes";
+import type {
+  CashuTokenRowLike,
+  LocalMintInfoRow,
+  OptionalText,
+} from "../../types/appTypes";
 
 interface MintInfoRowLike {
-  feesJson?: unknown;
-  firstSeenAtSec?: unknown;
-  id?: unknown;
-  infoJson?: unknown;
-  isDeleted?: unknown;
-  lastSeenAtSec?: unknown;
-  supportsMpp?: unknown;
-  url?: unknown;
+  feesJson?: LocalMintInfoRow["feesJson"];
+  firstSeenAtSec?: LocalMintInfoRow["firstSeenAtSec"];
+  id?: string | null;
+  infoJson?: LocalMintInfoRow["infoJson"];
+  isDeleted?: LocalMintInfoRow["isDeleted"];
+  lastSeenAtSec?: LocalMintInfoRow["lastSeenAtSec"];
+  supportsMpp?: LocalMintInfoRow["supportsMpp"];
+  url?: OptionalText;
 }
 
 export const isMintDeletedRow = (row: MintInfoRowLike): boolean =>
@@ -24,7 +28,7 @@ export const isMintDeletedRow = (row: MintInfoRowLike): boolean =>
 const getLastSeenAtSec = (row: MintInfoRowLike): number =>
   Number(row.lastSeenAtSec ?? 0) || 0;
 
-const hasJsonText = (value: unknown): boolean =>
+const hasJsonText = (value: OptionalText): boolean =>
   Boolean(String(value ?? "").trim().length);
 
 const getMintRowScore = (row: MintInfoRowLike): number => {
@@ -108,7 +112,7 @@ export const getMintInfoByUrlMap = (
 };
 
 export const getEncounteredMintUrls = (
-  cashuTokensAll: readonly Record<string, unknown>[],
+  cashuTokensAll: readonly CashuTokenRowLike[],
 ): string[] => {
   const set = new Set<string>();
 
@@ -164,7 +168,9 @@ export const parseMintInfoPayload = (
     (info as { fees?: unknown }).fees ??
     (info as { fee?: unknown }).fee ??
     null;
-  const ppk = extractPpk(feesRaw) ?? extractPpk(info);
+  const ppk =
+    extractPpk(feesRaw as Parameters<typeof extractPpk>[0]) ??
+    extractPpk(info as Parameters<typeof extractPpk>[0]);
   const fees = ppk !== null ? { ppk, raw: feesRaw } : feesRaw;
 
   return {

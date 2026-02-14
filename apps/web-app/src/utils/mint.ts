@@ -13,7 +13,52 @@ export const CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY =
 
 export const CASHU_SEEN_MINTS_STORAGE_KEY = "linky.cashu.seenMints.v1";
 
-export const normalizeMintUrl = (value: unknown): string => {
+interface MintStructuredValue {
+  toString(): string;
+}
+
+type MintStringInput =
+  | bigint
+  | boolean
+  | number
+  | MintStructuredValue
+  | string
+  | symbol
+  | null
+  | undefined;
+
+type PpkSearchPrimitive =
+  | bigint
+  | boolean
+  | number
+  | MintStructuredValue
+  | string
+  | symbol
+  | null
+  | undefined;
+
+interface PpkSearchRecord {
+  [key: string]: PpkSearchValue;
+}
+
+type PpkSearchValue = PpkSearchPrimitive | PpkSearchRecord | PpkSearchValue[];
+
+const isPpkSearchBranch = (
+  value: PpkSearchValue,
+): value is PpkSearchRecord | PpkSearchValue[] => {
+  return typeof value === "object" && value !== null;
+};
+
+const getPpkEntries = (
+  value: PpkSearchRecord | PpkSearchValue[],
+): Array<[string, PpkSearchValue]> => {
+  if (Array.isArray(value)) {
+    return value.map((inner, index) => [String(index), inner]);
+  }
+  return Object.entries(value);
+};
+
+export const normalizeMintUrl = (value: MintStringInput): string => {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
   const stripped = raw.replace(/\/+$/, "");
@@ -37,7 +82,7 @@ export const normalizeMintUrl = (value: unknown): string => {
 };
 
 export const getMintOriginAndHost = (
-  mint: unknown,
+  mint: MintStringInput,
 ): { origin: string | null; host: string | null } => {
   const raw = String(mint ?? "").trim();
   if (!raw) return { origin: null, host: null };
@@ -55,26 +100,28 @@ export const getMintOriginAndHost = (
   }
 };
 
-export const extractPpk = (value: unknown): number | null => {
-  const seen = new Set<unknown>();
-  const queue: Array<{ v: unknown; depth: number }> = [{ v: value, depth: 0 }];
+export const extractPpk = (value: PpkSearchValue): number | null => {
+  const seen = new Set<PpkSearchRecord | PpkSearchValue[]>();
+  const queue: Array<{ depth: number; value: PpkSearchValue }> = [
+    { value, depth: 0 },
+  ];
+
   while (queue.length) {
     const item = queue.shift();
     if (!item) break;
-    const { v, depth } = item;
-    if (!v || typeof v !== "object") continue;
-    if (seen.has(v)) continue;
-    seen.add(v);
+    const { depth, value: current } = item;
+    if (!isPpkSearchBranch(current)) continue;
+    if (seen.has(current)) continue;
+    seen.add(current);
 
-    const rec = v as Record<string, unknown>;
-    for (const [k, inner] of Object.entries(rec)) {
-      if (k.toLowerCase() === "ppk") {
+    for (const [key, inner] of getPpkEntries(current)) {
+      if (key.toLowerCase() === "ppk") {
         if (typeof inner === "number" && Number.isFinite(inner)) return inner;
         const num = Number(String(inner ?? "").trim());
         if (Number.isFinite(num)) return num;
       }
-      if (depth < 3 && inner && typeof inner === "object") {
-        queue.push({ v: inner, depth: depth + 1 });
+      if (depth < 3 && isPpkSearchBranch(inner)) {
+        queue.push({ value: inner, depth: depth + 1 });
       }
     }
   }

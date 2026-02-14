@@ -5,6 +5,20 @@ import {
   UNIT_TOGGLE_STORAGE_KEY,
 } from "./constants";
 
+interface StorageStructuredValue {
+  toString(): string;
+}
+
+type StoragePayload =
+  | bigint
+  | boolean
+  | number
+  | StorageStructuredValue
+  | string
+  | symbol
+  | null
+  | undefined;
+
 export const safeLocalStorageGet = (key: string): string | null => {
   try {
     return localStorage.getItem(key);
@@ -29,7 +43,10 @@ export const safeLocalStorageRemove = (key: string): void => {
   }
 };
 
-export const safeLocalStorageGetJson = <T>(key: string, fallback: T): T => {
+export const safeLocalStorageGetJson = <T extends StoragePayload>(
+  key: string,
+  fallback: T,
+): T => {
   const raw = safeLocalStorageGet(key);
   if (!raw) return fallback;
   try {
@@ -39,7 +56,10 @@ export const safeLocalStorageGetJson = <T>(key: string, fallback: T): T => {
   }
 };
 
-export const safeLocalStorageSetJson = (key: string, value: unknown): void => {
+export const safeLocalStorageSetJson = (
+  key: string,
+  value: StoragePayload,
+): void => {
   try {
     safeLocalStorageSet(key, JSON.stringify(value));
   } catch {

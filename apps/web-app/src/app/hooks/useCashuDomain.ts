@@ -5,16 +5,20 @@ import { parseCashuToken } from "../../cashu";
 import type { ContactId, CredoTokenId } from "../../evolu";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../utils/constants";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
-import type { CredoTokenRow } from "../types/appTypes";
+import type {
+  CashuTokenRowLike,
+  ContactRowLike,
+  CredoTokenRow,
+} from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
 interface UseCashuDomainParams {
   appOwnerId: OwnerId | null;
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
-  cashuTokensAll: readonly Record<string, unknown>[];
-  contacts: readonly Record<string, unknown>[];
-  credoTokensAll: readonly Record<string, unknown>[];
+  cashuTokensAll: readonly CashuTokenRowLike[];
+  contacts: readonly ContactRowLike[];
+  credoTokensAll: readonly CredoTokenRow[];
   insert: EvoluMutations["insert"];
   logPaymentEvent: (event: {
     amount?: number | null;
@@ -120,11 +124,7 @@ export const useCashuDomain = ({
       if (!id) return false;
 
       const current = credoTokensAllRef.current;
-      return current.some(
-        (row) =>
-          String((row as { promiseId?: unknown }).promiseId ?? "").trim() ===
-          id,
-      );
+      return current.some((row) => String(row.promiseId ?? "").trim() === id);
     },
     [],
   );

@@ -1,5 +1,6 @@
 import { fetchJson } from "./utils/http";
 import { asNonEmptyString } from "./utils/validation";
+import type { JsonRecord, JsonValue } from "./types/json";
 
 type LnurlPayRequest = {
   callback?: string;
@@ -19,6 +20,48 @@ type LnurlInvoiceResponse = {
   status?: string;
 };
 
+const isJsonRecord = (value: unknown): value is JsonRecord => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const isOptionalNumber = (
+  value: JsonValue | undefined,
+): value is number | undefined => {
+  return value === undefined || typeof value === "number";
+};
+
+const isOptionalString = (
+  value: JsonValue | undefined,
+): value is string | undefined => {
+  return value === undefined || typeof value === "string";
+};
+
+const isLnurlPayRequest = (value: unknown): value is LnurlPayRequest => {
+  if (!isJsonRecord(value)) return false;
+  return (
+    isOptionalString(value.callback) &&
+    isOptionalNumber(value.commentAllowed) &&
+    isOptionalNumber(value.maxSendable) &&
+    isOptionalString(value.metadata) &&
+    isOptionalNumber(value.minSendable) &&
+    isOptionalString(value.reason) &&
+    isOptionalString(value.status) &&
+    isOptionalString(value.tag)
+  );
+};
+
+const isLnurlInvoiceResponse = (
+  value: unknown,
+): value is LnurlInvoiceResponse => {
+  if (!isJsonRecord(value)) return false;
+  return (
+    isOptionalString(value.paymentRequest) &&
+    isOptionalString(value.pr) &&
+    isOptionalString(value.reason) &&
+    isOptionalString(value.status)
+  );
+};
+
 const getLnurlpUrlFromLightningAddress = (lightningAddress: string): string => {
   const raw = lightningAddress.trim();
   const at = raw.lastIndexOf("@");
@@ -33,13 +76,13 @@ const getLnurlpUrlFromLightningAddress = (lightningAddress: string): string => {
   return `https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`;
 };
 
-const fetchLnurlJson = async <T = unknown>(url: string): Promise<T> => {
+const fetchLnurlJson = async (url: string): Promise<JsonValue> => {
   try {
-    return await fetchJson<T>(url);
+    return await fetchJson<JsonValue>(url);
   } catch (error) {
     if (typeof window === "undefined") throw error;
     const proxyUrl = `/api/lnurlp?url=${encodeURIComponent(url)}`;
-    return await fetchJson<T>(proxyUrl);
+    return await fetchJson<JsonValue>(proxyUrl);
   }
 };
 
@@ -53,7 +96,11 @@ export const fetchLnurlInvoiceForLightningAddress = async (
   }
 
   const lnurlpUrl = getLnurlpUrlFromLightningAddress(lightningAddress);
-  const payReq = await fetchLnurlJson<LnurlPayRequest>(lnurlpUrl);
+  const payReqJson = await fetchLnurlJson(lnurlpUrl);
+  if (!isLnurlPayRequest(payReqJson)) {
+    throw new Error("Invalid LNURL pay response");
+  }
+  const payReq = payReqJson;
   if (String(payReq.status ?? "").toUpperCase() === "ERROR") {
     throw new Error(asNonEmptyString(payReq.reason) ?? "LNURL error");
   }
@@ -98,12 +145,20 @@ export const fetchLnurlInvoiceForLightningAddress = async (
   const invoiceJson = await (async () => {
     if (maybeWithCommentUrl && !providerAdvertisesComment) {
       try {
-        return await fetchLnurlJson<LnurlInvoiceResponse>(maybeWithCommentUrl);
+        const withCommentJson = await fetchLnurlJson(maybeWithCommentUrl);
+        if (!isLnurlInvoiceResponse(withCommentJson)) {
+          throw new Error("Invalid LNURL invoice response");
+        }
+        return withCommentJson;
       } catch {
         // Retry without comment.
       }
     }
-    return await fetchLnurlJson<LnurlInvoiceResponse>(callbackUrl.toString());
+    const fallbackJson = await fetchLnurlJson(callbackUrl.toString());
+    if (!isLnurlInvoiceResponse(fallbackJson)) {
+      throw new Error("Invalid LNURL invoice response");
+    }
+    return fallbackJson;
   })();
   if (String(invoiceJson.status ?? "").toUpperCase() === "ERROR") {
     throw new Error(

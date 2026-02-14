@@ -1,10 +1,7 @@
 import { getSharedNostrPool } from "./utils/nostrPool";
 import { isHttpUrl } from "./utils/validation";
-
-type NostrEvent = {
-  content: string;
-  created_at?: number;
-};
+import type { Event as NostrToolsEvent } from "nostr-tools";
+import type { JsonRecord } from "./types/json";
 
 export type NostrProfileMetadata = {
   displayName?: string;
@@ -34,6 +31,21 @@ const STORAGE_METADATA_PREFIX = "linky_nostr_profile_metadata_v1:";
 
 const AVATAR_CACHE_NAME = "linky_nostr_avatar_cache_v1";
 
+const isJsonRecord = (value: unknown): value is JsonRecord => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const getCurrentOrigin = (): string | null => {
+  try {
+    const origin = globalThis.location?.origin;
+    if (typeof origin !== "string") return null;
+    const trimmed = origin.trim();
+    return trimmed || null;
+  } catch {
+    return null;
+  }
+};
+
 const canUseCacheStorage = (): boolean => {
   try {
     return typeof caches !== "undefined" && typeof Request !== "undefined";
@@ -44,8 +56,7 @@ const canUseCacheStorage = (): boolean => {
 
 const makeAvatarCacheRequest = (npub: string): Request | null => {
   try {
-    const origin = (globalThis as unknown as { location?: { origin?: string } })
-      ?.location?.origin;
+    const origin = getCurrentOrigin();
     if (!origin) return null;
     const url = new URL(
       `/__linky_cache/nostr_avatar/${encodeURIComponent(npub)}`,
@@ -161,8 +172,7 @@ function canFetchAvatarAsBlob(avatarUrl: string): boolean {
   // We still show the image via <img src=...>; we only skip blob caching.
   try {
     const url = new URL(avatarUrl);
-    const origin = (globalThis as unknown as { location?: { origin?: string } })
-      ?.location?.origin;
+    const origin = getCurrentOrigin();
     if (origin && url.origin === origin) return true;
 
     const host = url.hostname.toLowerCase();
@@ -181,12 +191,11 @@ export const loadCachedProfilePicture = (
   try {
     const raw = localStorage.getItem(STORAGE_PICTURE_PREFIX + npub);
     if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as CachedValue;
-    if (!parsed || typeof parsed !== "object") return undefined;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isJsonRecord(parsed)) return undefined;
 
-    const url = "url" in parsed ? (parsed as CachedValue).url : undefined;
-    const fetchedAt =
-      "fetchedAt" in parsed ? (parsed as CachedValue).fetchedAt : undefined;
+    const url = parsed.url;
+    const fetchedAt = parsed.fetchedAt;
 
     if (typeof fetchedAt !== "number") return undefined;
     if (!(typeof url === "string" || url === null)) return undefined;
@@ -214,22 +223,36 @@ type CachedMetadataValue = {
   metadata: NostrProfileMetadata | null;
 };
 
+const isNostrProfileMetadata = (
+  value: unknown,
+): value is NostrProfileMetadata => {
+  if (!isJsonRecord(value)) return false;
+  return (
+    (value.displayName === undefined ||
+      typeof value.displayName === "string") &&
+    (value.image === undefined || typeof value.image === "string") &&
+    (value.lud06 === undefined || typeof value.lud06 === "string") &&
+    (value.lud16 === undefined || typeof value.lud16 === "string") &&
+    (value.name === undefined || typeof value.name === "string") &&
+    (value.picture === undefined || typeof value.picture === "string")
+  );
+};
+
 export const loadCachedProfileMetadata = (
   npub: string,
 ): CachedMetadataValue | undefined => {
   try {
     const raw = localStorage.getItem(STORAGE_METADATA_PREFIX + npub);
     if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as CachedMetadataValue;
-    if (!parsed || typeof parsed !== "object") return undefined;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isJsonRecord(parsed)) return undefined;
 
-    const fetchedAt =
-      "fetchedAt" in parsed ? (parsed as CachedMetadataValue).fetchedAt : null;
+    const fetchedAt = parsed.fetchedAt;
     if (typeof fetchedAt !== "number") return undefined;
 
     const metadata =
-      "metadata" in parsed ? (parsed as CachedMetadataValue).metadata : null;
-    if (!(metadata === null || (typeof metadata === "object" && metadata))) {
+      parsed.metadata === undefined ? null : (parsed.metadata ?? null);
+    if (!(metadata === null || isNostrProfileMetadata(metadata))) {
       return undefined;
     }
 
@@ -238,7 +261,7 @@ export const loadCachedProfileMetadata = (
 
     return {
       fetchedAt,
-      metadata: metadata as NostrProfileMetadata | null,
+      metadata,
     };
   } catch {
     return undefined;
@@ -284,7 +307,8 @@ export const fetchNostrProfileMetadata = async (
   try {
     const decoded = nip19.decode(trimmed);
     if (decoded.type !== "npub") return null;
-    pubkey = decoded.data as string;
+    if (typeof decoded.data !== "string") return null;
+    pubkey = decoded.data;
   } catch {
     return null;
   }
@@ -292,7 +316,7 @@ export const fetchNostrProfileMetadata = async (
   const pool = await getSharedNostrPool();
 
   try {
-    let events: unknown = [];
+    let events: NostrToolsEvent[] = [];
     try {
       events = await pool.querySync(
         relays,
@@ -303,10 +327,10 @@ export const fetchNostrProfileMetadata = async (
       return null;
     }
 
-    const newest = (events as NostrEvent[])
+    const newest = events
       .slice()
       .sort(
-        (a: NostrEvent, b: NostrEvent) =>
+        (a: NostrToolsEvent, b: NostrToolsEvent) =>
           (b.created_at ?? 0) - (a.created_at ?? 0),
       )[0];
 
@@ -319,8 +343,8 @@ export const fetchNostrProfileMetadata = async (
       return null;
     }
 
-    if (!raw || typeof raw !== "object") return null;
-    const obj = raw as Record<string, unknown>;
+    if (!isJsonRecord(raw)) return null;
+    const obj = raw;
 
     const name = asTrimmedNonEmptyString(obj.name);
     const displayName =

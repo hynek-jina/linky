@@ -34,7 +34,7 @@ const CASHU_COUNTER_LOCK_PREFIX = "linky.cashu.detCounterLock.v1";
 // In-memory per-keyset queue to ensure we never reuse the same deterministic
 // output counter range due to overlapping async mint operations.
 // Note: this does not coordinate across browser tabs/windows.
-const counterLocks = new Map<string, Promise<unknown>>();
+const counterLocks = new Map<string, Promise<void>>();
 
 export const withCashuDeterministicCounterLock = async <T>(
   args: {
@@ -46,13 +46,17 @@ export const withCashuDeterministicCounterLock = async <T>(
 ): Promise<T> => {
   const key = makeCounterKey(CASHU_COUNTER_LOCK_PREFIX, args);
   const prev = counterLocks.get(key) ?? Promise.resolve();
-  const next = prev.catch(() => undefined).then(fn);
+  const run = prev.then(() => fn());
+  const queue = run.then(
+    () => undefined,
+    () => undefined,
+  );
 
-  counterLocks.set(key, next);
+  counterLocks.set(key, queue);
   try {
-    return await next;
+    return await run;
   } finally {
-    if (counterLocks.get(key) === next) {
+    if (counterLocks.get(key) === queue) {
       counterLocks.delete(key);
     }
   }

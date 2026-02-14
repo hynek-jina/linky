@@ -1,5 +1,8 @@
 import React from "react";
-import type { LocalPendingPayment } from "../types/appTypes";
+import type {
+  ContactIdentityRowLike,
+  LocalPendingPayment,
+} from "../types/appTypes";
 
 interface PayResult {
   error?: string;
@@ -7,7 +10,7 @@ interface PayResult {
   queued: boolean;
 }
 
-interface UsePaymentsDomainParams<TContact extends { id?: unknown }> {
+interface UsePaymentsDomainParams<TContact extends ContactIdentityRowLike> {
   cashuIsBusy: boolean;
   contacts: readonly TContact[];
   currentNpub: string | null;
@@ -25,7 +28,7 @@ interface UsePaymentsDomainParams<TContact extends { id?: unknown }> {
   t: (key: string) => string;
 }
 
-export const usePaymentsDomain = <TContact extends { id?: unknown }>({
+export const usePaymentsDomain = <TContact extends ContactIdentityRowLike>({
   cashuIsBusy,
   contacts,
   currentNpub,

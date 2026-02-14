@@ -2,26 +2,62 @@ import { Buffer } from "buffer";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
+import type {
+  BroadcastChannelLike,
+  BroadcastMessageHandler,
+  GlobalWithOptionalBroadcastChannel,
+  LockManagerLike,
+  NavigatorWithOptionalLocks,
+  NavigatorWithOptionalStorage,
+} from "./types/browser";
+import type { JsonValue } from "./types/json";
 import "./index.css";
+
+type BufferFromArgs =
+  | [arrayLike: ArrayLike<number> | ArrayBufferView]
+  | [
+      arrayBuffer: ArrayBuffer | SharedArrayBuffer,
+      byteOffset?: number,
+      length?: number,
+    ]
+  | [value: string, encoding?: string];
+
+const isBufferConstructor = (value: unknown): value is typeof Buffer => {
+  return typeof value === "function" && "from" in value && "prototype" in value;
+};
+
+const getGlobalBuffer = (): typeof Buffer | null => {
+  const candidate = Reflect.get(globalThis, "Buffer");
+  return isBufferConstructor(candidate) ? candidate : null;
+};
 
 // Some dependencies (e.g. Cashu libs) expect Node's global Buffer.
 // Provide a safe browser polyfill.
-if (!("Buffer" in globalThis)) {
-  (globalThis as unknown as { Buffer: typeof Buffer }).Buffer = Buffer;
+if (!getGlobalBuffer()) {
+  try {
+    Object.defineProperty(globalThis, "Buffer", {
+      configurable: true,
+      value: Buffer,
+      writable: true,
+    });
+  } catch {
+    Object.defineProperty(globalThis, "Buffer", {
+      configurable: true,
+      value: Buffer,
+      writable: true,
+    });
+  }
 }
 
 // The `buffer` polyfill doesn't implement Node's newer "base64url" encoding.
 // Some deps (e.g. Evolu) use it for compact URL-safe IDs.
 // Patch in minimal support to avoid boot crashes in the browser.
 (() => {
-  const B = (globalThis as unknown as { Buffer?: typeof Buffer }).Buffer;
+  const B = getGlobalBuffer();
   if (!B) return;
 
-  const proto = B.prototype as unknown as {
-    __linkyBase64UrlPatched?: boolean;
-    toString: (encoding?: string, start?: number, end?: number) => string;
-  };
-  if (proto.__linkyBase64UrlPatched) return;
+  const patchMarker = "__linkyBase64UrlPatched";
+  if (Reflect.get(B.prototype, patchMarker) === true) return;
 
   const toBase64Url = (base64: string) =>
     base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -32,28 +68,37 @@ if (!("Buffer" in globalThis)) {
     return pad === 0 ? base64 : base64 + "=".repeat(4 - pad);
   };
 
-  const origToString = proto.toString;
-  proto.toString = function (encoding?: string, start?: number, end?: number) {
-    if (encoding === "base64url") {
-      return toBase64Url(origToString.call(this, "base64", start, end));
-    }
-    return origToString.call(this, encoding, start, end);
-  };
+  const origToString = B.prototype.toString;
+  Object.defineProperty(B.prototype, "toString", {
+    configurable: true,
+    value: function (
+      this: Buffer,
+      encoding?: string,
+      start?: number,
+      end?: number,
+    ) {
+      if (encoding === "base64url") {
+        return toBase64Url(origToString.call(this, "base64", start, end));
+      }
+      return origToString.call(this, encoding, start, end);
+    },
+    writable: true,
+  });
 
-  const origFrom = (B as unknown as { from: (...args: unknown[]) => Buffer })
-    .from;
-  (B as unknown as { from: (...args: unknown[]) => Buffer }).from = function (
-    value: unknown,
-    encodingOrOffset?: unknown,
-    length?: unknown,
-  ) {
-    if (typeof value === "string" && encodingOrOffset === "base64url") {
-      return origFrom.call(this, fromBase64Url(value), "base64");
-    }
-    return origFrom.call(this, value, encodingOrOffset, length);
-  };
+  const origFrom = B.from;
+  Object.defineProperty(B, "from", {
+    configurable: true,
+    value: function (this: typeof Buffer, ...args: BufferFromArgs) {
+      const [value, encodingOrOffset] = args;
+      if (typeof value === "string" && encodingOrOffset === "base64url") {
+        return origFrom.call(this, fromBase64Url(value), "base64");
+      }
+      return Reflect.apply(origFrom, this, args);
+    },
+    writable: true,
+  });
 
-  proto.__linkyBase64UrlPatched = true;
+  Reflect.set(B.prototype, patchMarker, true);
 })();
 
 // Dev-only cleanup: if a Service Worker was registered earlier (e.g. from a
@@ -161,11 +206,11 @@ const applyEvoluWebCompatPolyfills = () => {
   if (typeof document === "undefined") return;
 
   const ensureBroadcastChannel = () => {
-    const BC = (globalThis as unknown as { BroadcastChannel?: unknown })
+    const BC = (globalThis as GlobalWithOptionalBroadcastChannel)
       .BroadcastChannel;
     if (typeof BC === "undefined") return false;
     try {
-      const test = new (BC as typeof BroadcastChannel)("__linky_test__");
+      const test = new BC("__linky_test__");
       test.close();
       return true;
     } catch {
@@ -174,10 +219,10 @@ const applyEvoluWebCompatPolyfills = () => {
   };
 
   if (!ensureBroadcastChannel()) {
-    type Listener = ((event: MessageEvent<unknown>) => void) | null;
+    type Listener = BroadcastMessageHandler;
     const channelsByName = new Map<string, Set<PolyBroadcastChannel>>();
 
-    class PolyBroadcastChannel {
+    class PolyBroadcastChannel implements BroadcastChannelLike {
       readonly name: string;
       onmessage: Listener = null;
 
@@ -188,14 +233,14 @@ const applyEvoluWebCompatPolyfills = () => {
         channelsByName.set(this.name, set);
       }
 
-      postMessage(message: unknown) {
+      postMessage(message: JsonValue) {
         const set = channelsByName.get(this.name);
         if (!set) return;
         for (const ch of set) {
           const handler = ch.onmessage;
           if (!handler) continue;
           try {
-            handler({ data: message } as MessageEvent<unknown>);
+            handler(new MessageEvent("message", { data: message }));
           } catch {
             // ignore
           }
@@ -209,39 +254,47 @@ const applyEvoluWebCompatPolyfills = () => {
         if (set.size === 0) channelsByName.delete(this.name);
       }
 
-      addEventListener() {
+      addEventListener(
+        _type: string,
+        _listener: EventListenerOrEventListenerObject | null,
+        _options?: boolean | AddEventListenerOptions,
+      ) {
+        void _type;
+        void _listener;
+        void _options;
         // Not used by Evolu.
       }
 
-      removeEventListener() {
+      removeEventListener(
+        _type: string,
+        _listener: EventListenerOrEventListenerObject | null,
+        _options?: boolean | EventListenerOptions,
+      ) {
+        void _type;
+        void _listener;
+        void _options;
         // Not used by Evolu.
       }
 
-      dispatchEvent() {
+      dispatchEvent(_event: Event) {
+        void _event;
         return false;
       }
     }
 
-    (globalThis as unknown as { BroadcastChannel: unknown }).BroadcastChannel =
-      PolyBroadcastChannel as unknown;
+    (globalThis as GlobalWithOptionalBroadcastChannel).BroadcastChannel =
+      PolyBroadcastChannel;
   }
 
-  const nav = navigator as unknown as { locks?: unknown };
-  const locks = nav.locks as
-    | {
-        request?: (
-          name: string,
-          cb: () => Promise<unknown>,
-        ) => Promise<unknown>;
-      }
-    | undefined;
+  const nav = navigator as NavigatorWithOptionalLocks;
+  const locks = nav.locks;
 
   if (!locks?.request) {
-    const lockPolyfill = {
-      request: async (_name: string, cb: () => Promise<unknown>) => cb(),
+    const lockPolyfill: LockManagerLike = {
+      request: async (_name: string, cb: () => Promise<JsonValue>) => cb(),
     };
     try {
-      (navigator as unknown as { locks: unknown }).locks = lockPolyfill;
+      (navigator as NavigatorWithOptionalLocks).locks = lockPolyfill;
     } catch {
       try {
         Object.defineProperty(navigator, "locks", {
@@ -275,15 +328,15 @@ const renderBootError = (error: unknown) => {
         : null,
     hasWorker: typeof globalThis.Worker !== "undefined",
     hasBroadcastChannel:
-      typeof (globalThis as unknown as { BroadcastChannel?: unknown })
+      typeof (globalThis as GlobalWithOptionalBroadcastChannel)
         .BroadcastChannel !== "undefined",
     hasLocks: Boolean(
-      (globalThis.navigator as unknown as { locks?: unknown })?.locks,
+      (globalThis.navigator as NavigatorWithOptionalLocks)?.locks,
     ),
     hasIndexedDB: typeof globalThis.indexedDB !== "undefined",
     hasStorage:
-      typeof (globalThis.navigator as unknown as { storage?: unknown })
-        ?.storage !== "undefined",
+      typeof (globalThis.navigator as NavigatorWithOptionalStorage)?.storage !==
+      "undefined",
   };
 
   root.innerHTML = `

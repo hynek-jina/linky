@@ -3,12 +3,11 @@ import * as Evolu from "@evolu/common";
 import React from "react";
 import type { ContactId } from "../../evolu";
 import { navigateTo } from "../../hooks/useRouting";
+import type { ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
-interface UseScannedTextHandlerParams<
-  TContact extends { id?: unknown; lnAddress?: unknown; npub?: unknown },
-> {
+interface UseScannedTextHandlerParams<TContact extends ContactRowLike> {
   appOwnerId: OwnerId | null;
   closeScan: () => void;
   contacts: readonly TContact[];
@@ -28,9 +27,7 @@ interface UseScannedTextHandlerParams<
   t: (key: string) => string;
 }
 
-export const useScannedTextHandler = <
-  TContact extends { id?: unknown; lnAddress?: unknown; npub?: unknown },
->({
+export const useScannedTextHandler = <TContact extends ContactRowLike>({
   appOwnerId,
   closeScan,
   contacts,

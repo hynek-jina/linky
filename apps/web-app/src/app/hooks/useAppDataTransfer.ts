@@ -1,27 +1,15 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
 import type { ContactId } from "../../evolu";
+import type { JsonValue } from "../../types/json";
 import { asRecord } from "../../utils/validation";
+import type { CashuTokenRowLike, ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
 interface UseAppDataTransferParams<
-  TContact extends {
-    groupName?: unknown;
-    id?: unknown;
-    lnAddress?: unknown;
-    name?: unknown;
-    npub?: unknown;
-  },
-  TCashuToken extends {
-    amount?: unknown;
-    error?: unknown;
-    mint?: unknown;
-    rawToken?: unknown;
-    state?: unknown;
-    token?: unknown;
-    unit?: unknown;
-  },
+  TContact extends ContactRowLike,
+  TCashuToken extends CashuTokenRowLike,
 > {
   appOwnerId: Evolu.OwnerId | null;
   cashuTokens: readonly TCashuToken[];
@@ -35,22 +23,8 @@ interface UseAppDataTransferParams<
 }
 
 export const useAppDataTransfer = <
-  TContact extends {
-    groupName?: unknown;
-    id?: unknown;
-    lnAddress?: unknown;
-    name?: unknown;
-    npub?: unknown;
-  },
-  TCashuToken extends {
-    amount?: unknown;
-    error?: unknown;
-    mint?: unknown;
-    rawToken?: unknown;
-    state?: unknown;
-    token?: unknown;
-    unit?: unknown;
-  },
+  TContact extends ContactRowLike,
+  TCashuToken extends CashuTokenRowLike,
 >({
   appOwnerId,
   cashuTokens,
@@ -134,9 +108,9 @@ export const useAppDataTransfer = <
         return raw.length > maxLen ? raw.slice(0, maxLen) : raw;
       };
 
-      let parsed: unknown;
+      let parsed: JsonValue;
       try {
-        parsed = JSON.parse(String(text ?? ""));
+        parsed = JSON.parse(String(text ?? "")) as JsonValue;
       } catch {
         pushToast(t("importInvalid"));
         return;
@@ -265,9 +239,7 @@ export const useAppDataTransfer = <
         const unit = sanitizeText(rec.unit, 100);
         const state = sanitizeText(rec.state, 100);
         const error = sanitizeText(rec.error, 1000);
-        const amountNum = Math.trunc(
-          Number((rec as Record<string, unknown>).amount ?? 0),
-        );
+        const amountNum = Math.trunc(Number(rec.amount ?? 0));
         const amount =
           Number.isFinite(amountNum) && amountNum > 0 ? amountNum : null;
 

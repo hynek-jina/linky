@@ -1,4 +1,5 @@
 import React from "react";
+import type { JsonValue } from "../../types/json";
 import { normalizeMintUrl } from "../../utils/mint";
 import { asRecord } from "../../utils/validation";
 
@@ -113,7 +114,7 @@ export const useProfileNpubCashEffects = ({
           signal: infoController.signal,
         });
         if (!res.ok) return;
-        const data = (await res.json()) as unknown;
+        const data = (await res.json()) as JsonValue;
         const mintUrl = (() => {
           const root = asRecord(data);
           if (!root) return "";

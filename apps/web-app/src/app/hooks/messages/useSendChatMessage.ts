@@ -1,9 +1,14 @@
 import React from "react";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
-import type { LocalNostrMessage } from "../../types/appTypes";
+import type {
+  ContactIdentityRowLike,
+  LocalNostrMessage,
+  PublishWrappedResult,
+} from "../../types/appTypes";
 
 type AppendLocalNostrMessage = (
   message: Omit<LocalNostrMessage, "id" | "status"> & {
@@ -23,7 +28,7 @@ type UpdateLocalNostrMessage = (
 
 interface UseSendChatMessageParams<
   TRoute extends { kind: string },
-  TContact extends { id?: unknown; npub?: unknown },
+  TContact extends ContactIdentityRowLike,
 > {
   appendLocalNostrMessage: AppendLocalNostrMessage;
   chatDraft: string;
@@ -35,7 +40,7 @@ interface UseSendChatMessageParams<
     relays: string[],
     wrapForMe: NostrToolsEvent,
     wrapForContact: NostrToolsEvent,
-  ) => Promise<{ anySuccess: boolean; error: unknown | null }>;
+  ) => Promise<PublishWrappedResult>;
   route: TRoute;
   selectedContact: TContact | null;
   setChatDraft: React.Dispatch<React.SetStateAction<string>>;
@@ -48,7 +53,7 @@ interface UseSendChatMessageParams<
 
 export const useSendChatMessage = <
   TRoute extends { kind: string },
-  TContact extends { id?: unknown; npub?: unknown },
+  TContact extends ContactIdentityRowLike,
 >({
   appendLocalNostrMessage,
   chatDraft,
@@ -72,8 +77,11 @@ export const useSendChatMessage = <
     const text = chatDraft.trim();
     if (!text) return;
 
-    const contactNpub = String(selectedContact.npub ?? "").trim();
-    if (!contactNpub) return;
+    const contactNpub = normalizeNpubIdentifier(selectedContact.npub);
+    if (!contactNpub) {
+      setStatus(t("chatMissingContactNpub"));
+      return;
+    }
     if (!currentNsec) {
       setStatus(t("profileMissingNpub"));
       return;
@@ -87,13 +95,26 @@ export const useSendChatMessage = <
       const { wrapEvent } = await import("nostr-tools/nip59");
 
       const decodedMe = nip19.decode(currentNsec);
-      if (decodedMe.type !== "nsec") throw new Error("invalid nsec");
-      const privBytes = decodedMe.data as Uint8Array;
+      if (decodedMe.type !== "nsec" || !(decodedMe.data instanceof Uint8Array))
+        throw new Error("invalid nsec");
+      const privBytes = decodedMe.data;
       const myPubHex = getPublicKey(privBytes);
 
-      const decodedContact = nip19.decode(contactNpub);
-      if (decodedContact.type !== "npub") throw new Error("invalid npub");
-      const contactPubHex = decodedContact.data as string;
+      let decodedContact: ReturnType<typeof nip19.decode> | null = null;
+      try {
+        decodedContact = nip19.decode(contactNpub);
+      } catch {
+        decodedContact = null;
+      }
+      if (
+        !decodedContact ||
+        decodedContact.type !== "npub" ||
+        typeof decodedContact.data !== "string"
+      ) {
+        setStatus(t("chatMissingContactNpub"));
+        return;
+      }
+      const contactPubHex = decodedContact.data;
 
       const clientId = makeLocalId();
       const baseEvent = {

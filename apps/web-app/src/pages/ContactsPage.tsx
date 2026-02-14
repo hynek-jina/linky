@@ -1,11 +1,12 @@
 import type { FC } from "react";
 import React from "react";
+import type { ContactRowLike } from "../app/types/appTypes";
 import { BottomTabBar } from "../components/BottomTabBar";
 
 interface ContactsPageProps {
   activeGroup: string | null;
   bottomTabActive: "contacts" | "wallet" | null;
-  contacts: readonly unknown[];
+  contacts: readonly ContactRowLike[];
   contactsSearch: string;
   contactsSearchInputRef: React.RefObject<HTMLInputElement | null>;
   contactsToolbarStyle: React.CSSProperties;
@@ -15,7 +16,7 @@ interface ContactsPageProps {
   openNewContactPage: () => void;
   onboardingContent?: React.ReactNode;
   otherContactsLabel: string;
-  renderContactCard: (contact: unknown) => React.ReactNode;
+  renderContactCard: (contact: ContactRowLike) => React.ReactNode;
   setActiveGroup: (value: string | null) => void;
   setContactsSearch: (value: string) => void;
   showGroupFilter: boolean;
@@ -24,8 +25,8 @@ interface ContactsPageProps {
   showFab?: boolean;
   t: (key: string) => string;
   visibleContacts: {
-    conversations: unknown[];
-    others: unknown[];
+    conversations: ContactRowLike[];
+    others: ContactRowLike[];
   };
 }
 

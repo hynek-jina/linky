@@ -15,7 +15,11 @@ import {
   safeLocalStorageSetJson,
 } from "../../../utils/storage";
 import { makeLocalId } from "../../../utils/validation";
-import type { LocalMintInfoRow } from "../../types/appTypes";
+import type {
+  CashuTokenRowLike,
+  LocalMintInfoRow,
+  MintUrlInput,
+} from "../../types/appTypes";
 import {
   buildMintDedupeSignature,
   dedupeMintInfoRows,
@@ -30,9 +34,9 @@ import {
 interface UseMintInfoStoreParams {
   appOwnerId: Evolu.OwnerId | null;
   appOwnerIdRef: React.MutableRefObject<Evolu.OwnerId | null>;
-  cashuTokensAll: readonly Record<string, unknown>[];
+  cashuTokensAll: readonly CashuTokenRowLike[];
   defaultMintUrl: string | null;
-  rememberSeenMint: (mintUrl: unknown) => void;
+  rememberSeenMint: (mintUrl: MintUrlInput) => void;
 }
 
 interface UseMintInfoStoreResult {
@@ -109,13 +113,7 @@ export const useMintInfoStore = ({
 
       rememberSeenMint(cleaned);
 
-      const existing = mintInfoByUrl.get(cleaned) as
-        | (Record<string, unknown> & {
-            firstSeenAtSec?: unknown;
-            id?: unknown;
-            isDeleted?: unknown;
-          })
-        | undefined;
+      const existing = mintInfoByUrl.get(cleaned);
 
       const now = Math.floor(nowSec) as typeof Evolu.PositiveInt.Type;
       const ownerId = appOwnerIdRef.current;
@@ -126,14 +124,14 @@ export const useMintInfoStore = ({
 
         const firstSeen =
           existing && Number(existing.firstSeenAtSec ?? 0) > 0
-            ? Math.floor(Number(existing.firstSeenAtSec))
+            ? Math.floor(Number(existing?.firstSeenAtSec))
             : now;
 
         if (
           existing &&
-          String(existing.isDeleted ?? "") !== String(Evolu.sqliteTrue)
+          String(existing?.isDeleted ?? "") !== String(Evolu.sqliteTrue)
         ) {
-          const id = String(existing.id ?? "");
+          const id = String(existing?.id ?? "");
           const idx = next.findIndex((row) => String(row.id ?? "") === id);
           if (idx >= 0) {
             const prevRow = next[idx];
@@ -262,12 +260,7 @@ export const useMintInfoStore = ({
         if (!info) throw lastErr ?? new Error("No info");
 
         const parsed = parseMintInfoPayload(info);
-        const existing = mintInfoByUrl.get(cleaned) as
-          | (Record<string, unknown> & {
-              id?: unknown;
-              isDeleted?: unknown;
-            })
-          | undefined;
+        const existing = mintInfoByUrl.get(cleaned);
 
         setMintInfoAll((prev) => {
           const next = [...prev];

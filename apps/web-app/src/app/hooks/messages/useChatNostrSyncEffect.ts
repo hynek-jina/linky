@@ -1,21 +1,13 @@
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
-
-interface ChatMessageRow {
-  clientId?: unknown;
-  content?: unknown;
-  direction?: unknown;
-  id?: unknown;
-  status?: unknown;
-  wrapId?: unknown;
-}
-
-interface ContactRow {
-  id?: unknown;
-  npub?: unknown;
-}
+import type {
+  ChatMessageRowLike,
+  ContactIdentityRowLike,
+  PaymentLogData,
+} from "../../types/appTypes";
 
 interface UseChatNostrSyncEffectParams {
   appendLocalNostrMessage: (message: {
@@ -28,14 +20,14 @@ interface UseChatNostrSyncEffectParams {
     rumorId: string | null;
     wrapId: string;
   }) => string;
-  chatMessages: readonly ChatMessageRow[];
-  chatMessagesLatestRef: React.MutableRefObject<readonly ChatMessageRow[]>;
+  chatMessages: readonly ChatMessageRowLike[];
+  chatMessagesLatestRef: React.MutableRefObject<readonly ChatMessageRowLike[]>;
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   currentNsec: string | null;
-  logPayStep: (step: string, data?: Record<string, unknown>) => void;
+  logPayStep: (step: string, data?: PaymentLogData) => void;
   nostrMessageWrapIdsRef: React.MutableRefObject<Set<string>>;
   route: { kind: string };
-  selectedContact: ContactRow | null;
+  selectedContact: ContactIdentityRowLike | null;
   updateLocalNostrMessage: (
     id: string,
     updates: Partial<{
@@ -64,7 +56,7 @@ export const useChatNostrSyncEffect = ({
     if (route.kind !== "chat") return;
     if (!selectedContact) return;
 
-    const contactNpub = String(selectedContact.npub ?? "").trim();
+    const contactNpub = normalizeNpubIdentifier(selectedContact.npub);
     if (!contactNpub) return;
     if (!currentNsec) return;
 
@@ -82,13 +74,28 @@ export const useChatNostrSyncEffect = ({
         const { unwrapEvent } = await import("nostr-tools/nip17");
 
         const decodedMe = nip19.decode(currentNsec);
-        if (decodedMe.type !== "nsec") return;
-        const privBytes = decodedMe.data as Uint8Array;
+        if (
+          decodedMe.type !== "nsec" ||
+          !(decodedMe.data instanceof Uint8Array)
+        )
+          return;
+        const privBytes = decodedMe.data;
         const myPubHex = getPublicKey(privBytes);
 
-        const decodedContact = nip19.decode(contactNpub);
-        if (decodedContact.type !== "npub") return;
-        const contactPubHex = decodedContact.data as string;
+        let decodedContact: ReturnType<typeof nip19.decode> | null = null;
+        try {
+          decodedContact = nip19.decode(contactNpub);
+        } catch {
+          decodedContact = null;
+        }
+        if (
+          !decodedContact ||
+          decodedContact.type !== "npub" ||
+          typeof decodedContact.data !== "string"
+        ) {
+          return;
+        }
+        const contactPubHex = decodedContact.data;
 
         const pool = await getSharedAppNostrPool();
 
@@ -274,13 +281,18 @@ export const useChatNostrSyncEffect = ({
     };
 
     let cleanup: (() => void) | undefined;
-    void run().then((c) => {
-      cleanup = c;
+    void run().then((nextCleanup) => {
+      if (cancelled) {
+        nextCleanup?.();
+        return;
+      }
+      cleanup = nextCleanup;
     });
 
     return () => {
       cancelled = true;
       cleanup?.();
+      cleanup = undefined;
     };
   }, [
     appendLocalNostrMessage,

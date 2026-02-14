@@ -4,6 +4,7 @@ import React from "react";
 import type { ContactId } from "../../evolu";
 import { evolu } from "../../evolu";
 import type { Route } from "../../types/route";
+import type { OptionalText } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -62,13 +63,14 @@ export const useContactsDomain = ({
       );
     };
 
-    const normalize = (value: unknown): string => {
+    const normalize = (value: OptionalText): string => {
       return String(value ?? "")
         .trim()
         .toLowerCase();
     };
 
-    const fieldScore = (value: unknown): number => (normalize(value) ? 1 : 0);
+    const fieldScore = (value: OptionalText): number =>
+      normalize(value) ? 1 : 0;
 
     try {
       const n = contacts.length;

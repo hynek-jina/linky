@@ -10,12 +10,13 @@ import {
   setCashuRestoreCursor,
 } from "../../../utils/cashuDeterministic";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
+import type { CashuTokenRowLike, MintUrlInput } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
 interface UseRestoreMissingTokensParams {
   cashuIsBusy: boolean;
-  cashuTokensAll: readonly Record<string, unknown>[];
+  cashuTokensAll: readonly CashuTokenRowLike[];
   defaultMintUrl: string | null;
   enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;
   insert: EvoluMutations["insert"];
@@ -30,10 +31,10 @@ interface UseRestoreMissingTokensParams {
     status: "ok" | "error";
     unit?: string | null;
   }) => void;
-  mintInfoDeduped: readonly { canonicalUrl?: unknown }[];
+  mintInfoDeduped: readonly { canonicalUrl?: string | null }[];
   pushToast: (message: string) => void;
   readSeenMintsFromStorage: () => string[];
-  rememberSeenMint: (mintUrl: unknown) => void;
+  rememberSeenMint: (mintUrl: MintUrlInput) => void;
   resolveOwnerIdForWrite: () => Promise<Evolu.OwnerId | null>;
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
   setTokensRestoreIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
@@ -94,26 +95,19 @@ export const useRestoreMissingTokens = ({
         };
 
         for (const row of cashuTokensAll) {
-          const r = row as {
-            isDeleted?: unknown;
-            mint?: unknown;
-            rawToken?: unknown;
-            state?: unknown;
-            token?: unknown;
-            unit?: unknown;
-          };
-          if (r.isDeleted) continue;
-          const state = String(r.state ?? "").trim();
+          if (row.isDeleted) continue;
+          const state = String(row.state ?? "").trim();
           if (state && state !== "accepted") continue;
 
-          const tokenText = String(r.token ?? r.rawToken ?? "").trim();
+          const tokenText = String(row.token ?? row.rawToken ?? "").trim();
           if (!tokenText) continue;
 
           try {
             const decoded = getDecodedToken(tokenText);
-            const mintUrl = String(decoded?.mint ?? r.mint ?? "").trim();
+            const mintUrl = String(decoded?.mint ?? row.mint ?? "").trim();
             if (!mintUrl) continue;
-            const unit = String(decoded?.unit ?? r.unit ?? "").trim() || "sat";
+            const unit =
+              String(decoded?.unit ?? row.unit ?? "").trim() || "sat";
             const proofs: CashuProof[] = Array.isArray(decoded?.proofs)
               ? decoded.proofs
               : [];
@@ -138,19 +132,13 @@ export const useRestoreMissingTokens = ({
         // token for a mint locally. Evolu deletes are soft-deletes, so we can
         // still use the stored mint URL as a scan candidate.
         for (const row of cashuTokensAll) {
-          const r = row as {
-            mint?: unknown;
-            rawToken?: unknown;
-            token?: unknown;
-          };
-
-          const mintFromColumn = String(r.mint ?? "").trim();
+          const mintFromColumn = String(row.mint ?? "").trim();
           if (mintFromColumn) {
             mintCandidates.add(normalizeMintUrl(mintFromColumn));
             continue;
           }
 
-          const tokenText = String(r.token ?? r.rawToken ?? "").trim();
+          const tokenText = String(row.token ?? row.rawToken ?? "").trim();
           if (!tokenText) continue;
           try {
             const decoded = getDecodedToken(tokenText);
@@ -231,11 +219,11 @@ export const useRestoreMissingTokens = ({
             const keysets = await wallet.getKeySets();
             for (const ks of keysets) {
               const ksUnit = String(
-                (ks as Record<string, unknown>)?.unit ?? "",
+                (ks as { unit?: unknown })?.unit ?? "",
               ).trim();
               if (ksUnit && ksUnit !== wallet.unit) continue;
               const keysetId = String(
-                (ks as Record<string, unknown>)?.id ?? "",
+                (ks as { id?: unknown })?.id ?? "",
               ).trim();
               if (!keysetId) continue;
 
@@ -304,7 +292,8 @@ export const useRestoreMissingTokens = ({
                   const states = await wallet.checkProofsStates(proofs);
                   return proofs.filter((_, idx) => {
                     const state = String(
-                      (states as Record<string, unknown>[])?.[idx]?.state ?? "",
+                      (states as Array<{ state?: unknown }>)?.[idx]?.state ??
+                        "",
                     ).trim();
                     return state === "UNSPENT";
                   });

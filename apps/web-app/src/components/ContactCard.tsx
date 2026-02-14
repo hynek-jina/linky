@@ -1,42 +1,25 @@
 import React from "react";
+import type {
+  CashuTokenMessageInfo,
+  CredoTokenMessageInfo,
+} from "../app/lib/tokenMessageInfo";
+import type {
+  ContactRowLike,
+  LocalNostrMessage,
+  MintUrlInput,
+} from "../app/types/appTypes";
 import {
   formatContactMessageTimestamp,
   formatInteger,
   getInitials,
 } from "../utils/formatting";
 
-interface CashuTokenInfo {
-  amount: number | null;
-  isValid: boolean;
-  mintDisplay: string | null;
-  mintUrl: string | null;
-  tokenRaw: string;
-}
-
-interface CredoTokenInfo {
-  amount: number | null;
-  isValid: boolean;
-}
-
-interface LocalNostrMessage {
-  content?: unknown;
-  createdAtSec?: unknown;
-  direction?: unknown;
-}
-
-interface Contact {
-  groupName?: unknown;
-  id?: unknown;
-  lnAddress?: unknown;
-  name?: unknown;
-  npub?: unknown;
-}
 interface ContactCardProps {
   avatarUrl: string | null;
-  contact: Contact;
-  credoInfo: CredoTokenInfo | null;
+  contact: ContactRowLike;
+  credoInfo: Pick<CredoTokenMessageInfo, "amount" | "isValid"> | null;
   displayUnit: string;
-  getMintIconUrl: (url: unknown) => {
+  getMintIconUrl: (url: MintUrlInput) => {
     url: string | null;
     origin?: string | null;
     host?: string | null;
@@ -45,10 +28,10 @@ interface ContactCardProps {
   hasAttention: boolean;
   lastMessage?: LocalNostrMessage | null;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
-  onMintIconLoad: (origin: string, url: string) => void;
-  onSelect: (contact: Contact) => void;
+  onMintIconLoad: (origin: string, url: string | null) => void;
+  onSelect: (contact: ContactRowLike) => void;
   promiseNet: number;
-  tokenInfo: CashuTokenInfo | null;
+  tokenInfo: CashuTokenMessageInfo | null;
 }
 
 export const ContactCard: React.FC<ContactCardProps> = ({
@@ -232,15 +215,15 @@ export const ContactCard: React.FC<ContactCardProps> = ({
 interface TokenPreviewProps {
   directionSymbol: string;
   formatInteger: (num: number) => string;
-  getMintIconUrl: (url: unknown) => {
+  getMintIconUrl: (url: MintUrlInput) => {
     url: string | null;
     origin?: string | null;
     host?: string | null;
     failed?: boolean;
   };
   onIconError: (origin: string, nextUrl: string | null) => void;
-  onIconLoad: (origin: string, url: string) => void;
-  tokenInfo: CashuTokenInfo;
+  onIconLoad: (origin: string, url: string | null) => void;
+  tokenInfo: CashuTokenMessageInfo;
 }
 
 const TokenPreview: React.FC<TokenPreviewProps> = ({
@@ -291,12 +274,12 @@ const TokenPreview: React.FC<TokenPreviewProps> = ({
             loading="lazy"
             referrerPolicy="no-referrer"
             onLoad={() => {
-              if (icon.origin) {
-                onIconLoad(icon.origin as string, icon.url as string);
+              if (icon.origin && icon.url) {
+                onIconLoad(icon.origin, icon.url);
               }
             }}
             onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
+              e.currentTarget.style.display = "none";
               if (icon.origin) {
                 const duck = icon.host
                   ? `https://icons.duckduckgo.com/ip3/${icon.host}.ico`
@@ -308,7 +291,7 @@ const TokenPreview: React.FC<TokenPreviewProps> = ({
                 } else if (icon.url !== favicon) {
                   next = favicon;
                 }
-                onIconError(icon.origin as string, next);
+                onIconError(icon.origin, next);
               }
             }}
           />

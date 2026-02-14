@@ -12,23 +12,23 @@ import { getCashuLib } from "../../../utils/cashuLib";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import { navigateTo } from "../../../hooks/useRouting";
 import { normalizeMintUrl } from "../../../utils/mint";
+import { getUnknownErrorMessage } from "../../../utils/unknown";
 import {
   safeLocalStorageGet,
   safeLocalStorageSet,
 } from "../../../utils/storage";
 import { acceptCashuToken } from "../../../cashuAccept";
+import type { CashuTokenRowLike } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
-interface CashuTokenRow {
-  amount?: unknown;
-  id?: unknown;
-  isDeleted?: unknown;
-  mint?: unknown;
-  rawToken?: unknown;
-  state?: unknown;
-  token?: unknown;
-  unit?: unknown;
+type CashuTokenRow = CashuTokenRowLike & { id?: CashuTokenId | string | null };
+
+interface ProofLike {
+  C?: string;
+  amount?: number;
+  id?: string;
+  secret?: string;
 }
 
 interface UseCashuTokenChecksParams {
@@ -70,7 +70,7 @@ export const useCashuTokenChecks = ({
       const { navigate = true, setStatus: setStatusEnabled = true } =
         options ?? {};
       const row = cashuTokensAll.find(
-        (tkn) => String(tkn?.id ?? "") === String(id as unknown as string),
+        (tkn) => String(tkn?.id ?? "") === String(id),
       );
       const result = appOwnerId
         ? update(
@@ -111,9 +111,7 @@ export const useCashuTokenChecks = ({
       id: CashuTokenId,
     ): Promise<"ok" | "invalid" | "transient" | "skipped"> => {
       const row = cashuTokensAll.find(
-        (tkn) =>
-          String(tkn?.id ?? "") === String(id as unknown as string) &&
-          !tkn?.isDeleted,
+        (tkn) => String(tkn?.id ?? "") === String(id) && !tkn?.isDeleted,
       );
 
       if (!row) {
@@ -121,7 +119,7 @@ export const useCashuTokenChecks = ({
         return "skipped";
       }
 
-      const state = String((row as { state?: unknown }).state ?? "").trim();
+      const state = String(row.state ?? "").trim();
       const storedTokenText = String(row.token ?? "").trim();
       const rawTokenText = String(row.rawToken ?? "").trim();
       const tokenText = storedTokenText || rawTokenText;
@@ -238,38 +236,21 @@ export const useCashuTokenChecks = ({
         const unit = String(decoded?.unit ?? row.unit ?? "").trim() || "sat";
         const normalizedMint = normalizeMintUrl(mint);
         const normalizedUnit = String(unit ?? "").trim() || "sat";
-        const mergedProofs: Array<{
-          C?: unknown;
-          amount?: unknown;
-          id?: unknown;
-          secret?: unknown;
-        }> = [];
+        const mergedProofs: ProofLike[] = [];
         const mergeIds: CashuTokenId[] = [];
 
         for (const candidate of cashuTokensAll) {
-          const c = candidate as {
-            id?: unknown;
-            isDeleted?: unknown;
-            mint?: unknown;
-            rawToken?: unknown;
-            state?: unknown;
-            token?: unknown;
-            unit?: unknown;
-          };
-          if (c.isDeleted) continue;
-          if (String(c.state ?? "").trim() !== "accepted") continue;
+          if (candidate.isDeleted) continue;
+          if (String(candidate.state ?? "").trim() !== "accepted") continue;
 
-          const candidateText = String(c.token ?? c.rawToken ?? "").trim();
+          const candidateText = String(
+            candidate.token ?? candidate.rawToken ?? "",
+          ).trim();
           if (!candidateText) continue;
 
           let candidateDecoded: {
             mint?: string;
-            proofs?: Array<{
-              C?: unknown;
-              amount?: unknown;
-              id?: unknown;
-              secret?: unknown;
-            }>;
+            proofs?: ProofLike[];
             unit?: string;
           } | null = null;
           try {
@@ -279,13 +260,14 @@ export const useCashuTokenChecks = ({
           }
 
           const candidateMint = String(
-            candidateDecoded?.mint ?? c.mint ?? "",
+            candidateDecoded?.mint ?? candidate.mint ?? "",
           ).trim();
           if (!candidateMint) continue;
           if (normalizeMintUrl(candidateMint) !== normalizedMint) continue;
 
           const candidateUnit =
-            String(candidateDecoded?.unit ?? c.unit ?? "").trim() || "sat";
+            String(candidateDecoded?.unit ?? candidate.unit ?? "").trim() ||
+            "sat";
           if (candidateUnit !== normalizedUnit) continue;
 
           const candidateProofs = Array.isArray(candidateDecoded?.proofs)
@@ -294,11 +276,11 @@ export const useCashuTokenChecks = ({
           if (!candidateProofs.length) continue;
 
           mergedProofs.push(...candidateProofs);
-          if (c.id) mergeIds.push(c.id as CashuTokenId);
+          if (candidate.id) mergeIds.push(candidate.id as CashuTokenId);
         }
 
         const normalizeProofs = (
-          items: unknown[],
+          items: ProofLike[],
         ): Array<{ C: string; amount: number; id: string; secret: string }> =>
           items.filter(
             (
@@ -315,13 +297,13 @@ export const useCashuTokenChecks = ({
           mergedProofs.length
             ? mergedProofs
             : Array.isArray(decoded?.proofs)
-              ? decoded.proofs
+              ? (decoded.proofs as ProofLike[])
               : [],
         );
         if (!proofs.length) throw new Error("Token proofs missing");
 
         const total = proofs.reduce(
-          (sum: number, p: { amount?: unknown }) =>
+          (sum: number, p: { amount?: number }) =>
             sum + (Number(p?.amount ?? 0) || 0),
           0,
         );
@@ -339,18 +321,28 @@ export const useCashuTokenChecks = ({
         const walletUnit = wallet.unit;
         const keysetId = wallet.keysetId;
         const getSwapFeeForProofs = (): number | null => {
-          const fn = (wallet as unknown as { getFeesForProofs?: unknown })
-            .getFeesForProofs;
+          const fn = (
+            wallet as {
+              getFeesForProofs?: (
+                proofs: Array<{
+                  C: string;
+                  amount: number;
+                  id: string;
+                  secret: string;
+                }>,
+              ) => number | null | undefined;
+            }
+          ).getFeesForProofs;
           if (typeof fn !== "function") return null;
           try {
-            const fee = Number((fn as (p: unknown[]) => unknown)(proofs));
+            const fee = Number(fn(proofs));
             return Number.isFinite(fee) && fee > 0 ? fee : null;
           } catch {
             return null;
           }
         };
         const parseSwapFee = (error: unknown): number | null => {
-          const message = String(error ?? "");
+          const message = getUnknownErrorMessage(error, "");
           const feeMatch = message.match(/fee\s*:\s*(\d+)/i);
           if (!feeMatch) return null;
           const fee = Number(feeMatch[1]);
@@ -393,7 +385,7 @@ export const useCashuTokenChecks = ({
             : wallet.swap(amountToSend, proofs);
         };
 
-        let swapped: { keep?: unknown[]; send?: unknown[] };
+        let swapped: { keep?: ProofLike[]; send?: ProofLike[] };
         const initialFee = getSwapFeeForProofs();
         const applyLocalMerge = (): boolean => {
           if (mergeIds.length <= 1) return false;
@@ -447,11 +439,11 @@ export const useCashuTokenChecks = ({
           initialFee && total - initialFee > 0 ? total - initialFee : total;
         try {
           swapped = (await runSwap(initialAmount)) as {
-            keep?: unknown[];
-            send?: unknown[];
+            keep?: ProofLike[];
+            send?: ProofLike[];
           };
         } catch (error) {
-          const message = String(error ?? "").toLowerCase();
+          const message = getUnknownErrorMessage(error, "").toLowerCase();
           if (message.includes("not enough funds available for swap")) {
             // Fee/mint constraints: try local merge instead of failing.
             if (applyLocalMerge()) {
@@ -467,14 +459,14 @@ export const useCashuTokenChecks = ({
           const retryAmount = fee && total - fee > 0 ? total - fee : null;
           if (!retryAmount || retryAmount === initialAmount) throw error;
           swapped = (await runSwap(retryAmount)) as {
-            keep?: unknown[];
-            send?: unknown[];
+            keep?: ProofLike[];
+            send?: ProofLike[];
           };
         }
-        const newProofs = [
-          ...((swapped?.keep as unknown as unknown[]) ?? []),
-          ...((swapped?.send as unknown as unknown[]) ?? []),
-        ] as Array<{ C: string; amount: number; id: string; secret: string }>;
+        const newProofs = normalizeProofs([
+          ...(swapped?.keep ?? []),
+          ...(swapped?.send ?? []),
+        ]);
 
         const newTotal = newProofs.reduce(
           (sum, p) => sum + (Number(p?.amount ?? 0) || 0),

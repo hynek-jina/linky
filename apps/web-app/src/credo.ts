@@ -81,6 +81,80 @@ const decodeBase64Url = (input: string): Uint8Array | null => {
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const isFiniteNumber = (value: unknown): value is number => {
+  return typeof value === "number" && Number.isFinite(value);
+};
+
+const isOptionalFiniteNumber = (
+  value: unknown,
+): value is number | undefined => {
+  return value === undefined || isFiniteNumber(value);
+};
+
+const isOptionalString = (value: unknown): value is string | undefined => {
+  return value === undefined || typeof value === "string";
+};
+
+const isCredoPromisePayload = (
+  value: unknown,
+): value is CredoPromisePayload => {
+  if (!isRecord(value)) return false;
+  return (
+    value.type === "promise" &&
+    value.version === 1 &&
+    isFiniteNumber(value.amount) &&
+    isFiniteNumber(value.created_at) &&
+    isFiniteNumber(value.expires_at) &&
+    typeof value.issuer === "string" &&
+    typeof value.nonce === "string" &&
+    typeof value.recipient === "string" &&
+    typeof value.unit === "string"
+  );
+};
+
+const isCredoSettlementPayload = (
+  value: unknown,
+): value is CredoSettlementPayload => {
+  if (!isRecord(value)) return false;
+  return (
+    value.type === "settlement" &&
+    value.version === 1 &&
+    isOptionalFiniteNumber(value.amount) &&
+    typeof value.issuer === "string" &&
+    isOptionalString(value.nonce) &&
+    typeof value.promise_id === "string" &&
+    typeof value.recipient === "string" &&
+    isFiniteNumber(value.settled_at) &&
+    isOptionalString(value.unit)
+  );
+};
+
+const isCredoPromiseMessage = (
+  value: unknown,
+): value is CredoPromiseMessage => {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.issuer_sig === "string" &&
+    typeof value.promise_id === "string" &&
+    isCredoPromisePayload(value.promise)
+  );
+};
+
+const isCredoSettlementMessage = (
+  value: unknown,
+): value is CredoSettlementMessage => {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.recipient_sig === "string" &&
+    typeof value.settlement_id === "string" &&
+    isCredoSettlementPayload(value.settlement)
+  );
+};
+
 const canonicalize = (value: unknown): string => {
   if (value === null || value === undefined) return "null";
   if (typeof value === "number" || typeof value === "boolean") {
@@ -90,8 +164,8 @@ const canonicalize = (value: unknown): string => {
   if (Array.isArray(value)) {
     return `[${value.map((v) => canonicalize(v)).join(",")}]`;
   }
-  if (typeof value === "object") {
-    const obj = value as Record<string, unknown>;
+  if (isRecord(value)) {
+    const obj = value;
     const keys = Object.keys(obj).sort();
     const entries = keys.map(
       (k) => `${JSON.stringify(k)}:${canonicalize(obj[k])}`,
@@ -107,7 +181,8 @@ const decodeNpubToHex = (npub: string): string | null => {
   try {
     const decoded = nip19.decode(npub);
     if (decoded.type !== "npub") return null;
-    return decoded.data as string;
+    if (typeof decoded.data !== "string") return null;
+    return decoded.data;
   } catch {
     return null;
   }
@@ -131,12 +206,9 @@ export const decodeCredoMessage = (
   if (!bytes) return null;
   try {
     const jsonText = new TextDecoder().decode(bytes);
-    const obj = JSON.parse(jsonText) as Record<string, unknown> | null;
-    if (!obj || typeof obj !== "object") return null;
-    if (obj.promise && typeof obj.promise === "object")
-      return obj as CredoPromiseMessage;
-    if (obj.settlement && typeof obj.settlement === "object")
-      return obj as CredoSettlementMessage;
+    const parsed: unknown = JSON.parse(jsonText);
+    if (isCredoPromiseMessage(parsed)) return parsed;
+    if (isCredoSettlementMessage(parsed)) return parsed;
     return null;
   } catch {
     return null;
@@ -153,7 +225,7 @@ export const parseCredoMessage = (
   if (!decoded) return null;
 
   if ("promise" in decoded) {
-    const promise = decoded.promise as CredoPromisePayload;
+    const promise = decoded.promise;
     const promiseId = String(decoded.promise_id ?? "").trim();
     const issuerSig = String(decoded.issuer_sig ?? "").trim();
     if (!promiseId || !issuerSig) return null;
@@ -180,14 +252,9 @@ export const parseCredoMessage = (
     return { kind: "promise", token, promise, promiseId, issuerSig, isValid };
   }
 
-  const settlement = (decoded as CredoSettlementMessage)
-    .settlement as CredoSettlementPayload;
-  const settlementId = String(
-    (decoded as CredoSettlementMessage).settlement_id ?? "",
-  ).trim();
-  const recipientSig = String(
-    (decoded as CredoSettlementMessage).recipient_sig ?? "",
-  ).trim();
+  const settlement = decoded.settlement;
+  const settlementId = String(decoded.settlement_id ?? "").trim();
+  const recipientSig = String(decoded.recipient_sig ?? "").trim();
   if (!settlementId || !recipientSig) return null;
 
   const payloadCanonical = canonicalize(settlement);

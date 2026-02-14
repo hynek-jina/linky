@@ -1,9 +1,7 @@
 import React from "react";
+import type { ContactNameRowLike, OptionalNumber } from "../../types/appTypes";
 
-interface ContactRow {
-  id?: unknown;
-  name?: unknown;
-}
+type ContactRow = ContactNameRowLike;
 
 interface ContactsSearchItem<TContact extends ContactRow> {
   contact: TContact;
@@ -13,7 +11,7 @@ interface ContactsSearchItem<TContact extends ContactRow> {
 }
 
 interface LastMessageRow {
-  createdAtSec?: unknown;
+  createdAtSec?: OptionalNumber;
 }
 
 interface UseVisibleContactsParams<TContact extends ContactRow> {

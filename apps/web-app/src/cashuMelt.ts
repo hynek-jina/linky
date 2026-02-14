@@ -4,7 +4,14 @@ import {
   getCashuDeterministicSeedFromStorage,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
+import type {
+  MeltProofsResponse,
+  MeltQuoteResponse,
+  Proof,
+  SendResponse,
+} from "@cashu/cashu-ts";
 import { getCashuLib } from "./utils/cashuLib";
+import { getUnknownErrorMessage } from "./utils/unknown";
 
 type CashuPayResult = {
   ok: true;
@@ -31,15 +38,72 @@ type CashuPayErrorResult = {
   unit: string | null;
 };
 
-type Proof = {
-  C: string;
-  amount: number;
-  id: string;
-  secret: string;
-};
-
 const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
   proofs.reduce((sum, proof) => sum + proof.amount, 0);
+
+interface ParsedMeltProofsResponse {
+  change: Proof[];
+  fee?: number;
+  feePaid?: number;
+  fee_paid?: number;
+  quote: MeltQuoteResponse;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isProof = (value: unknown): value is Proof => {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.amount === "number" &&
+    typeof value.secret === "string" &&
+    typeof value.C === "string" &&
+    typeof value.id === "string"
+  );
+};
+
+const isProofArray = (value: unknown): value is Proof[] => {
+  return Array.isArray(value) && value.every(isProof);
+};
+
+const isMeltQuoteResponse = (value: unknown): value is MeltQuoteResponse => {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.quote === "string" &&
+    typeof value.amount === "number" &&
+    typeof value.fee_reserve === "number" &&
+    typeof value.state === "string" &&
+    typeof value.expiry === "number" &&
+    typeof value.request === "string" &&
+    typeof value.unit === "string"
+  );
+};
+
+const isOptionalFee = (value: unknown): value is number | undefined => {
+  return value === undefined || typeof value === "number";
+};
+
+const parseMeltProofsResponse = (
+  value: unknown,
+): ParsedMeltProofsResponse | null => {
+  if (!isRecord(value)) return null;
+  if (!isMeltQuoteResponse(value.quote)) return null;
+  if (!(value.change === undefined || isProofArray(value.change))) return null;
+  if (
+    !isOptionalFee(value.fee_paid) ||
+    !isOptionalFee(value.feePaid) ||
+    !isOptionalFee(value.fee)
+  ) {
+    return null;
+  }
+  return {
+    quote: value.quote,
+    change: value.change ?? [],
+    ...(value.fee_paid !== undefined ? { fee_paid: value.fee_paid } : {}),
+    ...(value.feePaid !== undefined ? { feePaid: value.feePaid } : {}),
+    ...(value.fee !== undefined ? { fee: value.fee } : {}),
+  };
+};
 
 export const meltInvoiceWithTokensAtMint = async (args: {
   invoice: string;
@@ -79,7 +143,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
       feePaid: 0,
       remainingAmount: 0,
       remainingToken: null,
-      error: String(e ?? "decode failed"),
+      error: getUnknownErrorMessage(e, "decode failed"),
     };
   }
 
@@ -89,7 +153,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
   });
 
   const isOutputsAlreadySignedError = (e: unknown): boolean => {
-    const m = String(e ?? "").toLowerCase();
+    const m = getUnknownErrorMessage(e, "").toLowerCase();
     return (
       m.includes("outputs have already been signed") ||
       m.includes("already been signed before") ||
@@ -123,7 +187,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
       };
     }
 
-    const run = async () => {
+    const run = async (): Promise<CashuPayResult | CashuPayErrorResult> => {
       const counter0 = det
         ? getCashuDeterministicCounter({
             mintUrl: mint,
@@ -136,7 +200,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
       const swapOnce = async (counter: number) =>
         await wallet.swap(total, allProofs, { counter });
 
-      let swapped: { keep: Proof[]; send: Proof[] } | undefined;
+      let swapped: SendResponse | null = null;
       let lastError: unknown;
       if (typeof counter0 === "number") {
         let counter = counter0;
@@ -166,8 +230,8 @@ export const meltInvoiceWithTokensAtMint = async (args: {
         swapped = await wallet.swap(total, allProofs);
       }
 
-      const keepLen = Array.isArray(swapped.keep) ? swapped.keep.length : 0;
-      const sendLen = Array.isArray(swapped.send) ? swapped.send.length : 0;
+      const keepLen = swapped.keep.length;
+      const sendLen = swapped.send.length;
       const counterAfterSwap = det
         ? bumpCashuDeterministicCounter({
             mintUrl: mint,
@@ -179,7 +243,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
 
       // If anything fails after this point, old proofs may already be invalid.
       // So we prepare a "recovery" token from the swapped proofs.
-      const recoveryProofs = [...(swapped.keep ?? []), ...(swapped.send ?? [])];
+      const recoveryProofs = [...swapped.keep, ...swapped.send];
       const recoveryAmount = getProofAmountSum(recoveryProofs);
       const recoveryToken =
         recoveryProofs.length > 0
@@ -190,21 +254,25 @@ export const meltInvoiceWithTokensAtMint = async (args: {
             })
           : null;
 
-      let melt:
-        | {
-            change?: Proof[];
-            fee_paid?: unknown;
-            feePaid?: unknown;
-            fee?: unknown;
-          }
-        | (Record<string, unknown> & { change?: Proof[] })
-        | null = null;
+      let melt: ParsedMeltProofsResponse | null = null;
 
       try {
+        const parseMeltResponse = (
+          response: MeltProofsResponse,
+        ): ParsedMeltProofsResponse => {
+          const parsedResponse = parseMeltProofsResponse(response);
+          if (!parsedResponse) {
+            throw new Error("Invalid melt response");
+          }
+          return parsedResponse;
+        };
+
         const meltOnce = async (counter: number) =>
-          (await wallet.meltProofs(quote, swapped!.send, {
-            counter,
-          })) as Record<string, unknown> & { change?: Proof[] };
+          parseMeltResponse(
+            await wallet.meltProofs(quote, swapped.send, {
+              counter,
+            }),
+          );
 
         if (typeof counterAfterSwap === "number") {
           let counter = counterAfterSwap;
@@ -232,14 +300,13 @@ export const meltInvoiceWithTokensAtMint = async (args: {
           }
           if (!melt) throw lastError ?? new Error("melt failed");
         } else {
-          melt = (await wallet.meltProofs(quote, swapped!.send)) as Record<
-            string,
-            unknown
-          > & { change?: Proof[] };
+          melt = parseMeltResponse(
+            await wallet.meltProofs(quote, swapped.send),
+          );
         }
       } catch (e) {
         return {
-          ok: false as const,
+          ok: false,
           mint,
           unit: unit ?? null,
           paidAmount,
@@ -247,7 +314,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
           feePaid: 0,
           remainingAmount: recoveryAmount,
           remainingToken: recoveryToken,
-          error: String(e ?? "melt failed"),
+          error: getUnknownErrorMessage(e, "melt failed"),
         };
       }
 
@@ -256,25 +323,17 @@ export const meltInvoiceWithTokensAtMint = async (args: {
           mintUrl: mint,
           unit: walletUnit,
           keysetId,
-          used: Array.isArray(melt?.change) ? melt.change.length : 0,
+          used: melt?.change.length ?? 0,
         });
       }
 
       const feePaid = (() => {
-        const m = (melt ?? {}) as Record<string, unknown>;
-        const raw =
-          (m.fee_paid as unknown) ??
-          (m.feePaid as unknown) ??
-          (m.fee as unknown) ??
-          0;
-        const n = Number(raw ?? 0);
+        const raw = melt?.fee_paid ?? melt?.feePaid ?? melt?.fee ?? 0;
+        const n = Number(raw);
         return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
       })();
 
-      const remainingProofs = [
-        ...(swapped.keep ?? []),
-        ...(melt?.change ?? []),
-      ];
+      const remainingProofs = [...swapped.keep, ...(melt?.change ?? [])];
       const remainingAmount = getProofAmountSum(remainingProofs);
 
       const remainingToken =
@@ -287,7 +346,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
           : null;
 
       return {
-        ok: true as const,
+        ok: true,
         mint,
         unit: walletUnit,
         paidAmount,
@@ -314,7 +373,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
       feePaid: 0,
       remainingAmount: getProofAmountSum(allProofs),
       remainingToken: null,
-      error: String(e ?? "melt failed"),
+      error: getUnknownErrorMessage(e, "melt failed"),
     };
   }
 };

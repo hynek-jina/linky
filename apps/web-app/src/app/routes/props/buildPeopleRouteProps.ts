@@ -1,110 +1,71 @@
-import type { AppRouteContentProps } from "../AppRouteContent";
-
-type PeopleRouteProps = Pick<
-  AppRouteContentProps,
-  | "chatProps"
-  | "contactEditProps"
-  | "contactNewProps"
-  | "contactPayProps"
-  | "contactProps"
-  | "mainSwipeProps"
-  | "profileProps"
->;
+import type { PeopleRoutesProps } from "../AppRouteContent";
 
 interface BuildPeopleRoutePropsParams {
-  activeGroup: AppRouteContentProps["mainSwipeProps"]["activeGroup"];
-  allowPromisesEnabled: AppRouteContentProps["chatProps"]["allowPromisesEnabled"];
-  cashuBalance: AppRouteContentProps["chatProps"]["cashuBalance"];
-  cashuIsBusy: AppRouteContentProps["chatProps"]["cashuIsBusy"];
-  chatDraft: AppRouteContentProps["chatProps"]["chatDraft"];
-  chatMessageElByIdRef: AppRouteContentProps["chatProps"]["chatMessageElByIdRef"];
-  chatMessages: AppRouteContentProps["chatProps"]["chatMessages"];
-  chatMessagesRef: AppRouteContentProps["chatProps"]["chatMessagesRef"];
-  chatSendIsBusy: AppRouteContentProps["chatProps"]["chatSendIsBusy"];
-  contactEditsSavable: AppRouteContentProps["contactEditProps"]["contactEditsSavable"];
-  contactPayMethod: AppRouteContentProps["contactPayProps"]["contactPayMethod"];
-  contacts: AppRouteContentProps["mainSwipeProps"]["contacts"];
-  contactsOnboardingCelebrating: AppRouteContentProps["mainSwipeProps"]["contactsOnboardingCelebrating"];
-  contactsOnboardingTasks: AppRouteContentProps["mainSwipeProps"]["contactsOnboardingTasks"];
-  contactsSearch: AppRouteContentProps["mainSwipeProps"]["contactsSearch"];
-  contactsSearchInputRef: AppRouteContentProps["mainSwipeProps"]["contactsSearchInputRef"];
-  contactsToolbarStyle: AppRouteContentProps["mainSwipeProps"]["contactsToolbarStyle"];
-  conversationsLabel: AppRouteContentProps["mainSwipeProps"]["conversationsLabel"];
-  copyText: AppRouteContentProps["profileProps"]["copyText"];
-  currentNpub: AppRouteContentProps["profileProps"]["currentNpub"];
-  derivedProfile: AppRouteContentProps["profileProps"]["derivedProfile"];
-  dismissContactsOnboarding: AppRouteContentProps["mainSwipeProps"]["dismissContactsOnboarding"];
-  displayUnit: AppRouteContentProps["mainSwipeProps"]["displayUnit"];
-  editingId: AppRouteContentProps["contactEditProps"]["editingId"];
-  effectiveMyLightningAddress: AppRouteContentProps["profileProps"]["effectiveMyLightningAddress"];
-  effectiveProfileName: AppRouteContentProps["profileProps"]["effectiveProfileName"];
-  effectiveProfilePicture: AppRouteContentProps["profileProps"]["effectiveProfilePicture"];
-  feedbackContactNpub: AppRouteContentProps["chatProps"]["feedbackContactNpub"];
-  form: AppRouteContentProps["contactEditProps"]["form"];
-  getCashuTokenMessageInfo: AppRouteContentProps["chatProps"]["getCashuTokenMessageInfo"];
-  getCredoAvailableForContact: AppRouteContentProps["chatProps"]["getCredoAvailableForContact"];
-  getCredoTokenMessageInfo: AppRouteContentProps["chatProps"]["getCredoTokenMessageInfo"];
-  getMintIconUrl: AppRouteContentProps["chatProps"]["getMintIconUrl"];
-  groupNames: AppRouteContentProps["contactEditProps"]["groupNames"];
-  handleMainSwipeScroll: AppRouteContentProps["mainSwipeProps"]["handleMainSwipeScroll"];
-  handleSaveContact: AppRouteContentProps["contactEditProps"]["handleSaveContact"];
-  isProfileEditing: AppRouteContentProps["profileProps"]["isProfileEditing"];
-  isSavingContact: AppRouteContentProps["contactEditProps"]["isSavingContact"];
-  lang: AppRouteContentProps["chatProps"]["lang"];
-  mainSwipeProgress: AppRouteContentProps["mainSwipeProps"]["mainSwipeProgress"];
-  mainSwipeRef: AppRouteContentProps["mainSwipeProps"]["mainSwipeRef"];
-  mainSwipeScrollY: AppRouteContentProps["mainSwipeProps"]["mainSwipeScrollY"];
-  myProfileQr: AppRouteContentProps["profileProps"]["myProfileQr"];
-  NO_GROUP_FILTER: AppRouteContentProps["mainSwipeProps"]["NO_GROUP_FILTER"];
-  nostrPictureByNpub: AppRouteContentProps["chatProps"]["nostrPictureByNpub"];
-  onPickProfilePhoto: AppRouteContentProps["profileProps"]["onPickProfilePhoto"];
-  onProfilePhotoSelected: AppRouteContentProps["profileProps"]["onProfilePhotoSelected"];
-  openContactPay: AppRouteContentProps["chatProps"]["openContactPay"];
-  openNewContactPage: AppRouteContentProps["mainSwipeProps"]["openNewContactPage"];
-  openScan: AppRouteContentProps["mainSwipeProps"]["openScan"];
-  otherContactsLabel: AppRouteContentProps["mainSwipeProps"]["otherContactsLabel"];
-  payAmount: AppRouteContentProps["contactPayProps"]["payAmount"];
-  paySelectedContact: AppRouteContentProps["contactPayProps"]["paySelectedContact"];
-  payWithCashuEnabled: AppRouteContentProps["chatProps"]["payWithCashuEnabled"];
-  pendingDeleteId: AppRouteContentProps["contactEditProps"]["pendingDeleteId"];
-  profileEditLnAddress: AppRouteContentProps["profileProps"]["profileEditLnAddress"];
-  profileEditName: AppRouteContentProps["profileProps"]["profileEditName"];
-  profileEditPicture: AppRouteContentProps["profileProps"]["profileEditPicture"];
-  profileEditsSavable: AppRouteContentProps["profileProps"]["profileEditsSavable"];
-  profilePhotoInputRef: AppRouteContentProps["profileProps"]["profilePhotoInputRef"];
-  promiseTotalCapSat: AppRouteContentProps["contactPayProps"]["promiseTotalCapSat"];
-  renderContactCard: AppRouteContentProps["mainSwipeProps"]["renderContactCard"];
-  requestDeleteCurrentContact: AppRouteContentProps["contactEditProps"]["requestDeleteCurrentContact"];
-  resetEditedContactFieldFromNostr: AppRouteContentProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
-  route: AppRouteContentProps["route"];
-  saveProfileEdits: AppRouteContentProps["profileProps"]["saveProfileEdits"];
-  scanIsOpen: AppRouteContentProps["contactNewProps"]["scanIsOpen"];
-  selectedContact: AppRouteContentProps["chatProps"]["selectedContact"];
-  sendChatMessage: AppRouteContentProps["chatProps"]["sendChatMessage"];
-  setActiveGroup: AppRouteContentProps["mainSwipeProps"]["setActiveGroup"];
-  setChatDraft: AppRouteContentProps["chatProps"]["setChatDraft"];
-  setContactPayMethod: AppRouteContentProps["contactPayProps"]["setContactPayMethod"];
-  setContactsSearch: AppRouteContentProps["mainSwipeProps"]["setContactsSearch"];
-  setForm: AppRouteContentProps["contactEditProps"]["setForm"];
-  setMintIconUrlByMint: AppRouteContentProps["chatProps"]["setMintIconUrlByMint"];
-  setPayAmount: AppRouteContentProps["contactPayProps"]["setPayAmount"];
-  setProfileEditLnAddress: AppRouteContentProps["profileProps"]["setProfileEditLnAddress"];
-  setProfileEditName: AppRouteContentProps["profileProps"]["setProfileEditName"];
-  setProfileEditPicture: AppRouteContentProps["profileProps"]["setProfileEditPicture"];
-  showContactsOnboarding: AppRouteContentProps["mainSwipeProps"]["showContactsOnboarding"];
-  showGroupFilter: AppRouteContentProps["mainSwipeProps"]["showGroupFilter"];
-  showNoGroupFilter: AppRouteContentProps["mainSwipeProps"]["showNoGroupFilter"];
-  startContactsGuide: AppRouteContentProps["mainSwipeProps"]["startContactsGuide"];
-  t: AppRouteContentProps["chatProps"]["t"];
-  totalCredoOutstandingOut: AppRouteContentProps["contactPayProps"]["totalCredoOutstandingOut"];
-  visibleContacts: AppRouteContentProps["mainSwipeProps"]["visibleContacts"];
-  bottomTabActive: AppRouteContentProps["mainSwipeProps"]["bottomTabActive"];
+  allowPromisesEnabled: PeopleRoutesProps["chatProps"]["allowPromisesEnabled"];
+  cashuBalance: PeopleRoutesProps["chatProps"]["cashuBalance"];
+  cashuIsBusy: PeopleRoutesProps["chatProps"]["cashuIsBusy"];
+  chatDraft: PeopleRoutesProps["chatProps"]["chatDraft"];
+  chatMessageElByIdRef: PeopleRoutesProps["chatProps"]["chatMessageElByIdRef"];
+  chatMessages: PeopleRoutesProps["chatProps"]["chatMessages"];
+  chatMessagesRef: PeopleRoutesProps["chatProps"]["chatMessagesRef"];
+  chatSendIsBusy: PeopleRoutesProps["chatProps"]["chatSendIsBusy"];
+  contactEditsSavable: PeopleRoutesProps["contactEditProps"]["contactEditsSavable"];
+  contactPayMethod: PeopleRoutesProps["contactPayProps"]["contactPayMethod"];
+  copyText: PeopleRoutesProps["profileProps"]["copyText"];
+  currentNpub: PeopleRoutesProps["profileProps"]["currentNpub"];
+  derivedProfile: PeopleRoutesProps["profileProps"]["derivedProfile"];
+  displayUnit: PeopleRoutesProps["contactPayProps"]["displayUnit"];
+  editingId: PeopleRoutesProps["contactEditProps"]["editingId"];
+  effectiveMyLightningAddress: PeopleRoutesProps["profileProps"]["effectiveMyLightningAddress"];
+  effectiveProfileName: PeopleRoutesProps["profileProps"]["effectiveProfileName"];
+  effectiveProfilePicture: PeopleRoutesProps["profileProps"]["effectiveProfilePicture"];
+  feedbackContactNpub: PeopleRoutesProps["chatProps"]["feedbackContactNpub"];
+  form: PeopleRoutesProps["contactEditProps"]["form"];
+  getCashuTokenMessageInfo: PeopleRoutesProps["chatProps"]["getCashuTokenMessageInfo"];
+  getCredoAvailableForContact: PeopleRoutesProps["chatProps"]["getCredoAvailableForContact"];
+  getCredoTokenMessageInfo: PeopleRoutesProps["chatProps"]["getCredoTokenMessageInfo"];
+  getMintIconUrl: PeopleRoutesProps["chatProps"]["getMintIconUrl"];
+  groupNames: PeopleRoutesProps["contactEditProps"]["groupNames"];
+  handleSaveContact: PeopleRoutesProps["contactEditProps"]["handleSaveContact"];
+  isProfileEditing: PeopleRoutesProps["profileProps"]["isProfileEditing"];
+  isSavingContact: PeopleRoutesProps["contactEditProps"]["isSavingContact"];
+  lang: PeopleRoutesProps["chatProps"]["lang"];
+  myProfileQr: PeopleRoutesProps["profileProps"]["myProfileQr"];
+  nostrPictureByNpub: PeopleRoutesProps["chatProps"]["nostrPictureByNpub"];
+  onPickProfilePhoto: PeopleRoutesProps["profileProps"]["onPickProfilePhoto"];
+  onProfilePhotoSelected: PeopleRoutesProps["profileProps"]["onProfilePhotoSelected"];
+  openContactPay: PeopleRoutesProps["chatProps"]["openContactPay"];
+  openScan: PeopleRoutesProps["contactNewProps"]["openScan"];
+  payAmount: PeopleRoutesProps["contactPayProps"]["payAmount"];
+  paySelectedContact: PeopleRoutesProps["contactPayProps"]["paySelectedContact"];
+  payWithCashuEnabled: PeopleRoutesProps["chatProps"]["payWithCashuEnabled"];
+  pendingDeleteId: PeopleRoutesProps["contactEditProps"]["pendingDeleteId"];
+  profileEditLnAddress: PeopleRoutesProps["profileProps"]["profileEditLnAddress"];
+  profileEditName: PeopleRoutesProps["profileProps"]["profileEditName"];
+  profileEditPicture: PeopleRoutesProps["profileProps"]["profileEditPicture"];
+  profileEditsSavable: PeopleRoutesProps["profileProps"]["profileEditsSavable"];
+  profilePhotoInputRef: PeopleRoutesProps["profileProps"]["profilePhotoInputRef"];
+  promiseTotalCapSat: PeopleRoutesProps["contactPayProps"]["promiseTotalCapSat"];
+  requestDeleteCurrentContact: PeopleRoutesProps["contactEditProps"]["requestDeleteCurrentContact"];
+  resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
+  saveProfileEdits: PeopleRoutesProps["profileProps"]["saveProfileEdits"];
+  scanIsOpen: PeopleRoutesProps["contactNewProps"]["scanIsOpen"];
+  selectedContact: PeopleRoutesProps["chatProps"]["selectedContact"];
+  sendChatMessage: PeopleRoutesProps["chatProps"]["sendChatMessage"];
+  setChatDraft: PeopleRoutesProps["chatProps"]["setChatDraft"];
+  setContactPayMethod: PeopleRoutesProps["contactPayProps"]["setContactPayMethod"];
+  setForm: PeopleRoutesProps["contactEditProps"]["setForm"];
+  setMintIconUrlByMint: PeopleRoutesProps["chatProps"]["setMintIconUrlByMint"];
+  setPayAmount: PeopleRoutesProps["contactPayProps"]["setPayAmount"];
+  setProfileEditLnAddress: PeopleRoutesProps["profileProps"]["setProfileEditLnAddress"];
+  setProfileEditName: PeopleRoutesProps["profileProps"]["setProfileEditName"];
+  setProfileEditPicture: PeopleRoutesProps["profileProps"]["setProfileEditPicture"];
+  t: PeopleRoutesProps["chatProps"]["t"];
+  totalCredoOutstandingOut: PeopleRoutesProps["contactPayProps"]["totalCredoOutstandingOut"];
 }
 
 export const buildPeopleRouteProps = ({
-  activeGroup,
   allowPromisesEnabled,
-  bottomTabActive,
   cashuBalance,
   cashuIsBusy,
   chatDraft,
@@ -114,17 +75,9 @@ export const buildPeopleRouteProps = ({
   chatSendIsBusy,
   contactEditsSavable,
   contactPayMethod,
-  contacts,
-  contactsOnboardingCelebrating,
-  contactsOnboardingTasks,
-  contactsSearch,
-  contactsSearchInputRef,
-  contactsToolbarStyle,
-  conversationsLabel,
   copyText,
   currentNpub,
   derivedProfile,
-  dismissContactsOnboarding,
   displayUnit,
   editingId,
   effectiveMyLightningAddress,
@@ -137,23 +90,16 @@ export const buildPeopleRouteProps = ({
   getCredoTokenMessageInfo,
   getMintIconUrl,
   groupNames,
-  handleMainSwipeScroll,
   handleSaveContact,
   isProfileEditing,
   isSavingContact,
   lang,
-  mainSwipeProgress,
-  mainSwipeRef,
-  mainSwipeScrollY,
   myProfileQr,
-  NO_GROUP_FILTER,
   nostrPictureByNpub,
   onPickProfilePhoto,
   onProfilePhotoSelected,
   openContactPay,
-  openNewContactPage,
   openScan,
-  otherContactsLabel,
   payAmount,
   paySelectedContact,
   payWithCashuEnabled,
@@ -164,32 +110,23 @@ export const buildPeopleRouteProps = ({
   profileEditsSavable,
   profilePhotoInputRef,
   promiseTotalCapSat,
-  renderContactCard,
   requestDeleteCurrentContact,
   resetEditedContactFieldFromNostr,
-  route,
   saveProfileEdits,
   scanIsOpen,
   selectedContact,
   sendChatMessage,
-  setActiveGroup,
   setChatDraft,
   setContactPayMethod,
-  setContactsSearch,
   setForm,
   setMintIconUrlByMint,
   setPayAmount,
   setProfileEditLnAddress,
   setProfileEditName,
   setProfileEditPicture,
-  showContactsOnboarding,
-  showGroupFilter,
-  showNoGroupFilter,
-  startContactsGuide,
   t,
   totalCredoOutstandingOut,
-  visibleContacts,
-}: BuildPeopleRoutePropsParams): PeopleRouteProps => {
+}: BuildPeopleRoutePropsParams): PeopleRoutesProps => {
   return {
     chatProps: {
       selectedContact,
@@ -268,40 +205,6 @@ export const buildPeopleRouteProps = ({
       getCredoAvailableForContact,
       openContactPay,
       t,
-    },
-    mainSwipeProps: {
-      activeGroup,
-      bottomTabActive,
-      cashuBalance,
-      contacts,
-      contactsOnboardingCelebrating,
-      contactsOnboardingTasks,
-      contactsSearch,
-      contactsSearchInputRef,
-      contactsToolbarStyle,
-      conversationsLabel,
-      displayUnit,
-      groupNames,
-      mainSwipeProgress,
-      mainSwipeRef,
-      mainSwipeScrollY,
-      NO_GROUP_FILTER,
-      otherContactsLabel,
-      route,
-      scanIsOpen,
-      showContactsOnboarding,
-      showGroupFilter,
-      showNoGroupFilter,
-      t,
-      visibleContacts,
-      dismissContactsOnboarding,
-      handleMainSwipeScroll,
-      openNewContactPage,
-      openScan,
-      renderContactCard,
-      setActiveGroup,
-      setContactsSearch,
-      startContactsGuide,
     },
     profileProps: {
       currentNpub,

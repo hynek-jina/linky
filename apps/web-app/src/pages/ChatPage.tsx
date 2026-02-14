@@ -1,25 +1,13 @@
 import type { FC } from "react";
+import type {
+  CashuTokenMessageInfo,
+  CredoTokenMessageInfo,
+} from "../app/lib/tokenMessageInfo";
+import type { LocalNostrMessage, MintUrlInput } from "../app/types/appTypes";
 import { ChatMessage } from "../components/ChatMessage";
 import type { ContactId } from "../evolu";
 import { formatChatDayLabel, formatInteger } from "../utils/formatting";
-
-interface CashuTokenInfo {
-  amount: number | null;
-  isValid: boolean;
-  mintDisplay: string | null;
-  mintUrl: string | null;
-  tokenRaw: string;
-}
-
-interface CredoTokenInfo {
-  amount: number | null;
-  expiresAtSec: number | null;
-  isValid: boolean;
-  issuer: string | null;
-  kind: "promise" | "settlement";
-  recipient: string | null;
-  tokenRaw: string;
-}
+import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
 interface Contact {
   id: ContactId;
@@ -33,14 +21,14 @@ interface ChatPageProps {
   cashuIsBusy: boolean;
   chatDraft: string;
   chatMessageElByIdRef: React.MutableRefObject<Map<string, HTMLDivElement>>;
-  chatMessages: Record<string, unknown>[];
+  chatMessages: LocalNostrMessage[];
   chatMessagesRef: React.RefObject<HTMLDivElement | null>;
   chatSendIsBusy: boolean;
   feedbackContactNpub: string;
-  getCashuTokenMessageInfo: (id: string) => CashuTokenInfo | null;
+  getCashuTokenMessageInfo: (id: string) => CashuTokenMessageInfo | null;
   getCredoAvailableForContact: (npub: string) => number;
-  getCredoTokenMessageInfo: (id: string) => CredoTokenInfo | null;
-  getMintIconUrl: (mint: unknown) => {
+  getCredoTokenMessageInfo: (id: string) => CredoTokenMessageInfo | null;
+  getMintIconUrl: (mint: MintUrlInput) => {
     origin: string | null;
     url: string | null;
     host: string | null;
@@ -91,7 +79,7 @@ export const ChatPage: FC<ChatPageProps> = ({
     );
   }
 
-  const npub = String(selectedContact.npub ?? "").trim();
+  const npub = normalizeNpubIdentifier(selectedContact.npub);
   const ln = String(selectedContact.lnAddress ?? "").trim();
   const canPayThisContact =
     Boolean(ln) ||
@@ -153,7 +141,7 @@ export const ChatPage: FC<ChatPageProps> = ({
                 chatPendingLabel={t("chatPendingShort")}
                 messageElRef={(el, messageId) => {
                   const map = chatMessageElByIdRef.current;
-                  if (el) map.set(messageId, el as HTMLDivElement);
+                  if (el) map.set(messageId, el);
                   else map.delete(messageId);
                 }}
               />

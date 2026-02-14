@@ -1,3 +1,5 @@
+import type { MintUrlInput } from "../app/types/appTypes";
+
 interface MintIcon {
   failed: boolean;
   host: string | null;
@@ -6,7 +8,7 @@ interface MintIcon {
 
 interface MintButtonProps {
   fallbackLetter: string;
-  getMintIconUrl: (mint: unknown) => MintIcon;
+  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   isSelected: boolean;
   label: string;
   mint: string;
@@ -50,7 +52,7 @@ export function MintButton({
           loading="lazy"
           referrerPolicy="no-referrer"
           onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
+            e.currentTarget.style.display = "none";
           }}
         />
       ) : (

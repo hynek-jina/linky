@@ -1,20 +1,15 @@
-import type { Filter, Event as NostrToolsEvent } from "nostr-tools";
+import type {
+  Event as NostrToolsEvent,
+  Filter,
+  SimplePool as NostrToolsSimplePool,
+} from "nostr-tools";
 
-type NostrPool = {
-  publish: (
-    relays: string[],
-    event: NostrToolsEvent,
-  ) => Array<Promise<unknown>>;
-  querySync: (
-    relays: string[],
-    filter: Record<string, unknown>,
-    opts: { maxWait: number },
-  ) => Promise<unknown>;
+type NostrPool = Pick<NostrToolsSimplePool, "publish" | "querySync"> & {
   subscribe: (
     relays: string[],
-    filters: Filter[],
-    opts: { onevent: (event: NostrToolsEvent) => void },
-  ) => { close: (reason?: string) => Promise<void> | void };
+    filter: Filter,
+    opts: { onevent: (event: NostrToolsEvent) => void; maxWait?: number },
+  ) => { close: (reason?: string) => void };
 };
 
 let sharedPoolPromise: Promise<NostrPool> | null = null;
@@ -24,8 +19,7 @@ export const getSharedNostrPool = async (): Promise<NostrPool> => {
 
   sharedPoolPromise = (async () => {
     const { SimplePool } = await import("nostr-tools");
-    const pool = new SimplePool();
-    return pool as unknown as NostrPool;
+    return new SimplePool();
   })().catch((error) => {
     sharedPoolPromise = null;
     throw error;

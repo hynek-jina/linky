@@ -70,10 +70,10 @@ export const publishToRelaysWithRetry = async ({
   retryDelayMs = DEFAULT_PUBLISH_RETRY_DELAY_MS,
 }: PublishToRelaysWithRetryParams): Promise<{
   anySuccess: boolean;
-  error: unknown | null;
+  error: string | null;
   timedOut: boolean;
 }> => {
-  let lastError: unknown = null;
+  let lastError: string | null = null;
   let timedOut = false;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -83,9 +83,10 @@ export const publishToRelaysWithRetry = async ({
     const anySuccess = publishResults.some((r) => r.status === "fulfilled");
     if (anySuccess) return { anySuccess: true, error: null, timedOut: false };
 
-    lastError = publishResults.find(
+    const rejectedReason = publishResults.find(
       (r): r is PromiseRejectedResult => r.status === "rejected",
     )?.reason;
+    lastError = String(rejectedReason ?? "");
     const message = String(lastError ?? "").toLowerCase();
     const isTimeout =
       message.includes("timed out") || message.includes("timeout");
@@ -118,7 +119,7 @@ export const publishWrappedWithRetry = async ({
   wrapForMe,
 }: PublishWrappedWithRetryParams): Promise<{
   anySuccess: boolean;
-  error: unknown | null;
+  error: string | null;
 }> => {
   const [me, contact] = await Promise.all([
     publishToRelaysWithRetry({
