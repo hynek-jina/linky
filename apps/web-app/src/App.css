@@ -773,6 +773,12 @@ button.settings-link:hover {
   cursor: pointer;
 }
 
+.qr-button {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
 .profile-detail {
   display: flex;
   flex-direction: column;

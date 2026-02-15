@@ -260,12 +260,15 @@ export function ProfileQrModal({
             </div>
 
             {myProfileQr ? (
-              <img
-                className="qr"
-                src={myProfileQr}
-                alt=""
+              <button
+                type="button"
+                className="qr-button"
                 onClick={onCopyNpub}
-              />
+                title={t("copy")}
+                aria-label={t("copy")}
+              >
+                <img className="qr" src={myProfileQr} alt="" />
+              </button>
             ) : null}
 
             <button
