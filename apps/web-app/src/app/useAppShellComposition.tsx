@@ -17,7 +17,7 @@ import {
 } from "../evolu";
 import { navigateTo, useRouting } from "../hooks/useRouting";
 import { useToasts } from "../hooks/useToasts";
-import { getInitialLang, translations, type Lang } from "../i18n";
+import { getInitialLang, translations, type I18nKey, type Lang } from "../i18n";
 import { type NostrProfileMetadata } from "../nostrProfile";
 import { getCashuDeterministicSeedFromStorage } from "../utils/cashuDeterministic";
 import { getCashuLib } from "../utils/cashuLib";
@@ -1609,10 +1609,17 @@ export const useAppShellComposition = () => {
     update,
   });
 
-  const copyText = async (value: string) => {
+  const copyText = async (
+    value: string,
+    successToastKey: I18nKey = "copiedToClipboard",
+  ) => {
     try {
-      await navigator.clipboard?.writeText(value);
-      pushToast(t("copiedToClipboard"));
+      const writeText = navigator.clipboard?.writeText;
+      if (!writeText) {
+        throw new Error("Clipboard API unavailable");
+      }
+      await writeText.call(navigator.clipboard, value);
+      pushToast(t(successToastKey));
     } catch {
       pushToast(t("copyFailed"));
     }

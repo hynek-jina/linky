@@ -308,6 +308,7 @@ export const en = {
   contactDeleted: "Contact deleted.",
 
   copiedToClipboard: "Copied to clipboard.",
+  yourNpubWasCopied: "Your npub was copied.",
   copyFailed: "Copy to clipboard failed.",
   copy: "Copy",
 
