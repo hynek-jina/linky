@@ -266,17 +266,23 @@ export function ProfileQrModal({
                 alt=""
                 onClick={onCopyNpub}
               />
-            ) : (
-              <p className="muted">{currentNpub}</p>
-            )}
+            ) : null}
 
             <h2 className="contact-detail-name">
               {effectiveProfileName ?? formatShortNpub(currentNpub)}
             </h2>
 
-            {effectiveMyLightningAddress ? (
-              <p className="contact-detail-ln">{effectiveMyLightningAddress}</p>
-            ) : null}
+            {effectiveMyLightningAddress && (
+              <button
+                type="button"
+                className="copyable npub muted"
+                onClick={onCopyNpub}
+                title={t("copy")}
+                aria-label={t("copy")}
+              >
+                {effectiveMyLightningAddress}
+              </button>
+            )}
 
             <p className="muted profile-note">{t("profileMessagesHint")}</p>
           </div>

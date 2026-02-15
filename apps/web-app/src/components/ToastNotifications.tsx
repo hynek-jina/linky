@@ -40,7 +40,11 @@ export const ToastNotifications: React.FC<ToastNotificationsProps> = ({
               if (!token) return;
               void (async () => {
                 try {
-                  await navigator.clipboard?.writeText(token);
+                  const writeText = navigator.clipboard?.writeText;
+                  if (!writeText) {
+                    throw new Error("Clipboard API unavailable");
+                  }
+                  await writeText.call(navigator.clipboard, token);
                   pushToast(t("copiedToClipboard"));
                   setRecentlyReceivedToken(null);
                 } catch {

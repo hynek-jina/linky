@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from "react";
-import type { Lang } from "../../i18n";
+import type { I18nKey, Lang } from "../../i18n";
 import type { Route } from "../../types/route";
 import type { DerivedProfileDefaults } from "../../derivedProfile";
 import type {
@@ -77,7 +77,7 @@ export interface AppShellActionsContextValue {
     back: () => void;
     next: () => void;
   };
-  copyText: (text: string) => Promise<void>;
+  copyText: (text: string, successToastKey?: I18nKey) => Promise<void>;
   onPickProfilePhoto: () => void;
   onProfilePhotoSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
   openFeedbackContact: () => void;

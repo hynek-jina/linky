@@ -87,7 +87,7 @@ export function AuthenticatedLayout({
           onClose={actions.closeProfileQr}
           onCopyNpub={() => {
             if (!state.currentNpub) return;
-            void actions.copyText(state.currentNpub);
+            void actions.copyText(state.currentNpub, "yourNpubWasCopied");
           }}
           onPickProfilePhoto={actions.onPickProfilePhoto}
           onProfilePhotoSelected={actions.onProfilePhotoSelected}

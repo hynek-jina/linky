@@ -309,6 +309,7 @@ export const cs = {
   contactDeleted: "Kontakt byl smazán.",
 
   copiedToClipboard: "Zkopírováno do schránky.",
+  yourNpubWasCopied: "Váš npub byl zkopírován.",
   copyFailed: "Kopírování do schránky se nepovedlo.",
   copy: "Kopírovat",
 
