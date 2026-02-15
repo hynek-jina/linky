@@ -12,6 +12,12 @@ const setBaseStorage = async (page: Page) => {
       localStorage.clear();
       sessionStorage.clear();
       localStorage.setItem("linky.lang", "en");
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async () => {},
+        },
+      });
     } catch {
       // ignore
     }
@@ -36,6 +42,27 @@ const setAuthenticatedStorage = async (page: Page) => {
     },
     [nsec, mnemonic],
   );
+};
+
+const createContactAndOpenChat = async (page: Page, contactName: string) => {
+  await page.goto("/#");
+  await page.locator("[data-guide='contact-add-button']").first().click();
+  await page.waitForURL(/#contact\/new$/, { timeout: 10_000 });
+
+  const formInputs = page.locator(".form-col input");
+  await expect(formInputs.nth(0)).toBeVisible();
+  await formInputs.nth(0).fill(contactName);
+  await formInputs.nth(1).fill(CONTACT_NPUB);
+  await page.getByRole("button", { name: "Save contact" }).click();
+
+  await page.waitForURL(/#$/, { timeout: 10_000 });
+  const contactCards = page.locator("[data-guide='contact-card']");
+  await expect
+    .poll(async () => contactCards.count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  await contactCards.first().click();
+  await page.waitForURL(/#chat\/[^/]+$/, { timeout: 10_000 });
+  await expect(page.locator("[data-guide='chat-input']")).toBeVisible();
 };
 
 test("keeps unauthenticated auth gating", async ({ page }) => {
@@ -147,4 +174,66 @@ test("preserves route parity and critical handlers", async ({ page }) => {
 
   await paySend.click();
   await expect(page.locator(".page")).toBeVisible();
+});
+
+test("supports chat reply, edit, reaction toggle, and copy actions", async ({
+  page,
+}) => {
+  await setAuthenticatedStorage(page);
+  await createContactAndOpenChat(page, `Action Contact ${Date.now()}`);
+
+  const chatInput = page.locator("[data-guide='chat-input']");
+  const sendButton = page.locator("[data-guide='chat-send']");
+
+  await chatInput.fill("First message");
+  await sendButton.click();
+  await expect(
+    page.locator(".chat-bubble").filter({ hasText: "First message" }),
+  ).toBeVisible();
+
+  await page
+    .locator(".chat-message .chat-bubble")
+    .filter({ hasText: "First message" })
+    .first()
+    .click({ button: "right" });
+  await page.getByRole("button", { name: "Reply", exact: true }).click();
+  const replyPreview = page.locator(".reply-preview");
+  await expect(replyPreview).toContainText("Replying to");
+  await expect(replyPreview).toContainText("First message");
+
+  await chatInput.fill("Reply body");
+  await sendButton.click();
+  const replyBubble = page
+    .locator(".chat-message")
+    .filter({ hasText: "Reply body" })
+    .first();
+  await expect(replyBubble).toBeVisible();
+  await expect(replyBubble).toHaveAttribute("data-reply-to-id", /.+/);
+  await expect(replyBubble.locator(".chat-reply-quote")).toContainText(
+    "First message",
+  );
+
+  await replyBubble.locator(".chat-bubble").click({ button: "right" });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await chatInput.fill("Reply body edited");
+  await page.getByRole("button", { name: "Save" }).click();
+  const editedBubble = page
+    .locator(".chat-message")
+    .filter({ hasText: "Reply body edited" })
+    .first();
+  await expect(editedBubble).toContainText("edited");
+
+  await editedBubble.locator(".chat-bubble").click({ button: "right" });
+  await page.getByRole("button", { name: "React", exact: true }).click();
+  await page.getByRole("button", { name: "👍" }).click();
+  const reactionChip = editedBubble.locator(".reaction-chip", {
+    hasText: "👍",
+  });
+  await expect(reactionChip).toBeVisible();
+  await reactionChip.click();
+  await expect(reactionChip).toHaveCount(0);
+
+  await editedBubble.locator(".chat-bubble").click({ button: "right" });
+  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  await expect(page.locator(".toast")).toContainText("Copied to clipboard");
 });

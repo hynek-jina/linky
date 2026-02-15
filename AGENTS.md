@@ -30,6 +30,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - **No framework router** - hash-based routing via `useRouting` hook and `parseRouteFromHash()` in `src/types/route.ts`
 - Navigation uses `navigateTo()` from `src/hooks/useRouting.ts` - do NOT use `window.location` directly
 - **Evolu** for all persistent data - local-first SQLite with sync. Schema in `src/evolu.ts`
+- Nostr chat persistence is Evolu-backed (`nostrMessage` + `nostrReaction` tables); legacy `linky.local.nostrMessages.v1.<ownerId>` data is imported once per owner via `linky.messages_evolu_migrated_v1:<ownerId>`
 - **No backend** - pure client-side PWA with service worker caching
 - `apps/web-app/src/App.tsx` is a thin wrapper that default-exports `app/AppShell`
 - App shell structure lives under `apps/web-app/src/app/`:
@@ -43,7 +44,8 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
   - `hooks/contacts/` contains contact-editor and contact-list view helpers (`useContactEditor`, `useVisibleContacts`)
   - `hooks/layout/` contains extracted shell layout/menu/swipe state helpers (`useMainMenuState`, `useMainSwipeNavigation`)
   - `hooks/profile/` contains extracted profile editor and profile metadata sync flows (`useProfileEditor`, `useProfileMetadataSyncEffect`)
-  - `hooks/messages/` contains extracted message/inbox effects (`useNostrPendingFlush`, `useSendChatMessage`, `useInboxNotificationsSync`, `useChatMessageEffects`)
+  - `hooks/messages/` contains extracted message/inbox effects (`useNostrPendingFlush`, `useSendChatMessage`, `useEditChatMessage`, `useSendReaction`, `useInboxNotificationsSync`, `useChatMessageEffects`)
+  - `hooks/messages/chatNostrProtocol.ts` contains shared reply/edit/reaction Nostr parsing helpers used by sync/send flows
   - `hooks/payments/` contains extracted payment orchestration (`usePayContactWithCashuMessage`)
   - `hooks/cashu/` contains extracted cashu helpers (`useSaveCashuFromText`, `useCashuTokenChecks`, `useRestoreMissingTokens`, `useNpubCashClaim`)
   - `hooks/topup/` contains extracted topup quote/reset effects (`useTopupInvoiceQuoteEffects`)
@@ -79,6 +81,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - The `nsec` private key is in localStorage (`linky.nostr_nsec`) - never log or expose it
 - Vite proxies: `/__mint-quote` for Cashu mint quotes, `/api/lnurlp` for LNURL-pay (CORS workarounds)
 - PWA service worker auto-updates - changes to `sw.ts` affect caching behavior
+- Chat retention is enforced in `useMessagesDomain` (latest 500 messages/contact, 3000 global; reactions capped to 5000 and orphaned reactions are pruned)
 
 ## Maintaining This File
 

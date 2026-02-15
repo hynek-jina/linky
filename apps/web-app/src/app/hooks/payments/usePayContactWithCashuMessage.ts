@@ -26,27 +26,15 @@ import type {
   ContactRowLike,
   CredoTokenRow,
   LocalNostrMessage,
+  NewLocalNostrMessage,
   PaymentLogData,
   PublishWrappedResult,
+  UpdateLocalNostrMessage,
 } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
-type AppendLocalNostrMessage = (
-  message: Omit<LocalNostrMessage, "id" | "status"> & {
-    status?: "sent" | "pending";
-  },
-) => string;
-
-type UpdateLocalNostrMessage = (
-  id: string,
-  updates: Partial<
-    Pick<
-      LocalNostrMessage,
-      "wrapId" | "status" | "pubkey" | "content" | "clientId" | "localOnly"
-    >
-  >,
-) => void;
+type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 
 interface UsePayContactWithCashuMessageParams {
   allowPromisesEnabled: boolean;

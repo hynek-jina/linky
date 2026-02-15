@@ -55,6 +55,7 @@ export function EvoluDataDetailPage({
     "credoToken",
     "nostrIdentity",
     "nostrMessage",
+    "nostrReaction",
     "paymentEvent",
   ];
   const systemTables = ["appState", "mintInfo"];
