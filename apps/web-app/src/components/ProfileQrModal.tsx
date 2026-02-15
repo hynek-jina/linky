@@ -266,9 +266,17 @@ export function ProfileQrModal({
                 alt=""
                 onClick={onCopyNpub}
               />
-            ) : (
-              <p className="muted">{currentNpub}</p>
-            )}
+            ) : null}
+
+            <button
+              type="button"
+              className="muted copyable npub"
+              onClick={onCopyNpub}
+              title={t("copy")}
+              aria-label={t("copy")}
+            >
+              {currentNpub}
+            </button>
 
             <h2 className="contact-detail-name">
               {effectiveProfileName ?? formatShortNpub(currentNpub)}
