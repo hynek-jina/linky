@@ -214,15 +214,18 @@ export function ProfilePage({
                 </div>
 
                 {myProfileQr ? (
-                  <img
-                    className="qr"
-                    src={myProfileQr}
-                    alt=""
+                  <button
+                    type="button"
+                    className="qr-copy-button"
                     onClick={() => {
                       if (!currentNpub) return;
                       void copyText(currentNpub);
                     }}
-                  />
+                    aria-label={t("copy")}
+                    title={t("copy")}
+                  >
+                    <img className="qr" src={myProfileQr} alt="" />
+                  </button>
                 ) : (
                   <p className="muted">{currentNpub}</p>
                 )}

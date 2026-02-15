@@ -43,15 +43,18 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
       )}
 
       {topupInvoiceQr ? (
-        <img
-          className="qr"
-          src={topupInvoiceQr}
-          alt=""
+        <button
+          type="button"
+          className="qr-copy-button"
           onClick={() => {
             if (!topupInvoice) return;
             void copyText(topupInvoice);
           }}
-        />
+          aria-label={t("copy")}
+          title={t("copy")}
+        >
+          <img className="qr" src={topupInvoiceQr} alt="" />
+        </button>
       ) : topupInvoiceError ? (
         <p className="muted">{topupInvoiceError}</p>
       ) : topupInvoice ? (

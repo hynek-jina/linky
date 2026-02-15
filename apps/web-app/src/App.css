@@ -773,6 +773,24 @@ button.settings-link:hover {
   cursor: pointer;
 }
 
+button.qr-copy-button {
+  background: transparent;
+  border: none;
+  display: block;
+  margin: 12px auto 0;
+  padding: 0;
+}
+
+button.qr-copy-button .qr {
+  margin: 0;
+}
+
+button.qr-copy-button:focus-visible {
+  border-radius: 12px;
+  outline: 2px solid #38bdf8;
+  outline-offset: 4px;
+}
+
 .profile-detail {
   display: flex;
   flex-direction: column;
