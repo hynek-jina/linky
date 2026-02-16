@@ -18,6 +18,7 @@ import {
   NOSTR_SLIP39_SEED_STORAGE_KEY,
 } from "../../utils/constants";
 import {
+  createSlip39Seed,
   deriveNostrKeysFromSlip39,
   looksLikeSlip39Seed,
 } from "../../utils/slip39Nostr";
@@ -241,26 +242,8 @@ export const useProfileAuthDomain = ({
     setOnboardingIsBusy(true);
     setOnboardingStep({ step: 1, derivedName: null, error: null });
     try {
-      const { nip19, getPublicKey } = await import("nostr-tools");
-      const generateRandomSecretKey = (): Uint8Array => {
-        const bytes = new Uint8Array(32);
-        crypto.getRandomValues(bytes);
-        return bytes;
-      };
-
-      let privBytes: Uint8Array | null = null;
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        const candidate = generateRandomSecretKey();
-        try {
-          getPublicKey(candidate);
-          privBytes = candidate;
-          break;
-        } catch {
-          // try again
-        }
-      }
-
-      if (!privBytes) {
+      const slip39 = await createSlip39Seed();
+      if (!slip39) {
         pushToast(t("onboardingCreateFailed"));
         setOnboardingStep({
           step: 1,
@@ -270,8 +253,28 @@ export const useProfileAuthDomain = ({
         return;
       }
 
-      const pubkeyHex = getPublicKey(privBytes);
-      const npub = nip19.npubEncode(pubkeyHex);
+      const derived = await deriveNostrKeysFromSlip39(slip39);
+      if (!derived) {
+        pushToast(t("onboardingCreateFailed"));
+        setOnboardingStep({
+          step: 1,
+          derivedName: null,
+          error: t("onboardingCreateFailed"),
+        });
+        return;
+      }
+
+      const npub = derived.npub;
+      const privBytes = await decodeNsecPrivateBytes(derived.nsec);
+      if (!privBytes) {
+        pushToast(t("onboardingCreateFailed"));
+        setOnboardingStep({
+          step: 1,
+          derivedName: null,
+          error: t("onboardingCreateFailed"),
+        });
+        return;
+      }
 
       const defaults = deriveDefaultProfile(npub);
       setOnboardingStep({ step: 1, derivedName: defaults.name, error: null });
@@ -313,12 +316,22 @@ export const useProfileAuthDomain = ({
         return;
       }
 
-      const nsec = nip19.nsecEncode(privBytes);
-      await setIdentityFromNsecAndReload(nsec, "nsec");
+      await setIdentityFromNsecAndReload(
+        derived.nsec,
+        "slip39",
+        "onboardingCreateFailed",
+        slip39,
+      );
     } finally {
       setOnboardingIsBusy(false);
     }
-  }, [onboardingIsBusy, pushToast, setIdentityFromNsecAndReload, t]);
+  }, [
+    decodeNsecPrivateBytes,
+    onboardingIsBusy,
+    pushToast,
+    setIdentityFromNsecAndReload,
+    t,
+  ]);
 
   const pasteExistingNsec = React.useCallback(async () => {
     if (onboardingIsBusy) return;

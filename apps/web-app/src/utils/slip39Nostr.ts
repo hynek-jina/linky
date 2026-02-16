@@ -18,6 +18,10 @@ const toWordList = (rawText: string): string[] => {
     .filter((word) => word.length > 0);
 };
 
+const normalizeSlip39Seed = (rawText: string): string => {
+  return toWordList(rawText).join(" ");
+};
+
 const isByte = (value: unknown): value is number => {
   if (typeof value !== "number") return false;
   if (!Number.isInteger(value)) return false;
@@ -62,6 +66,34 @@ export const deriveNostrKeysFromSlip39 = async (
       nsec: nip19.nsecEncode(privBytes),
       npub: nip19.npubEncode(pubHex),
     };
+  } catch {
+    return null;
+  }
+};
+
+export const createSlip39Seed = async (): Promise<string | null> => {
+  try {
+    const entropy = new Uint8Array(16);
+    crypto.getRandomValues(entropy);
+
+    const masterSecret = Array.from(entropy);
+    const slip = await Slip39.fromArray(masterSecret, {
+      groupThreshold: 1,
+      groups: [[1, 1, "Linky"]],
+      passphrase: "",
+      title: "Linky",
+    });
+
+    const mnemonics = slip.fromPath("r/0").mnemonics;
+    const firstShare = mnemonics[0];
+    if (typeof firstShare !== "string") return null;
+
+    const normalized = normalizeSlip39Seed(firstShare);
+    if (!normalized) return null;
+    if (!Slip39.validateMnemonic(normalized)) return null;
+    if (!looksLikeSlip39Seed(normalized)) return null;
+
+    return normalized;
   } catch {
     return null;
   }
