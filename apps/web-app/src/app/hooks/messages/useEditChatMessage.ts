@@ -1,5 +1,5 @@
-import React from "react";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import React from "react";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { makeLocalId } from "../../../utils/validation";
@@ -83,7 +83,7 @@ export const useEditChatMessage = <
     setChatSendIsBusy(true);
 
     try {
-      const { nip19, getEventHash, getPublicKey } = await import("nostr-tools");
+      const { nip19, getPublicKey } = await import("nostr-tools");
       const { wrapEvent } = await import("nostr-tools/nip59");
 
       const decodedMe = nip19.decode(currentNsec);
@@ -121,7 +121,6 @@ export const useEditChatMessage = <
         ],
         content: text,
       } satisfies UnsignedEvent;
-      const rumorId = getEventHash(baseEvent);
 
       updateLocalNostrMessage(String(editContext.messageId ?? ""), {
         content: text,
@@ -129,7 +128,7 @@ export const useEditChatMessage = <
         wrapId: `pending:edit:${clientId}`,
         pubkey: myPubHex,
         clientId,
-        rumorId,
+        rumorId: editedFromId,
         isEdited: true,
         editedAtSec: baseEvent.created_at,
         editedFromId,
@@ -177,7 +176,7 @@ export const useEditChatMessage = <
         status: "sent",
         wrapId: String(wrapForMe.id ?? ""),
         pubkey: myPubHex,
-        rumorId,
+        rumorId: editedFromId,
       });
 
       setChatDraft("");

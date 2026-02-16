@@ -20,6 +20,8 @@ import {
   extractReplyContextFromTags,
 } from "./chatNostrProtocol";
 
+const normalizeText = (value: unknown): string => String(value ?? "").trim();
+
 interface UseChatNostrSyncEffectParams {
   appendLocalNostrMessage: (message: NewLocalNostrMessage) => string;
   appendLocalNostrReaction: (reaction: NewLocalNostrReaction) => string;
@@ -170,11 +172,38 @@ export const useChatNostrSyncEffect = ({
                     wrapId,
                     pubkey: innerPub,
                     ...(tagClientId ? { clientId: tagClientId } : {}),
-                    ...(rumorId ? { rumorId } : {}),
                     isEdited: true,
                     editedAtSec: createdAtSec,
                     editedFromId,
                     originalContent: existingOriginal || null,
+                  });
+                  return;
+                }
+              }
+
+              if (!editedFromId && rumorId) {
+                const direction = isIncoming ? "in" : "out";
+                const messages = chatMessagesLatestRef.current;
+                const existingEditedVersion = messages.find((message) => {
+                  if (normalizeText(message.direction) !== direction)
+                    return false;
+                  return normalizeText(message.editedFromId) === rumorId;
+                });
+
+                if (existingEditedVersion) {
+                  const existingEditedVersionId = normalizeText(
+                    existingEditedVersion.id,
+                  );
+                  if (!existingEditedVersionId) return;
+
+                  const hasOriginalContent = Boolean(
+                    normalizeText(existingEditedVersion.originalContent),
+                  );
+
+                  if (hasOriginalContent) return;
+
+                  updateLocalNostrMessage(existingEditedVersionId, {
+                    originalContent: content,
                   });
                   return;
                 }
@@ -250,7 +279,7 @@ export const useChatNostrSyncEffect = ({
                   wrapId,
                   pubkey: innerPub,
                   ...(tagClientId ? { clientId: String(tagClientId) } : {}),
-                  ...(rumorId ? { rumorId } : {}),
+                  ...(!editedFromId && rumorId ? { rumorId } : {}),
                   ...(replyToId ? { replyToId } : {}),
                   ...(rootMessageId ? { rootMessageId } : {}),
                   ...(editedFromId ? { editedFromId } : {}),
@@ -258,12 +287,14 @@ export const useChatNostrSyncEffect = ({
                 return;
               }
 
+              const stableRumorId = editedFromId || rumorId;
+
               appendLocalNostrMessage({
                 contactId: String(selectedContact.id),
                 direction: isIncoming ? "in" : "out",
                 content,
                 wrapId,
-                rumorId,
+                rumorId: stableRumorId,
                 pubkey: innerPub,
                 createdAtSec,
                 ...(tagClientId ? { clientId: String(tagClientId) } : {}),

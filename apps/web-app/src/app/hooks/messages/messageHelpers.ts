@@ -241,5 +241,57 @@ export const dedupeChatMessages = (
     deduped.push(message);
   }
 
-  return deduped;
+  const visibleByBaseKey = new Map<string, LocalNostrMessage>();
+  for (const message of deduped) {
+    const contactId = normalizeText(message.contactId);
+    const direction = normalizeText(message.direction);
+    const baseRumorId =
+      normalizeText(message.editedFromId) || normalizeText(message.rumorId);
+    if (!contactId || !baseRumorId) continue;
+    if (direction !== "in" && direction !== "out") continue;
+
+    const baseKey = `${contactId}|${direction}|${baseRumorId}`;
+    const current = visibleByBaseKey.get(baseKey);
+    if (!current) {
+      visibleByBaseKey.set(baseKey, message);
+      continue;
+    }
+
+    const currentEditedWeight =
+      normalizeText(current.editedFromId) || current.isEdited ? 1 : 0;
+    const candidateEditedWeight =
+      normalizeText(message.editedFromId) || message.isEdited ? 1 : 0;
+
+    if (candidateEditedWeight > currentEditedWeight) {
+      visibleByBaseKey.set(baseKey, message);
+      continue;
+    }
+    if (candidateEditedWeight < currentEditedWeight) continue;
+
+    const currentEditedAt = Number(current.editedAtSec ?? 0) || 0;
+    const candidateEditedAt = Number(message.editedAtSec ?? 0) || 0;
+    if (candidateEditedAt > currentEditedAt) {
+      visibleByBaseKey.set(baseKey, message);
+      continue;
+    }
+    if (candidateEditedAt < currentEditedAt) continue;
+
+    if (message.createdAtSec >= current.createdAtSec) {
+      visibleByBaseKey.set(baseKey, message);
+    }
+  }
+
+  const collapsed = deduped.filter((message) => {
+    const contactId = normalizeText(message.contactId);
+    const direction = normalizeText(message.direction);
+    const baseRumorId =
+      normalizeText(message.editedFromId) || normalizeText(message.rumorId);
+    if (!contactId || !baseRumorId) return true;
+    if (direction !== "in" && direction !== "out") return true;
+
+    const baseKey = `${contactId}|${direction}|${baseRumorId}`;
+    return visibleByBaseKey.get(baseKey)?.id === message.id;
+  });
+
+  return collapsed;
 };

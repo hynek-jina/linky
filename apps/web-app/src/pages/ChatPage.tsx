@@ -1,6 +1,6 @@
-import type { FC } from "react";
-import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
+import { type FC, useEffect, useRef } from "react";
 import { aggregateReactions } from "../app/hooks/messages/chatNostrProtocol";
+import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
 import type { ReplyContext } from "../app/hooks/messages/useSendChatMessage";
 import type {
   CashuTokenMessageInfo,
@@ -99,6 +99,24 @@ export const ChatPage: FC<ChatPageProps> = ({
   setMintIconUrlByMint,
   t,
 }) => {
+  const composeInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const npub = selectedContact
+    ? normalizeNpubIdentifier(selectedContact.npub)
+    : null;
+  const isDesktop =
+    typeof window !== "undefined" &&
+    window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+  useEffect(() => {
+    if (!replyContext && !editContext) return;
+    if (chatSendIsBusy || !npub) return;
+    const input = composeInputRef.current;
+    if (!input) return;
+    input.focus();
+    const length = input.value.length;
+    input.setSelectionRange(length, length);
+  }, [replyContext, editContext, chatSendIsBusy, npub]);
+
   if (!selectedContact) {
     return (
       <section className="panel">
@@ -107,7 +125,6 @@ export const ChatPage: FC<ChatPageProps> = ({
     );
   }
 
-  const npub = normalizeNpubIdentifier(selectedContact.npub);
   const ln = String(selectedContact.lnAddress ?? "").trim();
   const canPayThisContact =
     Boolean(ln) ||
@@ -131,6 +148,8 @@ export const ChatPage: FC<ChatPageProps> = ({
     : replyContext?.replyToId
       ? (byRumorId.get(replyContext.replyToId)?.content ?? "")
       : "";
+
+  const canSendChat = Boolean(!chatSendIsBusy && chatDraft.trim() && npub);
 
   return (
     <section className="panel chat-panel">
@@ -240,8 +259,16 @@ export const ChatPage: FC<ChatPageProps> = ({
           />
         )}
         <textarea
+          ref={composeInputRef}
           value={chatDraft}
           onChange={(e) => setChatDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (!isDesktop) return;
+            if (e.key !== "Enter" || !e.metaKey) return;
+            if (!canSendChat) return;
+            e.preventDefault();
+            void sendChatMessage();
+          }}
           placeholder={t("chatPlaceholder")}
           disabled={chatSendIsBusy || !npub}
           data-guide="chat-input"
@@ -249,7 +276,7 @@ export const ChatPage: FC<ChatPageProps> = ({
         <button
           className="btn-wide"
           onClick={() => void sendChatMessage()}
-          disabled={chatSendIsBusy || !chatDraft.trim() || !npub}
+          disabled={!canSendChat}
           data-guide="chat-send"
         >
           {chatSendIsBusy
