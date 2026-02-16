@@ -53,6 +53,8 @@ export const cs = {
   nostrKeysCopied: "Nostr klíče zkopírovány do schránky.",
   seed: "Seed",
   seedCopied: "Seed zkopírován do schránky.",
+  cashuSeed: "Cashu seed",
+  cashuSeedCopied: "Cashu seed zkopírován do schránky.",
   seedMissing: "Chybí seed. Přihlaste se znovu pomocí nsec.",
   tokens: "Tokeny",
   payWithCashu: "Platit s cashu",

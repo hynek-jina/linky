@@ -561,6 +561,7 @@ export const useAppShellComposition = () => {
 
   const {
     createNewAccount,
+    cashuSeedMnemonic,
     currentNpub,
     isSeedLogin,
     logoutArmed,
@@ -1827,6 +1828,13 @@ export const useAppShellComposition = () => {
     pushToast(t("seedCopied"));
   };
 
+  const copyCashuSeed = async () => {
+    const value = String(cashuSeedMnemonic ?? "").trim();
+    if (!value) return;
+    await navigator.clipboard?.writeText(value);
+    pushToast(t("cashuSeedCopied"));
+  };
+
   const restoreMissingTokens = useRestoreMissingTokens({
     cashuIsBusy,
     cashuTokensAll,
@@ -2259,6 +2267,7 @@ export const useAppShellComposition = () => {
       connectedRelayCount,
       copyNostrKeys,
       copySeed,
+      copyCashuSeed,
       currentNpub,
       currentNsec,
       dedupeContacts,
@@ -2307,6 +2316,7 @@ export const useAppShellComposition = () => {
       requestImportAppData,
       requestLogout,
       restoreMissingTokens,
+      cashuSeedMnemonic,
       route,
       safeLocalStorageSetJson,
       saveEvoluServerUrls,

@@ -1,7 +1,12 @@
+import { hmac } from "@noble/hashes/hmac";
+import { sha512 } from "@noble/hashes/sha2";
 import { HDKey } from "@scure/bip32";
+import { entropyToMnemonic } from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english";
 import { Slip39 } from "slip39-ts";
 
 const NOSTR_DERIVATION_PATH = "m/44'/1237'/0'/0/0";
+const CASHU_BIP85_DERIVATION_PATH = "m/83696968'/39'/0'/24'/0'";
 const SLIP39_WORD_COUNT = 20;
 
 interface DerivedNostrKeys {
@@ -94,6 +99,35 @@ export const createSlip39Seed = async (): Promise<string | null> => {
     if (!looksLikeSlip39Seed(normalized)) return null;
 
     return normalized;
+  } catch {
+    return null;
+  }
+};
+
+export const deriveCashuBip85MnemonicFromSlip39 = async (
+  rawText: string,
+): Promise<string | null> => {
+  const normalizedMnemonic = normalizeSlip39Seed(rawText);
+  if (!looksLikeSlip39Seed(normalizedMnemonic)) return null;
+
+  try {
+    if (!Slip39.validateMnemonic(normalizedMnemonic)) return null;
+
+    const recovered = await Slip39.recoverSecret([normalizedMnemonic], "");
+    const seed = toSecretBytes(recovered);
+    if (!seed || seed.length < 16 || seed.length > 64) return null;
+
+    const hdRoot = HDKey.fromMasterSeed(seed);
+    const bip85Node = hdRoot.derive(CASHU_BIP85_DERIVATION_PATH);
+    const privateKey = bip85Node.privateKey;
+    if (!privateKey) return null;
+
+    const hmacKey = new TextEncoder().encode("bip-entropy-from-k");
+    const digest = hmac(sha512, hmacKey, privateKey);
+    const entropy = digest.slice(0, 32);
+    const mnemonic = entropyToMnemonic(entropy, wordlist);
+
+    return String(mnemonic ?? "").trim() || null;
   } catch {
     return null;
   }

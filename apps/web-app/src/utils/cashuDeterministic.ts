@@ -1,6 +1,7 @@
 import { mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "../mnemonic";
+import { CASHU_BIP85_MNEMONIC_STORAGE_KEY } from "./constants";
 import { safeLocalStorageGet, safeLocalStorageSetJson } from "./storage";
 
 export type CashuDeterministicSeed = {
@@ -16,11 +17,18 @@ const normalizeMintUrlLoose = (value: string): string => {
 
 export const getCashuDeterministicSeedFromStorage =
   (): CashuDeterministicSeed | null => {
-    const mnemonic = String(
+    const cashuMnemonic = String(
+      safeLocalStorageGet(CASHU_BIP85_MNEMONIC_STORAGE_KEY) ?? "",
+    ).trim();
+
+    const fallbackMnemonic = String(
       safeLocalStorageGet(INITIAL_MNEMONIC_STORAGE_KEY) ?? "",
     ).trim();
+
+    const mnemonic = cashuMnemonic || fallbackMnemonic;
     if (!mnemonic) return null;
     if (!validateMnemonic(mnemonic, wordlist)) return null;
+
     return {
       mnemonic,
       bip39seed: mnemonicToSeedSync(mnemonic),

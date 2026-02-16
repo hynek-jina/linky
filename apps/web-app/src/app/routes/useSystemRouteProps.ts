@@ -14,8 +14,10 @@ interface UseSystemRoutePropsParams {
   cashuIsBusy: SystemRoutesProps["advancedProps"]["cashuIsBusy"];
   allowPromisesEnabled: SystemRoutesProps["advancedProps"]["allowPromisesEnabled"];
   connectedRelayCount: SystemRoutesProps["advancedProps"]["connectedRelayCount"];
+  copyCashuSeed: SystemRoutesProps["advancedProps"]["copyCashuSeed"];
   copyNostrKeys: SystemRoutesProps["advancedProps"]["copyNostrKeys"];
   copySeed: SystemRoutesProps["advancedProps"]["copySeed"];
+  cashuSeedMnemonic: SystemRoutesProps["advancedProps"]["cashuSeedMnemonic"];
   currentNpub: SystemRoutesProps["advancedProps"]["currentNpub"];
   currentNsec: SystemRoutesProps["advancedProps"]["currentNsec"];
   dedupeContacts: SystemRoutesProps["advancedProps"]["dedupeContacts"];
@@ -94,8 +96,10 @@ export const useSystemRouteProps = ({
   canSaveNewRelay,
   cashuIsBusy,
   connectedRelayCount,
+  copyCashuSeed,
   copyNostrKeys,
   copySeed,
+  cashuSeedMnemonic,
   currentNpub,
   currentNsec,
   dedupeContacts,
@@ -177,6 +181,7 @@ export const useSystemRouteProps = ({
     advancedProps: {
       currentNpub,
       currentNsec,
+      cashuSeedMnemonic,
       seedMnemonic,
       tokensRestoreIsBusy,
       cashuIsBusy,
@@ -193,6 +198,7 @@ export const useSystemRouteProps = ({
       logoutArmed,
       importDataFileInputRef,
       isSeedLogin,
+      copyCashuSeed,
       copyNostrKeys,
       copySeed,
       restoreMissingTokens,

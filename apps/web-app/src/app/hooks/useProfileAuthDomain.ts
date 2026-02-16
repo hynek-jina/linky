@@ -13,12 +13,14 @@ import {
 import { publishKind0ProfileMetadata } from "../../nostrPublish";
 import type { JsonRecord } from "../../types/json";
 import {
+  CASHU_BIP85_MNEMONIC_STORAGE_KEY,
   NOSTR_AUTH_METHOD_STORAGE_KEY,
   NOSTR_NSEC_STORAGE_KEY,
   NOSTR_SLIP39_SEED_STORAGE_KEY,
 } from "../../utils/constants";
 import {
   createSlip39Seed,
+  deriveCashuBip85MnemonicFromSlip39,
   deriveNostrKeysFromSlip39,
   looksLikeSlip39Seed,
 } from "../../utils/slip39Nostr";
@@ -45,6 +47,7 @@ interface UseProfileAuthDomainResult {
   pasteExistingNsec: () => Promise<void>;
   requestLogout: () => void;
   seedMnemonic: string | null;
+  cashuSeedMnemonic: string | null;
   slip39Seed: string | null;
   setOnboardingStep: React.Dispatch<React.SetStateAction<OnboardingStep>>;
 }
@@ -61,6 +64,17 @@ export const useProfileAuthDomain = ({
   const [onboardingStep, setOnboardingStep] =
     React.useState<OnboardingStep>(null);
   const [seedMnemonic, setSeedMnemonic] = React.useState<string | null>(null);
+  const [cashuSeedMnemonic, setCashuSeedMnemonic] = React.useState<
+    string | null
+  >(() => {
+    try {
+      const raw = localStorage.getItem(CASHU_BIP85_MNEMONIC_STORAGE_KEY);
+      const normalized = String(raw ?? "").trim();
+      return normalized || null;
+    } catch {
+      return null;
+    }
+  });
   const [slip39Seed, setSlip39Seed] = React.useState<string | null>(() => {
     try {
       const raw = localStorage.getItem(NOSTR_SLIP39_SEED_STORAGE_KEY);
@@ -181,6 +195,32 @@ export const useProfileAuthDomain = ({
     };
   }, [currentNsec, deriveEvoluMnemonicFromNsec]);
 
+  React.useEffect(() => {
+    if (!isSeedLogin) return;
+    if (cashuSeedMnemonic) return;
+
+    const normalizedSlip39 = String(slip39Seed ?? "").trim();
+    if (!normalizedSlip39) return;
+
+    let cancelled = false;
+    void (async () => {
+      const derived =
+        await deriveCashuBip85MnemonicFromSlip39(normalizedSlip39);
+      if (!derived || cancelled) return;
+
+      setCashuSeedMnemonic(derived);
+      try {
+        localStorage.setItem(CASHU_BIP85_MNEMONIC_STORAGE_KEY, derived);
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cashuSeedMnemonic, isSeedLogin, slip39Seed]);
+
   const setIdentityFromNsecAndReload = React.useCallback(
     async (
       nsec: string,
@@ -200,13 +240,36 @@ export const useProfileAuthDomain = ({
         return;
       }
 
+      let derivedCashuMnemonic: string | null = null;
+      if (authMethod === "slip39") {
+        const normalizedSlip39 = String(sourceSlip39Seed ?? "").trim();
+        if (!normalizedSlip39) {
+          pushToast(t(invalidMessageKey));
+          return;
+        }
+
+        derivedCashuMnemonic =
+          await deriveCashuBip85MnemonicFromSlip39(normalizedSlip39);
+        if (!derivedCashuMnemonic) {
+          pushToast(t(invalidMessageKey));
+          return;
+        }
+      }
+
       try {
         localStorage.setItem(NOSTR_NSEC_STORAGE_KEY, raw);
         localStorage.setItem(NOSTR_AUTH_METHOD_STORAGE_KEY, authMethod);
         if (authMethod === "slip39" && sourceSlip39Seed) {
           localStorage.setItem(NOSTR_SLIP39_SEED_STORAGE_KEY, sourceSlip39Seed);
+          if (derivedCashuMnemonic) {
+            localStorage.setItem(
+              CASHU_BIP85_MNEMONIC_STORAGE_KEY,
+              derivedCashuMnemonic,
+            );
+          }
         } else {
           localStorage.removeItem(NOSTR_SLIP39_SEED_STORAGE_KEY);
+          localStorage.removeItem(CASHU_BIP85_MNEMONIC_STORAGE_KEY);
         }
         localStorage.setItem(INITIAL_MNEMONIC_STORAGE_KEY, mnemonic);
       } catch {
@@ -215,6 +278,9 @@ export const useProfileAuthDomain = ({
 
       setIsSeedLogin(authMethod === "slip39");
       setSlip39Seed(authMethod === "slip39" ? sourceSlip39Seed : null);
+      setCashuSeedMnemonic(
+        authMethod === "slip39" ? derivedCashuMnemonic : null,
+      );
 
       try {
         await evolu.restoreAppOwner(mnemonic, {
@@ -416,6 +482,7 @@ export const useProfileAuthDomain = ({
     }
 
     setIsSeedLogin(false);
+    setCashuSeedMnemonic(null);
     setSlip39Seed(null);
 
     try {
@@ -447,6 +514,7 @@ export const useProfileAuthDomain = ({
     onboardingStep,
     pasteExistingNsec,
     requestLogout,
+    cashuSeedMnemonic,
     seedMnemonic,
     slip39Seed,
     setOnboardingStep,

@@ -53,6 +53,8 @@ export const en = {
   nostrKeysCopied: "Nostr keys copied to clipboard.",
   seed: "Seed",
   seedCopied: "Seed copied to clipboard.",
+  cashuSeed: "Cashu seed",
+  cashuSeedCopied: "Cashu seed copied to clipboard.",
   seedMissing: "Seed missing. Log in again with your nsec.",
   tokens: "Tokens",
   payWithCashu: "Pay with Cashu",
