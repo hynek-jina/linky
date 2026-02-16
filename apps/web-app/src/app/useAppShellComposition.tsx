@@ -31,7 +31,6 @@ import {
 } from "../utils/constants";
 import { getCredoRemainingAmount } from "../utils/credo";
 import { formatInteger } from "../utils/formatting";
-import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
   extractPpk,
@@ -39,6 +38,7 @@ import {
   normalizeMintUrl,
   PRESET_MINTS,
 } from "../utils/mint";
+import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
   getInitialAllowPromisesEnabled,
   getInitialNostrNsec,
@@ -48,79 +48,79 @@ import {
   safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "../utils/storage";
-import { useCashuDomain } from "./hooks/useCashuDomain";
+import { useCashuTokenChecks } from "./hooks/cashu/useCashuTokenChecks";
+import { useNpubCashClaim } from "./hooks/cashu/useNpubCashClaim";
+import { useRestoreMissingTokens } from "./hooks/cashu/useRestoreMissingTokens";
+import { useSaveCashuFromText } from "./hooks/cashu/useSaveCashuFromText";
+import { usePaymentMoneyComposition } from "./hooks/composition/usePaymentMoneyComposition";
+import { useProfileAuthComposition } from "./hooks/composition/useProfileAuthComposition";
+import { useProfilePeopleComposition } from "./hooks/composition/useProfilePeopleComposition";
+import { useRoutingViewComposition } from "./hooks/composition/useRoutingViewComposition";
+import { useSystemSettingsComposition } from "./hooks/composition/useSystemSettingsComposition";
+import { useContactEditor } from "./hooks/contacts/useContactEditor";
+import { useVisibleContacts } from "./hooks/contacts/useVisibleContacts";
+import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardingProgress";
+import { useMainMenuState } from "./hooks/layout/useMainMenuState";
+import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
+import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
+import { useChatNostrSyncEffect } from "./hooks/messages/useChatNostrSyncEffect";
+import {
+  useEditChatMessage,
+  type EditChatContext,
+} from "./hooks/messages/useEditChatMessage";
+import { useInboxNotificationsSync } from "./hooks/messages/useInboxNotificationsSync";
+import { useNostrPendingFlush } from "./hooks/messages/useNostrPendingFlush";
+import {
+  useSendChatMessage,
+  type ReplyContext,
+} from "./hooks/messages/useSendChatMessage";
+import { useSendReaction } from "./hooks/messages/useSendReaction";
+import { useNpubCashMintSelection } from "./hooks/mint/useNpubCashMintSelection";
+import { useContactPayMethod } from "./hooks/payments/useContactPayMethod";
+import { usePayContactWithCashuMessage } from "./hooks/payments/usePayContactWithCashuMessage";
+import { useRouteAmountResetEffects } from "./hooks/payments/useRouteAmountResetEffects";
+import { useProfileEditor } from "./hooks/profile/useProfileEditor";
+import { useProfileMetadataSyncEffect } from "./hooks/profile/useProfileMetadataSyncEffect";
+import { useTopupInvoiceQuoteEffects } from "./hooks/topup/useTopupInvoiceQuoteEffects";
 import { useAppDataTransfer } from "./hooks/useAppDataTransfer";
 import { useAppPreferences } from "./hooks/useAppPreferences";
 import { useArmedDeleteTimeouts } from "./hooks/useArmedDeleteTimeouts";
+import { useCashuDomain } from "./hooks/useCashuDomain";
 import { useContactsDomain } from "./hooks/useContactsDomain";
 import { useContactsNostrPrefetchEffects } from "./hooks/useContactsNostrPrefetchEffects";
-import { useGuideScannerDomain } from "./hooks/useGuideScannerDomain";
 import { useFeedbackContact } from "./hooks/useFeedbackContact";
+import { useGuideScannerDomain } from "./hooks/useGuideScannerDomain";
 import { useLightningPaymentsDomain } from "./hooks/useLightningPaymentsDomain";
 import { useMainSwipePageEffects } from "./hooks/useMainSwipePageEffects";
 import { useMessagesDomain } from "./hooks/useMessagesDomain";
 import { useMintDomain } from "./hooks/useMintDomain";
+import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
+import { usePaidOverlayState } from "./hooks/usePaidOverlayState";
 import { usePaymentsDomain } from "./hooks/usePaymentsDomain";
-import { useNpubCashMintSelection } from "./hooks/mint/useNpubCashMintSelection";
-import { useProfileEditor } from "./hooks/profile/useProfileEditor";
-import { useProfileMetadataSyncEffect } from "./hooks/profile/useProfileMetadataSyncEffect";
-import { useTopupInvoiceQuoteEffects } from "./hooks/topup/useTopupInvoiceQuoteEffects";
 import { useProfileNpubCashEffects } from "./hooks/useProfileNpubCashEffects";
 import { useRelayDomain } from "./hooks/useRelayDomain";
 import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
-import { useCashuTokenChecks } from "./hooks/cashu/useCashuTokenChecks";
-import { useNpubCashClaim } from "./hooks/cashu/useNpubCashClaim";
-import { useRestoreMissingTokens } from "./hooks/cashu/useRestoreMissingTokens";
-import { useSaveCashuFromText } from "./hooks/cashu/useSaveCashuFromText";
-import { useContactEditor } from "./hooks/contacts/useContactEditor";
-import { useVisibleContacts } from "./hooks/contacts/useVisibleContacts";
-import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardingProgress";
-import { useMainMenuState } from "./hooks/layout/useMainMenuState";
-import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
-import { useNostrPendingFlush } from "./hooks/messages/useNostrPendingFlush";
-import {
-  useSendChatMessage,
-  type ReplyContext,
-} from "./hooks/messages/useSendChatMessage";
-import {
-  useEditChatMessage,
-  type EditChatContext,
-} from "./hooks/messages/useEditChatMessage";
-import { useSendReaction } from "./hooks/messages/useSendReaction";
-import { useChatNostrSyncEffect } from "./hooks/messages/useChatNostrSyncEffect";
-import { useInboxNotificationsSync } from "./hooks/messages/useInboxNotificationsSync";
-import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
-import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
-import { usePaidOverlayState } from "./hooks/usePaidOverlayState";
-import { useContactPayMethod } from "./hooks/payments/useContactPayMethod";
-import { usePayContactWithCashuMessage } from "./hooks/payments/usePayContactWithCashuMessage";
-import { useRouteAmountResetEffects } from "./hooks/payments/useRouteAmountResetEffects";
-import { usePaymentMoneyComposition } from "./hooks/composition/usePaymentMoneyComposition";
-import { useProfileAuthComposition } from "./hooks/composition/useProfileAuthComposition";
-import { useProfilePeopleComposition } from "./hooks/composition/useProfilePeopleComposition";
-import { useRoutingViewComposition } from "./hooks/composition/useRoutingViewComposition";
-import { useSystemSettingsComposition } from "./hooks/composition/useSystemSettingsComposition";
-import {
-  buildTopbar,
-  buildTopbarRight,
-  buildTopbarTitle,
-} from "./lib/topbarConfig";
 import { createPaySelectedContact } from "./lib/createPaySelectedContact";
 import type { AppNostrPool } from "./lib/nostrPool";
+import { publishWrappedWithRetry as publishWrappedWithRetryBase } from "./lib/nostrPublishRetry";
 import { buildCashuMintCandidates as buildCashuMintCandidatesBase } from "./lib/paymentMintSelection";
-import {
-  extractCashuTokenFromText,
-  extractCashuTokenMeta,
-} from "./lib/tokenText";
 import { showPwaNotification } from "./lib/pwaNotifications";
 import {
   getCashuTokenMessageInfo as getCashuTokenMessageInfoBase,
   getCredoTokenMessageInfo as getCredoTokenMessageInfoBase,
 } from "./lib/tokenMessageInfo";
-import { publishWrappedWithRetry as publishWrappedWithRetryBase } from "./lib/nostrPublishRetry";
+import {
+  extractCashuTokenFromText,
+  extractCashuTokenMeta,
+} from "./lib/tokenText";
+import {
+  buildTopbar,
+  buildTopbarRight,
+  buildTopbarTitle,
+} from "./lib/topbarConfig";
 import type {
   ContactRowLike,
   CredoTokenRow,
@@ -562,12 +562,14 @@ export const useAppShellComposition = () => {
   const {
     createNewAccount,
     currentNpub,
+    isSeedLogin,
     logoutArmed,
     onboardingIsBusy,
     onboardingStep,
     pasteExistingNsec,
     requestLogout,
     seedMnemonic,
+    slip39Seed,
     setOnboardingStep,
   } = useProfileAuthComposition({
     currentNsec,
@@ -1810,15 +1812,16 @@ export const useAppShellComposition = () => {
     );
 
   const copyNostrKeys = async () => {
-    if (!currentNsec) return;
-    await navigator.clipboard?.writeText(currentNsec);
+    const nsec = String(currentNsec ?? "").trim();
+    if (!nsec) return;
+    await navigator.clipboard?.writeText(nsec);
     safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY, "1");
     setContactsOnboardingHasBackedUpKeys(true);
     pushToast(t("nostrKeysCopied"));
   };
 
   const copySeed = async () => {
-    const value = String(seedMnemonic ?? "").trim();
+    const value = String(slip39Seed ?? "").trim();
     if (!value) return;
     await navigator.clipboard?.writeText(value);
     pushToast(t("seedCopied"));
@@ -2279,6 +2282,7 @@ export const useAppShellComposition = () => {
       getMintRuntime,
       handleImportAppDataFilePicked,
       importDataFileInputRef,
+      isSeedLogin,
       isEvoluServerOffline,
       lang,
       LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,

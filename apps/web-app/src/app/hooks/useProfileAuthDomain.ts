@@ -11,8 +11,16 @@ import {
   saveCachedProfilePicture,
 } from "../../nostrProfile";
 import { publishKind0ProfileMetadata } from "../../nostrPublish";
-import { NOSTR_NSEC_STORAGE_KEY } from "../../utils/constants";
 import type { JsonRecord } from "../../types/json";
+import {
+  NOSTR_AUTH_METHOD_STORAGE_KEY,
+  NOSTR_NSEC_STORAGE_KEY,
+  NOSTR_SLIP39_SEED_STORAGE_KEY,
+} from "../../utils/constants";
+import {
+  deriveNostrKeysFromSlip39,
+  looksLikeSlip39Seed,
+} from "../../utils/slip39Nostr";
 
 export type OnboardingStep = {
   step: 1 | 2 | 3;
@@ -29,12 +37,14 @@ interface UseProfileAuthDomainParams {
 interface UseProfileAuthDomainResult {
   createNewAccount: () => Promise<void>;
   currentNpub: string | null;
+  isSeedLogin: boolean;
   logoutArmed: boolean;
   onboardingIsBusy: boolean;
   onboardingStep: OnboardingStep;
   pasteExistingNsec: () => Promise<void>;
   requestLogout: () => void;
   seedMnemonic: string | null;
+  slip39Seed: string | null;
   setOnboardingStep: React.Dispatch<React.SetStateAction<OnboardingStep>>;
 }
 
@@ -43,12 +53,54 @@ export const useProfileAuthDomain = ({
   pushToast,
   t,
 }: UseProfileAuthDomainParams): UseProfileAuthDomainResult => {
+  type NostrAuthMethod = "nsec" | "slip39";
+
   const [currentNpub, setCurrentNpub] = React.useState<string | null>(null);
   const [onboardingIsBusy, setOnboardingIsBusy] = React.useState(false);
   const [onboardingStep, setOnboardingStep] =
     React.useState<OnboardingStep>(null);
   const [seedMnemonic, setSeedMnemonic] = React.useState<string | null>(null);
+  const [slip39Seed, setSlip39Seed] = React.useState<string | null>(() => {
+    try {
+      const raw = localStorage.getItem(NOSTR_SLIP39_SEED_STORAGE_KEY);
+      const normalized = String(raw ?? "").trim();
+      return normalized || null;
+    } catch {
+      return null;
+    }
+  });
   const [logoutArmed, setLogoutArmed] = React.useState(false);
+  const [isSeedLogin, setIsSeedLogin] = React.useState<boolean>(() => {
+    try {
+      return localStorage.getItem(NOSTR_AUTH_METHOD_STORAGE_KEY) === "slip39";
+    } catch {
+      return false;
+    }
+  });
+
+  const decodeNsecPrivateBytes = React.useCallback(async (nsec: string) => {
+    const raw = String(nsec ?? "").trim();
+    if (!raw) return null;
+
+    try {
+      const { nip19 } = await import("nostr-tools");
+      const decoded = nip19.decode(raw);
+      if (decoded.type !== "nsec") return null;
+      if (!(decoded.data instanceof Uint8Array)) return null;
+      return decoded.data;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const normalizeSlip39Seed = React.useCallback((value: string): string => {
+    return String(value ?? "")
+      .toLowerCase()
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 0)
+      .join(" ");
+  }, []);
 
   React.useEffect(() => {
     const nsec = String(currentNsec ?? "").trim();
@@ -61,10 +113,8 @@ export const useProfileAuthDomain = ({
     const run = async () => {
       try {
         const { nip19, getPublicKey } = await import("nostr-tools");
-        const decoded = nip19.decode(nsec);
-        if (decoded.type !== "nsec") return;
-
-        const privBytes = decoded.data as Uint8Array;
+        const privBytes = await decodeNsecPrivateBytes(nsec);
+        if (!privBytes) return;
         const pubHex = getPublicKey(privBytes);
         const npub = nip19.npubEncode(pubHex);
 
@@ -80,7 +130,7 @@ export const useProfileAuthDomain = ({
     return () => {
       cancelled = true;
     };
-  }, [currentNsec]);
+  }, [currentNsec, decodeNsecPrivateBytes]);
 
   const deriveEvoluMnemonicFromNsec = React.useCallback(
     async (nsec: string): Promise<Evolu.Mnemonic | null> => {
@@ -88,11 +138,8 @@ export const useProfileAuthDomain = ({
       if (!raw) return null;
 
       try {
-        const { nip19 } = await import("nostr-tools");
-        const decoded = nip19.decode(raw);
-        if (decoded.type !== "nsec") return null;
-
-        const privBytes = decoded.data as Uint8Array;
+        const privBytes = await decodeNsecPrivateBytes(raw);
+        if (!privBytes) return null;
 
         const prefix = new TextEncoder().encode("linky-evolu-v1:");
         const data = new Uint8Array(prefix.length + privBytes.length);
@@ -111,7 +158,7 @@ export const useProfileAuthDomain = ({
         return null;
       }
     },
-    [],
+    [decodeNsecPrivateBytes],
   );
 
   React.useEffect(() => {
@@ -134,25 +181,39 @@ export const useProfileAuthDomain = ({
   }, [currentNsec, deriveEvoluMnemonicFromNsec]);
 
   const setIdentityFromNsecAndReload = React.useCallback(
-    async (nsec: string) => {
+    async (
+      nsec: string,
+      authMethod: NostrAuthMethod = "nsec",
+      invalidMessageKey: string = "onboardingInvalidNsec",
+      sourceSlip39Seed: string | null = null,
+    ) => {
       const raw = String(nsec ?? "").trim();
       if (!raw) {
-        pushToast(t("onboardingInvalidNsec"));
+        pushToast(t(invalidMessageKey));
         return;
       }
 
       const mnemonic = await deriveEvoluMnemonicFromNsec(raw);
       if (!mnemonic) {
-        pushToast(t("onboardingInvalidNsec"));
+        pushToast(t(invalidMessageKey));
         return;
       }
 
       try {
         localStorage.setItem(NOSTR_NSEC_STORAGE_KEY, raw);
+        localStorage.setItem(NOSTR_AUTH_METHOD_STORAGE_KEY, authMethod);
+        if (authMethod === "slip39" && sourceSlip39Seed) {
+          localStorage.setItem(NOSTR_SLIP39_SEED_STORAGE_KEY, sourceSlip39Seed);
+        } else {
+          localStorage.removeItem(NOSTR_SLIP39_SEED_STORAGE_KEY);
+        }
         localStorage.setItem(INITIAL_MNEMONIC_STORAGE_KEY, mnemonic);
       } catch {
         // ignore
       }
+
+      setIsSeedLogin(authMethod === "slip39");
+      setSlip39Seed(authMethod === "slip39" ? sourceSlip39Seed : null);
 
       try {
         await evolu.restoreAppOwner(mnemonic, {
@@ -253,7 +314,7 @@ export const useProfileAuthDomain = ({
       }
 
       const nsec = nip19.nsecEncode(privBytes);
-      await setIdentityFromNsecAndReload(nsec);
+      await setIdentityFromNsecAndReload(nsec, "nsec");
     } finally {
       setOnboardingIsBusy(false);
     }
@@ -283,13 +344,46 @@ export const useProfileAuthDomain = ({
         return;
       }
 
-      await setIdentityFromNsecAndReload(raw);
+      if (looksLikeSlip39Seed(raw)) {
+        const derived = await deriveNostrKeysFromSlip39(raw);
+        if (derived) {
+          const normalizedSlip39 = normalizeSlip39Seed(raw);
+          await setIdentityFromNsecAndReload(
+            derived.nsec,
+            "slip39",
+            "onboardingInvalidNsecOrSeed",
+            normalizedSlip39,
+          );
+          return;
+        }
+      }
+
+      const privBytes = await decodeNsecPrivateBytes(raw);
+      if (!privBytes) {
+        pushToast(t("onboardingInvalidNsecOrSeed"));
+        return;
+      }
+
+      const { nip19 } = await import("nostr-tools");
+      const normalizedNsec = nip19.nsecEncode(privBytes);
+      await setIdentityFromNsecAndReload(
+        normalizedNsec,
+        "nsec",
+        "onboardingInvalidNsecOrSeed",
+      );
     } catch {
       pushToast(t("pasteNotAvailable"));
     } finally {
       setOnboardingIsBusy(false);
     }
-  }, [onboardingIsBusy, pushToast, setIdentityFromNsecAndReload, t]);
+  }, [
+    decodeNsecPrivateBytes,
+    normalizeSlip39Seed,
+    onboardingIsBusy,
+    pushToast,
+    setIdentityFromNsecAndReload,
+    t,
+  ]);
 
   const requestLogout = React.useCallback(() => {
     if (!logoutArmed) {
@@ -301,10 +395,15 @@ export const useProfileAuthDomain = ({
     setLogoutArmed(false);
     try {
       localStorage.removeItem(NOSTR_NSEC_STORAGE_KEY);
+      localStorage.removeItem(NOSTR_AUTH_METHOD_STORAGE_KEY);
+      localStorage.removeItem(NOSTR_SLIP39_SEED_STORAGE_KEY);
       localStorage.removeItem(INITIAL_MNEMONIC_STORAGE_KEY);
     } catch {
       // ignore
     }
+
+    setIsSeedLogin(false);
+    setSlip39Seed(null);
 
     try {
       window.location.hash = "#";
@@ -329,12 +428,14 @@ export const useProfileAuthDomain = ({
   return {
     createNewAccount,
     currentNpub,
+    isSeedLogin,
     logoutArmed,
     onboardingIsBusy,
     onboardingStep,
     pasteExistingNsec,
     requestLogout,
     seedMnemonic,
+    slip39Seed,
     setOnboardingStep,
   };
 };

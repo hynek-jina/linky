@@ -32,6 +32,7 @@ export const en = {
   onboardingCreate: "Create account",
   onboardingPasteNsec: "Paste nsec",
   onboardingInvalidNsec: "Invalid nsec.",
+  onboardingInvalidNsecOrSeed: "Invalid nsec or SLIP-39 seed.",
   onboardingCreateFailed: "Failed to create account.",
   onboardingStep1: "Picking a name for you… You will be {name}",
   onboardingStep2: "Imagining what you look like… Got it",

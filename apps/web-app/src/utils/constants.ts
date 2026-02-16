@@ -1,5 +1,7 @@
 export const UNIT_TOGGLE_STORAGE_KEY = "linky_use_btc_symbol";
 export const NOSTR_NSEC_STORAGE_KEY = "linky.nostr_nsec";
+export const NOSTR_AUTH_METHOD_STORAGE_KEY = "linky.nostr_auth_method";
+export const NOSTR_SLIP39_SEED_STORAGE_KEY = "linky.nostr_slip39_seed";
 export const CONTACTS_ONBOARDING_DISMISSED_STORAGE_KEY =
   "linky.contacts_onboarding_dismissed";
 export const CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY =

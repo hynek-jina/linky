@@ -32,6 +32,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - **Evolu** for all persistent data - local-first SQLite with sync. Schema in `src/evolu.ts`
 - Nostr chat persistence is Evolu-backed (`nostrMessage` + `nostrReaction` tables); legacy `linky.local.nostrMessages.v1.<ownerId>` data is imported once per owner via `linky.messages_evolu_migrated_v1:<ownerId>`
 - **No backend** - pure client-side PWA with service worker caching
+- Onboarding login accepts either `nsec` or a single 20-word **SLIP-39** share; when SLIP-39 is used, Nostr keys are derived at path `m/44'/1237'/0'/0/0`
 - `apps/web-app/src/App.tsx` is a thin wrapper that default-exports `app/AppShell`
 - App shell structure lives under `apps/web-app/src/app/`:
   - `AppShell.tsx` is a thin renderer/auth gate that wires `AppShellContextsProvider` and route content

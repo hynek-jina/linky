@@ -19,6 +19,7 @@ interface AdvancedPageProps {
   exportAppData: () => void;
   handleImportAppDataFilePicked: (file: File | null) => Promise<void>;
   importDataFileInputRef: React.RefObject<HTMLInputElement | null>;
+  isSeedLogin: boolean;
   logoutArmed: boolean;
   nostrRelayOverallStatus: "connected" | "checking" | "disconnected";
   payWithCashuEnabled: boolean;
@@ -51,6 +52,7 @@ export function AdvancedPage({
   exportAppData,
   handleImportAppDataFilePicked,
   importDataFileInputRef,
+  isSeedLogin,
   logoutArmed,
   nostrRelayOverallStatus,
   payWithCashuEnabled,
@@ -108,6 +110,24 @@ export function AdvancedPage({
 
   return (
     <section className="panel">
+      {isSeedLogin && (
+        <div className="settings-row">
+          <div className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🔑
+            </span>
+            <span className="settings-label">{t("keys")}</span>
+          </div>
+          <div className="settings-right">
+            <div className="badge-box">
+              <button className="ghost" onClick={copySeed}>
+                {t("copyCurrent")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="settings-row">
         <div className="settings-left">
           <span className="settings-icon" aria-hidden="true">
@@ -122,26 +142,6 @@ export function AdvancedPage({
               onClick={copyNostrKeys}
               disabled={!currentNsec}
               data-guide="copy-nostr-keys"
-            >
-              {t("copyCurrent")}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🌱
-          </span>
-          <span className="settings-label">{t("seed")}</span>
-        </div>
-        <div className="settings-right">
-          <div className="badge-box">
-            <button
-              className="ghost"
-              onClick={copySeed}
-              disabled={!seedMnemonic}
             >
               {t("copyCurrent")}
             </button>

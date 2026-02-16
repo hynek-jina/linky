@@ -32,6 +32,7 @@ export const cs = {
   onboardingCreate: "Vytvořit účet",
   onboardingPasteNsec: "Vložit nsec",
   onboardingInvalidNsec: "Neplatný nsec.",
+  onboardingInvalidNsecOrSeed: "Neplatný nsec nebo SLIP-39 seed.",
   onboardingCreateFailed: "Nepodařilo se vytvořit účet.",
   onboardingStep1: "Vymýšlím pro vás správné jméno… Budete {name}",
   onboardingStep2: "Zkouším si představit jak vypadáte… Už to mám",

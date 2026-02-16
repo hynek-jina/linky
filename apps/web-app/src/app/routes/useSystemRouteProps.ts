@@ -1,8 +1,8 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
 import { loadEvoluCurrentData, loadEvoluHistoryData } from "../../evolu";
-import type { SystemRoutesProps } from "./AppRouteContent";
 import type { Route } from "../../types/route";
+import type { SystemRoutesProps } from "./AppRouteContent";
 
 type SystemRouteProps = SystemRoutesProps;
 
@@ -39,6 +39,7 @@ interface UseSystemRoutePropsParams {
   getMintRuntime: SystemRoutesProps["mintDetailProps"]["getMintRuntime"];
   handleImportAppDataFilePicked: SystemRoutesProps["advancedProps"]["handleImportAppDataFilePicked"];
   importDataFileInputRef: SystemRoutesProps["advancedProps"]["importDataFileInputRef"];
+  isSeedLogin: SystemRoutesProps["advancedProps"]["isSeedLogin"];
   isEvoluServerOffline: SystemRoutesProps["evoluServerProps"]["isEvoluServerOffline"];
   lang: SystemRoutesProps["mintDetailProps"]["lang"];
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX: SystemRoutesProps["mintDetailProps"]["LOCAL_MINT_INFO_STORAGE_KEY_PREFIX"];
@@ -118,6 +119,7 @@ export const useSystemRouteProps = ({
   getMintRuntime,
   handleImportAppDataFilePicked,
   importDataFileInputRef,
+  isSeedLogin,
   isEvoluServerOffline,
   lang,
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
@@ -190,6 +192,7 @@ export const useSystemRouteProps = ({
       dedupeContactsIsBusy,
       logoutArmed,
       importDataFileInputRef,
+      isSeedLogin,
       copyNostrKeys,
       copySeed,
       restoreMissingTokens,
