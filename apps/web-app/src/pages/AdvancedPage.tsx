@@ -75,16 +75,16 @@ export function AdvancedPage({
   const [pushError, setPushError] = useState<string>("");
 
   const handleRegisterNotifications = async () => {
-    setPushStatus("Registruji...");
+    setPushStatus(t("notificationsRegistering"));
     setPushError("");
 
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setPushError("Notifikace nejsou podporovány");
+      setPushError(t("notificationsUnsupported"));
       return;
     }
 
     if (!currentNpub) {
-      setPushError("Nejste přihlášeni");
+      setPushError(t("notificationsNotLoggedIn"));
       return;
     }
 
@@ -100,15 +100,15 @@ export function AdvancedPage({
         );
 
         if (result.success) {
-          setPushStatus("✅ Zaregistrováno");
+          setPushStatus(`✅ ${t("notificationsRegistered")}`);
         } else {
-          setPushError(`❌ ${result.error || "Chyba"}`);
+          setPushError(`❌ ${result.error || t("notificationsError")}`);
         }
       } else {
-        setPushError("❌ Zamítnuto");
+        setPushError(`❌ ${t("notificationsDenied")}`);
       }
     } catch {
-      setPushError("❌ Chyba");
+      setPushError(`❌ ${t("notificationsError")}`);
     }
   };
 
@@ -356,7 +356,7 @@ export function AdvancedPage({
           <span className="settings-icon" aria-hidden="true">
             🔔
           </span>
-          <span className="settings-label">Notifikace</span>
+          <span className="settings-label">{t("notifications")}</span>
         </div>
         <div className="settings-right">
           <button
@@ -364,7 +364,7 @@ export function AdvancedPage({
             onClick={handleRegisterNotifications}
             disabled={!currentNpub}
           >
-            Povolit
+            {t("enable")}
           </button>
         </div>
       </div>
