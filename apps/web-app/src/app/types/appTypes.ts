@@ -20,10 +20,28 @@ export type LocalNostrMessage = {
   content: string;
   createdAtSec: number;
   direction: "in" | "out";
+  editedAtSec?: number | null;
+  editedFromId?: string | null;
   id: string;
+  isEdited?: boolean;
   localOnly?: boolean;
+  originalContent?: string | null;
   pubkey: string;
+  replyToContent?: string | null;
+  replyToId?: string | null;
+  rootMessageId?: string | null;
   rumorId: string | null;
+  status?: "sent" | "pending";
+  wrapId: string;
+};
+
+export type LocalNostrReaction = {
+  clientId?: string;
+  createdAtSec: number;
+  emoji: string;
+  id: string;
+  messageId: string;
+  reactorPubkey: string;
   status?: "sent" | "pending";
   wrapId: string;
 };
@@ -104,8 +122,18 @@ export type ContactPayRowLike = {
 export type ChatMessageRowLike = {
   clientId?: OptionalText;
   content?: OptionalText;
+  editedAtSec?: OptionalNumber;
+  editedFromId?: OptionalText;
   direction?: OptionalText;
   id?: OptionalText;
+  isEdited?: OptionalText;
+  localOnly?: OptionalText;
+  originalContent?: OptionalText;
+  pubkey?: OptionalText;
+  replyToContent?: OptionalText;
+  replyToId?: OptionalText;
+  rootMessageId?: OptionalText;
+  rumorId?: OptionalText;
   status?: OptionalText;
   wrapId?: OptionalText;
 };
@@ -208,4 +236,54 @@ export type TopbarButton = {
   icon: string;
   label: string;
   onClick: () => void;
+};
+
+export type NewLocalNostrMessage = Omit<LocalNostrMessage, "id" | "status"> & {
+  status?: "sent" | "pending";
+};
+
+export type UpdateLocalNostrMessageFields = Pick<
+  LocalNostrMessage,
+  | "clientId"
+  | "content"
+  | "editedAtSec"
+  | "editedFromId"
+  | "isEdited"
+  | "localOnly"
+  | "originalContent"
+  | "pubkey"
+  | "replyToContent"
+  | "replyToId"
+  | "rootMessageId"
+  | "rumorId"
+  | "status"
+  | "wrapId"
+>;
+
+export type UpdateLocalNostrMessage = (
+  id: string,
+  updates: Partial<UpdateLocalNostrMessageFields>,
+) => void;
+
+export type NewLocalNostrReaction = Omit<
+  LocalNostrReaction,
+  "id" | "status"
+> & {
+  status?: "sent" | "pending";
+};
+
+export type UpdateLocalNostrReactionFields = Pick<
+  LocalNostrReaction,
+  "clientId" | "emoji" | "messageId" | "reactorPubkey" | "status" | "wrapId"
+>;
+
+export type UpdateLocalNostrReaction = (
+  id: string,
+  updates: Partial<UpdateLocalNostrReactionFields>,
+) => void;
+
+export type ChatReactionChip = {
+  count: number;
+  emoji: string;
+  reactedByMe: boolean;
 };

@@ -6,50 +6,56 @@ import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import type {
   ChatMessageRowLike,
   ContactIdentityRowLike,
+  LocalNostrReaction,
+  NewLocalNostrMessage,
+  NewLocalNostrReaction,
   PaymentLogData,
+  UpdateLocalNostrMessage,
+  UpdateLocalNostrReaction,
 } from "../../types/appTypes";
+import {
+  extractClientTag,
+  extractDeleteReferencedIds,
+  extractEditedFromTag,
+  extractReplyContextFromTags,
+} from "./chatNostrProtocol";
+
+const normalizeText = (value: unknown): string => String(value ?? "").trim();
 
 interface UseChatNostrSyncEffectParams {
-  appendLocalNostrMessage: (message: {
-    clientId?: string;
-    contactId: string;
-    content: string;
-    createdAtSec: number;
-    direction: "in" | "out";
-    pubkey: string;
-    rumorId: string | null;
-    wrapId: string;
-  }) => string;
+  appendLocalNostrMessage: (message: NewLocalNostrMessage) => string;
+  appendLocalNostrReaction: (reaction: NewLocalNostrReaction) => string;
   chatMessages: readonly ChatMessageRowLike[];
   chatMessagesLatestRef: React.MutableRefObject<readonly ChatMessageRowLike[]>;
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   currentNsec: string | null;
   logPayStep: (step: string, data?: PaymentLogData) => void;
   nostrMessageWrapIdsRef: React.MutableRefObject<Set<string>>;
+  nostrReactionWrapIdsRef: React.MutableRefObject<Set<string>>;
+  nostrReactionsLatestRef: React.MutableRefObject<LocalNostrReaction[]>;
   route: { kind: string };
   selectedContact: ContactIdentityRowLike | null;
-  updateLocalNostrMessage: (
-    id: string,
-    updates: Partial<{
-      clientId: string;
-      pubkey: string;
-      status: "sent" | "pending";
-      wrapId: string;
-    }>,
-  ) => void;
+  softDeleteLocalNostrReactionsByWrapIds: (wrapIds: readonly string[]) => void;
+  updateLocalNostrMessage: UpdateLocalNostrMessage;
+  updateLocalNostrReaction: UpdateLocalNostrReaction;
 }
 
 export const useChatNostrSyncEffect = ({
   appendLocalNostrMessage,
+  appendLocalNostrReaction,
   chatMessages,
   chatMessagesLatestRef,
   chatSeenWrapIdsRef,
   currentNsec,
   logPayStep,
   nostrMessageWrapIdsRef,
+  nostrReactionWrapIdsRef,
+  nostrReactionsLatestRef,
   route,
   selectedContact,
+  softDeleteLocalNostrReactionsByWrapIds,
   updateLocalNostrMessage,
+  updateLocalNostrReaction,
 }: UseChatNostrSyncEffectParams) => {
   React.useEffect(() => {
     // NIP-17 inbox sync + subscription while a chat is open.
@@ -104,145 +110,293 @@ export const useChatNostrSyncEffect = ({
             const wrapId = String(wrap?.id ?? "");
             if (!wrapId) return;
             if (existingWrapIds.has(wrapId)) return;
-            if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
             existingWrapIds.add(wrapId);
 
             const inner = unwrapEvent(wrap, privBytes) as NostrToolsEvent;
-            if (!inner || inner.kind !== 14) return;
+            if (!inner) return;
 
-            const innerPub = String(inner.pubkey ?? "");
+            const innerPub = String(inner.pubkey ?? "").trim();
             const tags = Array.isArray(inner.tags) ? inner.tags : [];
-            const content = String(inner.content ?? "").trim();
-
             const createdAtSecRaw = Number(inner.created_at ?? 0);
             const createdAtSec =
               Number.isFinite(createdAtSecRaw) && createdAtSecRaw > 0
                 ? Math.trunc(createdAtSecRaw)
                 : Math.ceil(Date.now() / 1e3);
 
-            const isIncoming = innerPub === contactPubHex;
-            const isOutgoing = innerPub === myPubHex;
-            if (!isIncoming && !isOutgoing) return;
-
-            if (!content) return;
-
-            // Ensure outgoing messages are for this contact.
-            const pTags = tags
-              .filter((t) => Array.isArray(t) && t[0] === "p")
-              .map((t) => String(t[1] ?? "").trim());
-            const mentionsContact = pTags.includes(contactPubHex);
-            if (isOutgoing && !mentionsContact) return;
-
             if (cancelled) return;
 
-            if (isOutgoing) {
-              const messages = chatMessagesLatestRef.current;
-              const clientId = tags
-                .find((t) => Array.isArray(t) && t[0] === "client")
-                ?.at(1);
-              const pending = messages.find((m) => {
-                const isOut = String(m.direction ?? "") === "out";
-                const isPending = String(m.status ?? "sent") === "pending";
-                if (!isOut || !isPending) return false;
-                if (clientId)
-                  return String(m.clientId ?? "") === String(clientId);
-                return String(m.content ?? "").trim() === content;
-              });
-              if (pending) {
-                const pendingWrapId = String(pending.wrapId ?? "");
-                if (
-                  String(pending.status ?? "sent") === "sent" &&
-                  pendingWrapId &&
-                  pendingWrapId === wrapId
-                ) {
+            if (inner.kind === 14) {
+              if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
+
+              const isIncoming = innerPub === contactPubHex;
+              const isOutgoing = innerPub === myPubHex;
+              if (!isIncoming && !isOutgoing) return;
+
+              const content = String(inner.content ?? "");
+              if (!content.trim()) return;
+
+              // Ensure outgoing messages are for this contact.
+              const pTags = tags
+                .filter((tag) => Array.isArray(tag) && tag[0] === "p")
+                .map((tag) => String(tag[1] ?? "").trim());
+              const mentionsContact = pTags.includes(contactPubHex);
+              if (isOutgoing && !mentionsContact) return;
+
+              const tagClientId = extractClientTag(tags);
+              const rumorId = inner.id ? String(inner.id).trim() : null;
+              const { replyToId, rootMessageId } =
+                extractReplyContextFromTags(tags);
+              const editedFromId = extractEditedFromTag(tags);
+
+              if (editedFromId) {
+                const direction = isIncoming ? "in" : "out";
+                const messages = chatMessagesLatestRef.current;
+                const target = messages.find((message) => {
+                  if (String(message.direction ?? "") !== direction)
+                    return false;
+                  return (
+                    String(message.rumorId ?? "").trim() === editedFromId ||
+                    String(message.editedFromId ?? "").trim() === editedFromId
+                  );
+                });
+
+                if (target) {
+                  const targetId = String(target.id ?? "").trim();
+                  if (!targetId) return;
+                  const existingOriginal =
+                    String(target.originalContent ?? "").trim() ||
+                    String(target.content ?? "");
+                  updateLocalNostrMessage(targetId, {
+                    content,
+                    status: "sent",
+                    wrapId,
+                    pubkey: innerPub,
+                    ...(tagClientId ? { clientId: tagClientId } : {}),
+                    isEdited: true,
+                    editedAtSec: createdAtSec,
+                    editedFromId,
+                    originalContent: existingOriginal || null,
+                  });
                   return;
                 }
-                updateLocalNostrMessage(String(pending.id ?? ""), {
-                  status: "sent",
-                  wrapId,
-                  pubkey: innerPub,
-                });
-                logPayStep("message-ack", {
-                  contactId: String(selectedContact.id ?? ""),
-                  clientId: clientId ? String(clientId) : null,
-                  wrapId,
-                });
-                return;
               }
 
-              const existing = messages.find((m) => {
-                const isOut = String(m.direction ?? "") === "out";
-                if (!isOut) return false;
-                if (clientId)
-                  return String(m.clientId ?? "") === String(clientId);
-                return String(m.content ?? "").trim() === content;
-              });
-              if (existing) {
-                const existingWrapId = String(existing.wrapId ?? "");
-                if (
-                  String(existing.status ?? "sent") === "sent" &&
-                  existingWrapId &&
-                  existingWrapId === wrapId
-                ) {
+              if (!editedFromId && rumorId) {
+                const direction = isIncoming ? "in" : "out";
+                const messages = chatMessagesLatestRef.current;
+                const existingEditedVersion = messages.find((message) => {
+                  if (normalizeText(message.direction) !== direction)
+                    return false;
+                  return normalizeText(message.editedFromId) === rumorId;
+                });
+
+                if (existingEditedVersion) {
+                  const existingEditedVersionId = normalizeText(
+                    existingEditedVersion.id,
+                  );
+                  if (!existingEditedVersionId) return;
+
+                  const hasOriginalContent = Boolean(
+                    normalizeText(existingEditedVersion.originalContent),
+                  );
+
+                  if (hasOriginalContent) return;
+
+                  updateLocalNostrMessage(existingEditedVersionId, {
+                    originalContent: content,
+                  });
                   return;
                 }
-                updateLocalNostrMessage(String(existing.id ?? ""), {
-                  status: "sent",
-                  wrapId,
-                  pubkey: innerPub,
-                });
-                logPayStep("message-ack", {
-                  contactId: String(selectedContact.id ?? ""),
-                  clientId: clientId ? String(clientId) : null,
-                  wrapId,
-                });
-                return;
               }
-            }
 
-            const tagClientId = tags.find(
-              (t) => Array.isArray(t) && t[0] === "client",
-            )?.[1];
+              if (isOutgoing) {
+                const messages = chatMessagesLatestRef.current;
+                const pending = messages.find((message) => {
+                  const isOut = String(message.direction ?? "") === "out";
+                  const isPending =
+                    String(message.status ?? "sent") === "pending";
+                  if (!isOut || !isPending) return false;
+                  if (tagClientId) {
+                    return (
+                      String(message.clientId ?? "").trim() ===
+                      String(tagClientId).trim()
+                    );
+                  }
+                  if (rumorId) {
+                    return (
+                      String(message.rumorId ?? "").trim() ===
+                      String(rumorId).trim()
+                    );
+                  }
+                  return (
+                    String(message.content ?? "").trim() === content.trim()
+                  );
+                });
+                if (pending) {
+                  updateLocalNostrMessage(String(pending.id ?? ""), {
+                    status: "sent",
+                    wrapId,
+                    pubkey: innerPub,
+                    ...(tagClientId ? { clientId: String(tagClientId) } : {}),
+                    ...(rumorId ? { rumorId } : {}),
+                    ...(replyToId ? { replyToId } : {}),
+                    ...(rootMessageId ? { rootMessageId } : {}),
+                  });
+                  logPayStep("message-ack", {
+                    contactId: String(selectedContact.id ?? ""),
+                    clientId: tagClientId ? String(tagClientId) : null,
+                    wrapId,
+                  });
+                  return;
+                }
+              }
 
-            if (isOutgoing) {
-              const messages = chatMessagesLatestRef.current;
-              const byClient = tagClientId
-                ? messages.find(
-                    (m) =>
-                      String(m.direction ?? "") === "out" &&
-                      String(m.clientId ?? "") === String(tagClientId),
-                  )
-                : null;
-              const byContent = !tagClientId
-                ? messages.find(
-                    (m) =>
-                      String(m.direction ?? "") === "out" &&
-                      String(m.content ?? "").trim() === content,
-                  )
-                : null;
-              const existingMessage = byClient ?? byContent;
-
+              const existingMessage = chatMessagesLatestRef.current.find(
+                (message) => {
+                  const direction = isIncoming ? "in" : "out";
+                  if (String(message.direction ?? "") !== direction)
+                    return false;
+                  if (
+                    rumorId &&
+                    String(message.rumorId ?? "").trim() === rumorId
+                  ) {
+                    return true;
+                  }
+                  if (tagClientId) {
+                    return (
+                      String(message.clientId ?? "").trim() ===
+                      String(tagClientId).trim()
+                    );
+                  }
+                  return (
+                    String(message.content ?? "").trim() === content.trim()
+                  );
+                },
+              );
               if (existingMessage) {
                 updateLocalNostrMessage(String(existingMessage.id ?? ""), {
                   status: "sent",
                   wrapId,
                   pubkey: innerPub,
                   ...(tagClientId ? { clientId: String(tagClientId) } : {}),
+                  ...(!editedFromId && rumorId ? { rumorId } : {}),
+                  ...(replyToId ? { replyToId } : {}),
+                  ...(rootMessageId ? { rootMessageId } : {}),
+                  ...(editedFromId ? { editedFromId } : {}),
                 });
                 return;
               }
+
+              const stableRumorId = editedFromId || rumorId;
+
+              appendLocalNostrMessage({
+                contactId: String(selectedContact.id),
+                direction: isIncoming ? "in" : "out",
+                content,
+                wrapId,
+                rumorId: stableRumorId,
+                pubkey: innerPub,
+                createdAtSec,
+                ...(tagClientId ? { clientId: String(tagClientId) } : {}),
+                ...(replyToId ? { replyToId } : {}),
+                ...(rootMessageId ? { rootMessageId } : {}),
+                ...(editedFromId
+                  ? {
+                      isEdited: true,
+                      editedAtSec: createdAtSec,
+                      editedFromId,
+                    }
+                  : {}),
+              });
+              return;
             }
 
-            appendLocalNostrMessage({
-              contactId: String(selectedContact.id),
-              direction: isIncoming ? "in" : "out",
-              content,
-              wrapId,
-              rumorId: inner.id ? String(inner.id) : null,
-              pubkey: innerPub,
-              createdAtSec,
-              ...(tagClientId ? { clientId: String(tagClientId) } : {}),
-            });
+            if (inner.kind === 7) {
+              const tagsArray = Array.isArray(inner.tags) ? inner.tags : [];
+              const messageId = tagsArray
+                .find((tag) => Array.isArray(tag) && tag[0] === "e")
+                ?.at(1);
+              const normalizedMessageId = String(messageId ?? "").trim();
+              if (!normalizedMessageId) return;
+
+              const kindTag = tagsArray
+                .find((tag) => Array.isArray(tag) && tag[0] === "k")
+                ?.at(1);
+              if (kindTag && String(kindTag) !== "14") return;
+
+              const knownRumorIds = new Set(
+                chatMessagesLatestRef.current
+                  .map((message) => String(message.rumorId ?? "").trim())
+                  .filter(Boolean),
+              );
+              if (!knownRumorIds.has(normalizedMessageId)) return;
+
+              const emoji = String(inner.content ?? "").trim();
+              if (!emoji) return;
+
+              const reactionWrapId = String(inner.id ?? "").trim() || wrapId;
+              if (!reactionWrapId) return;
+              if (nostrReactionWrapIdsRef.current.has(reactionWrapId)) return;
+
+              const clientId = extractClientTag(tagsArray);
+              const reactions = nostrReactionsLatestRef.current;
+              const existingByWrap = reactions.find(
+                (reaction) =>
+                  String(reaction.wrapId ?? "").trim() === reactionWrapId,
+              );
+              if (existingByWrap) {
+                updateLocalNostrReaction(existingByWrap.id, {
+                  status: "sent",
+                  wrapId: reactionWrapId,
+                  ...(clientId ? { clientId } : {}),
+                });
+                return;
+              }
+
+              const existingByClient = clientId
+                ? reactions.find(
+                    (reaction) =>
+                      String(reaction.clientId ?? "").trim() === clientId,
+                  )
+                : null;
+              if (existingByClient) {
+                updateLocalNostrReaction(existingByClient.id, {
+                  status: "sent",
+                  wrapId: reactionWrapId,
+                  messageId: normalizedMessageId,
+                  reactorPubkey: innerPub,
+                  emoji,
+                  ...(clientId ? { clientId } : {}),
+                });
+                return;
+              }
+
+              const duplicateByIdentity = reactions.find(
+                (reaction) =>
+                  String(reaction.messageId ?? "").trim() ===
+                    normalizedMessageId &&
+                  String(reaction.reactorPubkey ?? "").trim() === innerPub &&
+                  String(reaction.emoji ?? "").trim() === emoji,
+              );
+              if (duplicateByIdentity) return;
+
+              appendLocalNostrReaction({
+                messageId: normalizedMessageId,
+                reactorPubkey: innerPub,
+                emoji,
+                createdAtSec,
+                wrapId: reactionWrapId,
+                status: "sent",
+                ...(clientId ? { clientId } : {}),
+              });
+              return;
+            }
+
+            if (inner.kind === 5) {
+              const referencedIds = extractDeleteReferencedIds(inner.tags);
+              if (referencedIds.length === 0) return;
+              softDeleteLocalNostrReactionsByWrapIds(referencedIds);
+            }
           } catch {
             // ignore individual events
           }
@@ -296,14 +450,19 @@ export const useChatNostrSyncEffect = ({
     };
   }, [
     appendLocalNostrMessage,
+    appendLocalNostrReaction,
     chatMessages,
     chatMessagesLatestRef,
     chatSeenWrapIdsRef,
     currentNsec,
     logPayStep,
     nostrMessageWrapIdsRef,
+    nostrReactionWrapIdsRef,
+    nostrReactionsLatestRef,
     route.kind,
     selectedContact,
+    softDeleteLocalNostrReactionsByWrapIds,
     updateLocalNostrMessage,
+    updateLocalNostrReaction,
   ]);
 };

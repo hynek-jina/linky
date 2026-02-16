@@ -25,8 +25,10 @@ import type {
   ContactRowLike,
   CredoTokenRow,
   MintUrlInput,
+  NewLocalNostrMessage,
   PaymentLogData,
   PublishWrappedResult,
+  UpdateLocalNostrMessage,
 } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -36,18 +38,7 @@ type CashuTokenWithMetaRow = CashuTokenRowLike & { id: CashuTokenId | string };
 
 interface UsePaySelectedContactParams {
   allowPromisesEnabled: boolean;
-  appendLocalNostrMessage: (message: {
-    clientId?: string;
-    contactId: string;
-    content: string;
-    createdAtSec: number;
-    direction: "in" | "out";
-    localOnly?: boolean;
-    pubkey: string;
-    rumorId: string | null;
-    status?: "sent" | "pending";
-    wrapId: string;
-  }) => string;
+  appendLocalNostrMessage: (message: NewLocalNostrMessage) => string;
   applyCredoSettlement: (args: {
     amount: number;
     promiseId: string;
@@ -123,17 +114,7 @@ interface UsePaySelectedContactParams {
   totalCredoOutstandingOut: number;
   triggerChatScrollToBottom: (messageId?: string) => void;
   update: EvoluMutations["update"];
-  updateLocalNostrMessage: (
-    id: string,
-    updates: Partial<{
-      clientId: string;
-      content: string;
-      localOnly: boolean;
-      pubkey: string;
-      status: "sent" | "pending";
-      wrapId: string;
-    }>,
-  ) => void;
+  updateLocalNostrMessage: UpdateLocalNostrMessage;
 }
 
 export const createPaySelectedContact = ({
