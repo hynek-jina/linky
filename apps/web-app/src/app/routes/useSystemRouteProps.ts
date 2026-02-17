@@ -35,6 +35,7 @@ interface UseSystemRoutePropsParams {
   evoluServersReloadRequired: SystemRoutesProps["evoluServerProps"]["evoluServersReloadRequired"];
   evoluTableCounts: SystemRoutesProps["evoluDataDetailProps"]["evoluTableCounts"];
   evoluContactsOwnerEditCount: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerEditCount"];
+  evoluCashuOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluCashuOwnerId"];
   evoluContactsOwnerId: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerId"];
   evoluContactsOwnerIndex: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerIndex"];
   evoluContactsOwnerNewContactsCount: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerNewContactsCount"];
@@ -125,6 +126,7 @@ export const useSystemRouteProps = ({
   evoluServersReloadRequired,
   evoluTableCounts,
   evoluContactsOwnerEditCount,
+  evoluCashuOwnerId,
   evoluContactsOwnerId,
   evoluContactsOwnerIndex,
   evoluContactsOwnerNewContactsCount,
@@ -229,6 +231,7 @@ export const useSystemRouteProps = ({
       __APP_VERSION__: appVersion,
     },
     evoluCurrentDataProps: {
+      evoluCashuOwnerId,
       evoluContactsOwnerId,
       requestManualRotateContactsOwner,
       rotateContactsOwnerIsBusy,

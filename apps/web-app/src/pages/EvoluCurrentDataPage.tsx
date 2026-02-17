@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import type { loadEvoluCurrentData } from "../evolu";
 
 interface EvoluCurrentDataPageProps {
+  evoluCashuOwnerId: string | null;
   evoluContactsOwnerId: string | null;
   requestManualRotateContactsOwner: () => Promise<void>;
   rotateContactsOwnerIsBusy: boolean;
@@ -10,6 +11,7 @@ interface EvoluCurrentDataPageProps {
 }
 
 export function EvoluCurrentDataPage({
+  evoluCashuOwnerId,
   evoluContactsOwnerId,
   requestManualRotateContactsOwner,
   rotateContactsOwnerIsBusy,
@@ -39,18 +41,27 @@ export function EvoluCurrentDataPage({
 
   const filteredCurrentData = React.useMemo(() => {
     const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
+    const activeCashuOwnerId = String(evoluCashuOwnerId ?? "").trim();
 
     return Object.fromEntries(
       Object.entries(currentData).map(([tableName, rows]) => {
-        if (tableName !== "contact") return [tableName, rows];
-        if (!activeContactsOwnerId) return [tableName, []];
+        if (
+          tableName !== "contact" &&
+          tableName !== "cashuToken" &&
+          tableName !== "credoToken"
+        ) {
+          return [tableName, rows];
+        }
+        const activeOwnerId =
+          tableName === "contact" ? activeContactsOwnerId : activeCashuOwnerId;
+        if (!activeOwnerId) return [tableName, []];
         return [
           tableName,
-          rows.filter((row) => readRowOwnerId(row) === activeContactsOwnerId),
+          rows.filter((row) => readRowOwnerId(row) === activeOwnerId),
         ];
       }),
     ) as Awaited<ReturnType<typeof loadEvoluCurrentData>>;
-  }, [currentData, evoluContactsOwnerId]);
+  }, [currentData, evoluCashuOwnerId, evoluContactsOwnerId]);
 
   const tableNames = Object.keys(filteredCurrentData).filter(
     (name) => filteredCurrentData[name]?.length > 0,
@@ -114,7 +125,9 @@ export function EvoluCurrentDataPage({
             <h3 style={{ marginBottom: 8 }}>
               {tableName} ({rows.length} rows)
             </h3>
-            {tableName === "contact" && (
+            {(tableName === "contact" ||
+              tableName === "cashuToken" ||
+              tableName === "credoToken") && (
               <div style={{ marginBottom: 10 }}>
                 <button
                   type="button"

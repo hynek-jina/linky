@@ -12,6 +12,7 @@ interface UseAppDataTransferParams<
   TCashuToken extends CashuTokenRowLike,
 > {
   appOwnerId: Evolu.OwnerId | null;
+  cashuOwnerId: Evolu.OwnerId | null;
   cashuTokens: readonly TCashuToken[];
   cashuTokensAll: readonly TCashuToken[];
   contacts: readonly TContact[];
@@ -27,6 +28,7 @@ export const useAppDataTransfer = <
   TCashuToken extends CashuTokenRowLike,
 >({
   appOwnerId,
+  cashuOwnerId,
   cashuTokens,
   cashuTokensAll,
   contacts,
@@ -243,7 +245,7 @@ export const useAppDataTransfer = <
         const amount =
           Number.isFinite(amountNum) && amountNum > 0 ? amountNum : null;
 
-        const result = insert("cashuToken", {
+        const payload = {
           token: token as typeof Evolu.NonEmptyString.Type,
           rawToken: rawToken
             ? (rawToken as typeof Evolu.NonEmptyString.Type)
@@ -253,7 +255,10 @@ export const useAppDataTransfer = <
           amount: amount ? (amount as typeof Evolu.PositiveInt.Type) : null,
           state: state ? (state as typeof Evolu.NonEmptyString100.Type) : null,
           error: error ? (error as typeof Evolu.NonEmptyString1000.Type) : null,
-        });
+        };
+        const result = cashuOwnerId
+          ? insert("cashuToken", payload, { ownerId: cashuOwnerId })
+          : insert("cashuToken", payload);
         if (result.ok) {
           addedTokens += 1;
           existingTokenSet.add(token);
@@ -270,7 +275,16 @@ export const useAppDataTransfer = <
         `${t("importDone")} (${addedContacts}/${updatedContacts}/${addedTokens})`,
       );
     },
-    [appOwnerId, cashuTokensAll, contacts, insert, pushToast, t, update],
+    [
+      appOwnerId,
+      cashuOwnerId,
+      cashuTokensAll,
+      contacts,
+      insert,
+      pushToast,
+      t,
+      update,
+    ],
   );
 
   const handleImportAppDataFilePicked = React.useCallback(

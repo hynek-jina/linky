@@ -170,6 +170,7 @@ export const useAppShellComposition = () => {
   const hasMintOverrideRef = React.useRef(false);
 
   const appOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const cashuOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const {
     logPaymentEvent,
     makeLocalStorageKey,
@@ -357,7 +358,7 @@ export const useAppShellComposition = () => {
   }, [appOwnerId, makeLocalStorageKey]);
 
   const resolveOwnerIdForWrite = React.useCallback(async () => {
-    if (appOwnerIdRef.current) return appOwnerIdRef.current;
+    if (cashuOwnerIdRef.current) return cashuOwnerIdRef.current;
     try {
       const owner = await evolu.appOwner;
       return owner?.id ?? null;
@@ -582,6 +583,8 @@ export const useAppShellComposition = () => {
   const contactsForRotationRef = React.useRef<readonly ContactRowLike[]>([]);
 
   const {
+    cashuOwnerId,
+    cashuSyncOwner,
     contactsBackupOwnerId,
     contactsSyncOwner,
     contactsOwnerEditCount,
@@ -605,17 +608,29 @@ export const useAppShellComposition = () => {
   });
 
   useOwner(contactsSyncOwner);
+  useOwner(cashuSyncOwner);
   useOwner(metaSyncOwner);
+
+  React.useEffect(() => {
+    cashuOwnerIdRef.current = cashuOwnerId;
+  }, [cashuOwnerId]);
 
   const evoluHistoryAllowedOwnerIds = React.useMemo(() => {
     const ids = [
       String(appOwnerId ?? "").trim(),
       String(contactsOwnerId ?? "").trim(),
+      String(cashuOwnerId ?? "").trim(),
       String(contactsBackupOwnerId ?? "").trim(),
       String(metaOwnerId ?? "").trim(),
     ].filter(Boolean);
     return Array.from(new Set(ids));
-  }, [appOwnerId, contactsBackupOwnerId, contactsOwnerId, metaOwnerId]);
+  }, [
+    appOwnerId,
+    cashuOwnerId,
+    contactsBackupOwnerId,
+    contactsOwnerId,
+    metaOwnerId,
+  ]);
 
   const {
     canSaveNewRelay,
@@ -795,9 +810,32 @@ export const useAppShellComposition = () => {
   );
   const cashuTokensAll = useQuery(cashuTokensAllQuery);
 
+  const activeCashuOwnerId = String(cashuOwnerId ?? "").trim();
+  const readCashuRowOwnerId = React.useCallback((row: unknown): string => {
+    if (typeof row !== "object" || row === null) return "";
+    if (!("ownerId" in row)) return "";
+    const ownerId = row.ownerId;
+    if (typeof ownerId !== "string") return "";
+    return ownerId.trim();
+  }, []);
+
+  const cashuTokensFiltered = React.useMemo(() => {
+    if (!activeCashuOwnerId) return [] as typeof cashuTokens;
+    return cashuTokens.filter(
+      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
+    );
+  }, [activeCashuOwnerId, cashuTokens, readCashuRowOwnerId]);
+
+  const cashuTokensAllFiltered = React.useMemo(() => {
+    if (!activeCashuOwnerId) return [] as typeof cashuTokensAll;
+    return cashuTokensAll.filter(
+      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
+    );
+  }, [activeCashuOwnerId, cashuTokensAll, readCashuRowOwnerId]);
+
   const cashuTokensWithMeta = useMemo(
     () =>
-      cashuTokens.map((row) => {
+      cashuTokensFiltered.map((row) => {
         const meta = extractCashuTokenMeta({
           amount: row.amount,
           mint: row.mint,
@@ -813,7 +851,7 @@ export const useAppShellComposition = () => {
           tokenText: meta.tokenText,
         };
       }),
-    [cashuTokens],
+    [cashuTokensFiltered],
   );
 
   const credoTokensQuery = useMemo(
@@ -839,6 +877,20 @@ export const useAppShellComposition = () => {
   );
   const credoTokensAll = useQuery(credoTokensAllQuery);
 
+  const credoTokensFiltered = React.useMemo(() => {
+    if (!activeCashuOwnerId) return [] as typeof credoTokens;
+    return credoTokens.filter(
+      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
+    );
+  }, [activeCashuOwnerId, credoTokens, readCashuRowOwnerId]);
+
+  const credoTokensAllFiltered = React.useMemo(() => {
+    if (!activeCashuOwnerId) return [] as typeof credoTokensAll;
+    return credoTokensAll.filter(
+      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
+    );
+  }, [activeCashuOwnerId, credoTokensAll, readCashuRowOwnerId]);
+
   const {
     applyCredoSettlement,
     cashuTokensHydratedRef,
@@ -848,11 +900,11 @@ export const useAppShellComposition = () => {
     isCashuTokenStored,
     isCredoPromiseKnown,
   } = useCashuDomain({
-    appOwnerId,
-    appOwnerIdRef,
-    cashuTokensAll,
+    appOwnerId: cashuOwnerId,
+    appOwnerIdRef: cashuOwnerIdRef,
+    cashuTokensAll: cashuTokensAllFiltered,
     contacts,
-    credoTokensAll,
+    credoTokensAll: credoTokensAllFiltered,
     insert,
     logPaymentEvent,
     update,
@@ -946,7 +998,7 @@ export const useAppShellComposition = () => {
   } = useMintDomain({
     appOwnerId,
     appOwnerIdRef,
-    cashuTokensAll,
+    cashuTokensAll: cashuTokensAllFiltered,
     defaultMintUrl,
     rememberSeenMint,
   });
@@ -975,15 +1027,15 @@ export const useAppShellComposition = () => {
         hasNsec: Boolean(currentNsec),
         hasNpub: Boolean(currentNpub),
       },
-      cashuTokens: cashuTokens.map((t) => ({
+      cashuTokens: cashuTokensFiltered.map((t) => ({
         id: String(t.id ?? ""),
         mint: String(t.mint ?? ""),
         amount: Number(t.amount ?? 0) || 0,
         state: String(t.state ?? ""),
       })),
       cashuTokensAll: {
-        count: cashuTokensAll.length,
-        newest10: cashuTokensAll.slice(0, 10).map((t) => ({
+        count: cashuTokensAllFiltered.length,
+        newest10: cashuTokensAllFiltered.slice(0, 10).map((t) => ({
           id: String(t.id ?? ""),
           mint: String(t.mint ?? ""),
           amount: Number(t.amount ?? 0) || 0,
@@ -992,7 +1044,7 @@ export const useAppShellComposition = () => {
         })),
       },
     });
-  }, [cashuTokens, cashuTokensAll, currentNpub, currentNsec]);
+  }, [cashuTokensAllFiltered, cashuTokensFiltered, currentNpub, currentNsec]);
 
   const {
     appendLocalNostrMessage,
@@ -1025,7 +1077,7 @@ export const useAppShellComposition = () => {
   });
 
   React.useEffect(() => {
-    const pendingTokens = cashuTokensAll.filter((row) => {
+    const pendingTokens = cashuTokensAllFiltered.filter((row) => {
       const state = String(row.state ?? "");
       if (state !== "pending") return false;
       const isDeleted = Boolean(row.isDeleted);
@@ -1043,12 +1095,17 @@ export const useAppShellComposition = () => {
         return isOut && matches && status !== "pending";
       });
       if (!hasMessage) continue;
-      update("cashuToken", {
+      const payload = {
         id: row.id as CashuTokenId,
         isDeleted: Evolu.sqliteTrue,
-      });
+      };
+      if (cashuOwnerId) {
+        update("cashuToken", payload, { ownerId: cashuOwnerId });
+      } else {
+        update("cashuToken", payload);
+      }
     }
-  }, [cashuTokensAll, nostrMessagesLocal, update]);
+  }, [cashuOwnerId, cashuTokensAllFiltered, nostrMessagesLocal, update]);
 
   // lastMessageByContactId provided by the derived Nostr index above.
 
@@ -1063,13 +1120,13 @@ export const useAppShellComposition = () => {
 
   const credoTokensActive = useMemo(() => {
     const nowSec = Math.floor(Date.now() / 1000);
-    return credoTokens.filter((row) => {
+    return credoTokensFiltered.filter((row) => {
       const r = row as CredoTokenRow;
       const expiresAt = Number(r.expiresAtSec ?? 0) || 0;
       if (expiresAt && nowSec >= expiresAt) return false;
       return getCredoRemainingAmount(row) > 0;
     });
-  }, [credoTokens]);
+  }, [credoTokensFiltered]);
 
   const totalCredoOutstandingOut = useMemo(() => {
     return credoTokensActive.reduce((sum, row) => {
@@ -1286,7 +1343,7 @@ export const useAppShellComposition = () => {
 
   const { claimNpubCashOnce, claimNpubCashOnceLatestRef } = useNpubCashClaim({
     cashuIsBusy,
-    cashuTokensAll,
+    cashuTokensAll: cashuTokensAllFiltered,
     currentNpub,
     currentNsec,
     displayUnit,
@@ -1563,6 +1620,7 @@ export const useAppShellComposition = () => {
     credoTokensActive,
     currentNpub,
     currentNsec,
+    cashuOwnerId,
     defaultMintUrl,
     displayUnit,
     enqueuePendingPayment,
@@ -1599,6 +1657,7 @@ export const useAppShellComposition = () => {
       canPayWithCashu,
       cashuBalance,
       cashuIsBusy,
+      cashuOwnerId,
       cashuTokensWithMeta,
       contacts,
       defaultMintUrl,
@@ -1713,10 +1772,10 @@ export const useAppShellComposition = () => {
     checkAndRefreshCashuToken,
     requestDeleteCashuToken,
   } = useCashuTokenChecks({
-    appOwnerId,
+    appOwnerId: cashuOwnerId,
     cashuBulkCheckIsBusy,
     cashuIsBusy,
-    cashuTokensAll,
+    cashuTokensAll: cashuTokensAllFiltered,
     pendingCashuDeleteId,
     pushToast,
     setCashuBulkCheckIsBusy,
@@ -1849,8 +1908,9 @@ export const useAppShellComposition = () => {
     useAppDataTransfer<(typeof contacts)[number], (typeof cashuTokens)[number]>(
       {
         appOwnerId: contactsOwnerId,
-        cashuTokens,
-        cashuTokensAll,
+        cashuOwnerId,
+        cashuTokens: cashuTokensFiltered,
+        cashuTokensAll: cashuTokensAllFiltered,
         contacts,
         importDataFileInputRef,
         insert,
@@ -1885,7 +1945,7 @@ export const useAppShellComposition = () => {
 
   const restoreMissingTokens = useRestoreMissingTokens({
     cashuIsBusy,
-    cashuTokensAll,
+    cashuTokensAll: cashuTokensAllFiltered,
     defaultMintUrl,
     enqueueCashuOp,
     insert,
@@ -2058,8 +2118,9 @@ export const useAppShellComposition = () => {
     route.kind === "chat" && selectedContact ? selectedContact : null;
 
   const getCashuTokenMessageInfo = React.useCallback(
-    (text: string) => getCashuTokenMessageInfoBase(text, cashuTokensAll),
-    [cashuTokensAll],
+    (text: string) =>
+      getCashuTokenMessageInfoBase(text, cashuTokensAllFiltered),
+    [cashuTokensAllFiltered],
   );
 
   const getCredoTokenMessageInfo = React.useCallback(
@@ -2147,7 +2208,7 @@ export const useAppShellComposition = () => {
       cashuDraft,
       cashuDraftRef,
       cashuIsBusy,
-      cashuTokensAll,
+      cashuTokensAll: cashuTokensAllFiltered,
       cashuTokensWithMeta,
       checkAllCashuTokensAndDeleteInvalid,
       checkAndRefreshCashuToken,
@@ -2155,7 +2216,7 @@ export const useAppShellComposition = () => {
       copyText,
       credoOweTokens,
       credoPromisedTokens,
-      credoTokensAll,
+      credoTokensAll: credoTokensAllFiltered,
       currentNpub,
       displayUnit,
       effectiveProfileName,
@@ -2334,6 +2395,7 @@ export const useAppShellComposition = () => {
       evoluTableCounts: evoluDbInfo.info.tableCounts,
       evoluWipeStorageIsBusy,
       evoluContactsOwnerEditCount: contactsOwnerEditCount,
+      evoluCashuOwnerId: cashuOwnerId,
       evoluContactsOwnerId: contactsOwnerId,
       evoluContactsOwnerIndex: contactsOwnerIndex,
       evoluContactsOwnerNewContactsCount: contactsOwnerNewContactsCount,

@@ -9,6 +9,7 @@ const NOSTR_DERIVATION_PATH = "m/44'/1237'/0'/0/0";
 const CASHU_BIP85_DERIVATION_PATH = "m/83696968'/39'/0'/24'/0'";
 const EVOLU_META_OWNER_DERIVATION_PATH = "m/83696968'/39'/0'/24'/1'/0'";
 const EVOLU_CONTACTS_OWNER_DERIVATION_PATH_PREFIX = "m/83696968'/39'/0'/24'/2'";
+const EVOLU_CASHU_OWNER_DERIVATION_PATH_PREFIX = "m/83696968'/39'/0'/24'/3'";
 const SLIP39_WORD_COUNT = 20;
 
 interface DerivedNostrKeys {
@@ -154,15 +155,18 @@ export const deriveCashuBip85MnemonicFromSlip39 = async (
 
 export const deriveEvoluOwnerMnemonicFromSlip39 = async (
   rawText: string,
-  role: "meta" | "contacts",
+  role: "meta" | "contacts" | "cashu",
   contactsIndex = 0,
 ): Promise<string | null> => {
   if (!Number.isInteger(contactsIndex) || contactsIndex < 0) return null;
 
-  const path =
-    role === "meta"
-      ? EVOLU_META_OWNER_DERIVATION_PATH
-      : `${EVOLU_CONTACTS_OWNER_DERIVATION_PATH_PREFIX}/${contactsIndex}'`;
+  const path = (() => {
+    if (role === "meta") return EVOLU_META_OWNER_DERIVATION_PATH;
+    if (role === "contacts") {
+      return `${EVOLU_CONTACTS_OWNER_DERIVATION_PATH_PREFIX}/${contactsIndex}'`;
+    }
+    return `${EVOLU_CASHU_OWNER_DERIVATION_PATH_PREFIX}/${contactsIndex}'`;
+  })();
 
   try {
     const entropy = await deriveBip85EntropyFromSlip39(rawText, path, 16);

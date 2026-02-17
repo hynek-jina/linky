@@ -43,6 +43,45 @@ export const useCashuDomain = ({
   logPaymentEvent,
   update,
 }: UseCashuDomainParams) => {
+  const updateCredoToken = React.useCallback(
+    (payload: {
+      id: CredoTokenId;
+      settledAmount?: typeof Evolu.PositiveInt.Type | null;
+      settledAtSec?: typeof Evolu.PositiveInt.Type | null;
+    }) => {
+      const ownerId = appOwnerIdRef.current;
+      if (ownerId) {
+        return update("credoToken", payload, { ownerId });
+      }
+      return update("credoToken", payload);
+    },
+    [appOwnerIdRef, update],
+  );
+
+  const insertCredoToken = React.useCallback(
+    (payload: {
+      amount: typeof Evolu.PositiveInt.Type;
+      contactId: string | null;
+      createdAtSec: typeof Evolu.PositiveInt.Type;
+      direction: typeof Evolu.NonEmptyString100.Type;
+      expiresAtSec: typeof Evolu.PositiveInt.Type;
+      issuer: typeof Evolu.NonEmptyString1000.Type;
+      promiseId: typeof Evolu.NonEmptyString1000.Type;
+      rawToken: typeof Evolu.NonEmptyString1000.Type;
+      recipient: typeof Evolu.NonEmptyString1000.Type;
+      settledAmount: null;
+      settledAtSec: null;
+      unit: typeof Evolu.NonEmptyString100.Type;
+    }) => {
+      const ownerId = appOwnerIdRef.current;
+      if (ownerId) {
+        return insert("credoToken", payload, { ownerId });
+      }
+      return insert("credoToken", payload);
+    },
+    [appOwnerIdRef, insert],
+  );
+
   const cashuTokensAllRef = React.useRef(cashuTokensAll);
   React.useEffect(() => {
     cashuTokensAllRef.current = cashuTokensAll;
@@ -148,7 +187,7 @@ export const useCashuDomain = ({
         existing + Math.max(0, args.amount),
       );
 
-      update("credoToken", {
+      updateCredoToken({
         id: (row as CredoTokenRow).id as CredoTokenId,
         settledAmount:
           nextSettled > 0
@@ -160,7 +199,7 @@ export const useCashuDomain = ({
             : null,
       });
     },
-    [update],
+    [updateCredoToken],
   );
 
   const ensuredTokenRef = React.useRef<Set<string>>(new Set());
@@ -283,9 +322,9 @@ export const useCashuDomain = ({
         rawToken: args.token as typeof Evolu.NonEmptyString1000.Type,
       };
 
-      insert("credoToken", payload);
+      insertCredoToken(payload);
     },
-    [contacts, insert, isCredoPromiseKnown],
+    [contacts, insertCredoToken, isCredoPromiseKnown],
   );
 
   React.useEffect(() => {

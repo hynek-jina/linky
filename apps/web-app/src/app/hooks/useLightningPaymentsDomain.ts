@@ -24,6 +24,7 @@ interface UseLightningPaymentsDomainParams {
   canPayWithCashu: boolean;
   cashuBalance: number;
   cashuIsBusy: boolean;
+  cashuOwnerId: Evolu.OwnerId | null;
   cashuTokensWithMeta: CashuTokenWithMetaRow[];
   contacts: readonly ContactRow[];
   defaultMintUrl: string | null;
@@ -58,6 +59,7 @@ export const useLightningPaymentsDomain = ({
   canPayWithCashu,
   cashuBalance,
   cashuIsBusy,
+  cashuOwnerId,
   cashuTokensWithMeta,
   contacts,
   defaultMintUrl,
@@ -75,6 +77,35 @@ export const useLightningPaymentsDomain = ({
   t,
   update,
 }: UseLightningPaymentsDomainParams) => {
+  type CashuTokenInsertPayload = {
+    amount: typeof Evolu.PositiveInt.Type | null;
+    error: typeof Evolu.NonEmptyString1000.Type | null;
+    mint: typeof Evolu.NonEmptyString1000.Type | null;
+    rawToken: typeof Evolu.NonEmptyString.Type | null;
+    state: typeof Evolu.NonEmptyString100.Type;
+    token: typeof Evolu.NonEmptyString.Type;
+    unit: typeof Evolu.NonEmptyString100.Type | null;
+  };
+
+  const insertCashuToken = React.useCallback(
+    (payload: CashuTokenInsertPayload) => {
+      if (cashuOwnerId)
+        return insert("cashuToken", payload, { ownerId: cashuOwnerId });
+      return insert("cashuToken", payload);
+    },
+    [cashuOwnerId, insert],
+  );
+
+  const markCashuTokenDeleted = React.useCallback(
+    (id: CashuTokenId) => {
+      const payload = { id, isDeleted: Evolu.sqliteTrue };
+      if (cashuOwnerId)
+        return update("cashuToken", payload, { ownerId: cashuOwnerId });
+      return update("cashuToken", payload);
+    },
+    [cashuOwnerId, update],
+  );
+
   const payLightningInvoiceWithCashu = React.useCallback(
     async (invoice: string) => {
       const normalized = invoice.trim();
@@ -129,7 +160,7 @@ export const useLightningPaymentsDomain = ({
             if (!result.ok) {
               if (result.remainingToken && result.remainingAmount > 0) {
                 const recoveryToken = result.remainingToken;
-                const inserted = insert("cashuToken", {
+                const inserted = insertCashuToken({
                   token: recoveryToken as typeof Evolu.NonEmptyString.Type,
                   rawToken: null,
                   mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
@@ -150,10 +181,7 @@ export const useLightningPaymentsDomain = ({
                       String(row.state ?? "") === "accepted" &&
                       String(row.mint ?? "").trim() === candidate.mint
                     ) {
-                      update("cashuToken", {
-                        id: row.id,
-                        isDeleted: Evolu.sqliteTrue,
-                      });
+                      markCashuTokenDeleted(row.id);
                     }
                   }
                 }
@@ -185,7 +213,7 @@ export const useLightningPaymentsDomain = ({
             }
 
             if (result.remainingToken && result.remainingAmount > 0) {
-              const inserted = insert("cashuToken", {
+              const inserted = insertCashuToken({
                 token:
                   result.remainingToken as typeof Evolu.NonEmptyString.Type,
                 rawToken: null,
@@ -208,10 +236,7 @@ export const useLightningPaymentsDomain = ({
                 String(row.state ?? "") === "accepted" &&
                 String(row.mint ?? "").trim() === candidate.mint
               ) {
-                update("cashuToken", {
-                  id: row.id,
-                  isDeleted: Evolu.sqliteTrue,
-                });
+                markCashuTokenDeleted(row.id);
               }
             }
 
@@ -272,15 +297,15 @@ export const useLightningPaymentsDomain = ({
       defaultMintUrl,
       displayUnit,
       formatInteger,
-      insert,
+      insertCashuToken,
       logPaymentEvent,
+      markCashuTokenDeleted,
       normalizeMintUrl,
       setCashuIsBusy,
       setContactsOnboardingHasPaid,
       setStatus,
       showPaidOverlay,
       t,
-      update,
     ],
   );
 
@@ -373,7 +398,7 @@ export const useLightningPaymentsDomain = ({
             if (!result.ok) {
               if (result.remainingToken && result.remainingAmount > 0) {
                 const recoveryToken = result.remainingToken;
-                const inserted = insert("cashuToken", {
+                const inserted = insertCashuToken({
                   token: recoveryToken as typeof Evolu.NonEmptyString.Type,
                   rawToken: null,
                   mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
@@ -394,10 +419,7 @@ export const useLightningPaymentsDomain = ({
                       String(row.state ?? "") === "accepted" &&
                       String(row.mint ?? "").trim() === candidate.mint
                     ) {
-                      update("cashuToken", {
-                        id: row.id,
-                        isDeleted: Evolu.sqliteTrue,
-                      });
+                      markCashuTokenDeleted(row.id);
                     }
                   }
                 }
@@ -428,7 +450,7 @@ export const useLightningPaymentsDomain = ({
             }
 
             if (result.remainingToken && result.remainingAmount > 0) {
-              const inserted = insert("cashuToken", {
+              const inserted = insertCashuToken({
                 token:
                   result.remainingToken as typeof Evolu.NonEmptyString.Type,
                 rawToken: null,
@@ -451,10 +473,7 @@ export const useLightningPaymentsDomain = ({
                 String(row.state ?? "") === "accepted" &&
                 String(row.mint ?? "").trim() === candidate.mint
               ) {
-                update("cashuToken", {
-                  id: row.id,
-                  isDeleted: Evolu.sqliteTrue,
-                });
+                markCashuTokenDeleted(row.id);
               }
             }
 
@@ -524,8 +543,9 @@ export const useLightningPaymentsDomain = ({
       contacts,
       displayUnit,
       formatInteger,
-      insert,
+      insertCashuToken,
       logPaymentEvent,
+      markCashuTokenDeleted,
       mintInfoByUrl,
       setCashuIsBusy,
       setContactsOnboardingHasPaid,
@@ -533,7 +553,6 @@ export const useLightningPaymentsDomain = ({
       setStatus,
       showPaidOverlay,
       t,
-      update,
     ],
   );
 
