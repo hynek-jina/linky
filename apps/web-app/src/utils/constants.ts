@@ -3,6 +3,12 @@ export const NOSTR_NSEC_STORAGE_KEY = "linky.nostr_nsec";
 export const NOSTR_AUTH_METHOD_STORAGE_KEY = "linky.nostr_auth_method";
 export const NOSTR_SLIP39_SEED_STORAGE_KEY = "linky.nostr_slip39_seed";
 export const CASHU_BIP85_MNEMONIC_STORAGE_KEY = "linky.cashu_bip85_mnemonic";
+export const EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY =
+  "linky.evolu.contacts_owner_index.v1";
+export const EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY =
+  "linky.evolu.contacts_owner_baseline_count.v1";
+export const EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY =
+  "linky.evolu.contacts_owner_edit_count.v1";
 export const CONTACTS_ONBOARDING_DISMISSED_STORAGE_KEY =
   "linky.contacts_onboarding_dismissed";
 export const CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY =

@@ -34,6 +34,14 @@ interface UseSystemRoutePropsParams {
   evoluServerUrls: SystemRoutesProps["advancedProps"]["evoluServerUrls"];
   evoluServersReloadRequired: SystemRoutesProps["evoluServerProps"]["evoluServersReloadRequired"];
   evoluTableCounts: SystemRoutesProps["evoluDataDetailProps"]["evoluTableCounts"];
+  evoluContactsOwnerEditCount: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerEditCount"];
+  evoluContactsOwnerId: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerId"];
+  evoluContactsOwnerIndex: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerIndex"];
+  evoluContactsOwnerNewContactsCount: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerNewContactsCount"];
+  evoluContactsOwnerPointer: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerPointer"];
+  evoluHistoryAllowedOwnerIds: SystemRoutesProps["evoluHistoryDataProps"]["evoluHistoryAllowedOwnerIds"];
+  requestManualRotateContactsOwner: SystemRoutesProps["evoluCurrentDataProps"]["requestManualRotateContactsOwner"];
+  rotateContactsOwnerIsBusy: SystemRoutesProps["evoluCurrentDataProps"]["rotateContactsOwnerIsBusy"];
   evoluWipeStorageIsBusy: SystemRoutesProps["evoluDataDetailProps"]["pendingClearDatabase"];
   exportAppData: SystemRoutesProps["advancedProps"]["exportAppData"];
   extractPpk: SystemRoutesProps["mintDetailProps"]["extractPpk"];
@@ -116,6 +124,14 @@ export const useSystemRouteProps = ({
   evoluServerUrls,
   evoluServersReloadRequired,
   evoluTableCounts,
+  evoluContactsOwnerEditCount,
+  evoluContactsOwnerId,
+  evoluContactsOwnerIndex,
+  evoluContactsOwnerNewContactsCount,
+  evoluContactsOwnerPointer,
+  evoluHistoryAllowedOwnerIds,
+  requestManualRotateContactsOwner,
+  rotateContactsOwnerIsBusy,
   evoluWipeStorageIsBusy,
   exportAppData,
   extractPpk,
@@ -213,6 +229,9 @@ export const useSystemRouteProps = ({
       __APP_VERSION__: appVersion,
     },
     evoluCurrentDataProps: {
+      evoluContactsOwnerId,
+      requestManualRotateContactsOwner,
+      rotateContactsOwnerIsBusy,
       loadCurrentData: loadEvoluCurrentData,
       t,
     },
@@ -220,6 +239,11 @@ export const useSystemRouteProps = ({
       evoluDatabaseBytes,
       evoluTableCounts,
       evoluHistoryCount,
+      evoluContactsOwnerEditCount,
+      evoluContactsOwnerId,
+      evoluContactsOwnerIndex,
+      evoluContactsOwnerNewContactsCount,
+      evoluContactsOwnerPointer,
       pendingClearDatabase: evoluWipeStorageIsBusy,
       requestClearDatabase,
       loadHistoryData: loadEvoluHistoryData,
@@ -227,6 +251,7 @@ export const useSystemRouteProps = ({
       t,
     },
     evoluHistoryDataProps: {
+      evoluHistoryAllowedOwnerIds,
       loadHistoryData: loadEvoluHistoryData,
       t,
     },

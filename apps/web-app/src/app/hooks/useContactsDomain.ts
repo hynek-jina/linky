@@ -8,9 +8,18 @@ import type { OptionalText } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
+const getRowOwnerId = (row: unknown): string => {
+  if (typeof row !== "object" || row === null) return "";
+  if (!("ownerId" in row)) return "";
+  const ownerId = row.ownerId;
+  if (typeof ownerId !== "string") return "";
+  return ownerId.trim();
+};
+
 interface UseContactsDomainParams {
   appOwnerId: Evolu.OwnerId | null;
   currentNsec: string | null;
+  isSeedLogin: boolean;
   noGroupFilterValue: string;
   pushToast: (message: string) => void;
   route: Route;
@@ -22,6 +31,7 @@ interface UseContactsDomainParams {
 export const useContactsDomain = ({
   appOwnerId,
   currentNsec,
+  isSeedLogin,
   noGroupFilterValue,
   pushToast,
   route,
@@ -47,7 +57,13 @@ export const useContactsDomain = ({
     [],
   );
 
-  const contacts = useQuery(contactsQuery);
+  const allContacts = useQuery(contactsQuery);
+
+  const contacts = React.useMemo(() => {
+    const ownerId = String(appOwnerId ?? "").trim();
+    if (!ownerId) return [];
+    return allContacts.filter((contact) => getRowOwnerId(contact) === ownerId);
+  }, [allContacts, appOwnerId]);
 
   const dedupeContacts = React.useCallback(async () => {
     if (dedupeContactsIsBusy) return;
@@ -71,6 +87,30 @@ export const useContactsDomain = ({
 
     const fieldScore = (value: OptionalText): number =>
       normalize(value) ? 1 : 0;
+
+    const writeContactProfileUpdate = (
+      payload: {
+        id: ContactId;
+      } & Partial<
+        Record<
+          "groupName" | "lnAddress" | "name" | "npub",
+          typeof Evolu.NonEmptyString1000.Type | null
+        >
+      >,
+    ) => {
+      if (!appOwnerId) return update("contact", payload);
+      const scoped = update("contact", payload, { ownerId: appOwnerId });
+      if (scoped.ok) return scoped;
+      return update("contact", payload);
+    };
+
+    const writeContactDelete = (id: ContactId) => {
+      const payload = { id, isDeleted: Evolu.sqliteTrue };
+      if (!appOwnerId) return update("contact", payload);
+      const scoped = update("contact", payload, { ownerId: appOwnerId });
+      if (scoped.ok) return scoped;
+      return update("contact", payload);
+    };
 
     try {
       const n = contacts.length;
@@ -181,37 +221,15 @@ export const useContactsDomain = ({
           (keep.groupName ?? null) !== (mergedGroup ?? null);
 
         if (keepNeedsUpdate) {
-          const result = appOwnerId
-            ? update(
-                "contact",
-                {
-                  id: keepId,
-                  name: mergedName as
-                    | typeof Evolu.NonEmptyString1000.Type
-                    | null,
-                  npub: mergedNpub as
-                    | typeof Evolu.NonEmptyString1000.Type
-                    | null,
-                  lnAddress: mergedLn as
-                    | typeof Evolu.NonEmptyString1000.Type
-                    | null,
-                  groupName: mergedGroup as
-                    | typeof Evolu.NonEmptyString1000.Type
-                    | null,
-                },
-                { ownerId: appOwnerId },
-              )
-            : update("contact", {
-                id: keepId,
-                name: mergedName as typeof Evolu.NonEmptyString1000.Type | null,
-                npub: mergedNpub as typeof Evolu.NonEmptyString1000.Type | null,
-                lnAddress: mergedLn as
-                  | typeof Evolu.NonEmptyString1000.Type
-                  | null,
-                groupName: mergedGroup as
-                  | typeof Evolu.NonEmptyString1000.Type
-                  | null,
-              });
+          const result = writeContactProfileUpdate({
+            id: keepId,
+            name: mergedName as typeof Evolu.NonEmptyString1000.Type | null,
+            npub: mergedNpub as typeof Evolu.NonEmptyString1000.Type | null,
+            lnAddress: mergedLn as typeof Evolu.NonEmptyString1000.Type | null,
+            groupName: mergedGroup as
+              | typeof Evolu.NonEmptyString1000.Type
+              | null,
+          });
 
           if (!result.ok) {
             throw new Error(String(result.error ?? "contact update failed"));
@@ -222,16 +240,7 @@ export const useContactsDomain = ({
           const duplicateId = contact.id as ContactId;
           if (duplicateId === keepId) continue;
 
-          const del = appOwnerId
-            ? update(
-                "contact",
-                { id: duplicateId, isDeleted: Evolu.sqliteTrue },
-                { ownerId: appOwnerId },
-              )
-            : update("contact", {
-                id: duplicateId,
-                isDeleted: Evolu.sqliteTrue,
-              });
+          const del = writeContactDelete(duplicateId);
 
           if (del.ok) removedContacts += 1;
         }
@@ -253,6 +262,7 @@ export const useContactsDomain = ({
   }, [appOwnerId, contacts, dedupeContactsIsBusy, pushToast, t, update]);
 
   React.useEffect(() => {
+    if (isSeedLogin) return;
     if (!currentNsec) return;
     if (!appOwnerId) return;
     if (contacts.length === 0) return;
@@ -310,7 +320,7 @@ export const useContactsDomain = ({
       ok: okCount,
       failed: failCount,
     });
-  }, [appOwnerId, contacts, currentNsec, upsert]);
+  }, [appOwnerId, contacts, currentNsec, isSeedLogin, upsert]);
 
   const { groupNames, ungroupedCount } = React.useMemo(() => {
     const counts = new Map<string, number>();

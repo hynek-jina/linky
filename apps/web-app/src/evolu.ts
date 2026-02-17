@@ -414,6 +414,10 @@ export type AppStateId = typeof AppStateId.Type;
 const MintId = Evolu.id("Mint");
 export type MintId = typeof MintId.Type;
 
+// Primary key pro OwnerMeta tabulku (metadata pro owner lane routing)
+const OwnerMetaId = Evolu.id("OwnerMeta");
+export type OwnerMetaId = typeof OwnerMetaId.Type;
+
 // Schema pro Linky app
 export const Schema = {
   contact: {
@@ -557,6 +561,12 @@ export const Schema = {
     infoJson: Evolu.nullOr(Evolu.NonEmptyString1000),
     lastCheckedAtSec: Evolu.nullOr(Evolu.PositiveInt),
   },
+
+  ownerMeta: {
+    id: OwnerMetaId,
+    scope: Evolu.NonEmptyString100,
+    value: Evolu.NonEmptyString1000,
+  },
 };
 
 // Create Evolu instance for a specific user (mnemonic)
@@ -693,6 +703,7 @@ export const getEvoluDatabaseInfo = async (): Promise<{
     "paymentEvent",
     "appState",
     "mintInfo",
+    "ownerMeta",
   ] as const;
 
   const instance = getEvolu();
@@ -882,6 +893,7 @@ export const loadEvoluCurrentData = async (): Promise<
     "paymentEvent",
     "appState",
     "mintInfo",
+    "ownerMeta",
   ] as const;
 
   const instance = getEvolu();

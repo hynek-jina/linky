@@ -7,6 +7,8 @@ import { Slip39 } from "slip39-ts";
 
 const NOSTR_DERIVATION_PATH = "m/44'/1237'/0'/0/0";
 const CASHU_BIP85_DERIVATION_PATH = "m/83696968'/39'/0'/24'/0'";
+const EVOLU_META_OWNER_DERIVATION_PATH = "m/83696968'/39'/0'/24'/1'/0'";
+const EVOLU_CONTACTS_OWNER_DERIVATION_PATH_PREFIX = "m/83696968'/39'/0'/24'/2'";
 const SLIP39_WORD_COUNT = 20;
 
 interface DerivedNostrKeys {
@@ -37,6 +39,34 @@ const toSecretBytes = (value: unknown): Uint8Array | null => {
   if (!Array.isArray(value)) return null;
   if (!value.every((item) => isByte(item))) return null;
   return Uint8Array.from(value);
+};
+
+const deriveBip85EntropyFromSlip39 = async (
+  rawText: string,
+  path: string,
+  bytesLength: 16 | 32,
+): Promise<Uint8Array | null> => {
+  const normalizedMnemonic = normalizeSlip39Seed(rawText);
+  if (!looksLikeSlip39Seed(normalizedMnemonic)) return null;
+
+  try {
+    if (!Slip39.validateMnemonic(normalizedMnemonic)) return null;
+
+    const recovered = await Slip39.recoverSecret([normalizedMnemonic], "");
+    const seed = toSecretBytes(recovered);
+    if (!seed || seed.length < 16 || seed.length > 64) return null;
+
+    const hdRoot = HDKey.fromMasterSeed(seed);
+    const node = hdRoot.derive(path);
+    const privateKey = node.privateKey;
+    if (!privateKey) return null;
+
+    const hmacKey = new TextEncoder().encode("bip-entropy-from-k");
+    const digest = hmac(sha512, hmacKey, privateKey);
+    return digest.slice(0, bytesLength);
+  } catch {
+    return null;
+  }
 };
 
 export const looksLikeSlip39Seed = (rawText: string): boolean => {
@@ -107,26 +137,37 @@ export const createSlip39Seed = async (): Promise<string | null> => {
 export const deriveCashuBip85MnemonicFromSlip39 = async (
   rawText: string,
 ): Promise<string | null> => {
-  const normalizedMnemonic = normalizeSlip39Seed(rawText);
-  if (!looksLikeSlip39Seed(normalizedMnemonic)) return null;
-
   try {
-    if (!Slip39.validateMnemonic(normalizedMnemonic)) return null;
-
-    const recovered = await Slip39.recoverSecret([normalizedMnemonic], "");
-    const seed = toSecretBytes(recovered);
-    if (!seed || seed.length < 16 || seed.length > 64) return null;
-
-    const hdRoot = HDKey.fromMasterSeed(seed);
-    const bip85Node = hdRoot.derive(CASHU_BIP85_DERIVATION_PATH);
-    const privateKey = bip85Node.privateKey;
-    if (!privateKey) return null;
-
-    const hmacKey = new TextEncoder().encode("bip-entropy-from-k");
-    const digest = hmac(sha512, hmacKey, privateKey);
-    const entropy = digest.slice(0, 32);
+    const entropy = await deriveBip85EntropyFromSlip39(
+      rawText,
+      CASHU_BIP85_DERIVATION_PATH,
+      32,
+    );
+    if (!entropy) return null;
     const mnemonic = entropyToMnemonic(entropy, wordlist);
 
+    return String(mnemonic ?? "").trim() || null;
+  } catch {
+    return null;
+  }
+};
+
+export const deriveEvoluOwnerMnemonicFromSlip39 = async (
+  rawText: string,
+  role: "meta" | "contacts",
+  contactsIndex = 0,
+): Promise<string | null> => {
+  if (!Number.isInteger(contactsIndex) || contactsIndex < 0) return null;
+
+  const path =
+    role === "meta"
+      ? EVOLU_META_OWNER_DERIVATION_PATH
+      : `${EVOLU_CONTACTS_OWNER_DERIVATION_PATH_PREFIX}/${contactsIndex}'`;
+
+  try {
+    const entropy = await deriveBip85EntropyFromSlip39(rawText, path, 16);
+    if (!entropy) return null;
+    const mnemonic = entropyToMnemonic(entropy, wordlist);
     return String(mnemonic ?? "").trim() || null;
   } catch {
     return null;

@@ -88,6 +88,7 @@ import { useArmedDeleteTimeouts } from "./hooks/useArmedDeleteTimeouts";
 import { useCashuDomain } from "./hooks/useCashuDomain";
 import { useContactsDomain } from "./hooks/useContactsDomain";
 import { useContactsNostrPrefetchEffects } from "./hooks/useContactsNostrPrefetchEffects";
+import { useEvoluContactsOwnerRotation } from "./hooks/useEvoluContactsOwnerRotation";
 import { useFeedbackContact } from "./hooks/useFeedbackContact";
 import { useGuideScannerDomain } from "./hooks/useGuideScannerDomain";
 import { useLightningPaymentsDomain } from "./hooks/useLightningPaymentsDomain";
@@ -578,6 +579,44 @@ export const useAppShellComposition = () => {
     t,
   });
 
+  const contactsForRotationRef = React.useRef<readonly ContactRowLike[]>([]);
+
+  const {
+    contactsBackupOwnerId,
+    contactsSyncOwner,
+    contactsOwnerEditCount,
+    contactsOwnerId,
+    contactsOwnerIndex,
+    contactsOwnerNewContactsCount,
+    contactsOwnerPointer,
+    metaOwnerId,
+    metaSyncOwner,
+    requestManualRotateContactsOwner,
+    rotateContactsOwnerIsBusy,
+  } = useEvoluContactsOwnerRotation({
+    appOwnerId,
+    getContactsForRotation: () => contactsForRotationRef.current,
+    isSeedLogin,
+    pushToast,
+    slip39Seed,
+    t,
+    update,
+    upsert,
+  });
+
+  useOwner(contactsSyncOwner);
+  useOwner(metaSyncOwner);
+
+  const evoluHistoryAllowedOwnerIds = React.useMemo(() => {
+    const ids = [
+      String(appOwnerId ?? "").trim(),
+      String(contactsOwnerId ?? "").trim(),
+      String(contactsBackupOwnerId ?? "").trim(),
+      String(metaOwnerId ?? "").trim(),
+    ].filter(Boolean);
+    return Array.from(new Set(ids));
+  }, [appOwnerId, contactsBackupOwnerId, contactsOwnerId, metaOwnerId]);
+
   const {
     canSaveNewRelay,
     connectedRelayCount,
@@ -718,8 +757,9 @@ export const useAppShellComposition = () => {
     setContactsSearch,
     ungroupedCount,
   } = useContactsDomain({
-    appOwnerId,
+    appOwnerId: contactsOwnerId,
     currentNsec,
+    isSeedLogin,
     noGroupFilterValue: NO_GROUP_FILTER,
     pushToast,
     route,
@@ -727,6 +767,10 @@ export const useAppShellComposition = () => {
     update,
     upsert,
   });
+
+  React.useEffect(() => {
+    contactsForRotationRef.current = contacts;
+  }, [contacts]);
 
   const cashuTokensQuery = useMemo(
     () =>
@@ -1300,7 +1344,7 @@ export const useAppShellComposition = () => {
   // We only publish profile changes when the user does so explicitly.
 
   useContactsNostrPrefetchEffects({
-    appOwnerId,
+    appOwnerId: contactsOwnerId,
     contacts,
     nostrFetchRelays,
     nostrInFlight,
@@ -1353,7 +1397,7 @@ export const useAppShellComposition = () => {
     resetEditedContactFieldFromNostr,
     setForm,
   } = useContactEditor({
-    appOwnerId,
+    appOwnerId: contactsOwnerId,
     contactNewPrefill,
     contacts,
     insert,
@@ -1645,12 +1689,16 @@ export const useAppShellComposition = () => {
   });
 
   const handleDelete = (id: ContactId) => {
-    const result = appOwnerId
-      ? update(
-          "contact",
-          { id, isDeleted: Evolu.sqliteTrue },
-          { ownerId: appOwnerId },
-        )
+    const result = contactsOwnerId
+      ? (() => {
+          const scoped = update(
+            "contact",
+            { id, isDeleted: Evolu.sqliteTrue },
+            { ownerId: contactsOwnerId },
+          );
+          if (scoped.ok) return scoped;
+          return update("contact", { id, isDeleted: Evolu.sqliteTrue });
+        })()
       : update("contact", { id, isDeleted: Evolu.sqliteTrue });
     if (result.ok) {
       setStatus(t("contactDeleted"));
@@ -1704,7 +1752,7 @@ export const useAppShellComposition = () => {
 
   const { openFeedbackContact } = useFeedbackContact<(typeof contacts)[number]>(
     {
-      appOwnerId,
+      appOwnerId: contactsOwnerId,
       contacts,
       insert,
       pushToast,
@@ -1800,7 +1848,7 @@ export const useAppShellComposition = () => {
   const { exportAppData, handleImportAppDataFilePicked, requestImportAppData } =
     useAppDataTransfer<(typeof contacts)[number], (typeof cashuTokens)[number]>(
       {
-        appOwnerId,
+        appOwnerId: contactsOwnerId,
         cashuTokens,
         cashuTokensAll,
         contacts,
@@ -2050,7 +2098,7 @@ export const useAppShellComposition = () => {
   }, []);
 
   const handleScannedText = useScannedTextHandler<(typeof contacts)[number]>({
-    appOwnerId,
+    appOwnerId: contactsOwnerId,
     closeScan,
     contacts,
     extractCashuTokenFromText,
@@ -2285,6 +2333,14 @@ export const useAppShellComposition = () => {
       evoluServersReloadRequired,
       evoluTableCounts: evoluDbInfo.info.tableCounts,
       evoluWipeStorageIsBusy,
+      evoluContactsOwnerEditCount: contactsOwnerEditCount,
+      evoluContactsOwnerId: contactsOwnerId,
+      evoluContactsOwnerIndex: contactsOwnerIndex,
+      evoluContactsOwnerNewContactsCount: contactsOwnerNewContactsCount,
+      evoluContactsOwnerPointer: contactsOwnerPointer,
+      evoluHistoryAllowedOwnerIds,
+      requestManualRotateContactsOwner,
+      rotateContactsOwnerIsBusy,
       exportAppData,
       extractPpk,
       getMintIconUrl,

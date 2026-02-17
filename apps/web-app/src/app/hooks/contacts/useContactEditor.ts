@@ -96,9 +96,10 @@ export const useContactEditor = ({
         >
       >,
     ) => {
-      return appOwnerId
-        ? update("contact", payload, { ownerId: appOwnerId })
-        : update("contact", payload);
+      if (!appOwnerId) return update("contact", payload);
+      const scoped = update("contact", payload, { ownerId: appOwnerId });
+      if (scoped.ok) return scoped;
+      return update("contact", payload);
     },
     [appOwnerId, update],
   );
@@ -223,9 +224,7 @@ export const useContactEditor = ({
 
       // Only update if there are actual changes (besides just the id).
       if (Object.keys(changedFields).length > 1) {
-        const result = appOwnerId
-          ? update("contact", changedFields, { ownerId: appOwnerId })
-          : update("contact", changedFields);
+        const result = updateContactFields(changedFields);
         if (result.ok) {
           setStatus(t("contactUpdated"));
         } else {
@@ -274,7 +273,7 @@ export const useContactEditor = ({
     setPendingDeleteId,
     setStatus,
     t,
-    update,
+    updateContactFields,
   ]);
 
   const refreshContactFromNostr = React.useCallback(
