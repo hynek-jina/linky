@@ -1,7 +1,7 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
-import { acceptCashuToken } from "../../../cashuAccept";
 import { parseCashuToken } from "../../../cashu";
+import { acceptCashuToken } from "../../../cashuAccept";
 import type { ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
@@ -70,6 +70,56 @@ export const useSaveCashuFromText = ({
   t,
   touchMintInfo,
 }: UseSaveCashuFromTextParams) => {
+  const buildCashuTokenPayload = React.useCallback(
+    (args: {
+      amount: number | null;
+      error: string | null;
+      mint: string | null;
+      rawToken: string;
+      state: "accepted" | "error";
+      token: string;
+      unit: string | null;
+    }) => {
+      const payload: {
+        token: typeof Evolu.NonEmptyString.Type;
+        state: typeof Evolu.NonEmptyString100.Type;
+        amount?: typeof Evolu.PositiveInt.Type;
+        error?: typeof Evolu.NonEmptyString1000.Type;
+        mint?: typeof Evolu.NonEmptyString1000.Type;
+        rawToken?: typeof Evolu.NonEmptyString.Type;
+        unit?: typeof Evolu.NonEmptyString100.Type;
+      } = {
+        token: args.token as typeof Evolu.NonEmptyString.Type,
+        state: args.state as typeof Evolu.NonEmptyString100.Type,
+      };
+
+      const rawToken = String(args.rawToken ?? "").trim();
+      if (rawToken)
+        payload.rawToken = rawToken as typeof Evolu.NonEmptyString.Type;
+
+      const mint = String(args.mint ?? "").trim();
+      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
+
+      const unit = String(args.unit ?? "").trim();
+      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
+
+      if (typeof args.amount === "number" && args.amount > 0) {
+        payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
+      }
+
+      const error = String(args.error ?? "").trim();
+      if (error) {
+        payload.error = error.slice(
+          0,
+          1000,
+        ) as typeof Evolu.NonEmptyString1000.Type;
+      }
+
+      return payload;
+    },
+    [],
+  );
+
   return React.useCallback(
     async (
       tokenText: string,
@@ -102,36 +152,29 @@ export const useSaveCashuFromText = ({
           const result = ownerId
             ? insert(
                 "cashuToken",
-                {
-                  token: accepted.token as typeof Evolu.NonEmptyString.Type,
-                  rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-                  mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
-                  unit: accepted.unit
-                    ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
-                    : null,
-                  amount:
-                    accepted.amount > 0
-                      ? (accepted.amount as typeof Evolu.PositiveInt.Type)
-                      : null,
-                  state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                buildCashuTokenPayload({
+                  token: String(accepted.token ?? ""),
+                  rawToken: tokenRaw,
+                  mint: String(accepted.mint ?? ""),
+                  unit: accepted.unit,
+                  amount: accepted.amount > 0 ? accepted.amount : null,
+                  state: "accepted",
                   error: null,
-                },
+                }),
                 { ownerId },
               )
-            : insert("cashuToken", {
-                token: accepted.token as typeof Evolu.NonEmptyString.Type,
-                rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-                mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
-                unit: accepted.unit
-                  ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
-                  : null,
-                amount:
-                  accepted.amount > 0
-                    ? (accepted.amount as typeof Evolu.PositiveInt.Type)
-                    : null,
-                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-                error: null,
-              });
+            : insert(
+                "cashuToken",
+                buildCashuTokenPayload({
+                  token: String(accepted.token ?? ""),
+                  rawToken: tokenRaw,
+                  mint: String(accepted.mint ?? ""),
+                  unit: accepted.unit,
+                  amount: accepted.amount > 0 ? accepted.amount : null,
+                  state: "accepted",
+                  error: null,
+                }),
+              );
           if (!result.ok) {
             setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
             return;
@@ -217,42 +260,31 @@ export const useSaveCashuFromText = ({
           const result = ownerId
             ? insert(
                 "cashuToken",
-                {
-                  token: tokenRaw as typeof Evolu.NonEmptyString.Type,
-                  rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-                  mint: parsedMint
-                    ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
-                    : null,
+                buildCashuTokenPayload({
+                  token: tokenRaw,
+                  rawToken: tokenRaw,
+                  mint: parsedMint,
                   unit: null,
                   amount:
-                    typeof parsedAmount === "number"
-                      ? (parsedAmount as typeof Evolu.PositiveInt.Type)
-                      : null,
-                  state: "error" as typeof Evolu.NonEmptyString100.Type,
-                  error: message.slice(
-                    0,
-                    1000,
-                  ) as typeof Evolu.NonEmptyString1000.Type,
-                },
+                    typeof parsedAmount === "number" ? parsedAmount : null,
+                  state: "error",
+                  error: message,
+                }),
                 { ownerId },
               )
-            : insert("cashuToken", {
-                token: tokenRaw as typeof Evolu.NonEmptyString.Type,
-                rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-                mint: parsedMint
-                  ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
-                  : null,
-                unit: null,
-                amount:
-                  typeof parsedAmount === "number"
-                    ? (parsedAmount as typeof Evolu.PositiveInt.Type)
-                    : null,
-                state: "error" as typeof Evolu.NonEmptyString100.Type,
-                error: message.slice(
-                  0,
-                  1000,
-                ) as typeof Evolu.NonEmptyString1000.Type,
-              });
+            : insert(
+                "cashuToken",
+                buildCashuTokenPayload({
+                  token: tokenRaw,
+                  rawToken: tokenRaw,
+                  mint: parsedMint,
+                  unit: null,
+                  amount:
+                    typeof parsedAmount === "number" ? parsedAmount : null,
+                  state: "error",
+                  error: message,
+                }),
+              );
           if (result.ok) {
             setStatus(`${t("cashuAcceptFailed")}: ${message}`);
           } else {
@@ -283,6 +315,7 @@ export const useSaveCashuFromText = ({
       showPaidOverlay,
       t,
       touchMintInfo,
+      buildCashuTokenPayload,
     ],
   );
 };

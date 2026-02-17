@@ -43,6 +43,37 @@ export const useCashuDomain = ({
   logPaymentEvent,
   update,
 }: UseCashuDomainParams) => {
+  const buildCashuTokenPayload = React.useCallback(
+    (args: {
+      amount: number | null;
+      mint: string | null;
+      state: "accepted";
+      token: string;
+    }) => {
+      const payload: {
+        token: typeof Evolu.NonEmptyString.Type;
+        state: typeof Evolu.NonEmptyString100.Type;
+        amount?: typeof Evolu.PositiveInt.Type;
+        mint?: typeof Evolu.NonEmptyString1000.Type;
+      } = {
+        token: args.token as typeof Evolu.NonEmptyString.Type,
+        state: args.state as typeof Evolu.NonEmptyString100.Type,
+      };
+
+      const mint = String(args.mint ?? "").trim();
+      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
+
+      if (typeof args.amount === "number" && args.amount > 0) {
+        payload.amount = Math.floor(
+          args.amount,
+        ) as typeof Evolu.PositiveInt.Type;
+      }
+
+      return payload;
+    },
+    [],
+  );
+
   const updateCredoToken = React.useCallback(
     (payload: {
       id: CredoTokenId;
@@ -239,20 +270,12 @@ export const useCashuDomain = ({
 
           const result = insert(
             "cashuToken",
-            {
-              token: remembered as typeof Evolu.NonEmptyString.Type,
-              rawToken: null,
-              mint: mint
-                ? (mint as typeof Evolu.NonEmptyString1000.Type)
-                : null,
-              unit: null,
-              amount:
-                typeof amount === "number" && amount > 0
-                  ? (Math.floor(amount) as typeof Evolu.PositiveInt.Type)
-                  : null,
-              state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-              error: null,
-            },
+            buildCashuTokenPayload({
+              token: remembered,
+              mint,
+              amount,
+              state: "accepted",
+            }),
             { ownerId },
           );
 
@@ -274,7 +297,13 @@ export const useCashuDomain = ({
         }
       }, 800);
     },
-    [appOwnerIdRef, insert, isCashuTokenKnownAny, logPaymentEvent],
+    [
+      appOwnerIdRef,
+      buildCashuTokenPayload,
+      insert,
+      isCashuTokenKnownAny,
+      logPaymentEvent,
+    ],
   );
 
   const insertCredoPromise = React.useCallback(
@@ -376,18 +405,12 @@ export const useCashuDomain = ({
 
     const result = insert(
       "cashuToken",
-      {
-        token: remembered as typeof Evolu.NonEmptyString.Type,
-        rawToken: null,
-        mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
-        unit: null,
-        amount:
-          typeof amount === "number" && amount > 0
-            ? (Math.floor(amount) as typeof Evolu.PositiveInt.Type)
-            : null,
-        state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-        error: null,
-      },
+      buildCashuTokenPayload({
+        token: remembered,
+        mint,
+        amount,
+        state: "accepted",
+      }),
       { ownerId },
     );
 
@@ -406,6 +429,7 @@ export const useCashuDomain = ({
     }
   }, [
     appOwnerIdRef,
+    buildCashuTokenPayload,
     cashuTokensAll,
     insert,
     isCashuTokenKnownAny,

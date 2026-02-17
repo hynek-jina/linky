@@ -1,5 +1,9 @@
 import React, { useState } from "react";
 import type { EvoluHistoryRow, loadEvoluCurrentData } from "../evolu";
+import {
+  MAX_CONTACTS_PER_OWNER,
+  OWNER_ROTATION_TRIGGER_WRITE_COUNT,
+} from "../utils/constants";
 
 interface EvoluDataDetailPageProps {
   evoluDatabaseBytes: number | null;
@@ -260,7 +264,7 @@ export function EvoluDataDetailPage({
             </div>
             <div className="settings-right">
               <span className="muted">
-                {evoluContactsOwnerNewContactsCount} / 10
+                {evoluContactsOwnerNewContactsCount} / {MAX_CONTACTS_PER_OWNER}
               </span>
             </div>
           </div>
@@ -272,7 +276,10 @@ export function EvoluDataDetailPage({
               </span>
             </div>
             <div className="settings-right">
-              <span className="muted">{evoluContactsOwnerEditCount} / 50</span>
+              <span className="muted">
+                {evoluContactsOwnerEditCount} /{" "}
+                {OWNER_ROTATION_TRIGGER_WRITE_COUNT}
+              </span>
             </div>
           </div>
 

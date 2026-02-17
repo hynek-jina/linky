@@ -26,6 +26,7 @@ import {
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
   FEEDBACK_CONTACT_NPUB,
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
+  MAX_CONTACTS_PER_OWNER,
   NO_GROUP_FILTER,
   PROMISE_TOTAL_CAP_SAT,
 } from "../utils/constants";
@@ -590,10 +591,12 @@ export const useAppShellComposition = () => {
 
   const {
     cashuOwnerId,
+    cashuOwnerEditsUntilRotation,
     cashuSyncOwner,
     contactsBackupOwnerId,
     contactsSyncOwner,
     contactsOwnerEditCount,
+    contactsOwnerEditsUntilRotation,
     contactsOwnerId,
     contactsOwnerIndex,
     contactsOwnerNewContactsCount,
@@ -602,7 +605,9 @@ export const useAppShellComposition = () => {
     metaSyncOwner,
     messagesBackupOwnerId,
     messagesOwnerId,
+    messagesOwnerEditsUntilRotation,
     messagesSyncOwner,
+    recordContactsOwnerWrite,
     requestManualRotateContactsOwner,
     requestManualRotateMessagesOwner,
     rotateContactsOwnerIsBusy,
@@ -973,7 +978,6 @@ export const useAppShellComposition = () => {
         const payload = {
           token: token as typeof Evolu.NonEmptyString.Type,
           state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-          error: null,
         };
 
         const result = ownerId
@@ -1491,6 +1495,7 @@ export const useAppShellComposition = () => {
     selectedContact,
     setContactNewPrefill,
     setPendingDeleteId,
+    recordContactsOwnerWrite,
     setStatus,
     t,
     update,
@@ -1503,6 +1508,15 @@ export const useAppShellComposition = () => {
   };
 
   const openNewContactPage = () => {
+    if (contacts.length >= MAX_CONTACTS_PER_OWNER) {
+      const message = t("contactsLimitReached").replace(
+        "{max}",
+        String(MAX_CONTACTS_PER_OWNER),
+      );
+      pushToast(message);
+      return;
+    }
+
     setPendingDeleteId(null);
     setPayAmount("");
     clearContactForm();
@@ -1518,6 +1532,8 @@ export const useAppShellComposition = () => {
     }
     navigateTo({ route: "contactNew" });
   };
+
+  const canAddContact = contacts.length < MAX_CONTACTS_PER_OWNER;
 
   const { closeMenu, menuIsOpen, navigateToMainReturn, openMenu, toggleMenu } =
     useMainMenuState({
@@ -1788,6 +1804,7 @@ export const useAppShellComposition = () => {
         })()
       : update("contact", { id, isDeleted: Evolu.sqliteTrue });
     if (result.ok) {
+      recordContactsOwnerWrite();
       setStatus(t("contactDeleted"));
       closeContactDetail();
       return;
@@ -2377,6 +2394,7 @@ export const useAppShellComposition = () => {
       mainSwipeRef,
       mainSwipeScrollY,
       NO_GROUP_FILTER,
+      canAddContact,
       openNewContactPage,
       openScan,
       otherContactsLabel,
@@ -2429,9 +2447,12 @@ export const useAppShellComposition = () => {
       evoluContactsOwnerIndex: contactsOwnerIndex,
       evoluContactsOwnerNewContactsCount: contactsOwnerNewContactsCount,
       evoluContactsOwnerPointer: contactsOwnerPointer,
+      evoluContactsOwnerEditsUntilRotation: contactsOwnerEditsUntilRotation,
+      evoluCashuOwnerEditsUntilRotation: cashuOwnerEditsUntilRotation,
       evoluHistoryAllowedOwnerIds,
       evoluMessagesBackupOwnerId: messagesBackupOwnerId,
       evoluMessagesOwnerId: messagesOwnerId,
+      evoluMessagesOwnerEditsUntilRotation: messagesOwnerEditsUntilRotation,
       requestManualRotateContactsOwner,
       requestManualRotateMessagesOwner,
       rotateContactsOwnerIsBusy,

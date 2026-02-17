@@ -1,6 +1,8 @@
 import React from "react";
-import { CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY } from "../../../utils/mint";
-import { normalizeMintUrl } from "../../../utils/mint";
+import {
+  CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
+  normalizeMintUrl,
+} from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
 
 interface UseNpubCashMintSelectionParams {
@@ -142,14 +144,11 @@ export const useNpubCashMintSelection = ({
     npubCashMintSyncRef.current = cleaned;
     void updateNpubCashMint(cleaned).catch(() => {
       npubCashMintSyncRef.current = null;
-      pushToast(t("mintUpdateFailed"));
     });
   }, [
     defaultMintUrl,
     hasMintOverrideRef,
     npubCashMintSyncRef,
-    pushToast,
-    t,
     updateNpubCashMint,
   ]);
 

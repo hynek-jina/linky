@@ -1,13 +1,13 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
+import { parseCashuToken } from "../../../cashu";
 import { acceptCashuToken } from "../../../cashuAccept";
 import type { ContactId } from "../../../evolu";
+import type { JsonValue } from "../../../types/json";
 import type { Route } from "../../../types/route";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { asRecord } from "../../../utils/validation";
-import { parseCashuToken } from "../../../cashu";
-import type { JsonValue } from "../../../types/json";
 import type { CashuTokenRowLike, LocalMintInfoRow } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
@@ -86,6 +86,56 @@ export const useNpubCashClaim = ({
   t,
   touchMintInfo,
 }: UseNpubCashClaimParams) => {
+  const buildCashuTokenPayload = React.useCallback(
+    (args: {
+      amount: number | null;
+      error: string | null;
+      mint: string | null;
+      rawToken: string;
+      state: "accepted" | "error";
+      token: string;
+      unit: string | null;
+    }) => {
+      const payload: {
+        token: typeof Evolu.NonEmptyString.Type;
+        state: typeof Evolu.NonEmptyString100.Type;
+        amount?: typeof Evolu.PositiveInt.Type;
+        error?: typeof Evolu.NonEmptyString1000.Type;
+        mint?: typeof Evolu.NonEmptyString1000.Type;
+        rawToken?: typeof Evolu.NonEmptyString.Type;
+        unit?: typeof Evolu.NonEmptyString100.Type;
+      } = {
+        token: args.token as typeof Evolu.NonEmptyString.Type,
+        state: args.state as typeof Evolu.NonEmptyString100.Type,
+      };
+
+      const rawToken = String(args.rawToken ?? "").trim();
+      if (rawToken)
+        payload.rawToken = rawToken as typeof Evolu.NonEmptyString.Type;
+
+      const mint = String(args.mint ?? "").trim();
+      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
+
+      const unit = String(args.unit ?? "").trim();
+      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
+
+      if (typeof args.amount === "number" && args.amount > 0) {
+        payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
+      }
+
+      const error = String(args.error ?? "").trim();
+      if (error) {
+        payload.error = error.slice(
+          0,
+          1000,
+        ) as typeof Evolu.NonEmptyString1000.Type;
+      }
+
+      return payload;
+    },
+    [],
+  );
+
   const acceptAndStoreCashuToken = React.useCallback(
     async (tokenText: string) => {
       const tokenRaw = tokenText.trim();
@@ -115,36 +165,29 @@ export const useNpubCashClaim = ({
           const result = ownerId
             ? insert(
                 "cashuToken",
-                {
-                  token: accepted.token as typeof Evolu.NonEmptyString.Type,
-                  rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-                  mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
-                  unit: accepted.unit
-                    ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
-                    : null,
-                  amount:
-                    accepted.amount > 0
-                      ? (accepted.amount as typeof Evolu.PositiveInt.Type)
-                      : null,
-                  state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                buildCashuTokenPayload({
+                  token: String(accepted.token ?? ""),
+                  rawToken: tokenRaw,
+                  mint: String(accepted.mint ?? ""),
+                  unit: accepted.unit,
+                  amount: accepted.amount > 0 ? accepted.amount : null,
+                  state: "accepted",
                   error: null,
-                },
+                }),
                 { ownerId },
               )
-            : insert("cashuToken", {
-                token: accepted.token as typeof Evolu.NonEmptyString.Type,
-                rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-                mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
-                unit: accepted.unit
-                  ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
-                  : null,
-                amount:
-                  accepted.amount > 0
-                    ? (accepted.amount as typeof Evolu.PositiveInt.Type)
-                    : null,
-                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-                error: null,
-              });
+            : insert(
+                "cashuToken",
+                buildCashuTokenPayload({
+                  token: String(accepted.token ?? ""),
+                  rawToken: tokenRaw,
+                  mint: String(accepted.mint ?? ""),
+                  unit: accepted.unit,
+                  amount: accepted.amount > 0 ? accepted.amount : null,
+                  state: "accepted",
+                  error: null,
+                }),
+              );
           if (!result.ok) {
             setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
             return;
@@ -240,43 +283,30 @@ export const useNpubCashClaim = ({
           if (ownerId) {
             insert(
               "cashuToken",
-              {
-                token: tokenRaw as typeof Evolu.NonEmptyString.Type,
-                rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-                mint: parsedMint
-                  ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
-                  : null,
+              buildCashuTokenPayload({
+                token: tokenRaw,
+                rawToken: tokenRaw,
+                mint: parsedMint,
                 unit: null,
-                amount:
-                  typeof parsedAmount === "number"
-                    ? (parsedAmount as typeof Evolu.PositiveInt.Type)
-                    : null,
-                state: "error" as typeof Evolu.NonEmptyString100.Type,
-                error: message.slice(
-                  0,
-                  1000,
-                ) as typeof Evolu.NonEmptyString1000.Type,
-              },
+                amount: typeof parsedAmount === "number" ? parsedAmount : null,
+                state: "error",
+                error: message,
+              }),
               { ownerId },
             );
           } else {
-            insert("cashuToken", {
-              token: tokenRaw as typeof Evolu.NonEmptyString.Type,
-              rawToken: tokenRaw as typeof Evolu.NonEmptyString.Type,
-              mint: parsedMint
-                ? (parsedMint as typeof Evolu.NonEmptyString1000.Type)
-                : null,
-              unit: null,
-              amount:
-                typeof parsedAmount === "number"
-                  ? (parsedAmount as typeof Evolu.PositiveInt.Type)
-                  : null,
-              state: "error" as typeof Evolu.NonEmptyString100.Type,
-              error: message.slice(
-                0,
-                1000,
-              ) as typeof Evolu.NonEmptyString1000.Type,
-            });
+            insert(
+              "cashuToken",
+              buildCashuTokenPayload({
+                token: tokenRaw,
+                rawToken: tokenRaw,
+                mint: parsedMint,
+                unit: null,
+                amount: typeof parsedAmount === "number" ? parsedAmount : null,
+                state: "error",
+                error: message,
+              }),
+            );
           }
           setStatus(`${t("cashuAcceptFailed")}: ${message}`);
         } finally {
@@ -292,6 +322,7 @@ export const useNpubCashClaim = ({
       formatInteger,
       insert,
       isMintDeleted,
+      buildCashuTokenPayload,
       logPaymentEvent,
       maybeShowPwaNotification,
       mintInfoByUrl,

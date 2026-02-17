@@ -3,13 +3,14 @@ import { BottomTabBar } from "../../components/BottomTabBar";
 import { ContactsChecklist } from "../../components/ContactsChecklist";
 import { ContactsPage } from "../../pages/ContactsPage";
 import { WalletPage } from "../../pages/WalletPage";
-import type { ContactRowLike, ContactsGuideKey } from "../types/appTypes";
 import type { Route } from "../../types/route";
 import { useMainSwipeRoutes } from "../context/AppShellContexts";
+import type { ContactRowLike, ContactsGuideKey } from "../types/appTypes";
 
 export interface MainSwipeRouteProps {
   activeGroup: string | null;
   bottomTabActive: "contacts" | "wallet" | null;
+  canAddContact: boolean;
   cashuBalance: number;
   contacts: readonly ContactRowLike[];
   contactsOnboardingCelebrating: boolean;
@@ -64,6 +65,7 @@ export const MainSwipeContent = (): React.ReactElement => {
   const {
     activeGroup,
     bottomTabActive,
+    canAddContact,
     cashuBalance,
     contacts,
     contactsOnboardingCelebrating,
@@ -141,6 +143,7 @@ export const MainSwipeContent = (): React.ReactElement => {
             otherContactsLabel={otherContactsLabel}
             renderContactCard={renderContactCard}
             bottomTabActive={bottomTabActive}
+            canAddContact={canAddContact}
             openNewContactPage={openNewContactPage}
             showBottomTabBar={false}
             showFab={false}
@@ -176,8 +179,9 @@ export const MainSwipeContent = (): React.ReactElement => {
       />
       <button
         type="button"
-        className="contacts-fab main-swipe-fab"
+        className={`contacts-fab main-swipe-fab${canAddContact ? "" : " is-disabled"}`}
         onClick={openNewContactPage}
+        aria-disabled={!canAddContact}
         aria-label={t("addContact")}
         title={t("addContact")}
         data-guide="contact-add-button"

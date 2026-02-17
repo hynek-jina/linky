@@ -339,13 +339,19 @@ export const useProfileAuthDomain = ({
         return;
       }
 
-      const mnemonic = await deriveEvoluMnemonicFromNsec(raw);
-      if (!mnemonic) {
-        pushToast(t(invalidMessageKey));
-        return;
+      const skipEvoluWriteAndRestore =
+        isManualNsecEntry && authMethod === "slip39";
+
+      let mnemonic: Evolu.Mnemonic | null = null;
+      if (!skipEvoluWriteAndRestore) {
+        mnemonic = await deriveEvoluMnemonicFromNsec(raw);
+        if (!mnemonic) {
+          pushToast(t(invalidMessageKey));
+          return;
+        }
       }
 
-      if (isManualNsecEntry) {
+      if (isManualNsecEntry && !skipEvoluWriteAndRestore) {
         const currentSeed = String(slip39Seed ?? "").trim();
         const incomingSeed = String(sourceSlip39Seed ?? "").trim();
         const seedForMetaOwner = incomingSeed || currentSeed || null;
@@ -383,7 +389,9 @@ export const useProfileAuthDomain = ({
           localStorage.removeItem(NOSTR_SLIP39_SEED_STORAGE_KEY);
           localStorage.removeItem(CASHU_BIP85_MNEMONIC_STORAGE_KEY);
         }
-        localStorage.setItem(INITIAL_MNEMONIC_STORAGE_KEY, mnemonic);
+        if (mnemonic) {
+          localStorage.setItem(INITIAL_MNEMONIC_STORAGE_KEY, mnemonic);
+        }
       } catch {
         // ignore
       }
@@ -394,14 +402,16 @@ export const useProfileAuthDomain = ({
         authMethod === "slip39" ? derivedCashuMnemonic : null,
       );
 
-      try {
-        await evolu.restoreAppOwner(mnemonic, {
-          reload: false,
-        });
-      } catch (e) {
-        console.log("[linky][evolu] restoreAppOwner failed", {
-          error: String(e ?? "unknown"),
-        });
+      if (!skipEvoluWriteAndRestore && mnemonic) {
+        try {
+          await evolu.restoreAppOwner(mnemonic, {
+            reload: false,
+          });
+        } catch (e) {
+          console.log("[linky][evolu] restoreAppOwner failed", {
+            error: String(e ?? "unknown"),
+          });
+        }
       }
 
       try {

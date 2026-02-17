@@ -34,13 +34,14 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - For seed logins, contacts writes are routed through deterministic Evolu `contacts-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/2'/<index>'`), with metadata pointer stored in Evolu `ownerMeta` lane (`contacts-<n>`)
 - For seed logins, cashu + credo token writes/reads are routed through deterministic Evolu `cashu-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/3'/<index>'`)
 - AppShell subscribes Evolu sync for active seed lanes (`contacts-n`, `cashu-n`, `messages-n`, and `ownerMeta`) via `useOwner`, so owner pointers/data converge across tabs/devices
-- Manual contacts rotation prunes stale contact lanes locally: after moving to `contacts-n`, contacts from `contacts-(n-2)` are marked deleted (keeping the immediate previous lane available for short rollback/history)
-- Manual owner rotation also migrates cashu tokens to `cashu-n` and prunes stale cashu lanes locally (`cashu-(n-2)`), keeping one previous lane available for short rollback/history
-- Manual messages owner rotation updates `ownerMeta` pointer (`messages-<n>`) without copying messages into the new lane; UI reads messages/reactions from the active + immediate previous messages owner and prunes older messages lanes locally (`messages-(n-2)`)
+- Contacts/cashu owner lanes auto-rotate when owner-local write delta reaches `OWNER_ROTATION_TRIGGER_WRITE_COUNT` (currently 1000), migrate valid contacts + tokens to next lane, and enforce 1-minute per-type cooldown
+- Messages owner lane auto-rotates at the same write threshold with pointer-only switch (no message copy), while UI reads active + immediate previous messages owner
+- Rotations prune stale lanes locally (`n-2`) for contacts/cashu/messages, keeping one previous lane for short rollback/history
+- Contacts are capped at `MAX_CONTACTS_PER_OWNER` (currently 500); add-contact UI is disabled at limit and save is blocked
 - Evolu debug views (`#evolu-current-data`, `#evolu-history-data`) scope contacts/history to active owner lanes, with history retaining one previous contacts lane as backup
 - **No backend** - pure client-side PWA with service worker caching
 - Onboarding login accepts either `nsec` or a single 20-word **SLIP-39** share; when SLIP-39 is used, Nostr keys are derived at path `m/44'/1237'/0'/0/0`
-- When a user manually pastes an `nsec` while a SLIP-39 seed session is present, the pasted key is persisted into Evolu `nostrIdentity` under the seed-derived `meta` owner lane before reload, so the profile switches to the pasted `nsec/npub` pair; choosing Derive in Advanced clears this custom row and switches back to the seed-derived `nsec/npub`
+- When a user manually pastes an `nsec` while a SLIP-39 seed session is present, the app switches profile to the pasted `nsec/npub` pair via local auth state without immediate Evolu writes or owner restore, so pasted-key history is not pulled into Evolu; choosing Derive in Advanced switches back to the seed-derived `nsec/npub`
 - Cashu deterministic wallet seed is derived from the SLIP-39 secret using **BIP-85** at path `m/83696968'/39'/0'/24'/0'` (24-word mnemonic)
 - `apps/web-app/src/App.tsx` is a thin wrapper that default-exports `app/AppShell`
 - App shell structure lives under `apps/web-app/src/app/`:
@@ -76,6 +77,8 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Components use `interface` for props, not `type`
 - LocalStorage keys use `linky.` prefix (e.g., `linky.nostr_nsec`, `linky.lang`)
 - Use types from libraries (e.g., Evolu, Cashu, Nostr) instead of redefining them - look up the library's exported types first
+- Prefer sparse Evolu mutation payloads: omit optional fields when empty instead of writing explicit `null` (especially `cashuToken` optional columns like `rawToken`, `mint`, `unit`, `amount`, `error`)
+- Owner rotation and contact limits use shared constants in `src/utils/constants.ts` (`OWNER_ROTATION_TRIGGER_WRITE_COUNT`, `OWNER_ROTATION_COOLDOWN_MS`, `MAX_CONTACTS_PER_OWNER`)
 - Plain CSS in `App.css` - no CSS-in-JS or utility framework
 
 ## Testing

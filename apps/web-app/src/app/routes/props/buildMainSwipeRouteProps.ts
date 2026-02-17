@@ -3,6 +3,7 @@ import type { MainSwipeRoutesProps } from "../AppRouteContent";
 interface BuildMainSwipeRoutePropsParams {
   activeGroup: MainSwipeRoutesProps["mainSwipeProps"]["activeGroup"];
   bottomTabActive: MainSwipeRoutesProps["mainSwipeProps"]["bottomTabActive"];
+  canAddContact: MainSwipeRoutesProps["mainSwipeProps"]["canAddContact"];
   cashuBalance: MainSwipeRoutesProps["mainSwipeProps"]["cashuBalance"];
   contacts: MainSwipeRoutesProps["mainSwipeProps"]["contacts"];
   contactsOnboardingCelebrating: MainSwipeRoutesProps["mainSwipeProps"]["contactsOnboardingCelebrating"];
@@ -38,6 +39,7 @@ interface BuildMainSwipeRoutePropsParams {
 export const buildMainSwipeRouteProps = ({
   activeGroup,
   bottomTabActive,
+  canAddContact,
   cashuBalance,
   contacts,
   contactsOnboardingCelebrating,
@@ -73,6 +75,7 @@ export const buildMainSwipeRouteProps = ({
     mainSwipeProps: {
       activeGroup,
       bottomTabActive,
+      canAddContact,
       cashuBalance,
       contacts,
       contactsOnboardingCelebrating,

@@ -4,10 +4,17 @@ import React from "react";
 import type { CashuTokenId, ContactId, CredoTokenId } from "../../evolu";
 import { evolu } from "../../evolu";
 import {
+  EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
+  EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
   EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
   EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY,
   EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
+  EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY,
   EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+  OWNER_ROTATION_COOLDOWN_MS,
+  OWNER_ROTATION_TRIGGER_WRITE_COUNT,
 } from "../../utils/constants";
 import { deriveEvoluOwnerMnemonicFromSlip39 } from "../../utils/slip39Nostr";
 import type {
@@ -40,9 +47,11 @@ interface UseEvoluContactsOwnerRotationParams {
 
 interface UseEvoluContactsOwnerRotationResult {
   cashuOwnerId: Evolu.OwnerId | null;
+  cashuOwnerEditsUntilRotation: number;
   cashuSyncOwner: Evolu.SyncOwner | null;
   contactsBackupOwnerId: Evolu.OwnerId | null;
   contactsOwnerEditCount: number;
+  contactsOwnerEditsUntilRotation: number;
   contactsOwnerId: Evolu.OwnerId | null;
   contactsSyncOwner: Evolu.SyncOwner | null;
   contactsOwnerIndex: number;
@@ -54,9 +63,11 @@ interface UseEvoluContactsOwnerRotationResult {
   messagesOwnerId: Evolu.OwnerId | null;
   messagesOwnerIndex: number;
   messagesOwnerPointer: string;
+  messagesOwnerEditsUntilRotation: number;
   messagesSyncOwner: Evolu.SyncOwner | null;
   requestManualRotateContactsOwner: () => Promise<void>;
   requestManualRotateMessagesOwner: () => Promise<void>;
+  recordContactsOwnerWrite: (count?: number) => void;
   rotateContactsOwnerIsBusy: boolean;
   rotateMessagesOwnerIsBusy: boolean;
 }
@@ -212,6 +223,40 @@ const setCounterValue = (
   writeCounterMap(storageKey, map);
 };
 
+const hasCounterValue = (storageKey: string, index: number): boolean => {
+  const map = readCounterMap(storageKey);
+  return Object.prototype.hasOwnProperty.call(map, String(index));
+};
+
+const getStoredTimestampMs = (storageKey: string): number => {
+  try {
+    const raw = Number(localStorage.getItem(storageKey));
+    if (!Number.isFinite(raw) || raw < 0) return 0;
+    return Math.trunc(raw);
+  } catch {
+    return 0;
+  }
+};
+
+const setStoredTimestampMs = (storageKey: string, value: number): void => {
+  try {
+    localStorage.setItem(storageKey, String(Math.max(0, Math.trunc(value))));
+  } catch {
+    // ignore
+  }
+};
+
+const getCooldownRemainingMs = (
+  storageKey: string,
+  nowMs: number,
+  cooldownMs: number,
+): number => {
+  const lastMs = getStoredTimestampMs(storageKey);
+  if (lastMs <= 0) return 0;
+  const elapsed = Math.max(0, nowMs - lastMs);
+  return Math.max(0, cooldownMs - elapsed);
+};
+
 const getStoredIndex = (storageKey: string): number => {
   try {
     const raw = Number(localStorage.getItem(storageKey));
@@ -307,6 +352,13 @@ export const useEvoluContactsOwnerRotation = ({
     React.useState(false);
   const [rotateMessagesOwnerIsBusy, setRotateMessagesOwnerIsBusy] =
     React.useState(false);
+  const [contactsOwnerEditCount, setContactsOwnerEditCount] = React.useState(
+    () =>
+      getCounterValue(
+        EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY,
+        getStoredIndex(EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY),
+      ),
+  );
 
   const ownerMetaQuery = React.useMemo(
     () =>
@@ -380,12 +432,28 @@ export const useEvoluContactsOwnerRotation = ({
   );
   const allNostrReactionsRows = useQuery(allNostrReactionsQuery);
 
-  const contactsOwnerEditCount = React.useMemo(
-    () =>
+  React.useEffect(() => {
+    setContactsOwnerEditCount(
       getCounterValue(
         EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY,
         contactsOwnerIndex,
       ),
+    );
+  }, [contactsOwnerIndex]);
+
+  const recordContactsOwnerWrite = React.useCallback(
+    (count = 1) => {
+      const delta = Math.max(1, Math.trunc(count));
+      setContactsOwnerEditCount((prev) => {
+        const next = Math.max(0, prev + delta);
+        setCounterValue(
+          EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY,
+          contactsOwnerIndex,
+          next,
+        );
+        return next;
+      });
+    },
     [contactsOwnerIndex],
   );
   const contactsOwnerBaselineCount = React.useMemo(
@@ -396,6 +464,130 @@ export const useEvoluContactsOwnerRotation = ({
       ),
     [contactsOwnerIndex],
   );
+  const cashuOwnerBaselineCount = React.useMemo(
+    () =>
+      getCounterValue(
+        EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        contactsOwnerIndex,
+      ),
+    [contactsOwnerIndex],
+  );
+  const messagesOwnerBaselineCount = React.useMemo(
+    () =>
+      getCounterValue(
+        EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        messagesOwnerIndex,
+      ),
+    [messagesOwnerIndex],
+  );
+
+  const contactsActiveOwnerId = isSeedLogin
+    ? String(ownerSyncData?.contactsOwner.id ?? "").trim()
+    : String(appOwnerId ?? "").trim();
+  const cashuActiveOwnerId = isSeedLogin
+    ? String(ownerSyncData?.cashuOwner.id ?? "").trim()
+    : String(appOwnerId ?? "").trim();
+  const messagesActiveOwnerId = isSeedLogin
+    ? String(ownerSyncData?.messagesOwner.id ?? "").trim()
+    : String(appOwnerId ?? "").trim();
+
+  const contactsOwnerWriteCount = React.useMemo(() => {
+    if (!contactsActiveOwnerId) return 0;
+    let count = 0;
+    for (const row of allContactsRows) {
+      if (readRowOwnerId(row) === contactsActiveOwnerId) count += 1;
+    }
+    return count;
+  }, [allContactsRows, contactsActiveOwnerId]);
+
+  const cashuOwnerWriteCount = React.useMemo(() => {
+    if (!cashuActiveOwnerId) return 0;
+    let count = 0;
+    for (const row of allCashuTokensRows) {
+      if (readRowOwnerId(row) === cashuActiveOwnerId) count += 1;
+    }
+    for (const row of allCredoTokensRows) {
+      if (readRowOwnerId(row) === cashuActiveOwnerId) count += 1;
+    }
+    return count;
+  }, [allCashuTokensRows, allCredoTokensRows, cashuActiveOwnerId]);
+
+  const messagesOwnerWriteCount = React.useMemo(() => {
+    if (!messagesActiveOwnerId) return 0;
+    let count = 0;
+    for (const row of allNostrMessagesRows) {
+      if (readRowOwnerId(row) === messagesActiveOwnerId) count += 1;
+    }
+    for (const row of allNostrReactionsRows) {
+      if (readRowOwnerId(row) === messagesActiveOwnerId) count += 1;
+    }
+    return count;
+  }, [allNostrMessagesRows, allNostrReactionsRows, messagesActiveOwnerId]);
+
+  const contactsOwnerWriteDelta = Math.max(
+    0,
+    contactsOwnerWriteCount -
+      contactsOwnerBaselineCount +
+      contactsOwnerEditCount,
+  );
+  const cashuOwnerWriteDelta = Math.max(
+    0,
+    cashuOwnerWriteCount - cashuOwnerBaselineCount,
+  );
+  const messagesOwnerWriteDelta = Math.max(
+    0,
+    messagesOwnerWriteCount - messagesOwnerBaselineCount,
+  );
+
+  React.useEffect(() => {
+    if (!isSeedLogin) return;
+
+    if (
+      !hasCounterValue(
+        EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        contactsOwnerIndex,
+      )
+    ) {
+      setCounterValue(
+        EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        contactsOwnerIndex,
+        contactsOwnerWriteCount,
+      );
+    }
+
+    if (
+      !hasCounterValue(
+        EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        contactsOwnerIndex,
+      )
+    ) {
+      setCounterValue(
+        EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        contactsOwnerIndex,
+        cashuOwnerWriteCount,
+      );
+    }
+
+    if (
+      !hasCounterValue(
+        EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        messagesOwnerIndex,
+      )
+    ) {
+      setCounterValue(
+        EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        messagesOwnerIndex,
+        messagesOwnerWriteCount,
+      );
+    }
+  }, [
+    cashuOwnerWriteCount,
+    contactsOwnerIndex,
+    contactsOwnerWriteCount,
+    isSeedLogin,
+    messagesOwnerIndex,
+    messagesOwnerWriteCount,
+  ]);
 
   React.useEffect(() => {
     if (!isSeedLogin) {
@@ -498,12 +690,30 @@ export const useEvoluContactsOwnerRotation = ({
     }
   }, [contactsOwnerIndex, messagesOwnerIndex, ownerMetaRows, ownerSyncData]);
 
-  const requestManualRotateContactsOwner = React.useCallback(async () => {
+  const rotateContactsAndCashuOwner = React.useCallback(async () => {
     if (rotateContactsOwnerIsBusy) return;
 
     const normalizedSeed = String(slip39Seed ?? "").trim();
     if (!isSeedLogin || !normalizedSeed) {
-      pushToast(t("seedMissing"));
+      return;
+    }
+
+    const nowMs = Date.now();
+    const contactsCooldownRemainingMs = getCooldownRemainingMs(
+      EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+      nowMs,
+      OWNER_ROTATION_COOLDOWN_MS,
+    );
+    const cashuCooldownRemainingMs = getCooldownRemainingMs(
+      EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+      nowMs,
+      OWNER_ROTATION_COOLDOWN_MS,
+    );
+    const cooldownRemainingMs = Math.max(
+      contactsCooldownRemainingMs,
+      cashuCooldownRemainingMs,
+    );
+    if (cooldownRemainingMs > 0) {
       return;
     }
 
@@ -665,43 +875,61 @@ export const useEvoluContactsOwnerRotation = ({
 
       let copiedCashuCount = 0;
       for (const token of byCashuToken.values()) {
+        const stateText = String(token.state ?? "")
+          .trim()
+          .toLowerCase();
+        if (stateText && stateText !== "accepted" && stateText !== "pending") {
+          continue;
+        }
+
         const tokenId = String(token.id ?? "").trim();
         const tokenText = String(token.token ?? "").trim();
         if (!tokenId || !tokenText) continue;
 
-        const payload = {
+        const payload: {
+          id: CashuTokenId;
+          token: typeof Evolu.NonEmptyString.Type;
+          amount?: typeof Evolu.PositiveInt.Type;
+          error?: typeof Evolu.NonEmptyString1000.Type;
+          mint?: typeof Evolu.NonEmptyString1000.Type;
+          rawToken?: typeof Evolu.NonEmptyString.Type;
+          state?: typeof Evolu.NonEmptyString100.Type;
+          unit?: typeof Evolu.NonEmptyString100.Type;
+        } = {
           id: tokenId as CashuTokenId,
           token: tokenText as typeof Evolu.NonEmptyString.Type,
-          rawToken: String(token.rawToken ?? "").trim()
-            ? (String(
-                token.rawToken ?? "",
-              ).trim() as typeof Evolu.NonEmptyString.Type)
-            : null,
-          mint: String(token.mint ?? "").trim()
-            ? (String(
-                token.mint ?? "",
-              ).trim() as typeof Evolu.NonEmptyString1000.Type)
-            : null,
-          unit: String(token.unit ?? "").trim()
-            ? (String(
-                token.unit ?? "",
-              ).trim() as typeof Evolu.NonEmptyString100.Type)
-            : null,
-          amount:
-            typeof token.amount === "number" && token.amount > 0
-              ? (Math.trunc(token.amount) as typeof Evolu.PositiveInt.Type)
-              : null,
-          state: String(token.state ?? "").trim()
-            ? (String(
-                token.state ?? "",
-              ).trim() as typeof Evolu.NonEmptyString100.Type)
-            : null,
-          error: String(token.error ?? "").trim()
-            ? (String(
-                token.error ?? "",
-              ).trim() as typeof Evolu.NonEmptyString1000.Type)
-            : null,
         };
+
+        const rawToken = String(token.rawToken ?? "").trim();
+        if (rawToken) {
+          payload.rawToken = rawToken as typeof Evolu.NonEmptyString.Type;
+        }
+
+        const mint = String(token.mint ?? "").trim();
+        if (mint) {
+          payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
+        }
+
+        const unit = String(token.unit ?? "").trim();
+        if (unit) {
+          payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
+        }
+
+        if (typeof token.amount === "number" && token.amount > 0) {
+          payload.amount = Math.trunc(
+            token.amount,
+          ) as typeof Evolu.PositiveInt.Type;
+        }
+
+        const state = String(token.state ?? "").trim();
+        if (state) {
+          payload.state = state as typeof Evolu.NonEmptyString100.Type;
+        }
+
+        const error = String(token.error ?? "").trim();
+        if (error) {
+          payload.error = error as typeof Evolu.NonEmptyString1000.Type;
+        }
 
         const result = upsert("cashuToken", payload, {
           ownerId: derived.cashuOwner.id,
@@ -833,6 +1061,20 @@ export const useEvoluContactsOwnerRotation = ({
         nextIndex,
         0,
       );
+      setContactsOwnerEditCount(0);
+      setCounterValue(
+        EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        nextIndex,
+        copiedCashuCount + copiedCredoCount,
+      );
+      setStoredTimestampMs(
+        EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+        nowMs,
+      );
+      setStoredTimestampMs(
+        EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+        nowMs,
+      );
 
       if (nextIndex >= 2) {
         const pruneIndex = nextIndex - 2;
@@ -923,12 +1165,57 @@ export const useEvoluContactsOwnerRotation = ({
     upsert,
   ]);
 
-  const requestManualRotateMessagesOwner = React.useCallback(async () => {
+  const requestManualRotateContactsOwner = React.useCallback(async () => {
+    const normalizedSeed = String(slip39Seed ?? "").trim();
+    if (!isSeedLogin || !normalizedSeed) {
+      pushToast(t("seedMissing"));
+      return;
+    }
+
+    const nowMs = Date.now();
+    const contactsCooldownRemainingMs = getCooldownRemainingMs(
+      EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+      nowMs,
+      OWNER_ROTATION_COOLDOWN_MS,
+    );
+    const cashuCooldownRemainingMs = getCooldownRemainingMs(
+      EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+      nowMs,
+      OWNER_ROTATION_COOLDOWN_MS,
+    );
+    const cooldownRemainingMs = Math.max(
+      contactsCooldownRemainingMs,
+      cashuCooldownRemainingMs,
+    );
+
+    if (cooldownRemainingMs > 0) {
+      pushToast(
+        t("evoluRotateCooldown").replace(
+          "{seconds}",
+          String(Math.ceil(cooldownRemainingMs / 1000)),
+        ),
+      );
+      return;
+    }
+
+    await rotateContactsAndCashuOwner();
+  }, [isSeedLogin, pushToast, rotateContactsAndCashuOwner, slip39Seed, t]);
+
+  const rotateMessagesOwner = React.useCallback(async () => {
     if (rotateMessagesOwnerIsBusy) return;
 
     const normalizedSeed = String(slip39Seed ?? "").trim();
     if (!isSeedLogin || !normalizedSeed) {
-      pushToast(t("seedMissing"));
+      return;
+    }
+
+    const nowMs = Date.now();
+    const cooldownRemainingMs = getCooldownRemainingMs(
+      EVOLU_MESSAGES_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+      nowMs,
+      OWNER_ROTATION_COOLDOWN_MS,
+    );
+    if (cooldownRemainingMs > 0) {
       return;
     }
 
@@ -964,6 +1251,29 @@ export const useEvoluContactsOwnerRotation = ({
       }
 
       setStoredIndex(EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY, nextIndex);
+      const nextOwnerMessageRows = allNostrMessagesRows.reduce(
+        (count, row) =>
+          readRowOwnerId(row) === String(derived.messagesOwner.id).trim()
+            ? count + 1
+            : count,
+        0,
+      );
+      const nextOwnerReactionRows = allNostrReactionsRows.reduce(
+        (count, row) =>
+          readRowOwnerId(row) === String(derived.messagesOwner.id).trim()
+            ? count + 1
+            : count,
+        0,
+      );
+      setCounterValue(
+        EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        nextIndex,
+        nextOwnerMessageRows + nextOwnerReactionRows,
+      );
+      setStoredTimestampMs(
+        EVOLU_MESSAGES_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+        nowMs,
+      );
 
       if (nextIndex >= 2) {
         const pruneIndex = nextIndex - 2;
@@ -1037,18 +1347,113 @@ export const useEvoluContactsOwnerRotation = ({
     upsert,
   ]);
 
+  const requestManualRotateMessagesOwner = React.useCallback(async () => {
+    const normalizedSeed = String(slip39Seed ?? "").trim();
+    if (!isSeedLogin || !normalizedSeed) {
+      pushToast(t("seedMissing"));
+      return;
+    }
+
+    const nowMs = Date.now();
+    const cooldownRemainingMs = getCooldownRemainingMs(
+      EVOLU_MESSAGES_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+      nowMs,
+      OWNER_ROTATION_COOLDOWN_MS,
+    );
+    if (cooldownRemainingMs > 0) {
+      pushToast(
+        t("evoluRotateCooldown").replace(
+          "{seconds}",
+          String(Math.ceil(cooldownRemainingMs / 1000)),
+        ),
+      );
+      return;
+    }
+
+    await rotateMessagesOwner();
+  }, [isSeedLogin, pushToast, rotateMessagesOwner, slip39Seed, t]);
+
+  React.useEffect(() => {
+    if (!isSeedLogin) return;
+    if (rotateContactsOwnerIsBusy) return;
+
+    const shouldRotateContacts =
+      contactsOwnerWriteDelta >= OWNER_ROTATION_TRIGGER_WRITE_COUNT;
+    const shouldRotateCashu =
+      cashuOwnerWriteDelta >= OWNER_ROTATION_TRIGGER_WRITE_COUNT;
+    if (!shouldRotateContacts && !shouldRotateCashu) return;
+
+    const nowMs = Date.now();
+    const contactsCooldownRemainingMs = getCooldownRemainingMs(
+      EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+      nowMs,
+      OWNER_ROTATION_COOLDOWN_MS,
+    );
+    const cashuCooldownRemainingMs = getCooldownRemainingMs(
+      EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+      nowMs,
+      OWNER_ROTATION_COOLDOWN_MS,
+    );
+
+    if (shouldRotateContacts && contactsCooldownRemainingMs > 0) return;
+    if (shouldRotateCashu && cashuCooldownRemainingMs > 0) return;
+
+    void rotateContactsAndCashuOwner();
+  }, [
+    cashuOwnerWriteDelta,
+    contactsOwnerWriteDelta,
+    isSeedLogin,
+    rotateContactsAndCashuOwner,
+    rotateContactsOwnerIsBusy,
+  ]);
+
+  React.useEffect(() => {
+    if (!isSeedLogin) return;
+    if (rotateMessagesOwnerIsBusy) return;
+    if (messagesOwnerWriteDelta < OWNER_ROTATION_TRIGGER_WRITE_COUNT) return;
+
+    const nowMs = Date.now();
+    const cooldownRemainingMs = getCooldownRemainingMs(
+      EVOLU_MESSAGES_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+      nowMs,
+      OWNER_ROTATION_COOLDOWN_MS,
+    );
+    if (cooldownRemainingMs > 0) return;
+
+    void rotateMessagesOwner();
+  }, [
+    isSeedLogin,
+    messagesOwnerWriteDelta,
+    rotateMessagesOwner,
+    rotateMessagesOwnerIsBusy,
+  ]);
+
   const contactsOwnerNewContactsCount = Math.max(
     0,
     getContactsForRotation().length - contactsOwnerBaselineCount,
+  );
+  const contactsOwnerEditsUntilRotation = Math.max(
+    0,
+    OWNER_ROTATION_TRIGGER_WRITE_COUNT - contactsOwnerWriteDelta,
+  );
+  const cashuOwnerEditsUntilRotation = Math.max(
+    0,
+    OWNER_ROTATION_TRIGGER_WRITE_COUNT - cashuOwnerWriteDelta,
+  );
+  const messagesOwnerEditsUntilRotation = Math.max(
+    0,
+    OWNER_ROTATION_TRIGGER_WRITE_COUNT - messagesOwnerWriteDelta,
   );
 
   return {
     cashuOwnerId: isSeedLogin
       ? (ownerSyncData?.cashuOwner.id ?? null)
       : appOwnerId,
+    cashuOwnerEditsUntilRotation,
     cashuSyncOwner: isSeedLogin ? (ownerSyncData?.cashuOwner ?? null) : null,
     contactsBackupOwnerId: isSeedLogin ? contactsBackupOwnerId : null,
     contactsOwnerEditCount,
+    contactsOwnerEditsUntilRotation,
     contactsSyncOwner: isSeedLogin
       ? (ownerSyncData?.contactsOwner ?? null)
       : null,
@@ -1066,9 +1471,11 @@ export const useEvoluContactsOwnerRotation = ({
       : appOwnerId,
     messagesOwnerIndex,
     messagesOwnerPointer: `messages-${messagesOwnerIndex}`,
+    messagesOwnerEditsUntilRotation,
     messagesSyncOwner: isSeedLogin
       ? (ownerSyncData?.messagesOwner ?? null)
       : null,
+    recordContactsOwnerWrite,
     requestManualRotateContactsOwner,
     requestManualRotateMessagesOwner,
     rotateContactsOwnerIsBusy,

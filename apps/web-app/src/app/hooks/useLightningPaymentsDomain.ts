@@ -89,9 +89,27 @@ export const useLightningPaymentsDomain = ({
 
   const insertCashuToken = React.useCallback(
     (payload: CashuTokenInsertPayload) => {
+      const sparsePayload: {
+        state: typeof Evolu.NonEmptyString100.Type;
+        token: typeof Evolu.NonEmptyString.Type;
+        amount?: typeof Evolu.PositiveInt.Type;
+        error?: typeof Evolu.NonEmptyString1000.Type;
+        mint?: typeof Evolu.NonEmptyString1000.Type;
+        rawToken?: typeof Evolu.NonEmptyString.Type;
+        unit?: typeof Evolu.NonEmptyString100.Type;
+      } = {
+        token: payload.token,
+        state: payload.state,
+      };
+      if (payload.rawToken) sparsePayload.rawToken = payload.rawToken;
+      if (payload.mint) sparsePayload.mint = payload.mint;
+      if (payload.unit) sparsePayload.unit = payload.unit;
+      if (payload.amount) sparsePayload.amount = payload.amount;
+      if (payload.error) sparsePayload.error = payload.error;
+
       if (cashuOwnerId)
-        return insert("cashuToken", payload, { ownerId: cashuOwnerId });
-      return insert("cashuToken", payload);
+        return insert("cashuToken", sparsePayload, { ownerId: cashuOwnerId });
+      return insert("cashuToken", sparsePayload);
     },
     [cashuOwnerId, insert],
   );

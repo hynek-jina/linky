@@ -41,9 +41,12 @@ interface UseSystemRoutePropsParams {
   evoluContactsOwnerIndex: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerIndex"];
   evoluContactsOwnerNewContactsCount: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerNewContactsCount"];
   evoluContactsOwnerPointer: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerPointer"];
+  evoluContactsOwnerEditsUntilRotation: SystemRoutesProps["evoluHistoryDataProps"]["evoluContactsOwnerEditsUntilRotation"];
+  evoluCashuOwnerEditsUntilRotation: SystemRoutesProps["evoluHistoryDataProps"]["evoluCashuOwnerEditsUntilRotation"];
   evoluHistoryAllowedOwnerIds: SystemRoutesProps["evoluHistoryDataProps"]["evoluHistoryAllowedOwnerIds"];
   evoluMessagesBackupOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluMessagesBackupOwnerId"];
   evoluMessagesOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluMessagesOwnerId"];
+  evoluMessagesOwnerEditsUntilRotation: SystemRoutesProps["evoluHistoryDataProps"]["evoluMessagesOwnerEditsUntilRotation"];
   requestManualRotateContactsOwner: SystemRoutesProps["evoluCurrentDataProps"]["requestManualRotateContactsOwner"];
   requestManualRotateMessagesOwner: SystemRoutesProps["evoluCurrentDataProps"]["requestManualRotateMessagesOwner"];
   rotateContactsOwnerIsBusy: SystemRoutesProps["evoluCurrentDataProps"]["rotateContactsOwnerIsBusy"];
@@ -139,9 +142,12 @@ export const useSystemRouteProps = ({
   evoluContactsOwnerIndex,
   evoluContactsOwnerNewContactsCount,
   evoluContactsOwnerPointer,
+  evoluContactsOwnerEditsUntilRotation,
+  evoluCashuOwnerEditsUntilRotation,
   evoluHistoryAllowedOwnerIds,
   evoluMessagesBackupOwnerId,
   evoluMessagesOwnerId,
+  evoluMessagesOwnerEditsUntilRotation,
   requestManualRotateContactsOwner,
   requestManualRotateMessagesOwner,
   rotateContactsOwnerIsBusy,
@@ -276,7 +282,10 @@ export const useSystemRouteProps = ({
       t,
     },
     evoluHistoryDataProps: {
+      evoluContactsOwnerEditsUntilRotation,
+      evoluCashuOwnerEditsUntilRotation,
       evoluHistoryAllowedOwnerIds,
+      evoluMessagesOwnerEditsUntilRotation,
       loadHistoryData: loadEvoluHistoryData,
       t,
     },

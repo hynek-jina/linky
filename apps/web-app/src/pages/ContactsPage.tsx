@@ -6,6 +6,7 @@ import { BottomTabBar } from "../components/BottomTabBar";
 interface ContactsPageProps {
   activeGroup: string | null;
   bottomTabActive: "contacts" | "wallet" | null;
+  canAddContact?: boolean;
   contacts: readonly ContactRowLike[];
   contactsSearch: string;
   contactsSearchInputRef: React.RefObject<HTMLInputElement | null>;
@@ -33,6 +34,7 @@ interface ContactsPageProps {
 export const ContactsPage: FC<ContactsPageProps> = ({
   activeGroup,
   bottomTabActive,
+  canAddContact = true,
   contacts,
   contactsSearch,
   contactsSearchInputRef,
@@ -189,8 +191,9 @@ export const ContactsPage: FC<ContactsPageProps> = ({
       {showFab ? (
         <button
           type="button"
-          className="contacts-fab"
+          className={`contacts-fab${canAddContact ? "" : " is-disabled"}`}
           onClick={openNewContactPage}
+          aria-disabled={!canAddContact}
           aria-label={t("addContact")}
           title={t("addContact")}
           data-guide="contact-add-button"

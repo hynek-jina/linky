@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { EvoluHistoryRow } from "../evolu";
 
 interface EvoluHistoryDataPageProps {
+  evoluCashuOwnerEditsUntilRotation: number;
+  evoluContactsOwnerEditsUntilRotation: number;
   evoluHistoryAllowedOwnerIds: string[];
+  evoluMessagesOwnerEditsUntilRotation: number;
   loadHistoryData: (
     limit: number,
     offset: number,
@@ -13,7 +16,10 @@ interface EvoluHistoryDataPageProps {
 const BATCH_SIZE = 50;
 
 export function EvoluHistoryDataPage({
+  evoluCashuOwnerEditsUntilRotation,
+  evoluContactsOwnerEditsUntilRotation,
   evoluHistoryAllowedOwnerIds,
+  evoluMessagesOwnerEditsUntilRotation,
   loadHistoryData,
   t,
 }: EvoluHistoryDataPageProps): React.ReactElement {
@@ -122,8 +128,41 @@ export function EvoluHistoryDataPage({
     );
   }
 
+  const rotationRemainingRows = [
+    {
+      label: t("evoluContactsEditsUntilRotation"),
+      value: evoluContactsOwnerEditsUntilRotation,
+      marginBottom: 8,
+    },
+    {
+      label: t("evoluTokensEditsUntilRotation"),
+      value: evoluCashuOwnerEditsUntilRotation,
+      marginBottom: 8,
+    },
+    {
+      label: t("evoluMessagesEditsUntilRotation"),
+      value: evoluMessagesOwnerEditsUntilRotation,
+      marginBottom: 12,
+    },
+  ] as const;
+
   return (
     <section className="panel" style={{ paddingTop: 8 }}>
+      {rotationRemainingRows.map((row) => (
+        <div
+          key={row.label}
+          className="settings-row"
+          style={{ marginBottom: row.marginBottom }}
+        >
+          <div className="settings-left">
+            <span className="settings-label">{row.label}</span>
+          </div>
+          <div className="settings-right">
+            <span className="muted">{row.value}</span>
+          </div>
+        </div>
+      ))}
+
       {/* Filter by table - same style as contacts page */}
       {tableNames.length > 0 && (
         <nav
