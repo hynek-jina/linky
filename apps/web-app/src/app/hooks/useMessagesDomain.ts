@@ -34,7 +34,10 @@ interface UseMessagesDomainParams {
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
   chatForceScrollToBottomRef: React.MutableRefObject<boolean>;
   chatMessagesRef: React.RefObject<HTMLDivElement | null>;
+  messagesOwnerId: OwnerId | null;
+  messagesOwnerIdRef: React.MutableRefObject<OwnerId | null>;
   route: Route;
+  visibleMessageOwnerIds: readonly string[];
 }
 
 const MESSAGE_MIGRATION_VERSION = 1;
@@ -368,7 +371,10 @@ export const useMessagesDomain = ({
   appOwnerIdRef,
   chatForceScrollToBottomRef,
   chatMessagesRef,
+  messagesOwnerId,
+  messagesOwnerIdRef,
   route,
+  visibleMessageOwnerIds,
 }: UseMessagesDomainParams) => {
   const { insert, update } = useEvolu();
   const activeChatRouteId = route.kind === "chat" ? route.id : null;
@@ -401,42 +407,63 @@ export const useMessagesDomain = ({
   const nostrMessageRows = useQuery(nostrMessagesQuery);
   const nostrReactionRows = useQuery(nostrReactionsQuery);
 
+  const visibleMessageOwnerIdsSet = React.useMemo(() => {
+    const ids = visibleMessageOwnerIds
+      .map((ownerId) => toTrimmedText(ownerId))
+      .filter(Boolean);
+    return new Set(ids);
+  }, [visibleMessageOwnerIds]);
+
+  const isVisibleMessageOwner = React.useCallback(
+    (row: Record<string, unknown>) => {
+      if (visibleMessageOwnerIdsSet.size === 0) return true;
+      const ownerId = toTrimmedText(row.ownerId);
+      if (!ownerId) return false;
+      return visibleMessageOwnerIdsSet.has(ownerId);
+    },
+    [visibleMessageOwnerIdsSet],
+  );
+
   const nostrReactionDeletedWrapIds = React.useMemo(() => {
     const deletedWrapIds = new Set<string>();
     for (const row of nostrReactionRows) {
+      if (!isVisibleMessageOwner(row)) continue;
       if (!isSqliteTrueish(row.isDeleted)) continue;
       const wrapId = toTrimmedText(row.wrapId);
       if (!wrapId) continue;
       deletedWrapIds.add(wrapId);
     }
     return deletedWrapIds;
-  }, [nostrReactionRows]);
+  }, [isVisibleMessageOwner, nostrReactionRows]);
 
   const nostrReactionSeenWrapIds = React.useMemo(() => {
     const seenWrapIds = new Set<string>();
     for (const row of nostrReactionRows) {
+      if (!isVisibleMessageOwner(row)) continue;
       const wrapId = toTrimmedText(row.wrapId);
       if (!wrapId) continue;
       seenWrapIds.add(wrapId);
     }
     return seenWrapIds;
-  }, [nostrReactionRows]);
+  }, [isVisibleMessageOwner, nostrReactionRows]);
 
   const nostrMessagesLocal = React.useMemo(() => {
     const parsed: LocalNostrMessage[] = [];
     for (const row of nostrMessageRows) {
+      if (!isVisibleMessageOwner(row)) continue;
       const normalized = toLocalNostrMessage(row);
       if (normalized) parsed.push(normalized);
     }
     const deduped = dedupeNostrMessagesByPriority(parsed);
     return deduped.sort((a, b) => a.createdAtSec - b.createdAtSec);
-  }, [nostrMessageRows]);
+  }, [isVisibleMessageOwner, nostrMessageRows]);
 
   const nostrReactionsLocal = React.useMemo(() => {
     const parsed: LocalNostrReaction[] = [];
     const seenWrapIds = new Set<string>();
     const seenClientIds = new Set<string>();
     for (const row of nostrReactionRows) {
+      if (!isVisibleMessageOwner(row)) continue;
       if (isSqliteTrueish(row.isDeleted)) continue;
       const normalized = toLocalNostrReaction(row);
       if (!normalized) continue;
@@ -454,7 +481,7 @@ export const useMessagesDomain = ({
     }
     parsed.sort((a, b) => a.createdAtSec - b.createdAtSec);
     return parsed;
-  }, [nostrReactionDeletedWrapIds, nostrReactionRows]);
+  }, [isVisibleMessageOwner, nostrReactionDeletedWrapIds, nostrReactionRows]);
 
   const nostrMessageWrapIdsRef = React.useRef<Set<string>>(new Set());
   const nostrMessagesLatestRef = React.useRef<LocalNostrMessage[]>([]);
@@ -494,8 +521,8 @@ export const useMessagesDomain = ({
   const migrationDoneForOwnerRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    if (!appOwnerId) return;
-    const ownerKey = toTrimmedText(appOwnerId);
+    if (!messagesOwnerId) return;
+    const ownerKey = toTrimmedText(messagesOwnerId);
     if (!ownerKey) return;
     if (migrationRunningRef.current) return;
     if (migrationDoneForOwnerRef.current === ownerKey) return;
@@ -557,7 +584,9 @@ export const useMessagesDomain = ({
         });
         if (!payload) continue;
 
-        const result = insert("nostrMessage", payload, { ownerId: appOwnerId });
+        const result = insert("nostrMessage", payload, {
+          ownerId: messagesOwnerId,
+        });
         if (!result.ok) continue;
 
         if (wrapId) seenWrapIds.add(wrapId);
@@ -577,7 +606,7 @@ export const useMessagesDomain = ({
     } finally {
       migrationRunningRef.current = false;
     }
-  }, [appOwnerId, insert, nostrMessagesLocal]);
+  }, [insert, messagesOwnerId, nostrMessagesLocal]);
 
   const appendLocalNostrMessage = React.useCallback(
     (message: NewLocalNostrMessage): string => {
@@ -610,8 +639,8 @@ export const useMessagesDomain = ({
       });
       if (existing) return toTrimmedText(existing.id);
 
-      const result = appOwnerId
-        ? insert("nostrMessage", payload, { ownerId: appOwnerId })
+      const result = messagesOwnerId
+        ? insert("nostrMessage", payload, { ownerId: messagesOwnerId })
         : insert("nostrMessage", payload);
       if (!result.ok) return "";
 
@@ -630,7 +659,7 @@ export const useMessagesDomain = ({
       return messageId;
     },
     [
-      appOwnerId,
+      messagesOwnerId,
       activeChatRouteId,
       chatForceScrollToBottomRef,
       chatMessagesRef,
@@ -872,13 +901,13 @@ export const useMessagesDomain = ({
 
       nostrMessageUpdateShadowRef.current.set(normalizedId, shadow);
 
-      if (appOwnerId) {
-        update("nostrMessage", payload, { ownerId: appOwnerId });
+      if (messagesOwnerId) {
+        update("nostrMessage", payload, { ownerId: messagesOwnerId });
       } else {
         update("nostrMessage", payload);
       }
     },
-    [appOwnerId, update],
+    [messagesOwnerId, update],
   );
 
   const appendLocalNostrReaction = React.useCallback(
@@ -907,13 +936,13 @@ export const useMessagesDomain = ({
       });
       if (existing) return toTrimmedText(existing.id);
 
-      const result = appOwnerId
-        ? insert("nostrReaction", payload, { ownerId: appOwnerId })
+      const result = messagesOwnerId
+        ? insert("nostrReaction", payload, { ownerId: messagesOwnerId })
         : insert("nostrReaction", payload);
       if (!result.ok) return "";
       return toText(result.value.id);
     },
-    [appOwnerId, insert],
+    [insert, messagesOwnerId],
   );
 
   const updateLocalNostrReaction = React.useCallback<UpdateLocalNostrReaction>(
@@ -1025,24 +1054,24 @@ export const useMessagesDomain = ({
 
       nostrReactionUpdateShadowRef.current.set(normalizedId, shadow);
 
-      if (appOwnerId) {
-        update("nostrReaction", payload, { ownerId: appOwnerId });
+      if (messagesOwnerId) {
+        update("nostrReaction", payload, { ownerId: messagesOwnerId });
       } else {
         update("nostrReaction", payload);
       }
     },
-    [appOwnerId, update],
+    [messagesOwnerId, update],
   );
 
   const softDeleteLocalNostrReaction = React.useCallback(
     (id: string) => {
       const normalizedId = toTrimmedText(id);
       if (!normalizedId) return;
-      if (appOwnerId) {
+      if (messagesOwnerId) {
         update(
           "nostrReaction",
           { id: normalizedId, isDeleted: Evolu.sqliteTrue },
-          { ownerId: appOwnerId },
+          { ownerId: messagesOwnerId },
         );
       } else {
         update("nostrReaction", {
@@ -1051,7 +1080,7 @@ export const useMessagesDomain = ({
         });
       }
     },
-    [appOwnerId, update],
+    [messagesOwnerId, update],
   );
 
   const softDeleteLocalNostrReactionsByWrapIds = React.useCallback(
@@ -1067,11 +1096,11 @@ export const useMessagesDomain = ({
 
       for (const reaction of nostrReactionsLatestRef.current) {
         if (!targetWrapIds.has(toTrimmedText(reaction.wrapId))) continue;
-        if (appOwnerId) {
+        if (messagesOwnerId) {
           update(
             "nostrReaction",
             { id: reaction.id, isDeleted: Evolu.sqliteTrue },
-            { ownerId: appOwnerId },
+            { ownerId: messagesOwnerId },
           );
         } else {
           update("nostrReaction", {
@@ -1081,7 +1110,7 @@ export const useMessagesDomain = ({
         }
       }
     },
-    [appOwnerId, update],
+    [messagesOwnerId, update],
   );
 
   const refreshLocalNostrMessages = React.useCallback(() => {
@@ -1130,11 +1159,11 @@ export const useMessagesDomain = ({
       for (const message of nostrMessagesLocal) {
         const messageId = toTrimmedText(message.id);
         if (!messageId || keepIds.has(messageId)) continue;
-        if (appOwnerId) {
+        if (messagesOwnerId) {
           update(
             "nostrMessage",
             { id: messageId, isDeleted: Evolu.sqliteTrue },
-            { ownerId: appOwnerId },
+            { ownerId: messagesOwnerId },
           );
         } else {
           update("nostrMessage", {
@@ -1167,11 +1196,11 @@ export const useMessagesDomain = ({
       for (const reaction of nostrReactionsLocal) {
         const reactionId = toTrimmedText(reaction.id);
         if (!reactionId || keepReactionIds.has(reactionId)) continue;
-        if (appOwnerId) {
+        if (messagesOwnerId) {
           update(
             "nostrReaction",
             { id: reactionId, isDeleted: Evolu.sqliteTrue },
-            { ownerId: appOwnerId },
+            { ownerId: messagesOwnerId },
           );
         } else {
           update("nostrReaction", {
@@ -1183,7 +1212,11 @@ export const useMessagesDomain = ({
     } finally {
       retentionPruneInFlightRef.current = false;
     }
-  }, [appOwnerId, nostrMessagesLocal, nostrReactionsLocal, update]);
+  }, [messagesOwnerId, nostrMessagesLocal, nostrReactionsLocal, update]);
+
+  React.useEffect(() => {
+    messagesOwnerIdRef.current = messagesOwnerId;
+  }, [messagesOwnerId, messagesOwnerIdRef]);
 
   React.useEffect(() => {
     const messageCountsByContact = new Map<string, number>();

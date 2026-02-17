@@ -76,6 +76,8 @@ export const cs = {
   nostrKeysDerived: "Nostr klíče byly znovu odvozeny ze seedu.",
   nostrPasteArmedHint:
     "Vložením Nostr klíčů přepíšete aktuální. Klikněte ještě jednou pro potvrzení.",
+  nostrDeriveArmedHint:
+    "Derivace přepne zpět na Nostr klíče odvozené ze seedu. Klikněte ještě jednou pro potvrzení.",
   nostrPasteInvalid: "Neplatný Nostr klíč (očekávám nsec…).",
 
   nostrRelay: "Nostr relay",
@@ -145,6 +147,9 @@ export const cs = {
   evoluContactsOwnerRotated: "Contacts owner byl otočen",
   evoluContactsOwnerRotate: "Přesunout kontakty na nového ownera",
   evoluContactsOwnerRotating: "Přesouvám kontakty na nového ownera…",
+  evoluMessagesOwnerRotated: "Messages owner byl otočen",
+  evoluMessagesOwnerRotate: "Přesunout zprávy na nového ownera",
+  evoluMessagesOwnerRotating: "Přepínám zprávy na nového ownera…",
   evoluData: "Data",
   evoluHistory: "Historie",
   evoluOfLimit: "z 1 MiB limitu",

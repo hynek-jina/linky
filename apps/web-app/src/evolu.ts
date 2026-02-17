@@ -402,18 +402,6 @@ export type NostrMessageId = typeof NostrMessageId.Type;
 const NostrReactionId = Evolu.id("NostrReaction");
 export type NostrReactionId = typeof NostrReactionId.Type;
 
-// Primary key pro PaymentEvent tabulku
-const PaymentEventId = Evolu.id("PaymentEvent");
-export type PaymentEventId = typeof PaymentEventId.Type;
-
-// Primary key pro AppState tabulku (snapshoty nastavení/progresu)
-const AppStateId = Evolu.id("AppState");
-export type AppStateId = typeof AppStateId.Type;
-
-// Primary key pro MintInfo tabulku (metadata o mintech)
-const MintId = Evolu.id("Mint");
-export type MintId = typeof MintId.Type;
-
 // Primary key pro OwnerMeta tabulku (metadata pro owner lane routing)
 const OwnerMetaId = Evolu.id("OwnerMeta");
 export type OwnerMetaId = typeof OwnerMetaId.Type;
@@ -512,54 +500,6 @@ export const Schema = {
     contactId: Evolu.nullOr(ContactId),
     // Raw credo token message (wire format)
     rawToken: Evolu.nullOr(Evolu.NonEmptyString1000),
-  },
-
-  paymentEvent: {
-    id: PaymentEventId,
-    // Seconds since epoch.
-    createdAtSec: Evolu.PositiveInt,
-    // "in" | "out"
-    direction: Evolu.NonEmptyString100,
-    // Amount in sats (or unit's base), when known.
-    amount: Evolu.nullOr(Evolu.PositiveInt),
-    // Fee reserve / fee paid, when known.
-    fee: Evolu.nullOr(Evolu.PositiveInt),
-    // Mint URL when known.
-    mint: Evolu.nullOr(Evolu.NonEmptyString1000),
-    unit: Evolu.nullOr(Evolu.NonEmptyString100),
-    // "ok" | "error"
-    status: Evolu.NonEmptyString100,
-    error: Evolu.nullOr(Evolu.NonEmptyString1000),
-    // Optional: link to a contact (e.g., pay-to-contact).
-    contactId: Evolu.nullOr(ContactId),
-  },
-
-  appState: {
-    id: AppStateId,
-    // "1" when dismissed.
-    contactsOnboardingDismissed: Evolu.nullOr(Evolu.NonEmptyString100),
-    // "1" when the user has successfully paid at least once.
-    contactsOnboardingHasPaid: Evolu.nullOr(Evolu.NonEmptyString100),
-    // Active guide task key (e.g., "add_contact" | "topup" | "pay" | "message").
-    contactsGuideTask: Evolu.nullOr(Evolu.NonEmptyString100),
-    // Persisted as (stepIndex + 1) so it fits PositiveInt.
-    contactsGuideStepPlusOne: Evolu.nullOr(Evolu.PositiveInt),
-    // Optional: which contact the guide is bound to.
-    contactsGuideTargetContactId: Evolu.nullOr(ContactId),
-  },
-
-  mintInfo: {
-    // We use mint URL as a stable id (so one row per mint).
-    id: MintId,
-    url: Evolu.NonEmptyString1000,
-    firstSeenAtSec: Evolu.PositiveInt,
-    lastSeenAtSec: Evolu.PositiveInt,
-    // "1" when mint claims MPP support (NUT-15). Null/"0" means unknown/false.
-    supportsMpp: Evolu.nullOr(Evolu.NonEmptyString100),
-    // JSON blobs (best-effort, may be truncated).
-    feesJson: Evolu.nullOr(Evolu.NonEmptyString1000),
-    infoJson: Evolu.nullOr(Evolu.NonEmptyString1000),
-    lastCheckedAtSec: Evolu.nullOr(Evolu.PositiveInt),
   },
 
   ownerMeta: {
@@ -700,9 +640,6 @@ export const getEvoluDatabaseInfo = async (): Promise<{
     "nostrIdentity",
     "nostrMessage",
     "nostrReaction",
-    "paymentEvent",
-    "appState",
-    "mintInfo",
     "ownerMeta",
   ] as const;
 
@@ -890,9 +827,6 @@ export const loadEvoluCurrentData = async (): Promise<
     "nostrIdentity",
     "nostrMessage",
     "nostrReaction",
-    "paymentEvent",
-    "appState",
-    "mintInfo",
     "ownerMeta",
   ] as const;
 

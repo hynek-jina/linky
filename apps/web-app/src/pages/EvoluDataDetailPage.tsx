@@ -77,9 +77,8 @@ export function EvoluDataDetailPage({
     "nostrIdentity",
     "nostrMessage",
     "nostrReaction",
-    "paymentEvent",
   ];
-  const systemTables = ["appState", "mintInfo", "ownerMeta"];
+  const systemTables = ["ownerMeta"];
 
   const tableEntries = Object.entries(evoluTableCounts);
   const scopedEntries = tableEntries.filter(([name]) => {

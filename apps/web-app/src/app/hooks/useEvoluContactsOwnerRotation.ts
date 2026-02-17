@@ -7,6 +7,7 @@ import {
   EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
   EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY,
   EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
 } from "../../utils/constants";
 import { deriveEvoluOwnerMnemonicFromSlip39 } from "../../utils/slip39Nostr";
 import type {
@@ -22,6 +23,7 @@ type CounterMap = Record<string, number>;
 interface OwnerSyncData {
   cashuOwner: Evolu.AppOwner;
   contactsOwner: Evolu.AppOwner;
+  messagesOwner: Evolu.AppOwner;
   metaOwner: Evolu.AppOwner;
 }
 
@@ -48,8 +50,15 @@ interface UseEvoluContactsOwnerRotationResult {
   contactsOwnerPointer: string;
   metaOwnerId: Evolu.OwnerId | null;
   metaSyncOwner: Evolu.SyncOwner | null;
+  messagesBackupOwnerId: Evolu.OwnerId | null;
+  messagesOwnerId: Evolu.OwnerId | null;
+  messagesOwnerIndex: number;
+  messagesOwnerPointer: string;
+  messagesSyncOwner: Evolu.SyncOwner | null;
   requestManualRotateContactsOwner: () => Promise<void>;
+  requestManualRotateMessagesOwner: () => Promise<void>;
   rotateContactsOwnerIsBusy: boolean;
+  rotateMessagesOwnerIsBusy: boolean;
 }
 
 const META_POINTER_ROW_ID = Evolu.createIdFromString<"OwnerMeta">(
@@ -144,6 +153,17 @@ const parseContactsOwnerIndexFromPointer = (value: unknown): number | null => {
   return Math.trunc(parsed);
 };
 
+const parseMessagesOwnerIndexFromPointer = (value: unknown): number | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  const match = /^messages-(\d+)$/.exec(trimmed);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed < 0) return null;
+  return Math.trunc(parsed);
+};
+
 const parseCounterMap = (raw: string | null): CounterMap => {
   if (!raw) return {};
   try {
@@ -192,11 +212,9 @@ const setCounterValue = (
   writeCounterMap(storageKey, map);
 };
 
-const getStoredIndex = (): number => {
+const getStoredIndex = (storageKey: string): number => {
   try {
-    const raw = Number(
-      localStorage.getItem(EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY),
-    );
+    const raw = Number(localStorage.getItem(storageKey));
     if (!Number.isFinite(raw) || raw < 0) return 0;
     return Math.trunc(raw);
   } catch {
@@ -204,12 +222,9 @@ const getStoredIndex = (): number => {
   }
 };
 
-const setStoredIndex = (value: number): void => {
+const setStoredIndex = (storageKey: string, value: number): void => {
   try {
-    localStorage.setItem(
-      EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
-      String(Math.max(0, Math.trunc(value))),
-    );
+    localStorage.setItem(storageKey, String(Math.max(0, Math.trunc(value))));
   } catch {
     // ignore
   }
@@ -225,28 +240,43 @@ const toAppOwnerFromMnemonic = (mnemonic: string): Evolu.AppOwner | null => {
 const deriveOwnerSyncDataFromSeed = async (
   slip39Seed: string,
   contactsOwnerIndex: number,
+  messagesOwnerIndex: number,
 ): Promise<OwnerSyncData | null> => {
-  const [metaMnemonic, contactsMnemonic, cashuMnemonic] = await Promise.all([
-    deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "meta", 0),
-    deriveEvoluOwnerMnemonicFromSlip39(
-      slip39Seed,
-      "contacts",
-      contactsOwnerIndex,
-    ),
-    deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "cashu", contactsOwnerIndex),
-  ]);
+  const [metaMnemonic, contactsMnemonic, cashuMnemonic, messagesMnemonic] =
+    await Promise.all([
+      deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "meta", 0),
+      deriveEvoluOwnerMnemonicFromSlip39(
+        slip39Seed,
+        "contacts",
+        contactsOwnerIndex,
+      ),
+      deriveEvoluOwnerMnemonicFromSlip39(
+        slip39Seed,
+        "cashu",
+        contactsOwnerIndex,
+      ),
+      deriveEvoluOwnerMnemonicFromSlip39(
+        slip39Seed,
+        "messages",
+        messagesOwnerIndex,
+      ),
+    ]);
 
-  if (!metaMnemonic || !contactsMnemonic || !cashuMnemonic) return null;
+  if (!metaMnemonic || !contactsMnemonic || !cashuMnemonic || !messagesMnemonic)
+    return null;
 
   const metaOwner = toAppOwnerFromMnemonic(metaMnemonic);
   const contactsOwner = toAppOwnerFromMnemonic(contactsMnemonic);
   const cashuOwner = toAppOwnerFromMnemonic(cashuMnemonic);
+  const messagesOwner = toAppOwnerFromMnemonic(messagesMnemonic);
 
-  if (!metaOwner || !contactsOwner || !cashuOwner) return null;
+  if (!metaOwner || !contactsOwner || !cashuOwner || !messagesOwner)
+    return null;
 
   return {
     cashuOwner,
     contactsOwner,
+    messagesOwner,
     metaOwner,
   };
 };
@@ -262,13 +292,20 @@ export const useEvoluContactsOwnerRotation = ({
   upsert,
 }: UseEvoluContactsOwnerRotationParams): UseEvoluContactsOwnerRotationResult => {
   const [contactsOwnerIndex, setContactsOwnerIndex] = React.useState<number>(
-    () => getStoredIndex(),
+    () => getStoredIndex(EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY),
+  );
+  const [messagesOwnerIndex, setMessagesOwnerIndex] = React.useState<number>(
+    () => getStoredIndex(EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY),
   );
   const [ownerSyncData, setOwnerSyncData] =
     React.useState<OwnerSyncData | null>(null);
   const [contactsBackupOwnerId, setContactsBackupOwnerId] =
     React.useState<Evolu.OwnerId | null>(null);
+  const [messagesBackupOwnerId, setMessagesBackupOwnerId] =
+    React.useState<Evolu.OwnerId | null>(null);
   const [rotateContactsOwnerIsBusy, setRotateContactsOwnerIsBusy] =
+    React.useState(false);
+  const [rotateMessagesOwnerIsBusy, setRotateMessagesOwnerIsBusy] =
     React.useState(false);
 
   const ownerMetaQuery = React.useMemo(
@@ -319,6 +356,30 @@ export const useEvoluContactsOwnerRotation = ({
   );
   const allCredoTokensRows = useQuery(allCredoTokensQuery);
 
+  const allNostrMessagesQuery = React.useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("nostrMessage")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue),
+      ),
+    [],
+  );
+  const allNostrMessagesRows = useQuery(allNostrMessagesQuery);
+
+  const allNostrReactionsQuery = React.useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("nostrReaction")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue),
+      ),
+    [],
+  );
+  const allNostrReactionsRows = useQuery(allNostrReactionsQuery);
+
   const contactsOwnerEditCount = React.useMemo(
     () =>
       getCounterValue(
@@ -340,6 +401,7 @@ export const useEvoluContactsOwnerRotation = ({
     if (!isSeedLogin) {
       setOwnerSyncData(null);
       setContactsBackupOwnerId(null);
+      setMessagesBackupOwnerId(null);
       return;
     }
 
@@ -347,25 +409,42 @@ export const useEvoluContactsOwnerRotation = ({
     if (!normalizedSeed) {
       setOwnerSyncData(null);
       setContactsBackupOwnerId(null);
+      setMessagesBackupOwnerId(null);
       return;
     }
 
     let cancelled = false;
     void Promise.all([
-      deriveOwnerSyncDataFromSeed(normalizedSeed, contactsOwnerIndex),
+      deriveOwnerSyncDataFromSeed(
+        normalizedSeed,
+        contactsOwnerIndex,
+        messagesOwnerIndex,
+      ),
       contactsOwnerIndex > 0
-        ? deriveOwnerSyncDataFromSeed(normalizedSeed, contactsOwnerIndex - 1)
+        ? deriveOwnerSyncDataFromSeed(
+            normalizedSeed,
+            contactsOwnerIndex - 1,
+            messagesOwnerIndex,
+          )
         : Promise.resolve(null),
-    ]).then(([derived, backup]) => {
+      messagesOwnerIndex > 0
+        ? deriveOwnerSyncDataFromSeed(
+            normalizedSeed,
+            contactsOwnerIndex,
+            messagesOwnerIndex - 1,
+          )
+        : Promise.resolve(null),
+    ]).then(([derived, contactsBackup, messagesBackup]) => {
       if (cancelled) return;
       setOwnerSyncData(derived);
-      setContactsBackupOwnerId(backup?.contactsOwner.id ?? null);
+      setContactsBackupOwnerId(contactsBackup?.contactsOwner.id ?? null);
+      setMessagesBackupOwnerId(messagesBackup?.messagesOwner.id ?? null);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [contactsOwnerIndex, isSeedLogin, slip39Seed]);
+  }, [contactsOwnerIndex, isSeedLogin, messagesOwnerIndex, slip39Seed]);
 
   React.useEffect(() => {
     if (!ownerSyncData) return;
@@ -373,23 +452,51 @@ export const useEvoluContactsOwnerRotation = ({
     const metaOwnerId = String(ownerSyncData.metaOwner.id).trim();
     if (!metaOwnerId) return;
 
-    let resolvedIndex: number | null = null;
+    let resolvedContactsIndex: number | null = null;
+    let resolvedMessagesIndex: number | null = null;
     for (const row of ownerMetaRows) {
       if (readRowOwnerId(row) !== metaOwnerId) continue;
-      const parsed = parseContactsOwnerIndexFromPointer(
-        readRowPointerValue(row),
-      );
-      if (parsed === null) continue;
-      resolvedIndex = parsed;
-      break;
+      const scope =
+        typeof row === "object" && row !== null && "scope" in row
+          ? row.scope
+          : null;
+      const scopeText = typeof scope === "string" ? scope.trim() : "";
+      if (scopeText === "contacts") {
+        const parsed = parseContactsOwnerIndexFromPointer(
+          readRowPointerValue(row),
+        );
+        if (parsed !== null) resolvedContactsIndex = parsed;
+      }
+      if (scopeText === "messages") {
+        const parsed = parseMessagesOwnerIndexFromPointer(
+          readRowPointerValue(row),
+        );
+        if (parsed !== null) resolvedMessagesIndex = parsed;
+      }
     }
 
-    if (resolvedIndex === null) return;
-    if (resolvedIndex === contactsOwnerIndex) return;
+    if (
+      resolvedContactsIndex !== null &&
+      resolvedContactsIndex !== contactsOwnerIndex
+    ) {
+      setStoredIndex(
+        EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
+        resolvedContactsIndex,
+      );
+      setContactsOwnerIndex(resolvedContactsIndex);
+    }
 
-    setStoredIndex(resolvedIndex);
-    setContactsOwnerIndex(resolvedIndex);
-  }, [contactsOwnerIndex, ownerMetaRows, ownerSyncData]);
+    if (
+      resolvedMessagesIndex !== null &&
+      resolvedMessagesIndex !== messagesOwnerIndex
+    ) {
+      setStoredIndex(
+        EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
+        resolvedMessagesIndex,
+      );
+      setMessagesOwnerIndex(resolvedMessagesIndex);
+    }
+  }, [contactsOwnerIndex, messagesOwnerIndex, ownerMetaRows, ownerSyncData]);
 
   const requestManualRotateContactsOwner = React.useCallback(async () => {
     if (rotateContactsOwnerIsBusy) return;
@@ -405,6 +512,7 @@ export const useEvoluContactsOwnerRotation = ({
       const currentDerived = await deriveOwnerSyncDataFromSeed(
         normalizedSeed,
         contactsOwnerIndex,
+        messagesOwnerIndex,
       );
       if (!currentDerived) {
         pushToast(t("restoreFailed"));
@@ -415,6 +523,7 @@ export const useEvoluContactsOwnerRotation = ({
       const derived = await deriveOwnerSyncDataFromSeed(
         normalizedSeed,
         nextIndex,
+        messagesOwnerIndex,
       );
       if (!derived) {
         pushToast(t("restoreFailed"));
@@ -713,7 +822,7 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
-      setStoredIndex(nextIndex);
+      setStoredIndex(EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY, nextIndex);
       setCounterValue(
         EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
         nextIndex,
@@ -730,6 +839,7 @@ export const useEvoluContactsOwnerRotation = ({
         const pruneOwners = await deriveOwnerSyncDataFromSeed(
           normalizedSeed,
           pruneIndex,
+          messagesOwnerIndex,
         );
 
         if (pruneOwners) {
@@ -806,6 +916,121 @@ export const useEvoluContactsOwnerRotation = ({
     allContactsRows,
     pushToast,
     rotateContactsOwnerIsBusy,
+    messagesOwnerIndex,
+    slip39Seed,
+    t,
+    update,
+    upsert,
+  ]);
+
+  const requestManualRotateMessagesOwner = React.useCallback(async () => {
+    if (rotateMessagesOwnerIsBusy) return;
+
+    const normalizedSeed = String(slip39Seed ?? "").trim();
+    if (!isSeedLogin || !normalizedSeed) {
+      pushToast(t("seedMissing"));
+      return;
+    }
+
+    setRotateMessagesOwnerIsBusy(true);
+    try {
+      const nextIndex = messagesOwnerIndex + 1;
+      const derived = await deriveOwnerSyncDataFromSeed(
+        normalizedSeed,
+        contactsOwnerIndex,
+        nextIndex,
+      );
+      if (!derived) {
+        pushToast(t("restoreFailed"));
+        return;
+      }
+
+      const pointerResult = upsert(
+        "ownerMeta",
+        {
+          id: META_POINTER_ROW_ID,
+          scope: "messages" as typeof Evolu.NonEmptyString100.Type,
+          value:
+            `messages-${nextIndex}` as typeof Evolu.NonEmptyString1000.Type,
+        },
+        { ownerId: derived.metaOwner.id },
+      );
+
+      if (!pointerResult.ok) {
+        pushToast(
+          `${t("errorPrefix")}: ${formatMutationError(pointerResult.error)}`,
+        );
+        return;
+      }
+
+      setStoredIndex(EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY, nextIndex);
+
+      if (nextIndex >= 2) {
+        const pruneIndex = nextIndex - 2;
+        const pruneOwners = await deriveOwnerSyncDataFromSeed(
+          normalizedSeed,
+          contactsOwnerIndex,
+          pruneIndex,
+        );
+
+        if (pruneOwners) {
+          const pruneMessagesOwnerId = String(
+            pruneOwners.messagesOwner.id,
+          ).trim();
+          if (pruneMessagesOwnerId) {
+            for (const row of allNostrMessagesRows) {
+              if (readRowOwnerId(row) !== pruneMessagesOwnerId) continue;
+              const id =
+                typeof row === "object" && row !== null && "id" in row
+                  ? row.id
+                  : null;
+              if (typeof id !== "string" || !id.trim()) continue;
+
+              update(
+                "nostrMessage",
+                {
+                  id: id as Evolu.Id,
+                  isDeleted: Evolu.sqliteTrue,
+                },
+                { ownerId: pruneOwners.messagesOwner.id },
+              );
+            }
+
+            for (const row of allNostrReactionsRows) {
+              if (readRowOwnerId(row) !== pruneMessagesOwnerId) continue;
+              const id =
+                typeof row === "object" && row !== null && "id" in row
+                  ? row.id
+                  : null;
+              if (typeof id !== "string" || !id.trim()) continue;
+
+              update(
+                "nostrReaction",
+                {
+                  id: id as Evolu.Id,
+                  isDeleted: Evolu.sqliteTrue,
+                },
+                { ownerId: pruneOwners.messagesOwner.id },
+              );
+            }
+          }
+        }
+      }
+
+      setOwnerSyncData(derived);
+      setMessagesOwnerIndex(nextIndex);
+      pushToast(`${t("evoluMessagesOwnerRotated")} (0)`);
+    } finally {
+      setRotateMessagesOwnerIsBusy(false);
+    }
+  }, [
+    allNostrMessagesRows,
+    allNostrReactionsRows,
+    contactsOwnerIndex,
+    isSeedLogin,
+    messagesOwnerIndex,
+    pushToast,
+    rotateMessagesOwnerIsBusy,
     slip39Seed,
     t,
     update,
@@ -835,7 +1060,18 @@ export const useEvoluContactsOwnerRotation = ({
     contactsOwnerPointer: `contacts-${contactsOwnerIndex}`,
     metaOwnerId: isSeedLogin ? (ownerSyncData?.metaOwner.id ?? null) : null,
     metaSyncOwner: isSeedLogin ? (ownerSyncData?.metaOwner ?? null) : null,
+    messagesBackupOwnerId: isSeedLogin ? messagesBackupOwnerId : null,
+    messagesOwnerId: isSeedLogin
+      ? (ownerSyncData?.messagesOwner.id ?? null)
+      : appOwnerId,
+    messagesOwnerIndex,
+    messagesOwnerPointer: `messages-${messagesOwnerIndex}`,
+    messagesSyncOwner: isSeedLogin
+      ? (ownerSyncData?.messagesOwner ?? null)
+      : null,
     requestManualRotateContactsOwner,
+    requestManualRotateMessagesOwner,
     rotateContactsOwnerIsBusy,
+    rotateMessagesOwnerIsBusy,
   };
 };

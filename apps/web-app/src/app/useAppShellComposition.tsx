@@ -171,6 +171,7 @@ export const useAppShellComposition = () => {
 
   const appOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const cashuOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const messagesOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const {
     logPaymentEvent,
     makeLocalStorageKey,
@@ -565,11 +566,14 @@ export const useAppShellComposition = () => {
     createNewAccount,
     cashuSeedMnemonic,
     currentNpub,
+    hasCustomNsecOverride,
     isSeedLogin,
     logoutArmed,
     onboardingIsBusy,
     onboardingStep,
     pasteExistingNsec,
+    requestDeriveNostrKeys,
+    requestPasteNostrKeys,
     requestLogout,
     seedMnemonic,
     slip39Seed,
@@ -578,6 +582,8 @@ export const useAppShellComposition = () => {
     currentNsec,
     pushToast,
     t,
+    update,
+    upsert,
   });
 
   const contactsForRotationRef = React.useRef<readonly ContactRowLike[]>([]);
@@ -594,8 +600,13 @@ export const useAppShellComposition = () => {
     contactsOwnerPointer,
     metaOwnerId,
     metaSyncOwner,
+    messagesBackupOwnerId,
+    messagesOwnerId,
+    messagesSyncOwner,
     requestManualRotateContactsOwner,
+    requestManualRotateMessagesOwner,
     rotateContactsOwnerIsBusy,
+    rotateMessagesOwnerIsBusy,
   } = useEvoluContactsOwnerRotation({
     appOwnerId,
     getContactsForRotation: () => contactsForRotationRef.current,
@@ -609,6 +620,7 @@ export const useAppShellComposition = () => {
 
   useOwner(contactsSyncOwner);
   useOwner(cashuSyncOwner);
+  useOwner(messagesSyncOwner);
   useOwner(metaSyncOwner);
 
   React.useEffect(() => {
@@ -621,6 +633,8 @@ export const useAppShellComposition = () => {
       String(contactsOwnerId ?? "").trim(),
       String(cashuOwnerId ?? "").trim(),
       String(contactsBackupOwnerId ?? "").trim(),
+      String(messagesOwnerId ?? "").trim(),
+      String(messagesBackupOwnerId ?? "").trim(),
       String(metaOwnerId ?? "").trim(),
     ].filter(Boolean);
     return Array.from(new Set(ids));
@@ -629,8 +643,19 @@ export const useAppShellComposition = () => {
     cashuOwnerId,
     contactsBackupOwnerId,
     contactsOwnerId,
+    messagesBackupOwnerId,
+    messagesOwnerId,
     metaOwnerId,
   ]);
+
+  const visibleMessageOwnerIds = React.useMemo(() => {
+    const ids = [
+      String(messagesOwnerId ?? "").trim(),
+      String(messagesBackupOwnerId ?? "").trim(),
+      String(appOwnerId ?? "").trim(),
+    ].filter(Boolean);
+    return Array.from(new Set(ids));
+  }, [appOwnerId, messagesBackupOwnerId, messagesOwnerId]);
 
   const {
     canSaveNewRelay,
@@ -1073,7 +1098,10 @@ export const useAppShellComposition = () => {
     appOwnerIdRef,
     chatForceScrollToBottomRef,
     chatMessagesRef,
+    messagesOwnerId,
+    messagesOwnerIdRef,
     route,
+    visibleMessageOwnerIds,
   });
 
   React.useEffect(() => {
@@ -2375,6 +2403,7 @@ export const useAppShellComposition = () => {
       allowPromisesEnabled,
       connectedRelayCount,
       copyNostrKeys,
+      hasCustomNsecOverride,
       copySeed,
       copyCashuSeed,
       currentNpub,
@@ -2401,8 +2430,12 @@ export const useAppShellComposition = () => {
       evoluContactsOwnerNewContactsCount: contactsOwnerNewContactsCount,
       evoluContactsOwnerPointer: contactsOwnerPointer,
       evoluHistoryAllowedOwnerIds,
+      evoluMessagesBackupOwnerId: messagesBackupOwnerId,
+      evoluMessagesOwnerId: messagesOwnerId,
       requestManualRotateContactsOwner,
+      requestManualRotateMessagesOwner,
       rotateContactsOwnerIsBusy,
+      rotateMessagesOwnerIsBusy,
       exportAppData,
       extractPpk,
       getMintIconUrl,
@@ -2432,6 +2465,8 @@ export const useAppShellComposition = () => {
       relayUrls,
       requestDeleteSelectedRelay,
       requestImportAppData,
+      requestDeriveNostrKeys,
+      requestPasteNostrKeys,
       requestLogout,
       restoreMissingTokens,
       cashuSeedMnemonic,

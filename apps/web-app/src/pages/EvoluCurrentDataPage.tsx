@@ -4,8 +4,12 @@ import type { loadEvoluCurrentData } from "../evolu";
 interface EvoluCurrentDataPageProps {
   evoluCashuOwnerId: string | null;
   evoluContactsOwnerId: string | null;
+  evoluMessagesBackupOwnerId: string | null;
+  evoluMessagesOwnerId: string | null;
   requestManualRotateContactsOwner: () => Promise<void>;
+  requestManualRotateMessagesOwner: () => Promise<void>;
   rotateContactsOwnerIsBusy: boolean;
+  rotateMessagesOwnerIsBusy: boolean;
   loadCurrentData: typeof loadEvoluCurrentData;
   t: (key: string) => string;
 }
@@ -13,8 +17,12 @@ interface EvoluCurrentDataPageProps {
 export function EvoluCurrentDataPage({
   evoluCashuOwnerId,
   evoluContactsOwnerId,
+  evoluMessagesBackupOwnerId,
+  evoluMessagesOwnerId,
   requestManualRotateContactsOwner,
+  requestManualRotateMessagesOwner,
   rotateContactsOwnerIsBusy,
+  rotateMessagesOwnerIsBusy,
   loadCurrentData,
   t,
 }: EvoluCurrentDataPageProps): React.ReactElement {
@@ -42,26 +50,53 @@ export function EvoluCurrentDataPage({
   const filteredCurrentData = React.useMemo(() => {
     const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
     const activeCashuOwnerId = String(evoluCashuOwnerId ?? "").trim();
+    const activeMessagesOwnerId = String(evoluMessagesOwnerId ?? "").trim();
+    const backupMessagesOwnerId = String(
+      evoluMessagesBackupOwnerId ?? "",
+    ).trim();
+    const visibleMessageOwnerIds = new Set(
+      [activeMessagesOwnerId, backupMessagesOwnerId].filter(Boolean),
+    );
 
     return Object.fromEntries(
       Object.entries(currentData).map(([tableName, rows]) => {
         if (
           tableName !== "contact" &&
           tableName !== "cashuToken" &&
-          tableName !== "credoToken"
+          tableName !== "credoToken" &&
+          tableName !== "nostrMessage" &&
+          tableName !== "nostrReaction"
         ) {
           return [tableName, rows];
         }
-        const activeOwnerId =
-          tableName === "contact" ? activeContactsOwnerId : activeCashuOwnerId;
-        if (!activeOwnerId) return [tableName, []];
+        if (tableName === "contact") {
+          if (!activeContactsOwnerId) return [tableName, []];
+          return [
+            tableName,
+            rows.filter((row) => readRowOwnerId(row) === activeContactsOwnerId),
+          ];
+        }
+        if (tableName === "cashuToken" || tableName === "credoToken") {
+          if (!activeCashuOwnerId) return [tableName, []];
+          return [
+            tableName,
+            rows.filter((row) => readRowOwnerId(row) === activeCashuOwnerId),
+          ];
+        }
+        if (visibleMessageOwnerIds.size === 0) return [tableName, []];
         return [
           tableName,
-          rows.filter((row) => readRowOwnerId(row) === activeOwnerId),
+          rows.filter((row) => visibleMessageOwnerIds.has(readRowOwnerId(row))),
         ];
       }),
     ) as Awaited<ReturnType<typeof loadEvoluCurrentData>>;
-  }, [currentData, evoluCashuOwnerId, evoluContactsOwnerId]);
+  }, [
+    currentData,
+    evoluCashuOwnerId,
+    evoluContactsOwnerId,
+    evoluMessagesBackupOwnerId,
+    evoluMessagesOwnerId,
+  ]);
 
   const tableNames = Object.keys(filteredCurrentData).filter(
     (name) => filteredCurrentData[name]?.length > 0,
@@ -141,6 +176,24 @@ export function EvoluCurrentDataPage({
                   {rotateContactsOwnerIsBusy
                     ? t("evoluContactsOwnerRotating")
                     : t("evoluContactsOwnerRotate")}
+                </button>
+              </div>
+            )}
+            {(tableName === "nostrMessage" ||
+              tableName === "nostrReaction") && (
+              <div style={{ marginBottom: 10 }}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    if (rotateMessagesOwnerIsBusy) return;
+                    void requestManualRotateMessagesOwner();
+                  }}
+                  disabled={rotateMessagesOwnerIsBusy}
+                >
+                  {rotateMessagesOwnerIsBusy
+                    ? t("evoluMessagesOwnerRotating")
+                    : t("evoluMessagesOwnerRotate")}
                 </button>
               </div>
             )}

@@ -76,6 +76,8 @@ export const en = {
   nostrKeysDerived: "Nostr keys derived from seed.",
   nostrPasteArmedHint:
     "Pasting Nostr keys will overwrite the current ones. Click once more to confirm.",
+  nostrDeriveArmedHint:
+    "Derive will switch back to seed-derived Nostr keys. Click once more to confirm.",
   nostrPasteInvalid: "Invalid Nostr key (expected nsec…).",
 
   nostrRelay: "Nostr relay",
@@ -145,6 +147,9 @@ export const en = {
   evoluContactsOwnerRotated: "Contacts owner rotated",
   evoluContactsOwnerRotate: "Rotate contacts owner",
   evoluContactsOwnerRotating: "Rotating contacts owner…",
+  evoluMessagesOwnerRotated: "Messages owner rotated",
+  evoluMessagesOwnerRotate: "Rotate messages owner",
+  evoluMessagesOwnerRotating: "Rotating messages owner…",
   evoluData: "Data",
   evoluHistory: "History",
   evoluOfLimit: "of 1 MiB limit",

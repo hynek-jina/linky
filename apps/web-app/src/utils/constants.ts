@@ -5,6 +5,8 @@ export const NOSTR_SLIP39_SEED_STORAGE_KEY = "linky.nostr_slip39_seed";
 export const CASHU_BIP85_MNEMONIC_STORAGE_KEY = "linky.cashu_bip85_mnemonic";
 export const EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY =
   "linky.evolu.contacts_owner_index.v1";
+export const EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY =
+  "linky.evolu.messages_owner_index.v1";
 export const EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY =
   "linky.evolu.contacts_owner_baseline_count.v1";
 export const EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY =
