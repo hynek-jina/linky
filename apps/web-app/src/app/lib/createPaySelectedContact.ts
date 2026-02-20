@@ -1,6 +1,7 @@
 import * as Evolu from "@evolu/common";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React from "react";
+import { createSendTokenWithTokensAtMint } from "../../cashuSend";
 import {
   createCredoPromiseToken,
   createCredoSettlementToken,
@@ -9,16 +10,15 @@ import type { CashuTokenId, ContactId } from "../../evolu";
 import { navigateTo } from "../../hooks/useRouting";
 import { NOSTR_RELAYS } from "../../nostrProfile";
 import type { Route } from "../../types/route";
-import { createSendTokenWithTokensAtMint } from "../../cashuSend";
 import {
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
   PROMISE_EXPIRES_SEC,
   PROMISE_TOTAL_CAP_SAT,
 } from "../../utils/constants";
+import { previewTokenText } from "../../utils/formatting";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
 import { makeLocalId } from "../../utils/validation";
-import { previewTokenText } from "../../utils/formatting";
 import { getSharedAppNostrPool, type AppNostrPool } from "../lib/nostrPool";
 import type {
   CashuTokenRowLike,
@@ -50,6 +50,7 @@ interface UsePaySelectedContactParams {
   ) => Array<{ mint: string; sum: number; tokens: string[] }>;
   cashuBalance: number;
   cashuIsBusy: boolean;
+  cashuOwnerId: Evolu.OwnerId | null;
   cashuTokensWithMeta: CashuTokenWithMetaRow[];
   chatForceScrollToBottomRef: React.MutableRefObject<boolean>;
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
@@ -124,6 +125,7 @@ export const createPaySelectedContact = ({
   buildCashuMintCandidates,
   cashuBalance,
   cashuIsBusy,
+  cashuOwnerId,
   cashuTokensWithMeta,
   chatForceScrollToBottomRef,
   chatSeenWrapIdsRef,
@@ -160,6 +162,52 @@ export const createPaySelectedContact = ({
   update,
   updateLocalNostrMessage,
 }: UsePaySelectedContactParams): (() => Promise<void>) => {
+  type CashuTokenInsertPayload = {
+    amount?: typeof Evolu.PositiveInt.Type | null;
+    error?: typeof Evolu.NonEmptyString1000.Type | null;
+    mint?: typeof Evolu.NonEmptyString1000.Type | null;
+    rawToken?: typeof Evolu.NonEmptyString.Type | null;
+    state: typeof Evolu.NonEmptyString100.Type;
+    token: typeof Evolu.NonEmptyString.Type;
+    unit?: typeof Evolu.NonEmptyString100.Type | null;
+  };
+
+  const insertCashuToken = (
+    payload: CashuTokenInsertPayload,
+  ): ReturnType<EvoluMutations["insert"]> => {
+    const sparsePayload: {
+      token: typeof Evolu.NonEmptyString.Type;
+      state: typeof Evolu.NonEmptyString100.Type;
+      amount?: typeof Evolu.PositiveInt.Type;
+      error?: typeof Evolu.NonEmptyString1000.Type;
+      mint?: typeof Evolu.NonEmptyString1000.Type;
+      rawToken?: typeof Evolu.NonEmptyString.Type;
+      unit?: typeof Evolu.NonEmptyString100.Type;
+    } = {
+      token: payload.token,
+      state: payload.state,
+    };
+
+    if (payload.rawToken) sparsePayload.rawToken = payload.rawToken;
+    if (payload.mint) sparsePayload.mint = payload.mint;
+    if (payload.unit) sparsePayload.unit = payload.unit;
+    if (payload.amount) sparsePayload.amount = payload.amount;
+    if (payload.error) sparsePayload.error = payload.error;
+
+    if (cashuOwnerId)
+      return insert("cashuToken", sparsePayload, { ownerId: cashuOwnerId });
+    return insert("cashuToken", sparsePayload);
+  };
+
+  const markCashuTokenDeleted = (id: CashuTokenId): void => {
+    const payload = { id, isDeleted: Evolu.sqliteTrue };
+    if (cashuOwnerId) {
+      update("cashuToken", payload, { ownerId: cashuOwnerId });
+      return;
+    }
+    update("cashuToken", payload);
+  };
+
   return async () => {
     if (route.kind !== "contactPay") return;
     if (!selectedContact) return;
@@ -427,7 +475,7 @@ export const createPaySelectedContact = ({
               const remainingAmount = split.remainingAmount;
 
               if (remainingToken && remainingAmount > 0) {
-                const inserted = insert("cashuToken", {
+                const inserted = insertCashuToken({
                   token: remainingToken as typeof Evolu.NonEmptyString.Type,
                   rawToken: null,
                   mint: split.mint as typeof Evolu.NonEmptyString1000.Type,
@@ -706,7 +754,7 @@ export const createPaySelectedContact = ({
             for (const tokenText of unsentTokens) {
               const meta = sendTokenMetaByText.get(tokenText);
               if (!meta) continue;
-              insert("cashuToken", {
+              insertCashuToken({
                 token: tokenText as typeof Evolu.NonEmptyString.Type,
                 rawToken: null,
                 mint: meta.mint as typeof Evolu.NonEmptyString1000.Type,
@@ -724,10 +772,7 @@ export const createPaySelectedContact = ({
 
             for (const ids of tokensToDeleteByMint.values()) {
               for (const id of ids) {
-                update("cashuToken", {
-                  id,
-                  isDeleted: Evolu.sqliteTrue,
-                });
+                markCashuTokenDeleted(id);
               }
             }
           }
@@ -1058,7 +1103,7 @@ export const createPaySelectedContact = ({
             // and remove old rows so the wallet doesn't keep stale proofs.
             if (result.remainingToken && result.remainingAmount > 0) {
               const recoveryToken = result.remainingToken;
-              const inserted = insert("cashuToken", {
+              const inserted = insertCashuToken({
                 token: recoveryToken as typeof Evolu.NonEmptyString.Type,
                 rawToken: null,
                 mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
@@ -1079,10 +1124,7 @@ export const createPaySelectedContact = ({
                     String(row.state ?? "") === "accepted" &&
                     String(row.mint ?? "").trim() === candidate.mint
                   ) {
-                    update("cashuToken", {
-                      id: row.id as CashuTokenId,
-                      isDeleted: Evolu.sqliteTrue,
-                    });
+                    markCashuTokenDeleted(row.id as CashuTokenId);
                   }
                 }
               }
@@ -1117,7 +1159,7 @@ export const createPaySelectedContact = ({
 
           // Persist change first, then remove old rows for that mint.
           if (result.remainingToken && result.remainingAmount > 0) {
-            const inserted = insert("cashuToken", {
+            const inserted = insertCashuToken({
               token: result.remainingToken as typeof Evolu.NonEmptyString.Type,
               rawToken: null,
               mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
@@ -1139,10 +1181,7 @@ export const createPaySelectedContact = ({
               String(row.state ?? "") === "accepted" &&
               String(row.mint ?? "").trim() === candidate.mint
             ) {
-              update("cashuToken", {
-                id: row.id as CashuTokenId,
-                isDeleted: Evolu.sqliteTrue,
-              });
+              markCashuTokenDeleted(row.id as CashuTokenId);
             }
           }
 

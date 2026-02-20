@@ -19,6 +19,7 @@
     "@evolu/react-web": "^2.4.0",
     "@noble/curves": "^1.4.1",
     "@noble/hashes": "^1.5.0",
+    "@scure/bip32": "^2.0.1",
     "@scure/bip39": "^1.4.0",
     "buffer": "^6.0.3",
     "cbor-x": "^1.6.0",
@@ -28,6 +29,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "slip39-ts": "^0.1.13",
     "workbox-window": "^7.3.0"
   },
   "devDependencies": {

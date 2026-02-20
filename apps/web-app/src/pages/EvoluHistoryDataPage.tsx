@@ -1,7 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { EvoluHistoryRow } from "../evolu";
 
 interface EvoluHistoryDataPageProps {
+  evoluCashuOwnerEditsUntilRotation: number;
+  evoluContactsOwnerEditsUntilRotation: number;
+  evoluHistoryAllowedOwnerIds: string[];
+  evoluMessagesOwnerEditsUntilRotation: number;
   loadHistoryData: (
     limit: number,
     offset: number,
@@ -12,6 +16,10 @@ interface EvoluHistoryDataPageProps {
 const BATCH_SIZE = 50;
 
 export function EvoluHistoryDataPage({
+  evoluCashuOwnerEditsUntilRotation,
+  evoluContactsOwnerEditsUntilRotation,
+  evoluHistoryAllowedOwnerIds,
+  evoluMessagesOwnerEditsUntilRotation,
   loadHistoryData,
   t,
 }: EvoluHistoryDataPageProps): React.ReactElement {
@@ -21,6 +29,41 @@ export function EvoluHistoryDataPage({
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
+
+  const normalizeOwnerId = useCallback((value: string): string => {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "";
+
+    const replaced = raw.replace(/-/g, "+").replace(/_/g, "/");
+    const remainder = replaced.length % 4;
+    if (remainder === 0) return replaced;
+    if (remainder === 1) return replaced;
+    return replaced.padEnd(replaced.length + (4 - remainder), "=");
+  }, []);
+
+  const allowedOwnerIds = useMemo(() => {
+    const values = evoluHistoryAllowedOwnerIds
+      .map((ownerId) => String(ownerId ?? "").trim())
+      .filter(Boolean);
+
+    const out = new Set<string>();
+    for (const value of values) {
+      out.add(value);
+      out.add(normalizeOwnerId(value));
+    }
+    return out;
+  }, [evoluHistoryAllowedOwnerIds, normalizeOwnerId]);
+
+  const readRowOwnerId = useCallback(
+    (row: EvoluHistoryRow): string => {
+      const ownerId = row.ownerId;
+      if (typeof ownerId !== "string") return "";
+      const normalized = normalizeOwnerId(ownerId);
+      if (normalized) return normalized;
+      return ownerId.trim();
+    },
+    [normalizeOwnerId],
+  );
 
   // Load initial data
   useEffect(() => {
@@ -32,19 +75,26 @@ export function EvoluHistoryDataPage({
   }, [loadHistoryData]);
 
   // Get unique table names from loaded data
+  const visibleHistoryData = useMemo(() => {
+    if (allowedOwnerIds.size === 0) return [] as EvoluHistoryRow[];
+    return historyData.filter((row) =>
+      allowedOwnerIds.has(readRowOwnerId(row)),
+    );
+  }, [allowedOwnerIds, historyData, readRowOwnerId]);
+
   const tableNames = useMemo(() => {
     const tables = new Set<string>();
-    historyData.forEach((row) => {
+    visibleHistoryData.forEach((row) => {
       if (row.table) tables.add(row.table);
     });
     return Array.from(tables).sort();
-  }, [historyData]);
+  }, [visibleHistoryData]);
 
   // Filter data by selected table
   const filteredData = useMemo(() => {
-    if (!selectedTable) return historyData;
-    return historyData.filter((row) => row.table === selectedTable);
-  }, [historyData, selectedTable]);
+    if (!selectedTable) return visibleHistoryData;
+    return visibleHistoryData.filter((row) => row.table === selectedTable);
+  }, [selectedTable, visibleHistoryData]);
 
   // Load more data
   const handleLoadMore = useCallback(async () => {
@@ -78,8 +128,41 @@ export function EvoluHistoryDataPage({
     );
   }
 
+  const rotationRemainingRows = [
+    {
+      label: t("evoluContactsEditsUntilRotation"),
+      value: evoluContactsOwnerEditsUntilRotation,
+      marginBottom: 8,
+    },
+    {
+      label: t("evoluTokensEditsUntilRotation"),
+      value: evoluCashuOwnerEditsUntilRotation,
+      marginBottom: 8,
+    },
+    {
+      label: t("evoluMessagesEditsUntilRotation"),
+      value: evoluMessagesOwnerEditsUntilRotation,
+      marginBottom: 12,
+    },
+  ] as const;
+
   return (
     <section className="panel" style={{ paddingTop: 8 }}>
+      {rotationRemainingRows.map((row) => (
+        <div
+          key={row.label}
+          className="settings-row"
+          style={{ marginBottom: row.marginBottom }}
+        >
+          <div className="settings-left">
+            <span className="settings-label">{row.label}</span>
+          </div>
+          <div className="settings-right">
+            <span className="muted">{row.value}</span>
+          </div>
+        </div>
+      ))}
+
       {/* Filter by table - same style as contacts page */}
       {tableNames.length > 0 && (
         <nav

@@ -30,8 +30,19 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - **No framework router** - hash-based routing via `useRouting` hook and `parseRouteFromHash()` in `src/types/route.ts`
 - Navigation uses `navigateTo()` from `src/hooks/useRouting.ts` - do NOT use `window.location` directly
 - **Evolu** for all persistent data - local-first SQLite with sync. Schema in `src/evolu.ts`
-- Nostr chat persistence is Evolu-backed (`nostrMessage` + `nostrReaction` tables); legacy `linky.local.nostrMessages.v1.<ownerId>` data is imported once per owner via `linky.messages_evolu_migrated_v1:<ownerId>`
+- Nostr chat persistence is Evolu-backed (`nostrMessage` + `nostrReaction` tables) and uses deterministic `messages-n` owner lanes for seed logins (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/4'/<index>'`); legacy `linky.local.nostrMessages.v1.<ownerId>` data is imported once per owner via `linky.messages_evolu_migrated_v1:<ownerId>`
+- For seed logins, contacts writes are routed through deterministic Evolu `contacts-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/2'/<index>'`), with metadata pointer stored in Evolu `ownerMeta` lane (`contacts-<n>`)
+- For seed logins, cashu + credo token writes/reads are routed through deterministic Evolu `cashu-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/3'/<index>'`)
+- AppShell subscribes Evolu sync for active seed lanes (`contacts-n`, `cashu-n`, `messages-n`, and `ownerMeta`) via `useOwner`, so owner pointers/data converge across tabs/devices
+- Contacts/cashu owner lanes auto-rotate when owner-local write delta reaches `OWNER_ROTATION_TRIGGER_WRITE_COUNT` (currently 1000), migrate valid contacts + tokens to next lane, and enforce 1-minute per-type cooldown
+- Messages owner lane auto-rotates at the same write threshold with pointer-only switch (no message copy), while UI reads active + immediate previous messages owner
+- Rotations prune stale lanes locally (`n-2`) for contacts/cashu/messages, keeping one previous lane for short rollback/history
+- Contacts are capped at `MAX_CONTACTS_PER_OWNER` (currently 500); add-contact UI is disabled at limit and save is blocked
+- Evolu debug views (`#evolu-current-data`, `#evolu-history-data`) scope contacts/history to active owner lanes, with history retaining one previous contacts lane as backup
 - **No backend** - pure client-side PWA with service worker caching
+- Onboarding login accepts either `nsec` or a single 20-word **SLIP-39** share; when SLIP-39 is used, Nostr keys are derived at path `m/44'/1237'/0'/0/0`
+- When a user manually pastes an `nsec` while a SLIP-39 seed session is present, the app switches profile to the pasted `nsec/npub` pair via local auth state without immediate Evolu writes or owner restore, so pasted-key history is not pulled into Evolu; choosing Derive in Advanced switches back to the seed-derived `nsec/npub`
+- Cashu deterministic wallet seed is derived from the SLIP-39 secret using **BIP-85** at path `m/83696968'/39'/0'/24'/0'` (24-word mnemonic)
 - `apps/web-app/src/App.tsx` is a thin wrapper that default-exports `app/AppShell`
 - App shell structure lives under `apps/web-app/src/app/`:
   - `AppShell.tsx` is a thin renderer/auth gate that wires `AppShellContextsProvider` and route content
@@ -40,6 +51,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
   - `context/ContextSplitContract.md` defines target context lanes, typed read hooks, and composition-to-context ownership mapping for the split plan
   - `context/AppShellContexts.tsx` is the single authenticated shell context transport; it provides shell/route contexts and typed consumer hooks (`useAppShellCore`, `useAppShellActions`, `useAppShellRouteContext`)
   - `hooks/` contains app domain hooks (`useRelayDomain`, `useMintDomain`, `useContactsDomain`, `useMessagesDomain`, `usePaymentsDomain`, `useCashuDomain`, `useProfileAuthDomain`, `useGuideScannerDomain`) plus app-shell extraction hooks (`useAppDataTransfer`, `useContactsNostrPrefetchEffects`, `useMainSwipePageEffects`, `useProfileNpubCashEffects`, `useScannedTextHandler`, `useFeedbackContact`, `useOwnerScopedStorage`, `usePaidOverlayState`, `useRouteDerivedShellState`)
+  - `hooks/useEvoluContactsOwnerRotation.ts` owns deterministic contacts/messages owner derivation, manual contacts rotation (copy-forward), manual messages rotation (pointer-only), and owner pointer persistence
   - `hooks/composition/` contains sub-composition slices for shell orchestration concerns (`useProfileAuthComposition`, `useProfilePeopleComposition`, `usePaymentMoneyComposition`, `useRoutingViewComposition`, `useSystemSettingsComposition`)
   - `hooks/contacts/` contains contact-editor and contact-list view helpers (`useContactEditor`, `useVisibleContacts`)
   - `hooks/layout/` contains extracted shell layout/menu/swipe state helpers (`useMainMenuState`, `useMainSwipeNavigation`)
@@ -65,6 +77,8 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Components use `interface` for props, not `type`
 - LocalStorage keys use `linky.` prefix (e.g., `linky.nostr_nsec`, `linky.lang`)
 - Use types from libraries (e.g., Evolu, Cashu, Nostr) instead of redefining them - look up the library's exported types first
+- Prefer sparse Evolu mutation payloads: omit optional fields when empty instead of writing explicit `null` (especially `cashuToken` optional columns like `rawToken`, `mint`, `unit`, `amount`, `error`)
+- Owner rotation and contact limits use shared constants in `src/utils/constants.ts` (`OWNER_ROTATION_TRIGGER_WRITE_COUNT`, `OWNER_ROTATION_COOLDOWN_MS`, `MAX_CONTACTS_PER_OWNER`)
 - Plain CSS in `App.css` - no CSS-in-JS or utility framework
 
 ## Testing

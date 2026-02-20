@@ -1,10 +1,19 @@
 import React, { useState } from "react";
 import type { EvoluHistoryRow, loadEvoluCurrentData } from "../evolu";
+import {
+  MAX_CONTACTS_PER_OWNER,
+  OWNER_ROTATION_TRIGGER_WRITE_COUNT,
+} from "../utils/constants";
 
 interface EvoluDataDetailPageProps {
   evoluDatabaseBytes: number | null;
   evoluTableCounts: Record<string, number | null>;
   evoluHistoryCount: number | null;
+  evoluContactsOwnerEditCount: number;
+  evoluContactsOwnerId: string | null;
+  evoluContactsOwnerIndex: number;
+  evoluContactsOwnerNewContactsCount: number;
+  evoluContactsOwnerPointer: string;
   pendingClearDatabase: boolean;
   requestClearDatabase: () => void;
   loadHistoryData: () => Promise<EvoluHistoryRow[]>;
@@ -18,12 +27,20 @@ export function EvoluDataDetailPage({
   evoluDatabaseBytes,
   evoluTableCounts,
   evoluHistoryCount,
+  evoluContactsOwnerEditCount,
+  evoluContactsOwnerId,
+  evoluContactsOwnerIndex,
+  evoluContactsOwnerNewContactsCount,
+  evoluContactsOwnerPointer,
   pendingClearDatabase,
   requestClearDatabase,
   loadHistoryData,
   loadCurrentData,
   t,
 }: EvoluDataDetailPageProps): React.ReactElement {
+  const [ownerView, setOwnerView] = useState<"all" | "meta" | "contacts">(
+    "all",
+  );
   const [showHistoryData, setShowHistoryData] = useState(false);
   const [showCurrentData, setShowCurrentData] = useState(false);
   const [historyData, setHistoryData] = useState<EvoluHistoryRow[]>([]);
@@ -31,6 +48,14 @@ export function EvoluDataDetailPage({
     Awaited<ReturnType<typeof loadEvoluCurrentData>>
   >({});
   const [isLoading, setIsLoading] = useState(false);
+
+  const readRowOwnerId = (row: unknown): string => {
+    if (typeof row !== "object" || row === null) return "";
+    if (!("ownerId" in row)) return "";
+    const ownerId = row.ownerId;
+    if (typeof ownerId !== "string") return "";
+    return ownerId.trim();
+  };
 
   const formatBytes = (bytes: number): string => {
     if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -56,19 +81,23 @@ export function EvoluDataDetailPage({
     "nostrIdentity",
     "nostrMessage",
     "nostrReaction",
-    "paymentEvent",
   ];
-  const systemTables = ["appState", "mintInfo"];
+  const systemTables = ["ownerMeta"];
 
   const tableEntries = Object.entries(evoluTableCounts);
-  const userTableEntries = tableEntries
+  const scopedEntries = tableEntries.filter(([name]) => {
+    if (ownerView === "meta") return name === "ownerMeta";
+    if (ownerView === "contacts") return name === "contact";
+    return true;
+  });
+  const userTableEntries = scopedEntries
     .filter(([name]) => userTables.includes(name))
     .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0));
-  const systemTableEntries = tableEntries
+  const systemTableEntries = scopedEntries
     .filter(([name]) => systemTables.includes(name))
     .sort(([, a], [, b]) => (b ?? 0) - (a ?? 0));
 
-  const totalCurrentRows = tableEntries.reduce<number>(
+  const totalCurrentRows = scopedEntries.reduce<number>(
     (sum, [, count]) => sum + (count ?? 0),
     0,
   );
@@ -100,6 +129,25 @@ export function EvoluDataDetailPage({
     }
     setShowCurrentData(!showCurrentData);
   };
+
+  const currentDataEntries = React.useMemo(() => {
+    const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
+
+    return Object.entries(currentData)
+      .filter(([tableName]) => {
+        if (ownerView === "meta") return tableName === "ownerMeta";
+        if (ownerView === "contacts") return tableName === "contact";
+        return true;
+      })
+      .map(([tableName, rows]) => {
+        if (tableName !== "contact") return [tableName, rows] as const;
+        if (!activeContactsOwnerId) return [tableName, rows] as const;
+        return [
+          tableName,
+          rows.filter((row) => readRowOwnerId(row) === activeContactsOwnerId),
+        ] as const;
+      });
+  }, [currentData, evoluContactsOwnerId, ownerView]);
 
   return (
     <section className="panel">
@@ -160,6 +208,80 @@ export function EvoluDataDetailPage({
           <h3 style={{ marginTop: 24, marginBottom: 12 }}>
             {t("evoluRowCounts")}
           </h3>
+
+          <div
+            className="settings-row"
+            style={{ gap: 8, display: "flex", marginBottom: 12 }}
+          >
+            <button
+              type="button"
+              className={ownerView === "all" ? "secondary" : "btn-wide"}
+              onClick={() => setOwnerView("all")}
+            >
+              {t("all")}
+            </button>
+            <button
+              type="button"
+              className={ownerView === "meta" ? "secondary" : "btn-wide"}
+              onClick={() => setOwnerView("meta")}
+            >
+              {t("evoluOwnerViewMeta")}
+            </button>
+            <button
+              type="button"
+              className={ownerView === "contacts" ? "secondary" : "btn-wide"}
+              onClick={() => setOwnerView("contacts")}
+            >
+              {t("contactsTitle")}
+            </button>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-label">{t("evoluContactsOwner")}</span>
+            </div>
+            <div className="settings-right">
+              <span className="muted">{evoluContactsOwnerPointer}</span>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-label">
+                {t("evoluContactsOwnerIndex")}
+              </span>
+            </div>
+            <div className="settings-right">
+              <span className="muted">{evoluContactsOwnerIndex}</span>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-label">
+                {t("evoluContactsOwnerNewContacts")}
+              </span>
+            </div>
+            <div className="settings-right">
+              <span className="muted">
+                {evoluContactsOwnerNewContactsCount} / {MAX_CONTACTS_PER_OWNER}
+              </span>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-label">
+                {t("evoluContactsOwnerEdits")}
+              </span>
+            </div>
+            <div className="settings-right">
+              <span className="muted">
+                {evoluContactsOwnerEditCount} /{" "}
+                {OWNER_ROTATION_TRIGGER_WRITE_COUNT}
+              </span>
+            </div>
+          </div>
 
           <div className="settings-row">
             <div className="settings-left">
@@ -226,7 +348,7 @@ export function EvoluDataDetailPage({
             <div style={{ marginTop: 16 }}>
               <h4>{t("evoluCurrentDataJson")}</h4>
               <div style={{ maxHeight: 400, overflow: "auto" }}>
-                {Object.entries(currentData).map(([tableName, rows]) => (
+                {currentDataEntries.map(([tableName, rows]) => (
                   <div key={tableName} style={{ marginBottom: 16 }}>
                     <h5 style={{ marginBottom: 8 }}>
                       {tableName} ({rows.length} rows)

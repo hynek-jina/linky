@@ -1,12 +1,15 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigation } from "../hooks/useRouting";
 
 interface AdvancedPageProps {
   __APP_VERSION__: string;
   allowPromisesEnabled: boolean;
   cashuIsBusy: boolean;
+  cashuSeedMnemonic: string | null;
   connectedRelayCount: number;
+  copyCashuSeed: () => void;
   copyNostrKeys: () => void;
+  hasCustomNsecOverride: boolean;
   copySeed: () => void;
   currentNpub: string | null;
   currentNsec: string | null;
@@ -19,11 +22,15 @@ interface AdvancedPageProps {
   exportAppData: () => void;
   handleImportAppDataFilePicked: (file: File | null) => Promise<void>;
   importDataFileInputRef: React.RefObject<HTMLInputElement | null>;
+  isSeedLogin: boolean;
   logoutArmed: boolean;
   nostrRelayOverallStatus: "connected" | "checking" | "disconnected";
   payWithCashuEnabled: boolean;
+  pushToast: (message: string) => void;
   relayUrls: string[];
   requestImportAppData: () => void;
+  requestDeriveNostrKeys: () => Promise<void>;
+  requestPasteNostrKeys: () => Promise<void>;
   requestLogout: () => void;
   restoreMissingTokens: () => Promise<void>;
   seedMnemonic: string | null;
@@ -37,8 +44,11 @@ export function AdvancedPage({
   __APP_VERSION__,
   allowPromisesEnabled,
   cashuIsBusy,
+  cashuSeedMnemonic,
   connectedRelayCount,
+  copyCashuSeed,
   copyNostrKeys,
+  hasCustomNsecOverride,
   copySeed,
   currentNpub,
   currentNsec,
@@ -51,11 +61,15 @@ export function AdvancedPage({
   exportAppData,
   handleImportAppDataFilePicked,
   importDataFileInputRef,
+  isSeedLogin,
   logoutArmed,
   nostrRelayOverallStatus,
   payWithCashuEnabled,
+  pushToast,
   relayUrls,
   requestImportAppData,
+  requestDeriveNostrKeys,
+  requestPasteNostrKeys,
   requestLogout,
   restoreMissingTokens,
   seedMnemonic,
@@ -67,18 +81,59 @@ export function AdvancedPage({
   const navigateTo = useNavigation();
   const [pushStatus, setPushStatus] = useState<string>("");
   const [pushError, setPushError] = useState<string>("");
+  const [nostrPasteArmed, setNostrPasteArmed] = useState(false);
+  const [nostrDeriveArmed, setNostrDeriveArmed] = useState(false);
+  const armTimeoutRef = useRef<number | null>(null);
+
+  const clearArmTimeout = useCallback(() => {
+    if (armTimeoutRef.current !== null) {
+      window.clearTimeout(armTimeoutRef.current);
+      armTimeoutRef.current = null;
+    }
+  }, []);
+
+  const armNostrAction = useCallback(
+    (action: "paste" | "derive") => {
+      clearArmTimeout();
+      setNostrPasteArmed(action === "paste");
+      setNostrDeriveArmed(action === "derive");
+      pushToast(
+        action === "paste"
+          ? t("nostrPasteArmedHint")
+          : t("nostrDeriveArmedHint"),
+      );
+      armTimeoutRef.current = window.setTimeout(() => {
+        setNostrPasteArmed(false);
+        setNostrDeriveArmed(false);
+        armTimeoutRef.current = null;
+      }, 5000);
+    },
+    [clearArmTimeout, pushToast, t],
+  );
+
+  useEffect(() => {
+    return () => {
+      clearArmTimeout();
+    };
+  }, [clearArmTimeout]);
+
+  useEffect(() => {
+    clearArmTimeout();
+    setNostrPasteArmed(false);
+    setNostrDeriveArmed(false);
+  }, [clearArmTimeout, hasCustomNsecOverride]);
 
   const handleRegisterNotifications = async () => {
-    setPushStatus("Registruji...");
+    setPushStatus(t("notificationsRegistering"));
     setPushError("");
 
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setPushError("Notifikace nejsou podporovány");
+      setPushError(t("notificationsUnsupported"));
       return;
     }
 
     if (!currentNpub) {
-      setPushError("Nejste přihlášeni");
+      setPushError(t("notificationsNotLoggedIn"));
       return;
     }
 
@@ -94,20 +149,38 @@ export function AdvancedPage({
         );
 
         if (result.success) {
-          setPushStatus("✅ Zaregistrováno");
+          setPushStatus(`✅ ${t("notificationsRegistered")}`);
         } else {
-          setPushError(`❌ ${result.error || "Chyba"}`);
+          setPushError(`❌ ${result.error || t("notificationsError")}`);
         }
       } else {
-        setPushError("❌ Zamítnuto");
+        setPushError(`❌ ${t("notificationsDenied")}`);
       }
     } catch {
-      setPushError("❌ Chyba");
+      setPushError(`❌ ${t("notificationsError")}`);
     }
   };
 
   return (
     <section className="panel">
+      {isSeedLogin && (
+        <div className="settings-row">
+          <div className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🔑
+            </span>
+            <span className="settings-label">{t("keys")}</span>
+          </div>
+          <div className="settings-right">
+            <div className="badge-box">
+              <button className="ghost" onClick={copySeed}>
+                {t("copyCurrent")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="settings-row">
         <div className="settings-left">
           <span className="settings-icon" aria-hidden="true">
@@ -117,6 +190,55 @@ export function AdvancedPage({
         </div>
         <div className="settings-right">
           <div className="badge-box">
+            {hasCustomNsecOverride ? (
+              <button
+                className="ghost"
+                onClick={() => {
+                  if (nostrDeriveArmed) {
+                    clearArmTimeout();
+                    setNostrDeriveArmed(false);
+                    void requestDeriveNostrKeys();
+                    return;
+                  }
+                  armNostrAction("derive");
+                }}
+                style={
+                  nostrDeriveArmed
+                    ? {
+                        color: "var(--color-error)",
+                        borderColor: "var(--color-error)",
+                      }
+                    : undefined
+                }
+                disabled={!isSeedLogin || !currentNsec}
+              >
+                {t("derive")}
+              </button>
+            ) : (
+              <button
+                className="ghost"
+                onClick={() => {
+                  if (nostrPasteArmed) {
+                    clearArmTimeout();
+                    setNostrPasteArmed(false);
+                    void requestPasteNostrKeys();
+                    return;
+                  }
+                  armNostrAction("paste");
+                }}
+                style={
+                  nostrPasteArmed
+                    ? {
+                        color: "var(--color-error)",
+                        borderColor: "var(--color-error)",
+                      }
+                    : undefined
+                }
+                disabled={!currentNsec}
+              >
+                {t("paste")}
+              </button>
+            )}
             <button
               className="ghost"
               onClick={copyNostrKeys}
@@ -132,16 +254,16 @@ export function AdvancedPage({
       <div className="settings-row">
         <div className="settings-left">
           <span className="settings-icon" aria-hidden="true">
-            🌱
+            🌰
           </span>
-          <span className="settings-label">{t("seed")}</span>
+          <span className="settings-label">{t("cashuSeed")}</span>
         </div>
         <div className="settings-right">
           <div className="badge-box">
             <button
               className="ghost"
-              onClick={copySeed}
-              disabled={!seedMnemonic}
+              onClick={copyCashuSeed}
+              disabled={!cashuSeedMnemonic}
             >
               {t("copyCurrent")}
             </button>
@@ -332,7 +454,7 @@ export function AdvancedPage({
           <span className="settings-icon" aria-hidden="true">
             🔔
           </span>
-          <span className="settings-label">Notifikace</span>
+          <span className="settings-label">{t("notifications")}</span>
         </div>
         <div className="settings-right">
           <button
@@ -340,7 +462,7 @@ export function AdvancedPage({
             onClick={handleRegisterNotifications}
             disabled={!currentNpub}
           >
-            Povolit
+            {t("enable")}
           </button>
         </div>
       </div>

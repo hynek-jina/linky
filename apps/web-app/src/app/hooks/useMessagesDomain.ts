@@ -1,5 +1,5 @@
-import * as Evolu from "@evolu/common";
 import type { OwnerId } from "@evolu/common";
+import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
 import React from "react";
 import type { ContactId } from "../../evolu";
@@ -34,7 +34,10 @@ interface UseMessagesDomainParams {
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
   chatForceScrollToBottomRef: React.MutableRefObject<boolean>;
   chatMessagesRef: React.RefObject<HTMLDivElement | null>;
+  messagesOwnerId: OwnerId | null;
+  messagesOwnerIdRef: React.MutableRefObject<OwnerId | null>;
   route: Route;
+  visibleMessageOwnerIds: readonly string[];
 }
 
 const MESSAGE_MIGRATION_VERSION = 1;
@@ -181,27 +184,29 @@ const normalizeLegacyLocalMessage = (
   };
 };
 
-const buildMessageInsertPayload = (
-  message: NewLocalNostrMessage,
-): {
-  clientId: string | null;
+type NostrMessageInsertPayload = {
   contactId: string;
   content: string;
   createdAtSec: number;
   direction: "in" | "out";
-  editedAtSec: number | null;
-  editedFromId: string | null;
-  isEdited: string | null;
-  localOnly: string | null;
-  originalContent: string | null;
-  pubkey: string | null;
-  replyToContent: string | null;
-  replyToId: string | null;
-  rootMessageId: string | null;
-  rumorId: string | null;
   status: "pending" | "sent";
   wrapId: string;
-} | null => {
+  clientId?: string;
+  editedAtSec?: number;
+  editedFromId?: string;
+  isEdited?: "1";
+  localOnly?: "1";
+  originalContent?: string;
+  pubkey?: string;
+  replyToContent?: string;
+  replyToId?: string;
+  rootMessageId?: string;
+  rumorId?: string;
+};
+
+const buildMessageInsertPayload = (
+  message: NewLocalNostrMessage,
+): NostrMessageInsertPayload | null => {
   const contactId = toTrimmedText(message.contactId);
   const directionRaw = toTrimmedText(message.direction);
   const direction =
@@ -218,37 +223,58 @@ const buildMessageInsertPayload = (
     ? toPositiveInt(message.editedAtSec, createdAtSec)
     : null;
 
-  return {
+  const payload: NostrMessageInsertPayload = {
     contactId,
     direction,
     content,
     wrapId,
-    rumorId: toOptionalText(message.rumorId),
-    pubkey: toOptionalText(message.pubkey),
     createdAtSec,
-    clientId: toOptionalText(message.clientId),
     status: toMessageStatus(message.status),
-    localOnly: message.localOnly ? "1" : null,
-    replyToId: toOptionalText(message.replyToId),
-    replyToContent: toOptionalText(message.replyToContent),
-    rootMessageId: toOptionalText(message.rootMessageId),
-    editedAtSec,
-    editedFromId: toOptionalText(message.editedFromId),
-    isEdited: message.isEdited ? "1" : null,
-    originalContent: toOptionalText(message.originalContent),
   };
+
+  const rumorId = toOptionalText(message.rumorId);
+  if (rumorId) payload.rumorId = rumorId;
+
+  const pubkey = toOptionalText(message.pubkey);
+  if (pubkey) payload.pubkey = pubkey;
+
+  const clientId = toOptionalText(message.clientId);
+  if (clientId) payload.clientId = clientId;
+
+  if (message.localOnly) payload.localOnly = "1";
+
+  const replyToId = toOptionalText(message.replyToId);
+  if (replyToId) payload.replyToId = replyToId;
+
+  const replyToContent = toOptionalText(message.replyToContent);
+  if (replyToContent) payload.replyToContent = replyToContent;
+
+  const rootMessageId = toOptionalText(message.rootMessageId);
+  if (rootMessageId) payload.rootMessageId = rootMessageId;
+
+  if (editedAtSec) payload.editedAtSec = editedAtSec;
+
+  const editedFromId = toOptionalText(message.editedFromId);
+  if (editedFromId) payload.editedFromId = editedFromId;
+
+  if (message.isEdited) payload.isEdited = "1";
+
+  const originalContent = toOptionalText(message.originalContent);
+  if (originalContent) payload.originalContent = originalContent;
+
+  return payload;
 };
 
 const buildReactionInsertPayload = (
   reaction: NewLocalNostrReaction,
 ): {
-  clientId: string | null;
   createdAtSec: number;
   emoji: string;
   messageId: string;
   reactorPubkey: string;
   status: "pending" | "sent";
   wrapId: string;
+  clientId?: string;
 } | null => {
   const messageId = toTrimmedText(reaction.messageId);
   const reactorPubkey = toTrimmedText(reaction.reactorPubkey);
@@ -257,7 +283,15 @@ const buildReactionInsertPayload = (
 
   const wrapId = toTrimmedText(reaction.wrapId) || `pending:${makeLocalId()}`;
 
-  return {
+  const payload: {
+    createdAtSec: number;
+    emoji: string;
+    messageId: string;
+    reactorPubkey: string;
+    status: "pending" | "sent";
+    wrapId: string;
+    clientId?: string;
+  } = {
     messageId,
     reactorPubkey,
     emoji,
@@ -266,9 +300,13 @@ const buildReactionInsertPayload = (
       Math.ceil(Date.now() / 1000),
     ),
     wrapId,
-    clientId: toOptionalText(reaction.clientId),
     status: toReactionStatus(reaction.status),
   };
+
+  const clientId = toOptionalText(reaction.clientId);
+  if (clientId) payload.clientId = clientId;
+
+  return payload;
 };
 
 const migrationKeyForOwner = (ownerId: string): string =>
@@ -302,12 +340,41 @@ interface NostrReactionUpdatePayload {
   wrapId?: string;
 }
 
+interface NostrMessageShadowState {
+  clientId?: string | null;
+  content?: string;
+  editedAtSec?: number | null;
+  editedFromId?: string | null;
+  isEdited?: boolean;
+  localOnly?: boolean;
+  originalContent?: string | null;
+  pubkey?: string | null;
+  replyToContent?: string | null;
+  replyToId?: string | null;
+  rootMessageId?: string | null;
+  rumorId?: string | null;
+  status?: "pending" | "sent";
+  wrapId?: string;
+}
+
+interface NostrReactionShadowState {
+  clientId?: string | null;
+  emoji?: string | null;
+  messageId?: string | null;
+  reactorPubkey?: string | null;
+  status?: "pending" | "sent";
+  wrapId?: string;
+}
+
 export const useMessagesDomain = ({
   appOwnerId,
   appOwnerIdRef,
   chatForceScrollToBottomRef,
   chatMessagesRef,
+  messagesOwnerId,
+  messagesOwnerIdRef,
   route,
+  visibleMessageOwnerIds,
 }: UseMessagesDomainParams) => {
   const { insert, update } = useEvolu();
   const activeChatRouteId = route.kind === "chat" ? route.id : null;
@@ -340,42 +407,63 @@ export const useMessagesDomain = ({
   const nostrMessageRows = useQuery(nostrMessagesQuery);
   const nostrReactionRows = useQuery(nostrReactionsQuery);
 
+  const visibleMessageOwnerIdsSet = React.useMemo(() => {
+    const ids = visibleMessageOwnerIds
+      .map((ownerId) => toTrimmedText(ownerId))
+      .filter(Boolean);
+    return new Set(ids);
+  }, [visibleMessageOwnerIds]);
+
+  const isVisibleMessageOwner = React.useCallback(
+    (row: Record<string, unknown>) => {
+      if (visibleMessageOwnerIdsSet.size === 0) return true;
+      const ownerId = toTrimmedText(row.ownerId);
+      if (!ownerId) return false;
+      return visibleMessageOwnerIdsSet.has(ownerId);
+    },
+    [visibleMessageOwnerIdsSet],
+  );
+
   const nostrReactionDeletedWrapIds = React.useMemo(() => {
     const deletedWrapIds = new Set<string>();
     for (const row of nostrReactionRows) {
+      if (!isVisibleMessageOwner(row)) continue;
       if (!isSqliteTrueish(row.isDeleted)) continue;
       const wrapId = toTrimmedText(row.wrapId);
       if (!wrapId) continue;
       deletedWrapIds.add(wrapId);
     }
     return deletedWrapIds;
-  }, [nostrReactionRows]);
+  }, [isVisibleMessageOwner, nostrReactionRows]);
 
   const nostrReactionSeenWrapIds = React.useMemo(() => {
     const seenWrapIds = new Set<string>();
     for (const row of nostrReactionRows) {
+      if (!isVisibleMessageOwner(row)) continue;
       const wrapId = toTrimmedText(row.wrapId);
       if (!wrapId) continue;
       seenWrapIds.add(wrapId);
     }
     return seenWrapIds;
-  }, [nostrReactionRows]);
+  }, [isVisibleMessageOwner, nostrReactionRows]);
 
   const nostrMessagesLocal = React.useMemo(() => {
     const parsed: LocalNostrMessage[] = [];
     for (const row of nostrMessageRows) {
+      if (!isVisibleMessageOwner(row)) continue;
       const normalized = toLocalNostrMessage(row);
       if (normalized) parsed.push(normalized);
     }
     const deduped = dedupeNostrMessagesByPriority(parsed);
     return deduped.sort((a, b) => a.createdAtSec - b.createdAtSec);
-  }, [nostrMessageRows]);
+  }, [isVisibleMessageOwner, nostrMessageRows]);
 
   const nostrReactionsLocal = React.useMemo(() => {
     const parsed: LocalNostrReaction[] = [];
     const seenWrapIds = new Set<string>();
     const seenClientIds = new Set<string>();
     for (const row of nostrReactionRows) {
+      if (!isVisibleMessageOwner(row)) continue;
       if (isSqliteTrueish(row.isDeleted)) continue;
       const normalized = toLocalNostrReaction(row);
       if (!normalized) continue;
@@ -393,15 +481,22 @@ export const useMessagesDomain = ({
     }
     parsed.sort((a, b) => a.createdAtSec - b.createdAtSec);
     return parsed;
-  }, [nostrReactionDeletedWrapIds, nostrReactionRows]);
+  }, [isVisibleMessageOwner, nostrReactionDeletedWrapIds, nostrReactionRows]);
 
   const nostrMessageWrapIdsRef = React.useRef<Set<string>>(new Set());
   const nostrMessagesLatestRef = React.useRef<LocalNostrMessage[]>([]);
+  const nostrMessageUpdateShadowRef = React.useRef<
+    Map<string, NostrMessageShadowState>
+  >(new Map());
   const nostrReactionWrapIdsRef = React.useRef<Set<string>>(new Set());
   const nostrReactionsLatestRef = React.useRef<LocalNostrReaction[]>([]);
+  const nostrReactionUpdateShadowRef = React.useRef<
+    Map<string, NostrReactionShadowState>
+  >(new Map());
 
   React.useEffect(() => {
     nostrMessagesLatestRef.current = nostrMessagesLocal;
+    nostrMessageUpdateShadowRef.current.clear();
     nostrMessageWrapIdsRef.current = new Set(
       nostrMessagesLocal
         .map(
@@ -414,6 +509,7 @@ export const useMessagesDomain = ({
 
   React.useEffect(() => {
     nostrReactionsLatestRef.current = nostrReactionsLocal;
+    nostrReactionUpdateShadowRef.current.clear();
     nostrReactionWrapIdsRef.current = new Set(nostrReactionSeenWrapIds);
   }, [nostrReactionSeenWrapIds, nostrReactionsLocal]);
 
@@ -425,8 +521,8 @@ export const useMessagesDomain = ({
   const migrationDoneForOwnerRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    if (!appOwnerId) return;
-    const ownerKey = toTrimmedText(appOwnerId);
+    if (!messagesOwnerId) return;
+    const ownerKey = toTrimmedText(messagesOwnerId);
     if (!ownerKey) return;
     if (migrationRunningRef.current) return;
     if (migrationDoneForOwnerRef.current === ownerKey) return;
@@ -488,7 +584,9 @@ export const useMessagesDomain = ({
         });
         if (!payload) continue;
 
-        const result = insert("nostrMessage", payload, { ownerId: appOwnerId });
+        const result = insert("nostrMessage", payload, {
+          ownerId: messagesOwnerId,
+        });
         if (!result.ok) continue;
 
         if (wrapId) seenWrapIds.add(wrapId);
@@ -508,15 +606,41 @@ export const useMessagesDomain = ({
     } finally {
       migrationRunningRef.current = false;
     }
-  }, [appOwnerId, insert, nostrMessagesLocal]);
+  }, [insert, messagesOwnerId, nostrMessagesLocal]);
 
   const appendLocalNostrMessage = React.useCallback(
     (message: NewLocalNostrMessage): string => {
       const payload = buildMessageInsertPayload(message);
       if (!payload) return "";
 
-      const result = appOwnerId
-        ? insert("nostrMessage", payload, { ownerId: appOwnerId })
+      const existing = nostrMessagesLatestRef.current.find((current) => {
+        const sameClientId =
+          payload.clientId &&
+          toTrimmedText(current.clientId) === toTrimmedText(payload.clientId);
+        if (sameClientId) return true;
+
+        const sameWrapId =
+          toTrimmedText(current.wrapId) === toTrimmedText(payload.wrapId);
+        if (sameWrapId) return true;
+
+        const sameRumor =
+          payload.rumorId &&
+          toTrimmedText(current.rumorId) === toTrimmedText(payload.rumorId);
+        if (sameRumor) return true;
+
+        return (
+          toTrimmedText(current.contactId) ===
+            toTrimmedText(payload.contactId) &&
+          toTrimmedText(current.direction) ===
+            toTrimmedText(payload.direction) &&
+          toText(current.content) === toText(payload.content) &&
+          Number(current.createdAtSec ?? 0) === Number(payload.createdAtSec)
+        );
+      });
+      if (existing) return toTrimmedText(existing.id);
+
+      const result = messagesOwnerId
+        ? insert("nostrMessage", payload, { ownerId: messagesOwnerId })
         : insert("nostrMessage", payload);
       if (!result.ok) return "";
 
@@ -535,7 +659,7 @@ export const useMessagesDomain = ({
       return messageId;
     },
     [
-      appOwnerId,
+      messagesOwnerId,
       activeChatRouteId,
       chatForceScrollToBottomRef,
       chatMessagesRef,
@@ -548,83 +672,242 @@ export const useMessagesDomain = ({
       const normalizedId = toTrimmedText(id);
       if (!normalizedId) return;
 
+      const current = nostrMessagesLatestRef.current.find(
+        (message) => toTrimmedText(message.id) === normalizedId,
+      );
+      const shadow =
+        nostrMessageUpdateShadowRef.current.get(normalizedId) ??
+        ({} as NostrMessageShadowState);
+
+      const readShadowText = <K extends keyof NostrMessageShadowState>(
+        key: K,
+        fallback: string | null,
+      ): string | null => {
+        if (Object.prototype.hasOwnProperty.call(shadow, key)) {
+          const value = shadow[key];
+          if (typeof value === "string") {
+            const next = toOptionalText(value);
+            return next;
+          }
+          return null;
+        }
+        return fallback;
+      };
+
+      const currentWrapId =
+        readShadowText("wrapId", toOptionalText(current?.wrapId)) ?? "";
+      const currentStatus =
+        shadow.status ?? toMessageStatus(current?.status ?? "sent");
+
       const payload: NostrMessageUpdatePayload = {
         id: normalizedId,
       };
       let hasChanges = false;
 
       if (updates.wrapId !== undefined) {
-        payload.wrapId =
-          toTrimmedText(updates.wrapId) || `pending:${makeLocalId()}`;
-        hasChanges = true;
+        const nextWrapId = toTrimmedText(updates.wrapId);
+        if (nextWrapId) {
+          const nextStatusCandidate =
+            updates.status !== undefined
+              ? toMessageStatus(updates.status)
+              : currentStatus;
+          const keepExistingSentWrap =
+            currentWrapId &&
+            !currentWrapId.startsWith("pending:") &&
+            nextStatusCandidate === "sent";
+          if (nextWrapId !== currentWrapId && !keepExistingSentWrap) {
+            payload.wrapId = nextWrapId;
+            hasChanges = true;
+            shadow.wrapId = nextWrapId;
+          }
+        }
       }
       if (updates.status !== undefined) {
-        payload.status = toMessageStatus(updates.status);
-        hasChanges = true;
+        const nextStatus = toMessageStatus(updates.status);
+        if (nextStatus !== currentStatus) {
+          payload.status = nextStatus;
+          hasChanges = true;
+          shadow.status = nextStatus;
+        }
       }
       if (updates.pubkey !== undefined) {
-        payload.pubkey = toOptionalText(updates.pubkey);
-        hasChanges = true;
+        const nextPubkey = toOptionalText(updates.pubkey);
+        if (
+          nextPubkey &&
+          nextPubkey !==
+            readShadowText("pubkey", toOptionalText(current?.pubkey))
+        ) {
+          payload.pubkey = nextPubkey;
+          hasChanges = true;
+          shadow.pubkey = nextPubkey;
+        }
       }
       if (updates.content !== undefined) {
         const content = toText(updates.content);
-        if (content.trim()) {
+        if (
+          content.trim() &&
+          content !==
+            (readShadowText("content", toOptionalText(current?.content)) ?? "")
+        ) {
           payload.content = content;
           hasChanges = true;
+          shadow.content = content;
         }
       }
       if (updates.clientId !== undefined) {
-        payload.clientId = toOptionalText(updates.clientId);
-        hasChanges = true;
+        const nextClientId = toOptionalText(updates.clientId);
+        if (
+          nextClientId &&
+          nextClientId !==
+            readShadowText("clientId", toOptionalText(current?.clientId))
+        ) {
+          payload.clientId = nextClientId;
+          hasChanges = true;
+          shadow.clientId = nextClientId;
+        }
       }
       if (updates.localOnly !== undefined) {
-        payload.localOnly = updates.localOnly ? "1" : null;
-        hasChanges = true;
+        const nextLocalOnly = updates.localOnly ? "1" : null;
+        const prevLocalOnly =
+          shadow.localOnly !== undefined
+            ? shadow.localOnly
+              ? "1"
+              : null
+            : current?.localOnly
+              ? "1"
+              : null;
+        if (nextLocalOnly && nextLocalOnly !== prevLocalOnly) {
+          payload.localOnly = nextLocalOnly;
+          hasChanges = true;
+          shadow.localOnly = true;
+        }
       }
       if (updates.rumorId !== undefined) {
-        payload.rumorId = toOptionalText(updates.rumorId);
-        hasChanges = true;
+        const nextRumorId = toOptionalText(updates.rumorId);
+        if (
+          nextRumorId &&
+          nextRumorId !==
+            readShadowText("rumorId", toOptionalText(current?.rumorId))
+        ) {
+          payload.rumorId = nextRumorId;
+          hasChanges = true;
+          shadow.rumorId = nextRumorId;
+        }
       }
       if (updates.replyToId !== undefined) {
-        payload.replyToId = toOptionalText(updates.replyToId);
-        hasChanges = true;
+        const nextReplyToId = toOptionalText(updates.replyToId);
+        if (
+          nextReplyToId &&
+          nextReplyToId !==
+            readShadowText("replyToId", toOptionalText(current?.replyToId))
+        ) {
+          payload.replyToId = nextReplyToId;
+          hasChanges = true;
+          shadow.replyToId = nextReplyToId;
+        }
       }
       if (updates.replyToContent !== undefined) {
-        payload.replyToContent = toOptionalText(updates.replyToContent);
-        hasChanges = true;
+        const nextReplyToContent = toOptionalText(updates.replyToContent);
+        if (
+          nextReplyToContent &&
+          nextReplyToContent !==
+            readShadowText(
+              "replyToContent",
+              toOptionalText(current?.replyToContent),
+            )
+        ) {
+          payload.replyToContent = nextReplyToContent;
+          hasChanges = true;
+          shadow.replyToContent = nextReplyToContent;
+        }
       }
       if (updates.rootMessageId !== undefined) {
-        payload.rootMessageId = toOptionalText(updates.rootMessageId);
-        hasChanges = true;
+        const nextRootMessageId = toOptionalText(updates.rootMessageId);
+        if (
+          nextRootMessageId &&
+          nextRootMessageId !==
+            readShadowText(
+              "rootMessageId",
+              toOptionalText(current?.rootMessageId),
+            )
+        ) {
+          payload.rootMessageId = nextRootMessageId;
+          hasChanges = true;
+          shadow.rootMessageId = nextRootMessageId;
+        }
       }
       if (updates.editedAtSec !== undefined) {
-        payload.editedAtSec = updates.editedAtSec
+        const nextEditedAtSec = updates.editedAtSec
           ? toPositiveInt(updates.editedAtSec, Math.ceil(Date.now() / 1000))
           : null;
-        hasChanges = true;
+        const prevEditedAtSec =
+          shadow.editedAtSec !== undefined
+            ? shadow.editedAtSec
+            : (current?.editedAtSec ?? null);
+        if (nextEditedAtSec && nextEditedAtSec !== prevEditedAtSec) {
+          payload.editedAtSec = nextEditedAtSec;
+          hasChanges = true;
+          shadow.editedAtSec = nextEditedAtSec;
+        }
       }
       if (updates.editedFromId !== undefined) {
-        payload.editedFromId = toOptionalText(updates.editedFromId);
-        hasChanges = true;
+        const nextEditedFromId = toOptionalText(updates.editedFromId);
+        if (
+          nextEditedFromId &&
+          nextEditedFromId !==
+            readShadowText(
+              "editedFromId",
+              toOptionalText(current?.editedFromId),
+            )
+        ) {
+          payload.editedFromId = nextEditedFromId;
+          hasChanges = true;
+          shadow.editedFromId = nextEditedFromId;
+        }
       }
       if (updates.isEdited !== undefined) {
-        payload.isEdited = updates.isEdited ? "1" : null;
-        hasChanges = true;
+        const nextIsEdited = updates.isEdited ? "1" : null;
+        const prevIsEdited =
+          shadow.isEdited !== undefined
+            ? shadow.isEdited
+              ? "1"
+              : null
+            : current?.isEdited
+              ? "1"
+              : null;
+        if (nextIsEdited && nextIsEdited !== prevIsEdited) {
+          payload.isEdited = nextIsEdited;
+          hasChanges = true;
+          shadow.isEdited = true;
+        }
       }
       if (updates.originalContent !== undefined) {
-        payload.originalContent = toOptionalText(updates.originalContent);
-        hasChanges = true;
+        const nextOriginalContent = toOptionalText(updates.originalContent);
+        if (
+          nextOriginalContent &&
+          nextOriginalContent !==
+            readShadowText(
+              "originalContent",
+              toOptionalText(current?.originalContent),
+            )
+        ) {
+          payload.originalContent = nextOriginalContent;
+          hasChanges = true;
+          shadow.originalContent = nextOriginalContent;
+        }
       }
 
       if (!hasChanges) return;
 
-      if (appOwnerId) {
-        update("nostrMessage", payload, { ownerId: appOwnerId });
+      nostrMessageUpdateShadowRef.current.set(normalizedId, shadow);
+
+      if (messagesOwnerId) {
+        update("nostrMessage", payload, { ownerId: messagesOwnerId });
       } else {
         update("nostrMessage", payload);
       }
     },
-    [appOwnerId, update],
+    [messagesOwnerId, update],
   );
 
   const appendLocalNostrReaction = React.useCallback(
@@ -632,13 +915,34 @@ export const useMessagesDomain = ({
       const payload = buildReactionInsertPayload(reaction);
       if (!payload) return "";
 
-      const result = appOwnerId
-        ? insert("nostrReaction", payload, { ownerId: appOwnerId })
+      const existing = nostrReactionsLatestRef.current.find((current) => {
+        const sameClientId =
+          payload.clientId &&
+          toTrimmedText(current.clientId) === toTrimmedText(payload.clientId);
+        if (sameClientId) return true;
+
+        const sameWrapId =
+          toTrimmedText(current.wrapId) === toTrimmedText(payload.wrapId);
+        if (sameWrapId) return true;
+
+        return (
+          toTrimmedText(current.messageId) ===
+            toTrimmedText(payload.messageId) &&
+          toTrimmedText(current.reactorPubkey) ===
+            toTrimmedText(payload.reactorPubkey) &&
+          toTrimmedText(current.emoji) === toTrimmedText(payload.emoji) &&
+          Number(current.createdAtSec ?? 0) === Number(payload.createdAtSec)
+        );
+      });
+      if (existing) return toTrimmedText(existing.id);
+
+      const result = messagesOwnerId
+        ? insert("nostrReaction", payload, { ownerId: messagesOwnerId })
         : insert("nostrReaction", payload);
       if (!result.ok) return "";
       return toText(result.value.id);
     },
-    [appOwnerId, insert],
+    [insert, messagesOwnerId],
   );
 
   const updateLocalNostrReaction = React.useCallback<UpdateLocalNostrReaction>(
@@ -646,66 +950,128 @@ export const useMessagesDomain = ({
       const normalizedId = toTrimmedText(id);
       if (!normalizedId) return;
 
+      const current = nostrReactionsLatestRef.current.find(
+        (reaction) => toTrimmedText(reaction.id) === normalizedId,
+      );
+      const shadow =
+        nostrReactionUpdateShadowRef.current.get(normalizedId) ??
+        ({} as NostrReactionShadowState);
+
+      const readShadowText = <K extends keyof NostrReactionShadowState>(
+        key: K,
+        fallback: string | null,
+      ): string | null => {
+        if (Object.prototype.hasOwnProperty.call(shadow, key)) {
+          const value = shadow[key];
+          if (typeof value === "string") return toOptionalText(value);
+          return null;
+        }
+        return fallback;
+      };
+
+      const currentStatus =
+        shadow.status ?? toReactionStatus(current?.status ?? "sent");
+
       const payload: NostrReactionUpdatePayload = {
         id: normalizedId,
       };
       let hasChanges = false;
 
       if (updates.messageId !== undefined) {
-        const messageId = toOptionalText(updates.messageId);
-        if (messageId) {
-          payload.messageId = messageId;
+        const nextMessageId = toOptionalText(updates.messageId);
+        if (
+          nextMessageId &&
+          nextMessageId !==
+            readShadowText("messageId", toOptionalText(current?.messageId))
+        ) {
+          payload.messageId = nextMessageId;
           hasChanges = true;
+          shadow.messageId = nextMessageId;
         }
       }
       if (updates.reactorPubkey !== undefined) {
-        const reactorPubkey = toOptionalText(updates.reactorPubkey);
-        if (reactorPubkey) {
-          payload.reactorPubkey = reactorPubkey;
+        const nextReactorPubkey = toOptionalText(updates.reactorPubkey);
+        if (
+          nextReactorPubkey &&
+          nextReactorPubkey !==
+            readShadowText(
+              "reactorPubkey",
+              toOptionalText(current?.reactorPubkey),
+            )
+        ) {
+          payload.reactorPubkey = nextReactorPubkey;
           hasChanges = true;
+          shadow.reactorPubkey = nextReactorPubkey;
         }
       }
       if (updates.emoji !== undefined) {
-        const emoji = toOptionalText(updates.emoji);
-        if (emoji) {
-          payload.emoji = emoji;
+        const nextEmoji = toOptionalText(updates.emoji);
+        if (
+          nextEmoji &&
+          nextEmoji !== readShadowText("emoji", toOptionalText(current?.emoji))
+        ) {
+          payload.emoji = nextEmoji;
           hasChanges = true;
+          shadow.emoji = nextEmoji;
         }
       }
       if (updates.wrapId !== undefined) {
-        payload.wrapId =
-          toTrimmedText(updates.wrapId) || `pending:${makeLocalId()}`;
-        hasChanges = true;
+        const nextWrapId = toTrimmedText(updates.wrapId);
+        if (nextWrapId) {
+          const prevWrapId = readShadowText(
+            "wrapId",
+            toOptionalText(current?.wrapId),
+          );
+          if (nextWrapId !== (prevWrapId ?? "")) {
+            payload.wrapId = nextWrapId;
+            hasChanges = true;
+            shadow.wrapId = nextWrapId;
+          }
+        }
       }
       if (updates.clientId !== undefined) {
-        payload.clientId = toOptionalText(updates.clientId);
-        hasChanges = true;
+        const nextClientId = toOptionalText(updates.clientId);
+        if (
+          nextClientId &&
+          nextClientId !==
+            readShadowText("clientId", toOptionalText(current?.clientId))
+        ) {
+          payload.clientId = nextClientId;
+          hasChanges = true;
+          shadow.clientId = nextClientId;
+        }
       }
       if (updates.status !== undefined) {
-        payload.status = toReactionStatus(updates.status);
-        hasChanges = true;
+        const nextStatus = toReactionStatus(updates.status);
+        if (nextStatus !== currentStatus) {
+          payload.status = nextStatus;
+          hasChanges = true;
+          shadow.status = nextStatus;
+        }
       }
 
       if (!hasChanges) return;
 
-      if (appOwnerId) {
-        update("nostrReaction", payload, { ownerId: appOwnerId });
+      nostrReactionUpdateShadowRef.current.set(normalizedId, shadow);
+
+      if (messagesOwnerId) {
+        update("nostrReaction", payload, { ownerId: messagesOwnerId });
       } else {
         update("nostrReaction", payload);
       }
     },
-    [appOwnerId, update],
+    [messagesOwnerId, update],
   );
 
   const softDeleteLocalNostrReaction = React.useCallback(
     (id: string) => {
       const normalizedId = toTrimmedText(id);
       if (!normalizedId) return;
-      if (appOwnerId) {
+      if (messagesOwnerId) {
         update(
           "nostrReaction",
           { id: normalizedId, isDeleted: Evolu.sqliteTrue },
-          { ownerId: appOwnerId },
+          { ownerId: messagesOwnerId },
         );
       } else {
         update("nostrReaction", {
@@ -714,7 +1080,7 @@ export const useMessagesDomain = ({
         });
       }
     },
-    [appOwnerId, update],
+    [messagesOwnerId, update],
   );
 
   const softDeleteLocalNostrReactionsByWrapIds = React.useCallback(
@@ -730,11 +1096,11 @@ export const useMessagesDomain = ({
 
       for (const reaction of nostrReactionsLatestRef.current) {
         if (!targetWrapIds.has(toTrimmedText(reaction.wrapId))) continue;
-        if (appOwnerId) {
+        if (messagesOwnerId) {
           update(
             "nostrReaction",
             { id: reaction.id, isDeleted: Evolu.sqliteTrue },
-            { ownerId: appOwnerId },
+            { ownerId: messagesOwnerId },
           );
         } else {
           update("nostrReaction", {
@@ -744,7 +1110,7 @@ export const useMessagesDomain = ({
         }
       }
     },
-    [appOwnerId, update],
+    [messagesOwnerId, update],
   );
 
   const refreshLocalNostrMessages = React.useCallback(() => {
@@ -793,11 +1159,11 @@ export const useMessagesDomain = ({
       for (const message of nostrMessagesLocal) {
         const messageId = toTrimmedText(message.id);
         if (!messageId || keepIds.has(messageId)) continue;
-        if (appOwnerId) {
+        if (messagesOwnerId) {
           update(
             "nostrMessage",
             { id: messageId, isDeleted: Evolu.sqliteTrue },
-            { ownerId: appOwnerId },
+            { ownerId: messagesOwnerId },
           );
         } else {
           update("nostrMessage", {
@@ -830,11 +1196,11 @@ export const useMessagesDomain = ({
       for (const reaction of nostrReactionsLocal) {
         const reactionId = toTrimmedText(reaction.id);
         if (!reactionId || keepReactionIds.has(reactionId)) continue;
-        if (appOwnerId) {
+        if (messagesOwnerId) {
           update(
             "nostrReaction",
             { id: reactionId, isDeleted: Evolu.sqliteTrue },
-            { ownerId: appOwnerId },
+            { ownerId: messagesOwnerId },
           );
         } else {
           update("nostrReaction", {
@@ -846,7 +1212,11 @@ export const useMessagesDomain = ({
     } finally {
       retentionPruneInFlightRef.current = false;
     }
-  }, [appOwnerId, nostrMessagesLocal, nostrReactionsLocal, update]);
+  }, [messagesOwnerId, nostrMessagesLocal, nostrReactionsLocal, update]);
+
+  React.useEffect(() => {
+    messagesOwnerIdRef.current = messagesOwnerId;
+  }, [messagesOwnerId, messagesOwnerIdRef]);
 
   React.useEffect(() => {
     const messageCountsByContact = new Map<string, number>();

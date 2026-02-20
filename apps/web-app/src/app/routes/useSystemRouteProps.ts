@@ -1,8 +1,8 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
 import { loadEvoluCurrentData, loadEvoluHistoryData } from "../../evolu";
-import type { SystemRoutesProps } from "./AppRouteContent";
 import type { Route } from "../../types/route";
+import type { SystemRoutesProps } from "./AppRouteContent";
 
 type SystemRouteProps = SystemRoutesProps;
 
@@ -14,8 +14,11 @@ interface UseSystemRoutePropsParams {
   cashuIsBusy: SystemRoutesProps["advancedProps"]["cashuIsBusy"];
   allowPromisesEnabled: SystemRoutesProps["advancedProps"]["allowPromisesEnabled"];
   connectedRelayCount: SystemRoutesProps["advancedProps"]["connectedRelayCount"];
+  copyCashuSeed: SystemRoutesProps["advancedProps"]["copyCashuSeed"];
   copyNostrKeys: SystemRoutesProps["advancedProps"]["copyNostrKeys"];
+  hasCustomNsecOverride: SystemRoutesProps["advancedProps"]["hasCustomNsecOverride"];
   copySeed: SystemRoutesProps["advancedProps"]["copySeed"];
+  cashuSeedMnemonic: SystemRoutesProps["advancedProps"]["cashuSeedMnemonic"];
   currentNpub: SystemRoutesProps["advancedProps"]["currentNpub"];
   currentNsec: SystemRoutesProps["advancedProps"]["currentNsec"];
   dedupeContacts: SystemRoutesProps["advancedProps"]["dedupeContacts"];
@@ -32,6 +35,22 @@ interface UseSystemRoutePropsParams {
   evoluServerUrls: SystemRoutesProps["advancedProps"]["evoluServerUrls"];
   evoluServersReloadRequired: SystemRoutesProps["evoluServerProps"]["evoluServersReloadRequired"];
   evoluTableCounts: SystemRoutesProps["evoluDataDetailProps"]["evoluTableCounts"];
+  evoluContactsOwnerEditCount: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerEditCount"];
+  evoluCashuOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluCashuOwnerId"];
+  evoluContactsOwnerId: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerId"];
+  evoluContactsOwnerIndex: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerIndex"];
+  evoluContactsOwnerNewContactsCount: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerNewContactsCount"];
+  evoluContactsOwnerPointer: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerPointer"];
+  evoluContactsOwnerEditsUntilRotation: SystemRoutesProps["evoluHistoryDataProps"]["evoluContactsOwnerEditsUntilRotation"];
+  evoluCashuOwnerEditsUntilRotation: SystemRoutesProps["evoluHistoryDataProps"]["evoluCashuOwnerEditsUntilRotation"];
+  evoluHistoryAllowedOwnerIds: SystemRoutesProps["evoluHistoryDataProps"]["evoluHistoryAllowedOwnerIds"];
+  evoluMessagesBackupOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluMessagesBackupOwnerId"];
+  evoluMessagesOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluMessagesOwnerId"];
+  evoluMessagesOwnerEditsUntilRotation: SystemRoutesProps["evoluHistoryDataProps"]["evoluMessagesOwnerEditsUntilRotation"];
+  requestManualRotateContactsOwner: SystemRoutesProps["evoluCurrentDataProps"]["requestManualRotateContactsOwner"];
+  requestManualRotateMessagesOwner: SystemRoutesProps["evoluCurrentDataProps"]["requestManualRotateMessagesOwner"];
+  rotateContactsOwnerIsBusy: SystemRoutesProps["evoluCurrentDataProps"]["rotateContactsOwnerIsBusy"];
+  rotateMessagesOwnerIsBusy: SystemRoutesProps["evoluCurrentDataProps"]["rotateMessagesOwnerIsBusy"];
   evoluWipeStorageIsBusy: SystemRoutesProps["evoluDataDetailProps"]["pendingClearDatabase"];
   exportAppData: SystemRoutesProps["advancedProps"]["exportAppData"];
   extractPpk: SystemRoutesProps["mintDetailProps"]["extractPpk"];
@@ -39,6 +58,7 @@ interface UseSystemRoutePropsParams {
   getMintRuntime: SystemRoutesProps["mintDetailProps"]["getMintRuntime"];
   handleImportAppDataFilePicked: SystemRoutesProps["advancedProps"]["handleImportAppDataFilePicked"];
   importDataFileInputRef: SystemRoutesProps["advancedProps"]["importDataFileInputRef"];
+  isSeedLogin: SystemRoutesProps["advancedProps"]["isSeedLogin"];
   isEvoluServerOffline: SystemRoutesProps["evoluServerProps"]["isEvoluServerOffline"];
   lang: SystemRoutesProps["mintDetailProps"]["lang"];
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX: SystemRoutesProps["mintDetailProps"]["LOCAL_MINT_INFO_STORAGE_KEY_PREFIX"];
@@ -60,7 +80,9 @@ interface UseSystemRoutePropsParams {
   relayStatusByUrl: SystemRoutesProps["nostrRelaysProps"]["relayStatusByUrl"];
   relayUrls: SystemRoutesProps["advancedProps"]["relayUrls"];
   requestDeleteSelectedRelay: SystemRoutesProps["nostrRelayProps"]["requestDeleteSelectedRelay"];
+  requestDeriveNostrKeys: SystemRoutesProps["advancedProps"]["requestDeriveNostrKeys"];
   requestImportAppData: SystemRoutesProps["advancedProps"]["requestImportAppData"];
+  requestPasteNostrKeys: SystemRoutesProps["advancedProps"]["requestPasteNostrKeys"];
   requestLogout: SystemRoutesProps["advancedProps"]["requestLogout"];
   restoreMissingTokens: SystemRoutesProps["advancedProps"]["restoreMissingTokens"];
   route: Route;
@@ -93,8 +115,11 @@ export const useSystemRouteProps = ({
   canSaveNewRelay,
   cashuIsBusy,
   connectedRelayCount,
+  copyCashuSeed,
   copyNostrKeys,
+  hasCustomNsecOverride,
   copySeed,
+  cashuSeedMnemonic,
   currentNpub,
   currentNsec,
   dedupeContacts,
@@ -111,6 +136,22 @@ export const useSystemRouteProps = ({
   evoluServerUrls,
   evoluServersReloadRequired,
   evoluTableCounts,
+  evoluContactsOwnerEditCount,
+  evoluCashuOwnerId,
+  evoluContactsOwnerId,
+  evoluContactsOwnerIndex,
+  evoluContactsOwnerNewContactsCount,
+  evoluContactsOwnerPointer,
+  evoluContactsOwnerEditsUntilRotation,
+  evoluCashuOwnerEditsUntilRotation,
+  evoluHistoryAllowedOwnerIds,
+  evoluMessagesBackupOwnerId,
+  evoluMessagesOwnerId,
+  evoluMessagesOwnerEditsUntilRotation,
+  requestManualRotateContactsOwner,
+  requestManualRotateMessagesOwner,
+  rotateContactsOwnerIsBusy,
+  rotateMessagesOwnerIsBusy,
   evoluWipeStorageIsBusy,
   exportAppData,
   extractPpk,
@@ -118,6 +159,7 @@ export const useSystemRouteProps = ({
   getMintRuntime,
   handleImportAppDataFilePicked,
   importDataFileInputRef,
+  isSeedLogin,
   isEvoluServerOffline,
   lang,
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
@@ -140,7 +182,9 @@ export const useSystemRouteProps = ({
   relayStatusByUrl,
   relayUrls,
   requestDeleteSelectedRelay,
+  requestDeriveNostrKeys,
   requestImportAppData,
+  requestPasteNostrKeys,
   requestLogout,
   restoreMissingTokens,
   route,
@@ -175,10 +219,12 @@ export const useSystemRouteProps = ({
     advancedProps: {
       currentNpub,
       currentNsec,
+      cashuSeedMnemonic,
       seedMnemonic,
       tokensRestoreIsBusy,
       cashuIsBusy,
       payWithCashuEnabled,
+      pushToast,
       allowPromisesEnabled,
       relayUrls,
       connectedRelayCount,
@@ -190,13 +236,18 @@ export const useSystemRouteProps = ({
       dedupeContactsIsBusy,
       logoutArmed,
       importDataFileInputRef,
+      isSeedLogin,
+      copyCashuSeed,
       copyNostrKeys,
+      hasCustomNsecOverride,
       copySeed,
       restoreMissingTokens,
       setPayWithCashuEnabled,
       setAllowPromisesEnabled,
       exportAppData,
       requestImportAppData,
+      requestDeriveNostrKeys,
+      requestPasteNostrKeys,
       dedupeContacts,
       handleImportAppDataFilePicked,
       requestLogout,
@@ -204,6 +255,14 @@ export const useSystemRouteProps = ({
       __APP_VERSION__: appVersion,
     },
     evoluCurrentDataProps: {
+      evoluCashuOwnerId,
+      evoluContactsOwnerId,
+      evoluMessagesBackupOwnerId,
+      evoluMessagesOwnerId,
+      requestManualRotateContactsOwner,
+      requestManualRotateMessagesOwner,
+      rotateContactsOwnerIsBusy,
+      rotateMessagesOwnerIsBusy,
       loadCurrentData: loadEvoluCurrentData,
       t,
     },
@@ -211,6 +270,11 @@ export const useSystemRouteProps = ({
       evoluDatabaseBytes,
       evoluTableCounts,
       evoluHistoryCount,
+      evoluContactsOwnerEditCount,
+      evoluContactsOwnerId,
+      evoluContactsOwnerIndex,
+      evoluContactsOwnerNewContactsCount,
+      evoluContactsOwnerPointer,
       pendingClearDatabase: evoluWipeStorageIsBusy,
       requestClearDatabase,
       loadHistoryData: loadEvoluHistoryData,
@@ -218,6 +282,10 @@ export const useSystemRouteProps = ({
       t,
     },
     evoluHistoryDataProps: {
+      evoluContactsOwnerEditsUntilRotation,
+      evoluCashuOwnerEditsUntilRotation,
+      evoluHistoryAllowedOwnerIds,
+      evoluMessagesOwnerEditsUntilRotation,
       loadHistoryData: loadEvoluHistoryData,
       t,
     },

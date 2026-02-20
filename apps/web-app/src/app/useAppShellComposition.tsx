@@ -26,12 +26,12 @@ import {
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
   FEEDBACK_CONTACT_NPUB,
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
+  MAX_CONTACTS_PER_OWNER,
   NO_GROUP_FILTER,
   PROMISE_TOTAL_CAP_SAT,
 } from "../utils/constants";
 import { getCredoRemainingAmount } from "../utils/credo";
 import { formatInteger } from "../utils/formatting";
-import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
   extractPpk,
@@ -39,6 +39,7 @@ import {
   normalizeMintUrl,
   PRESET_MINTS,
 } from "../utils/mint";
+import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
   getInitialAllowPromisesEnabled,
   getInitialNostrNsec,
@@ -48,79 +49,80 @@ import {
   safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "../utils/storage";
-import { useCashuDomain } from "./hooks/useCashuDomain";
+import { useCashuTokenChecks } from "./hooks/cashu/useCashuTokenChecks";
+import { useNpubCashClaim } from "./hooks/cashu/useNpubCashClaim";
+import { useRestoreMissingTokens } from "./hooks/cashu/useRestoreMissingTokens";
+import { useSaveCashuFromText } from "./hooks/cashu/useSaveCashuFromText";
+import { usePaymentMoneyComposition } from "./hooks/composition/usePaymentMoneyComposition";
+import { useProfileAuthComposition } from "./hooks/composition/useProfileAuthComposition";
+import { useProfilePeopleComposition } from "./hooks/composition/useProfilePeopleComposition";
+import { useRoutingViewComposition } from "./hooks/composition/useRoutingViewComposition";
+import { useSystemSettingsComposition } from "./hooks/composition/useSystemSettingsComposition";
+import { useContactEditor } from "./hooks/contacts/useContactEditor";
+import { useVisibleContacts } from "./hooks/contacts/useVisibleContacts";
+import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardingProgress";
+import { useMainMenuState } from "./hooks/layout/useMainMenuState";
+import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
+import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
+import { useChatNostrSyncEffect } from "./hooks/messages/useChatNostrSyncEffect";
+import {
+  useEditChatMessage,
+  type EditChatContext,
+} from "./hooks/messages/useEditChatMessage";
+import { useInboxNotificationsSync } from "./hooks/messages/useInboxNotificationsSync";
+import { useNostrPendingFlush } from "./hooks/messages/useNostrPendingFlush";
+import {
+  useSendChatMessage,
+  type ReplyContext,
+} from "./hooks/messages/useSendChatMessage";
+import { useSendReaction } from "./hooks/messages/useSendReaction";
+import { useNpubCashMintSelection } from "./hooks/mint/useNpubCashMintSelection";
+import { useContactPayMethod } from "./hooks/payments/useContactPayMethod";
+import { usePayContactWithCashuMessage } from "./hooks/payments/usePayContactWithCashuMessage";
+import { useRouteAmountResetEffects } from "./hooks/payments/useRouteAmountResetEffects";
+import { useProfileEditor } from "./hooks/profile/useProfileEditor";
+import { useProfileMetadataSyncEffect } from "./hooks/profile/useProfileMetadataSyncEffect";
+import { useTopupInvoiceQuoteEffects } from "./hooks/topup/useTopupInvoiceQuoteEffects";
 import { useAppDataTransfer } from "./hooks/useAppDataTransfer";
 import { useAppPreferences } from "./hooks/useAppPreferences";
 import { useArmedDeleteTimeouts } from "./hooks/useArmedDeleteTimeouts";
+import { useCashuDomain } from "./hooks/useCashuDomain";
 import { useContactsDomain } from "./hooks/useContactsDomain";
 import { useContactsNostrPrefetchEffects } from "./hooks/useContactsNostrPrefetchEffects";
-import { useGuideScannerDomain } from "./hooks/useGuideScannerDomain";
+import { useEvoluContactsOwnerRotation } from "./hooks/useEvoluContactsOwnerRotation";
 import { useFeedbackContact } from "./hooks/useFeedbackContact";
+import { useGuideScannerDomain } from "./hooks/useGuideScannerDomain";
 import { useLightningPaymentsDomain } from "./hooks/useLightningPaymentsDomain";
 import { useMainSwipePageEffects } from "./hooks/useMainSwipePageEffects";
 import { useMessagesDomain } from "./hooks/useMessagesDomain";
 import { useMintDomain } from "./hooks/useMintDomain";
+import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
+import { usePaidOverlayState } from "./hooks/usePaidOverlayState";
 import { usePaymentsDomain } from "./hooks/usePaymentsDomain";
-import { useNpubCashMintSelection } from "./hooks/mint/useNpubCashMintSelection";
-import { useProfileEditor } from "./hooks/profile/useProfileEditor";
-import { useProfileMetadataSyncEffect } from "./hooks/profile/useProfileMetadataSyncEffect";
-import { useTopupInvoiceQuoteEffects } from "./hooks/topup/useTopupInvoiceQuoteEffects";
 import { useProfileNpubCashEffects } from "./hooks/useProfileNpubCashEffects";
 import { useRelayDomain } from "./hooks/useRelayDomain";
 import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
-import { useCashuTokenChecks } from "./hooks/cashu/useCashuTokenChecks";
-import { useNpubCashClaim } from "./hooks/cashu/useNpubCashClaim";
-import { useRestoreMissingTokens } from "./hooks/cashu/useRestoreMissingTokens";
-import { useSaveCashuFromText } from "./hooks/cashu/useSaveCashuFromText";
-import { useContactEditor } from "./hooks/contacts/useContactEditor";
-import { useVisibleContacts } from "./hooks/contacts/useVisibleContacts";
-import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardingProgress";
-import { useMainMenuState } from "./hooks/layout/useMainMenuState";
-import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
-import { useNostrPendingFlush } from "./hooks/messages/useNostrPendingFlush";
-import {
-  useSendChatMessage,
-  type ReplyContext,
-} from "./hooks/messages/useSendChatMessage";
-import {
-  useEditChatMessage,
-  type EditChatContext,
-} from "./hooks/messages/useEditChatMessage";
-import { useSendReaction } from "./hooks/messages/useSendReaction";
-import { useChatNostrSyncEffect } from "./hooks/messages/useChatNostrSyncEffect";
-import { useInboxNotificationsSync } from "./hooks/messages/useInboxNotificationsSync";
-import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
-import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
-import { usePaidOverlayState } from "./hooks/usePaidOverlayState";
-import { useContactPayMethod } from "./hooks/payments/useContactPayMethod";
-import { usePayContactWithCashuMessage } from "./hooks/payments/usePayContactWithCashuMessage";
-import { useRouteAmountResetEffects } from "./hooks/payments/useRouteAmountResetEffects";
-import { usePaymentMoneyComposition } from "./hooks/composition/usePaymentMoneyComposition";
-import { useProfileAuthComposition } from "./hooks/composition/useProfileAuthComposition";
-import { useProfilePeopleComposition } from "./hooks/composition/useProfilePeopleComposition";
-import { useRoutingViewComposition } from "./hooks/composition/useRoutingViewComposition";
-import { useSystemSettingsComposition } from "./hooks/composition/useSystemSettingsComposition";
-import {
-  buildTopbar,
-  buildTopbarRight,
-  buildTopbarTitle,
-} from "./lib/topbarConfig";
 import { createPaySelectedContact } from "./lib/createPaySelectedContact";
 import type { AppNostrPool } from "./lib/nostrPool";
+import { publishWrappedWithRetry as publishWrappedWithRetryBase } from "./lib/nostrPublishRetry";
 import { buildCashuMintCandidates as buildCashuMintCandidatesBase } from "./lib/paymentMintSelection";
-import {
-  extractCashuTokenFromText,
-  extractCashuTokenMeta,
-} from "./lib/tokenText";
 import { showPwaNotification } from "./lib/pwaNotifications";
 import {
   getCashuTokenMessageInfo as getCashuTokenMessageInfoBase,
   getCredoTokenMessageInfo as getCredoTokenMessageInfoBase,
 } from "./lib/tokenMessageInfo";
-import { publishWrappedWithRetry as publishWrappedWithRetryBase } from "./lib/nostrPublishRetry";
+import {
+  extractCashuTokenFromText,
+  extractCashuTokenMeta,
+} from "./lib/tokenText";
+import {
+  buildTopbar,
+  buildTopbarRight,
+  buildTopbarTitle,
+} from "./lib/topbarConfig";
 import type {
   ContactRowLike,
   CredoTokenRow,
@@ -169,6 +171,8 @@ export const useAppShellComposition = () => {
   const hasMintOverrideRef = React.useRef(false);
 
   const appOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const cashuOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const messagesOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const {
     logPaymentEvent,
     makeLocalStorageKey,
@@ -356,7 +360,7 @@ export const useAppShellComposition = () => {
   }, [appOwnerId, makeLocalStorageKey]);
 
   const resolveOwnerIdForWrite = React.useCallback(async () => {
-    if (appOwnerIdRef.current) return appOwnerIdRef.current;
+    if (cashuOwnerIdRef.current) return cashuOwnerIdRef.current;
     try {
       const owner = await evolu.appOwner;
       return owner?.id ?? null;
@@ -561,19 +565,102 @@ export const useAppShellComposition = () => {
 
   const {
     createNewAccount,
+    cashuSeedMnemonic,
     currentNpub,
+    hasCustomNsecOverride,
+    isSeedLogin,
     logoutArmed,
     onboardingIsBusy,
     onboardingStep,
     pasteExistingNsec,
+    requestDeriveNostrKeys,
+    requestPasteNostrKeys,
     requestLogout,
     seedMnemonic,
+    slip39Seed,
     setOnboardingStep,
   } = useProfileAuthComposition({
     currentNsec,
     pushToast,
     t,
+    update,
+    upsert,
   });
+
+  const contactsForRotationRef = React.useRef<readonly ContactRowLike[]>([]);
+
+  const {
+    cashuOwnerId,
+    cashuOwnerEditsUntilRotation,
+    cashuSyncOwner,
+    contactsBackupOwnerId,
+    contactsSyncOwner,
+    contactsOwnerEditCount,
+    contactsOwnerEditsUntilRotation,
+    contactsOwnerId,
+    contactsOwnerIndex,
+    contactsOwnerNewContactsCount,
+    contactsOwnerPointer,
+    metaOwnerId,
+    metaSyncOwner,
+    messagesBackupOwnerId,
+    messagesOwnerId,
+    messagesOwnerEditsUntilRotation,
+    messagesSyncOwner,
+    recordContactsOwnerWrite,
+    requestManualRotateContactsOwner,
+    requestManualRotateMessagesOwner,
+    rotateContactsOwnerIsBusy,
+    rotateMessagesOwnerIsBusy,
+  } = useEvoluContactsOwnerRotation({
+    appOwnerId,
+    getContactsForRotation: () => contactsForRotationRef.current,
+    isSeedLogin,
+    pushToast,
+    slip39Seed,
+    t,
+    update,
+    upsert,
+  });
+
+  useOwner(contactsSyncOwner);
+  useOwner(cashuSyncOwner);
+  useOwner(messagesSyncOwner);
+  useOwner(metaSyncOwner);
+
+  React.useEffect(() => {
+    cashuOwnerIdRef.current = cashuOwnerId;
+  }, [cashuOwnerId]);
+
+  const evoluHistoryAllowedOwnerIds = React.useMemo(() => {
+    const ids = [
+      String(appOwnerId ?? "").trim(),
+      String(contactsOwnerId ?? "").trim(),
+      String(cashuOwnerId ?? "").trim(),
+      String(contactsBackupOwnerId ?? "").trim(),
+      String(messagesOwnerId ?? "").trim(),
+      String(messagesBackupOwnerId ?? "").trim(),
+      String(metaOwnerId ?? "").trim(),
+    ].filter(Boolean);
+    return Array.from(new Set(ids));
+  }, [
+    appOwnerId,
+    cashuOwnerId,
+    contactsBackupOwnerId,
+    contactsOwnerId,
+    messagesBackupOwnerId,
+    messagesOwnerId,
+    metaOwnerId,
+  ]);
+
+  const visibleMessageOwnerIds = React.useMemo(() => {
+    const ids = [
+      String(messagesOwnerId ?? "").trim(),
+      String(messagesBackupOwnerId ?? "").trim(),
+      String(appOwnerId ?? "").trim(),
+    ].filter(Boolean);
+    return Array.from(new Set(ids));
+  }, [appOwnerId, messagesBackupOwnerId, messagesOwnerId]);
 
   const {
     canSaveNewRelay,
@@ -715,8 +802,9 @@ export const useAppShellComposition = () => {
     setContactsSearch,
     ungroupedCount,
   } = useContactsDomain({
-    appOwnerId,
+    appOwnerId: contactsOwnerId,
     currentNsec,
+    isSeedLogin,
     noGroupFilterValue: NO_GROUP_FILTER,
     pushToast,
     route,
@@ -724,6 +812,10 @@ export const useAppShellComposition = () => {
     update,
     upsert,
   });
+
+  React.useEffect(() => {
+    contactsForRotationRef.current = contacts;
+  }, [contacts]);
 
   const cashuTokensQuery = useMemo(
     () =>
@@ -748,9 +840,32 @@ export const useAppShellComposition = () => {
   );
   const cashuTokensAll = useQuery(cashuTokensAllQuery);
 
+  const activeCashuOwnerId = String(cashuOwnerId ?? "").trim();
+  const readCashuRowOwnerId = React.useCallback((row: unknown): string => {
+    if (typeof row !== "object" || row === null) return "";
+    if (!("ownerId" in row)) return "";
+    const ownerId = row.ownerId;
+    if (typeof ownerId !== "string") return "";
+    return ownerId.trim();
+  }, []);
+
+  const cashuTokensFiltered = React.useMemo(() => {
+    if (!activeCashuOwnerId) return [] as typeof cashuTokens;
+    return cashuTokens.filter(
+      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
+    );
+  }, [activeCashuOwnerId, cashuTokens, readCashuRowOwnerId]);
+
+  const cashuTokensAllFiltered = React.useMemo(() => {
+    if (!activeCashuOwnerId) return [] as typeof cashuTokensAll;
+    return cashuTokensAll.filter(
+      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
+    );
+  }, [activeCashuOwnerId, cashuTokensAll, readCashuRowOwnerId]);
+
   const cashuTokensWithMeta = useMemo(
     () =>
-      cashuTokens.map((row) => {
+      cashuTokensFiltered.map((row) => {
         const meta = extractCashuTokenMeta({
           amount: row.amount,
           mint: row.mint,
@@ -766,7 +881,7 @@ export const useAppShellComposition = () => {
           tokenText: meta.tokenText,
         };
       }),
-    [cashuTokens],
+    [cashuTokensFiltered],
   );
 
   const credoTokensQuery = useMemo(
@@ -792,6 +907,20 @@ export const useAppShellComposition = () => {
   );
   const credoTokensAll = useQuery(credoTokensAllQuery);
 
+  const credoTokensFiltered = React.useMemo(() => {
+    if (!activeCashuOwnerId) return [] as typeof credoTokens;
+    return credoTokens.filter(
+      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
+    );
+  }, [activeCashuOwnerId, credoTokens, readCashuRowOwnerId]);
+
+  const credoTokensAllFiltered = React.useMemo(() => {
+    if (!activeCashuOwnerId) return [] as typeof credoTokensAll;
+    return credoTokensAll.filter(
+      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
+    );
+  }, [activeCashuOwnerId, credoTokensAll, readCashuRowOwnerId]);
+
   const {
     applyCredoSettlement,
     cashuTokensHydratedRef,
@@ -801,11 +930,11 @@ export const useAppShellComposition = () => {
     isCashuTokenStored,
     isCredoPromiseKnown,
   } = useCashuDomain({
-    appOwnerId,
-    appOwnerIdRef,
-    cashuTokensAll,
+    appOwnerId: cashuOwnerId,
+    appOwnerIdRef: cashuOwnerIdRef,
+    cashuTokensAll: cashuTokensAllFiltered,
     contacts,
-    credoTokensAll,
+    credoTokensAll: credoTokensAllFiltered,
     insert,
     logPaymentEvent,
     update,
@@ -849,7 +978,6 @@ export const useAppShellComposition = () => {
         const payload = {
           token: token as typeof Evolu.NonEmptyString.Type,
           state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-          error: null,
         };
 
         const result = ownerId
@@ -899,7 +1027,7 @@ export const useAppShellComposition = () => {
   } = useMintDomain({
     appOwnerId,
     appOwnerIdRef,
-    cashuTokensAll,
+    cashuTokensAll: cashuTokensAllFiltered,
     defaultMintUrl,
     rememberSeenMint,
   });
@@ -928,15 +1056,15 @@ export const useAppShellComposition = () => {
         hasNsec: Boolean(currentNsec),
         hasNpub: Boolean(currentNpub),
       },
-      cashuTokens: cashuTokens.map((t) => ({
+      cashuTokens: cashuTokensFiltered.map((t) => ({
         id: String(t.id ?? ""),
         mint: String(t.mint ?? ""),
         amount: Number(t.amount ?? 0) || 0,
         state: String(t.state ?? ""),
       })),
       cashuTokensAll: {
-        count: cashuTokensAll.length,
-        newest10: cashuTokensAll.slice(0, 10).map((t) => ({
+        count: cashuTokensAllFiltered.length,
+        newest10: cashuTokensAllFiltered.slice(0, 10).map((t) => ({
           id: String(t.id ?? ""),
           mint: String(t.mint ?? ""),
           amount: Number(t.amount ?? 0) || 0,
@@ -945,7 +1073,7 @@ export const useAppShellComposition = () => {
         })),
       },
     });
-  }, [cashuTokens, cashuTokensAll, currentNpub, currentNsec]);
+  }, [cashuTokensAllFiltered, cashuTokensFiltered, currentNpub, currentNsec]);
 
   const {
     appendLocalNostrMessage,
@@ -974,11 +1102,14 @@ export const useAppShellComposition = () => {
     appOwnerIdRef,
     chatForceScrollToBottomRef,
     chatMessagesRef,
+    messagesOwnerId,
+    messagesOwnerIdRef,
     route,
+    visibleMessageOwnerIds,
   });
 
   React.useEffect(() => {
-    const pendingTokens = cashuTokensAll.filter((row) => {
+    const pendingTokens = cashuTokensAllFiltered.filter((row) => {
       const state = String(row.state ?? "");
       if (state !== "pending") return false;
       const isDeleted = Boolean(row.isDeleted);
@@ -996,12 +1127,17 @@ export const useAppShellComposition = () => {
         return isOut && matches && status !== "pending";
       });
       if (!hasMessage) continue;
-      update("cashuToken", {
+      const payload = {
         id: row.id as CashuTokenId,
         isDeleted: Evolu.sqliteTrue,
-      });
+      };
+      if (cashuOwnerId) {
+        update("cashuToken", payload, { ownerId: cashuOwnerId });
+      } else {
+        update("cashuToken", payload);
+      }
     }
-  }, [cashuTokensAll, nostrMessagesLocal, update]);
+  }, [cashuOwnerId, cashuTokensAllFiltered, nostrMessagesLocal, update]);
 
   // lastMessageByContactId provided by the derived Nostr index above.
 
@@ -1016,13 +1152,13 @@ export const useAppShellComposition = () => {
 
   const credoTokensActive = useMemo(() => {
     const nowSec = Math.floor(Date.now() / 1000);
-    return credoTokens.filter((row) => {
+    return credoTokensFiltered.filter((row) => {
       const r = row as CredoTokenRow;
       const expiresAt = Number(r.expiresAtSec ?? 0) || 0;
       if (expiresAt && nowSec >= expiresAt) return false;
       return getCredoRemainingAmount(row) > 0;
     });
-  }, [credoTokens]);
+  }, [credoTokensFiltered]);
 
   const totalCredoOutstandingOut = useMemo(() => {
     return credoTokensActive.reduce((sum, row) => {
@@ -1239,7 +1375,7 @@ export const useAppShellComposition = () => {
 
   const { claimNpubCashOnce, claimNpubCashOnceLatestRef } = useNpubCashClaim({
     cashuIsBusy,
-    cashuTokensAll,
+    cashuTokensAll: cashuTokensAllFiltered,
     currentNpub,
     currentNsec,
     displayUnit,
@@ -1297,7 +1433,7 @@ export const useAppShellComposition = () => {
   // We only publish profile changes when the user does so explicitly.
 
   useContactsNostrPrefetchEffects({
-    appOwnerId,
+    appOwnerId: contactsOwnerId,
     contacts,
     nostrFetchRelays,
     nostrInFlight,
@@ -1350,7 +1486,7 @@ export const useAppShellComposition = () => {
     resetEditedContactFieldFromNostr,
     setForm,
   } = useContactEditor({
-    appOwnerId,
+    appOwnerId: contactsOwnerId,
     contactNewPrefill,
     contacts,
     insert,
@@ -1359,6 +1495,7 @@ export const useAppShellComposition = () => {
     selectedContact,
     setContactNewPrefill,
     setPendingDeleteId,
+    recordContactsOwnerWrite,
     setStatus,
     t,
     update,
@@ -1371,6 +1508,15 @@ export const useAppShellComposition = () => {
   };
 
   const openNewContactPage = () => {
+    if (contacts.length >= MAX_CONTACTS_PER_OWNER) {
+      const message = t("contactsLimitReached").replace(
+        "{max}",
+        String(MAX_CONTACTS_PER_OWNER),
+      );
+      pushToast(message);
+      return;
+    }
+
     setPendingDeleteId(null);
     setPayAmount("");
     clearContactForm();
@@ -1386,6 +1532,8 @@ export const useAppShellComposition = () => {
     }
     navigateTo({ route: "contactNew" });
   };
+
+  const canAddContact = contacts.length < MAX_CONTACTS_PER_OWNER;
 
   const { closeMenu, menuIsOpen, navigateToMainReturn, openMenu, toggleMenu } =
     useMainMenuState({
@@ -1516,6 +1664,7 @@ export const useAppShellComposition = () => {
     credoTokensActive,
     currentNpub,
     currentNsec,
+    cashuOwnerId,
     defaultMintUrl,
     displayUnit,
     enqueuePendingPayment,
@@ -1552,6 +1701,7 @@ export const useAppShellComposition = () => {
       canPayWithCashu,
       cashuBalance,
       cashuIsBusy,
+      cashuOwnerId,
       cashuTokensWithMeta,
       contacts,
       defaultMintUrl,
@@ -1642,14 +1792,19 @@ export const useAppShellComposition = () => {
   });
 
   const handleDelete = (id: ContactId) => {
-    const result = appOwnerId
-      ? update(
-          "contact",
-          { id, isDeleted: Evolu.sqliteTrue },
-          { ownerId: appOwnerId },
-        )
+    const result = contactsOwnerId
+      ? (() => {
+          const scoped = update(
+            "contact",
+            { id, isDeleted: Evolu.sqliteTrue },
+            { ownerId: contactsOwnerId },
+          );
+          if (scoped.ok) return scoped;
+          return update("contact", { id, isDeleted: Evolu.sqliteTrue });
+        })()
       : update("contact", { id, isDeleted: Evolu.sqliteTrue });
     if (result.ok) {
+      recordContactsOwnerWrite();
       setStatus(t("contactDeleted"));
       closeContactDetail();
       return;
@@ -1662,10 +1817,10 @@ export const useAppShellComposition = () => {
     checkAndRefreshCashuToken,
     requestDeleteCashuToken,
   } = useCashuTokenChecks({
-    appOwnerId,
+    appOwnerId: cashuOwnerId,
     cashuBulkCheckIsBusy,
     cashuIsBusy,
-    cashuTokensAll,
+    cashuTokensAll: cashuTokensAllFiltered,
     pendingCashuDeleteId,
     pushToast,
     setCashuBulkCheckIsBusy,
@@ -1701,7 +1856,7 @@ export const useAppShellComposition = () => {
 
   const { openFeedbackContact } = useFeedbackContact<(typeof contacts)[number]>(
     {
-      appOwnerId,
+      appOwnerId: contactsOwnerId,
       contacts,
       insert,
       pushToast,
@@ -1797,9 +1952,10 @@ export const useAppShellComposition = () => {
   const { exportAppData, handleImportAppDataFilePicked, requestImportAppData } =
     useAppDataTransfer<(typeof contacts)[number], (typeof cashuTokens)[number]>(
       {
-        appOwnerId,
-        cashuTokens,
-        cashuTokensAll,
+        appOwnerId: contactsOwnerId,
+        cashuOwnerId,
+        cashuTokens: cashuTokensFiltered,
+        cashuTokensAll: cashuTokensAllFiltered,
         contacts,
         importDataFileInputRef,
         insert,
@@ -1810,23 +1966,31 @@ export const useAppShellComposition = () => {
     );
 
   const copyNostrKeys = async () => {
-    if (!currentNsec) return;
-    await navigator.clipboard?.writeText(currentNsec);
+    const nsec = String(currentNsec ?? "").trim();
+    if (!nsec) return;
+    await navigator.clipboard?.writeText(nsec);
     safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY, "1");
     setContactsOnboardingHasBackedUpKeys(true);
     pushToast(t("nostrKeysCopied"));
   };
 
   const copySeed = async () => {
-    const value = String(seedMnemonic ?? "").trim();
+    const value = String(slip39Seed ?? "").trim();
     if (!value) return;
     await navigator.clipboard?.writeText(value);
     pushToast(t("seedCopied"));
   };
 
+  const copyCashuSeed = async () => {
+    const value = String(cashuSeedMnemonic ?? "").trim();
+    if (!value) return;
+    await navigator.clipboard?.writeText(value);
+    pushToast(t("cashuSeedCopied"));
+  };
+
   const restoreMissingTokens = useRestoreMissingTokens({
     cashuIsBusy,
-    cashuTokensAll,
+    cashuTokensAll: cashuTokensAllFiltered,
     defaultMintUrl,
     enqueueCashuOp,
     insert,
@@ -1999,8 +2163,9 @@ export const useAppShellComposition = () => {
     route.kind === "chat" && selectedContact ? selectedContact : null;
 
   const getCashuTokenMessageInfo = React.useCallback(
-    (text: string) => getCashuTokenMessageInfoBase(text, cashuTokensAll),
-    [cashuTokensAll],
+    (text: string) =>
+      getCashuTokenMessageInfoBase(text, cashuTokensAllFiltered),
+    [cashuTokensAllFiltered],
   );
 
   const getCredoTokenMessageInfo = React.useCallback(
@@ -2039,7 +2204,7 @@ export const useAppShellComposition = () => {
   }, []);
 
   const handleScannedText = useScannedTextHandler<(typeof contacts)[number]>({
-    appOwnerId,
+    appOwnerId: contactsOwnerId,
     closeScan,
     contacts,
     extractCashuTokenFromText,
@@ -2088,7 +2253,7 @@ export const useAppShellComposition = () => {
       cashuDraft,
       cashuDraftRef,
       cashuIsBusy,
-      cashuTokensAll,
+      cashuTokensAll: cashuTokensAllFiltered,
       cashuTokensWithMeta,
       checkAllCashuTokensAndDeleteInvalid,
       checkAndRefreshCashuToken,
@@ -2096,7 +2261,7 @@ export const useAppShellComposition = () => {
       copyText,
       credoOweTokens,
       credoPromisedTokens,
-      credoTokensAll,
+      credoTokensAll: credoTokensAllFiltered,
       currentNpub,
       displayUnit,
       effectiveProfileName,
@@ -2229,6 +2394,7 @@ export const useAppShellComposition = () => {
       mainSwipeRef,
       mainSwipeScrollY,
       NO_GROUP_FILTER,
+      canAddContact,
       openNewContactPage,
       openScan,
       otherContactsLabel,
@@ -2255,7 +2421,9 @@ export const useAppShellComposition = () => {
       allowPromisesEnabled,
       connectedRelayCount,
       copyNostrKeys,
+      hasCustomNsecOverride,
       copySeed,
+      copyCashuSeed,
       currentNpub,
       currentNsec,
       dedupeContacts,
@@ -2273,12 +2441,29 @@ export const useAppShellComposition = () => {
       evoluServersReloadRequired,
       evoluTableCounts: evoluDbInfo.info.tableCounts,
       evoluWipeStorageIsBusy,
+      evoluContactsOwnerEditCount: contactsOwnerEditCount,
+      evoluCashuOwnerId: cashuOwnerId,
+      evoluContactsOwnerId: contactsOwnerId,
+      evoluContactsOwnerIndex: contactsOwnerIndex,
+      evoluContactsOwnerNewContactsCount: contactsOwnerNewContactsCount,
+      evoluContactsOwnerPointer: contactsOwnerPointer,
+      evoluContactsOwnerEditsUntilRotation: contactsOwnerEditsUntilRotation,
+      evoluCashuOwnerEditsUntilRotation: cashuOwnerEditsUntilRotation,
+      evoluHistoryAllowedOwnerIds,
+      evoluMessagesBackupOwnerId: messagesBackupOwnerId,
+      evoluMessagesOwnerId: messagesOwnerId,
+      evoluMessagesOwnerEditsUntilRotation: messagesOwnerEditsUntilRotation,
+      requestManualRotateContactsOwner,
+      requestManualRotateMessagesOwner,
+      rotateContactsOwnerIsBusy,
+      rotateMessagesOwnerIsBusy,
       exportAppData,
       extractPpk,
       getMintIconUrl,
       getMintRuntime,
       handleImportAppDataFilePicked,
       importDataFileInputRef,
+      isSeedLogin,
       isEvoluServerOffline,
       lang,
       LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
@@ -2301,8 +2486,11 @@ export const useAppShellComposition = () => {
       relayUrls,
       requestDeleteSelectedRelay,
       requestImportAppData,
+      requestDeriveNostrKeys,
+      requestPasteNostrKeys,
       requestLogout,
       restoreMissingTokens,
+      cashuSeedMnemonic,
       route,
       safeLocalStorageSetJson,
       saveEvoluServerUrls,

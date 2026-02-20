@@ -1,12 +1,12 @@
-import type { CashuTokenId, ContactId } from "../../../evolu";
 import * as Evolu from "@evolu/common";
-import React from "react";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import React from "react";
 import { createSendTokenWithTokensAtMint } from "../../../cashuSend";
 import {
   createCredoPromiseToken,
   createCredoSettlementToken,
 } from "../../../credo";
+import type { CashuTokenId, ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import {
@@ -136,6 +136,40 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   update,
   updateLocalNostrMessage,
 }: UsePayContactWithCashuMessageParams) => {
+  const buildCashuTokenPayload = React.useCallback(
+    (args: {
+      amount: number | null;
+      mint: string | null;
+      state: "accepted" | "pending";
+      token: string;
+      unit: string | null;
+    }) => {
+      const payload: {
+        token: typeof Evolu.NonEmptyString.Type;
+        state: typeof Evolu.NonEmptyString100.Type;
+        amount?: typeof Evolu.PositiveInt.Type;
+        mint?: typeof Evolu.NonEmptyString1000.Type;
+        unit?: typeof Evolu.NonEmptyString100.Type;
+      } = {
+        token: args.token as typeof Evolu.NonEmptyString.Type,
+        state: args.state as typeof Evolu.NonEmptyString100.Type,
+      };
+
+      const mint = String(args.mint ?? "").trim();
+      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
+
+      const unit = String(args.unit ?? "").trim();
+      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
+
+      if (typeof args.amount === "number" && args.amount > 0) {
+        payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
+      }
+
+      return payload;
+    },
+    [],
+  );
+
   return React.useCallback(
     async (args: {
       contact: TContact;
@@ -338,20 +372,16 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             const remainingAmount = split.remainingAmount;
 
             if (remainingToken && remainingAmount > 0) {
-              const inserted = insert("cashuToken", {
-                token: remainingToken as typeof Evolu.NonEmptyString.Type,
-                rawToken: null,
-                mint: split.mint as typeof Evolu.NonEmptyString1000.Type,
-                unit: split.unit
-                  ? (split.unit as typeof Evolu.NonEmptyString100.Type)
-                  : null,
-                amount:
-                  remainingAmount > 0
-                    ? (remainingAmount as typeof Evolu.PositiveInt.Type)
-                    : null,
-                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-                error: null,
-              });
+              const inserted = insert(
+                "cashuToken",
+                buildCashuTokenPayload({
+                  token: remainingToken,
+                  mint: split.mint,
+                  unit: split.unit ?? null,
+                  amount: remainingAmount,
+                  state: "accepted",
+                }),
+              );
               if (!inserted.ok) throw inserted.error;
             }
 
@@ -634,20 +664,16 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           for (const tokenText of unsentTokens) {
             const meta = sendTokenMetaByText.get(tokenText);
             if (!meta) continue;
-            insert("cashuToken", {
-              token: tokenText as typeof Evolu.NonEmptyString.Type,
-              rawToken: null,
-              mint: meta.mint as typeof Evolu.NonEmptyString1000.Type,
-              unit: meta.unit
-                ? (meta.unit as typeof Evolu.NonEmptyString100.Type)
-                : null,
-              amount:
-                meta.amount > 0
-                  ? (meta.amount as typeof Evolu.PositiveInt.Type)
-                  : null,
-              state: "pending" as typeof Evolu.NonEmptyString100.Type,
-              error: null,
-            });
+            insert(
+              "cashuToken",
+              buildCashuTokenPayload({
+                token: tokenText,
+                mint: meta.mint,
+                unit: meta.unit ?? null,
+                amount: meta.amount,
+                state: "pending",
+              }),
+            );
           }
 
           for (const ids of tokensToDeleteByMint.values()) {
@@ -744,6 +770,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       update,
       applyCredoSettlement,
       buildCashuMintCandidates,
+      buildCashuTokenPayload,
       updateLocalNostrMessage,
       appendLocalNostrMessage,
       publishWrappedWithRetry,

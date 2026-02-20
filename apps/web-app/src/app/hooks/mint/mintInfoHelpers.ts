@@ -1,4 +1,3 @@
-import type { MintId } from "../../../evolu";
 import * as Evolu from "@evolu/common";
 import {
   extractPpk,
@@ -181,7 +180,7 @@ export const parseMintInfoPayload = (
 };
 
 interface DuplicateRow extends MintInfoRowLike {
-  id: MintId;
+  id: string;
   url: string;
 }
 
@@ -251,7 +250,7 @@ export const dedupeMintInfoRows = (
   const next = [...mintInfoAll];
   let didChange = false;
 
-  const applyPatch = (patch: Partial<LocalMintInfoRow> & { id: MintId }) => {
+  const applyPatch = (patch: Partial<LocalMintInfoRow> & { id: string }) => {
     const id = String(patch.id ?? "");
     if (!id) return;
 

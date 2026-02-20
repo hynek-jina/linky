@@ -1,12 +1,28 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import type { loadEvoluCurrentData } from "../evolu";
 
 interface EvoluCurrentDataPageProps {
+  evoluCashuOwnerId: string | null;
+  evoluContactsOwnerId: string | null;
+  evoluMessagesBackupOwnerId: string | null;
+  evoluMessagesOwnerId: string | null;
+  requestManualRotateContactsOwner: () => Promise<void>;
+  requestManualRotateMessagesOwner: () => Promise<void>;
+  rotateContactsOwnerIsBusy: boolean;
+  rotateMessagesOwnerIsBusy: boolean;
   loadCurrentData: typeof loadEvoluCurrentData;
   t: (key: string) => string;
 }
 
 export function EvoluCurrentDataPage({
+  evoluCashuOwnerId,
+  evoluContactsOwnerId,
+  evoluMessagesBackupOwnerId,
+  evoluMessagesOwnerId,
+  requestManualRotateContactsOwner,
+  requestManualRotateMessagesOwner,
+  rotateContactsOwnerIsBusy,
+  rotateMessagesOwnerIsBusy,
   loadCurrentData,
   t,
 }: EvoluCurrentDataPageProps): React.ReactElement {
@@ -23,13 +39,72 @@ export function EvoluCurrentDataPage({
     });
   }, [loadCurrentData]);
 
-  const tableNames = Object.keys(currentData).filter(
-    (name) => currentData[name]?.length > 0,
+  const readRowOwnerId = (row: unknown): string => {
+    if (typeof row !== "object" || row === null) return "";
+    if (!("ownerId" in row)) return "";
+    const ownerId = row.ownerId;
+    if (typeof ownerId !== "string") return "";
+    return ownerId.trim();
+  };
+
+  const filteredCurrentData = React.useMemo(() => {
+    const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
+    const activeCashuOwnerId = String(evoluCashuOwnerId ?? "").trim();
+    const activeMessagesOwnerId = String(evoluMessagesOwnerId ?? "").trim();
+    const backupMessagesOwnerId = String(
+      evoluMessagesBackupOwnerId ?? "",
+    ).trim();
+    const visibleMessageOwnerIds = new Set(
+      [activeMessagesOwnerId, backupMessagesOwnerId].filter(Boolean),
+    );
+
+    return Object.fromEntries(
+      Object.entries(currentData).map(([tableName, rows]) => {
+        if (
+          tableName !== "contact" &&
+          tableName !== "cashuToken" &&
+          tableName !== "credoToken" &&
+          tableName !== "nostrMessage" &&
+          tableName !== "nostrReaction"
+        ) {
+          return [tableName, rows];
+        }
+        if (tableName === "contact") {
+          if (!activeContactsOwnerId) return [tableName, []];
+          return [
+            tableName,
+            rows.filter((row) => readRowOwnerId(row) === activeContactsOwnerId),
+          ];
+        }
+        if (tableName === "cashuToken" || tableName === "credoToken") {
+          if (!activeCashuOwnerId) return [tableName, []];
+          return [
+            tableName,
+            rows.filter((row) => readRowOwnerId(row) === activeCashuOwnerId),
+          ];
+        }
+        if (visibleMessageOwnerIds.size === 0) return [tableName, []];
+        return [
+          tableName,
+          rows.filter((row) => visibleMessageOwnerIds.has(readRowOwnerId(row))),
+        ];
+      }),
+    ) as Awaited<ReturnType<typeof loadEvoluCurrentData>>;
+  }, [
+    currentData,
+    evoluCashuOwnerId,
+    evoluContactsOwnerId,
+    evoluMessagesBackupOwnerId,
+    evoluMessagesOwnerId,
+  ]);
+
+  const tableNames = Object.keys(filteredCurrentData).filter(
+    (name) => filteredCurrentData[name]?.length > 0,
   );
 
   const filteredData = selectedTable
-    ? { [selectedTable]: currentData[selectedTable] || [] }
-    : currentData;
+    ? { [selectedTable]: filteredCurrentData[selectedTable] || [] }
+    : filteredCurrentData;
 
   if (isLoading) {
     return (
@@ -85,6 +160,43 @@ export function EvoluCurrentDataPage({
             <h3 style={{ marginBottom: 8 }}>
               {tableName} ({rows.length} rows)
             </h3>
+            {(tableName === "contact" ||
+              tableName === "cashuToken" ||
+              tableName === "credoToken") && (
+              <div style={{ marginBottom: 10 }}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    if (rotateContactsOwnerIsBusy) return;
+                    void requestManualRotateContactsOwner();
+                  }}
+                  disabled={rotateContactsOwnerIsBusy}
+                >
+                  {rotateContactsOwnerIsBusy
+                    ? t("evoluContactsOwnerRotating")
+                    : t("evoluContactsOwnerRotate")}
+                </button>
+              </div>
+            )}
+            {(tableName === "nostrMessage" ||
+              tableName === "nostrReaction") && (
+              <div style={{ marginBottom: 10 }}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    if (rotateMessagesOwnerIsBusy) return;
+                    void requestManualRotateMessagesOwner();
+                  }}
+                  disabled={rotateMessagesOwnerIsBusy}
+                >
+                  {rotateMessagesOwnerIsBusy
+                    ? t("evoluMessagesOwnerRotating")
+                    : t("evoluMessagesOwnerRotate")}
+                </button>
+              </div>
+            )}
             {rows.length > 0 ? (
               <table
                 style={{

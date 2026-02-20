@@ -7,6 +7,7 @@ import {
   saveCachedProfileMetadata,
 } from "../../../nostrProfile";
 import type { Route } from "../../../types/route";
+import { MAX_CONTACTS_PER_OWNER } from "../../../utils/constants";
 import { getBestNostrName } from "../../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import type {
@@ -38,6 +39,7 @@ interface UseContactEditorParams {
     React.SetStateAction<ContactNewPrefill | null>
   >;
   setPendingDeleteId: React.Dispatch<React.SetStateAction<ContactId | null>>;
+  recordContactsOwnerWrite: (count?: number) => void;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
   update: EvoluMutations["update"];
@@ -60,6 +62,7 @@ export const useContactEditor = ({
   selectedContact,
   setContactNewPrefill,
   setPendingDeleteId,
+  recordContactsOwnerWrite,
   setStatus,
   t,
   update,
@@ -96,9 +99,10 @@ export const useContactEditor = ({
         >
       >,
     ) => {
-      return appOwnerId
-        ? update("contact", payload, { ownerId: appOwnerId })
-        : update("contact", payload);
+      if (!appOwnerId) return update("contact", payload);
+      const scoped = update("contact", payload, { ownerId: appOwnerId });
+      if (scoped.ok) return scoped;
+      return update("contact", payload);
     },
     [appOwnerId, update],
   );
@@ -170,6 +174,16 @@ export const useContactEditor = ({
       return;
     }
 
+    if (!editingId && contacts.length >= MAX_CONTACTS_PER_OWNER) {
+      setStatus(
+        t("contactsLimitReached").replace(
+          "{max}",
+          String(MAX_CONTACTS_PER_OWNER),
+        ),
+      );
+      return;
+    }
+
     setIsSavingContact(true);
 
     const payload = {
@@ -180,6 +194,17 @@ export const useContactEditor = ({
         : null,
       groupName: group ? (group as typeof Evolu.NonEmptyString1000.Type) : null,
     };
+
+    const createPayload: Partial<{
+      groupName: typeof Evolu.NonEmptyString1000.Type;
+      lnAddress: typeof Evolu.NonEmptyString1000.Type;
+      name: typeof Evolu.NonEmptyString1000.Type;
+      npub: typeof Evolu.NonEmptyString1000.Type;
+    }> = {};
+    if (payload.name) createPayload.name = payload.name;
+    if (payload.npub) createPayload.npub = payload.npub;
+    if (payload.lnAddress) createPayload.lnAddress = payload.lnAddress;
+    if (payload.groupName) createPayload.groupName = payload.groupName;
 
     if (editingId) {
       // Build update payload with only changed fields to minimize history entries.
@@ -223,10 +248,9 @@ export const useContactEditor = ({
 
       // Only update if there are actual changes (besides just the id).
       if (Object.keys(changedFields).length > 1) {
-        const result = appOwnerId
-          ? update("contact", changedFields, { ownerId: appOwnerId })
-          : update("contact", changedFields);
+        const result = updateContactFields(changedFields);
         if (result.ok) {
+          recordContactsOwnerWrite();
           setStatus(t("contactUpdated"));
         } else {
           setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -238,9 +262,10 @@ export const useContactEditor = ({
       }
     } else {
       const result = appOwnerId
-        ? insert("contact", payload, { ownerId: appOwnerId })
-        : insert("contact", payload);
+        ? insert("contact", createPayload, { ownerId: appOwnerId })
+        : insert("contact", createPayload);
       if (result.ok) {
+        recordContactsOwnerWrite();
         setStatus(t("contactSaved"));
       } else {
         setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -263,6 +288,7 @@ export const useContactEditor = ({
     appOwnerId,
     clearContactForm,
     contactEditInitial,
+    contacts.length,
     editingId,
     form.group,
     form.lnAddress,
@@ -271,10 +297,11 @@ export const useContactEditor = ({
     insert,
     isSavingContact,
     route.kind,
+    recordContactsOwnerWrite,
     setPendingDeleteId,
     setStatus,
     t,
-    update,
+    updateContactFields,
   ]);
 
   const refreshContactFromNostr = React.useCallback(

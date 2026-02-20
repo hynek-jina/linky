@@ -60,6 +60,42 @@ export const useRestoreMissingTokens = ({
   t,
   tokensRestoreIsBusy,
 }: UseRestoreMissingTokensParams) => {
+  const buildCashuTokenPayload = React.useCallback(
+    (args: {
+      amount: number;
+      mint: string;
+      state: "accepted";
+      token: string;
+      unit: string | null;
+    }) => {
+      const payload: {
+        token: typeof Evolu.NonEmptyString.Type;
+        state: typeof Evolu.NonEmptyString100.Type;
+        amount?: typeof Evolu.PositiveInt.Type;
+        mint?: typeof Evolu.NonEmptyString1000.Type;
+        unit?: typeof Evolu.NonEmptyString100.Type;
+      } = {
+        token: args.token as typeof Evolu.NonEmptyString.Type,
+        state: args.state as typeof Evolu.NonEmptyString100.Type,
+      };
+
+      const mint = String(args.mint ?? "").trim();
+      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
+
+      const unit = String(args.unit ?? "").trim();
+      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
+
+      if (Number.isFinite(args.amount) && args.amount > 0) {
+        payload.amount = Math.trunc(
+          args.amount,
+        ) as typeof Evolu.PositiveInt.Type;
+      }
+
+      return payload;
+    },
+    [],
+  );
+
   return React.useCallback(async () => {
     if (tokensRestoreIsBusy) return;
     if (cashuIsBusy) return;
@@ -372,15 +408,13 @@ export const useRestoreMissingTokens = ({
                   memo: "restored",
                 });
 
-                const payload = {
-                  token: token as typeof Evolu.NonEmptyString.Type,
-                  rawToken: null,
-                  mint: mintUrl as typeof Evolu.NonEmptyString1000.Type,
-                  unit: wallet.unit as typeof Evolu.NonEmptyString100.Type,
-                  amount: Math.floor(amount) as typeof Evolu.PositiveInt.Type,
-                  state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-                  error: null,
-                };
+                const payload = buildCashuTokenPayload({
+                  token,
+                  mint: mintUrl,
+                  unit: wallet.unit ?? null,
+                  amount,
+                  state: "accepted",
+                });
 
                 const r = ownerId
                   ? insert("cashuToken", payload, { ownerId })
@@ -429,6 +463,7 @@ export const useRestoreMissingTokens = ({
     insert,
     isMintDeleted,
     logPaymentEvent,
+    buildCashuTokenPayload,
     mintInfoDeduped,
     pushToast,
     readSeenMintsFromStorage,

@@ -12,6 +12,7 @@ interface UseAppDataTransferParams<
   TCashuToken extends CashuTokenRowLike,
 > {
   appOwnerId: Evolu.OwnerId | null;
+  cashuOwnerId: Evolu.OwnerId | null;
   cashuTokens: readonly TCashuToken[];
   cashuTokensAll: readonly TCashuToken[];
   contacts: readonly TContact[];
@@ -27,6 +28,7 @@ export const useAppDataTransfer = <
   TCashuToken extends CashuTokenRowLike,
 >({
   appOwnerId,
+  cashuOwnerId,
   cashuTokens,
   cashuTokensAll,
   contacts,
@@ -36,6 +38,53 @@ export const useAppDataTransfer = <
   t,
   update,
 }: UseAppDataTransferParams<TContact, TCashuToken>) => {
+  const buildImportedCashuTokenPayload = React.useCallback(
+    (args: {
+      amount: number | null;
+      error: string | null;
+      mint: string | null;
+      rawToken: string | null;
+      state: string | null;
+      token: string;
+      unit: string | null;
+    }) => {
+      const payload: {
+        token: typeof Evolu.NonEmptyString.Type;
+        amount?: typeof Evolu.PositiveInt.Type;
+        error?: typeof Evolu.NonEmptyString1000.Type;
+        mint?: typeof Evolu.NonEmptyString1000.Type;
+        rawToken?: typeof Evolu.NonEmptyString.Type;
+        state?: typeof Evolu.NonEmptyString100.Type;
+        unit?: typeof Evolu.NonEmptyString100.Type;
+      } = {
+        token: args.token as typeof Evolu.NonEmptyString.Type,
+      };
+
+      const rawToken = String(args.rawToken ?? "").trim();
+      if (rawToken)
+        payload.rawToken = rawToken as typeof Evolu.NonEmptyString.Type;
+
+      const mint = String(args.mint ?? "").trim();
+      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
+
+      const unit = String(args.unit ?? "").trim();
+      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
+
+      const state = String(args.state ?? "").trim();
+      if (state) payload.state = state as typeof Evolu.NonEmptyString100.Type;
+
+      if (typeof args.amount === "number" && args.amount > 0) {
+        payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
+      }
+
+      const error = String(args.error ?? "").trim();
+      if (error) payload.error = error as typeof Evolu.NonEmptyString1000.Type;
+
+      return payload;
+    },
+    [],
+  );
+
   const exportAppData = React.useCallback(() => {
     try {
       const now = new Date();
@@ -243,17 +292,18 @@ export const useAppDataTransfer = <
         const amount =
           Number.isFinite(amountNum) && amountNum > 0 ? amountNum : null;
 
-        const result = insert("cashuToken", {
-          token: token as typeof Evolu.NonEmptyString.Type,
-          rawToken: rawToken
-            ? (rawToken as typeof Evolu.NonEmptyString.Type)
-            : null,
-          mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
-          unit: unit ? (unit as typeof Evolu.NonEmptyString100.Type) : null,
-          amount: amount ? (amount as typeof Evolu.PositiveInt.Type) : null,
-          state: state ? (state as typeof Evolu.NonEmptyString100.Type) : null,
-          error: error ? (error as typeof Evolu.NonEmptyString1000.Type) : null,
+        const payload = buildImportedCashuTokenPayload({
+          token,
+          rawToken,
+          mint,
+          unit,
+          amount,
+          state,
+          error,
         });
+        const result = cashuOwnerId
+          ? insert("cashuToken", payload, { ownerId: cashuOwnerId })
+          : insert("cashuToken", payload);
         if (result.ok) {
           addedTokens += 1;
           existingTokenSet.add(token);
@@ -270,7 +320,17 @@ export const useAppDataTransfer = <
         `${t("importDone")} (${addedContacts}/${updatedContacts}/${addedTokens})`,
       );
     },
-    [appOwnerId, cashuTokensAll, contacts, insert, pushToast, t, update],
+    [
+      appOwnerId,
+      buildImportedCashuTokenPayload,
+      cashuOwnerId,
+      cashuTokensAll,
+      contacts,
+      insert,
+      pushToast,
+      t,
+      update,
+    ],
   );
 
   const handleImportAppDataFilePicked = React.useCallback(
