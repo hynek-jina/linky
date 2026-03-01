@@ -21,6 +21,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 ## Monorepo Structure
 
 - `apps/web-app/` - Main React app (Vite + SWC)
+- `packages/core/` - Core package workspace (currently scaffolded with shared tooling config and empty `src/`)
 - `packages/config/` - Shared ESLint, Prettier, and TypeScript configs
 - Package manager is **Bun** (not npm/yarn/pnpm)
 - Workspace filter: `bun run --filter @linky/web-app <script>`

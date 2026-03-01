@@ -1,0 +1,28 @@
+{
+  "name": "@linky/core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "eslint": "eslint --fix .",
+    "prettier": "prettier --write .",
+    "tslint": "bun run eslint",
+    "typecheck": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.0.1",
+    "@scure/bip32": "^2.0.1",
+    "@scure/bip39": "^2.0.1",
+    "effect": "^3.19.19",
+    "nostr-tools": "^2.23.3"
+  },
+  "devDependencies": {
+    "@linky/config": "workspace:*",
+    "@types/node": "^24.10.1",
+    "eslint": "^9.39.1",
+    "prettier": "^3.4.2",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
