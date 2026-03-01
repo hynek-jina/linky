@@ -1,6 +1,5 @@
 export const UNIT_TOGGLE_STORAGE_KEY = "linky_use_btc_symbol";
 export const NOSTR_NSEC_STORAGE_KEY = "linky.nostr_nsec";
-export const NOSTR_AUTH_METHOD_STORAGE_KEY = "linky.nostr_auth_method";
 export const NOSTR_SLIP39_SEED_STORAGE_KEY = "linky.nostr_slip39_seed";
 export const CASHU_BIP85_MNEMONIC_STORAGE_KEY = "linky.cashu_bip85_mnemonic";
 export const EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY =

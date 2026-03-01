@@ -1,6 +1,4 @@
 import * as Evolu from "@evolu/common";
-import { entropyToMnemonic } from "@scure/bip39";
-import { wordlist } from "@scure/bip39/wordlists/english";
 import React from "react";
 import { deriveDefaultProfile } from "../../derivedProfile";
 import { evolu } from "../../evolu";
@@ -14,7 +12,6 @@ import { publishKind0ProfileMetadata } from "../../nostrPublish";
 import type { JsonRecord } from "../../types/json";
 import {
   CASHU_BIP85_MNEMONIC_STORAGE_KEY,
-  NOSTR_AUTH_METHOD_STORAGE_KEY,
   NOSTR_NSEC_STORAGE_KEY,
   NOSTR_SLIP39_SEED_STORAGE_KEY,
 } from "../../utils/constants";
@@ -31,6 +28,8 @@ type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 const NOSTR_IDENTITY_ROW_ID = Evolu.createIdFromString<"NostrIdentity">(
   "active-nostr-identity",
 );
+const OWNER_META_IDENTITIES_POINTER_ROW_ID =
+  Evolu.createIdFromString<"OwnerMeta">("identities-owner-active");
 
 export type OnboardingStep = {
   step: 1 | 2 | 3;
@@ -71,8 +70,6 @@ export const useProfileAuthDomain = ({
   update,
   upsert,
 }: UseProfileAuthDomainParams): UseProfileAuthDomainResult => {
-  type NostrAuthMethod = "nsec" | "slip39";
-
   const [currentNpub, setCurrentNpub] = React.useState<string | null>(null);
   const [onboardingIsBusy, setOnboardingIsBusy] = React.useState(false);
   const [onboardingStep, setOnboardingStep] =
@@ -101,7 +98,10 @@ export const useProfileAuthDomain = ({
   const [logoutArmed, setLogoutArmed] = React.useState(false);
   const [isSeedLogin, setIsSeedLogin] = React.useState<boolean>(() => {
     try {
-      return localStorage.getItem(NOSTR_AUTH_METHOD_STORAGE_KEY) === "slip39";
+      const seed = String(
+        localStorage.getItem(NOSTR_SLIP39_SEED_STORAGE_KEY) ?? "",
+      ).trim();
+      return Boolean(seed);
     } catch {
       return false;
     }
@@ -140,18 +140,29 @@ export const useProfileAuthDomain = ({
       const normalizedSeed = String(seedCandidate ?? "").trim();
       if (!normalizedNsec || !normalizedSeed) return;
 
+      const identitiesIndex = 0;
+
       const metaMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
         normalizedSeed,
         "meta",
         0,
       );
-      if (!metaMnemonic) return;
+      const identitiesMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
+        normalizedSeed,
+        "identities",
+        identitiesIndex,
+      );
+      if (!metaMnemonic || !identitiesMnemonic) return;
 
-      const parsed = Evolu.Mnemonic.fromUnknown(metaMnemonic);
-      if (!parsed.ok) return;
+      const metaParsed = Evolu.Mnemonic.fromUnknown(metaMnemonic);
+      const identitiesParsed = Evolu.Mnemonic.fromUnknown(identitiesMnemonic);
+      if (!metaParsed.ok || !identitiesParsed.ok) return;
 
       const metaOwner = Evolu.createAppOwner(
-        Evolu.mnemonicToOwnerSecret(parsed.value),
+        Evolu.mnemonicToOwnerSecret(metaParsed.value),
+      );
+      const identitiesOwner = Evolu.createAppOwner(
+        Evolu.mnemonicToOwnerSecret(identitiesParsed.value),
       );
 
       upsert(
@@ -159,6 +170,16 @@ export const useProfileAuthDomain = ({
         {
           id: NOSTR_IDENTITY_ROW_ID,
           nsec: normalizedNsec,
+        },
+        { ownerId: identitiesOwner.id },
+      );
+
+      upsert(
+        "ownerMeta",
+        {
+          id: OWNER_META_IDENTITIES_POINTER_ROW_ID,
+          scope: "identities",
+          value: `identities-${identitiesIndex}`,
         },
         { ownerId: metaOwner.id },
       );
@@ -171,18 +192,20 @@ export const useProfileAuthDomain = ({
       const normalizedSeed = String(seedCandidate ?? "").trim();
       if (!normalizedSeed) return;
 
-      const metaMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
+      const identitiesIndex = 0;
+
+      const identitiesMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
         normalizedSeed,
-        "meta",
-        0,
+        "identities",
+        identitiesIndex,
       );
-      if (!metaMnemonic) return;
+      if (!identitiesMnemonic) return;
 
-      const parsed = Evolu.Mnemonic.fromUnknown(metaMnemonic);
-      if (!parsed.ok) return;
+      const identitiesParsed = Evolu.Mnemonic.fromUnknown(identitiesMnemonic);
+      if (!identitiesParsed.ok) return;
 
-      const metaOwner = Evolu.createAppOwner(
-        Evolu.mnemonicToOwnerSecret(parsed.value),
+      const identitiesOwner = Evolu.createAppOwner(
+        Evolu.mnemonicToOwnerSecret(identitiesParsed.value),
       );
 
       update(
@@ -191,7 +214,7 @@ export const useProfileAuthDomain = ({
           id: NOSTR_IDENTITY_ROW_ID,
           isDeleted: Evolu.sqliteTrue,
         },
-        { ownerId: metaOwner.id },
+        { ownerId: identitiesOwner.id },
       );
     },
     [update],
@@ -251,53 +274,29 @@ export const useProfileAuthDomain = ({
     };
   }, [currentNsec, decodeNsecPrivateBytes]);
 
-  const deriveEvoluMnemonicFromNsec = React.useCallback(
-    async (nsec: string): Promise<Evolu.Mnemonic | null> => {
-      const raw = String(nsec ?? "").trim();
-      if (!raw) return null;
+  const deriveAppMnemonicFromSlip39 = React.useCallback(
+    async (seed: string): Promise<Evolu.Mnemonic | null> => {
+      const normalizedSeed = String(seed ?? "").trim();
+      if (!normalizedSeed) return null;
 
-      try {
-        const privBytes = await decodeNsecPrivateBytes(raw);
-        if (!privBytes) return null;
+      const metaMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
+        normalizedSeed,
+        "meta",
+        0,
+      );
+      if (!metaMnemonic) return null;
 
-        const prefix = new TextEncoder().encode("linky-evolu-v1:");
-        const data = new Uint8Array(prefix.length + privBytes.length);
-        data.set(prefix);
-        data.set(privBytes, prefix.length);
-
-        const hashBuf = await crypto.subtle.digest("SHA-256", data);
-        const hash = new Uint8Array(hashBuf);
-        const entropy = hash.slice(0, 16);
-        const phrase = entropyToMnemonic(entropy, wordlist);
-        const validated = Evolu.Mnemonic.fromUnknown(phrase);
-        if (!validated.ok) return null;
-
-        return validated.value;
-      } catch {
-        return null;
-      }
+      const parsed = Evolu.Mnemonic.fromUnknown(metaMnemonic);
+      if (!parsed.ok) return null;
+      return parsed.value;
     },
-    [decodeNsecPrivateBytes],
+    [],
   );
 
   React.useEffect(() => {
-    const nsec = String(currentNsec ?? "").trim();
-    if (!nsec) {
-      setSeedMnemonic(null);
-      return;
-    }
-
-    let cancelled = false;
-    void (async () => {
-      const derived = await deriveEvoluMnemonicFromNsec(nsec);
-      if (cancelled) return;
-      setSeedMnemonic(derived ? String(derived) : null);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentNsec, deriveEvoluMnemonicFromNsec]);
+    const normalizedSlip39 = String(slip39Seed ?? "").trim();
+    setSeedMnemonic(normalizedSlip39 || null);
+  }, [slip39Seed]);
 
   React.useEffect(() => {
     if (!isSeedLogin) return;
@@ -328,9 +327,8 @@ export const useProfileAuthDomain = ({
   const setIdentityFromNsecAndReload = React.useCallback(
     async (
       nsec: string,
-      authMethod: NostrAuthMethod = "nsec",
+      sourceSlip39Seed: string,
       invalidMessageKey: string = "onboardingInvalidNsec",
-      sourceSlip39Seed: string | null = null,
       isManualNsecEntry = false,
     ) => {
       const raw = String(nsec ?? "").trim();
@@ -339,72 +337,54 @@ export const useProfileAuthDomain = ({
         return;
       }
 
-      const skipEvoluWriteAndRestore =
-        isManualNsecEntry && authMethod === "slip39";
-
-      let mnemonic: Evolu.Mnemonic | null = null;
-      if (!skipEvoluWriteAndRestore) {
-        mnemonic = await deriveEvoluMnemonicFromNsec(raw);
-        if (!mnemonic) {
-          pushToast(t(invalidMessageKey));
-          return;
-        }
+      const normalizedSlip39 = String(sourceSlip39Seed ?? "").trim();
+      if (!normalizedSlip39) {
+        pushToast(t(invalidMessageKey));
+        return;
       }
 
-      if (isManualNsecEntry && !skipEvoluWriteAndRestore) {
+      const skipEvoluWriteAndRestore =
+        isManualNsecEntry && Boolean(String(slip39Seed ?? "").trim());
+
+      const appMnemonic = await deriveAppMnemonicFromSlip39(normalizedSlip39);
+      if (!appMnemonic) {
+        pushToast(t(invalidMessageKey));
+        return;
+      }
+
+      if (isManualNsecEntry) {
         const currentSeed = String(slip39Seed ?? "").trim();
-        const incomingSeed = String(sourceSlip39Seed ?? "").trim();
+        const incomingSeed = normalizedSlip39;
         const seedForMetaOwner = incomingSeed || currentSeed || null;
         await persistNsecToMetaOwner(raw, seedForMetaOwner);
       }
 
-      let derivedCashuMnemonic: string | null = null;
-      if (authMethod === "slip39") {
-        const normalizedSlip39 = String(sourceSlip39Seed ?? "").trim();
-        if (!normalizedSlip39) {
-          pushToast(t(invalidMessageKey));
-          return;
-        }
-
-        derivedCashuMnemonic =
-          await deriveCashuBip85MnemonicFromSlip39(normalizedSlip39);
-        if (!derivedCashuMnemonic) {
-          pushToast(t(invalidMessageKey));
-          return;
-        }
+      const derivedCashuMnemonic =
+        await deriveCashuBip85MnemonicFromSlip39(normalizedSlip39);
+      if (!derivedCashuMnemonic) {
+        pushToast(t(invalidMessageKey));
+        return;
       }
 
       try {
         localStorage.setItem(NOSTR_NSEC_STORAGE_KEY, raw);
-        localStorage.setItem(NOSTR_AUTH_METHOD_STORAGE_KEY, authMethod);
-        if (authMethod === "slip39" && sourceSlip39Seed) {
-          localStorage.setItem(NOSTR_SLIP39_SEED_STORAGE_KEY, sourceSlip39Seed);
-          if (derivedCashuMnemonic) {
-            localStorage.setItem(
-              CASHU_BIP85_MNEMONIC_STORAGE_KEY,
-              derivedCashuMnemonic,
-            );
-          }
-        } else {
-          localStorage.removeItem(NOSTR_SLIP39_SEED_STORAGE_KEY);
-          localStorage.removeItem(CASHU_BIP85_MNEMONIC_STORAGE_KEY);
-        }
-        if (mnemonic) {
-          localStorage.setItem(INITIAL_MNEMONIC_STORAGE_KEY, mnemonic);
-        }
+        localStorage.setItem(NOSTR_SLIP39_SEED_STORAGE_KEY, normalizedSlip39);
+        localStorage.setItem(
+          CASHU_BIP85_MNEMONIC_STORAGE_KEY,
+          derivedCashuMnemonic,
+        );
+        localStorage.setItem(INITIAL_MNEMONIC_STORAGE_KEY, appMnemonic);
       } catch {
         // ignore
       }
 
-      setIsSeedLogin(authMethod === "slip39");
-      setSlip39Seed(authMethod === "slip39" ? sourceSlip39Seed : null);
-      setCashuSeedMnemonic(
-        authMethod === "slip39" ? derivedCashuMnemonic : null,
-      );
+      setIsSeedLogin(true);
+      setSlip39Seed(normalizedSlip39);
+      setCashuSeedMnemonic(derivedCashuMnemonic);
 
-      if (!skipEvoluWriteAndRestore && mnemonic) {
+      if (!skipEvoluWriteAndRestore) {
         try {
-          await evolu.restoreAppOwner(mnemonic, {
+          await evolu.restoreAppOwner(appMnemonic, {
             reload: false,
           });
         } catch (e) {
@@ -422,7 +402,7 @@ export const useProfileAuthDomain = ({
       globalThis.location.reload();
     },
     [
-      deriveEvoluMnemonicFromNsec,
+      deriveAppMnemonicFromSlip39,
       persistNsecToMetaOwner,
       pushToast,
       slip39Seed,
@@ -512,9 +492,8 @@ export const useProfileAuthDomain = ({
 
       await setIdentityFromNsecAndReload(
         derived.nsec,
-        "slip39",
-        "onboardingCreateFailed",
         slip39,
+        "onboardingCreateFailed",
       );
     } finally {
       setOnboardingIsBusy(false);
@@ -557,9 +536,8 @@ export const useProfileAuthDomain = ({
           const normalizedSlip39 = normalizeSlip39Seed(raw);
           await setIdentityFromNsecAndReload(
             derived.nsec,
-            "slip39",
-            "onboardingInvalidNsecOrSeed",
             normalizedSlip39,
+            "onboardingInvalidNsecOrSeed",
           );
           return;
         }
@@ -573,11 +551,19 @@ export const useProfileAuthDomain = ({
 
       const { nip19 } = await import("nostr-tools");
       const normalizedNsec = nip19.nsecEncode(privBytes);
+
+      const generatedSeed = await createSlip39Seed();
+      if (!generatedSeed) {
+        pushToast(t("onboardingCreateFailed"));
+        return;
+      }
+
+      const normalizedSlip39 = normalizeSlip39Seed(generatedSeed);
+
       await setIdentityFromNsecAndReload(
         normalizedNsec,
-        "nsec",
+        normalizedSlip39,
         "onboardingInvalidNsecOrSeed",
-        null,
         true,
       );
     } catch {
@@ -627,11 +613,16 @@ export const useProfileAuthDomain = ({
       const { nip19 } = await import("nostr-tools");
       const normalizedNsec = nip19.nsecEncode(privBytes);
 
+      const normalizedSeed = String(slip39Seed ?? "").trim();
+      if (!normalizedSeed) {
+        pushToast(t("seedMissing"));
+        return;
+      }
+
       await setIdentityFromNsecAndReload(
         normalizedNsec,
-        isSeedLogin ? "slip39" : "nsec",
+        normalizedSeed,
         "nostrPasteInvalid",
-        isSeedLogin ? String(slip39Seed ?? "").trim() : null,
         true,
       );
     } catch {
@@ -641,7 +632,6 @@ export const useProfileAuthDomain = ({
     }
   }, [
     decodeNsecPrivateBytes,
-    isSeedLogin,
     onboardingIsBusy,
     pushToast,
     setIdentityFromNsecAndReload,
@@ -653,7 +643,7 @@ export const useProfileAuthDomain = ({
     if (onboardingIsBusy) return;
 
     const normalizedSeed = String(slip39Seed ?? "").trim();
-    if (!isSeedLogin || !normalizedSeed) {
+    if (!normalizedSeed) {
       pushToast(t("seedMissing"));
       return;
     }
@@ -670,16 +660,14 @@ export const useProfileAuthDomain = ({
 
       await setIdentityFromNsecAndReload(
         derived.nsec,
-        "slip39",
-        "restoreFailed",
         normalizedSeed,
+        "restoreFailed",
         false,
       );
     } finally {
       setOnboardingIsBusy(false);
     }
   }, [
-    isSeedLogin,
     markCustomNsecDeletedInMetaOwner,
     onboardingIsBusy,
     pushToast,
@@ -689,12 +677,11 @@ export const useProfileAuthDomain = ({
   ]);
 
   const hasCustomNsecOverride = React.useMemo(() => {
-    if (!isSeedLogin) return false;
     const current = String(currentNsec ?? "").trim();
     const derived = String(derivedSeedNsec ?? "").trim();
     if (!current || !derived) return false;
     return current !== derived;
-  }, [currentNsec, derivedSeedNsec, isSeedLogin]);
+  }, [currentNsec, derivedSeedNsec]);
 
   const requestLogout = React.useCallback(() => {
     if (!logoutArmed) {
@@ -706,7 +693,6 @@ export const useProfileAuthDomain = ({
     setLogoutArmed(false);
     try {
       localStorage.removeItem(NOSTR_NSEC_STORAGE_KEY);
-      localStorage.removeItem(NOSTR_AUTH_METHOD_STORAGE_KEY);
       localStorage.removeItem(NOSTR_SLIP39_SEED_STORAGE_KEY);
       localStorage.removeItem(INITIAL_MNEMONIC_STORAGE_KEY);
     } catch {

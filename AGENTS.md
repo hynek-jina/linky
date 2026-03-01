@@ -33,6 +33,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Nostr chat persistence is Evolu-backed (`nostrMessage` + `nostrReaction` tables) and uses deterministic `messages-n` owner lanes for seed logins (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/4'/<index>'`); legacy `linky.local.nostrMessages.v1.<ownerId>` data is imported once per owner via `linky.messages_evolu_migrated_v1:<ownerId>`
 - For seed logins, contacts writes are routed through deterministic Evolu `contacts-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/2'/<index>'`), with metadata pointer stored in Evolu `ownerMeta` lane (`contacts-<n>`)
 - For seed logins, cashu + credo token writes/reads are routed through deterministic Evolu `cashu-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/3'/<index>'`)
+- For seed logins, custom Nostr identity overrides are persisted in deterministic Evolu `identities-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/5'/<index>'`), with active pointer recorded in `ownerMeta` scope `identities` (`identities-<n>`)
 - AppShell subscribes Evolu sync for active seed lanes (`contacts-n`, `cashu-n`, `messages-n`, and `ownerMeta`) via `useOwner`, so owner pointers/data converge across tabs/devices
 - Contacts/cashu owner lanes auto-rotate when owner-local write delta reaches `OWNER_ROTATION_TRIGGER_WRITE_COUNT` (currently 1000), migrate valid contacts + tokens to next lane, and enforce 1-minute per-type cooldown
 - Messages owner lane auto-rotates at the same write threshold with pointer-only switch (no message copy), while UI reads active + immediate previous messages owner
@@ -40,8 +41,8 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Contacts are capped at `MAX_CONTACTS_PER_OWNER` (currently 500); add-contact UI is disabled at limit and save is blocked
 - Evolu debug views (`#evolu-current-data`, `#evolu-history-data`) scope contacts/history to active owner lanes, with history retaining one previous contacts lane as backup
 - **No backend** - pure client-side PWA with service worker caching
-- Onboarding login accepts either `nsec` or a single 20-word **SLIP-39** share; when SLIP-39 is used, Nostr keys are derived at path `m/44'/1237'/0'/0/0`
-- When a user manually pastes an `nsec` while a SLIP-39 seed session is present, the app switches profile to the pasted `nsec/npub` pair via local auth state without immediate Evolu writes or owner restore, so pasted-key history is not pulled into Evolu; choosing Derive in Advanced switches back to the seed-derived `nsec/npub`
+- Onboarding login accepts either `nsec` or a single 20-word **SLIP-39** share; `nsec` onboarding now generates a fresh SLIP-39 seed and attaches the pasted `nsec` as a custom Nostr override, while direct SLIP-39 onboarding derives Nostr keys at path `m/44'/1237'/0'/0/0`
+- When a user manually pastes an `nsec` during a SLIP-39 seed session, the app switches profile to the pasted `nsec/npub` pair without owner restore and persists the override into Evolu `identities-n`; choosing Derive in Advanced switches back to the seed-derived `nsec/npub`
 - Cashu deterministic wallet seed is derived from the SLIP-39 secret using **BIP-85** at path `m/83696968'/39'/0'/24'/0'` (24-word mnemonic)
 - `apps/web-app/src/App.tsx` is a thin wrapper that default-exports `app/AppShell`
 - App shell structure lives under `apps/web-app/src/app/`:
