@@ -3,7 +3,6 @@ import { useNavigation } from "../hooks/useRouting";
 
 interface AdvancedPageProps {
   __APP_VERSION__: string;
-  allowPromisesEnabled: boolean;
   cashuIsBusy: boolean;
   cashuSeedMnemonic: string | null;
   connectedRelayCount: number;
@@ -34,7 +33,6 @@ interface AdvancedPageProps {
   requestLogout: () => void;
   restoreMissingTokens: () => Promise<void>;
   seedMnemonic: string | null;
-  setAllowPromisesEnabled: (value: boolean) => void;
   setPayWithCashuEnabled: (value: boolean) => void;
   t: (key: string) => string;
   tokensRestoreIsBusy: boolean;
@@ -42,7 +40,6 @@ interface AdvancedPageProps {
 
 export function AdvancedPage({
   __APP_VERSION__,
-  allowPromisesEnabled,
   cashuIsBusy,
   cashuSeedMnemonic,
   connectedRelayCount,
@@ -72,7 +69,6 @@ export function AdvancedPage({
   requestLogout,
   restoreMissingTokens,
   seedMnemonic,
-  setAllowPromisesEnabled,
   setPayWithCashuEnabled,
   t,
   tokensRestoreIsBusy,
@@ -175,6 +171,7 @@ export function AdvancedPage({
               className="ghost"
               onClick={copySeed}
               disabled={!seedMnemonic}
+              data-guide="copy-seed"
             >
               {t("copyCurrent")}
             </button>
@@ -307,26 +304,6 @@ export function AdvancedPage({
               aria-label={t("payWithCashu")}
               checked={payWithCashuEnabled}
               onChange={(e) => setPayWithCashuEnabled(e.target.checked)}
-            />
-          </label>
-        </div>
-      </div>
-
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            ❤️
-          </span>
-          <span className="settings-label">{t("allowPromises")}</span>
-        </div>
-        <div className="settings-right">
-          <label className="switch">
-            <input
-              className="switch-input"
-              type="checkbox"
-              aria-label={t("allowPromises")}
-              checked={allowPromisesEnabled}
-              onChange={(e) => setAllowPromisesEnabled(e.target.checked)}
             />
           </label>
         </div>

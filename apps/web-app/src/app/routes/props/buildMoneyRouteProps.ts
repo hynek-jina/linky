@@ -1,5 +1,5 @@
-import type { MoneyRoutesProps } from "../AppRouteContent";
 import type { Route } from "../../../types/route";
+import type { MoneyRoutesProps } from "../AppRouteContent";
 
 type MoneyRouteProps = MoneyRoutesProps;
 
@@ -18,21 +18,13 @@ interface BuildMoneyRoutePropsParams {
   checkAndRefreshCashuToken: ReturnType<
     MoneyRoutesProps["cashuTokenProps"]
   >["checkAndRefreshCashuToken"];
-  contacts: ReturnType<MoneyRoutesProps["credoTokenProps"]>["contacts"];
   copyText: ReturnType<MoneyRoutesProps["cashuTokenProps"]>["copyText"];
-  credoOweTokens: MoneyRoutesProps["cashuTokenNewProps"]["credoOweTokens"];
-  credoPromisedTokens: MoneyRoutesProps["cashuTokenNewProps"]["credoPromisedTokens"];
-  credoTokensAll: ReturnType<
-    MoneyRoutesProps["credoTokenProps"]
-  >["credoTokensAll"];
   currentNpub: MoneyRoutesProps["topupProps"]["currentNpub"];
   displayUnit: MoneyRoutesProps["cashuTokenNewProps"]["displayUnit"];
   effectiveProfileName: MoneyRoutesProps["topupProps"]["effectiveProfileName"];
   effectiveProfilePicture: MoneyRoutesProps["topupProps"]["effectiveProfilePicture"];
-  getCredoRemainingAmount: MoneyRoutesProps["cashuTokenNewProps"]["getCredoRemainingAmount"];
   getMintIconUrl: MoneyRoutesProps["cashuTokenNewProps"]["getMintIconUrl"];
   lnAddressPayAmount: MoneyRoutesProps["lnAddressPayProps"]["lnAddressPayAmount"];
-  nostrPictureByNpub: MoneyRoutesProps["cashuTokenNewProps"]["nostrPictureByNpub"];
   npubCashLightningAddress: MoneyRoutesProps["topupProps"]["npubCashLightningAddress"];
   payLightningAddressWithCashu: MoneyRoutesProps["lnAddressPayProps"]["payLightningAddressWithCashu"];
   pendingCashuDeleteId: ReturnType<
@@ -54,8 +46,6 @@ interface BuildMoneyRoutePropsParams {
   topupInvoiceError: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceError"];
   topupInvoiceIsBusy: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceIsBusy"];
   topupInvoiceQr: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceQr"];
-  totalCredoOutstandingIn: MoneyRoutesProps["cashuTokenNewProps"]["totalCredoOutstandingIn"];
-  totalCredoOutstandingOut: MoneyRoutesProps["cashuTokenNewProps"]["totalCredoOutstandingOut"];
 }
 
 export const buildMoneyRouteProps = ({
@@ -69,19 +59,13 @@ export const buildMoneyRouteProps = ({
   cashuTokensWithMeta,
   checkAllCashuTokensAndDeleteInvalid,
   checkAndRefreshCashuToken,
-  contacts,
   copyText,
-  credoOweTokens,
-  credoPromisedTokens,
-  credoTokensAll,
   currentNpub,
   displayUnit,
   effectiveProfileName,
   effectiveProfilePicture,
-  getCredoRemainingAmount,
   getMintIconUrl,
   lnAddressPayAmount,
-  nostrPictureByNpub,
   npubCashLightningAddress,
   payLightningAddressWithCashu,
   pendingCashuDeleteId,
@@ -99,15 +83,11 @@ export const buildMoneyRouteProps = ({
   topupInvoiceError,
   topupInvoiceIsBusy,
   topupInvoiceQr,
-  totalCredoOutstandingIn,
-  totalCredoOutstandingOut,
 }: BuildMoneyRoutePropsParams): MoneyRouteProps => {
   return {
     cashuTokenNewProps: {
       cashuBalance,
       cashuBulkCheckIsBusy,
-      totalCredoOutstandingIn,
-      totalCredoOutstandingOut,
       displayUnit,
       cashuTokens: cashuTokensWithMeta,
       cashuDraft,
@@ -115,13 +95,9 @@ export const buildMoneyRouteProps = ({
       cashuDraftRef,
       cashuIsBusy,
       checkAllCashuTokensAndDeleteInvalid,
-      credoOweTokens,
-      credoPromisedTokens,
-      nostrPictureByNpub,
       setMintIconUrlByMint,
       saveCashuFromText,
       getMintIconUrl,
-      getCredoRemainingAmount,
       t,
     },
     cashuTokenProps: () => {
@@ -136,19 +112,6 @@ export const buildMoneyRouteProps = ({
         checkAndRefreshCashuToken,
         copyText,
         requestDeleteCashuToken,
-        t,
-      };
-    },
-    credoTokenProps: () => {
-      if (route.kind !== "credoToken") {
-        throw new Error("invalid route for credo token");
-      }
-      return {
-        credoTokensAll,
-        routeId: route.id,
-        contacts,
-        displayUnit,
-        getCredoRemainingAmount,
         t,
       };
     },

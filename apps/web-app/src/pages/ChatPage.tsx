@@ -2,10 +2,7 @@ import { type FC, useEffect, useRef } from "react";
 import { aggregateReactions } from "../app/hooks/messages/chatNostrProtocol";
 import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
 import type { ReplyContext } from "../app/hooks/messages/useSendChatMessage";
-import type {
-  CashuTokenMessageInfo,
-  CredoTokenMessageInfo,
-} from "../app/lib/tokenMessageInfo";
+import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   LocalNostrMessage,
   LocalNostrReaction,
@@ -24,7 +21,6 @@ interface Contact {
 }
 
 interface ChatPageProps {
-  allowPromisesEnabled: boolean;
   cashuBalance: number;
   cashuIsBusy: boolean;
   chatDraft: string;
@@ -36,8 +32,6 @@ interface ChatPageProps {
   editContext: EditChatContext | null;
   feedbackContactNpub: string;
   getCashuTokenMessageInfo: (id: string) => CashuTokenMessageInfo | null;
-  getCredoAvailableForContact: (npub: string) => number;
-  getCredoTokenMessageInfo: (id: string) => CredoTokenMessageInfo | null;
   getMintIconUrl: (mint: MintUrlInput) => {
     origin: string | null;
     url: string | null;
@@ -45,7 +39,6 @@ interface ChatPageProps {
     failed: boolean;
   };
   lang: string;
-  nostrPictureByNpub: Record<string, string | null>;
   onCancelEdit: () => void;
   onCancelReply: () => void;
   onCopy: (message: LocalNostrMessage) => void;
@@ -66,7 +59,6 @@ interface ChatPageProps {
 }
 
 export const ChatPage: FC<ChatPageProps> = ({
-  allowPromisesEnabled,
   cashuBalance,
   cashuIsBusy,
   chatDraft,
@@ -78,11 +70,8 @@ export const ChatPage: FC<ChatPageProps> = ({
   editContext,
   feedbackContactNpub,
   getCashuTokenMessageInfo,
-  getCredoAvailableForContact,
-  getCredoTokenMessageInfo,
   getMintIconUrl,
   lang,
-  nostrPictureByNpub,
   onCancelEdit,
   onCancelReply,
   onCopy,
@@ -127,13 +116,9 @@ export const ChatPage: FC<ChatPageProps> = ({
 
   const ln = String(selectedContact.lnAddress ?? "").trim();
   const canPayThisContact =
-    Boolean(ln) ||
-    ((payWithCashuEnabled || allowPromisesEnabled) && Boolean(npub));
-  const availableCredo = npub ? getCredoAvailableForContact(npub) : 0;
+    Boolean(ln) || (payWithCashuEnabled && Boolean(npub));
   const canStartPay =
-    (Boolean(ln) && cashuBalance > 0) ||
-    (Boolean(npub) &&
-      (cashuBalance > 0 || availableCredo > 0 || allowPromisesEnabled));
+    (Boolean(ln) && cashuBalance > 0) || (Boolean(npub) && cashuBalance > 0);
   const isFeedbackContact = npub === feedbackContactNpub;
 
   const byRumorId = new Map<string, LocalNostrMessage>();
@@ -168,7 +153,6 @@ export const ChatPage: FC<ChatPageProps> = ({
             const prev = idx > 0 ? chatMessages[idx - 1] : null;
             const next =
               idx + 1 < chatMessages.length ? chatMessages[idx + 1] : null;
-            const avatar = npub ? nostrPictureByNpub[npub] : null;
             const formatChatDayLabelForLang = (timestamp: number) =>
               formatChatDayLabel(timestamp, lang, t);
 
@@ -188,8 +172,7 @@ export const ChatPage: FC<ChatPageProps> = ({
             const isOwnTextMessage =
               String(message.direction ?? "") === "out" &&
               Boolean(String(message.rumorId ?? "").trim()) &&
-              !getCashuTokenMessageInfo(String(message.content ?? "")) &&
-              !getCredoTokenMessageInfo(String(message.content ?? ""));
+              !getCashuTokenMessageInfo(String(message.content ?? ""));
 
             return (
               <ChatMessage
@@ -198,11 +181,9 @@ export const ChatPage: FC<ChatPageProps> = ({
                 previousMessage={prev}
                 nextMessage={next}
                 locale={lang === "cs" ? "cs-CZ" : "en-US"}
-                contactAvatar={avatar}
                 formatInteger={formatInteger}
                 formatChatDayLabel={formatChatDayLabelForLang}
                 getCashuTokenMessageInfo={getCashuTokenMessageInfo}
-                getCredoTokenMessageInfo={getCredoTokenMessageInfo}
                 getMintIconUrl={getMintIconUrl}
                 onMintIconLoad={(origin, url) => {
                   setMintIconUrlByMint((prevByMint) => ({

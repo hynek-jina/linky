@@ -386,10 +386,6 @@ export type ContactId = typeof ContactId.Type;
 const CashuTokenId = Evolu.id("CashuToken");
 export type CashuTokenId = typeof CashuTokenId.Type;
 
-// Primary key pro CredoToken tabulku
-const CredoTokenId = Evolu.id("CredoToken");
-export type CredoTokenId = typeof CredoTokenId.Type;
-
 // Primary key pro NostrIdentity tabulku
 const NostrIdentityId = Evolu.id("NostrIdentity");
 export type NostrIdentityId = typeof NostrIdentityId.Type;
@@ -482,24 +478,6 @@ export const Schema = {
     // "pending" | "accepted" | "error"
     state: Evolu.nullOr(Evolu.NonEmptyString100),
     error: Evolu.nullOr(Evolu.NonEmptyString1000),
-  },
-
-  credoToken: {
-    id: CredoTokenId,
-    promiseId: Evolu.NonEmptyString1000,
-    issuer: Evolu.NonEmptyString1000,
-    recipient: Evolu.NonEmptyString1000,
-    amount: Evolu.PositiveInt,
-    unit: Evolu.NonEmptyString100,
-    createdAtSec: Evolu.PositiveInt,
-    expiresAtSec: Evolu.PositiveInt,
-    settledAmount: Evolu.nullOr(Evolu.PositiveInt),
-    settledAtSec: Evolu.nullOr(Evolu.PositiveInt),
-    // "in" | "out"
-    direction: Evolu.NonEmptyString100,
-    contactId: Evolu.nullOr(ContactId),
-    // Raw credo token message (wire format)
-    rawToken: Evolu.nullOr(Evolu.NonEmptyString1000),
   },
 
   ownerMeta: {
@@ -636,7 +614,6 @@ export const getEvoluDatabaseInfo = async (): Promise<{
   const tables = [
     "contact",
     "cashuToken",
-    "credoToken",
     "nostrIdentity",
     "nostrMessage",
     "nostrReaction",
@@ -823,7 +800,6 @@ export const loadEvoluCurrentData = async (): Promise<
   const tables = [
     "contact",
     "cashuToken",
-    "credoToken",
     "nostrIdentity",
     "nostrMessage",
     "nostrReaction",

@@ -1,4 +1,4 @@
-import type { CashuTokenId, ContactId, CredoTokenId } from "../../evolu";
+import type { CashuTokenId, ContactId } from "../../evolu";
 import type { JsonValue } from "../../types/json";
 
 export type LocalPaymentEvent = {
@@ -184,23 +184,6 @@ export type LocalMintInfoRow = {
   lastSeenAtSec?: OptionalNumber;
   supportsMpp?: MintSupportsMppValue;
   url: string;
-};
-
-export type CredoTokenRow = {
-  amount?: OptionalNumber;
-  contactId?: OptionalText;
-  createdAtSec?: OptionalNumber;
-  direction?: OptionalText;
-  expiresAtSec?: OptionalNumber;
-  id: CredoTokenId;
-  isDeleted?: OptionalText;
-  issuer?: OptionalText;
-  promiseId?: OptionalText;
-  rawToken?: OptionalText;
-  recipient?: OptionalText;
-  settledAmount?: OptionalNumber;
-  settledAtSec?: OptionalNumber;
-  unit?: OptionalText;
 };
 
 export type ContactsGuideKey =

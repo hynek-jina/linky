@@ -1,13 +1,13 @@
-import type { ContactId } from "../../../evolu";
-import React from "react";
 import type { Event as NostrToolsEvent } from "nostr-tools";
+import React from "react";
+import type { ContactId } from "../../../evolu";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import type {
   ContactNameRowLike,
-  LocalNostrReaction,
   LocalNostrMessage,
+  LocalNostrReaction,
   NewLocalNostrMessage,
   NewLocalNostrReaction,
   NostrMessageSummaryRow,
@@ -34,10 +34,6 @@ interface UseInboxNotificationsSyncParams<
   contacts: readonly TContact[];
   currentNsec: string | null;
   getCashuTokenMessageInfo: (text: string) => {
-    amount: number | null;
-    isValid: boolean;
-  } | null;
-  getCredoTokenMessageInfo: (text: string) => {
     amount: number | null;
     isValid: boolean;
   } | null;
@@ -71,7 +67,6 @@ export const useInboxNotificationsSync = <
   contacts,
   currentNsec,
   getCashuTokenMessageInfo,
-  getCredoTokenMessageInfo,
   maybeShowPwaNotification,
   nostrFetchRelays,
   nostrMessageWrapIdsRef,
@@ -267,7 +262,6 @@ export const useInboxNotificationsSync = <
                 );
 
                 const tokenInfo = getCashuTokenMessageInfo(content);
-                const credoInfo = getCredoTokenMessageInfo(content);
                 if (tokenInfo?.isValid) {
                   const body = tokenInfo.amount
                     ? `${tokenInfo.amount} sat`
@@ -276,15 +270,6 @@ export const useInboxNotificationsSync = <
                     t("mints"),
                     body,
                     `cashu_${otherPub}`,
-                  );
-                } else if (credoInfo?.isValid) {
-                  const body = credoInfo.amount
-                    ? `${credoInfo.amount} sat`
-                    : t("credoPromisedToMe");
-                  void maybeShowPwaNotification(
-                    t("credoPromisedToMe"),
-                    body,
-                    `credo_${otherPub}`,
                   );
                 }
               }
@@ -490,7 +475,6 @@ export const useInboxNotificationsSync = <
     contacts,
     currentNsec,
     getCashuTokenMessageInfo,
-    getCredoTokenMessageInfo,
     appendLocalNostrMessage,
     appendLocalNostrReaction,
     updateLocalNostrMessage,

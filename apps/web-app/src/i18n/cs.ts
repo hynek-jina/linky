@@ -414,11 +414,6 @@ export const cs = {
 
   allowPromises: "Povolit sliby",
   totalBalanceWithPromises: "Celková bilance (vč. slibů)",
-  credoTokenTitle: "Credo",
-  credoOwe: "Dlužím",
-  credoPromisedToMe: "Mám slíbeno",
-  credoExpiresIn: "Expiruje za {time}",
-  credoExpired: "Expirovalo",
 
   pay: "Zaplatit",
   payTo: "Platba pro",

@@ -7,7 +7,6 @@ export { ContactNewPage } from "./ContactNewPage";
 export { ContactPage } from "./ContactPage";
 export { ContactPayPage } from "./ContactPayPage";
 export { ContactsPage } from "./ContactsPage";
-export { CredoTokenPage } from "./CredoTokenPage";
 export { EvoluCurrentDataPage } from "./EvoluCurrentDataPage";
 export { EvoluDataDetailPage } from "./EvoluDataDetailPage";
 export { EvoluHistoryDataPage } from "./EvoluHistoryDataPage";

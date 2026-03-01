@@ -1672,12 +1672,6 @@ button.icon {
   border: none;
 }
 
-.pill.pill-credo {
-  background: rgba(244, 114, 182, 0.15);
-  color: #f9a8d4;
-  border: none;
-}
-
 .contact-list {
   display: flex;
   flex-direction: column;

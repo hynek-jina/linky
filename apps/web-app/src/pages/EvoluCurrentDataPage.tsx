@@ -63,7 +63,6 @@ export function EvoluCurrentDataPage({
         if (
           tableName !== "contact" &&
           tableName !== "cashuToken" &&
-          tableName !== "credoToken" &&
           tableName !== "nostrMessage" &&
           tableName !== "nostrReaction"
         ) {
@@ -76,7 +75,7 @@ export function EvoluCurrentDataPage({
             rows.filter((row) => readRowOwnerId(row) === activeContactsOwnerId),
           ];
         }
-        if (tableName === "cashuToken" || tableName === "credoToken") {
+        if (tableName === "cashuToken") {
           if (!activeCashuOwnerId) return [tableName, []];
           return [
             tableName,
@@ -160,9 +159,7 @@ export function EvoluCurrentDataPage({
             <h3 style={{ marginBottom: 8 }}>
               {tableName} ({rows.length} rows)
             </h3>
-            {(tableName === "contact" ||
-              tableName === "cashuToken" ||
-              tableName === "credoToken") && (
+            {(tableName === "contact" || tableName === "cashuToken") && (
               <div style={{ marginBottom: 10 }}>
                 <button
                   type="button"

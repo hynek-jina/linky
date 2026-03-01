@@ -411,11 +411,6 @@ export const en = {
 
   allowPromises: "Allow promises",
   totalBalanceWithPromises: "Total balance (incl. promises)",
-  credoTokenTitle: "Credo",
-  credoOwe: "I owe",
-  credoPromisedToMe: "Promised to me",
-  credoExpiresIn: "Expires in {time}",
-  credoExpired: "Expired",
 
   pay: "Pay",
   payTo: "Pay to",

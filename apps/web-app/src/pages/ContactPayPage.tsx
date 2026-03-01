@@ -13,43 +13,35 @@ interface Contact {
 }
 
 interface ContactPayPageProps {
-  allowPromisesEnabled: boolean;
   cashuBalance: number;
   cashuIsBusy: boolean;
   contactPayMethod: "lightning" | "cashu" | null;
   displayUnit: string;
-  getCredoAvailableForContact: (npub: string) => number;
   nostrPictureByNpub: Record<string, string | null>;
   payAmount: string;
   paySelectedContact: () => Promise<void>;
   payWithCashuEnabled: boolean;
-  promiseTotalCapSat: number;
   selectedContact: Contact | null;
   setContactPayMethod: React.Dispatch<
     React.SetStateAction<"lightning" | "cashu" | null>
   >;
   setPayAmount: (value: string | ((prev: string) => string)) => void;
   t: (key: string) => string;
-  totalCredoOutstandingOut: number;
 }
 
 export const ContactPayPage: FC<ContactPayPageProps> = ({
-  allowPromisesEnabled,
   cashuBalance,
   cashuIsBusy,
   contactPayMethod,
   displayUnit,
-  getCredoAvailableForContact,
   nostrPictureByNpub,
   payAmount,
   paySelectedContact,
   payWithCashuEnabled,
-  promiseTotalCapSat,
   selectedContact,
   setContactPayMethod,
   setPayAmount,
   t,
-  totalCredoOutstandingOut,
 }) => {
   if (!selectedContact) {
     return (
@@ -62,8 +54,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
   const ln = String(selectedContact.lnAddress ?? "").trim();
   const npub = normalizeNpubIdentifier(selectedContact.npub);
   const url = npub ? nostrPictureByNpub[npub] : null;
-  const canUseCashu =
-    (payWithCashuEnabled || allowPromisesEnabled) && Boolean(npub);
+  const canUseCashu = payWithCashuEnabled && Boolean(npub);
   const canUseLightning = Boolean(ln);
   const showToggle = canUseCashu && canUseLightning;
   const method =
@@ -77,27 +68,13 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
   const amountSat = Number.parseInt(payAmount.trim(), 10);
   const validAmount =
     Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0;
-  const availableCredo = npub ? getCredoAvailableForContact(npub) : 0;
-  const useCredo = Math.min(availableCredo, validAmount);
-  const remaining = Math.max(0, validAmount - useCredo);
-  const promiseAmount =
-    method === "cashu" && allowPromisesEnabled
-      ? Math.max(0, remaining - cashuBalance)
-      : 0;
-  const promiseLimitExceeded =
-    promiseAmount > 0 &&
-    totalCredoOutstandingOut + promiseAmount > promiseTotalCapSat;
-  const canCoverAnything =
-    cashuBalance > 0 ||
-    availableCredo > 0 ||
-    (allowPromisesEnabled && method === "cashu");
+  const remaining = validAmount;
+  const canCoverAnything = cashuBalance > 0;
   const invalid =
     (method === "lightning" ? !ln : !canUseCashu) ||
     !Number.isFinite(amountSat) ||
     amountSat <= 0 ||
-    (method === "lightning"
-      ? remaining > cashuBalance
-      : promiseAmount > 0 && (!allowPromisesEnabled || promiseLimitExceeded));
+    remaining > cashuBalance;
 
   return (
     <section className="panel">
@@ -152,18 +129,11 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
           )}
           <p className="muted">
             {t("availablePrefix")} {formatInteger(cashuBalance)} {displayUnit}
-            {allowPromisesEnabled ? (
-              <>
-                {" · "}
-                {t("promisedPrefix")} {formatInteger(promiseAmount)}{" "}
-                {displayUnit}
-              </>
-            ) : null}
           </p>
         </div>
       </div>
 
-      {method === "cashu" && !payWithCashuEnabled && !allowPromisesEnabled && (
+      {method === "cashu" && !payWithCashuEnabled && (
         <p className="muted">{t("payWithCashuDisabled")}</p>
       )}
 
@@ -216,12 +186,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
             title={
               method === "lightning" && remaining > cashuBalance
                 ? t("payInsufficient")
-                : promiseAmount > 0 &&
-                    (!allowPromisesEnabled || promiseLimitExceeded)
-                  ? allowPromisesEnabled
-                    ? t("payPromiseLimit")
-                    : t("payInsufficient")
-                  : undefined
+                : undefined
             }
             data-guide="pay-send"
           >

@@ -2,19 +2,10 @@ import * as Evolu from "@evolu/common";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React from "react";
 import { createSendTokenWithTokensAtMint } from "../../../cashuSend";
-import {
-  createCredoPromiseToken,
-  createCredoSettlementToken,
-} from "../../../credo";
 import type { CashuTokenId, ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
-import {
-  CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
-  PROMISE_EXPIRES_SEC,
-  PROMISE_TOTAL_CAP_SAT,
-} from "../../../utils/constants";
-import { getCredoRemainingAmount } from "../../../utils/credo";
+import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../../utils/constants";
 import { previewTokenText } from "../../../utils/formatting";
 import { normalizeMintUrl } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
@@ -24,7 +15,6 @@ import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import type {
   CashuTokenRowLike,
   ContactRowLike,
-  CredoTokenRow,
   LocalNostrMessage,
   NewLocalNostrMessage,
   PaymentLogData,
@@ -37,13 +27,7 @@ type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 
 interface UsePayContactWithCashuMessageParams {
-  allowPromisesEnabled: boolean;
   appendLocalNostrMessage: AppendLocalNostrMessage;
-  applyCredoSettlement: (args: {
-    amount: number;
-    promiseId: string;
-    settledAtSec: number;
-  }) => void;
   buildCashuMintCandidates: (
     mintGroups: Map<string, { sum: number; tokens: string[] }>,
     preferredMint: string,
@@ -51,7 +35,6 @@ interface UsePayContactWithCashuMessageParams {
   cashuBalance: number;
   cashuTokensWithMeta: readonly CashuTokenRowLike[];
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
-  credoTokensActive: readonly CredoTokenRow[];
   currentNpub: string | null;
   currentNsec: string | null;
   defaultMintUrl: string | null;
@@ -62,19 +45,7 @@ interface UsePayContactWithCashuMessageParams {
     messageId?: string;
   }) => void;
   formatInteger: (value: number) => string;
-  getCredoAvailableForContact: (contactNpub: string) => number;
   insert: EvoluMutations["insert"];
-  insertCredoPromise: (args: {
-    amount: number;
-    createdAtSec: number;
-    direction: "in" | "out";
-    expiresAtSec: number;
-    issuer: string;
-    promiseId: string;
-    recipient: string;
-    token: string;
-    unit: string;
-  }) => void;
   logPayStep: (step: string, data?: PaymentLogData) => void;
   logPaymentEvent: (event: {
     amount?: number | null;
@@ -99,29 +70,23 @@ interface UsePayContactWithCashuMessageParams {
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   showPaidOverlay: (title: string) => void;
   t: (key: string) => string;
-  totalCredoOutstandingOut: number;
   update: EvoluMutations["update"];
   updateLocalNostrMessage: UpdateLocalNostrMessage;
 }
 
 export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
-  allowPromisesEnabled,
   appendLocalNostrMessage,
-  applyCredoSettlement,
   buildCashuMintCandidates,
   cashuBalance,
   cashuTokensWithMeta,
   chatSeenWrapIdsRef,
-  credoTokensActive,
   currentNpub,
   currentNsec,
   defaultMintUrl,
   displayUnit,
   enqueuePendingPayment,
   formatInteger,
-  getCredoAvailableForContact,
   insert,
-  insertCredoPromise,
   logPayStep,
   logPaymentEvent,
   nostrMessagesLocal,
@@ -132,7 +97,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   setStatus,
   showPaidOverlay,
   t,
-  totalCredoOutstandingOut,
   update,
   updateLocalNostrMessage,
 }: UsePayContactWithCashuMessageParams) => {
@@ -201,7 +165,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         amountSat,
         fromQueue: Boolean(fromQueue),
         cashuBalance,
-        allowPromisesEnabled,
         payWithCashuEnabled,
       });
 
@@ -255,24 +218,9 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
 
       if (notify) setStatus(t("payPaying"));
 
-      const availableCredo = contactNpub
-        ? getCredoAvailableForContact(contactNpub)
-        : 0;
-      const useCredoAmount = Math.min(availableCredo, amountSat);
-      const remainingAfterCredo = Math.max(0, amountSat - useCredoAmount);
+      const remainingAmount = amountSat;
 
-      const cashuToSend = Math.min(cashuBalance, remainingAfterCredo);
-      const promiseAmount = Math.max(0, remainingAfterCredo - cashuToSend);
-      if (promiseAmount > 0) {
-        if (!allowPromisesEnabled) {
-          if (notify) setStatus(t("payInsufficient"));
-          return { ok: false, queued: false, error: "insufficient" };
-        }
-        if (totalCredoOutstandingOut + promiseAmount > PROMISE_TOTAL_CAP_SAT) {
-          if (notify) setStatus(t("payPromiseLimit"));
-          return { ok: false, queued: false, error: "promise limit" };
-        }
-      }
+      const cashuToSend = Math.min(cashuBalance, remainingAmount);
 
       const sendBatches: Array<{
         token: string;
@@ -427,38 +375,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         }
       }
 
-      const settlementPlans: Array<{
-        row: CredoTokenRow;
-        amount: number;
-      }> = [];
-
-      if (useCredoAmount > 0) {
-        const candidates = credoTokensActive
-          .filter((row) => {
-            const r = row as CredoTokenRow;
-            return (
-              String(r.direction ?? "") === "in" &&
-              String(r.issuer ?? "").trim() === contactNpub
-            );
-          })
-          .sort(
-            (a, b) =>
-              Number((a as CredoTokenRow).expiresAtSec ?? 0) -
-              Number((b as CredoTokenRow).expiresAtSec ?? 0),
-          );
-
-        let remaining = useCredoAmount;
-        for (const row of candidates) {
-          if (remaining <= 0) break;
-          const available = getCredoRemainingAmount(row);
-          if (available <= 0) continue;
-          const useAmount = Math.min(available, remaining);
-          if (useAmount <= 0) continue;
-          settlementPlans.push({ row, amount: useAmount });
-          remaining -= useAmount;
-        }
-      }
-
       try {
         const { nip19, getPublicKey } = await import("nostr-tools");
         const { wrapEvent } = await import("nostr-tools/nip59");
@@ -478,61 +394,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           text: string;
           onSuccess?: () => void;
         }> = [];
-        const nowSec = Math.floor(Date.now() / 1000);
-
-        for (const plan of settlementPlans) {
-          const row = plan.row as CredoTokenRow;
-          const promiseId = String(row.promiseId ?? "").trim();
-          const issuer = String(row.issuer ?? "").trim();
-          const recipient = String(row.recipient ?? "").trim() || currentNpub;
-          if (!promiseId || !issuer || !recipient) continue;
-          const settlement = createCredoSettlementToken({
-            recipientNsec: privBytes,
-            promiseId,
-            issuerNpub: issuer,
-            recipientNpub: recipient,
-            amount: plan.amount,
-            unit: "sat",
-            settledAtSec: nowSec,
-          });
-          messagePlans.push({
-            text: settlement.token,
-            onSuccess: () =>
-              applyCredoSettlement({
-                promiseId,
-                amount: plan.amount,
-                settledAtSec: nowSec,
-              }),
-          });
-        }
-
-        if (promiseAmount > 0) {
-          const expiresAtSec = nowSec + PROMISE_EXPIRES_SEC;
-          const promiseCreated = createCredoPromiseToken({
-            issuerNpub: currentNpub,
-            issuerNsec: privBytes,
-            recipientNpub: contactNpub,
-            amount: promiseAmount,
-            unit: "sat",
-            expiresAtSec,
-            createdAtSec: nowSec,
-          });
-          messagePlans.push({
-            text: promiseCreated.token,
-            onSuccess: () =>
-              insertCredoPromise({
-                promiseId: promiseCreated.promiseId,
-                token: promiseCreated.token,
-                issuer: currentNpub,
-                recipient: contactNpub,
-                amount: promiseAmount,
-                unit: "sat",
-                createdAtSec: nowSec,
-                expiresAtSec,
-                direction: "out",
-              }),
-          });
-        }
 
         for (const batch of sendBatches) {
           logPayStep("plan-send-token", {
@@ -558,10 +419,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         for (const plan of messagePlans) {
           const messageText = plan.text;
           const clientId = makeLocalId();
-          const isCredoMessage = messageText.startsWith("credoA");
           logPayStep("publish-pending", {
             clientId,
-            isCredoMessage,
             token: previewTokenText(messageText),
           });
           const baseEvent = {
@@ -626,7 +485,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             logPayStep("publish-failed", {
               clientId,
               error: getUnknownErrorMessage(firstError, "publish failed"),
-              isCredoMessage,
             });
             hasPendingMessages = true;
             if (notify) {
@@ -648,7 +506,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           logPayStep("publish-ok", {
             clientId,
             wrapId: String(wrapForMe.id ?? ""),
-            isCredoMessage,
           });
 
           plan.onSuccess?.();
@@ -748,7 +605,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       }
     },
     [
-      allowPromisesEnabled,
       cashuBalance,
       cashuTokensWithMeta,
       chatSeenWrapIdsRef,
@@ -757,24 +613,19 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       displayUnit,
       enqueuePendingPayment,
       formatInteger,
-      getCredoAvailableForContact,
       insert,
-      insertCredoPromise,
       logPayStep,
       logPaymentEvent,
       pushToast,
       setStatus,
       showPaidOverlay,
       t,
-      totalCredoOutstandingOut,
       update,
-      applyCredoSettlement,
       buildCashuMintCandidates,
       buildCashuTokenPayload,
       updateLocalNostrMessage,
       appendLocalNostrMessage,
       publishWrappedWithRetry,
-      credoTokensActive,
       nostrMessagesLocal,
       setContactsOnboardingHasPaid,
       payWithCashuEnabled,

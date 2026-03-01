@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CashuTokenId, ContactId, CredoTokenId } from "../evolu";
+import type { CashuTokenId, ContactId } from "../evolu";
 import { parseRouteFromHash, type Route } from "../types/route";
 
 export const useRouting = () => {
@@ -25,7 +25,6 @@ type NavigationAction =
   | { route: "contactNew" }
   | { route: "contactPay"; id: ContactId }
   | { route: "contacts" }
-  | { route: "credoToken"; id: CredoTokenId }
   | { route: "evoluCurrentData" }
   | { route: "evoluData" }
   | { route: "evoluHistoryData" }
@@ -104,11 +103,6 @@ export const navigateTo = (action: NavigationAction): void => {
     case "cashuToken":
       window.location.assign(
         `#wallet/token/${encodeURIComponent(String(action.id))}`,
-      );
-      break;
-    case "credoToken":
-      window.location.assign(
-        `#wallet/credo/${encodeURIComponent(String(action.id))}`,
       );
       break;
     case "profile":

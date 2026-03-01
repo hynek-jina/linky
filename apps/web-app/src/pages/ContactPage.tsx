@@ -13,11 +13,9 @@ interface Contact {
 }
 
 interface ContactPageProps {
-  allowPromisesEnabled: boolean;
   cashuBalance: number;
   cashuIsBusy: boolean;
   feedbackContactNpub: string;
-  getCredoAvailableForContact: (npub: string) => number;
   nostrPictureByNpub: Record<string, string | null>;
   openContactPay: (id: ContactId) => void;
   payWithCashuEnabled: boolean;
@@ -26,11 +24,9 @@ interface ContactPageProps {
 }
 
 export const ContactPage: FC<ContactPageProps> = ({
-  allowPromisesEnabled,
   cashuBalance,
   cashuIsBusy,
   feedbackContactNpub,
-  getCredoAvailableForContact,
   nostrPictureByNpub,
   openContactPay,
   payWithCashuEnabled,
@@ -51,13 +47,9 @@ export const ContactPage: FC<ContactPageProps> = ({
   const ln = String(selectedContact.lnAddress ?? "").trim();
   const group = String(selectedContact.groupName ?? "").trim();
   const canPayThisContact =
-    Boolean(ln) ||
-    ((payWithCashuEnabled || allowPromisesEnabled) && Boolean(npub));
-  const availableCredo = npub ? getCredoAvailableForContact(npub) : 0;
+    Boolean(ln) || (payWithCashuEnabled && Boolean(npub));
   const canStartPay =
-    (Boolean(ln) && cashuBalance > 0) ||
-    (Boolean(npub) &&
-      (cashuBalance > 0 || availableCredo > 0 || allowPromisesEnabled));
+    (Boolean(ln) && cashuBalance > 0) || (Boolean(npub) && cashuBalance > 0);
   const isFeedbackContact = npub === feedbackContactNpub;
 
   return (

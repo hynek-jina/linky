@@ -2,7 +2,7 @@
 
 Mobile-first PWA for contacts, Nostr messaging, and Lightning/Cashu payments. Local-first architecture using Evolu for offline storage and cross-device sync.
 
-See @README.md for project overview and @docs/credo.md for the Credo protocol spec.
+See @README.md for project overview.
 
 ## Commands
 
@@ -32,7 +32,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - **Evolu** for all persistent data - local-first SQLite with sync. Schema in `src/evolu.ts`
 - Nostr chat persistence is Evolu-backed (`nostrMessage` + `nostrReaction` tables) and uses deterministic `messages-n` owner lanes for seed logins (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/4'/<index>'`); legacy `linky.local.nostrMessages.v1.<ownerId>` data is imported once per owner via `linky.messages_evolu_migrated_v1:<ownerId>`
 - For seed logins, contacts writes are routed through deterministic Evolu `contacts-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/2'/<index>'`), with metadata pointer stored in Evolu `ownerMeta` lane (`contacts-<n>`)
-- For seed logins, cashu + credo token writes/reads are routed through deterministic Evolu `cashu-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/3'/<index>'`)
+- For seed logins, cashu token writes/reads are routed through deterministic Evolu `cashu-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/3'/<index>'`)
 - For seed logins, custom Nostr identity overrides are persisted in deterministic Evolu `identities-n` owner lanes (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/5'/<index>'`), with active pointer recorded in `ownerMeta` scope `identities` (`identities-<n>`)
 - AppShell subscribes Evolu sync for active seed lanes (`contacts-n`, `cashu-n`, `messages-n`, and `ownerMeta`) via `useOwner`, so owner pointers/data converge across tabs/devices
 - Contacts/cashu owner lanes auto-rotate when owner-local write delta reaches `OWNER_ROTATION_TRIGGER_WRITE_COUNT` (currently 1000), migrate valid contacts + tokens to next lane, and enforce 1-minute per-type cooldown
@@ -74,7 +74,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 
 - TypeScript strict mode with `exactOptionalPropertyTypes`
 - **NEVER use `as` or `any` to cast types** - validate with a runtime type guard instead of casting
-- Branded ID types from Evolu (`ContactId`, `CashuTokenId`, `CredoTokenId`, `MintId`, etc.) - don't use plain strings
+- Branded ID types from Evolu (`ContactId`, `CashuTokenId`, `MintId`, etc.) - don't use plain strings
 - Components use `interface` for props, not `type`
 - LocalStorage keys use `linky.` prefix (e.g., `linky.nostr_nsec`, `linky.lang`)
 - Use types from libraries (e.g., Evolu, Cashu, Nostr) instead of redefining them - look up the library's exported types first

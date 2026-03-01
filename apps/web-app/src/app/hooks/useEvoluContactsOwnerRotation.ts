@@ -1,7 +1,7 @@
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
 import React from "react";
-import type { CashuTokenId, ContactId, CredoTokenId } from "../../evolu";
+import type { CashuTokenId, ContactId } from "../../evolu";
 import { evolu } from "../../evolu";
 import {
   EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
@@ -17,11 +17,7 @@ import {
   OWNER_ROTATION_TRIGGER_WRITE_COUNT,
 } from "../../utils/constants";
 import { deriveEvoluOwnerMnemonicFromSlip39 } from "../../utils/slip39Nostr";
-import type {
-  CashuTokenRowLike,
-  ContactRowLike,
-  CredoTokenRow,
-} from "../types/appTypes";
+import type { CashuTokenRowLike, ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -143,14 +139,6 @@ const scoreCashuToken = (token: CashuTokenRowLike): number => {
   const createdAt = Number((token as { createdAt?: unknown }).createdAt);
   if (Number.isFinite(createdAt)) score += createdAt / 1_000_000_000;
   return score;
-};
-
-const readCredoTokenId = (row: unknown): string => {
-  if (typeof row !== "object" || row === null) return "";
-  if (!("id" in row)) return "";
-  const id = row.id;
-  if (typeof id !== "string") return "";
-  return id.trim();
 };
 
 const parseContactsOwnerIndexFromPointer = (value: unknown): number | null => {
@@ -396,18 +384,6 @@ export const useEvoluContactsOwnerRotation = ({
   );
   const allCashuTokensRows = useQuery(allCashuTokensQuery);
 
-  const allCredoTokensQuery = React.useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db
-          .selectFrom("credoToken")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue),
-      ),
-    [],
-  );
-  const allCredoTokensRows = useQuery(allCredoTokensQuery);
-
   const allNostrMessagesQuery = React.useMemo(
     () =>
       evolu.createQuery((db) =>
@@ -506,11 +482,8 @@ export const useEvoluContactsOwnerRotation = ({
     for (const row of allCashuTokensRows) {
       if (readRowOwnerId(row) === cashuActiveOwnerId) count += 1;
     }
-    for (const row of allCredoTokensRows) {
-      if (readRowOwnerId(row) === cashuActiveOwnerId) count += 1;
-    }
     return count;
-  }, [allCashuTokensRows, allCredoTokensRows, cashuActiveOwnerId]);
+  }, [allCashuTokensRows, cashuActiveOwnerId]);
 
   const messagesOwnerWriteCount = React.useMemo(() => {
     if (!messagesActiveOwnerId) return 0;
@@ -937,101 +910,6 @@ export const useEvoluContactsOwnerRotation = ({
         if (result.ok) copiedCashuCount += 1;
       }
 
-      const byCredoPromiseId = new Map<string, CredoTokenRow>();
-      if (currentCashuOwnerId) {
-        for (const row of allCredoTokensRows) {
-          if (readRowOwnerId(row) !== currentCashuOwnerId) continue;
-          if (typeof row !== "object" || row === null) continue;
-          const promiseId =
-            "promiseId" in row && typeof row.promiseId === "string"
-              ? row.promiseId.trim()
-              : "";
-          if (!promiseId) continue;
-          const existing = byCredoPromiseId.get(promiseId);
-          if (!existing) {
-            byCredoPromiseId.set(promiseId, row as CredoTokenRow);
-            continue;
-          }
-          const existingSettled = Number(existing.settledAmount ?? 0) || 0;
-          const nextSettled =
-            "settledAmount" in row ? Number(row.settledAmount ?? 0) || 0 : 0;
-          if (nextSettled >= existingSettled) {
-            byCredoPromiseId.set(promiseId, row as CredoTokenRow);
-          }
-        }
-      }
-
-      let copiedCredoCount = 0;
-      for (const row of byCredoPromiseId.values()) {
-        const id = readCredoTokenId(row);
-        const promiseId = String(row.promiseId ?? "").trim();
-        const issuer = String(row.issuer ?? "").trim();
-        const recipient = String(row.recipient ?? "").trim();
-        const unit = String(row.unit ?? "").trim();
-        const direction = String(row.direction ?? "").trim();
-        const amount = Number(row.amount ?? 0);
-        const createdAtSec = Number(row.createdAtSec ?? 0);
-        const expiresAtSec = Number(row.expiresAtSec ?? 0);
-        if (
-          !id ||
-          !promiseId ||
-          !issuer ||
-          !recipient ||
-          !unit ||
-          !direction ||
-          !Number.isFinite(amount) ||
-          amount <= 0 ||
-          !Number.isFinite(createdAtSec) ||
-          createdAtSec <= 0 ||
-          !Number.isFinite(expiresAtSec) ||
-          expiresAtSec <= 0
-        ) {
-          continue;
-        }
-
-        const settledAmountRaw = Number(row.settledAmount ?? 0);
-        const settledAmount =
-          Number.isFinite(settledAmountRaw) && settledAmountRaw > 0
-            ? (Math.trunc(settledAmountRaw) as typeof Evolu.PositiveInt.Type)
-            : null;
-        const settledAtSecRaw = Number(row.settledAtSec ?? 0);
-        const settledAtSec =
-          Number.isFinite(settledAtSecRaw) && settledAtSecRaw > 0
-            ? (Math.trunc(settledAtSecRaw) as typeof Evolu.PositiveInt.Type)
-            : null;
-
-        const payload = {
-          id: id as CredoTokenId,
-          promiseId: promiseId as typeof Evolu.NonEmptyString1000.Type,
-          issuer: issuer as typeof Evolu.NonEmptyString1000.Type,
-          recipient: recipient as typeof Evolu.NonEmptyString1000.Type,
-          amount: Math.trunc(amount) as typeof Evolu.PositiveInt.Type,
-          unit: unit as typeof Evolu.NonEmptyString100.Type,
-          createdAtSec: Math.trunc(
-            createdAtSec,
-          ) as typeof Evolu.PositiveInt.Type,
-          expiresAtSec: Math.trunc(
-            expiresAtSec,
-          ) as typeof Evolu.PositiveInt.Type,
-          settledAmount,
-          settledAtSec,
-          direction: direction as typeof Evolu.NonEmptyString100.Type,
-          contactId: String(row.contactId ?? "").trim()
-            ? String(row.contactId ?? "").trim()
-            : null,
-          rawToken: String(row.rawToken ?? "").trim()
-            ? (String(
-                row.rawToken ?? "",
-              ).trim() as typeof Evolu.NonEmptyString1000.Type)
-            : null,
-        };
-
-        const result = upsert("credoToken", payload, {
-          ownerId: derived.cashuOwner.id,
-        });
-        if (result.ok) copiedCredoCount += 1;
-      }
-
       const pointerResult = upsert(
         "ownerMeta",
         {
@@ -1065,7 +943,7 @@ export const useEvoluContactsOwnerRotation = ({
       setCounterValue(
         EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
         nextIndex,
-        copiedCashuCount + copiedCredoCount,
+        copiedCashuCount,
       );
       setStoredTimestampMs(
         EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
@@ -1122,21 +1000,6 @@ export const useEvoluContactsOwnerRotation = ({
                 { ownerId: pruneOwners.cashuOwner.id },
               );
             }
-
-            for (const row of allCredoTokensRows) {
-              if (readRowOwnerId(row) !== pruneCashuOwnerId) continue;
-              const id = readCredoTokenId(row);
-              if (!id) continue;
-
-              update(
-                "credoToken",
-                {
-                  id: id as CredoTokenId,
-                  isDeleted: Evolu.sqliteTrue,
-                },
-                { ownerId: pruneOwners.cashuOwner.id },
-              );
-            }
           }
         }
       }
@@ -1144,13 +1007,12 @@ export const useEvoluContactsOwnerRotation = ({
       setOwnerSyncData(derived);
       setContactsOwnerIndex(nextIndex);
       pushToast(
-        `${t("evoluContactsOwnerRotated")} (${copiedCount}/${copiedCashuCount}/${copiedCredoCount})`,
+        `${t("evoluContactsOwnerRotated")} (${copiedCount}/${copiedCashuCount})`,
       );
     } finally {
       setRotateContactsOwnerIsBusy(false);
     }
   }, [
-    allCredoTokensRows,
     allCashuTokensRows,
     contactsOwnerIndex,
     getContactsForRotation,

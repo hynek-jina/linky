@@ -1,7 +1,6 @@
 import type { PeopleRoutesProps } from "../AppRouteContent";
 
 interface BuildPeopleRoutePropsParams {
-  allowPromisesEnabled: PeopleRoutesProps["chatProps"]["allowPromisesEnabled"];
   cashuBalance: PeopleRoutesProps["chatProps"]["cashuBalance"];
   cashuIsBusy: PeopleRoutesProps["chatProps"]["cashuIsBusy"];
   chatDraft: PeopleRoutesProps["chatProps"]["chatDraft"];
@@ -24,8 +23,6 @@ interface BuildPeopleRoutePropsParams {
   feedbackContactNpub: PeopleRoutesProps["chatProps"]["feedbackContactNpub"];
   form: PeopleRoutesProps["contactEditProps"]["form"];
   getCashuTokenMessageInfo: PeopleRoutesProps["chatProps"]["getCashuTokenMessageInfo"];
-  getCredoAvailableForContact: PeopleRoutesProps["chatProps"]["getCredoAvailableForContact"];
-  getCredoTokenMessageInfo: PeopleRoutesProps["chatProps"]["getCredoTokenMessageInfo"];
   getMintIconUrl: PeopleRoutesProps["chatProps"]["getMintIconUrl"];
   groupNames: PeopleRoutesProps["contactEditProps"]["groupNames"];
   handleSaveContact: PeopleRoutesProps["contactEditProps"]["handleSaveContact"];
@@ -33,7 +30,7 @@ interface BuildPeopleRoutePropsParams {
   isSavingContact: PeopleRoutesProps["contactEditProps"]["isSavingContact"];
   lang: PeopleRoutesProps["chatProps"]["lang"];
   myProfileQr: PeopleRoutesProps["profileProps"]["myProfileQr"];
-  nostrPictureByNpub: PeopleRoutesProps["chatProps"]["nostrPictureByNpub"];
+  nostrPictureByNpub: PeopleRoutesProps["contactProps"]["nostrPictureByNpub"];
   onCancelEdit: PeopleRoutesProps["chatProps"]["onCancelEdit"];
   onCancelReply: PeopleRoutesProps["chatProps"]["onCancelReply"];
   onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
@@ -54,7 +51,6 @@ interface BuildPeopleRoutePropsParams {
   profileEditPicture: PeopleRoutesProps["profileProps"]["profileEditPicture"];
   profileEditsSavable: PeopleRoutesProps["profileProps"]["profileEditsSavable"];
   profilePhotoInputRef: PeopleRoutesProps["profileProps"]["profilePhotoInputRef"];
-  promiseTotalCapSat: PeopleRoutesProps["contactPayProps"]["promiseTotalCapSat"];
   requestDeleteCurrentContact: PeopleRoutesProps["contactEditProps"]["requestDeleteCurrentContact"];
   resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
   saveProfileEdits: PeopleRoutesProps["profileProps"]["saveProfileEdits"];
@@ -71,11 +67,9 @@ interface BuildPeopleRoutePropsParams {
   setProfileEditName: PeopleRoutesProps["profileProps"]["setProfileEditName"];
   setProfileEditPicture: PeopleRoutesProps["profileProps"]["setProfileEditPicture"];
   t: PeopleRoutesProps["chatProps"]["t"];
-  totalCredoOutstandingOut: PeopleRoutesProps["contactPayProps"]["totalCredoOutstandingOut"];
 }
 
 export const buildPeopleRouteProps = ({
-  allowPromisesEnabled,
   cashuBalance,
   cashuIsBusy,
   chatDraft,
@@ -98,8 +92,6 @@ export const buildPeopleRouteProps = ({
   feedbackContactNpub,
   form,
   getCashuTokenMessageInfo,
-  getCredoAvailableForContact,
-  getCredoTokenMessageInfo,
   getMintIconUrl,
   groupNames,
   handleSaveContact,
@@ -128,7 +120,6 @@ export const buildPeopleRouteProps = ({
   profileEditPicture,
   profileEditsSavable,
   profilePhotoInputRef,
-  promiseTotalCapSat,
   requestDeleteCurrentContact,
   resetEditedContactFieldFromNostr,
   saveProfileEdits,
@@ -145,7 +136,6 @@ export const buildPeopleRouteProps = ({
   setProfileEditName,
   setProfileEditPicture,
   t,
-  totalCredoOutstandingOut,
 }: BuildPeopleRoutePropsParams): PeopleRoutesProps => {
   return {
     chatProps: {
@@ -161,17 +151,13 @@ export const buildPeopleRouteProps = ({
       cashuBalance,
       cashuIsBusy,
       payWithCashuEnabled,
-      allowPromisesEnabled,
       feedbackContactNpub,
       lang,
-      nostrPictureByNpub,
       reactionsByMessageId,
       setMintIconUrlByMint,
       chatMessageElByIdRef,
       getCashuTokenMessageInfo,
-      getCredoTokenMessageInfo,
       getMintIconUrl,
-      getCredoAvailableForContact,
       onReply,
       onEdit,
       onReact,
@@ -210,17 +196,13 @@ export const buildPeopleRouteProps = ({
       selectedContact,
       nostrPictureByNpub,
       cashuBalance,
-      totalCredoOutstandingOut,
-      promiseTotalCapSat,
       cashuIsBusy,
       payWithCashuEnabled,
-      allowPromisesEnabled,
       contactPayMethod,
       setContactPayMethod,
       payAmount,
       setPayAmount,
       displayUnit,
-      getCredoAvailableForContact,
       paySelectedContact,
       t,
     },
@@ -230,9 +212,7 @@ export const buildPeopleRouteProps = ({
       cashuBalance,
       cashuIsBusy,
       payWithCashuEnabled,
-      allowPromisesEnabled,
       feedbackContactNpub,
-      getCredoAvailableForContact,
       openContactPay,
       t,
     },

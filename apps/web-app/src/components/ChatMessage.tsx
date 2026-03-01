@@ -1,8 +1,5 @@
 import React from "react";
-import type {
-  CashuTokenMessageInfo,
-  CredoTokenMessageInfo,
-} from "../app/lib/tokenMessageInfo";
+import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   ChatReactionChip,
   LocalNostrMessage,
@@ -30,11 +27,9 @@ interface ChatMessageProps {
   canEdit: boolean;
   canReplyOrReact: boolean;
   chatPendingLabel: string;
-  contactAvatar: string | null;
   formatChatDayLabel: (ms: number) => string;
   formatInteger: (n: number) => string;
   getCashuTokenMessageInfo: (text: string) => CashuTokenMessageInfo | null;
-  getCredoTokenMessageInfo: (text: string) => CredoTokenMessageInfo | null;
   getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   locale: string;
   message: LocalNostrMessage;
@@ -60,11 +55,9 @@ export function ChatMessage({
   canEdit,
   canReplyOrReact,
   chatPendingLabel,
-  contactAvatar,
   formatChatDayLabel,
   formatInteger,
   getCashuTokenMessageInfo,
-  getCredoTokenMessageInfo,
   getMintIconUrl,
   locale,
   message,
@@ -119,7 +112,6 @@ export function ChatMessage({
   }).format(d);
 
   const tokenInfo = getCashuTokenMessageInfo(content);
-  const credoInfo = getCredoTokenMessageInfo(content);
 
   const openMenu = React.useCallback(() => {
     setMenuOpen(true);
@@ -248,120 +240,90 @@ export function ChatMessage({
                 <span>{replyQuoteText}</span>
               </div>
             )}
-            {credoInfo ? (
-              <span
-                className={
-                  credoInfo.isValid ? "pill pill-credo" : "pill pill-muted"
-                }
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-                aria-label={`${formatInteger(credoInfo.amount ?? 0)} sat`}
-              >
-                {contactAvatar ? (
-                  <img
-                    src={contactAvatar}
-                    alt=""
-                    width={14}
-                    height={14}
-                    style={{
-                      borderRadius: 9999,
-                      objectFit: "cover",
-                    }}
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : null}
-                <span>{formatInteger(credoInfo.amount ?? 0)}</span>
-              </span>
-            ) : tokenInfo ? (
-              (() => {
-                const icon = getMintIconUrl(tokenInfo.mintUrl);
-                const showMintFallback = icon.failed || !icon.url;
-                return (
-                  <span
-                    className={tokenInfo.isValid ? "pill" : "pill pill-muted"}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                    aria-label={
-                      tokenInfo.mintDisplay
-                        ? `${formatInteger(tokenInfo.amount ?? 0)} sat · ${tokenInfo.mintDisplay}`
-                        : `${formatInteger(tokenInfo.amount ?? 0)} sat`
-                    }
-                  >
-                    {icon.url ? (
-                      <img
-                        src={icon.url}
-                        alt=""
-                        width={14}
-                        height={14}
-                        style={{
-                          borderRadius: 9999,
-                          objectFit: "cover",
-                        }}
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        onLoad={() => {
-                          if (icon.origin) {
-                            onMintIconLoad(icon.origin, icon.url);
-                          }
-                        }}
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                          if (icon.origin) {
-                            const duck = icon.host
-                              ? `https://icons.duckduckgo.com/ip3/${icon.host}.ico`
-                              : null;
-                            const favicon = `${icon.origin}/favicon.ico`;
-                            let next: string | null = null;
-                            if (duck && icon.url !== duck) {
-                              next = duck;
-                            } else if (icon.url !== favicon) {
-                              next = favicon;
+            {tokenInfo
+              ? (() => {
+                  const icon = getMintIconUrl(tokenInfo.mintUrl);
+                  const showMintFallback = icon.failed || !icon.url;
+                  return (
+                    <span
+                      className={tokenInfo.isValid ? "pill" : "pill pill-muted"}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                      aria-label={
+                        tokenInfo.mintDisplay
+                          ? `${formatInteger(tokenInfo.amount ?? 0)} sat · ${tokenInfo.mintDisplay}`
+                          : `${formatInteger(tokenInfo.amount ?? 0)} sat`
+                      }
+                    >
+                      {icon.url ? (
+                        <img
+                          src={icon.url}
+                          alt=""
+                          width={14}
+                          height={14}
+                          style={{
+                            borderRadius: 9999,
+                            objectFit: "cover",
+                          }}
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onLoad={() => {
+                            if (icon.origin) {
+                              onMintIconLoad(icon.origin, icon.url);
                             }
-                            onMintIconError(icon.origin, next);
-                          }
-                        }}
-                      />
-                    ) : null}
-                    {showMintFallback && icon.host ? (
-                      <span
-                        className="muted"
-                        style={{
-                          fontSize: 10,
-                          lineHeight: "14px",
-                        }}
-                      >
-                        {icon.host}
-                      </span>
-                    ) : null}
-                    {!showMintFallback && tokenInfo.mintDisplay ? (
-                      <span
-                        className="muted"
-                        style={{
-                          fontSize: 10,
-                          lineHeight: "14px",
-                          maxWidth: 140,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {tokenInfo.mintDisplay}
-                      </span>
-                    ) : null}
-                    <span>{formatInteger(tokenInfo.amount ?? 0)}</span>
-                  </span>
-                );
-              })()
-            ) : (
-              content
-            )}
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            if (icon.origin) {
+                              const duck = icon.host
+                                ? `https://icons.duckduckgo.com/ip3/${icon.host}.ico`
+                                : null;
+                              const favicon = `${icon.origin}/favicon.ico`;
+                              let next: string | null = null;
+                              if (duck && icon.url !== duck) {
+                                next = duck;
+                              } else if (icon.url !== favicon) {
+                                next = favicon;
+                              }
+                              onMintIconError(icon.origin, next);
+                            }
+                          }}
+                        />
+                      ) : null}
+                      {showMintFallback && icon.host ? (
+                        <span
+                          className="muted"
+                          style={{
+                            fontSize: 10,
+                            lineHeight: "14px",
+                          }}
+                        >
+                          {icon.host}
+                        </span>
+                      ) : null}
+                      {!showMintFallback && tokenInfo.mintDisplay ? (
+                        <span
+                          className="muted"
+                          style={{
+                            fontSize: 10,
+                            lineHeight: "14px",
+                            maxWidth: 140,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {tokenInfo.mintDisplay}
+                        </span>
+                      ) : null}
+                      <span>{formatInteger(tokenInfo.amount ?? 0)}</span>
+                    </span>
+                  );
+                })()
+              : content}
           </div>
         </div>
 

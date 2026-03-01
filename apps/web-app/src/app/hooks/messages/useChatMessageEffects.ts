@@ -1,5 +1,4 @@
 import React from "react";
-import { parseCredoMessage } from "../../../credo";
 import type { Route } from "../../../types/route";
 import type {
   ContactRowLike,
@@ -8,11 +7,6 @@ import type {
 } from "../../types/appTypes";
 
 interface UseChatMessageEffectsParams<TContact extends ContactRowLike> {
-  applyCredoSettlement: (args: {
-    amount: number;
-    promiseId: string;
-    settledAtSec: number;
-  }) => void;
   autoAcceptedChatMessageIdsRef: React.MutableRefObject<Set<string>>;
   cashuIsBusy: boolean;
   cashuTokensHydratedRef: React.MutableRefObject<boolean>;
@@ -23,24 +17,11 @@ interface UseChatMessageEffectsParams<TContact extends ContactRowLike> {
   chatMessages: LocalNostrMessage[];
   chatMessagesRef: React.RefObject<HTMLDivElement | null>;
   chatScrollTargetIdRef: React.MutableRefObject<string | null>;
-  currentNpub: string | null;
   getCashuTokenMessageInfo: (
     text: string,
   ) => { isValid: boolean; tokenRaw: string } | null;
-  insertCredoPromise: (args: {
-    amount: number;
-    createdAtSec: number;
-    direction: "in" | "out";
-    expiresAtSec: number;
-    issuer: string;
-    promiseId: string;
-    recipient: string;
-    token: string;
-    unit: string;
-  }) => void;
   isCashuTokenKnownAny: (tokenRaw: string) => boolean;
   isCashuTokenStored: (tokenRaw: string) => boolean;
-  isCredoPromiseKnown: (promiseId: string) => boolean;
   nostrMessagesRecent: readonly NostrMessageSummaryRow[];
   route: Route;
   saveCashuFromText: (
@@ -51,7 +32,6 @@ interface UseChatMessageEffectsParams<TContact extends ContactRowLike> {
 }
 
 export const useChatMessageEffects = <TContact extends ContactRowLike>({
-  applyCredoSettlement,
   autoAcceptedChatMessageIdsRef,
   cashuIsBusy,
   cashuTokensHydratedRef,
@@ -62,12 +42,9 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
   chatMessages,
   chatMessagesRef,
   chatScrollTargetIdRef,
-  currentNpub,
   getCashuTokenMessageInfo,
-  insertCredoPromise,
   isCashuTokenKnownAny,
   isCashuTokenStored,
-  isCredoPromiseKnown,
   nostrMessagesRecent,
   route,
   saveCashuFromText,
@@ -90,46 +67,10 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
 
       const content = String(message.content ?? "");
       const info = getCashuTokenMessageInfo(content);
-      const credoParsed = parseCredoMessage(content);
-      if (!info && !credoParsed) continue;
+      if (!info) continue;
 
       // Mark it as processed so we don't keep retrying every render.
       autoAcceptedChatMessageIdsRef.current.add(id);
-
-      if (credoParsed && credoParsed.isValid) {
-        if (credoParsed.kind === "promise") {
-          if (!isCredoPromiseKnown(credoParsed.promiseId)) {
-            const promise = credoParsed.promise;
-            const issuer = String(promise.issuer ?? "").trim();
-            const recipient = String(promise.recipient ?? "").trim();
-            const direction =
-              currentNpub && issuer === currentNpub ? "out" : "in";
-            insertCredoPromise({
-              promiseId: credoParsed.promiseId,
-              token: credoParsed.token,
-              issuer,
-              recipient,
-              amount: Number(promise.amount ?? 0) || 0,
-              unit: String(promise.unit ?? "sat"),
-              createdAtSec: Number(promise.created_at ?? 0) || 0,
-              expiresAtSec: Number(promise.expires_at ?? 0) || 0,
-              direction,
-            });
-          }
-        } else if (credoParsed.kind === "settlement") {
-          const settlement = credoParsed.settlement;
-          applyCredoSettlement({
-            promiseId: String(settlement.promise_id ?? ""),
-            amount:
-              typeof settlement.amount === "number" && settlement.amount > 0
-                ? settlement.amount
-                : Number.MAX_SAFE_INTEGER,
-            settledAtSec: Number(settlement.settled_at ?? 0) || 0,
-          });
-        }
-      }
-
-      if (!info) continue;
 
       // Only accept if it's not already in our wallet.
       if (!info.isValid) continue;
@@ -140,16 +81,12 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
       break;
     }
   }, [
-    applyCredoSettlement,
     autoAcceptedChatMessageIdsRef,
     cashuIsBusy,
     chatMessages,
-    currentNpub,
     getCashuTokenMessageInfo,
-    insertCredoPromise,
     isCashuTokenKnownAny,
     isCashuTokenStored,
-    isCredoPromiseKnown,
     route.kind,
     saveCashuFromText,
     cashuTokensHydratedRef,
@@ -170,45 +107,9 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
 
       const content = String(message.content ?? "");
       const info = getCashuTokenMessageInfo(content);
-      const credoParsed = parseCredoMessage(content);
-      if (!info && !credoParsed) continue;
+      if (!info) continue;
 
       autoAcceptedChatMessageIdsRef.current.add(id);
-
-      if (credoParsed && credoParsed.isValid) {
-        if (credoParsed.kind === "promise") {
-          if (!isCredoPromiseKnown(credoParsed.promiseId)) {
-            const promise = credoParsed.promise;
-            const issuer = String(promise.issuer ?? "").trim();
-            const recipient = String(promise.recipient ?? "").trim();
-            const direction =
-              currentNpub && issuer === currentNpub ? "out" : "in";
-            insertCredoPromise({
-              promiseId: credoParsed.promiseId,
-              token: credoParsed.token,
-              issuer,
-              recipient,
-              amount: Number(promise.amount ?? 0) || 0,
-              unit: String(promise.unit ?? "sat"),
-              createdAtSec: Number(promise.created_at ?? 0) || 0,
-              expiresAtSec: Number(promise.expires_at ?? 0) || 0,
-              direction,
-            });
-          }
-        } else if (credoParsed.kind === "settlement") {
-          const settlement = credoParsed.settlement;
-          applyCredoSettlement({
-            promiseId: String(settlement.promise_id ?? ""),
-            amount:
-              typeof settlement.amount === "number" && settlement.amount > 0
-                ? settlement.amount
-                : Number.MAX_SAFE_INTEGER,
-            settledAtSec: Number(settlement.settled_at ?? 0) || 0,
-          });
-        }
-      }
-
-      if (!info) continue;
       if (!info.isValid) continue;
       if (isCashuTokenKnownAny(info.tokenRaw)) continue;
       if (isCashuTokenStored(info.tokenRaw)) continue;
@@ -217,15 +118,11 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
       break;
     }
   }, [
-    applyCredoSettlement,
     autoAcceptedChatMessageIdsRef,
     cashuIsBusy,
-    currentNpub,
     getCashuTokenMessageInfo,
-    insertCredoPromise,
     isCashuTokenKnownAny,
     isCashuTokenStored,
-    isCredoPromiseKnown,
     nostrMessagesRecent,
     saveCashuFromText,
     cashuTokensHydratedRef,

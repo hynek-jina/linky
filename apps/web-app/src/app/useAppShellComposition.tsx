@@ -28,9 +28,7 @@ import {
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
   MAX_CONTACTS_PER_OWNER,
   NO_GROUP_FILTER,
-  PROMISE_TOTAL_CAP_SAT,
 } from "../utils/constants";
-import { getCredoRemainingAmount } from "../utils/credo";
 import { formatInteger } from "../utils/formatting";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
@@ -41,7 +39,6 @@ import {
 } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
-  getInitialAllowPromisesEnabled,
   getInitialNostrNsec,
   getInitialPayWithCashuEnabled,
   getInitialUseBitcoinSymbol,
@@ -105,15 +102,11 @@ import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
-import { createPaySelectedContact } from "./lib/createPaySelectedContact";
 import type { AppNostrPool } from "./lib/nostrPool";
 import { publishWrappedWithRetry as publishWrappedWithRetryBase } from "./lib/nostrPublishRetry";
 import { buildCashuMintCandidates as buildCashuMintCandidatesBase } from "./lib/paymentMintSelection";
 import { showPwaNotification } from "./lib/pwaNotifications";
-import {
-  getCashuTokenMessageInfo as getCashuTokenMessageInfoBase,
-  getCredoTokenMessageInfo as getCredoTokenMessageInfoBase,
-} from "./lib/tokenMessageInfo";
+import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "./lib/tokenMessageInfo";
 import {
   extractCashuTokenFromText,
   extractCashuTokenMeta,
@@ -125,7 +118,6 @@ import {
 } from "./lib/topbarConfig";
 import type {
   ContactRowLike,
-  CredoTokenRow,
   LocalNostrMessage,
   PaymentLogData,
   PublishWrappedResult,
@@ -256,9 +248,7 @@ export const useAppShellComposition = () => {
   const [payWithCashuEnabled, setPayWithCashuEnabled] = useState<boolean>(() =>
     getInitialPayWithCashuEnabled(),
   );
-  const [allowPromisesEnabled, setAllowPromisesEnabled] = useState<boolean>(
-    () => getInitialAllowPromisesEnabled(),
-  );
+  const [allowPromisesEnabled] = useState<boolean>(false);
 
   const displayUnit = useBitcoinSymbol ? "₿" : "sat";
 
@@ -884,60 +874,17 @@ export const useAppShellComposition = () => {
     [cashuTokensFiltered],
   );
 
-  const credoTokensQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db
-          .selectFrom("credoToken")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .orderBy("createdAt", "desc"),
-      ),
-    [],
-  );
-
-  const credoTokens = useQuery(credoTokensQuery);
-
-  const credoTokensAllQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db.selectFrom("credoToken").selectAll().orderBy("createdAt", "desc"),
-      ),
-    [],
-  );
-  const credoTokensAll = useQuery(credoTokensAllQuery);
-
-  const credoTokensFiltered = React.useMemo(() => {
-    if (!activeCashuOwnerId) return [] as typeof credoTokens;
-    return credoTokens.filter(
-      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
-    );
-  }, [activeCashuOwnerId, credoTokens, readCashuRowOwnerId]);
-
-  const credoTokensAllFiltered = React.useMemo(() => {
-    if (!activeCashuOwnerId) return [] as typeof credoTokensAll;
-    return credoTokensAll.filter(
-      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
-    );
-  }, [activeCashuOwnerId, credoTokensAll, readCashuRowOwnerId]);
-
   const {
-    applyCredoSettlement,
     cashuTokensHydratedRef,
     ensureCashuTokenPersisted,
-    insertCredoPromise,
     isCashuTokenKnownAny,
     isCashuTokenStored,
-    isCredoPromiseKnown,
   } = useCashuDomain({
     appOwnerId: cashuOwnerId,
     appOwnerIdRef: cashuOwnerIdRef,
     cashuTokensAll: cashuTokensAllFiltered,
-    contacts,
-    credoTokensAll: credoTokensAllFiltered,
     insert,
     logPaymentEvent,
-    update,
   });
 
   React.useEffect(() => {
@@ -1091,7 +1038,6 @@ export const useAppShellComposition = () => {
     nostrReactionsLocal,
     pendingPayments,
     reactionsByMessageId,
-    refreshLocalNostrMessages,
     removePendingPayment,
     softDeleteLocalNostrReaction,
     softDeleteLocalNostrReactionsByWrapIds,
@@ -1150,91 +1096,7 @@ export const useAppShellComposition = () => {
     }, 0);
   }, [cashuTokensWithMeta]);
 
-  const credoTokensActive = useMemo(() => {
-    const nowSec = Math.floor(Date.now() / 1000);
-    return credoTokensFiltered.filter((row) => {
-      const r = row as CredoTokenRow;
-      const expiresAt = Number(r.expiresAtSec ?? 0) || 0;
-      if (expiresAt && nowSec >= expiresAt) return false;
-      return getCredoRemainingAmount(row) > 0;
-    });
-  }, [credoTokensFiltered]);
-
-  const totalCredoOutstandingOut = useMemo(() => {
-    return credoTokensActive.reduce((sum, row) => {
-      const dir = String((row as CredoTokenRow)?.direction ?? "");
-      if (dir !== "out") return sum;
-      return sum + getCredoRemainingAmount(row);
-    }, 0);
-  }, [credoTokensActive]);
-
-  const totalCredoOutstandingIn = useMemo(() => {
-    return credoTokensActive.reduce((sum, row) => {
-      const dir = String((row as CredoTokenRow)?.direction ?? "");
-      if (dir !== "in") return sum;
-      return sum + getCredoRemainingAmount(row);
-    }, 0);
-  }, [credoTokensActive]);
-
-  const credoOweTokens = useMemo(
-    () =>
-      credoTokensActive.filter(
-        (row) => String((row as CredoTokenRow)?.direction ?? "") === "out",
-      ),
-    [credoTokensActive],
-  );
-
-  const credoPromisedTokens = useMemo(
-    () =>
-      credoTokensActive.filter(
-        (row) => String((row as CredoTokenRow)?.direction ?? "") === "in",
-      ),
-    [credoTokensActive],
-  );
-
   const canPayWithCashu = cashuBalance > 0;
-
-  const getCredoAvailableForContact = React.useCallback(
-    (contactNpub: string): number => {
-      const npub = String(contactNpub ?? "").trim();
-      if (!npub) return 0;
-      const nowSec = Math.floor(Date.now() / 1000);
-      return credoTokensActive.reduce((sum, row) => {
-        const r = row as CredoTokenRow;
-        const dir = String(r.direction ?? "");
-        const issuer = String(r.issuer ?? "").trim();
-        const expiresAt = Number(r.expiresAtSec ?? 0) || 0;
-        if (expiresAt && nowSec >= expiresAt) return sum;
-        if (dir !== "in" || issuer !== npub) return sum;
-        return sum + getCredoRemainingAmount(row);
-      }, 0);
-    },
-    [credoTokensActive],
-  );
-
-  const getCredoNetForContact = React.useCallback(
-    (contactNpub: string): number => {
-      const npub = String(contactNpub ?? "").trim();
-      if (!npub) return 0;
-      const nowSec = Math.floor(Date.now() / 1000);
-      let promised = 0;
-      let owe = 0;
-      for (const row of credoTokensActive) {
-        const r = row as CredoTokenRow;
-        const dir = String(r.direction ?? "");
-        const issuer = String(r.issuer ?? "").trim();
-        const recipient = String(r.recipient ?? "").trim();
-        const expiresAt = Number(r.expiresAtSec ?? 0) || 0;
-        if (expiresAt && nowSec >= expiresAt) continue;
-        const remaining = getCredoRemainingAmount(row);
-        if (remaining <= 0) continue;
-        if (dir === "in" && issuer === npub) promised += remaining;
-        if (dir === "out" && recipient === npub) owe += remaining;
-      }
-      return promised - owe;
-    },
-    [credoTokensActive],
-  );
 
   React.useEffect(() => {
     if (route.kind !== "topupInvoice") return;
@@ -1594,23 +1456,18 @@ export const useAppShellComposition = () => {
   const payContactWithCashuMessage = usePayContactWithCashuMessage<
     (typeof contacts)[number]
   >({
-    allowPromisesEnabled,
     appendLocalNostrMessage,
-    applyCredoSettlement,
     buildCashuMintCandidates,
     cashuBalance,
     cashuTokensWithMeta,
     chatSeenWrapIdsRef,
-    credoTokensActive,
     currentNpub,
     currentNsec,
     defaultMintUrl,
     displayUnit,
     enqueuePendingPayment,
     formatInteger,
-    getCredoAvailableForContact,
     insert,
-    insertCredoPromise,
     logPayStep,
     logPaymentEvent,
     nostrMessagesLocal,
@@ -1621,7 +1478,6 @@ export const useAppShellComposition = () => {
     setStatus,
     showPaidOverlay,
     t,
-    totalCredoOutstandingOut,
     update,
     updateLocalNostrMessage,
   });
@@ -1650,50 +1506,44 @@ export const useAppShellComposition = () => {
     t,
   });
 
-  const paySelectedContact = createPaySelectedContact({
-    allowPromisesEnabled,
-    appendLocalNostrMessage,
-    applyCredoSettlement,
-    buildCashuMintCandidates,
-    cashuBalance,
-    cashuIsBusy,
-    cashuTokensWithMeta,
-    chatForceScrollToBottomRef,
-    chatSeenWrapIdsRef,
+  const paySelectedContact = React.useCallback(async () => {
+    if (route.kind !== "contactPay") return;
+    if (!selectedContact) return;
+
+    const amountSat = Number.parseInt(String(payAmount ?? "").trim(), 10);
+    if (!Number.isFinite(amountSat) || amountSat <= 0) {
+      setStatus(t("payInvalidAmount"));
+      return;
+    }
+
+    const normalizedMethod =
+      contactPayMethod === "lightning" || contactPayMethod === "cashu"
+        ? contactPayMethod
+        : "cashu";
+
+    if (normalizedMethod === "lightning") {
+      const lnAddress = String(selectedContact.lnAddress ?? "").trim();
+      if (!lnAddress) {
+        setStatus(t("payMissingLn"));
+        return;
+      }
+      navigateTo({ route: "lnAddressPay", lnAddress });
+      return;
+    }
+
+    await payContactWithCashuMessage({
+      contact: selectedContact,
+      amountSat,
+    });
+  }, [
     contactPayMethod,
-    credoTokensActive,
-    currentNpub,
-    currentNsec,
-    cashuOwnerId,
-    defaultMintUrl,
-    displayUnit,
-    enqueuePendingPayment,
-    formatInteger,
-    getCredoAvailableForContact,
-    getCredoRemainingAmount,
-    insert,
-    insertCredoPromise,
-    logPayStep,
-    logPaymentEvent,
-    normalizeMintUrl,
     payAmount,
-    payWithCashuEnabled,
-    publishWrappedWithRetry,
-    pushToast,
-    refreshLocalNostrMessages,
-    route,
+    payContactWithCashuMessage,
+    route.kind,
     selectedContact,
-    setCashuIsBusy,
-    setContactPayMethod,
-    setContactsOnboardingHasPaid,
     setStatus,
-    showPaidOverlay,
     t,
-    totalCredoOutstandingOut,
-    triggerChatScrollToBottom,
-    update,
-    updateLocalNostrMessage,
-  });
+  ]);
 
   const { payLightningAddressWithCashu, payLightningInvoiceWithCashu } =
     useLightningPaymentsDomain({
@@ -1900,8 +1750,6 @@ export const useAppShellComposition = () => {
     const last = contactId ? lastMessageByContactId.get(contactId) : null;
     const lastText = String(last?.content ?? "").trim();
     const tokenInfo = lastText ? getCashuTokenMessageInfo(lastText) : null;
-    const credoInfo = lastText ? getCredoTokenMessageInfo(lastText) : null;
-    const promiseNet = npub ? getCredoNetForContact(npub) : 0;
     const hasAttention = Boolean(
       contactAttentionById[String(contact.id ?? "")],
     );
@@ -1913,10 +1761,7 @@ export const useAppShellComposition = () => {
         avatarUrl={avatarUrl}
         lastMessage={last ?? null}
         hasAttention={hasAttention}
-        promiseNet={promiseNet}
-        displayUnit={displayUnit}
         tokenInfo={tokenInfo}
-        credoInfo={credoInfo}
         getMintIconUrl={getMintIconUrl}
         onSelect={() => openContactDetail(contact)}
         onMintIconLoad={(origin, url) => {
@@ -1969,8 +1814,6 @@ export const useAppShellComposition = () => {
     const nsec = String(currentNsec ?? "").trim();
     if (!nsec) return;
     await navigator.clipboard?.writeText(nsec);
-    safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY, "1");
-    setContactsOnboardingHasBackedUpKeys(true);
     pushToast(t("nostrKeysCopied"));
   };
 
@@ -1978,6 +1821,8 @@ export const useAppShellComposition = () => {
     const value = String(slip39Seed ?? "").trim();
     if (!value) return;
     await navigator.clipboard?.writeText(value);
+    safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY, "1");
+    setContactsOnboardingHasBackedUpKeys(true);
     pushToast(t("seedCopied"));
   };
 
@@ -2168,18 +2013,12 @@ export const useAppShellComposition = () => {
     [cashuTokensAllFiltered],
   );
 
-  const getCredoTokenMessageInfo = React.useCallback(
-    (text: string) => getCredoTokenMessageInfoBase(text),
-    [],
-  );
-
   useInboxNotificationsSync({
     appendLocalNostrMessage,
     appendLocalNostrReaction,
     contacts,
     currentNsec,
     getCashuTokenMessageInfo,
-    getCredoTokenMessageInfo,
     maybeShowPwaNotification,
     nostrFetchRelays,
     nostrMessageWrapIdsRef,
@@ -2223,7 +2062,6 @@ export const useAppShellComposition = () => {
   });
 
   useChatMessageEffects({
-    applyCredoSettlement,
     autoAcceptedChatMessageIdsRef,
     cashuIsBusy,
     cashuTokensHydratedRef,
@@ -2234,12 +2072,9 @@ export const useAppShellComposition = () => {
     chatMessages,
     chatMessagesRef,
     chatScrollTargetIdRef,
-    currentNpub,
     getCashuTokenMessageInfo,
-    insertCredoPromise,
     isCashuTokenKnownAny,
     isCashuTokenStored,
-    isCredoPromiseKnown,
     nostrMessagesRecent,
     route,
     saveCashuFromText,
@@ -2257,19 +2092,13 @@ export const useAppShellComposition = () => {
       cashuTokensWithMeta,
       checkAllCashuTokensAndDeleteInvalid,
       checkAndRefreshCashuToken,
-      contacts,
       copyText,
-      credoOweTokens,
-      credoPromisedTokens,
-      credoTokensAll: credoTokensAllFiltered,
       currentNpub,
       displayUnit,
       effectiveProfileName,
       effectiveProfilePicture,
-      getCredoRemainingAmount,
       getMintIconUrl,
       lnAddressPayAmount,
-      nostrPictureByNpub,
       npubCashLightningAddress,
       payLightningAddressWithCashu,
       pendingCashuDeleteId,
@@ -2287,14 +2116,11 @@ export const useAppShellComposition = () => {
       topupInvoiceError,
       topupInvoiceIsBusy,
       topupInvoiceQr,
-      totalCredoOutstandingIn,
-      totalCredoOutstandingOut,
     },
   });
 
   const { peopleRouteProps } = useProfilePeopleComposition({
     peopleRouteBuilderInput: {
-      allowPromisesEnabled,
       cashuBalance,
       cashuIsBusy,
       chatDraft,
@@ -2317,8 +2143,6 @@ export const useAppShellComposition = () => {
       feedbackContactNpub: FEEDBACK_CONTACT_NPUB,
       form,
       getCashuTokenMessageInfo,
-      getCredoAvailableForContact,
-      getCredoTokenMessageInfo,
       getMintIconUrl,
       groupNames,
       handleSaveContact,
@@ -2347,7 +2171,6 @@ export const useAppShellComposition = () => {
       profileEditPicture,
       profileEditsSavable,
       profilePhotoInputRef,
-      promiseTotalCapSat: PROMISE_TOTAL_CAP_SAT,
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
       replyContext,
@@ -2364,7 +2187,6 @@ export const useAppShellComposition = () => {
       setProfileEditName,
       setProfileEditPicture,
       t,
-      totalCredoOutstandingOut,
     },
   });
 
@@ -2418,7 +2240,6 @@ export const useAppShellComposition = () => {
       applyDefaultMintSelection,
       canSaveNewRelay,
       cashuIsBusy,
-      allowPromisesEnabled,
       connectedRelayCount,
       copyNostrKeys,
       hasCustomNsecOverride,
@@ -2498,7 +2319,6 @@ export const useAppShellComposition = () => {
       seedMnemonic,
       selectedEvoluServerUrl,
       selectedRelayUrl,
-      setAllowPromisesEnabled,
       setDefaultMintUrlDraft,
       setEvoluServerOffline,
       setNewEvoluServerUrl,

@@ -12,7 +12,6 @@ interface UseSystemRoutePropsParams {
   applyDefaultMintSelection: SystemRoutesProps["mintsProps"]["applyDefaultMintSelection"];
   canSaveNewRelay: SystemRoutesProps["nostrRelayNewProps"]["canSaveNewRelay"];
   cashuIsBusy: SystemRoutesProps["advancedProps"]["cashuIsBusy"];
-  allowPromisesEnabled: SystemRoutesProps["advancedProps"]["allowPromisesEnabled"];
   connectedRelayCount: SystemRoutesProps["advancedProps"]["connectedRelayCount"];
   copyCashuSeed: SystemRoutesProps["advancedProps"]["copyCashuSeed"];
   copyNostrKeys: SystemRoutesProps["advancedProps"]["copyNostrKeys"];
@@ -92,7 +91,6 @@ interface UseSystemRoutePropsParams {
   seedMnemonic: SystemRoutesProps["advancedProps"]["seedMnemonic"];
   selectedEvoluServerUrl: SystemRoutesProps["evoluServerProps"]["selectedEvoluServerUrl"];
   selectedRelayUrl: SystemRoutesProps["nostrRelayProps"]["selectedRelayUrl"];
-  setAllowPromisesEnabled: SystemRoutesProps["advancedProps"]["setAllowPromisesEnabled"];
   setDefaultMintUrlDraft: SystemRoutesProps["mintsProps"]["setDefaultMintUrlDraft"];
   setEvoluServerOffline: SystemRoutesProps["evoluServerProps"]["setEvoluServerOffline"];
   setNewEvoluServerUrl: SystemRoutesProps["evoluServerNewProps"]["setNewEvoluServerUrl"];
@@ -175,7 +173,6 @@ export const useSystemRouteProps = ({
   pendingMintDeleteUrl,
   pendingRelayDeleteUrl,
   payWithCashuEnabled,
-  allowPromisesEnabled,
   PRESET_MINTS,
   pushToast,
   refreshMintInfo,
@@ -194,7 +191,6 @@ export const useSystemRouteProps = ({
   seedMnemonic,
   selectedEvoluServerUrl,
   selectedRelayUrl,
-  setAllowPromisesEnabled,
   setDefaultMintUrlDraft,
   setEvoluServerOffline,
   setNewEvoluServerUrl,
@@ -225,7 +221,6 @@ export const useSystemRouteProps = ({
       cashuIsBusy,
       payWithCashuEnabled,
       pushToast,
-      allowPromisesEnabled,
       relayUrls,
       connectedRelayCount,
       nostrRelayOverallStatus,
@@ -243,7 +238,6 @@ export const useSystemRouteProps = ({
       copySeed,
       restoreMissingTokens,
       setPayWithCashuEnabled,
-      setAllowPromisesEnabled,
       exportAppData,
       requestImportAppData,
       requestDeriveNostrKeys,

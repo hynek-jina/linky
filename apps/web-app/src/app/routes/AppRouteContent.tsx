@@ -8,7 +8,6 @@ import {
   ContactNewPage,
   ContactPage,
   ContactPayPage,
-  CredoTokenPage,
   EvoluCurrentDataPage,
   EvoluDataDetailPage,
   EvoluHistoryDataPage,
@@ -46,7 +45,6 @@ export interface PeopleRoutesProps {
 export interface MoneyRoutesProps {
   cashuTokenNewProps: React.ComponentProps<typeof CashuTokenNewPage>;
   cashuTokenProps: () => React.ComponentProps<typeof CashuTokenPage>;
-  credoTokenProps: () => React.ComponentProps<typeof CredoTokenPage>;
   lnAddressPayProps: React.ComponentProps<typeof LnAddressPayPage>;
   topupInvoiceProps: React.ComponentProps<typeof TopupInvoicePage>;
   topupProps: React.ComponentProps<typeof TopupPage>;
@@ -140,10 +138,6 @@ export const AppRouteContent = (): React.ReactElement => {
 
       {route.kind === "cashuToken" && (
         <CashuTokenPage {...moneyRoutes.cashuTokenProps()} />
-      )}
-
-      {route.kind === "credoToken" && (
-        <CredoTokenPage {...moneyRoutes.credoTokenProps()} />
       )}
 
       {route.kind === "contact" && (

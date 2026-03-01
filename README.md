@@ -11,7 +11,6 @@ It is local-first: data is stored in Evolu (SQLite) and syncs between devices.
 - Evolu (local-first DB + sync)
 - Cashu + mints (Lightning wallet flow)
 - npub.cash (LN address + mint preference sync)
-- Credo promises (see [docs/credo.md](docs/credo.md))
 
 ## Authentication model
 
@@ -22,7 +21,7 @@ It is local-first: data is stored in Evolu (SQLite) and syncs between devices.
   - Nostr keypair is derived at `m/44'/1237'/0'/0/0`
   - deterministic Evolu owner lanes are derived for:
     - contacts (`contacts-n`)
-    - cashu/credo (`cashu-n`)
+    - cashu (`cashu-n`)
     - messages (`messages-n`)
     - owner metadata (`ownerMeta`)
 - If user pastes custom `nsec` during a SLIP-39 session, app switches to pasted key locally without immediate Evolu restore/write; choosing Derive switches back to seed-derived key.
@@ -46,7 +45,7 @@ It is local-first: data is stored in Evolu (SQLite) and syncs between devices.
 - Wallet: Cashu token ingest, restore, validation, spend
 - Payments:
   - Lightning invoice and LN address payment
-  - contact payment via Cashu/Credo message flow
+  - contact payment via Cashu message flow
 - Debug pages for Evolu current/history data and owner/rotation diagnostics
 
 ## Development

@@ -1,8 +1,5 @@
 import React from "react";
-import type {
-  CashuTokenMessageInfo,
-  CredoTokenMessageInfo,
-} from "../app/lib/tokenMessageInfo";
+import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   ContactRowLike,
   LocalNostrMessage,
@@ -17,8 +14,6 @@ import {
 interface ContactCardProps {
   avatarUrl: string | null;
   contact: ContactRowLike;
-  credoInfo: Pick<CredoTokenMessageInfo, "amount" | "isValid"> | null;
-  displayUnit: string;
   getMintIconUrl: (url: MintUrlInput) => {
     url: string | null;
     origin?: string | null;
@@ -30,22 +25,18 @@ interface ContactCardProps {
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
   onSelect: (contact: ContactRowLike) => void;
-  promiseNet: number;
   tokenInfo: CashuTokenMessageInfo | null;
 }
 
 export const ContactCard: React.FC<ContactCardProps> = ({
   avatarUrl,
   contact,
-  credoInfo,
-  displayUnit,
   getMintIconUrl,
   hasAttention,
   lastMessage,
   onMintIconError,
   onMintIconLoad,
   onSelect,
-  promiseNet,
   tokenInfo,
 }) => {
   const initials = getInitials(String(contact.name ?? ""));
@@ -112,7 +103,7 @@ export const ContactCard: React.FC<ContactCardProps> = ({
                 {String(contact.name)}
               </h4>
             ) : null}
-            {lastTime || promiseNet !== 0 ? (
+            {lastTime ? (
               <span
                 style={{
                   display: "flex",
@@ -129,67 +120,11 @@ export const ContactCard: React.FC<ContactCardProps> = ({
                     {lastTime}
                   </span>
                 ) : null}
-                {promiseNet !== 0 ? (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      whiteSpace: "nowrap",
-                      color: promiseNet > 0 ? "#34d399" : "#f87171",
-                    }}
-                  >
-                    {promiseNet < 0 ? "- " : ""}
-                    {formatInteger(Math.abs(promiseNet))} {displayUnit}
-                  </span>
-                ) : null}
               </span>
             ) : null}
           </div>
 
-          {credoInfo ? (
-            <div
-              className="muted"
-              style={{
-                fontSize: 12,
-                marginTop: 4,
-                lineHeight: 1.2,
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              {directionSymbol ? <span>{directionSymbol}</span> : null}
-              <span
-                className={
-                  credoInfo.isValid ? "pill pill-credo" : "pill pill-muted"
-                }
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 4,
-                  padding: "1px 4px",
-                  fontSize: 10,
-                  lineHeight: "10px",
-                }}
-                aria-label={`${formatInteger(credoInfo.amount ?? 0)} sat`}
-              >
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt=""
-                    width={14}
-                    height={14}
-                    style={{
-                      borderRadius: 9999,
-                      objectFit: "cover",
-                    }}
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : null}
-                <span>{formatInteger(credoInfo.amount ?? 0)}</span>
-              </span>
-            </div>
-          ) : tokenInfo ? (
+          {tokenInfo ? (
             <TokenPreview
               tokenInfo={tokenInfo}
               directionSymbol={directionSymbol}

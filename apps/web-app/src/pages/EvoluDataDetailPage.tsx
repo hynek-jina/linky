@@ -77,7 +77,6 @@ export function EvoluDataDetailPage({
   const userTables = [
     "contact",
     "cashuToken",
-    "credoToken",
     "nostrIdentity",
     "nostrMessage",
     "nostrReaction",

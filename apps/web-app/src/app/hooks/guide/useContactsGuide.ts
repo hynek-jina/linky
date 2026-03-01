@@ -230,7 +230,7 @@ export const useContactsGuide = ({
         },
         {
           id: "backup_keys_3",
-          selector: '[data-guide="copy-nostr-keys"]',
+          selector: '[data-guide="copy-seed"]',
           titleKey: "guideBackupKeysStep3Title",
           bodyKey: "guideBackupKeysStep3Body",
           ensure: () => ensureRoute("advanced"),

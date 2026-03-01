@@ -1,5 +1,5 @@
-import { navigateTo } from "../../hooks/useRouting";
 import type { ContactId } from "../../evolu";
+import { navigateTo } from "../../hooks/useRouting";
 import type { Route } from "../../types/route";
 import type { TopbarButton } from "../types/appTypes";
 
@@ -79,14 +79,6 @@ export const buildTopbar = ({
       icon: "<",
       label: t("close"),
       onClick: () => navigateTo({ route: "wallet" }),
-    };
-  }
-
-  if (route.kind === "credoToken") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "cashuTokenNew" }),
     };
   }
 
@@ -305,7 +297,6 @@ export const buildTopbarTitle = (
   if (route.kind === "lnAddressPay") return t("pay");
   if (route.kind === "cashuTokenNew") return t("cashuToken");
   if (route.kind === "cashuToken") return t("cashuToken");
-  if (route.kind === "credoToken") return t("credoTokenTitle");
   if (route.kind === "advanced") return t("advanced");
   if (route.kind === "mints") return t("mints");
   if (route.kind === "mint") return t("mints");
