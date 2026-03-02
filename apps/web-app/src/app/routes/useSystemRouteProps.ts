@@ -15,7 +15,6 @@ interface UseSystemRoutePropsParams {
   connectedRelayCount: SystemRoutesProps["advancedProps"]["connectedRelayCount"];
   copyCashuSeed: SystemRoutesProps["advancedProps"]["copyCashuSeed"];
   copyNostrKeys: SystemRoutesProps["advancedProps"]["copyNostrKeys"];
-  hasCustomNsecOverride: SystemRoutesProps["advancedProps"]["hasCustomNsecOverride"];
   copySeed: SystemRoutesProps["advancedProps"]["copySeed"];
   cashuSeedMnemonic: SystemRoutesProps["advancedProps"]["cashuSeedMnemonic"];
   currentNpub: SystemRoutesProps["advancedProps"]["currentNpub"];
@@ -81,7 +80,6 @@ interface UseSystemRoutePropsParams {
   requestDeleteSelectedRelay: SystemRoutesProps["nostrRelayProps"]["requestDeleteSelectedRelay"];
   requestDeriveNostrKeys: SystemRoutesProps["advancedProps"]["requestDeriveNostrKeys"];
   requestImportAppData: SystemRoutesProps["advancedProps"]["requestImportAppData"];
-  requestPasteNostrKeys: SystemRoutesProps["advancedProps"]["requestPasteNostrKeys"];
   requestLogout: SystemRoutesProps["advancedProps"]["requestLogout"];
   restoreMissingTokens: SystemRoutesProps["advancedProps"]["restoreMissingTokens"];
   route: Route;
@@ -115,7 +113,6 @@ export const useSystemRouteProps = ({
   connectedRelayCount,
   copyCashuSeed,
   copyNostrKeys,
-  hasCustomNsecOverride,
   copySeed,
   cashuSeedMnemonic,
   currentNpub,
@@ -181,7 +178,6 @@ export const useSystemRouteProps = ({
   requestDeleteSelectedRelay,
   requestDeriveNostrKeys,
   requestImportAppData,
-  requestPasteNostrKeys,
   requestLogout,
   restoreMissingTokens,
   route,
@@ -234,14 +230,12 @@ export const useSystemRouteProps = ({
       isSeedLogin,
       copyCashuSeed,
       copyNostrKeys,
-      hasCustomNsecOverride,
       copySeed,
       restoreMissingTokens,
       setPayWithCashuEnabled,
       exportAppData,
       requestImportAppData,
       requestDeriveNostrKeys,
-      requestPasteNostrKeys,
       dedupeContacts,
       handleImportAppDataFilePicked,
       requestLogout,

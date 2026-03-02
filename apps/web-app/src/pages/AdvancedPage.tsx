@@ -8,7 +8,6 @@ interface AdvancedPageProps {
   connectedRelayCount: number;
   copyCashuSeed: () => void;
   copyNostrKeys: () => void;
-  hasCustomNsecOverride: boolean;
   copySeed: () => void;
   currentNpub: string | null;
   currentNsec: string | null;
@@ -29,7 +28,6 @@ interface AdvancedPageProps {
   relayUrls: string[];
   requestImportAppData: () => void;
   requestDeriveNostrKeys: () => Promise<void>;
-  requestPasteNostrKeys: () => Promise<void>;
   requestLogout: () => void;
   restoreMissingTokens: () => Promise<void>;
   seedMnemonic: string | null;
@@ -45,7 +43,6 @@ export function AdvancedPage({
   connectedRelayCount,
   copyCashuSeed,
   copyNostrKeys,
-  hasCustomNsecOverride,
   copySeed,
   currentNpub,
   currentNsec,
@@ -65,7 +62,6 @@ export function AdvancedPage({
   relayUrls,
   requestImportAppData,
   requestDeriveNostrKeys,
-  requestPasteNostrKeys,
   requestLogout,
   restoreMissingTokens,
   seedMnemonic,
@@ -76,7 +72,6 @@ export function AdvancedPage({
   const navigateTo = useNavigation();
   const [pushStatus, setPushStatus] = useState<string>("");
   const [pushError, setPushError] = useState<string>("");
-  const [nostrPasteArmed, setNostrPasteArmed] = useState(false);
   const [nostrDeriveArmed, setNostrDeriveArmed] = useState(false);
   const armTimeoutRef = useRef<number | null>(null);
 
@@ -87,24 +82,15 @@ export function AdvancedPage({
     }
   }, []);
 
-  const armNostrAction = useCallback(
-    (action: "paste" | "derive") => {
-      clearArmTimeout();
-      setNostrPasteArmed(action === "paste");
-      setNostrDeriveArmed(action === "derive");
-      pushToast(
-        action === "paste"
-          ? t("nostrPasteArmedHint")
-          : t("nostrDeriveArmedHint"),
-      );
-      armTimeoutRef.current = window.setTimeout(() => {
-        setNostrPasteArmed(false);
-        setNostrDeriveArmed(false);
-        armTimeoutRef.current = null;
-      }, 5000);
-    },
-    [clearArmTimeout, pushToast, t],
-  );
+  const armNostrAction = useCallback(() => {
+    clearArmTimeout();
+    setNostrDeriveArmed(true);
+    pushToast(t("nostrDeriveArmedHint"));
+    armTimeoutRef.current = window.setTimeout(() => {
+      setNostrDeriveArmed(false);
+      armTimeoutRef.current = null;
+    }, 5000);
+  }, [clearArmTimeout, pushToast, t]);
 
   useEffect(() => {
     return () => {
@@ -114,9 +100,8 @@ export function AdvancedPage({
 
   useEffect(() => {
     clearArmTimeout();
-    setNostrPasteArmed(false);
     setNostrDeriveArmed(false);
-  }, [clearArmTimeout, hasCustomNsecOverride]);
+  }, [clearArmTimeout]);
 
   const handleRegisterNotifications = async () => {
     setPushStatus(t("notificationsRegistering"));
@@ -188,55 +173,29 @@ export function AdvancedPage({
         </div>
         <div className="settings-right">
           <div className="badge-box">
-            {hasCustomNsecOverride ? (
-              <button
-                className="ghost"
-                onClick={() => {
-                  if (nostrDeriveArmed) {
-                    clearArmTimeout();
-                    setNostrDeriveArmed(false);
-                    void requestDeriveNostrKeys();
-                    return;
-                  }
-                  armNostrAction("derive");
-                }}
-                style={
-                  nostrDeriveArmed
-                    ? {
-                        color: "var(--color-error)",
-                        borderColor: "var(--color-error)",
-                      }
-                    : undefined
+            <button
+              className="ghost"
+              onClick={() => {
+                if (nostrDeriveArmed) {
+                  clearArmTimeout();
+                  setNostrDeriveArmed(false);
+                  void requestDeriveNostrKeys();
+                  return;
                 }
-                disabled={!currentNsec}
-              >
-                {t("derive")}
-              </button>
-            ) : (
-              <button
-                className="ghost"
-                onClick={() => {
-                  if (nostrPasteArmed) {
-                    clearArmTimeout();
-                    setNostrPasteArmed(false);
-                    void requestPasteNostrKeys();
-                    return;
-                  }
-                  armNostrAction("paste");
-                }}
-                style={
-                  nostrPasteArmed
-                    ? {
-                        color: "var(--color-error)",
-                        borderColor: "var(--color-error)",
-                      }
-                    : undefined
-                }
-                disabled={!currentNsec}
-              >
-                {t("paste")}
-              </button>
-            )}
+                armNostrAction();
+              }}
+              style={
+                nostrDeriveArmed
+                  ? {
+                      color: "var(--color-error)",
+                      borderColor: "var(--color-error)",
+                    }
+                  : undefined
+              }
+              disabled={!currentNsec}
+            >
+              {t("derive")}
+            </button>
             <button
               className="ghost"
               onClick={copyNostrKeys}
