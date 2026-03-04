@@ -38,7 +38,8 @@ export const en = {
   onboardingTitle: "Linky",
   onboardingSubtitle: "Lightning contacts for payments and messages.",
   onboardingCreate: "Create account",
-  onboardingPasteNsec: "Paste secret",
+  onboardingPasteNsec: "Paste seed",
+  onboardingInvalidSeed: "Invalid SLIP-39 seed.",
   onboardingInvalidNsec: "Invalid secret.",
   onboardingInvalidNsecOrSeed: "Invalid nsec or SLIP-39 seed.",
   onboardingCreateFailed: "Failed to create account.",
@@ -63,7 +64,7 @@ export const en = {
   seedCopied: "Seed copied to clipboard.",
   cashuSeed: "Cashu seed",
   cashuSeedCopied: "Cashu seed copied to clipboard.",
-  seedMissing: "Seed missing. Log in again with your nsec.",
+  seedMissing: "Seed missing. Log in again with your seed.",
   tokens: "Tokens",
   payWithCashu: "Pay with Cashu",
   payWithCashuDisabled: "Pay with Cashu is disabled in Advanced settings.",
@@ -77,7 +78,7 @@ export const en = {
   nostrPasteArmedHint:
     "Pasting Nostr keys will overwrite the current ones. Click once more to confirm.",
   nostrDeriveArmedHint:
-    "Derive will switch back to seed-derived Nostr keys. Click once more to confirm.",
+    "Derive will regenerate Nostr keys from your seed. Click once more to confirm.",
   nostrPasteInvalid: "Invalid Nostr key (expected nsec…).",
 
   nostrRelay: "Nostr relay",

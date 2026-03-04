@@ -38,7 +38,8 @@ export const cs = {
   onboardingTitle: "Linky",
   onboardingSubtitle: "Lightning kontakty pro platby a zprávy.",
   onboardingCreate: "Vytvořit účet",
-  onboardingPasteNsec: "Vložit nsec",
+  onboardingPasteNsec: "Vložit seed",
+  onboardingInvalidSeed: "Neplatný SLIP-39 seed.",
   onboardingInvalidNsec: "Neplatný nsec.",
   onboardingInvalidNsecOrSeed: "Neplatný nsec nebo SLIP-39 seed.",
   onboardingCreateFailed: "Nepodařilo se vytvořit účet.",
@@ -77,7 +78,7 @@ export const cs = {
   nostrPasteArmedHint:
     "Vložením Nostr klíčů přepíšete aktuální. Klikněte ještě jednou pro potvrzení.",
   nostrDeriveArmedHint:
-    "Derivace přepne zpět na Nostr klíče odvozené ze seedu. Klikněte ještě jednou pro potvrzení.",
+    "Derivace znovu vygeneruje Nostr klíče ze seedu. Klikněte ještě jednou pro potvrzení.",
   nostrPasteInvalid: "Neplatný Nostr klíč (očekávám nsec…).",
 
   nostrRelay: "Nostr relay",

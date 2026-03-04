@@ -557,14 +557,12 @@ export const useAppShellComposition = () => {
     createNewAccount,
     cashuSeedMnemonic,
     currentNpub,
-    hasCustomNsecOverride,
     isSeedLogin,
     logoutArmed,
     onboardingIsBusy,
     onboardingStep,
     pasteExistingNsec,
     requestDeriveNostrKeys,
-    requestPasteNostrKeys,
     requestLogout,
     seedMnemonic,
     slip39Seed,
@@ -573,8 +571,6 @@ export const useAppShellComposition = () => {
     currentNsec,
     pushToast,
     t,
-    update,
-    upsert,
   });
 
   const contactsForRotationRef = React.useRef<readonly ContactRowLike[]>([]);
@@ -1821,11 +1817,18 @@ export const useAppShellComposition = () => {
 
   const copySeed = async () => {
     const value = String(slip39Seed ?? "").trim();
-    if (!value) return;
-    await navigator.clipboard?.writeText(value);
-    safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY, "1");
-    setContactsOnboardingHasBackedUpKeys(true);
-    pushToast(t("seedCopied"));
+    if (value) {
+      await navigator.clipboard?.writeText(value);
+      safeLocalStorageSet(
+        CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY,
+        "1",
+      );
+      setContactsOnboardingHasBackedUpKeys(true);
+      pushToast(t("seedCopied"));
+      return;
+    }
+
+    pushToast(t("seedMissing"));
   };
 
   const copyCashuSeed = async () => {
@@ -2244,7 +2247,6 @@ export const useAppShellComposition = () => {
       cashuIsBusy,
       connectedRelayCount,
       copyNostrKeys,
-      hasCustomNsecOverride,
       copySeed,
       copyCashuSeed,
       currentNpub,
@@ -2310,7 +2312,6 @@ export const useAppShellComposition = () => {
       requestDeleteSelectedRelay,
       requestImportAppData,
       requestDeriveNostrKeys,
-      requestPasteNostrKeys,
       requestLogout,
       restoreMissingTokens,
       cashuSeedMnemonic,
