@@ -43,6 +43,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - **No backend** - pure client-side PWA with service worker caching
 - Onboarding/login uses a single 20-word **SLIP-39** share; Nostr keys are always derived from that seed at path `m/44'/1237'/0'/0/0` (manual Nostr key overrides are disabled)
 - Cashu deterministic wallet seed is derived from the SLIP-39 secret using **BIP-85** at path `m/83696968'/39'/0'/24'/0'` (24-word mnemonic)
+- Web app seed/identity helpers in `src/utils/slip39Nostr.ts` are app-level adapters that delegate SLIP-39/BIP-85 derivation to `@linky/core/identity`
 - `apps/web-app/src/App.tsx` is a thin wrapper that default-exports `app/AppShell`
 - App shell structure lives under `apps/web-app/src/app/`:
   - `AppShell.tsx` is a thin renderer/auth gate that wires `AppShellContextsProvider` and route content
