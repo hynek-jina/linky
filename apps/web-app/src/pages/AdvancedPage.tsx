@@ -74,6 +74,8 @@ export function AdvancedPage({
   const [pushError, setPushError] = useState<string>("");
   const [nostrDeriveArmed, setNostrDeriveArmed] = useState(false);
   const armTimeoutRef = useRef<number | null>(null);
+  const hasSeedMnemonic = String(seedMnemonic ?? "").trim().length > 0;
+  const hasCurrentNsec = String(currentNsec ?? "").trim().length > 0;
 
   const clearArmTimeout = useCallback(() => {
     if (armTimeoutRef.current !== null) {
@@ -152,12 +154,7 @@ export function AdvancedPage({
         </div>
         <div className="settings-right">
           <div className="badge-box">
-            <button
-              className="ghost"
-              onClick={copySeed}
-              disabled={!seedMnemonic}
-              data-guide="copy-seed"
-            >
+            <button className="ghost" onClick={copySeed} data-guide="copy-seed">
               {t("copyCurrent")}
             </button>
           </div>
@@ -192,14 +189,14 @@ export function AdvancedPage({
                     }
                   : undefined
               }
-              disabled={!currentNsec}
+              disabled={!hasCurrentNsec}
             >
               {t("derive")}
             </button>
             <button
               className="ghost"
               onClick={copyNostrKeys}
-              disabled={!currentNsec}
+              disabled={!hasCurrentNsec}
               data-guide="copy-nostr-keys"
             >
               {t("copyCurrent")}
@@ -240,7 +237,7 @@ export function AdvancedPage({
             <button
               className="ghost"
               onClick={() => void restoreMissingTokens()}
-              disabled={!seedMnemonic || tokensRestoreIsBusy || cashuIsBusy}
+              disabled={!hasSeedMnemonic || tokensRestoreIsBusy || cashuIsBusy}
             >
               {tokensRestoreIsBusy ? t("restoring") : t("restore")}
             </button>

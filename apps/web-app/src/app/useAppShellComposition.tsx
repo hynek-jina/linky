@@ -1817,11 +1817,18 @@ export const useAppShellComposition = () => {
 
   const copySeed = async () => {
     const value = String(slip39Seed ?? "").trim();
-    if (!value) return;
-    await navigator.clipboard?.writeText(value);
-    safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY, "1");
-    setContactsOnboardingHasBackedUpKeys(true);
-    pushToast(t("seedCopied"));
+    if (value) {
+      await navigator.clipboard?.writeText(value);
+      safeLocalStorageSet(
+        CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY,
+        "1",
+      );
+      setContactsOnboardingHasBackedUpKeys(true);
+      pushToast(t("seedCopied"));
+      return;
+    }
+
+    pushToast(t("seedMissing"));
   };
 
   const copyCashuSeed = async () => {
