@@ -10,17 +10,17 @@ import {
   NostrPrivateKey,
   NostrPublicKeyHex,
   OwnerKey,
+  OwnerLaneIndex,
 } from "./domain";
+import {
+  CASHU_SEED_PATH,
+  contactsOwnerPath,
+  cashuOwnerPath,
+  messagesOwnerPath,
+  META_OWNER_PATH,
+  NOSTR_PATH,
+} from "./derivationPaths";
 import { MasterSecretProvider } from "./MasterSecretProvider";
-
-const NOSTR_PATH = "m/44'/1237'/0'/0/0";
-const CASHU_SEED_PATH = "m/83696968'/39'/0'/24'/0'";
-const META_OWNER_PATH = "m/83696968'/39'/0'/24'/1'/0'";
-const contactsOwnerPath = (index: number) =>
-  `m/83696968'/39'/0'/24'/2'/${index}'`;
-const cashuOwnerPath = (index: number) => `m/83696968'/39'/0'/24'/3'/${index}'`;
-const messagesOwnerPath = (index: number) =>
-  `m/83696968'/39'/0'/24'/4'/${index}'`;
 
 export class IdentityProviderError extends Schema.TaggedError<IdentityProviderError>()(
   "IdentityProviderError",
@@ -34,9 +34,9 @@ interface Identities {
   readonly cashuWalletSeed: CashuSeed;
 
   readonly storageMetaOwnerKey: OwnerKey;
-  readonly storageContactsOwnerKey: (index: number) => OwnerKey;
-  readonly storageCashuOwnerKey: (index: number) => OwnerKey;
-  readonly storageMessagesOwnerKey: (index: number) => OwnerKey;
+  readonly storageContactsOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
+  readonly storageCashuOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
+  readonly storageMessagesOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
 }
 
 const BIP85_HMAC_KEY = new TextEncoder().encode("bip-entropy-from-k");
@@ -91,11 +91,11 @@ export class IdentityProvider extends Context.Tag("IdentityProvider")<
         nostrPublicKey,
         cashuWalletSeed,
         storageMetaOwnerKey,
-        storageContactsOwnerKey: (index: number) =>
+        storageContactsOwnerKey: (index: OwnerLaneIndex) =>
           deriveOwnerKey(root, contactsOwnerPath(index)),
-        storageCashuOwnerKey: (index: number) =>
+        storageCashuOwnerKey: (index: OwnerLaneIndex) =>
           deriveOwnerKey(root, cashuOwnerPath(index)),
-        storageMessagesOwnerKey: (index: number) =>
+        storageMessagesOwnerKey: (index: OwnerLaneIndex) =>
           deriveOwnerKey(root, messagesOwnerPath(index)),
       };
     }).pipe(

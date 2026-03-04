@@ -21,7 +21,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 ## Monorepo Structure
 
 - `apps/web-app/` - Main React app (Vite + SWC)
-- `packages/core/` - Core package workspace (Effect-based identity domain in `src/identity/`, exported via `@linky/core` and `@linky/core/identity`)
+- `packages/core/` - Core package workspace (Effect-based identity domain in `src/identity/` with branded schemas + derivation utils, shared derivation paths in `src/identity/derivationPaths.ts`, and `MasterSecretProvider` SLIP-39 layer constructors, exported via `@linky/core` and `@linky/core/identity`)
 - `packages/config/` - Shared ESLint, Prettier, and TypeScript configs
 - Package manager is **Bun** (not npm/yarn/pnpm)
 - Workspace filter: `bun run --filter @linky/web-app <script>`

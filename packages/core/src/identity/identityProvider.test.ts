@@ -1,10 +1,12 @@
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { IdentityProvider, IdentityProviderError } from "./IdentityProvider";
 import { MasterSecretProvider } from "./MasterSecretProvider";
-import { MasterSecret } from "./domain";
+import { MasterSecret, OwnerLaneIndex } from "./domain";
 
 const hex = (u8: Uint8Array) => Buffer.from(u8).toString("hex");
+const lane = (index: number): OwnerLaneIndex =>
+  Schema.decodeUnknownSync(OwnerLaneIndex)(index);
 
 /** Deterministic 64-byte master seed for testing. */
 const TEST_SEED = MasterSecret.make(
@@ -48,22 +50,22 @@ describe("IdentityProvider", () => {
     expect(id.nostrPublicKey).toBe(EXPECTED.nostrPublicKey);
     expect(hex(id.cashuWalletSeed)).toBe(EXPECTED.cashuWalletSeed);
     expect(hex(id.storageMetaOwnerKey)).toBe(EXPECTED.storageMetaOwnerKey);
-    expect(hex(id.storageContactsOwnerKey(0))).toBe(
+    expect(hex(id.storageContactsOwnerKey(lane(0)))).toBe(
       EXPECTED.storageContactsOwnerKey0,
     );
-    expect(hex(id.storageContactsOwnerKey(1))).toBe(
+    expect(hex(id.storageContactsOwnerKey(lane(1)))).toBe(
       EXPECTED.storageContactsOwnerKey1,
     );
-    expect(hex(id.storageCashuOwnerKey(0))).toBe(
+    expect(hex(id.storageCashuOwnerKey(lane(0)))).toBe(
       EXPECTED.storageCashuOwnerKey0,
     );
-    expect(hex(id.storageCashuOwnerKey(1))).toBe(
+    expect(hex(id.storageCashuOwnerKey(lane(1)))).toBe(
       EXPECTED.storageCashuOwnerKey1,
     );
-    expect(hex(id.storageMessagesOwnerKey(0))).toBe(
+    expect(hex(id.storageMessagesOwnerKey(lane(0)))).toBe(
       EXPECTED.storageMessagesOwnerKey0,
     );
-    expect(hex(id.storageMessagesOwnerKey(1))).toBe(
+    expect(hex(id.storageMessagesOwnerKey(lane(1)))).toBe(
       EXPECTED.storageMessagesOwnerKey1,
     );
   });
@@ -99,8 +101,8 @@ describe("IdentityProvider", () => {
 
   it("derives different owner keys for contacts at different indices", async () => {
     const id = await runTest(IdentityProvider);
-    const key0 = id.storageContactsOwnerKey(0);
-    const key1 = id.storageContactsOwnerKey(1);
+    const key0 = id.storageContactsOwnerKey(lane(0));
+    const key1 = id.storageContactsOwnerKey(lane(1));
 
     expect(key0).toBeInstanceOf(Uint8Array);
     expect(key0).toHaveLength(16);
@@ -110,8 +112,8 @@ describe("IdentityProvider", () => {
 
   it("derives different owner keys for cashu at different indices", async () => {
     const id = await runTest(IdentityProvider);
-    const key0 = id.storageCashuOwnerKey(0);
-    const key1 = id.storageCashuOwnerKey(1);
+    const key0 = id.storageCashuOwnerKey(lane(0));
+    const key1 = id.storageCashuOwnerKey(lane(1));
 
     expect(key0).toHaveLength(16);
     expect(key1).toHaveLength(16);
@@ -120,8 +122,8 @@ describe("IdentityProvider", () => {
 
   it("derives different owner keys for messages at different indices", async () => {
     const id = await runTest(IdentityProvider);
-    const key0 = id.storageMessagesOwnerKey(0);
-    const key1 = id.storageMessagesOwnerKey(1);
+    const key0 = id.storageMessagesOwnerKey(lane(0));
+    const key1 = id.storageMessagesOwnerKey(lane(1));
 
     expect(key0).toHaveLength(16);
     expect(key1).toHaveLength(16);
@@ -132,17 +134,23 @@ describe("IdentityProvider", () => {
     const a = await runTest(IdentityProvider);
     const b = await runTest(IdentityProvider);
 
-    expect(a.storageContactsOwnerKey(5)).toEqual(b.storageContactsOwnerKey(5));
-    expect(a.storageCashuOwnerKey(3)).toEqual(b.storageCashuOwnerKey(3));
-    expect(a.storageMessagesOwnerKey(7)).toEqual(b.storageMessagesOwnerKey(7));
+    expect(a.storageContactsOwnerKey(lane(5))).toEqual(
+      b.storageContactsOwnerKey(lane(5)),
+    );
+    expect(a.storageCashuOwnerKey(lane(3))).toEqual(
+      b.storageCashuOwnerKey(lane(3)),
+    );
+    expect(a.storageMessagesOwnerKey(lane(7))).toEqual(
+      b.storageMessagesOwnerKey(lane(7)),
+    );
   });
 
   it("uses distinct derivation paths across key families", async () => {
     const id = await runTest(IdentityProvider);
 
-    const contacts0 = id.storageContactsOwnerKey(0);
-    const cashu0 = id.storageCashuOwnerKey(0);
-    const messages0 = id.storageMessagesOwnerKey(0);
+    const contacts0 = id.storageContactsOwnerKey(lane(0));
+    const cashu0 = id.storageCashuOwnerKey(lane(0));
+    const messages0 = id.storageMessagesOwnerKey(lane(0));
 
     expect(contacts0).not.toEqual(cashu0);
     expect(contacts0).not.toEqual(messages0);
