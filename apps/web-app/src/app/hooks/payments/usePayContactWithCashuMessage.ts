@@ -249,7 +249,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         mint: string;
         unit: string | null;
       }> = [];
-      const tokensToDeleteByMint = new Map<string, CashuTokenId[]>();
       const sendTokenMetaByText = new Map<
         string,
         { mint: string; unit: string | null; amount: number }
@@ -317,6 +316,38 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
               continue;
             }
 
+            const spentTokenIds = cashuTokensWithMeta
+              .filter(
+                (row) =>
+                  String(row.state ?? "") === "accepted" &&
+                  String(row.mint ?? "").trim() === candidate.mint,
+              )
+              .map((row) => row.id as CashuTokenId);
+
+            for (const id of spentTokenIds) {
+              const deleted = updateCashuToken({
+                id,
+                isDeleted: Evolu.sqliteTrue,
+              });
+              if (!deleted.ok) throw deleted.error;
+            }
+
+            const remainingToken = split.remainingToken;
+            const remainingAmount = split.remainingAmount;
+
+            if (remainingToken && remainingAmount > 0) {
+              const inserted = insertCashuToken(
+                buildCashuTokenPayload({
+                  token: remainingToken,
+                  mint: split.mint,
+                  unit: split.unit ?? null,
+                  amount: remainingAmount,
+                  state: "accepted",
+                }),
+              );
+              if (!inserted.ok) throw inserted.error;
+            }
+
             sendBatches.push({
               token: split.sendToken,
               amount: split.sendAmount,
@@ -336,33 +367,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
               amount: split.sendAmount,
             });
             remaining -= split.sendAmount;
-
-            const remainingToken = split.remainingToken;
-            const remainingAmount = split.remainingAmount;
-
-            if (remainingToken && remainingAmount > 0) {
-              const inserted = insertCashuToken(
-                buildCashuTokenPayload({
-                  token: remainingToken,
-                  mint: split.mint,
-                  unit: split.unit ?? null,
-                  amount: remainingAmount,
-                  state: "accepted",
-                }),
-              );
-              if (!inserted.ok) throw inserted.error;
-            }
-
-            if (!tokensToDeleteByMint.has(candidate.mint)) {
-              const ids = cashuTokensWithMeta
-                .filter(
-                  (row) =>
-                    String(row.state ?? "") === "accepted" &&
-                    String(row.mint ?? "").trim() === candidate.mint,
-                )
-                .map((row) => row.id as CashuTokenId);
-              tokensToDeleteByMint.set(candidate.mint, ids);
-            }
           } catch (e) {
             lastError = e;
             lastMint = candidate.mint;
@@ -550,15 +554,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
                 state: "pending",
               }),
             );
-          }
-
-          for (const ids of tokensToDeleteByMint.values()) {
-            for (const id of ids) {
-              updateCashuToken({
-                id,
-                isDeleted: Evolu.sqliteTrue,
-              });
-            }
           }
         }
 
