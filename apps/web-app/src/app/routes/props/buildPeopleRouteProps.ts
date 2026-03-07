@@ -3,6 +3,7 @@ import type { PeopleRoutesProps } from "../AppRouteContent";
 interface BuildPeopleRoutePropsParams {
   cashuBalance: PeopleRoutesProps["chatProps"]["cashuBalance"];
   cashuIsBusy: PeopleRoutesProps["chatProps"]["cashuIsBusy"];
+  chatSelectedContact: PeopleRoutesProps["chatProps"]["selectedContact"];
   chatDraft: PeopleRoutesProps["chatProps"]["chatDraft"];
   chatMessageElByIdRef: PeopleRoutesProps["chatProps"]["chatMessageElByIdRef"];
   chatMessages: PeopleRoutesProps["chatProps"]["chatMessages"];
@@ -33,6 +34,8 @@ interface BuildPeopleRoutePropsParams {
   nostrPictureByNpub: PeopleRoutesProps["contactProps"]["nostrPictureByNpub"];
   onCancelEdit: PeopleRoutesProps["chatProps"]["onCancelEdit"];
   onCancelReply: PeopleRoutesProps["chatProps"]["onCancelReply"];
+  onAddUnknownContact: PeopleRoutesProps["chatProps"]["onAddUnknownContact"];
+  onBlockUnknownContact: PeopleRoutesProps["chatProps"]["onBlockUnknownContact"];
   onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
   onEdit: PeopleRoutesProps["chatProps"]["onEdit"];
   onPickProfilePhoto: PeopleRoutesProps["profileProps"]["onPickProfilePhoto"];
@@ -56,7 +59,7 @@ interface BuildPeopleRoutePropsParams {
   saveProfileEdits: PeopleRoutesProps["profileProps"]["saveProfileEdits"];
   scanIsOpen: PeopleRoutesProps["contactNewProps"]["scanIsOpen"];
   replyContext: PeopleRoutesProps["chatProps"]["replyContext"];
-  selectedContact: PeopleRoutesProps["chatProps"]["selectedContact"];
+  selectedContact: PeopleRoutesProps["contactProps"]["selectedContact"];
   sendChatMessage: PeopleRoutesProps["chatProps"]["sendChatMessage"];
   setChatDraft: PeopleRoutesProps["chatProps"]["setChatDraft"];
   setContactPayMethod: PeopleRoutesProps["contactPayProps"]["setContactPayMethod"];
@@ -72,6 +75,7 @@ interface BuildPeopleRoutePropsParams {
 export const buildPeopleRouteProps = ({
   cashuBalance,
   cashuIsBusy,
+  chatSelectedContact,
   chatDraft,
   chatMessageElByIdRef,
   chatMessages,
@@ -102,6 +106,8 @@ export const buildPeopleRouteProps = ({
   nostrPictureByNpub,
   onCancelEdit,
   onCancelReply,
+  onAddUnknownContact,
+  onBlockUnknownContact,
   onCopy,
   onEdit,
   onPickProfilePhoto,
@@ -139,7 +145,7 @@ export const buildPeopleRouteProps = ({
 }: BuildPeopleRoutePropsParams): PeopleRoutesProps => {
   return {
     chatProps: {
-      selectedContact,
+      selectedContact: chatSelectedContact,
       chatMessages,
       chatMessagesRef,
       chatOwnPubkeyHex,
@@ -164,6 +170,8 @@ export const buildPeopleRouteProps = ({
       onCopy,
       onCancelReply,
       onCancelEdit,
+      onAddUnknownContact,
+      onBlockUnknownContact,
       sendChatMessage,
       openContactPay,
       t,

@@ -19,7 +19,7 @@ type NavigationAction =
   | { route: "advanced" }
   | { route: "cashuToken"; id: CashuTokenId }
   | { route: "cashuTokenNew" }
-  | { route: "chat"; id: ContactId }
+  | { route: "chat"; id: string }
   | { route: "contact"; id: ContactId }
   | { route: "contactEdit"; id: ContactId }
   | { route: "contactNew" }

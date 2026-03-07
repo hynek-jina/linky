@@ -10,6 +10,7 @@ interface TopbarButton {
 }
 
 interface ChatContact {
+  isUnknownContact?: boolean;
   name: string | null;
   npub: string | null;
 }
@@ -101,6 +102,11 @@ export function Topbar({
                 </span>
               );
             })()}
+            {chatTopbarContact.isUnknownContact ? (
+              <span className="contact-unknown-badge topbar-unknown-badge">
+                ?
+              </span>
+            ) : null}
           </span>
           <span className="topbar-chat-name">
             {String(chatTopbarContact.name ?? "").trim() || t("messagesTitle")}

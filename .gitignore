@@ -13,6 +13,7 @@ dist-ssr
 dev-dist
 test-results
 *.local
+packages/core/src/**/*.js
 
 # Editor directories and files
 .vscode/*

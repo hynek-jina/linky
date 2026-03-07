@@ -1,8 +1,9 @@
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
-import type { ContactId } from "../../../evolu";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import { safeLocalStorageGetJson } from "../../../utils/storage";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import type {
   ContactNameRowLike,
@@ -21,6 +22,7 @@ import {
   extractEditedFromTag,
   extractReplyContextFromTags,
 } from "./chatNostrProtocol";
+import { buildUnknownContactId, normalizePubkeyHex } from "./contactIdentity";
 
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 type AppendLocalNostrReaction = (reaction: NewLocalNostrReaction) => string;
@@ -82,9 +84,9 @@ export const useInboxNotificationsSync = <
   updateLocalNostrReaction,
 }: UseInboxNotificationsSyncParams<TContact, TRoute>) => {
   React.useEffect(() => {
-    // Best-effort: keep syncing NIP-17 inbox when not inside a chat so we can
-    // show PWA notifications for new messages / incoming Cashu tokens.
-    if (route.kind === "chat") return;
+    // Best-effort: keep syncing the NIP-17 inbox globally so messages from
+    // other contacts still arrive while a chat is open. The currently opened
+    // chat contact is deduplicated below to avoid duplicate inserts.
     if (!currentNsec) return;
 
     const activeChatId = route.kind === "chat" ? String(route.id ?? "") : null;
@@ -125,7 +127,7 @@ export const useInboxNotificationsSync = <
         // Map known contact pubkeys -> contact info.
         const contactByPubHex = new Map<
           string,
-          { id: ContactId; name: string | null }
+          { id: string; name: string | null }
         >();
         for (const contact of contacts) {
           const npub = normalizeNpubIdentifier(contact.npub);
@@ -137,11 +139,28 @@ export const useInboxNotificationsSync = <
             const pub = decoded.data.trim();
             if (!pub) continue;
             const name = String(contact.name ?? "").trim() || null;
-            contactByPubHex.set(pub, { id: contact.id as ContactId, name });
+            contactByPubHex.set(pub, {
+              id: String(contact.id ?? "").trim(),
+              name,
+            });
           } catch {
             // ignore
           }
         }
+
+        const isBlockedPubkey = (pubkeyHex: string): boolean => {
+          const normalizedPubkey = normalizePubkeyHex(pubkeyHex);
+          if (!normalizedPubkey) return false;
+
+          const blocked = safeLocalStorageGetJson(
+            BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
+            [],
+          )
+            .map((entry) => normalizePubkeyHex(entry))
+            .filter((entry): entry is string => Boolean(entry));
+
+          return blocked.includes(normalizedPubkey);
+        };
 
         const pool = await getSharedAppNostrPool();
 
@@ -186,17 +205,24 @@ export const useInboxNotificationsSync = <
                 : senderPub;
               if (!otherPub) return;
 
-              const contact = contactByPubHex.get(otherPub);
-              if (!contact) return;
+              if (isBlockedPubkey(otherPub)) {
+                return;
+              }
+
+              const contact = contactByPubHex.get(otherPub) ?? null;
+              const contactId = contact
+                ? String(contact.id ?? "").trim()
+                : String(buildUnknownContactId(otherPub) ?? "").trim();
+              if (!contactId) return;
 
               const isActiveChatContact =
                 Boolean(activeChatId) &&
-                String(contact.id ?? "") === String(activeChatId);
+                String(contactId) === String(activeChatId);
 
               const messageDirection = isOutgoing ? "out" : "in";
               const rumorId = inner.id ? String(inner.id).trim() : "";
               const rumorKey = rumorId
-                ? `${String(contact.id ?? "")}|${messageDirection}|${rumorId}`
+                ? `${String(contactId)}|${messageDirection}|${rumorId}`
                 : "";
               if (rumorKey) {
                 if (seenRumorKeys.has(rumorKey)) return;
@@ -211,10 +237,7 @@ export const useInboxNotificationsSync = <
               if (editedFromId) {
                 const target = nostrMessagesLatestRef.current.find(
                   (message) => {
-                    if (
-                      String(message.contactId ?? "") !==
-                      String(contact.id ?? "")
-                    ) {
+                    if (String(message.contactId ?? "") !== String(contactId)) {
                       return false;
                     }
                     if (String(message.direction ?? "") !== messageDirection)
@@ -251,11 +274,13 @@ export const useInboxNotificationsSync = <
                 if (!isActiveChatContact) {
                   setContactAttentionById((prev) => ({
                     ...prev,
-                    [String(contact.id)]: Date.now(),
+                    [contactId]: Date.now(),
                   }));
                 }
 
-                const title = contact.name ?? t("appTitle");
+                const title =
+                  contact?.name ??
+                  (contact ? t("appTitle") : t("unknownContactTitle"));
                 void maybeShowPwaNotification(
                   title,
                   content.trim(),
@@ -281,9 +306,7 @@ export const useInboxNotificationsSync = <
 
               const existingMessage = nostrMessagesLatestRef.current.find(
                 (message) => {
-                  if (
-                    String(message.contactId ?? "") !== String(contact.id ?? "")
-                  ) {
+                  if (String(message.contactId ?? "") !== String(contactId)) {
                     return false;
                   }
                   if (String(message.direction ?? "") !== messageDirection)
@@ -320,7 +343,7 @@ export const useInboxNotificationsSync = <
               }
 
               appendLocalNostrMessage({
-                contactId: String(contact.id),
+                contactId,
                 direction: isOutgoing ? "out" : "in",
                 content,
                 wrapId,

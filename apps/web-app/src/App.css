@@ -103,7 +103,8 @@
   width: 24px;
   height: 24px;
   border-radius: 999px;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
   background: #0b1222;
   border: none;
   display: inline-flex;
@@ -2109,6 +2110,25 @@ button.icon {
   border: 2px solid #0b1222;
 }
 
+.contact-unknown-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  color: #022c22;
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  border: 2px solid #0b1222;
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.35);
+}
+
 .contact-avatar.is-large {
   width: 56px;
   height: 56px;
@@ -2171,6 +2191,39 @@ button.icon {
   gap: 12px;
   align-items: center;
   margin: 12px 0 6px;
+}
+
+.topbar-unknown-badge {
+  right: -4px;
+  bottom: -4px;
+  width: 16px;
+  height: 16px;
+  font-size: 11px;
+}
+
+.chat-unknown-warning {
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(20, 184, 166, 0.45);
+  background: rgba(13, 148, 136, 0.12);
+}
+
+.chat-unknown-warning p {
+  margin: 0;
+  font-size: 13px;
+  color: #ccfbf1;
+}
+
+.chat-unknown-warning-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chat-unknown-warning-actions .danger {
+  border-color: rgba(244, 63, 94, 0.5);
+  color: #fecdd3;
 }
 
 .contact-header-text {

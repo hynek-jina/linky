@@ -9,6 +9,7 @@ import type {
   PublishWrappedResult,
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
+import { readUnknownPubkeyHex } from "./contactIdentity";
 
 export interface EditChatContext {
   messageId: string;
@@ -70,7 +71,8 @@ export const useEditChatMessage = <
     if (!text) return;
 
     const contactNpub = normalizeNpubIdentifier(selectedContact.npub);
-    if (!contactNpub) {
+    const unknownPubkeyHex = readUnknownPubkeyHex(selectedContact);
+    if (!contactNpub && !unknownPubkeyHex) {
       setStatus(t("chatMissingContactNpub"));
       return;
     }
@@ -92,21 +94,29 @@ export const useEditChatMessage = <
       const privBytes = decodedMe.data;
       const myPubHex = getPublicKey(privBytes);
 
-      let decodedContact: ReturnType<typeof nip19.decode> | null = null;
-      try {
-        decodedContact = nip19.decode(contactNpub);
-      } catch {
-        decodedContact = null;
+      let contactPubHex = unknownPubkeyHex;
+
+      if (!contactPubHex) {
+        if (!contactNpub) {
+          setStatus(t("chatMissingContactNpub"));
+          return;
+        }
+        let decodedContact: ReturnType<typeof nip19.decode> | null = null;
+        try {
+          decodedContact = nip19.decode(contactNpub);
+        } catch {
+          decodedContact = null;
+        }
+        if (
+          !decodedContact ||
+          decodedContact.type !== "npub" ||
+          typeof decodedContact.data !== "string"
+        ) {
+          setStatus(t("chatMissingContactNpub"));
+          return;
+        }
+        contactPubHex = decodedContact.data;
       }
-      if (
-        !decodedContact ||
-        decodedContact.type !== "npub" ||
-        typeof decodedContact.data !== "string"
-      ) {
-        setStatus(t("chatMissingContactNpub"));
-        return;
-      }
-      const contactPubHex = decodedContact.data;
 
       const clientId = makeLocalId();
       const baseEvent = {

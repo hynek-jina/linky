@@ -23,6 +23,7 @@ import type {
   UpdateLocalNostrMessage,
   UpdateLocalNostrReaction,
 } from "../types/appTypes";
+import { isUnknownContactId } from "./messages/contactIdentity";
 import {
   dedupeChatMessages,
   dedupeNostrMessagesByPriority,
@@ -313,6 +314,9 @@ const buildReactionInsertPayload = (
 const migrationKeyForOwner = (ownerId: string): string =>
   `linky.messages_evolu_migrated_v${MESSAGE_MIGRATION_VERSION}:${ownerId}`;
 
+const overlayMessagesKeyForOwner = (ownerId: string): string =>
+  `${LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX}.overlay.${ownerId}`;
+
 interface NostrMessageUpdatePayload {
   clientId?: string | null;
   content?: string;
@@ -382,6 +386,9 @@ export const useMessagesDomain = ({
 }: UseMessagesDomainParams) => {
   const { insert, update } = useEvolu();
   const activeChatRouteId = route.kind === "chat" ? route.id : null;
+  const [overlayMessages, setOverlayMessages] = React.useState<
+    LocalNostrMessage[]
+  >([]);
 
   const nostrMessagesQuery = React.useMemo(
     () =>
@@ -451,7 +458,7 @@ export const useMessagesDomain = ({
     return seenWrapIds;
   }, [isVisibleMessageOwner, nostrReactionRows]);
 
-  const nostrMessagesLocal = React.useMemo(() => {
+  const evoluNostrMessagesLocal = React.useMemo(() => {
     const parsed: LocalNostrMessage[] = [];
     for (const row of nostrMessageRows) {
       if (!isVisibleMessageOwner(row)) continue;
@@ -461,6 +468,53 @@ export const useMessagesDomain = ({
     const deduped = dedupeNostrMessagesByPriority(parsed);
     return deduped.sort((a, b) => a.createdAtSec - b.createdAtSec);
   }, [isVisibleMessageOwner, nostrMessageRows]);
+
+  const persistOverlayMessages = React.useCallback(
+    (nextMessages: LocalNostrMessage[]) => {
+      setOverlayMessages(nextMessages);
+      const ownerId = appOwnerIdRef.current;
+      if (!ownerId) return;
+      safeLocalStorageSetJson(
+        overlayMessagesKeyForOwner(String(ownerId)),
+        nextMessages,
+      );
+    },
+    [appOwnerIdRef],
+  );
+
+  React.useEffect(() => {
+    const ownerId = appOwnerIdRef.current;
+    if (!ownerId) {
+      setOverlayMessages([]);
+      return;
+    }
+
+    const raw = safeLocalStorageGetJson(
+      overlayMessagesKeyForOwner(String(ownerId)),
+      [] as LocalNostrMessage[],
+    );
+
+    const normalized = Array.isArray(raw)
+      ? raw
+          .map((message) => normalizeLegacyLocalMessage(message))
+          .filter((message): message is LocalNostrMessage => Boolean(message))
+      : [];
+
+    setOverlayMessages(dedupeNostrMessagesByPriority(normalized));
+  }, [appOwnerId, appOwnerIdRef]);
+
+  const overlayMessagesRef = React.useRef<LocalNostrMessage[]>([]);
+  React.useEffect(() => {
+    overlayMessagesRef.current = overlayMessages;
+  }, [overlayMessages]);
+
+  const nostrMessagesLocal = React.useMemo(() => {
+    const combined = dedupeNostrMessagesByPriority([
+      ...evoluNostrMessagesLocal,
+      ...overlayMessages,
+    ]);
+    return combined.sort((a, b) => a.createdAtSec - b.createdAtSec);
+  }, [evoluNostrMessagesLocal, overlayMessages]);
 
   const nostrReactionsLocal = React.useMemo(() => {
     const parsed: LocalNostrReaction[] = [];
@@ -654,7 +708,12 @@ export const useMessagesDomain = ({
     } finally {
       migrationRunningRef.current = false;
     }
-  }, [insertNostrMessage, messagesOwnerId, nostrMessagesLocal]);
+  }, [
+    insertNostrMessage,
+    messagesOwnerId,
+    evoluNostrMessagesLocal,
+    nostrMessagesLocal,
+  ]);
 
   const appendLocalNostrMessage = React.useCallback(
     (message: NewLocalNostrMessage): string => {
@@ -687,6 +746,48 @@ export const useMessagesDomain = ({
       });
       if (existing) return toTrimmedText(existing.id);
 
+      if (isUnknownContactId(payload.contactId)) {
+        const messageId = makeLocalId();
+        const nextMessage: LocalNostrMessage = {
+          id: messageId,
+          contactId: payload.contactId,
+          direction: payload.direction,
+          content: payload.content,
+          wrapId: payload.wrapId,
+          rumorId: payload.rumorId ?? null,
+          pubkey: payload.pubkey ?? "",
+          createdAtSec: payload.createdAtSec,
+          status: payload.status,
+          localOnly: payload.localOnly === "1",
+          replyToId: payload.replyToId ?? null,
+          replyToContent: payload.replyToContent ?? null,
+          rootMessageId: payload.rootMessageId ?? null,
+          editedAtSec: payload.editedAtSec ?? null,
+          editedFromId: payload.editedFromId ?? null,
+          isEdited: payload.isEdited === "1",
+          originalContent: payload.originalContent ?? null,
+          ...(payload.clientId ? { clientId: payload.clientId } : {}),
+        };
+        const nextOverlayMessages = dedupeNostrMessagesByPriority([
+          ...overlayMessagesRef.current,
+          nextMessage,
+        ]).sort((a, b) => a.createdAtSec - b.createdAtSec);
+        persistOverlayMessages(nextOverlayMessages);
+
+        if (
+          activeChatRouteId &&
+          toTrimmedText(message.contactId) === toTrimmedText(activeChatRouteId)
+        ) {
+          chatForceScrollToBottomRef.current = true;
+          requestAnimationFrame(() => {
+            const container = chatMessagesRef.current;
+            if (container) container.scrollTop = container.scrollHeight;
+          });
+        }
+
+        return messageId;
+      }
+
       const result = insertNostrMessage(payload);
       if (!result.ok) return "";
 
@@ -709,6 +810,7 @@ export const useMessagesDomain = ({
       chatForceScrollToBottomRef,
       chatMessagesRef,
       insertNostrMessage,
+      persistOverlayMessages,
     ],
   );
 
@@ -718,6 +820,9 @@ export const useMessagesDomain = ({
       if (!normalizedId) return;
 
       const current = nostrMessagesLatestRef.current.find(
+        (message) => toTrimmedText(message.id) === normalizedId,
+      );
+      const isOverlayMessage = overlayMessagesRef.current.some(
         (message) => toTrimmedText(message.id) === normalizedId,
       );
       const shadow =
@@ -946,9 +1051,56 @@ export const useMessagesDomain = ({
 
       nostrMessageUpdateShadowRef.current.set(normalizedId, shadow);
 
+      if (isOverlayMessage && current) {
+        const nextOverlayMessages = overlayMessagesRef.current.map(
+          (message) => {
+            if (toTrimmedText(message.id) !== normalizedId) return message;
+            const nextMessage: LocalNostrMessage = { ...message };
+
+            if (payload.clientId !== undefined) {
+              if (payload.clientId === null) delete nextMessage.clientId;
+              else nextMessage.clientId = payload.clientId;
+            }
+            if (payload.content !== undefined)
+              nextMessage.content = payload.content;
+            if (payload.editedAtSec !== undefined)
+              nextMessage.editedAtSec = payload.editedAtSec;
+            if (payload.editedFromId !== undefined)
+              nextMessage.editedFromId = payload.editedFromId;
+            if (payload.isEdited !== undefined)
+              nextMessage.isEdited = payload.isEdited === "1";
+            if (payload.localOnly !== undefined)
+              nextMessage.localOnly = payload.localOnly === "1";
+            if (payload.originalContent !== undefined) {
+              nextMessage.originalContent = payload.originalContent;
+            }
+            if (payload.pubkey !== undefined)
+              nextMessage.pubkey = payload.pubkey ?? "";
+            if (payload.replyToContent !== undefined) {
+              nextMessage.replyToContent = payload.replyToContent;
+            }
+            if (payload.replyToId !== undefined)
+              nextMessage.replyToId = payload.replyToId;
+            if (payload.rootMessageId !== undefined) {
+              nextMessage.rootMessageId = payload.rootMessageId;
+            }
+            if (payload.rumorId !== undefined)
+              nextMessage.rumorId = payload.rumorId;
+            if (payload.status !== undefined)
+              nextMessage.status = payload.status;
+            if (payload.wrapId !== undefined)
+              nextMessage.wrapId = payload.wrapId;
+
+            return nextMessage;
+          },
+        );
+        persistOverlayMessages(nextOverlayMessages);
+        return;
+      }
+
       updateNostrMessage(payload);
     },
-    [updateNostrMessage],
+    [persistOverlayMessages, updateNostrMessage],
   );
 
   const appendLocalNostrReaction = React.useCallback(
@@ -1133,8 +1285,47 @@ export const useMessagesDomain = ({
   );
 
   const refreshLocalNostrMessages = React.useCallback(() => {
-    // Data is query-driven from Evolu; kept for backwards-compatible call sites.
-  }, []);
+    const ownerId = appOwnerIdRef.current;
+    if (!ownerId) return;
+    const raw = safeLocalStorageGetJson(
+      overlayMessagesKeyForOwner(String(ownerId)),
+      [] as LocalNostrMessage[],
+    );
+    const normalized = Array.isArray(raw)
+      ? raw
+          .map((message) => normalizeLegacyLocalMessage(message))
+          .filter((message): message is LocalNostrMessage => Boolean(message))
+      : [];
+    setOverlayMessages(dedupeNostrMessagesByPriority(normalized));
+  }, [appOwnerIdRef]);
+
+  const reassignLocalNostrMessagesContactId = React.useCallback(
+    (fromContactId: string, toContactId: string) => {
+      const normalizedFrom = toTrimmedText(fromContactId);
+      const normalizedTo = toTrimmedText(toContactId);
+      if (!normalizedFrom || !normalizedTo) return;
+
+      const nextOverlayMessages = overlayMessagesRef.current.map((message) =>
+        toTrimmedText(message.contactId) === normalizedFrom
+          ? { ...message, contactId: normalizedTo }
+          : message,
+      );
+      persistOverlayMessages(nextOverlayMessages);
+    },
+    [persistOverlayMessages],
+  );
+
+  const removeLocalNostrMessagesByContactId = React.useCallback(
+    (contactId: string) => {
+      const normalizedContactId = toTrimmedText(contactId);
+      if (!normalizedContactId) return;
+      const nextOverlayMessages = overlayMessagesRef.current.filter(
+        (message) => toTrimmedText(message.contactId) !== normalizedContactId,
+      );
+      persistOverlayMessages(nextOverlayMessages);
+    },
+    [persistOverlayMessages],
+  );
 
   const retentionPruneTimerRef = React.useRef<number | null>(null);
   const retentionPruneInFlightRef = React.useRef(false);
@@ -1178,10 +1369,21 @@ export const useMessagesDomain = ({
       for (const message of nostrMessagesLocal) {
         const messageId = toTrimmedText(message.id);
         if (!messageId || keepIds.has(messageId)) continue;
-        updateNostrMessage({
-          id: messageId,
-          isDeleted: Evolu.sqliteTrue,
-        });
+        if (
+          overlayMessagesRef.current.some(
+            (overlayMessage) => toTrimmedText(overlayMessage.id) === messageId,
+          )
+        ) {
+          continue;
+        }
+        updateNostrMessage({ id: messageId, isDeleted: Evolu.sqliteTrue });
+      }
+
+      const nextOverlayMessages = overlayMessagesRef.current.filter((message) =>
+        keepIds.has(toTrimmedText(message.id)),
+      );
+      if (nextOverlayMessages.length !== overlayMessagesRef.current.length) {
+        persistOverlayMessages(nextOverlayMessages);
       }
 
       const keptRumorIds = new Set<string>();
@@ -1218,6 +1420,7 @@ export const useMessagesDomain = ({
   }, [
     nostrMessagesLocal,
     nostrReactionsLocal,
+    persistOverlayMessages,
     updateNostrMessage,
     updateNostrReaction,
   ]);
@@ -1446,6 +1649,8 @@ export const useMessagesDomain = ({
     pendingPayments,
     reactionsByMessageId,
     refreshLocalNostrMessages,
+    reassignLocalNostrMessagesContactId,
+    removeLocalNostrMessagesByContactId,
     removePendingPayment,
     softDeleteLocalNostrReaction,
     softDeleteLocalNostrReactionsByWrapIds,

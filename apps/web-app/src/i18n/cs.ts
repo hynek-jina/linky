@@ -206,9 +206,18 @@ export const cs = {
 
   chat: "Chat",
   sendMessage: "Zprávy",
+  unknownContactTitle: "Neznámý kontakt",
+  unknownContactNamePrefix: "[Neznámý]",
   chatEmpty: "Zatím žádné zprávy.",
   chatPlaceholder: "Zpráva",
   chatMissingContactNpub: "Chybí npub u kontaktu.",
+  chatUnknownContactWarning:
+    "Tento kontakt zatím nemáte uložený. Můžete ho přidat nebo zablokovat.",
+  blockContact: "Blokovat",
+  chatUnknownContactBlockConfirm:
+    "Opravdu chcete tento kontakt zablokovat? Konverzace zmizí.",
+  chatUnknownContactBlocked: "Kontakt byl zablokován.",
+  chatUnknownContactAddFailed: "Tento kontakt se zatím nepodařilo přidat.",
   chatQueued: "Zpráva zařazena do fronty.",
   chatPendingShort: "čeká",
   chatReplyAction: "Odpovědět",

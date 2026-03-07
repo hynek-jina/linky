@@ -10,13 +10,14 @@ import type {
 } from "../app/types/appTypes";
 import { ChatMessage } from "../components/ChatMessage";
 import { ReplyPreview } from "../components/ReplyPreview";
-import type { ContactId } from "../evolu";
 import { formatChatDayLabel, formatInteger } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
 interface Contact {
-  id: ContactId;
+  id: string;
+  isUnknownContact?: boolean;
   npub?: string | null;
+  unknownPubkeyHex?: string | null;
   lnAddress?: string | null;
 }
 
@@ -41,11 +42,13 @@ interface ChatPageProps {
   lang: string;
   onCancelEdit: () => void;
   onCancelReply: () => void;
+  onAddUnknownContact: () => Promise<void>;
+  onBlockUnknownContact: () => Promise<void>;
   onCopy: (message: LocalNostrMessage) => void;
   onEdit: (message: LocalNostrMessage) => void;
   onReact: (message: LocalNostrMessage, emoji: string) => void;
   onReply: (message: LocalNostrMessage) => void;
-  openContactPay: (id: ContactId, returnToChat?: boolean) => void;
+  openContactPay: (id: string, returnToChat?: boolean) => void;
   payWithCashuEnabled: boolean;
   reactionsByMessageId: Map<string, LocalNostrReaction[]>;
   replyContext: ReplyContext | null;
@@ -74,6 +77,8 @@ export const ChatPage: FC<ChatPageProps> = ({
   lang,
   onCancelEdit,
   onCancelReply,
+  onAddUnknownContact,
+  onBlockUnknownContact,
   onCopy,
   onEdit,
   onReact,
@@ -92,19 +97,22 @@ export const ChatPage: FC<ChatPageProps> = ({
   const npub = selectedContact
     ? normalizeNpubIdentifier(selectedContact.npub)
     : null;
+  const hasUnknownPubkeyHex = Boolean(
+    String(selectedContact?.unknownPubkeyHex ?? "").trim(),
+  );
   const isDesktop =
     typeof window !== "undefined" &&
     window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
   useEffect(() => {
     if (!replyContext && !editContext) return;
-    if (chatSendIsBusy || !npub) return;
+    if (chatSendIsBusy || (!npub && !hasUnknownPubkeyHex)) return;
     const input = composeInputRef.current;
     if (!input) return;
     input.focus();
     const length = input.value.length;
     input.setSelectionRange(length, length);
-  }, [replyContext, editContext, chatSendIsBusy, npub]);
+  }, [replyContext, editContext, chatSendIsBusy, hasUnknownPubkeyHex, npub]);
 
   if (!selectedContact) {
     return (
@@ -115,8 +123,10 @@ export const ChatPage: FC<ChatPageProps> = ({
   }
 
   const ln = String(selectedContact.lnAddress ?? "").trim();
+  const isUnknownContact = Boolean(selectedContact.isUnknownContact);
   const canPayThisContact =
-    Boolean(ln) || (payWithCashuEnabled && Boolean(npub));
+    !isUnknownContact &&
+    (Boolean(ln) || (payWithCashuEnabled && Boolean(npub)));
   const canStartPay =
     (Boolean(ln) && cashuBalance > 0) || (Boolean(npub) && cashuBalance > 0);
   const isFeedbackContact = npub === feedbackContactNpub;
@@ -134,11 +144,41 @@ export const ChatPage: FC<ChatPageProps> = ({
       ? (byRumorId.get(replyContext.replyToId)?.content ?? "")
       : "";
 
-  const canSendChat = Boolean(!chatSendIsBusy && chatDraft.trim() && npub);
+  const canSendChat = Boolean(
+    !chatSendIsBusy && chatDraft.trim() && (npub || hasUnknownPubkeyHex),
+  );
 
   return (
     <section className="panel chat-panel">
-      {!npub && <p className="muted">{t("chatMissingContactNpub")}</p>}
+      {isUnknownContact ? (
+        <div className="chat-unknown-warning">
+          <p>{t("chatUnknownContactWarning")}</p>
+          <div className="chat-unknown-warning-actions">
+            <button
+              className="btn-wide secondary"
+              type="button"
+              onClick={() => {
+                void onAddUnknownContact();
+              }}
+            >
+              {t("addContact")}
+            </button>
+            <button
+              className="btn-wide secondary danger"
+              type="button"
+              onClick={() => {
+                void onBlockUnknownContact();
+              }}
+            >
+              {t("blockContact")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {!npub && !hasUnknownPubkeyHex && (
+        <p className="muted">{t("chatMissingContactNpub")}</p>
+      )}
 
       <div
         className="chat-messages"
@@ -251,7 +291,7 @@ export const ChatPage: FC<ChatPageProps> = ({
             void sendChatMessage();
           }}
           placeholder={t("chatPlaceholder")}
-          disabled={chatSendIsBusy || !npub}
+          disabled={chatSendIsBusy || (!npub && !hasUnknownPubkeyHex)}
           data-guide="chat-input"
         />
         <button

@@ -37,16 +37,19 @@
   "devDependencies": {
     "@linky/config": "workspace:*",
     "@playwright/test": "^1.58.1",
+    "@testing-library/jest-dom": "^6.9.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-basic-ssl": "^2.0.0",
     "@vitejs/plugin-react-swc": "^4.2.2",
     "eslint": "^9.39.1",
+    "jsdom": "^28.1.0",
     "playwright": "^1.58.1",
     "prettier": "^3.4.2",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^4.0.18"
   }
 }
