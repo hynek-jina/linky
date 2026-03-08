@@ -776,6 +776,83 @@ button.settings-link:hover {
   cursor: pointer;
 }
 
+.topup-invoice-panel {
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(45, 212, 191, 0.12),
+      transparent 42%
+    ),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(9, 16, 32, 0.98));
+  overflow: hidden;
+}
+
+.topup-invoice-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.topup-invoice-balance {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.topup-invoice-balance .balance-hero {
+  margin: 0;
+  justify-content: center;
+}
+
+.topup-invoice-mint-note {
+  margin: -4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.topup-invoice-mint-value {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.topup-invoice-qr-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.topup-invoice-qr-button {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #f8fafc, #dbeafe);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.45);
+}
+
+.topup-invoice-qr {
+  width: min(100%, 290px);
+  margin: 0;
+}
+
+.topup-invoice-copy {
+  max-width: 320px;
+}
+
+.topup-invoice-loading {
+  margin: 14px 0 0;
+}
+
 .profile-detail {
   display: flex;
   flex-direction: column;
@@ -2204,6 +2281,29 @@ button.icon {
   word-break: break-word;
 }
 
+.contact-detail-copy {
+  max-width: 100%;
+  font: inherit;
+  text-align: center;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.contact-detail-copy:hover {
+  background: transparent;
+  color: #cbd5e1;
+  box-shadow: none;
+  transform: none;
+}
+
+.contact-detail-copy:focus,
+.contact-detail-copy:active {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
 .contact-detail-actions {
   margin-top: 16px;
   width: 100%;
@@ -2419,7 +2519,7 @@ button.tag-button {
   position: fixed;
   top: 70px;
   right: 12px;
-  z-index: 60;
+  z-index: 96;
   display: flex;
   flex-direction: column;
   gap: 8px;

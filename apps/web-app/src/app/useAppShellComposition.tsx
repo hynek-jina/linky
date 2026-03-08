@@ -31,6 +31,7 @@ import {
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
   FEEDBACK_CONTACT_NPUB,
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
+  LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX,
   MAX_CONTACTS_PER_OWNER,
   NO_GROUP_FILTER,
 } from "../utils/constants";
@@ -53,6 +54,7 @@ import {
   getInitialUseBitcoinSymbol,
   safeLocalStorageGet,
   safeLocalStorageGetJson,
+  safeLocalStorageRemove,
   safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "../utils/storage";
@@ -93,7 +95,10 @@ import { usePayContactWithCashuMessage } from "./hooks/payments/usePayContactWit
 import { useRouteAmountResetEffects } from "./hooks/payments/useRouteAmountResetEffects";
 import { useProfileEditor } from "./hooks/profile/useProfileEditor";
 import { useProfileMetadataSyncEffect } from "./hooks/profile/useProfileMetadataSyncEffect";
-import { useTopupInvoiceQuoteEffects } from "./hooks/topup/useTopupInvoiceQuoteEffects";
+import {
+  useTopupInvoiceQuoteEffects,
+  type TopupMintQuoteDraft,
+} from "./hooks/topup/useTopupInvoiceQuoteEffects";
 import { useAppDataTransfer } from "./hooks/useAppDataTransfer";
 import { useAppPreferences } from "./hooks/useAppPreferences";
 import { useArmedDeleteTimeouts } from "./hooks/useArmedDeleteTimeouts";
@@ -161,6 +166,91 @@ const readPaidMintQuoteState = (value: unknown): string | null => {
   const paid = readObjectField(value, "PAID");
   if (paid === undefined || paid === null) return null;
   return String(paid);
+};
+
+interface PendingTopupQuoteStorage {
+  amount: number;
+  createdAtMs: number;
+  mintUrl: string;
+  quote: string;
+  unit: string | null;
+}
+
+const PENDING_TOPUP_QUOTE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+const isExpiredPendingTopupQuote = (createdAtMs: number): boolean =>
+  Date.now() - createdAtMs > PENDING_TOPUP_QUOTE_MAX_AGE_MS;
+
+const isSameTopupMintQuote = (
+  left: TopupMintQuoteDraft | null,
+  right: TopupMintQuoteDraft | null,
+): boolean => {
+  if (!left || !right) return left === right;
+
+  return (
+    left.mintUrl === right.mintUrl &&
+    left.quote === right.quote &&
+    left.amount === right.amount &&
+    left.unit === right.unit
+  );
+};
+
+const toTopupMintQuoteDraft = (
+  value: PendingTopupQuoteStorage,
+): TopupMintQuoteDraft => ({
+  mintUrl: value.mintUrl,
+  quote: value.quote,
+  amount: value.amount,
+  unit: value.unit,
+});
+
+const toPendingTopupQuoteStorage = (
+  value: TopupMintQuoteDraft,
+): PendingTopupQuoteStorage => ({
+  mintUrl: value.mintUrl,
+  quote: value.quote,
+  amount: value.amount,
+  unit: value.unit,
+  createdAtMs: Date.now(),
+});
+
+const isPendingTopupQuoteStorage = (
+  value: unknown,
+): value is PendingTopupQuoteStorage => {
+  if (typeof value !== "object" || value === null) return false;
+
+  const amount = readObjectField(value, "amount");
+  const createdAtMs = readObjectField(value, "createdAtMs");
+  const mintUrl = readObjectField(value, "mintUrl");
+  const quote = readObjectField(value, "quote");
+  const unit = readObjectField(value, "unit");
+
+  return (
+    typeof amount === "number" &&
+    Number.isFinite(amount) &&
+    amount > 0 &&
+    typeof createdAtMs === "number" &&
+    Number.isFinite(createdAtMs) &&
+    typeof mintUrl === "string" &&
+    mintUrl.trim().length > 0 &&
+    typeof quote === "string" &&
+    quote.trim().length > 0 &&
+    (unit === null || typeof unit === "string")
+  );
+};
+
+const readPendingTopupQuoteFromStorage = (
+  key: string,
+): PendingTopupQuoteStorage | null => {
+  const raw = safeLocalStorageGet(key);
+  if (!raw) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isPendingTopupQuoteStorage(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 };
 
 const logPayStep = (step: string, data?: PaymentLogData): void => {
@@ -376,6 +466,7 @@ export const useAppShellComposition = () => {
   }, [evoluActiveServerUrls, evoluHasError, evoluServerStatusByUrl, syncOwner]);
 
   const appOwnerId = syncOwner?.id ?? null;
+  const pendingTopupStorageKey = `${LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX}.${String(appOwnerId ?? "anon")}`;
 
   React.useEffect(() => {
     appOwnerIdRef.current = appOwnerId;
@@ -490,13 +581,67 @@ export const useAppShellComposition = () => {
     null,
   );
   const [topupInvoiceIsBusy, setTopupInvoiceIsBusy] = useState(false);
-  const [topupDebug, setTopupDebug] = useState<string | null>(null);
-  const [topupMintQuote, setTopupMintQuote] = useState<null | {
-    mintUrl: string;
-    quote: string;
-    amount: number;
-    unit: string | null;
-  }>(null);
+  const [topupMintQuote, setTopupMintQuote] =
+    useState<TopupMintQuoteDraft | null>(null);
+
+  React.useEffect(() => {
+    if (!appOwnerId) {
+      setTopupMintQuote(null);
+      return;
+    }
+
+    const stored = readPendingTopupQuoteFromStorage(pendingTopupStorageKey);
+    if (!stored) {
+      safeLocalStorageRemove(pendingTopupStorageKey);
+      setTopupMintQuote(null);
+      return;
+    }
+
+    if (isExpiredPendingTopupQuote(stored.createdAtMs)) {
+      safeLocalStorageRemove(pendingTopupStorageKey);
+      setTopupMintQuote(null);
+      return;
+    }
+
+    const nextQuote = toTopupMintQuoteDraft(stored);
+    setTopupMintQuote((current) => {
+      if (isSameTopupMintQuote(current, nextQuote)) return current;
+      return nextQuote;
+    });
+  }, [appOwnerId, pendingTopupStorageKey]);
+
+  React.useEffect(() => {
+    if (!appOwnerId) return;
+
+    if (!topupMintQuote) {
+      safeLocalStorageRemove(pendingTopupStorageKey);
+      return;
+    }
+
+    safeLocalStorageSet(
+      pendingTopupStorageKey,
+      JSON.stringify(toPendingTopupQuoteStorage(topupMintQuote)),
+    );
+  }, [appOwnerId, pendingTopupStorageKey, topupMintQuote]);
+
+  const showRecentlyReceivedTokenToast = React.useCallback(
+    (token: string, amount: number | null) => {
+      if (recentlyReceivedTokenTimerRef.current !== null) {
+        try {
+          window.clearTimeout(recentlyReceivedTokenTimerRef.current);
+        } catch {
+          // ignore
+        }
+      }
+
+      setRecentlyReceivedToken({ token, amount });
+      recentlyReceivedTokenTimerRef.current = window.setTimeout(() => {
+        setRecentlyReceivedToken(null);
+        recentlyReceivedTokenTimerRef.current = null;
+      }, 25_000);
+    },
+    [setRecentlyReceivedToken],
+  );
 
   const [chatDraft, setChatDraft] = useState<string>("");
   const [chatSendIsBusy, setChatSendIsBusy] = useState(false);
@@ -767,7 +912,6 @@ export const useAppShellComposition = () => {
     topupPaidNavTimerRef,
     topupRefreshKey: myProfileName,
     setTopupAmount,
-    setTopupDebug,
     setTopupInvoice,
     setTopupInvoiceError,
     setTopupInvoiceIsBusy,
@@ -932,7 +1076,6 @@ export const useAppShellComposition = () => {
   });
 
   React.useEffect(() => {
-    if (route.kind !== "topupInvoice") return;
     if (!topupMintQuote) return;
 
     let cancelled = false;
@@ -980,6 +1123,20 @@ export const useAppShellComposition = () => {
         }
 
         ensureCashuTokenPersisted(String(token ?? ""));
+
+        showRecentlyReceivedTokenToast(
+          String(token ?? "").trim(),
+          topupMintQuote.amount > 0 ? topupMintQuote.amount : null,
+        );
+
+        if (route.kind !== "topupInvoice") {
+          showPaidOverlay(
+            t("topupOverlay")
+              .replace("{amount}", formatInteger(topupMintQuote.amount))
+              .replace("{unit}", displayUnit),
+          );
+        }
+
         if (!cancelled) setTopupMintQuote(null);
       } catch {
         // ignore
@@ -996,12 +1153,15 @@ export const useAppShellComposition = () => {
       window.clearInterval(intervalId);
     };
   }, [
+    displayUnit,
     insert,
     resolveOwnerIdForWrite,
-    route.kind,
     topupMintQuote,
     t,
     ensureCashuTokenPersisted,
+    route.kind,
+    showRecentlyReceivedTokenToast,
+    showPaidOverlay,
   ]);
 
   const {
@@ -2561,10 +2721,13 @@ export const useAppShellComposition = () => {
       setTopupAmount,
       t,
       topupAmount,
-      topupDebug,
       topupInvoice,
       topupInvoiceError,
       topupInvoiceIsBusy,
+      topupMintUrl:
+        topupMintQuote?.mintUrl ??
+        normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ??
+        MAIN_MINT_URL,
       topupInvoiceQr,
     },
   });

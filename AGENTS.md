@@ -99,6 +99,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Vite proxies: `/__mint-quote` for Cashu mint quotes, `/api/lnurlp` for LNURL-pay (CORS workarounds)
 - PWA service worker auto-updates - changes to `sw.ts` affect caching behavior
 - Chat retention is enforced in `useMessagesDomain` (latest 500 messages/contact, 3000 global; reactions capped to 5000 and orphaned reactions are pruned)
+- Wallet top-up receive quotes are cached in owner-scoped localStorage until claimed/expired, so dismissing the QR screen does not drop a pending receive
 
 ## Maintaining This File
 

@@ -234,7 +234,6 @@ export const en = {
   profileNoName: "Nostr profile",
   myNpubQr: "Your contact",
   profileMissingNpub: "Missing Nostr keys.",
-  profileMessagesHint: "You only see messages from contacts you also add.",
   profileUploadPhoto: "Upload photo",
   profileFetching: "Fetching profile from Nostr…",
   profileDerivedDefault: "Default (derived)",

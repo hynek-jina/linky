@@ -1,8 +1,13 @@
 import React from "react";
-import { formatShortNpub, getInitials } from "../utils/formatting";
+import {
+  formatShortLightningAddress,
+  formatShortNpub,
+  getInitials,
+} from "../utils/formatting";
 
 interface ProfileQrModalProps {
   closeProfileQr: () => void;
+  copyText: (text: string) => Promise<void>;
   currentNpub: string | null;
   currentNsec: string | null;
   derivedProfile: {
@@ -16,7 +21,6 @@ interface ProfileQrModalProps {
   isProfileEditing: boolean;
   myProfileQr: string | null;
   onClose: () => void;
-  onCopyNpub: () => void;
   onPickProfilePhoto: () => void;
   onProfilePhotoSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSaveProfileEdits: () => void;
@@ -40,6 +44,7 @@ interface ProfileQrModalProps {
 
 export function ProfileQrModal({
   closeProfileQr,
+  copyText,
   currentNpub,
   currentNsec,
   derivedProfile,
@@ -49,7 +54,6 @@ export function ProfileQrModal({
   isProfileEditing,
   myProfileQr,
   onClose,
-  onCopyNpub,
   onPickProfilePhoto,
   onProfilePhotoSelected,
   onSaveProfileEdits,
@@ -66,6 +70,16 @@ export function ProfileQrModal({
   t,
   toggleProfileEditing,
 }: ProfileQrModalProps): React.ReactElement {
+  const handleCopyNpub = () => {
+    if (!currentNpub) return;
+    void copyText(currentNpub);
+  };
+
+  const handleCopyLightningAddress = () => {
+    if (!effectiveMyLightningAddress) return;
+    void copyText(effectiveMyLightningAddress);
+  };
+
   return (
     <div
       className="modal-overlay"
@@ -264,7 +278,9 @@ export function ProfileQrModal({
                 className="qr"
                 src={myProfileQr}
                 alt=""
-                onClick={onCopyNpub}
+                title={t("myNpubQr")}
+                aria-label={t("myNpubQr")}
+                onClick={handleCopyNpub}
               />
             ) : (
               <p className="muted">{currentNpub}</p>
@@ -275,10 +291,16 @@ export function ProfileQrModal({
             </h2>
 
             {effectiveMyLightningAddress ? (
-              <p className="contact-detail-ln">{effectiveMyLightningAddress}</p>
+              <button
+                type="button"
+                className="copyable contact-detail-ln contact-detail-copy"
+                onClick={handleCopyLightningAddress}
+                title={effectiveMyLightningAddress}
+                aria-label={t("lightningAddress")}
+              >
+                {formatShortLightningAddress(effectiveMyLightningAddress)}
+              </button>
             ) : null}
-
-            <p className="muted profile-note">{t("profileMessagesHint")}</p>
           </div>
         )}
       </div>

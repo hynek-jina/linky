@@ -1,6 +1,6 @@
+import { expect, test } from "@playwright/test";
 import { generateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
-import { expect, test } from "@playwright/test";
 import { generateSecretKey, nip19 } from "nostr-tools";
 
 const NPUB_RECEIVER =
@@ -94,6 +94,16 @@ test("send token", async ({ page }) => {
     await page.getByRole("button", { name: "Show top-up invoice" }).click();
 
     await page.locator("img.qr").waitFor({ state: "visible", timeout: 30_000 });
+
+    // Leave the invoice screen before the mint finishes claiming proofs.
+    await page.getByRole("button", { name: "Wallet" }).click();
+
+    await expect(page.locator(".toast").first()).toContainText(
+      "Click to copy token",
+      {
+        timeout: 120_000,
+      },
+    );
 
     const balanceAfterTopup = await readBalanceSat(120_000);
     expect(balanceAfterTopup).toBeGreaterThan(0);

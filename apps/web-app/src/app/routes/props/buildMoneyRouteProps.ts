@@ -41,10 +41,10 @@ interface BuildMoneyRoutePropsParams {
   setTopupAmount: MoneyRoutesProps["topupProps"]["setTopupAmount"];
   t: MoneyRoutesProps["cashuTokenNewProps"]["t"];
   topupAmount: MoneyRoutesProps["topupProps"]["topupAmount"];
-  topupDebug: MoneyRoutesProps["topupInvoiceProps"]["topupDebug"];
   topupInvoice: MoneyRoutesProps["topupInvoiceProps"]["topupInvoice"];
   topupInvoiceError: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceError"];
   topupInvoiceIsBusy: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceIsBusy"];
+  topupMintUrl: MoneyRoutesProps["topupInvoiceProps"]["topupMintUrl"];
   topupInvoiceQr: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceQr"];
 }
 
@@ -78,10 +78,10 @@ export const buildMoneyRouteProps = ({
   setTopupAmount,
   t,
   topupAmount,
-  topupDebug,
   topupInvoice,
   topupInvoiceError,
   topupInvoiceIsBusy,
+  topupMintUrl,
   topupInvoiceQr,
 }: BuildMoneyRoutePropsParams): MoneyRouteProps => {
   return {
@@ -128,11 +128,11 @@ export const buildMoneyRouteProps = ({
     },
     topupInvoiceProps: {
       topupAmount,
-      topupDebug,
       topupInvoiceQr,
       topupInvoice,
       topupInvoiceError,
       topupInvoiceIsBusy,
+      topupMintUrl,
       displayUnit,
       copyText,
       t,

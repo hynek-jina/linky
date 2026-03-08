@@ -15,6 +15,22 @@ export const formatShortNpub = (npub: string): string => {
   return `${trimmed.slice(0, 10)}…${trimmed.slice(-6)}`;
 };
 
+export const formatShortLightningAddress = (value: string): string => {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return "";
+
+  const atIndex = trimmed.indexOf("@");
+  if (atIndex <= 0 || atIndex === trimmed.length - 1) {
+    return trimmed.length <= 20 ? trimmed : `${trimmed.slice(0, 10)}...`;
+  }
+
+  const localPart = trimmed.slice(0, atIndex);
+  const domainPart = trimmed.slice(atIndex);
+  if (localPart.length <= 10) return trimmed;
+
+  return `${localPart.slice(0, 10)}...${domainPart}`;
+};
+
 export const formatMiddleDots = (value: string, maxLen: number): string => {
   const trimmed = String(value ?? "").trim();
   if (!trimmed) return "";

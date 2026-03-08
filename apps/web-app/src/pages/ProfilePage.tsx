@@ -1,5 +1,9 @@
 import React from "react";
-import { formatShortNpub, getInitials } from "../utils/formatting";
+import {
+  formatShortLightningAddress,
+  formatShortNpub,
+  getInitials,
+} from "../utils/formatting";
 
 interface DerivedProfile {
   lnAddress: string;
@@ -218,6 +222,8 @@ export function ProfilePage({
                     className="qr"
                     src={myProfileQr}
                     alt=""
+                    title={t("copy")}
+                    aria-label={t("myNpubQr")}
                     onClick={() => {
                       if (!currentNpub) return;
                       void copyText(currentNpub);
@@ -232,12 +238,16 @@ export function ProfilePage({
                 </h2>
 
                 {effectiveMyLightningAddress ? (
-                  <p className="contact-detail-ln">
-                    {effectiveMyLightningAddress}
-                  </p>
+                  <button
+                    type="button"
+                    className="copyable contact-detail-ln contact-detail-copy"
+                    onClick={() => void copyText(effectiveMyLightningAddress)}
+                    title={effectiveMyLightningAddress}
+                    aria-label={t("lightningAddress")}
+                  >
+                    {formatShortLightningAddress(effectiveMyLightningAddress)}
+                  </button>
                 ) : null}
-
-                <p className="muted profile-note">{t("profileMessagesHint")}</p>
               </div>
             </>
           )}

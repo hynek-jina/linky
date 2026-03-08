@@ -234,7 +234,6 @@ export const cs = {
   profileNoName: "Nostr profil",
   myNpubQr: "Tvůj kontakt",
   profileMissingNpub: "Chybí Nostr klíče.",
-  profileMessagesHint: "Uvidíš pouze zprávy od kontaktů, které si také přidáš.",
   profileUploadPhoto: "Nahrát fotku",
   profileFetching: "Stahuju profil z Nostr…",
   profileDerivedDefault: "Výchozí (derivované)",

@@ -1,15 +1,15 @@
 import React from "react";
-import { Topbar } from "./Topbar";
-import { ContactsGuideOverlay } from "./ContactsGuideOverlay";
-import { MenuModal } from "./MenuModal";
-import { ProfileQrModal } from "./ProfileQrModal";
-import { ScanModal } from "./ScanModal";
-import { SaveContactPromptModal } from "./SaveContactPromptModal";
-import { PaidOverlay } from "./PaidOverlay";
 import {
   useAppShellActions,
   useAppShellCore,
 } from "../app/context/AppShellContexts";
+import { ContactsGuideOverlay } from "./ContactsGuideOverlay";
+import { MenuModal } from "./MenuModal";
+import { PaidOverlay } from "./PaidOverlay";
+import { ProfileQrModal } from "./ProfileQrModal";
+import { SaveContactPromptModal } from "./SaveContactPromptModal";
+import { ScanModal } from "./ScanModal";
+import { Topbar } from "./Topbar";
 
 interface AuthenticatedLayoutProps {
   children: React.ReactNode;
@@ -76,6 +76,7 @@ export function AuthenticatedLayout({
       {state.profileQrIsOpen && (
         <ProfileQrModal
           closeProfileQr={actions.closeProfileQr}
+          copyText={actions.copyText}
           currentNpub={state.currentNpub}
           currentNsec={state.currentNsec}
           derivedProfile={state.derivedProfile}
@@ -85,10 +86,6 @@ export function AuthenticatedLayout({
           isProfileEditing={state.isProfileEditing}
           myProfileQr={state.myProfileQr}
           onClose={actions.closeProfileQr}
-          onCopyNpub={() => {
-            if (!state.currentNpub) return;
-            void actions.copyText(state.currentNpub);
-          }}
           onPickProfilePhoto={actions.onPickProfilePhoto}
           onProfilePhotoSelected={actions.onProfilePhotoSelected}
           onSaveProfileEdits={actions.saveProfileEdits}

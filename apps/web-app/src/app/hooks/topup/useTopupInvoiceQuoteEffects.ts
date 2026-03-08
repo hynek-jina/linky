@@ -2,7 +2,7 @@ import React from "react";
 import type { Route } from "../../../types/route";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
 
-interface TopupMintQuoteDraft {
+export interface TopupMintQuoteDraft {
   amount: number;
   mintUrl: string;
   quote: string;
@@ -24,7 +24,6 @@ interface UseTopupInvoiceQuoteEffectsParams {
   topupPaidNavTimerRef: React.MutableRefObject<number | null>;
   topupRefreshKey: string | null;
   setTopupAmount: React.Dispatch<React.SetStateAction<string>>;
-  setTopupDebug: React.Dispatch<React.SetStateAction<string | null>>;
   setTopupInvoice: React.Dispatch<React.SetStateAction<string | null>>;
   setTopupInvoiceError: React.Dispatch<React.SetStateAction<string | null>>;
   setTopupInvoiceIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
@@ -49,7 +48,6 @@ export const useTopupInvoiceQuoteEffects = ({
   topupPaidNavTimerRef,
   topupRefreshKey,
   setTopupAmount,
-  setTopupDebug,
   setTopupInvoice,
   setTopupInvoiceError,
   setTopupInvoiceIsBusy,
@@ -68,8 +66,6 @@ export const useTopupInvoiceQuoteEffects = ({
       setTopupInvoiceQr(null);
       setTopupInvoiceError(null);
       setTopupInvoiceIsBusy(false);
-      setTopupMintQuote(null);
-      setTopupDebug(null);
 
       isFetchingRef.current = false;
       topupInvoiceStartBalanceRef.current = null;
@@ -86,7 +82,6 @@ export const useTopupInvoiceQuoteEffects = ({
   }, [
     routeKind,
     setTopupAmount,
-    setTopupDebug,
     setTopupInvoice,
     setTopupInvoiceError,
     setTopupInvoiceIsBusy,
@@ -127,7 +122,6 @@ export const useTopupInvoiceQuoteEffects = ({
     setTopupInvoiceQr(null);
     setTopupInvoiceError(null);
     setTopupInvoiceIsBusy(true);
-    setTopupDebug(`quote: ${mintUrl}`);
 
     topupInvoiceStartBalanceRef.current = null;
     topupInvoicePaidHandledRef.current = false;
@@ -171,10 +165,6 @@ export const useTopupInvoiceQuoteEffects = ({
             ? `/__mint-quote?mint=${encodeURIComponent(baseUrl)}`
             : `${baseUrl}/v1/mint/quote/bolt11`;
 
-          setTopupDebug(
-            `quote: ${baseUrl} (${shouldProxy ? "proxy" : "direct"} fetch)`,
-          );
-
           const quoteRes = await fetchWithTimeout(
             targetUrl,
             {
@@ -187,8 +177,6 @@ export const useTopupInvoiceQuoteEffects = ({
             },
             12_000,
           );
-
-          setTopupDebug(`quote: ${baseUrl} (response ${quoteRes.status})`);
 
           if (!quoteRes.ok) {
             throw new Error(`Mint quote HTTP ${quoteRes.status}`);
@@ -241,7 +229,6 @@ export const useTopupInvoiceQuoteEffects = ({
           amount: amountSat,
           unit: "sat",
         });
-        setTopupDebug(`quote: ${mintUrl} (invoice ready)`);
 
         setTopupInvoice(invoice);
 
@@ -267,7 +254,6 @@ export const useTopupInvoiceQuoteEffects = ({
             amountSat,
             error: message,
           });
-          setTopupDebug(`quote: ${mintUrl} (error)`);
           setTopupInvoiceError(
             message
               ? `${t("topupInvoiceFailed")}: ${corsHint || message}`
@@ -300,7 +286,6 @@ export const useTopupInvoiceQuoteEffects = ({
     currentNpub,
     defaultMintUrl,
     routeKind,
-    setTopupDebug,
     setTopupInvoice,
     setTopupInvoiceError,
     setTopupInvoiceIsBusy,
