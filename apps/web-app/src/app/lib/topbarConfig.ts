@@ -12,6 +12,7 @@ interface BuildTopbarArgs {
 }
 
 interface BuildTopbarRightArgs {
+  canEditSelectedContact?: boolean;
   route: Route;
   selectedContact: { id: ContactId } | null;
   t: (key: string) => string;
@@ -220,6 +221,7 @@ export const buildTopbar = ({
 };
 
 export const buildTopbarRight = ({
+  canEditSelectedContact = true,
   route,
   selectedContact,
   t,
@@ -251,7 +253,7 @@ export const buildTopbarRight = ({
     };
   }
 
-  if (route.kind === "chat" && selectedContact) {
+  if (route.kind === "chat" && selectedContact && canEditSelectedContact) {
     return {
       icon: "✎",
       label: t("editContact"),

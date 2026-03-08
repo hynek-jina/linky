@@ -93,7 +93,12 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
           disabled={cashuIsBusy || invalid}
           title={amountSat > cashuBalance ? t("payInsufficient") : undefined}
         >
-          {t("paySend")}
+          <span className="btn-label-with-icon">
+            <span className="btn-label-icon" aria-hidden="true">
+              ₿
+            </span>
+            <span>{t("paySend")}</span>
+          </span>
         </button>
       </div>
     </section>

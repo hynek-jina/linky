@@ -26,6 +26,7 @@ interface ContactCardProps {
   onMintIconLoad: (origin: string, url: string | null) => void;
   onSelect: (contact: ContactRowLike) => void;
   tokenInfo: CashuTokenMessageInfo | null;
+  isUnknownContact?: boolean;
 }
 
 export const ContactCard: React.FC<ContactCardProps> = ({
@@ -38,6 +39,7 @@ export const ContactCard: React.FC<ContactCardProps> = ({
   onMintIconLoad,
   onSelect,
   tokenInfo,
+  isUnknownContact = false,
 }) => {
   const initials = getInitials(String(contact.name ?? ""));
   const lastText = String(lastMessage?.content ?? "").trim();
@@ -93,6 +95,11 @@ export const ContactCard: React.FC<ContactCardProps> = ({
           </span>
           {hasAttention ? (
             <span className="contact-unread-dot" aria-hidden="true" />
+          ) : null}
+          {isUnknownContact ? (
+            <span className="contact-unknown-badge" aria-hidden="true">
+              ?
+            </span>
           ) : null}
         </div>
 

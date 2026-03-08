@@ -206,9 +206,18 @@ export const en = {
 
   chat: "Chat",
   sendMessage: "Messages",
+  unknownContactTitle: "Unknown contact",
+  unknownContactNamePrefix: "[Unknown]",
   chatEmpty: "No messages yet.",
   chatPlaceholder: "Message",
   chatMissingContactNpub: "Missing contact npub.",
+  chatUnknownContactWarning:
+    "This contact is not saved yet. You can add it or block it.",
+  blockContact: "Block",
+  chatUnknownContactBlockConfirm:
+    "Block this contact? The conversation will be removed.",
+  chatUnknownContactBlocked: "Contact blocked.",
+  chatUnknownContactAddFailed: "Cannot add this contact yet.",
   chatQueued: "Queued for delivery.",
   chatPendingShort: "pending",
   chatReplyAction: "Reply",

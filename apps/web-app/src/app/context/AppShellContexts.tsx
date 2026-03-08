@@ -1,8 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from "react";
+import type { DerivedProfileDefaults } from "../../derivedProfile";
 import type { Lang } from "../../i18n";
 import type { Route } from "../../types/route";
-import type { DerivedProfileDefaults } from "../../derivedProfile";
 import type {
   MainSwipeRoutesProps,
   MoneyRoutesProps,
@@ -12,6 +12,7 @@ import type {
 import type { ContactsGuideStep, TopbarButton } from "../types/appTypes";
 
 interface ChatContact {
+  isUnknownContact?: boolean;
   name: string | null;
   npub: string | null;
 }

@@ -190,7 +190,12 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
             }
             data-guide="pay-send"
           >
-            {t("paySend")}
+            <span className="btn-label-with-icon">
+              <span className="btn-label-icon" aria-hidden="true">
+                ₿
+              </span>
+              <span>{t("paySend")}</span>
+            </span>
           </button>
         </div>
       </div>

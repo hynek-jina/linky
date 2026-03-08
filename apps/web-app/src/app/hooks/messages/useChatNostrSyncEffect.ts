@@ -19,6 +19,7 @@ import {
   extractEditedFromTag,
   extractReplyContextFromTags,
 } from "./chatNostrProtocol";
+import { readUnknownPubkeyHex } from "./contactIdentity";
 
 const normalizeText = (value: unknown): string => String(value ?? "").trim();
 
@@ -63,7 +64,9 @@ export const useChatNostrSyncEffect = ({
     if (!selectedContact) return;
 
     const contactNpub = normalizeNpubIdentifier(selectedContact.npub);
-    if (!contactNpub) return;
+    const unknownPubkeyHex = readUnknownPubkeyHex(selectedContact);
+
+    if (!contactNpub && !unknownPubkeyHex) return;
     if (!currentNsec) return;
 
     let cancelled = false;
@@ -88,20 +91,26 @@ export const useChatNostrSyncEffect = ({
         const privBytes = decodedMe.data;
         const myPubHex = getPublicKey(privBytes);
 
-        let decodedContact: ReturnType<typeof nip19.decode> | null = null;
-        try {
-          decodedContact = nip19.decode(contactNpub);
-        } catch {
-          decodedContact = null;
+        let contactPubHex = unknownPubkeyHex;
+        if (!contactPubHex) {
+          if (!contactNpub) {
+            return;
+          }
+          let decodedContact: ReturnType<typeof nip19.decode> | null = null;
+          try {
+            decodedContact = nip19.decode(contactNpub);
+          } catch {
+            decodedContact = null;
+          }
+          if (
+            !decodedContact ||
+            decodedContact.type !== "npub" ||
+            typeof decodedContact.data !== "string"
+          ) {
+            return;
+          }
+          contactPubHex = decodedContact.data;
         }
-        if (
-          !decodedContact ||
-          decodedContact.type !== "npub" ||
-          typeof decodedContact.data !== "string"
-        ) {
-          return;
-        }
-        const contactPubHex = decodedContact.data;
 
         const pool = await getSharedAppNostrPool();
 

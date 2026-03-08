@@ -24,11 +24,7 @@ interface ContactsGuideState {
 }
 
 const getRouteContactId = (route: Route): ContactId | null => {
-  if (
-    route.kind === "contact" ||
-    route.kind === "contactPay" ||
-    route.kind === "chat"
-  ) {
+  if (route.kind === "contact" || route.kind === "contactPay") {
     return route.id;
   }
 

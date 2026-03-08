@@ -57,6 +57,7 @@ export const ContactsPage: FC<ContactsPageProps> = ({
 }) => {
   const totalVisible =
     visibleContacts.conversations.length + visibleContacts.others.length;
+  const hasAnyContacts = contacts.length > 0 || totalVisible > 0;
 
   return (
     <>
@@ -137,7 +138,7 @@ export const ContactsPage: FC<ContactsPageProps> = ({
 
       <section className="panel panel-plain">
         <div className="contact-list">
-          {contacts.length === 0 || totalVisible === 0 ? (
+          {!hasAnyContacts ? (
             <p className="muted">{t("noContactsYet")}</p>
           ) : (
             <>

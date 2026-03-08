@@ -25,7 +25,7 @@ export type Route =
   | { kind: "contact"; id: ContactId }
   | { kind: "contactEdit"; id: ContactId }
   | { kind: "contactPay"; id: ContactId }
-  | { kind: "chat"; id: ContactId };
+  | { kind: "chat"; id: string };
 
 export const parseRouteFromHash = (): Route => {
   const hash = globalThis.location?.hash ?? "";
@@ -87,7 +87,7 @@ export const parseRouteFromHash = (): Route => {
   if (hash.startsWith(chatPrefix)) {
     const rest = hash.slice(chatPrefix.length);
     const id = decodeURIComponent(String(rest ?? "")).trim();
-    if (id) return { kind: "chat", id: id as ContactId };
+    if (id) return { kind: "chat", id };
   }
 
   if (hash === "#contact/new") return { kind: "contactNew" };

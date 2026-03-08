@@ -1,5 +1,5 @@
-import React from "react";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import React from "react";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { makeLocalId } from "../../../utils/validation";
@@ -10,6 +10,7 @@ import type {
   PublishWrappedResult,
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
+import { readUnknownPubkeyHex } from "./contactIdentity";
 
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 
@@ -77,7 +78,8 @@ export const useSendChatMessage = <
     if (!text) return;
 
     const contactNpub = normalizeNpubIdentifier(selectedContact.npub);
-    if (!contactNpub) {
+    const unknownPubkeyHex = readUnknownPubkeyHex(selectedContact);
+    if (!contactNpub && !unknownPubkeyHex) {
       setStatus(t("chatMissingContactNpub"));
       return;
     }
@@ -99,21 +101,29 @@ export const useSendChatMessage = <
       const privBytes = decodedMe.data;
       const myPubHex = getPublicKey(privBytes);
 
-      let decodedContact: ReturnType<typeof nip19.decode> | null = null;
-      try {
-        decodedContact = nip19.decode(contactNpub);
-      } catch {
-        decodedContact = null;
+      let contactPubHex = unknownPubkeyHex;
+
+      if (!contactPubHex) {
+        if (!contactNpub) {
+          setStatus(t("chatMissingContactNpub"));
+          return;
+        }
+        let decodedContact: ReturnType<typeof nip19.decode> | null = null;
+        try {
+          decodedContact = nip19.decode(contactNpub);
+        } catch {
+          decodedContact = null;
+        }
+        if (
+          !decodedContact ||
+          decodedContact.type !== "npub" ||
+          typeof decodedContact.data !== "string"
+        ) {
+          setStatus(t("chatMissingContactNpub"));
+          return;
+        }
+        contactPubHex = decodedContact.data;
       }
-      if (
-        !decodedContact ||
-        decodedContact.type !== "npub" ||
-        typeof decodedContact.data !== "string"
-      ) {
-        setStatus(t("chatMissingContactNpub"));
-        return;
-      }
-      const contactPubHex = decodedContact.data;
 
       const clientId = makeLocalId();
       const activeReplyContext =
