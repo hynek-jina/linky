@@ -126,12 +126,12 @@ export const useLightningPaymentsDomain = ({
   const payLightningInvoiceWithCashu = React.useCallback(
     async (invoice: string) => {
       const normalized = invoice.trim();
-      if (!normalized) return;
+      if (!normalized) return false;
 
-      if (cashuIsBusy) return;
+      if (cashuIsBusy) return false;
       if (cashuBalance <= 0) {
         setStatus(t("payInsufficient"));
-        return;
+        return false;
       }
 
       setCashuIsBusy(true);
@@ -158,7 +158,7 @@ export const useLightningPaymentsDomain = ({
 
         if (candidates.length === 0) {
           setStatus(t("payInsufficient"));
-          return;
+          return false;
         }
 
         let lastError: unknown = null;
@@ -226,7 +226,7 @@ export const useLightningPaymentsDomain = ({
               setStatus(
                 `${t("payFailed")}: ${String(result.error ?? "unknown")}`,
               );
-              return;
+              return false;
             }
 
             if (result.remainingToken && result.remainingAmount > 0) {
@@ -286,7 +286,7 @@ export const useLightningPaymentsDomain = ({
             setStatus(t("paySuccess"));
             safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
             setContactsOnboardingHasPaid(true);
-            return;
+            return true;
           } catch (e) {
             lastError = e;
             lastMint = candidate.mint;
@@ -306,6 +306,7 @@ export const useLightningPaymentsDomain = ({
         setStatus(
           `${t("payFailed")}: ${getUnknownErrorMessage(lastError, "unknown")}`,
         );
+        return false;
       } finally {
         setCashuIsBusy(false);
       }

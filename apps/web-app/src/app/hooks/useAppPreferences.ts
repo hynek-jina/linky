@@ -3,6 +3,7 @@ import { persistLang, type Lang } from "../../i18n";
 import {
   ALLOW_PROMISES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
+  LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
   PAY_WITH_CASHU_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "../../utils/constants";
@@ -12,6 +13,7 @@ interface UseAppPreferencesParams {
   allowPromisesEnabled: boolean;
   displayCurrency: DisplayCurrency;
   lang: Lang;
+  lightningInvoiceAutoPayLimit: number;
   payWithCashuEnabled: boolean;
 }
 
@@ -19,6 +21,7 @@ export const useAppPreferences = ({
   allowPromisesEnabled,
   displayCurrency,
   lang,
+  lightningInvoiceAutoPayLimit,
   payWithCashuEnabled,
 }: UseAppPreferencesParams): void => {
   React.useEffect(() => {
@@ -52,6 +55,17 @@ export const useAppPreferences = ({
       // ignore
     }
   }, [payWithCashuEnabled]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(
+        LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
+        String(lightningInvoiceAutoPayLimit),
+      );
+    } catch {
+      // ignore
+    }
+  }, [lightningInvoiceAutoPayLimit]);
 
   React.useEffect(() => {
     try {

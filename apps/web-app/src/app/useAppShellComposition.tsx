@@ -43,6 +43,7 @@ import {
   type DisplayCurrency,
 } from "../utils/displayAmounts";
 import { formatShortNpub, getBestNostrName } from "../utils/formatting";
+import type { LightningInvoicePreview } from "../utils/lightningInvoice";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
   extractPpk,
@@ -53,6 +54,7 @@ import {
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
   getInitialDisplayCurrency,
+  getInitialLightningInvoiceAutoPayLimit,
   getInitialNostrNsec,
   getInitialPayWithCashuEnabled,
   safeLocalStorageGet,
@@ -386,6 +388,8 @@ export const useAppShellComposition = () => {
   const [payWithCashuEnabled, setPayWithCashuEnabled] = useState<boolean>(() =>
     getInitialPayWithCashuEnabled(),
   );
+  const [lightningInvoiceAutoPayLimit, setLightningInvoiceAutoPayLimit] =
+    useState<number>(() => getInitialLightningInvoiceAutoPayLimit());
   const [allowPromisesEnabled] = useState<boolean>(false);
 
   const fiatRates = useFiatRates();
@@ -707,6 +711,10 @@ export const useAppShellComposition = () => {
   }, [nostrPictureByNpub]);
 
   const [profileQrIsOpen, setProfileQrIsOpen] = useState(false);
+  const [
+    pendingLightningInvoiceConfirmation,
+    setPendingLightningInvoiceConfirmation,
+  ] = useState<LightningInvoicePreview | null>(null);
 
   const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
   const chatMessageElByIdRef = React.useRef<Map<string, HTMLDivElement>>(
@@ -955,6 +963,7 @@ export const useAppShellComposition = () => {
     allowPromisesEnabled,
     displayCurrency,
     lang,
+    lightningInvoiceAutoPayLimit,
     payWithCashuEnabled,
   });
 
@@ -2037,6 +2046,18 @@ export const useAppShellComposition = () => {
       update,
     });
 
+  const closeLightningInvoiceConfirmation = React.useCallback(() => {
+    setPendingLightningInvoiceConfirmation(null);
+  }, []);
+
+  const confirmLightningInvoicePayment = React.useCallback(async () => {
+    const pending = pendingLightningInvoiceConfirmation;
+    if (!pending) return;
+
+    const ok = await payLightningInvoiceWithCashu(pending.invoice);
+    if (ok) setPendingLightningInvoiceConfirmation(null);
+  }, [payLightningInvoiceWithCashu, pendingLightningInvoiceConfirmation]);
+
   const contactsOnboardingHasSentMessage = useMemo(() => {
     return nostrMessagesRecent.some((m) => String(m.direction ?? "") === "out");
   }, [nostrMessagesRecent]);
@@ -2692,9 +2713,11 @@ export const useAppShellComposition = () => {
     contacts,
     extractCashuTokenFromText,
     insert,
+    lightningInvoiceAutoPayLimit,
     openScannedContactPendingNpubRef,
     payLightningInvoiceWithCashu,
     refreshContactFromNostr,
+    requestLightningInvoiceConfirmation: setPendingLightningInvoiceConfirmation,
     saveCashuFromText,
     setStatus,
     t,
@@ -2934,6 +2957,7 @@ export const useAppShellComposition = () => {
       importDataFileInputRef,
       isSeedLogin,
       isEvoluServerOffline,
+      lightningInvoiceAutoPayLimit,
       lang,
       LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
       logoutArmed,
@@ -2968,6 +2992,7 @@ export const useAppShellComposition = () => {
       selectedRelayUrl,
       setDefaultMintUrlDraft,
       setEvoluServerOffline,
+      setLightningInvoiceAutoPayLimit,
       setNewEvoluServerUrl,
       setNewRelayUrl,
       setPayWithCashuEnabled,
@@ -2984,6 +3009,8 @@ export const useAppShellComposition = () => {
 
   const appState = {
     applyAmountInputKey: applyDisplayedAmountInputKey,
+    cashuBalance,
+    cashuIsBusy,
     chatTopbarContact,
     contactsGuide,
     contactsGuideActiveStep,
@@ -3005,6 +3032,7 @@ export const useAppShellComposition = () => {
     nostrPictureByNpub,
     paidOverlayIsOpen,
     paidOverlayTitle,
+    pendingLightningInvoiceConfirmation,
     postPaySaveContact,
     profileEditInitialRef,
     profileEditLnAddress,
@@ -3024,8 +3052,10 @@ export const useAppShellComposition = () => {
 
   const appActions = {
     closeMenu,
+    closeLightningInvoiceConfirmation,
     closeProfileQr,
     closeScan,
+    confirmLightningInvoicePayment,
     contactsGuideNav,
     copyText,
     onPickProfilePhoto,
@@ -3037,6 +3067,7 @@ export const useAppShellComposition = () => {
     setContactNewPrefill,
     setIsProfileEditing,
     setLang,
+    setLightningInvoiceAutoPayLimit,
     setPostPaySaveContact,
     setProfileEditLnAddress,
     setProfileEditName,

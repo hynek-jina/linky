@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigation } from "../hooks/useRouting";
+import { LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS } from "../utils/constants";
+import { formatInteger } from "../utils/formatting";
 
 interface AdvancedPageProps {
   __APP_VERSION__: string;
@@ -21,6 +23,7 @@ interface AdvancedPageProps {
   handleImportAppDataFilePicked: (file: File | null) => Promise<void>;
   importDataFileInputRef: React.RefObject<HTMLInputElement | null>;
   isSeedLogin: boolean;
+  lightningInvoiceAutoPayLimit: number;
   logoutArmed: boolean;
   nostrRelayOverallStatus: "connected" | "checking" | "disconnected";
   payWithCashuEnabled: boolean;
@@ -31,6 +34,7 @@ interface AdvancedPageProps {
   requestLogout: () => void;
   restoreMissingTokens: () => Promise<void>;
   seedMnemonic: string | null;
+  setLightningInvoiceAutoPayLimit: (value: number) => void;
   setPayWithCashuEnabled: (value: boolean) => void;
   t: (key: string) => string;
   tokensRestoreIsBusy: boolean;
@@ -55,6 +59,7 @@ export function AdvancedPage({
   exportAppData,
   handleImportAppDataFilePicked,
   importDataFileInputRef,
+  lightningInvoiceAutoPayLimit,
   logoutArmed,
   nostrRelayOverallStatus,
   payWithCashuEnabled,
@@ -65,6 +70,7 @@ export function AdvancedPage({
   requestLogout,
   restoreMissingTokens,
   seedMnemonic,
+  setLightningInvoiceAutoPayLimit,
   setPayWithCashuEnabled,
   t,
   tokensRestoreIsBusy,
@@ -262,6 +268,36 @@ export function AdvancedPage({
               onChange={(e) => setPayWithCashuEnabled(e.target.checked)}
             />
           </label>
+        </div>
+      </div>
+
+      <div className="settings-row settings-row-stack-mobile">
+        <div className="settings-left">
+          <span className="settings-icon" aria-hidden="true">
+            ⚡
+          </span>
+          <span className="settings-label">
+            {t("lightningInvoiceAutoPayLimit")}
+          </span>
+        </div>
+        <div className="settings-right settings-right-wrap">
+          <div className="badge-box badge-box-wrap">
+            {LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS.map((limit) => (
+              <button
+                key={limit}
+                type="button"
+                className={
+                  limit === lightningInvoiceAutoPayLimit
+                    ? "ghost settings-choice is-selected"
+                    : "ghost settings-choice"
+                }
+                onClick={() => setLightningInvoiceAutoPayLimit(limit)}
+                aria-pressed={limit === lightningInvoiceAutoPayLimit}
+              >
+                {formatInteger(limit)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

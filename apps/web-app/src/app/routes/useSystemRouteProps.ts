@@ -58,6 +58,7 @@ interface UseSystemRoutePropsParams {
   importDataFileInputRef: SystemRoutesProps["advancedProps"]["importDataFileInputRef"];
   isSeedLogin: SystemRoutesProps["advancedProps"]["isSeedLogin"];
   isEvoluServerOffline: SystemRoutesProps["evoluServerProps"]["isEvoluServerOffline"];
+  lightningInvoiceAutoPayLimit: SystemRoutesProps["advancedProps"]["lightningInvoiceAutoPayLimit"];
   lang: SystemRoutesProps["mintDetailProps"]["lang"];
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX: SystemRoutesProps["mintDetailProps"]["LOCAL_MINT_INFO_STORAGE_KEY_PREFIX"];
   logoutArmed: SystemRoutesProps["advancedProps"]["logoutArmed"];
@@ -89,6 +90,7 @@ interface UseSystemRoutePropsParams {
   seedMnemonic: SystemRoutesProps["advancedProps"]["seedMnemonic"];
   selectedEvoluServerUrl: SystemRoutesProps["evoluServerProps"]["selectedEvoluServerUrl"];
   selectedRelayUrl: SystemRoutesProps["nostrRelayProps"]["selectedRelayUrl"];
+  setLightningInvoiceAutoPayLimit: SystemRoutesProps["advancedProps"]["setLightningInvoiceAutoPayLimit"];
   setDefaultMintUrlDraft: SystemRoutesProps["mintsProps"]["setDefaultMintUrlDraft"];
   setEvoluServerOffline: SystemRoutesProps["evoluServerProps"]["setEvoluServerOffline"];
   setNewEvoluServerUrl: SystemRoutesProps["evoluServerNewProps"]["setNewEvoluServerUrl"];
@@ -156,6 +158,7 @@ export const useSystemRouteProps = ({
   importDataFileInputRef,
   isSeedLogin,
   isEvoluServerOffline,
+  lightningInvoiceAutoPayLimit,
   lang,
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
   logoutArmed,
@@ -187,6 +190,7 @@ export const useSystemRouteProps = ({
   seedMnemonic,
   selectedEvoluServerUrl,
   selectedRelayUrl,
+  setLightningInvoiceAutoPayLimit,
   setDefaultMintUrlDraft,
   setEvoluServerOffline,
   setNewEvoluServerUrl,
@@ -228,10 +232,12 @@ export const useSystemRouteProps = ({
       logoutArmed,
       importDataFileInputRef,
       isSeedLogin,
+      lightningInvoiceAutoPayLimit,
       copyCashuSeed,
       copyNostrKeys,
       copySeed,
       restoreMissingTokens,
+      setLightningInvoiceAutoPayLimit,
       setPayWithCashuEnabled,
       exportAppData,
       requestImportAppData,
