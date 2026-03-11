@@ -2631,11 +2631,7 @@ export const useAppShellComposition = () => {
   });
 
   const topbarRight = buildTopbarRight({
-    canEditSelectedContact: !(
-      route.kind === "chat" && Boolean(selectedChatContact?.isUnknownContact)
-    ),
     route,
-    selectedContact,
     t,
     toggleMenu,
     toggleProfileEditing,
@@ -2646,6 +2642,9 @@ export const useAppShellComposition = () => {
   const chatTopbarContact =
     route.kind === "chat" && selectedChatContact
       ? {
+          contactId: selectedChatContact.isUnknownContact
+            ? null
+            : (selectedContact?.id ?? null),
           isUnknownContact: Boolean(selectedChatContact.isUnknownContact),
           name: String(selectedChatContact.name ?? "").trim() || null,
           npub: normalizeNpubIdentifier(selectedChatContact.npub),

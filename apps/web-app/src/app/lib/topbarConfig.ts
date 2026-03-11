@@ -12,9 +12,7 @@ interface BuildTopbarArgs {
 }
 
 interface BuildTopbarRightArgs {
-  canEditSelectedContact?: boolean;
   route: Route;
-  selectedContact: { id: ContactId } | null;
   t: (key: string) => string;
   toggleMenu: () => void;
   toggleProfileEditing: () => void;
@@ -221,9 +219,7 @@ export const buildTopbar = ({
 };
 
 export const buildTopbarRight = ({
-  canEditSelectedContact = true,
   route,
-  selectedContact,
   t,
   toggleMenu,
   toggleProfileEditing,
@@ -241,24 +237,6 @@ export const buildTopbarRight = ({
       icon: "+",
       label: t("evoluAddServerLabel"),
       onClick: () => navigateTo({ route: "evoluServerNew" }),
-    };
-  }
-
-  if (route.kind === "contact" && selectedContact) {
-    return {
-      icon: "✎",
-      label: t("editContact"),
-      onClick: () =>
-        navigateTo({ route: "contactEdit", id: selectedContact.id }),
-    };
-  }
-
-  if (route.kind === "chat" && selectedContact && canEditSelectedContact) {
-    return {
-      icon: "✎",
-      label: t("editContact"),
-      onClick: () =>
-        navigateTo({ route: "contactEdit", id: selectedContact.id }),
     };
   }
 

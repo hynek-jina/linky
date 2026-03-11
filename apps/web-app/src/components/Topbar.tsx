@@ -1,4 +1,6 @@
 import React from "react";
+import type { ContactId } from "../evolu";
+import { useNavigation } from "../hooks/useRouting";
 import type { Route } from "../types/route";
 import { formatShortNpub, getInitials } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
@@ -10,6 +12,7 @@ interface TopbarButton {
 }
 
 interface ChatContact {
+  contactId: ContactId | null;
   isUnknownContact?: boolean;
   name: string | null;
   npub: string | null;
@@ -42,6 +45,9 @@ export function Topbar({
   topbarRight,
   topbarTitle,
 }: TopbarProps): React.ReactElement {
+  const navigateTo = useNavigation();
+  const canOpenChatContact = Boolean(chatTopbarContact?.contactId);
+
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -84,7 +90,21 @@ export function Topbar({
       </div>
 
       {chatTopbarContact ? (
-        <div className="topbar-chat" aria-label={t("messagesTitle")}>
+        <button
+          type="button"
+          className={
+            canOpenChatContact
+              ? "topbar-chat topbar-chat-button"
+              : "topbar-chat"
+          }
+          aria-label={canOpenChatContact ? t("contact") : t("messagesTitle")}
+          disabled={!canOpenChatContact}
+          onClick={() => {
+            const contactId = chatTopbarContact.contactId;
+            if (!contactId) return;
+            navigateTo({ route: "contact", id: contactId });
+          }}
+        >
           <span className="topbar-chat-avatar" aria-hidden="true">
             {(() => {
               const npub = normalizeNpubIdentifier(chatTopbarContact.npub);
@@ -111,7 +131,7 @@ export function Topbar({
           <span className="topbar-chat-name">
             {String(chatTopbarContact.name ?? "").trim() || t("messagesTitle")}
           </span>
-        </div>
+        </button>
       ) : topbarTitle ? (
         <div className="topbar-title" aria-label={topbarTitle}>
           {topbarTitle}

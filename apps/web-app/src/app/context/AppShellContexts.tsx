@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from "react";
 import type { DerivedProfileDefaults } from "../../derivedProfile";
+import type { ContactId } from "../../evolu";
 import type { Lang } from "../../i18n";
 import type { Route } from "../../types/route";
 import type {
@@ -16,6 +17,7 @@ import type {
 import type { ContactsGuideStep, TopbarButton } from "../types/appTypes";
 
 interface ChatContact {
+  contactId: ContactId | null;
   isUnknownContact?: boolean;
   name: string | null;
   npub: string | null;
