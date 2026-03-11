@@ -219,6 +219,7 @@ export const buildPeopleRouteProps = ({
       nostrPictureByNpub,
       cashuBalance,
       cashuIsBusy,
+      copyText,
       payWithCashuEnabled,
       feedbackContactNpub,
       openContactPay,

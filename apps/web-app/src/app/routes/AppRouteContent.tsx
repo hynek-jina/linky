@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  AdvancedAutoPayLimitPage,
   AdvancedPage,
   CashuTokenNewPage,
   CashuTokenPage,
@@ -52,6 +53,9 @@ export interface MoneyRoutesProps {
 
 export interface SystemRoutesProps {
   advancedProps: React.ComponentProps<typeof AdvancedPage>;
+  advancedAutoPayLimitProps: React.ComponentProps<
+    typeof AdvancedAutoPayLimitPage
+  >;
   evoluCurrentDataProps: React.ComponentProps<typeof EvoluCurrentDataPage>;
   evoluDataDetailProps: React.ComponentProps<typeof EvoluDataDetailPage>;
   evoluHistoryDataProps: React.ComponentProps<typeof EvoluHistoryDataPage>;
@@ -80,6 +84,10 @@ export const AppRouteContent = (): React.ReactElement => {
     <>
       {route.kind === "advanced" && (
         <AdvancedPage {...systemRoutes.advancedProps} />
+      )}
+
+      {route.kind === "advancedAutoPayLimit" && (
+        <AdvancedAutoPayLimitPage {...systemRoutes.advancedAutoPayLimitProps} />
       )}
 
       {route.kind === "mints" && <MintsPage {...systemRoutes.mintsProps} />}

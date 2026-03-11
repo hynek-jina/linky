@@ -62,6 +62,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
   - `hooks/messages/` contains extracted message/inbox effects (`useNostrPendingFlush`, `useSendChatMessage`, `useEditChatMessage`, `useSendReaction`, `useInboxNotificationsSync`, `useChatMessageEffects`)
   - `hooks/messages/chatNostrProtocol.ts` contains shared reply/edit/reaction Nostr parsing helpers used by sync/send flows
   - `hooks/payments/` contains extracted payment orchestration (`usePayContactWithCashuMessage`)
+  - Lightning pay scan supports lightning addresses plus LNURL-pay bech32 / `lnurlp://` / HTTPS targets; unknown recipients open the same amount-entry UI as contact pay, but without avatar/name until matched to a saved contact
   - `hooks/cashu/` contains extracted cashu helpers (`useSaveCashuFromText`, `useCashuTokenChecks`, `useRestoreMissingTokens`, `useNpubCashClaim`)
   - `hooks/topup/` contains extracted topup quote/reset effects (`useTopupInvoiceQuoteEffects`)
   - `hooks/mint/` contains mint-info store/helpers (`useMintInfoStore`, `mintInfoHelpers`)

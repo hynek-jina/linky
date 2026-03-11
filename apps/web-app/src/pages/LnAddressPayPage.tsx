@@ -1,13 +1,24 @@
 import type { FC } from "react";
-import { AmountDisplay } from "../components/AmountDisplay";
-import { Keypad } from "../components/Keypad";
-import { formatInteger, formatMiddleDots } from "../utils/formatting";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { PaymentAmountPanel } from "../components/PaymentAmountPanel";
+import {
+  getLnurlPayDisplayText,
+  inferLightningAddressFromLnurlTarget,
+} from "../lnurlPay";
+import { formatMiddleDots, getInitials } from "../utils/formatting";
+
+interface LnAddressPayKnownContact {
+  lnAddress?: string | null;
+  name?: string | null;
+}
 
 interface LnAddressPayPageProps {
   canPayWithCashu: boolean;
   cashuBalance: number;
   cashuIsBusy: boolean;
   displayUnit: string;
+  knownContact: LnAddressPayKnownContact | null;
+  knownContactPictureUrl: string | null;
   lnAddress: string;
   lnAddressPayAmount: string;
   payLightningAddressWithCashu: (
@@ -23,13 +34,25 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
   cashuBalance,
   cashuIsBusy,
   displayUnit,
+  knownContact,
+  knownContactPictureUrl,
   lnAddress,
   lnAddressPayAmount,
   payLightningAddressWithCashu,
   setLnAddressPayAmount,
   t,
 }) => {
+  const { formatDisplayedAmountText } = useAppShellCore();
   const amountSat = Number.parseInt(lnAddressPayAmount.trim(), 10);
+  const displayTarget = formatMiddleDots(getLnurlPayDisplayText(lnAddress), 36);
+  const inferredLightningAddress =
+    inferLightningAddressFromLnurlTarget(lnAddress);
+  const displayAddress = formatMiddleDots(
+    String(
+      knownContact?.lnAddress ?? inferredLightningAddress ?? displayTarget,
+    ),
+    36,
+  );
   const invalid =
     !canPayWithCashu ||
     !Number.isFinite(amountSat) ||
@@ -37,70 +60,50 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
     amountSat > cashuBalance;
 
   return (
-    <section className="panel">
-      <div className="contact-header">
-        <div className="contact-avatar is-large" aria-hidden="true">
-          <span className="contact-avatar-fallback">⚡</span>
+    <PaymentAmountPanel
+      amount={lnAddressPayAmount}
+      cashuIsBusy={cashuIsBusy}
+      displayUnit={displayUnit}
+      header={
+        <div className="contact-header">
+          {knownContact ? (
+            <div className="contact-avatar is-large" aria-hidden="true">
+              {knownContactPictureUrl ? (
+                <img
+                  src={knownContactPictureUrl}
+                  alt=""
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="contact-avatar-fallback">
+                  {getInitials(String(knownContact.name ?? ""))}
+                </span>
+              )}
+            </div>
+          ) : null}
+          <div className="contact-header-text">
+            {knownContact?.name ? <h3>{knownContact.name}</h3> : null}
+            <p className="muted">{displayAddress}</p>
+            <p className="muted">
+              {t("availablePrefix")} {formatDisplayedAmountText(cashuBalance)}
+            </p>
+          </div>
         </div>
-        <div className="contact-header-text">
-          <h3>{t("payTo")}</h3>
-          <p className="muted">{formatMiddleDots(lnAddress, 36)}</p>
-          <p className="muted">
-            {t("availablePrefix")} {formatInteger(cashuBalance)} {displayUnit}
-          </p>
-        </div>
-      </div>
-
-      {!canPayWithCashu && <p className="muted">{t("payInsufficient")}</p>}
-
-      <AmountDisplay
-        amount={lnAddressPayAmount}
-        displayUnit={displayUnit}
-        formatInteger={formatInteger}
-      />
-
-      <Keypad
-        ariaLabel={`${t("payAmount")} (${displayUnit})`}
-        disabled={cashuIsBusy}
-        onKeyPress={(key: string) => {
-          if (cashuIsBusy) return;
-          if (key === "C") {
-            setLnAddressPayAmount("");
-            return;
-          }
-          if (key === "⌫") {
-            setLnAddressPayAmount((v) => v.slice(0, -1));
-            return;
-          }
-          setLnAddressPayAmount((v) => {
-            const next = (v + key).replace(/^0+(\d)/, "$1");
-            return next;
-          });
-        }}
-        translations={{
-          clearForm: t("clearForm"),
-          delete: t("delete"),
-        }}
-      />
-
-      <div className="actions">
-        <button
-          className="btn-wide"
-          onClick={() => {
-            if (invalid) return;
-            void payLightningAddressWithCashu(lnAddress, amountSat);
-          }}
-          disabled={cashuIsBusy || invalid}
-          title={amountSat > cashuBalance ? t("payInsufficient") : undefined}
-        >
-          <span className="btn-label-with-icon">
-            <span className="btn-label-icon" aria-hidden="true">
-              ₿
-            </span>
-            <span>{t("paySend")}</span>
-          </span>
-        </button>
-      </div>
-    </section>
+      }
+      notices={
+        !canPayWithCashu ? (
+          <p className="muted">{t("payInsufficient")}</p>
+        ) : undefined
+      }
+      onAmountChange={setLnAddressPayAmount}
+      onSubmit={() => {
+        if (invalid) return;
+        void payLightningAddressWithCashu(lnAddress, amountSat);
+      }}
+      submitDisabled={invalid}
+      submitTitle={amountSat > cashuBalance ? t("payInsufficient") : undefined}
+      t={t}
+    />
   );
 };

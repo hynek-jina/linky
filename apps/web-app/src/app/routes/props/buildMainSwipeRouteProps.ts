@@ -12,7 +12,6 @@ interface BuildMainSwipeRoutePropsParams {
   contactsSearchInputRef: MainSwipeRoutesProps["mainSwipeProps"]["contactsSearchInputRef"];
   contactsToolbarStyle: MainSwipeRoutesProps["mainSwipeProps"]["contactsToolbarStyle"];
   conversationsLabel: MainSwipeRoutesProps["mainSwipeProps"]["conversationsLabel"];
-  displayUnit: MainSwipeRoutesProps["mainSwipeProps"]["displayUnit"];
   dismissContactsOnboarding: MainSwipeRoutesProps["mainSwipeProps"]["dismissContactsOnboarding"];
   groupNames: MainSwipeRoutesProps["mainSwipeProps"]["groupNames"];
   handleMainSwipeScroll: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeScroll"];
@@ -48,7 +47,6 @@ export const buildMainSwipeRouteProps = ({
   contactsSearchInputRef,
   contactsToolbarStyle,
   conversationsLabel,
-  displayUnit,
   dismissContactsOnboarding,
   groupNames,
   handleMainSwipeScroll,
@@ -84,7 +82,6 @@ export const buildMainSwipeRouteProps = ({
       contactsSearchInputRef,
       contactsToolbarStyle,
       conversationsLabel,
-      displayUnit,
       dismissContactsOnboarding,
       groupNames,
       handleMainSwipeScroll,

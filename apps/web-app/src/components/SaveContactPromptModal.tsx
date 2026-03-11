@@ -1,10 +1,10 @@
 import React from "react";
-import { formatInteger } from "../utils/formatting";
+import { flushSync } from "react-dom";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useNavigation } from "../hooks/useRouting";
 
 interface SaveContactPromptModalProps {
   amountSat: number;
-  displayUnit: string;
   lnAddress: string;
   onClose: () => void;
   setContactNewPrefill: (prefill: {
@@ -17,13 +17,15 @@ interface SaveContactPromptModalProps {
 
 export function SaveContactPromptModal({
   amountSat,
-  displayUnit,
   lnAddress,
   onClose,
   setContactNewPrefill,
   t,
 }: SaveContactPromptModalProps): React.ReactElement {
+  const { formatDisplayedAmountParts } = useAppShellCore();
   const navigateTo = useNavigation();
+  const displayAmount = formatDisplayedAmountParts(amountSat);
+
   const handleSave = () => {
     const ln = String(lnAddress ?? "").trim();
 
@@ -34,13 +36,15 @@ export function SaveContactPromptModal({
       return left || null;
     })();
 
-    onClose();
-    setContactNewPrefill({
-      lnAddress: ln,
-      npub,
-      suggestedName: null,
+    flushSync(() => {
+      setContactNewPrefill({
+        lnAddress: ln,
+        npub,
+        suggestedName: null,
+      });
     });
     navigateTo({ route: "contactNew" });
+    onClose();
   };
 
   return (
@@ -54,8 +58,11 @@ export function SaveContactPromptModal({
         <div className="modal-title">{t("saveContactPromptTitle")}</div>
         <div className="modal-body">
           {t("saveContactPromptBody")
-            .replace("{amount}", formatInteger(amountSat))
-            .replace("{unit}", displayUnit)
+            .replace(
+              "{amount}",
+              `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+            )
+            .replace("{unit}", displayAmount.unitLabel)
             .replace("{lnAddress}", lnAddress)}
         </div>
         <div className="modal-actions">

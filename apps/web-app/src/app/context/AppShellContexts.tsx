@@ -1,8 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from "react";
 import type { DerivedProfileDefaults } from "../../derivedProfile";
+import type { ContactId } from "../../evolu";
 import type { Lang } from "../../i18n";
 import type { Route } from "../../types/route";
+import type {
+  DisplayAmountParts,
+  DisplayCurrency,
+} from "../../utils/displayAmounts";
 import type { LightningInvoicePreview } from "../../utils/lightningInvoice";
 import type {
   MainSwipeRoutesProps,
@@ -13,6 +18,7 @@ import type {
 import type { ContactsGuideStep, TopbarButton } from "../types/appTypes";
 
 interface ChatContact {
+  contactId: ContactId | null;
   isUnknownContact?: boolean;
   name: string | null;
   npub: string | null;
@@ -36,11 +42,15 @@ export interface AppShellCoreContextValue {
   } | null;
   currentNpub: string | null;
   currentNsec: string | null;
+  displayCurrency: DisplayCurrency;
   derivedProfile: DerivedProfileDefaults | null;
   displayUnit: string;
   effectiveMyLightningAddress: string | null;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
+  applyAmountInputKey: (currentAmount: string, key: string) => string;
+  formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
+  formatDisplayedAmountText: (amountSat: number) => string;
   isProfileEditing: boolean;
   lang: Lang;
   menuIsOpen: boolean;
@@ -71,7 +81,6 @@ export interface AppShellCoreContextValue {
   topbar: TopbarButton | null;
   topbarRight: TopbarButton | null;
   topbarTitle: string | null;
-  useBitcoinSymbol: boolean;
 }
 
 export interface AppShellActionsContextValue {
@@ -90,6 +99,7 @@ export interface AppShellActionsContextValue {
   openFeedbackContact: () => void;
   openProfileQr: () => void;
   saveProfileEdits: () => void;
+  setDisplayCurrency: (currency: DisplayCurrency) => void;
   setContactNewPrefill: (prefill: {
     lnAddress: string;
     npub: string | null;
@@ -106,7 +116,6 @@ export interface AppShellActionsContextValue {
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
   setProfileEditPicture: (value: string) => void;
-  setUseBitcoinSymbol: (value: boolean) => void;
   stopContactsGuide: () => void;
   toggleProfileEditing: () => void;
 }

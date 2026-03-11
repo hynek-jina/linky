@@ -1,5 +1,5 @@
 import React from "react";
-import { formatInteger } from "../utils/formatting";
+import type { DisplayAmountParts } from "../utils/displayAmounts";
 
 type Toast = {
   id: string;
@@ -12,7 +12,7 @@ type RecentlyReceivedToken = {
 } | null;
 
 type ToastNotificationsProps = {
-  displayUnit: string;
+  formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   pushToast: (message: string) => void;
   recentlyReceivedToken: RecentlyReceivedToken;
   setRecentlyReceivedToken: (token: RecentlyReceivedToken) => void;
@@ -21,7 +21,7 @@ type ToastNotificationsProps = {
 };
 
 export const ToastNotifications: React.FC<ToastNotificationsProps> = ({
-  displayUnit,
+  formatDisplayedAmountParts,
   pushToast,
   recentlyReceivedToken,
   setRecentlyReceivedToken,
@@ -57,9 +57,13 @@ export const ToastNotifications: React.FC<ToastNotificationsProps> = ({
                   ? recentlyReceivedToken.amount
                   : null;
               if (amount) {
+                const displayAmount = formatDisplayedAmountParts(amount);
                 return t("tokenReceivedClickToCopy")
-                  .replace("{amount}", formatInteger(amount))
-                  .replace("{unit}", displayUnit);
+                  .replace(
+                    "{amount}",
+                    `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+                  )
+                  .replace("{unit}", displayAmount.unitLabel);
               }
               return t("tokenReceived");
             })()}

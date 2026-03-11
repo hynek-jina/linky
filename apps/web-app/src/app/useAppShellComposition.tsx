@@ -18,6 +18,7 @@ import {
 import { navigateTo, useRouting } from "../hooks/useRouting";
 import { useToasts } from "../hooks/useToasts";
 import { getInitialLang, translations, type Lang } from "../i18n";
+import { inferLightningAddressFromLnurlTarget } from "../lnurlPay";
 import {
   fetchNostrProfileMetadata,
   loadCachedProfileMetadata,
@@ -36,10 +37,13 @@ import {
   NO_GROUP_FILTER,
 } from "../utils/constants";
 import {
-  formatInteger,
-  formatShortNpub,
-  getBestNostrName,
-} from "../utils/formatting";
+  applyAmountInputKey,
+  formatDisplayAmountParts,
+  formatDisplayAmountText,
+  getDisplayUnitLabel,
+  type DisplayCurrency,
+} from "../utils/displayAmounts";
+import { formatShortNpub, getBestNostrName } from "../utils/formatting";
 import type { LightningInvoicePreview } from "../utils/lightningInvoice";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
@@ -50,10 +54,10 @@ import {
 } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
+  getInitialDisplayCurrency,
   getInitialLightningInvoiceAutoPayLimit,
   getInitialNostrNsec,
   getInitialPayWithCashuEnabled,
-  getInitialUseBitcoinSymbol,
   safeLocalStorageGet,
   safeLocalStorageGetJson,
   safeLocalStorageRemove,
@@ -109,6 +113,7 @@ import { useContactsDomain } from "./hooks/useContactsDomain";
 import { useContactsNostrPrefetchEffects } from "./hooks/useContactsNostrPrefetchEffects";
 import { useEvoluContactsOwnerRotation } from "./hooks/useEvoluContactsOwnerRotation";
 import { useFeedbackContact } from "./hooks/useFeedbackContact";
+import { useFiatRates } from "./hooks/useFiatRates";
 import { useGuideScannerDomain } from "./hooks/useGuideScannerDomain";
 import { useLightningPaymentsDomain } from "./hooks/useLightningPaymentsDomain";
 import { useMainSwipePageEffects } from "./hooks/useMainSwipePageEffects";
@@ -378,8 +383,8 @@ export const useAppShellComposition = () => {
     Record<string, number>
   >(() => ({}));
   const [lang, setLang] = useState<Lang>(() => getInitialLang());
-  const [useBitcoinSymbol, setUseBitcoinSymbol] = useState<boolean>(() =>
-    getInitialUseBitcoinSymbol(),
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(() =>
+    getInitialDisplayCurrency(),
   );
   const [payWithCashuEnabled, setPayWithCashuEnabled] = useState<boolean>(() =>
     getInitialPayWithCashuEnabled(),
@@ -388,7 +393,35 @@ export const useAppShellComposition = () => {
     useState<number>(() => getInitialLightningInvoiceAutoPayLimit());
   const [allowPromisesEnabled] = useState<boolean>(false);
 
-  const displayUnit = useBitcoinSymbol ? "₿" : "sat";
+  const fiatRates = useFiatRates();
+  const displayUnit = getDisplayUnitLabel(displayCurrency, lang);
+  const applyDisplayedAmountInputKey = React.useCallback(
+    (currentAmount: string, key: string) =>
+      applyAmountInputKey(currentAmount, key, {
+        displayCurrency,
+        fiatRates,
+        lang,
+      }),
+    [displayCurrency, fiatRates, lang],
+  );
+  const formatDisplayedAmountParts = React.useCallback(
+    (amountSat: number) =>
+      formatDisplayAmountParts(amountSat, {
+        displayCurrency,
+        fiatRates,
+        lang,
+      }),
+    [displayCurrency, fiatRates, lang],
+  );
+  const formatDisplayedAmountText = React.useCallback(
+    (amountSat: number) =>
+      formatDisplayAmountText(amountSat, {
+        displayCurrency,
+        fiatRates,
+        lang,
+      }),
+    [displayCurrency, fiatRates, lang],
+  );
 
   const [currentNsec] = useState<string | null>(() => getInitialNostrNsec());
   const [chatOwnPubkeyHex, setChatOwnPubkeyHex] = useState<string | null>(null);
@@ -929,10 +962,10 @@ export const useAppShellComposition = () => {
 
   useAppPreferences({
     allowPromisesEnabled,
+    displayCurrency,
     lang,
     lightningInvoiceAutoPayLimit,
     payWithCashuEnabled,
-    useBitcoinSymbol,
   });
 
   useArmedDeleteTimeouts({
@@ -1139,10 +1172,16 @@ export const useAppShellComposition = () => {
         );
 
         if (route.kind !== "topupInvoice") {
+          const displayAmount = formatDisplayedAmountParts(
+            topupMintQuote.amount,
+          );
           showPaidOverlay(
             t("topupOverlay")
-              .replace("{amount}", formatInteger(topupMintQuote.amount))
-              .replace("{unit}", displayUnit),
+              .replace(
+                "{amount}",
+                `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+              )
+              .replace("{unit}", displayAmount.unitLabel),
           );
         }
 
@@ -1162,7 +1201,7 @@ export const useAppShellComposition = () => {
       window.clearInterval(intervalId);
     };
   }, [
-    displayUnit,
+    formatDisplayedAmountParts,
     insert,
     resolveOwnerIdForWrite,
     topupMintQuote,
@@ -1334,10 +1373,14 @@ export const useAppShellComposition = () => {
     if (cashuBalance < expected) return;
 
     topupInvoicePaidHandledRef.current = true;
+    const displayAmount = formatDisplayedAmountParts(amountSat);
     showPaidOverlay(
       t("topupOverlay")
-        .replace("{amount}", formatInteger(amountSat))
-        .replace("{unit}", displayUnit),
+        .replace(
+          "{amount}",
+          `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+        )
+        .replace("{unit}", displayAmount.unitLabel),
     );
 
     if (topupPaidNavTimerRef.current !== null) {
@@ -1353,8 +1396,7 @@ export const useAppShellComposition = () => {
     }, 1400);
   }, [
     cashuBalance,
-    displayUnit,
-    lang,
+    formatDisplayedAmountParts,
     route.kind,
     showPaidOverlay,
     t,
@@ -1456,10 +1498,9 @@ export const useAppShellComposition = () => {
     cashuTokensAll: cashuTokensAllFiltered,
     currentNpub,
     currentNsec,
-    displayUnit,
     enqueueCashuOp,
     ensureCashuTokenPersisted,
-    formatInteger,
+    formatDisplayedAmountParts,
     insert,
     isMintDeleted,
     logPaymentEvent,
@@ -1840,11 +1881,9 @@ export const useAppShellComposition = () => {
     useMainMenuState({
       onClose: () => {
         setPendingDeleteId(null);
-        setPayAmount("");
       },
       onOpen: () => {
         setPendingDeleteId(null);
-        setPayAmount("");
       },
       route,
     });
@@ -1903,9 +1942,8 @@ export const useAppShellComposition = () => {
     currentNpub,
     currentNsec,
     defaultMintUrl,
-    displayUnit,
     enqueuePendingPayment,
-    formatInteger,
+    formatDisplayedAmountParts,
     insert,
     logPayStep,
     logPaymentEvent,
@@ -1995,8 +2033,7 @@ export const useAppShellComposition = () => {
       cashuTokensWithMeta,
       contacts,
       defaultMintUrl,
-      displayUnit,
-      formatInteger,
+      formatDisplayedAmountParts,
       insert,
       logPaymentEvent,
       mintInfoByUrl,
@@ -2072,10 +2109,9 @@ export const useAppShellComposition = () => {
   });
 
   const saveCashuFromText = useSaveCashuFromText({
-    displayUnit,
     enqueueCashuOp,
     ensureCashuTokenPersisted,
-    formatInteger,
+    formatDisplayedAmountParts,
     insert,
     isCashuTokenStored,
     isMintDeleted,
@@ -2617,11 +2653,7 @@ export const useAppShellComposition = () => {
   });
 
   const topbarRight = buildTopbarRight({
-    canEditSelectedContact: !(
-      route.kind === "chat" && Boolean(selectedChatContact?.isUnknownContact)
-    ),
     route,
-    selectedContact,
     t,
     toggleMenu,
     toggleProfileEditing,
@@ -2632,6 +2664,9 @@ export const useAppShellComposition = () => {
   const chatTopbarContact =
     route.kind === "chat" && selectedChatContact
       ? {
+          contactId: selectedChatContact.isUnknownContact
+            ? null
+            : (selectedContact?.id ?? null),
           isUnknownContact: Boolean(selectedChatContact.isUnknownContact),
           name: String(selectedChatContact.name ?? "").trim() || null,
           npub: normalizeNpubIdentifier(selectedChatContact.npub),
@@ -2713,6 +2748,28 @@ export const useAppShellComposition = () => {
     saveCashuFromText,
     selectedContact: selectedChatContact,
   });
+  const knownLnAddressPayContact = React.useMemo(() => {
+    if (route.kind !== "lnAddressPay") return null;
+
+    const inferredLnAddress = inferLightningAddressFromLnurlTarget(
+      route.lnAddress,
+    );
+    if (!inferredLnAddress) return null;
+
+    return (
+      contacts.find(
+        (contact) =>
+          String(contact.lnAddress ?? "")
+            .trim()
+            .toLowerCase() === inferredLnAddress.toLowerCase(),
+      ) ?? null
+    );
+  }, [contacts, route]);
+  const knownLnAddressPayContactPictureUrl = React.useMemo(() => {
+    const npub = normalizeNpubIdentifier(knownLnAddressPayContact?.npub);
+    return npub ? (nostrPictureByNpub[npub] ?? null) : null;
+  }, [knownLnAddressPayContact, nostrPictureByNpub]);
+
   const { moneyRouteProps } = usePaymentMoneyComposition({
     moneyRouteBuilderInput: {
       canPayWithCashu,
@@ -2731,6 +2788,8 @@ export const useAppShellComposition = () => {
       effectiveProfileName,
       effectiveProfilePicture,
       getMintIconUrl,
+      knownLnAddressPayContact,
+      knownLnAddressPayContactPictureUrl,
       lnAddressPayAmount,
       npubCashLightningAddress,
       payLightningAddressWithCashu,
@@ -2847,7 +2906,6 @@ export const useAppShellComposition = () => {
       contactsSearch,
       contactsSearchInputRef,
       conversationsLabel,
-      displayUnit,
       dismissContactsOnboarding,
       groupNames,
       handleMainSwipeScroll,
@@ -2975,6 +3033,7 @@ export const useAppShellComposition = () => {
   });
 
   const appState = {
+    applyAmountInputKey: applyDisplayedAmountInputKey,
     cashuBalance,
     cashuIsBusy,
     chatTopbarContact,
@@ -2983,11 +3042,14 @@ export const useAppShellComposition = () => {
     contactsGuideHighlightRect,
     currentNpub,
     currentNsec,
+    displayCurrency,
     derivedProfile,
     displayUnit,
     effectiveMyLightningAddress,
     effectiveProfileName,
     effectiveProfilePicture,
+    formatDisplayedAmountParts,
+    formatDisplayedAmountText,
     isProfileEditing,
     lang,
     menuIsOpen,
@@ -3011,7 +3073,6 @@ export const useAppShellComposition = () => {
     topbar,
     topbarRight,
     topbarTitle,
-    useBitcoinSymbol,
   };
 
   const appActions = {
@@ -3027,6 +3088,7 @@ export const useAppShellComposition = () => {
     openFeedbackContact,
     openProfileQr,
     saveProfileEdits,
+    setDisplayCurrency,
     setContactNewPrefill,
     setIsProfileEditing,
     setLang,
@@ -3035,7 +3097,6 @@ export const useAppShellComposition = () => {
     setProfileEditLnAddress,
     setProfileEditName,
     setProfileEditPicture,
-    setUseBitcoinSymbol,
     stopContactsGuide,
     toggleProfileEditing,
   };
@@ -3046,6 +3107,7 @@ export const useAppShellComposition = () => {
     createNewAccount,
     currentNsec,
     displayUnit,
+    formatDisplayedAmountParts,
     isMainSwipeRoute,
     mainSwipeRouteProps,
     moneyRouteProps,

@@ -1,4 +1,5 @@
 import React from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   ChatReactionChip,
@@ -28,7 +29,6 @@ interface ChatMessageProps {
   canReplyOrReact: boolean;
   chatPendingLabel: string;
   formatChatDayLabel: (ms: number) => string;
-  formatInteger: (n: number) => string;
   getCashuTokenMessageInfo: (text: string) => CashuTokenMessageInfo | null;
   getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   locale: string;
@@ -56,7 +56,6 @@ export function ChatMessage({
   canReplyOrReact,
   chatPendingLabel,
   formatChatDayLabel,
-  formatInteger,
   getCashuTokenMessageInfo,
   getMintIconUrl,
   locale,
@@ -73,6 +72,8 @@ export function ChatMessage({
   reactions,
   replyQuoteText,
 }: ChatMessageProps) {
+  const { formatDisplayedAmountParts, formatDisplayedAmountText } =
+    useAppShellCore();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
   const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
@@ -244,6 +245,12 @@ export function ChatMessage({
               ? (() => {
                   const icon = getMintIconUrl(tokenInfo.mintUrl);
                   const showMintFallback = icon.failed || !icon.url;
+                  const displayAmount = formatDisplayedAmountParts(
+                    tokenInfo.amount ?? 0,
+                  );
+                  const displayAmountText = formatDisplayedAmountText(
+                    tokenInfo.amount ?? 0,
+                  );
                   return (
                     <span
                       className={tokenInfo.isValid ? "pill" : "pill pill-muted"}
@@ -254,8 +261,8 @@ export function ChatMessage({
                       }}
                       aria-label={
                         tokenInfo.mintDisplay
-                          ? `${formatInteger(tokenInfo.amount ?? 0)} sat · ${tokenInfo.mintDisplay}`
-                          : `${formatInteger(tokenInfo.amount ?? 0)} sat`
+                          ? `${displayAmountText} · ${tokenInfo.mintDisplay}`
+                          : displayAmountText
                       }
                     >
                       {icon.url ? (
@@ -319,7 +326,10 @@ export function ChatMessage({
                           {tokenInfo.mintDisplay}
                         </span>
                       ) : null}
-                      <span>{formatInteger(tokenInfo.amount ?? 0)}</span>
+                      <span>
+                        {displayAmount.approxPrefix}
+                        {displayAmount.amountText}
+                      </span>
                     </span>
                   );
                 })()

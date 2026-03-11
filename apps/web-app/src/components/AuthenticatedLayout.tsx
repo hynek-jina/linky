@@ -55,12 +55,12 @@ export function AuthenticatedLayout({
       {state.menuIsOpen ? (
         <MenuModal
           closeMenu={actions.closeMenu}
+          displayCurrency={state.displayCurrency}
           lang={state.lang}
           openFeedbackContact={actions.openFeedbackContact}
+          setDisplayCurrency={actions.setDisplayCurrency}
           setLang={actions.setLang}
-          setUseBitcoinSymbol={actions.setUseBitcoinSymbol}
           t={state.t}
-          useBitcoinSymbol={state.useBitcoinSymbol}
         />
       ) : null}
 
@@ -108,7 +108,6 @@ export function AuthenticatedLayout({
       {state.postPaySaveContact && !state.paidOverlayIsOpen ? (
         <SaveContactPromptModal
           amountSat={state.postPaySaveContact.amountSat}
-          displayUnit={state.displayUnit}
           lnAddress={state.postPaySaveContact.lnAddress}
           onClose={() => actions.setPostPaySaveContact(null)}
           setContactNewPrefill={actions.setContactNewPrefill}
@@ -121,7 +120,6 @@ export function AuthenticatedLayout({
           cashuBalance={state.cashuBalance}
           cashuIsBusy={state.cashuIsBusy}
           confirmation={state.pendingLightningInvoiceConfirmation}
-          displayUnit={state.displayUnit}
           onClose={actions.closeLightningInvoiceConfirmation}
           onConfirm={actions.confirmLightningInvoicePayment}
           t={state.t}

@@ -1,4 +1,7 @@
 export const UNIT_TOGGLE_STORAGE_KEY = "linky_use_btc_symbol";
+export const DISPLAY_CURRENCY_STORAGE_KEY = "linky.display_currency.v1";
+export const FIAT_RATES_CACHE_STORAGE_KEY = "linky.fiat_rates.v1";
+export const FIAT_RATES_TTL_MS = 10 * 60 * 1000;
 export const NOSTR_NSEC_STORAGE_KEY = "linky.nostr_nsec";
 export const NOSTR_SLIP39_SEED_STORAGE_KEY = "linky.nostr_slip39_seed";
 export const CASHU_BIP85_MNEMONIC_STORAGE_KEY = "linky.cashu_bip85_mnemonic";

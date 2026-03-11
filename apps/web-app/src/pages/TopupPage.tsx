@@ -1,9 +1,9 @@
 import type { FC } from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import { AmountDisplay } from "../components/AmountDisplay";
 import { Keypad } from "../components/Keypad";
 import { useNavigation } from "../hooks/useRouting";
 import {
-  formatInteger,
   formatMiddleDots,
   formatShortNpub,
   getInitials,
@@ -32,6 +32,7 @@ export const TopupPage: FC<TopupPageProps> = ({
   topupAmount,
   topupInvoiceIsBusy,
 }) => {
+  const { applyAmountInputKey } = useAppShellCore();
   const navigateTo = useNavigation();
   const ln = String(npubCashLightningAddress ?? "").trim();
   const amountSat = Number.parseInt(topupAmount.trim(), 10);
@@ -69,29 +70,14 @@ export const TopupPage: FC<TopupPageProps> = ({
         </div>
       </div>
 
-      <AmountDisplay
-        amount={topupAmount}
-        displayUnit={displayUnit}
-        formatInteger={formatInteger}
-      />
+      <AmountDisplay amount={topupAmount} />
 
       <Keypad
         ariaLabel={`${t("payAmount")} (${displayUnit})`}
         disabled={topupInvoiceIsBusy}
         onKeyPress={(key: string) => {
           if (topupInvoiceIsBusy) return;
-          if (key === "C") {
-            setTopupAmount("");
-            return;
-          }
-          if (key === "⌫") {
-            setTopupAmount((v) => v.slice(0, -1));
-            return;
-          }
-          setTopupAmount((v) => {
-            const next = (v + key).replace(/^0+(\d)/, "$1");
-            return next;
-          });
+          setTopupAmount((v) => applyAmountInputKey(v, key));
         }}
         translations={{
           clearForm: t("clearForm"),

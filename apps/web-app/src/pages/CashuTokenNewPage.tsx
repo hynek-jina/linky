@@ -1,9 +1,9 @@
 import type { FC } from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
 import type { CashuTokenId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
-import { formatInteger } from "../utils/formatting";
 
 type CashuTokenListItem = CashuTokenRowLike & { id: CashuTokenId };
 
@@ -15,7 +15,6 @@ interface CashuTokenNewPageProps {
   cashuIsBusy: boolean;
   cashuTokens: readonly CashuTokenListItem[];
   checkAllCashuTokensAndDeleteInvalid: () => Promise<void>;
-  displayUnit: string;
   getMintIconUrl: (mint: MintUrlInput) => {
     origin: string | null;
     url: string | null;
@@ -41,21 +40,19 @@ export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
   cashuIsBusy,
   cashuTokens,
   checkAllCashuTokensAndDeleteInvalid,
-  displayUnit,
   getMintIconUrl,
   saveCashuFromText,
   setCashuDraft,
   setMintIconUrlByMint,
   t,
 }) => {
+  const { formatDisplayedAmountText } = useAppShellCore();
   const navigateTo = useNavigation();
   return (
     <section className="panel">
       <div className="ln-list wallet-token-list">
         <div className="list-header">
-          <span>
-            Cashu · {formatInteger(cashuBalance)} {displayUnit}
-          </span>
+          <span>Cashu · {formatDisplayedAmountText(cashuBalance)}</span>
           <button
             type="button"
             className="btn-small secondary"
@@ -76,7 +73,6 @@ export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
                 key={token.id}
                 token={token}
                 getMintIconUrl={getMintIconUrl}
-                formatInteger={formatInteger}
                 isError={String(token.state ?? "") === "error"}
                 onMintIconLoad={(origin, url) => {
                   setMintIconUrlByMint((prev) => ({

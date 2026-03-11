@@ -5,6 +5,7 @@ import { acceptCashuToken } from "../../../cashuAccept";
 import type { ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
+import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import type { OptionalNumber, OptionalText } from "../../types/appTypes";
 
@@ -17,10 +18,9 @@ interface CashuTokenMetaRow {
 }
 
 interface UseSaveCashuFromTextParams {
-  displayUnit: string;
   enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;
   ensureCashuTokenPersisted: (token: string) => void;
-  formatInteger: (value: number) => string;
+  formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   insert: EvoluMutations["insert"];
   isCashuTokenStored: (tokenRaw: string) => boolean;
   isMintDeleted: (mintUrl: string) => boolean;
@@ -50,10 +50,9 @@ interface UseSaveCashuFromTextParams {
 }
 
 export const useSaveCashuFromText = ({
-  displayUnit,
   enqueueCashuOp,
   ensureCashuTokenPersisted,
-  formatInteger,
+  formatDisplayedAmountParts,
   insert,
   isCashuTokenStored,
   isMintDeleted,
@@ -235,9 +234,17 @@ export const useSaveCashuFromText = ({
 
           const title =
             accepted.amount && accepted.amount > 0
-              ? t("paidReceived")
-                  .replace("{amount}", formatInteger(accepted.amount))
-                  .replace("{unit}", displayUnit)
+              ? (() => {
+                  const displayAmount = formatDisplayedAmountParts(
+                    accepted.amount,
+                  );
+                  return t("paidReceived")
+                    .replace(
+                      "{amount}",
+                      `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+                    )
+                    .replace("{unit}", displayAmount.unitLabel);
+                })()
               : t("cashuAccepted");
           showPaidOverlay(title);
 
@@ -296,10 +303,9 @@ export const useSaveCashuFromText = ({
       });
     },
     [
-      displayUnit,
       enqueueCashuOp,
       ensureCashuTokenPersisted,
-      formatInteger,
+      formatDisplayedAmountParts,
       insert,
       isCashuTokenStored,
       isMintDeleted,

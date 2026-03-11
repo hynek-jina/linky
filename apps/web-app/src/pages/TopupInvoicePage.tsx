@@ -1,10 +1,8 @@
 import type { FC } from "react";
 import { WalletBalance } from "../components/WalletBalance";
-import { formatInteger } from "../utils/formatting";
 
 interface TopupInvoicePageProps {
   copyText: (text: string) => Promise<void>;
-  displayUnit: string;
   t: (key: string) => string;
   topupAmount: string;
   topupInvoice: string | null;
@@ -16,7 +14,6 @@ interface TopupInvoicePageProps {
 
 export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
   copyText,
-  displayUnit,
   t,
   topupAmount,
   topupInvoice,
@@ -63,8 +60,6 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
             balance={
               Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0
             }
-            displayUnit={displayUnit}
-            formatInteger={formatInteger}
           />
         </div>
 

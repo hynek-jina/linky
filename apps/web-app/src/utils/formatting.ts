@@ -65,7 +65,7 @@ export const getBestNostrName = (metadata: {
   return null;
 };
 
-const normalizeLocale = (lang?: string): string => {
+export const normalizeLocale = (lang?: string): string => {
   const raw = String(lang ?? "").trim();
   if (raw) {
     if (raw === "cs") return "cs-CZ";

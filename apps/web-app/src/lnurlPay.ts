@@ -1,6 +1,7 @@
+import { bech32 } from "@scure/base";
+import type { JsonRecord, JsonValue } from "./types/json";
 import { fetchJson } from "./utils/http";
 import { asNonEmptyString } from "./utils/validation";
-import type { JsonRecord, JsonValue } from "./types/json";
 
 type LnurlPayRequest = {
   callback?: string;
@@ -34,6 +35,143 @@ const isOptionalString = (
   value: JsonValue | undefined,
 ): value is string | undefined => {
   return value === undefined || typeof value === "string";
+};
+
+const LIGHTNING_ADDRESS_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+const stripLightningPrefix = (value: string): string => {
+  return value.replace(/^lightning:/i, "").trim();
+};
+
+const isHttpUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
+const decodeLnurlBech32Url = (value: string): string | null => {
+  const normalized = stripLightningPrefix(value);
+  if (!/^lnurl1/i.test(normalized)) return null;
+
+  try {
+    const decoded = bech32.decodeUnsafe(normalized.toLowerCase(), 2048);
+    if (!decoded) return null;
+    const bytes = Uint8Array.from(bech32.fromWords(decoded.words));
+    const text = new TextDecoder().decode(bytes).trim();
+    return isHttpUrl(text) ? text : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeLnurlSchemeUrl = (value: string): string | null => {
+  const normalized = stripLightningPrefix(value);
+  if (!/^lnurlp:\/\//i.test(normalized)) return null;
+
+  const rawTarget = normalized.replace(/^lnurlp:\/\//i, "").trim();
+  if (isLightningAddress(rawTarget)) {
+    return getLnurlpUrlFromLightningAddress(rawTarget);
+  }
+
+  const httpUrl = `https://${rawTarget}`;
+  return isHttpUrl(httpUrl) ? httpUrl : null;
+};
+
+const toHttpLnurlUrl = (value: string): string | null => {
+  const normalized = stripLightningPrefix(value);
+  if (!isHttpUrl(normalized)) return null;
+  return normalized;
+};
+
+const resolveLnurlTargetUrlOrNull = (value: string): string | null => {
+  const normalized = stripLightningPrefix(value);
+
+  if (isLightningAddress(normalized)) {
+    return getLnurlpUrlFromLightningAddress(normalized);
+  }
+
+  return (
+    decodeLnurlBech32Url(normalized) ??
+    normalizeLnurlSchemeUrl(normalized) ??
+    toHttpLnurlUrl(normalized)
+  );
+};
+
+const inferLightningAddressFromRequestUrl = (
+  requestUrl: string,
+): string | null => {
+  try {
+    const url = new URL(requestUrl);
+    const pathSegments = url.pathname
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => decodeURIComponent(segment));
+
+    if (
+      pathSegments.length >= 3 &&
+      pathSegments[0] === ".well-known" &&
+      pathSegments[1].toLowerCase() === "lnurlp"
+    ) {
+      return `${pathSegments[2]}@${url.host}`;
+    }
+
+    if (
+      pathSegments.length >= 2 &&
+      pathSegments[0].toLowerCase() === "lnurlp"
+    ) {
+      return `${pathSegments[1]}@${url.host}`;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+export const isLightningAddress = (value: string): boolean => {
+  return LIGHTNING_ADDRESS_PATTERN.test(stripLightningPrefix(value));
+};
+
+export const isLnurlPayTarget = (value: string): boolean => {
+  return resolveLnurlTargetUrlOrNull(value) !== null;
+};
+
+export const resolveLnurlPayRequestUrl = (value: string): string => {
+  const httpUrl = resolveLnurlTargetUrlOrNull(value);
+  if (httpUrl) return httpUrl;
+
+  throw new Error("Invalid LNURL or lightning address");
+};
+
+export const getLnurlPayDisplayText = (value: string): string => {
+  const normalized = stripLightningPrefix(value);
+  if (isLightningAddress(normalized)) return normalized;
+
+  const requestUrl = resolveLnurlTargetUrlOrNull(normalized);
+  if (!requestUrl) return normalized;
+
+  try {
+    const url = new URL(requestUrl);
+    const path = url.pathname === "/" ? "" : url.pathname;
+    return `${url.host}${path}`;
+  } catch {
+    return requestUrl;
+  }
+};
+
+export const inferLightningAddressFromLnurlTarget = (
+  value: string,
+): string | null => {
+  const normalized = stripLightningPrefix(value);
+  if (isLightningAddress(normalized)) return normalized;
+
+  const requestUrl = resolveLnurlTargetUrlOrNull(normalized);
+  if (!requestUrl) return null;
+
+  return inferLightningAddressFromRequestUrl(requestUrl);
 };
 
 const isLnurlPayRequest = (value: unknown): value is LnurlPayRequest => {
@@ -86,8 +224,8 @@ const fetchLnurlJson = async (url: string): Promise<JsonValue> => {
   }
 };
 
-export const fetchLnurlInvoiceForLightningAddress = async (
-  lightningAddress: string,
+export const fetchLnurlInvoiceForTarget = async (
+  paymentTarget: string,
   amountSat: number,
   comment?: string,
 ): Promise<string> => {
@@ -95,7 +233,7 @@ export const fetchLnurlInvoiceForLightningAddress = async (
     throw new Error("Invalid amount");
   }
 
-  const lnurlpUrl = getLnurlpUrlFromLightningAddress(lightningAddress);
+  const lnurlpUrl = resolveLnurlPayRequestUrl(paymentTarget);
   const payReqJson = await fetchLnurlJson(lnurlpUrl);
   if (!isLnurlPayRequest(payReqJson)) {
     throw new Error("Invalid LNURL pay response");
@@ -172,4 +310,12 @@ export const fetchLnurlInvoiceForLightningAddress = async (
   if (!pr) throw new Error("Invoice missing");
 
   return pr;
+};
+
+export const fetchLnurlInvoiceForLightningAddress = async (
+  lightningAddress: string,
+  amountSat: number,
+  comment?: string,
+): Promise<string> => {
+  return fetchLnurlInvoiceForTarget(lightningAddress, amountSat, comment);
 };

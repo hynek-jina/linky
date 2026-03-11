@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useNavigation } from "../hooks/useRouting";
 import { LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS } from "../utils/constants";
-import { formatInteger } from "../utils/formatting";
 
 interface AdvancedPageProps {
   __APP_VERSION__: string;
@@ -76,12 +76,26 @@ export function AdvancedPage({
   tokensRestoreIsBusy,
 }: AdvancedPageProps): React.ReactElement {
   const navigateTo = useNavigation();
+  const { formatDisplayedAmountParts } = useAppShellCore();
   const [pushStatus, setPushStatus] = useState<string>("");
   const [pushError, setPushError] = useState<string>("");
   const [nostrDeriveArmed, setNostrDeriveArmed] = useState(false);
   const armTimeoutRef = useRef<number | null>(null);
   const hasSeedMnemonic = String(seedMnemonic ?? "").trim().length > 0;
   const hasCurrentNsec = String(currentNsec ?? "").trim().length > 0;
+  const customAutoPayLimitSelected =
+    !LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS.some(
+      (limit) => limit === lightningInvoiceAutoPayLimit,
+    );
+
+  const getAutoPayLimitLabel = useCallback(
+    (limit: number) => {
+      if (limit === 0) return "0";
+      const displayAmount = formatDisplayedAmountParts(limit);
+      return `${displayAmount.approxPrefix}${displayAmount.amountText}`;
+    },
+    [formatDisplayedAmountParts],
+  );
 
   const clearArmTimeout = useCallback(() => {
     if (armTimeoutRef.current !== null) {
@@ -281,22 +295,40 @@ export function AdvancedPage({
           </span>
         </div>
         <div className="settings-right settings-right-wrap">
-          <div className="badge-box badge-box-wrap">
+          <div className="badge-box autopay-limit-options" role="group">
             {LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS.map((limit) => (
               <button
                 key={limit}
                 type="button"
                 className={
+                  !customAutoPayLimitSelected &&
                   limit === lightningInvoiceAutoPayLimit
                     ? "ghost settings-choice is-selected"
                     : "ghost settings-choice"
                 }
                 onClick={() => setLightningInvoiceAutoPayLimit(limit)}
-                aria-pressed={limit === lightningInvoiceAutoPayLimit}
+                aria-pressed={
+                  !customAutoPayLimitSelected &&
+                  limit === lightningInvoiceAutoPayLimit
+                }
               >
-                {formatInteger(limit)}
+                {getAutoPayLimitLabel(limit)}
               </button>
             ))}
+            <button
+              type="button"
+              className={
+                customAutoPayLimitSelected
+                  ? "ghost settings-choice is-selected"
+                  : "ghost settings-choice"
+              }
+              onClick={() => navigateTo({ route: "advancedAutoPayLimit" })}
+              aria-pressed={customAutoPayLimitSelected}
+            >
+              {customAutoPayLimitSelected
+                ? getAutoPayLimitLabel(lightningInvoiceAutoPayLimit)
+                : t("custom")}
+            </button>
           </div>
         </div>
       </div>

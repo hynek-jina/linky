@@ -1,7 +1,14 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
 import type { CashuTokenId, ContactId } from "../../evolu";
+import {
+  fetchLnurlInvoiceForTarget,
+  getLnurlPayDisplayText,
+  inferLightningAddressFromLnurlTarget,
+  isLightningAddress,
+} from "../../lnurlPay";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../utils/constants";
+import type { DisplayAmountParts } from "../../utils/displayAmounts";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
 import type {
@@ -28,8 +35,7 @@ interface UseLightningPaymentsDomainParams {
   cashuTokensWithMeta: CashuTokenWithMetaRow[];
   contacts: readonly ContactRow[];
   defaultMintUrl: string | null;
-  displayUnit: string;
-  formatInteger: (value: number) => string;
+  formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   insert: EvoluMutations["insert"];
   logPaymentEvent: (event: {
     amount?: number | null;
@@ -63,8 +69,7 @@ export const useLightningPaymentsDomain = ({
   cashuTokensWithMeta,
   contacts,
   defaultMintUrl,
-  displayUnit,
-  formatInteger,
+  formatDisplayedAmountParts,
   insert,
   logPaymentEvent,
   mintInfoByUrl,
@@ -274,10 +279,14 @@ export const useLightningPaymentsDomain = ({
               contactId: null,
             });
 
+            const displayAmount = formatDisplayedAmountParts(result.paidAmount);
             showPaidOverlay(
               t("paidSent")
-                .replace("{amount}", formatInteger(result.paidAmount))
-                .replace("{unit}", displayUnit),
+                .replace(
+                  "{amount}",
+                  `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+                )
+                .replace("{unit}", displayAmount.unitLabel),
             );
 
             setStatus(t("paySuccess"));
@@ -314,8 +323,7 @@ export const useLightningPaymentsDomain = ({
       cashuIsBusy,
       cashuTokensWithMeta,
       defaultMintUrl,
-      displayUnit,
-      formatInteger,
+      formatDisplayedAmountParts,
       insertCashuToken,
       logPaymentEvent,
       markCashuTokenDeleted,
@@ -330,8 +338,8 @@ export const useLightningPaymentsDomain = ({
 
   const payLightningAddressWithCashu = React.useCallback(
     async (lnAddress: string, amountSat: number) => {
-      const address = String(lnAddress ?? "").trim();
-      if (!address) return;
+      const paymentTarget = String(lnAddress ?? "").trim();
+      if (!paymentTarget) return;
       if (!Number.isFinite(amountSat) || amountSat <= 0) {
         setStatus(`${t("errorPrefix")}: ${t("payInvalidAmount")}`);
         return;
@@ -340,24 +348,24 @@ export const useLightningPaymentsDomain = ({
       if (cashuIsBusy) return;
       setCashuIsBusy(true);
 
+      const displayTarget = getLnurlPayDisplayText(paymentTarget);
+      const inferredLightningAddress =
+        inferLightningAddressFromLnurlTarget(paymentTarget) ?? paymentTarget;
+      const canOfferSave = isLightningAddress(inferredLightningAddress);
+
       const knownContact = contacts.find(
         (c) =>
           String(c.lnAddress ?? "")
             .trim()
-            .toLowerCase() === address.toLowerCase(),
+            .toLowerCase() === inferredLightningAddress.toLowerCase(),
       );
-      const shouldOfferSave = !knownContact?.id;
+      const shouldOfferSave = canOfferSave && !knownContact?.id;
 
       try {
         setStatus(t("payFetchingInvoice"));
         let invoice: string;
         try {
-          const { fetchLnurlInvoiceForLightningAddress } =
-            await import("../../lnurlPay");
-          invoice = await fetchLnurlInvoiceForLightningAddress(
-            address,
-            amountSat,
-          );
+          invoice = await fetchLnurlInvoiceForTarget(paymentTarget, amountSat);
         } catch (e) {
           setStatus(`${t("payFailed")}: ${String(e)}`);
           return;
@@ -511,13 +519,17 @@ export const useLightningPaymentsDomain = ({
               contactId: null,
             });
 
+            const displayAmount = formatDisplayedAmountParts(result.paidAmount);
             showPaidOverlay(
               t("paidSentTo")
-                .replace("{amount}", formatInteger(result.paidAmount))
-                .replace("{unit}", displayUnit)
+                .replace(
+                  "{amount}",
+                  `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+                )
+                .replace("{unit}", displayAmount.unitLabel)
                 .replace(
                   "{name}",
-                  String(knownContact?.name ?? "").trim() || address,
+                  String(knownContact?.name ?? "").trim() || displayTarget,
                 ),
             );
 
@@ -527,7 +539,7 @@ export const useLightningPaymentsDomain = ({
             // Offer to save as a contact after a successful pay to a new address.
             if (shouldOfferSave) {
               setPostPaySaveContact({
-                lnAddress: address,
+                lnAddress: inferredLightningAddress,
                 amountSat: result.paidAmount,
               });
             }
@@ -560,8 +572,7 @@ export const useLightningPaymentsDomain = ({
       cashuIsBusy,
       cashuTokensWithMeta,
       contacts,
-      displayUnit,
-      formatInteger,
+      formatDisplayedAmountParts,
       insertCashuToken,
       logPaymentEvent,
       markCashuTokenDeleted,

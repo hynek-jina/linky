@@ -1,4 +1,5 @@
 import React from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   ContactRowLike,
@@ -7,7 +8,6 @@ import type {
 } from "../app/types/appTypes";
 import {
   formatContactMessageTimestamp,
-  formatInteger,
   getInitials,
 } from "../utils/formatting";
 
@@ -41,6 +41,8 @@ export const ContactCard: React.FC<ContactCardProps> = ({
   tokenInfo,
   isUnknownContact = false,
 }) => {
+  const { formatDisplayedAmountParts, formatDisplayedAmountText } =
+    useAppShellCore();
   const initials = getInitials(String(contact.name ?? ""));
   const lastText = String(lastMessage?.content ?? "").trim();
   const preview = lastText.length > 40 ? `${lastText.slice(0, 40)}…` : lastText;
@@ -135,7 +137,8 @@ export const ContactCard: React.FC<ContactCardProps> = ({
             <TokenPreview
               tokenInfo={tokenInfo}
               directionSymbol={directionSymbol}
-              formatInteger={formatInteger}
+              formatDisplayedAmountParts={formatDisplayedAmountParts}
+              formatDisplayedAmountText={formatDisplayedAmountText}
               getMintIconUrl={getMintIconUrl}
               onIconLoad={onMintIconLoad}
               onIconError={onMintIconError}
@@ -156,7 +159,12 @@ export const ContactCard: React.FC<ContactCardProps> = ({
 
 interface TokenPreviewProps {
   directionSymbol: string;
-  formatInteger: (num: number) => string;
+  formatDisplayedAmountParts: (amountSat: number) => {
+    amountText: string;
+    approxPrefix: string;
+    unitLabel: string;
+  };
+  formatDisplayedAmountText: (amountSat: number) => string;
   getMintIconUrl: (url: MintUrlInput) => {
     url: string | null;
     origin?: string | null;
@@ -170,13 +178,16 @@ interface TokenPreviewProps {
 
 const TokenPreview: React.FC<TokenPreviewProps> = ({
   directionSymbol,
-  formatInteger,
+  formatDisplayedAmountParts,
+  formatDisplayedAmountText,
   getMintIconUrl,
   onIconError,
   onIconLoad,
   tokenInfo,
 }) => {
   const icon = getMintIconUrl(tokenInfo.mintUrl);
+  const displayAmount = formatDisplayedAmountParts(tokenInfo.amount ?? 0);
+  const displayAmountText = formatDisplayedAmountText(tokenInfo.amount ?? 0);
 
   return (
     <div
@@ -201,7 +212,7 @@ const TokenPreview: React.FC<TokenPreviewProps> = ({
           fontSize: 10,
           lineHeight: "10px",
         }}
-        aria-label={`${formatInteger(tokenInfo.amount ?? 0)} sat`}
+        aria-label={displayAmountText}
       >
         {icon.url ? (
           <img
@@ -238,7 +249,10 @@ const TokenPreview: React.FC<TokenPreviewProps> = ({
             }}
           />
         ) : null}
-        <span>{formatInteger(tokenInfo.amount ?? 0)}</span>
+        <span>
+          {displayAmount.approxPrefix}
+          {displayAmount.amountText}
+        </span>
       </span>
     </div>
   );

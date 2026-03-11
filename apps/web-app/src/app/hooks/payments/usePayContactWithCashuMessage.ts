@@ -6,6 +6,7 @@ import type { CashuTokenId, ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../../utils/constants";
+import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { previewTokenText } from "../../../utils/formatting";
 import { normalizeMintUrl } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
@@ -38,13 +39,12 @@ interface UsePayContactWithCashuMessageParams {
   currentNpub: string | null;
   currentNsec: string | null;
   defaultMintUrl: string | null;
-  displayUnit: string;
   enqueuePendingPayment: (payload: {
     amountSat: number;
     contactId: ContactId;
     messageId?: string;
   }) => void;
-  formatInteger: (value: number) => string;
+  formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   insert: EvoluMutations["insert"];
   logPayStep: (step: string, data?: PaymentLogData) => void;
   logPaymentEvent: (event: {
@@ -84,9 +84,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   currentNpub,
   currentNsec,
   defaultMintUrl,
-  displayUnit,
   enqueuePendingPayment,
-  formatInteger,
+  formatDisplayedAmountParts,
   insert,
   logPayStep,
   logPaymentEvent,
@@ -177,13 +176,17 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           String(contact.name ?? "").trim() ||
           String(contact.lnAddress ?? "").trim() ||
           t("appTitle");
+        const displayAmount = formatDisplayedAmountParts(amountSat);
         const clientId = makeLocalId();
         const messageId = appendLocalNostrMessage({
           contactId: String(contact.id ?? ""),
           direction: "out",
           content: t("payQueuedMessage")
-            .replace("{amount}", formatInteger(amountSat))
-            .replace("{unit}", displayUnit)
+            .replace(
+              "{amount}",
+              `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+            )
+            .replace("{unit}", displayAmount.unitLabel)
             .replace("{name}", displayName),
           wrapId: `pending:pay:${clientId}`,
           rumorId: null,
@@ -207,8 +210,11 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           setStatus(t("payQueued"));
           showPaidOverlay(
             t("paidQueuedTo")
-              .replace("{amount}", formatInteger(amountSat))
-              .replace("{unit}", displayUnit)
+              .replace(
+                "{amount}",
+                `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+              )
+              .replace("{unit}", displayAmount.unitLabel)
               .replace("{name}", displayName),
           );
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
@@ -580,11 +586,15 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             String(contact.name ?? "").trim() ||
             String(contact.lnAddress ?? "").trim() ||
             t("appTitle");
+          const displayAmount = formatDisplayedAmountParts(amountSat);
 
           showPaidOverlay(
             (hasPendingMessages ? t("paidQueuedTo") : t("paidSentTo"))
-              .replace("{amount}", formatInteger(amountSat))
-              .replace("{unit}", displayUnit)
+              .replace(
+                "{amount}",
+                `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+              )
+              .replace("{unit}", displayAmount.unitLabel)
               .replace("{name}", displayName),
           );
 
@@ -624,9 +634,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       chatSeenWrapIdsRef,
       currentNpub,
       currentNsec,
-      displayUnit,
       enqueuePendingPayment,
-      formatInteger,
+      formatDisplayedAmountParts,
       insert,
       logPayStep,
       logPaymentEvent,

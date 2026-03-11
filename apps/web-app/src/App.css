@@ -99,6 +99,28 @@
   gap: 8px;
 }
 
+.topbar-chat-button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  transform: none;
+  padding: 0;
+  border-radius: 12px;
+}
+
+.topbar-chat-button:hover,
+.topbar-chat-button:focus,
+.topbar-chat-button:active,
+.topbar-chat-button:disabled {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.topbar-chat-button:disabled {
+  cursor: default;
+}
+
 .topbar-chat-avatar {
   width: 24px;
   height: 24px;
@@ -697,6 +719,13 @@ button.settings-link:hover {
 .settings-right-wrap {
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.autopay-limit-options {
+  flex-wrap: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 .settings-row-stack-mobile {
@@ -2276,8 +2305,15 @@ button.icon {
 }
 
 .contact-avatar.is-xl {
-  width: 92px;
-  height: 92px;
+  width: 112px;
+  height: 112px;
+}
+
+.contact-detail-card {
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top, rgba(20, 184, 166, 0.12), transparent 50%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(11, 18, 34, 0.96));
 }
 
 .contact-detail {
@@ -2285,11 +2321,28 @@ button.icon {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 8px;
+  gap: 14px;
+  padding: 20px 16px;
+}
+
+.contact-detail-header {
+  width: 100%;
+  min-height: 112px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.contact-detail-copy-block {
+  display: grid;
+  gap: 6px;
 }
 
 .contact-detail-name {
-  margin: 4px 0 0;
+  margin: 0;
+  font-size: clamp(28px, 7vw, 36px);
+  line-height: 1.05;
 }
 
 .contact-detail-group {
@@ -2299,10 +2352,26 @@ button.icon {
 }
 
 .contact-detail-ln {
-  margin: 6px 0 0;
+  margin: 0;
   color: #cbd5e1;
   font-size: 14px;
   word-break: break-word;
+}
+
+.contact-detail-edit {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .contact-detail-copy {

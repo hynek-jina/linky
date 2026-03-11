@@ -4,12 +4,10 @@ import { WalletActionButton } from "../components/WalletActionButton";
 import { WalletBalance } from "../components/WalletBalance";
 import { WalletWarning } from "../components/WalletWarning";
 import { useNavigation } from "../hooks/useRouting";
-import { formatInteger } from "../utils/formatting";
 
 interface WalletPageProps {
   bottomTabActive: "wallet" | "contacts" | null;
   cashuBalance: number;
-  displayUnit: string;
   openScan: () => void;
   scanIsOpen: boolean;
   showBottomTabBar?: boolean;
@@ -19,7 +17,6 @@ interface WalletPageProps {
 export const WalletPage: React.FC<WalletPageProps> = ({
   bottomTabActive,
   cashuBalance,
-  displayUnit,
   openScan,
   scanIsOpen,
   showBottomTabBar = true,
@@ -31,12 +28,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
       <WalletWarning t={t} />
       <div className="panel-header">
         <div className="wallet-hero">
-          <WalletBalance
-            balance={cashuBalance}
-            displayUnit={displayUnit}
-            formatInteger={formatInteger}
-            ariaLabel={t("cashuBalance")}
-          />
+          <WalletBalance balance={cashuBalance} ariaLabel={t("cashuBalance")} />
           <button
             type="button"
             className="wallet-tokens-link"

@@ -6,6 +6,7 @@ import type { ContactId } from "../../../evolu";
 import type { JsonValue } from "../../../types/json";
 import type { Route } from "../../../types/route";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
+import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { asRecord } from "../../../utils/validation";
 import type { CashuTokenRowLike, LocalMintInfoRow } from "../../types/appTypes";
@@ -17,10 +18,9 @@ interface UseNpubCashClaimParams {
   cashuTokensAll: readonly CashuTokenRowLike[];
   currentNpub: string | null;
   currentNsec: string | null;
-  displayUnit: string;
   enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;
   ensureCashuTokenPersisted: (token: string) => void;
-  formatInteger: (value: number) => string;
+  formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   insert: EvoluMutations["insert"];
   isMintDeleted: (mintUrl: string) => boolean;
   logPaymentEvent: (event: {
@@ -64,10 +64,9 @@ export const useNpubCashClaim = ({
   cashuTokensAll,
   currentNpub,
   currentNsec,
-  displayUnit,
   enqueueCashuOp,
   ensureCashuTokenPersisted,
-  formatInteger,
+  formatDisplayedAmountParts,
   insert,
   isMintDeleted,
   logPaymentEvent,
@@ -253,16 +252,29 @@ export const useNpubCashClaim = ({
           if (routeKind !== "topupInvoice") {
             const title =
               accepted.amount && accepted.amount > 0
-                ? t("paidReceived")
-                    .replace("{amount}", formatInteger(accepted.amount))
-                    .replace("{unit}", displayUnit)
+                ? (() => {
+                    const displayAmount = formatDisplayedAmountParts(
+                      accepted.amount,
+                    );
+                    return t("paidReceived")
+                      .replace(
+                        "{amount}",
+                        `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+                      )
+                      .replace("{unit}", displayAmount.unitLabel);
+                  })()
                 : t("cashuAccepted");
             showPaidOverlay(title);
           }
 
           const body =
             accepted.amount && accepted.amount > 0
-              ? `${accepted.amount} sat`
+              ? (() => {
+                  const displayAmount = formatDisplayedAmountParts(
+                    accepted.amount,
+                  );
+                  return `${displayAmount.approxPrefix}${displayAmount.amountText} ${displayAmount.unitLabel}`;
+                })()
               : t("cashuAccepted");
           void maybeShowPwaNotification(t("mints"), body, "cashu_claim");
         } catch (error) {
@@ -316,10 +328,9 @@ export const useNpubCashClaim = ({
     },
     [
       cashuTokensAll,
-      displayUnit,
       enqueueCashuOp,
       ensureCashuTokenPersisted,
-      formatInteger,
+      formatDisplayedAmountParts,
       insert,
       isMintDeleted,
       buildCashuTokenPayload,

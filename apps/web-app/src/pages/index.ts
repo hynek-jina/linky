@@ -1,3 +1,4 @@
+export { AdvancedAutoPayLimitPage } from "./AdvancedAutoPayLimitPage";
 export { AdvancedPage } from "./AdvancedPage";
 export { CashuTokenNewPage } from "./CashuTokenNewPage";
 export { CashuTokenPage } from "./CashuTokenPage";

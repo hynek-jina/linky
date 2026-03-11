@@ -248,6 +248,11 @@ export const useSystemRouteProps = ({
       t,
       __APP_VERSION__: appVersion,
     },
+    advancedAutoPayLimitProps: {
+      lightningInvoiceAutoPayLimit,
+      setLightningInvoiceAutoPayLimit,
+      t,
+    },
     evoluCurrentDataProps: {
       evoluCashuOwnerId,
       evoluContactsOwnerId,

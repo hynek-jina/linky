@@ -18,7 +18,7 @@ const AppShell = () => {
     appState,
     createNewAccount,
     currentNsec,
-    displayUnit,
+    formatDisplayedAmountParts,
     isMainSwipeRoute,
     mainSwipeRouteProps,
     moneyRouteProps,
@@ -64,7 +64,7 @@ const AppShell = () => {
       <ToastNotifications
         recentlyReceivedToken={recentlyReceivedToken}
         toasts={toasts}
-        displayUnit={displayUnit}
+        formatDisplayedAmountParts={formatDisplayedAmountParts}
         pushToast={pushToast}
         setRecentlyReceivedToken={setRecentlyReceivedToken}
         t={t}

@@ -24,7 +24,6 @@ export interface MainSwipeRouteProps {
   contactsSearchInputRef: React.RefObject<HTMLInputElement | null>;
   contactsToolbarStyle: React.CSSProperties;
   conversationsLabel: string;
-  displayUnit: string;
   dismissContactsOnboarding: () => void;
   groupNames: string[];
   handleMainSwipeScroll:
@@ -74,7 +73,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     contactsSearchInputRef,
     contactsToolbarStyle,
     conversationsLabel,
-    displayUnit,
     dismissContactsOnboarding,
     groupNames,
     handleMainSwipeScroll,
@@ -161,7 +159,6 @@ export const MainSwipeContent = (): React.ReactElement => {
         >
           <WalletPage
             cashuBalance={cashuBalance}
-            displayUnit={displayUnit}
             openScan={openScan}
             scanIsOpen={scanIsOpen}
             bottomTabActive={bottomTabActive}

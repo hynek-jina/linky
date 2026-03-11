@@ -1,5 +1,6 @@
-import { parseCashuToken } from "../cashu";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
+import { parseCashuToken } from "../cashu";
 
 interface MintIcon {
   failed: boolean;
@@ -10,7 +11,6 @@ interface MintIcon {
 
 interface CashuTokenPillProps {
   ariaLabel: string;
-  formatInteger: (n: number) => string;
   getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   isError?: boolean;
   onClick: () => void;
@@ -21,7 +21,6 @@ interface CashuTokenPillProps {
 
 export function CashuTokenPill({
   ariaLabel,
-  formatInteger,
   getMintIconUrl,
   isError = false,
   onClick,
@@ -29,6 +28,7 @@ export function CashuTokenPill({
   onMintIconLoad,
   token,
 }: CashuTokenPillProps) {
+  const { formatDisplayedAmountParts } = useAppShellCore();
   const tokenText = String(token.token ?? token.rawToken ?? "").trim();
   const storedAmount = Number(token.amount ?? 0);
   const storedMint = String(token.mint ?? "").trim();
@@ -54,6 +54,7 @@ export function CashuTokenPill({
       : null;
   const icon = getMintIconUrl(mint);
   const showMintFallback = icon.failed || !icon.url;
+  const displayAmount = formatDisplayedAmountParts(amount);
 
   return (
     <button
@@ -109,7 +110,10 @@ export function CashuTokenPill({
             {icon.host}
           </span>
         ) : null}
-        <span>{formatInteger(amount)}</span>
+        <span>
+          {displayAmount.approxPrefix}
+          {displayAmount.amountText}
+        </span>
       </span>
     </button>
   );

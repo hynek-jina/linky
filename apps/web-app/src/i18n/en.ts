@@ -69,6 +69,7 @@ export const en = {
   payWithCashu: "Pay with Cashu",
   payWithCashuDisabled: "Pay with Cashu is disabled in Advanced settings.",
   lightningInvoiceAutoPayLimit: "Invoice auto-pay limit",
+  custom: "Custom",
   restore: "Restore",
   restoring: "Restoring…",
   restoreNothing: "No missing tokens found.",

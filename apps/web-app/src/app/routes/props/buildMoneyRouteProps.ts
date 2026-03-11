@@ -20,10 +20,12 @@ interface BuildMoneyRoutePropsParams {
   >["checkAndRefreshCashuToken"];
   copyText: ReturnType<MoneyRoutesProps["cashuTokenProps"]>["copyText"];
   currentNpub: MoneyRoutesProps["topupProps"]["currentNpub"];
-  displayUnit: MoneyRoutesProps["cashuTokenNewProps"]["displayUnit"];
+  displayUnit: MoneyRoutesProps["lnAddressPayProps"]["displayUnit"];
   effectiveProfileName: MoneyRoutesProps["topupProps"]["effectiveProfileName"];
   effectiveProfilePicture: MoneyRoutesProps["topupProps"]["effectiveProfilePicture"];
   getMintIconUrl: MoneyRoutesProps["cashuTokenNewProps"]["getMintIconUrl"];
+  knownLnAddressPayContact: MoneyRoutesProps["lnAddressPayProps"]["knownContact"];
+  knownLnAddressPayContactPictureUrl: MoneyRoutesProps["lnAddressPayProps"]["knownContactPictureUrl"];
   lnAddressPayAmount: MoneyRoutesProps["lnAddressPayProps"]["lnAddressPayAmount"];
   npubCashLightningAddress: MoneyRoutesProps["topupProps"]["npubCashLightningAddress"];
   payLightningAddressWithCashu: MoneyRoutesProps["lnAddressPayProps"]["payLightningAddressWithCashu"];
@@ -65,6 +67,8 @@ export const buildMoneyRouteProps = ({
   effectiveProfileName,
   effectiveProfilePicture,
   getMintIconUrl,
+  knownLnAddressPayContact,
+  knownLnAddressPayContactPictureUrl,
   lnAddressPayAmount,
   npubCashLightningAddress,
   payLightningAddressWithCashu,
@@ -88,7 +92,6 @@ export const buildMoneyRouteProps = ({
     cashuTokenNewProps: {
       cashuBalance,
       cashuBulkCheckIsBusy,
-      displayUnit,
       cashuTokens: cashuTokensWithMeta,
       cashuDraft,
       setCashuDraft,
@@ -120,6 +123,8 @@ export const buildMoneyRouteProps = ({
       cashuBalance,
       canPayWithCashu,
       cashuIsBusy,
+      knownContact: knownLnAddressPayContact,
+      knownContactPictureUrl: knownLnAddressPayContactPictureUrl,
       lnAddressPayAmount,
       setLnAddressPayAmount,
       displayUnit,
@@ -133,7 +138,6 @@ export const buildMoneyRouteProps = ({
       topupInvoiceError,
       topupInvoiceIsBusy,
       topupMintUrl,
-      displayUnit,
       copyText,
       t,
     },

@@ -1,13 +1,11 @@
 import React from "react";
 import { WalletBalance } from "../components/WalletBalance";
-import { formatInteger } from "../utils/formatting";
 import type { LightningInvoicePreview } from "../utils/lightningInvoice";
 
 interface LightningInvoiceConfirmModalProps {
   cashuBalance: number;
   cashuIsBusy: boolean;
   confirmation: LightningInvoicePreview;
-  displayUnit: string;
   onClose: () => void;
   onConfirm: () => Promise<void>;
   t: (key: string) => string;
@@ -38,7 +36,6 @@ export function LightningInvoiceConfirmModal({
   cashuBalance,
   cashuIsBusy,
   confirmation,
-  displayUnit,
   onClose,
   onConfirm,
   t,
@@ -87,8 +84,6 @@ export function LightningInvoiceConfirmModal({
               <WalletBalance
                 ariaLabel={t("pay")}
                 balance={confirmation.amountSat}
-                displayUnit={displayUnit}
-                formatInteger={formatInteger}
               />
             )}
           </div>

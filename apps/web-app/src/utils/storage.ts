@@ -1,12 +1,13 @@
 import {
   ALLOW_PROMISES_STORAGE_KEY,
-  LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS,
+  DISPLAY_CURRENCY_STORAGE_KEY,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
   NOSTR_NSEC_STORAGE_KEY,
   PAY_WITH_CASHU_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "./constants";
+import { parseDisplayCurrency, type DisplayCurrency } from "./displayAmounts";
 
 interface StorageStructuredValue {
   toString(): string;
@@ -70,11 +71,17 @@ export const safeLocalStorageSetJson = (
   }
 };
 
-export const getInitialUseBitcoinSymbol = (): boolean => {
+export const getInitialDisplayCurrency = (): DisplayCurrency => {
   try {
-    return localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1";
+    const stored = parseDisplayCurrency(
+      localStorage.getItem(DISPLAY_CURRENCY_STORAGE_KEY),
+    );
+    if (stored) return stored;
+    return localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1"
+      ? "btc"
+      : "sat";
   } catch {
-    return false;
+    return "sat";
   }
 };
 
@@ -108,12 +115,7 @@ export const getInitialLightningInvoiceAutoPayLimit = (): number => {
       LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
     );
     const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
-    if (
-      Number.isFinite(parsed) &&
-      LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS.includes(
-        parsed as (typeof LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS)[number],
-      )
-    ) {
+    if (Number.isFinite(parsed) && parsed >= 0) {
       return parsed;
     }
     return LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT;

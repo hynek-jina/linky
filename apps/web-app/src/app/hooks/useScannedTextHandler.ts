@@ -4,6 +4,11 @@ import React from "react";
 import type { ContactId } from "../../evolu";
 import { navigateTo } from "../../hooks/useRouting";
 import {
+  inferLightningAddressFromLnurlTarget,
+  isLightningAddress,
+  isLnurlPayTarget,
+} from "../../lnurlPay";
+import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
 } from "../../utils/lightningInvoice";
@@ -123,7 +128,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       }
 
       const maybeLnAddress = String(normalized ?? "").trim();
-      const isLnAddress = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(maybeLnAddress);
+      const isLnAddress = isLightningAddress(maybeLnAddress);
       if (isLnAddress) {
         const needle = maybeLnAddress.toLowerCase();
         const existing = contacts.find(
@@ -140,6 +145,27 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
         }
 
         // New address: open pay screen and offer to save contact after success.
+        navigateTo({ route: "lnAddressPay", lnAddress: maybeLnAddress });
+        return;
+      }
+
+      if (isLnurlPayTarget(maybeLnAddress)) {
+        const inferredLnAddress =
+          inferLightningAddressFromLnurlTarget(maybeLnAddress);
+        const existing = inferredLnAddress
+          ? contacts.find(
+              (contact) =>
+                String(contact.lnAddress ?? "")
+                  .trim()
+                  .toLowerCase() === inferredLnAddress.toLowerCase(),
+            )
+          : null;
+
+        closeScan();
+        if (existing?.id) {
+          navigateTo({ route: "contactPay", id: existing.id as ContactId });
+          return;
+        }
         navigateTo({ route: "lnAddressPay", lnAddress: maybeLnAddress });
         return;
       }

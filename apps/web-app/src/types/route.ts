@@ -3,6 +3,7 @@ import type { CashuTokenId, ContactId } from "../evolu";
 export type Route =
   | { kind: "contacts" }
   | { kind: "advanced" }
+  | { kind: "advancedAutoPayLimit" }
   | { kind: "mints" }
   | { kind: "mint"; mintUrl: string }
   | { kind: "profile" }
@@ -31,6 +32,9 @@ export const parseRouteFromHash = (): Route => {
   const hash = globalThis.location?.hash ?? "";
   if (hash === "#") return { kind: "contacts" };
   if (hash === "#advanced") return { kind: "advanced" };
+  if (hash === "#advanced/auto-pay-limit") {
+    return { kind: "advancedAutoPayLimit" };
+  }
   if (hash === "#advanced/mints") return { kind: "mints" };
 
   const mintPrefix = "#advanced/mint/";

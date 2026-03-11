@@ -1,22 +1,25 @@
 import React from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 
 interface WalletBalanceProps {
   ariaLabel: string;
   balance: number;
-  displayUnit: string;
-  formatInteger: (num: number) => string;
 }
 
 export const WalletBalance: React.FC<WalletBalanceProps> = ({
   ariaLabel,
   balance,
-  displayUnit,
-  formatInteger,
 }) => {
+  const { formatDisplayedAmountParts } = useAppShellCore();
+  const displayAmount = formatDisplayedAmountParts(balance);
+
   return (
     <div className="balance-hero" aria-label={ariaLabel}>
-      <span className="balance-number">{formatInteger(balance)}</span>
-      <span className="balance-unit">{displayUnit}</span>
+      <span className="balance-number">
+        {displayAmount.approxPrefix}
+        {displayAmount.amountText}
+      </span>
+      <span className="balance-unit">{displayAmount.unitLabel}</span>
     </div>
   );
 };

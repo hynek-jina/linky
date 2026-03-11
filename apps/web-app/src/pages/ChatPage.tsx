@@ -10,7 +10,7 @@ import type {
 } from "../app/types/appTypes";
 import { ChatMessage } from "../components/ChatMessage";
 import { ReplyPreview } from "../components/ReplyPreview";
-import { formatChatDayLabel, formatInteger } from "../utils/formatting";
+import { formatChatDayLabel } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
 interface Contact {
@@ -222,7 +222,6 @@ export const ChatPage: FC<ChatPageProps> = ({
                 previousMessage={prev}
                 nextMessage={next}
                 locale={lang === "cs" ? "cs-CZ" : "en-US"}
-                formatInteger={formatInteger}
                 formatChatDayLabel={formatChatDayLabelForLang}
                 getCashuTokenMessageInfo={getCashuTokenMessageInfo}
                 getMintIconUrl={getMintIconUrl}
