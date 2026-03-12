@@ -1,0 +1,567 @@
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+
+import { Database } from "bun:sqlite";
+
+import { isRecord } from "./guards";
+import type {
+  ChallengeRecord,
+  ProofAction,
+  StoredSubscription,
+  WebPushSubscriptionData,
+} from "./types";
+
+interface RegisterSubscriptionParams {
+  subscription: WebPushSubscriptionData;
+  recipientPubkeys: string[];
+  consumedChallengeNonces: string[];
+  maxPubkeysPerSubscription: number;
+  maxSubscriptionsPerPubkey: number;
+  nowMs: number;
+}
+
+interface UnregisterSubscriptionPubkeysParams {
+  endpoint: string;
+  recipientPubkeys: string[];
+  consumedChallengeNonces: string[];
+  nowMs: number;
+}
+
+interface UnregisterSubscriptionPubkeysResult {
+  removedPubkeys: number;
+  removedSubscription: boolean;
+}
+
+export class StorageLimitError extends Error {
+  readonly status = 409;
+  readonly code = "subscription_limit";
+}
+
+export class StorageConflictError extends Error {
+  readonly status = 409;
+  readonly code = "storage_conflict";
+}
+
+function readNumberField(
+  record: Record<string | number | symbol, unknown>,
+  key: string,
+): number | null {
+  const value = record[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+  return null;
+}
+
+function readNullableNumberField(
+  record: Record<string | number | symbol, unknown>,
+  key: string,
+): number | null {
+  const value = record[key];
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return readNumberField(record, key);
+}
+
+function readStringField(
+  record: Record<string | number | symbol, unknown>,
+  key: string,
+): string | null {
+  const value = record[key];
+  return typeof value === "string" ? value : null;
+}
+
+function createNonce(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Buffer.from(bytes).toString("base64url");
+}
+
+export class PushStorage {
+  private readonly db: Database;
+  private readonly registerSubscriptionTransaction;
+  private readonly unregisterSubscriptionPubkeysTransaction;
+
+  constructor(path: string) {
+    mkdirSync(dirname(path), { recursive: true });
+
+    this.db = new Database(path, { create: true });
+    this.db.exec("PRAGMA journal_mode = WAL;");
+    this.db.exec("PRAGMA foreign_keys = ON;");
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        expiration_time INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS subscription_pubkeys (
+        subscription_id INTEGER NOT NULL,
+        pubkey TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (subscription_id, pubkey),
+        FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_subscription_pubkeys_pubkey
+      ON subscription_pubkeys (pubkey);
+
+      CREATE TABLE IF NOT EXISTS challenges (
+        nonce TEXT PRIMARY KEY,
+        pubkey TEXT NOT NULL,
+        action TEXT NOT NULL CHECK (action IN ('subscribe', 'unsubscribe')),
+        expires_at INTEGER NOT NULL,
+        used_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_challenges_pubkey_action
+      ON challenges (pubkey, action);
+    `);
+
+    this.registerSubscriptionTransaction = this.db.transaction(
+      (params: RegisterSubscriptionParams) =>
+        this.registerSubscriptionInternal(params),
+    );
+    this.unregisterSubscriptionPubkeysTransaction = this.db.transaction(
+      (params: UnregisterSubscriptionPubkeysParams) =>
+        this.unregisterSubscriptionPubkeysInternal(params),
+    );
+  }
+
+  close(): void {
+    this.db.close();
+  }
+
+  createChallenge(
+    pubkey: string,
+    action: ProofAction,
+    expiresAt: number,
+    nowMs: number,
+  ): string {
+    this.pruneChallenges(nowMs);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const nonce = createNonce();
+      const result = this.db
+        .query(
+          `
+            INSERT OR IGNORE INTO challenges (
+              nonce,
+              pubkey,
+              action,
+              expires_at,
+              used_at,
+              created_at
+            ) VALUES (?, ?, ?, ?, NULL, ?)
+          `,
+        )
+        .run(nonce, pubkey, action, expiresAt, nowMs);
+
+      if (result.changes === 1) {
+        return nonce;
+      }
+    }
+
+    throw new StorageConflictError(
+      "Failed to allocate a unique challenge nonce",
+    );
+  }
+
+  getChallenge(nonce: string): ChallengeRecord | null {
+    const row = this.db
+      .query(
+        `
+          SELECT nonce, pubkey, action, expires_at AS expiresAt, used_at AS usedAt
+          FROM challenges
+          WHERE nonce = ?
+        `,
+      )
+      .get(nonce);
+
+    if (!isRecord(row)) {
+      return null;
+    }
+
+    const storedNonce = readStringField(row, "nonce");
+    const pubkey = readStringField(row, "pubkey");
+    const action = readStringField(row, "action");
+    const expiresAt = readNumberField(row, "expiresAt");
+    const usedAt = readNullableNumberField(row, "usedAt");
+
+    if (
+      storedNonce === null ||
+      pubkey === null ||
+      (action !== "subscribe" && action !== "unsubscribe") ||
+      expiresAt === null
+    ) {
+      return null;
+    }
+
+    return {
+      nonce: storedNonce,
+      pubkey,
+      action,
+      expiresAt,
+      usedAt,
+    };
+  }
+
+  registerSubscription(params: RegisterSubscriptionParams): void {
+    this.registerSubscriptionTransaction(params);
+  }
+
+  unregisterSubscription(endpoint: string): boolean {
+    const result = this.db
+      .query("DELETE FROM subscriptions WHERE endpoint = ?")
+      .run(endpoint);
+    return result.changes > 0;
+  }
+
+  unregisterSubscriptionPubkeys(
+    params: UnregisterSubscriptionPubkeysParams,
+  ): UnregisterSubscriptionPubkeysResult {
+    return this.unregisterSubscriptionPubkeysTransaction(params);
+  }
+
+  removeSubscriptionById(subscriptionId: number): void {
+    this.db.query("DELETE FROM subscriptions WHERE id = ?").run(subscriptionId);
+  }
+
+  getSubscriptionsForPubkeys(
+    pubkeys: string[],
+  ): Map<string, StoredSubscription[]> {
+    const uniquePubkeys = [...new Set(pubkeys)];
+    const out = new Map<string, StoredSubscription[]>();
+    if (uniquePubkeys.length === 0) {
+      return out;
+    }
+
+    const placeholders = uniquePubkeys.map(() => "?").join(", ");
+    const rows = this.db
+      .query(
+        `
+          SELECT
+            sp.pubkey AS pubkey,
+            s.id AS id,
+            s.endpoint AS endpoint,
+            s.p256dh AS p256dh,
+            s.auth AS auth,
+            s.expiration_time AS expirationTime
+          FROM subscription_pubkeys sp
+          INNER JOIN subscriptions s ON s.id = sp.subscription_id
+          WHERE sp.pubkey IN (${placeholders})
+        `,
+      )
+      .all(...uniquePubkeys);
+
+    for (const row of rows) {
+      if (!isRecord(row)) {
+        continue;
+      }
+      const pubkey = readStringField(row, "pubkey");
+      const id = readNumberField(row, "id");
+      const endpoint = readStringField(row, "endpoint");
+      const p256dh = readStringField(row, "p256dh");
+      const auth = readStringField(row, "auth");
+      const expirationTime = readNullableNumberField(row, "expirationTime");
+
+      if (
+        pubkey === null ||
+        id === null ||
+        endpoint === null ||
+        p256dh === null ||
+        auth === null
+      ) {
+        continue;
+      }
+
+      const existing = out.get(pubkey);
+      const stored: StoredSubscription = {
+        id,
+        endpoint,
+        expirationTime,
+        keys: {
+          p256dh,
+          auth,
+        },
+      };
+
+      if (existing) {
+        existing.push(stored);
+      } else {
+        out.set(pubkey, [stored]);
+      }
+    }
+
+    return out;
+  }
+
+  pruneChallenges(nowMs: number): void {
+    this.db
+      .query(
+        `
+          DELETE FROM challenges
+          WHERE expires_at <= ? OR (used_at IS NOT NULL AND used_at <= ?)
+        `,
+      )
+      .run(nowMs, nowMs - 24 * 60 * 60 * 1000);
+  }
+
+  private registerSubscriptionInternal(
+    params: RegisterSubscriptionParams,
+  ): void {
+    if (params.recipientPubkeys.length > params.maxPubkeysPerSubscription) {
+      throw new StorageLimitError(
+        `Subscriptions may track at most ${params.maxPubkeysPerSubscription} pubkeys`,
+      );
+    }
+
+    const existingSubscriptionId = this.getSubscriptionIdByEndpoint(
+      params.subscription.endpoint,
+    );
+    const currentPubkeys =
+      existingSubscriptionId === null
+        ? new Set<string>()
+        : this.getSubscriptionPubkeysInternal(existingSubscriptionId);
+    const comparisonSubscriptionId = existingSubscriptionId ?? 0;
+
+    for (const pubkey of params.recipientPubkeys) {
+      if (currentPubkeys.has(pubkey)) {
+        continue;
+      }
+      const currentCount = this.countSubscriptionsForPubkeyInternal(
+        pubkey,
+        comparisonSubscriptionId,
+      );
+      if (currentCount >= params.maxSubscriptionsPerPubkey) {
+        throw new StorageLimitError(
+          `Pubkey ${pubkey} already has the maximum ${params.maxSubscriptionsPerPubkey} subscriptions`,
+        );
+      }
+    }
+
+    this.consumeChallengesInternal(
+      params.consumedChallengeNonces,
+      params.nowMs,
+    );
+
+    const subscriptionId = this.upsertSubscriptionInternal(
+      params.subscription,
+      params.nowMs,
+    );
+
+    this.db
+      .query("DELETE FROM subscription_pubkeys WHERE subscription_id = ?")
+      .run(subscriptionId);
+
+    for (const pubkey of params.recipientPubkeys) {
+      this.db
+        .query(
+          `
+            INSERT INTO subscription_pubkeys (
+              subscription_id,
+              pubkey,
+              created_at
+            ) VALUES (?, ?, ?)
+          `,
+        )
+        .run(subscriptionId, pubkey, params.nowMs);
+    }
+  }
+
+  private unregisterSubscriptionPubkeysInternal(
+    params: UnregisterSubscriptionPubkeysParams,
+  ): UnregisterSubscriptionPubkeysResult {
+    const subscriptionId = this.getSubscriptionIdByEndpoint(params.endpoint);
+    if (subscriptionId === null) {
+      return {
+        removedPubkeys: 0,
+        removedSubscription: false,
+      };
+    }
+
+    this.consumeChallengesInternal(
+      params.consumedChallengeNonces,
+      params.nowMs,
+    );
+
+    let removedPubkeys = 0;
+    for (const pubkey of params.recipientPubkeys) {
+      const result = this.db
+        .query(
+          `
+            DELETE FROM subscription_pubkeys
+            WHERE subscription_id = ? AND pubkey = ?
+          `,
+        )
+        .run(subscriptionId, pubkey);
+      removedPubkeys += result.changes;
+    }
+
+    const remaining = this.countPubkeysForSubscriptionInternal(subscriptionId);
+    if (remaining === 0) {
+      this.db
+        .query("DELETE FROM subscriptions WHERE id = ?")
+        .run(subscriptionId);
+      return {
+        removedPubkeys,
+        removedSubscription: true,
+      };
+    }
+
+    return {
+      removedPubkeys,
+      removedSubscription: false,
+    };
+  }
+
+  private consumeChallengesInternal(nonces: string[], nowMs: number): void {
+    for (const nonce of nonces) {
+      const result = this.db
+        .query(
+          `
+            UPDATE challenges
+            SET used_at = ?
+            WHERE nonce = ? AND used_at IS NULL AND expires_at > ?
+          `,
+        )
+        .run(nowMs, nonce, nowMs);
+      if (result.changes !== 1) {
+        throw new StorageConflictError("Challenge is expired or already used");
+      }
+    }
+  }
+
+  private upsertSubscriptionInternal(
+    subscription: WebPushSubscriptionData,
+    nowMs: number,
+  ): number {
+    const existingId = this.getSubscriptionIdByEndpoint(subscription.endpoint);
+    if (existingId !== null) {
+      this.db
+        .query(
+          `
+            UPDATE subscriptions
+            SET
+              p256dh = ?,
+              auth = ?,
+              expiration_time = ?,
+              updated_at = ?
+            WHERE id = ?
+          `,
+        )
+        .run(
+          subscription.keys.p256dh,
+          subscription.keys.auth,
+          subscription.expirationTime,
+          nowMs,
+          existingId,
+        );
+      return existingId;
+    }
+
+    const result = this.db
+      .query(
+        `
+          INSERT INTO subscriptions (
+            endpoint,
+            p256dh,
+            auth,
+            expiration_time,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `,
+      )
+      .run(
+        subscription.endpoint,
+        subscription.keys.p256dh,
+        subscription.keys.auth,
+        subscription.expirationTime,
+        nowMs,
+        nowMs,
+      );
+
+    return Number(result.lastInsertRowid);
+  }
+
+  private getSubscriptionIdByEndpoint(endpoint: string): number | null {
+    const row = this.db
+      .query("SELECT id AS id FROM subscriptions WHERE endpoint = ?")
+      .get(endpoint);
+    if (!isRecord(row)) {
+      return null;
+    }
+    return readNumberField(row, "id");
+  }
+
+  private getSubscriptionPubkeysInternal(subscriptionId: number): Set<string> {
+    const rows = this.db
+      .query(
+        `
+          SELECT pubkey AS pubkey
+          FROM subscription_pubkeys
+          WHERE subscription_id = ?
+        `,
+      )
+      .all(subscriptionId);
+
+    const out = new Set<string>();
+    for (const row of rows) {
+      if (!isRecord(row)) {
+        continue;
+      }
+      const pubkey = readStringField(row, "pubkey");
+      if (pubkey !== null) {
+        out.add(pubkey);
+      }
+    }
+    return out;
+  }
+
+  private countSubscriptionsForPubkeyInternal(
+    pubkey: string,
+    excludedSubscriptionId: number,
+  ): number {
+    const row = this.db
+      .query(
+        `
+          SELECT COUNT(*) AS total
+          FROM subscription_pubkeys
+          WHERE pubkey = ? AND subscription_id != ?
+        `,
+      )
+      .get(pubkey, excludedSubscriptionId);
+
+    if (!isRecord(row)) {
+      return 0;
+    }
+    return readNumberField(row, "total") ?? 0;
+  }
+
+  private countPubkeysForSubscriptionInternal(subscriptionId: number): number {
+    const row = this.db
+      .query(
+        `
+          SELECT COUNT(*) AS total
+          FROM subscription_pubkeys
+          WHERE subscription_id = ?
+        `,
+      )
+      .get(subscriptionId);
+
+    if (!isRecord(row)) {
+      return 0;
+    }
+    return readNumberField(row, "total") ?? 0;
+  }
+}

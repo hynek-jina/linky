@@ -11,6 +11,8 @@
     "dev": "bun run --filter @linky/web-app dev",
     "build": "bun run --filter @linky/web-app build",
     "preview": "bun run --filter @linky/web-app preview",
+    "push:dev": "bun run --filter @linky/push dev",
+    "push:start": "bun run --filter @linky/push start",
     "eslint": "bun run --workspaces --if-present eslint",
     "prettier": "bun run --workspaces --if-present prettier",
     "typecheck": "bun run --workspaces --if-present typecheck",

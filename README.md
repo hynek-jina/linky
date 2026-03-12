@@ -46,6 +46,7 @@ It is local-first: data is stored in Evolu (SQLite) and syncs between devices.
 - Payments:
   - Lightning invoice and LN address payment
   - contact payment via Cashu message flow
+- Push: optional Bun push service in `apps/push/` for generic Web Push notifications on new outer inbox `kind: 1059` events
 - Debug pages for Evolu current/history data and owner/rotation diagnostics
 
 ## Development
@@ -55,12 +56,19 @@ Requirements: Bun
 ```bash
 bun install
 bun run dev
+bun run push:dev
 ```
 
 Build:
 
 ```bash
 bun run build
+```
+
+Start the push service once:
+
+```bash
+bun run push:start
 ```
 
 ### Code quality
@@ -84,3 +92,16 @@ bun run --filter @linky/web-app typecheck
 bun run --filter @linky/web-app eslint
 bun run --filter @linky/web-app prettier
 ```
+
+Push service workspace commands:
+
+```bash
+bun run --filter @linky/push typecheck
+bun run --filter @linky/push start
+```
+
+Push service container artifacts live in `apps/push/`:
+
+- `Dockerfile` builds a production Bun image
+- `docker-compose.example.yml` shows a persistent SQLite `/data` volume for prod-style deployment
+- `.env.production.example` lists the runtime env vars expected by that compose setup
