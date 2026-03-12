@@ -1,0 +1,17 @@
+services:
+  push:
+    image: ghcr.io/your-org/linky-push:latest
+    container_name: linky-push
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8787"
+    env_file:
+      - ./.env.production
+    environment:
+      PUSH_PORT: "8787"
+      PUSH_STORAGE_PATH: /data/linky-push.sqlite
+    volumes:
+      - linky_push_data:/data
+
+volumes:
+  linky_push_data:

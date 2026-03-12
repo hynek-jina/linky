@@ -10,6 +10,8 @@ See @README.md for project overview.
 bun install                # Install dependencies
 bun run dev                # Start Vite dev server
 bun run build              # Production build (tsc -b && vite build)
+bun run push:dev           # Start the Bun push notification service in watch mode
+bun run push:start         # Start the Bun push notification service once
 bun run check-code         # Run ALL checks: typecheck → eslint --fix → prettier --write
 bun run typecheck          # TypeScript type checking only
 bun run eslint             # Lint + autofix all workspaces
@@ -21,6 +23,8 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 ## Monorepo Structure
 
 - `apps/web-app/` - Main React app (Vite + SWC)
+- `apps/push/` - Bun HTTP push service for Web Push subscription auth/storage and Nostr outer-inbox relay watching
+  - ships with `Dockerfile`, `docker-compose.example.yml`, and `.env.production.example` for container deployment with persistent SQLite storage under `/data`
 - `packages/core/` - Core package workspace (Effect-based identity domain in `src/identity/` with branded schemas + derivation utils, shared derivation paths in `src/identity/derivationPaths.ts`, and `MasterSecretProvider` SLIP-39 layer constructors, exported via `@linky/core` and `@linky/core/identity`)
 - `packages/config/` - Shared ESLint, Prettier, and TypeScript configs
 - Package manager is **Bun** (not npm/yarn/pnpm)
@@ -68,10 +72,12 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
   - `hooks/mint/` contains mint-info store/helpers (`useMintInfoStore`, `mintInfoHelpers`)
   - `routes/AppRouteContent.tsx` handles route-kind page rendering
   - `routes/MainSwipeContent.tsx` handles contacts/wallet swipe UI
-  - `routes/useSystemRouteProps.ts` builds shared system/settings route prop groups
-  - `routes/props/` contains grouped route-prop builders (`buildPeopleRouteProps`, `buildMoneyRouteProps`, `buildMainSwipeRouteProps`)
-  - `lib/` contains shared app helpers (Nostr pool, token text parsing, topbar config)
-  - `types/appTypes.ts` contains app-local shared types
+- `routes/useSystemRouteProps.ts` builds shared system/settings route prop groups
+- `routes/props/` contains grouped route-prop builders (`buildPeopleRouteProps`, `buildMoneyRouteProps`, `buildMainSwipeRouteProps`)
+- `lib/` contains shared app helpers (Nostr pool, token text parsing, topbar config)
+- `types/appTypes.ts` contains app-local shared types
+- `apps/push/src/` is split by concern: `http.ts` (Bun API), `ownership.ts` (signed challenge verification), `storage.ts` (SQLite persistence for subscriptions/pubkeys/challenges), `relayWatcher.ts` (relay subscription for outer `kind: 1059` events), and `push.ts` (Web Push delivery + invalid subscription cleanup)
+- Push service proof events use `kind: 27235` with short-lived per-pubkey challenge nonces; the server never decrypts NIP-17 payloads and only emits generic notifications for matching outer `kind: 1059` events
 
 ## Code Conventions
 
@@ -101,6 +107,8 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - PWA service worker auto-updates - changes to `sw.ts` affect caching behavior
 - Chat retention is enforced in `useMessagesDomain` (latest 500 messages/contact, 3000 global; reactions capped to 5000 and orphaned reactions are pruned)
 - Wallet top-up receive quotes are cached in owner-scoped localStorage until claimed/expired, so dismissing the QR screen does not drop a pending receive
+- Push service env is documented in `apps/push/.env.example`; `PUSH_VAPID_SUBJECT`, `PUSH_VAPID_PUBLIC_KEY`, and `PUSH_VAPID_PRIVATE_KEY` must be set before `apps/push` starts
+- Container publishing is handled by `.github/workflows/push-image.yml`, which builds `apps/push/Dockerfile` and publishes the image to GHCR
 
 ## Maintaining This File
 
