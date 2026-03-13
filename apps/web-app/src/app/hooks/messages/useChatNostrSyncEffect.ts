@@ -18,7 +18,7 @@ import {
   extractDeleteReferencedIds,
   extractEditedFromTag,
   extractReplyContextFromTags,
-  isNestedEncryptedNip44Payload,
+  isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./chatNostrProtocol";
 import { readUnknownPubkeyHex } from "./contactIdentity";
 
@@ -145,17 +145,14 @@ export const useChatNostrSyncEffect = ({
                 .map((tag) => String(tag[1] ?? "").trim());
               const taggedPeerPub =
                 pTags.find((tag) => tag && tag !== myPubHex) ?? "";
-              for (const participantPub of [innerPub, taggedPeerPub]) {
-                if (
-                  participantPub &&
-                  isNestedEncryptedNip44Payload(
-                    content,
-                    participantPub,
-                    privBytes,
-                  )
-                ) {
-                  return;
-                }
+              if (
+                isNestedEncryptedNip44PayloadForAnyPubkey(
+                  content,
+                  [innerPub, taggedPeerPub, wrap.pubkey],
+                  privBytes,
+                )
+              ) {
+                return;
               }
               const tagClientId = extractClientTag(tags);
               const rumorId = inner.id ? String(inner.id).trim() : null;
