@@ -13,6 +13,8 @@ export const en = {
   importData: "Import",
   dedupeContacts: "Deduplicate contacts",
   appVersionLabel: "Version",
+  reloadApp: "Reload app",
+  reloadNow: "Reload now",
   dedupeContactsNone: "No duplicates found.",
   dedupeContactsResult:
     "Merged {groups} groups, removed {removed} contacts, moved {moved} messages.",
