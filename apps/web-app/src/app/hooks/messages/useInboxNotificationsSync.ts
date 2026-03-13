@@ -206,23 +206,53 @@ export const useInboxNotificationsSync = <
                 .map((tag) => String(tag[1] ?? "").trim())
                 .filter(Boolean);
 
-              // Only accept messages addressed to us.
-              if (!pTags.includes(myPubHex) && senderPub !== myPubHex) return;
+              const tagClientId = extractClientTag(tags);
+              const rumorId = inner.id ? String(inner.id).trim() : "";
+              const matchedOutgoingMessage =
+                senderPub === myPubHex
+                  ? null
+                  : (nostrMessagesLatestRef.current.find((message) => {
+                      if (String(message.direction ?? "").trim() !== "out") {
+                        return false;
+                      }
+                      if (
+                        tagClientId &&
+                        String(message.clientId ?? "").trim() ===
+                          String(tagClientId).trim()
+                      ) {
+                        return true;
+                      }
+                      return (
+                        rumorId &&
+                        String(message.rumorId ?? "").trim() === rumorId
+                      );
+                    }) ?? null);
 
-              const isOutgoing = senderPub === myPubHex;
+              // Only accept messages addressed to us.
+              const addressesMe = pTags.includes(myPubHex);
+              const isOutgoing =
+                senderPub === myPubHex ||
+                (addressesMe && Boolean(matchedOutgoingMessage));
+              if (!addressesMe && !isOutgoing) return;
+
               const otherPub = isOutgoing
                 ? (pTags.find((pub) => pub && pub !== myPubHex) ?? "")
                 : senderPub;
-              if (!otherPub) return;
+              const matchedContactId = String(
+                matchedOutgoingMessage?.contactId ?? "",
+              ).trim();
+              if (!otherPub && !matchedContactId) return;
 
-              if (isBlockedPubkey(otherPub)) {
+              if (!isOutgoing && isBlockedPubkey(otherPub)) {
                 return;
               }
 
               const contact = contactByPubHex.get(otherPub) ?? null;
-              const contactId = contact
-                ? String(contact.id ?? "").trim()
-                : String(buildUnknownContactId(otherPub) ?? "").trim();
+              const contactId =
+                matchedContactId ||
+                (contact
+                  ? String(contact.id ?? "").trim()
+                  : String(buildUnknownContactId(otherPub) ?? "").trim());
               if (!contactId) return;
 
               const isActiveChatContact =
@@ -230,7 +260,6 @@ export const useInboxNotificationsSync = <
                 String(contactId) === String(activeChatId);
 
               const messageDirection = isOutgoing ? "out" : "in";
-              const rumorId = inner.id ? String(inner.id).trim() : "";
               const rumorKey = rumorId
                 ? `${String(contactId)}|${messageDirection}|${rumorId}`
                 : "";
@@ -239,10 +268,10 @@ export const useInboxNotificationsSync = <
                 seenRumorKeys.add(rumorKey);
               }
 
-              const tagClientId = extractClientTag(tags);
               const { replyToId, rootMessageId } =
                 extractReplyContextFromTags(tags);
               const editedFromId = extractEditedFromTag(tags);
+              const effectivePubkey = isOutgoing ? myPubHex : senderPub;
 
               if (editedFromId) {
                 const target = nostrMessagesLatestRef.current.find(
@@ -268,7 +297,7 @@ export const useInboxNotificationsSync = <
                     content,
                     status: "sent",
                     wrapId,
-                    pubkey: senderPub,
+                    pubkey: effectivePubkey,
                     ...(tagClientId ? { clientId: tagClientId } : {}),
                     ...(rumorId ? { rumorId } : {}),
                     isEdited: true,
@@ -368,7 +397,7 @@ export const useInboxNotificationsSync = <
                 updateLocalNostrMessage(String(existingMessage.id ?? ""), {
                   status: "sent",
                   wrapId,
-                  pubkey: senderPub,
+                  pubkey: effectivePubkey,
                   ...(tagClientId ? { clientId: tagClientId } : {}),
                   ...(rumorId ? { rumorId } : {}),
                   ...(replyToId ? { replyToId } : {}),
@@ -384,7 +413,7 @@ export const useInboxNotificationsSync = <
                 content,
                 wrapId,
                 rumorId: rumorId || null,
-                pubkey: senderPub,
+                pubkey: effectivePubkey,
                 createdAtSec,
                 ...(tagClientId ? { clientId: tagClientId } : {}),
                 ...(replyToId ? { replyToId } : {}),

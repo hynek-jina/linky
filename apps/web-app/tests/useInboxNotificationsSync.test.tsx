@@ -341,4 +341,112 @@ describe("useInboxNotificationsSync", () => {
       activeRoot.unmount();
     });
   });
+
+  it("treats self-authored copies matched by client id as outgoing and silent", async () => {
+    const wrapEvent = { id: "wrap-self-copy-1" };
+    querySyncMock.mockResolvedValue([wrapEvent]);
+    subscribeMock.mockReturnValue({
+      close: vi.fn(async () => {}),
+    });
+    unwrapEventMock.mockReturnValue({
+      kind: 14,
+      id: "rumor-self-copy-1",
+      pubkey:
+        "feedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
+      content: "hi from me",
+      created_at: 1730000004,
+      tags: [
+        ["p", "known-contact-pubkey"],
+        ["p", "me-pubkey-hex"],
+        ["client", "client-fixed"],
+      ],
+    });
+    nip44DecryptMock.mockImplementation(() => {
+      throw new Error("not encrypted");
+    });
+
+    const appendLocalNostrMessage = vi.fn(() => "message-append");
+    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
+    const maybeShowPwaNotification = vi.fn(async () => {});
+    const pushToast = vi.fn();
+    const updateLocalNostrMessage = vi.fn();
+    const updateLocalNostrReaction = vi.fn();
+    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
+    const setContactAttentionById: React.Dispatch<
+      React.SetStateAction<Record<string, number>>
+    > = vi.fn();
+
+    const Harness = () => {
+      useInboxNotificationsSync({
+        appendLocalNostrMessage,
+        appendLocalNostrReaction,
+        contacts: [
+          {
+            id: "contact-bob",
+            name: "Bob",
+            npub: "npub-known",
+          },
+        ],
+        currentNsec: "nsec-test",
+        getCashuTokenMessageInfo: () => null,
+        maybeShowPwaNotification,
+        nostrFetchRelays: [],
+        nostrMessageWrapIdsRef: { current: new Set<string>() },
+        nostrMessagesLatestRef: {
+          current: [
+            {
+              id: "local-pending-1",
+              contactId: "contact-bob",
+              direction: "out",
+              content: "hi from me",
+              wrapId: "pending:client-fixed",
+              rumorId: "rumor-self-copy-1",
+              pubkey: "me-pubkey-hex",
+              createdAtSec: 1730000003,
+              status: "pending",
+              clientId: "client-fixed",
+              localOnly: false,
+              replyToId: null,
+              replyToContent: null,
+              rootMessageId: null,
+              editedAtSec: null,
+              editedFromId: null,
+              isEdited: false,
+              originalContent: null,
+            },
+          ] satisfies LocalNostrMessage[],
+        },
+        nostrMessagesRecent: [],
+        nostrReactionWrapIdsRef: { current: new Set<string>() },
+        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+        pushToast,
+        route: { kind: "contacts" },
+        setContactAttentionById,
+        softDeleteLocalNostrReactionsByWrapIds,
+        t: (key: string) => key,
+        updateLocalNostrMessage,
+        updateLocalNostrReaction,
+      });
+
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<Harness />);
+    });
+    await flushEffects();
+    await flushEffects();
+
+    expect(appendLocalNostrMessage).not.toHaveBeenCalled();
+    expect(pushToast).not.toHaveBeenCalled();
+    expect(maybeShowPwaNotification).not.toHaveBeenCalled();
+    expect(setContactAttentionById).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

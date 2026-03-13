@@ -138,28 +138,49 @@ export const useChatNostrSyncEffect = ({
             if (inner.kind === 14) {
               if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
 
-              const isIncoming = innerPub === contactPubHex;
-              const isOutgoing = innerPub === myPubHex;
-              if (!isIncoming && !isOutgoing) return;
-
               const content = String(inner.content ?? "");
               if (!content.trim()) return;
               if (isNestedEncryptedNip44Payload(content, innerPub, privBytes)) {
                 return;
               }
 
-              // Ensure outgoing messages are for this contact.
               const pTags = tags
                 .filter((tag) => Array.isArray(tag) && tag[0] === "p")
                 .map((tag) => String(tag[1] ?? "").trim());
-              const mentionsContact = pTags.includes(contactPubHex);
-              if (isOutgoing && !mentionsContact) return;
-
               const tagClientId = extractClientTag(tags);
               const rumorId = inner.id ? String(inner.id).trim() : null;
+              const hasOutgoingLocalMatch =
+                innerPub === myPubHex
+                  ? false
+                  : chatMessagesLatestRef.current.some((message) => {
+                      if (String(message.direction ?? "").trim() !== "out") {
+                        return false;
+                      }
+                      if (
+                        tagClientId &&
+                        String(message.clientId ?? "").trim() ===
+                          String(tagClientId).trim()
+                      ) {
+                        return true;
+                      }
+                      return (
+                        rumorId &&
+                        String(message.rumorId ?? "").trim() === rumorId
+                      );
+                    });
+              const mentionsContact = pTags.includes(contactPubHex);
+              const addressesMe = pTags.includes(myPubHex);
+              const isIncoming = innerPub === contactPubHex;
+              const isOutgoing =
+                innerPub === myPubHex ||
+                (addressesMe && mentionsContact && hasOutgoingLocalMatch);
+              if (!isIncoming && !isOutgoing) return;
+              if (isOutgoing && !mentionsContact) return;
+
               const { replyToId, rootMessageId } =
                 extractReplyContextFromTags(tags);
               const editedFromId = extractEditedFromTag(tags);
+              const effectivePubkey = isOutgoing ? myPubHex : innerPub;
 
               if (editedFromId) {
                 const direction = isIncoming ? "in" : "out";
@@ -183,7 +204,7 @@ export const useChatNostrSyncEffect = ({
                     content,
                     status: "sent",
                     wrapId,
-                    pubkey: innerPub,
+                    pubkey: effectivePubkey,
                     ...(tagClientId ? { clientId: tagClientId } : {}),
                     isEdited: true,
                     editedAtSec: createdAtSec,
@@ -249,7 +270,7 @@ export const useChatNostrSyncEffect = ({
                   updateLocalNostrMessage(String(pending.id ?? ""), {
                     status: "sent",
                     wrapId,
-                    pubkey: innerPub,
+                    pubkey: effectivePubkey,
                     ...(tagClientId ? { clientId: String(tagClientId) } : {}),
                     ...(rumorId ? { rumorId } : {}),
                     ...(replyToId ? { replyToId } : {}),
@@ -290,7 +311,7 @@ export const useChatNostrSyncEffect = ({
                 updateLocalNostrMessage(String(existingMessage.id ?? ""), {
                   status: "sent",
                   wrapId,
-                  pubkey: innerPub,
+                  pubkey: effectivePubkey,
                   ...(tagClientId ? { clientId: String(tagClientId) } : {}),
                   ...(!editedFromId && rumorId ? { rumorId } : {}),
                   ...(replyToId ? { replyToId } : {}),
@@ -308,7 +329,7 @@ export const useChatNostrSyncEffect = ({
                 content,
                 wrapId,
                 rumorId: stableRumorId,
-                pubkey: innerPub,
+                pubkey: effectivePubkey,
                 createdAtSec,
                 ...(tagClientId ? { clientId: String(tagClientId) } : {}),
                 ...(replyToId ? { replyToId } : {}),
