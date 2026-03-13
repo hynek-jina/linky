@@ -253,9 +253,8 @@ export function PushDebugPage({
           import.meta.env.VITE_PUSH_SERVER_URL ??
           import.meta.env.VITE_NOTIFICATION_SERVER_URL ??
           null,
-        hasPushVapidPublicKey: Boolean(
-          localStorage.getItem("linky.push_vapid_public_key"),
-        ),
+        vapidPublicKey:
+          localStorage.getItem("linky.push_vapid_public_key") ?? null,
       },
       recentMessages: messages,
     },
