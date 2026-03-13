@@ -86,6 +86,9 @@ export function AdvancedPage({
     !LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS.some(
       (limit) => limit === lightningInvoiceAutoPayLimit,
     );
+  const appVersionLabel = __APP_COMMIT_SHA__
+    ? `v${__APP_VERSION__} (${__APP_COMMIT_SHA__})`
+    : `v${__APP_VERSION__}`;
 
   const getAutoPayLimitLabel = useCallback(
     (limit: number) => {
@@ -568,7 +571,7 @@ export function AdvancedPage({
         className="muted"
         style={{ marginTop: 14, textAlign: "center", fontSize: 12 }}
       >
-        {t("appVersionLabel")}: v{__APP_VERSION__}
+        {t("appVersionLabel")}: {appVersionLabel}
       </div>
     </section>
   );
