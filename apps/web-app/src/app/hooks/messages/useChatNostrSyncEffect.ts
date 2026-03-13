@@ -140,13 +140,23 @@ export const useChatNostrSyncEffect = ({
 
               const content = String(inner.content ?? "");
               if (!content.trim()) return;
-              if (isNestedEncryptedNip44Payload(content, innerPub, privBytes)) {
-                return;
-              }
-
               const pTags = tags
                 .filter((tag) => Array.isArray(tag) && tag[0] === "p")
                 .map((tag) => String(tag[1] ?? "").trim());
+              const taggedPeerPub =
+                pTags.find((tag) => tag && tag !== myPubHex) ?? "";
+              for (const participantPub of [innerPub, taggedPeerPub]) {
+                if (
+                  participantPub &&
+                  isNestedEncryptedNip44Payload(
+                    content,
+                    participantPub,
+                    privBytes,
+                  )
+                ) {
+                  return;
+                }
+              }
               const tagClientId = extractClientTag(tags);
               const rumorId = inner.id ? String(inner.id).trim() : null;
               const hasOutgoingLocalMatch =
@@ -170,7 +180,8 @@ export const useChatNostrSyncEffect = ({
                     });
               const mentionsContact = pTags.includes(contactPubHex);
               const addressesMe = pTags.includes(myPubHex);
-              const isIncoming = innerPub === contactPubHex;
+              const isIncoming =
+                innerPub === contactPubHex || taggedPeerPub === contactPubHex;
               const isOutgoing =
                 innerPub === myPubHex ||
                 (addressesMe && mentionsContact && hasOutgoingLocalMatch);
@@ -180,7 +191,11 @@ export const useChatNostrSyncEffect = ({
               const { replyToId, rootMessageId } =
                 extractReplyContextFromTags(tags);
               const editedFromId = extractEditedFromTag(tags);
-              const effectivePubkey = isOutgoing ? myPubHex : innerPub;
+              const effectivePubkey = isOutgoing
+                ? myPubHex
+                : taggedPeerPub === contactPubHex
+                  ? contactPubHex
+                  : innerPub;
 
               if (editedFromId) {
                 const direction = isIncoming ? "in" : "out";

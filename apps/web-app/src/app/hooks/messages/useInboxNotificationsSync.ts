@@ -133,6 +133,26 @@ export const useInboxNotificationsSync = <
           string,
           { id: string; name: string | null; npub: string | null }
         >();
+        const rememberContactPubkey = (
+          pubkey: string,
+          contact: { id: string; name: string | null; npub: string | null },
+        ) => {
+          const normalizedPubkey = normalizePubkeyHex(pubkey);
+          if (normalizedPubkey) {
+            contactByPubHex.set(normalizedPubkey, contact);
+          }
+          contactByPubHex.set(pubkey, contact);
+        };
+        const findContactByPubkey = (
+          pubkey: string,
+        ): { id: string; name: string | null; npub: string | null } | null => {
+          const normalizedPubkey = normalizePubkeyHex(pubkey);
+          return (
+            (normalizedPubkey ? contactByPubHex.get(normalizedPubkey) : null) ??
+            contactByPubHex.get(pubkey) ??
+            null
+          );
+        };
         for (const contact of contacts) {
           const npub = normalizeNpubIdentifier(contact.npub);
           if (!npub) continue;
@@ -143,7 +163,7 @@ export const useInboxNotificationsSync = <
             const pub = decoded.data.trim();
             if (!pub) continue;
             const name = String(contact.name ?? "").trim() || null;
-            contactByPubHex.set(pub, {
+            rememberContactPubkey(pub, {
               id: String(contact.id ?? "").trim(),
               name,
               npub,
@@ -205,6 +225,20 @@ export const useInboxNotificationsSync = <
                 .filter((tag) => Array.isArray(tag) && tag[0] === "p")
                 .map((tag) => String(tag[1] ?? "").trim())
                 .filter(Boolean);
+              const taggedPeerPub =
+                pTags.find((pub) => pub && pub !== myPubHex) ?? "";
+              for (const participantPub of [senderPub, taggedPeerPub]) {
+                if (
+                  participantPub &&
+                  isNestedEncryptedNip44Payload(
+                    content,
+                    participantPub,
+                    privBytes,
+                  )
+                ) {
+                  return;
+                }
+              }
 
               const tagClientId = extractClientTag(tags);
               const rumorId = inner.id ? String(inner.id).trim() : "";
@@ -228,31 +262,47 @@ export const useInboxNotificationsSync = <
                       );
                     }) ?? null);
 
-              // Only accept messages addressed to us.
               const addressesMe = pTags.includes(myPubHex);
               const isOutgoing =
                 senderPub === myPubHex ||
                 (addressesMe && Boolean(matchedOutgoingMessage));
               if (!addressesMe && !isOutgoing) return;
 
-              const otherPub = isOutgoing
-                ? (pTags.find((pub) => pub && pub !== myPubHex) ?? "")
-                : senderPub;
+              const peerPubCandidates = isOutgoing
+                ? [taggedPeerPub]
+                : [taggedPeerPub, senderPub];
+              let resolvedPeerPub = "";
+              let contact: {
+                id: string;
+                name: string | null;
+                npub: string | null;
+              } | null = null;
+              for (const candidate of peerPubCandidates) {
+                const nextCandidate = String(candidate ?? "").trim();
+                if (!nextCandidate || nextCandidate === myPubHex) continue;
+                if (!resolvedPeerPub) resolvedPeerPub = nextCandidate;
+                const matchedContact = findContactByPubkey(nextCandidate);
+                if (!matchedContact) continue;
+                resolvedPeerPub = nextCandidate;
+                contact = matchedContact;
+                break;
+              }
               const matchedContactId = String(
                 matchedOutgoingMessage?.contactId ?? "",
               ).trim();
-              if (!otherPub && !matchedContactId) return;
+              if (!resolvedPeerPub && !matchedContactId) return;
 
-              if (!isOutgoing && isBlockedPubkey(otherPub)) {
+              if (!isOutgoing && isBlockedPubkey(resolvedPeerPub)) {
                 return;
               }
 
-              const contact = contactByPubHex.get(otherPub) ?? null;
               const contactId =
                 matchedContactId ||
                 (contact
                   ? String(contact.id ?? "").trim()
-                  : String(buildUnknownContactId(otherPub) ?? "").trim());
+                  : String(
+                      buildUnknownContactId(resolvedPeerPub) ?? "",
+                    ).trim());
               if (!contactId) return;
 
               const isActiveChatContact =
@@ -271,7 +321,7 @@ export const useInboxNotificationsSync = <
               const { replyToId, rootMessageId } =
                 extractReplyContextFromTags(tags);
               const editedFromId = extractEditedFromTag(tags);
-              const effectivePubkey = isOutgoing ? myPubHex : senderPub;
+              const effectivePubkey = isOutgoing ? myPubHex : resolvedPeerPub;
 
               if (editedFromId) {
                 const target = nostrMessagesLatestRef.current.find(
@@ -327,7 +377,7 @@ export const useInboxNotificationsSync = <
                     const senderLabel =
                       contact?.name ??
                       formatShortNpub(
-                        contact?.npub ?? nip19.npubEncode(otherPub),
+                        contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
                       ) ??
                       t("unknownContactTitle");
                     const trimmedContent = content.trim();
@@ -349,7 +399,7 @@ export const useInboxNotificationsSync = <
                 void maybeShowPwaNotification(
                   title,
                   content.trim(),
-                  `msg_${otherPub}`,
+                  `msg_${resolvedPeerPub}`,
                 );
 
                 const tokenInfo = getCashuTokenMessageInfo(content);
@@ -360,7 +410,7 @@ export const useInboxNotificationsSync = <
                   void maybeShowPwaNotification(
                     t("mints"),
                     body,
-                    `cashu_${otherPub}`,
+                    `cashu_${resolvedPeerPub}`,
                   );
                 }
               }
