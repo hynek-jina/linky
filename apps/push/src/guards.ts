@@ -275,6 +275,7 @@ export function readSubscribeRequest(value: unknown): SubscribeRequestBody {
   }
 
   return {
+    installationId: readOptionalString(value.installationId),
     subscription: readWebPushSubscription(value.subscription),
     recipientPubkeys,
     proofs: readOwnershipProofs(value.proofs),

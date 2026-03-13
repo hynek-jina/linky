@@ -227,6 +227,7 @@ export function createHttpHandler({
         );
 
         storage.registerSubscription({
+          installationId: body.installationId,
           subscription: body.subscription,
           recipientPubkeys: body.recipientPubkeys,
           consumedChallengeNonces,
@@ -235,7 +236,7 @@ export function createHttpHandler({
           nowMs,
         });
         console.info(
-          `[push] subscribe ok endpoint=${hashEndpoint(body.subscription.endpoint)} pubkeys=${body.recipientPubkeys.length} ip=${ip}`,
+          `[push] subscribe ok endpoint=${hashEndpoint(body.subscription.endpoint)} installation=${body.installationId ?? "none"} pubkeys=${body.recipientPubkeys.length} ip=${ip}`,
         );
 
         return jsonResponse(config, request, 200, {

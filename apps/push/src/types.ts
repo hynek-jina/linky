@@ -48,6 +48,7 @@ export interface PushNotificationEnvelope {
 }
 
 export interface SubscribeRequestBody {
+  installationId: string | null;
   subscription: WebPushSubscriptionData;
   recipientPubkeys: string[];
   proofs: OwnershipProofInput[];

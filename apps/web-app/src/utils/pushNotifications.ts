@@ -7,6 +7,9 @@ const PUSH_SERVER_URL =
   "https://push.linky.fit";
 
 const VAPID_KEY_STORAGE_KEY = "linky.push_vapid_public_key";
+const PUSH_INSTALLATION_ID_STORAGE_KEY = "linky.push_installation_id";
+const REGISTERED_PUSH_ENDPOINT_STORAGE_KEY = "linky.push_subscription_endpoint";
+const REGISTERED_PUSH_PUBKEY_STORAGE_KEY = "linky.push_subscription_pubkey";
 
 async function fetchVapidPublicKey(): Promise<string> {
   const response = await fetch(`${PUSH_SERVER_URL}/vapid-public-key`);
@@ -26,6 +29,44 @@ function getStoredVapidKey(): string | null {
 
 function storeVapidKey(key: string): void {
   localStorage.setItem(VAPID_KEY_STORAGE_KEY, key);
+}
+
+function getOrCreatePushInstallationId(): string {
+  const existing = localStorage.getItem(PUSH_INSTALLATION_ID_STORAGE_KEY);
+  if (existing && existing.trim().length > 0) {
+    return existing;
+  }
+
+  const nextId =
+    typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : uint8ArrayToUrlBase64(crypto.getRandomValues(new Uint8Array(16)));
+  localStorage.setItem(PUSH_INSTALLATION_ID_STORAGE_KEY, nextId);
+  return nextId;
+}
+
+function readStoredRegisteredPushEndpoint(): string | null {
+  return localStorage.getItem(REGISTERED_PUSH_ENDPOINT_STORAGE_KEY);
+}
+
+function storeRegisteredPushEndpoint(endpoint: string): void {
+  localStorage.setItem(REGISTERED_PUSH_ENDPOINT_STORAGE_KEY, endpoint);
+}
+
+function clearStoredRegisteredPushEndpoint(): void {
+  localStorage.removeItem(REGISTERED_PUSH_ENDPOINT_STORAGE_KEY);
+}
+
+function readStoredRegisteredPushPubkey(): string | null {
+  return localStorage.getItem(REGISTERED_PUSH_PUBKEY_STORAGE_KEY);
+}
+
+function storeRegisteredPushPubkey(pubkey: string): void {
+  localStorage.setItem(REGISTERED_PUSH_PUBKEY_STORAGE_KEY, pubkey);
+}
+
+function clearStoredRegisteredPushPubkey(): void {
+  localStorage.removeItem(REGISTERED_PUSH_PUBKEY_STORAGE_KEY);
 }
 
 type PushSubscriptionData = {
@@ -184,6 +225,20 @@ async function requestChallenge(pubkey: string): Promise<ChallengeResponse> {
   return readChallengeResponse(await response.json());
 }
 
+async function unregisterEndpointOnServer(endpoint: string): Promise<boolean> {
+  const response = await fetch(`${PUSH_SERVER_URL}/unsubscribe`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      endpoint,
+    }),
+  });
+
+  return response.ok;
+}
+
 async function createOwnershipProof(params: {
   action: "subscribe" | "unsubscribe";
   challenge: string;
@@ -284,10 +339,14 @@ export async function registerPushNotifications(
 
     const storedKey = getStoredVapidKey();
     const vapidKeyChanged = storedKey !== null && storedKey !== vapidPublicKey;
+    const installationId = getOrCreatePushInstallationId();
 
     const { pubkey } = await derivePushIdentity(currentNsec);
+    const storedEndpoint = readStoredRegisteredPushEndpoint();
+    const storedPubkey = readStoredRegisteredPushPubkey();
     const registration = await navigator.serviceWorker.ready;
     let subscription = await registration.pushManager.getSubscription();
+    let replacedEndpoint: string | null = null;
     const subscriptionApplicationServerKey =
       subscription === null ? null : readApplicationServerKey(subscription);
     const subscriptionUsesCurrentVapidKey =
@@ -296,7 +355,11 @@ export async function registerPushNotifications(
         : subscriptionApplicationServerKey === vapidPublicKey;
     await appendPushDebugLog("client", "push registration ready", {
       hasActiveWorker: Boolean(registration.active),
+      installationId,
       pubkey,
+      storedEndpointHash:
+        storedEndpoint === null ? null : storedEndpoint.slice(-24),
+      storedPubkey,
       subscription: describeSubscription(subscription),
       storedVapidKey: storedKey,
       subscriptionApplicationServerKey,
@@ -305,10 +368,12 @@ export async function registerPushNotifications(
     });
 
     if (subscription && !subscriptionUsesCurrentVapidKey) {
+      replacedEndpoint = subscription.endpoint;
       await appendPushDebugLog(
         "client",
         "push subscription vapid mismatch, re-subscribing",
         {
+          replacedEndpointHash: replacedEndpoint.slice(-24),
           storedVapidKey: storedKey,
           subscriptionApplicationServerKey,
           vapidKeyChanged,
@@ -317,6 +382,8 @@ export async function registerPushNotifications(
       await subscription.unsubscribe().catch(() => false);
       subscription = null;
     }
+
+    const previousEndpoint = replacedEndpoint ?? storedEndpoint;
 
     if (!subscription) {
       try {
@@ -361,6 +428,7 @@ export async function registerPushNotifications(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        installationId,
         proofs: [proof],
         recipientPubkeys: [pubkey],
         subscription: toPushSubscriptionData(subscription),
@@ -381,7 +449,56 @@ export async function registerPushNotifications(
       };
     }
 
+    const currentEndpoint = subscription.endpoint;
+    if (previousEndpoint && previousEndpoint !== currentEndpoint) {
+      const shouldCleanupPreviousEndpoint =
+        storedPubkey === null ||
+        storedPubkey === pubkey ||
+        replacedEndpoint !== null;
+      if (shouldCleanupPreviousEndpoint) {
+        try {
+          const removed = await unregisterEndpointOnServer(previousEndpoint);
+          await appendPushDebugLog(
+            "client",
+            "push stale endpoint cleanup result",
+            {
+              currentEndpointHash: currentEndpoint.slice(-24),
+              installationId,
+              previousEndpointHash: previousEndpoint.slice(-24),
+              pubkey,
+              removed,
+              replacedEndpointHash:
+                replacedEndpoint === null ? null : replacedEndpoint.slice(-24),
+              storedPubkey,
+            },
+          );
+        } catch (cleanupError) {
+          await appendPushDebugLog(
+            "client",
+            "push stale endpoint cleanup failed",
+            {
+              currentEndpointHash: currentEndpoint.slice(-24),
+              installationId,
+              previousEndpointHash: previousEndpoint.slice(-24),
+              pubkey,
+              error: cleanupError,
+              replacedEndpointHash:
+                replacedEndpoint === null ? null : replacedEndpoint.slice(-24),
+              storedPubkey,
+            },
+          );
+        }
+      }
+    }
+
+    storeRegisteredPushEndpoint(currentEndpoint);
+    storeRegisteredPushPubkey(pubkey);
+
     await appendPushDebugLog("client", "push register success", {
+      currentEndpointHash: currentEndpoint.slice(-24),
+      installationId,
+      previousEndpointHash:
+        previousEndpoint === null ? null : previousEndpoint.slice(-24),
       pubkey,
       subscription: describeSubscription(subscription),
     });
@@ -403,32 +520,41 @@ export async function unregisterPushNotifications(): Promise<boolean> {
 
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
+    const storedEndpoint = readStoredRegisteredPushEndpoint();
 
     if (!subscription) {
+      if (storedEndpoint) {
+        const responseOk = await unregisterEndpointOnServer(
+          storedEndpoint,
+        ).catch(() => false);
+        if (responseOk) {
+          clearStoredRegisteredPushEndpoint();
+          clearStoredRegisteredPushPubkey();
+        }
+      }
       await appendPushDebugLog("client", "push unregister noop", {
         reason: "missing_subscription",
+        storedEndpointHash:
+          storedEndpoint === null ? null : storedEndpoint.slice(-24),
       });
       return false;
     }
 
-    const response = await fetch(`${PUSH_SERVER_URL}/unsubscribe`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        endpoint: subscription.endpoint,
-      }),
-    });
-
+    const responseOk = await unregisterEndpointOnServer(subscription.endpoint);
     const unsubscribed = await subscription.unsubscribe().catch(() => false);
+    if (responseOk) {
+      clearStoredRegisteredPushEndpoint();
+      clearStoredRegisteredPushPubkey();
+    }
     await appendPushDebugLog("client", "push unregister result", {
-      ok: response.ok && unsubscribed,
-      responseOk: response.ok,
+      ok: responseOk && unsubscribed,
+      responseOk,
+      storedEndpointHash:
+        storedEndpoint === null ? null : storedEndpoint.slice(-24),
       subscription: describeSubscription(subscription),
       unsubscribed,
     });
-    return response.ok && unsubscribed;
+    return responseOk && unsubscribed;
   } catch (error) {
     await appendPushDebugLog("client", "push unregister exception", { error });
     return false;

@@ -12,6 +12,7 @@ import type {
 } from "./types";
 
 interface RegisterSubscriptionParams {
+  installationId: string | null;
   subscription: WebPushSubscriptionData;
   recipientPubkeys: string[];
   consumedChallengeNonces: string[];
@@ -96,6 +97,7 @@ export class PushStorage {
       CREATE TABLE IF NOT EXISTS subscriptions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         endpoint TEXT NOT NULL UNIQUE,
+        installation_id TEXT,
         p256dh TEXT NOT NULL,
         auth TEXT NOT NULL,
         expiration_time INTEGER,
@@ -126,6 +128,12 @@ export class PushStorage {
       CREATE INDEX IF NOT EXISTS idx_challenges_pubkey_action
       ON challenges (pubkey, action);
     `);
+    this.ensureSubscriptionsInstallationIdColumn();
+    this.db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_installation_id
+      ON subscriptions (installation_id)
+      WHERE installation_id IS NOT NULL;
+    `);
 
     this.registerSubscriptionTransaction = this.db.transaction(
       (params: RegisterSubscriptionParams) =>
@@ -135,6 +143,20 @@ export class PushStorage {
       (params: UnregisterSubscriptionPubkeysParams) =>
         this.unregisterSubscriptionPubkeysInternal(params),
     );
+  }
+
+  private ensureSubscriptionsInstallationIdColumn(): void {
+    const rows = this.db.query("PRAGMA table_info(subscriptions)").all();
+    const hasColumn = rows.some((row) => {
+      if (!isRecord(row)) {
+        return false;
+      }
+      return readStringField(row, "name") === "installation_id";
+    });
+    if (hasColumn) {
+      return;
+    }
+    this.db.exec("ALTER TABLE subscriptions ADD COLUMN installation_id TEXT;");
   }
 
   close(): void {
@@ -325,9 +347,11 @@ export class PushStorage {
       );
     }
 
-    const existingSubscriptionId = this.getSubscriptionIdByEndpoint(
-      params.subscription.endpoint,
-    );
+    const existingSubscriptionId =
+      this.getSubscriptionIdByEndpoint(params.subscription.endpoint) ??
+      (params.installationId === null
+        ? null
+        : this.getSubscriptionIdByInstallationId(params.installationId));
     const currentPubkeys =
       existingSubscriptionId === null
         ? new Set<string>()
@@ -355,6 +379,7 @@ export class PushStorage {
     );
 
     const subscriptionId = this.upsertSubscriptionInternal(
+      params.installationId,
       params.subscription,
       params.nowMs,
     );
@@ -442,16 +467,23 @@ export class PushStorage {
   }
 
   private upsertSubscriptionInternal(
+    installationId: string | null,
     subscription: WebPushSubscriptionData,
     nowMs: number,
   ): number {
-    const existingId = this.getSubscriptionIdByEndpoint(subscription.endpoint);
+    const existingId =
+      this.getSubscriptionIdByEndpoint(subscription.endpoint) ??
+      (installationId === null
+        ? null
+        : this.getSubscriptionIdByInstallationId(installationId));
     if (existingId !== null) {
       this.db
         .query(
           `
             UPDATE subscriptions
             SET
+              endpoint = ?,
+              installation_id = ?,
               p256dh = ?,
               auth = ?,
               expiration_time = ?,
@@ -460,6 +492,8 @@ export class PushStorage {
           `,
         )
         .run(
+          subscription.endpoint,
+          installationId,
           subscription.keys.p256dh,
           subscription.keys.auth,
           subscription.expirationTime,
@@ -474,16 +508,18 @@ export class PushStorage {
         `
           INSERT INTO subscriptions (
             endpoint,
+            installation_id,
             p256dh,
             auth,
             expiration_time,
             created_at,
             updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
       )
       .run(
         subscription.endpoint,
+        installationId,
         subscription.keys.p256dh,
         subscription.keys.auth,
         subscription.expirationTime,
@@ -498,6 +534,18 @@ export class PushStorage {
     const row = this.db
       .query("SELECT id AS id FROM subscriptions WHERE endpoint = ?")
       .get(endpoint);
+    if (!isRecord(row)) {
+      return null;
+    }
+    return readNumberField(row, "id");
+  }
+
+  private getSubscriptionIdByInstallationId(
+    installationId: string,
+  ): number | null {
+    const row = this.db
+      .query("SELECT id AS id FROM subscriptions WHERE installation_id = ?")
+      .get(installationId);
     if (!isRecord(row)) {
       return null;
     }
