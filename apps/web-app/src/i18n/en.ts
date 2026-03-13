@@ -212,6 +212,7 @@ export const en = {
   sendMessage: "Messages",
   unknownContactTitle: "Unknown contact",
   unknownContactNamePrefix: "[Unknown]",
+  chatIncomingMessageToast: "{name}: {message}",
   chatEmpty: "No messages yet.",
   chatPlaceholder: "Message",
   chatMissingContactNpub: "Missing contact npub.",

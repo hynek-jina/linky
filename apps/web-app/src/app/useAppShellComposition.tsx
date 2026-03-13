@@ -2778,6 +2778,7 @@ export const useAppShellComposition = () => {
     nostrMessagesRecent,
     nostrReactionWrapIdsRef,
     nostrReactionsLatestRef,
+    pushToast,
     route,
     setContactAttentionById,
     softDeleteLocalNostrReactionsByWrapIds,

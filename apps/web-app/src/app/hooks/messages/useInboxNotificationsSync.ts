@@ -1,6 +1,7 @@
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { formatShortNpub } from "../../../utils/formatting";
 import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { safeLocalStorageGetJson } from "../../../utils/storage";
@@ -51,6 +52,7 @@ interface UseInboxNotificationsSyncParams<
   nostrMessagesRecent: readonly NostrMessageSummaryRow[];
   nostrReactionWrapIdsRef: React.MutableRefObject<Set<string>>;
   nostrReactionsLatestRef: React.MutableRefObject<LocalNostrReaction[]>;
+  pushToast: (message: string) => void;
   route: TRoute;
   setContactAttentionById: React.Dispatch<
     React.SetStateAction<Record<string, number>>
@@ -77,6 +79,7 @@ export const useInboxNotificationsSync = <
   nostrMessagesRecent,
   nostrReactionWrapIdsRef,
   nostrReactionsLatestRef,
+  pushToast,
   route,
   setContactAttentionById,
   softDeleteLocalNostrReactionsByWrapIds,
@@ -128,7 +131,7 @@ export const useInboxNotificationsSync = <
         // Map known contact pubkeys -> contact info.
         const contactByPubHex = new Map<
           string,
-          { id: string; name: string | null }
+          { id: string; name: string | null; npub: string | null }
         >();
         for (const contact of contacts) {
           const npub = normalizeNpubIdentifier(contact.npub);
@@ -143,6 +146,7 @@ export const useInboxNotificationsSync = <
             contactByPubHex.set(pub, {
               id: String(contact.id ?? "").trim(),
               name,
+              npub,
             });
           } catch {
             // ignore
@@ -282,6 +286,32 @@ export const useInboxNotificationsSync = <
                     ...prev,
                     [contactId]: Date.now(),
                   }));
+
+                  const shouldShowVisibleToast = (() => {
+                    try {
+                      return document.visibilityState === "visible";
+                    } catch {
+                      return false;
+                    }
+                  })();
+                  if (shouldShowVisibleToast) {
+                    const senderLabel =
+                      contact?.name ??
+                      formatShortNpub(
+                        contact?.npub ?? nip19.npubEncode(otherPub),
+                      ) ??
+                      t("unknownContactTitle");
+                    const trimmedContent = content.trim();
+                    const preview =
+                      trimmedContent.length > 80
+                        ? `${trimmedContent.slice(0, 80)}…`
+                        : trimmedContent;
+                    pushToast(
+                      t("chatIncomingMessageToast")
+                        .replace("{name}", senderLabel)
+                        .replace("{message}", preview),
+                    );
+                  }
                 }
 
                 const title =
@@ -516,6 +546,7 @@ export const useInboxNotificationsSync = <
     nostrMessagesLatestRef,
     nostrReactionWrapIdsRef,
     nostrReactionsLatestRef,
+    pushToast,
     route,
     setContactAttentionById,
     softDeleteLocalNostrReactionsByWrapIds,

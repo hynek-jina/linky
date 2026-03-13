@@ -212,6 +212,7 @@ export const cs = {
   sendMessage: "Zprávy",
   unknownContactTitle: "Neznámý kontakt",
   unknownContactNamePrefix: "[Neznámý]",
+  chatIncomingMessageToast: "{name}: {message}",
   chatEmpty: "Zatím žádné zprávy.",
   chatPlaceholder: "Zpráva",
   chatMissingContactNpub: "Chybí npub u kontaktu.",

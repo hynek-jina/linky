@@ -70,6 +70,10 @@ describe("useInboxNotificationsSync", () => {
     nip44DecryptMock.mockReset();
     getConversationKeyMock.mockClear();
     localStorage.clear();
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
   });
 
   it("stores an incoming message under a local unknown-thread id for unknown pubkeys", async () => {
@@ -94,6 +98,7 @@ describe("useInboxNotificationsSync", () => {
     const appendLocalNostrMessage = vi.fn(() => "message-1");
     const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
+    const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
     const updateLocalNostrReaction = vi.fn();
     const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
@@ -115,6 +120,7 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         nostrReactionWrapIdsRef: { current: new Set<string>() },
         nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+        pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
         softDeleteLocalNostrReactionsByWrapIds,
@@ -173,6 +179,7 @@ describe("useInboxNotificationsSync", () => {
     const appendLocalNostrMessage = vi.fn(() => "message-1");
     const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
+    const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
     const updateLocalNostrReaction = vi.fn();
     const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
@@ -194,6 +201,7 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         nostrReactionWrapIdsRef: { current: new Set<string>() },
         nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+        pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
         softDeleteLocalNostrReactionsByWrapIds,
@@ -219,6 +227,118 @@ describe("useInboxNotificationsSync", () => {
 
     await act(async () => {
       root.unmount();
+    });
+  });
+
+  it("shows an in-app toast for incoming messages outside the active chat only", async () => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+
+    const wrapEvent = { id: "wrap-known-1" };
+    querySyncMock.mockResolvedValue([wrapEvent]);
+    subscribeMock.mockReturnValue({
+      close: vi.fn(async () => {}),
+    });
+    unwrapEventMock.mockReturnValue({
+      kind: 14,
+      id: "rumor-known-1",
+      pubkey: "known-contact-pubkey",
+      content: "hi from Bob",
+      created_at: 1730000002,
+      tags: [["p", "me-pubkey-hex"]],
+    });
+    nip44DecryptMock.mockImplementation(() => {
+      throw new Error("not encrypted");
+    });
+
+    const appendLocalNostrMessage = vi.fn(() => "message-1");
+    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
+    const maybeShowPwaNotification = vi.fn(async () => {});
+    const pushToast = vi.fn();
+    const updateLocalNostrMessage = vi.fn();
+    const updateLocalNostrReaction = vi.fn();
+    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
+    const setContactAttentionById: React.Dispatch<
+      React.SetStateAction<Record<string, number>>
+    > = vi.fn();
+
+    const renderHarness = async (routeId: string) => {
+      const Harness = () => {
+        useInboxNotificationsSync({
+          appendLocalNostrMessage,
+          appendLocalNostrReaction,
+          contacts: [
+            {
+              id: "contact-bob",
+              name: "Bob",
+              npub: "npub-known",
+            },
+          ],
+          currentNsec: "nsec-test",
+          getCashuTokenMessageInfo: () => null,
+          maybeShowPwaNotification,
+          nostrFetchRelays: [],
+          nostrMessageWrapIdsRef: { current: new Set<string>() },
+          nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
+          nostrMessagesRecent: [],
+          nostrReactionWrapIdsRef: { current: new Set<string>() },
+          nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+          pushToast,
+          route: { kind: "chat", id: routeId },
+          setContactAttentionById,
+          softDeleteLocalNostrReactionsByWrapIds,
+          t: (key: string) =>
+            key === "chatIncomingMessageToast" ? "{name}: {message}" : key,
+          updateLocalNostrMessage,
+          updateLocalNostrReaction,
+        });
+
+        return null;
+      };
+
+      const root = createRoot(document.createElement("div"));
+      await act(async () => {
+        root.render(<Harness />);
+      });
+      await flushEffects();
+      await flushEffects();
+      return root;
+    };
+
+    const root = await renderHarness("contact-alice");
+
+    expect(pushToast).toHaveBeenCalledWith("Bob: hi from Bob");
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    querySyncMock.mockReset();
+    subscribeMock.mockReset();
+    unwrapEventMock.mockReset();
+    pushToast.mockReset();
+
+    querySyncMock.mockResolvedValue([wrapEvent]);
+    subscribeMock.mockReturnValue({
+      close: vi.fn(async () => {}),
+    });
+    unwrapEventMock.mockReturnValue({
+      kind: 14,
+      id: "rumor-known-2",
+      pubkey: "known-contact-pubkey",
+      content: "this stays silent",
+      created_at: 1730000003,
+      tags: [["p", "me-pubkey-hex"]],
+    });
+
+    const activeRoot = await renderHarness("contact-bob");
+
+    expect(pushToast).not.toHaveBeenCalled();
+
+    await act(async () => {
+      activeRoot.unmount();
     });
   });
 });
