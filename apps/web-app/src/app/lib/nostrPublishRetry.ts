@@ -1,4 +1,5 @@
 import type { Event as NostrToolsEvent } from "nostr-tools";
+import { appendPushDebugLog } from "../../utils/pushDebugLog";
 import type { AppNostrPool } from "./nostrPool";
 
 const DEFAULT_PUBLISH_RETRY_DELAY_MS = 1500;
@@ -109,6 +110,13 @@ interface PublishWrappedWithRetryParams {
   wrapForMe: NostrToolsEvent;
 }
 
+function extractRecipientPubkeys(event: NostrToolsEvent): string[] {
+  return event.tags
+    .filter((tag) => Array.isArray(tag) && tag[0] === "p")
+    .map((tag) => String(tag[1] ?? "").trim())
+    .filter(Boolean);
+}
+
 export const publishWrappedWithRetry = async ({
   confirmTimeoutMs = DEFAULT_PUBLISH_CONFIRM_TIMEOUT_MS,
   maxAttempts = DEFAULT_PUBLISH_MAX_ATTEMPTS,
@@ -121,6 +129,18 @@ export const publishWrappedWithRetry = async ({
   anySuccess: boolean;
   error: string | null;
 }> => {
+  await appendPushDebugLog("client", "publish wrapped start", {
+    relays,
+    wrapForContactId: String(wrapForContact.id ?? "").trim() || null,
+    wrapForContactKind: wrapForContact.kind,
+    wrapForContactPubkey: wrapForContact.pubkey,
+    wrapForContactRecipients: extractRecipientPubkeys(wrapForContact),
+    wrapForMeId: String(wrapForMe.id ?? "").trim() || null,
+    wrapForMeKind: wrapForMe.kind,
+    wrapForMePubkey: wrapForMe.pubkey,
+    wrapForMeRecipients: extractRecipientPubkeys(wrapForMe),
+  });
+
   const [me, contact] = await Promise.all([
     publishToRelaysWithRetry({
       pool,
@@ -138,6 +158,17 @@ export const publishWrappedWithRetry = async ({
     }),
   ]);
 
+  await appendPushDebugLog("client", "publish wrapped relay outcome", {
+    contactAnySuccess: contact.anySuccess,
+    contactError: contact.error,
+    contactTimedOut: contact.timedOut,
+    meAnySuccess: me.anySuccess,
+    meError: me.error,
+    meTimedOut: me.timedOut,
+    wrapForContactId: String(wrapForContact.id ?? "").trim() || null,
+    wrapForMeId: String(wrapForMe.id ?? "").trim() || null,
+  });
+
   if (me.anySuccess || contact.anySuccess) {
     return { anySuccess: true, error: null };
   }
@@ -152,6 +183,11 @@ export const publishWrappedWithRetry = async ({
         String(wrapForContact.id ?? "").trim(),
       ],
       confirmTimeoutMs,
+    });
+    await appendPushDebugLog("client", "publish wrapped confirm check", {
+      confirmed,
+      wrapForContactId: String(wrapForContact.id ?? "").trim() || null,
+      wrapForMeId: String(wrapForMe.id ?? "").trim() || null,
     });
     if (confirmed) return { anySuccess: true, error: null };
   }
