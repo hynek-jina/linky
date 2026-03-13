@@ -2,6 +2,7 @@ import React from "react";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import type {
   ContactIdentityRowLike,
@@ -133,11 +134,47 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
             contactPubHex,
           ) as NostrToolsEvent;
 
+          await appendPushDebugLog(
+            "client",
+            "chat pending flush wraps created",
+            {
+              clientId: clientId || null,
+              contactId: String(message.contactId ?? "").trim() || null,
+              contactPubHex,
+              myPubHex,
+              rumorId: String(message.rumorId ?? "").trim() || null,
+              wrapForContactId: String(wrapForContact.id ?? "").trim() || null,
+              wrapForContactPtags: wrapForContact.tags
+                .filter((tag) => Array.isArray(tag) && tag[0] === "p")
+                .map((tag) => String(tag[1] ?? "").trim())
+                .filter(Boolean),
+              wrapForMeId: String(wrapForMe.id ?? "").trim() || null,
+              wrapForMePtags: wrapForMe.tags
+                .filter((tag) => Array.isArray(tag) && tag[0] === "p")
+                .map((tag) => String(tag[1] ?? "").trim())
+                .filter(Boolean),
+            },
+          );
+
           const publishOutcome = await publishWrappedWithRetry(
             pool,
             NOSTR_RELAYS,
             wrapForMe,
             wrapForContact,
+          );
+
+          await appendPushDebugLog(
+            "client",
+            "chat pending flush publish outcome",
+            {
+              anySuccess: publishOutcome.anySuccess,
+              clientId: clientId || null,
+              contactId: String(message.contactId ?? "").trim() || null,
+              error: publishOutcome.error,
+              rumorId: String(message.rumorId ?? "").trim() || null,
+              wrapForContactId: String(wrapForContact.id ?? "").trim() || null,
+              wrapForMeId: String(wrapForMe.id ?? "").trim() || null,
+            },
           );
 
           if (!publishOutcome.anySuccess) continue;

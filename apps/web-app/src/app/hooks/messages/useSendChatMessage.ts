@@ -2,6 +2,7 @@ import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React from "react";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import type {
@@ -204,6 +205,24 @@ export const useSendChatMessage = <
         contactPubHex,
       ) as NostrToolsEvent;
 
+      await appendPushDebugLog("client", "chat send wraps created", {
+        clientId,
+        contactPubHex,
+        myPubHex,
+        replyToId: activeReplyToId || null,
+        rumorId,
+        wrapForContactId: String(wrapForContact.id ?? "").trim() || null,
+        wrapForContactPtags: wrapForContact.tags
+          .filter((tag) => Array.isArray(tag) && tag[0] === "p")
+          .map((tag) => String(tag[1] ?? "").trim())
+          .filter(Boolean),
+        wrapForMeId: String(wrapForMe.id ?? "").trim() || null,
+        wrapForMePtags: wrapForMe.tags
+          .filter((tag) => Array.isArray(tag) && tag[0] === "p")
+          .map((tag) => String(tag[1] ?? "").trim())
+          .filter(Boolean),
+      });
+
       const pool = await getSharedAppNostrPool();
       const publishOutcome = await publishWrappedWithRetry(
         pool,
@@ -211,6 +230,15 @@ export const useSendChatMessage = <
         wrapForMe,
         wrapForContact,
       );
+
+      await appendPushDebugLog("client", "chat send publish outcome", {
+        anySuccess: publishOutcome.anySuccess,
+        clientId,
+        error: publishOutcome.error,
+        rumorId,
+        wrapForContactId: String(wrapForContact.id ?? "").trim() || null,
+        wrapForMeId: String(wrapForMe.id ?? "").trim() || null,
+      });
 
       if (!publishOutcome.anySuccess) {
         setStatus(t("chatQueued"));

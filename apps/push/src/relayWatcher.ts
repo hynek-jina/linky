@@ -1,5 +1,5 @@
 import type { Event as NostrEvent } from "nostr-tools";
-import { SimplePool } from "nostr-tools";
+import { SimplePool, verifyEvent } from "nostr-tools";
 
 import { isHexString } from "./guards";
 import { PushStorage } from "./storage";
@@ -64,6 +64,34 @@ function extractRelayHints(
   }
 
   return uniqueStrings(out);
+}
+
+function hasSingleRecipientTag(event: NostrEvent): boolean {
+  const recipientPubkeys = extractRecipientPubkeys(event);
+  return recipientPubkeys.length === 1;
+}
+
+function validateGiftWrapForPush(event: NostrEvent): {
+  ok: boolean;
+  reason: string | null;
+} {
+  if (event.kind !== 1059) {
+    return { ok: false, reason: "wrong_kind" };
+  }
+
+  if (!verifyEvent(event)) {
+    return { ok: false, reason: "invalid_signature" };
+  }
+
+  if (typeof event.content !== "string" || event.content.trim().length === 0) {
+    return { ok: false, reason: "empty_content" };
+  }
+
+  if (!hasSingleRecipientTag(event)) {
+    return { ok: false, reason: "unexpected_recipient_count" };
+  }
+
+  return { ok: true, reason: null };
 }
 
 export class RelayWatcher {
@@ -136,6 +164,14 @@ export class RelayWatcher {
   private async handleEvent(event: NostrEvent): Promise<void> {
     const nowMs = Date.now();
     if (!this.markSeen(event.id, nowMs)) {
+      return;
+    }
+
+    const validation = validateGiftWrapForPush(event);
+    if (!validation.ok) {
+      console.warn(
+        `[push] skipped malformed gift wrap id=${event.id} reason=${validation.reason ?? "unknown"}`,
+      );
       return;
     }
 
