@@ -94,6 +94,16 @@ function validateGiftWrapForPush(event: NostrEvent): {
   return { ok: true, reason: null };
 }
 
+const LINKY_PUSH_MARKER_TAG = "linky";
+const LINKY_PUSH_MARKER_VALUE = "push";
+
+function hasLinkyPushMarker(event: NostrEvent): boolean {
+  return event.tags.some(
+    (tag) =>
+      tag[0] === LINKY_PUSH_MARKER_TAG && tag[1] === LINKY_PUSH_MARKER_VALUE,
+  );
+}
+
 function describeEventRecipients(event: NostrEvent): string {
   const recipients = extractRecipientPubkeys(event);
   return recipients.length > 0 ? recipients.join(",") : "none";
@@ -181,6 +191,13 @@ export class RelayWatcher {
     if (!validation.ok) {
       console.warn(
         `[push] skipped malformed gift wrap id=${event.id} pubkey=${event.pubkey} recipients=${describeEventRecipients(event)} reason=${validation.reason ?? "unknown"}`,
+      );
+      return;
+    }
+
+    if (!hasLinkyPushMarker(event)) {
+      console.info(
+        `[push] skipped non-push gift wrap id=${event.id} pubkey=${event.pubkey} recipients=${describeEventRecipients(event)}`,
       );
       return;
     }

@@ -5,6 +5,10 @@ import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
+import {
+  wrapEventWithPushMarker,
+  wrapEventWithoutPushMarker,
+} from "../../lib/pushWrappedEvent";
 import type {
   ContactIdentityRowLike,
   NewLocalNostrMessage,
@@ -98,7 +102,6 @@ export const useSendChatMessage = <
 
     try {
       const { nip19, getEventHash, getPublicKey } = await import("nostr-tools");
-      const { wrapEvent } = await import("nostr-tools/nip59");
 
       const decodedMe = nip19.decode(currentNsec);
       if (decodedMe.type !== "nsec" || !(decodedMe.data instanceof Uint8Array))
@@ -200,16 +203,16 @@ export const useSendChatMessage = <
         return;
       }
 
-      const wrapForMe = wrapEvent(
+      const wrapForMe = wrapEventWithoutPushMarker(
         baseEvent,
         privBytes,
         myPubHex,
-      ) as NostrToolsEvent;
-      const wrapForContact = wrapEvent(
+      );
+      const wrapForContact = wrapEventWithPushMarker(
         baseEvent,
         privBytes,
         contactPubHex,
-      ) as NostrToolsEvent;
+      );
 
       await appendPushDebugLog("client", "chat send wraps created", {
         clientId,

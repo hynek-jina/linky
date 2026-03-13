@@ -4,6 +4,7 @@ import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
+import { wrapEventWithoutPushMarker } from "../../lib/pushWrappedEvent";
 import type {
   ContactIdentityRowLike,
   PublishWrappedResult,
@@ -86,7 +87,6 @@ export const useEditChatMessage = <
 
     try {
       const { nip19, getPublicKey } = await import("nostr-tools");
-      const { wrapEvent } = await import("nostr-tools/nip59");
 
       const decodedMe = nip19.decode(currentNsec);
       if (decodedMe.type !== "nsec" || !(decodedMe.data instanceof Uint8Array))
@@ -156,16 +156,16 @@ export const useEditChatMessage = <
         return;
       }
 
-      const wrapForMe = wrapEvent(
+      const wrapForMe = wrapEventWithoutPushMarker(
         baseEvent,
         privBytes,
         myPubHex,
-      ) as NostrToolsEvent;
-      const wrapForContact = wrapEvent(
+      );
+      const wrapForContact = wrapEventWithoutPushMarker(
         baseEvent,
         privBytes,
         contactPubHex,
-      ) as NostrToolsEvent;
+      );
 
       const pool = await getSharedAppNostrPool();
       const publishOutcome = await publishWrappedWithRetry(
