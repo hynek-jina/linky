@@ -2,8 +2,9 @@ import { resolve } from "node:path";
 
 const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
-  "wss://relay.primal.net",
   "wss://nos.lol",
+  "wss://relay.0xchat.com",
+  "wss://shu01.shugur.net",
 ];
 
 export interface PushServiceConfig {

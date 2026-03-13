@@ -94,6 +94,11 @@ function validateGiftWrapForPush(event: NostrEvent): {
   return { ok: true, reason: null };
 }
 
+function describeEventRecipients(event: NostrEvent): string {
+  const recipients = extractRecipientPubkeys(event);
+  return recipients.length > 0 ? recipients.join(",") : "none";
+}
+
 export class RelayWatcher {
   private readonly relayUrls: string[];
   private readonly storage: PushStorage;
@@ -164,25 +169,34 @@ export class RelayWatcher {
   private async handleEvent(event: NostrEvent): Promise<void> {
     const nowMs = Date.now();
     if (!this.markSeen(event.id, nowMs)) {
+      console.info(`[push] skipped duplicate event id=${event.id}`);
       return;
     }
+
+    console.info(
+      `[push] observed gift wrap id=${event.id} pubkey=${event.pubkey} recipients=${describeEventRecipients(event)} createdAt=${event.created_at}`,
+    );
 
     const validation = validateGiftWrapForPush(event);
     if (!validation.ok) {
       console.warn(
-        `[push] skipped malformed gift wrap id=${event.id} reason=${validation.reason ?? "unknown"}`,
+        `[push] skipped malformed gift wrap id=${event.id} pubkey=${event.pubkey} recipients=${describeEventRecipients(event)} reason=${validation.reason ?? "unknown"}`,
       );
       return;
     }
 
     const recipientPubkeys = extractRecipientPubkeys(event);
     if (recipientPubkeys.length === 0) {
+      console.info(`[push] skipped event without recipients id=${event.id}`);
       return;
     }
 
     const subscriptionsByPubkey =
       this.storage.getSubscriptionsForPubkeys(recipientPubkeys);
     if (subscriptionsByPubkey.size === 0) {
+      console.info(
+        `[push] skipped event without matching subscriptions id=${event.id} recipients=${recipientPubkeys.join(",")}`,
+      );
       return;
     }
 
@@ -191,8 +205,15 @@ export class RelayWatcher {
     for (const recipientPubkey of recipientPubkeys) {
       const subscriptions = subscriptionsByPubkey.get(recipientPubkey);
       if (!subscriptions) {
+        console.info(
+          `[push] no subscriptions for recipient id=${event.id} recipient=${recipientPubkey}`,
+        );
         continue;
       }
+
+      console.info(
+        `[push] delivering gift wrap id=${event.id} recipient=${recipientPubkey} subscriptions=${subscriptions.length}`,
+      );
 
       const payloadData: PushNotificationData = {
         type: "nostr_inbox",
