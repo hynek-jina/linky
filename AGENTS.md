@@ -78,7 +78,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - `routes/props/` contains grouped route-prop builders (`buildPeopleRouteProps`, `buildMoneyRouteProps`, `buildMainSwipeRouteProps`)
 - `lib/` contains shared app helpers (Nostr pool, token text parsing, topbar config)
 - `types/appTypes.ts` contains app-local shared types
-- `apps/push/src/` is split by concern: `http.ts` (Bun API), `ownership.ts` (signed challenge verification), `storage.ts` (SQLite persistence for subscriptions/pubkeys/challenges), `relayWatcher.ts` (relay subscription for outer `kind: 1059` events), and `push.ts` (Web Push delivery + invalid subscription cleanup, including stale subscriptions tied to an old VAPID keypair)
+- `apps/push/src/` is split by concern: `http.ts` (Bun API), `ownership.ts` (signed challenge verification), `storage.ts` (SQLite persistence for subscriptions/pubkeys/challenges/seen outer event ids), `relayWatcher.ts` (relay subscription for outer `kind: 1059` events with catch-up vs live delivery gating), and `push.ts` (Web Push delivery + invalid subscription cleanup, including stale subscriptions tied to an old VAPID keypair)
 - Push service proof events use `kind: 27235` with short-lived per-pubkey challenge nonces; the server never decrypts NIP-17 payloads and only emits generic notifications for outer `kind: 1059` events tagged `["linky","push"]`, so sender self-copies / reactions / edits can sync over relays without triggering push
 
 ## Code Conventions
@@ -116,6 +116,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Push service env is documented in `apps/push/.env.example`; `PUSH_VAPID_SUBJECT`, `PUSH_VAPID_PUBLIC_KEY`, and `PUSH_VAPID_PRIVATE_KEY` must be set before `apps/push` starts
 - `apps/push` CORS allowlist is configured via `PUSH_CORS_ORIGIN`; it accepts `*` or a comma-separated list of allowed web app origins
 - `apps/push` relay watcher defaults now match the web app chat publish relays (`wss://relay.damus.io`, `wss://nos.lol`, `wss://relay.0xchat.com`, `wss://shu01.shugur.net`) unless overridden via `PUSH_DEFAULT_RELAYS`
+- `apps/push` relay watcher uses a 3-day catch-up `since` window to accommodate NIP-59 randomized outer `created_at`, persists seen outer event ids in SQLite, suppresses notification delivery until EOSE switches the watcher into live mode, periodically refreshes the subscription to reset reconnect `since` drift, and prunes old seen-event rows on the server cleanup interval
 - Container publishing is handled by `.github/workflows/push-image.yml`, which builds `apps/push/Dockerfile` and publishes the image to GHCR
 
 ## Maintaining This File
