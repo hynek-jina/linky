@@ -5,6 +5,7 @@
 import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst } from "workbox-strategies";
+import { appendPushDebugLog } from "./utils/pushDebugLog";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -21,6 +22,26 @@ type PushNotificationEnvelope = {
   data?: PushNotificationData;
   title?: string;
 };
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error ?? "");
+}
+
+async function postClientMessage(
+  message: Record<string, unknown>,
+): Promise<void> {
+  const clientList = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  for (const client of clientList) {
+    client.postMessage(message);
+  }
+}
+
+async function logSw(message: string, details?: unknown): Promise<void> {
+  await appendPushDebugLog("sw", message, details);
+}
 
 function isRecord(
   value: unknown,
@@ -82,16 +103,49 @@ registerRoute(
 
 registerRoute(new NavigationRoute(createHandlerBoundToURL("index.html")));
 
+self.addEventListener("install", (event) => {
+  event.waitUntil(logSw("service worker install"));
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(logSw("service worker activate"));
+});
+
+self.addEventListener("error", (event: ErrorEvent) => {
+  void logSw("service worker error", {
+    filename: event.filename,
+    line: event.lineno,
+    message: event.message,
+  });
+});
+
+self.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
+  void logSw("service worker unhandled rejection", {
+    reason: describeError(event.reason),
+  });
+});
+
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
+  if (!event.data) {
+    event.waitUntil(logSw("push event without data"));
+    return;
+  }
 
   let envelope: PushNotificationEnvelope | null = null;
   try {
     envelope = readPushEnvelope(event.data.json());
-  } catch {
+  } catch (error) {
+    event.waitUntil(
+      logSw("push event JSON parse failed", {
+        error: describeError(error),
+      }),
+    );
     envelope = null;
   }
-  if (!envelope) return;
+  if (!envelope) {
+    event.waitUntil(logSw("push event ignored because envelope was invalid"));
+    return;
+  }
 
   const data = envelope.data ?? { type: "nostr_inbox" };
   const options: NotificationOptions = {
@@ -110,19 +164,41 @@ self.addEventListener("push", (event) => {
   }
 
   console.info("[linky][sw] push received", data);
-  void self.clients
-    .matchAll({ type: "window", includeUncontrolled: true })
-    .then((clientList) => {
-      for (const client of clientList) {
-        client.postMessage({
-          data,
-          type: "push-received",
-        });
-      }
-    });
-
   event.waitUntil(
-    self.registration.showNotification(envelope.title ?? "Linky", options),
+    Promise.all([
+      logSw("push received", {
+        data,
+        tag: options.tag ?? null,
+        title: envelope.title ?? "Linky",
+      }),
+      postClientMessage({
+        data,
+        type: "push-received",
+      }),
+      self.registration
+        .showNotification(envelope.title ?? "Linky", options)
+        .then(() =>
+          logSw("notification displayed", {
+            data,
+            tag: options.tag ?? null,
+          }),
+        )
+        .catch((error) =>
+          logSw("notification display failed", {
+            data,
+            error: describeError(error),
+          }),
+        ),
+    ]),
+  );
+});
+
+self.addEventListener("notificationclose", (event) => {
+  event.waitUntil(
+    logSw("notification close", {
+      data: event.notification.data ?? null,
+      tag: event.notification.tag,
+    }),
   );
 });
 
@@ -137,22 +213,39 @@ self.addEventListener("notificationclick", (event) => {
 
   console.info("[linky][sw] notification click");
   event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clientList) => {
-        for (const client of clientList) {
-          if (client.url && "focus" in client) {
-            return client.navigate("/").then(() => client.focus());
-          }
-        }
-        if (self.clients.openWindow) {
-          return self.clients.openWindow("/");
-        }
+    Promise.all([
+      logSw("notification click", {
+        data: event.notification.data ?? null,
+        tag: event.notification.tag,
       }),
+      self.clients
+        .matchAll({ type: "window", includeUncontrolled: true })
+        .then((clientList) => {
+          for (const client of clientList) {
+            if (client.url && "focus" in client) {
+              return client.navigate("/").then(() => client.focus());
+            }
+          }
+          if (self.clients.openWindow) {
+            return self.clients.openWindow("/");
+          }
+        }),
+    ]),
   );
 });
 
-self.addEventListener("activate", () => {
-  // Let new SW versions take over on the next navigation instead of claiming
-  // an already-booting dev page, which can break Vite's dynamic imports.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    Promise.all([
+      logSw("push subscription change", {
+        hadNewSubscription: event.newSubscription !== null,
+        hadOldSubscription: event.oldSubscription !== null,
+      }),
+      postClientMessage({
+        hadNewSubscription: event.newSubscription !== null,
+        hadOldSubscription: event.oldSubscription !== null,
+        type: "push-subscription-change",
+      }),
+    ]),
+  );
 });

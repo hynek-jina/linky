@@ -1,13 +1,32 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import { appendPushDebugLog } from "./pushDebugLog";
 
 const PUSH_SERVER_URL =
   import.meta.env.VITE_PUSH_SERVER_URL ||
   import.meta.env.VITE_NOTIFICATION_SERVER_URL ||
   "https://push.linky.fit";
-const VAPID_PUBLIC_KEY =
-  import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY ||
-  import.meta.env.VITE_VAPID_PUBLIC_KEY ||
-  "";
+
+const VAPID_KEY_STORAGE_KEY = "linky.push_vapid_public_key";
+
+async function fetchVapidPublicKey(): Promise<string> {
+  const response = await fetch(`${PUSH_SERVER_URL}/vapid-public-key`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch VAPID key: HTTP ${response.status}`);
+  }
+  const data: unknown = await response.json();
+  if (!isRecord(data) || typeof data.vapidPublicKey !== "string") {
+    throw new Error("Invalid VAPID key response");
+  }
+  return data.vapidPublicKey;
+}
+
+function getStoredVapidKey(): string | null {
+  return localStorage.getItem(VAPID_KEY_STORAGE_KEY);
+}
+
+function storeVapidKey(key: string): void {
+  localStorage.setItem(VAPID_KEY_STORAGE_KEY, key);
+}
 
 type PushSubscriptionData = {
   endpoint: string;
@@ -29,6 +48,21 @@ type OwnershipProof = {
   event: NostrToolsEvent;
   pubkey: string;
 };
+
+function describeSubscription(subscription: PushSubscription | null): {
+  endpointHash: string | null;
+  expirationTime: number | null;
+  hasAuth: boolean;
+  hasP256dh: boolean;
+} {
+  const endpoint = subscription?.endpoint ?? "";
+  return {
+    endpointHash: endpoint ? endpoint.slice(-24) : null,
+    expirationTime: subscription?.expirationTime ?? null,
+    hasAuth: Boolean(subscription?.getKey("auth")),
+    hasP256dh: Boolean(subscription?.getKey("p256dh")),
+  };
+}
 
 function isRecord(
   value: unknown,
@@ -178,10 +212,14 @@ function toPushSubscriptionData(
 
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!("Notification" in window)) {
+    await appendPushDebugLog("client", "notification permission unsupported");
     return false;
   }
 
   const permission = await Notification.requestPermission();
+  await appendPushDebugLog("client", "notification permission result", {
+    permission,
+  });
   return permission === "granted";
 }
 
@@ -189,35 +227,82 @@ export async function registerPushNotifications(
   currentNsec: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await appendPushDebugLog("client", "push register start", {
+      permission:
+        "Notification" in window ? Notification.permission : "missing",
+    });
+
     if (!("serviceWorker" in navigator)) {
+      await appendPushDebugLog("client", "push register failed", {
+        reason: "service_worker_unsupported",
+      });
       return { success: false, error: "Service Worker není podporován" };
     }
 
-    if (!VAPID_PUBLIC_KEY) {
-      return { success: false, error: "VAPID public key není nakonfigurován" };
+    let vapidPublicKey: string;
+    try {
+      vapidPublicKey = await fetchVapidPublicKey();
+    } catch (fetchError) {
+      await appendPushDebugLog("client", "push register failed", {
+        reason: "vapid_key_fetch_failed",
+        error: fetchError,
+      });
+      return {
+        success: false,
+        error: `Nepodařilo se získat VAPID klíč: ${String(fetchError ?? "")}`,
+      };
     }
+
+    const storedKey = getStoredVapidKey();
+    const vapidKeyChanged = storedKey !== null && storedKey !== vapidPublicKey;
 
     const { pubkey } = await derivePushIdentity(currentNsec);
     const registration = await navigator.serviceWorker.ready;
     let subscription = await registration.pushManager.getSubscription();
+    await appendPushDebugLog("client", "push registration ready", {
+      hasActiveWorker: Boolean(registration.active),
+      pubkey,
+      subscription: describeSubscription(subscription),
+      vapidKeyChanged,
+    });
+
+    if (vapidKeyChanged && subscription) {
+      await appendPushDebugLog("client", "vapid key changed, re-subscribing");
+      await subscription.unsubscribe().catch(() => false);
+      subscription = null;
+    }
 
     if (!subscription) {
       try {
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: toArrayBuffer(
-            urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+            urlBase64ToUint8Array(vapidPublicKey),
           ),
         });
+        storeVapidKey(vapidPublicKey);
+        await appendPushDebugLog("client", "push subscribe created", {
+          subscription: describeSubscription(subscription),
+        });
       } catch (subError) {
+        await appendPushDebugLog("client", "push subscribe failed", {
+          error: subError,
+        });
         return {
           success: false,
           error: `Chyba při vytváření subscription: ${String(subError ?? "")}`,
         };
       }
+    } else {
+      storeVapidKey(vapidPublicKey);
     }
 
     const challenge = await requestChallenge(pubkey);
+    await appendPushDebugLog("client", "push challenge received", {
+      action: challenge.action,
+      expiresAt: challenge.expiresAt,
+      pubkey: challenge.pubkey,
+    });
     const proof = await createOwnershipProof({
       action: "subscribe",
       challenge: challenge.challenge,
@@ -237,16 +322,26 @@ export async function registerPushNotifications(
     });
 
     if (!response.ok) {
+      const errorMessage = await readErrorMessage(response);
+      await appendPushDebugLog("client", "push register server error", {
+        errorMessage,
+        pubkey,
+        status: response.status,
+        subscription: describeSubscription(subscription),
+      });
       return {
         success: false,
-        error: `Server vrátil chybu ${response.status}: ${await readErrorMessage(
-          response,
-        )}`,
+        error: `Server vrátil chybu ${response.status}: ${errorMessage}`,
       };
     }
 
+    await appendPushDebugLog("client", "push register success", {
+      pubkey,
+      subscription: describeSubscription(subscription),
+    });
     return { success: true };
   } catch (error) {
+    await appendPushDebugLog("client", "push register exception", { error });
     return { success: false, error: `Chyba: ${String(error ?? "")}` };
   }
 }
@@ -254,6 +349,9 @@ export async function registerPushNotifications(
 export async function unregisterPushNotifications(): Promise<boolean> {
   try {
     if (!("serviceWorker" in navigator)) {
+      await appendPushDebugLog("client", "push unregister failed", {
+        reason: "service_worker_unsupported",
+      });
       return false;
     }
 
@@ -261,6 +359,9 @@ export async function unregisterPushNotifications(): Promise<boolean> {
     const subscription = await registration.pushManager.getSubscription();
 
     if (!subscription) {
+      await appendPushDebugLog("client", "push unregister noop", {
+        reason: "missing_subscription",
+      });
       return false;
     }
 
@@ -275,8 +376,15 @@ export async function unregisterPushNotifications(): Promise<boolean> {
     });
 
     const unsubscribed = await subscription.unsubscribe().catch(() => false);
+    await appendPushDebugLog("client", "push unregister result", {
+      ok: response.ok && unsubscribed,
+      responseOk: response.ok,
+      subscription: describeSubscription(subscription),
+      unsubscribed,
+    });
     return response.ok && unsubscribed;
-  } catch {
+  } catch (error) {
+    await appendPushDebugLog("client", "push unregister exception", { error });
     return false;
   }
 }

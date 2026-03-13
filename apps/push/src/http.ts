@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { PushServiceConfig } from "./config";
 import {
   isRecord,
@@ -20,6 +21,10 @@ interface HttpHandlerDependencies {
   storage: PushStorage;
   ownershipVerifier: OwnershipVerifier;
   rateLimiter: InMemoryRateLimiter;
+}
+
+function hashEndpoint(endpoint: string): string {
+  return createHash("sha256").update(endpoint).digest("hex").slice(0, 16);
 }
 
 function resolveAllowedOrigin(
@@ -167,6 +172,12 @@ export function createHttpHandler({
         });
       }
 
+      if (request.method === "GET" && url.pathname === "/vapid-public-key") {
+        return jsonResponse(config, request, 200, {
+          vapidPublicKey: config.vapidPublicKey,
+        });
+      }
+
       const ip = ipFromRequest(request, server);
       rateLimiter.prune(nowMs);
 
@@ -186,6 +197,9 @@ export function createHttpHandler({
           action,
           expiresAt,
           nowMs,
+        );
+        console.info(
+          `[push] challenge issued action=${action} pubkey=${pubkey} ip=${ip}`,
         );
 
         return jsonResponse(config, request, 200, {
@@ -220,6 +234,9 @@ export function createHttpHandler({
           maxSubscriptionsPerPubkey: config.maxSubscriptionsPerPubkey,
           nowMs,
         });
+        console.info(
+          `[push] subscribe ok endpoint=${hashEndpoint(body.subscription.endpoint)} pubkeys=${body.recipientPubkeys.length} ip=${ip}`,
+        );
 
         return jsonResponse(config, request, 200, {
           ok: true,
@@ -239,6 +256,9 @@ export function createHttpHandler({
         const body = readUnsubscribeRequest(await readJsonBody(request));
         if (body.recipientPubkeys === null) {
           const removed = storage.unregisterSubscription(body.endpoint);
+          console.info(
+            `[push] unsubscribe endpoint=${hashEndpoint(body.endpoint)} removed=${removed} ip=${ip}`,
+          );
           return jsonResponse(config, request, 200, {
             ok: true,
             removed,
@@ -259,6 +279,9 @@ export function createHttpHandler({
           consumedChallengeNonces,
           nowMs,
         });
+        console.info(
+          `[push] unsubscribe pubkeys endpoint=${hashEndpoint(body.endpoint)} removedPubkeys=${result.removedPubkeys} removedSubscription=${result.removedSubscription} ip=${ip}`,
+        );
 
         return jsonResponse(config, request, 200, {
           ok: true,

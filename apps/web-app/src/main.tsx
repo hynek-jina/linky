@@ -11,6 +11,7 @@ import type {
   NavigatorWithOptionalStorage,
 } from "./types/browser";
 import type { JsonValue } from "./types/json";
+import { appendPushDebugLog } from "./utils/pushDebugLog";
 import "./index.css";
 
 type BufferFromArgs =
@@ -105,9 +106,11 @@ registerSW({
   immediate: true,
   onOfflineReady() {
     console.log("[linky][pwa] offline ready");
+    void appendPushDebugLog("client", "pwa offline ready");
   },
   onNeedRefresh() {
     console.log("[linky][pwa] update available");
+    void appendPushDebugLog("client", "pwa update available");
   },
   onRegisteredSW(swUrl, registration) {
     console.log("[linky][pwa] sw registered", {
@@ -117,9 +120,17 @@ registerSW({
       hasWaiting: Boolean(registration?.waiting),
       hasInstalling: Boolean(registration?.installing),
     });
+    void appendPushDebugLog("client", "pwa sw registered", {
+      hasActive: Boolean(registration?.active),
+      hasInstalling: Boolean(registration?.installing),
+      hasWaiting: Boolean(registration?.waiting),
+      scope: registration?.scope ?? null,
+      swUrl,
+    });
   },
   onRegisterError(error) {
     console.log("[linky][pwa] sw register error", { error });
+    void appendPushDebugLog("client", "pwa sw register error", { error });
   },
 });
 
@@ -127,13 +138,22 @@ if ("serviceWorker" in navigator) {
   console.log("[linky][pwa] controller", {
     hasController: Boolean(navigator.serviceWorker.controller),
   });
+  void appendPushDebugLog("client", "pwa controller snapshot", {
+    hasController: Boolean(navigator.serviceWorker.controller),
+  });
 
   navigator.serviceWorker.addEventListener("message", (event) => {
     console.log("[linky][pwa] sw message", event.data);
+    void appendPushDebugLog("client", "pwa sw message", {
+      data: event.data,
+    });
   });
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     console.log("[linky][pwa] controller change", {
+      hasController: Boolean(navigator.serviceWorker.controller),
+    });
+    void appendPushDebugLog("client", "pwa controller change", {
       hasController: Boolean(navigator.serviceWorker.controller),
     });
   });
@@ -144,6 +164,10 @@ if ("serviceWorker" in navigator) {
         scope: reg.scope,
         hasActive: Boolean(reg.active),
       });
+      await appendPushDebugLog("client", "pwa sw ready", {
+        hasActive: Boolean(reg.active),
+        scope: reg.scope,
+      });
 
       if ("caches" in globalThis) {
         const keys = await caches.keys();
@@ -151,10 +175,14 @@ if ("serviceWorker" in navigator) {
           (k) => k.includes("workbox") || k.includes("linky"),
         );
         console.log("[linky][pwa] cache keys", { keys: relevant });
+        await appendPushDebugLog("client", "pwa cache keys", {
+          keys: relevant,
+        });
       }
     })
     .catch((error) => {
       console.log("[linky][pwa] sw ready error", { error });
+      void appendPushDebugLog("client", "pwa sw ready error", { error });
     });
 }
 

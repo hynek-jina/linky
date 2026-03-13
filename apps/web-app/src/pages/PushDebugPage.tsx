@@ -5,6 +5,12 @@ import {
   requestNotificationPermission,
   unregisterPushNotifications,
 } from "../utils/pushNotifications";
+import {
+  appendPushDebugLog,
+  clearPushDebugLog,
+  readPushDebugLog,
+  type PushDebugLogEntry,
+} from "../utils/pushDebugLog";
 
 interface PushDebugPageProps {
   currentNsec: string | null;
@@ -34,6 +40,7 @@ interface PushDebugReport {
     scope: string;
     waitingScriptUrl: string | null;
   }>;
+  storedDebugLog: PushDebugLogEntry[];
 }
 
 const INITIAL_REPORT: PushDebugReport = {
@@ -44,6 +51,7 @@ const INITIAL_REPORT: PushDebugReport = {
   notificationPermission: "unsupported",
   pushSubscriptionEndpoint: null,
   pushSubscriptionKeys: null,
+  storedDebugLog: [],
   serviceWorkerController: false,
   serviceWorkerRegistrations: [],
 };
@@ -80,6 +88,8 @@ async function loadPushDebugReport(): Promise<PushDebugReport> {
       report.cacheKeys = [];
     }
   }
+
+  report.storedDebugLog = await readPushDebugLog();
 
   if (!report.hasServiceWorker) {
     return report;
@@ -213,10 +223,23 @@ export function PushDebugPage({
     setIsBusy(true);
     try {
       await resetServiceWorkersAndCaches();
+      await clearPushDebugLog();
       setStatus("Service workers and caches reset");
       await refreshReport();
     } catch (error) {
       setStatus(`Reset failed: ${String(error ?? "")}`);
+    } finally {
+      setIsBusy(false);
+    }
+  }, [refreshReport]);
+
+  const handleClearLogs = React.useCallback(async () => {
+    setIsBusy(true);
+    try {
+      await clearPushDebugLog();
+      await appendPushDebugLog("client", "debug log cleared from UI");
+      setStatus("Debug log cleared");
+      await refreshReport();
     } finally {
       setIsBusy(false);
     }
@@ -231,8 +254,7 @@ export function PushDebugPage({
           import.meta.env.VITE_NOTIFICATION_SERVER_URL ??
           null,
         hasPushVapidPublicKey: Boolean(
-          import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY ??
-          import.meta.env.VITE_VAPID_PUBLIC_KEY,
+          localStorage.getItem("linky.push_vapid_public_key"),
         ),
       },
       recentMessages: messages,
@@ -283,6 +305,13 @@ export function PushDebugPage({
               disabled={isBusy}
             >
               Reset SW
+            </button>
+            <button
+              className="ghost"
+              onClick={() => void handleClearLogs()}
+              disabled={isBusy}
+            >
+              Clear logs
             </button>
           </div>
         </div>
