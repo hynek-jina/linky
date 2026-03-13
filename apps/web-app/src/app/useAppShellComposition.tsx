@@ -2455,6 +2455,29 @@ export const useAppShellComposition = () => {
     t,
   ]);
 
+  const removeUnknownContactChatFromChat = React.useCallback(async () => {
+    if (route.kind !== "chat") return;
+    if (!selectedChatContact?.isUnknownContact) return;
+
+    const confirmed = window.confirm(t("chatUnknownContactRemoveConfirm"));
+    if (!confirmed) return;
+
+    const contactId = String(selectedChatContact.id ?? "").trim();
+    if (!contactId) return;
+
+    removeLocalNostrMessagesByContactId(contactId);
+    clearContactAttention(contactId);
+    setStatus(t("chatUnknownContactRemoved"));
+    navigateTo({ route: "contacts" });
+  }, [
+    clearContactAttention,
+    removeLocalNostrMessagesByContactId,
+    route.kind,
+    selectedChatContact,
+    setStatus,
+    t,
+  ]);
+
   React.useEffect(() => {
     const pending = pendingUnknownContactAddRef.current;
     if (!pending) return;
@@ -2938,6 +2961,7 @@ export const useAppShellComposition = () => {
       onCancelReply,
       onAddUnknownContact: addUnknownContactFromChat,
       onBlockUnknownContact: blockUnknownContactFromChat,
+      onRemoveUnknownContactChat: removeUnknownContactChatFromChat,
       onCopy: onCopyChatMessage,
       onEdit: onEditChatMessage,
       onPickProfilePhoto,

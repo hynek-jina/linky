@@ -2466,9 +2466,14 @@ button.icon {
 }
 
 .chat-unknown-warning-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 10px;
+}
+
+.chat-unknown-warning-actions .btn-wide {
+  min-width: 0;
 }
 
 .chat-unknown-warning-actions .danger {
