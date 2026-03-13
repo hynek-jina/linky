@@ -709,6 +709,9 @@ export const useAppShellComposition = () => {
   const [replyContext, setReplyContext] = useState<ReplyContext | null>(null);
   const replyContextRef = React.useRef<ReplyContext | null>(null);
   const [editContext, setEditContext] = useState<EditChatContext | null>(null);
+  const activeNostrMessagePublishClientIdsRef = React.useRef<Set<string>>(
+    new Set(),
+  );
   const chatSeenWrapIdsRef = React.useRef<Set<string>>(new Set());
   const autoAcceptedChatMessageIdsRef = React.useRef<Set<string>>(new Set());
   const activeChatRouteId = route.kind === "chat" ? String(route.id ?? "") : "";
@@ -2065,6 +2068,7 @@ export const useAppShellComposition = () => {
   });
 
   useNostrPendingFlush({
+    activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
     chatSeenWrapIdsRef,
     contacts,
     currentNsec,
@@ -2656,6 +2660,7 @@ export const useAppShellComposition = () => {
   });
 
   const sendChatMessage = useSendChatMessage({
+    activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
     appendLocalNostrMessage,
     chatDraft,
     chatSeenWrapIdsRef,

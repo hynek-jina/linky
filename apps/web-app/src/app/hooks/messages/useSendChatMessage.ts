@@ -25,6 +25,7 @@ interface UseSendChatMessageParams<
   TRoute extends { kind: string },
   TContact extends ContactIdentityRowLike,
 > {
+  activePublishClientIdsRef: React.MutableRefObject<Set<string>>;
   appendLocalNostrMessage: AppendLocalNostrMessage;
   chatDraft: string;
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
@@ -53,6 +54,7 @@ export const useSendChatMessage = <
   TRoute extends { kind: string },
   TContact extends ContactIdentityRowLike,
 >({
+  activePublishClientIdsRef,
   appendLocalNostrMessage,
   chatDraft,
   chatSeenWrapIdsRef,
@@ -92,6 +94,8 @@ export const useSendChatMessage = <
     if (chatSendIsBusy) return;
     setChatSendIsBusy(true);
 
+    let activeClientId: string | null = null;
+
     try {
       const { nip19, getEventHash, getPublicKey } = await import("nostr-tools");
       const { wrapEvent } = await import("nostr-tools/nip59");
@@ -127,6 +131,8 @@ export const useSendChatMessage = <
       }
 
       const clientId = makeLocalId();
+      activeClientId = clientId;
+      activePublishClientIdsRef.current.add(clientId);
       const activeReplyContext =
         replyContextRef.current ?? replyContext ?? null;
       const activeReplyToId = String(
@@ -257,9 +263,13 @@ export const useSendChatMessage = <
     } catch (e) {
       setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
     } finally {
+      if (activeClientId) {
+        activePublishClientIdsRef.current.delete(activeClientId);
+      }
       setChatSendIsBusy(false);
     }
   }, [
+    activePublishClientIdsRef,
     appendLocalNostrMessage,
     chatDraft,
     chatSeenWrapIdsRef,

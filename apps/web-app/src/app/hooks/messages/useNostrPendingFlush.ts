@@ -14,6 +14,7 @@ import type {
 } from "../../types/appTypes";
 
 interface UseNostrPendingFlushParams<TContact extends ContactIdentityRowLike> {
+  activePublishClientIdsRef: React.MutableRefObject<Set<string>>;
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   contacts: readonly TContact[];
   currentNsec: string | null;
@@ -30,6 +31,7 @@ interface UseNostrPendingFlushParams<TContact extends ContactIdentityRowLike> {
 }
 
 export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
+  activePublishClientIdsRef,
   chatSeenWrapIdsRef,
   contacts,
   currentNsec,
@@ -46,12 +48,15 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
     if (nostrPendingFlushRef.current) return;
 
     const pending = nostrMessagesLocal
-      .filter(
-        (message) =>
+      .filter((message) => {
+        const clientId = String(message.clientId ?? "").trim();
+        return (
           String(message.direction ?? "") === "out" &&
           String(message.status ?? "sent") === "pending" &&
-          !message.localOnly,
-      )
+          !message.localOnly &&
+          (!clientId || !activePublishClientIdsRef.current.has(clientId))
+        );
+      })
       .sort((a, b) => (a.createdAtSec ?? 0) - (b.createdAtSec ?? 0));
 
     if (pending.length === 0) return;
@@ -279,6 +284,7 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
     nostrPendingFlushRef.current = run;
     await run;
   }, [
+    activePublishClientIdsRef,
     chatSeenWrapIdsRef,
     contacts,
     currentNsec,
