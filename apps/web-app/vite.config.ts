@@ -1,5 +1,6 @@
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import react from "@vitejs/plugin-react-swc";
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import type { ServerResponse } from "node:http";
@@ -31,6 +32,31 @@ const appVersion = (() => {
       : "0.0.0";
   } catch {
     return "0.0.0";
+  }
+})();
+
+const normalizeShortCommitSha = (value: string | undefined): string => {
+  const trimmed = String(value ?? "").trim();
+  return /^[0-9a-f]{7,40}$/i.test(trimmed) ? trimmed.slice(0, 7) : "";
+};
+
+const appCommitSha = (() => {
+  const envSha = normalizeShortCommitSha(
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+      process.env.VITE_VERCEL_GIT_COMMIT_SHA ??
+      process.env.GIT_COMMIT_SHA,
+  );
+  if (envSha) return envSha;
+
+  try {
+    return normalizeShortCommitSha(
+      execSync("git rev-parse --short=7 HEAD", {
+        cwd: __dirname,
+        stdio: ["ignore", "pipe", "ignore"],
+      }).toString("utf8"),
+    );
+  } catch {
+    return "";
   }
 })();
 
@@ -238,6 +264,7 @@ export default defineConfig({
   define: {
     global: "globalThis",
     __APP_VERSION__: JSON.stringify(appVersion),
+    __APP_COMMIT_SHA__: JSON.stringify(appCommitSha),
   },
   optimizeDeps: {
     exclude: ["@evolu/react-web"],
