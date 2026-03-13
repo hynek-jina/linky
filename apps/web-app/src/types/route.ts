@@ -4,6 +4,7 @@ export type Route =
   | { kind: "contacts" }
   | { kind: "advanced" }
   | { kind: "advancedAutoPayLimit" }
+  | { kind: "advancedPushDebug" }
   | { kind: "mints" }
   | { kind: "mint"; mintUrl: string }
   | { kind: "profile" }
@@ -34,6 +35,9 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#advanced") return { kind: "advanced" };
   if (hash === "#advanced/auto-pay-limit") {
     return { kind: "advancedAutoPayLimit" };
+  }
+  if (hash === "#advanced/push-debug") {
+    return { kind: "advancedPushDebug" };
   }
   if (hash === "#advanced/mints") return { kind: "mints" };
 

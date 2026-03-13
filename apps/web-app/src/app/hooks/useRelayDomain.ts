@@ -55,22 +55,34 @@ export const useRelayDomain = ({
   }, [pendingRelayDeleteUrl]);
 
   React.useEffect(() => {
-    if (!currentNpub) return;
+    if (!currentNsec) return;
 
     const initPush = async () => {
       try {
-        const {
-          isPushRegistered,
-          registerPushNotifications,
-          updatePushSubscriptionRelays,
-        } = await import("../../utils/pushNotifications");
+        const { registerPushNotifications } =
+          await import("../../utils/pushNotifications");
 
-        if (isPushRegistered()) {
-          await updatePushSubscriptionRelays(relayUrls.slice(0, 3));
-        } else {
+        if (Notification.permission === "granted") {
+          const result = await registerPushNotifications(currentNsec);
+          if (!result.success) {
+            console.error(
+              "Push notification registration failed:",
+              result.error ?? "unknown error",
+            );
+          }
+          return;
+        }
+
+        if (Notification.permission === "default") {
           const granted = await Notification.requestPermission();
           if (granted === "granted") {
-            await registerPushNotifications(currentNpub, relayUrls.slice(0, 3));
+            const result = await registerPushNotifications(currentNsec);
+            if (!result.success) {
+              console.error(
+                "Push notification registration failed:",
+                result.error ?? "unknown error",
+              );
+            }
           }
         }
       } catch (error) {
@@ -81,7 +93,7 @@ export const useRelayDomain = ({
     if ("serviceWorker" in navigator && "PushManager" in window) {
       void initPush();
     }
-  }, [currentNpub, relayUrls]);
+  }, [currentNsec]);
 
   const nostrFetchRelays = React.useMemo(() => {
     const merged = [...relayUrls, ...NOSTR_RELAYS];

@@ -1,0 +1,311 @@
+import React from "react";
+
+import {
+  registerPushNotifications,
+  requestNotificationPermission,
+  unregisterPushNotifications,
+} from "../utils/pushNotifications";
+
+interface PushDebugPageProps {
+  currentNsec: string | null;
+  t: (key: string) => string;
+}
+
+interface PushDebugMessage {
+  receivedAtIso: string;
+  text: string;
+}
+
+interface PushDebugReport {
+  cacheKeys: string[];
+  hasPushManager: boolean;
+  hasServiceWorker: boolean;
+  localStorageKeys: string[];
+  notificationPermission: string;
+  pushSubscriptionEndpoint: string | null;
+  pushSubscriptionKeys: {
+    hasAuth: boolean;
+    hasP256dh: boolean;
+  } | null;
+  serviceWorkerController: boolean;
+  serviceWorkerRegistrations: Array<{
+    activeScriptUrl: string | null;
+    installingScriptUrl: string | null;
+    scope: string;
+    waitingScriptUrl: string | null;
+  }>;
+}
+
+const INITIAL_REPORT: PushDebugReport = {
+  cacheKeys: [],
+  hasPushManager: false,
+  hasServiceWorker: false,
+  localStorageKeys: [],
+  notificationPermission: "unsupported",
+  pushSubscriptionEndpoint: null,
+  pushSubscriptionKeys: null,
+  serviceWorkerController: false,
+  serviceWorkerRegistrations: [],
+};
+
+async function resetServiceWorkersAndCaches(): Promise<void> {
+  if ("serviceWorker" in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(
+      registrations.map((registration) => registration.unregister()),
+    );
+  }
+
+  if ("caches" in globalThis) {
+    const cacheKeys = await caches.keys();
+    await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+  }
+}
+
+async function loadPushDebugReport(): Promise<PushDebugReport> {
+  const report: PushDebugReport = {
+    ...INITIAL_REPORT,
+    hasPushManager: "PushManager" in window,
+    hasServiceWorker: "serviceWorker" in navigator,
+    localStorageKeys: Object.keys(localStorage).sort(),
+    notificationPermission:
+      "Notification" in window ? Notification.permission : "unsupported",
+    serviceWorkerController: Boolean(navigator.serviceWorker?.controller),
+  };
+
+  if ("caches" in globalThis) {
+    try {
+      report.cacheKeys = (await caches.keys()).sort();
+    } catch {
+      report.cacheKeys = [];
+    }
+  }
+
+  if (!report.hasServiceWorker) {
+    return report;
+  }
+
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    report.serviceWorkerRegistrations = registrations.map((registration) => ({
+      activeScriptUrl: registration.active?.scriptURL ?? null,
+      installingScriptUrl: registration.installing?.scriptURL ?? null,
+      scope: registration.scope,
+      waitingScriptUrl: registration.waiting?.scriptURL ?? null,
+    }));
+
+    const readyRegistration = await navigator.serviceWorker.ready;
+    const subscription = await readyRegistration.pushManager.getSubscription();
+    report.pushSubscriptionEndpoint = subscription?.endpoint ?? null;
+    report.pushSubscriptionKeys = subscription
+      ? {
+          hasAuth: Boolean(subscription.getKey("auth")),
+          hasP256dh: Boolean(subscription.getKey("p256dh")),
+        }
+      : null;
+  } catch {
+    // ignore best-effort debug reads
+  }
+
+  return report;
+}
+
+export function PushDebugPage({
+  currentNsec,
+  t,
+}: PushDebugPageProps): React.ReactElement {
+  const [report, setReport] = React.useState<PushDebugReport>(INITIAL_REPORT);
+  const [messages, setMessages] = React.useState<PushDebugMessage[]>([]);
+  const [isBusy, setIsBusy] = React.useState(false);
+  const [status, setStatus] = React.useState<string>("");
+
+  const refreshReport = React.useCallback(async () => {
+    setReport(await loadPushDebugReport());
+  }, []);
+
+  React.useEffect(() => {
+    void refreshReport();
+  }, [refreshReport]);
+
+  React.useEffect(() => {
+    if (!("serviceWorker" in navigator)) {
+      return;
+    }
+
+    const onMessage = (event: MessageEvent) => {
+      const nextText = JSON.stringify(event.data);
+      setMessages((prev) =>
+        [
+          {
+            receivedAtIso: new Date().toISOString(),
+            text: nextText,
+          },
+          ...prev,
+        ].slice(0, 10),
+      );
+    };
+
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener("message", onMessage);
+    };
+  }, []);
+
+  const handleRequestPermission = React.useCallback(async () => {
+    setIsBusy(true);
+    try {
+      const granted = await requestNotificationPermission();
+      setStatus(
+        granted ? t("notificationsRegistered") : t("notificationsDenied"),
+      );
+      await refreshReport();
+    } finally {
+      setIsBusy(false);
+    }
+  }, [refreshReport, t]);
+
+  const handleRegister = React.useCallback(async () => {
+    if (!currentNsec) {
+      setStatus(t("notificationsNotLoggedIn"));
+      return;
+    }
+
+    if (!("Notification" in window)) {
+      setStatus(t("notificationsUnsupported"));
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      if (Notification.permission === "default") {
+        const granted = await requestNotificationPermission();
+        if (!granted) {
+          setStatus(t("notificationsDenied"));
+          await refreshReport();
+          return;
+        }
+      }
+
+      const result = await registerPushNotifications(currentNsec);
+      setStatus(
+        result.success
+          ? t("notificationsRegistered")
+          : String(result.error ?? t("notificationsError")),
+      );
+      await refreshReport();
+    } finally {
+      setIsBusy(false);
+    }
+  }, [currentNsec, refreshReport, t]);
+
+  const handleUnregister = React.useCallback(async () => {
+    setIsBusy(true);
+    try {
+      const ok = await unregisterPushNotifications();
+      setStatus(ok ? "Unregistered" : "Unregister failed");
+      await refreshReport();
+    } finally {
+      setIsBusy(false);
+    }
+  }, [refreshReport]);
+
+  const handleReset = React.useCallback(async () => {
+    setIsBusy(true);
+    try {
+      await resetServiceWorkersAndCaches();
+      setStatus("Service workers and caches reset");
+      await refreshReport();
+    } catch (error) {
+      setStatus(`Reset failed: ${String(error ?? "")}`);
+    } finally {
+      setIsBusy(false);
+    }
+  }, [refreshReport]);
+
+  const reportText = JSON.stringify(
+    {
+      ...report,
+      env: {
+        pushServerUrl:
+          import.meta.env.VITE_PUSH_SERVER_URL ??
+          import.meta.env.VITE_NOTIFICATION_SERVER_URL ??
+          null,
+        hasPushVapidPublicKey: Boolean(
+          import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY ??
+          import.meta.env.VITE_VAPID_PUBLIC_KEY,
+        ),
+      },
+      recentMessages: messages,
+    },
+    null,
+    2,
+  );
+
+  return (
+    <section className="panel">
+      <div className="settings-row">
+        <div className="settings-left">
+          <span className="settings-label">Push / SW debug</span>
+        </div>
+        <div className="settings-right">
+          <div className="badge-box">
+            <button
+              className="ghost"
+              onClick={() => void refreshReport()}
+              disabled={isBusy}
+            >
+              Refresh
+            </button>
+            <button
+              className="ghost"
+              onClick={() => void handleRequestPermission()}
+              disabled={isBusy}
+            >
+              Permission
+            </button>
+            <button
+              className="ghost"
+              onClick={() => void handleRegister()}
+              disabled={isBusy || !currentNsec}
+            >
+              Register
+            </button>
+            <button
+              className="ghost"
+              onClick={() => void handleUnregister()}
+              disabled={isBusy}
+            >
+              Unregister
+            </button>
+            <button
+              className="ghost"
+              onClick={() => void handleReset()}
+              disabled={isBusy}
+            >
+              Reset SW
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {status ? (
+        <div className="settings-row">
+          <div style={{ padding: "8px", fontSize: "12px", color: "#666" }}>
+            {status}
+          </div>
+        </div>
+      ) : null}
+
+      <pre
+        style={{
+          overflowX: "auto",
+          whiteSpace: "pre-wrap",
+          fontSize: 12,
+          lineHeight: 1.4,
+        }}
+      >
+        {reportText}
+      </pre>
+    </section>
+  );
+}

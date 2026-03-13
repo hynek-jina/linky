@@ -14,7 +14,7 @@ export interface PushServiceConfig {
   vapidPublicKey: string;
   vapidPrivateKey: string;
   defaultRelays: string[];
-  corsOrigin: string;
+  corsOrigins: string[];
   challengeTtlMs: number;
   proofMaxAgeSeconds: number;
   maxPubkeysPerSubscription: number;
@@ -96,6 +96,42 @@ function readRelayList(env: Record<string, string | undefined>): string[] {
   return out;
 }
 
+function readCorsOrigins(env: Record<string, string | undefined>): string[] {
+  const raw = env.PUSH_CORS_ORIGIN;
+  const source = raw && raw.trim().length > 0 ? raw : "*";
+  const values = source
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  if (values.length === 0) {
+    throw new ConfigError("PUSH_CORS_ORIGIN must contain at least one origin");
+  }
+
+  if (values.includes("*")) {
+    return ["*"];
+  }
+
+  const unique = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    let normalized: string;
+    try {
+      normalized = new URL(value).origin;
+    } catch {
+      throw new ConfigError(
+        `PUSH_CORS_ORIGIN contains invalid origin ${value}`,
+      );
+    }
+    if (unique.has(normalized)) {
+      continue;
+    }
+    unique.add(normalized);
+    out.push(normalized);
+  }
+  return out;
+}
+
 function normalizeRelayUrl(value: string): string {
   const candidate = value.includes("://") ? value : `wss://${value}`;
   const parsed = new URL(candidate);
@@ -141,7 +177,7 @@ export function loadConfig(
     vapidPublicKey: readEnvString(env, "PUSH_VAPID_PUBLIC_KEY"),
     vapidPrivateKey: readEnvString(env, "PUSH_VAPID_PRIVATE_KEY"),
     defaultRelays: readRelayList(env),
-    corsOrigin: readEnvString(env, "PUSH_CORS_ORIGIN", "*"),
+    corsOrigins: readCorsOrigins(env),
     challengeTtlMs: readEnvInteger(env, "PUSH_CHALLENGE_TTL_MS", 5 * 60 * 1000),
     proofMaxAgeSeconds: readEnvInteger(env, "PUSH_PROOF_MAX_AGE_SECONDS", 300),
     maxPubkeysPerSubscription: readEnvInteger(

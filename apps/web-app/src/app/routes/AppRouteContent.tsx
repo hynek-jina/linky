@@ -22,6 +22,7 @@ import {
   NostrRelayPage,
   NostrRelaysPage,
   ProfilePage,
+  PushDebugPage,
   TopupInvoicePage,
   TopupPage,
 } from "../../pages";
@@ -56,6 +57,7 @@ export interface SystemRoutesProps {
   advancedAutoPayLimitProps: React.ComponentProps<
     typeof AdvancedAutoPayLimitPage
   >;
+  advancedPushDebugProps: React.ComponentProps<typeof PushDebugPage>;
   evoluCurrentDataProps: React.ComponentProps<typeof EvoluCurrentDataPage>;
   evoluDataDetailProps: React.ComponentProps<typeof EvoluDataDetailPage>;
   evoluHistoryDataProps: React.ComponentProps<typeof EvoluHistoryDataPage>;
@@ -88,6 +90,10 @@ export const AppRouteContent = (): React.ReactElement => {
 
       {route.kind === "advancedAutoPayLimit" && (
         <AdvancedAutoPayLimitPage {...systemRoutes.advancedAutoPayLimitProps} />
+      )}
+
+      {route.kind === "advancedPushDebug" && (
+        <PushDebugPage {...systemRoutes.advancedPushDebugProps} />
       )}
 
       {route.kind === "mints" && <MintsPage {...systemRoutes.mintsProps} />}

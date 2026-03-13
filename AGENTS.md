@@ -46,7 +46,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Rotations prune stale lanes locally (`n-2`) for contacts/cashu/messages, keeping one previous lane for short rollback/history
 - Contacts are capped at `MAX_CONTACTS_PER_OWNER` (currently 500); add-contact UI is disabled at limit and save is blocked
 - Evolu debug views (`#evolu-current-data`, `#evolu-history-data`) scope contacts/history to active owner lanes, with history retaining one previous contacts lane as backup
-- **No backend** - pure client-side PWA with service worker caching
+- Core app remains local-first/client-side; optional background notifications are handled by the separate `apps/push` Bun service
 - Onboarding/login uses a single 20-word **SLIP-39** share; Nostr keys are always derived from that seed at path `m/44'/1237'/0'/0/0` (manual Nostr key overrides are disabled)
 - Cashu deterministic wallet seed is derived from the SLIP-39 secret using **BIP-85** at path `m/83696968'/39'/0'/24'/0'` (24-word mnemonic)
 - Web app seed/identity helpers in `src/utils/slip39Nostr.ts` are app-level adapters that delegate SLIP-39/BIP-85 derivation to `@linky/core/identity`
@@ -104,10 +104,12 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - SQLite WASM files served from `public/sqlite-wasm/` with `cache-control: no-store` in dev
 - The `nsec` private key is in localStorage (`linky.nostr_nsec`) - never log or expose it
 - Vite proxies: `/__mint-quote` for Cashu mint quotes, `/api/lnurlp` for LNURL-pay (CORS workarounds)
-- PWA service worker auto-updates - changes to `sw.ts` affect caching behavior
+- PWA service worker is built from `apps/web-app/src/sw.ts` via Vite PWA `injectManifest`; changes there affect both prod and dev SW behavior
+- Dev mode now keeps the registered PWA service worker alive for push testing; use `#advanced/push-debug` to manually reset service workers/caches when needed
 - Chat retention is enforced in `useMessagesDomain` (latest 500 messages/contact, 3000 global; reactions capped to 5000 and orphaned reactions are pruned)
 - Wallet top-up receive quotes are cached in owner-scoped localStorage until claimed/expired, so dismissing the QR screen does not drop a pending receive
 - Push service env is documented in `apps/push/.env.example`; `PUSH_VAPID_SUBJECT`, `PUSH_VAPID_PUBLIC_KEY`, and `PUSH_VAPID_PRIVATE_KEY` must be set before `apps/push` starts
+- `apps/push` CORS allowlist is configured via `PUSH_CORS_ORIGIN`; it accepts `*` or a comma-separated list of allowed web app origins
 - Container publishing is handled by `.github/workflows/push-image.yml`, which builds `apps/push/Dockerfile` and publishes the image to GHCR
 
 ## Maintaining This File
