@@ -413,12 +413,17 @@ self.addEventListener("push", (event) => {
     (async () => {
       const clientList = await getWindowClients();
       const hasWindowClient = clientList.length > 0;
-      const messageBody = await decryptIncomingMessageBody(envelope).catch(
+      const decryptedBody = await decryptIncomingMessageBody(envelope).catch(
         () => null,
       );
+      const fallbackBody =
+        typeof envelope.body === "string" && envelope.body.trim().length > 0
+          ? truncateNotificationBody(envelope.body)
+          : "";
+      const notificationBody = decryptedBody ?? fallbackBody;
       const options: NotificationOptions = {
         badge: "/pwa-192x192.png",
-        body: messageBody ?? "",
+        body: notificationBody,
         data,
         icon: "/pwa-192x192.png",
         requireInteraction: false,
@@ -429,7 +434,8 @@ self.addEventListener("push", (event) => {
         logSw("push received", {
           data,
           hasWindowClient,
-          hasDecryptedBody: Boolean(messageBody),
+          hasDecryptedBody: Boolean(decryptedBody),
+          usedFallbackBody: decryptedBody === null && fallbackBody.length > 0,
           tag: options.tag ?? null,
           title: envelope.title ?? "Linky",
         }),
@@ -442,25 +448,22 @@ self.addEventListener("push", (event) => {
               data,
               tag: options.tag ?? null,
             })
-          : !messageBody
-            ? logSw("notification skipped because message decryption failed", {
-                data,
-                tag: options.tag ?? null,
-              })
-            : self.registration
-                .showNotification(envelope.title ?? "Linky", options)
-                .then(() =>
-                  logSw("notification displayed", {
-                    data,
-                    tag: options.tag ?? null,
-                  }),
-                )
-                .catch((error) =>
-                  logSw("notification display failed", {
-                    data,
-                    error: describeError(error),
-                  }),
-                ),
+          : self.registration
+              .showNotification(envelope.title ?? "Linky", options)
+              .then(() =>
+                logSw("notification displayed", {
+                  data,
+                  tag: options.tag ?? null,
+                  usedFallbackBody:
+                    decryptedBody === null && fallbackBody.length > 0,
+                }),
+              )
+              .catch((error) =>
+                logSw("notification display failed", {
+                  data,
+                  error: describeError(error),
+                }),
+              ),
       ]);
     })(),
   );

@@ -79,7 +79,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - `lib/` contains shared app helpers (Nostr pool, token text parsing, topbar config)
 - `types/appTypes.ts` contains app-local shared types
 - `apps/push/src/` is split by concern: `http.ts` (Bun API), `ownership.ts` (signed challenge verification), `storage.ts` (SQLite persistence for subscriptions/pubkeys/challenges), `relayWatcher.ts` (relay subscription for outer `kind: 1059` events), and `push.ts` (Web Push delivery + invalid subscription cleanup, including stale subscriptions tied to an old VAPID keypair)
-- Push service proof events use `kind: 27235` with short-lived per-pubkey challenge nonces; the server never decrypts NIP-17 payloads and only emits generic notifications for matching outer `kind: 1059` events
+- Push service proof events use `kind: 27235` with short-lived per-pubkey challenge nonces; the server never decrypts NIP-17 payloads and only emits generic notifications for outer `kind: 1059` events tagged `["linky","push"]`, so sender self-copies / reactions / edits can sync over relays without triggering push
 
 ## Code Conventions
 
@@ -110,7 +110,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Dev mode now keeps the registered PWA service worker alive for push testing; use `#advanced/push-debug` to inspect persistent client/SW push logs and manually reset service workers/caches when needed
 - Push registration now validates the live `PushSubscription.options.applicationServerKey` against the current server VAPID public key and forces a re-subscribe on mismatch; open clients also re-register when the service worker emits `pushsubscriptionchange`
 - Push registration persists a stable browser `installationId` plus the last server-registered endpoint in localStorage; subscribe calls also request cleanup of legacy subscriptions without an installation id for the same pubkey, the push server replaces stale endpoints for the same installation, and the client best-effort unregisters the previous endpoint when the browser rotates/replaces the current subscription, preventing duplicate generic notifications from old endpoints
-- The PWA service worker mirrors the active `nsec` into IndexedDB on app startup/login, clears it on logout, and for closed-app push delivery it fetches the outer `kind: 1059` event from relays, decrypts it locally in the service worker, and only shows a notification when decrypt/validation succeeds; any open Linky window client still suppresses the service-worker notification in favor of in-app notification logic
+- The PWA service worker mirrors the active `nsec` into IndexedDB on app startup/login, clears it on logout, and for closed-app push delivery it fetches the outer `kind: 1059` event from relays, decrypts it locally in the service worker, and uses decrypted text when available but still shows a generic fallback notification when decrypt/validation fails; any open Linky window client still suppresses the service-worker notification in favor of in-app notification logic
 - Chat retention is enforced in `useMessagesDomain` (latest 500 messages/contact, 3000 global; reactions capped to 5000 and orphaned reactions are pruned)
 - Wallet top-up receive quotes are cached in owner-scoped localStorage until claimed/expired, so dismissing the QR screen does not drop a pending receive
 - Push service env is documented in `apps/push/.env.example`; `PUSH_VAPID_SUBJECT`, `PUSH_VAPID_PUBLIC_KEY`, and `PUSH_VAPID_PRIVATE_KEY` must be set before `apps/push` starts

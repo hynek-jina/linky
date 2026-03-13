@@ -13,6 +13,10 @@ import { safeLocalStorageSet } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
+import {
+  wrapEventWithPushMarker,
+  wrapEventWithoutPushMarker,
+} from "../../lib/pushWrappedEvent";
 import type {
   CashuTokenRowLike,
   ContactRowLike,
@@ -407,7 +411,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
 
       try {
         const { nip19, getPublicKey } = await import("nostr-tools");
-        const { wrapEvent } = await import("nostr-tools/nip59");
 
         const decodedMe = nip19.decode(currentNsec);
         if (decodedMe.type !== "nsec") throw new Error("invalid nsec");
@@ -491,16 +494,16 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             });
           }
 
-          const wrapForMe = wrapEvent(
+          const wrapForMe = wrapEventWithoutPushMarker(
             baseEvent,
             privBytes,
             myPubHex,
-          ) as NostrToolsEvent;
-          const wrapForContact = wrapEvent(
+          );
+          const wrapForContact = wrapEventWithPushMarker(
             baseEvent,
             privBytes,
             contactPubHex,
-          ) as NostrToolsEvent;
+          );
 
           const publishOutcome = await publishWrappedWithRetry(
             pool,

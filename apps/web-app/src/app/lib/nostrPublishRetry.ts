@@ -1,6 +1,7 @@
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import { appendPushDebugLog } from "../../utils/pushDebugLog";
 import type { AppNostrPool } from "./nostrPool";
+import { hasLinkyPushMarker } from "./pushWrappedEvent";
 
 const DEFAULT_PUBLISH_RETRY_DELAY_MS = 1500;
 const DEFAULT_PUBLISH_MAX_ATTEMPTS = 2;
@@ -133,10 +134,12 @@ export const publishWrappedWithRetry = async ({
     relays,
     wrapForContactId: String(wrapForContact.id ?? "").trim() || null,
     wrapForContactKind: wrapForContact.kind,
+    wrapForContactPushEligible: hasLinkyPushMarker(wrapForContact),
     wrapForContactPubkey: wrapForContact.pubkey,
     wrapForContactRecipients: extractRecipientPubkeys(wrapForContact),
     wrapForMeId: String(wrapForMe.id ?? "").trim() || null,
     wrapForMeKind: wrapForMe.kind,
+    wrapForMePushEligible: hasLinkyPushMarker(wrapForMe),
     wrapForMePubkey: wrapForMe.pubkey,
     wrapForMeRecipients: extractRecipientPubkeys(wrapForMe),
   });

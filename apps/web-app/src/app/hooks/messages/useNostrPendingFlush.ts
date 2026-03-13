@@ -4,6 +4,10 @@ import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
+import {
+  wrapEventWithPushMarker,
+  wrapEventWithoutPushMarker,
+} from "../../lib/pushWrappedEvent";
 import type {
   ContactIdentityRowLike,
   LocalNostrReaction,
@@ -65,7 +69,6 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
       try {
         const { nip19, getEventHash, getPublicKey } =
           await import("nostr-tools");
-        const { wrapEvent } = await import("nostr-tools/nip59");
 
         const decodedMe = nip19.decode(currentNsec);
         if (
@@ -128,16 +131,16 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
             content: String(message.content ?? ""),
           } satisfies UnsignedEvent;
 
-          const wrapForMe = wrapEvent(
+          const wrapForMe = wrapEventWithoutPushMarker(
             baseEvent,
             privBytes,
             myPubHex,
-          ) as NostrToolsEvent;
-          const wrapForContact = wrapEvent(
+          );
+          const wrapForContact = wrapEventWithPushMarker(
             baseEvent,
             privBytes,
             contactPubHex,
-          ) as NostrToolsEvent;
+          );
 
           await appendPushDebugLog(
             "client",
@@ -252,16 +255,16 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
           } satisfies UnsignedEvent;
           const reactionRumorId = getEventHash(reactionEvent);
 
-          const wrapForMe = wrapEvent(
+          const wrapForMe = wrapEventWithoutPushMarker(
             reactionEvent,
             privBytes,
             myPubHex,
-          ) as NostrToolsEvent;
-          const wrapForContact = wrapEvent(
+          );
+          const wrapForContact = wrapEventWithoutPushMarker(
             reactionEvent,
             privBytes,
             contactPubHex,
-          ) as NostrToolsEvent;
+          );
 
           const publishOutcome = await publishWrappedWithRetry(
             pool,
