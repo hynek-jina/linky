@@ -39,6 +39,13 @@ async function postClientMessage(
   }
 }
 
+async function getWindowClients(): Promise<readonly WindowClient[]> {
+  return self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+}
+
 async function logSw(message: string, details?: unknown): Promise<void> {
   await appendPushDebugLog("sw", message, details);
 }
@@ -165,31 +172,42 @@ self.addEventListener("push", (event) => {
 
   console.info("[linky][sw] push received", data);
   event.waitUntil(
-    Promise.all([
-      logSw("push received", {
-        data,
-        tag: options.tag ?? null,
-        title: envelope.title ?? "Linky",
-      }),
-      postClientMessage({
-        data,
-        type: "push-received",
-      }),
-      self.registration
-        .showNotification(envelope.title ?? "Linky", options)
-        .then(() =>
-          logSw("notification displayed", {
-            data,
-            tag: options.tag ?? null,
-          }),
-        )
-        .catch((error) =>
-          logSw("notification display failed", {
-            data,
-            error: describeError(error),
-          }),
-        ),
-    ]),
+    (async () => {
+      const clientList = await getWindowClients();
+      const hasWindowClient = clientList.length > 0;
+
+      await Promise.all([
+        logSw("push received", {
+          data,
+          hasWindowClient,
+          tag: options.tag ?? null,
+          title: envelope.title ?? "Linky",
+        }),
+        postClientMessage({
+          data,
+          type: "push-received",
+        }),
+        hasWindowClient
+          ? logSw("notification suppressed because app client is open", {
+              data,
+              tag: options.tag ?? null,
+            })
+          : self.registration
+              .showNotification(envelope.title ?? "Linky", options)
+              .then(() =>
+                logSw("notification displayed", {
+                  data,
+                  tag: options.tag ?? null,
+                }),
+              )
+              .catch((error) =>
+                logSw("notification display failed", {
+                  data,
+                  error: describeError(error),
+                }),
+              ),
+      ]);
+    })(),
   );
 });
 
