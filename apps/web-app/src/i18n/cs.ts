@@ -217,11 +217,15 @@ export const cs = {
   chatPlaceholder: "Zpráva",
   chatMissingContactNpub: "Chybí npub u kontaktu.",
   chatUnknownContactWarning:
-    "Tento kontakt zatím nemáte uložený. Můžete ho přidat nebo zablokovat.",
+    "Tento kontakt zatím nemáte uložený. Můžete ho přidat, zablokovat nebo smazat tento chat.",
   blockContact: "Blokovat",
+  removeChat: "Smazat chat",
   chatUnknownContactBlockConfirm:
     "Opravdu chcete tento kontakt zablokovat? Konverzace zmizí.",
   chatUnknownContactBlocked: "Kontakt byl zablokován.",
+  chatUnknownContactRemoveConfirm:
+    "Opravdu chcete smazat tuto konverzaci? Budoucí zprávy od tohoto kontaktu se budou dál zobrazovat.",
+  chatUnknownContactRemoved: "Chat byl smazán.",
   chatUnknownContactAddFailed: "Tento kontakt se zatím nepodařilo přidat.",
   chatQueued: "Zpráva zařazena do fronty.",
   chatPendingShort: "čeká",

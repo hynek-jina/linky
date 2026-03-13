@@ -217,11 +217,15 @@ export const en = {
   chatPlaceholder: "Message",
   chatMissingContactNpub: "Missing contact npub.",
   chatUnknownContactWarning:
-    "This contact is not saved yet. You can add it or block it.",
+    "This contact is not saved yet. You can add it, block it, or clear this chat.",
   blockContact: "Block",
+  removeChat: "Remove chat",
   chatUnknownContactBlockConfirm:
     "Block this contact? The conversation will be removed.",
   chatUnknownContactBlocked: "Contact blocked.",
+  chatUnknownContactRemoveConfirm:
+    "Remove this conversation? Future messages from this contact will still appear.",
+  chatUnknownContactRemoved: "Chat removed.",
   chatUnknownContactAddFailed: "Cannot add this contact yet.",
   chatQueued: "Queued for delivery.",
   chatPendingShort: "pending",
