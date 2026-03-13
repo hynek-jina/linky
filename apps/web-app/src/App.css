@@ -5,15 +5,24 @@
 }
 
 .page.chat-page {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  width: min(1200px, 100%);
+  margin-left: auto;
+  margin-right: auto;
   padding-left: 0;
   padding-right: 0;
+  padding-top: 0;
   padding-bottom: 0;
-  height: var(--chat-viewport-height, 100dvh);
-  min-height: var(--chat-viewport-height, 100dvh);
+  height: calc(var(--chat-viewport-height, 100dvh) - 56px);
+  min-height: calc(var(--chat-viewport-height, 100dvh) - 56px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   overscroll-behavior: none;
+  max-width: none;
 }
 
 .topbar {

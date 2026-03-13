@@ -138,12 +138,6 @@ export const ChatPage: FC<ChatPageProps> = ({
       timeoutId = window.setTimeout(tryFocus, 120);
     };
 
-    try {
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    } catch {
-      window.scrollTo(0, 0);
-    }
-
     const frameId = window.requestAnimationFrame(tryFocus);
 
     return () => {
@@ -165,21 +159,27 @@ export const ChatPage: FC<ChatPageProps> = ({
     if (typeof window === "undefined") return;
 
     const root = document.documentElement;
-    const html = document.documentElement;
     const body = document.body;
-    const prevHtmlOverflow = html.style.overflow;
+
+    // Prevent body scroll when keyboard opens on iOS
+    const prevHtmlOverflow = root.style.overflow;
     const prevBodyOverflow = body.style.overflow;
+    root.style.overflow = "hidden";
+    body.style.overflow = "hidden";
 
     const updateViewportHeight = () => {
-      const nextHeight = window.visualViewport?.height ?? window.innerHeight;
+      const vp = window.visualViewport;
+      const nextHeight = vp?.height ?? window.innerHeight;
       root.style.setProperty(
         "--chat-viewport-height",
         `${Math.round(nextHeight)}px`,
       );
+      // Reset any page scroll caused by keyboard focus on iOS
+      if (window.scrollY > 0) {
+        window.scrollTo(0, 0);
+      }
     };
 
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
     updateViewportHeight();
 
     const viewport = window.visualViewport;
@@ -191,7 +191,7 @@ export const ChatPage: FC<ChatPageProps> = ({
       window.removeEventListener("resize", updateViewportHeight);
       viewport?.removeEventListener("resize", updateViewportHeight);
       viewport?.removeEventListener("scroll", updateViewportHeight);
-      html.style.overflow = prevHtmlOverflow;
+      root.style.overflow = prevHtmlOverflow;
       body.style.overflow = prevBodyOverflow;
       root.style.removeProperty("--chat-viewport-height");
     };
@@ -388,7 +388,10 @@ export const ChatPage: FC<ChatPageProps> = ({
             <button
               type="button"
               className="chat-compose-send-button"
-              onClick={() => void sendChatMessage()}
+              onClick={() => {
+                void sendChatMessage();
+                focusComposeInput();
+              }}
               disabled={!canSendChat}
               aria-label={editContext ? t("chatSaveAction") : t("send")}
               title={editContext ? t("chatSaveAction") : t("send")}
