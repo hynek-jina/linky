@@ -76,7 +76,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - `routes/props/` contains grouped route-prop builders (`buildPeopleRouteProps`, `buildMoneyRouteProps`, `buildMainSwipeRouteProps`)
 - `lib/` contains shared app helpers (Nostr pool, token text parsing, topbar config)
 - `types/appTypes.ts` contains app-local shared types
-- `apps/push/src/` is split by concern: `http.ts` (Bun API), `ownership.ts` (signed challenge verification), `storage.ts` (SQLite persistence for subscriptions/pubkeys/challenges), `relayWatcher.ts` (relay subscription for outer `kind: 1059` events), and `push.ts` (Web Push delivery + invalid subscription cleanup)
+- `apps/push/src/` is split by concern: `http.ts` (Bun API), `ownership.ts` (signed challenge verification), `storage.ts` (SQLite persistence for subscriptions/pubkeys/challenges), `relayWatcher.ts` (relay subscription for outer `kind: 1059` events), and `push.ts` (Web Push delivery + invalid subscription cleanup, including stale subscriptions tied to an old VAPID keypair)
 - Push service proof events use `kind: 27235` with short-lived per-pubkey challenge nonces; the server never decrypts NIP-17 payloads and only emits generic notifications for matching outer `kind: 1059` events
 
 ## Code Conventions

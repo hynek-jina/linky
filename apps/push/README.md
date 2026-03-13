@@ -9,7 +9,7 @@ Bun HTTP service for Web Push delivery on top of outer NIP-17 inbox events (`kin
 - Persists subscriptions and challenges in SQLite
 - Watches configured Nostr relays for new outer `1059` inbox events
 - Sends a generic Web Push notification for every matching subscribed recipient pubkey
-- Removes permanently invalid subscriptions when push delivery returns `404` or `410`
+- Removes permanently invalid subscriptions when push delivery returns `404` or `410`, or when the push provider reports a VAPID public key mismatch
 
 The service does **not** decrypt inbox events and does **not** inspect wrapped inner content.
 

@@ -19,12 +19,65 @@ interface PushDeliveryServiceOptions {
 
 const DELIVERY_TTL_SECONDS = 24 * 60 * 60;
 
-function isPermanentPushFailure(error: unknown): boolean {
-  if (!isRecord(error)) {
+function isVapidKeyMismatchBody(errorBody: string | null): boolean {
+  if (errorBody === null) {
     return false;
   }
-  const statusCode = error.statusCode;
-  return statusCode === 404 || statusCode === 410;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(errorBody);
+  } catch {
+    return false;
+  }
+
+  if (!isRecord(parsed)) {
+    return false;
+  }
+
+  const message = parsed.message;
+  if (message === "VAPID public key mismatch") {
+    return true;
+  }
+
+  const reason = parsed.reason;
+  return reason === "VapidPkHashMismatch";
+}
+
+function isPermanentPushFailure(
+  statusCode: number | null,
+  errorBody: string | null,
+): boolean {
+  if (statusCode === 404 || statusCode === 410) {
+    return true;
+  }
+
+  return (
+    (statusCode === 400 || statusCode === 401) &&
+    isVapidKeyMismatchBody(errorBody)
+  );
+}
+
+function describePermanentPushFailure(
+  statusCode: number | null,
+  errorBody: string | null,
+): string | null {
+  if (statusCode === 404) {
+    return "not_found";
+  }
+
+  if (statusCode === 410) {
+    return "gone";
+  }
+
+  if (
+    (statusCode === 400 || statusCode === 401) &&
+    isVapidKeyMismatchBody(errorBody)
+  ) {
+    return "vapid_key_mismatch";
+  }
+
+  return null;
 }
 
 function toWebPushSubscription(
@@ -103,15 +156,19 @@ export class PushDeliveryService {
         },
       );
       console.info(
-        `[push] delivered ${payloadData.outerEventId} to ${payloadData.recipientPubkey} endpoint=${endpointHash} ttl=${DELIVERY_TTL_SECONDS}`,
+        `[push] sent notification successfully id=${subscription.id} outerEventId=${payloadData.outerEventId} recipient=${payloadData.recipientPubkey} endpoint=${endpointHash} ttl=${DELIVERY_TTL_SECONDS}`,
       );
     } catch (error) {
       const statusCode = readErrorStatusCode(error);
       const errorBody = readErrorBody(error);
-      if (isPermanentPushFailure(error)) {
+      const permanentFailureReason = describePermanentPushFailure(
+        statusCode,
+        errorBody,
+      );
+      if (isPermanentPushFailure(statusCode, errorBody)) {
         this.storage.removeSubscriptionById(subscription.id);
         console.warn(
-          `[push] removed invalid subscription ${subscription.id} endpoint=${endpointHash} status=${statusCode ?? "unknown"}`,
+          `[push] removed subscription from db id=${subscription.id} endpoint=${endpointHash} status=${statusCode ?? "unknown"} reason=${permanentFailureReason ?? "unknown"}`,
         );
       }
       console.warn(
