@@ -178,6 +178,11 @@ export const ChatPage: FC<ChatPageProps> = ({
       if (window.scrollY > 0) {
         window.scrollTo(0, 0);
       }
+      // Keep chat scrolled to bottom when keyboard opens/closes
+      requestAnimationFrame(() => {
+        const c = chatMessagesRef.current;
+        if (c) c.scrollTop = c.scrollHeight;
+      });
     };
 
     updateViewportHeight();
@@ -195,7 +200,7 @@ export const ChatPage: FC<ChatPageProps> = ({
       body.style.overflow = prevBodyOverflow;
       root.style.removeProperty("--chat-viewport-height");
     };
-  }, []);
+  }, [chatMessagesRef]);
 
   useEffect(() => {
     if (!replyContext && !editContext) return;
