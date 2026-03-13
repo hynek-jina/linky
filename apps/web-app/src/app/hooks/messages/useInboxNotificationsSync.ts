@@ -22,6 +22,7 @@ import {
   extractDeleteReferencedIds,
   extractEditedFromTag,
   extractReplyContextFromTags,
+  isInvalidInnerRumorPubkey,
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./chatNostrProtocol";
 import { buildUnknownContactId, normalizePubkeyHex } from "./contactIdentity";
@@ -213,6 +214,7 @@ export const useInboxNotificationsSync = <
 
             if (inner.kind === 14) {
               if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
+              if (isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)) return;
               if (!content.trim()) return;
 
               const tags = Array.isArray(inner.tags) ? inner.tags : [];

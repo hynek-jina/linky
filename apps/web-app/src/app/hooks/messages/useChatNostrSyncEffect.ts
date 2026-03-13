@@ -18,6 +18,7 @@ import {
   extractDeleteReferencedIds,
   extractEditedFromTag,
   extractReplyContextFromTags,
+  isInvalidInnerRumorPubkey,
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./chatNostrProtocol";
 import { readUnknownPubkeyHex } from "./contactIdentity";
@@ -137,6 +138,7 @@ export const useChatNostrSyncEffect = ({
 
             if (inner.kind === 14) {
               if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
+              if (isInvalidInnerRumorPubkey(innerPub, wrap.pubkey)) return;
 
               const content = String(inner.content ?? "");
               if (!content.trim()) return;

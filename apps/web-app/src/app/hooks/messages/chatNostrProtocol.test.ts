@@ -2,7 +2,10 @@ import { getPublicKey } from "nostr-tools";
 import { encrypt, getConversationKey } from "nostr-tools/nip44";
 import { wrapEvent } from "nostr-tools/nip59";
 import { describe, expect, it } from "vitest";
-import { isNestedEncryptedNip44PayloadForAnyPubkey } from "./chatNostrProtocol";
+import {
+  isInvalidInnerRumorPubkey,
+  isNestedEncryptedNip44PayloadForAnyPubkey,
+} from "./chatNostrProtocol";
 
 const createSecretKey = (lastByte: number): Uint8Array => {
   const secretKey = new Uint8Array(32);
@@ -63,5 +66,26 @@ describe("isNestedEncryptedNip44PayloadForAnyPubkey", () => {
         recipientPrivkey,
       ),
     ).toBe(true);
+  });
+
+  it("rejects inner rumors that reuse the outer wrap pubkey", () => {
+    const senderPrivkey = createSecretKey(5);
+    const recipientPrivkey = createSecretKey(6);
+    const recipientPubkey = getPublicKey(recipientPrivkey);
+    const wrap = wrapEvent(
+      {
+        kind: 14,
+        created_at: 123,
+        content: "hello",
+        tags: [["p", recipientPubkey]],
+      },
+      senderPrivkey,
+      recipientPubkey,
+    );
+
+    expect(isInvalidInnerRumorPubkey(wrap.pubkey, wrap.pubkey)).toBe(true);
+    expect(
+      isInvalidInnerRumorPubkey(getPublicKey(senderPrivkey), wrap.pubkey),
+    ).toBe(false);
   });
 });

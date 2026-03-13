@@ -127,6 +127,20 @@ export const isNestedEncryptedNip44PayloadForAnyPubkey = (
   return false;
 };
 
+export const isInvalidInnerRumorPubkey = (
+  innerPubkey: unknown,
+  wrapPubkey: unknown,
+): boolean => {
+  const normalizedInnerPubkey = normalizePubkeyHex(innerPubkey);
+  const normalizedWrapPubkey = normalizePubkeyHex(wrapPubkey);
+
+  if (!normalizedInnerPubkey || !normalizedWrapPubkey) {
+    return false;
+  }
+
+  return normalizedInnerPubkey === normalizedWrapPubkey;
+};
+
 export const applyEditToMessage = (
   message: LocalNostrMessage,
   nextContent: string,
