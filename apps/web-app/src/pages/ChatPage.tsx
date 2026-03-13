@@ -106,13 +106,13 @@ export const ChatPage: FC<ChatPageProps> = ({
 
   useEffect(() => {
     if (!replyContext && !editContext) return;
-    if (chatSendIsBusy || (!npub && !hasUnknownPubkeyHex)) return;
+    if (!npub && !hasUnknownPubkeyHex) return;
     const input = composeInputRef.current;
     if (!input) return;
     input.focus();
     const length = input.value.length;
     input.setSelectionRange(length, length);
-  }, [replyContext, editContext, chatSendIsBusy, hasUnknownPubkeyHex, npub]);
+  }, [replyContext, editContext, hasUnknownPubkeyHex, npub]);
 
   if (!selectedContact) {
     return (
@@ -292,7 +292,7 @@ export const ChatPage: FC<ChatPageProps> = ({
               void sendChatMessage();
             }}
             placeholder={t("chatPlaceholder")}
-            disabled={chatSendIsBusy || (!npub && !hasUnknownPubkeyHex)}
+            disabled={!npub && !hasUnknownPubkeyHex}
             data-guide="chat-input"
           />
           {hasDraftText ? (

@@ -146,12 +146,12 @@ export const useEditChatMessage = <
           ? editContext.originalContent
           : null,
       });
+      setChatDraft("");
+      setEditContext(null);
 
       const isOffline =
         typeof navigator !== "undefined" && navigator.onLine === false;
       if (isOffline) {
-        setChatDraft("");
-        setEditContext(null);
         setStatus(t("chatQueued"));
         return;
       }
@@ -176,8 +176,6 @@ export const useEditChatMessage = <
       );
 
       if (!publishOutcome.anySuccess) {
-        setChatDraft("");
-        setEditContext(null);
         setStatus(t("chatQueued"));
         return;
       }
@@ -188,9 +186,6 @@ export const useEditChatMessage = <
         pubkey: myPubHex,
         rumorId: editedFromId,
       });
-
-      setChatDraft("");
-      setEditContext(null);
     } catch (e) {
       setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
     } finally {

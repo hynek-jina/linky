@@ -183,12 +183,12 @@ export const useSendChatMessage = <
           : {}),
       });
       triggerChatScrollToBottom(pendingId);
+      setChatDraft("");
+      clearReplyContextIfCurrent();
 
       const isOffline =
         typeof navigator !== "undefined" && navigator.onLine === false;
       if (isOffline) {
-        setChatDraft("");
-        clearReplyContextIfCurrent();
         setStatus(t("chatQueued"));
         return;
       }
@@ -213,8 +213,6 @@ export const useSendChatMessage = <
       );
 
       if (!publishOutcome.anySuccess) {
-        setChatDraft("");
-        clearReplyContextIfCurrent();
         setStatus(t("chatQueued"));
         return;
       }
@@ -228,9 +226,6 @@ export const useSendChatMessage = <
           rumorId,
         });
       }
-
-      setChatDraft("");
-      clearReplyContextIfCurrent();
     } catch (e) {
       setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
     } finally {
