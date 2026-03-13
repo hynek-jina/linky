@@ -105,7 +105,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - The `nsec` private key is in localStorage (`linky.nostr_nsec`) - never log or expose it
 - Vite proxies: `/__mint-quote` for Cashu mint quotes, `/api/lnurlp` for LNURL-pay (CORS workarounds)
 - PWA service worker is built from `apps/web-app/src/sw.ts` via Vite PWA `injectManifest`; changes there affect both prod and dev SW behavior
-- Dev mode now keeps the registered PWA service worker alive for push testing; use `#advanced/push-debug` to manually reset service workers/caches when needed
+- Dev mode now keeps the registered PWA service worker alive for push testing; use `#advanced/push-debug` to inspect persistent client/SW push logs and manually reset service workers/caches when needed
 - Chat retention is enforced in `useMessagesDomain` (latest 500 messages/contact, 3000 global; reactions capped to 5000 and orphaned reactions are pruned)
 - Wallet top-up receive quotes are cached in owner-scoped localStorage until claimed/expired, so dismissing the QR screen does not drop a pending receive
 - Push service env is documented in `apps/push/.env.example`; `PUSH_VAPID_SUBJECT`, `PUSH_VAPID_PUBLIC_KEY`, and `PUSH_VAPID_PRIVATE_KEY` must be set before `apps/push` starts
