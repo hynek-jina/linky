@@ -107,6 +107,26 @@ export const isNestedEncryptedNip44Payload = (
   }
 };
 
+export const isNestedEncryptedNip44PayloadForAnyPubkey = (
+  content: unknown,
+  participantPubkeys: readonly (string | null | undefined)[],
+  recipientPrivateKey: Uint8Array,
+): boolean => {
+  const normalizedPubkeys = new Set<string>();
+
+  for (const candidate of participantPubkeys) {
+    const pubkey = normalizePubkeyHex(candidate);
+    if (!pubkey || normalizedPubkeys.has(pubkey)) continue;
+    normalizedPubkeys.add(pubkey);
+
+    if (isNestedEncryptedNip44Payload(content, pubkey, recipientPrivateKey)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 export const applyEditToMessage = (
   message: LocalNostrMessage,
   nextContent: string,

@@ -22,7 +22,7 @@ import {
   extractDeleteReferencedIds,
   extractEditedFromTag,
   extractReplyContextFromTags,
-  isNestedEncryptedNip44Payload,
+  isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./chatNostrProtocol";
 import { buildUnknownContactId, normalizePubkeyHex } from "./contactIdentity";
 
@@ -214,11 +214,6 @@ export const useInboxNotificationsSync = <
             if (inner.kind === 14) {
               if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
               if (!content.trim()) return;
-              if (
-                isNestedEncryptedNip44Payload(content, senderPub, privBytes)
-              ) {
-                return;
-              }
 
               const tags = Array.isArray(inner.tags) ? inner.tags : [];
               const pTags = tags
@@ -227,17 +222,14 @@ export const useInboxNotificationsSync = <
                 .filter(Boolean);
               const taggedPeerPub =
                 pTags.find((pub) => pub && pub !== myPubHex) ?? "";
-              for (const participantPub of [senderPub, taggedPeerPub]) {
-                if (
-                  participantPub &&
-                  isNestedEncryptedNip44Payload(
-                    content,
-                    participantPub,
-                    privBytes,
-                  )
-                ) {
-                  return;
-                }
+              if (
+                isNestedEncryptedNip44PayloadForAnyPubkey(
+                  content,
+                  [senderPub, taggedPeerPub, wrap.pubkey],
+                  privBytes,
+                )
+              ) {
+                return;
               }
 
               const tagClientId = extractClientTag(tags);
