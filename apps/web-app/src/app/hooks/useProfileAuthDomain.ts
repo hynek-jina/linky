@@ -16,6 +16,10 @@ import {
   NOSTR_SLIP39_SEED_STORAGE_KEY,
 } from "../../utils/constants";
 import {
+  clearStoredPushNsec,
+  setStoredPushNsec,
+} from "../../utils/pushNsecStorage";
+import {
   createSlip39Seed,
   deriveCashuBip85MnemonicFromSlip39,
   deriveEvoluOwnerMnemonicFromSlip39,
@@ -225,6 +229,12 @@ export const useProfileAuthDomain = ({
       if (!derivedCashuMnemonic) {
         pushToast(t(invalidMessageKey));
         return;
+      }
+
+      try {
+        await setStoredPushNsec(raw);
+      } catch {
+        // ignore
       }
 
       try {
@@ -482,25 +492,33 @@ export const useProfileAuthDomain = ({
       return;
     }
 
-    setLogoutArmed(false);
-    try {
-      localStorage.removeItem(NOSTR_NSEC_STORAGE_KEY);
-      localStorage.removeItem(NOSTR_SLIP39_SEED_STORAGE_KEY);
-      localStorage.removeItem(INITIAL_MNEMONIC_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
+    void (async () => {
+      setLogoutArmed(false);
+      try {
+        await clearStoredPushNsec();
+      } catch {
+        // ignore
+      }
 
-    setIsSeedLogin(false);
-    setCashuSeedMnemonic(null);
-    setSlip39Seed(null);
+      try {
+        localStorage.removeItem(NOSTR_NSEC_STORAGE_KEY);
+        localStorage.removeItem(NOSTR_SLIP39_SEED_STORAGE_KEY);
+        localStorage.removeItem(INITIAL_MNEMONIC_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
 
-    try {
-      window.location.hash = "#";
-    } catch {
-      // ignore
-    }
-    globalThis.location.reload();
+      setIsSeedLogin(false);
+      setCashuSeedMnemonic(null);
+      setSlip39Seed(null);
+
+      try {
+        window.location.hash = "#";
+      } catch {
+        // ignore
+      }
+      globalThis.location.reload();
+    })();
   }, [logoutArmed, pushToast, t]);
 
   React.useEffect(() => {
