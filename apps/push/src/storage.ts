@@ -128,6 +128,14 @@ export class PushStorage {
 
       CREATE INDEX IF NOT EXISTS idx_challenges_pubkey_action
       ON challenges (pubkey, action);
+
+      CREATE TABLE IF NOT EXISTS seen_events (
+        event_id TEXT PRIMARY KEY,
+        first_seen_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_seen_events_first_seen_at
+      ON seen_events (first_seen_at);
     `);
     this.ensureSubscriptionsInstallationIdColumn();
     this.db.exec(`
@@ -257,6 +265,31 @@ export class PushStorage {
 
   removeSubscriptionById(subscriptionId: number): void {
     this.db.query("DELETE FROM subscriptions WHERE id = ?").run(subscriptionId);
+  }
+
+  recordSeenEvent(eventId: string, firstSeenAt: number): boolean {
+    const result = this.db
+      .query(
+        `
+          INSERT OR IGNORE INTO seen_events (
+            event_id,
+            first_seen_at
+          ) VALUES (?, ?)
+        `,
+      )
+      .run(eventId, firstSeenAt);
+    return result.changes === 1;
+  }
+
+  pruneSeenEvents(nowMs: number, maxAgeMs: number): void {
+    this.db
+      .query(
+        `
+          DELETE FROM seen_events
+          WHERE first_seen_at <= ?
+        `,
+      )
+      .run(nowMs - maxAgeMs);
   }
 
   getSubscriptionsForPubkeys(

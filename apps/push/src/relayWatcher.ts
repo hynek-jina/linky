@@ -110,12 +110,18 @@ function describeEventRecipients(event: NostrEvent): string {
 }
 
 export class RelayWatcher {
+  private static readonly CATCH_UP_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
+  private static readonly LIVE_SUBSCRIPTION_REFRESH_MS = 10 * 60 * 1000;
+  static readonly SEEN_EVENT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
   private readonly relayUrls: string[];
   private readonly storage: PushStorage;
   private readonly pushDelivery: PushDeliveryService;
   private readonly seenEventIds = new Map<string, number>();
   private readonly pool = new SimplePool({ enableReconnect: true });
   private readonly eventDedupeTtlMs: number;
+  private liveDeliveryEnabled = false;
+  private refreshIntervalHandle: ReturnType<typeof setInterval> | null = null;
   private subscription: ClosableSubscription | null = null;
 
   constructor(options: RelayWatcherOptions) {
@@ -130,7 +136,30 @@ export class RelayWatcher {
       return;
     }
 
-    const since = Math.floor(Date.now() / 1000) - 15;
+    this.openSubscription("initial start");
+    this.refreshIntervalHandle = setInterval(() => {
+      this.restartSubscription("periodic refresh");
+    }, RelayWatcher.LIVE_SUBSCRIPTION_REFRESH_MS);
+  }
+
+  async stop(): Promise<void> {
+    if (this.refreshIntervalHandle !== null) {
+      clearInterval(this.refreshIntervalHandle);
+      this.refreshIntervalHandle = null;
+    }
+    this.liveDeliveryEnabled = false;
+    await this.subscription?.close("server shutdown");
+    this.subscription = null;
+    this.pool.close(this.relayUrls);
+  }
+
+  private openSubscription(reason: string): void {
+    const since =
+      Math.floor(Date.now() / 1000) - RelayWatcher.CATCH_UP_LOOKBACK_SECONDS;
+    this.liveDeliveryEnabled = false;
+    console.info(
+      `[push] opening relay watcher subscription reason=${reason} since=${since}`,
+    );
     this.subscription = this.pool.subscribeMany(
       this.relayUrls,
       {
@@ -142,25 +171,33 @@ export class RelayWatcher {
           void this.handleEvent(event);
         },
         oneose: () => {
-          console.info("[push] relay watcher caught up");
+          this.liveDeliveryEnabled = true;
+          console.info("[push] relay watcher caught up; live delivery enabled");
         },
         onclose: (reasons) => {
+          this.liveDeliveryEnabled = false;
           console.warn("[push] relay subscription closed", reasons);
         },
       },
     );
   }
 
-  async stop(): Promise<void> {
-    await this.subscription?.close("server shutdown");
+  private restartSubscription(reason: string): void {
+    this.liveDeliveryEnabled = false;
+    this.subscription?.close(reason);
     this.subscription = null;
-    this.pool.close(this.relayUrls);
+    this.openSubscription(reason);
   }
 
   private markSeen(eventId: string, nowMs: number): boolean {
     this.pruneSeen(nowMs);
 
     if (this.seenEventIds.has(eventId)) {
+      return false;
+    }
+
+    if (!this.storage.recordSeenEvent(eventId, nowMs)) {
+      this.seenEventIds.set(eventId, nowMs + this.eventDedupeTtlMs);
       return false;
     }
 
@@ -213,6 +250,13 @@ export class RelayWatcher {
     if (subscriptionsByPubkey.size === 0) {
       console.info(
         `[push] skipped event without matching subscriptions id=${event.id} recipients=${recipientPubkeys.join(",")}`,
+      );
+      return;
+    }
+
+    if (!this.liveDeliveryEnabled) {
+      console.info(
+        `[push] suppressed historical gift wrap id=${event.id} recipients=${recipientPubkeys.join(",")} until live delivery is enabled`,
       );
       return;
     }
