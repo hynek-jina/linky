@@ -70,6 +70,10 @@ import {
   safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "../utils/storage";
+import {
+  clearStoredPushNsec,
+  setStoredPushNsec,
+} from "../utils/pushNsecStorage";
 import { useCashuTokenChecks } from "./hooks/cashu/useCashuTokenChecks";
 import { useNpubCashClaim } from "./hooks/cashu/useNpubCashClaim";
 import { useRestoreMissingTokens } from "./hooks/cashu/useRestoreMissingTokens";
@@ -467,6 +471,20 @@ export const useAppShellComposition = () => {
     return () => {
       cancelled = true;
     };
+  }, [currentNsec]);
+
+  React.useEffect(() => {
+    void (async () => {
+      try {
+        if (currentNsec) {
+          await setStoredPushNsec(currentNsec);
+        } else {
+          await clearStoredPushNsec();
+        }
+      } catch {
+        // ignore
+      }
+    })();
   }, [currentNsec]);
 
   React.useEffect(() => {

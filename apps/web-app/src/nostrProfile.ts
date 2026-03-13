@@ -1,3 +1,4 @@
+import { NOSTR_RELAYS } from "./utils/nostrRelays";
 import { getSharedNostrPool } from "./utils/nostrPool";
 import { isHttpUrl } from "./utils/validation";
 import type { Event as NostrToolsEvent } from "nostr-tools";
@@ -19,12 +20,7 @@ const getNostrTools = () => {
   return nostrToolsPromise;
 };
 
-export const NOSTR_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://nos.lol",
-  "wss://relay.0xchat.com",
-  "wss://shu01.shugur.net",
-];
+export { NOSTR_RELAYS };
 
 const STORAGE_PICTURE_PREFIX = "linky_nostr_profile_picture_v1:";
 const STORAGE_METADATA_PREFIX = "linky_nostr_profile_metadata_v1:";

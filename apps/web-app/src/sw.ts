@@ -2,10 +2,20 @@
 /// <reference lib="dom" />
 /// <reference lib="webworker" />
 
+import type { Event as NostrEvent } from "nostr-tools";
+import { getPublicKey, nip19, SimplePool } from "nostr-tools";
+import { unwrapEvent } from "nostr-tools/nip17";
 import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst } from "workbox-strategies";
+import {
+  isInvalidInnerRumorPubkey,
+  isNestedEncryptedNip44PayloadForAnyPubkey,
+} from "./app/hooks/messages/chatNostrProtocol";
+import { normalizePubkeyHex } from "./app/hooks/messages/contactIdentity";
+import { NOSTR_RELAYS } from "./utils/nostrRelays";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
+import { getStoredPushNsec } from "./utils/pushNsecStorage";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -99,6 +109,134 @@ function readPushEnvelope(value: unknown): PushNotificationEnvelope | null {
   };
 }
 
+function truncateNotificationBody(value: string): string {
+  const normalized = value.trim();
+  if (normalized.length <= 140) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 140)}…`;
+}
+
+function normalizeRelayUrls(urls: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of urls) {
+    const url = String(raw ?? "").trim();
+    if (!url) continue;
+    if (!(url.startsWith("wss://") || url.startsWith("ws://"))) continue;
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+  }
+
+  return out;
+}
+
+function getPTagPubkeys(inner: { tags: string[][] }): string[] {
+  const out: string[] = [];
+
+  for (const tag of inner.tags) {
+    if (!Array.isArray(tag) || tag[0] !== "p") continue;
+    const pubkey = String(tag[1] ?? "").trim();
+    if (pubkey) {
+      out.push(pubkey);
+    }
+  }
+
+  return out;
+}
+
+async function fetchOuterWrapEvent(
+  envelope: PushNotificationEnvelope,
+): Promise<NostrEvent | null> {
+  const outerEventId = String(envelope.data?.outerEventId ?? "").trim();
+  const recipientPubkey = String(envelope.data?.recipientPubkey ?? "").trim();
+  if (!outerEventId || !recipientPubkey) {
+    return null;
+  }
+
+  const relays = normalizeRelayUrls([
+    ...(envelope.data?.relayHints ?? []),
+    ...NOSTR_RELAYS,
+  ]);
+  if (relays.length === 0) {
+    return null;
+  }
+
+  const pool = new SimplePool({ enableReconnect: false });
+  try {
+    const events = await pool.querySync(
+      relays,
+      { ids: [outerEventId], kinds: [1059], "#p": [recipientPubkey], limit: 1 },
+      { maxWait: 5000 },
+    );
+    return events[0] ?? null;
+  } catch {
+    return null;
+  } finally {
+    pool.close(relays);
+  }
+}
+
+async function decryptIncomingMessageBody(
+  envelope: PushNotificationEnvelope,
+): Promise<string | null> {
+  const nsec = await getStoredPushNsec();
+  if (!nsec) {
+    return null;
+  }
+
+  const decoded = nip19.decode(nsec);
+  if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
+    return null;
+  }
+
+  const privBytes = decoded.data;
+  const myPubHex = getPublicKey(privBytes);
+  const recipientPubkey = normalizePubkeyHex(envelope.data?.recipientPubkey);
+  if (!recipientPubkey || recipientPubkey !== myPubHex) {
+    return null;
+  }
+
+  const wrap = await fetchOuterWrapEvent(envelope);
+  if (!wrap) {
+    return null;
+  }
+
+  const inner = unwrapEvent(wrap, privBytes);
+  if (!inner || inner.kind !== 14) {
+    return null;
+  }
+
+  const senderPub = String(inner.pubkey ?? "").trim();
+  const content = String(inner.content ?? "").trim();
+  if (!senderPub || !content) {
+    return null;
+  }
+  if (isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)) {
+    return null;
+  }
+
+  const pTags = getPTagPubkeys(inner);
+  if (!pTags.includes(myPubHex)) {
+    return null;
+  }
+
+  const taggedPeerPub = pTags.find((pubkey) => pubkey !== myPubHex) ?? "";
+  if (
+    isNestedEncryptedNip44PayloadForAnyPubkey(
+      content,
+      [senderPub, taggedPeerPub, wrap.pubkey],
+      privBytes,
+    )
+  ) {
+    return null;
+  }
+
+  return truncateNotificationBody(content);
+}
+
 precacheAndRoute(self.__WB_MANIFEST || []);
 
 registerRoute(
@@ -155,14 +293,6 @@ self.addEventListener("push", (event) => {
   }
 
   const data = envelope.data ?? { type: "nostr_inbox" };
-  const options: NotificationOptions = {
-    badge: "/pwa-192x192.png",
-    body: envelope.body ?? "New message",
-    data,
-    icon: "/pwa-192x192.png",
-    requireInteraction: false,
-    tag: data.outerEventId ?? "linky-inbox",
-  };
 
   if ("setAppBadge" in navigator) {
     navigator.setAppBadge().catch(() => {
@@ -175,11 +305,23 @@ self.addEventListener("push", (event) => {
     (async () => {
       const clientList = await getWindowClients();
       const hasWindowClient = clientList.length > 0;
+      const messageBody = await decryptIncomingMessageBody(envelope).catch(
+        () => null,
+      );
+      const options: NotificationOptions = {
+        badge: "/pwa-192x192.png",
+        body: messageBody ?? "",
+        data,
+        icon: "/pwa-192x192.png",
+        requireInteraction: false,
+        tag: data.outerEventId ?? "linky-inbox",
+      };
 
       await Promise.all([
         logSw("push received", {
           data,
           hasWindowClient,
+          hasDecryptedBody: Boolean(messageBody),
           tag: options.tag ?? null,
           title: envelope.title ?? "Linky",
         }),
@@ -192,20 +334,25 @@ self.addEventListener("push", (event) => {
               data,
               tag: options.tag ?? null,
             })
-          : self.registration
-              .showNotification(envelope.title ?? "Linky", options)
-              .then(() =>
-                logSw("notification displayed", {
-                  data,
-                  tag: options.tag ?? null,
-                }),
-              )
-              .catch((error) =>
-                logSw("notification display failed", {
-                  data,
-                  error: describeError(error),
-                }),
-              ),
+          : !messageBody
+            ? logSw("notification skipped because message decryption failed", {
+                data,
+                tag: options.tag ?? null,
+              })
+            : self.registration
+                .showNotification(envelope.title ?? "Linky", options)
+                .then(() =>
+                  logSw("notification displayed", {
+                    data,
+                    tag: options.tag ?? null,
+                  }),
+                )
+                .catch((error) =>
+                  logSw("notification display failed", {
+                    data,
+                    error: describeError(error),
+                  }),
+                ),
       ]);
     })(),
   );
