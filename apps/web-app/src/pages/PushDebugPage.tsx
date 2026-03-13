@@ -272,6 +272,22 @@ export function PushDebugPage({
     2,
   );
 
+  const handleCopyLogs = React.useCallback(async () => {
+    setIsBusy(true);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(reportText);
+        setStatus("Copied debug report");
+      } else {
+        setStatus("Clipboard API unavailable");
+      }
+    } catch (error) {
+      setStatus(`Copy failed: ${String(error ?? "")}`);
+    } finally {
+      setIsBusy(false);
+    }
+  }, [reportText]);
+
   return (
     <section className="panel">
       <div className="settings-row">
@@ -321,6 +337,13 @@ export function PushDebugPage({
               disabled={isBusy}
             >
               Clear logs
+            </button>
+            <button
+              className="ghost"
+              onClick={() => void handleCopyLogs()}
+              disabled={isBusy}
+            >
+              Copy logs
             </button>
           </div>
         </div>

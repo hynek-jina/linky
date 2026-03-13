@@ -37,6 +37,19 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? "");
 }
 
+function readEnvelopeDebugMeta(
+  envelope: PushNotificationEnvelope,
+): PushNotificationData {
+  const data = envelope.data ?? {};
+  return {
+    ...(data.createdAt === undefined ? {} : { createdAt: data.createdAt }),
+    ...(data.outerEventId ? { outerEventId: data.outerEventId } : {}),
+    ...(data.recipientPubkey ? { recipientPubkey: data.recipientPubkey } : {}),
+    ...(data.relayHints ? { relayHints: data.relayHints } : {}),
+    ...(data.type ? { type: data.type } : {}),
+  };
+}
+
 async function postClientMessage(
   message: Record<string, unknown>,
 ): Promise<void> {
@@ -153,6 +166,12 @@ async function fetchOuterWrapEvent(
   const outerEventId = String(envelope.data?.outerEventId ?? "").trim();
   const recipientPubkey = String(envelope.data?.recipientPubkey ?? "").trim();
   if (!outerEventId || !recipientPubkey) {
+    await logSw(
+      "sw decrypt fetch skipped because push envelope is incomplete",
+      {
+        data: readEnvelopeDebugMeta(envelope),
+      },
+    );
     return null;
   }
 
@@ -161,8 +180,17 @@ async function fetchOuterWrapEvent(
     ...NOSTR_RELAYS,
   ]);
   if (relays.length === 0) {
+    await logSw("sw decrypt fetch skipped because no relays were available", {
+      data: readEnvelopeDebugMeta(envelope),
+    });
     return null;
   }
+
+  await logSw("sw decrypt fetching outer wrap", {
+    data: readEnvelopeDebugMeta(envelope),
+    relayCount: relays.length,
+    relays,
+  });
 
   const pool = new SimplePool({ enableReconnect: false });
   try {
@@ -171,8 +199,18 @@ async function fetchOuterWrapEvent(
       { ids: [outerEventId], kinds: [1059], "#p": [recipientPubkey], limit: 1 },
       { maxWait: 5000 },
     );
-    return events[0] ?? null;
-  } catch {
+    const wrap = events[0] ?? null;
+    await logSw("sw decrypt outer wrap fetch completed", {
+      data: readEnvelopeDebugMeta(envelope),
+      found: Boolean(wrap),
+      resultCount: events.length,
+    });
+    return wrap;
+  } catch (error) {
+    await logSw("sw decrypt outer wrap fetch failed", {
+      data: readEnvelopeDebugMeta(envelope),
+      error: describeError(error),
+    });
     return null;
   } finally {
     pool.close(relays);
@@ -182,13 +220,23 @@ async function fetchOuterWrapEvent(
 async function decryptIncomingMessageBody(
   envelope: PushNotificationEnvelope,
 ): Promise<string | null> {
+  await logSw("sw decrypt started", {
+    data: readEnvelopeDebugMeta(envelope),
+  });
+
   const nsec = await getStoredPushNsec();
   if (!nsec) {
+    await logSw("sw decrypt failed because nsec is missing from indexeddb", {
+      data: readEnvelopeDebugMeta(envelope),
+    });
     return null;
   }
 
   const decoded = nip19.decode(nsec);
   if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
+    await logSw("sw decrypt failed because stored nsec is invalid", {
+      data: readEnvelopeDebugMeta(envelope),
+    });
     return null;
   }
 
@@ -196,30 +244,79 @@ async function decryptIncomingMessageBody(
   const myPubHex = getPublicKey(privBytes);
   const recipientPubkey = normalizePubkeyHex(envelope.data?.recipientPubkey);
   if (!recipientPubkey || recipientPubkey !== myPubHex) {
+    await logSw("sw decrypt failed because recipient pubkey did not match", {
+      data: readEnvelopeDebugMeta(envelope),
+      derivedPubkey: myPubHex,
+      hasRecipientPubkey: Boolean(recipientPubkey),
+    });
     return null;
   }
 
   const wrap = await fetchOuterWrapEvent(envelope);
   if (!wrap) {
+    await logSw("sw decrypt failed because outer wrap event was not fetched", {
+      data: readEnvelopeDebugMeta(envelope),
+    });
     return null;
   }
 
-  const inner = unwrapEvent(wrap, privBytes);
+  let inner: ReturnType<typeof unwrapEvent> | null = null;
+  try {
+    inner = unwrapEvent(wrap, privBytes);
+  } catch (error) {
+    await logSw("sw decrypt failed because unwrapEvent threw", {
+      data: readEnvelopeDebugMeta(envelope),
+      error: describeError(error),
+      wrapPubkey: wrap.pubkey,
+    });
+    return null;
+  }
   if (!inner || inner.kind !== 14) {
+    await logSw(
+      "sw decrypt failed because inner rumor was missing or invalid",
+      {
+        data: readEnvelopeDebugMeta(envelope),
+        hasInner: Boolean(inner),
+        innerKind: inner?.kind ?? null,
+      },
+    );
     return null;
   }
 
   const senderPub = String(inner.pubkey ?? "").trim();
   const content = String(inner.content ?? "").trim();
   if (!senderPub || !content) {
+    await logSw(
+      "sw decrypt failed because inner rumor lacked sender or content",
+      {
+        contentLength: content.length,
+        data: readEnvelopeDebugMeta(envelope),
+        hasSenderPubkey: Boolean(senderPub),
+      },
+    );
     return null;
   }
   if (isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)) {
+    await logSw(
+      "sw decrypt rejected inner rumor because it reused wrap pubkey",
+      {
+        data: readEnvelopeDebugMeta(envelope),
+        senderPub,
+        wrapPubkey: wrap.pubkey,
+      },
+    );
     return null;
   }
 
   const pTags = getPTagPubkeys(inner);
   if (!pTags.includes(myPubHex)) {
+    await logSw(
+      "sw decrypt failed because inner rumor did not address this recipient",
+      {
+        data: readEnvelopeDebugMeta(envelope),
+        pTagCount: pTags.length,
+      },
+    );
     return null;
   }
 
@@ -231,9 +328,20 @@ async function decryptIncomingMessageBody(
       privBytes,
     )
   ) {
+    await logSw("sw decrypt rejected nested encrypted payload", {
+      data: readEnvelopeDebugMeta(envelope),
+      hasTaggedPeerPub: Boolean(taggedPeerPub),
+      senderPub,
+      wrapPubkey: wrap.pubkey,
+    });
     return null;
   }
 
+  await logSw("sw decrypt succeeded", {
+    contentLength: content.length,
+    data: readEnvelopeDebugMeta(envelope),
+    senderPub,
+  });
   return truncateNotificationBody(content);
 }
 
