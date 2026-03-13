@@ -1,4 +1,4 @@
-import { type FC, useEffect, useRef } from "react";
+import { type FC, useCallback, useEffect, useRef } from "react";
 import { aggregateReactions } from "../app/hooks/messages/chatNostrProtocol";
 import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
 import type { ReplyContext } from "../app/hooks/messages/useSendChatMessage";
@@ -103,16 +103,105 @@ export const ChatPage: FC<ChatPageProps> = ({
   const isDesktop =
     typeof window !== "undefined" &&
     window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const shouldAutoFocusCompose =
+    typeof window !== "undefined" &&
+    window.matchMedia("(hover: none), (pointer: coarse)").matches;
+  const canCompose = Boolean(npub || hasUnknownPubkeyHex);
+
+  const focusComposeInput = useCallback(() => {
+    const input = composeInputRef.current;
+    if (!input || input.disabled) return false;
+
+    try {
+      input.focus({ preventScroll: true });
+    } catch {
+      input.focus();
+    }
+
+    const length = input.value.length;
+    input.setSelectionRange(length, length);
+    return document.activeElement === input;
+  }, []);
+
+  useEffect(() => {
+    if (!shouldAutoFocusCompose || !canCompose) return;
+    if (typeof window === "undefined") return;
+
+    let isCancelled = false;
+    let timeoutId: number | null = null;
+    let attempts = 0;
+
+    const tryFocus = () => {
+      if (isCancelled || focusComposeInput()) return;
+      if (attempts >= 3) return;
+      attempts += 1;
+      timeoutId = window.setTimeout(tryFocus, 120);
+    };
+
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+
+    const frameId = window.requestAnimationFrame(tryFocus);
+
+    return () => {
+      isCancelled = true;
+      window.cancelAnimationFrame(frameId);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [
+    canCompose,
+    focusComposeInput,
+    shouldAutoFocusCompose,
+    selectedContact?.id,
+  ]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (typeof window === "undefined") return;
+
+    const root = document.documentElement;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+
+    const updateViewportHeight = () => {
+      const nextHeight = window.visualViewport?.height ?? window.innerHeight;
+      root.style.setProperty(
+        "--chat-viewport-height",
+        `${Math.round(nextHeight)}px`,
+      );
+    };
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    updateViewportHeight();
+
+    const viewport = window.visualViewport;
+    window.addEventListener("resize", updateViewportHeight);
+    viewport?.addEventListener("resize", updateViewportHeight);
+    viewport?.addEventListener("scroll", updateViewportHeight);
+
+    return () => {
+      window.removeEventListener("resize", updateViewportHeight);
+      viewport?.removeEventListener("resize", updateViewportHeight);
+      viewport?.removeEventListener("scroll", updateViewportHeight);
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+      root.style.removeProperty("--chat-viewport-height");
+    };
+  }, []);
 
   useEffect(() => {
     if (!replyContext && !editContext) return;
     if (!npub && !hasUnknownPubkeyHex) return;
-    const input = composeInputRef.current;
-    if (!input) return;
-    input.focus();
-    const length = input.value.length;
-    input.setSelectionRange(length, length);
-  }, [replyContext, editContext, hasUnknownPubkeyHex, npub]);
+    focusComposeInput();
+  }, [replyContext, editContext, focusComposeInput, hasUnknownPubkeyHex, npub]);
 
   if (!selectedContact) {
     return (

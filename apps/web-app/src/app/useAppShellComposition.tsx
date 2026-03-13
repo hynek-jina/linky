@@ -20,8 +20,14 @@ import { useToasts } from "../hooks/useToasts";
 import { getInitialLang, translations, type Lang } from "../i18n";
 import { inferLightningAddressFromLnurlTarget } from "../lnurlPay";
 import {
+  cacheProfileAvatarFromUrl,
   fetchNostrProfileMetadata,
+  fetchNostrProfilePicture,
+  loadCachedProfileAvatarObjectUrl,
   loadCachedProfileMetadata,
+  loadCachedProfilePicture,
+  saveCachedProfileMetadata,
+  saveCachedProfilePicture,
   type NostrProfileMetadata,
 } from "../nostrProfile";
 import { getCashuDeterministicSeedFromStorage } from "../utils/cashuDeterministic";
@@ -1643,21 +1649,34 @@ export const useAppShellComposition = () => {
     unknownNameByNpub,
   ]);
 
+  const unknownContactNpubs = React.useMemo(() => {
+    const seen = new Set<string>();
+    const npubs: string[] = [];
+
+    for (const contact of unknownContacts) {
+      const npub = normalizeNpubIdentifier(contact.npub);
+      if (!npub) continue;
+      if (seen.has(npub)) continue;
+      seen.add(npub);
+      npubs.push(npub);
+    }
+
+    return npubs;
+  }, [unknownContacts]);
+
   React.useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
 
     const run = async () => {
-      for (const contact of unknownContacts) {
-        const npub = normalizeNpubIdentifier(contact.npub);
-        if (!npub) continue;
+      for (const npub of unknownContactNpubs) {
         if (unknownNameByNpub[npub] !== undefined) continue;
 
         const cached = loadCachedProfileMetadata(npub);
-        const cachedName = cached?.metadata
-          ? getBestNostrName(cached.metadata)
-          : null;
-        if (cachedName) {
+        if (cached) {
+          const cachedName = cached.metadata
+            ? getBestNostrName(cached.metadata)
+            : null;
           if (!cancelled) {
             setUnknownNameByNpub((prev) =>
               prev[npub] !== undefined ? prev : { ...prev, [npub]: cachedName },
@@ -1674,12 +1693,14 @@ export const useAppShellComposition = () => {
             signal: controller.signal,
             relays: nostrFetchRelays,
           });
+          saveCachedProfileMetadata(npub, metadata);
           if (cancelled) return;
           setUnknownNameByNpub((prev) => ({
             ...prev,
             [npub]: metadata ? getBestNostrName(metadata) : null,
           }));
         } catch {
+          saveCachedProfileMetadata(npub, null);
           if (cancelled) return;
           setUnknownNameByNpub((prev) => ({
             ...prev,
@@ -1700,8 +1721,96 @@ export const useAppShellComposition = () => {
   }, [
     nostrFetchRelays,
     nostrMetadataInFlight,
-    unknownContacts,
+    unknownContactNpubs,
     unknownNameByNpub,
+  ]);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const run = async () => {
+      for (const npub of unknownContactNpubs) {
+        if (nostrPictureByNpub[npub] !== undefined) continue;
+
+        try {
+          const blobUrl = await loadCachedProfileAvatarObjectUrl(npub);
+          if (cancelled) return;
+          if (blobUrl) {
+            setNostrPictureByNpub((prev) => ({
+              ...prev,
+              [npub]: rememberBlobAvatarUrl(npub, blobUrl),
+            }));
+            continue;
+          }
+        } catch {
+          // ignore
+        }
+
+        const cached = loadCachedProfilePicture(npub);
+        if (cached) {
+          setNostrPictureByNpub((prev) =>
+            prev[npub] !== undefined ? prev : { ...prev, [npub]: cached.url },
+          );
+          continue;
+        }
+
+        if (nostrInFlight.current.has(npub)) continue;
+        nostrInFlight.current.add(npub);
+
+        try {
+          const url = await fetchNostrProfilePicture(npub, {
+            signal: controller.signal,
+            relays: nostrFetchRelays,
+          });
+          saveCachedProfilePicture(npub, url);
+          if (cancelled) return;
+
+          if (url) {
+            const blobUrl = await cacheProfileAvatarFromUrl(npub, url, {
+              signal: controller.signal,
+            });
+            if (cancelled) return;
+            setNostrPictureByNpub((prev) => ({
+              ...prev,
+              [npub]: rememberBlobAvatarUrl(npub, blobUrl || url),
+            }));
+          } else {
+            setNostrPictureByNpub((prev) => {
+              const existing = prev[npub];
+              if (typeof existing === "string" && existing.trim()) return prev;
+              if (existing === null) return prev;
+              return { ...prev, [npub]: null };
+            });
+          }
+        } catch {
+          saveCachedProfilePicture(npub, null);
+          if (cancelled) return;
+          setNostrPictureByNpub((prev) => {
+            const existing = prev[npub];
+            if (typeof existing === "string" && existing.trim()) return prev;
+            if (existing === null) return prev;
+            return { ...prev, [npub]: null };
+          });
+        } finally {
+          nostrInFlight.current.delete(npub);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [
+    nostrFetchRelays,
+    nostrInFlight,
+    nostrPictureByNpub,
+    rememberBlobAvatarUrl,
+    setNostrPictureByNpub,
+    unknownContactNpubs,
   ]);
 
   const unknownContactById = React.useMemo(() => {

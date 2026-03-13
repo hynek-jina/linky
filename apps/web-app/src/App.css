@@ -8,6 +8,12 @@
   padding-left: 0;
   padding-right: 0;
   padding-bottom: 0;
+  height: var(--chat-viewport-height, 100dvh);
+  min-height: var(--chat-viewport-height, 100dvh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .topbar {
@@ -922,6 +928,7 @@ button.settings-link:hover {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .chat-day-separator {
@@ -1227,7 +1234,8 @@ button.settings-link:hover {
 .chat-panel {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 56px);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .panel.chat-panel {
