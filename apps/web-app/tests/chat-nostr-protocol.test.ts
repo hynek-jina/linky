@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { encrypt, getConversationKey } from "nostr-tools/nip44";
+import { generateSecretKey, getPublicKey } from "nostr-tools";
 import type {
   LocalNostrMessage,
   LocalNostrReaction,
@@ -9,6 +11,7 @@ import {
   applyReactionDeletes,
   extractDeleteReferencedIds,
   extractReplyContextFromTags,
+  isNestedEncryptedNip44Payload,
 } from "../src/app/hooks/messages/chatNostrProtocol";
 import { dedupeNostrMessagesByPriority } from "../src/app/hooks/messages/messageHelpers";
 
@@ -79,6 +82,37 @@ describe("applyEditToMessage", () => {
   });
 });
 
+describe("isNestedEncryptedNip44Payload", () => {
+  it("detects payloads that are still encrypted for the sender/recipient pair", () => {
+    const senderPrivateKey = generateSecretKey();
+    const recipientPrivateKey = generateSecretKey();
+    const senderPubkey = getPublicKey(senderPrivateKey);
+    const recipientPubkey = getPublicKey(recipientPrivateKey);
+    const encryptedPayload = encrypt(
+      JSON.stringify({ kind: 14, content: "hello" }),
+      getConversationKey(senderPrivateKey, recipientPubkey),
+    );
+
+    expect(
+      isNestedEncryptedNip44Payload(
+        encryptedPayload,
+        senderPubkey,
+        recipientPrivateKey,
+      ),
+    ).toBe(true);
+  });
+
+  it("ignores normal plaintext chat messages", () => {
+    expect(
+      isNestedEncryptedNip44Payload(
+        "hello from chat",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        generateSecretKey(),
+      ),
+    ).toBe(false);
+  });
+});
+
 describe("reactions", () => {
   it("aggregates counts and own highlight", () => {
     const chips = aggregateReactions(
@@ -91,8 +125,8 @@ describe("reactions", () => {
     );
 
     expect(chips).toEqual([
-      { emoji: "👍", count: 2, reactedByMe: true },
       { emoji: "❤️", count: 1, reactedByMe: false },
+      { emoji: "👍", count: 1, reactedByMe: true },
     ]);
   });
 

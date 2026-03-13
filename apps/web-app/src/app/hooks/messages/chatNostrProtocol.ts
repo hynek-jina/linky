@@ -1,8 +1,10 @@
+import { decrypt, getConversationKey } from "nostr-tools/nip44";
 import type {
   ChatReactionChip,
   LocalNostrMessage,
   LocalNostrReaction,
 } from "../../types/appTypes";
+import { normalizePubkeyHex } from "./contactIdentity";
 
 type NostrTag = readonly string[];
 
@@ -83,6 +85,26 @@ export const extractDeleteReferencedIds = (tags: unknown): string[] => {
     ids.push(id);
   }
   return ids;
+};
+
+export const isNestedEncryptedNip44Payload = (
+  content: unknown,
+  participantPubkey: unknown,
+  recipientPrivateKey: Uint8Array,
+): boolean => {
+  const payload = normalizeText(content);
+  const pubkey = normalizePubkeyHex(participantPubkey);
+
+  if (!payload || !pubkey || !(recipientPrivateKey instanceof Uint8Array)) {
+    return false;
+  }
+
+  try {
+    decrypt(payload, getConversationKey(recipientPrivateKey, pubkey));
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 export const applyEditToMessage = (

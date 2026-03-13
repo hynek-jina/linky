@@ -18,6 +18,7 @@ import {
   extractDeleteReferencedIds,
   extractEditedFromTag,
   extractReplyContextFromTags,
+  isNestedEncryptedNip44Payload,
 } from "./chatNostrProtocol";
 import { readUnknownPubkeyHex } from "./contactIdentity";
 
@@ -143,6 +144,9 @@ export const useChatNostrSyncEffect = ({
 
               const content = String(inner.content ?? "");
               if (!content.trim()) return;
+              if (isNestedEncryptedNip44Payload(content, innerPub, privBytes)) {
+                return;
+              }
 
               // Ensure outgoing messages are for this contact.
               const pTags = tags

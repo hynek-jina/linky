@@ -21,6 +21,7 @@ import {
   extractDeleteReferencedIds,
   extractEditedFromTag,
   extractReplyContextFromTags,
+  isNestedEncryptedNip44Payload,
 } from "./chatNostrProtocol";
 import { buildUnknownContactId, normalizePubkeyHex } from "./contactIdentity";
 
@@ -189,6 +190,11 @@ export const useInboxNotificationsSync = <
             if (inner.kind === 14) {
               if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
               if (!content.trim()) return;
+              if (
+                isNestedEncryptedNip44Payload(content, senderPub, privBytes)
+              ) {
+                return;
+              }
 
               const tags = Array.isArray(inner.tags) ? inner.tags : [];
               const pTags = tags
