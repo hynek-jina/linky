@@ -28,6 +28,17 @@ interface UseRelayDomainResult {
   setNewRelayUrl: React.Dispatch<React.SetStateAction<string>>;
 }
 
+function isPushSubscriptionChangeMessage(
+  value: unknown,
+): value is { type: "push-subscription-change" } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "push-subscription-change"
+  );
+}
+
 export const useRelayDomain = ({
   currentNpub,
   currentNsec,
@@ -93,6 +104,50 @@ export const useRelayDomain = ({
     if ("serviceWorker" in navigator && "PushManager" in window) {
       void initPush();
     }
+  }, [currentNsec]);
+
+  React.useEffect(() => {
+    if (!currentNsec) {
+      return;
+    }
+
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      return;
+    }
+
+    const onServiceWorkerMessage = (event: MessageEvent) => {
+      if (!isPushSubscriptionChangeMessage(event.data)) {
+        return;
+      }
+
+      if (Notification.permission !== "granted") {
+        return;
+      }
+
+      void (async () => {
+        try {
+          const { registerPushNotifications } =
+            await import("../../utils/pushNotifications");
+          const result = await registerPushNotifications(currentNsec);
+          if (!result.success) {
+            console.error(
+              "Push notification re-registration failed:",
+              result.error ?? "unknown error",
+            );
+          }
+        } catch (error) {
+          console.error("Push notification re-registration error:", error);
+        }
+      })();
+    };
+
+    navigator.serviceWorker.addEventListener("message", onServiceWorkerMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener(
+        "message",
+        onServiceWorkerMessage,
+      );
+    };
   }, [currentNsec]);
 
   const nostrFetchRelays = React.useMemo(() => {
