@@ -50,16 +50,22 @@ type OwnershipProof = {
 };
 
 function describeSubscription(subscription: PushSubscription | null): {
+  applicationServerKey: string | null;
   endpointHash: string | null;
   expirationTime: number | null;
   hasAuth: boolean;
+  hasApplicationServerKey: boolean;
   hasP256dh: boolean;
 } {
   const endpoint = subscription?.endpoint ?? "";
+  const applicationServerKey =
+    subscription === null ? null : readApplicationServerKey(subscription);
   return {
+    applicationServerKey,
     endpointHash: endpoint ? endpoint.slice(-24) : null,
     expirationTime: subscription?.expirationTime ?? null,
     hasAuth: Boolean(subscription?.getKey("auth")),
+    hasApplicationServerKey: applicationServerKey !== null,
     hasP256dh: Boolean(subscription?.getKey("p256dh")),
   };
 }
@@ -79,6 +85,18 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
+}
+
+function uint8ArrayToUrlBase64(bytes: Uint8Array): string {
+  let raw = "";
+  for (const value of bytes) {
+    raw += String.fromCharCode(value);
+  }
+  return window
+    .btoa(raw)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -197,6 +215,17 @@ async function createOwnershipProof(params: {
   };
 }
 
+function readApplicationServerKey(
+  subscription: PushSubscription,
+): string | null {
+  const applicationServerKey = subscription.options.applicationServerKey;
+  if (applicationServerKey === null) {
+    return null;
+  }
+
+  return uint8ArrayToUrlBase64(new Uint8Array(applicationServerKey));
+}
+
 function toPushSubscriptionData(
   subscription: PushSubscription,
 ): PushSubscriptionData {
@@ -259,15 +288,32 @@ export async function registerPushNotifications(
     const { pubkey } = await derivePushIdentity(currentNsec);
     const registration = await navigator.serviceWorker.ready;
     let subscription = await registration.pushManager.getSubscription();
+    const subscriptionApplicationServerKey =
+      subscription === null ? null : readApplicationServerKey(subscription);
+    const subscriptionUsesCurrentVapidKey =
+      subscription === null
+        ? false
+        : subscriptionApplicationServerKey === vapidPublicKey;
     await appendPushDebugLog("client", "push registration ready", {
       hasActiveWorker: Boolean(registration.active),
       pubkey,
       subscription: describeSubscription(subscription),
+      storedVapidKey: storedKey,
+      subscriptionApplicationServerKey,
       vapidKeyChanged,
+      subscriptionUsesCurrentVapidKey,
     });
 
-    if (vapidKeyChanged && subscription) {
-      await appendPushDebugLog("client", "vapid key changed, re-subscribing");
+    if (subscription && !subscriptionUsesCurrentVapidKey) {
+      await appendPushDebugLog(
+        "client",
+        "push subscription vapid mismatch, re-subscribing",
+        {
+          storedVapidKey: storedKey,
+          subscriptionApplicationServerKey,
+          vapidKeyChanged,
+        },
+      );
       await subscription.unsubscribe().catch(() => false);
       subscription = null;
     }

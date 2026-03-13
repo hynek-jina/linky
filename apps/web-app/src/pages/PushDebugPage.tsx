@@ -28,6 +28,7 @@ interface PushDebugReport {
   hasServiceWorker: boolean;
   localStorageKeys: string[];
   notificationPermission: string;
+  pushSubscriptionApplicationServerKey: string | null;
   pushSubscriptionEndpoint: string | null;
   pushSubscriptionKeys: {
     hasAuth: boolean;
@@ -49,6 +50,7 @@ const INITIAL_REPORT: PushDebugReport = {
   hasServiceWorker: false,
   localStorageKeys: [],
   notificationPermission: "unsupported",
+  pushSubscriptionApplicationServerKey: null,
   pushSubscriptionEndpoint: null,
   pushSubscriptionKeys: null,
   storedDebugLog: [],
@@ -106,7 +108,15 @@ async function loadPushDebugReport(): Promise<PushDebugReport> {
 
     const readyRegistration = await navigator.serviceWorker.ready;
     const subscription = await readyRegistration.pushManager.getSubscription();
+    const applicationServerKey = subscription?.options.applicationServerKey;
     report.pushSubscriptionEndpoint = subscription?.endpoint ?? null;
+    report.pushSubscriptionApplicationServerKey =
+      applicationServerKey === null || applicationServerKey === undefined
+        ? null
+        : btoa(String.fromCharCode(...new Uint8Array(applicationServerKey)))
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_")
+            .replace(/=+$/g, "");
     report.pushSubscriptionKeys = subscription
       ? {
           hasAuth: Boolean(subscription.getKey("auth")),
