@@ -428,6 +428,7 @@ export async function registerPushNotifications(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        cleanupLegacySubscriptions: true,
         installationId,
         proofs: [proof],
         recipientPubkeys: [pubkey],

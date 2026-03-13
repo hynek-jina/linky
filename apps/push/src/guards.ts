@@ -60,6 +60,24 @@ function readOptionalString(value: unknown): string | null {
   return value;
 }
 
+function readBoolean(
+  value: unknown,
+  fieldName: string,
+  fallback = false,
+): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (typeof value !== "boolean") {
+    throw new RequestError(
+      400,
+      "invalid_request",
+      `${fieldName} must be a boolean`,
+    );
+  }
+  return value;
+}
+
 function readNumber(value: unknown, fieldName: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new RequestError(
@@ -275,6 +293,11 @@ export function readSubscribeRequest(value: unknown): SubscribeRequestBody {
   }
 
   return {
+    cleanupLegacySubscriptions: readBoolean(
+      value.cleanupLegacySubscriptions,
+      "cleanupLegacySubscriptions",
+      false,
+    ),
     installationId: readOptionalString(value.installationId),
     subscription: readWebPushSubscription(value.subscription),
     recipientPubkeys,

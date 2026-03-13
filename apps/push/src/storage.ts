@@ -12,6 +12,7 @@ import type {
 } from "./types";
 
 interface RegisterSubscriptionParams {
+  cleanupLegacySubscriptions: boolean;
   installationId: string | null;
   subscription: WebPushSubscriptionData;
   recipientPubkeys: string[];
@@ -384,6 +385,13 @@ export class PushStorage {
       params.nowMs,
     );
 
+    if (params.cleanupLegacySubscriptions) {
+      this.pruneLegacySubscriptionsForPubkeys(
+        params.recipientPubkeys,
+        subscriptionId,
+      );
+    }
+
     this.db
       .query("DELETE FROM subscription_pubkeys WHERE subscription_id = ?")
       .run(subscriptionId);
@@ -574,6 +582,58 @@ export class PushStorage {
       }
     }
     return out;
+  }
+
+  private pruneLegacySubscriptionsForPubkeys(
+    pubkeys: readonly string[],
+    keepSubscriptionId: number,
+  ): void {
+    const affectedSubscriptionIds = new Set<number>();
+
+    for (const pubkey of pubkeys) {
+      const rows = this.db
+        .query(
+          `
+            SELECT sp.subscription_id AS subscriptionId
+            FROM subscription_pubkeys sp
+            INNER JOIN subscriptions s ON s.id = sp.subscription_id
+            WHERE sp.pubkey = ?
+              AND sp.subscription_id != ?
+              AND s.installation_id IS NULL
+          `,
+        )
+        .all(pubkey, keepSubscriptionId);
+
+      for (const row of rows) {
+        if (!isRecord(row)) {
+          continue;
+        }
+        const subscriptionId = readNumberField(row, "subscriptionId");
+        if (subscriptionId === null) {
+          continue;
+        }
+        const result = this.db
+          .query(
+            `
+              DELETE FROM subscription_pubkeys
+              WHERE subscription_id = ? AND pubkey = ?
+            `,
+          )
+          .run(subscriptionId, pubkey);
+        if (result.changes > 0) {
+          affectedSubscriptionIds.add(subscriptionId);
+        }
+      }
+    }
+
+    for (const subscriptionId of affectedSubscriptionIds) {
+      if (this.countPubkeysForSubscriptionInternal(subscriptionId) > 0) {
+        continue;
+      }
+      this.db
+        .query("DELETE FROM subscriptions WHERE id = ?")
+        .run(subscriptionId);
+    }
   }
 
   private countSubscriptionsForPubkeyInternal(
