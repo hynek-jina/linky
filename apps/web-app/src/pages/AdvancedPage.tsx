@@ -103,6 +103,21 @@ export function AdvancedPage({
     }
   }, []);
 
+  const handleReloadApp = useCallback(async () => {
+    if ("serviceWorker" in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.allSettled(
+          registrations.map((registration) => registration.update()),
+        );
+      } catch {
+        // Reload anyway even if the service worker update check fails.
+      }
+    }
+
+    window.location.reload();
+  }, []);
+
   const armNostrAction = useCallback(() => {
     clearArmTimeout();
     setNostrDeriveArmed(true);
@@ -520,6 +535,24 @@ export function AdvancedPage({
           void handleImportAppDataFilePicked(file);
         }}
       />
+
+      <div className="settings-row">
+        <div className="settings-left">
+          <span className="settings-icon" aria-hidden="true">
+            ♻️
+          </span>
+          <span className="settings-label">{t("reloadApp")}</span>
+        </div>
+        <div className="settings-right">
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => void handleReloadApp()}
+          >
+            {t("reloadNow")}
+          </button>
+        </div>
+      </div>
 
       <div className="settings-row">
         <button

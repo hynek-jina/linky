@@ -13,6 +13,8 @@ export const cs = {
   importData: "Import",
   dedupeContacts: "Deduplikovat kontakty",
   appVersionLabel: "Verze",
+  reloadApp: "Obnovit aplikaci",
+  reloadNow: "Obnovit teď",
   dedupeContactsNone: "Žádné duplicity nenalezeny.",
   dedupeContactsResult:
     "Sloučeno {groups} skupin, odstraněno {removed} kontaktů, přesunuto {moved} zpráv.",
