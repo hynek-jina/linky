@@ -3,7 +3,7 @@ import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 const PUSH_SERVER_URL =
   import.meta.env.VITE_PUSH_SERVER_URL ||
   import.meta.env.VITE_NOTIFICATION_SERVER_URL ||
-  "http://127.0.0.1:8787";
+  "https://push.linky.fit";
 const VAPID_PUBLIC_KEY =
   import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY ||
   import.meta.env.VITE_VAPID_PUBLIC_KEY ||
