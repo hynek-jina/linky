@@ -22,23 +22,46 @@ interface HttpHandlerDependencies {
   rateLimiter: InMemoryRateLimiter;
 }
 
-function responseHeaders(config: PushServiceConfig): Record<string, string> {
+function resolveAllowedOrigin(
+  config: PushServiceConfig,
+  request: Request,
+): string | null {
+  if (config.corsOrigins.includes("*")) {
+    return "*";
+  }
+
+  const origin = request.headers.get("origin");
+  if (!origin) {
+    return null;
+  }
+
+  return config.corsOrigins.includes(origin) ? origin : null;
+}
+
+function responseHeaders(
+  config: PushServiceConfig,
+  request: Request,
+  contentType = "application/json; charset=utf-8",
+): Record<string, string> {
+  const allowedOrigin = resolveAllowedOrigin(config, request);
   return {
-    "Access-Control-Allow-Origin": config.corsOrigin,
+    ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin } : {}),
+    ...(allowedOrigin && allowedOrigin !== "*" ? { Vary: "Origin" } : {}),
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Content-Type": "application/json; charset=utf-8",
+    "Content-Type": contentType,
   };
 }
 
 function jsonResponse(
   config: PushServiceConfig,
+  request: Request,
   status: number,
   body: Record<string, unknown>,
 ): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: responseHeaders(config),
+    headers: responseHeaders(config, request),
   });
 }
 
@@ -78,9 +101,13 @@ async function readJsonBody(
   return json;
 }
 
-function errorResponse(config: PushServiceConfig, error: unknown): Response {
+function errorResponse(
+  config: PushServiceConfig,
+  request: Request,
+  error: unknown,
+): Response {
   if (error instanceof RequestError) {
-    return jsonResponse(config, error.status, {
+    return jsonResponse(config, request, error.status, {
       error: error.code,
       message: error.message,
     });
@@ -91,14 +118,14 @@ function errorResponse(config: PushServiceConfig, error: unknown): Response {
     error instanceof StorageConflictError ||
     error instanceof StorageLimitError
   ) {
-    return jsonResponse(config, error.status, {
+    return jsonResponse(config, request, error.status, {
       error: error.code,
       message: error.message,
     });
   }
 
   console.error("[push] unhandled request error", error);
-  return jsonResponse(config, 500, {
+  return jsonResponse(config, request, 500, {
     error: "internal_error",
     message: "Internal server error",
   });
@@ -121,23 +148,22 @@ export function createHttpHandler({
       if (request.method === "OPTIONS") {
         return new Response(null, {
           status: 204,
-          headers: responseHeaders(config),
+          headers: responseHeaders(config, request),
         });
       }
 
       if (request.method === "GET" && url.pathname === "/health") {
-        return jsonResponse(config, 200, { ok: true });
+        return jsonResponse(config, request, 200, { ok: true });
       }
 
       if (request.method === "GET" && url.pathname === "/") {
         return new Response(`${config.buildCommitSha}\n`, {
           status: 200,
-          headers: {
-            "Access-Control-Allow-Origin": config.corsOrigin,
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-            "Content-Type": "text/plain; charset=utf-8",
-          },
+          headers: responseHeaders(
+            config,
+            request,
+            "text/plain; charset=utf-8",
+          ),
         });
       }
 
@@ -162,7 +188,7 @@ export function createHttpHandler({
           nowMs,
         );
 
-        return jsonResponse(config, 200, {
+        return jsonResponse(config, request, 200, {
           pubkey,
           action,
           challenge,
@@ -195,7 +221,7 @@ export function createHttpHandler({
           nowMs,
         });
 
-        return jsonResponse(config, 200, {
+        return jsonResponse(config, request, 200, {
           ok: true,
           endpoint: body.subscription.endpoint,
           recipientPubkeys: body.recipientPubkeys,
@@ -213,7 +239,7 @@ export function createHttpHandler({
         const body = readUnsubscribeRequest(await readJsonBody(request));
         if (body.recipientPubkeys === null) {
           const removed = storage.unregisterSubscription(body.endpoint);
-          return jsonResponse(config, 200, {
+          return jsonResponse(config, request, 200, {
             ok: true,
             removed,
             endpoint: body.endpoint,
@@ -234,7 +260,7 @@ export function createHttpHandler({
           nowMs,
         });
 
-        return jsonResponse(config, 200, {
+        return jsonResponse(config, request, 200, {
           ok: true,
           endpoint: body.endpoint,
           removedPubkeys: result.removedPubkeys,
@@ -242,12 +268,12 @@ export function createHttpHandler({
         });
       }
 
-      return jsonResponse(config, 404, {
+      return jsonResponse(config, request, 404, {
         error: "not_found",
         message: "Route not found",
       });
     } catch (error) {
-      return errorResponse(config, error);
+      return errorResponse(config, request, error);
     }
   };
 }

@@ -7,6 +7,9 @@ import { RelayWatcher } from "./relayWatcher";
 import { PushStorage } from "./storage";
 
 const config = loadConfig(Bun.env);
+const defaultCorsOrigin = config.corsOrigins.includes("*")
+  ? "*"
+  : (config.corsOrigins[0] ?? "*");
 const storage = new PushStorage(config.storagePath);
 const ownershipVerifier = new OwnershipVerifier({
   proofMaxAgeSeconds: config.proofMaxAgeSeconds,
@@ -50,7 +53,7 @@ const server = Bun.serve({
       {
         status: 500,
         headers: {
-          "Access-Control-Allow-Origin": config.corsOrigin,
+          "Access-Control-Allow-Origin": defaultCorsOrigin,
           "Access-Control-Allow-Headers": "Content-Type",
           "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
           "Content-Type": "application/json; charset=utf-8",

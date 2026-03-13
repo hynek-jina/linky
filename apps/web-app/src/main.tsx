@@ -101,93 +101,61 @@ if (!getGlobalBuffer()) {
   Reflect.set(B.prototype, patchMarker, true);
 })();
 
-// Dev-only cleanup: if a Service Worker was registered earlier (e.g. from a
-// previous PROD preview), it can keep serving stale cached assets on localhost
-// and cause a blank screen until a hard refresh.
-if (import.meta.env.DEV && "serviceWorker" in navigator) {
-  void (async () => {
-    try {
-      const reloadKey = "linky_dev_sw_cleanup_reload_v1";
-      const hadController = Boolean(navigator.serviceWorker.controller);
+registerSW({
+  immediate: true,
+  onOfflineReady() {
+    console.log("[linky][pwa] offline ready");
+  },
+  onNeedRefresh() {
+    console.log("[linky][pwa] update available");
+  },
+  onRegisteredSW(swUrl, registration) {
+    console.log("[linky][pwa] sw registered", {
+      swUrl,
+      scope: registration?.scope,
+      hasActive: Boolean(registration?.active),
+      hasWaiting: Boolean(registration?.waiting),
+      hasInstalling: Boolean(registration?.installing),
+    });
+  },
+  onRegisterError(error) {
+    console.log("[linky][pwa] sw register error", { error });
+  },
+});
 
-      const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map((r) => r.unregister()));
-      if ("caches" in globalThis) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
-
-      // Unregistering doesn't immediately stop an already-controlling SW.
-      // Force a one-time reload so the page is no longer under SW control.
-      if (hadController) {
-        try {
-          if (sessionStorage.getItem(reloadKey) !== "1") {
-            sessionStorage.setItem(reloadKey, "1");
-            window.location.reload();
-          }
-        } catch {
-          // ignore
-        }
-      }
-    } catch {
-      // ignore
-    }
-  })();
-}
-
-if (import.meta.env.PROD) {
-  registerSW({
-    immediate: true,
-    onOfflineReady() {
-      console.log("[linky][pwa] offline ready");
-    },
-    onNeedRefresh() {
-      console.log("[linky][pwa] update available");
-    },
-    onRegisteredSW(swUrl, registration) {
-      console.log("[linky][pwa] sw registered", {
-        swUrl,
-        scope: registration?.scope,
-        hasActive: Boolean(registration?.active),
-        hasWaiting: Boolean(registration?.waiting),
-        hasInstalling: Boolean(registration?.installing),
-      });
-    },
-    onRegisterError(error) {
-      console.log("[linky][pwa] sw register error", { error });
-    },
+if ("serviceWorker" in navigator) {
+  console.log("[linky][pwa] controller", {
+    hasController: Boolean(navigator.serviceWorker.controller),
   });
 
-  if ("serviceWorker" in navigator) {
-    console.log("[linky][pwa] controller", {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    console.log("[linky][pwa] sw message", event.data);
+  });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    console.log("[linky][pwa] controller change", {
       hasController: Boolean(navigator.serviceWorker.controller),
     });
+  });
 
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      console.log("[linky][pwa] controller change", {
-        hasController: Boolean(navigator.serviceWorker.controller),
+  void navigator.serviceWorker.ready
+    .then(async (reg) => {
+      console.log("[linky][pwa] sw ready", {
+        scope: reg.scope,
+        hasActive: Boolean(reg.active),
       });
+
+      if ("caches" in globalThis) {
+        const keys = await caches.keys();
+        const relevant = keys.filter(
+          (k) => k.includes("workbox") || k.includes("linky"),
+        );
+        console.log("[linky][pwa] cache keys", { keys: relevant });
+      }
+    })
+    .catch((error) => {
+      console.log("[linky][pwa] sw ready error", { error });
     });
-
-    void navigator.serviceWorker.ready
-      .then(async (reg) => {
-        console.log("[linky][pwa] sw ready", {
-          scope: reg.scope,
-          hasActive: Boolean(reg.active),
-        });
-
-        if ("caches" in globalThis) {
-          const keys = await caches.keys();
-          const relevant = keys.filter(
-            (k) => k.includes("workbox") || k.includes("linky"),
-          );
-          console.log("[linky][pwa] cache keys", { keys: relevant });
-        }
-      })
-      .catch((error) => {
-        console.log("[linky][pwa] sw ready error", { error });
-      });
-  }
 }
 
 const escapeHtml = (value: string) =>

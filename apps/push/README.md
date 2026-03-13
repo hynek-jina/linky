@@ -153,6 +153,12 @@ Copy `.env.example` and set the required values:
 
 Optional values cover the port, storage path, relay list, challenge TTL, proof age window, rate limits, and subscription caps.
 
+`PUSH_CORS_ORIGIN` accepts either `*` or a comma-separated list of allowed web app origins, for example:
+
+```bash
+PUSH_CORS_ORIGIN=http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:5174
+```
+
 Generate VAPID keys locally with:
 
 ```bash

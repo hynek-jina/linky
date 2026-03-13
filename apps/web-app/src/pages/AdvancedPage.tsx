@@ -48,7 +48,6 @@ export function AdvancedPage({
   copyCashuSeed,
   copyNostrKeys,
   copySeed,
-  currentNpub,
   currentNsec,
   dedupeContacts,
   dedupeContactsIsBusy,
@@ -134,7 +133,7 @@ export function AdvancedPage({
       return;
     }
 
-    if (!currentNpub) {
+    if (!currentNsec) {
       setPushError(t("notificationsNotLoggedIn"));
       return;
     }
@@ -145,10 +144,7 @@ export function AdvancedPage({
       if (permission === "granted") {
         const { registerPushNotifications } =
           await import("../utils/pushNotifications");
-        const result = await registerPushNotifications(
-          currentNpub,
-          relayUrls.slice(0, 3),
-        );
+        const result = await registerPushNotifications(currentNsec);
 
         if (result.success) {
           setPushStatus(`✅ ${t("notificationsRegistered")}`);
@@ -462,7 +458,7 @@ export function AdvancedPage({
           <button
             className="ghost"
             onClick={handleRegisterNotifications}
-            disabled={!currentNpub}
+            disabled={!currentNsec}
           >
             {t("enable")}
           </button>
@@ -484,6 +480,23 @@ export function AdvancedPage({
           </div>
         </div>
       )}
+
+      <div className="settings-row">
+        <div className="settings-left">
+          <span className="settings-icon" aria-hidden="true">
+            🧪
+          </span>
+          <span className="settings-label">Push / SW debug</span>
+        </div>
+        <div className="settings-right">
+          <button
+            className="ghost"
+            onClick={() => navigateTo({ route: "advancedPushDebug" })}
+          >
+            Open
+          </button>
+        </div>
+      </div>
 
       <div className="settings-row">
         <button

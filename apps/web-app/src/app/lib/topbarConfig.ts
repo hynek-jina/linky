@@ -41,6 +41,14 @@ export const buildTopbar = ({
     };
   }
 
+  if (route.kind === "advancedPushDebug") {
+    return {
+      icon: "<",
+      label: t("close"),
+      onClick: () => navigateTo({ route: "advanced" }),
+    };
+  }
+
   if (route.kind === "mints") {
     return {
       icon: "<",
@@ -259,6 +267,7 @@ export const buildTopbarRight = ({
   if (
     route.kind === "advanced" ||
     route.kind === "advancedAutoPayLimit" ||
+    route.kind === "advancedPushDebug" ||
     route.kind === "mints" ||
     route.kind === "cashuToken" ||
     route.kind === "evoluCurrentData" ||
@@ -290,6 +299,7 @@ export const buildTopbarTitle = (
   if (route.kind === "advancedAutoPayLimit") {
     return t("lightningInvoiceAutoPayLimit");
   }
+  if (route.kind === "advancedPushDebug") return "Push Debug";
   if (route.kind === "mints") return t("mints");
   if (route.kind === "mint") return t("mints");
   if (route.kind === "profile") return t("profile");

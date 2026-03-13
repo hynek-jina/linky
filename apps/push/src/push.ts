@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import * as webpush from "web-push";
 
 import { isRecord } from "./guards";
@@ -37,6 +38,13 @@ function toWebPushSubscription(
   };
 }
 
+function buildPushTopic(payloadData: PushNotificationData): string {
+  return createHash("sha256")
+    .update(`${payloadData.outerEventId}:${payloadData.recipientPubkey}`)
+    .digest("base64url")
+    .slice(0, 32);
+}
+
 export class PushDeliveryService {
   private readonly storage: PushStorage;
 
@@ -66,8 +74,11 @@ export class PushDeliveryService {
         {
           TTL: 60,
           urgency: "normal",
-          topic: `${payloadData.outerEventId}:${payloadData.recipientPubkey}`,
+          topic: buildPushTopic(payloadData),
         },
+      );
+      console.info(
+        `[push] delivered ${payloadData.outerEventId} to ${payloadData.recipientPubkey}`,
       );
     } catch (error) {
       if (isPermanentPushFailure(error)) {

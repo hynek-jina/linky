@@ -253,6 +253,10 @@ export const useSystemRouteProps = ({
       setLightningInvoiceAutoPayLimit,
       t,
     },
+    advancedPushDebugProps: {
+      currentNsec,
+      t,
+    },
     evoluCurrentDataProps: {
       evoluCashuOwnerId,
       evoluContactsOwnerId,

@@ -18,6 +18,7 @@ export const useRouting = () => {
 type NavigationAction =
   | { route: "advanced" }
   | { route: "advancedAutoPayLimit" }
+  | { route: "advancedPushDebug" }
   | { route: "cashuToken"; id: CashuTokenId }
   | { route: "cashuTokenNew" }
   | { route: "chat"; id: string }
@@ -57,6 +58,9 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "advancedAutoPayLimit":
       window.location.assign("#advanced/auto-pay-limit");
+      break;
+    case "advancedPushDebug":
+      window.location.assign("#advanced/push-debug");
       break;
     case "mints":
       window.location.assign("#advanced/mints");
