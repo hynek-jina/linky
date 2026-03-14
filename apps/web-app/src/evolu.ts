@@ -42,6 +42,7 @@ export type EvoluDatabaseInfo = {
 };
 
 export const DEFAULT_EVOLU_SERVER_URLS: ReadonlyArray<string> = [
+  "wss://evolu.linky.fit",
   "wss://free.evoluhq.com",
 ];
 
