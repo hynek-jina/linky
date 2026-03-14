@@ -1,4 +1,5 @@
 import React from "react";
+import { ProfileQrButton } from "../components/ProfileQrButton";
 import {
   formatShortLightningAddress,
   formatShortNpub,
@@ -217,14 +218,16 @@ export function ProfilePage({
                   )}
                 </div>
 
+                <h2 className="contact-detail-name">
+                  {effectiveProfileName ?? formatShortNpub(currentNpub)}
+                </h2>
+
                 {myProfileQr ? (
-                  <img
-                    className="qr"
-                    src={myProfileQr}
-                    alt=""
-                    title={t("copy")}
-                    aria-label={t("myNpubQr")}
-                    onClick={() => {
+                  <ProfileQrButton
+                    qrSrc={myProfileQr}
+                    qrAlt={t("myNpubQr")}
+                    copyLabel={t("copy")}
+                    onCopy={() => {
                       if (!currentNpub) return;
                       void copyText(currentNpub);
                     }}
@@ -232,10 +235,6 @@ export function ProfilePage({
                 ) : (
                   <p className="muted">{currentNpub}</p>
                 )}
-
-                <h2 className="contact-detail-name">
-                  {effectiveProfileName ?? formatShortNpub(currentNpub)}
-                </h2>
 
                 {effectiveMyLightningAddress ? (
                   <button
@@ -245,7 +244,16 @@ export function ProfilePage({
                     title={effectiveMyLightningAddress}
                     aria-label={t("lightningAddress")}
                   >
-                    {formatShortLightningAddress(effectiveMyLightningAddress)}
+                    <span aria-hidden="true">⚡️</span>
+                    <span className="contact-detail-copyText">
+                      {formatShortLightningAddress(effectiveMyLightningAddress)}
+                    </span>
+                    <span
+                      className="contact-detail-copyIcon"
+                      aria-hidden="true"
+                    >
+                      ⧉
+                    </span>
                   </button>
                 ) : null}
               </div>

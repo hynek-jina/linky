@@ -4,6 +4,7 @@ import {
   formatShortNpub,
   getInitials,
 } from "../utils/formatting";
+import { ProfileQrButton } from "./ProfileQrButton";
 
 interface ProfileQrModalProps {
   closeProfileQr: () => void;
@@ -273,22 +274,20 @@ export function ProfileQrModal({
               )}
             </div>
 
+            <h2 className="contact-detail-name">
+              {effectiveProfileName ?? formatShortNpub(currentNpub)}
+            </h2>
+
             {myProfileQr ? (
-              <img
-                className="qr"
-                src={myProfileQr}
-                alt=""
-                title={t("myNpubQr")}
-                aria-label={t("myNpubQr")}
-                onClick={handleCopyNpub}
+              <ProfileQrButton
+                qrSrc={myProfileQr}
+                qrAlt={t("myNpubQr")}
+                copyLabel={t("copy")}
+                onCopy={handleCopyNpub}
               />
             ) : (
               <p className="muted">{currentNpub}</p>
             )}
-
-            <h2 className="contact-detail-name">
-              {effectiveProfileName ?? formatShortNpub(currentNpub)}
-            </h2>
 
             {effectiveMyLightningAddress ? (
               <button
@@ -298,7 +297,13 @@ export function ProfileQrModal({
                 title={effectiveMyLightningAddress}
                 aria-label={t("lightningAddress")}
               >
-                {formatShortLightningAddress(effectiveMyLightningAddress)}
+                <span aria-hidden="true">⚡️</span>
+                <span className="contact-detail-copyText">
+                  {formatShortLightningAddress(effectiveMyLightningAddress)}
+                </span>
+                <span className="contact-detail-copyIcon" aria-hidden="true">
+                  ⧉
+                </span>
               </button>
             ) : null}
           </div>

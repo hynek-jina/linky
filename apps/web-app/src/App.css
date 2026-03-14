@@ -956,7 +956,50 @@ button.settings-link:hover {
   height: auto;
   display: block;
   margin: 12px auto 0;
+}
+
+.profile-qr-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 28px;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.profile-qr-button:hover,
+.profile-qr-button:focus,
+.profile-qr-button:active {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.profile-qr-image {
+  margin-top: 0;
   cursor: pointer;
+}
+
+.profile-qr-copyBadge {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
 }
 
 .topup-invoice-panel {
@@ -2505,6 +2548,10 @@ button.icon {
   color: #cbd5e1;
   font-size: 14px;
   word-break: break-word;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .contact-detail-edit {
@@ -2532,11 +2579,28 @@ button.icon {
   transform: none;
 }
 
+.contact-detail-copyIcon {
+  color: #94a3b8;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.contact-detail-copyText {
+  text-decoration: none;
+}
+
 .contact-detail-copy:hover {
+  text-decoration: none;
   background: transparent;
   color: #cbd5e1;
   box-shadow: none;
   transform: none;
+}
+
+.contact-detail-copy:hover .contact-detail-copyText,
+.contact-detail-copy:focus .contact-detail-copyText,
+.contact-detail-copy:active .contact-detail-copyText {
+  text-decoration: underline;
 }
 
 .contact-detail-copy:focus,
@@ -2695,7 +2759,7 @@ button.copyable.npub {
   white-space: nowrap;
 }
 
-button.copyable:hover {
+button.copyable:hover:not(.contact-detail-copy) {
   text-decoration: underline;
 }
 

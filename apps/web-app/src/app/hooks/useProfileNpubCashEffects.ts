@@ -63,10 +63,37 @@ export const useProfileNpubCashEffects = ({
     const run = async () => {
       try {
         const QRCode = await import("qrcode");
-        const url = await QRCode.toDataURL(currentNpub, {
+        const size = 240;
+        const canvas = document.createElement("canvas");
+
+        await QRCode.toCanvas(canvas, currentNpub, {
+          errorCorrectionLevel: "H",
           margin: 1,
-          width: 240,
+          width: size,
+          color: {
+            dark: "#0f172a",
+            light: "#ffffff",
+          },
         });
+
+        const context = canvas.getContext("2d");
+        if (!context) {
+          throw new Error("Missing QR canvas context");
+        }
+
+        const cutoutSize = Math.round(size * 0.23);
+        const cutoutRadius = cutoutSize / 2;
+        const cutoutCenterX = size / 2;
+        const cutoutCenterY = size / 2;
+
+        context.save();
+        context.fillStyle = "#ffffff";
+        context.beginPath();
+        context.arc(cutoutCenterX, cutoutCenterY, cutoutRadius, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+
+        const url = canvas.toDataURL();
         if (cancelled) return;
         setMyProfileQr(url);
       } catch {
