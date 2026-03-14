@@ -44,18 +44,22 @@ export class StorageConflictError extends Error {
   readonly code = "storage_conflict";
 }
 
+function readSafeInteger(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) ? value : null;
+  }
+  if (typeof value === "bigint") {
+    const asNumber = Number(value);
+    return Number.isSafeInteger(asNumber) ? asNumber : null;
+  }
+  return null;
+}
+
 function readNumberField(
   record: Record<string | number | symbol, unknown>,
   key: string,
 ): number | null {
-  const value = record[key];
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "bigint") {
-    return Number(value);
-  }
-  return null;
+  return readSafeInteger(record[key]);
 }
 
 function readNullableNumberField(
@@ -568,7 +572,11 @@ export class PushStorage {
         nowMs,
       );
 
-    return Number(result.lastInsertRowid);
+    const subscriptionId = readSafeInteger(result.lastInsertRowid);
+    if (subscriptionId === null) {
+      throw new Error("Subscription rowid exceeds Number.MAX_SAFE_INTEGER");
+    }
+    return subscriptionId;
   }
 
   private getSubscriptionIdByEndpoint(endpoint: string): number | null {

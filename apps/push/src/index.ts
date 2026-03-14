@@ -31,9 +31,11 @@ const relayWatcher = new RelayWatcher({
 
 relayWatcher.start();
 const cleanupTimer = setInterval(() => {
-  storage.pruneChallenges(Date.now());
-  storage.pruneSeenEvents(Date.now(), RelayWatcher.SEEN_EVENT_RETENTION_MS);
-  rateLimiter.prune(Date.now());
+  const nowMs = Date.now();
+  storage.pruneChallenges(nowMs);
+  storage.pruneSeenEvents(nowMs, RelayWatcher.SEEN_EVENT_RETENTION_MS);
+  relayWatcher.pruneSeen(nowMs);
+  rateLimiter.prune(nowMs);
 }, 60 * 1000);
 
 const server = Bun.serve({

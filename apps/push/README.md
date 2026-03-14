@@ -79,15 +79,7 @@ Every pubkey listed in `recipientPubkeys` needs its own proof.
 
 ### `POST /unsubscribe`
 
-Remove an entire stored subscription by endpoint:
-
-```json
-{
-  "endpoint": "https://example.push/service"
-}
-```
-
-Or remove only selected pubkeys from a subscription with ownership proofs:
+Remove selected pubkeys from a subscription with ownership proofs. If you remove the subscription's last remaining pubkey, the whole subscription row is deleted:
 
 ```json
 {
@@ -113,6 +105,8 @@ Or remove only selected pubkeys from a subscription with ownership proofs:
   ]
 }
 ```
+
+Every pubkey listed in `recipientPubkeys` needs its own unsubscribe proof. Full subscription removal requires proving ownership for the subscription's current pubkeys.
 
 ### `GET /health`
 

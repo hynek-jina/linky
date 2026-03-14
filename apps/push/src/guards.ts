@@ -339,36 +339,22 @@ export function readUnsubscribeRequest(value: unknown): UnsubscribeRequestBody {
   }
 
   const endpoint = readEndpointOrSubscriptionEndpoint(value);
-  const recipientPubkeysValue = value.recipientPubkeys;
-  const proofsValue = value.proofs;
-  let recipientPubkeys: string[] | null = null;
-  let proofs: OwnershipProofInput[] = [];
-
-  if (recipientPubkeysValue !== undefined) {
-    recipientPubkeys = uniqueStrings(
-      readStringArray(recipientPubkeysValue, "recipientPubkeys").map((pubkey) =>
-        readPubkey(pubkey, "recipientPubkeys[]"),
-      ),
-    );
-    if (recipientPubkeys.length === 0) {
-      throw new RequestError(
-        400,
-        "invalid_request",
-        "recipientPubkeys must contain at least one pubkey when provided",
-      );
-    }
-    proofs = readOwnershipProofs(proofsValue);
-  } else if (proofsValue !== undefined) {
+  const recipientPubkeys = uniqueStrings(
+    readStringArray(value.recipientPubkeys, "recipientPubkeys").map((pubkey) =>
+      readPubkey(pubkey, "recipientPubkeys[]"),
+    ),
+  );
+  if (recipientPubkeys.length === 0) {
     throw new RequestError(
       400,
       "invalid_request",
-      "proofs may only be provided when recipientPubkeys are provided",
+      "recipientPubkeys must contain at least one pubkey",
     );
   }
 
   return {
     endpoint,
     recipientPubkeys,
-    proofs,
+    proofs: readOwnershipProofs(value.proofs),
   };
 }

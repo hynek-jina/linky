@@ -219,15 +219,20 @@ export function PushDebugPage({
   }, [currentNsec, refreshReport, t]);
 
   const handleUnregister = React.useCallback(async () => {
+    if (!currentNsec) {
+      setStatus(t("notificationsNotLoggedIn"));
+      return;
+    }
+
     setIsBusy(true);
     try {
-      const ok = await unregisterPushNotifications();
+      const ok = await unregisterPushNotifications(currentNsec);
       setStatus(ok ? "Unregistered" : "Unregister failed");
       await refreshReport();
     } finally {
       setIsBusy(false);
     }
-  }, [refreshReport]);
+  }, [currentNsec, refreshReport, t]);
 
   const handleReset = React.useCallback(async () => {
     setIsBusy(true);
