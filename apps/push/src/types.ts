@@ -57,6 +57,6 @@ export interface SubscribeRequestBody {
 
 export interface UnsubscribeRequestBody {
   endpoint: string;
-  recipientPubkeys: string[] | null;
+  recipientPubkeys: string[];
   proofs: OwnershipProofInput[];
 }

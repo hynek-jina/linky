@@ -256,18 +256,6 @@ export function createHttpHandler({
         );
 
         const body = readUnsubscribeRequest(await readJsonBody(request));
-        if (body.recipientPubkeys === null) {
-          const removed = storage.unregisterSubscription(body.endpoint);
-          console.info(
-            `[push] unsubscribe endpoint=${hashEndpoint(body.endpoint)} removed=${removed} ip=${ip}`,
-          );
-          return jsonResponse(config, request, 200, {
-            ok: true,
-            removed,
-            endpoint: body.endpoint,
-          });
-        }
-
         const consumedChallengeNonces = ownershipVerifier.verifyProofs(
           "unsubscribe",
           body.recipientPubkeys,

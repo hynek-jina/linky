@@ -207,13 +207,20 @@ async function derivePushIdentity(currentNsec: string): Promise<{
 }
 
 async function requestChallenge(pubkey: string): Promise<ChallengeResponse> {
+  return requestChallengeForAction(pubkey, "subscribe");
+}
+
+async function requestChallengeForAction(
+  pubkey: string,
+  action: "subscribe" | "unsubscribe",
+): Promise<ChallengeResponse> {
   const response = await fetch(`${PUSH_SERVER_URL}/auth/challenge`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      action: "subscribe",
+      action,
       pubkey,
     }),
   });
@@ -225,14 +232,26 @@ async function requestChallenge(pubkey: string): Promise<ChallengeResponse> {
   return readChallengeResponse(await response.json());
 }
 
-async function unregisterEndpointOnServer(endpoint: string): Promise<boolean> {
+async function unregisterEndpointOnServer(params: {
+  currentNsec: string;
+  endpoint: string;
+}): Promise<boolean> {
+  const { pubkey } = await derivePushIdentity(params.currentNsec);
+  const challenge = await requestChallengeForAction(pubkey, "unsubscribe");
+  const proof = await createOwnershipProof({
+    action: "unsubscribe",
+    challenge: challenge.challenge,
+    currentNsec: params.currentNsec,
+  });
   const response = await fetch(`${PUSH_SERVER_URL}/unsubscribe`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      endpoint,
+      endpoint: params.endpoint,
+      recipientPubkeys: [pubkey],
+      proofs: [proof],
     }),
   });
 
@@ -458,7 +477,10 @@ export async function registerPushNotifications(
         replacedEndpoint !== null;
       if (shouldCleanupPreviousEndpoint) {
         try {
-          const removed = await unregisterEndpointOnServer(previousEndpoint);
+          const removed = await unregisterEndpointOnServer({
+            currentNsec,
+            endpoint: previousEndpoint,
+          });
           await appendPushDebugLog(
             "client",
             "push stale endpoint cleanup result",
@@ -510,7 +532,9 @@ export async function registerPushNotifications(
   }
 }
 
-export async function unregisterPushNotifications(): Promise<boolean> {
+export async function unregisterPushNotifications(
+  currentNsec: string,
+): Promise<boolean> {
   try {
     if (!("serviceWorker" in navigator)) {
       await appendPushDebugLog("client", "push unregister failed", {
@@ -525,9 +549,10 @@ export async function unregisterPushNotifications(): Promise<boolean> {
 
     if (!subscription) {
       if (storedEndpoint) {
-        const responseOk = await unregisterEndpointOnServer(
-          storedEndpoint,
-        ).catch(() => false);
+        const responseOk = await unregisterEndpointOnServer({
+          currentNsec,
+          endpoint: storedEndpoint,
+        }).catch(() => false);
         if (responseOk) {
           clearStoredRegisteredPushEndpoint();
           clearStoredRegisteredPushPubkey();
@@ -541,7 +566,10 @@ export async function unregisterPushNotifications(): Promise<boolean> {
       return false;
     }
 
-    const responseOk = await unregisterEndpointOnServer(subscription.endpoint);
+    const responseOk = await unregisterEndpointOnServer({
+      currentNsec,
+      endpoint: subscription.endpoint,
+    });
     const unsubscribed = await subscription.unsubscribe().catch(() => false);
     if (responseOk) {
       clearStoredRegisteredPushEndpoint();

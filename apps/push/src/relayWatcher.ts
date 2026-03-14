@@ -13,6 +13,11 @@ interface RelayWatcherOptions {
   eventDedupeTtlMs: number;
 }
 
+interface SeenEventIdCacheOptions {
+  ttlMs: number;
+  maxEntries: number;
+}
+
 interface ClosableSubscription {
   close: (reason?: string) => void;
 }
@@ -109,17 +114,73 @@ function describeEventRecipients(event: NostrEvent): string {
   return recipients.length > 0 ? recipients.join(",") : "none";
 }
 
+export class SeenEventIdCache {
+  private readonly entries = new Map<string, number>();
+  private readonly ttlMs: number;
+  private readonly maxEntries: number;
+
+  constructor(options: SeenEventIdCacheOptions) {
+    this.ttlMs = options.ttlMs;
+    this.maxEntries = options.maxEntries;
+  }
+
+  has(eventId: string, nowMs: number): boolean {
+    const expiresAt = this.entries.get(eventId);
+    if (expiresAt === undefined) {
+      return false;
+    }
+
+    if (expiresAt <= nowMs) {
+      this.entries.delete(eventId);
+      return false;
+    }
+
+    return true;
+  }
+
+  markSeen(eventId: string, nowMs: number): void {
+    this.entries.delete(eventId);
+    this.entries.set(eventId, nowMs + this.ttlMs);
+    this.pruneOverflow();
+  }
+
+  pruneExpired(nowMs: number): void {
+    // Entries are inserted in first-seen order, so with a fixed TTL the oldest
+    // ids also expire first and cleanup can stop at the first live entry.
+    for (const [eventId, expiresAt] of this.entries) {
+      if (expiresAt > nowMs) {
+        break;
+      }
+      this.entries.delete(eventId);
+    }
+  }
+
+  get size(): number {
+    return this.entries.size;
+  }
+
+  private pruneOverflow(): void {
+    while (this.entries.size > this.maxEntries) {
+      const oldestEventId = this.entries.keys().next().value;
+      if (typeof oldestEventId !== "string") {
+        return;
+      }
+      this.entries.delete(oldestEventId);
+    }
+  }
+}
+
 export class RelayWatcher {
   private static readonly CATCH_UP_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
   private static readonly LIVE_SUBSCRIPTION_REFRESH_MS = 10 * 60 * 1000;
+  private static readonly SEEN_EVENT_CACHE_MAX_ENTRIES = 50_000;
   static readonly SEEN_EVENT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
   private readonly relayUrls: string[];
   private readonly storage: PushStorage;
   private readonly pushDelivery: PushDeliveryService;
-  private readonly seenEventIds = new Map<string, number>();
+  private readonly seenEventIds: SeenEventIdCache;
   private readonly pool = new SimplePool({ enableReconnect: true });
-  private readonly eventDedupeTtlMs: number;
   private liveDeliveryEnabled = false;
   private refreshIntervalHandle: ReturnType<typeof setInterval> | null = null;
   private subscription: ClosableSubscription | null = null;
@@ -128,7 +189,10 @@ export class RelayWatcher {
     this.relayUrls = options.relayUrls;
     this.storage = options.storage;
     this.pushDelivery = options.pushDelivery;
-    this.eventDedupeTtlMs = options.eventDedupeTtlMs;
+    this.seenEventIds = new SeenEventIdCache({
+      ttlMs: options.eventDedupeTtlMs,
+      maxEntries: RelayWatcher.SEEN_EVENT_CACHE_MAX_ENTRIES,
+    });
   }
 
   start(): void {
@@ -190,27 +254,21 @@ export class RelayWatcher {
   }
 
   private markSeen(eventId: string, nowMs: number): boolean {
-    this.pruneSeen(nowMs);
-
-    if (this.seenEventIds.has(eventId)) {
+    if (this.seenEventIds.has(eventId, nowMs)) {
       return false;
     }
 
     if (!this.storage.recordSeenEvent(eventId, nowMs)) {
-      this.seenEventIds.set(eventId, nowMs + this.eventDedupeTtlMs);
+      this.seenEventIds.markSeen(eventId, nowMs);
       return false;
     }
 
-    this.seenEventIds.set(eventId, nowMs + this.eventDedupeTtlMs);
+    this.seenEventIds.markSeen(eventId, nowMs);
     return true;
   }
 
-  private pruneSeen(nowMs: number): void {
-    for (const [eventId, expiresAt] of this.seenEventIds.entries()) {
-      if (expiresAt <= nowMs) {
-        this.seenEventIds.delete(eventId);
-      }
-    }
+  pruneSeen(nowMs: number): void {
+    this.seenEventIds.pruneExpired(nowMs);
   }
 
   private async handleEvent(event: NostrEvent): Promise<void> {
