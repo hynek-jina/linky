@@ -727,4 +727,116 @@ describe("useInboxNotificationsSync", () => {
       root.unmount();
     });
   });
+
+  it("does not replay the same payment notice when the inbox effect reruns on navigation", async () => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+
+    const wrapEvent = { id: "wrap-payment-notice-repeat-1" };
+    querySyncMock.mockResolvedValue([wrapEvent]);
+    subscribeMock.mockReturnValue({
+      close: vi.fn(async () => {}),
+    });
+    unwrapEventMock.mockReturnValue({
+      kind: 24133,
+      id: "payment-notice-repeat-1",
+      pubkey: "known-contact-pubkey",
+      content: "payment_notice",
+      created_at: 1730000008,
+      tags: [
+        ["p", "known-contact-pubkey"],
+        ["p", "me-pubkey-hex"],
+        ["linky", "payment_notice"],
+      ],
+    });
+    nip44DecryptMock.mockImplementation(() => {
+      throw new Error("not encrypted");
+    });
+
+    const appendLocalNostrMessage = vi.fn(() => "message-payment-notice");
+    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
+    const maybeShowPwaNotification = vi.fn(async () => {});
+    const pushToast = vi.fn();
+    const updateLocalNostrMessage = vi.fn();
+    const updateLocalNostrReaction = vi.fn();
+    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
+    const setContactAttentionById: React.Dispatch<
+      React.SetStateAction<Record<string, number>>
+    > = vi.fn();
+
+    interface HarnessProps {
+      routeKind: "contacts" | "wallet";
+    }
+
+    const Harness = ({ routeKind }: HarnessProps) => {
+      useInboxNotificationsSync({
+        appendLocalNostrMessage,
+        appendLocalNostrReaction,
+        contacts: [
+          {
+            id: "contact-bob",
+            name: "Bob",
+            npub: "npub-known",
+          },
+        ],
+        currentNsec: "nsec-test",
+        maybeShowPwaNotification,
+        nostrFetchRelays: [],
+        nostrMessageWrapIdsRef: { current: new Set<string>() },
+        nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
+        nostrMessagesRecent: [],
+        nostrReactionWrapIdsRef: { current: new Set<string>() },
+        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+        pushToast,
+        route: { kind: routeKind },
+        setContactAttentionById,
+        softDeleteLocalNostrReactionsByWrapIds,
+        t: (key: string) => {
+          if (key === "chatIncomingMessageToast") return "{name}: {message}";
+          if (key === "notificationReceivedMoney") return "You received money";
+          return key;
+        },
+        updateLocalNostrMessage,
+        updateLocalNostrReaction,
+      });
+
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<Harness routeKind="contacts" />);
+    });
+    await flushEffects();
+    await flushEffects();
+
+    await act(async () => {
+      root.render(<Harness routeKind="wallet" />);
+    });
+    await flushEffects();
+    await flushEffects();
+
+    await act(async () => {
+      root.render(<Harness routeKind="contacts" />);
+    });
+    await flushEffects();
+    await flushEffects();
+
+    expect(pushToast).toHaveBeenCalledTimes(1);
+    expect(pushToast).toHaveBeenCalledWith("Bob: You received money");
+    expect(maybeShowPwaNotification).toHaveBeenCalledTimes(1);
+    expect(maybeShowPwaNotification).toHaveBeenCalledWith(
+      "Bob",
+      "You received money",
+      "wrap-payment-notice-repeat-1",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

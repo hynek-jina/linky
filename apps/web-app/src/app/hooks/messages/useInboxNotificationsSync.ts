@@ -85,6 +85,8 @@ export const useInboxNotificationsSync = <
   updateLocalNostrMessage,
   updateLocalNostrReaction,
 }: UseInboxNotificationsSyncParams<TContact, TRoute>) => {
+  const paymentNoticeWrapIdsRef = React.useRef<Set<string>>(new Set());
+
   React.useEffect(() => {
     // Best-effort: keep syncing the NIP-17 inbox globally so messages from
     // other contacts still arrive while a chat is open. The currently opened
@@ -99,6 +101,10 @@ export const useInboxNotificationsSync = <
     for (const message of nostrMessagesRecent) {
       const wrapId = String(message.wrapId ?? "").trim();
       if (wrapId) seenWrapIds.add(wrapId);
+    }
+    for (const wrapId of paymentNoticeWrapIdsRef.current) {
+      const normalizedWrapId = String(wrapId ?? "").trim();
+      if (normalizedWrapId) seenWrapIds.add(normalizedWrapId);
     }
     const seenRumorKeys = new Set<string>();
     for (const message of nostrMessagesLatestRef.current) {
@@ -235,6 +241,8 @@ export const useInboxNotificationsSync = <
               const isActiveChatContact =
                 Boolean(activeChatId) &&
                 String(contactId) === String(activeChatId);
+
+              paymentNoticeWrapIdsRef.current.add(wrapId);
 
               if (!isActiveChatContact) {
                 setContactAttentionById((prev) => ({
