@@ -3,6 +3,7 @@ import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { appendPushDebugLog } from "../../../utils/pushDebugLog";
+import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import {
   wrapEventWithPushMarker,
@@ -136,11 +137,9 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
             privBytes,
             myPubHex,
           );
-          const wrapForContact = wrapEventWithPushMarker(
-            baseEvent,
-            privBytes,
-            contactPubHex,
-          );
+          const wrapForContact = isCashuNotificationMessage(baseEvent.content)
+            ? wrapEventWithoutPushMarker(baseEvent, privBytes, contactPubHex)
+            : wrapEventWithPushMarker(baseEvent, privBytes, contactPubHex);
 
           await appendPushDebugLog(
             "client",

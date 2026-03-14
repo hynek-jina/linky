@@ -33,6 +33,7 @@ type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 
 interface UsePayContactWithCashuMessageParams {
+  activePublishClientIdsRef: React.MutableRefObject<Set<string>>;
   appendLocalNostrMessage: AppendLocalNostrMessage;
   buildCashuMintCandidates: (
     mintGroups: Map<string, { sum: number; tokens: string[] }>,
@@ -86,6 +87,7 @@ interface UsePayContactWithCashuMessageParams {
 }
 
 export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
+  activePublishClientIdsRef,
   appendLocalNostrMessage,
   buildCashuMintCandidates,
   cashuBalance,
@@ -460,6 +462,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         for (const plan of messagePlans) {
           const messageText = plan.text;
           const clientId = makeLocalId();
+          activePublishClientIdsRef.current.add(clientId);
           logPayStep("publish-pending", {
             clientId,
             token: previewTokenText(messageText),
@@ -513,12 +516,17 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             contactPubHex,
           );
 
-          const publishOutcome = await publishWrappedWithRetry(
-            pool,
-            NOSTR_RELAYS,
-            wrapForMe,
-            wrapForContact,
-          );
+          let publishOutcome: PublishWrappedResult;
+          try {
+            publishOutcome = await publishWrappedWithRetry(
+              pool,
+              NOSTR_RELAYS,
+              wrapForMe,
+              wrapForContact,
+            );
+          } finally {
+            activePublishClientIdsRef.current.delete(clientId);
+          }
 
           const anySuccess = publishOutcome.anySuccess;
           if (!anySuccess) {
@@ -670,6 +678,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       cashuBalance,
       cashuTokensWithMeta,
       chatSeenWrapIdsRef,
+      activePublishClientIdsRef,
       currentNpub,
       currentNsec,
       enqueuePendingPayment,

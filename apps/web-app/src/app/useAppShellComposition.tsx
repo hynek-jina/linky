@@ -2059,6 +2059,7 @@ export const useAppShellComposition = () => {
   const payContactWithCashuMessage = usePayContactWithCashuMessage<
     (typeof contacts)[number]
   >({
+    activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
     appendLocalNostrMessage,
     buildCashuMintCandidates,
     cashuBalance,

@@ -125,6 +125,7 @@ describe("usePayContactWithCashuMessage", () => {
 
     const Harness = () => {
       const pay = usePayContactWithCashuMessage<ContactRowLike>({
+        activePublishClientIdsRef: { current: new Set<string>() },
         appendLocalNostrMessage: () => "local-message-1",
         buildCashuMintCandidates: (mintGroups) => {
           const mint = mintGroups.get("https://mint.example");
