@@ -5,14 +5,18 @@ import type { ContactRowLike } from "../src/app/types/appTypes";
 
 const {
   createSendTokenWithTokensAtMintMock,
+  createLinkyPaymentNoticeEventMock,
   getSharedAppNostrPoolMock,
   navigateToMock,
-  wrapEventMock,
+  wrapEventWithPushMarkerMock,
+  wrapEventWithoutPushMarkerMock,
 } = vi.hoisted(() => ({
   createSendTokenWithTokensAtMintMock: vi.fn(),
+  createLinkyPaymentNoticeEventMock: vi.fn(),
   getSharedAppNostrPoolMock: vi.fn(),
   navigateToMock: vi.fn(),
-  wrapEventMock: vi.fn(),
+  wrapEventWithPushMarkerMock: vi.fn(),
+  wrapEventWithoutPushMarkerMock: vi.fn(),
 }));
 
 vi.mock("../src/cashuSend", () => ({
@@ -42,8 +46,10 @@ vi.mock("nostr-tools", () => ({
   },
 }));
 
-vi.mock("nostr-tools/nip59", () => ({
-  wrapEvent: wrapEventMock,
+vi.mock("../src/app/lib/pushWrappedEvent", () => ({
+  createLinkyPaymentNoticeEvent: createLinkyPaymentNoticeEventMock,
+  wrapEventWithPushMarker: wrapEventWithPushMarkerMock,
+  wrapEventWithoutPushMarker: wrapEventWithoutPushMarkerMock,
 }));
 
 import { usePayContactWithCashuMessage } from "../src/app/hooks/payments/usePayContactWithCashuMessage";
@@ -59,9 +65,11 @@ const flushEffects = async () => {
 describe("usePayContactWithCashuMessage", () => {
   afterEach(() => {
     createSendTokenWithTokensAtMintMock.mockReset();
+    createLinkyPaymentNoticeEventMock.mockReset();
     getSharedAppNostrPoolMock.mockReset();
     navigateToMock.mockReset();
-    wrapEventMock.mockReset();
+    wrapEventWithPushMarkerMock.mockReset();
+    wrapEventWithoutPushMarkerMock.mockReset();
     localStorage.clear();
   });
 
@@ -76,9 +84,22 @@ describe("usePayContactWithCashuMessage", () => {
       remainingToken: "cashu-change-token",
     });
     getSharedAppNostrPoolMock.mockResolvedValue({});
-    wrapEventMock
+    wrapEventWithoutPushMarkerMock
       .mockReturnValueOnce({ id: "wrap-me" })
       .mockReturnValueOnce({ id: "wrap-contact" });
+    createLinkyPaymentNoticeEventMock.mockReturnValue({
+      created_at: 1730000000,
+      kind: 24133,
+      pubkey: "my-pubkey-hex",
+      tags: [
+        ["p", "contact-pubkey-hex"],
+        ["p", "my-pubkey-hex"],
+        ["client", "payment-notice-client"],
+        ["linky", "payment_notice"],
+      ],
+      content: "payment_notice",
+    });
+    wrapEventWithPushMarkerMock.mockReturnValue({ id: "wrap-payment-notice" });
 
     const operations: string[] = [];
     const insert = vi.fn(
@@ -140,6 +161,10 @@ describe("usePayContactWithCashuMessage", () => {
         logPaymentEvent: vi.fn(),
         nostrMessagesLocal: [],
         payWithCashuEnabled: true,
+        publishSingleWrappedWithRetry: vi.fn(async () => ({
+          anySuccess: true,
+          error: null,
+        })),
         publishWrappedWithRetry: vi.fn(async () => ({
           anySuccess: true,
           error: null,

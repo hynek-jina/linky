@@ -36,6 +36,7 @@ export const cs = {
   notificationsRegistered: "Zaregistrováno",
   notificationsDenied: "Zamítnuto",
   notificationsError: "Chyba",
+  notificationReceivedMoney: "Přijali jste peníze",
 
   onboardingTitle: "Linky",
   onboardingSubtitle: "Lightning kontakty pro platby a zprávy.",

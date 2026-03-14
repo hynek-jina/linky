@@ -3,6 +3,7 @@ import type { JsonRecord, JsonValue } from "../types/json";
 const PUSH_DEBUG_CACHE_NAME = "linky-push-debug-v1";
 const PUSH_DEBUG_LOG_URL = "/__debug__/push-log.json";
 const PUSH_DEBUG_LOG_LIMIT = 100;
+let pushDebugLogWriteQueue: Promise<void> = Promise.resolve();
 
 export interface PushDebugLogEntry {
   details?: JsonValue;
@@ -116,22 +117,30 @@ export async function appendPushDebugLog(
     return;
   }
 
-  try {
-    const existing = await readStoredLog();
-    const nextEntry: PushDebugLogEntry = {
-      message,
-      source,
-      timestamp: new Date().toISOString(),
-      ...(details === undefined
-        ? {}
-        : { details: normalizeJsonValue(details) }),
-    };
-    await writeStoredLog(
-      [nextEntry, ...existing].slice(0, PUSH_DEBUG_LOG_LIMIT),
-    );
-  } catch {
-    // Ignore debug logging failures.
-  }
+  pushDebugLogWriteQueue = pushDebugLogWriteQueue
+    .catch(() => {
+      // Ignore previous debug logging failures and keep the queue moving.
+    })
+    .then(async () => {
+      try {
+        const existing = await readStoredLog();
+        const nextEntry: PushDebugLogEntry = {
+          message,
+          source,
+          timestamp: new Date().toISOString(),
+          ...(details === undefined
+            ? {}
+            : { details: normalizeJsonValue(details) }),
+        };
+        await writeStoredLog(
+          [nextEntry, ...existing].slice(0, PUSH_DEBUG_LOG_LIMIT),
+        );
+      } catch {
+        // Ignore debug logging failures.
+      }
+    });
+
+  await pushDebugLogWriteQueue;
 }
 
 export async function readPushDebugLog(): Promise<PushDebugLogEntry[]> {

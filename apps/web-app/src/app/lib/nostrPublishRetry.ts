@@ -101,6 +101,74 @@ export const publishToRelaysWithRetry = async ({
   return { anySuccess: false, error: lastError, timedOut };
 };
 
+interface PublishSingleWrappedWithRetryParams {
+  event: NostrToolsEvent;
+  maxAttempts?: number;
+  pool: AppNostrPool;
+  relays: string[];
+  retryDelayMs?: number;
+}
+
+export const publishSingleWrappedWithRetry = async ({
+  event,
+  maxAttempts = DEFAULT_PUBLISH_MAX_ATTEMPTS,
+  pool,
+  relays,
+  retryDelayMs = DEFAULT_PUBLISH_RETRY_DELAY_MS,
+}: PublishSingleWrappedWithRetryParams): Promise<{
+  anySuccess: boolean;
+  error: string | null;
+}> => {
+  await appendPushDebugLog("client", "publish single wrapped start", {
+    eventId: String(event.id ?? "").trim() || null,
+    eventKind: event.kind,
+    eventPushEligible: hasLinkyPushMarker(event),
+    eventPubkey: event.pubkey,
+    eventRecipients: extractRecipientPubkeys(event),
+    relays,
+  });
+
+  const result = await publishToRelaysWithRetry({
+    event,
+    maxAttempts,
+    pool,
+    relays,
+    retryDelayMs,
+  });
+
+  await appendPushDebugLog("client", "publish single wrapped relay outcome", {
+    anySuccess: result.anySuccess,
+    error: result.error,
+    eventId: String(event.id ?? "").trim() || null,
+    timedOut: result.timedOut,
+  });
+
+  if (result.anySuccess) {
+    return { anySuccess: true, error: null };
+  }
+
+  if (result.timedOut) {
+    const confirmed = await confirmPublishById({
+      confirmTimeoutMs: DEFAULT_PUBLISH_CONFIRM_TIMEOUT_MS,
+      ids: [String(event.id ?? "").trim()],
+      pool,
+      relays,
+    });
+    await appendPushDebugLog("client", "publish single wrapped confirm check", {
+      confirmed,
+      eventId: String(event.id ?? "").trim() || null,
+    });
+    if (confirmed) {
+      return { anySuccess: true, error: null };
+    }
+  }
+
+  return {
+    anySuccess: false,
+    error: result.error,
+  };
+};
+
 interface PublishWrappedWithRetryParams {
   confirmTimeoutMs?: number;
   maxAttempts?: number;

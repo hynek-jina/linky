@@ -5,7 +5,9 @@ import { formatShortNpub } from "../../../utils/formatting";
 import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { safeLocalStorageGetJson } from "../../../utils/storage";
+import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
+import { isLinkyPaymentNoticeEvent } from "../../lib/pushWrappedEvent";
 import type {
   ContactNameRowLike,
   LocalNostrMessage,
@@ -38,10 +40,6 @@ interface UseInboxNotificationsSyncParams<
   appendLocalNostrReaction: AppendLocalNostrReaction;
   contacts: readonly TContact[];
   currentNsec: string | null;
-  getCashuTokenMessageInfo: (text: string) => {
-    amount: number | null;
-    isValid: boolean;
-  } | null;
   maybeShowPwaNotification: (
     title: string,
     body: string,
@@ -72,7 +70,6 @@ export const useInboxNotificationsSync = <
   appendLocalNostrReaction,
   contacts,
   currentNsec,
-  getCashuTokenMessageInfo,
   maybeShowPwaNotification,
   nostrFetchRelays,
   nostrMessageWrapIdsRef,
@@ -211,6 +208,72 @@ export const useInboxNotificationsSync = <
                 : Math.ceil(Date.now() / 1e3);
 
             if (cancelled) return;
+
+            if (isLinkyPaymentNoticeEvent(inner)) {
+              const tags = Array.isArray(inner.tags) ? inner.tags : [];
+              const pTags = tags
+                .filter((tag) => Array.isArray(tag) && tag[0] === "p")
+                .map((tag) => String(tag[1] ?? "").trim())
+                .filter(Boolean);
+              const taggedPeerPub =
+                pTags.find((pub) => pub && pub !== myPubHex) ?? "";
+              const addressesMe = pTags.includes(myPubHex);
+              if (!addressesMe) return;
+              const resolvedPeerPub =
+                taggedPeerPub && taggedPeerPub !== myPubHex
+                  ? taggedPeerPub
+                  : senderPub;
+              if (!resolvedPeerPub || resolvedPeerPub === myPubHex) return;
+              if (isBlockedPubkey(resolvedPeerPub)) return;
+
+              const contact = findContactByPubkey(resolvedPeerPub);
+              const contactId = contact
+                ? String(contact.id ?? "").trim()
+                : String(buildUnknownContactId(resolvedPeerPub) ?? "").trim();
+              if (!contactId) return;
+
+              const isActiveChatContact =
+                Boolean(activeChatId) &&
+                String(contactId) === String(activeChatId);
+
+              if (!isActiveChatContact) {
+                setContactAttentionById((prev) => ({
+                  ...prev,
+                  [contactId]: Date.now(),
+                }));
+
+                const shouldShowVisibleToast = (() => {
+                  try {
+                    return document.visibilityState === "visible";
+                  } catch {
+                    return false;
+                  }
+                })();
+                if (shouldShowVisibleToast) {
+                  const senderLabel =
+                    contact?.name ??
+                    formatShortNpub(
+                      contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
+                    ) ??
+                    t("unknownContactTitle");
+                  pushToast(
+                    t("chatIncomingMessageToast")
+                      .replace("{name}", senderLabel)
+                      .replace("{message}", t("notificationReceivedMoney")),
+                  );
+                }
+              }
+
+              const title =
+                contact?.name ??
+                (contact ? t("appTitle") : t("unknownContactTitle"));
+              void maybeShowPwaNotification(
+                title,
+                t("notificationReceivedMoney"),
+                wrapId,
+              );
+              return;
+            }
 
             if (inner.kind === 14) {
               if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
@@ -353,6 +416,8 @@ export const useInboxNotificationsSync = <
                 }
               }
 
+              const isCashuMessage = isCashuNotificationMessage(content);
+
               if (!isOutgoing) {
                 if (!isActiveChatContact) {
                   setContactAttentionById((prev) => ({
@@ -375,36 +440,28 @@ export const useInboxNotificationsSync = <
                       ) ??
                       t("unknownContactTitle");
                     const trimmedContent = content.trim();
-                    const preview =
-                      trimmedContent.length > 80
-                        ? `${trimmedContent.slice(0, 80)}…`
-                        : trimmedContent;
-                    pushToast(
-                      t("chatIncomingMessageToast")
-                        .replace("{name}", senderLabel)
-                        .replace("{message}", preview),
-                    );
+                    if (!isCashuMessage) {
+                      const preview =
+                        trimmedContent.length > 80
+                          ? `${trimmedContent.slice(0, 80)}…`
+                          : trimmedContent;
+                      pushToast(
+                        t("chatIncomingMessageToast")
+                          .replace("{name}", senderLabel)
+                          .replace("{message}", preview),
+                      );
+                    }
                   }
                 }
 
-                const title =
-                  contact?.name ??
-                  (contact ? t("appTitle") : t("unknownContactTitle"));
-                void maybeShowPwaNotification(
-                  title,
-                  content.trim(),
-                  `msg_${resolvedPeerPub}`,
-                );
-
-                const tokenInfo = getCashuTokenMessageInfo(content);
-                if (tokenInfo?.isValid) {
-                  const body = tokenInfo.amount
-                    ? `${tokenInfo.amount} sat`
-                    : t("cashuAccepted");
+                if (!isCashuMessage) {
+                  const title =
+                    contact?.name ??
+                    (contact ? t("appTitle") : t("unknownContactTitle"));
                   void maybeShowPwaNotification(
-                    t("mints"),
-                    body,
-                    `cashu_${resolvedPeerPub}`,
+                    title,
+                    content.trim(),
+                    `msg_${resolvedPeerPub}`,
                   );
                 }
               }
@@ -607,7 +664,6 @@ export const useInboxNotificationsSync = <
   }, [
     contacts,
     currentNsec,
-    getCashuTokenMessageInfo,
     appendLocalNostrMessage,
     appendLocalNostrReaction,
     updateLocalNostrMessage,

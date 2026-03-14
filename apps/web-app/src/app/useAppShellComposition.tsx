@@ -139,7 +139,10 @@ import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRef
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
 import type { AppNostrPool } from "./lib/nostrPool";
-import { publishWrappedWithRetry as publishWrappedWithRetryBase } from "./lib/nostrPublishRetry";
+import {
+  publishSingleWrappedWithRetry as publishSingleWrappedWithRetryBase,
+  publishWrappedWithRetry as publishWrappedWithRetryBase,
+} from "./lib/nostrPublishRetry";
 import { buildCashuMintCandidates as buildCashuMintCandidatesBase } from "./lib/paymentMintSelection";
 import { showPwaNotification } from "./lib/pwaNotifications";
 import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "./lib/tokenMessageInfo";
@@ -2038,6 +2041,21 @@ export const useAppShellComposition = () => {
     [],
   );
 
+  const publishSingleWrappedWithRetry = React.useCallback(
+    async (
+      pool: AppNostrPool,
+      relays: string[],
+      event: NostrToolsEvent,
+    ): Promise<{ anySuccess: boolean; error: string | null }> => {
+      return await publishSingleWrappedWithRetryBase({
+        event,
+        pool,
+        relays,
+      });
+    },
+    [],
+  );
+
   const payContactWithCashuMessage = usePayContactWithCashuMessage<
     (typeof contacts)[number]
   >({
@@ -2056,6 +2074,7 @@ export const useAppShellComposition = () => {
     logPaymentEvent,
     nostrMessagesLocal,
     payWithCashuEnabled,
+    publishSingleWrappedWithRetry,
     publishWrappedWithRetry,
     pushToast,
     resolveOwnerIdForWrite,
@@ -2816,7 +2835,6 @@ export const useAppShellComposition = () => {
     appendLocalNostrReaction,
     contacts,
     currentNsec,
-    getCashuTokenMessageInfo,
     maybeShowPwaNotification,
     nostrFetchRelays,
     nostrMessageWrapIdsRef,

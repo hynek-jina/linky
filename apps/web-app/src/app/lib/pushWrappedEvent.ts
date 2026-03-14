@@ -8,6 +8,8 @@ const TWO_DAYS_SECONDS = 2 * 24 * 60 * 60;
 
 export const LINKY_PUSH_MARKER_TAG = "linky";
 export const LINKY_PUSH_MARKER_VALUE = "push";
+export const LINKY_PAYMENT_NOTICE_KIND = 24133;
+export const LINKY_PAYMENT_NOTICE_VALUE = "payment_notice";
 
 function currentTimestampSeconds(): number {
   return Math.round(Date.now() / 1000);
@@ -72,5 +74,40 @@ export function hasLinkyPushMarker(event: { tags: string[][] }): boolean {
       Array.isArray(tag) &&
       tag[0] === LINKY_PUSH_MARKER_TAG &&
       tag[1] === LINKY_PUSH_MARKER_VALUE,
+  );
+}
+
+export function createLinkyPaymentNoticeEvent(args: {
+  clientId: string;
+  createdAt: number;
+  recipientPublicKey: string;
+  senderPublicKey: string;
+}): UnsignedEvent {
+  return {
+    created_at: args.createdAt,
+    kind: LINKY_PAYMENT_NOTICE_KIND,
+    pubkey: args.senderPublicKey,
+    tags: [
+      ["p", args.recipientPublicKey],
+      ["p", args.senderPublicKey],
+      ["client", args.clientId],
+      [LINKY_PUSH_MARKER_TAG, LINKY_PAYMENT_NOTICE_VALUE],
+    ],
+    content: LINKY_PAYMENT_NOTICE_VALUE,
+  };
+}
+
+export function isLinkyPaymentNoticeEvent(event: {
+  kind: number;
+  tags: string[][];
+}): boolean {
+  return (
+    event.kind === LINKY_PAYMENT_NOTICE_KIND &&
+    event.tags.some(
+      (tag) =>
+        Array.isArray(tag) &&
+        tag[0] === LINKY_PUSH_MARKER_TAG &&
+        tag[1] === LINKY_PAYMENT_NOTICE_VALUE,
+    )
   );
 }

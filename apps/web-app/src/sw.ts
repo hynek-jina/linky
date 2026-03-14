@@ -12,6 +12,11 @@ import {
   isInvalidInnerRumorPubkey,
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./app/hooks/messages/chatNostrProtocol";
+import {
+  getReceivedMoneyCopyForLanguage,
+  isCashuNotificationMessage,
+} from "./app/lib/cashuNotificationCopy";
+import { isLinkyPaymentNoticeEvent } from "./app/lib/pushWrappedEvent";
 import { normalizePubkeyHex } from "./app/hooks/messages/contactIdentity";
 import { NOSTR_RELAYS } from "./utils/nostrRelays";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
@@ -32,6 +37,13 @@ type PushNotificationEnvelope = {
   data?: PushNotificationData;
   title?: string;
 };
+
+interface DecryptedPushMessage {
+  body: string;
+  isCashu: boolean;
+  isPaymentNotice: boolean;
+  senderPub: string;
+}
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? "");
@@ -219,7 +231,7 @@ async function fetchOuterWrapEvent(
 
 async function decryptIncomingMessageBody(
   envelope: PushNotificationEnvelope,
-): Promise<string | null> {
+): Promise<DecryptedPushMessage | null> {
   await logSw("sw decrypt started", {
     data: readEnvelopeDebugMeta(envelope),
   });
@@ -271,13 +283,13 @@ async function decryptIncomingMessageBody(
     });
     return null;
   }
-  if (!inner || inner.kind !== 14) {
+  if (!inner) {
     await logSw(
       "sw decrypt failed because inner rumor was missing or invalid",
       {
         data: readEnvelopeDebugMeta(envelope),
         hasInner: Boolean(inner),
-        innerKind: inner?.kind ?? null,
+        innerKind: null,
       },
     );
     return null;
@@ -285,7 +297,7 @@ async function decryptIncomingMessageBody(
 
   const senderPub = String(inner.pubkey ?? "").trim();
   const content = String(inner.content ?? "").trim();
-  if (!senderPub || !content) {
+  if (!senderPub) {
     await logSw(
       "sw decrypt failed because inner rumor lacked sender or content",
       {
@@ -320,6 +332,33 @@ async function decryptIncomingMessageBody(
     return null;
   }
 
+  if (isLinkyPaymentNoticeEvent(inner)) {
+    await logSw("sw decrypt succeeded", {
+      contentLength: content.length,
+      data: readEnvelopeDebugMeta(envelope),
+      isPaymentNotice: true,
+      senderPub,
+    });
+    return {
+      body: getReceivedMoneyCopyForLanguage(self.navigator.language),
+      isCashu: false,
+      isPaymentNotice: true,
+      senderPub,
+    };
+  }
+
+  if (inner.kind !== 14 || !content) {
+    await logSw(
+      "sw decrypt failed because inner rumor was missing or invalid",
+      {
+        data: readEnvelopeDebugMeta(envelope),
+        hasInner: Boolean(inner),
+        innerKind: inner.kind,
+      },
+    );
+    return null;
+  }
+
   const taggedPeerPub = pTags.find((pubkey) => pubkey !== myPubHex) ?? "";
   if (
     isNestedEncryptedNip44PayloadForAnyPubkey(
@@ -342,7 +381,20 @@ async function decryptIncomingMessageBody(
     data: readEnvelopeDebugMeta(envelope),
     senderPub,
   });
-  return truncateNotificationBody(content);
+  if (isCashuNotificationMessage(content)) {
+    return {
+      body: getReceivedMoneyCopyForLanguage(self.navigator.language),
+      isCashu: true,
+      isPaymentNotice: false,
+      senderPub,
+    };
+  }
+  return {
+    body: truncateNotificationBody(content),
+    isCashu: false,
+    isPaymentNotice: false,
+    senderPub,
+  };
 }
 
 precacheAndRoute(self.__WB_MANIFEST || []);
@@ -401,6 +453,12 @@ self.addEventListener("push", (event) => {
   }
 
   const data = envelope.data ?? { type: "nostr_inbox" };
+  event.waitUntil(
+    logSw("push event parsed", {
+      data,
+      title: envelope.title ?? "Linky",
+    }),
+  );
 
   if ("setAppBadge" in navigator) {
     navigator.setAppBadge().catch(() => {
@@ -413,14 +471,14 @@ self.addEventListener("push", (event) => {
     (async () => {
       const clientList = await getWindowClients();
       const hasWindowClient = clientList.length > 0;
-      const decryptedBody = await decryptIncomingMessageBody(envelope).catch(
+      const decryptedMessage = await decryptIncomingMessageBody(envelope).catch(
         () => null,
       );
       const fallbackBody =
         typeof envelope.body === "string" && envelope.body.trim().length > 0
           ? truncateNotificationBody(envelope.body)
           : "";
-      const notificationBody = decryptedBody ?? fallbackBody;
+      const notificationBody = decryptedMessage?.body ?? fallbackBody;
       const options: NotificationOptions = {
         badge: "/pwa-192x192.png",
         body: notificationBody,
@@ -434,8 +492,11 @@ self.addEventListener("push", (event) => {
         logSw("push received", {
           data,
           hasWindowClient,
-          hasDecryptedBody: Boolean(decryptedBody),
-          usedFallbackBody: decryptedBody === null && fallbackBody.length > 0,
+          hasDecryptedBody: Boolean(decryptedMessage),
+          isCashuMessage: decryptedMessage?.isCashu ?? false,
+          isPaymentNotice: decryptedMessage?.isPaymentNotice ?? false,
+          usedFallbackBody:
+            decryptedMessage === null && fallbackBody.length > 0,
           tag: options.tag ?? null,
           title: envelope.title ?? "Linky",
         }),
@@ -453,9 +514,11 @@ self.addEventListener("push", (event) => {
               .then(() =>
                 logSw("notification displayed", {
                   data,
+                  isCashuMessage: decryptedMessage?.isCashu ?? false,
+                  isPaymentNotice: decryptedMessage?.isPaymentNotice ?? false,
                   tag: options.tag ?? null,
                   usedFallbackBody:
-                    decryptedBody === null && fallbackBody.length > 0,
+                    decryptedMessage === null && fallbackBody.length > 0,
                 }),
               )
               .catch((error) =>

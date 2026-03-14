@@ -14,6 +14,7 @@ import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import {
+  createLinkyPaymentNoticeEvent,
   wrapEventWithPushMarker,
   wrapEventWithoutPushMarker,
 } from "../../lib/pushWrappedEvent";
@@ -69,6 +70,11 @@ interface UsePayContactWithCashuMessageParams {
     wrapForMe: NostrToolsEvent,
     wrapForContact: NostrToolsEvent,
   ) => Promise<PublishWrappedResult>;
+  publishSingleWrappedWithRetry: (
+    pool: AppNostrPool,
+    relays: string[],
+    event: NostrToolsEvent,
+  ) => Promise<{ anySuccess: boolean; error: string | null }>;
   pushToast: (message: string) => void;
   resolveOwnerIdForWrite: () => Promise<Evolu.OwnerId | null>;
   setContactsOnboardingHasPaid: React.Dispatch<React.SetStateAction<boolean>>;
@@ -96,6 +102,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   nostrMessagesLocal,
   payWithCashuEnabled,
   publishWrappedWithRetry,
+  publishSingleWrappedWithRetry,
   pushToast,
   resolveOwnerIdForWrite,
   setContactsOnboardingHasPaid,
@@ -440,6 +447,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         }
 
         const publishedSendTokens = new Set<string>();
+        let publishedAnyTokenMessage = false;
         let hasPendingMessages = false;
         const canReusePendingMessage = Boolean(
           normalizedPendingMessageId &&
@@ -499,7 +507,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             privBytes,
             myPubHex,
           );
-          const wrapForContact = wrapEventWithPushMarker(
+          const wrapForContact = wrapEventWithoutPushMarker(
             baseEvent,
             privBytes,
             contactPubHex,
@@ -542,9 +550,36 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           });
 
           plan.onSuccess?.();
+          publishedAnyTokenMessage = true;
           if (sendTokenMetaByText.has(messageText)) {
             publishedSendTokens.add(messageText);
           }
+        }
+
+        if (publishedAnyTokenMessage) {
+          const paymentNoticeClientId = makeLocalId();
+          const paymentNoticeEvent = createLinkyPaymentNoticeEvent({
+            clientId: paymentNoticeClientId,
+            createdAt: Math.ceil(Date.now() / 1e3),
+            recipientPublicKey: contactPubHex,
+            senderPublicKey: myPubHex,
+          });
+          const paymentNoticeWrap = wrapEventWithPushMarker(
+            paymentNoticeEvent,
+            privBytes,
+            contactPubHex,
+          );
+          const paymentNoticeOutcome = await publishSingleWrappedWithRetry(
+            pool,
+            NOSTR_RELAYS,
+            paymentNoticeWrap,
+          );
+          logPayStep("payment-notice-publish", {
+            anySuccess: paymentNoticeOutcome.anySuccess,
+            clientId: paymentNoticeClientId,
+            error: paymentNoticeOutcome.error,
+            wrapId: String(paymentNoticeWrap.id ?? ""),
+          });
         }
 
         if (sendTokenMetaByText.size > 0) {
@@ -653,6 +688,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       updateLocalNostrMessage,
       appendLocalNostrMessage,
       publishWrappedWithRetry,
+      publishSingleWrappedWithRetry,
       nostrMessagesLocal,
       setContactsOnboardingHasPaid,
       payWithCashuEnabled,

@@ -36,6 +36,7 @@ export const en = {
   notificationsRegistered: "Registered",
   notificationsDenied: "Denied",
   notificationsError: "Error",
+  notificationReceivedMoney: "You received money",
 
   onboardingTitle: "Linky",
   onboardingSubtitle: "Lightning contacts for payments and messages.",
