@@ -1,8 +1,11 @@
+import React from "react";
 import type { MintUrlInput } from "../app/types/appTypes";
+import { getNextMintIconUrl } from "../utils/mint";
 
 interface MintIcon {
   failed: boolean;
   host: string | null;
+  origin: string | null;
   url: string | null;
 }
 
@@ -24,6 +27,11 @@ export function MintButton({
   onClick,
 }: MintButtonProps) {
   const icon = getMintIconUrl(mint);
+  const [renderedIconUrl, setRenderedIconUrl] = React.useState(icon.url);
+
+  React.useEffect(() => {
+    setRenderedIconUrl(icon.url);
+  }, [icon.url]);
 
   return (
     <button
@@ -39,9 +47,9 @@ export function MintButton({
         boxShadow: isSelected ? "0 0 0 1px rgba(34,197,94,0.35)" : undefined,
       }}
     >
-      {icon.url ? (
+      {renderedIconUrl ? (
         <img
-          src={icon.url}
+          src={renderedIconUrl}
           alt=""
           width={14}
           height={14}
@@ -51,8 +59,13 @@ export function MintButton({
           }}
           loading="lazy"
           referrerPolicy="no-referrer"
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
+          onError={() => {
+            const nextUrl = getNextMintIconUrl(renderedIconUrl, icon.origin);
+            if (nextUrl) {
+              setRenderedIconUrl(nextUrl);
+              return;
+            }
+            setRenderedIconUrl(null);
           }}
         />
       ) : (

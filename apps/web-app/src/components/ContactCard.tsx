@@ -10,6 +10,7 @@ import {
   formatContactMessageTimestamp,
   getInitials,
 } from "../utils/formatting";
+import { getNextMintIconUrl } from "../utils/mint";
 
 interface ContactCardProps {
   avatarUrl: string | null;
@@ -231,19 +232,9 @@ const TokenPreview: React.FC<TokenPreviewProps> = ({
                 onIconLoad(icon.origin, icon.url);
               }
             }}
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
+            onError={() => {
               if (icon.origin) {
-                const duck = icon.host
-                  ? `https://icons.duckduckgo.com/ip3/${icon.host}.ico`
-                  : null;
-                const favicon = `${icon.origin}/favicon.ico`;
-                let next: string | null = null;
-                if (duck && icon.url !== duck) {
-                  next = duck;
-                } else if (icon.url !== favicon) {
-                  next = favicon;
-                }
+                const next = getNextMintIconUrl(icon.url, icon.origin);
                 onIconError(icon.origin, next);
               }
             }}

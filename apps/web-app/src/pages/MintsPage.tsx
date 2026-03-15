@@ -4,6 +4,7 @@ import { MintButton } from "../components/MintButton";
 interface MintIcon {
   failed: boolean;
   host: string | null;
+  origin: string | null;
   url: string | null;
 }
 

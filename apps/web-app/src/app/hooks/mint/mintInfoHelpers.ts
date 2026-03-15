@@ -7,6 +7,7 @@ import {
 import type {
   CashuTokenRowLike,
   LocalMintInfoRow,
+  MintUrlInput,
   OptionalText,
 } from "../../types/appTypes";
 
@@ -20,6 +21,58 @@ interface MintInfoRowLike {
   supportsMpp?: LocalMintInfoRow["supportsMpp"];
   url?: OptionalText;
 }
+
+type MintInfoSearchPrimitive = boolean | number | string | null | undefined;
+
+interface MintInfoSearchObject {
+  [key: string]: MintInfoSearchValue;
+}
+
+type MintInfoSearchValue =
+  | MintInfoSearchObject
+  | MintInfoSearchPrimitive
+  | MintInfoSearchValue[];
+
+const MINT_INFO_ICON_KEYS = [
+  "icon_url",
+  "iconUrl",
+  "icon",
+  "logo",
+  "image",
+  "image_url",
+  "imageUrl",
+];
+
+const isSearchableMintInfoValue = (
+  value: unknown,
+): value is MintInfoSearchObject | MintInfoSearchValue[] => {
+  return typeof value === "object" && value !== null;
+};
+
+const findMintInfoIconValue = (
+  value: unknown,
+  seen: Set<MintInfoSearchObject | MintInfoSearchValue[]>,
+): string | null => {
+  if (!isSearchableMintInfoValue(value)) return null;
+  if (seen.has(value)) return null;
+  seen.add(value);
+
+  if (!Array.isArray(value)) {
+    for (const key of MINT_INFO_ICON_KEYS) {
+      const rawValue = value[key];
+      if (typeof rawValue !== "string") continue;
+      const trimmed = rawValue.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+
+  for (const inner of Object.values(value)) {
+    const found = findMintInfoIconValue(inner, seen);
+    if (found) return found;
+  }
+
+  return null;
+};
 
 export const isMintDeletedRow = (row: MintInfoRowLike): boolean =>
   String(row.isDeleted ?? "") === String(Evolu.sqliteTrue);
@@ -141,6 +194,33 @@ const toJson = (value: unknown): string | null => {
     }
 
     return trimmed.slice(0, 1000);
+  } catch {
+    return null;
+  }
+};
+
+export const getMintInfoIconUrl = (
+  mintUrl: MintUrlInput,
+  infoJson: OptionalText,
+): string | null => {
+  const infoText = String(infoJson ?? "").trim();
+  if (!infoText) return null;
+
+  const normalizedMintUrl = normalizeMintUrl(mintUrl);
+  if (!normalizedMintUrl) return null;
+
+  let info: unknown;
+  try {
+    info = JSON.parse(infoText);
+  } catch {
+    return null;
+  }
+
+  const rawIcon = findMintInfoIconValue(info, new Set());
+  if (!rawIcon) return null;
+
+  try {
+    return new URL(rawIcon, normalizedMintUrl).toString();
   } catch {
     return null;
   }

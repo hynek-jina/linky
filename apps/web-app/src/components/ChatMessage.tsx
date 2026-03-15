@@ -6,6 +6,7 @@ import type {
   LocalNostrMessage,
   MintUrlInput,
 } from "../app/types/appTypes";
+import { getNextMintIconUrl } from "../utils/mint";
 import { EditIndicator } from "./EditIndicator";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
@@ -282,19 +283,12 @@ export function ChatMessage({
                               onMintIconLoad(icon.origin, icon.url);
                             }
                           }}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
+                          onError={() => {
                             if (icon.origin) {
-                              const duck = icon.host
-                                ? `https://icons.duckduckgo.com/ip3/${icon.host}.ico`
-                                : null;
-                              const favicon = `${icon.origin}/favicon.ico`;
-                              let next: string | null = null;
-                              if (duck && icon.url !== duck) {
-                                next = duck;
-                              } else if (icon.url !== favicon) {
-                                next = favicon;
-                              }
+                              const next = getNextMintIconUrl(
+                                icon.url,
+                                icon.origin,
+                              );
                               onMintIconError(icon.origin, next);
                             }
                           }}

@@ -1,6 +1,7 @@
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
 import { parseCashuToken } from "../cashu";
+import { getNextMintIconUrl } from "../utils/mint";
 
 interface MintIcon {
   failed: boolean;
@@ -87,19 +88,9 @@ export function CashuTokenPill({
                 onMintIconLoad(icon.origin, icon.url);
               }
             }}
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
+            onError={() => {
               if (icon.origin) {
-                const duck = icon.host
-                  ? `https://icons.duckduckgo.com/ip3/${icon.host}.ico`
-                  : null;
-                const favicon = `${icon.origin}/favicon.ico`;
-                let next: string | null = null;
-                if (duck && icon.url !== duck) {
-                  next = duck;
-                } else if (icon.url !== favicon) {
-                  next = favicon;
-                }
+                const next = getNextMintIconUrl(icon.url, icon.origin);
                 onMintIconError(icon.origin, next);
               }
             }}

@@ -1,16 +1,17 @@
 import type { OwnerId } from "@evolu/common";
 import React from "react";
+import {
+  getGenericMintIconUrl,
+  getMintIconOverride,
+  getMintOriginAndHost,
+  normalizeMintUrl,
+} from "../../utils/mint";
 import type {
   CashuTokenRowLike,
   LocalMintInfoRow,
   MintUrlInput,
 } from "../types/appTypes";
-import {
-  getMintDuckDuckGoIcon,
-  getMintIconOverride,
-  getMintOriginAndHost,
-  normalizeMintUrl,
-} from "../../utils/mint";
+import { getMintInfoIconUrl } from "./mint/mintInfoHelpers";
 import { useMintInfoStore } from "./mint/useMintInfoStore";
 
 interface UseMintDomainParams {
@@ -70,64 +71,6 @@ export const useMintDomain = ({
     rememberSeenMint,
   });
 
-  const getMintInfoIconUrl = React.useCallback(
-    (mint: MintUrlInput): string | null => {
-      const raw = String(mint ?? "").trim();
-      const normalized = normalizeMintUrl(raw);
-      if (!normalized) return null;
-      const row = mintInfoByUrl.get(normalized);
-      const infoText = String(row?.infoJson ?? "").trim();
-      if (!infoText) return null;
-      let baseUrl: string | null = null;
-      try {
-        baseUrl = new URL(normalized).toString();
-      } catch {
-        const { origin } = getMintOriginAndHost(normalized);
-        baseUrl = origin ?? null;
-      }
-      if (!baseUrl) return null;
-
-      const findIcon = (value: unknown): string | null => {
-        if (!value || typeof value !== "object") return null;
-        const rec = value as Record<string, unknown>;
-        const keys = [
-          "icon_url",
-          "iconUrl",
-          "icon",
-          "logo",
-          "image",
-          "image_url",
-          "imageUrl",
-        ];
-        for (const key of keys) {
-          const rawValue = String(rec[key] ?? "").trim();
-          if (rawValue) return rawValue;
-        }
-        for (const inner of Object.values(rec)) {
-          if (inner && typeof inner === "object") {
-            const found = findIcon(inner);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-
-      try {
-        const info = JSON.parse(infoText) as unknown;
-        const rawIcon = findIcon(info);
-        if (!rawIcon) return null;
-        try {
-          return new URL(rawIcon, baseUrl).toString();
-        } catch {
-          return null;
-        }
-      } catch {
-        return null;
-      }
-    },
-    [mintInfoByUrl],
-  );
-
   const getMintIconUrl = React.useCallback(
     (
       mint: MintUrlInput,
@@ -138,7 +81,14 @@ export const useMintDomain = ({
       failed: boolean;
     } => {
       const { origin, host } = getMintOriginAndHost(mint);
-      if (!origin) return { origin: null, url: null, host, failed: true };
+      if (!origin) {
+        return {
+          origin: null,
+          url: getGenericMintIconUrl(),
+          host,
+          failed: false,
+        };
+      }
 
       if (Object.prototype.hasOwnProperty.call(mintIconUrlByMint, origin)) {
         const stored = mintIconUrlByMint[origin];
@@ -150,14 +100,15 @@ export const useMintDomain = ({
         };
       }
 
-      const infoIcon = getMintInfoIconUrl(mint);
+      const normalizedMintUrl = normalizeMintUrl(mint);
+      const infoIcon = getMintInfoIconUrl(
+        mint,
+        mintInfoByUrl.get(normalizedMintUrl)?.infoJson ?? null,
+      );
       if (infoIcon) return { origin, url: infoIcon, host, failed: false };
 
       const override = getMintIconOverride(host);
       if (override) return { origin, url: override, host, failed: false };
-
-      const duckIcon = getMintDuckDuckGoIcon(host);
-      if (duckIcon) return { origin, url: duckIcon, host, failed: false };
 
       return {
         origin,
@@ -166,7 +117,7 @@ export const useMintDomain = ({
         failed: false,
       };
     },
-    [getMintInfoIconUrl, mintIconUrlByMint],
+    [mintIconUrlByMint, mintInfoByUrl],
   );
 
   return {
