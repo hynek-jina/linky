@@ -1,11 +1,15 @@
+import type { Proof, ProofState, SendResponse } from "@cashu/cashu-ts";
 import {
   bumpCashuDeterministicCounter,
   getCashuDeterministicCounter,
   getCashuDeterministicSeedFromStorage,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
-import type { Proof, ProofState, SendResponse } from "@cashu/cashu-ts";
 import { getCashuLib } from "./utils/cashuLib";
+import {
+  dedupeCashuProofs,
+  filterUnspentCashuProofs,
+} from "./utils/cashuProofs";
 import { getUnknownErrorMessage } from "./utils/unknown";
 
 const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
@@ -99,7 +103,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
     );
   };
 
-  let spendableProofs = allProofs;
+  let spendableProofs = dedupeCashuProofs(allProofs);
   try {
     await wallet.loadMint();
 
@@ -108,15 +112,9 @@ export const createSendTokenWithTokensAtMint = async (args: {
 
     try {
       // Ignore already-spent proofs so stale local token rows do not block send.
-      const states = await wallet.checkProofsStates(allProofs);
+      const states = await wallet.checkProofsStates(spendableProofs);
       const asArray: ProofState[] = Array.isArray(states) ? states : [];
-      const filtered = allProofs.filter((_, idx) => {
-        const state = String(asArray[idx]?.state ?? "").trim();
-        return state === "UNSPENT";
-      });
-      if (filtered.length > 0) {
-        spendableProofs = filtered;
-      }
+      spendableProofs = filterUnspentCashuProofs(spendableProofs, asArray);
     } catch {
       // Keep previous behavior if state checks are unavailable.
     }

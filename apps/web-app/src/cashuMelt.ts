@@ -1,16 +1,21 @@
+import type {
+  MeltProofsResponse,
+  MeltQuoteResponse,
+  Proof,
+  ProofState,
+  SendResponse,
+} from "@cashu/cashu-ts";
 import {
   bumpCashuDeterministicCounter,
   getCashuDeterministicCounter,
   getCashuDeterministicSeedFromStorage,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
-import type {
-  MeltProofsResponse,
-  MeltQuoteResponse,
-  Proof,
-  SendResponse,
-} from "@cashu/cashu-ts";
 import { getCashuLib } from "./utils/cashuLib";
+import {
+  dedupeCashuProofs,
+  filterUnspentCashuProofs,
+} from "./utils/cashuProofs";
 import { getUnknownErrorMessage } from "./utils/unknown";
 
 type CashuPayResult = {
@@ -166,13 +171,22 @@ export const meltInvoiceWithTokensAtMint = async (args: {
 
     const walletUnit = wallet.unit;
     const keysetId = wallet.keysetId;
+    let spendableProofs = dedupeCashuProofs(allProofs);
+
+    try {
+      const states = await wallet.checkProofsStates(spendableProofs);
+      const asArray: ProofState[] = Array.isArray(states) ? states : [];
+      spendableProofs = filterUnspentCashuProofs(spendableProofs, asArray);
+    } catch {
+      // Keep previous behavior if state checks are unavailable.
+    }
 
     const quote = await wallet.createMeltQuote(invoice);
     const paidAmount = quote.amount ?? 0;
     const feeReserve = quote.fee_reserve ?? 0;
     const total = paidAmount + feeReserve;
 
-    const have = getProofAmountSum(allProofs);
+    const have = getProofAmountSum(spendableProofs);
     if (have < total) {
       return {
         ok: false,
@@ -198,7 +212,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
 
       // Swap to get exact proofs for amount+fees; returns keep+send proofs.
       const swapOnce = async (counter: number) =>
-        await wallet.swap(total, allProofs, { counter });
+        await wallet.swap(total, spendableProofs, { counter });
 
       let swapped: SendResponse | null = null;
       let lastError: unknown;
@@ -227,7 +241,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
         }
         if (!swapped) throw lastError ?? new Error("swap failed");
       } else {
-        swapped = await wallet.swap(total, allProofs);
+        swapped = await wallet.swap(total, spendableProofs);
       }
 
       const keepLen = swapped.keep.length;
@@ -371,7 +385,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
       paidAmount: 0,
       feeReserve: 0,
       feePaid: 0,
-      remainingAmount: getProofAmountSum(allProofs),
+      remainingAmount: getProofAmountSum(dedupeCashuProofs(allProofs)),
       remainingToken: null,
       error: getUnknownErrorMessage(e, "melt failed"),
     };

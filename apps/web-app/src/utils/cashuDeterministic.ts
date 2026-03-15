@@ -2,7 +2,11 @@ import { mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "../mnemonic";
 import { CASHU_BIP85_MNEMONIC_STORAGE_KEY } from "./constants";
-import { safeLocalStorageGet, safeLocalStorageSetJson } from "./storage";
+import {
+  safeLocalStorageGet,
+  safeLocalStorageSetJson,
+  withLocalStorageLeaseLock,
+} from "./storage";
 
 export type CashuDeterministicSeed = {
   mnemonic: string;
@@ -54,7 +58,15 @@ export const withCashuDeterministicCounterLock = async <T>(
 ): Promise<T> => {
   const key = makeCounterKey(CASHU_COUNTER_LOCK_PREFIX, args);
   const prev = counterLocks.get(key) ?? Promise.resolve();
-  const run = prev.then(() => fn());
+  const run = prev.then(() =>
+    withLocalStorageLeaseLock({
+      key,
+      ttlMs: 15_000,
+      timeoutMs: 15_000,
+      waitMs: 50,
+      fn,
+    }),
+  );
   const queue = run.then(
     () => undefined,
     () => undefined,

@@ -1,7 +1,9 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
-import type { CashuTokenId } from "../../../evolu";
 import { parseCashuToken } from "../../../cashu";
+import { acceptCashuToken } from "../../../cashuAccept";
+import type { CashuTokenId } from "../../../evolu";
+import { navigateTo } from "../../../hooks/useRouting";
 import {
   bumpCashuDeterministicCounter,
   getCashuDeterministicCounter,
@@ -9,15 +11,14 @@ import {
   withCashuDeterministicCounterLock,
 } from "../../../utils/cashuDeterministic";
 import { getCashuLib } from "../../../utils/cashuLib";
+import { dedupeCashuProofs } from "../../../utils/cashuProofs";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
-import { navigateTo } from "../../../hooks/useRouting";
 import { normalizeMintUrl } from "../../../utils/mint";
-import { getUnknownErrorMessage } from "../../../utils/unknown";
 import {
   safeLocalStorageGet,
   safeLocalStorageSet,
 } from "../../../utils/storage";
-import { acceptCashuToken } from "../../../cashuAccept";
+import { getUnknownErrorMessage } from "../../../utils/unknown";
 import type { CashuTokenRowLike } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
@@ -293,12 +294,14 @@ export const useCashuTokenChecks = ({
               typeof (p as { id?: unknown }).id === "string",
           );
 
-        const proofs = normalizeProofs(
-          mergedProofs.length
-            ? mergedProofs
-            : Array.isArray(decoded?.proofs)
-              ? (decoded.proofs as ProofLike[])
-              : [],
+        const proofs = dedupeCashuProofs(
+          normalizeProofs(
+            mergedProofs.length
+              ? mergedProofs
+              : Array.isArray(decoded?.proofs)
+                ? (decoded.proofs as ProofLike[])
+                : [],
+          ),
         );
         if (!proofs.length) throw new Error("Token proofs missing");
 

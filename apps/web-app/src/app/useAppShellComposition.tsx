@@ -73,6 +73,7 @@ import {
   safeLocalStorageRemove,
   safeLocalStorageSet,
   safeLocalStorageSetJson,
+  withLocalStorageLeaseLock,
 } from "../utils/storage";
 import { useCashuTokenChecks } from "./hooks/cashu/useCashuTokenChecks";
 import { useNpubCashClaim } from "./hooks/cashu/useNpubCashClaim";
@@ -196,7 +197,21 @@ interface PendingTopupQuoteStorage {
   unit: string | null;
 }
 
+interface ClaimedTopupQuoteStorage {
+  amount: number;
+  claimedAtMs: number;
+  mintUrl: string;
+  quote: string;
+  token: string;
+  unit: string | null;
+}
+
 const PENDING_TOPUP_QUOTE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const CLAIMED_TOPUP_QUOTE_STORAGE_KEY_PREFIX = "linky.topup.claimed.v1";
+const CLAIMED_TOPUP_QUOTE_LOCK_STORAGE_KEY_PREFIX = "linky.topup.claimLock.v1";
+
+const encodeStorageSegment = (value: string): string =>
+  encodeURIComponent(String(value ?? "").trim());
 
 const isExpiredPendingTopupQuote = (createdAtMs: number): boolean =>
   Date.now() - createdAtMs > PENDING_TOPUP_QUOTE_MAX_AGE_MS;
@@ -257,6 +272,62 @@ const isPendingTopupQuoteStorage = (
     quote.trim().length > 0 &&
     (unit === null || typeof unit === "string")
   );
+};
+
+const isClaimedTopupQuoteStorage = (
+  value: unknown,
+): value is ClaimedTopupQuoteStorage => {
+  if (typeof value !== "object" || value === null) return false;
+
+  const amount = readObjectField(value, "amount");
+  const claimedAtMs = readObjectField(value, "claimedAtMs");
+  const mintUrl = readObjectField(value, "mintUrl");
+  const quote = readObjectField(value, "quote");
+  const token = readObjectField(value, "token");
+  const unit = readObjectField(value, "unit");
+
+  return (
+    typeof amount === "number" &&
+    typeof claimedAtMs === "number" &&
+    typeof mintUrl === "string" &&
+    typeof quote === "string" &&
+    typeof token === "string" &&
+    (unit === null || typeof unit === "string")
+  );
+};
+
+const makeClaimedTopupQuoteStorageKey = (args: {
+  mintUrl: string;
+  ownerId: string;
+  quote: string;
+}): string => {
+  return `${CLAIMED_TOPUP_QUOTE_STORAGE_KEY_PREFIX}.${encodeStorageSegment(
+    args.ownerId,
+  )}.${encodeStorageSegment(args.mintUrl)}.${encodeStorageSegment(args.quote)}`;
+};
+
+const makeClaimedTopupQuoteLockKey = (args: {
+  mintUrl: string;
+  ownerId: string;
+  quote: string;
+}): string => {
+  return `${CLAIMED_TOPUP_QUOTE_LOCK_STORAGE_KEY_PREFIX}.${encodeStorageSegment(
+    args.ownerId,
+  )}.${encodeStorageSegment(args.mintUrl)}.${encodeStorageSegment(args.quote)}`;
+};
+
+const readClaimedTopupQuoteFromStorage = (
+  key: string,
+): ClaimedTopupQuoteStorage | null => {
+  const raw = safeLocalStorageGet(key);
+  if (!raw) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isClaimedTopupQuoteStorage(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 };
 
 const readPendingTopupQuoteFromStorage = (
@@ -1136,69 +1207,145 @@ export const useAppShellComposition = () => {
     let cancelled = false;
     const run = async () => {
       try {
-        const { CashuMint, CashuWallet, MintQuoteState, getEncodedToken } =
-          await getCashuLib();
-        const det = getCashuDeterministicSeedFromStorage();
-        const wallet = new CashuWallet(new CashuMint(topupMintQuote.mintUrl), {
-          ...(topupMintQuote.unit ? { unit: topupMintQuote.unit } : {}),
-          ...(det ? { bip39seed: det.bip39seed } : {}),
-        });
-        await wallet.loadMint();
-
         const quoteId = String(topupMintQuote.quote ?? "").trim();
         if (!quoteId) return;
 
-        const status = await wallet.checkMintQuote(quoteId);
-        const quoteState = readMintQuoteState(status);
-        const state = quoteState.toLowerCase();
-        const paidState = readPaidMintQuoteState(MintQuoteState);
-        const paid = state === "paid" || quoteState === paidState;
-        if (!paid) return;
-
-        const proofs = await wallet.mintProofs(topupMintQuote.amount, quoteId);
-        const unit = wallet.unit ?? null;
-        const token = getEncodedToken({
-          mint: topupMintQuote.mintUrl,
-          proofs,
-          ...(unit ? { unit } : {}),
+        const topupOwnerKey = String(appOwnerId ?? "anon");
+        const claimStorageKey = makeClaimedTopupQuoteStorageKey({
+          ownerId: topupOwnerKey,
+          mintUrl: topupMintQuote.mintUrl,
+          quote: quoteId,
+        });
+        const claimLockKey = makeClaimedTopupQuoteLockKey({
+          ownerId: topupOwnerKey,
+          mintUrl: topupMintQuote.mintUrl,
+          quote: quoteId,
         });
 
-        const ownerId = await resolveOwnerIdForWrite();
-        const payload = {
-          token: token as typeof Evolu.NonEmptyString.Type,
-          state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+        const insertClaimedTopupToken = async (
+          claimed: ClaimedTopupQuoteStorage,
+        ) => {
+          if (isCashuTokenKnownAny(claimed.token)) return true;
+
+          const ownerId = await resolveOwnerIdForWrite();
+          const payload = {
+            token: claimed.token as typeof Evolu.NonEmptyString.Type,
+            state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+          };
+
+          const result = ownerId
+            ? insert("cashuToken", payload, { ownerId })
+            : insert("cashuToken", payload);
+          if (!result.ok) {
+            setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+            return false;
+          }
+
+          return true;
         };
 
-        const result = ownerId
-          ? insert("cashuToken", payload, { ownerId })
-          : insert("cashuToken", payload);
-        if (!result.ok) {
-          setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+        const claimedBeforeRun =
+          readClaimedTopupQuoteFromStorage(claimStorageKey);
+        if (claimedBeforeRun) {
+          const restored = await insertClaimedTopupToken(claimedBeforeRun);
+          if (restored && !cancelled) setTopupMintQuote(null);
           return;
         }
 
-        ensureCashuTokenPersisted(String(token ?? ""));
+        const { CashuMint, CashuWallet, MintQuoteState, getEncodedToken } =
+          await getCashuLib();
+        await withLocalStorageLeaseLock({
+          key: claimLockKey,
+          ttlMs: 15_000,
+          timeoutMs: 2_000,
+          waitMs: 50,
+          fn: async () => {
+            const alreadyClaimed =
+              readClaimedTopupQuoteFromStorage(claimStorageKey);
+            if (alreadyClaimed) {
+              const restored = await insertClaimedTopupToken(alreadyClaimed);
+              if (restored && !cancelled) setTopupMintQuote(null);
+              return;
+            }
 
-        showRecentlyReceivedTokenToast(
-          String(token ?? "").trim(),
-          topupMintQuote.amount > 0 ? topupMintQuote.amount : null,
-        );
+            const det = getCashuDeterministicSeedFromStorage();
+            const wallet = new CashuWallet(
+              new CashuMint(topupMintQuote.mintUrl),
+              {
+                ...(topupMintQuote.unit ? { unit: topupMintQuote.unit } : {}),
+                ...(det ? { bip39seed: det.bip39seed } : {}),
+              },
+            );
+            await wallet.loadMint();
 
-        if (route.kind !== "topupInvoice") {
-          const displayAmount = formatDisplayedAmountParts(
-            topupMintQuote.amount,
-          );
-          showPaidOverlay(
-            t("topupOverlay")
-              .replace(
-                "{amount}",
-                `${displayAmount.approxPrefix}${displayAmount.amountText}`,
-              )
-              .replace("{unit}", displayAmount.unitLabel),
-          );
-        }
+            const status = await wallet.checkMintQuote(quoteId);
+            const quoteState = readMintQuoteState(status);
+            const state = quoteState.toLowerCase();
+            const paidState = readPaidMintQuoteState(MintQuoteState);
+            const paid = state === "paid" || quoteState === paidState;
+            if (!paid) return;
 
-        if (!cancelled) setTopupMintQuote(null);
+            const proofs = await wallet.mintProofs(
+              topupMintQuote.amount,
+              quoteId,
+            );
+            const unit = wallet.unit ?? null;
+            const token = String(
+              getEncodedToken({
+                mint: topupMintQuote.mintUrl,
+                proofs,
+                ...(unit ? { unit } : {}),
+              }) ?? "",
+            ).trim();
+            if (!token) throw new Error("Mint produced empty token");
+
+            if (!isCashuTokenKnownAny(token)) {
+              const ownerId = await resolveOwnerIdForWrite();
+              const payload = {
+                token: token as typeof Evolu.NonEmptyString.Type,
+                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+              };
+
+              const result = ownerId
+                ? insert("cashuToken", payload, { ownerId })
+                : insert("cashuToken", payload);
+              if (!result.ok) {
+                setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+                return;
+              }
+            }
+
+            safeLocalStorageSetJson(claimStorageKey, {
+              amount: topupMintQuote.amount,
+              claimedAtMs: Date.now(),
+              mintUrl: topupMintQuote.mintUrl,
+              quote: quoteId,
+              token,
+              unit,
+            });
+
+            showRecentlyReceivedTokenToast(
+              token,
+              topupMintQuote.amount > 0 ? topupMintQuote.amount : null,
+            );
+
+            if (route.kind !== "topupInvoice") {
+              const displayAmount = formatDisplayedAmountParts(
+                topupMintQuote.amount,
+              );
+              showPaidOverlay(
+                t("topupOverlay")
+                  .replace(
+                    "{amount}",
+                    `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+                  )
+                  .replace("{unit}", displayAmount.unitLabel),
+              );
+            }
+
+            if (!cancelled) setTopupMintQuote(null);
+          },
+        });
       } catch {
         // ignore
       }
@@ -1214,15 +1361,17 @@ export const useAppShellComposition = () => {
       window.clearInterval(intervalId);
     };
   }, [
+    appOwnerId,
     formatDisplayedAmountParts,
     insert,
+    isCashuTokenKnownAny,
     resolveOwnerIdForWrite,
     topupMintQuote,
     t,
-    ensureCashuTokenPersisted,
     route.kind,
     showRecentlyReceivedTokenToast,
     showPaidOverlay,
+    setStatus,
   ]);
 
   const {

@@ -13,15 +13,45 @@ interface StorageStructuredValue {
   toString(): string;
 }
 
+interface StorageObjectPayload {
+  [key: string]: StoragePayload;
+}
+
 type StoragePayload =
-  | bigint
   | boolean
   | number
+  | StorageObjectPayload
   | StorageStructuredValue
+  | StoragePayload[]
   | string
-  | symbol
   | null
   | undefined;
+
+interface LocalStorageLeaseLockRecord {
+  expiresAtMs: number;
+  owner: string;
+}
+
+const isLocalStorageLeaseLockRecord = (
+  value: unknown,
+): value is LocalStorageLeaseLockRecord => {
+  if (typeof value !== "object" || value === null) return false;
+  const owner = Reflect.get(value, "owner");
+  const expiresAtMs = Reflect.get(value, "expiresAtMs");
+  return typeof owner === "string" && typeof expiresAtMs === "number";
+};
+
+const createLeaseLockOwner = (): string => {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (typeof randomUuid === "string" && randomUuid.trim()) return randomUuid;
+  return `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+};
+
+const sleep = async (delayMs: number): Promise<void> => {
+  await new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, delayMs);
+  });
+};
 
 export const safeLocalStorageGet = (key: string): string | null => {
   try {
@@ -68,6 +98,87 @@ export const safeLocalStorageSetJson = (
     safeLocalStorageSet(key, JSON.stringify(value));
   } catch {
     // ignore
+  }
+};
+
+const readLocalStorageLeaseLock = (
+  key: string,
+): LocalStorageLeaseLockRecord | null => {
+  const raw = safeLocalStorageGet(key);
+  if (!raw) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isLocalStorageLeaseLockRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+export const withLocalStorageLeaseLock = async <T>(args: {
+  key: string;
+  ttlMs?: number;
+  timeoutMs?: number;
+  waitMs?: number;
+  fn: () => Promise<T>;
+}): Promise<T> => {
+  const ttlMs =
+    Number.isFinite(args.ttlMs) && (args.ttlMs ?? 0) > 0
+      ? Math.floor(args.ttlMs ?? 0)
+      : 15_000;
+  const timeoutMs =
+    Number.isFinite(args.timeoutMs) && (args.timeoutMs ?? 0) >= 0
+      ? Math.floor(args.timeoutMs ?? 0)
+      : 15_000;
+  const waitMs =
+    Number.isFinite(args.waitMs) && (args.waitMs ?? 0) > 0
+      ? Math.floor(args.waitMs ?? 0)
+      : 50;
+
+  const owner = createLeaseLockOwner();
+  const startedAt = Date.now();
+
+  while (true) {
+    const now = Date.now();
+    const current = readLocalStorageLeaseLock(args.key);
+
+    if (!current || current.expiresAtMs <= now || current.owner === owner) {
+      safeLocalStorageSetJson(args.key, {
+        owner,
+        expiresAtMs: now + ttlMs,
+      });
+
+      const confirmed = readLocalStorageLeaseLock(args.key);
+      if (confirmed?.owner === owner) break;
+    }
+
+    if (now - startedAt >= timeoutMs) {
+      throw new Error(`Timed out waiting for lock: ${args.key}`);
+    }
+
+    await sleep(waitMs);
+  }
+
+  const heartbeat = globalThis.setInterval(
+    () => {
+      const current = readLocalStorageLeaseLock(args.key);
+      if (current?.owner !== owner) return;
+      safeLocalStorageSetJson(args.key, {
+        owner,
+        expiresAtMs: Date.now() + ttlMs,
+      });
+    },
+    Math.max(250, Math.floor(ttlMs / 3)),
+  );
+
+  try {
+    return await args.fn();
+  } finally {
+    globalThis.clearInterval(heartbeat);
+    const current = readLocalStorageLeaseLock(args.key);
+    if (current?.owner === owner) {
+      safeLocalStorageRemove(args.key);
+    }
   }
 };
 
