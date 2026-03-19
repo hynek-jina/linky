@@ -6,9 +6,7 @@ import { LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS } from "../utils/constants";
 interface AdvancedPageProps {
   __APP_VERSION__: string;
   cashuIsBusy: boolean;
-  cashuSeedMnemonic: string | null;
   connectedRelayCount: number;
-  copyCashuSeed: () => void;
   copyNostrKeys: () => void;
   copySeed: () => void;
   currentNpub: string | null;
@@ -43,9 +41,7 @@ interface AdvancedPageProps {
 export function AdvancedPage({
   __APP_VERSION__,
   cashuIsBusy,
-  cashuSeedMnemonic,
   connectedRelayCount,
-  copyCashuSeed,
   copyNostrKeys,
   copySeed,
   currentNsec,
@@ -232,26 +228,6 @@ export function AdvancedPage({
               onClick={copyNostrKeys}
               disabled={!hasCurrentNsec}
               data-guide="copy-nostr-keys"
-            >
-              {t("copyCurrent")}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🌰
-          </span>
-          <span className="settings-label">{t("cashuSeed")}</span>
-        </div>
-        <div className="settings-right">
-          <div className="badge-box">
-            <button
-              className="ghost"
-              onClick={copyCashuSeed}
-              disabled={!cashuSeedMnemonic}
             >
               {t("copyCurrent")}
             </button>

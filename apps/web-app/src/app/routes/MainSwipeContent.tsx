@@ -1,5 +1,6 @@
 import React from "react";
 import { BottomTabBar } from "../../components/BottomTabBar";
+import { ContactAddFabIcon } from "../../components/ContactAddFabIcon";
 import { ContactsChecklist } from "../../components/ContactsChecklist";
 import { ContactsPage } from "../../pages/ContactsPage";
 import { WalletPage } from "../../pages/WalletPage";
@@ -143,6 +144,7 @@ export const MainSwipeContent = (): React.ReactElement => {
             bottomTabActive={bottomTabActive}
             canAddContact={canAddContact}
             openNewContactPage={openNewContactPage}
+            openScan={openScan}
             showBottomTabBar={false}
             showFab={false}
             t={t}
@@ -177,7 +179,7 @@ export const MainSwipeContent = (): React.ReactElement => {
       <button
         type="button"
         className={`contacts-fab main-swipe-fab${canAddContact ? "" : " is-disabled"}`}
-        onClick={openNewContactPage}
+        onClick={openScan}
         aria-disabled={!canAddContact}
         aria-label={t("addContact")}
         title={t("addContact")}
@@ -188,7 +190,7 @@ export const MainSwipeContent = (): React.ReactElement => {
           pointerEvents: mainSwipeProgress < 0.5 ? "auto" : "none",
         }}
       >
-        <span aria-hidden="true">+</span>
+        <ContactAddFabIcon />
       </button>
     </>
   );

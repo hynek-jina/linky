@@ -2,12 +2,14 @@ import React from "react";
 
 interface ScanModalProps {
   closeScan: () => void;
+  pasteScanValue: () => Promise<void>;
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
   t: (key: string) => string;
 }
 
 export function ScanModal({
   closeScan,
+  pasteScanValue,
   scanVideoRef,
   t,
 }: ScanModalProps): React.ReactElement {
@@ -28,9 +30,41 @@ export function ScanModal({
 
         <video ref={scanVideoRef} className="scan-video" />
 
-        <div className="scan-hints" aria-label={t("scan")}>
-          {t("scanHintInvoice")}, {t("scanHintContact")},{" "}
-          {t("scanHintWithdraw")}
+        <div className="scan-footer">
+          <button
+            type="button"
+            className="scan-paste-btn"
+            onClick={() => void pasteScanValue()}
+            aria-label={t("paste")}
+            title={t("paste")}
+          >
+            <svg
+              aria-hidden="true"
+              className="scan-paste-btn-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <rect
+                x="5"
+                y="4"
+                width="11"
+                height="13"
+                rx="2.2"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              />
+              <rect
+                x="8"
+                y="7"
+                width="11"
+                height="13"
+                rx="2.2"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              />
+            </svg>
+            <span className="scan-paste-btn-label">{t("paste")}</span>
+          </button>
         </div>
       </div>
     </div>

@@ -87,8 +87,15 @@ export function ContactsChecklist({
               }
               role="listitem"
             >
-              <span className="contacts-checklist-check" aria-hidden="true">
-                ✓
+              <span
+                className={
+                  task.done
+                    ? "contacts-checklist-check is-done"
+                    : "contacts-checklist-check is-bullet"
+                }
+                aria-hidden="true"
+              >
+                {task.done ? "✓" : "•"}
               </span>
               <span className="contacts-checklist-label">{task.label}</span>
 

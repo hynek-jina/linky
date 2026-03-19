@@ -69,6 +69,7 @@ export function AuthenticatedLayout({
       {state.scanIsOpen && (
         <ScanModal
           closeScan={actions.closeScan}
+          pasteScanValue={actions.pasteScanValue}
           scanVideoRef={state.scanVideoRef}
           t={state.t}
         />

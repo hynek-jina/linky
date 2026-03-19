@@ -98,6 +98,7 @@ export interface AppShellActionsContextValue {
   onProfilePhotoSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
   openFeedbackContact: () => void;
   openProfileQr: () => void;
+  pasteScanValue: () => Promise<void>;
   saveProfileEdits: () => void;
   setDisplayCurrency: (currency: DisplayCurrency) => void;
   setContactNewPrefill: (prefill: {

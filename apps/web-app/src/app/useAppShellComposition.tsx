@@ -148,7 +148,9 @@ import { buildCashuMintCandidates as buildCashuMintCandidatesBase } from "./lib/
 import { showPwaNotification } from "./lib/pwaNotifications";
 import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "./lib/tokenMessageInfo";
 import {
+  clearCashuTokenUrlParams,
   extractCashuTokenFromText,
+  extractCashuTokenFromUrl,
   extractCashuTokenMeta,
 } from "./lib/tokenText";
 import {
@@ -415,6 +417,7 @@ export const useAppShellComposition = () => {
 
   const [status, setStatus] = useState<string | null>(null);
   const importDataFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const handledIncomingCashuTokenRef = React.useRef<string | null>(null);
 
   const [recentlyReceivedToken, setRecentlyReceivedToken] = useState<null | {
     token: string;
@@ -891,7 +894,6 @@ export const useAppShellComposition = () => {
   const {
     confirmPendingOnboardingProfile,
     createNewAccount,
-    cashuSeedMnemonic,
     currentNpub,
     isSeedLogin,
     logoutArmed,
@@ -2412,6 +2414,24 @@ export const useAppShellComposition = () => {
     touchMintInfo,
   });
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const launchUrl = new URL(window.location.href);
+    const incomingToken = extractCashuTokenFromUrl(launchUrl);
+    if (!incomingToken) return;
+    if (handledIncomingCashuTokenRef.current === incomingToken) return;
+
+    handledIncomingCashuTokenRef.current = incomingToken;
+
+    if (clearCashuTokenUrlParams(launchUrl)) {
+      const nextUrl = `${launchUrl.pathname}${launchUrl.search}${launchUrl.hash}`;
+      window.history.replaceState(window.history.state, "", nextUrl || "/");
+    }
+
+    void saveCashuFromText(incomingToken, { navigateToWallet: true });
+  }, [saveCashuFromText]);
+
   const handleDelete = (id: ContactId) => {
     const result = contactsOwnerId
       ? (() => {
@@ -2748,13 +2768,6 @@ export const useAppShellComposition = () => {
     pushToast(t("seedMissing"));
   };
 
-  const copyCashuSeed = async () => {
-    const value = String(cashuSeedMnemonic ?? "").trim();
-    if (!value) return;
-    await navigator.clipboard?.writeText(value);
-    pushToast(t("cashuSeedCopied"));
-  };
-
   const restoreMissingTokens = useRestoreMissingTokens({
     cashuIsBusy,
     cashuTokensAll: cashuTokensAllFiltered,
@@ -2989,6 +3002,30 @@ export const useAppShellComposition = () => {
     t,
   });
 
+  const pasteScanValue = React.useCallback(async () => {
+    let text = "";
+
+    if (navigator.clipboard?.readText) {
+      text = await navigator.clipboard.readText();
+    } else if (
+      typeof window !== "undefined" &&
+      typeof window.prompt === "function"
+    ) {
+      text = String(window.prompt(t("scanPastePrompt")) ?? "");
+    } else {
+      pushToast(t("pasteNotAvailable"));
+      return;
+    }
+
+    const raw = String(text ?? "").trim();
+    if (!raw) {
+      pushToast(t("pasteEmpty"));
+      return;
+    }
+
+    await handleScannedText(raw);
+  }, [handleScannedText, pushToast, t]);
+
   useScannedTextHandlerRefBridge({
     handleScannedText,
     scannedTextHandlerRef,
@@ -3205,7 +3242,6 @@ export const useAppShellComposition = () => {
       connectedRelayCount,
       copyNostrKeys,
       copySeed,
-      copyCashuSeed,
       currentNpub,
       currentNsec,
       dedupeContacts,
@@ -3272,7 +3308,6 @@ export const useAppShellComposition = () => {
       requestDeriveNostrKeys,
       requestLogout,
       restoreMissingTokens,
-      cashuSeedMnemonic,
       route,
       safeLocalStorageSetJson,
       saveEvoluServerUrls,
@@ -3352,6 +3387,7 @@ export const useAppShellComposition = () => {
     onProfilePhotoSelected,
     openFeedbackContact,
     openProfileQr,
+    pasteScanValue,
     saveProfileEdits,
     setDisplayCurrency,
     setContactNewPrefill,

@@ -356,7 +356,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
               onClick={() => void pasteExistingNsec()}
               disabled={onboardingIsBusy}
             >
-              {t("onboardingPasteNsec")}
+              {t("onboardingReturn")}
             </button>
           </div>
         </>

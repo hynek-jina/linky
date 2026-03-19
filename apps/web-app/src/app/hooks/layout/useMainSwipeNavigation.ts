@@ -17,10 +17,42 @@ interface MainSwipeScrollable {
   scrollTo: (options: { behavior: ScrollBehavior; left: number }) => void;
 }
 
+const ROUTES_WITHOUT_WALLET_RETURN_ANIMATION = new Set<Route["kind"]>([
+  "cashuTokenNew",
+  "cashuToken",
+  "topup",
+  "topupInvoice",
+]);
+
 const getMainSwipeTargetLeft = (
   width: number,
   target: "contacts" | "wallet",
 ): number => (target === "wallet" ? width : 0);
+
+const shouldDisableWalletReturnAnimation = (
+  routeKind: Route["kind"],
+  previousRouteKind: Route["kind"],
+): boolean =>
+  routeKind === "wallet" &&
+  ROUTES_WITHOUT_WALLET_RETURN_ANIMATION.has(previousRouteKind);
+
+const restoreScrollBehaviorNextFrame = (
+  element: HTMLDivElement,
+  mainSwipeRef: React.RefObject<HTMLDivElement | null>,
+  scrollBehavior: string,
+): (() => void) => {
+  const frameId = window.requestAnimationFrame(() => {
+    if (mainSwipeRef.current !== element) return;
+    element.style.scrollBehavior = scrollBehavior;
+  });
+
+  return () => {
+    window.cancelAnimationFrame(frameId);
+    if (mainSwipeRef.current === element) {
+      element.style.scrollBehavior = scrollBehavior;
+    }
+  };
+};
 
 export const alignMainSwipeToTarget = (
   element: MainSwipeScrollable,
@@ -44,6 +76,8 @@ export const useMainSwipeNavigation = ({
   routeKind,
   setMainSwipeProgress,
 }: UseMainSwipeNavigationParams) => {
+  const previousRouteKindRef = React.useRef<Route["kind"]>(routeKind);
+
   const updateMainSwipeProgress = React.useCallback(
     (value: number) => {
       const clamped = Math.min(1, Math.max(0, value));
@@ -67,10 +101,21 @@ export const useMainSwipeNavigation = ({
     [mainSwipeRef, routeKind, updateMainSwipeProgress],
   );
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!isMainSwipeRoute) return;
     const element = mainSwipeRef.current;
     if (!element) return;
+
+    const previousRouteKind = previousRouteKindRef.current;
+    const disableSmoothAlignment = shouldDisableWalletReturnAnimation(
+      routeKind,
+      previousRouteKind,
+    );
+    const previousScrollBehavior = element.style.scrollBehavior;
+
+    if (disableSmoothAlignment) {
+      element.style.scrollBehavior = "auto";
+    }
 
     alignMainSwipeToTarget(
       element,
@@ -78,7 +123,19 @@ export const useMainSwipeNavigation = ({
     );
 
     updateMainSwipeProgress(routeKind === "wallet" ? 1 : 0);
+
+    if (!disableSmoothAlignment) return;
+
+    return restoreScrollBehaviorNextFrame(
+      element,
+      mainSwipeRef,
+      previousScrollBehavior,
+    );
   }, [isMainSwipeRoute, mainSwipeRef, routeKind, updateMainSwipeProgress]);
+
+  React.useEffect(() => {
+    previousRouteKindRef.current = routeKind;
+  }, [routeKind]);
 
   React.useEffect(() => {
     if (isMainSwipeRoute) return;

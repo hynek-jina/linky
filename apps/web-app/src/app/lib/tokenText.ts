@@ -155,3 +155,44 @@ export const extractCashuTokenFromText = (text: string): string | null => {
 
   return null;
 };
+
+const CASHU_LAUNCH_PARAM_KEYS = [
+  "cashu",
+  "token",
+  "cashutoken",
+  "cashu_token",
+  "uri",
+  "link",
+];
+
+export const extractCashuTokenFromUrl = (url: URL): string | null => {
+  for (const key of CASHU_LAUNCH_PARAM_KEYS) {
+    const value = url.searchParams.get(key);
+    if (!value) continue;
+
+    const token = extractCashuTokenFromText(value);
+    if (token) return token;
+  }
+
+  const hash = String(url.hash ?? "")
+    .replace(/^#/, "")
+    .trim();
+  if (hash) {
+    const token = extractCashuTokenFromText(hash);
+    if (token) return token;
+  }
+
+  return null;
+};
+
+export const clearCashuTokenUrlParams = (url: URL): boolean => {
+  let changed = false;
+
+  for (const key of CASHU_LAUNCH_PARAM_KEYS) {
+    if (!url.searchParams.has(key)) continue;
+    url.searchParams.delete(key);
+    changed = true;
+  }
+
+  return changed;
+};

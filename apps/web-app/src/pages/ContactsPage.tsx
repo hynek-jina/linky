@@ -2,6 +2,7 @@ import type { FC } from "react";
 import React from "react";
 import type { ContactRowLike } from "../app/types/appTypes";
 import { BottomTabBar } from "../components/BottomTabBar";
+import { ContactAddFabIcon } from "../components/ContactAddFabIcon";
 
 interface ContactsPageProps {
   activeGroup: string | null;
@@ -15,6 +16,7 @@ interface ContactsPageProps {
   groupNames: string[];
   noGroupFilterValue: string;
   openNewContactPage: () => void;
+  openScan?: () => void;
   onboardingContent?: React.ReactNode;
   otherContactsLabel: string;
   renderContactCard: (contact: ContactRowLike) => React.ReactNode;
@@ -43,6 +45,7 @@ export const ContactsPage: FC<ContactsPageProps> = ({
   groupNames,
   noGroupFilterValue,
   openNewContactPage,
+  openScan,
   onboardingContent,
   otherContactsLabel,
   renderContactCard,
@@ -193,13 +196,13 @@ export const ContactsPage: FC<ContactsPageProps> = ({
         <button
           type="button"
           className={`contacts-fab${canAddContact ? "" : " is-disabled"}`}
-          onClick={openNewContactPage}
+          onClick={openScan ?? openNewContactPage}
           aria-disabled={!canAddContact}
           aria-label={t("addContact")}
           title={t("addContact")}
           data-guide="contact-add-button"
         >
-          <span aria-hidden="true">+</span>
+          <ContactAddFabIcon />
         </button>
       ) : null}
     </>
