@@ -31,7 +31,9 @@ export type Route =
 
 export const parseRouteFromHash = (): Route => {
   const hash = globalThis.location?.hash ?? "";
+  if (hash === "") return { kind: "wallet" };
   if (hash === "#") return { kind: "contacts" };
+  if (hash === "#contacts") return { kind: "contacts" };
   if (hash === "#advanced") return { kind: "advanced" };
   if (hash === "#advanced/auto-pay-limit") {
     return { kind: "advancedAutoPayLimit" };
@@ -114,5 +116,5 @@ export const parseRouteFromHash = (): Route => {
     }
   }
 
-  return { kind: "contacts" };
+  return { kind: "wallet" };
 };

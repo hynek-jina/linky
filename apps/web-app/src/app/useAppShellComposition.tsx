@@ -148,9 +148,7 @@ import { buildCashuMintCandidates as buildCashuMintCandidatesBase } from "./lib/
 import { showPwaNotification } from "./lib/pwaNotifications";
 import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "./lib/tokenMessageInfo";
 import {
-  clearCashuTokenUrlParams,
   extractCashuTokenFromText,
-  extractCashuTokenFromUrl,
   extractCashuTokenMeta,
 } from "./lib/tokenText";
 import {
@@ -417,7 +415,6 @@ export const useAppShellComposition = () => {
 
   const [status, setStatus] = useState<string | null>(null);
   const importDataFileInputRef = React.useRef<HTMLInputElement | null>(null);
-  const handledIncomingCashuTokenRef = React.useRef<string | null>(null);
 
   const [recentlyReceivedToken, setRecentlyReceivedToken] = useState<null | {
     token: string;
@@ -2413,24 +2410,6 @@ export const useAppShellComposition = () => {
     t,
     touchMintInfo,
   });
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const launchUrl = new URL(window.location.href);
-    const incomingToken = extractCashuTokenFromUrl(launchUrl);
-    if (!incomingToken) return;
-    if (handledIncomingCashuTokenRef.current === incomingToken) return;
-
-    handledIncomingCashuTokenRef.current = incomingToken;
-
-    if (clearCashuTokenUrlParams(launchUrl)) {
-      const nextUrl = `${launchUrl.pathname}${launchUrl.search}${launchUrl.hash}`;
-      window.history.replaceState(window.history.state, "", nextUrl || "/");
-    }
-
-    void saveCashuFromText(incomingToken, { navigateToWallet: true });
-  }, [saveCashuFromText]);
 
   const handleDelete = (id: ContactId) => {
     const result = contactsOwnerId

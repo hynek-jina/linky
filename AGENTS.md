@@ -33,6 +33,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 ## Architecture
 
 - **No framework router** - hash-based routing via `useRouting` hook and `parseRouteFromHash()` in `src/types/route.ts`
+- Empty or unknown hashes now default to the wallet route; contacts use `#contacts` and legacy explicit `#` still opens contacts
 - Navigation uses `navigateTo()` from `src/hooks/useRouting.ts` - do NOT use `window.location` directly
 - **Evolu** for all persistent data - local-first SQLite with sync. Schema in `src/evolu.ts`
 - Nostr chat persistence is Evolu-backed (`nostrMessage` + `nostrReaction` tables) and uses deterministic `messages-n` owner lanes for seed logins (derived from SLIP-39/BIP-85 path family `m/83696968'/39'/0'/24'/4'/<index>'`); legacy `linky.local.nostrMessages.v1.<ownerId>` data is imported once per owner via `linky.messages_evolu_migrated_v1:<ownerId>`
@@ -78,7 +79,6 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - `routes/useSystemRouteProps.ts` builds shared system/settings route prop groups
 - `routes/props/` contains grouped route-prop builders (`buildPeopleRouteProps`, `buildMoneyRouteProps`, `buildMainSwipeRouteProps`)
 - `lib/` contains shared app helpers (Nostr pool, token text parsing, topbar config)
-- Installed desktop Chromium PWAs can register a `web+cashu` protocol handler in the manifest; Linky strips the incoming query param at launch and routes the token through the same `useSaveCashuFromText` accept flow as scanned/pasted/message tokens
 - `types/appTypes.ts` contains app-local shared types
 - `apps/push/src/` is split by concern: `http.ts` (Bun API), `ownership.ts` (signed challenge verification), `storage.ts` (SQLite persistence for subscriptions/pubkeys/challenges/seen outer event ids), `relayWatcher.ts` (relay subscription for outer `kind: 1059` events with catch-up vs live delivery gating), and `push.ts` (Web Push delivery + invalid subscription cleanup, including stale subscriptions tied to an old VAPID keypair)
 - Push service proof events use `kind: 27235` with short-lived per-pubkey challenge nonces; `/subscribe` and `/unsubscribe` both require valid proofs per affected pubkey, full unsubscribe only happens when the last proven pubkey is removed, the server never decrypts NIP-17 payloads, and it only emits generic notifications for outer `kind: 1059` events tagged `["linky","push"]`, so sender self-copies / reactions / edits can sync over relays without triggering push

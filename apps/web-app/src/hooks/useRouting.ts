@@ -48,7 +48,7 @@ type NavigationAction =
 export const navigateTo = (action: NavigationAction): void => {
   switch (action.route) {
     case "contacts":
-      window.location.assign("#");
+      window.location.assign("#contacts");
       break;
     case "settings":
       window.location.assign("#settings");
