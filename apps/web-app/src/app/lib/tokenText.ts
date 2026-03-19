@@ -56,6 +56,7 @@ export const extractCashuTokenFromText = (text: string): string | null => {
     if (!raw) return null;
 
     const stripped = raw
+      .replace(/^linky:(\/\/)?/i, "")
       .replace(/^web\+cashu:/i, "")
       .replace(/^cashu:/i, "")
       .replace(/^nostr:/i, "")
@@ -182,7 +183,7 @@ export const extractCashuTokenFromUrl = (url: URL): string | null => {
     if (token) return token;
   }
 
-  return null;
+  return extractCashuTokenFromText(url.toString());
 };
 
 export const clearCashuTokenUrlParams = (url: URL): boolean => {

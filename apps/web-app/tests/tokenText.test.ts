@@ -16,6 +16,9 @@ describe("extractCashuTokenFromText", () => {
     expect(extractCashuTokenFromText(`web+cashu://${SAMPLE_TOKEN}`)).toBe(
       SAMPLE_TOKEN,
     );
+    expect(extractCashuTokenFromText(`linky://${SAMPLE_TOKEN}`)).toBe(
+      SAMPLE_TOKEN,
+    );
   });
 });
 
@@ -32,6 +35,12 @@ describe("extractCashuTokenFromUrl", () => {
     const url = new URL(
       `https://linky.example/?uri=cashu%3A%2F%2F${SAMPLE_TOKEN}`,
     );
+
+    expect(extractCashuTokenFromUrl(url)).toBe(SAMPLE_TOKEN);
+  });
+
+  it("reads direct linky protocol urls", () => {
+    const url = new URL(`linky://${SAMPLE_TOKEN}`);
 
     expect(extractCashuTokenFromUrl(url)).toBe(SAMPLE_TOKEN);
   });
