@@ -1,0 +1,20 @@
+name: Deploy Push Server
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to push.linky.fit
+        uses: appleboy/ssh-action@v1
+        with:
+          host: push.linky.fit
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/stack
+            docker compose pull push
+            docker compose up -d push
