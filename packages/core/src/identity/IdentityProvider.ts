@@ -6,20 +6,20 @@ import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { Context, Effect, Layer, Schema } from "effect";
 import { getPublicKey } from "nostr-tools";
 import {
+  CASHU_SEED_PATH,
+  cashuOwnerPath,
+  contactsOwnerPath,
+  messagesOwnerPath,
+  META_OWNER_PATH,
+  NOSTR_PATH,
+} from "./derivationPaths";
+import {
   CashuSeed,
   NostrPrivateKey,
   NostrPublicKeyHex,
   OwnerKey,
   OwnerLaneIndex,
 } from "./domain";
-import {
-  CASHU_SEED_PATH,
-  contactsOwnerPath,
-  cashuOwnerPath,
-  messagesOwnerPath,
-  META_OWNER_PATH,
-  NOSTR_PATH,
-} from "./derivationPaths";
 import { MasterSecretProvider } from "./MasterSecretProvider";
 
 export class IdentityProviderError extends Schema.TaggedError<IdentityProviderError>()(

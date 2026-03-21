@@ -8,8 +8,8 @@ import { nip19 } from "nostr-tools";
 import { Slip39 } from "slip39-ts";
 import {
   CASHU_SEED_PATH,
-  contactsOwnerPath,
   cashuOwnerPath,
+  contactsOwnerPath,
   messagesOwnerPath,
   META_OWNER_PATH,
 } from "./derivationPaths";

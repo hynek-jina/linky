@@ -1,6 +1,8 @@
 import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import simpleImportSort from "eslint-plugin-simple-import-sort";
+import unusedImports from "eslint-plugin-unused-imports";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -15,11 +17,31 @@ export const webAppEslintConfig = defineConfig([
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
     ],
+    plugins: {
+      "simple-import-sort": simpleImportSort,
+      "unused-imports": unusedImports,
+    },
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
     },
     rules: {
+      "simple-import-sort/imports": [
+        "error",
+        { groups: [["^\\u0000", "^node:", "^@?\\w", "^", "^\\."]] },
+      ],
+      "simple-import-sort/exports": "error",
+      "@typescript-eslint/no-unused-vars": "off",
+      "unused-imports/no-unused-imports": "error",
+      "unused-imports/no-unused-vars": [
+        "error",
+        {
+          vars: "all",
+          varsIgnorePattern: "^_",
+          args: "after-used",
+          argsIgnorePattern: "^_",
+        },
+      ],
       // Unknown is allowed at parse/input boundaries only after guard narrowing.
       // Internal placeholders like Promise<unknown> / unknown[] are disallowed.
       "@typescript-eslint/no-explicit-any": [

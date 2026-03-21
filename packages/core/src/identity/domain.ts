@@ -1,9 +1,9 @@
-import { Schema } from "effect";
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
+import { Schema } from "effect";
 import { nip19 } from "nostr-tools";
 import { Slip39 } from "slip39-ts";
-import { Unit8ArraySchema } from "../utils/schemas";
+import { Hex64LowercaseString, Unit8ArraySchema } from "../utils/schemas";
 
 const hasLengthBetween =
   (min: number, max: number) =>
@@ -21,9 +21,6 @@ const toWords = (value: string): ReadonlyArray<string> =>
     .split(/\s+/)
     .map((word) => word.trim())
     .filter((word) => word.length > 0);
-
-const isHex64 = (value: unknown): value is string =>
-  typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 
 const isNormalizedShare = (value: unknown): value is string => {
   if (typeof value !== "string") return false;
@@ -88,9 +85,9 @@ export const NostrPrivateKey = Unit8ArraySchema.pipe(
 );
 export type NostrPrivateKey = typeof NostrPrivateKey.Type;
 
-export const NostrPublicKeyHex = Schema.String.pipe(
-  Schema.filter(isHex64),
-).pipe(Schema.brand("NostrPublicKeyHex"));
+export const NostrPublicKeyHex = Hex64LowercaseString.pipe(
+  Schema.brand("NostrPublicKeyHex"),
+);
 export type NostrPublicKeyHex = typeof NostrPublicKeyHex.Type;
 
 export const CashuSeed = Unit8ArraySchema.pipe(
@@ -156,3 +153,23 @@ export const OwnerRole = Schema.Literal(
   "messages",
 );
 export type OwnerRole = typeof OwnerRole.Type;
+
+export const HttpsUrl = Schema.String.pipe(
+  Schema.filter(
+    (input) =>
+      /^https:\/\/[^\s/$.?#].[^\s]*$/.test(input) ||
+      "Must be a valid HTTPS URL",
+  ),
+  Schema.brand("HttpsUrl"),
+);
+export type HttpsUrl = typeof HttpsUrl.Type;
+
+export const Lud16Address = Schema.String.pipe(
+  Schema.lowercased(),
+  Schema.filter(
+    (input) =>
+      /^[a-z0-9._-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(input) ||
+      "Must be a valid lud16 address",
+  ),
+  Schema.brand("Lud16Address"),
+);

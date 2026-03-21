@@ -1,8 +1,8 @@
 import { Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
+import { MasterSecret, NostrNpub, NostrNsec } from "./domain";
 import { IdentityProvider } from "./IdentityProvider";
 import { MasterSecretProvider } from "./MasterSecretProvider";
-import { MasterSecret, NostrNpub, NostrNsec } from "./domain";
 import {
   createSlip39Share,
   deriveCashuMnemonicFromMasterSecret,

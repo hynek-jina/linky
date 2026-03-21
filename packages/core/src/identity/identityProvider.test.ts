@@ -1,8 +1,8 @@
 import { Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
+import { MasterSecret, OwnerLaneIndex } from "./domain";
 import { IdentityProvider, IdentityProviderError } from "./IdentityProvider";
 import { MasterSecretProvider } from "./MasterSecretProvider";
-import { MasterSecret, OwnerLaneIndex } from "./domain";
 
 const hex = (u8: Uint8Array) => Buffer.from(u8).toString("hex");
 const lane = (index: number): OwnerLaneIndex =>
