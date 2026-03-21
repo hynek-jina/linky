@@ -4,9 +4,13 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.nfc.FormatException;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
+import android.nfc.Tag;
+import android.nfc.tech.Ndef;
+import android.nfc.tech.NdefFormatable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
@@ -35,6 +39,7 @@ import java.util.Arrays;
 
 public class MainActivity extends BridgeActivity {
 	private static final String EVENT_DEEP_LINK = "linky-native-deep-link";
+	private static final String EVENT_NFC_WRITE = "linky-native-nfc-write";
 	private static final String EVENT_NOTIFICATION_PERMISSION = "linky-native-notification-permission";
 	private static final String EVENT_SCAN_RESULT = "linky-native-scan-result";
 	private static final String PREFS_NAME = "linky.native.bridge";
@@ -44,6 +49,8 @@ public class MainActivity extends BridgeActivity {
 	private int latestBottomInsetPx = 0;
 	private int latestKeyboardInsetPx = 0;
 	private int latestTopInsetPx = 0;
+	private NfcAdapter nfcAdapter;
+	private String pendingNfcWriteUrl = null;
 
 	private ActivityResultLauncher<String> notificationPermissionLauncher;
 	private ActivityResultLauncher<ScanOptions> qrScanLauncher;
@@ -54,6 +61,7 @@ public class MainActivity extends BridgeActivity {
 		super.onCreate(savedInstanceState);
 
 		bridgePreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+		nfcAdapter = NfcAdapter.getDefaultAdapter(this);
 		cacheIntentDeepLinkUrl(getIntent());
 
 		notificationPermissionLauncher = registerForActivityResult(
@@ -76,6 +84,7 @@ public class MainActivity extends BridgeActivity {
 		webView.addJavascriptInterface(new LinkyNativeNotificationsBridge(), "LinkyNativeNotifications");
 		webView.addJavascriptInterface(new LinkyNativeWindowInsetsBridge(), "LinkyNativeWindowInsets");
 		webView.addJavascriptInterface(new LinkyNativeDeepLinksBridge(), "LinkyNativeDeepLinks");
+		webView.addJavascriptInterface(new LinkyNativeNfcBridge(), "LinkyNativeNfc");
 
 		ViewCompat.setOnApplyWindowInsetsListener(webView, (View view, WindowInsetsCompat insets) -> {
 			Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -106,6 +115,17 @@ public class MainActivity extends BridgeActivity {
 				dispatchSafeAreaInsets();
 			});
 		}
+	}
+
+	@Override
+	public void onPause() {
+		super.onPause();
+		if (pendingNfcWriteUrl != null) {
+			finishPendingNfcWrite("cancelled", null);
+			return;
+		}
+
+		stopNfcReaderMode();
 	}
 
 	@Override
@@ -207,6 +227,21 @@ public class MainActivity extends BridgeActivity {
 		}
 
 		dispatchWindowEvent(EVENT_DEEP_LINK, detail);
+	}
+
+	private void dispatchNfcWriteEvent(String status, String message) {
+		JSONObject detail = new JSONObject();
+
+		try {
+			detail.put("status", status);
+			if (message != null && !message.trim().isEmpty()) {
+				detail.put("message", message.trim());
+			}
+		} catch (Exception ignored) {
+			// ignore JSON bridge payload failures
+		}
+
+		dispatchWindowEvent(EVENT_NFC_WRITE, detail);
 	}
 
 	private String extractDeepLinkUrl(Intent intent) {
@@ -346,6 +381,125 @@ public class MainActivity extends BridgeActivity {
 		return null;
 	}
 
+	private boolean isNativeNfcWriteSupported() {
+		return Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && nfcAdapter != null;
+	}
+
+	private void stopNfcReaderMode() {
+		if (!isNativeNfcWriteSupported()) {
+			return;
+		}
+
+		runOnUiThread(() -> {
+			try {
+				nfcAdapter.disableReaderMode(this);
+			} catch (Exception ignored) {
+				// reader mode may already be disabled
+			}
+		});
+	}
+
+	private void finishPendingNfcWrite(String status, String message) {
+		pendingNfcWriteUrl = null;
+		stopNfcReaderMode();
+		dispatchNfcWriteEvent(status, message);
+	}
+
+	private void writePendingNfcMessage(Tag tag) {
+		String url = pendingNfcWriteUrl;
+		if (url == null) {
+			stopNfcReaderMode();
+			return;
+		}
+
+		NdefMessage message = new NdefMessage(new NdefRecord[] { NdefRecord.createUri(url) });
+		byte[] encodedMessage = message.toByteArray();
+
+		try {
+			Ndef ndef = Ndef.get(tag);
+			if (ndef != null) {
+				ndef.connect();
+				if (!ndef.isWritable()) {
+					finishPendingNfcWrite("error", "NFC tag is read-only.");
+					return;
+				}
+
+				int maxSize = ndef.getMaxSize();
+				if (maxSize > 0 && maxSize < encodedMessage.length) {
+					finishPendingNfcWrite("error", "NFC tag is too small.");
+					return;
+				}
+
+				ndef.writeNdefMessage(message);
+				finishPendingNfcWrite("success", null);
+				return;
+			}
+
+			NdefFormatable formatable = NdefFormatable.get(tag);
+			if (formatable != null) {
+				formatable.connect();
+				formatable.format(message);
+				finishPendingNfcWrite("success", null);
+				return;
+			}
+
+			finishPendingNfcWrite("error", "NFC tag does not support NDEF.");
+		} catch (FormatException error) {
+			finishPendingNfcWrite("error", error.getMessage() == null ? "Failed to encode NFC tag." : error.getMessage());
+		} catch (Exception error) {
+			finishPendingNfcWrite("error", error.getMessage() == null ? "Failed to write NFC tag." : error.getMessage());
+		}
+	}
+
+	private void startPendingNfcWrite(String url) {
+		String normalized = normalizeDeepLinkCandidate(url);
+		if (normalized == null) {
+			dispatchNfcWriteEvent("error", "Unsupported NFC payload.");
+			return;
+		}
+
+		if (!isNativeNfcWriteSupported()) {
+			dispatchNfcWriteEvent("unsupported", null);
+			return;
+		}
+
+		if (!nfcAdapter.isEnabled()) {
+			dispatchNfcWriteEvent("disabled", null);
+			return;
+		}
+
+		if (pendingNfcWriteUrl != null) {
+			dispatchNfcWriteEvent("busy", null);
+			return;
+		}
+
+		pendingNfcWriteUrl = normalized;
+
+		runOnUiThread(() -> {
+			Bundle options = new Bundle();
+			options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 150);
+
+			try {
+				nfcAdapter.enableReaderMode(
+					this,
+					this::writePendingNfcMessage,
+					NfcAdapter.FLAG_READER_NFC_A
+						| NfcAdapter.FLAG_READER_NFC_B
+						| NfcAdapter.FLAG_READER_NFC_F
+						| NfcAdapter.FLAG_READER_NFC_V,
+					options
+				);
+				dispatchNfcWriteEvent("armed", null);
+			} catch (Exception error) {
+				pendingNfcWriteUrl = null;
+				dispatchNfcWriteEvent(
+					"error",
+					error.getMessage() == null ? "Failed to start NFC write." : error.getMessage()
+				);
+			}
+		});
+	}
+
 	private void cacheIntentDeepLinkUrl(Intent intent) {
 		String deepLinkUrl = extractDeepLinkUrl(intent);
 		if (deepLinkUrl == null) {
@@ -471,6 +625,18 @@ public class MainActivity extends BridgeActivity {
 		@JavascriptInterface
 		public String consumePendingUrl() {
 			return consumePendingDeepLinkUrl();
+		}
+	}
+
+	private final class LinkyNativeNfcBridge {
+		@JavascriptInterface
+		public boolean areSupported() {
+			return isNativeNfcWriteSupported();
+		}
+
+		@JavascriptInterface
+		public void writeUri(String url) {
+			startPendingNfcWrite(url);
 		}
 	}
 }

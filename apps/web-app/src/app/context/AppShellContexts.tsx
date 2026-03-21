@@ -27,6 +27,7 @@ interface ChatContact {
 export interface AppShellCoreContextValue {
   cashuBalance: number;
   cashuIsBusy: boolean;
+  canWriteNfc: boolean;
   chatTopbarContact: ChatContact | null;
   contactsGuide: { step: number; task: string } | null;
   contactsGuideActiveStep: {
@@ -121,6 +122,7 @@ export interface AppShellActionsContextValue {
   setProfileEditPicture: (value: string) => void;
   stopContactsGuide: () => void;
   toggleProfileEditing: () => void;
+  writeCurrentNpubToNfc: () => Promise<void>;
 }
 
 export interface AppShellRouteContextValue {

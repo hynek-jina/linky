@@ -2908,10 +2908,19 @@ button.tag-button {
 
 .btn-label-icon {
   width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
+}
+
+.btn-inline-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .btn-label-icon svg {

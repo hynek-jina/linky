@@ -34,6 +34,8 @@ import { readStoredNostrNsec } from "../platform/identitySecrets";
 import {
   consumePendingNativeDeepLinkUrl,
   NATIVE_DEEP_LINK_EVENT,
+  startNativeNfcWrite,
+  supportsNativeNfcWrite,
 } from "../platform/nativeBridge";
 import {
   bumpCashuDeterministicCounter,
@@ -2588,6 +2590,75 @@ export const useAppShellComposition = () => {
     [pushToast, t],
   );
 
+  const canWriteNfc = supportsNativeNfcWrite();
+
+  const writeNfcUriWithToast = React.useCallback(
+    async (
+      url: string,
+      successKey: "nfcWriteProfileSuccess" | "nfcWriteTokenSuccess",
+    ) => {
+      const result = await startNativeNfcWrite(url, (progress) => {
+        if (progress.status === "armed") {
+          pushToast(t("nfcWriteTapPrompt"));
+        }
+      });
+
+      if (result === null || result.status === "unsupported") {
+        pushToast(t("nfcWriteUnsupported"));
+        return;
+      }
+
+      if (result.status === "success") {
+        pushToast(t(successKey));
+        return;
+      }
+
+      if (result.status === "disabled") {
+        pushToast(t("nfcWriteDisabled"));
+        return;
+      }
+
+      if (result.status === "busy") {
+        pushToast(t("nfcWriteBusy"));
+        return;
+      }
+
+      if (result.status === "cancelled") {
+        pushToast(t("nfcWriteCancelled"));
+        return;
+      }
+
+      const message = String(result.message ?? "").trim();
+      pushToast(
+        message ? `${t("nfcWriteFailed")}: ${message}` : t("nfcWriteFailed"),
+      );
+    },
+    [pushToast, t],
+  );
+
+  const writeCashuTokenToNfc = React.useCallback(
+    async (tokenText: string) => {
+      const trimmed = String(tokenText ?? "").trim();
+      if (!trimmed) {
+        pushToast(t("cashuInvalid"));
+        return;
+      }
+
+      await writeNfcUriWithToast(`cashu://${trimmed}`, "nfcWriteTokenSuccess");
+    },
+    [pushToast, t, writeNfcUriWithToast],
+  );
+
+  const writeCurrentNpubToNfc = React.useCallback(async () => {
+    const npub = normalizeNpubIdentifier(currentNpub);
+    if (!npub) {
+      pushToast(t("profileMissingNpub"));
+      return;
+    }
+
+    await writeNfcUriWithToast(`nostr://${npub}`, "nfcWriteProfileSuccess");
+  }, [currentNpub, pushToast, t, writeNfcUriWithToast]);
+
   const requestDeleteCurrentContact = () => {
     if (!editingId) return;
     if (pendingDeleteId === editingId) {
@@ -3222,6 +3293,7 @@ export const useAppShellComposition = () => {
 
   const { moneyRouteProps } = usePaymentMoneyComposition({
     moneyRouteBuilderInput: {
+      canWriteNfc,
       canPayWithCashu,
       cashuBalance,
       cashuBulkCheckIsBusy,
@@ -3261,6 +3333,7 @@ export const useAppShellComposition = () => {
         normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ??
         MAIN_MINT_URL,
       topupInvoiceQr,
+      writeCashuTokenToNfc,
     },
   });
 
@@ -3485,6 +3558,7 @@ export const useAppShellComposition = () => {
     applyAmountInputKey: applyDisplayedAmountInputKey,
     cashuBalance,
     cashuIsBusy,
+    canWriteNfc,
     chatTopbarContact,
     contactsGuide,
     contactsGuideActiveStep,
@@ -3551,6 +3625,7 @@ export const useAppShellComposition = () => {
     setProfileEditPicture,
     stopContactsGuide,
     toggleProfileEditing,
+    writeCurrentNpubToNfc,
   };
 
   return {

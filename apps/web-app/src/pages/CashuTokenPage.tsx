@@ -1,11 +1,13 @@
 import type { FC } from "react";
 import type { CashuTokenRowLike } from "../app/types/appTypes";
 import { parseCashuToken } from "../cashu";
+import { NfcIcon } from "../components/NfcIcon";
 import type { CashuTokenId } from "../evolu";
 
 type CashuTokenPageRow = CashuTokenRowLike & { id: CashuTokenId };
 
 interface CashuTokenPageProps {
+  canWriteToNfc: boolean;
   cashuIsBusy: boolean;
   cashuTokensAll: readonly CashuTokenPageRow[];
   checkAndRefreshCashuToken: (
@@ -16,9 +18,11 @@ interface CashuTokenPageProps {
   requestDeleteCashuToken: (id: CashuTokenId) => void;
   routeId: CashuTokenId;
   t: (key: string) => string;
+  writeToNfc: (tokenText: string) => Promise<void>;
 }
 
 export const CashuTokenPage: FC<CashuTokenPageProps> = ({
+  canWriteToNfc,
   cashuIsBusy,
   cashuTokensAll,
   checkAndRefreshCashuToken,
@@ -27,6 +31,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   requestDeleteCashuToken,
   routeId,
   t,
+  writeToNfc,
 }) => {
   const row = cashuTokensAll.find(
     (tkn) => tkn.id === routeId && !tkn.isDeleted,
@@ -89,6 +94,21 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
           {t("copy")}
         </button>
       </div>
+
+      {canWriteToNfc ? (
+        <div className="settings-row">
+          <button
+            className="btn-wide secondary btn-inline-icon"
+            onClick={() => void writeToNfc(tokenText)}
+            disabled={!tokenText.trim()}
+          >
+            <span className="btn-label-icon" aria-hidden="true">
+              <NfcIcon />
+            </span>
+            {t("uploadToNfc")}
+          </button>
+        </div>
+      ) : null}
 
       <div className="settings-row">
         <button

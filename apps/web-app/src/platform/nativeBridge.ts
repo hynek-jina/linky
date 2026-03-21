@@ -38,7 +38,27 @@ interface AndroidDeepLinksBridge {
   consumePendingUrl?: () => string | null;
 }
 
+interface AndroidNfcBridge {
+  areSupported?: () => boolean;
+  writeUri?: (url: string) => void;
+}
+
 export const NATIVE_DEEP_LINK_EVENT = "linky-native-deep-link";
+export const NATIVE_NFC_WRITE_EVENT = "linky-native-nfc-write";
+
+export type NativeNfcWriteStatus =
+  | "armed"
+  | "busy"
+  | "cancelled"
+  | "disabled"
+  | "error"
+  | "success"
+  | "unsupported";
+
+export interface NativeNfcWriteResult {
+  message: string | null;
+  status: NativeNfcWriteStatus;
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null;
@@ -90,6 +110,25 @@ const getAndroidWindowInsetsBridge = (): AndroidWindowInsetsBridge | null => {
 const getAndroidDeepLinksBridge = (): AndroidDeepLinksBridge | null => {
   const value = Reflect.get(globalThis, "LinkyNativeDeepLinks");
   return isRecord(value) ? value : null;
+};
+
+const getAndroidNfcBridge = (): AndroidNfcBridge | null => {
+  const value = Reflect.get(globalThis, "LinkyNativeNfc");
+  return isRecord(value) ? value : null;
+};
+
+const isNativeNfcWriteStatus = (
+  value: string | null,
+): value is NativeNfcWriteStatus => {
+  return (
+    value === "armed" ||
+    value === "busy" ||
+    value === "cancelled" ||
+    value === "disabled" ||
+    value === "error" ||
+    value === "success" ||
+    value === "unsupported"
+  );
 };
 
 export const readAndroidStoredSecret = async (
@@ -328,6 +367,75 @@ export const requestNativeNotificationPermission = async (): Promise<
     } catch {
       cleanup();
       resolve(false);
+    }
+  });
+};
+
+export const supportsNativeNfcWrite = (): boolean => {
+  const bridge = getAndroidNfcBridge();
+  if (!isNativePlatform() || !bridge?.areSupported) {
+    return false;
+  }
+
+  try {
+    return Boolean(bridge.areSupported());
+  } catch {
+    return false;
+  }
+};
+
+export const startNativeNfcWrite = async (
+  url: string,
+  onProgress?: (result: NativeNfcWriteResult) => void,
+): Promise<NativeNfcWriteResult | null> => {
+  const bridge = getAndroidNfcBridge();
+  if (!isNativePlatform() || !bridge?.areSupported || !bridge.writeUri) {
+    return null;
+  }
+
+  if (!bridge.areSupported()) {
+    return null;
+  }
+
+  return new Promise<NativeNfcWriteResult>((resolve) => {
+    const onResult: EventListener = (event) => {
+      if (!(event instanceof CustomEvent) || !isRecord(event.detail)) {
+        return;
+      }
+
+      const rawStatus = normalizeString(Reflect.get(event.detail, "status"));
+      if (!isNativeNfcWriteStatus(rawStatus)) {
+        return;
+      }
+
+      const result: NativeNfcWriteResult = {
+        message: normalizeString(Reflect.get(event.detail, "message")),
+        status: rawStatus,
+      };
+
+      if (result.status === "armed") {
+        onProgress?.(result);
+        return;
+      }
+
+      cleanup();
+      resolve(result);
+    };
+
+    const cleanup = () => {
+      window.removeEventListener(NATIVE_NFC_WRITE_EVENT, onResult);
+    };
+
+    window.addEventListener(NATIVE_NFC_WRITE_EVENT, onResult);
+
+    try {
+      bridge.writeUri?.(url);
+    } catch (error) {
+      cleanup();
+      resolve({
+        message: String(error ?? "Native NFC write failed"),
+        status: "error",
+      });
     }
   });
 };

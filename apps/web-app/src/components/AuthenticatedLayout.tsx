@@ -79,6 +79,7 @@ export function AuthenticatedLayout({
 
       {state.profileQrIsOpen && (
         <ProfileQrModal
+          canWriteToNfc={state.canWriteNfc}
           closeProfileQr={actions.closeProfileQr}
           copyText={actions.copyText}
           currentNpub={state.currentNpub}
@@ -105,6 +106,7 @@ export function AuthenticatedLayout({
           setProfileEditPicture={actions.setProfileEditPicture}
           t={state.t}
           toggleProfileEditing={actions.toggleProfileEditing}
+          writeCurrentNpubToNfc={actions.writeCurrentNpubToNfc}
         />
       )}
 

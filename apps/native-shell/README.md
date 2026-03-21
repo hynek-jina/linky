@@ -62,3 +62,5 @@ If that file is missing, the app now skips native push registration instead of c
 Android native shell now also registers `nostr://` and `cashu://` and forwards incoming URLs to the web app through the native bridge. The current web-app handler resolves `nostr://npub...` contact links into the saved contact detail, creating the contact first when needed, and imports `cashu://cashu...` tokens into the wallet.
 
 Android NFC NDEF tags are also supported for the same payloads: URI records with `nostr://...` or `cashu://...`, plus `text/plain` NDEF records whose text content starts with those schemes.
+
+The Android shell also exposes NFC writing to the web app. Token detail can write `cashu://cashu...` as an NDEF URI record, and profile can write `nostr://npub...` the same way.
