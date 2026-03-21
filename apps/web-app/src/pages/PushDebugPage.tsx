@@ -1,16 +1,17 @@
 import React from "react";
 
-import {
-  registerPushNotifications,
-  requestNotificationPermission,
-  unregisterPushNotifications,
-} from "../utils/pushNotifications";
+import { isNativePlatform } from "../platform/runtime";
 import {
   appendPushDebugLog,
   clearPushDebugLog,
   readPushDebugLog,
   type PushDebugLogEntry,
 } from "../utils/pushDebugLog";
+import {
+  registerPushNotifications,
+  requestNotificationPermission,
+  unregisterPushNotifications,
+} from "../utils/pushNotifications";
 
 interface PushDebugPageProps {
   currentNsec: string | null;
@@ -190,14 +191,14 @@ export function PushDebugPage({
       return;
     }
 
-    if (!("Notification" in window)) {
+    if (!isNativePlatform() && !("Notification" in window)) {
       setStatus(t("notificationsUnsupported"));
       return;
     }
 
     setIsBusy(true);
     try {
-      if (Notification.permission === "default") {
+      if (!isNativePlatform() && Notification.permission === "default") {
         const granted = await requestNotificationPermission();
         if (!granted) {
           setStatus(t("notificationsDenied"));

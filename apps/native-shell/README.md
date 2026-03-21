@@ -53,6 +53,9 @@ This workspace sets up the local-bundle native shell and the Android/iOS project
 The next implementation steps are:
 
 - native secure storage bridge for identity secrets
-- native push registration and delivery path
 - camera/barcode native adapter
 - deep-link to hash-route translation
+
+Native Android push is now wired through Capacitor Push Notifications + FCM.
+To make it work in builds, provide `android/app/google-services.json` before running `bun run native:android:sync` or `bun run native:apk:debug`.
+If that file is missing, the app now skips native push registration instead of crashing on startup, but Android notifications stay disabled.

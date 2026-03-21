@@ -17,7 +17,8 @@
     "prettier": "prettier --write capacitor.config.ts eslint.config.js package.json prettier.config.js tsconfig.json"
   },
   "dependencies": {
-    "@capacitor/core": "^7.4.3"
+    "@capacitor/core": "^7.4.3",
+    "@capacitor/push-notifications": "^7.0.0"
   },
   "devDependencies": {
     "@capacitor/android": "^7.4.3",

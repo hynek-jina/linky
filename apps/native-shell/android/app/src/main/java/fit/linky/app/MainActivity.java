@@ -29,6 +29,7 @@ public class MainActivity extends BridgeActivity {
 	private static final String EVENT_SCAN_RESULT = "linky-native-scan-result";
 	private static final String PREFS_NAME = "linky.native.bridge";
 	private static final String PREF_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested";
+	private static final String FIREBASE_GOOGLE_APP_ID_RESOURCE = "google_app_id";
 	private int latestBottomInsetPx = 0;
 	private int latestKeyboardInsetPx = 0;
 	private int latestTopInsetPx = 0;
@@ -165,6 +166,10 @@ public class MainActivity extends BridgeActivity {
 	}
 
 	private String getNotificationPermissionState() {
+		if (!isNativePushSupported()) {
+			return "unsupported";
+		}
+
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
 			return "granted";
 		}
@@ -176,6 +181,14 @@ public class MainActivity extends BridgeActivity {
 
 		boolean wasRequested = bridgePreferences.getBoolean(PREF_NOTIFICATION_PERMISSION_REQUESTED, false);
 		return wasRequested ? "denied" : "prompt";
+	}
+
+	private boolean isNativePushSupported() {
+		return getResources().getIdentifier(
+			FIREBASE_GOOGLE_APP_ID_RESOURCE,
+			"string",
+			getPackageName()
+		) != 0;
 	}
 
 	private final class LinkyNativeScannerBridge {
@@ -195,7 +208,7 @@ public class MainActivity extends BridgeActivity {
 	private final class LinkyNativeNotificationsBridge {
 		@JavascriptInterface
 		public boolean areSupported() {
-			return true;
+			return isNativePushSupported();
 		}
 
 		@JavascriptInterface
@@ -205,6 +218,14 @@ public class MainActivity extends BridgeActivity {
 
 		@JavascriptInterface
 		public void requestPermission() {
+			if (!isNativePushSupported()) {
+				dispatchWindowEvent(
+					EVENT_NOTIFICATION_PERMISSION,
+					createPermissionDetail("unsupported")
+				);
+				return;
+			}
+
 			if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
 				dispatchWindowEvent(
 					EVENT_NOTIFICATION_PERMISSION,

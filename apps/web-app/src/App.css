@@ -1622,7 +1622,6 @@ button.settings-link:hover {
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: #94a3b8;
 }
 
@@ -2053,7 +2052,6 @@ button.icon {
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: #94a3b8;
 }
 

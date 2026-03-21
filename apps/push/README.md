@@ -1,15 +1,16 @@
 # Linky Push Service
 
-Bun HTTP service for Web Push delivery on top of outer NIP-17 inbox events (`kind: 1059`).
+Bun HTTP service for Web Push and Android FCM delivery on top of outer NIP-17 inbox events (`kind: 1059`).
 
 ## What it does
 
 - Issues short-lived ownership challenges per recipient pubkey
 - Verifies signed Nostr proof events before storing subscriptions
-- Persists subscriptions and challenges in SQLite
+- Persists web subscriptions, native Android tokens, and challenges in SQLite
 - Watches configured Nostr relays for new outer `1059` inbox events
-- Sends a generic Web Push notification for every matching subscribed recipient pubkey
+- Sends a generic Web Push or Android FCM notification for every matching subscribed recipient pubkey
 - Removes permanently invalid subscriptions when push delivery returns `404` or `410`, or when the push provider reports a VAPID public key mismatch
+- Removes permanently invalid Android registration tokens when Firebase reports them as invalid or unregistered
 
 The service does **not** decrypt inbox events and does **not** inspect wrapped inner content.
 
@@ -77,6 +78,41 @@ Request:
 
 Every pubkey listed in `recipientPubkeys` needs its own proof.
 
+### `POST /native/subscribe`
+
+Request:
+
+```json
+{
+  "installationId": "<stable-installation-id>",
+  "device": {
+    "platform": "android",
+    "token": "<fcm-token>"
+  },
+  "recipientPubkeys": ["<hex-pubkey-1>"],
+  "proofs": [
+    {
+      "pubkey": "<hex-pubkey-1>",
+      "event": {
+        "id": "<event-id>",
+        "pubkey": "<hex-pubkey-1>",
+        "created_at": 1760000000,
+        "kind": 27235,
+        "content": "linky-push-subscribe",
+        "tags": [
+          ["challenge", "<nonce>"],
+          ["action", "subscribe"],
+          ["pubkey", "<hex-pubkey-1>"]
+        ],
+        "sig": "<signature>"
+      }
+    }
+  ]
+}
+```
+
+The server returns `503 native_push_unavailable` until `PUSH_FIREBASE_SERVICE_ACCOUNT_JSON` is configured.
+
 ### `POST /unsubscribe`
 
 Remove selected pubkeys from a subscription with ownership proofs. If you remove the subscription's last remaining pubkey, the whole subscription row is deleted:
@@ -108,6 +144,33 @@ Remove selected pubkeys from a subscription with ownership proofs. If you remove
 
 Every pubkey listed in `recipientPubkeys` needs its own unsubscribe proof. Full subscription removal requires proving ownership for the subscription's current pubkeys.
 
+### `POST /native/unsubscribe`
+
+```json
+{
+  "token": "<fcm-token>",
+  "recipientPubkeys": ["<hex-pubkey>"],
+  "proofs": [
+    {
+      "pubkey": "<hex-pubkey>",
+      "event": {
+        "id": "<event-id>",
+        "pubkey": "<hex-pubkey>",
+        "created_at": 1760000000,
+        "kind": 27235,
+        "content": "linky-push-unsubscribe",
+        "tags": [
+          ["challenge", "<nonce>"],
+          ["action", "unsubscribe"],
+          ["pubkey", "<hex-pubkey>"]
+        ],
+        "sig": "<signature>"
+      }
+    }
+  ]
+}
+```
+
 ### `GET /health`
 
 Simple health check.
@@ -137,6 +200,8 @@ Every delivered Web Push message contains:
 }
 ```
 
+Android FCM deliveries carry the same fields under the data payload, with `relayHints` encoded as a JSON string array.
+
 ## Environment
 
 Copy `.env.example` and set the required values:
@@ -144,6 +209,7 @@ Copy `.env.example` and set the required values:
 - `PUSH_VAPID_SUBJECT`
 - `PUSH_VAPID_PUBLIC_KEY`
 - `PUSH_VAPID_PRIVATE_KEY`
+- `PUSH_FIREBASE_SERVICE_ACCOUNT_JSON` for Android native push delivery
 
 Optional values cover the port, storage path, relay list, challenge TTL, proof age window, rate limits, and subscription caps.
 
@@ -158,6 +224,8 @@ Generate VAPID keys locally with:
 ```bash
 bunx web-push generate-vapid-keys
 ```
+
+`PUSH_FIREBASE_SERVICE_ACCOUNT_JSON` should contain a single-line Firebase service account JSON blob with `project_id`, `client_email`, and `private_key`.
 
 ## Local run
 
@@ -216,6 +284,7 @@ docker run --rm \
   -e PUSH_VAPID_SUBJECT=mailto:alerts@example.com \
   -e PUSH_VAPID_PUBLIC_KEY=replace-me \
   -e PUSH_VAPID_PRIVATE_KEY=replace-me \
+  -e PUSH_FIREBASE_SERVICE_ACCOUNT_JSON='{"project_id":"...","client_email":"...","private_key":"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"}' \
   -e PUSH_STORAGE_PATH=/data/linky-push.sqlite \
   -v linky_push_data:/data \
   linky-push

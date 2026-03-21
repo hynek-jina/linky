@@ -31,7 +31,13 @@ import {
   type NostrProfileMetadata,
 } from "../nostrProfile";
 import { readStoredNostrNsec } from "../platform/identitySecrets";
-import { getCashuDeterministicSeedFromStorage } from "../utils/cashuDeterministic";
+import {
+  bumpCashuDeterministicCounter,
+  getCashuDeterministicCounter,
+  getCashuDeterministicSeedFromStorage,
+  withCashuDeterministicCounterLock,
+} from "../utils/cashuDeterministic";
+import { isCashuOutputsAlreadySignedError } from "../utils/cashuErrors";
 import { getCashuLib } from "../utils/cashuLib";
 import {
   BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
@@ -114,6 +120,7 @@ import { usePayContactWithCashuMessage } from "./hooks/payments/usePayContactWit
 import { useRouteAmountResetEffects } from "./hooks/payments/useRouteAmountResetEffects";
 import { useProfileEditor } from "./hooks/profile/useProfileEditor";
 import { useProfileMetadataSyncEffect } from "./hooks/profile/useProfileMetadataSyncEffect";
+import { isTopupMintQuoteClaimableState } from "./hooks/topup/topupMintClaim";
 import {
   useTopupInvoiceQuoteEffects,
   type TopupMintQuoteDraft,
@@ -185,15 +192,10 @@ const readMintQuoteState = (value: unknown): string => {
   return String(status ?? "");
 };
 
-const readPaidMintQuoteState = (value: unknown): string | null => {
-  const paid = readObjectField(value, "PAID");
-  if (paid === undefined || paid === null) return null;
-  return String(paid);
-};
-
 interface PendingTopupQuoteStorage {
   amount: number;
   createdAtMs: number;
+  invoice?: string | null;
   mintUrl: string;
   quote: string;
   unit: string | null;
@@ -238,6 +240,7 @@ const toTopupMintQuoteDraft = (
   mintUrl: value.mintUrl,
   quote: value.quote,
   amount: value.amount,
+  invoice: typeof value.invoice === "string" ? value.invoice : null,
   unit: value.unit,
 });
 
@@ -247,6 +250,7 @@ const toPendingTopupQuoteStorage = (
   mintUrl: value.mintUrl,
   quote: value.quote,
   amount: value.amount,
+  invoice: value.invoice,
   unit: value.unit,
   createdAtMs: Date.now(),
 });
@@ -258,6 +262,7 @@ const isPendingTopupQuoteStorage = (
 
   const amount = readObjectField(value, "amount");
   const createdAtMs = readObjectField(value, "createdAtMs");
+  const invoice = readObjectField(value, "invoice");
   const mintUrl = readObjectField(value, "mintUrl");
   const quote = readObjectField(value, "quote");
   const unit = readObjectField(value, "unit");
@@ -268,6 +273,9 @@ const isPendingTopupQuoteStorage = (
     amount > 0 &&
     typeof createdAtMs === "number" &&
     Number.isFinite(createdAtMs) &&
+    (invoice === undefined ||
+      invoice === null ||
+      typeof invoice === "string") &&
     typeof mintUrl === "string" &&
     mintUrl.trim().length > 0 &&
     typeof quote === "string" &&
@@ -1095,6 +1103,7 @@ export const useAppShellComposition = () => {
     topupInvoicePaidHandledRef,
     topupInvoiceQr,
     topupInvoiceStartBalanceRef,
+    topupMintQuote,
     topupPaidNavTimerRef,
     topupRefreshKey: myProfileName,
     setTopupAmount,
@@ -1318,16 +1327,77 @@ export const useAppShellComposition = () => {
 
             const status = await wallet.checkMintQuote(quoteId);
             const quoteState = readMintQuoteState(status);
-            const state = quoteState.toLowerCase();
-            const paidState = readPaidMintQuoteState(MintQuoteState);
-            const paid = state === "paid" || quoteState === paidState;
-            if (!paid) return;
+            if (!isTopupMintQuoteClaimableState(quoteState, MintQuoteState)) {
+              return;
+            }
 
-            const proofs = await wallet.mintProofs(
-              topupMintQuote.amount,
-              quoteId,
-            );
-            const unit = wallet.unit ?? null;
+            const unit = wallet.unit ?? topupMintQuote.unit ?? null;
+            const keysetId = wallet.keysetId;
+
+            const proofs =
+              det && unit && keysetId
+                ? await withCashuDeterministicCounterLock(
+                    {
+                      mintUrl: topupMintQuote.mintUrl,
+                      unit,
+                      keysetId,
+                    },
+                    async () => {
+                      let counter = getCashuDeterministicCounter({
+                        mintUrl: topupMintQuote.mintUrl,
+                        unit,
+                        keysetId,
+                      });
+                      let mintedProofs: Awaited<
+                        ReturnType<typeof wallet.mintProofs>
+                      > | null = null;
+                      let lastError: unknown;
+
+                      for (let attempt = 0; attempt < 5; attempt += 1) {
+                        try {
+                          mintedProofs = await wallet.mintProofs(
+                            topupMintQuote.amount,
+                            quoteId,
+                            { counter },
+                          );
+                          lastError = null;
+                          break;
+                        } catch (error) {
+                          lastError = error;
+                          if (!isCashuOutputsAlreadySignedError(error)) {
+                            throw error;
+                          }
+
+                          bumpCashuDeterministicCounter({
+                            mintUrl: topupMintQuote.mintUrl,
+                            unit,
+                            keysetId,
+                            used: 64,
+                          });
+                          counter = getCashuDeterministicCounter({
+                            mintUrl: topupMintQuote.mintUrl,
+                            unit,
+                            keysetId,
+                          });
+                        }
+                      }
+
+                      if (!mintedProofs) {
+                        throw lastError ?? new Error("mint failed");
+                      }
+
+                      bumpCashuDeterministicCounter({
+                        mintUrl: topupMintQuote.mintUrl,
+                        unit,
+                        keysetId,
+                        used: mintedProofs.length,
+                      });
+
+                      return mintedProofs;
+                    },
+                  )
+                : await wallet.mintProofs(topupMintQuote.amount, quoteId);
+
             const token = String(
               getEncodedToken({
                 mint: topupMintQuote.mintUrl,

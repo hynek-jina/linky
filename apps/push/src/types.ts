@@ -2,6 +2,8 @@ import type { Event as NostrEvent } from "nostr-tools";
 
 export type ProofAction = "subscribe" | "unsubscribe";
 
+export type NativePushPlatform = "android";
+
 export interface WebPushSubscriptionKeys {
   p256dh: string;
   auth: string;
@@ -11,6 +13,11 @@ export interface WebPushSubscriptionData {
   endpoint: string;
   expirationTime: number | null;
   keys: WebPushSubscriptionKeys;
+}
+
+export interface NativePushSubscriptionData {
+  platform: NativePushPlatform;
+  token: string;
 }
 
 export interface OwnershipProofInput {
@@ -29,8 +36,16 @@ export interface ChallengeRecord {
 export interface StoredSubscription {
   id: number;
   endpoint: string;
+  installationId: string | null;
   expirationTime: number | null;
   keys: WebPushSubscriptionKeys;
+}
+
+export interface StoredNativeSubscription {
+  id: number;
+  installationId: string | null;
+  platform: NativePushPlatform;
+  token: string;
 }
 
 export interface PushNotificationData {
@@ -55,8 +70,22 @@ export interface SubscribeRequestBody {
   proofs: OwnershipProofInput[];
 }
 
+export interface NativeSubscribeRequestBody {
+  cleanupLegacySubscriptions: boolean;
+  installationId: string | null;
+  device: NativePushSubscriptionData;
+  recipientPubkeys: string[];
+  proofs: OwnershipProofInput[];
+}
+
 export interface UnsubscribeRequestBody {
   endpoint: string;
+  recipientPubkeys: string[];
+  proofs: OwnershipProofInput[];
+}
+
+export interface NativeUnsubscribeRequestBody {
+  token: string;
   recipientPubkeys: string[];
   proofs: OwnershipProofInput[];
 }

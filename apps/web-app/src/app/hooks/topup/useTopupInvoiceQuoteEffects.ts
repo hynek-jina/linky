@@ -5,10 +5,23 @@ import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
 
 export interface TopupMintQuoteDraft {
   amount: number;
+  invoice: string | null;
   mintUrl: string;
   quote: string;
   unit: string | null;
 }
+
+export const topupMintQuoteMatchesRequest = (
+  quote: TopupMintQuoteDraft | null,
+  args: {
+    amount: number;
+    mintUrl: string;
+  },
+): boolean => {
+  if (!quote) return false;
+
+  return quote.amount === args.amount && quote.mintUrl === args.mintUrl;
+};
 
 interface UseTopupInvoiceQuoteEffectsParams {
   currentNpub: string | null;
@@ -22,6 +35,7 @@ interface UseTopupInvoiceQuoteEffectsParams {
   topupInvoicePaidHandledRef: React.MutableRefObject<boolean>;
   topupInvoiceQr: string | null;
   topupInvoiceStartBalanceRef: React.MutableRefObject<number | null>;
+  topupMintQuote: TopupMintQuoteDraft | null;
   topupPaidNavTimerRef: React.MutableRefObject<number | null>;
   topupRefreshKey: string | null;
   setTopupAmount: React.Dispatch<React.SetStateAction<string>>;
@@ -46,6 +60,7 @@ export const useTopupInvoiceQuoteEffects = ({
   topupInvoicePaidHandledRef,
   topupInvoiceQr,
   topupInvoiceStartBalanceRef,
+  topupMintQuote,
   topupPaidNavTimerRef,
   topupRefreshKey,
   setTopupAmount,
@@ -59,6 +74,42 @@ export const useTopupInvoiceQuoteEffects = ({
   // Using state (topupInvoiceIsBusy) as a dependency would cause the effect
   // to re-trigger and abort the in-flight request when React re-renders.
   const isFetchingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (routeKind !== "topupInvoice") return;
+    if (!topupMintQuote?.invoice) return;
+    if (topupInvoice === topupMintQuote.invoice && topupInvoiceQr) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      setTopupInvoice(topupMintQuote.invoice);
+      setTopupInvoiceError(null);
+
+      if (topupInvoiceQr) return;
+
+      const QRCode = await import("qrcode");
+      const qr = await QRCode.toDataURL(topupMintQuote.invoice, {
+        margin: 1,
+        width: 320,
+      });
+      if (cancelled) return;
+      setTopupInvoiceQr(qr);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    routeKind,
+    setTopupInvoice,
+    setTopupInvoiceError,
+    setTopupInvoiceQr,
+    topupInvoice,
+    topupInvoiceQr,
+    topupMintQuote,
+  ]);
+
   React.useEffect(() => {
     // Reset topup state when leaving the topup flow.
     if (routeKind !== "topup" && routeKind !== "topupInvoice") {
@@ -113,6 +164,17 @@ export const useTopupInvoiceQuoteEffects = ({
       setTopupInvoice(null);
       setTopupInvoiceQr(null);
       setTopupInvoiceError(t("topupInvoiceFailed"));
+      setTopupInvoiceIsBusy(false);
+      return;
+    }
+
+    if (
+      topupMintQuoteMatchesRequest(topupMintQuote, {
+        amount: amountSat,
+        mintUrl,
+      })
+    ) {
+      setTopupInvoiceError(null);
       setTopupInvoiceIsBusy(false);
       return;
     }
@@ -221,6 +283,7 @@ export const useTopupInvoiceQuoteEffects = ({
         if (cancelled) return;
 
         setTopupMintQuote({
+          invoice,
           mintUrl,
           quote: quoteId,
           amount: amountSat,
@@ -290,6 +353,7 @@ export const useTopupInvoiceQuoteEffects = ({
     setTopupMintQuote,
     t,
     topupAmount,
+    topupMintQuote,
     topupInvoicePaidHandledRef,
     topupInvoiceStartBalanceRef,
     topupRefreshKey,

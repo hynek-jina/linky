@@ -71,11 +71,17 @@ export const useRelayDomain = ({
 
     const initPush = async () => {
       try {
-        const { registerPushNotifications, requestNotificationPermission } =
+        const { registerPushNotifications } =
           await import("../../utils/pushNotifications");
 
         if (isNativePlatform()) {
-          await requestNotificationPermission();
+          const result = await registerPushNotifications(currentNsec);
+          if (!result.success) {
+            console.error(
+              "Native push notification registration failed:",
+              result.error ?? "unknown error",
+            );
+          }
           return;
         }
 

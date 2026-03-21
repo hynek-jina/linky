@@ -59,11 +59,12 @@ Android shell currently adds:
 
 - encrypted native secret storage for identity data
 - native QR scanning in the Capacitor shell
-- native Android notification permission bridge
+- native Android notification permission + FCM token bridge
 
-Current limitation:
+Native push delivery now works end-to-end when:
 
-- full native push delivery is not finished yet; the Android shell has the permission bridge, but not the final Firebase/server registration flow
+- `apps/native-shell/android/app/google-services.json` is present for the Android shell build
+- `apps/push` is configured with `PUSH_FIREBASE_SERVICE_ACCOUNT_JSON`
 
 ```bash
 bun install
