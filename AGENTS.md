@@ -10,6 +10,9 @@ See @README.md for project overview.
 bun install                # Install dependencies
 bun run dev                # Start Vite dev server
 bun run build              # Production build (tsc -b && vite build)
+bun run native:android:add # Generate the Capacitor Android project once
+bun run native:apk:debug   # Build the web app, sync Capacitor, assemble debug APK
+bun run native:ios:add     # Generate the Capacitor iOS project once
 bun run push:dev           # Start the Bun push notification service in watch mode
 bun run push:start         # Start the Bun push notification service once
 bun run check-code         # Run ALL checks: typecheck → eslint --fix → prettier --write
@@ -20,9 +23,12 @@ bun run prettier           # Format + autofix all workspaces
 
 IMPORTANT: Always run `bun run check-code` after making changes. It runs typecheck first, then eslint and prettier which autofix what they can. If typecheck or non-autofixable eslint errors remain, fix them manually and re-run until all checks pass.
 
+Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh` prefers an installed macOS JDK 17 automatically before running Capacitor/Gradle commands, and `apps/native-shell/scripts/patch-android-java.sh` rewrites Capacitor-generated Android compile options from Java 21 to Java 17 after add/sync.
+
 ## Monorepo Structure
 
 - `apps/web-app/` - Main React app (Vite + SWC)
+- `apps/native-shell/` - Capacitor native shell that consumes the built `apps/web-app/dist` bundle for Android/iOS packaging
 - `apps/push/` - Bun HTTP push service for Web Push subscription auth/storage and Nostr outer-inbox relay watching
   - ships with `Dockerfile`, `docker-compose.example.yml`, and `.env.production.example` for container deployment with persistent SQLite storage under `/data`
 - `packages/core/` - Core package workspace (Effect-based identity domain in `src/identity/` with branded schemas + derivation utils, shared derivation paths in `src/identity/derivationPaths.ts`, and `MasterSecretProvider` SLIP-39 layer constructors, exported via `@linky/core` and `@linky/core/identity`)
@@ -50,6 +56,11 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Contacts are capped at `MAX_CONTACTS_PER_OWNER` (currently 500); add-contact UI is disabled at limit and save is blocked
 - Evolu debug views (`#evolu-current-data`, `#evolu-history-data`) scope contacts/history to active owner lanes, with history retaining one previous contacts lane as backup
 - Core app remains local-first/client-side; optional background notifications are handled by the separate `apps/push` Bun service
+- Native packaging uses a separate Capacitor shell in `apps/native-shell/` so Android/iOS project files stay isolated from the web app source tree
+- Native shells now load bundled `apps/web-app/dist` assets by default; Capacitor live reload must be enabled explicitly via `LINKY_CAP_SERVER_URL` / `CAP_SERVER_URL` before `cap sync` / `cap open`, preventing packaged APKs from pointing at `127.0.0.1`
+- Browser-only identity persistence is being moved behind platform adapters in `apps/web-app/src/platform/`; the Android shell now provides a real encrypted secret-storage bridge plus native QR scan, deep-link, and notification-permission bridges via `apps/web-app/src/platform/nativeBridge.ts`, while native push registration now uses Capacitor Push Notifications + FCM token registration against `apps/push`
+- Android native push delivery now uses data-only FCM payloads plus `apps/native-shell/android/app/src/main/java/fit/linky/app/LinkyFirebaseMessagingService.java`, which renders closed-app notifications locally and forwards payload extras back into `MainActivity` on tap; `google-services.json` is still required in `apps/native-shell/android/app/`
+- Android shell now also exposes live system-bar inset values through `LinkyNativeWindowInsets`, and the web app consumes them via CSS vars (`--safe-area-top`, `--safe-area-bottom`) so the fixed top bar and bottom overlays clear Android status/navigation bars
 - Onboarding/login uses a single 20-word **SLIP-39** share; Nostr keys are always derived from that seed at path `m/44'/1237'/0'/0/0` (manual Nostr key overrides are disabled)
 - New account creation now pauses before first login on an unauthenticated profile-picker step: it derives 8 deterministic DiceBear avatar options from the freshly generated `npub`, preselects the first one in a large preview, lets the user edit the suggested name immediately, supports uploading a custom square-cropped photo as a 9th option, and only publishes kind-0 name/picture metadata on confirm (the automatic lightning-address registration path is intentionally deferred until after this step)
 - Cashu deterministic wallet seed is derived from the SLIP-39 secret using **BIP-85** at path `m/83696968'/39'/0'/24'/0'` (24-word mnemonic)
@@ -80,7 +91,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - `routes/props/` contains grouped route-prop builders (`buildPeopleRouteProps`, `buildMoneyRouteProps`, `buildMainSwipeRouteProps`)
 - `lib/` contains shared app helpers (Nostr pool, token text parsing, topbar config)
 - `types/appTypes.ts` contains app-local shared types
-- `apps/push/src/` is split by concern: `http.ts` (Bun API), `ownership.ts` (signed challenge verification), `storage.ts` (SQLite persistence for subscriptions/pubkeys/challenges/seen outer event ids), `relayWatcher.ts` (relay subscription for outer `kind: 1059` events with catch-up vs live delivery gating), and `push.ts` (Web Push delivery + invalid subscription cleanup, including stale subscriptions tied to an old VAPID keypair)
+- `apps/push/src/` is split by concern: `http.ts` (Bun API, including `/native/subscribe` + `/native/unsubscribe` for Android FCM tokens), `ownership.ts` (signed challenge verification), `storage.ts` (SQLite persistence for web subscriptions, native tokens, pubkeys, challenges, seen outer event ids), `relayWatcher.ts` (relay subscription for outer `kind: 1059` events with catch-up vs live delivery gating), and `push.ts` (Web Push + Firebase Admin delivery with invalid subscription/token cleanup)
 - Push service proof events use `kind: 27235` with short-lived per-pubkey challenge nonces; `/subscribe` and `/unsubscribe` both require valid proofs per affected pubkey, full unsubscribe only happens when the last proven pubkey is removed, the server never decrypts NIP-17 payloads, and it only emits generic notifications for outer `kind: 1059` events tagged `["linky","push"]`, so sender self-copies / reactions / edits can sync over relays without triggering push
 
 ## Code Conventions
@@ -106,8 +117,15 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Evolu requires a Worker polyfill in test environments
 - In this workspace/Bun setup, `bunx --cwd apps/web-app playwright test tests` can resolve incorrectly; run `cd apps/web-app && bunx playwright test tests` instead
 - SQLite WASM files served from `public/sqlite-wasm/` with `cache-control: no-store` in dev
-- The `nsec` private key is in localStorage (`linky.nostr_nsec`) - never log or expose it
+- On web, the `nsec` private key is still mirrored under `linky.nostr_nsec`; native shells are expected to provide secure secret storage via the platform bridge and secrets must never be logged or exposed
+- Android native shells currently back identity secrets with `EncryptedSharedPreferences`, use ZXing-based native QR scanning instead of `getUserMedia` when available, expose Android notification permission to the web app, and register Android FCM push tokens through Capacitor Push Notifications; native builds need `apps/native-shell/android/app/google-services.json`, and the push server needs `PUSH_FIREBASE_SERVICE_ACCOUNT_JSON` for delivery
+- Android native shells also register `nostr://` and `cashu://` custom URI schemes and forward incoming URLs through `LinkyNativeDeepLinks`; the current handler accepts contact `npub` links plus Cashu token links, reuses the scanned-text add/import flows, opens the saved contact detail, and imports tokens into the wallet
+- Android native shells also accept NFC NDEF tags for the same flows: `ACTION_NDEF_DISCOVERED` URI records with `nostr://` / `cashu://` and `text/plain` NDEF records whose payload starts with those schemes are normalized in `MainActivity` and forwarded through the same deep-link bridge
+- Android native shells also expose NFC writing through `LinkyNativeNfc`; token detail writes `cashu://cashu...` and profile writes `nostr://npub...` as NDEF URI records, with web-app UI hidden when the native bridge is unavailable
+- Cashu tokens written to NFC remain listed as greyed `externalized` rows, are excluded from available balance and outgoing payments, and token check re-accepts them into a fresh spendable token; token detail also offers Share for the same `cashu://cashu...` deeplink used by NFC writes
+- Native scan/notification injected bridge methods must be invoked as bridge methods (`bridge.method()`), not detached function references, otherwise Android WebView rejects them as non-injected calls
 - Vite proxies: `/api/mint-quote` for Cashu mint quotes and `/api/lnurlp` for LNURL-pay (CORS workarounds); production mirrors the mint-quote proxy in `apps/web-app/api/mint-quote.ts`
+- Cashu topup invoice creation uses the `/api/mint-quote` proxy on web, but on native platforms it calls the mint `/v1/mint/quote/bolt11` endpoint directly so bundled APKs do not resolve the relative proxy path to the local app shell HTML
 - PWA service worker is built from `apps/web-app/src/sw.ts` via Vite PWA `injectManifest`; changes there affect both prod and dev SW behavior
 - Dev mode now keeps the registered PWA service worker alive for push testing; use `#advanced/push-debug` to inspect persistent client/SW push logs and manually reset service workers/caches when needed
 - Push registration now validates the live `PushSubscription.options.applicationServerKey` against the current server VAPID public key and forces a re-subscribe on mismatch; open clients also re-register when the service worker emits `pushsubscriptionchange`
@@ -115,7 +133,7 @@ IMPORTANT: Always run `bun run check-code` after making changes. It runs typeche
 - Cashu payments now publish actual token chat messages to the recipient without the outer push marker and emit one separate notify-only wrapped event per payment (`kind: 24133`, `["linky","payment_notice"]`) as the sole push trigger; receiver inbox sync never stores that notice in chat history, but the service worker and open-app notification paths render it as `You received money` / `Přijali jste peníze`
 - The PWA service worker mirrors the active `nsec` into IndexedDB on app startup/login, clears it on logout, and for closed-app push delivery it fetches the outer `kind: 1059` event from relays, decrypts it locally in the service worker, uses `You received money` / `Přijali jste peníze` copy for Cashu token messages and notify-only payment notice events, and still shows a generic fallback notification when decrypt/validation fails; any open Linky window client still suppresses the service-worker notification in favor of in-app notification logic, while inbox sync keeps actual Cashu token chat messages silent in notification surfaces and uses the notify-only payment event for the user-visible payment alert
 - Chat retention is enforced in `useMessagesDomain` (latest 500 messages/contact, 3000 global; reactions capped to 5000 and orphaned reactions are pruned)
-- Wallet top-up receive quotes are cached in owner-scoped localStorage until claimed/expired, so dismissing the QR screen does not drop a pending receive
+- Wallet top-up receive quotes are cached in owner-scoped localStorage until claimed/expired, including the original invoice text, so Android/native resumes reuse the same quote instead of minting against a newly generated one; top-up mint claim must also treat Cashu `ISSUED` as claim-relevant and run `mintProofs` under the deterministic counter lock/retry flow used by other Cashu operations, otherwise paid invoices can fail silently with duplicate-output signing errors
 - Push service env is documented in `apps/push/.env.example`; `PUSH_VAPID_SUBJECT`, `PUSH_VAPID_PUBLIC_KEY`, and `PUSH_VAPID_PRIVATE_KEY` must be set before `apps/push` starts
 - `apps/push` CORS allowlist is configured via `PUSH_CORS_ORIGIN`; it accepts `*` or a comma-separated list of allowed web app origins
 - `apps/push` relay watcher defaults now match the web app chat publish relays (`wss://relay.damus.io`, `wss://nos.lol`, `wss://relay.0xchat.com`) unless overridden via `PUSH_DEFAULT_RELAYS`

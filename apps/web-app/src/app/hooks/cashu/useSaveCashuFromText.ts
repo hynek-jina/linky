@@ -131,7 +131,13 @@ export const useSaveCashuFromText = ({
         setStatus(t("pasteEmpty"));
         return;
       }
-      if (isCashuTokenStored(tokenRaw)) return;
+      if (isCashuTokenStored(tokenRaw)) {
+        setStatus(t("cashuExists"));
+        if (options?.navigateToWallet) {
+          navigateTo({ route: "wallet" });
+        }
+        return;
+      }
       setCashuDraft("");
       setStatus(t("cashuAccepting"));
 
@@ -147,12 +153,24 @@ export const useSaveCashuFromText = ({
           const ownerId = await resolveOwnerIdForWrite();
 
           const accepted = await acceptCashuToken(tokenRaw);
+          const acceptedToken = String(accepted.token ?? "").trim();
+
+          if (
+            isCashuTokenStored(tokenRaw) ||
+            (acceptedToken !== "" && isCashuTokenStored(acceptedToken))
+          ) {
+            setStatus(t("cashuExists"));
+            if (options?.navigateToWallet) {
+              navigateTo({ route: "wallet" });
+            }
+            return;
+          }
 
           const result = ownerId
             ? insert(
                 "cashuToken",
                 buildCashuTokenPayload({
-                  token: String(accepted.token ?? ""),
+                  token: acceptedToken,
                   rawToken: tokenRaw,
                   mint: String(accepted.mint ?? ""),
                   unit: accepted.unit,
@@ -165,7 +183,7 @@ export const useSaveCashuFromText = ({
             : insert(
                 "cashuToken",
                 buildCashuTokenPayload({
-                  token: String(accepted.token ?? ""),
+                  token: acceptedToken,
                   rawToken: tokenRaw,
                   mint: String(accepted.mint ?? ""),
                   unit: accepted.unit,
@@ -181,9 +199,9 @@ export const useSaveCashuFromText = ({
 
           safeLocalStorageSet(
             LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
-            String(accepted.token ?? ""),
+            acceptedToken,
           );
-          ensureCashuTokenPersisted(String(accepted.token ?? ""));
+          ensureCashuTokenPersisted(acceptedToken);
 
           if (recentlyReceivedTokenTimerRef.current !== null) {
             try {
@@ -193,7 +211,7 @@ export const useSaveCashuFromText = ({
             }
           }
           setRecentlyReceivedToken({
-            token: String(accepted.token ?? "").trim(),
+            token: acceptedToken,
             amount:
               typeof accepted.amount === "number" && accepted.amount > 0
                 ? accepted.amount

@@ -1,12 +1,12 @@
+import type { Proof } from "@cashu/cashu-ts";
 import {
   bumpCashuDeterministicCounter,
   getCashuDeterministicCounter,
   getCashuDeterministicSeedFromStorage,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
-import type { Proof } from "@cashu/cashu-ts";
+import { isCashuOutputsAlreadySignedError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
-import { getUnknownErrorMessage } from "./utils/unknown";
 
 type CashuAcceptResult = {
   amount: number;
@@ -40,15 +40,6 @@ export const acceptCashuToken = async (
   const unit = wallet.unit;
   const keysetId = wallet.keysetId;
 
-  const isOutputsAlreadySignedError = (e: unknown): boolean => {
-    const m = getUnknownErrorMessage(e, "").toLowerCase();
-    return (
-      m.includes("outputs have already been signed") ||
-      m.includes("already been signed before") ||
-      m.includes("keyset id already signed")
-    );
-  };
-
   const proofs = await (det
     ? withCashuDeterministicCounterLock(
         { mintUrl, unit, keysetId },
@@ -72,7 +63,7 @@ export const acceptCashuToken = async (
               break;
             } catch (e) {
               lastError = e;
-              if (!isOutputsAlreadySignedError(e)) throw e;
+              if (!isCashuOutputsAlreadySignedError(e)) throw e;
               bumpCashuDeterministicCounter({
                 mintUrl,
                 unit,

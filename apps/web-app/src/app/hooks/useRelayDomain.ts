@@ -1,7 +1,8 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React from "react";
-import { NOSTR_RELAYS } from "../../nostrProfile";
 import { navigateTo } from "../../hooks/useRouting";
+import { NOSTR_RELAYS } from "../../nostrProfile";
+import { isNativePlatform } from "../../platform/runtime";
 import type { Route } from "../../types/route";
 import { getSharedAppNostrPool } from "../lib/nostrPool";
 
@@ -73,6 +74,17 @@ export const useRelayDomain = ({
         const { registerPushNotifications } =
           await import("../../utils/pushNotifications");
 
+        if (isNativePlatform()) {
+          const result = await registerPushNotifications(currentNsec);
+          if (!result.success) {
+            console.error(
+              "Native push notification registration failed:",
+              result.error ?? "unknown error",
+            );
+          }
+          return;
+        }
+
         if (Notification.permission === "granted") {
           const result = await registerPushNotifications(currentNsec);
           if (!result.success) {
@@ -101,6 +113,11 @@ export const useRelayDomain = ({
       }
     };
 
+    if (isNativePlatform()) {
+      void initPush();
+      return;
+    }
+
     if ("serviceWorker" in navigator && "PushManager" in window) {
       void initPush();
     }
@@ -108,6 +125,10 @@ export const useRelayDomain = ({
 
   React.useEffect(() => {
     if (!currentNsec) {
+      return;
+    }
+
+    if (isNativePlatform()) {
       return;
     }
 

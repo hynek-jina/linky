@@ -1,4 +1,8 @@
 import React from "react";
+import {
+  startNativeQrScan,
+  supportsNativeQrScan,
+} from "../../platform/nativeBridge";
 import type {
   NavigatorWithOptionalCameraPermissions,
   WindowWithOptionalBarcodeDetector,
@@ -20,9 +24,13 @@ interface UseGuideScannerDomainParams {
   t: (key: string) => string;
 }
 
+export type ScanEntryPoint = "contacts" | "wallet";
+
 type UseGuideScannerDomainResult = ReturnType<typeof useContactsGuide> & {
   closeScan: () => void;
   openScan: () => void;
+  openWalletScan: () => void;
+  scanAllowsManualContact: boolean;
   scanIsOpen: boolean;
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
 };
@@ -50,6 +58,8 @@ export const useGuideScannerDomain = ({
   });
 
   const [scanIsOpen, setScanIsOpen] = React.useState(false);
+  const [scanEntryPoint, setScanEntryPoint] =
+    React.useState<ScanEntryPoint | null>(null);
   const [scanStream, setScanStream] = React.useState<MediaStream | null>(null);
 
   const scanVideoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -62,6 +72,7 @@ export const useGuideScannerDomain = ({
 
   const closeScan = React.useCallback(() => {
     setScanIsOpen(false);
+    setScanEntryPoint(null);
     scanOpenRequestIdRef.current += 1;
 
     const video = scanVideoRef.current;
@@ -93,99 +104,150 @@ export const useGuideScannerDomain = ({
     });
   }, []);
 
-  const openScan = React.useCallback(() => {
-    setScanIsOpen(true);
-
-    const requestId = (scanOpenRequestIdRef.current += 1);
-
-    const media = navigator.mediaDevices as
-      | { getUserMedia?: (c: MediaStreamConstraints) => Promise<MediaStream> }
-      | undefined;
-    if (!media?.getUserMedia) {
-      pushToast(t("scanCameraError"));
-      closeScan();
-      return;
+  const startNativeScanFallback = React.useCallback((): boolean => {
+    if (!supportsNativeQrScan()) {
+      return false;
     }
 
-    if (typeof globalThis.isSecureContext === "boolean" && !isSecureContext) {
-      pushToast(t("scanRequiresHttps"));
-      closeScan();
-      return;
-    }
+    closeScan();
 
     void (async () => {
-      try {
-        const acceptStream = (stream: MediaStream) => {
-          if (
-            requestId !== scanOpenRequestIdRef.current ||
-            !scanIsOpenRef.current
-          ) {
-            for (const track of stream.getTracks()) {
-              try {
-                track.stop();
-              } catch {
-                // ignore
-              }
-            }
-            return false;
-          }
+      const result = await startNativeQrScan();
+      if (!result) {
+        pushToast(t("scanCameraError"));
+        return;
+      }
 
-          setScanStream(stream);
-          return true;
-        };
+      if (result.value) {
+        await handleScannedTextRef.current(result.value);
+        return;
+      }
 
-        const tryGet = async (constraints: MediaStreamConstraints) => {
-          const stream = await media.getUserMedia!(constraints);
-          return acceptStream(stream);
-        };
-
-        const ok = await tryGet({
-          video: { facingMode: { ideal: "environment" } },
-          audio: false,
-        }).catch(() => false);
-
-        if (!ok) {
-          await tryGet({ video: true, audio: false });
-        }
-      } catch (e) {
-        const err = e as { name?: unknown; message?: unknown };
-        const name = String(err?.name ?? "").trim();
-        const message = String(err?.message ?? e ?? "").trim();
-
-        let permissionState: string | null = null;
-        try {
-          const permissions = (
-            navigator as NavigatorWithOptionalCameraPermissions
-          ).permissions;
-          const res = await permissions?.query?.({ name: "camera" });
-          permissionState = String(res?.state ?? "").trim() || null;
-        } catch {
-          // ignore
-        }
-
-        console.log("[linky][scan] getUserMedia failed", {
-          name,
-          message,
-          permissionState,
-          href: globalThis.location?.href ?? null,
-          isSecureContext:
-            typeof globalThis.isSecureContext === "boolean"
-              ? globalThis.isSecureContext
-              : null,
-        });
-
-        const isPermissionDenied =
-          name === "NotAllowedError" ||
-          /permission/i.test(message) ||
-          /denied/i.test(message);
-
-        if (isPermissionDenied) pushToast(t("scanPermissionDenied"));
-        else pushToast(t("scanCameraError"));
-
-        closeScan();
+      if (!result.cancelled) {
+        pushToast(result.message ?? t("scanCameraError"));
       }
     })();
+
+    return true;
   }, [closeScan, pushToast, t]);
+
+  const openScanForEntryPoint = React.useCallback(
+    (entryPoint: ScanEntryPoint) => {
+      setScanEntryPoint(entryPoint);
+      setScanIsOpen(true);
+
+      const requestId = (scanOpenRequestIdRef.current += 1);
+
+      const media = navigator.mediaDevices as
+        | { getUserMedia?: (c: MediaStreamConstraints) => Promise<MediaStream> }
+        | undefined;
+      if (!media?.getUserMedia) {
+        if (startNativeScanFallback()) {
+          return;
+        }
+
+        pushToast(t("scanCameraError"));
+        closeScan();
+        return;
+      }
+
+      if (typeof globalThis.isSecureContext === "boolean" && !isSecureContext) {
+        if (startNativeScanFallback()) {
+          return;
+        }
+
+        pushToast(t("scanRequiresHttps"));
+        closeScan();
+        return;
+      }
+
+      void (async () => {
+        try {
+          const acceptStream = (stream: MediaStream) => {
+            if (
+              requestId !== scanOpenRequestIdRef.current ||
+              !scanIsOpenRef.current
+            ) {
+              for (const track of stream.getTracks()) {
+                try {
+                  track.stop();
+                } catch {
+                  // ignore
+                }
+              }
+              return false;
+            }
+
+            setScanStream(stream);
+            return true;
+          };
+
+          const tryGet = async (constraints: MediaStreamConstraints) => {
+            const stream = await media.getUserMedia!(constraints);
+            return acceptStream(stream);
+          };
+
+          const ok = await tryGet({
+            video: { facingMode: { ideal: "environment" } },
+            audio: false,
+          }).catch(() => false);
+
+          if (!ok) {
+            await tryGet({ video: true, audio: false });
+          }
+        } catch (e) {
+          const err = e as { name?: unknown; message?: unknown };
+          const name = String(err?.name ?? "").trim();
+          const message = String(err?.message ?? e ?? "").trim();
+
+          let permissionState: string | null = null;
+          try {
+            const permissions = (
+              navigator as NavigatorWithOptionalCameraPermissions
+            ).permissions;
+            const res = await permissions?.query?.({ name: "camera" });
+            permissionState = String(res?.state ?? "").trim() || null;
+          } catch {
+            // ignore
+          }
+
+          console.log("[linky][scan] getUserMedia failed", {
+            name,
+            message,
+            permissionState,
+            href: globalThis.location?.href ?? null,
+            isSecureContext:
+              typeof globalThis.isSecureContext === "boolean"
+                ? globalThis.isSecureContext
+                : null,
+          });
+
+          const isPermissionDenied =
+            name === "NotAllowedError" ||
+            /permission/i.test(message) ||
+            /denied/i.test(message);
+
+          if (!isPermissionDenied && startNativeScanFallback()) {
+            return;
+          }
+
+          if (isPermissionDenied) pushToast(t("scanPermissionDenied"));
+          else pushToast(t("scanCameraError"));
+
+          closeScan();
+        }
+      })();
+    },
+    [closeScan, pushToast, startNativeScanFallback, t],
+  );
+
+  const openScan = React.useCallback(() => {
+    openScanForEntryPoint("contacts");
+  }, [openScanForEntryPoint]);
+
+  const openWalletScan = React.useCallback(() => {
+    openScanForEntryPoint("wallet");
+  }, [openScanForEntryPoint]);
 
   const handleScannedTextRef = React.useRef(onScannedText);
   React.useEffect(() => {
@@ -339,6 +401,8 @@ export const useGuideScannerDomain = ({
     closeScan,
     ...contactsGuideDomain,
     openScan,
+    openWalletScan,
+    scanAllowsManualContact: scanEntryPoint === "contacts",
     scanIsOpen,
     scanVideoRef,
   };

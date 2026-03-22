@@ -20,6 +20,7 @@ interface UseScannedTextHandlerParams<TContact extends ContactRowLike> {
   appOwnerId: OwnerId | null;
   closeScan: () => void;
   contacts: readonly TContact[];
+  currentNpub: string | null;
   extractCashuTokenFromText: (text: string) => string | null;
   insert: EvoluMutations["insert"];
   lightningInvoiceAutoPayLimit: number;
@@ -44,6 +45,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
   appOwnerId,
   closeScan,
   contacts,
+  currentNpub,
   extractCashuTokenFromText,
   insert,
   lightningInvoiceAutoPayLimit,
@@ -78,6 +80,14 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
         const { nip19 } = await import("nostr-tools");
         const decoded = nip19.decode(normalized);
         if (decoded.type === "npub") {
+          const ownNpub = String(currentNpub ?? "").trim();
+          if (ownNpub && ownNpub === normalized) {
+            setStatus(t("contactIsYou"));
+            closeScan();
+            navigateTo({ route: "profile" });
+            return;
+          }
+
           const already = contacts.some(
             (contact) => String(contact.npub ?? "").trim() === normalized,
           );
@@ -201,6 +211,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       appOwnerId,
       closeScan,
       contacts,
+      currentNpub,
       extractCashuTokenFromText,
       insert,
       lightningInvoiceAutoPayLimit,

@@ -1,6 +1,14 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap");
 
 :root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --chat-keyboard-inset: 0px;
+  --native-keyboard-inset: 0px;
+  --chat-compose-height: 116px;
+  --floating-safe-area-bottom: min(var(--safe-area-bottom), 24px);
+  --topbar-content-height: 48px;
+  --topbar-height: calc(var(--topbar-content-height) + var(--safe-area-top));
   font-family:
     "Manrope",
     "Segoe UI",
@@ -23,6 +31,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  padding-top: 0;
   background:
     radial-gradient(
       circle at 20% 20%,

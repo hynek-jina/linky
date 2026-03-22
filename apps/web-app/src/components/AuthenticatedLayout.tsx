@@ -6,6 +6,7 @@ import {
 import { ContactsGuideOverlay } from "./ContactsGuideOverlay";
 import { LightningInvoiceConfirmModal } from "./LightningInvoiceConfirmModal";
 import { MenuModal } from "./MenuModal";
+import { NfcWriteModal } from "./NfcWriteModal";
 import { PaidOverlay } from "./PaidOverlay";
 import { ProfileQrModal } from "./ProfileQrModal";
 import { SaveContactPromptModal } from "./SaveContactPromptModal";
@@ -69,14 +70,17 @@ export function AuthenticatedLayout({
       {state.scanIsOpen && (
         <ScanModal
           closeScan={actions.closeScan}
+          onTypeManually={actions.openManualContactFromScan}
           pasteScanValue={actions.pasteScanValue}
           scanVideoRef={state.scanVideoRef}
+          showTypeAction={state.scanAllowsManualContact}
           t={state.t}
         />
       )}
 
       {state.profileQrIsOpen && (
         <ProfileQrModal
+          canWriteToNfc={state.canWriteNfc}
           closeProfileQr={actions.closeProfileQr}
           copyText={actions.copyText}
           currentNpub={state.currentNpub}
@@ -103,6 +107,7 @@ export function AuthenticatedLayout({
           setProfileEditPicture={actions.setProfileEditPicture}
           t={state.t}
           toggleProfileEditing={actions.toggleProfileEditing}
+          writeCurrentNpubToNfc={actions.writeCurrentNpubToNfc}
         />
       )}
 
@@ -129,6 +134,14 @@ export function AuthenticatedLayout({
 
       {state.paidOverlayIsOpen ? (
         <PaidOverlay paidOverlayTitle={state.paidOverlayTitle} t={state.t} />
+      ) : null}
+
+      {state.nfcWritePromptKind ? (
+        <NfcWriteModal
+          kind={state.nfcWritePromptKind}
+          onCancel={actions.cancelPendingNfcWrite}
+          t={state.t}
+        />
       ) : null}
     </>
   );

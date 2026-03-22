@@ -94,6 +94,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   t,
 }) => {
   const composeInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const composeContainerRef = useRef<HTMLDivElement | null>(null);
   const npub = selectedContact
     ? normalizeNpubIdentifier(selectedContact.npub)
     : null;
@@ -170,16 +171,45 @@ export const ChatPage: FC<ChatPageProps> = ({
     const updateViewportHeight = () => {
       const vp = window.visualViewport;
       const nextHeight = vp?.height ?? window.innerHeight;
+      const nextOffsetTop = vp?.offsetTop ?? 0;
+      const visibleHeight = Math.min(
+        window.innerHeight,
+        Math.max(0, nextHeight + nextOffsetTop),
+      );
+      const viewportKeyboardInset = Math.max(
+        0,
+        window.innerHeight - visibleHeight,
+      );
+      const nativeKeyboardInset = Number.parseFloat(
+        getComputedStyle(root).getPropertyValue("--native-keyboard-inset"),
+      );
+      const keyboardInset = Math.max(
+        viewportKeyboardInset,
+        Number.isFinite(nativeKeyboardInset) ? nativeKeyboardInset : 0,
+      );
       root.style.setProperty(
         "--chat-viewport-height",
-        `${Math.round(nextHeight)}px`,
+        `${Math.round(window.innerHeight - keyboardInset)}px`,
       );
+      root.style.setProperty(
+        "--chat-keyboard-inset",
+        `${Math.round(keyboardInset)}px`,
+      );
+      if (keyboardInset > 0) {
+        root.dataset.chatKeyboardOpen = "true";
+      } else {
+        delete root.dataset.chatKeyboardOpen;
+      }
       // Reset any page scroll caused by keyboard focus on iOS
       if (window.scrollY > 0) {
         window.scrollTo(0, 0);
       }
       // Keep chat scrolled to bottom when keyboard opens/closes
       requestAnimationFrame(() => {
+        const input = composeInputRef.current;
+        if (input && document.activeElement === input) {
+          input.scrollIntoView({ block: "nearest" });
+        }
         const c = chatMessagesRef.current;
         if (c) c.scrollTop = c.scrollHeight;
       });
@@ -189,18 +219,65 @@ export const ChatPage: FC<ChatPageProps> = ({
 
     const viewport = window.visualViewport;
     window.addEventListener("resize", updateViewportHeight);
+    window.addEventListener("linky-native-window-insets", updateViewportHeight);
     viewport?.addEventListener("resize", updateViewportHeight);
     viewport?.addEventListener("scroll", updateViewportHeight);
 
     return () => {
       window.removeEventListener("resize", updateViewportHeight);
+      window.removeEventListener(
+        "linky-native-window-insets",
+        updateViewportHeight,
+      );
       viewport?.removeEventListener("resize", updateViewportHeight);
       viewport?.removeEventListener("scroll", updateViewportHeight);
       root.style.overflow = prevHtmlOverflow;
       body.style.overflow = prevBodyOverflow;
       root.style.removeProperty("--chat-viewport-height");
+      root.style.removeProperty("--chat-keyboard-inset");
+      delete root.dataset.chatKeyboardOpen;
     };
   }, [chatMessagesRef]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (typeof window === "undefined") return;
+
+    const root = document.documentElement;
+    const compose = composeContainerRef.current;
+    if (!compose) return;
+
+    const updateComposeHeight = () => {
+      root.style.setProperty(
+        "--chat-compose-height",
+        `${Math.round(compose.getBoundingClientRect().height)}px`,
+      );
+    };
+
+    updateComposeHeight();
+
+    window.addEventListener("resize", updateComposeHeight);
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(updateComposeHeight);
+      observer.observe(compose);
+    }
+
+    return () => {
+      window.removeEventListener("resize", updateComposeHeight);
+      observer?.disconnect();
+      root.style.removeProperty("--chat-compose-height");
+    };
+  }, [
+    editContext,
+    payWithCashuEnabled,
+    replyContext,
+    selectedContact?.id,
+    selectedContact?.isUnknownContact,
+    selectedContact?.lnAddress,
+    npub,
+  ]);
 
   useEffect(() => {
     if (!replyContext && !editContext) return;
@@ -358,7 +435,7 @@ export const ChatPage: FC<ChatPageProps> = ({
         )}
       </div>
 
-      <div className="chat-compose">
+      <div className="chat-compose" ref={composeContainerRef}>
         {replyContext && (
           <ReplyPreview
             label={t("chatReplyingTo")}

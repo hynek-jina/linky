@@ -1,4 +1,15 @@
+import {
+  PushNotifications,
+  type PushNotificationActionPerformed,
+  type PushNotificationSchema,
+  type Token,
+} from "@capacitor/push-notifications";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import {
+  getNativeNotificationPermissionState,
+  requestNativeNotificationPermission,
+} from "../platform/nativeBridge";
+import { isNativePlatform } from "../platform/runtime";
 import { appendPushDebugLog } from "./pushDebugLog";
 
 const PUSH_SERVER_URL =
@@ -10,6 +21,19 @@ const VAPID_KEY_STORAGE_KEY = "linky.push_vapid_public_key";
 const PUSH_INSTALLATION_ID_STORAGE_KEY = "linky.push_installation_id";
 const REGISTERED_PUSH_ENDPOINT_STORAGE_KEY = "linky.push_subscription_endpoint";
 const REGISTERED_PUSH_PUBKEY_STORAGE_KEY = "linky.push_subscription_pubkey";
+const REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY = "linky.push_native_token";
+const REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY = "linky.push_native_pubkey";
+
+let nativePushListenersPromise: Promise<void> | null = null;
+interface NativePluginListenerHandle {
+  remove: () => Promise<void>;
+}
+
+const nativePushListenerHandles: NativePluginListenerHandle[] = [];
+const pendingNativePushTokenWaiters = new Set<{
+  reject: (error: Error) => void;
+  resolve: (token: string) => void;
+}>();
 
 async function fetchVapidPublicKey(): Promise<string> {
   const response = await fetch(`${PUSH_SERVER_URL}/vapid-public-key`);
@@ -69,6 +93,30 @@ function clearStoredRegisteredPushPubkey(): void {
   localStorage.removeItem(REGISTERED_PUSH_PUBKEY_STORAGE_KEY);
 }
 
+function readStoredRegisteredNativePushToken(): string | null {
+  return localStorage.getItem(REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY);
+}
+
+function storeRegisteredNativePushToken(token: string): void {
+  localStorage.setItem(REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY, token);
+}
+
+function clearStoredRegisteredNativePushToken(): void {
+  localStorage.removeItem(REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY);
+}
+
+function readStoredRegisteredNativePushPubkey(): string | null {
+  return localStorage.getItem(REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY);
+}
+
+function storeRegisteredNativePushPubkey(pubkey: string): void {
+  localStorage.setItem(REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY, pubkey);
+}
+
+function clearStoredRegisteredNativePushPubkey(): void {
+  localStorage.removeItem(REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY);
+}
+
 type PushSubscriptionData = {
   endpoint: string;
   expirationTime: number | null;
@@ -76,6 +124,11 @@ type PushSubscriptionData = {
     p256dh: string;
     auth: string;
   };
+};
+
+type NativePushDeviceData = {
+  platform: "android";
+  token: string;
 };
 
 type ChallengeResponse = {
@@ -109,6 +162,13 @@ function describeSubscription(subscription: PushSubscription | null): {
     hasApplicationServerKey: applicationServerKey !== null,
     hasP256dh: Boolean(subscription?.getKey("p256dh")),
   };
+}
+
+function hashStoredIdentifier(value: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  return value.slice(-24);
 }
 
 function isRecord(
@@ -313,7 +373,285 @@ function toPushSubscriptionData(
   };
 }
 
+function toNativePushDeviceData(token: string): NativePushDeviceData {
+  return {
+    platform: "android",
+    token,
+  };
+}
+
+async function ensureNativePushListeners(): Promise<void> {
+  if (!isNativePlatform()) {
+    return;
+  }
+
+  if (nativePushListenersPromise) {
+    return nativePushListenersPromise;
+  }
+
+  nativePushListenersPromise = (async () => {
+    nativePushListenerHandles.push(
+      await PushNotifications.addListener("registration", (token: Token) => {
+        const normalized = String(token.value ?? "").trim();
+        void appendPushDebugLog("client", "native push token event", {
+          tokenHash: hashStoredIdentifier(normalized),
+        });
+
+        if (!normalized) {
+          const error = new Error("Native push token is empty");
+          for (const waiter of pendingNativePushTokenWaiters) {
+            waiter.reject(error);
+          }
+          pendingNativePushTokenWaiters.clear();
+          return;
+        }
+
+        for (const waiter of pendingNativePushTokenWaiters) {
+          waiter.resolve(normalized);
+        }
+        pendingNativePushTokenWaiters.clear();
+      }),
+    );
+
+    nativePushListenerHandles.push(
+      await PushNotifications.addListener("registrationError", (error) => {
+        const wrappedError = new Error(
+          String(error.error ?? "Native push registration failed"),
+        );
+        void appendPushDebugLog("client", "native push token error", {
+          error,
+        });
+        for (const waiter of pendingNativePushTokenWaiters) {
+          waiter.reject(wrappedError);
+        }
+        pendingNativePushTokenWaiters.clear();
+      }),
+    );
+
+    nativePushListenerHandles.push(
+      await PushNotifications.addListener(
+        "pushNotificationReceived",
+        (notification: PushNotificationSchema) => {
+          void appendPushDebugLog(
+            "client",
+            "native push notification received",
+            notification,
+          );
+          window.dispatchEvent(
+            new CustomEvent("linky-native-push-received", {
+              detail: notification,
+            }),
+          );
+        },
+      ),
+    );
+
+    nativePushListenerHandles.push(
+      await PushNotifications.addListener(
+        "pushNotificationActionPerformed",
+        (notification: PushNotificationActionPerformed) => {
+          void appendPushDebugLog(
+            "client",
+            "native push notification action",
+            notification,
+          );
+          window.dispatchEvent(
+            new CustomEvent("linky-native-push-action", {
+              detail: notification,
+            }),
+          );
+        },
+      ),
+    );
+  })();
+
+  return nativePushListenersPromise;
+}
+
+function waitForNativePushToken(): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const waiter = { reject, resolve };
+    pendingNativePushTokenWaiters.add(waiter);
+
+    window.setTimeout(() => {
+      if (!pendingNativePushTokenWaiters.has(waiter)) {
+        return;
+      }
+      pendingNativePushTokenWaiters.delete(waiter);
+      reject(new Error("Timed out while waiting for native push token"));
+    }, 15000);
+  });
+}
+
+async function requestNativePushToken(): Promise<string> {
+  await ensureNativePushListeners();
+  const tokenPromise = waitForNativePushToken();
+  await PushNotifications.register();
+  return tokenPromise;
+}
+
+async function unregisterNativeTokenOnServer(params: {
+  currentNsec: string;
+  token: string;
+}): Promise<boolean> {
+  const { pubkey } = await derivePushIdentity(params.currentNsec);
+  const challenge = await requestChallengeForAction(pubkey, "unsubscribe");
+  const proof = await createOwnershipProof({
+    action: "unsubscribe",
+    challenge: challenge.challenge,
+    currentNsec: params.currentNsec,
+  });
+  const response = await fetch(`${PUSH_SERVER_URL}/native/unsubscribe`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      token: params.token,
+      recipientPubkeys: [pubkey],
+      proofs: [proof],
+    }),
+  });
+
+  return response.ok;
+}
+
+async function registerNativePushNotifications(
+  currentNsec: string,
+): Promise<{ success: boolean; error?: string }> {
+  const permissionState = getNativeNotificationPermissionState();
+  if (permissionState === null || permissionState === "unsupported") {
+    await appendPushDebugLog("client", "native push unsupported", {
+      permissionState,
+    });
+    return {
+      success: false,
+      error:
+        "Native push není v tomto buildu nakonfigurovaný. V Android shellu chybí google-services.json.",
+    };
+  }
+
+  const granted = await requestNotificationPermission();
+  await appendPushDebugLog("client", "native push registration requested", {
+    granted,
+    permissionState,
+  });
+
+  if (!granted) {
+    return { success: false, error: "Nativni notifikace nejsou povolene" };
+  }
+
+  try {
+    const installationId = getOrCreatePushInstallationId();
+    const { pubkey } = await derivePushIdentity(currentNsec);
+    const previousToken = readStoredRegisteredNativePushToken();
+    const storedPubkey = readStoredRegisteredNativePushPubkey();
+    const token = await requestNativePushToken();
+
+    const challenge = await requestChallenge(pubkey);
+    const proof = await createOwnershipProof({
+      action: "subscribe",
+      challenge: challenge.challenge,
+      currentNsec,
+    });
+
+    const response = await fetch(`${PUSH_SERVER_URL}/native/subscribe`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        cleanupLegacySubscriptions: true,
+        installationId,
+        proofs: [proof],
+        recipientPubkeys: [pubkey],
+        device: toNativePushDeviceData(token),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorMessage = await readErrorMessage(response);
+      await appendPushDebugLog("client", "native push register server error", {
+        errorMessage,
+        installationId,
+        pubkey,
+        status: response.status,
+        tokenHash: hashStoredIdentifier(token),
+      });
+      return {
+        success: false,
+        error: `Server vrátil chybu ${response.status}: ${errorMessage}`,
+      };
+    }
+
+    if (previousToken && previousToken !== token) {
+      const shouldCleanupPreviousToken =
+        storedPubkey === null || storedPubkey === pubkey;
+      if (shouldCleanupPreviousToken) {
+        try {
+          const removed = await unregisterNativeTokenOnServer({
+            currentNsec,
+            token: previousToken,
+          });
+          await appendPushDebugLog(
+            "client",
+            "native push stale token cleanup result",
+            {
+              installationId,
+              previousTokenHash: hashStoredIdentifier(previousToken),
+              pubkey,
+              removed,
+              tokenHash: hashStoredIdentifier(token),
+            },
+          );
+        } catch (cleanupError) {
+          await appendPushDebugLog(
+            "client",
+            "native push stale token cleanup failed",
+            {
+              error: cleanupError,
+              installationId,
+              previousTokenHash: hashStoredIdentifier(previousToken),
+              pubkey,
+              tokenHash: hashStoredIdentifier(token),
+            },
+          );
+        }
+      }
+    }
+
+    storeRegisteredNativePushToken(token);
+    storeRegisteredNativePushPubkey(pubkey);
+
+    await appendPushDebugLog("client", "native push register success", {
+      installationId,
+      previousTokenHash: hashStoredIdentifier(previousToken),
+      pubkey,
+      tokenHash: hashStoredIdentifier(token),
+    });
+    return { success: true };
+  } catch (error) {
+    await appendPushDebugLog("client", "native push register exception", {
+      error,
+    });
+    return { success: false, error: `Chyba: ${String(error ?? "")}` };
+  }
+}
+
 export async function requestNotificationPermission(): Promise<boolean> {
+  if (isNativePlatform()) {
+    const granted = await requestNativeNotificationPermission();
+    await appendPushDebugLog(
+      "client",
+      "native notification permission result",
+      {
+        granted,
+        permissionState: getNativeNotificationPermissionState(),
+      },
+    );
+    return granted === true;
+  }
+
   if (!("Notification" in window)) {
     await appendPushDebugLog("client", "notification permission unsupported");
     return false;
@@ -329,6 +667,10 @@ export async function requestNotificationPermission(): Promise<boolean> {
 export async function registerPushNotifications(
   currentNsec: string,
 ): Promise<{ success: boolean; error?: string }> {
+  if (isNativePlatform()) {
+    return registerNativePushNotifications(currentNsec);
+  }
+
   try {
     await appendPushDebugLog("client", "push register start", {
       permission:
@@ -535,6 +877,37 @@ export async function registerPushNotifications(
 export async function unregisterPushNotifications(
   currentNsec: string,
 ): Promise<boolean> {
+  if (isNativePlatform()) {
+    try {
+      const storedToken = readStoredRegisteredNativePushToken();
+      const responseOk =
+        storedToken === null
+          ? false
+          : await unregisterNativeTokenOnServer({
+              currentNsec,
+              token: storedToken,
+            }).catch(() => false);
+      const unregistered = await PushNotifications.unregister()
+        .then(() => true)
+        .catch(() => false);
+      if (responseOk || unregistered) {
+        clearStoredRegisteredNativePushToken();
+        clearStoredRegisteredNativePushPubkey();
+      }
+      await appendPushDebugLog("client", "native push unregister result", {
+        responseOk,
+        tokenHash: hashStoredIdentifier(storedToken),
+        unregistered,
+      });
+      return responseOk && unregistered;
+    } catch (error) {
+      await appendPushDebugLog("client", "native push unregister exception", {
+        error,
+      });
+      return false;
+    }
+  }
+
   try {
     if (!("serviceWorker" in navigator)) {
       await appendPushDebugLog("client", "push unregister failed", {

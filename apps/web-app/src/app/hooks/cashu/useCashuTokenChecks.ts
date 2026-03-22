@@ -19,6 +19,14 @@ import {
   safeLocalStorageSet,
 } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
+import {
+  CASHU_TOKEN_STATE_ACCEPTED,
+  CASHU_TOKEN_STATE_ERROR,
+  CASHU_TOKEN_STATE_EXTERNALIZED,
+  CASHU_TOKEN_STATE_PENDING,
+  isCashuTokenAcceptedState,
+  normalizeCashuTokenState,
+} from "../../lib/cashuTokenState";
 import type { CashuTokenRowLike } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
@@ -120,7 +128,7 @@ export const useCashuTokenChecks = ({
         return "skipped";
       }
 
-      const state = String(row.state ?? "").trim();
+      const state = normalizeCashuTokenState(row.state);
       const storedTokenText = String(row.token ?? "").trim();
       const rawTokenText = String(row.rawToken ?? "").trim();
       const tokenText = storedTokenText || rawTokenText;
@@ -166,19 +174,23 @@ export const useCashuTokenChecks = ({
       };
 
       try {
-        if (state && state !== "accepted") {
-          if (state === "pending") {
+        if (state && state !== CASHU_TOKEN_STATE_ACCEPTED) {
+          if (state === CASHU_TOKEN_STATE_PENDING) {
             return "skipped";
           }
 
-          if (state === "error" && rawTokenText) {
+          if (
+            (state === CASHU_TOKEN_STATE_ERROR ||
+              state === CASHU_TOKEN_STATE_EXTERNALIZED) &&
+            tokenText
+          ) {
             try {
-              const accepted = await acceptCashuToken(rawTokenText);
+              const accepted = await acceptCashuToken(tokenText);
               const result = update("cashuToken", {
                 id: row.id as CashuTokenId,
                 token: accepted.token as typeof Evolu.NonEmptyString.Type,
-                rawToken: rawTokenText
-                  ? (rawTokenText as typeof Evolu.NonEmptyString.Type)
+                rawToken: tokenText
+                  ? (tokenText as typeof Evolu.NonEmptyString.Type)
                   : null,
                 mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
                 unit: accepted.unit
@@ -188,7 +200,8 @@ export const useCashuTokenChecks = ({
                   accepted.amount > 0
                     ? (accepted.amount as typeof Evolu.PositiveInt.Type)
                     : null,
-                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                state:
+                  CASHU_TOKEN_STATE_ACCEPTED as typeof Evolu.NonEmptyString100.Type,
                 error: null,
               });
 
@@ -242,7 +255,7 @@ export const useCashuTokenChecks = ({
 
         for (const candidate of cashuTokensAll) {
           if (candidate.isDeleted) continue;
-          if (String(candidate.state ?? "").trim() !== "accepted") continue;
+          if (!isCashuTokenAcceptedState(candidate.state)) continue;
 
           const candidateText = String(
             candidate.token ?? candidate.rawToken ?? "",
@@ -409,7 +422,8 @@ export const useCashuTokenChecks = ({
               total > 0
                 ? (Math.floor(total) as typeof Evolu.PositiveInt.Type)
                 : null,
-            state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+            state:
+              CASHU_TOKEN_STATE_ACCEPTED as typeof Evolu.NonEmptyString100.Type,
             error: null,
           });
 
@@ -497,7 +511,8 @@ export const useCashuTokenChecks = ({
             newTotal > 0
               ? (Math.floor(newTotal) as typeof Evolu.PositiveInt.Type)
               : null,
-          state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+          state:
+            CASHU_TOKEN_STATE_ACCEPTED as typeof Evolu.NonEmptyString100.Type,
           error: null,
         });
 

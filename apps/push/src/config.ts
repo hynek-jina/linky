@@ -13,6 +13,7 @@ export interface PushServiceConfig {
   vapidSubject: string;
   vapidPublicKey: string;
   vapidPrivateKey: string;
+  firebaseServiceAccountJson: string | null;
   defaultRelays: string[];
   corsOrigins: string[];
   challengeTtlMs: number;
@@ -29,6 +30,18 @@ export interface PushServiceConfig {
 }
 
 class ConfigError extends Error {}
+
+function readOptionalEnvString(
+  env: Record<string, string | undefined>,
+  key: string,
+): string | null {
+  const value = env[key];
+  if (value === undefined) {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
 
 function readEnvString(
   env: Record<string, string | undefined>,
@@ -176,6 +189,10 @@ export function loadConfig(
     vapidSubject: readEnvString(env, "PUSH_VAPID_SUBJECT"),
     vapidPublicKey: readEnvString(env, "PUSH_VAPID_PUBLIC_KEY"),
     vapidPrivateKey: readEnvString(env, "PUSH_VAPID_PRIVATE_KEY"),
+    firebaseServiceAccountJson: readOptionalEnvString(
+      env,
+      "PUSH_FIREBASE_SERVICE_ACCOUNT_JSON",
+    ),
     defaultRelays: readRelayList(env),
     corsOrigins: readCorsOrigins(env),
     challengeTtlMs: readEnvInteger(env, "PUSH_CHALLENGE_TTL_MS", 5 * 60 * 1000),

@@ -26,8 +26,12 @@ const isKnownCashuToken = (
 ): boolean => {
   return cashuTokensAll.some((row) => {
     if (row.isDeleted) return false;
-    const stored = String(row.rawToken ?? row.token ?? "").trim();
-    return stored && stored === tokenRaw;
+    const storedRaw = String(row.rawToken ?? "").trim();
+    const storedToken = String(row.token ?? "").trim();
+    return (
+      (storedRaw !== "" && storedRaw === tokenRaw) ||
+      (storedToken !== "" && storedToken === tokenRaw)
+    );
   });
 };
 

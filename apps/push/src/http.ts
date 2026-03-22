@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type { PushServiceConfig } from "./config";
 import {
   isRecord,
+  readNativeSubscribeRequest,
+  readNativeUnsubscribeRequest,
   readProofAction,
   readPubkey,
   readSubscribeRequest,
@@ -21,10 +23,17 @@ interface HttpHandlerDependencies {
   storage: PushStorage;
   ownershipVerifier: OwnershipVerifier;
   rateLimiter: InMemoryRateLimiter;
+  pushDelivery: {
+    nativeDeliveryEnabled: boolean;
+  };
 }
 
 function hashEndpoint(endpoint: string): string {
   return createHash("sha256").update(endpoint).digest("hex").slice(0, 16);
+}
+
+function hashDeviceToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex").slice(0, 16);
 }
 
 function resolveAllowedOrigin(
@@ -141,6 +150,7 @@ export function createHttpHandler({
   storage,
   ownershipVerifier,
   rateLimiter,
+  pushDelivery,
 }: HttpHandlerDependencies) {
   return async (
     request: Request,
@@ -247,6 +257,51 @@ export function createHttpHandler({
         });
       }
 
+      if (request.method === "POST" && url.pathname === "/native/subscribe") {
+        rateLimiter.check(
+          `subscribe:${ip}`,
+          config.subscribeRateLimitMax,
+          config.subscribeRateLimitWindowMs,
+          nowMs,
+        );
+
+        if (!pushDelivery.nativeDeliveryEnabled) {
+          return jsonResponse(config, request, 503, {
+            error: "native_push_unavailable",
+            message: "Native push delivery is not configured on the server",
+          });
+        }
+
+        const body = readNativeSubscribeRequest(await readJsonBody(request));
+        const consumedChallengeNonces = ownershipVerifier.verifyProofs(
+          "subscribe",
+          body.recipientPubkeys,
+          body.proofs,
+          nowMs,
+        );
+
+        storage.registerNativeSubscription({
+          cleanupLegacySubscriptions: body.cleanupLegacySubscriptions,
+          installationId: body.installationId,
+          device: body.device,
+          recipientPubkeys: body.recipientPubkeys,
+          consumedChallengeNonces,
+          maxPubkeysPerSubscription: config.maxPubkeysPerSubscription,
+          maxSubscriptionsPerPubkey: config.maxSubscriptionsPerPubkey,
+          nowMs,
+        });
+        console.info(
+          `[push] native subscribe ok token=${hashDeviceToken(body.device.token)} installation=${body.installationId ?? "none"} platform=${body.device.platform} cleanupLegacy=${body.cleanupLegacySubscriptions} pubkeys=${body.recipientPubkeys.length} ip=${ip}`,
+        );
+
+        return jsonResponse(config, request, 200, {
+          ok: true,
+          platform: body.device.platform,
+          recipientPubkeys: body.recipientPubkeys,
+          token: body.device.token,
+        });
+      }
+
       if (request.method === "POST" && url.pathname === "/unsubscribe") {
         rateLimiter.check(
           `unsubscribe:${ip}`,
@@ -278,6 +333,40 @@ export function createHttpHandler({
           endpoint: body.endpoint,
           removedPubkeys: result.removedPubkeys,
           removedSubscription: result.removedSubscription,
+        });
+      }
+
+      if (request.method === "POST" && url.pathname === "/native/unsubscribe") {
+        rateLimiter.check(
+          `unsubscribe:${ip}`,
+          config.unsubscribeRateLimitMax,
+          config.unsubscribeRateLimitWindowMs,
+          nowMs,
+        );
+
+        const body = readNativeUnsubscribeRequest(await readJsonBody(request));
+        const consumedChallengeNonces = ownershipVerifier.verifyProofs(
+          "unsubscribe",
+          body.recipientPubkeys,
+          body.proofs,
+          nowMs,
+        );
+
+        const result = storage.unregisterNativeSubscriptionPubkeys({
+          token: body.token,
+          recipientPubkeys: body.recipientPubkeys,
+          consumedChallengeNonces,
+          nowMs,
+        });
+        console.info(
+          `[push] native unsubscribe pubkeys token=${hashDeviceToken(body.token)} removedPubkeys=${result.removedPubkeys} removedSubscription=${result.removedSubscription} ip=${ip}`,
+        );
+
+        return jsonResponse(config, request, 200, {
+          ok: true,
+          removedPubkeys: result.removedPubkeys,
+          removedSubscription: result.removedSubscription,
+          token: body.token,
         });
       }
 

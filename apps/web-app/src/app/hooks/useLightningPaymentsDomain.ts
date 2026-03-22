@@ -11,6 +11,7 @@ import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../utils/constants"
 import type { DisplayAmountParts } from "../../utils/displayAmounts";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
+import { isCashuTokenAcceptedState } from "../lib/cashuTokenState";
 import type {
   CashuTokenRowLike,
   ContactPayRowLike,
@@ -146,7 +147,7 @@ export const useLightningPaymentsDomain = ({
 
         const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
         for (const row of cashuTokensWithMeta) {
-          if (String(row.state ?? "") !== "accepted") continue;
+          if (!isCashuTokenAcceptedState(row.state)) continue;
           const mint = String(row.mint ?? "").trim();
           if (!mint) continue;
           const tokenText = String(row.token ?? row.rawToken ?? "").trim();
@@ -201,7 +202,7 @@ export const useLightningPaymentsDomain = ({
                 if (inserted.ok) {
                   for (const row of cashuTokensWithMeta) {
                     if (
-                      String(row.state ?? "") === "accepted" &&
+                      isCashuTokenAcceptedState(row.state) &&
                       String(row.mint ?? "").trim() === candidate.mint
                     ) {
                       markCashuTokenDeleted(row.id);
@@ -256,7 +257,7 @@ export const useLightningPaymentsDomain = ({
 
             for (const row of cashuTokensWithMeta) {
               if (
-                String(row.state ?? "") === "accepted" &&
+                isCashuTokenAcceptedState(row.state) &&
                 String(row.mint ?? "").trim() === candidate.mint
               ) {
                 markCashuTokenDeleted(row.id);
@@ -375,7 +376,7 @@ export const useLightningPaymentsDomain = ({
 
         const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
         for (const row of cashuTokensWithMeta) {
-          if (String(row.state ?? "") !== "accepted") continue;
+          if (!isCashuTokenAcceptedState(row.state)) continue;
           const mint = String(row.mint ?? "").trim();
           if (!mint) continue;
           const tokenText = String(row.token ?? row.rawToken ?? "").trim();
@@ -443,7 +444,7 @@ export const useLightningPaymentsDomain = ({
                 if (inserted.ok) {
                   for (const row of cashuTokensWithMeta) {
                     if (
-                      String(row.state ?? "") === "accepted" &&
+                      isCashuTokenAcceptedState(row.state) &&
                       String(row.mint ?? "").trim() === candidate.mint
                     ) {
                       markCashuTokenDeleted(row.id);
@@ -497,7 +498,7 @@ export const useLightningPaymentsDomain = ({
 
             for (const row of cashuTokensWithMeta) {
               if (
-                String(row.state ?? "") === "accepted" &&
+                isCashuTokenAcceptedState(row.state) &&
                 String(row.mint ?? "").trim() === candidate.mint
               ) {
                 markCashuTokenDeleted(row.id);

@@ -21,6 +21,7 @@ interface BuildMainSwipeRoutePropsParams {
   NO_GROUP_FILTER: MainSwipeRoutesProps["mainSwipeProps"]["NO_GROUP_FILTER"];
   openNewContactPage: MainSwipeRoutesProps["mainSwipeProps"]["openNewContactPage"];
   openScan: MainSwipeRoutesProps["mainSwipeProps"]["openScan"];
+  openWalletScan: MainSwipeRoutesProps["mainSwipeProps"]["openWalletScan"];
   otherContactsLabel: MainSwipeRoutesProps["mainSwipeProps"]["otherContactsLabel"];
   renderContactCard: MainSwipeRoutesProps["mainSwipeProps"]["renderContactCard"];
   route: MainSwipeRoutesProps["mainSwipeProps"]["route"];
@@ -56,6 +57,7 @@ export const buildMainSwipeRouteProps = ({
   NO_GROUP_FILTER,
   openNewContactPage,
   openScan,
+  openWalletScan,
   otherContactsLabel,
   renderContactCard,
   route,
@@ -91,6 +93,7 @@ export const buildMainSwipeRouteProps = ({
       NO_GROUP_FILTER,
       openNewContactPage,
       openScan,
+      openWalletScan,
       otherContactsLabel,
       renderContactCard,
       route,

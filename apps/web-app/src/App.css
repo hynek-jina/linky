@@ -1,12 +1,12 @@
 .page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 56px 20px 72px;
+  padding: calc(var(--topbar-height) + 8px) 20px 72px;
 }
 
 .page.chat-page {
   position: fixed;
-  top: 56px;
+  top: var(--topbar-height);
   left: 0;
   right: 0;
   width: min(1200px, 100%);
@@ -16,8 +16,8 @@
   padding-right: 0;
   padding-top: 0;
   padding-bottom: 0;
-  height: calc(var(--chat-viewport-height, 100dvh) - 56px);
-  min-height: calc(var(--chat-viewport-height, 100dvh) - 56px);
+  height: calc(var(--chat-viewport-height, 100dvh) - var(--topbar-height));
+  min-height: calc(var(--chat-viewport-height, 100dvh) - var(--topbar-height));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -30,11 +30,11 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 48px;
+  min-height: var(--topbar-height);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: calc(var(--safe-area-top) + 8px) 12px 8px;
   background: rgba(15, 23, 42, 0.9);
   border-bottom: none;
   backdrop-filter: blur(8px);
@@ -79,7 +79,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: max(12px, env(safe-area-inset-top)) 12px 12px;
+  padding: calc(var(--safe-area-top) + 12px) 12px 12px;
   background: linear-gradient(180deg, rgba(2, 6, 23, 0.9), rgba(2, 6, 23, 0));
 }
 
@@ -104,11 +104,19 @@
   z-index: 2;
   display: flex;
   justify-content: center;
-  padding: 12px 16px max(20px, env(safe-area-inset-bottom));
+  padding: 12px 16px calc(var(--floating-safe-area-bottom) + 20px);
   background: linear-gradient(0deg, rgba(2, 6, 23, 0.94), rgba(2, 6, 23, 0));
 }
 
-.scan-paste-btn {
+.scan-footer-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.scan-action-btn {
   min-width: 164px;
   min-height: 48px;
   display: inline-flex;
@@ -127,20 +135,20 @@
   box-shadow: 0 12px 30px rgba(2, 6, 23, 0.35);
 }
 
-.scan-paste-btn:hover,
-.scan-paste-btn:focus {
+.scan-action-btn:hover,
+.scan-action-btn:focus {
   transform: none;
   box-shadow: 0 12px 30px rgba(2, 6, 23, 0.35);
   background: rgba(15, 23, 42, 0.94);
 }
 
-.scan-paste-btn-icon {
+.scan-action-btn-icon {
   width: 24px;
   height: 24px;
   line-height: 1;
 }
 
-.scan-paste-btn-label {
+.scan-action-btn-label {
   line-height: 1;
 }
 
@@ -1156,7 +1164,7 @@ button.settings-link:hover {
 
 .chat-messages {
   margin-top: 14px;
-  padding: 18px 10px 12px;
+  padding: 18px 10px calc(12px + var(--chat-compose-height, 116px));
   border-radius: 12px;
   border: none;
   background: transparent;
@@ -1168,6 +1176,7 @@ button.settings-link:hover {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  scroll-padding-bottom: var(--chat-compose-height, 116px);
 }
 
 .chat-day-separator {
@@ -1282,7 +1291,7 @@ button.settings-link:hover {
   background: #0f172a;
   border-radius: 16px 16px 0 0;
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
-  padding: 8px 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
+  padding: 8px 8px calc(var(--floating-safe-area-bottom) + 8px);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1470,17 +1479,22 @@ button.settings-link:hover {
   background: transparent;
   box-shadow: none;
   border-radius: 0;
+  position: relative;
 }
 
 .chat-compose {
-  position: static;
-  width: 100%;
-  margin-top: auto;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--chat-keyboard-inset, 0px);
+  width: min(1200px, 100%);
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 12px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  padding-bottom: calc(12px + var(--floating-safe-area-bottom));
   background: rgba(15, 23, 42, 0.95);
   border-radius: 0;
   z-index: 30;
@@ -1608,7 +1622,6 @@ button.settings-link:hover {
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: #94a3b8;
 }
 
@@ -2039,7 +2052,6 @@ button.icon {
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: #94a3b8;
 }
 
@@ -2190,7 +2202,7 @@ button.icon {
   right: 0;
   bottom: 0;
   z-index: 20;
-  padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  padding: 0 20px calc(20px + var(--floating-safe-area-bottom));
   background: transparent;
   backdrop-filter: none;
 }
@@ -2198,7 +2210,7 @@ button.icon {
 .contacts-fab {
   position: fixed;
   right: 20px;
-  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(96px + var(--floating-safe-area-bottom));
   z-index: 30;
   width: 56px;
   height: 56px;
@@ -2757,7 +2769,7 @@ button.icon {
   .chat-compose {
     gap: 4px;
     padding: 8px 12px;
-    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    padding-bottom: calc(6px + var(--floating-safe-area-bottom));
   }
 
   .chat-compose textarea {

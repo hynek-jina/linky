@@ -2,8 +2,8 @@ import type { Event as NostrEvent } from "nostr-tools";
 import { SimplePool, verifyEvent } from "nostr-tools";
 
 import { isHexString } from "./guards";
-import { PushStorage } from "./storage";
 import { PushDeliveryService } from "./push";
+import { PushStorage } from "./storage";
 import type { PushNotificationData } from "./types";
 
 interface RelayWatcherOptions {
@@ -305,7 +305,12 @@ export class RelayWatcher {
 
     const subscriptionsByPubkey =
       this.storage.getSubscriptionsForPubkeys(recipientPubkeys);
-    if (subscriptionsByPubkey.size === 0) {
+    const nativeSubscriptionsByPubkey =
+      this.storage.getNativeSubscriptionsForPubkeys(recipientPubkeys);
+    if (
+      subscriptionsByPubkey.size === 0 &&
+      nativeSubscriptionsByPubkey.size === 0
+    ) {
       console.info(
         `[push] skipped event without matching subscriptions id=${event.id} recipients=${recipientPubkeys.join(",")}`,
       );
@@ -322,8 +327,10 @@ export class RelayWatcher {
     const deliveries: Promise<void>[] = [];
 
     for (const recipientPubkey of recipientPubkeys) {
-      const subscriptions = subscriptionsByPubkey.get(recipientPubkey);
-      if (!subscriptions) {
+      const subscriptions = subscriptionsByPubkey.get(recipientPubkey) ?? [];
+      const nativeSubscriptions =
+        nativeSubscriptionsByPubkey.get(recipientPubkey) ?? [];
+      if (subscriptions.length === 0 && nativeSubscriptions.length === 0) {
         console.info(
           `[push] no subscriptions for recipient id=${event.id} recipient=${recipientPubkey}`,
         );
@@ -331,7 +338,7 @@ export class RelayWatcher {
       }
 
       console.info(
-        `[push] delivering gift wrap id=${event.id} recipient=${recipientPubkey} subscriptions=${subscriptions.length}`,
+        `[push] delivering gift wrap id=${event.id} recipient=${recipientPubkey} webSubscriptions=${subscriptions.length} nativeSubscriptions=${nativeSubscriptions.length}`,
       );
 
       const payloadData: PushNotificationData = {
@@ -345,10 +352,23 @@ export class RelayWatcher {
       for (const subscription of subscriptions) {
         deliveries.push(
           this.pushDelivery
-            .deliver(subscription, payloadData)
+            .deliverWeb(subscription, payloadData)
             .catch((error) => {
               console.warn(
                 `[push] failed to deliver ${event.id} to ${recipientPubkey}`,
+                error,
+              );
+            }),
+        );
+      }
+
+      for (const subscription of nativeSubscriptions) {
+        deliveries.push(
+          this.pushDelivery
+            .deliverNative(subscription, payloadData)
+            .catch((error) => {
+              console.warn(
+                `[push] failed to deliver native ${event.id} to ${recipientPubkey}`,
                 error,
               );
             }),

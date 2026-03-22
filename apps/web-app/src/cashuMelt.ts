@@ -11,6 +11,7 @@ import {
   getCashuDeterministicSeedFromStorage,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
+import { isCashuOutputsAlreadySignedError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
 import {
   dedupeCashuProofs,
@@ -157,15 +158,6 @@ export const meltInvoiceWithTokensAtMint = async (args: {
     ...(det ? { bip39seed: det.bip39seed } : {}),
   });
 
-  const isOutputsAlreadySignedError = (e: unknown): boolean => {
-    const m = getUnknownErrorMessage(e, "").toLowerCase();
-    return (
-      m.includes("outputs have already been signed") ||
-      m.includes("already been signed before") ||
-      m.includes("keyset id already signed")
-    );
-  };
-
   try {
     await wallet.loadMint();
 
@@ -225,7 +217,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
             break;
           } catch (e) {
             lastError = e;
-            if (!isOutputsAlreadySignedError(e) || !det) throw e;
+            if (!isCashuOutputsAlreadySignedError(e) || !det) throw e;
             bumpCashuDeterministicCounter({
               mintUrl: mint,
               unit: walletUnit,
@@ -298,7 +290,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
               break;
             } catch (e) {
               lastError = e;
-              if (!isOutputsAlreadySignedError(e) || !det) throw e;
+              if (!isCashuOutputsAlreadySignedError(e) || !det) throw e;
               bumpCashuDeterministicCounter({
                 mintUrl: mint,
                 unit: walletUnit,

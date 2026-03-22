@@ -31,6 +31,7 @@ interface UseContactEditorParams {
   appOwnerId: Evolu.OwnerId | null;
   contactNewPrefill: ContactNewPrefill | null;
   contacts: readonly ContactRow[];
+  currentNpub: string | null;
   insert: EvoluMutations["insert"];
   nostrFetchRelays: string[];
   route: Route;
@@ -56,6 +57,7 @@ export const useContactEditor = ({
   appOwnerId,
   contactNewPrefill,
   contacts,
+  currentNpub,
   insert,
   nostrFetchRelays,
   route,
@@ -166,6 +168,7 @@ export const useContactEditor = ({
     const name = form.name.trim();
     const rawNpub = form.npub.trim();
     const npub = normalizeNpubIdentifier(rawNpub) ?? rawNpub;
+    const currentProfileNpub = normalizeNpubIdentifier(currentNpub);
     const lnAddress = form.lnAddress.trim();
     const group = form.group.trim();
 
@@ -182,6 +185,25 @@ export const useContactEditor = ({
         ),
       );
       return;
+    }
+
+    if (npub && currentProfileNpub && npub === currentProfileNpub) {
+      setStatus(t("contactIsYou"));
+      navigateTo({ route: "profile" });
+      return;
+    }
+
+    if (npub) {
+      const duplicate = contacts.find((contact) => {
+        if (editingId && contact.id === editingId) return false;
+        return normalizeNpubIdentifier(contact.npub) === npub;
+      });
+
+      if (duplicate?.id) {
+        setStatus(t("contactExists"));
+        navigateTo({ route: "contact", id: duplicate.id as ContactId });
+        return;
+      }
     }
 
     setIsSavingContact(true);
@@ -288,7 +310,8 @@ export const useContactEditor = ({
     appOwnerId,
     clearContactForm,
     contactEditInitial,
-    contacts.length,
+    contacts,
+    currentNpub,
     editingId,
     form.group,
     form.lnAddress,

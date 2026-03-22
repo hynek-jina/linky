@@ -1,3 +1,9 @@
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import {
+  getMessaging,
+  type Message,
+  type Messaging,
+} from "firebase-admin/messaging";
 import { createHash } from "node:crypto";
 import * as webpush from "web-push";
 
@@ -6,11 +12,13 @@ import { PushStorage } from "./storage";
 import type {
   PushNotificationData,
   PushNotificationEnvelope,
+  StoredNativeSubscription,
   StoredSubscription,
   WebPushSubscriptionData,
 } from "./types";
 
 interface PushDeliveryServiceOptions {
+  firebaseServiceAccountJson: string | null;
   vapidSubject: string;
   vapidPublicKey: string;
   vapidPrivateKey: string;
@@ -123,7 +131,9 @@ function readErrorBody(error: unknown): string | null {
 }
 
 export class PushDeliveryService {
+  readonly nativeDeliveryEnabled: boolean;
   private readonly storage: PushStorage;
+  private readonly messaging: Messaging | null;
 
   constructor(options: PushDeliveryServiceOptions) {
     this.storage = options.storage;
@@ -132,9 +142,13 @@ export class PushDeliveryService {
       options.vapidPublicKey,
       options.vapidPrivateKey,
     );
+    this.messaging = createFirebaseMessaging(
+      options.firebaseServiceAccountJson,
+    );
+    this.nativeDeliveryEnabled = this.messaging !== null;
   }
 
-  async deliver(
+  async deliverWeb(
     subscription: StoredSubscription,
     payloadData: PushNotificationData,
   ): Promise<void> {
@@ -177,4 +191,114 @@ export class PushDeliveryService {
       throw error;
     }
   }
+
+  async deliverNative(
+    subscription: StoredNativeSubscription,
+    payloadData: PushNotificationData,
+  ): Promise<void> {
+    if (this.messaging === null) {
+      throw new Error("Native push delivery is not configured");
+    }
+
+    const tokenHash = hashEndpoint(subscription.token);
+    const message: Message = {
+      token: subscription.token,
+      data: {
+        body: "New message",
+        createdAt: String(payloadData.createdAt),
+        outerEventId: payloadData.outerEventId,
+        recipientPubkey: payloadData.recipientPubkey,
+        relayHints: JSON.stringify(payloadData.relayHints),
+        title: "Linky",
+        type: payloadData.type,
+      },
+      android: {
+        priority: "high",
+      },
+    };
+
+    try {
+      const messageId = await this.messaging.send(message, false);
+      console.info(
+        `[push] sent native notification successfully id=${subscription.id} outerEventId=${payloadData.outerEventId} recipient=${payloadData.recipientPubkey} token=${tokenHash} messageId=${messageId}`,
+      );
+    } catch (error) {
+      const code = readFirebaseErrorCode(error);
+      if (isPermanentFirebaseFailure(code)) {
+        this.storage.removeNativeSubscriptionById(subscription.id);
+        console.warn(
+          `[push] removed native subscription from db id=${subscription.id} token=${tokenHash} code=${code ?? "unknown"}`,
+        );
+      }
+      console.warn(
+        `[push] native delivery failed ${payloadData.outerEventId} to ${payloadData.recipientPubkey} token=${tokenHash} code=${code ?? "unknown"}`,
+        error,
+      );
+      throw error;
+    }
+  }
+}
+
+function createFirebaseMessaging(
+  firebaseServiceAccountJson: string | null,
+): Messaging | null {
+  if (firebaseServiceAccountJson === null) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(firebaseServiceAccountJson);
+  } catch (error) {
+    console.error("[push] invalid PUSH_FIREBASE_SERVICE_ACCOUNT_JSON", error);
+    return null;
+  }
+
+  if (!isRecord(parsed)) {
+    console.error(
+      "[push] PUSH_FIREBASE_SERVICE_ACCOUNT_JSON must parse to an object",
+    );
+    return null;
+  }
+
+  const projectId = parsed.project_id;
+  const clientEmail = parsed.client_email;
+  const privateKey = parsed.private_key;
+  if (
+    typeof projectId !== "string" ||
+    typeof clientEmail !== "string" ||
+    typeof privateKey !== "string"
+  ) {
+    console.error(
+      "[push] PUSH_FIREBASE_SERVICE_ACCOUNT_JSON is missing project_id, client_email or private_key",
+    );
+    return null;
+  }
+
+  const app =
+    getApps()[0] ??
+    initializeApp({
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+      projectId,
+    });
+  return getMessaging(app);
+}
+
+function readFirebaseErrorCode(error: unknown): string | null {
+  if (!isRecord(error)) {
+    return null;
+  }
+  const code = error.code;
+  return typeof code === "string" && code.trim().length > 0 ? code : null;
+}
+
+function isPermanentFirebaseFailure(code: string | null): boolean {
+  return (
+    code === "messaging/invalid-registration-token" ||
+    code === "messaging/registration-token-not-registered"
+  );
 }

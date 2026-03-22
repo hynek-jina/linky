@@ -27,6 +27,7 @@ interface ChatContact {
 export interface AppShellCoreContextValue {
   cashuBalance: number;
   cashuIsBusy: boolean;
+  canWriteNfc: boolean;
   chatTopbarContact: ChatContact | null;
   contactsGuide: { step: number; task: string } | null;
   contactsGuideActiveStep: {
@@ -55,6 +56,7 @@ export interface AppShellCoreContextValue {
   lang: Lang;
   menuIsOpen: boolean;
   myProfileQr: string | null;
+  nfcWritePromptKind: "profile" | "token" | null;
   nostrPictureByNpub: Record<string, string | null>;
   paidOverlayIsOpen: boolean;
   paidOverlayTitle: string | null;
@@ -75,6 +77,7 @@ export interface AppShellCoreContextValue {
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
   profileQrIsOpen: boolean;
   route: Route;
+  scanAllowsManualContact: boolean;
   scanIsOpen: boolean;
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
   t: (key: string) => string;
@@ -84,6 +87,7 @@ export interface AppShellCoreContextValue {
 }
 
 export interface AppShellActionsContextValue {
+  cancelPendingNfcWrite: () => void;
   closeMenu: () => void;
   closeLightningInvoiceConfirmation: () => void;
   closeProfileQr: () => void;
@@ -97,6 +101,7 @@ export interface AppShellActionsContextValue {
   onPickProfilePhoto: () => void;
   onProfilePhotoSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
   openFeedbackContact: () => void;
+  openManualContactFromScan: () => void;
   openProfileQr: () => void;
   pasteScanValue: () => Promise<void>;
   saveProfileEdits: () => void;
@@ -119,6 +124,7 @@ export interface AppShellActionsContextValue {
   setProfileEditPicture: (value: string) => void;
   stopContactsGuide: () => void;
   toggleProfileEditing: () => void;
+  writeCurrentNpubToNfc: () => Promise<void>;
 }
 
 export interface AppShellRouteContextValue {

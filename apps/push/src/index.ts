@@ -17,6 +17,7 @@ const ownershipVerifier = new OwnershipVerifier({
 });
 const rateLimiter = new InMemoryRateLimiter();
 const pushDelivery = new PushDeliveryService({
+  firebaseServiceAccountJson: config.firebaseServiceAccountJson,
   vapidSubject: config.vapidSubject,
   vapidPublicKey: config.vapidPublicKey,
   vapidPrivateKey: config.vapidPrivateKey,
@@ -45,6 +46,7 @@ const server = Bun.serve({
     storage,
     ownershipVerifier,
     rateLimiter,
+    pushDelivery,
   }),
   error(error: unknown) {
     console.error("[push] server error", error);

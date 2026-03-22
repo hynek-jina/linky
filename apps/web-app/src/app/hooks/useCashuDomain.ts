@@ -69,6 +69,22 @@ export const useCashuDomain = ({
     cashuTokensAllRef.current = cashuTokensAll;
   }, [cashuTokensAll]);
 
+  const rowMatchesToken = React.useCallback(
+    (row: CashuTokenRowLike, tokenRaw: string): boolean => {
+      const candidate = String(tokenRaw ?? "").trim();
+      if (!candidate) return false;
+
+      const storedRaw = String(row.rawToken ?? "").trim();
+      const storedToken = String(row.token ?? "").trim();
+
+      return (
+        (storedRaw !== "" && storedRaw === candidate) ||
+        (storedToken !== "" && storedToken === candidate)
+      );
+    },
+    [],
+  );
+
   const cashuTokensHydratedRef = React.useRef(false);
   const cashuTokensHydrationTimeoutRef = React.useRef<number | null>(null);
 
@@ -108,17 +124,19 @@ export const useCashuDomain = ({
     };
   }, [appOwnerId, cashuTokensAll]);
 
-  const isCashuTokenStored = React.useCallback((tokenRaw: string): boolean => {
-    const raw = String(tokenRaw ?? "").trim();
-    if (!raw) return false;
+  const isCashuTokenStored = React.useCallback(
+    (tokenRaw: string): boolean => {
+      const raw = String(tokenRaw ?? "").trim();
+      if (!raw) return false;
 
-    const current = cashuTokensAllRef.current;
-    return current.some((row) => {
-      if (row.isDeleted) return false;
-      const stored = String(row.rawToken ?? row.token ?? "").trim();
-      return stored && stored === raw;
-    });
-  }, []);
+      const current = cashuTokensAllRef.current;
+      return current.some((row) => {
+        if (row.isDeleted) return false;
+        return rowMatchesToken(row, raw);
+      });
+    },
+    [rowMatchesToken],
+  );
 
   const isCashuTokenKnownAny = React.useCallback(
     (tokenRaw: string): boolean => {
@@ -126,12 +144,9 @@ export const useCashuDomain = ({
       if (!raw) return false;
 
       const current = cashuTokensAllRef.current;
-      return current.some((row) => {
-        const stored = String(row.rawToken ?? row.token ?? "").trim();
-        return stored && stored === raw;
-      });
+      return current.some((row) => rowMatchesToken(row, raw));
     },
-    [],
+    [rowMatchesToken],
   );
 
   const ensuredTokenRef = React.useRef<Set<string>>(new Set());
@@ -152,10 +167,9 @@ export const useCashuDomain = ({
           if (!ownerId) return;
 
           const current = cashuTokensAllRef.current;
-          const exists = current.some((row) => {
-            const stored = String(row.token ?? row.rawToken ?? "").trim();
-            return stored && stored === remembered;
-          });
+          const exists = current.some((row) =>
+            rowMatchesToken(row, remembered),
+          );
           if (exists) {
             safeLocalStorageSet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY, "");
             return;
@@ -204,6 +218,7 @@ export const useCashuDomain = ({
       insert,
       isCashuTokenKnownAny,
       logPaymentEvent,
+      rowMatchesToken,
     ],
   );
 
@@ -241,8 +256,7 @@ export const useCashuDomain = ({
 
     const exists = cashuTokensAll.some((row) => {
       if (row.isDeleted) return false;
-      const stored = String(row.token ?? row.rawToken ?? "").trim();
-      return stored && stored === remembered;
+      return rowMatchesToken(row, remembered);
     });
 
     if (exists) {
@@ -285,6 +299,7 @@ export const useCashuDomain = ({
     insert,
     isCashuTokenKnownAny,
     logPaymentEvent,
+    rowMatchesToken,
   ]);
 
   return {

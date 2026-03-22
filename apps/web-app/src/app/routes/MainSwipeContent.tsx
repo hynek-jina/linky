@@ -36,6 +36,7 @@ export interface MainSwipeRouteProps {
   NO_GROUP_FILTER: string;
   openNewContactPage: () => void;
   openScan: () => void;
+  openWalletScan: () => void;
   otherContactsLabel: string;
   renderContactCard: (contact: ContactRowLike) => React.ReactNode;
   route: Route;
@@ -83,6 +84,7 @@ export const MainSwipeContent = (): React.ReactElement => {
     NO_GROUP_FILTER,
     openNewContactPage,
     openScan,
+    openWalletScan,
     otherContactsLabel,
     renderContactCard,
     route,
@@ -161,7 +163,7 @@ export const MainSwipeContent = (): React.ReactElement => {
         >
           <WalletPage
             cashuBalance={cashuBalance}
-            openScan={openScan}
+            openScan={openWalletScan}
             scanIsOpen={scanIsOpen}
             bottomTabActive={bottomTabActive}
             showBottomTabBar={false}

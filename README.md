@@ -53,16 +53,44 @@ It is local-first: data is stored in Evolu (SQLite) and syncs between devices.
 
 Requirements: Bun
 
+For Android native builds: Java 17
+
+Android shell currently adds:
+
+- encrypted native secret storage for identity data
+- native QR scanning in the Capacitor shell
+- native Android notification permission + FCM token bridge
+
+Native push delivery now works end-to-end when:
+
+- `apps/native-shell/android/app/google-services.json` is present for the Android shell build
+- `apps/push` is configured with `PUSH_FIREBASE_SERVICE_ACCOUNT_JSON`
+
 ```bash
 bun install
 bun run dev
 bun run push:dev
+bun run native:android:add
+bun run native:apk:debug
 ```
 
 Build:
 
 ```bash
 bun run build
+```
+
+Android native shell debug APK:
+
+```bash
+bun run native:android:add
+bun run native:apk:debug
+```
+
+Latest built debug APK ends up at:
+
+```bash
+apps/native-shell/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 Start the push service once:
@@ -91,6 +119,14 @@ Workspace-scoped commands (web app only):
 bun run --filter @linky/web-app typecheck
 bun run --filter @linky/web-app eslint
 bun run --filter @linky/web-app prettier
+```
+
+Workspace-scoped commands (native shell):
+
+```bash
+bun run --filter @linky/native-shell android:sync
+bun run --filter @linky/native-shell android:open
+bun run --filter @linky/native-shell android:apk:debug
 ```
 
 Push service workspace commands:

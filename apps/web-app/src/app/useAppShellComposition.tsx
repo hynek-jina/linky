@@ -30,7 +30,21 @@ import {
   saveCachedProfilePicture,
   type NostrProfileMetadata,
 } from "../nostrProfile";
-import { getCashuDeterministicSeedFromStorage } from "../utils/cashuDeterministic";
+import { readStoredNostrNsec } from "../platform/identitySecrets";
+import {
+  cancelNativeNfcWrite,
+  consumePendingNativeDeepLinkUrl,
+  NATIVE_DEEP_LINK_EVENT,
+  startNativeNfcWrite,
+  supportsNativeNfcWrite,
+} from "../platform/nativeBridge";
+import {
+  bumpCashuDeterministicCounter,
+  getCashuDeterministicCounter,
+  getCashuDeterministicSeedFromStorage,
+  withCashuDeterministicCounterLock,
+} from "../utils/cashuDeterministic";
+import { isCashuOutputsAlreadySignedError } from "../utils/cashuErrors";
 import { getCashuLib } from "../utils/cashuLib";
 import {
   BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
@@ -43,6 +57,7 @@ import {
   MAX_CONTACTS_PER_OWNER,
   NO_GROUP_FILTER,
 } from "../utils/constants";
+import { buildCashuDeepLink, parseNativeDeepLinkUrl } from "../utils/deepLinks";
 import {
   applyAmountInputKey,
   formatDisplayAmountParts,
@@ -113,6 +128,7 @@ import { usePayContactWithCashuMessage } from "./hooks/payments/usePayContactWit
 import { useRouteAmountResetEffects } from "./hooks/payments/useRouteAmountResetEffects";
 import { useProfileEditor } from "./hooks/profile/useProfileEditor";
 import { useProfileMetadataSyncEffect } from "./hooks/profile/useProfileMetadataSyncEffect";
+import { isTopupMintQuoteClaimableState } from "./hooks/topup/topupMintClaim";
 import {
   useTopupInvoiceQuoteEffects,
   type TopupMintQuoteDraft,
@@ -140,6 +156,10 @@ import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
+import {
+  CASHU_TOKEN_STATE_EXTERNALIZED,
+  isCashuTokenAcceptedState,
+} from "./lib/cashuTokenState";
 import type { AppNostrPool } from "./lib/nostrPool";
 import {
   publishSingleWrappedWithRetry as publishSingleWrappedWithRetryBase,
@@ -184,15 +204,10 @@ const readMintQuoteState = (value: unknown): string => {
   return String(status ?? "");
 };
 
-const readPaidMintQuoteState = (value: unknown): string | null => {
-  const paid = readObjectField(value, "PAID");
-  if (paid === undefined || paid === null) return null;
-  return String(paid);
-};
-
 interface PendingTopupQuoteStorage {
   amount: number;
   createdAtMs: number;
+  invoice?: string | null;
   mintUrl: string;
   quote: string;
   unit: string | null;
@@ -237,6 +252,7 @@ const toTopupMintQuoteDraft = (
   mintUrl: value.mintUrl,
   quote: value.quote,
   amount: value.amount,
+  invoice: typeof value.invoice === "string" ? value.invoice : null,
   unit: value.unit,
 });
 
@@ -246,6 +262,7 @@ const toPendingTopupQuoteStorage = (
   mintUrl: value.mintUrl,
   quote: value.quote,
   amount: value.amount,
+  invoice: value.invoice,
   unit: value.unit,
   createdAtMs: Date.now(),
 });
@@ -257,6 +274,7 @@ const isPendingTopupQuoteStorage = (
 
   const amount = readObjectField(value, "amount");
   const createdAtMs = readObjectField(value, "createdAtMs");
+  const invoice = readObjectField(value, "invoice");
   const mintUrl = readObjectField(value, "mintUrl");
   const quote = readObjectField(value, "quote");
   const unit = readObjectField(value, "unit");
@@ -267,6 +285,9 @@ const isPendingTopupQuoteStorage = (
     amount > 0 &&
     typeof createdAtMs === "number" &&
     Number.isFinite(createdAtMs) &&
+    (invoice === undefined ||
+      invoice === null ||
+      typeof invoice === "string") &&
     typeof mintUrl === "string" &&
     mintUrl.trim().length > 0 &&
     typeof quote === "string" &&
@@ -508,8 +529,26 @@ export const useAppShellComposition = () => {
     [displayCurrency, fiatRates, lang],
   );
 
-  const [currentNsec] = useState<string | null>(() => getInitialNostrNsec());
+  const [currentNsec, setCurrentNsec] = useState<string | null>(() =>
+    getInitialNostrNsec(),
+  );
   const [chatOwnPubkeyHex, setChatOwnPubkeyHex] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const storedNsec = await readStoredNostrNsec();
+      if (cancelled) return;
+      setCurrentNsec((current) =>
+        current === storedNsec ? current : storedNsec,
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Evolu is local-first; to get automatic cross-device/browser sync you must
   // "use" an owner (which starts syncing over configured transports).
@@ -1076,6 +1115,7 @@ export const useAppShellComposition = () => {
     topupInvoicePaidHandledRef,
     topupInvoiceQr,
     topupInvoiceStartBalanceRef,
+    topupMintQuote,
     topupPaidNavTimerRef,
     topupRefreshKey: myProfileName,
     setTopupAmount,
@@ -1299,16 +1339,77 @@ export const useAppShellComposition = () => {
 
             const status = await wallet.checkMintQuote(quoteId);
             const quoteState = readMintQuoteState(status);
-            const state = quoteState.toLowerCase();
-            const paidState = readPaidMintQuoteState(MintQuoteState);
-            const paid = state === "paid" || quoteState === paidState;
-            if (!paid) return;
+            if (!isTopupMintQuoteClaimableState(quoteState, MintQuoteState)) {
+              return;
+            }
 
-            const proofs = await wallet.mintProofs(
-              topupMintQuote.amount,
-              quoteId,
-            );
-            const unit = wallet.unit ?? null;
+            const unit = wallet.unit ?? topupMintQuote.unit ?? null;
+            const keysetId = wallet.keysetId;
+
+            const proofs =
+              det && unit && keysetId
+                ? await withCashuDeterministicCounterLock(
+                    {
+                      mintUrl: topupMintQuote.mintUrl,
+                      unit,
+                      keysetId,
+                    },
+                    async () => {
+                      let counter = getCashuDeterministicCounter({
+                        mintUrl: topupMintQuote.mintUrl,
+                        unit,
+                        keysetId,
+                      });
+                      let mintedProofs: Awaited<
+                        ReturnType<typeof wallet.mintProofs>
+                      > | null = null;
+                      let lastError: unknown;
+
+                      for (let attempt = 0; attempt < 5; attempt += 1) {
+                        try {
+                          mintedProofs = await wallet.mintProofs(
+                            topupMintQuote.amount,
+                            quoteId,
+                            { counter },
+                          );
+                          lastError = null;
+                          break;
+                        } catch (error) {
+                          lastError = error;
+                          if (!isCashuOutputsAlreadySignedError(error)) {
+                            throw error;
+                          }
+
+                          bumpCashuDeterministicCounter({
+                            mintUrl: topupMintQuote.mintUrl,
+                            unit,
+                            keysetId,
+                            used: 64,
+                          });
+                          counter = getCashuDeterministicCounter({
+                            mintUrl: topupMintQuote.mintUrl,
+                            unit,
+                            keysetId,
+                          });
+                        }
+                      }
+
+                      if (!mintedProofs) {
+                        throw lastError ?? new Error("mint failed");
+                      }
+
+                      bumpCashuDeterministicCounter({
+                        mintUrl: topupMintQuote.mintUrl,
+                        unit,
+                        keysetId,
+                        used: mintedProofs.length,
+                      });
+
+                      return mintedProofs;
+                    },
+                  )
+                : await wallet.mintProofs(topupMintQuote.amount, quoteId);
+
             const token = String(
               getEncodedToken({
                 mint: topupMintQuote.mintUrl,
@@ -1525,8 +1626,7 @@ export const useAppShellComposition = () => {
 
   const cashuBalance = useMemo(() => {
     return cashuTokensWithMeta.reduce((sum, token) => {
-      const state = String(token.state ?? "");
-      if (state !== "accepted") return sum;
+      if (!isCashuTokenAcceptedState(token.state)) return sum;
       const amount = Number(token.amount ?? 0);
       return sum + (Number.isFinite(amount) ? amount : 0);
     }, 0);
@@ -1593,6 +1693,9 @@ export const useAppShellComposition = () => {
     npub: string | null;
     suggestedName: string | null;
   }>(null);
+  const [pendingDeepLinkText, setPendingDeepLinkText] = React.useState<
+    string | null
+  >(null);
 
   const [postPaySaveContact, setPostPaySaveContact] = React.useState<null | {
     lnAddress: string;
@@ -2115,6 +2218,7 @@ export const useAppShellComposition = () => {
     appOwnerId: contactsOwnerId,
     contactNewPrefill,
     contacts,
+    currentNpub,
     insert,
     nostrFetchRelays,
     route,
@@ -2376,6 +2480,8 @@ export const useAppShellComposition = () => {
     contactsGuideHighlightRect,
     contactsGuideNav,
     openScan,
+    openWalletScan,
+    scanAllowsManualContact,
     scanIsOpen,
     scanVideoRef,
     startContactsGuide,
@@ -2393,6 +2499,12 @@ export const useAppShellComposition = () => {
     route,
     t,
   });
+
+  const openManualContactFromScan = React.useCallback(() => {
+    closeScan();
+    if (route.kind === "contactNew") return;
+    openNewContactPage();
+  }, [closeScan, openNewContactPage, route.kind]);
 
   const {
     contactsOnboardingCelebrating,
@@ -2482,6 +2594,168 @@ export const useAppShellComposition = () => {
     },
     [pushToast, t],
   );
+
+  const shareText = React.useCallback(
+    async (value: string) => {
+      const text = String(value ?? "").trim();
+      if (!text) {
+        pushToast(t("errorPrefix"));
+        return;
+      }
+
+      if (typeof navigator.share === "function") {
+        try {
+          await navigator.share({ text });
+          return;
+        } catch (error) {
+          const errorName =
+            typeof error === "object" &&
+            error !== null &&
+            "name" in error &&
+            typeof error.name === "string"
+              ? error.name
+              : "";
+          if (errorName === "AbortError") return;
+        }
+      }
+
+      await copyText(text);
+    },
+    [copyText, pushToast, t],
+  );
+
+  const canWriteNfc = supportsNativeNfcWrite();
+  const [nfcWritePromptKind, setNfcWritePromptKind] = React.useState<
+    "profile" | "token" | null
+  >(null);
+  const nfcWriteCancelledByUserRef = React.useRef(false);
+
+  const cancelPendingNfcWrite = React.useCallback(() => {
+    nfcWriteCancelledByUserRef.current = true;
+    setNfcWritePromptKind(null);
+    cancelNativeNfcWrite();
+  }, []);
+
+  const writeNfcUriWithToast = React.useCallback(
+    async (
+      url: string,
+      successKey: "nfcWriteProfileSuccess" | "nfcWriteTokenSuccess",
+      promptKind: "profile" | "token",
+    ): Promise<boolean> => {
+      nfcWriteCancelledByUserRef.current = false;
+
+      const result = await startNativeNfcWrite(url, (progress) => {
+        if (progress.status === "armed") {
+          setNfcWritePromptKind(promptKind);
+        }
+      });
+
+      setNfcWritePromptKind(null);
+
+      if (result === null || result.status === "unsupported") {
+        pushToast(t("nfcWriteUnsupported"));
+        return false;
+      }
+
+      if (result.status === "success") {
+        pushToast(t(successKey));
+        return true;
+      }
+
+      if (result.status === "disabled") {
+        pushToast(t("nfcWriteDisabled"));
+        return false;
+      }
+
+      if (result.status === "busy") {
+        pushToast(t("nfcWriteBusy"));
+        return false;
+      }
+
+      if (result.status === "cancelled") {
+        if (nfcWriteCancelledByUserRef.current) {
+          nfcWriteCancelledByUserRef.current = false;
+          return false;
+        }
+
+        pushToast(t("nfcWriteCancelled"));
+        return false;
+      }
+
+      nfcWriteCancelledByUserRef.current = false;
+
+      const message = String(result.message ?? "").trim();
+      pushToast(
+        message ? `${t("nfcWriteFailed")}: ${message}` : t("nfcWriteFailed"),
+      );
+
+      return false;
+    },
+    [pushToast, t],
+  );
+
+  const writeCashuTokenToNfc = React.useCallback(
+    async (id: CashuTokenId, tokenText: string) => {
+      const trimmed = String(tokenText ?? "").trim();
+      const deepLink = buildCashuDeepLink(trimmed);
+      if (!deepLink) {
+        pushToast(t("cashuInvalid"));
+        return;
+      }
+
+      const wrote = await writeNfcUriWithToast(
+        deepLink,
+        "nfcWriteTokenSuccess",
+        "token",
+      );
+
+      if (!wrote) return;
+
+      const payload = {
+        id,
+        rawToken: trimmed as typeof Evolu.NonEmptyString.Type,
+        state:
+          CASHU_TOKEN_STATE_EXTERNALIZED as typeof Evolu.NonEmptyString100.Type,
+        error: null,
+      };
+
+      const result = cashuOwnerId
+        ? update("cashuToken", payload, { ownerId: cashuOwnerId })
+        : update("cashuToken", payload);
+
+      if (!result.ok) {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+      }
+    },
+    [cashuOwnerId, pushToast, setStatus, t, update, writeNfcUriWithToast],
+  );
+
+  const shareCashuTokenDeepLink = React.useCallback(
+    async (tokenText: string) => {
+      const deepLink = buildCashuDeepLink(tokenText);
+      if (!deepLink) {
+        pushToast(t("cashuInvalid"));
+        return;
+      }
+
+      await shareText(deepLink);
+    },
+    [pushToast, shareText, t],
+  );
+
+  const writeCurrentNpubToNfc = React.useCallback(async () => {
+    const npub = normalizeNpubIdentifier(currentNpub);
+    if (!npub) {
+      pushToast(t("profileMissingNpub"));
+      return;
+    }
+
+    await writeNfcUriWithToast(
+      `nostr://${npub}`,
+      "nfcWriteProfileSuccess",
+      "profile",
+    );
+  }, [currentNpub, pushToast, t, writeNfcUriWithToast]);
 
   const requestDeleteCurrentContact = () => {
     if (!editingId) return;
@@ -2989,6 +3263,7 @@ export const useAppShellComposition = () => {
     appOwnerId: contactsOwnerId,
     closeScan,
     contacts,
+    currentNpub,
     extractCashuTokenFromText,
     insert,
     lightningInvoiceAutoPayLimit,
@@ -3000,6 +3275,50 @@ export const useAppShellComposition = () => {
     setStatus,
     t,
   });
+
+  React.useEffect(() => {
+    const acceptDeepLinkUrl = (rawUrl: unknown) => {
+      const parsed = parseNativeDeepLinkUrl(rawUrl);
+      if (!parsed) {
+        return;
+      }
+
+      setPendingDeleteId(null);
+      setPendingDeepLinkText(parsed.text);
+      consumePendingNativeDeepLinkUrl();
+    };
+
+    acceptDeepLinkUrl(consumePendingNativeDeepLinkUrl());
+
+    const onDeepLink: EventListener = (event) => {
+      if (!(event instanceof CustomEvent)) {
+        return;
+      }
+
+      const detail = event.detail;
+      if (typeof detail !== "object" || detail === null) {
+        return;
+      }
+
+      acceptDeepLinkUrl(Reflect.get(detail, "url"));
+    };
+
+    window.addEventListener(NATIVE_DEEP_LINK_EVENT, onDeepLink);
+    return () => window.removeEventListener(NATIVE_DEEP_LINK_EVENT, onDeepLink);
+  }, [setPendingDeleteId]);
+
+  React.useEffect(() => {
+    if (!pendingDeepLinkText) {
+      return;
+    }
+
+    if (!currentNsec && !contactsOwnerId) {
+      return;
+    }
+
+    setPendingDeepLinkText(null);
+    void handleScannedText(pendingDeepLinkText);
+  }, [contactsOwnerId, currentNsec, handleScannedText, pendingDeepLinkText]);
 
   const pasteScanValue = React.useCallback(async () => {
     let text = "";
@@ -3073,6 +3392,7 @@ export const useAppShellComposition = () => {
 
   const { moneyRouteProps } = usePaymentMoneyComposition({
     moneyRouteBuilderInput: {
+      canWriteNfc,
       canPayWithCashu,
       cashuBalance,
       cashuBulkCheckIsBusy,
@@ -3101,6 +3421,7 @@ export const useAppShellComposition = () => {
       setCashuDraft,
       setLnAddressPayAmount,
       setMintIconUrlByMint,
+      shareCashuTokenDeepLink,
       setTopupAmount,
       t,
       topupAmount,
@@ -3112,6 +3433,7 @@ export const useAppShellComposition = () => {
         normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ??
         MAIN_MINT_URL,
       topupInvoiceQr,
+      writeCashuTokenToNfc,
     },
   });
 
@@ -3217,6 +3539,7 @@ export const useAppShellComposition = () => {
       canAddContact,
       openNewContactPage,
       openScan,
+      openWalletScan,
       otherContactsLabel,
       renderContactCard: renderMainSwipeContactCard,
       route,
@@ -3335,6 +3658,7 @@ export const useAppShellComposition = () => {
     applyAmountInputKey: applyDisplayedAmountInputKey,
     cashuBalance,
     cashuIsBusy,
+    canWriteNfc,
     chatTopbarContact,
     contactsGuide,
     contactsGuideActiveStep,
@@ -3353,6 +3677,7 @@ export const useAppShellComposition = () => {
     lang,
     menuIsOpen,
     myProfileQr,
+    nfcWritePromptKind,
     nostrPictureByNpub,
     paidOverlayIsOpen,
     paidOverlayTitle,
@@ -3366,6 +3691,7 @@ export const useAppShellComposition = () => {
     profilePhotoInputRef,
     profileQrIsOpen,
     route,
+    scanAllowsManualContact,
     scanIsOpen,
     scanVideoRef,
     t,
@@ -3375,6 +3701,7 @@ export const useAppShellComposition = () => {
   };
 
   const appActions = {
+    cancelPendingNfcWrite,
     closeMenu,
     closeLightningInvoiceConfirmation,
     closeProfileQr,
@@ -3385,6 +3712,7 @@ export const useAppShellComposition = () => {
     onPickProfilePhoto,
     onProfilePhotoSelected,
     openFeedbackContact,
+    openManualContactFromScan,
     openProfileQr,
     pasteScanValue,
     saveProfileEdits,
@@ -3399,6 +3727,7 @@ export const useAppShellComposition = () => {
     setProfileEditPicture,
     stopContactsGuide,
     toggleProfileEditing,
+    writeCurrentNpubToNfc,
   };
 
   return {

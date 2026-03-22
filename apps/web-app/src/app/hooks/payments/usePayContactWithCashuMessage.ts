@@ -12,6 +12,7 @@ import { normalizeMintUrl } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
+import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import {
   createLinkyPaymentNoticeEvent,
@@ -279,7 +280,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       if (cashuToSend > 0) {
         const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
         for (const row of cashuTokensWithMeta) {
-          if (String(row.state ?? "") !== "accepted") continue;
+          if (!isCashuTokenAcceptedState(row.state)) continue;
           const mint = String(row.mint ?? "").trim();
           if (!mint) continue;
           const tokenText = String(row.token ?? row.rawToken ?? "").trim();
@@ -338,7 +339,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             const spentTokenIds = cashuTokensWithMeta
               .filter(
                 (row) =>
-                  String(row.state ?? "") === "accepted" &&
+                  isCashuTokenAcceptedState(row.state) &&
                   String(row.mint ?? "").trim() === candidate.mint,
               )
               .map((row) => row.id as CashuTokenId);

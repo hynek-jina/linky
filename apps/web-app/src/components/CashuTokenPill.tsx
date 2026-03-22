@@ -1,4 +1,5 @@
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { isCashuTokenExternalizedState } from "../app/lib/cashuTokenState";
 import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
 import { parseCashuToken } from "../cashu";
 import { getNextMintIconUrl } from "../utils/mint";
@@ -56,10 +57,13 @@ export function CashuTokenPill({
   const icon = getMintIconUrl(mint);
   const showMintFallback = icon.failed || !icon.url;
   const displayAmount = formatDisplayedAmountParts(amount);
+  const isMuted = isCashuTokenExternalizedState(token.state);
 
   return (
     <button
-      className={isError ? "pill pill-error" : "pill"}
+      className={
+        isError ? "pill pill-error" : isMuted ? "pill pill-muted" : "pill"
+      }
       onClick={onClick}
       style={{ cursor: "pointer" }}
       aria-label={ariaLabel}

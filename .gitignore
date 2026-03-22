@@ -12,6 +12,8 @@ dist
 dist-ssr
 dev-dist
 test-results
+.capacitor
+local.properties
 *.local
 packages/core/src/**/*.js
 

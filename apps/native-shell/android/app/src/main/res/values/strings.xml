@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Linky</string>
+    <string name="title_activity_main">Linky</string>
+    <string name="cashu_url_scheme">cashu</string>
+    <string name="nostr_url_scheme">nostr</string>
+    <string name="package_name">fit.linky.app</string>
+    <string name="push_notification_channel_id">linky_messages</string>
+    <string name="push_notification_channel_name">Linky messages</string>
+    <string name="push_notification_fallback_title">Linky</string>
+    <string name="push_notification_fallback_body">New message</string>
+</resources>

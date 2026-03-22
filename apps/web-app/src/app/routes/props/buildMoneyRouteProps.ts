@@ -4,6 +4,7 @@ import type { MoneyRoutesProps } from "../AppRouteContent";
 type MoneyRouteProps = MoneyRoutesProps;
 
 interface BuildMoneyRoutePropsParams {
+  canWriteNfc: boolean;
   canPayWithCashu: MoneyRoutesProps["lnAddressPayProps"]["canPayWithCashu"];
   cashuBalance: MoneyRoutesProps["cashuTokenNewProps"]["cashuBalance"];
   cashuBulkCheckIsBusy: MoneyRoutesProps["cashuTokenNewProps"]["cashuBulkCheckIsBusy"];
@@ -40,6 +41,11 @@ interface BuildMoneyRoutePropsParams {
   setCashuDraft: MoneyRoutesProps["cashuTokenNewProps"]["setCashuDraft"];
   setLnAddressPayAmount: MoneyRoutesProps["lnAddressPayProps"]["setLnAddressPayAmount"];
   setMintIconUrlByMint: MoneyRoutesProps["cashuTokenNewProps"]["setMintIconUrlByMint"];
+  shareCashuTokenDeepLink: MoneyRoutesProps["cashuTokenProps"] extends () => infer Props
+    ? Props extends { shareTokenDeepLink: infer Fn }
+      ? Fn
+      : never
+    : never;
   setTopupAmount: MoneyRoutesProps["topupProps"]["setTopupAmount"];
   t: MoneyRoutesProps["cashuTokenNewProps"]["t"];
   topupAmount: MoneyRoutesProps["topupProps"]["topupAmount"];
@@ -48,9 +54,15 @@ interface BuildMoneyRoutePropsParams {
   topupInvoiceIsBusy: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceIsBusy"];
   topupMintUrl: MoneyRoutesProps["topupInvoiceProps"]["topupMintUrl"];
   topupInvoiceQr: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceQr"];
+  writeCashuTokenToNfc: MoneyRoutesProps["cashuTokenProps"] extends () => infer Props
+    ? Props extends { writeToNfc: infer Fn }
+      ? Fn
+      : never
+    : never;
 }
 
 export const buildMoneyRouteProps = ({
+  canWriteNfc,
   canPayWithCashu,
   cashuBalance,
   cashuBulkCheckIsBusy,
@@ -79,6 +91,7 @@ export const buildMoneyRouteProps = ({
   setCashuDraft,
   setLnAddressPayAmount,
   setMintIconUrlByMint,
+  shareCashuTokenDeepLink,
   setTopupAmount,
   t,
   topupAmount,
@@ -87,6 +100,7 @@ export const buildMoneyRouteProps = ({
   topupInvoiceIsBusy,
   topupMintUrl,
   topupInvoiceQr,
+  writeCashuTokenToNfc,
 }: BuildMoneyRoutePropsParams): MoneyRouteProps => {
   return {
     cashuTokenNewProps: {
@@ -108,6 +122,7 @@ export const buildMoneyRouteProps = ({
         throw new Error("invalid route for cashu token");
       }
       return {
+        canWriteToNfc: canWriteNfc,
         cashuTokensAll,
         routeId: route.id,
         cashuIsBusy,
@@ -115,7 +130,9 @@ export const buildMoneyRouteProps = ({
         checkAndRefreshCashuToken,
         copyText,
         requestDeleteCashuToken,
+        shareTokenDeepLink: shareCashuTokenDeepLink,
         t,
+        writeToNfc: writeCashuTokenToNfc,
       };
     },
     lnAddressPayProps: {

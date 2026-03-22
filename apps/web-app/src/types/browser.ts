@@ -63,3 +63,29 @@ export interface NavigatorWithOptionalCameraPermissions {
     }) => Promise<CameraPermissionStatusLike>;
   };
 }
+
+export interface CapacitorLike {
+  getPlatform?: () => string;
+  getServerUrl?: () => string | undefined;
+  isNativePlatform?: () => boolean;
+}
+
+export interface GlobalWithOptionalCapacitor {
+  Capacitor?: CapacitorLike;
+}
+
+export interface NativeSecretStorageBridge {
+  get(options: {
+    key: string;
+  }): Promise<{ value?: string | null } | string | null>;
+  remove(options: { key: string }): Promise<void>;
+  set(options: { key: string; value: string }): Promise<void>;
+}
+
+export interface LinkyNativeBridge {
+  secretStorage?: NativeSecretStorageBridge;
+}
+
+export interface GlobalWithOptionalLinkyNativeBridge {
+  LinkyNative?: LinkyNativeBridge;
+}

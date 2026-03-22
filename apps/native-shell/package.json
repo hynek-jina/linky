@@ -1,0 +1,33 @@
+{
+  "name": "@linky/native-shell",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:web": "bun run --filter @linky/web-app build",
+    "android:add": "bash ./scripts/with-java17.sh cap add android && bash ./scripts/patch-android-java.sh",
+    "android:sync": "bun run build:web && bash ./scripts/with-java17.sh cap sync android && bash ./scripts/patch-android-java.sh",
+    "android:open": "bash ./scripts/with-java17.sh cap open android",
+    "android:apk:debug": "bun run build:web && bash ./scripts/with-java17.sh cap sync android && bash ./scripts/patch-android-java.sh && cd android && bash ../scripts/with-java17.sh ./gradlew assembleDebug",
+    "ios:add": "bash ./scripts/with-java17.sh cap add ios",
+    "ios:sync": "bun run build:web && bash ./scripts/with-java17.sh cap sync ios",
+    "ios:open": "bash ./scripts/with-java17.sh cap open ios",
+    "typecheck": "tsc -p tsconfig.json",
+    "eslint": "eslint --fix capacitor.config.ts eslint.config.js prettier.config.js",
+    "prettier": "prettier --write capacitor.config.ts eslint.config.js package.json prettier.config.js tsconfig.json"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7.4.3",
+    "@capacitor/push-notifications": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/ios": "^7.4.3",
+    "@linky/config": "workspace:*",
+    "@types/node": "^24.10.1",
+    "eslint": "^9.39.1",
+    "prettier": "^3.4.2",
+    "typescript": "~5.9.3"
+  }
+}

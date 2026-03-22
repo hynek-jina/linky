@@ -4,9 +4,11 @@ import {
   formatShortNpub,
   getInitials,
 } from "../utils/formatting";
+import { NfcIcon } from "./NfcIcon";
 import { ProfileQrButton } from "./ProfileQrButton";
 
 interface ProfileQrModalProps {
+  canWriteToNfc: boolean;
   closeProfileQr: () => void;
   copyText: (text: string) => Promise<void>;
   currentNpub: string | null;
@@ -41,9 +43,11 @@ interface ProfileQrModalProps {
   setProfileEditPicture: (value: string) => void;
   t: (key: string) => string;
   toggleProfileEditing: () => void;
+  writeCurrentNpubToNfc: () => Promise<void>;
 }
 
 export function ProfileQrModal({
+  canWriteToNfc,
   closeProfileQr,
   copyText,
   currentNpub,
@@ -70,6 +74,7 @@ export function ProfileQrModal({
   setProfileEditPicture,
   t,
   toggleProfileEditing,
+  writeCurrentNpubToNfc,
 }: ProfileQrModalProps): React.ReactElement {
   const handleCopyNpub = () => {
     if (!currentNpub) return;
@@ -96,6 +101,22 @@ export function ProfileQrModal({
         <div className="modal-header">
           <div className="modal-title">{t("profile")}</div>
           <div style={{ display: "inline-flex", gap: 8 }}>
+            {canWriteToNfc ? (
+              <button
+                className="topbar-btn"
+                onClick={() => void writeCurrentNpubToNfc()}
+                aria-label={t("uploadProfileToNfc")}
+                title={t("uploadProfileToNfc")}
+                disabled={!currentNpub}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{ display: "inline-flex", width: 18, height: 18 }}
+                >
+                  <NfcIcon />
+                </span>
+              </button>
+            ) : null}
             <button
               className="topbar-btn"
               onClick={toggleProfileEditing}
