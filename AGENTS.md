@@ -10,6 +10,8 @@ See @README.md for project overview.
 bun install                # Install dependencies
 bun run dev                # Start Vite dev server
 bun run build              # Production build (tsc -b && vite build)
+bun run site:dev           # Start the public Linky website for linky.fit
+bun run site:build         # Build the public Linky website
 bun run native:android:add # Generate the Capacitor Android project once
 bun run native:apk:debug   # Build the web app, sync Capacitor, assemble debug APK
 bun run native:aab:release # Build the web app, sync Capacitor, and bundle a signed release AAB for Play upload
@@ -28,6 +30,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 
 ## Monorepo Structure
 
+- `apps/site/` - Public marketing/landing website intended for `linky.fit`
 - `apps/web-app/` - Main React app (Vite + SWC)
 - `apps/native-shell/` - Capacitor native shell that consumes the built `apps/web-app/dist` bundle for Android/iOS packaging
 - `apps/push/` - Bun HTTP push service for Web Push subscription auth/storage and Nostr outer-inbox relay watching
@@ -39,6 +42,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 
 ## Architecture
 
+- Public website lives in `apps/site/` and is intended for a separate deploy on `linky.fit`; the product PWA stays in `apps/web-app/` for `app.linky.fit`
 - **No framework router** - hash-based routing via `useRouting` hook and `parseRouteFromHash()` in `src/types/route.ts`
 - Empty or unknown hashes now default to the wallet route; contacts use `#contacts` and legacy explicit `#` still opens contacts
 - Navigation uses `navigateTo()` from `src/hooks/useRouting.ts` - do NOT use `window.location` directly
