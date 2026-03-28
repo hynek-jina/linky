@@ -5,6 +5,8 @@
 Linky is a mobile-first PWA for contacts, Nostr messaging, and Lightning/Cashu payments.
 It is local-first: data is stored in Evolu (SQLite) and syncs between devices.
 
+The repo also contains a separate public website in `apps/site/` intended for `linky.fit`, while the product app remains a distinct deployment on `app.linky.fit`.
+
 ## Protocols and stack
 
 - Nostr (chat, profile, auth-related flows)
@@ -69,6 +71,7 @@ Native push delivery now works end-to-end when:
 ```bash
 bun install
 bun run dev
+bun run site:dev
 bun run push:dev
 bun run native:android:add
 bun run native:apk:debug
@@ -78,6 +81,7 @@ Build:
 
 ```bash
 bun run build
+bun run site:build
 ```
 
 Android native shell debug APK:
@@ -119,6 +123,14 @@ Workspace-scoped commands (web app only):
 bun run --filter @linky/web-app typecheck
 bun run --filter @linky/web-app eslint
 bun run --filter @linky/web-app prettier
+```
+
+Workspace-scoped commands (public site only):
+
+```bash
+bun run --filter @linky/site dev
+bun run --filter @linky/site build
+bun run --filter @linky/site preview
 ```
 
 Workspace-scoped commands (native shell):
