@@ -43,6 +43,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 ## Architecture
 
 - Public website lives in `apps/site/` and is intended for a separate deploy on `linky.fit`; the product PWA stays in `apps/web-app/` for `app.linky.fit`
+- `apps/site/` must stay a non-PWA marketing site: no web manifest, no service worker registration, and install prompts should only come from `app.linky.fit`
 - **No framework router** - hash-based routing via `useRouting` hook and `parseRouteFromHash()` in `src/types/route.ts`
 - Empty or unknown hashes now default to the wallet route; contacts use `#contacts` and legacy explicit `#` still opens contacts
 - Navigation uses `navigateTo()` from `src/hooks/useRouting.ts` - do NOT use `window.location` directly

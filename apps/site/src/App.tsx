@@ -122,7 +122,7 @@ function App() {
     useState<BeforeInstallPromptEvent | null>(null);
   const activeCopy = useMemo(() => copy[locale], [locale]);
   const ctaMenuRef = useRef<HTMLDivElement | null>(null);
-  const manualInstallAvailable = useMemo(getManualInstallSupport, []);
+  const manualInstallAvailable = useMemo(() => getManualInstallSupport(), []);
 
   const installAvailable = installEvent !== null;
   const ctaMode =

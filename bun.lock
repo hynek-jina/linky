@@ -47,7 +47,6 @@
       "dependencies": {
         "react": "^19.2.3",
         "react-dom": "^19.2.3",
-        "workbox-window": "^7.3.0",
       },
       "devDependencies": {
         "@linky/config": "workspace:*",
@@ -58,7 +57,6 @@
         "prettier": "^3.4.2",
         "typescript": "~5.9.3",
         "vite": "^7.2.4",
-        "vite-plugin-pwa": "^1.2.0",
       },
     },
     "apps/web-app": {
