@@ -75,6 +75,7 @@ bun run site:dev
 bun run push:dev
 bun run native:android:add
 bun run native:apk:debug
+bun run native:apk:release
 ```
 
 Build:
@@ -91,10 +92,22 @@ bun run native:android:add
 bun run native:apk:debug
 ```
 
+Android signed release APK:
+
+```bash
+bun run native:apk:release
+```
+
 Latest built debug APK ends up at:
 
 ```bash
 apps/native-shell/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Public download URL for the latest GitHub Release APK:
+
+```bash
+https://github.com/hynek-jina/linky/releases/latest/download/linky.apk
 ```
 
 Start the push service once:

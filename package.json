@@ -19,6 +19,7 @@
     "native:android:sync": "bun run --filter @linky/native-shell android:sync",
     "native:android:open": "bun run --filter @linky/native-shell android:open",
     "native:apk:debug": "bun run --filter @linky/native-shell android:apk:debug",
+    "native:apk:release": "bun run --filter @linky/native-shell android:apk:release",
     "native:aab:release": "bun run --filter @linky/native-shell android:aab:release",
     "native:ios:add": "bun run --filter @linky/native-shell ios:add",
     "native:ios:sync": "bun run --filter @linky/native-shell ios:sync",

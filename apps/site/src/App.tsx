@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type CtaMode = "google-play" | "web";
+type CtaMode = "android-apk" | "web";
 
 type Locale = "cs" | "en";
 
@@ -10,14 +10,16 @@ interface LocaleCopy {
   title: string;
   subtitle: string;
   webCta: string;
-  googlePlayCta: string;
-  comingSoonLabel: string;
+  androidApkCta: string;
   ctaMenuLabel: string;
   privacyLabel: string;
   imageTitle: string;
   githubLabel: string;
   nostrLabel: string;
 }
+
+const latestAndroidApkUrl =
+  "https://github.com/hynek-jina/linky/releases/latest/download/linky.apk";
 
 const copy: Record<Locale, LocaleCopy> = {
   cs: {
@@ -27,8 +29,7 @@ const copy: Record<Locale, LocaleCopy> = {
     subtitle:
       "Linky přináší svobodu komunikace i plateb v jedné aplikaci. Díky cashu snadno zaplatíte, nostr zajistí soukromé zprávy a evolu se postará o bezpečnou synchronizaci vašich dat.",
     webCta: "Webová aplikace",
-    googlePlayCta: "Google Play",
-    comingSoonLabel: "již brzy",
+    androidApkCta: "Android APK",
     ctaMenuLabel: "Možnosti otevření aplikace",
     privacyLabel: "Ochrana soukromí",
     imageTitle: "Fotorealistické setkání lidí s aplikací Linky",
@@ -42,8 +43,7 @@ const copy: Record<Locale, LocaleCopy> = {
     subtitle:
       "Linky brings freedom to communication and payments in a single app. Cashu makes payments easy, nostr ensures private messaging, and evolu takes care of securely syncing your data.",
     webCta: "Web app",
-    googlePlayCta: "Google Play",
-    comingSoonLabel: "coming soon",
+    androidApkCta: "Android APK",
     ctaMenuLabel: "App launch options",
     privacyLabel: "Privacy Policy",
     imageTitle: "Photorealistic meeting of people with the Linky app",
@@ -92,8 +92,9 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const activeCopy = useMemo(() => copy[locale], [locale]);
   const ctaMenuRef = useRef<HTMLDivElement | null>(null);
-  const ctaMode = preferredCtaMode === "google-play" ? "google-play" : "web";
-  const primaryCtaLabel = activeCopy.webCta;
+  const ctaMode = preferredCtaMode === "android-apk" ? "android-apk" : "web";
+  const primaryCtaLabel =
+    ctaMode === "android-apk" ? activeCopy.androidApkCta : activeCopy.webCta;
 
   useEffect(() => {
     document.documentElement.lang = activeCopy.htmlLang;
@@ -126,7 +127,16 @@ function App() {
     window.open("https://app.linky.fit", "_blank", "noopener,noreferrer");
   };
 
+  const openAndroidApk = () => {
+    window.open(latestAndroidApkUrl, "_blank", "noopener,noreferrer");
+  };
+
   const handlePrimaryAction = () => {
+    if (ctaMode === "android-apk") {
+      openAndroidApk();
+      return;
+    }
+
     openWebApp();
   };
 
@@ -209,16 +219,21 @@ function App() {
                       </span>
                     </button>
                     <button
-                      className="cta-option is-disabled"
+                      className={
+                        ctaMode === "android-apk"
+                          ? "cta-option is-selected"
+                          : "cta-option"
+                      }
                       type="button"
-                      role="menuitem"
-                      disabled
+                      role="menuitemradio"
+                      aria-checked={ctaMode === "android-apk"}
+                      onClick={() => {
+                        setPreferredCtaMode("android-apk");
+                        setMenuOpen(false);
+                      }}
                     >
                       <span className="cta-option-label">
-                        {activeCopy.googlePlayCta}
-                      </span>
-                      <span className="cta-option-note">
-                        {activeCopy.comingSoonLabel}
+                        {activeCopy.androidApkCta}
                       </span>
                     </button>
                   </div>

@@ -10,6 +10,7 @@
     "android:sync": "bun run build:web && bash ./scripts/with-java17.sh cap sync android && bash ./scripts/patch-android-java.sh",
     "android:open": "bash ./scripts/with-java17.sh cap open android",
     "android:apk:debug": "bun run build:web && bash ./scripts/with-java17.sh cap sync android && bash ./scripts/patch-android-java.sh && cd android && bash ../scripts/with-java17.sh ./gradlew assembleDebug",
+    "android:apk:release": "bash ./scripts/check-android-release-prereqs.sh && bun run build:web && bash ./scripts/with-java17.sh cap sync android && bash ./scripts/patch-android-java.sh && cd android && bash ../scripts/with-java17.sh ./gradlew assembleRelease",
     "android:aab:release": "bash ./scripts/check-android-release-prereqs.sh && bun run build:web && bash ./scripts/with-java17.sh cap sync android && bash ./scripts/patch-android-java.sh && cd android && bash ../scripts/with-java17.sh ./gradlew bundleRelease",
     "ios:add": "bash ./scripts/with-java17.sh cap add ios",
     "ios:sync": "bun run build:web && bash ./scripts/with-java17.sh cap sync ios",

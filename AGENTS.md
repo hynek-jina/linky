@@ -14,6 +14,7 @@ bun run site:dev           # Start the public Linky website for linky.fit
 bun run site:build         # Build the public Linky website
 bun run native:android:add # Generate the Capacitor Android project once
 bun run native:apk:debug   # Build the web app, sync Capacitor, assemble debug APK
+bun run native:apk:release # Build the web app, sync Capacitor, and assemble a signed release APK
 bun run native:aab:release # Build the web app, sync Capacitor, and bundle a signed release AAB for Play upload
 bun run native:ios:add     # Generate the Capacitor iOS project once
 bun run push:dev           # Start the Bun push notification service in watch mode
@@ -65,6 +66,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 - Native packaging uses a separate Capacitor shell in `apps/native-shell/` so Android/iOS project files stay isolated from the web app source tree
 - Native shells now load bundled `apps/web-app/dist` assets by default; Capacitor live reload must be enabled explicitly via `LINKY_CAP_SERVER_URL` / `CAP_SERVER_URL` before `cap sync` / `cap open`, preventing packaged APKs from pointing at `127.0.0.1`
 - Android release AAB builds derive `versionName` from the workspace `package.json` version and derive `versionCode` from semantic version components (`major * 10000 + minor * 100 + patch`), with optional `LINKY_ANDROID_VERSION_NAME` / `LINKY_ANDROID_VERSION_CODE` overrides for special releases
+- GitHub Actions workflow `.github/workflows/android-apk-release.yml` builds a signed Android release APK on version tags (or manual dispatch) and publishes `linky.apk` to GitHub Releases; the public site links the stable `releases/latest/download/linky.apk` URL
 - GitHub Actions workflow `.github/workflows/android-play-internal.yml` builds a signed Android AAB on pushes to `main` and uploads it to the Google Play `internal` track using repository secrets for the upload keystore, Play service account JSON, and `google-services.json`
 - Browser-only identity persistence is being moved behind platform adapters in `apps/web-app/src/platform/`; the Android shell now provides a real encrypted secret-storage bridge plus native QR scan, deep-link, and notification-permission bridges via `apps/web-app/src/platform/nativeBridge.ts`, while native push registration now uses Capacitor Push Notifications + FCM token registration against `apps/push`
 - Android native push delivery now uses data-only FCM payloads plus `apps/native-shell/android/app/src/main/java/fit/linky/app/LinkyFirebaseMessagingService.java`, which renders closed-app notifications locally and forwards payload extras back into `MainActivity` on tap; `google-services.json` is still required in `apps/native-shell/android/app/`

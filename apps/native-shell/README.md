@@ -41,6 +41,26 @@ The generated APK is expected at:
 apps/native-shell/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## Android release APK
+
+Release APK builds use the same signing setup as the Play bundle build.
+
+```bash
+bun run native:apk:release
+```
+
+The generated APK is expected at:
+
+```bash
+apps/native-shell/android/app/build/outputs/apk/release/app-release.apk
+```
+
+GitHub Releases publish the downloadable asset as `linky.apk`, so the public stable URL is:
+
+```bash
+https://github.com/hynek-jina/linky/releases/latest/download/linky.apk
+```
+
 ## Android release AAB
 
 Release builds derive Android `versionName` from the workspace version in `package.json` and derive `versionCode` from semantic version components as `major * 10000 + minor * 100 + patch`.
