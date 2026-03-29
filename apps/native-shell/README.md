@@ -129,8 +129,10 @@ If neither variable is set, the native shells use the bundled web assets.
 This workspace sets up the local-bundle native shell and the Android/iOS project entrypoint.
 The next implementation steps are:
 
-- iOS parity for the native shell bridges
+- iOS parity for native notifications and deep links
 - richer deep-link actions beyond contact `npub`
+
+The iOS shell now includes local Capacitor plugins for Keychain-backed secret storage, native QR scanning, and CoreNFC NDEF writing for `nostr://...` and `cashu://...` payloads. That means seed/material persistence no longer falls back to browser-only storage on iOS devices, the app can use a native camera scanner when WebKit camera APIs are unavailable, and the existing web-app NFC write UI now works on signed physical iPhones as well.
 
 Native Android push is now wired through Capacitor Push Notifications + FCM.
 To make it work in builds, provide `android/app/google-services.json` before running `bun run native:android:sync` or `bun run native:apk:debug`.

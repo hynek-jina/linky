@@ -1,3 +1,4 @@
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import type {
   LinkyNativeBridge,
   NativeSecretStorageBridge,
@@ -12,7 +13,16 @@ import {
   removeAndroidStoredSecret,
   writeAndroidStoredSecret,
 } from "./nativeBridge";
-import { isNativePlatform } from "./runtime";
+import { getPlatformTarget, isNativePlatform } from "./runtime";
+
+interface IosSecretStoragePlugin {
+  get(options: { key: string }): Promise<{ value?: string | null }>;
+  remove(options: { key: string }): Promise<void>;
+  set(options: { key: string; value: string }): Promise<void>;
+}
+
+const LinkySecretStorage =
+  registerPlugin<IosSecretStoragePlugin>("LinkySecretStorage");
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null;
@@ -33,6 +43,13 @@ const normalizeStoredValue = (value: unknown): string | null => {
   return normalized || null;
 };
 
+const supportsIosNativeSecretStorage = (): boolean => {
+  return (
+    getPlatformTarget() === "ios" &&
+    Capacitor.isPluginAvailable("LinkySecretStorage")
+  );
+};
+
 const getNativeSecretStorage = () => {
   const bridge = Reflect.get(globalThis, "LinkyNative");
   if (!isLinkyNativeBridge(bridge)) return null;
@@ -42,6 +59,11 @@ const getNativeSecretStorage = () => {
 };
 
 const readNativeSecretValue = async (key: string): Promise<string | null> => {
+  if (supportsIosNativeSecretStorage()) {
+    const result = await LinkySecretStorage.get({ key });
+    return normalizeStoredValue(result.value);
+  }
+
   const secretStorage = getNativeSecretStorage();
   if (!secretStorage) return null;
 
@@ -92,6 +114,14 @@ export const writeStoredSecret = async (
       normalized,
     );
 
+    if (supportsIosNativeSecretStorage()) {
+      try {
+        await LinkySecretStorage.set({ key, value: normalized });
+      } catch {
+        // ignore
+      }
+    }
+
     const secretStorage = getNativeSecretStorage();
     if (secretStorage) {
       try {
@@ -113,6 +143,14 @@ export const writeStoredSecret = async (
 export const removeStoredSecret = async (key: string): Promise<void> => {
   if (isNativePlatform()) {
     const removedFromAndroidBridge = await removeAndroidStoredSecret(key);
+
+    if (supportsIosNativeSecretStorage()) {
+      try {
+        await LinkySecretStorage.remove({ key });
+      } catch {
+        // ignore
+      }
+    }
 
     const secretStorage = getNativeSecretStorage();
     if (secretStorage) {

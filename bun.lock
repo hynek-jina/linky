@@ -65,6 +65,7 @@
       "name": "@linky/web-app",
       "version": "26.1.0",
       "dependencies": {
+        "@capacitor/core": "^7.4.3",
         "@capacitor/push-notifications": "^7.0.0",
         "@cashu/cashu-ts": "^2.5.3",
         "@evolu/common": "^7.4.1",
