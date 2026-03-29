@@ -2415,45 +2415,6 @@ export const useAppShellComposition = () => {
     t,
   });
 
-  const paySelectedContact = React.useCallback(async () => {
-    if (route.kind !== "contactPay") return;
-    if (!selectedContact) return;
-
-    const amountSat = Number.parseInt(String(payAmount ?? "").trim(), 10);
-    if (!Number.isFinite(amountSat) || amountSat <= 0) {
-      setStatus(t("payInvalidAmount"));
-      return;
-    }
-
-    const normalizedMethod =
-      contactPayMethod === "lightning" || contactPayMethod === "cashu"
-        ? contactPayMethod
-        : "cashu";
-
-    if (normalizedMethod === "lightning") {
-      const lnAddress = String(selectedContact.lnAddress ?? "").trim();
-      if (!lnAddress) {
-        setStatus(t("payMissingLn"));
-        return;
-      }
-      navigateTo({ route: "lnAddressPay", lnAddress });
-      return;
-    }
-
-    await payContactWithCashuMessage({
-      contact: selectedContact,
-      amountSat,
-    });
-  }, [
-    contactPayMethod,
-    payAmount,
-    payContactWithCashuMessage,
-    route.kind,
-    selectedContact,
-    setStatus,
-    t,
-  ]);
-
   const { payLightningAddressWithCashu, payLightningInvoiceWithCashu } =
     useLightningPaymentsDomain({
       buildCashuMintCandidates,
@@ -2477,6 +2438,46 @@ export const useAppShellComposition = () => {
       t,
       update,
     });
+
+  const paySelectedContact = React.useCallback(async () => {
+    if (route.kind !== "contactPay") return;
+    if (!selectedContact) return;
+
+    const amountSat = Number.parseInt(String(payAmount ?? "").trim(), 10);
+    if (!Number.isFinite(amountSat) || amountSat <= 0) {
+      setStatus(t("payInvalidAmount"));
+      return;
+    }
+
+    const normalizedMethod =
+      contactPayMethod === "lightning" || contactPayMethod === "cashu"
+        ? contactPayMethod
+        : "cashu";
+
+    if (normalizedMethod === "lightning") {
+      const lnAddress = String(selectedContact.lnAddress ?? "").trim();
+      if (!lnAddress) {
+        setStatus(t("payMissingLn"));
+        return;
+      }
+      await payLightningAddressWithCashu(lnAddress, amountSat);
+      return;
+    }
+
+    await payContactWithCashuMessage({
+      contact: selectedContact,
+      amountSat,
+    });
+  }, [
+    contactPayMethod,
+    payAmount,
+    payContactWithCashuMessage,
+    payLightningAddressWithCashu,
+    route.kind,
+    selectedContact,
+    setStatus,
+    t,
+  ]);
 
   const closeLightningInvoiceConfirmation = React.useCallback(() => {
     setPendingLightningInvoiceConfirmation(null);
