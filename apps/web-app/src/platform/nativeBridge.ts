@@ -1,4 +1,5 @@
-import { isNativePlatform } from "./runtime";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+import { getPlatformTarget, isNativePlatform } from "./runtime";
 
 type NativeNotificationPermissionState =
   | "denied"
@@ -11,6 +12,35 @@ type NativeScanResult = {
   message?: string;
   value: string | null;
 };
+
+interface IosScannerPluginResult {
+  cancelled?: boolean;
+  message?: string | null;
+  value?: string | null;
+}
+
+interface IosScannerPlugin {
+  scan(): Promise<IosScannerPluginResult>;
+}
+
+const LinkyScanner = registerPlugin<IosScannerPlugin>("LinkyScanner");
+
+interface IosNfcSupportResult {
+  supported?: boolean;
+}
+
+interface IosNfcPluginResult {
+  message?: string | null;
+  status?: string | null;
+}
+
+interface IosNfcPlugin {
+  areSupported(): Promise<IosNfcSupportResult>;
+  cancelWrite(): Promise<void>;
+  writeUri(options: { url: string }): Promise<IosNfcPluginResult>;
+}
+
+const LinkyNfc = registerPlugin<IosNfcPlugin>("LinkyNfc");
 
 interface AndroidSecretStorageBridge {
   get?: (key: string) => string | null;
@@ -132,6 +162,18 @@ const isNativeNfcWriteStatus = (
   );
 };
 
+const supportsIosNativeQrScan = (): boolean => {
+  return (
+    getPlatformTarget() === "ios" && Capacitor.isPluginAvailable("LinkyScanner")
+  );
+};
+
+const supportsIosNativeNfcWrite = (): boolean => {
+  return (
+    getPlatformTarget() === "ios" && Capacitor.isPluginAvailable("LinkyNfc")
+  );
+};
+
 export const readAndroidStoredSecret = async (
   key: string,
 ): Promise<string | null | undefined> => {
@@ -169,6 +211,10 @@ export const removeAndroidStoredSecret = async (
 };
 
 export const supportsNativeQrScan = (): boolean => {
+  if (supportsIosNativeQrScan()) {
+    return true;
+  }
+
   return isNativePlatform() && Boolean(getAndroidScannerBridge()?.startScan);
 };
 
@@ -235,6 +281,18 @@ if (typeof window !== "undefined") {
 }
 
 export const startNativeQrScan = (): Promise<NativeScanResult> | null => {
+  if (supportsIosNativeQrScan()) {
+    return LinkyScanner.scan().then((result) => {
+      const value = normalizeString(result.value);
+      const message = normalizeString(result.message);
+      const cancelled = result.cancelled === true;
+
+      return message === null
+        ? { cancelled, value }
+        : { cancelled, message, value };
+    });
+  }
+
   const bridge = getAndroidScannerBridge();
   if (!isNativePlatform() || !bridge?.startScan) {
     return null;
@@ -373,6 +431,10 @@ export const requestNativeNotificationPermission = async (): Promise<
 };
 
 export const supportsNativeNfcWrite = (): boolean => {
+  if (supportsIosNativeNfcWrite()) {
+    return true;
+  }
+
   const bridge = getAndroidNfcBridge();
   if (!isNativePlatform() || !bridge?.areSupported) {
     return false;
@@ -389,6 +451,40 @@ export const startNativeNfcWrite = async (
   url: string,
   onProgress?: (result: NativeNfcWriteResult) => void,
 ): Promise<NativeNfcWriteResult | null> => {
+  if (supportsIosNativeNfcWrite()) {
+    try {
+      const supportResult = await LinkyNfc.areSupported();
+      if (supportResult.supported !== true) {
+        return null;
+      }
+
+      onProgress?.({
+        message: null,
+        status: "armed",
+      });
+
+      const result = await LinkyNfc.writeUri({ url });
+      const status = normalizeString(result.status);
+
+      if (!isNativeNfcWriteStatus(status) || status === "armed") {
+        return {
+          message: normalizeString(result.message),
+          status: "error",
+        };
+      }
+
+      return {
+        message: normalizeString(result.message),
+        status,
+      };
+    } catch (error) {
+      return {
+        message: String(error ?? "Native NFC write failed"),
+        status: "error",
+      };
+    }
+  }
+
   const bridge = getAndroidNfcBridge();
   if (!isNativePlatform() || !bridge?.areSupported || !bridge.writeUri) {
     return null;
@@ -442,6 +538,11 @@ export const startNativeNfcWrite = async (
 };
 
 export const cancelNativeNfcWrite = (): boolean => {
+  if (supportsIosNativeNfcWrite()) {
+    void LinkyNfc.cancelWrite().catch(() => undefined);
+    return true;
+  }
+
   const bridge = getAndroidNfcBridge();
   if (!isNativePlatform() || !bridge?.cancelWrite) {
     return false;
