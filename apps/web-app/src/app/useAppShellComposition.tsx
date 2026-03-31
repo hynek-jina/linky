@@ -46,6 +46,7 @@ import {
   withCashuDeterministicCounterLock,
 } from "../utils/cashuDeterministic";
 import { getCashuLib } from "../utils/cashuLib";
+import { createLoadedCashuWallet } from "../utils/cashuWallet";
 import {
   BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
@@ -1418,14 +1419,13 @@ export const useAppShellComposition = () => {
             }
 
             const det = getCashuDeterministicSeedFromStorage();
-            const wallet = new CashuWallet(
-              new CashuMint(topupMintQuote.mintUrl),
-              {
-                ...(topupMintQuote.unit ? { unit: topupMintQuote.unit } : {}),
-                ...(det ? { bip39seed: det.bip39seed } : {}),
-              },
-            );
-            await wallet.loadMint();
+            const wallet = await createLoadedCashuWallet({
+              CashuMint,
+              CashuWallet,
+              mintUrl: topupMintQuote.mintUrl,
+              ...(topupMintQuote.unit ? { unit: topupMintQuote.unit } : {}),
+              ...(det ? { bip39seed: det.bip39seed } : {}),
+            });
 
             const status = await wallet.checkMintQuote(quoteId);
             const quoteState = readMintQuoteState(status);

@@ -7,6 +7,7 @@ import {
 } from "./utils/cashuDeterministic";
 import { isCashuOutputsAlreadySignedError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
+import { createLoadedCashuWallet } from "./utils/cashuWallet";
 
 type CashuAcceptResult = {
   amount: number;
@@ -30,12 +31,13 @@ export const acceptCashuToken = async (
 
   const det = getCashuDeterministicSeedFromStorage();
 
-  const wallet = new CashuWallet(new CashuMint(mintUrl), {
+  const wallet = await createLoadedCashuWallet({
+    CashuMint,
+    CashuWallet,
+    mintUrl,
     ...(decoded.unit ? { unit: decoded.unit } : {}),
     ...(det ? { bip39seed: det.bip39seed } : {}),
   });
-
-  await wallet.loadMint();
 
   const unit = wallet.unit;
   const keysetId = wallet.keysetId;

@@ -13,6 +13,7 @@ import {
 } from "./utils/cashuDeterministic";
 import { isCashuOutputsAlreadySignedError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
+import { createLoadedCashuWallet } from "./utils/cashuWallet";
 import {
   dedupeCashuProofs,
   filterUnspentCashuProofs,
@@ -153,13 +154,14 @@ export const meltInvoiceWithTokensAtMint = async (args: {
     };
   }
 
-  const wallet = new CashuWallet(new CashuMint(mint), {
-    ...(unit ? { unit } : {}),
-    ...(det ? { bip39seed: det.bip39seed } : {}),
-  });
-
   try {
-    await wallet.loadMint();
+    const wallet = await createLoadedCashuWallet({
+      CashuMint,
+      CashuWallet,
+      mintUrl: mint,
+      ...(unit ? { unit } : {}),
+      ...(det ? { bip39seed: det.bip39seed } : {}),
+    });
 
     const walletUnit = wallet.unit;
     const keysetId = wallet.keysetId;

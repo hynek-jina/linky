@@ -11,6 +11,7 @@ import {
   withCashuDeterministicCounterLock,
 } from "../../../utils/cashuDeterministic";
 import { getCashuLib } from "../../../utils/cashuLib";
+import { createLoadedCashuWallet } from "../../../utils/cashuWallet";
 import { dedupeCashuProofs } from "../../../utils/cashuProofs";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import { normalizeMintUrl } from "../../../utils/mint";
@@ -353,11 +354,13 @@ export const useCashuTokenChecks = ({
         }
 
         const det = getCashuDeterministicSeedFromStorage();
-        const wallet = new CashuWallet(new CashuMint(mint), {
+        const wallet = await createLoadedCashuWallet({
+          CashuMint,
+          CashuWallet,
+          mintUrl: mint,
           ...(unit ? { unit } : {}),
           ...(det ? { bip39seed: det.bip39seed } : {}),
         });
-        await wallet.loadMint();
 
         const walletUnit = wallet.unit;
         const keysetId = wallet.keysetId;

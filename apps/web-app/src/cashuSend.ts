@@ -7,6 +7,7 @@ import {
 } from "./utils/cashuDeterministic";
 import { isCashuOutputsAlreadySignedError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
+import { createLoadedCashuWallet } from "./utils/cashuWallet";
 import {
   dedupeCashuProofs,
   filterUnspentCashuProofs,
@@ -90,15 +91,16 @@ export const createSendTokenWithTokensAtMint = async (args: {
     };
   }
 
-  const wallet = new CashuWallet(new CashuMint(mint), {
+  const wallet = await createLoadedCashuWallet({
+    CashuMint,
+    CashuWallet,
+    mintUrl: mint,
     ...(unit ? { unit } : {}),
     ...(det ? { bip39seed: det.bip39seed } : {}),
   });
 
   let spendableProofs = dedupeCashuProofs(allProofs);
   try {
-    await wallet.loadMint();
-
     const walletUnit = wallet.unit;
     const keysetId = wallet.keysetId;
 

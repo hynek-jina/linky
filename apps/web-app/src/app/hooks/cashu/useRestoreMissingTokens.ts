@@ -8,6 +8,7 @@ import {
   getCashuRestoreCursor,
   setCashuRestoreCursor,
 } from "../../../utils/cashuDeterministic";
+import { createLoadedCashuWallet } from "../../../utils/cashuWallet";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
 import type {
   CashuTokenRowLike,
@@ -234,13 +235,16 @@ export const useRestoreMissingTokens = ({
           })();
 
           for (const unit of units) {
-            const wallet = new CashuWallet(new CashuMint(mintUrl), {
-              unit,
-              bip39seed: det.bip39seed,
-            });
+            let wallet: Awaited<ReturnType<typeof createLoadedCashuWallet>>;
 
             try {
-              await wallet.loadMint();
+              wallet = await createLoadedCashuWallet({
+                CashuMint,
+                CashuWallet,
+                mintUrl,
+                unit,
+                bip39seed: det.bip39seed,
+              });
             } catch {
               // skip unreachable mints
               continue;
