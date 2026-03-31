@@ -138,6 +138,7 @@ import {
   type TopupMintQuoteDraft,
 } from "./hooks/topup/useTopupInvoiceQuoteEffects";
 import { useAppDataTransfer } from "./hooks/useAppDataTransfer";
+import { useAnonymousPaymentTelemetry } from "./hooks/useAnonymousPaymentTelemetry";
 import { useAppPreferences } from "./hooks/useAppPreferences";
 import { useArmedDeleteTimeouts } from "./hooks/useArmedDeleteTimeouts";
 import { useCashuDomain } from "./hooks/useCashuDomain";
@@ -726,6 +727,11 @@ export const useAppShellComposition = () => {
 
   const appOwnerId = syncOwner?.id ?? null;
   const pendingTopupStorageKey = `${LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX}.${String(appOwnerId ?? "anon")}`;
+
+  useAnonymousPaymentTelemetry({
+    appOwnerId,
+    makeLocalStorageKey,
+  });
 
   React.useEffect(() => {
     appOwnerIdRef.current = appOwnerId;

@@ -1,7 +1,6 @@
 import type { Proof as CashuProof } from "@cashu/cashu-ts";
 import * as Evolu from "@evolu/common";
 import React from "react";
-import type { ContactId } from "../../../evolu";
 import {
   ensureCashuDeterministicCounterAtLeast,
   getCashuDeterministicCounter,
@@ -10,7 +9,11 @@ import {
   setCashuRestoreCursor,
 } from "../../../utils/cashuDeterministic";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
-import type { CashuTokenRowLike, MintUrlInput } from "../../types/appTypes";
+import type {
+  CashuTokenRowLike,
+  LoggedPaymentEventParams,
+  MintUrlInput,
+} from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -21,16 +24,7 @@ interface UseRestoreMissingTokensParams {
   enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;
   insert: EvoluMutations["insert"];
   isMintDeleted: (mintUrl: string) => boolean;
-  logPaymentEvent: (event: {
-    amount?: number | null;
-    contactId?: ContactId | null;
-    direction: "in" | "out";
-    error?: string | null;
-    fee?: number | null;
-    mint?: string | null;
-    status: "ok" | "error";
-    unit?: string | null;
-  }) => void;
+  logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   mintInfoDeduped: readonly { canonicalUrl?: string | null }[];
   pushToast: (message: string) => void;
   readSeenMintsFromStorage: () => string[];
@@ -431,6 +425,8 @@ export const useRestoreMissingTokens = ({
                     unit: wallet.unit,
                     error: null,
                     contactId: null,
+                    method: "cashu_restore",
+                    phase: "restore",
                   });
                 }
               }

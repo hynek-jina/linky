@@ -1,6 +1,6 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
-import type { CashuTokenId, ContactId } from "../../evolu";
+import type { CashuTokenId } from "../../evolu";
 import {
   fetchLnurlInvoiceForTarget,
   getLnurlPayDisplayText,
@@ -19,6 +19,7 @@ import {
 import type {
   CashuTokenRowLike,
   ContactPayRowLike,
+  LoggedPaymentEventParams,
   LocalMintInfoRow,
   MintUrlInput,
 } from "../types/appTypes";
@@ -42,16 +43,7 @@ interface UseLightningPaymentsDomainParams {
   defaultMintUrl: string | null;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   insert: EvoluMutations["insert"];
-  logPaymentEvent: (event: {
-    amount?: number | null;
-    contactId?: ContactId | null;
-    direction: "in" | "out";
-    error?: string | null;
-    fee?: number | null;
-    mint?: string | null;
-    status: "ok" | "error";
-    unit?: string | null;
-  }) => void;
+  logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   mintInfoByUrl: Map<string, LocalMintInfoRow>;
   normalizeMintUrl: (url: MintUrlInput) => string | null;
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
@@ -232,6 +224,8 @@ export const useLightningPaymentsDomain = ({
                 unit: result.unit,
                 error: String(result.error ?? "unknown"),
                 contactId: null,
+                method: "lightning_invoice",
+                phase: "melt",
               });
 
               setStatus(
@@ -282,6 +276,8 @@ export const useLightningPaymentsDomain = ({
               unit: result.unit,
               error: null,
               contactId: null,
+              method: "lightning_invoice",
+              phase: "complete",
             });
 
             const displayAmount = formatDisplayedAmountParts(result.paidAmount);
@@ -313,6 +309,8 @@ export const useLightningPaymentsDomain = ({
           unit: "sat",
           error: getUnknownErrorMessage(lastError, "unknown"),
           contactId: null,
+          method: "lightning_invoice",
+          phase: "melt",
         });
         setStatus(
           `${t("payFailed")}: ${getUnknownErrorMessage(lastError, "unknown")}`,
@@ -540,6 +538,8 @@ export const useLightningPaymentsDomain = ({
                 unit: result.unit,
                 error: null,
                 contactId: null,
+                method: "lightning_address",
+                phase: "complete",
               });
 
               const displayAmount = formatDisplayedAmountParts(
@@ -606,6 +606,8 @@ export const useLightningPaymentsDomain = ({
           unit: "sat",
           error: finalErrorMessage,
           contactId: null,
+          method: "lightning_address",
+          phase: finalErrorMint ? "melt" : "invoice_fetch",
         });
         setStatus(`${t("payFailed")}: ${finalErrorMessage}`);
       } finally {

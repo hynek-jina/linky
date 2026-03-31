@@ -43,6 +43,8 @@ export const LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY =
   "linky.lightning_invoice_auto_pay_limit";
 export const FEEDBACK_CONTACT_NPUB =
   "npub1kkht6jvgr8mt4844saf80j5jjwyy6fdy90sxsuxt4hfv8pel499s96jvz8";
+export const PAYMENT_ANALYTICS_RECIPIENT_NPUB =
+  "npub1xuxvcnmw4drf8duzalvalxrfxjvwtrjdmwxy0ez2e62uje4drrvqu6pz2w";
 export const NO_GROUP_FILTER = "__linky_no_group__";
 
 export const LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY =
@@ -62,6 +64,10 @@ export const LOCAL_NOSTR_MESSAGES_STORAGE_KEY_PREFIX =
 export const LOCAL_MINT_INFO_STORAGE_KEY_PREFIX = "linky.local.mintInfo.v1";
 export const LOCAL_PENDING_PAYMENTS_STORAGE_KEY_PREFIX =
   "linky.local.pendingPayments.v1";
+export const LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX =
+  "linky.local.pendingPaymentTelemetry.v1";
+export const LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY_PREFIX =
+  "linky.local.pendingPaymentTelemetryLock.v1";
 export const LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX =
   "linky.local.pendingTopupQuote.v1";
 

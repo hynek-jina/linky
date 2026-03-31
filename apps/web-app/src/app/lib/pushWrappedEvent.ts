@@ -10,6 +10,8 @@ export const LINKY_PUSH_MARKER_TAG = "linky";
 export const LINKY_PUSH_MARKER_VALUE = "push";
 export const LINKY_PAYMENT_NOTICE_KIND = 24133;
 export const LINKY_PAYMENT_NOTICE_VALUE = "payment_notice";
+export const LINKY_PAYMENT_TELEMETRY_KIND = 24134;
+export const LINKY_PAYMENT_TELEMETRY_VALUE = "payment_telemetry";
 
 function currentTimestampSeconds(): number {
   return Math.round(Date.now() / 1000);

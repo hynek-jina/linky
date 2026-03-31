@@ -63,6 +63,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 - Contacts are capped at `MAX_CONTACTS_PER_OWNER` (currently 500); add-contact UI is disabled at limit and save is blocked
 - Evolu debug views (`#evolu-current-data`, `#evolu-history-data`) scope contacts/history to active owner lanes, with history retaining one previous contacts lane as backup
 - Core app remains local-first/client-side; optional background notifications are handled by the separate `apps/push` Bun service
+- Payment result logging in `useOwnerScopedStorage` now also queues anonymous payment telemetry in owner-scoped localStorage; `useAnonymousPaymentTelemetry` flushes that queue after the fact over Nostr gift wraps to a fixed collector `npub` using one-off ephemeral sender keys, lease-locking against duplicate multi-tab sends so telemetry never blocks the payment path
 - Native packaging uses a separate Capacitor shell in `apps/native-shell/` so Android/iOS project files stay isolated from the web app source tree
 - Native shells now load bundled `apps/web-app/dist` assets by default; Capacitor live reload must be enabled explicitly via `LINKY_CAP_SERVER_URL` / `CAP_SERVER_URL` before `cap sync` / `cap open`, preventing packaged APKs from pointing at `127.0.0.1`
 - Android release AAB builds derive `versionName` from the workspace `package.json` version and derive `versionCode` from semantic version components (`major * 10000 + minor * 100 + patch`), with optional `LINKY_ANDROID_VERSION_NAME` / `LINKY_ANDROID_VERSION_CODE` overrides for special releases

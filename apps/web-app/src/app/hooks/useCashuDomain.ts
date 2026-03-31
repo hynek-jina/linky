@@ -2,10 +2,12 @@ import type { OwnerId } from "@evolu/common";
 import * as Evolu from "@evolu/common";
 import React from "react";
 import { parseCashuToken } from "../../cashu";
-import type { ContactId } from "../../evolu";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../utils/constants";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
-import type { CashuTokenRowLike } from "../types/appTypes";
+import type {
+  CashuTokenRowLike,
+  LoggedPaymentEventParams,
+} from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -14,16 +16,7 @@ interface UseCashuDomainParams {
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
   cashuTokensAll: readonly CashuTokenRowLike[];
   insert: EvoluMutations["insert"];
-  logPaymentEvent: (event: {
-    amount?: number | null;
-    contactId?: ContactId | null;
-    direction: "in" | "out";
-    error?: string | null;
-    fee?: number | null;
-    mint?: string | null;
-    status: "ok" | "error";
-    unit?: string | null;
-  }) => void;
+  logPaymentEvent: (event: LoggedPaymentEventParams) => void;
 }
 
 export const useCashuDomain = ({
@@ -204,6 +197,8 @@ export const useCashuDomain = ({
               unit: null,
               error: null,
               contactId: null,
+              method: "cashu_receive",
+              phase: "receive",
             });
             safeLocalStorageSet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY, "");
           }
@@ -289,6 +284,8 @@ export const useCashuDomain = ({
         unit: null,
         error: null,
         contactId: null,
+        method: "cashu_receive",
+        phase: "receive",
       });
       safeLocalStorageSet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY, "");
     }
