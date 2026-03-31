@@ -5,7 +5,7 @@ interface MintGroup {
   tokens: string[];
 }
 
-interface MintCandidate extends MintGroup {
+export interface PaymentMintCandidate extends MintGroup {
   mint: string;
 }
 
@@ -29,7 +29,7 @@ export const buildCashuMintCandidates = <
   mintGroups: Map<string, MintGroup>,
   preferredMint: string | null,
   mintInfoByUrl: Map<string, TMintInfo>,
-): MintCandidate[] => {
+): PaymentMintCandidate[] => {
   const preferred = normalizeMint(preferredMint ?? "");
   return Array.from(mintGroups.entries())
     .map(([mint, info]) => ({ mint, ...info }))
@@ -45,4 +45,24 @@ export const buildCashuMintCandidates = <
       if (mppPriority !== 0) return mppPriority;
       return b.sum - a.sum;
     });
+};
+
+export const requiresMultipleMintsForAmount = (
+  candidates: readonly Pick<PaymentMintCandidate, "sum">[],
+  amountSat: number,
+): boolean => {
+  if (!Number.isFinite(amountSat) || amountSat <= 0) return false;
+
+  let totalAvailableSat = 0;
+  let maxSingleMintSat = 0;
+  for (const candidate of candidates) {
+    const candidateSum = Number(candidate.sum ?? 0) || 0;
+    if (candidateSum <= 0) continue;
+    totalAvailableSat += candidateSum;
+    if (candidateSum > maxSingleMintSat) {
+      maxSingleMintSat = candidateSum;
+    }
+  }
+
+  return totalAvailableSat >= amountSat && maxSingleMintSat < amountSat;
 };

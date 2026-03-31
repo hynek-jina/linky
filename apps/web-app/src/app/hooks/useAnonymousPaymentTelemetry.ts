@@ -1,13 +1,6 @@
 import type { OwnerId } from "@evolu/common";
-import React from "react";
 import { generateSecretKey, nip19 } from "nostr-tools";
-import { getSharedAppNostrPool } from "../lib/nostrPool";
-import {
-  createPaymentTelemetryWrappedEvent,
-  getPaymentTelemetryRetryDelaySec,
-} from "../lib/paymentTelemetry";
-import { publishSingleWrappedWithRetry } from "../lib/nostrPublishRetry";
-import type { LocalPaymentTelemetryEvent } from "../types/appTypes";
+import React from "react";
 import { NOSTR_RELAYS } from "../../nostrProfile";
 import {
   LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY_PREFIX,
@@ -19,6 +12,13 @@ import {
   safeLocalStorageSetJson,
   withLocalStorageLeaseLock,
 } from "../../utils/storage";
+import { getSharedAppNostrPool } from "../lib/nostrPool";
+import { publishSingleWrappedWithRetry } from "../lib/nostrPublishRetry";
+import {
+  createPaymentTelemetryWrappedEvent,
+  getPaymentTelemetryRetryDelaySec,
+} from "../lib/paymentTelemetry";
+import type { LocalPaymentTelemetryEvent } from "../types/appTypes";
 
 interface UseAnonymousPaymentTelemetryParams {
   appOwnerId: OwnerId | null;
@@ -85,6 +85,7 @@ const isLocalPaymentTelemetryEvent = (
   const amountBucket = Reflect.get(value, "amountBucket");
   const feeBucket = Reflect.get(value, "feeBucket");
   const errorCode = Reflect.get(value, "errorCode");
+  const errorDetail = Reflect.get(value, "errorDetail");
 
   return (
     typeof id === "string" &&
@@ -100,7 +101,8 @@ const isLocalPaymentTelemetryEvent = (
     typeof appVersion === "string" &&
     (typeof amountBucket === "string" || amountBucket === null) &&
     (typeof feeBucket === "string" || feeBucket === null) &&
-    (typeof errorCode === "string" || errorCode === null)
+    (typeof errorCode === "string" || errorCode === null) &&
+    (typeof errorDetail === "string" || errorDetail === null)
   );
 };
 

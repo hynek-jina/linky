@@ -7,7 +7,10 @@ import {
 } from "./utils/cashuDeterministic";
 import { isCashuOutputsAlreadySignedError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
-import { createLoadedCashuWallet } from "./utils/cashuWallet";
+import {
+  createLoadedCashuWallet,
+  decodeCashuTokenForMint,
+} from "./utils/cashuWallet";
 
 type CashuAcceptResult = {
   amount: number;
@@ -22,11 +25,16 @@ export const acceptCashuToken = async (
   const tokenText = rawToken.trim();
   if (!tokenText) throw new Error("Empty token");
 
-  const { CashuMint, CashuWallet, getDecodedToken, getEncodedToken } =
-    await getCashuLib();
+  const {
+    CashuMint,
+    CashuWallet,
+    getDecodedToken,
+    getEncodedToken,
+    getTokenMetadata,
+  } = await getCashuLib();
 
-  const decoded = getDecodedToken(tokenText);
-  const mintUrl = decoded.mint;
+  const tokenMetadata = getTokenMetadata(tokenText);
+  const mintUrl = String(tokenMetadata.mint ?? "").trim();
   if (!mintUrl) throw new Error("Token mint missing");
 
   const det = getCashuDeterministicSeedFromStorage();
@@ -35,8 +43,16 @@ export const acceptCashuToken = async (
     CashuMint,
     CashuWallet,
     mintUrl,
-    ...(decoded.unit ? { unit: decoded.unit } : {}),
+    ...(tokenMetadata.unit ? { unit: tokenMetadata.unit } : {}),
     ...(det ? { bip39seed: det.bip39seed } : {}),
+  });
+
+  const decoded = decodeCashuTokenForMint({
+    tokenText,
+    mintUrl,
+    keysets: wallet.keysets,
+    getDecodedToken,
+    getTokenMetadata,
   });
 
   const unit = wallet.unit;

@@ -7,11 +7,14 @@ import {
 } from "./utils/cashuDeterministic";
 import { isCashuOutputsAlreadySignedError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
-import { createLoadedCashuWallet } from "./utils/cashuWallet";
 import {
   dedupeCashuProofs,
   filterUnspentCashuProofs,
 } from "./utils/cashuProofs";
+import {
+  createLoadedCashuWallet,
+  decodeCashuTokenForMint,
+} from "./utils/cashuWallet";
 import { getUnknownErrorMessage } from "./utils/unknown";
 
 const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
@@ -58,18 +61,36 @@ export const createSendTokenWithTokensAtMint = async (args: {
     };
   }
 
-  const { CashuMint, CashuWallet, getDecodedToken, getEncodedToken } =
-    await getCashuLib();
+  const {
+    CashuMint,
+    CashuWallet,
+    getDecodedToken,
+    getEncodedToken,
+    getTokenMetadata,
+  } = await getCashuLib();
 
   const det = getCashuDeterministicSeedFromStorage();
+  const wallet = await createLoadedCashuWallet({
+    CashuMint,
+    CashuWallet,
+    mintUrl: mint,
+    ...(unit ? { unit } : {}),
+    ...(det ? { bip39seed: det.bip39seed } : {}),
+  });
+  const walletUnit = wallet.unit;
+  const keysetId = wallet.keysetId;
 
   const allProofs: Proof[] = [];
 
   try {
     for (const tokenText of tokens) {
-      const decoded = getDecodedToken(tokenText);
-      if (!decoded?.mint) throw new Error("Token mint missing");
-      if (decoded.mint !== mint) throw new Error("Mixed mints not supported");
+      const decoded = decodeCashuTokenForMint({
+        tokenText,
+        mintUrl: mint,
+        keysets: wallet.keysets,
+        getDecodedToken,
+        getTokenMetadata,
+      });
       for (const proof of decoded.proofs ?? []) {
         allProofs.push({
           amount: Number(proof.amount ?? 0),
@@ -91,19 +112,8 @@ export const createSendTokenWithTokensAtMint = async (args: {
     };
   }
 
-  const wallet = await createLoadedCashuWallet({
-    CashuMint,
-    CashuWallet,
-    mintUrl: mint,
-    ...(unit ? { unit } : {}),
-    ...(det ? { bip39seed: det.bip39seed } : {}),
-  });
-
   let spendableProofs = dedupeCashuProofs(allProofs);
   try {
-    const walletUnit = wallet.unit;
-    const keysetId = wallet.keysetId;
-
     try {
       // Ignore already-spent proofs so stale local token rows do not block send.
       const states = await wallet.checkProofsStates(spendableProofs);

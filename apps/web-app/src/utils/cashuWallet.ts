@@ -17,8 +17,22 @@ interface CashuWalletOptions {
   unit?: string;
 }
 
+interface CashuTokenMetadataLike {
+  mint?: string;
+}
+
+interface DecodedCashuTokenLike {
+  mint?: string;
+}
+
 const isHexString = (value: string): boolean => {
   return /^[0-9a-f]+$/i.test(value);
+};
+
+const normalizeMintUrlValue = (value: string): string => {
+  return String(value ?? "")
+    .trim()
+    .replace(/\/+$/, "");
 };
 
 const buildWalletOptions = (
@@ -34,9 +48,13 @@ const buildWalletOptions = (
 };
 
 export const isCashuKeysetVerificationError = (error: unknown): boolean => {
-  return getUnknownErrorMessage(error, "")
-    .toLowerCase()
-    .includes("couldn't verify keyset id");
+  const message = getUnknownErrorMessage(error, "").toLowerCase();
+  return (
+    message.includes("couldn't verify keyset id") ||
+    message.includes("short keyset id v2") ||
+    message.includes("got no keysets to map it to") ||
+    message.includes("couldn't map short keyset id")
+  );
 };
 
 export const pickPreferredMintKeyset = (
@@ -56,6 +74,28 @@ export const pickPreferredMintKeyset = (
     });
 
   return matches[0] ?? null;
+};
+
+export const decodeCashuTokenForMint = <
+  TDecoded extends DecodedCashuTokenLike,
+>(args: {
+  getDecodedToken: (tokenText: string, keysets?: MintKeyset[]) => TDecoded;
+  getTokenMetadata: (tokenText: string) => CashuTokenMetadataLike;
+  keysets: MintKeyset[];
+  mintUrl: string;
+  tokenText: string;
+}): TDecoded => {
+  const tokenMetadata = args.getTokenMetadata(args.tokenText);
+  const tokenMintUrl = normalizeMintUrlValue(tokenMetadata.mint ?? "");
+  if (!tokenMintUrl) {
+    throw new Error("Token mint missing");
+  }
+
+  if (tokenMintUrl !== normalizeMintUrlValue(args.mintUrl)) {
+    throw new Error("Mixed mints not supported");
+  }
+
+  return args.getDecodedToken(args.tokenText, args.keysets);
 };
 
 const createWalletInstance = (

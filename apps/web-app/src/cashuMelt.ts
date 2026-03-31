@@ -13,11 +13,14 @@ import {
 } from "./utils/cashuDeterministic";
 import { isCashuOutputsAlreadySignedError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
-import { createLoadedCashuWallet } from "./utils/cashuWallet";
 import {
   dedupeCashuProofs,
   filterUnspentCashuProofs,
 } from "./utils/cashuProofs";
+import {
+  createLoadedCashuWallet,
+  decodeCashuTokenForMint,
+} from "./utils/cashuWallet";
 import { getUnknownErrorMessage } from "./utils/unknown";
 
 type CashuPayResult = {
@@ -119,18 +122,36 @@ export const meltInvoiceWithTokensAtMint = async (args: {
   unit?: string | null;
 }): Promise<CashuPayResult | CashuPayErrorResult> => {
   const { invoice, mint, tokens, unit } = args;
-  const { CashuMint, CashuWallet, getDecodedToken, getEncodedToken } =
-    await getCashuLib();
+  const {
+    CashuMint,
+    CashuWallet,
+    getDecodedToken,
+    getEncodedToken,
+    getTokenMetadata,
+  } = await getCashuLib();
 
   const det = getCashuDeterministicSeedFromStorage();
+  const wallet = await createLoadedCashuWallet({
+    CashuMint,
+    CashuWallet,
+    mintUrl: mint,
+    ...(unit ? { unit } : {}),
+    ...(det ? { bip39seed: det.bip39seed } : {}),
+  });
+  const walletUnit = wallet.unit;
+  const keysetId = wallet.keysetId;
 
   const allProofs: Proof[] = [];
 
   try {
     for (const tokenText of tokens) {
-      const decoded = getDecodedToken(tokenText);
-      if (!decoded?.mint) throw new Error("Token mint missing");
-      if (decoded.mint !== mint) throw new Error("Mixed mints not supported");
+      const decoded = decodeCashuTokenForMint({
+        tokenText,
+        mintUrl: mint,
+        keysets: wallet.keysets,
+        getDecodedToken,
+        getTokenMetadata,
+      });
       for (const proof of decoded.proofs ?? []) {
         allProofs.push({
           amount: Number(proof.amount ?? 0),
@@ -155,16 +176,6 @@ export const meltInvoiceWithTokensAtMint = async (args: {
   }
 
   try {
-    const wallet = await createLoadedCashuWallet({
-      CashuMint,
-      CashuWallet,
-      mintUrl: mint,
-      ...(unit ? { unit } : {}),
-      ...(det ? { bip39seed: det.bip39seed } : {}),
-    });
-
-    const walletUnit = wallet.unit;
-    const keysetId = wallet.keysetId;
     let spendableProofs = dedupeCashuProofs(allProofs);
 
     try {

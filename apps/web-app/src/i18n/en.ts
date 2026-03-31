@@ -479,6 +479,8 @@ export const en = {
   payQueued: "Payment queued for delivery.",
   payQueuedMessage: "Queued payment {amount} {unit} → {name}.",
   payFailed: "Payment failed",
+  payMultiMintUnsupported:
+    "A single Lightning payment cannot yet be assembled from tokens across multiple mints.",
   payPromiseLimit: "Promise limit reached.",
 
   paidSent: "Sent {amount} {unit}.",

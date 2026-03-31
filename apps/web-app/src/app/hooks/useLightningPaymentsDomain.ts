@@ -9,6 +9,7 @@ import {
 } from "../../lnurlPay";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../utils/constants";
 import type { DisplayAmountParts } from "../../utils/displayAmounts";
+import { getLightningInvoicePreview } from "../../utils/lightningInvoice";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
 import { isCashuTokenAcceptedState } from "../lib/cashuTokenState";
@@ -16,11 +17,12 @@ import {
   buildPaymentAmountAttempts,
   isRetryablePaymentAmountFailure,
 } from "../lib/paymentAmountFallback";
+import { requiresMultipleMintsForAmount } from "../lib/paymentMintSelection";
 import type {
   CashuTokenRowLike,
   ContactPayRowLike,
-  LoggedPaymentEventParams,
   LocalMintInfoRow,
+  LoggedPaymentEventParams,
   MintUrlInput,
 } from "../types/appTypes";
 
@@ -158,9 +160,32 @@ export const useLightningPaymentsDomain = ({
 
         const preferredMint = normalizeMintUrl(defaultMintUrl ?? "");
         const candidates = buildCashuMintCandidates(mintGroups, preferredMint);
+        const invoiceAmountSat =
+          getLightningInvoicePreview(normalized)?.amountSat;
 
         if (candidates.length === 0) {
           setStatus(t("payInsufficient"));
+          return false;
+        }
+
+        if (
+          typeof invoiceAmountSat === "number" &&
+          requiresMultipleMintsForAmount(candidates, invoiceAmountSat)
+        ) {
+          const errorMessage = t("payMultiMintUnsupported");
+          logPaymentEvent({
+            direction: "out",
+            status: "error",
+            amount: invoiceAmountSat,
+            fee: null,
+            mint: null,
+            unit: "sat",
+            error: errorMessage,
+            contactId: null,
+            method: "lightning_invoice",
+            phase: "melt",
+          });
+          setStatus(`${t("payFailed")}: ${errorMessage}`);
           return false;
         }
 
@@ -416,6 +441,16 @@ export const useLightningPaymentsDomain = ({
           const attemptedAmountSat = amountAttempts[attemptIndex];
           const hasLowerAmountFallback =
             attemptIndex < amountAttempts.length - 1;
+
+          if (requiresMultipleMintsForAmount(candidates, attemptedAmountSat)) {
+            if (hasLowerAmountFallback) {
+              continue;
+            }
+
+            finalErrorMessage = t("payMultiMintUnsupported");
+            finalErrorMint = null;
+            break;
+          }
 
           let attemptInvoice: string;
           try {

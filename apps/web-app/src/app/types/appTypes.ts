@@ -54,6 +54,7 @@ export type LocalPaymentTelemetryEvent = {
   createdAtSec: number;
   direction: "in" | "out";
   errorCode: string | null;
+  errorDetail: string | null;
   feeBucket: string | null;
   id: string;
   lastAttemptAtSec: number | null;

@@ -482,6 +482,8 @@ export const cs = {
   payQueued: "Platba čeká na odeslání.",
   payQueuedMessage: "Platba čeká: {amount} {unit} → {name}.",
   payFailed: "Platba se nepovedla",
+  payMultiMintUnsupported:
+    "Jednu lightning platbu zatím nejde složit z tokenů z více mintů.",
   payPromiseLimit: "Dosažen limit slibů.",
 
   paidSent: "Odesláno {amount} {unit}.",

@@ -1,17 +1,17 @@
-import { getPublicKey, type UnsignedEvent } from "nostr-tools";
 import type { Event as NostrToolsEvent } from "nostr-tools";
+import { getPublicKey, type UnsignedEvent } from "nostr-tools";
 import { getPlatformTarget } from "../../platform/runtime";
 import { makeLocalId } from "../../utils/validation";
-import {
-  LINKY_PAYMENT_TELEMETRY_KIND,
-  wrapEventWithoutPushMarker,
-} from "./pushWrappedEvent";
 import type {
   LocalPaymentTelemetryEvent,
   LoggedPaymentEventParams,
   PaymentTelemetryMethod,
   PaymentTelemetryPhase,
 } from "../types/appTypes";
+import {
+  LINKY_PAYMENT_TELEMETRY_KIND,
+  wrapEventWithoutPushMarker,
+} from "./pushWrappedEvent";
 
 const AMOUNT_BUCKETS = [1, 10, 100, 1_000, 10_000, 100_000];
 const FEE_BUCKETS = [1, 5, 10, 25, 100, 500];
@@ -70,6 +70,14 @@ const asTelemetryPhase = (
   }
 };
 
+export const normalizePaymentTelemetryErrorDetail = (
+  value: string | null | undefined,
+): string | null => {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  return text.slice(0, 500);
+};
+
 export const classifyPaymentErrorCode = (
   value: string | null | undefined,
 ): string | null => {
@@ -77,6 +85,20 @@ export const classifyPaymentErrorCode = (
     .trim()
     .toLowerCase();
   if (!text) return null;
+  if (
+    text.includes("short keyset id v2") ||
+    text.includes("got no keysets to map it to") ||
+    text.includes("couldn't map short keyset id")
+  ) {
+    return "short_keyset_id_unmapped";
+  }
+  if (
+    text.includes("multiple mints") ||
+    text.includes("více mint") ||
+    text.includes("one lightning invoice from multiple mints")
+  ) {
+    return "multi_mint_unsupported";
+  }
   if (text.includes("offline")) return "offline";
   if (text.includes("timeout") || text.includes("timed out")) return "timeout";
   if (text.includes("insufficient")) return "insufficient";
@@ -110,6 +132,7 @@ export const createLocalPaymentTelemetryEvent = (
     amountBucket: bucketPositiveNumber(event.amount, AMOUNT_BUCKETS),
     feeBucket: bucketPositiveNumber(event.fee, FEE_BUCKETS),
     errorCode: classifyPaymentErrorCode(event.error),
+    errorDetail: normalizePaymentTelemetryErrorDetail(event.error),
     platform: getPlatformTarget(),
     appVersion: __APP_VERSION__,
   };
@@ -153,6 +176,7 @@ export const createPaymentTelemetryWrappedEvent = (args: {
       amountBucket: args.item.amountBucket,
       feeBucket: args.item.feeBucket,
       errorCode: args.item.errorCode,
+      errorDetail: args.item.errorDetail,
       platform: args.item.platform,
       appVersion: args.item.appVersion,
     }),
