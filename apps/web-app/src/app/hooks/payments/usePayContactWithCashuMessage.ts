@@ -29,6 +29,7 @@ import type {
   CashuTokenRowLike,
   ContactRowLike,
   LocalNostrMessage,
+  LoggedPaymentEventParams,
   NewLocalNostrMessage,
   PaymentLogData,
   PublishWrappedResult,
@@ -94,16 +95,7 @@ interface UsePayContactWithCashuMessageParams {
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   insert: EvoluMutations["insert"];
   logPayStep: (step: string, data?: PaymentLogData) => void;
-  logPaymentEvent: (event: {
-    amount?: number | null;
-    contactId?: ContactId | null;
-    direction: "in" | "out";
-    error?: string | null;
-    fee?: number | null;
-    mint?: string | null;
-    status: "ok" | "error";
-    unit?: string | null;
-  }) => void;
+  logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   nostrMessagesLocal: LocalNostrMessage[];
   payWithCashuEnabled: boolean;
   publishWrappedWithRetry: (
@@ -531,6 +523,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             unit: "sat",
             error: getUnknownErrorMessage(lastError, "insufficient funds"),
             contactId: contact.id as ContactId,
+            method: "cashu_chat",
+            phase: "swap",
           });
           if (notify) {
             setStatus(
@@ -754,6 +748,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           unit: "sat",
           error: null,
           contactId: contact.id as ContactId,
+          method: "cashu_chat",
+          phase: hasPendingMessages ? "publish" : "complete",
         });
 
         if (notify) {
@@ -790,6 +786,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           unit: "sat",
           error: getUnknownErrorMessage(e, "unknown"),
           contactId: contact.id as ContactId,
+          method: "cashu_chat",
+          phase: "publish",
         });
         if (notify) {
           setStatus(

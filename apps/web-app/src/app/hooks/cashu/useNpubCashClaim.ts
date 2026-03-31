@@ -2,14 +2,17 @@ import * as Evolu from "@evolu/common";
 import React from "react";
 import { parseCashuToken } from "../../../cashu";
 import { acceptCashuToken } from "../../../cashuAccept";
-import type { ContactId } from "../../../evolu";
 import type { JsonValue } from "../../../types/json";
 import type { Route } from "../../../types/route";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { asRecord } from "../../../utils/validation";
-import type { CashuTokenRowLike, LocalMintInfoRow } from "../../types/appTypes";
+import type {
+  CashuTokenRowLike,
+  LocalMintInfoRow,
+  LoggedPaymentEventParams,
+} from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -23,16 +26,7 @@ interface UseNpubCashClaimParams {
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   insert: EvoluMutations["insert"];
   isMintDeleted: (mintUrl: string) => boolean;
-  logPaymentEvent: (event: {
-    amount?: number | null;
-    contactId?: ContactId | null;
-    direction: "in" | "out";
-    error?: string | null;
-    fee?: number | null;
-    mint?: string | null;
-    status: "ok" | "error";
-    unit?: string | null;
-  }) => void;
+  logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   makeNip98AuthHeader: (
     url: string,
     method: string,
@@ -247,6 +241,8 @@ export const useNpubCashClaim = ({
             unit: accepted.unit,
             error: null,
             contactId: null,
+            method: "cashu_receive",
+            phase: "receive",
           });
 
           if (routeKind !== "topupInvoice") {
@@ -289,6 +285,8 @@ export const useNpubCashClaim = ({
             unit: null,
             error: message,
             contactId: null,
+            method: "cashu_receive",
+            phase: "receive",
           });
 
           const ownerId = await resolveOwnerIdForWrite();

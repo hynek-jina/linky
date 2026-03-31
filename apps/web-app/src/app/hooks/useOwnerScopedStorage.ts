@@ -1,7 +1,9 @@
 import type { OwnerId } from "@evolu/common";
 import React from "react";
-import type { ContactId } from "../../evolu";
-import { LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX } from "../../utils/constants";
+import {
+  LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX,
+  LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX,
+} from "../../utils/constants";
 import {
   CASHU_SEEN_MINTS_STORAGE_KEY,
   normalizeMintUrl,
@@ -11,25 +13,20 @@ import {
   safeLocalStorageSetJson,
 } from "../../utils/storage";
 import { makeLocalId } from "../../utils/validation";
-import type { LocalPaymentEvent, MintUrlInput } from "../types/appTypes";
-
-interface LogPaymentEventParams {
-  amount?: number | null;
-  contactId?: ContactId | null;
-  direction: "in" | "out";
-  error?: string | null;
-  fee?: number | null;
-  mint?: string | null;
-  status: "ok" | "error";
-  unit?: string | null;
-}
+import { createLocalPaymentTelemetryEvent } from "../lib/paymentTelemetry";
+import type {
+  LocalPaymentEvent,
+  LocalPaymentTelemetryEvent,
+  LoggedPaymentEventParams,
+  MintUrlInput,
+} from "../types/appTypes";
 
 interface UseOwnerScopedStorageParams {
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
 }
 
 interface UseOwnerScopedStorageResult {
-  logPaymentEvent: (event: LogPaymentEventParams) => void;
+  logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   makeLocalStorageKey: (prefix: string) => string;
   readSeenMintsFromStorage: () => string[];
   rememberSeenMint: (mintUrl: MintUrlInput) => void;
@@ -82,7 +79,7 @@ export const useOwnerScopedStorage = ({
   );
 
   const logPaymentEvent = React.useCallback(
-    (event: LogPaymentEventParams) => {
+    (event: LoggedPaymentEventParams) => {
       const ownerId = appOwnerIdRef.current;
       if (!ownerId) return;
 
@@ -111,6 +108,8 @@ export const useOwnerScopedStorage = ({
         unit: unit || null,
         error: err ? err.slice(0, 1000) : null,
         contactId: event.contactId ? String(event.contactId) : null,
+        method: event.method ?? null,
+        phase: event.phase ?? null,
       };
 
       const existing = safeLocalStorageGetJson(
@@ -121,6 +120,21 @@ export const useOwnerScopedStorage = ({
       safeLocalStorageSetJson(
         makeLocalStorageKey(LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX),
         next,
+      );
+
+      const telemetryEntry = createLocalPaymentTelemetryEvent(event, nowSec);
+      const emptyTelemetryQueue: LocalPaymentTelemetryEvent[] = [];
+      const telemetryQueue = safeLocalStorageGetJson(
+        makeLocalStorageKey(LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX),
+        emptyTelemetryQueue,
+      );
+      const nextTelemetryQueue = [telemetryEntry, ...telemetryQueue].slice(
+        0,
+        250,
+      );
+      safeLocalStorageSetJson(
+        makeLocalStorageKey(LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX),
+        nextTelemetryQueue,
       );
     },
     [appOwnerIdRef, makeLocalStorageKey],

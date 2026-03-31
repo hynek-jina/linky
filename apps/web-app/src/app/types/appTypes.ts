@@ -9,9 +9,59 @@ export type LocalPaymentEvent = {
   error: string | null;
   fee: number | null;
   id: string;
+  method?: PaymentTelemetryMethod | null;
   mint: string | null;
+  phase?: PaymentTelemetryPhase | null;
   status: "ok" | "error";
   unit: string | null;
+};
+
+export type PaymentTelemetryMethod =
+  | "cashu_chat"
+  | "cashu_receive"
+  | "cashu_restore"
+  | "lightning_address"
+  | "lightning_invoice"
+  | "unknown";
+
+export type PaymentTelemetryPhase =
+  | "complete"
+  | "invoice_fetch"
+  | "melt"
+  | "publish"
+  | "receive"
+  | "restore"
+  | "swap"
+  | "unknown";
+
+export type LoggedPaymentEventParams = {
+  amount?: number | null;
+  contactId?: ContactId | null;
+  direction: "in" | "out";
+  error?: string | null;
+  fee?: number | null;
+  method?: PaymentTelemetryMethod | null;
+  mint?: string | null;
+  phase?: PaymentTelemetryPhase | null;
+  status: "ok" | "error";
+  unit?: string | null;
+};
+
+export type LocalPaymentTelemetryEvent = {
+  amountBucket: string | null;
+  appVersion: string;
+  attemptCount: number;
+  createdAtSec: number;
+  direction: "in" | "out";
+  errorCode: string | null;
+  feeBucket: string | null;
+  id: string;
+  lastAttemptAtSec: number | null;
+  method: PaymentTelemetryMethod;
+  nextAttemptAtSec: number;
+  phase: PaymentTelemetryPhase;
+  platform: "android" | "ios" | "web";
+  status: "ok" | "error";
 };
 
 export type LocalNostrMessage = {

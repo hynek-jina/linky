@@ -2,12 +2,15 @@ import * as Evolu from "@evolu/common";
 import React from "react";
 import { parseCashuToken } from "../../../cashu";
 import { acceptCashuToken } from "../../../cashuAccept";
-import type { ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { safeLocalStorageSet } from "../../../utils/storage";
-import type { OptionalNumber, OptionalText } from "../../types/appTypes";
+import type {
+  LoggedPaymentEventParams,
+  OptionalNumber,
+  OptionalText,
+} from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -24,16 +27,7 @@ interface UseSaveCashuFromTextParams {
   insert: EvoluMutations["insert"];
   isCashuTokenStored: (tokenRaw: string) => boolean;
   isMintDeleted: (mintUrl: string) => boolean;
-  logPaymentEvent: (event: {
-    amount?: number | null;
-    contactId?: ContactId | null;
-    direction: "in" | "out";
-    error?: string | null;
-    fee?: number | null;
-    mint?: string | null;
-    status: "ok" | "error";
-    unit?: string | null;
-  }) => void;
+  logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   mintInfoByUrl: Map<string, CashuTokenMetaRow>;
   recentlyReceivedTokenTimerRef: React.MutableRefObject<number | null>;
   refreshMintInfo: (mintUrl: string) => Promise<void>;
@@ -248,6 +242,8 @@ export const useSaveCashuFromText = ({
             unit: accepted.unit,
             error: null,
             contactId: null,
+            method: "cashu_receive",
+            phase: "receive",
           });
 
           const title =
@@ -280,6 +276,8 @@ export const useSaveCashuFromText = ({
             unit: null,
             error: message,
             contactId: null,
+            method: "cashu_receive",
+            phase: "receive",
           });
           const ownerId = await resolveOwnerIdForWrite();
           const result = ownerId
