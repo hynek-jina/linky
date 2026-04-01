@@ -67,6 +67,7 @@ button {
 
 .topbar,
 .hero,
+.feature-showcase,
 .footer-links {
   width: min(1120px, 100%);
   margin: 0 auto;
@@ -318,6 +319,104 @@ button {
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
 }
 
+.feature-showcase {
+  margin-top: 56px;
+}
+
+.section-heading {
+  max-width: 42rem;
+  margin-bottom: 24px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(2rem, 7vw, 3.5rem);
+  line-height: 1.02;
+}
+
+.section-lede {
+  margin: 14px 0 0;
+  color: rgba(247, 244, 234, 0.72);
+  font-size: 1rem;
+}
+
+.feature-stage {
+  display: grid;
+  gap: 20px;
+  padding: 0;
+}
+
+.feature-stage-media {
+  width: min(100%, 360px);
+  justify-self: center;
+  overflow: hidden;
+  border-radius: 28px;
+  background: rgba(4, 12, 12, 0.88);
+  box-shadow: 0 24px 44px rgba(0, 0, 0, 0.22);
+}
+
+.feature-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.feature-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.feature-index {
+  margin: 0;
+  color: #8fe1d4;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.feature-copy h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.feature-copy p:last-child {
+  margin: 0;
+  color: rgba(247, 244, 234, 0.72);
+}
+
+.feature-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.feature-dot {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(247, 244, 234, 0.22);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+
+.feature-dot:hover {
+  background: rgba(247, 244, 234, 0.42);
+}
+
+.feature-dot.is-active {
+  background: #14b8a6;
+  transform: scale(1.2);
+}
+
 .footer-links {
   display: flex;
   flex-wrap: wrap;
@@ -372,7 +471,25 @@ button {
   }
 
   .footer-links {
-    margin-top: 8px;
+    margin-top: 18px;
     justify-content: flex-end;
+  }
+
+  .feature-showcase {
+    margin-top: 88px;
+  }
+
+  .feature-stage {
+    grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
+    align-items: center;
+    gap: 28px;
+  }
+
+  .feature-stage-media {
+    width: 100%;
+  }
+
+  .feature-dots {
+    grid-column: 1 / -1;
   }
 }

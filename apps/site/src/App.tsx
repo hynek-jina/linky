@@ -4,6 +4,11 @@ type CtaMode = "android-apk" | "web";
 
 type Locale = "cs" | "en";
 
+interface FeatureVideoCopy {
+  title: string;
+  description: string;
+}
+
 interface LocaleCopy {
   htmlLang: string;
   switchLabel: string;
@@ -16,6 +21,13 @@ interface LocaleCopy {
   imageTitle: string;
   githubLabel: string;
   nostrLabel: string;
+  featureSectionTitle: string;
+  featureVideos: [
+    FeatureVideoCopy,
+    FeatureVideoCopy,
+    FeatureVideoCopy,
+    FeatureVideoCopy,
+  ];
 }
 
 const latestAndroidApkUrl =
@@ -35,6 +47,27 @@ const copy: Record<Locale, LocaleCopy> = {
     imageTitle: "Fotorealistické setkání lidí s aplikací Linky",
     githubLabel: "GitHub",
     nostrLabel: "Nostr profil",
+    featureSectionTitle: "Jak to funguje",
+    featureVideos: [
+      {
+        title: "Vytvoření profilu",
+        description: "Na tři kliknutí máte profil a lightning adresu.",
+      },
+      {
+        title: "Nahrání prostředků",
+        description:
+          "Po kliknutí na Přijmout zadáte částku. Jakmile proplatíte lightnign fakturu, tak se vám prostředky objeví v Linky.",
+      },
+      {
+        title: "Přidání kontaktu",
+        description: "Načtete QR kód a kontakt se sám přidá.",
+      },
+      {
+        title: "Platba na kontakt",
+        description:
+          "U kontaktu vyberete platbu, zadáte částku a potvrdíte. Hotovo.",
+      },
+    ],
   },
   en: {
     htmlLang: "en",
@@ -49,6 +82,27 @@ const copy: Record<Locale, LocaleCopy> = {
     imageTitle: "Photorealistic meeting of people with the Linky app",
     githubLabel: "GitHub",
     nostrLabel: "Nostr profile",
+    featureSectionTitle: "How it works",
+    featureVideos: [
+      {
+        title: "Creating a profile",
+        description:
+          "In just a few taps, you have your profile and lightning address ready to go.",
+      },
+      {
+        title: "Uploading funds",
+        description:
+          "After clicking Accept, you enter the amount. Once you pay the lightning invoice, the funds appear in Linky.",
+      },
+      {
+        title: "Adding a contact",
+        description: "Scan a QR code and the contact is automatically added.",
+      },
+      {
+        title: "Paying a contact",
+        description: "Select a contact, enter the amount, and confirm. Done.",
+      },
+    ],
   },
 };
 
@@ -59,9 +113,27 @@ const localeLabels: Record<Locale, string> = {
 
 const localeOptions: Locale[] = ["cs", "en"];
 const localeStorageKey = "linky.lang";
+const featureVideoSources = [
+  "/videos/feature-1.webm",
+  "/videos/feature-2.webm",
+  "/videos/feature-3.webm",
+  "/videos/feature-4.webm",
+] as const;
 
 const isNodeTarget = (value: EventTarget | null): value is Node => {
   return value instanceof Node;
+};
+
+const isVideoElement = (
+  value: HTMLVideoElement | null | undefined,
+): value is HTMLVideoElement => {
+  return value instanceof HTMLVideoElement;
+};
+
+const isHTMLElement = (
+  value: Element | null | undefined,
+): value is HTMLElement => {
+  return value instanceof HTMLElement;
 };
 
 const getInitialLocale = (): Locale => {
@@ -90,8 +162,17 @@ function App() {
   const [locale, setLocale] = useState<Locale>(getInitialLocale);
   const [preferredCtaMode, setPreferredCtaMode] = useState<CtaMode>("web");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeFeatureIndex, setActiveFeatureIndex] = useState(0);
+  const [isFeaturePlaying, setIsFeaturePlaying] = useState(false);
+  const [currentFeatureAspectRatio, setCurrentFeatureAspectRatio] =
+    useState<number>(9 / 19.5);
   const activeCopy = useMemo(() => copy[locale], [locale]);
+  const activeFeature = activeCopy.featureVideos[activeFeatureIndex];
   const ctaMenuRef = useRef<HTMLDivElement | null>(null);
+  const featureSectionRef = useRef<HTMLElement | null>(null);
+  const featureVideoRef = useRef<HTMLVideoElement | null>(null);
+  const featurePlaybackStartedRef = useRef(false);
+  const playedFeatureIndexesRef = useRef<Set<number>>(new Set());
   const ctaMode = preferredCtaMode === "android-apk" ? "android-apk" : "web";
   const primaryCtaLabel =
     ctaMode === "android-apk" ? activeCopy.androidApkCta : activeCopy.webCta;
@@ -122,6 +203,118 @@ function App() {
       document.removeEventListener("mousedown", handlePointerDown);
     };
   }, []);
+
+  const resetFeaturePlayback = () => {
+    playedFeatureIndexesRef.current.clear();
+    featurePlaybackStartedRef.current = false;
+    setActiveFeatureIndex(0);
+    setIsFeaturePlaying(false);
+    setCurrentFeatureAspectRatio(9 / 19.5);
+
+    const video = featureVideoRef.current;
+    if (isVideoElement(video)) {
+      video.pause();
+      video.currentTime = 0;
+    }
+  };
+
+  const playFeature = (index: number) => {
+    playedFeatureIndexesRef.current.delete(index);
+    featurePlaybackStartedRef.current = true;
+    if (activeFeatureIndex === index) {
+      const video = featureVideoRef.current;
+      if (!isVideoElement(video)) {
+        return;
+      }
+
+      video.currentTime = 0;
+      void video
+        .play()
+        .then(() => {
+          setIsFeaturePlaying(true);
+        })
+        .catch(() => {
+          setIsFeaturePlaying(false);
+        });
+      return;
+    }
+
+    setActiveFeatureIndex(index);
+  };
+
+  useEffect(() => {
+    const video = featureVideoRef.current;
+    if (!isVideoElement(video)) {
+      return;
+    }
+
+    const handleVideoEnd = () => {
+      playedFeatureIndexesRef.current.add(activeFeatureIndex);
+      setIsFeaturePlaying(false);
+
+      const nextIndex = activeFeatureIndex + 1;
+      if (nextIndex < featureVideoSources.length) {
+        setActiveFeatureIndex(nextIndex);
+        featurePlaybackStartedRef.current = true;
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && isHTMLElement(entry.target)) {
+            if (playedFeatureIndexesRef.current.has(activeFeatureIndex)) {
+              continue;
+            }
+
+            featurePlaybackStartedRef.current = true;
+            video.currentTime = 0;
+            void video
+              .play()
+              .then(() => {
+                setIsFeaturePlaying(true);
+              })
+              .catch(() => {
+                setIsFeaturePlaying(false);
+              });
+          }
+        }
+      },
+      {
+        threshold: 0.65,
+        rootMargin: "0px 0px -8% 0px",
+      },
+    );
+
+    const section = featureSectionRef.current;
+    if (isHTMLElement(section)) {
+      observer.observe(section);
+    }
+
+    video.addEventListener("ended", handleVideoEnd);
+
+    return () => {
+      observer.disconnect();
+      video.removeEventListener("ended", handleVideoEnd);
+    };
+  }, [activeFeatureIndex]);
+
+  useEffect(() => {
+    const video = featureVideoRef.current;
+    if (!isVideoElement(video) || !featurePlaybackStartedRef.current) {
+      return;
+    }
+
+    video.currentTime = 0;
+    void video
+      .play()
+      .then(() => {
+        setIsFeaturePlaying(true);
+      })
+      .catch(() => {
+        setIsFeaturePlaying(false);
+      });
+  }, [activeFeatureIndex]);
 
   const openWebApp = () => {
     window.open("https://app.linky.fit", "_blank", "noopener,noreferrer");
@@ -160,7 +353,10 @@ function App() {
                 key={nextLocale}
                 className={selected ? "locale-pill is-active" : "locale-pill"}
                 type="button"
-                onClick={() => setLocale(nextLocale)}
+                onClick={() => {
+                  resetFeaturePlayback();
+                  setLocale(nextLocale);
+                }}
                 aria-pressed={selected}
               >
                 {localeLabels[nextLocale]}
@@ -250,6 +446,78 @@ function App() {
             alt={activeCopy.imageTitle}
           />
         </aside>
+      </section>
+
+      <section className="feature-showcase" ref={featureSectionRef}>
+        <div className="section-heading">
+          <h2>{activeCopy.featureSectionTitle}</h2>
+        </div>
+
+        <article
+          className={
+            isFeaturePlaying ? "feature-stage is-active" : "feature-stage"
+          }
+          aria-label={activeCopy.featureSectionTitle}
+        >
+          <div
+            className="feature-stage-media"
+            style={{ aspectRatio: String(currentFeatureAspectRatio) }}
+            onMouseEnter={() => {
+              if (playedFeatureIndexesRef.current.has(activeFeatureIndex)) {
+                return;
+              }
+
+              playFeature(activeFeatureIndex);
+            }}
+          >
+            <video
+              key={featureVideoSources[activeFeatureIndex]}
+              ref={featureVideoRef}
+              className="feature-video"
+              src={featureVideoSources[activeFeatureIndex]}
+              muted
+              playsInline
+              preload="metadata"
+              onLoadedMetadata={(event) => {
+                const video = event.currentTarget;
+                const aspectRatio =
+                  video.videoWidth > 0 && video.videoHeight > 0
+                    ? video.videoWidth / video.videoHeight
+                    : 9 / 19.5;
+
+                setCurrentFeatureAspectRatio(aspectRatio);
+              }}
+            />
+          </div>
+
+          <div className="feature-copy">
+            <p className="feature-index">0{activeFeatureIndex + 1}</p>
+            <h3>{activeFeature.title}</h3>
+            <p>{activeFeature.description}</p>
+          </div>
+
+          <div className="feature-dots" aria-label="Feature video navigation">
+            {featureVideoSources.map((source, index) => {
+              const isSelected = index === activeFeatureIndex;
+
+              return (
+                <button
+                  key={source}
+                  className={
+                    isSelected ? "feature-dot is-active" : "feature-dot"
+                  }
+                  type="button"
+                  aria-label={`Video ${index + 1}`}
+                  aria-pressed={isSelected}
+                  onClick={() => {
+                    setIsFeaturePlaying(false);
+                    playFeature(index);
+                  }}
+                />
+              );
+            })}
+          </div>
+        </article>
       </section>
 
       <footer className="footer-links">

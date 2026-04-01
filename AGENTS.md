@@ -32,6 +32,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 ## Monorepo Structure
 
 - `apps/site/` - Public marketing/landing website intended for `linky.fit`
+  - includes a feature-video showcase fed from static assets in `apps/site/public/videos/`, with mobile viewport-triggered playback, desktop hover-triggered playback, and automatic once-only progression to the next clip
 - `apps/web-app/` - Main React app (Vite + SWC)
 - `apps/native-shell/` - Capacitor native shell that consumes the built `apps/web-app/dist` bundle for Android/iOS packaging
 - `apps/push/` - Bun HTTP push service for Web Push subscription auth/storage and Nostr outer-inbox relay watching
