@@ -45,6 +45,176 @@ button {
   min-height: 100vh;
 }
 
+.cashu-shell {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow: clip;
+  padding: 20px 16px 28px;
+}
+
+.cashu-entry,
+.cashu-token-view {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+}
+
+.cashu-panel {
+  padding: 24px 20px;
+  border-radius: 28px;
+  background: rgba(7, 18, 18, 0.72);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+}
+
+.cashu-panel-highlight {
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(20, 184, 166, 0.16),
+      transparent 28%
+    ),
+    rgba(7, 18, 18, 0.82);
+}
+
+.cashu-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.cashu-redeem-form {
+  margin-top: 20px;
+}
+
+.cashu-label,
+.cashu-card-title,
+.cashu-stat dt {
+  color: #8fe1d4;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cashu-card-title {
+  margin: 0 0 18px;
+}
+
+.cashu-textarea,
+.cashu-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(247, 244, 234, 0.1);
+  border-radius: 18px;
+  background: rgba(3, 13, 13, 0.78);
+  color: #f7f4ea;
+  font: inherit;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.cashu-textarea {
+  resize: vertical;
+  min-height: 132px;
+}
+
+.cashu-textarea:focus,
+.cashu-input:focus {
+  outline: none;
+  border-color: rgba(20, 184, 166, 0.7);
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.14);
+}
+
+.cashu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.cashu-token-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.cashu-mint-chip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.cashu-mint-chip h1 {
+  margin: 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(2.2rem, 7vw, 4rem);
+  line-height: 0.95;
+}
+
+.cashu-mint-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cashu-token-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+
+.cashu-secondary-link {
+  color: rgba(247, 244, 234, 0.76);
+  font-weight: 500;
+}
+
+.cashu-stats {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.cashu-stat {
+  padding: 14px 0;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.cashu-stat:first-child {
+  padding: 16px;
+}
+
+.cashu-stat dt {
+  margin-bottom: 8px;
+}
+
+.cashu-stat dd {
+  margin: 0;
+  font-size: 1.12rem;
+  word-break: break-word;
+}
+
+.cashu-status,
+.cashu-footnote {
+  margin: 18px 0 0;
+  color: rgba(247, 244, 234, 0.8);
+}
+
+.cashu-status-error {
+  color: #ffb4a3;
+}
+
+.cashu-footnote span {
+  word-break: break-all;
+}
+
 .site-shell {
   position: relative;
   isolation: isolate;
@@ -436,6 +606,15 @@ button {
 }
 
 @media (min-width: 840px) {
+  .cashu-shell {
+    padding: 28px 24px 34px;
+  }
+
+  .cashu-entry,
+  .cashu-token-view {
+    margin-top: 16px;
+  }
+
   .site-shell {
     padding: 28px 24px 34px;
   }

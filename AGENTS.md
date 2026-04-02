@@ -33,6 +33,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 
 - `apps/site/` - Public marketing/landing website intended for `linky.fit`
   - includes a feature-video showcase fed from static assets in `apps/site/public/videos/`, with mobile viewport-triggered playback, desktop hover-triggered playback, and automatic once-only progression to the next clip
+  - includes a dedicated `cashu/` entry page for `linky.fit/cashu`, which can ingest a token from manual paste, query string, or preferably URL hash, inspect the token client-side, and redeem it to a Lightning address
 - `apps/web-app/` - Main React app (Vite + SWC)
 - `apps/native-shell/` - Capacitor native shell that consumes the built `apps/web-app/dist` bundle for Android/iOS packaging
 - `apps/push/` - Bun HTTP push service for Web Push subscription auth/storage and Nostr outer-inbox relay watching
@@ -46,6 +47,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 
 - Public website lives in `apps/site/` and is intended for a separate deploy on `linky.fit`; the product PWA stays in `apps/web-app/` for `app.linky.fit`
 - `apps/site/` must stay a non-PWA marketing site: no web manifest, no service worker registration, and install prompts should only come from `app.linky.fit`
+- `apps/site/cashu/` is a separate MPA entry for direct `/cashu` loads; Cashu token privacy should prefer hash fragments (`/cashu/#cashu...`) because query strings are sent to the server on the initial request
 - **No framework router** - hash-based routing via `useRouting` hook and `parseRouteFromHash()` in `src/types/route.ts`
 - Empty or unknown hashes now default to the wallet route; contacts use `#contacts` and legacy explicit `#` still opens contacts
 - Navigation uses `navigateTo()` from `src/hooks/useRouting.ts` - do NOT use `window.location` directly

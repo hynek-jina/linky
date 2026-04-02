@@ -45,6 +45,7 @@
       "name": "@linky/site",
       "version": "0.1.0",
       "dependencies": {
+        "@cashu/cashu-ts": "^2.5.3",
         "react": "^19.2.3",
         "react-dom": "^19.2.3",
       },
