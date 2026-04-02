@@ -30,7 +30,8 @@ export type Route =
   | { kind: "chat"; id: string };
 
 export const parseRouteFromHash = (): Route => {
-  const hash = globalThis.location?.hash ?? "";
+  const rawHash = globalThis.location?.hash ?? "";
+  const hash = rawHash.split("?")[0] ?? rawHash;
   if (hash === "") return { kind: "wallet" };
   if (hash === "#") return { kind: "contacts" };
   if (hash === "#contacts") return { kind: "contacts" };

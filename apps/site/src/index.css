@@ -45,6 +45,266 @@ button {
   min-height: 100vh;
 }
 
+.cashu-shell {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow: clip;
+  padding: 20px 16px 28px;
+}
+
+.cashu-entry,
+.cashu-token-view {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+}
+
+.cashu-panel {
+  padding: 24px 20px;
+  border-radius: 28px;
+  background: rgba(7, 18, 18, 0.72);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+}
+
+.cashu-panel-highlight {
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(20, 184, 166, 0.16),
+      transparent 28%
+    ),
+    rgba(7, 18, 18, 0.82);
+}
+
+.cashu-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.cashu-redeem-form {
+  margin-top: 20px;
+}
+
+.cashu-label,
+.cashu-card-title,
+.cashu-mint-subtle {
+  color: #8fe1d4;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.cashu-card-title {
+  margin: 0 0 18px;
+}
+
+.cashu-textarea,
+.cashu-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(247, 244, 234, 0.1);
+  border-radius: 18px;
+  background: rgba(3, 13, 13, 0.78);
+  color: #f7f4ea;
+  font: inherit;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.cashu-textarea {
+  resize: vertical;
+  min-height: 132px;
+}
+
+.cashu-textarea:focus,
+.cashu-input:focus {
+  outline: none;
+  border-color: rgba(20, 184, 166, 0.7);
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.14);
+}
+
+.cashu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.cashu-token-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.cashu-page-kicker {
+  margin: 0 0 12px;
+  color: #8fe1d4;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.cashu-mint-chip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.cashu-token-actions {
+  display: inline-flex;
+  align-items: flex-start;
+  align-self: flex-start;
+  gap: 8px;
+  margin-top: -4px;
+}
+
+.cashu-token-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+  color: #fffdf4;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.cashu-token-action:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.cashu-token-action:active {
+  transform: translateY(1px);
+}
+
+.cashu-token-action-glyph {
+  font-size: 1rem;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.cashu-token-action-logo {
+  width: 18px;
+  height: 18px;
+  display: block;
+  transform: translateY(-1px);
+}
+
+.cashu-token-copy {
+  display: flex;
+  flex-direction: column;
+}
+
+.cashu-mint-chip h1 {
+  margin: 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(2.2rem, 7vw, 4rem);
+  line-height: 0.95;
+}
+
+.cashu-mint-chip h1.is-spent {
+  color: rgba(247, 244, 234, 0.48);
+  text-decoration: line-through;
+  text-decoration-thickness: 0.08em;
+  text-decoration-color: rgba(255, 180, 163, 0.75);
+}
+
+.cashu-mint-subtle {
+  margin: 8px 0 0;
+  color: rgba(247, 244, 234, 0.52);
+  font-size: 0.95rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.cashu-mint-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cashu-spent-badge {
+  display: inline-flex;
+  margin: 18px 0 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 180, 163, 0.14);
+  color: #ffb4a3;
+  font-weight: 700;
+}
+
+.cashu-success-panel {
+  text-align: center;
+}
+
+.cashu-success-check {
+  width: 92px;
+  height: 92px;
+  margin: 8px auto 18px;
+  border-radius: 999px;
+  border: 2px solid #22c55e;
+  color: #22c55e;
+  display: grid;
+  place-items: center;
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.cashu-success-title {
+  margin: 0;
+  color: #f7f4ea;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(2rem, 7vw, 3.4rem);
+  line-height: 0.96;
+}
+
+.cashu-success-address {
+  margin: 16px auto 0;
+  max-width: 28rem;
+  color: rgba(247, 244, 234, 0.8);
+  font-size: 1rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.cashu-status,
+.cashu-footnote {
+  margin: 18px 0 0;
+  color: rgba(247, 244, 234, 0.8);
+}
+
+.cashu-status-error {
+  color: #ffb4a3;
+}
+
+.cashu-inline-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  text-decoration-thickness: 0.08em;
+}
+
+.cashu-footnote span {
+  word-break: break-all;
+}
+
 .site-shell {
   position: relative;
   isolation: isolate;
@@ -106,34 +366,164 @@ button {
   text-transform: uppercase;
 }
 
-.locale-switch {
-  display: inline-flex;
-  gap: 6px;
-  padding: 5px;
-  border-radius: 999px;
-  background: rgba(5, 20, 20, 0.6);
-  backdrop-filter: blur(16px);
+.site-menu {
+  position: relative;
+  z-index: 8;
 }
 
-.locale-pill {
+.site-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
   border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: rgba(247, 244, 234, 0.72);
-  padding: 8px 12px;
+  border-radius: 18px;
+  background: rgba(5, 20, 20, 0.66);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px);
+  color: #fffdf4;
   cursor: pointer;
   transition:
     background-color 160ms ease,
-    color 160ms ease;
+    transform 160ms ease;
 }
 
-.locale-pill:hover {
-  color: #fffdf4;
+.site-menu-trigger:hover,
+.site-menu-trigger.is-open {
+  background: rgba(20, 184, 166, 0.16);
 }
 
-.locale-pill.is-active {
-  background: rgba(20, 184, 166, 0.18);
+.site-menu-trigger:active {
+  transform: translateY(1px);
+}
+
+.site-menu-trigger-lines {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.site-menu-trigger-lines span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.site-menu-sheet {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(320px, calc(100vw - 32px));
+  padding: 12px;
+  border-radius: 24px;
+  background: rgba(5, 15, 16, 0.96);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.36),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(24px);
+}
+
+.site-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 58px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
   color: #fffdf4;
+  font: inherit;
+  text-align: left;
+}
+
+.site-menu-row + .site-menu-row {
+  margin-top: 4px;
+}
+
+.site-menu-link {
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.site-menu-link:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.site-menu-link-primary {
+  justify-content: center;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: #021211;
+  font-weight: 700;
+  box-shadow: 0 18px 36px rgba(20, 184, 166, 0.24);
+}
+
+.site-menu-link-primary:hover {
+  background: linear-gradient(135deg, #1ccab7 0%, #11998d 100%);
+}
+
+.site-menu-link-primary .site-menu-label {
+  color: inherit;
+}
+
+.site-menu-left,
+.site-menu-right {
+  display: inline-flex;
+  align-items: center;
+}
+
+.site-menu-left {
+  gap: 12px;
+  min-width: 0;
+}
+
+.site-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  color: #8fe1d4;
+  font-size: 0.94rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.site-menu-label {
+  color: rgba(255, 253, 244, 0.92);
+  font-size: 0.98rem;
+}
+
+.site-menu-select {
+  appearance: none;
+  min-width: 96px;
+  padding: 9px 32px 9px 12px;
+  border: 0;
+  border-radius: 999px;
+  background:
+    linear-gradient(45deg, transparent 50%, rgba(255, 253, 244, 0.85) 50%),
+    linear-gradient(135deg, rgba(255, 253, 244, 0.85) 50%, transparent 50%),
+    rgba(255, 255, 255, 0.06);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px),
+    0 0;
+  background-repeat: no-repeat;
+  background-size:
+    6px 6px,
+    6px 6px,
+    100% 100%;
+  color: #fffdf4;
+  font: inherit;
+}
+
+.site-menu-chevron {
+  color: rgba(255, 253, 244, 0.5);
+  font-size: 1.15rem;
 }
 
 .hero {
@@ -436,6 +826,15 @@ button {
 }
 
 @media (min-width: 840px) {
+  .cashu-shell {
+    padding: 28px 24px 34px;
+  }
+
+  .cashu-entry,
+  .cashu-token-view {
+    margin-top: 16px;
+  }
+
   .site-shell {
     padding: 28px 24px 34px;
   }

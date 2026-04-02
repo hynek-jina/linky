@@ -38,6 +38,7 @@ export const extractCashuTokenMeta = (
 export const extractCashuTokenFromText = (text: string): string | null => {
   const raw0 = String(text ?? "").trim();
   if (!raw0) return null;
+  const queryKeys = ["token", "cashu", "cashutoken", "cashu_token", "t"];
 
   const normalizeCandidate = (value: string): string =>
     value.replace(/^cashu/i, "cashu");
@@ -80,11 +81,21 @@ export const extractCashuTokenFromText = (text: string): string | null => {
       }
     }
 
+    const queryIndex = stripped.indexOf("?");
+    if (queryIndex >= 0 && queryIndex < stripped.length - 1) {
+      const params = new URLSearchParams(stripped.slice(queryIndex + 1));
+      for (const key of queryKeys) {
+        const queryValue = params.get(key);
+        if (!queryValue) continue;
+        const found = tryInText(queryValue);
+        if (found) return found;
+      }
+    }
+
     if (/^https?:\/\//i.test(stripped)) {
       try {
         const u = new URL(stripped);
-        const keys = ["token", "cashu", "cashutoken", "cashu_token", "t"];
-        for (const key of keys) {
+        for (const key of queryKeys) {
           const v = u.searchParams.get(key);
           if (v) {
             const decoded = (() => {

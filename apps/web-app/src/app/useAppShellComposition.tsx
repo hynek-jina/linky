@@ -111,6 +111,7 @@ import {
   isUnknownContactId,
   normalizePubkeyHex,
 } from "./hooks/messages/contactIdentity";
+import { extractCashuTokenFromText } from "./lib/tokenText";
 import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
 import { useChatNostrSyncEffect } from "./hooks/messages/useChatNostrSyncEffect";
 import {
@@ -175,7 +176,7 @@ import { buildCashuMintCandidates as buildCashuMintCandidatesBase } from "./lib/
 import { showPwaNotification } from "./lib/pwaNotifications";
 import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "./lib/tokenMessageInfo";
 import {
-  extractCashuTokenFromText,
+  extractCashuTokenFromText as extractCashuTokenFromTextFromUrl,
   extractCashuTokenMeta,
 } from "./lib/tokenText";
 import {
@@ -3389,6 +3390,29 @@ export const useAppShellComposition = () => {
 
     window.addEventListener(NATIVE_DEEP_LINK_EVENT, onDeepLink);
     return () => window.removeEventListener(NATIVE_DEEP_LINK_EVENT, onDeepLink);
+  }, [setPendingDeleteId]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const rawHash = String(window.location.hash ?? "");
+    const token = extractCashuTokenFromTextFromUrl(rawHash);
+    if (!token) {
+      return;
+    }
+
+    setPendingDeleteId(null);
+    setPendingDeepLinkText(`cashu:${token}`);
+
+    const cleanHash = rawHash.split("?")[0] ?? "#wallet";
+    const nextHash = cleanHash || "#wallet";
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}${nextHash}`,
+    );
   }, [setPendingDeleteId]);
 
   React.useEffect(() => {

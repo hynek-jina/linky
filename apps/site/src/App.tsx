@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SiteHeaderMenu } from "./SiteHeaderMenu";
+import {
+  getInitialSiteDisplayCurrency,
+  siteDisplayCurrencyStorageKey,
+  type SiteDisplayCurrency,
+} from "./siteDisplayCurrency";
 
 type CtaMode = "android-apk" | "web";
 
@@ -10,7 +16,12 @@ interface FeatureVideoCopy {
 }
 
 interface LocaleCopy {
+  czechLabel: string;
+  currencyLabel: string;
+  englishLabel: string;
   htmlLang: string;
+  menuLabel: string;
+  openAppLabel: string;
   switchLabel: string;
   title: string;
   subtitle: string;
@@ -35,7 +46,12 @@ const latestAndroidApkUrl =
 
 const copy: Record<Locale, LocaleCopy> = {
   cs: {
+    czechLabel: "Čeština",
+    currencyLabel: "Měna",
+    englishLabel: "English",
     htmlLang: "cs",
+    menuLabel: "Menu",
+    openAppLabel: "Otevřít aplikaci",
     switchLabel: "Jazyk",
     title: "Bitcoin pro lidi, na kterých vám záleží",
     subtitle:
@@ -70,7 +86,12 @@ const copy: Record<Locale, LocaleCopy> = {
     ],
   },
   en: {
+    czechLabel: "Czech",
+    currencyLabel: "Currency",
+    englishLabel: "English",
     htmlLang: "en",
+    menuLabel: "Menu",
+    openAppLabel: "Open web app",
     switchLabel: "Language",
     title: "Bitcoin for the people you care about",
     subtitle:
@@ -106,12 +127,6 @@ const copy: Record<Locale, LocaleCopy> = {
   },
 };
 
-const localeLabels: Record<Locale, string> = {
-  cs: "CZ",
-  en: "EN",
-};
-
-const localeOptions: Locale[] = ["cs", "en"];
 const localeStorageKey = "linky.lang";
 const featureVideoSources = [
   "/videos/feature-1.webm",
@@ -160,6 +175,9 @@ const getInitialLocale = (): Locale => {
 
 function App() {
   const [locale, setLocale] = useState<Locale>(getInitialLocale);
+  const [displayCurrency, setDisplayCurrency] = useState<SiteDisplayCurrency>(
+    getInitialSiteDisplayCurrency,
+  );
   const [preferredCtaMode, setPreferredCtaMode] = useState<CtaMode>("web");
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeFeatureIndex, setActiveFeatureIndex] = useState(0);
@@ -184,6 +202,10 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(localeStorageKey, locale);
   }, [locale]);
+
+  useEffect(() => {
+    window.localStorage.setItem(siteDisplayCurrencyStorageKey, displayCurrency);
+  }, [displayCurrency]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -345,25 +367,23 @@ function App() {
           <span className="brand-word">Linky</span>
         </a>
 
-        <div className="locale-switch" aria-label={activeCopy.switchLabel}>
-          {localeOptions.map((nextLocale) => {
-            const selected = nextLocale === locale;
-            return (
-              <button
-                key={nextLocale}
-                className={selected ? "locale-pill is-active" : "locale-pill"}
-                type="button"
-                onClick={() => {
-                  resetFeaturePlayback();
-                  setLocale(nextLocale);
-                }}
-                aria-pressed={selected}
-              >
-                {localeLabels[nextLocale]}
-              </button>
-            );
-          })}
-        </div>
+        <SiteHeaderMenu
+          copy={{
+            czechLabel: activeCopy.czechLabel,
+            currencyLabel: activeCopy.currencyLabel,
+            englishLabel: activeCopy.englishLabel,
+            menuLabel: activeCopy.menuLabel,
+            openAppLabel: activeCopy.openAppLabel,
+            switchLabel: activeCopy.switchLabel,
+          }}
+          displayCurrency={displayCurrency}
+          locale={locale}
+          onLocaleChange={(nextLocale) => {
+            resetFeaturePlayback();
+            setLocale(nextLocale);
+          }}
+          setDisplayCurrency={setDisplayCurrency}
+        />
       </header>
 
       <section className="hero">
@@ -521,6 +541,7 @@ function App() {
       </section>
 
       <footer className="footer-links">
+        <a href="/cashu/">Cashu</a>
         <a
           href="https://github.com/hynek-jina/linky"
           target="_blank"
