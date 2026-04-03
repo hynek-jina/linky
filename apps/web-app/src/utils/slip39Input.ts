@@ -1,9 +1,9 @@
-import { WORD_LIST } from "slip39/src/slip39_helper.js";
+import { SLIP39_WORD_LIST } from "./slip39WordList";
 
 export const SLIP39_WORD_COUNT = 20;
 
 const SUGGESTION_LIMIT = 6;
-const SLIP39_WORD_SET = new Set(WORD_LIST);
+const SLIP39_WORD_SET = new Set(SLIP39_WORD_LIST);
 
 export interface Slip39InputAnalysis {
   activeFragment: string;
@@ -37,7 +37,7 @@ export const analyzeSlip39Input = (value: string): Slip39InputAnalysis => {
     ? ""
     : String(rawFragments[rawFragments.length - 1] ?? "").trim();
   const prefixMatches = activeFragment
-    ? WORD_LIST.filter((word) => word.startsWith(activeFragment)).slice(
+    ? SLIP39_WORD_LIST.filter((word) => word.startsWith(activeFragment)).slice(
         0,
         SUGGESTION_LIMIT,
       )
