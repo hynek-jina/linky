@@ -29,6 +29,10 @@ import {
   deriveNostrKeysFromSlip39,
   looksLikeSlip39Seed,
 } from "../../utils/slip39Nostr";
+import {
+  applySlip39Suggestion,
+  normalizeSlip39Input,
+} from "../../utils/slip39Input";
 import { safeLocalStorageSet } from "../../utils/storage";
 
 export interface PendingOnboardingProfile {
@@ -42,6 +46,12 @@ export interface PendingOnboardingProfile {
   slip39Seed: string;
 }
 
+export interface ReturningOnboardingStep {
+  error: string | null;
+  input: string;
+  kind: "returning";
+}
+
 type PreparingOnboardingStep = {
   derivedName: string | null;
   error: string | null;
@@ -52,6 +62,7 @@ type PreparingOnboardingStep = {
 export type OnboardingStep =
   | PreparingOnboardingStep
   | PendingOnboardingProfile
+  | ReturningOnboardingStep
   | null;
 
 interface PersistNewProfileParams {
@@ -77,19 +88,23 @@ interface UseProfileAuthDomainResult {
   onboardingIsBusy: boolean;
   onboardingPhotoInputRef: React.RefObject<HTMLInputElement | null>;
   onboardingStep: OnboardingStep;
+  openReturningOnboarding: () => void;
   onPendingOnboardingPhotoSelected: (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => Promise<void>;
-  pasteExistingNsec: () => Promise<void>;
+  pasteReturningSlip39FromClipboard: () => Promise<void>;
   pickPendingOnboardingPhoto: () => Promise<void>;
   requestDeriveNostrKeys: () => Promise<void>;
   requestLogout: () => void;
   seedMnemonic: string | null;
+  selectReturningSlip39Suggestion: (value: string) => void;
   selectPendingOnboardingAvatar: (pictureUrl: string) => void;
   cashuSeedMnemonic: string | null;
   slip39Seed: string | null;
+  setReturningSlip39Input: (value: string) => void;
   setOnboardingStep: React.Dispatch<React.SetStateAction<OnboardingStep>>;
   setPendingOnboardingName: (value: string) => void;
+  submitReturningSlip39: (inputOverride?: string) => Promise<void>;
 }
 
 export const useProfileAuthDomain = ({
@@ -142,15 +157,6 @@ export const useProfileAuthDomain = ({
     } catch {
       return null;
     }
-  }, []);
-
-  const normalizeSlip39Seed = React.useCallback((value: string): string => {
-    return String(value ?? "")
-      .toLowerCase()
-      .trim()
-      .split(/\s+/)
-      .filter((word) => word.length > 0)
-      .join(" ");
   }, []);
 
   React.useEffect(() => {
@@ -235,6 +241,16 @@ export const useProfileAuthDomain = ({
     ) => {
       setOnboardingStep((current) => {
         if (!current || current.kind !== "profile") return current;
+        return update(current);
+      });
+    },
+    [],
+  );
+
+  const updateReturningOnboardingStep = React.useCallback(
+    (update: (step: ReturningOnboardingStep) => ReturningOnboardingStep) => {
+      setOnboardingStep((current) => {
+        if (!current || current.kind !== "returning") return current;
         return update(current);
       });
     },
@@ -458,7 +474,7 @@ export const useProfileAuthDomain = ({
     } finally {
       setOnboardingIsBusy(false);
     }
-  }, [deriveAvatarChoices, onboardingIsBusy, pushToast, t]);
+  }, [onboardingIsBusy, pushToast, t]);
 
   const setPendingOnboardingName = React.useCallback(
     (value: string) => {
@@ -583,58 +599,142 @@ export const useProfileAuthDomain = ({
     updatePendingOnboardingProfile,
   ]);
 
-  const pasteExistingNsec = React.useCallback(async () => {
+  const openReturningOnboarding = React.useCallback(() => {
     if (onboardingIsBusy) return;
 
-    setOnboardingIsBusy(true);
+    setOnboardingStep({
+      kind: "returning",
+      error: null,
+      input: "",
+    });
+  }, [onboardingIsBusy]);
+
+  const setReturningSlip39Input = React.useCallback(
+    (value: string) => {
+      updateReturningOnboardingStep((current) => ({
+        ...current,
+        error: null,
+        input: value,
+      }));
+    },
+    [updateReturningOnboardingStep],
+  );
+
+  const selectReturningSlip39Suggestion = React.useCallback(
+    (value: string) => {
+      updateReturningOnboardingStep((current) => ({
+        ...current,
+        error: null,
+        input: applySlip39Suggestion(current.input, value),
+      }));
+    },
+    [updateReturningOnboardingStep],
+  );
+
+  const submitReturningSlip39 = React.useCallback(
+    async (inputOverride?: string) => {
+      if (onboardingIsBusy) return;
+
+      const rawInput =
+        typeof inputOverride === "string"
+          ? inputOverride
+          : onboardingStep?.kind === "returning"
+            ? onboardingStep.input
+            : "";
+      const normalizedSlip39 = normalizeSlip39Input(rawInput);
+
+      updateReturningOnboardingStep((current) => ({
+        ...current,
+        error: null,
+        input: normalizedSlip39,
+      }));
+
+      if (!normalizedSlip39) {
+        const message = t("pasteEmpty");
+        updateReturningOnboardingStep((current) => ({
+          ...current,
+          error: message,
+          input: normalizedSlip39,
+        }));
+        pushToast(message);
+        return;
+      }
+
+      if (!looksLikeSlip39Seed(normalizedSlip39)) {
+        const message = t("onboardingInvalidSeed");
+        updateReturningOnboardingStep((current) => ({
+          ...current,
+          error: message,
+          input: normalizedSlip39,
+        }));
+        pushToast(message);
+        return;
+      }
+
+      setOnboardingIsBusy(true);
+      try {
+        const derived = await deriveNostrKeysFromSlip39(normalizedSlip39);
+        if (!derived) {
+          const message = t("onboardingInvalidSeed");
+          updateReturningOnboardingStep((current) => ({
+            ...current,
+            error: message,
+            input: normalizedSlip39,
+          }));
+          pushToast(message);
+          return;
+        }
+
+        await setIdentityFromNsecAndReload(
+          derived.nsec,
+          normalizedSlip39,
+          "onboardingInvalidSeed",
+        );
+      } finally {
+        setOnboardingIsBusy(false);
+      }
+    },
+    [
+      onboardingIsBusy,
+      onboardingStep,
+      pushToast,
+      setIdentityFromNsecAndReload,
+      t,
+      updateReturningOnboardingStep,
+    ],
+  );
+
+  const pasteReturningSlip39FromClipboard = React.useCallback(async () => {
+    if (onboardingIsBusy) return;
+
     try {
-      let text = "";
-      if (navigator.clipboard?.readText) {
-        text = await navigator.clipboard.readText();
-      } else if (
-        typeof window !== "undefined" &&
-        typeof window.prompt === "function"
-      ) {
-        text = String(window.prompt(t("onboardingPasteNsec")) ?? "");
-      } else {
+      if (!navigator.clipboard?.readText) {
         pushToast(t("pasteNotAvailable"));
         return;
       }
 
+      const text = await navigator.clipboard.readText();
       const raw = String(text ?? "").trim();
       if (!raw) {
         pushToast(t("pasteEmpty"));
         return;
       }
 
-      if (!looksLikeSlip39Seed(raw)) {
-        pushToast(t("onboardingInvalidSeed"));
-        return;
-      }
-
-      const derived = await deriveNostrKeysFromSlip39(raw);
-      if (!derived) {
-        pushToast(t("onboardingInvalidSeed"));
-        return;
-      }
-
-      const normalizedSlip39 = normalizeSlip39Seed(raw);
-      await setIdentityFromNsecAndReload(
-        derived.nsec,
-        normalizedSlip39,
-        "onboardingInvalidSeed",
-      );
+      updateReturningOnboardingStep((current) => ({
+        ...current,
+        error: null,
+        input: raw,
+      }));
+      await submitReturningSlip39(raw);
     } catch {
       pushToast(t("pasteNotAvailable"));
-    } finally {
-      setOnboardingIsBusy(false);
     }
   }, [
-    normalizeSlip39Seed,
     onboardingIsBusy,
     pushToast,
-    setIdentityFromNsecAndReload,
+    submitReturningSlip39,
     t,
+    updateReturningOnboardingStep,
   ]);
 
   const requestDeriveNostrKeys = React.useCallback(async () => {
@@ -715,16 +815,20 @@ export const useProfileAuthDomain = ({
     onboardingIsBusy,
     onboardingPhotoInputRef,
     onboardingStep,
+    openReturningOnboarding,
     onPendingOnboardingPhotoSelected,
-    pasteExistingNsec,
+    pasteReturningSlip39FromClipboard,
     pickPendingOnboardingPhoto,
     requestDeriveNostrKeys,
     requestLogout,
+    selectReturningSlip39Suggestion,
     selectPendingOnboardingAvatar,
     cashuSeedMnemonic,
     seedMnemonic,
     slip39Seed,
+    setReturningSlip39Input,
     setOnboardingStep,
     setPendingOnboardingName,
+    submitReturningSlip39,
   };
 };

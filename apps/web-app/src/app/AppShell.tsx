@@ -27,18 +27,22 @@ const AppShell = () => {
     onboardingIsBusy,
     onboardingPhotoInputRef,
     onboardingStep,
+    openReturningOnboarding,
     onPendingOnboardingPhotoSelected,
     pageClassNameWithSwipe,
-    pasteExistingNsec,
+    pasteReturningSlip39FromClipboard,
     peopleRouteProps,
     pickPendingOnboardingPhoto,
     pushToast,
     recentlyReceivedToken,
+    selectReturningSlip39Suggestion,
     selectPendingOnboardingAvatar,
+    setReturningSlip39Input,
     setOnboardingStep,
     setLang,
     setPendingOnboardingName,
     setRecentlyReceivedToken,
+    submitReturningSlip39,
     systemRouteProps,
     t,
     toasts,
@@ -85,14 +89,18 @@ const AppShell = () => {
           onboardingIsBusy={onboardingIsBusy}
           lang={lang}
           onboardingPhotoInputRef={onboardingPhotoInputRef}
+          openReturningOnboarding={openReturningOnboarding}
           onPendingOnboardingPhotoSelected={onPendingOnboardingPhotoSelected}
           setOnboardingStep={setOnboardingStep}
           createNewAccount={createNewAccount}
-          pasteExistingNsec={pasteExistingNsec}
+          pasteReturningSlip39FromClipboard={pasteReturningSlip39FromClipboard}
           pickPendingOnboardingPhoto={pickPendingOnboardingPhoto}
+          selectReturningSlip39Suggestion={selectReturningSlip39Suggestion}
           selectPendingOnboardingAvatar={selectPendingOnboardingAvatar}
+          setReturningSlip39Input={setReturningSlip39Input}
           setLang={setLang}
           setPendingOnboardingName={setPendingOnboardingName}
+          submitReturningSlip39={submitReturningSlip39}
           t={t}
         />
       ) : null}

@@ -419,6 +419,99 @@
   gap: 8px;
 }
 
+.onboarding-return-stage {
+  gap: 14px;
+}
+
+.onboarding-return-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.onboarding-return-logo {
+  margin: 0;
+}
+
+.onboarding-return-logoSvg {
+  max-height: 132px;
+}
+
+.onboarding-return-intro {
+  display: block;
+  margin: 0;
+  text-align: center;
+}
+
+.onboarding-return-inputWrap {
+  display: grid;
+  gap: 6px;
+}
+
+.onboarding-return-inputRow {
+  position: relative;
+}
+
+.onboarding-return-inputRow textarea {
+  min-height: 116px;
+  padding-right: 58px;
+  resize: none;
+}
+
+.onboarding-return-pasteBtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #cbd5e1;
+  box-shadow: none;
+}
+
+.onboarding-return-pasteBtn:hover {
+  transform: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.onboarding-return-pasteIcon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.onboarding-return-feedback {
+  min-height: 20px;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.onboarding-return-feedback.is-warning {
+  color: #fbbf24;
+}
+
+.onboarding-return-feedback.is-error {
+  color: #fca5a5;
+}
+
+.onboarding-return-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.onboarding-return-suggestion {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
 .contacts-checklist {
   position: relative;
   background: linear-gradient(

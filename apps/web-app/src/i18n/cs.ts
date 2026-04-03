@@ -47,6 +47,18 @@ export const cs = {
   onboardingInvalidNsec: "Neplatný nsec.",
   onboardingInvalidNsecOrSeed: "Neplatný nsec nebo SLIP-39 klíče.",
   onboardingCreateFailed: "Nepodařilo se vytvořit účet.",
+  onboardingReturnIntro:
+    "Zde si můžete obnovit svůj účet nebo jej používat současně na více zařízeních. Pokud již účet máte, přejděte do pokročilého nastavení, zkopírujte své klíče a následně je sem vložte.",
+  onboardingReturnHint: "Zadejte svých 20 slov.",
+  onboardingReturnPlaceholder: "academic acid acne ...",
+  onboardingReturnPasteButton: "Vložit ze schránky",
+  onboardingReturnConfirm: "Pokračovat",
+  onboardingReturnWordCount: "{count}/{total} slov",
+  onboardingReturnSeparatorHint:
+    "Čárky a odřádkování automaticky převedu na mezery.",
+  onboardingReturnTooManyWords: "Zadali jste příliš mnoho slov.",
+  onboardingReturnUnknownWords: "Neznámé slovo: {words}",
+  onboardingReturnSuggestions: "Návrhy slov",
   onboardingStep1: "Vymýšlím pro vás správné jméno… Budete {name}",
   onboardingStep2: "Zkouším si představit jak vypadáte… Už to mám",
   onboardingStep3: "Vytvářím lightning adresu… chvíli strpení.",

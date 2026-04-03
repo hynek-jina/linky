@@ -47,6 +47,18 @@ export const en = {
   onboardingInvalidNsec: "Invalid secret.",
   onboardingInvalidNsecOrSeed: "Invalid nsec or SLIP-39 keys.",
   onboardingCreateFailed: "Failed to create account.",
+  onboardingReturnIntro:
+    "Enter your 20 SLIP-39 words. You can type them manually or paste them here.",
+  onboardingReturnHint: "Use 20 SLIP-39 words separated by spaces or commas.",
+  onboardingReturnPlaceholder: "academic acid acne ...",
+  onboardingReturnPasteButton: "Paste from clipboard",
+  onboardingReturnConfirm: "Continue",
+  onboardingReturnWordCount: "{count}/{total} words",
+  onboardingReturnSeparatorHint:
+    "Commas and line breaks are converted to spaces automatically.",
+  onboardingReturnTooManyWords: "Too many words.",
+  onboardingReturnUnknownWords: "Unknown word: {words}",
+  onboardingReturnSuggestions: "Word suggestions",
   onboardingStep1: "Picking a name for you… You will be {name}",
   onboardingStep2: "Imagining what you look like… Got it",
   onboardingStep3: "Creating your lightning address… one moment.",
