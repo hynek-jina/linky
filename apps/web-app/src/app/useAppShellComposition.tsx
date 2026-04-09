@@ -2471,6 +2471,7 @@ export const useAppShellComposition = () => {
   });
 
   const paySelectedContact = React.useCallback(async () => {
+    if (cashuIsBusy) return;
     if (route.kind !== "contactPay") return;
     if (!selectedContact) return;
 
@@ -2496,16 +2497,23 @@ export const useAppShellComposition = () => {
       return;
     }
 
-    await payContactWithCashuMessage({
-      contact: selectedContact,
-      amountSat,
-    });
+    setCashuIsBusy(true);
+    try {
+      await payContactWithCashuMessage({
+        contact: selectedContact,
+        amountSat,
+      });
+    } finally {
+      setCashuIsBusy(false);
+    }
   }, [
+    cashuIsBusy,
     contactPayMethod,
     payAmount,
     payContactWithCashuMessage,
     route.kind,
     selectedContact,
+    setCashuIsBusy,
     setLnAddressPayAmount,
     setStatus,
     t,

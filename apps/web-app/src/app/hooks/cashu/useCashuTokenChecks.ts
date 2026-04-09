@@ -20,6 +20,7 @@ import {
   safeLocalStorageSet,
 } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
+import { buildPaymentFailureAmountAttempts } from "../../lib/paymentAmountFallback";
 import {
   CASHU_TOKEN_STATE_ACCEPTED,
   CASHU_TOKEN_STATE_ERROR,
@@ -385,14 +386,6 @@ export const useCashuTokenChecks = ({
             return null;
           }
         };
-        const parseSwapFee = (error: unknown): number | null => {
-          const message = getUnknownErrorMessage(error, "");
-          const feeMatch = message.match(/fee\s*:\s*(\d+)/i);
-          if (!feeMatch) return null;
-          const fee = Number(feeMatch[1]);
-          return Number.isFinite(fee) && fee > 0 ? fee : null;
-        };
-
         const runSwap = async (amountToSend: number) => {
           return det
             ? withCashuDeterministicCounterLock(
@@ -429,7 +422,6 @@ export const useCashuTokenChecks = ({
             : wallet.swap(amountToSend, proofs);
         };
 
-        let swapped: { keep?: ProofLike[]; send?: ProofLike[] };
         const initialFee = getSwapFeeForProofs();
         const applyLocalMerge = (): boolean => {
           if (mergeIds.length <= 1) return false;
@@ -482,31 +474,55 @@ export const useCashuTokenChecks = ({
         }
         const initialAmount =
           initialFee && total - initialFee > 0 ? total - initialFee : total;
-        try {
-          swapped = (await runSwap(initialAmount)) as {
-            keep?: ProofLike[];
-            send?: ProofLike[];
-          };
-        } catch (error) {
-          const message = getUnknownErrorMessage(error, "").toLowerCase();
-          if (message.includes("not enough funds available for swap")) {
-            // Fee/mint constraints: try local merge instead of failing.
-            if (applyLocalMerge()) {
+        const amountAttempts = [
+          initialAmount,
+          ...buildPaymentFailureAmountAttempts(
+            initialAmount,
+            initialFee ? `fee: ${initialFee}` : "",
+          ),
+        ];
+        let swapped: { keep?: ProofLike[]; send?: ProofLike[] } | null = null;
+        let swapFailure: unknown = null;
+        for (const amountAttempt of amountAttempts) {
+          try {
+            swapped = (await runSwap(amountAttempt)) as {
+              keep?: ProofLike[];
+              send?: ProofLike[];
+            };
+            swapFailure = null;
+            break;
+          } catch (error) {
+            swapFailure = error;
+            const message = getUnknownErrorMessage(error, "").toLowerCase();
+            if (message.includes("not enough funds available for swap")) {
+              // Fee/mint constraints: try local merge instead of failing.
+              if (applyLocalMerge()) {
+                setStatus(t("cashuCheckOk"));
+                pushToast(t("cashuCheckOk"));
+                return "ok";
+              }
               setStatus(t("cashuCheckOk"));
               pushToast(t("cashuCheckOk"));
               return "ok";
             }
-            setStatus(t("cashuCheckOk"));
-            pushToast(t("cashuCheckOk"));
-            return "ok";
+
+            const retryAttempts = buildPaymentFailureAmountAttempts(
+              amountAttempt,
+              getUnknownErrorMessage(error, ""),
+            );
+            let appendedRetry = false;
+            for (const retryAmount of retryAttempts) {
+              if (amountAttempts.includes(retryAmount)) continue;
+              amountAttempts.push(retryAmount);
+              appendedRetry = true;
+            }
+            if (appendedRetry) {
+              continue;
+            }
           }
-          const fee = parseSwapFee(error) ?? getSwapFeeForProofs();
-          const retryAmount = fee && total - fee > 0 ? total - fee : null;
-          if (!retryAmount || retryAmount === initialAmount) throw error;
-          swapped = (await runSwap(retryAmount)) as {
-            keep?: ProofLike[];
-            send?: ProofLike[];
-          };
+        }
+        if (!swapped) {
+          throw swapFailure ?? new Error("Swap produced empty token");
         }
         const newProofs = normalizeProofs([
           ...(swapped?.keep ?? []),

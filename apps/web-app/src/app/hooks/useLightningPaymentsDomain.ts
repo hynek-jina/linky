@@ -14,6 +14,7 @@ import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
 import { isCashuTokenAcceptedState } from "../lib/cashuTokenState";
 import {
+  buildPaymentFailureAmountAttempts,
   buildPaymentAmountAttempts,
   isRetryablePaymentAmountFailure,
 } from "../lib/paymentAmountFallback";
@@ -430,17 +431,33 @@ export const useLightningPaymentsDomain = ({
           amountSat,
           cashuBalance,
         );
+        const queuedAmountAttempts = [...amountAttempts];
+        const seenAmountAttempts = new Set(queuedAmountAttempts);
         let finalErrorMessage: string | null = null;
         let finalErrorMint: string | null = null;
 
         for (
           let attemptIndex = 0;
-          attemptIndex < amountAttempts.length;
+          attemptIndex < queuedAmountAttempts.length;
           attemptIndex += 1
         ) {
-          const attemptedAmountSat = amountAttempts[attemptIndex];
+          const attemptedAmountSat = queuedAmountAttempts[attemptIndex];
+          const queueLowerAmountAttempts = (errorMessage: string): boolean => {
+            const retryAttempts = buildPaymentFailureAmountAttempts(
+              attemptedAmountSat,
+              errorMessage,
+            );
+            let queuedAny = false;
+            for (const retryAmountSat of retryAttempts) {
+              if (seenAmountAttempts.has(retryAmountSat)) continue;
+              seenAmountAttempts.add(retryAmountSat);
+              queuedAmountAttempts.push(retryAmountSat);
+              queuedAny = true;
+            }
+            return queuedAny;
+          };
           const hasLowerAmountFallback =
-            attemptIndex < amountAttempts.length - 1;
+            attemptIndex < queuedAmountAttempts.length - 1;
 
           if (requiresMultipleMintsForAmount(candidates, attemptedAmountSat)) {
             if (hasLowerAmountFallback) {
@@ -462,7 +479,8 @@ export const useLightningPaymentsDomain = ({
           } catch (e) {
             const errorMessage = getUnknownErrorMessage(e, "unknown");
             if (
-              hasLowerAmountFallback &&
+              (hasLowerAmountFallback ||
+                queueLowerAmountAttempts(errorMessage)) &&
               isRetryablePaymentAmountFailure(errorMessage)
             ) {
               continue;
@@ -522,6 +540,14 @@ export const useLightningPaymentsDomain = ({
 
                 lastError = result.error;
                 lastMint = candidate.mint;
+
+                if (
+                  !result.remainingToken &&
+                  queueLowerAmountAttempts(String(result.error ?? "unknown"))
+                ) {
+                  shouldRetryWithLowerAmount = true;
+                  break;
+                }
 
                 if (!result.remainingToken) {
                   continue;
@@ -616,7 +642,8 @@ export const useLightningPaymentsDomain = ({
 
           const errorMessage = getUnknownErrorMessage(lastError, "unknown");
           if (
-            hasLowerAmountFallback &&
+            (hasLowerAmountFallback ||
+              queueLowerAmountAttempts(errorMessage)) &&
             isRetryablePaymentAmountFailure(errorMessage)
           ) {
             shouldRetryWithLowerAmount = true;
