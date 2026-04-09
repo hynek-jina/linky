@@ -12,6 +12,7 @@ import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
 } from "../../utils/lightningInvoice";
+import { parseNativeDeepLinkUrl } from "../../utils/deepLinks";
 import type { ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -62,14 +63,19 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       const raw = String(rawValue ?? "").trim();
       if (!raw) return;
 
-      const normalized = raw
+      const parsedDeepLink = parseNativeDeepLinkUrl(raw);
+      const scanText = String(parsedDeepLink?.text ?? raw).trim();
+
+      const normalized = scanText
         .replace(/^nostr:/i, "")
         .replace(/^lightning:/i, "")
         .replace(/^cashu:/i, "")
         .trim();
 
       const cashu =
-        extractCashuTokenFromText(normalized) ?? extractCashuTokenFromText(raw);
+        extractCashuTokenFromText(normalized) ??
+        extractCashuTokenFromText(scanText) ??
+        extractCashuTokenFromText(raw);
       if (cashu) {
         closeScan();
         await saveCashuFromText(cashu, { navigateToWallet: true });

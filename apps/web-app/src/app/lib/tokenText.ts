@@ -39,9 +39,18 @@ export const extractCashuTokenFromText = (text: string): string | null => {
   const raw0 = String(text ?? "").trim();
   if (!raw0) return null;
   const queryKeys = ["token", "cashu", "cashutoken", "cashu_token", "t"];
+  const cashuSchemePrefix = /^(web\+)?cashu:(\/\/)?/i;
 
   const normalizeCandidate = (value: string): string =>
     value.replace(/^cashu/i, "cashu");
+
+  const decodeCandidate = (value: string): string => {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  };
 
   const tryToken = (value: string): string | null => {
     const trimmed = String(value ?? "").trim();
@@ -57,8 +66,7 @@ export const extractCashuTokenFromText = (text: string): string | null => {
     if (!raw) return null;
 
     const stripped = raw
-      .replace(/^web\+cashu:/i, "")
-      .replace(/^cashu:/i, "")
+      .replace(cashuSchemePrefix, "")
       .replace(/^nostr:/i, "")
       .replace(/^lightning:/i, "")
       .trim();
@@ -112,14 +120,21 @@ export const extractCashuTokenFromText = (text: string): string | null => {
 
         const hash = String(u.hash ?? "").replace(/^#/, "");
         if (hash) {
-          const decodedHash = (() => {
-            try {
-              return decodeURIComponent(hash);
-            } catch {
-              return hash;
-            }
-          })();
+          const decodedHash = decodeCandidate(hash);
           const found = tryInText(decodedHash);
+          if (found) return found;
+        }
+
+        const host = decodeCandidate(String(u.host ?? "").trim());
+        if (host) {
+          const found = tryInText(host);
+          if (found) return found;
+        }
+
+        for (const pathSegment of u.pathname.split("/")) {
+          const decodedSegment = decodeCandidate(pathSegment.trim());
+          if (!decodedSegment) continue;
+          const found = tryInText(decodedSegment);
           if (found) return found;
         }
       } catch {

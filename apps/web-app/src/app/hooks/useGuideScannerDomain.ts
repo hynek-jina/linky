@@ -7,6 +7,7 @@ import type {
   NavigatorWithOptionalCameraPermissions,
   WindowWithOptionalBarcodeDetector,
 } from "../../types/browser";
+import { AnimatedQrDecoder } from "../../utils/animatedQr";
 import type { Route } from "../../types/route";
 import type { ContactRowLike } from "../types/appTypes";
 import { useContactsGuide } from "./guide/useContactsGuide";
@@ -65,16 +66,13 @@ export const useGuideScannerDomain = ({
   const scanVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const scanOpenRequestIdRef = React.useRef(0);
   const scanIsOpenRef = React.useRef(false);
+  const animatedQrDecoderRef = React.useRef(new AnimatedQrDecoder());
 
   React.useEffect(() => {
     scanIsOpenRef.current = scanIsOpen;
   }, [scanIsOpen]);
 
-  const closeScan = React.useCallback(() => {
-    setScanIsOpen(false);
-    setScanEntryPoint(null);
-    scanOpenRequestIdRef.current += 1;
-
+  const stopScanStream = React.useCallback(() => {
     const video = scanVideoRef.current;
     if (video) {
       try {
@@ -103,6 +101,14 @@ export const useGuideScannerDomain = ({
       return null;
     });
   }, []);
+
+  const closeScan = React.useCallback(() => {
+    setScanIsOpen(false);
+    setScanEntryPoint(null);
+    scanOpenRequestIdRef.current += 1;
+    animatedQrDecoderRef.current.reset();
+    stopScanStream();
+  }, [stopScanStream]);
 
   const startNativeScanFallback = React.useCallback((): boolean => {
     if (!supportsNativeQrScan()) {
@@ -147,7 +153,7 @@ export const useGuideScannerDomain = ({
         }
 
         pushToast(t("scanCameraError"));
-        closeScan();
+        stopScanStream();
         return;
       }
 
@@ -157,7 +163,7 @@ export const useGuideScannerDomain = ({
         }
 
         pushToast(t("scanRequiresHttps"));
-        closeScan();
+        stopScanStream();
         return;
       }
 
@@ -234,11 +240,11 @@ export const useGuideScannerDomain = ({
           if (isPermissionDenied) pushToast(t("scanPermissionDenied"));
           else pushToast(t("scanCameraError"));
 
-          closeScan();
+          stopScanStream();
         }
       })();
     },
-    [closeScan, pushToast, startNativeScanFallback, t],
+    [pushToast, startNativeScanFallback, stopScanStream, t],
   );
 
   const openScan = React.useCallback(() => {
@@ -253,6 +259,22 @@ export const useGuideScannerDomain = ({
   React.useEffect(() => {
     handleScannedTextRef.current = onScannedText;
   }, [onScannedText]);
+
+  const handleDetectedScanValue = React.useCallback(async (value: string) => {
+    const animatedResult = animatedQrDecoderRef.current.receive(value);
+    if (animatedResult.accepted) {
+      const completedText = String(animatedResult.completeText ?? "").trim();
+      if (!completedText) {
+        return false;
+      }
+
+      await handleScannedTextRef.current(completedText);
+      return true;
+    }
+
+    await handleScannedTextRef.current(value);
+    return true;
+  }, []);
 
   React.useEffect(() => {
     if (!scanIsOpen) return;
@@ -357,10 +379,12 @@ export const useGuideScannerDomain = ({
             const codes = await detector.detect(video);
             const value = String(codes?.[0]?.rawValue ?? "").trim();
             if (value) {
-              handled = true;
-              stop();
-              await handleScannedTextRef.current(value);
-              return;
+              const didHandle = await handleDetectedScanValue(value);
+              if (didHandle) {
+                handled = true;
+                stop();
+                return;
+              }
             }
           } else if (jsQr && ctx) {
             const w = video.videoWidth || 0;
@@ -373,10 +397,12 @@ export const useGuideScannerDomain = ({
               const result = jsQr(imageData.data, w, h);
               const value = String(result?.data ?? "").trim();
               if (value) {
-                handled = true;
-                stop();
-                await handleScannedTextRef.current(value);
-                return;
+                const didHandle = await handleDetectedScanValue(value);
+                if (didHandle) {
+                  handled = true;
+                  stop();
+                  return;
+                }
               }
             }
           }
@@ -395,7 +421,7 @@ export const useGuideScannerDomain = ({
       cancelled = true;
       stop();
     };
-  }, [scanIsOpen, scanStream]);
+  }, [handleDetectedScanValue, scanIsOpen, scanStream]);
 
   return {
     closeScan,

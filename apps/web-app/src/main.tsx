@@ -23,6 +23,11 @@ type BufferFromArgs =
     ]
   | [value: string, encoding?: string];
 
+interface ProcessLike {
+  emitWarning?: (message: string, type?: string, code?: string) => void;
+  env?: Record<string, string | undefined>;
+}
+
 const isBufferConstructor = (value: unknown): value is typeof Buffer => {
   return typeof value === "function" && "from" in value && "prototype" in value;
 };
@@ -30,6 +35,14 @@ const isBufferConstructor = (value: unknown): value is typeof Buffer => {
 const getGlobalBuffer = (): typeof Buffer | null => {
   const candidate = Reflect.get(globalThis, "Buffer");
   return isBufferConstructor(candidate) ? candidate : null;
+};
+
+const getGlobalProcess = (): ProcessLike | null => {
+  const candidate = Reflect.get(globalThis, "process");
+  if (candidate && typeof candidate === "object") {
+    return candidate as ProcessLike;
+  }
+  return null;
 };
 
 // Some dependencies (e.g. Cashu libs) expect Node's global Buffer.
@@ -47,6 +60,32 @@ if (!getGlobalBuffer()) {
       value: Buffer,
       writable: true,
     });
+  }
+}
+
+// Some browserified Node deps still expect a global `process`.
+// Provide a tiny shim before any lazy-loaded app code runs.
+if (!getGlobalProcess()) {
+  const processShim: ProcessLike = {
+    emitWarning: (message: string, type?: string, code?: string) => {
+      if (
+        typeof console !== "undefined" &&
+        typeof console.warn === "function"
+      ) {
+        console.warn(message, type, code);
+      }
+    },
+    env: {},
+  };
+
+  try {
+    Object.defineProperty(globalThis, "process", {
+      configurable: true,
+      value: processShim,
+      writable: true,
+    });
+  } catch {
+    Reflect.set(globalThis, "process", processShim);
   }
 }
 
@@ -92,7 +131,7 @@ if (!getGlobalBuffer()) {
     value: function (this: typeof Buffer, ...args: BufferFromArgs) {
       const [value, encodingOrOffset] = args;
       if (typeof value === "string" && encodingOrOffset === "base64url") {
-        return origFrom.call(this, fromBase64Url(value), "base64");
+        return Reflect.apply(origFrom, this, [fromBase64Url(value), "base64"]);
       }
       return Reflect.apply(origFrom, this, args);
     },
