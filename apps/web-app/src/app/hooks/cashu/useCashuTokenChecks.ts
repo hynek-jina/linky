@@ -599,15 +599,7 @@ export const useCashuTokenChecks = ({
         }
       }
     },
-    [
-      cashuIsBusy,
-      pushToast,
-      setCashuIsBusy,
-      setStatus,
-      t,
-      update,
-      updateCashuToken,
-    ],
+    [cashuIsBusy, pushToast, setCashuIsBusy, setStatus, t, updateCashuToken],
   );
 
   const checkAndRefreshCashuToken = React.useCallback(

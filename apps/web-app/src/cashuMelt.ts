@@ -51,6 +51,33 @@ type CashuPayErrorResult = {
 const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
   proofs.reduce((sum, proof) => sum + proof.amount, 0);
 
+export const getMeltSwapTargetAmount = (
+  quotedTotalAmount: number,
+  availableAmount: number,
+): number => {
+  const normalizedQuotedTotalAmount = Math.trunc(quotedTotalAmount);
+  const normalizedAvailableAmount = Math.trunc(availableAmount);
+
+  if (
+    !Number.isFinite(normalizedQuotedTotalAmount) ||
+    normalizedQuotedTotalAmount <= 0
+  ) {
+    return 0;
+  }
+
+  if (
+    !Number.isFinite(normalizedAvailableAmount) ||
+    normalizedAvailableAmount <= normalizedQuotedTotalAmount
+  ) {
+    return normalizedQuotedTotalAmount;
+  }
+
+  // Some mints occasionally require one extra sat of inputs beyond the
+  // quoted melt reserve. Overproviding by 1 sat lets the mint return change
+  // instead of failing the melt with "Provided X, needed X+1".
+  return normalizedQuotedTotalAmount + 1;
+};
+
 interface ParsedMeltProofsResponse {
   change: Proof[];
   fee?: number;
@@ -189,10 +216,10 @@ export const meltInvoiceWithTokensAtMint = async (args: {
     const quote = await wallet.createMeltQuote(invoice);
     const paidAmount = quote.amount ?? 0;
     const feeReserve = quote.fee_reserve ?? 0;
-    const total = paidAmount + feeReserve;
+    const quotedTotal = paidAmount + feeReserve;
 
     const have = getProofAmountSum(spendableProofs);
-    if (have < total) {
+    if (have < quotedTotal) {
       return {
         ok: false,
         mint,
@@ -202,9 +229,11 @@ export const meltInvoiceWithTokensAtMint = async (args: {
         feePaid: 0,
         remainingAmount: have,
         remainingToken: null,
-        error: `Insufficient funds (need ${total}, have ${have})`,
+        error: `Insufficient funds (need ${quotedTotal}, have ${have})`,
       };
     }
+
+    const total = getMeltSwapTargetAmount(quotedTotal, have);
 
     const run = async (): Promise<CashuPayResult | CashuPayErrorResult> => {
       const counter0 = det

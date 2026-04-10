@@ -2325,7 +2325,7 @@ export const useAppShellComposition = () => {
     navigateTo({ route: "contacts" });
   };
 
-  const openNewContactPage = () => {
+  const openNewContactPage = React.useCallback(() => {
     if (contacts.length >= MAX_CONTACTS_PER_OWNER) {
       const message = t("contactsLimitReached").replace(
         "{max}",
@@ -2349,7 +2349,15 @@ export const useAppShellComposition = () => {
       });
     }
     navigateTo({ route: "contactNew" });
-  };
+  }, [
+    clearContactForm,
+    contactNewPrefill,
+    contacts.length,
+    pushToast,
+    setContactNewPrefill,
+    setForm,
+    t,
+  ]);
 
   const canAddContact = contacts.length < MAX_CONTACTS_PER_OWNER;
 
