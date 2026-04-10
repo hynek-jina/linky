@@ -111,7 +111,6 @@ import {
   isUnknownContactId,
   normalizePubkeyHex,
 } from "./hooks/messages/contactIdentity";
-import { extractCashuTokenFromText } from "./lib/tokenText";
 import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
 import { useChatNostrSyncEffect } from "./hooks/messages/useChatNostrSyncEffect";
 import {
@@ -136,8 +135,8 @@ import {
   readMintQuoteState,
 } from "./hooks/topup/topupMintQuoteState";
 import {
-  useTopupInvoiceQuoteEffects,
   requestMintQuoteBolt11,
+  useTopupInvoiceQuoteEffects,
   type TopupMintQuoteDraft,
 } from "./hooks/topup/useTopupInvoiceQuoteEffects";
 import { useAnonymousPaymentTelemetry } from "./hooks/useAnonymousPaymentTelemetry";
@@ -168,20 +167,21 @@ import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   isCashuTokenAcceptedState,
 } from "./lib/cashuTokenState";
-import {
-  buildPaymentAmountAttempts,
-  buildPaymentFailureAmountAttempts,
-  isRetryablePaymentAmountFailure,
-} from "./lib/paymentAmountFallback";
 import type { AppNostrPool } from "./lib/nostrPool";
 import {
   publishSingleWrappedWithRetry as publishSingleWrappedWithRetryBase,
   publishWrappedWithRetry as publishWrappedWithRetryBase,
 } from "./lib/nostrPublishRetry";
+import {
+  buildPaymentAmountAttempts,
+  buildPaymentFailureAmountAttempts,
+  isRetryablePaymentAmountFailure,
+} from "./lib/paymentAmountFallback";
 import { buildCashuMintCandidates as buildCashuMintCandidatesBase } from "./lib/paymentMintSelection";
 import { showPwaNotification } from "./lib/pwaNotifications";
 import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "./lib/tokenMessageInfo";
 import {
+  extractCashuTokenFromText,
   extractCashuTokenFromText as extractCashuTokenFromTextFromUrl,
   extractCashuTokenMeta,
 } from "./lib/tokenText";
