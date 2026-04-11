@@ -144,27 +144,18 @@ const publishWithRetry = async (args: {
   return { anySuccess: false, error: lastError, timedOut };
 };
 
-export const forwardCashuTokenPrivately = async (args: {
+export const publishSiteWrappedEvent = async (args: {
+  baseEvent: UnsignedEvent;
+  errorMessage: string;
   recipientNpub: string;
-  token: string;
 }): Promise<void> => {
-  const token = String(args.token ?? "").trim();
-  if (!token) return;
-
   const recipientPublicKey = decodeRecipientNpub(args.recipientNpub);
   const senderPrivateKey = generateSecretKey();
   const senderPublicKey = getPublicKey(senderPrivateKey);
   const baseEvent: UnsignedEvent = {
-    created_at: Math.ceil(Date.now() / 1000),
-    kind: 14,
+    ...args.baseEvent,
     pubkey: senderPublicKey,
-    tags: [
-      ["p", recipientPublicKey],
-      ["client", makeClientId()],
-    ],
-    content: token,
   };
-
   const wrapped = wrapEvent(baseEvent, senderPrivateKey, recipientPublicKey);
   const pool = await getSharedPool();
   const publishResult = await publishWithRetry({
@@ -184,5 +175,30 @@ export const forwardCashuTokenPrivately = async (args: {
     if (confirmed) return;
   }
 
-  throw new Error(publishResult.error || "Failed to forward remaining token");
+  throw new Error(publishResult.error || args.errorMessage);
+};
+
+export const forwardCashuTokenPrivately = async (args: {
+  recipientNpub: string;
+  token: string;
+}): Promise<void> => {
+  const token = String(args.token ?? "").trim();
+  if (!token) return;
+
+  const baseEvent: UnsignedEvent = {
+    created_at: Math.ceil(Date.now() / 1000),
+    kind: 14,
+    pubkey: "",
+    tags: [
+      ["p", decodeRecipientNpub(args.recipientNpub)],
+      ["client", makeClientId()],
+    ],
+    content: token,
+  };
+
+  await publishSiteWrappedEvent({
+    baseEvent,
+    errorMessage: "Failed to forward remaining token",
+    recipientNpub: args.recipientNpub,
+  });
 };

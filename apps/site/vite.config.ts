@@ -1,11 +1,11 @@
 import react from "@vitejs/plugin-react-swc";
-import http from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import http from "node:http";
 import https from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
 import type { Plugin, ViteDevServer } from "vite";
+import { defineConfig } from "vite";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -118,6 +118,9 @@ export default defineConfig({
         privacy: path.resolve(__dirname, "privacy.html"),
       },
     },
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? "0.1.0"),
   },
   plugins: [react(), cashuRedirect(), lnurlProxy()],
 });
