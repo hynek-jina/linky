@@ -7,8 +7,8 @@ import type {
   NavigatorWithOptionalCameraPermissions,
   WindowWithOptionalBarcodeDetector,
 } from "../../types/browser";
-import { AnimatedQrDecoder } from "../../utils/animatedQr";
 import type { Route } from "../../types/route";
+import { AnimatedQrDecoder } from "../../utils/animatedQr";
 import type { ContactRowLike } from "../types/appTypes";
 import { useContactsGuide } from "./guide/useContactsGuide";
 
@@ -116,21 +116,43 @@ export const useGuideScannerDomain = ({
     }
 
     closeScan();
+    animatedQrDecoderRef.current.reset();
 
     void (async () => {
-      const result = await startNativeQrScan();
-      if (!result) {
-        pushToast(t("scanCameraError"));
-        return;
-      }
+      while (true) {
+        const result = await startNativeQrScan();
+        if (!result) {
+          animatedQrDecoderRef.current.reset();
+          pushToast(t("scanCameraError"));
+          return;
+        }
 
-      if (result.value) {
+        if (!result.value) {
+          animatedQrDecoderRef.current.reset();
+          if (!result.cancelled) {
+            pushToast(result.message ?? t("scanCameraError"));
+          }
+          return;
+        }
+
+        const animatedResult = animatedQrDecoderRef.current.receive(
+          result.value,
+        );
+        if (animatedResult.accepted) {
+          const completedText = String(
+            animatedResult.completeText ?? "",
+          ).trim();
+          if (!completedText) {
+            continue;
+          }
+
+          await handleScannedTextRef.current(completedText);
+          return;
+        }
+
+        animatedQrDecoderRef.current.reset();
         await handleScannedTextRef.current(result.value);
         return;
-      }
-
-      if (!result.cancelled) {
-        pushToast(result.message ?? t("scanCameraError"));
       }
     })();
 

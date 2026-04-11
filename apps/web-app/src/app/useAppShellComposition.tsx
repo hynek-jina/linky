@@ -1417,6 +1417,8 @@ export const useAppShellComposition = () => {
   );
 
   React.useEffect(() => {
+    if (!appOwnerId) return;
+
     const sourceOwnerId = String(appOwnerId ?? "").trim();
     if (!sourceOwnerId) return;
     if (!activeCashuOwnerId) return;
