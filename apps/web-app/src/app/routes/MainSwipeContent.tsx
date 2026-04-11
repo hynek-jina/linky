@@ -30,6 +30,7 @@ export interface MainSwipeRouteProps {
   handleMainSwipeScroll:
     | ((event: React.UIEvent<HTMLDivElement>) => void)
     | undefined;
+  handleMainSwipeTabChange: (target: "contacts" | "wallet") => void;
   mainSwipeProgress: number;
   mainSwipeRef: React.RefObject<HTMLDivElement | null>;
   mainSwipeScrollY: number;
@@ -81,6 +82,7 @@ export const MainSwipeContent = (): React.ReactElement => {
     dismissWalletWarning,
     groupNames,
     handleMainSwipeScroll,
+    handleMainSwipeTabChange,
     mainSwipeProgress,
     mainSwipeRef,
     mainSwipeScrollY,
@@ -181,6 +183,7 @@ export const MainSwipeContent = (): React.ReactElement => {
         activeTab={bottomTabActive}
         activeProgress={mainSwipeProgress}
         contactsLabel={t("contactsTitle")}
+        onTabChange={handleMainSwipeTabChange}
         t={t}
         walletLabel={t("wallet")}
       />

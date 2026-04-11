@@ -536,7 +536,11 @@ export function AdvancedPage({
       <div className="settings-row">
         <button
           type="button"
-          className={logoutArmed ? "btn-wide danger" : "btn-wide"}
+          className={
+            logoutArmed
+              ? "btn-wide secondary danger-armed"
+              : "btn-wide secondary"
+          }
           onClick={requestLogout}
         >
           {t("logout")}

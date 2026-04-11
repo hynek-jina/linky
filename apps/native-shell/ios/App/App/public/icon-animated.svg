@@ -1,8 +1,8 @@
 <svg width="800" height="800" viewBox="0 0 800 800" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="paint0_linear_0_1" x1="151.343" y1="223.359" x2="459.343" y2="683.132" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#14B8A6" />
-      <stop offset="1" stop-color="#0D9488" />
+      <stop stop-color="#2DD5BE" />
+      <stop offset="1" stop-color="#2DD5BE" />
     </linearGradient>
 
     <!-- Slight softening so the reveal feels like a pen/brush edge, without bleeding too much. -->

@@ -2106,7 +2106,7 @@ export const useAppShellComposition = () => {
     setMainSwipeScrollY,
   });
 
-  const { handleMainSwipeScroll } = useMainSwipeNavigation({
+  const { commitMainSwipe, handleMainSwipeScroll } = useMainSwipeNavigation({
     isMainSwipeRoute,
     mainSwipeProgressRef,
     mainSwipeRef,
@@ -4218,6 +4218,7 @@ export const useAppShellComposition = () => {
       dismissWalletWarning,
       groupNames,
       handleMainSwipeScroll,
+      handleMainSwipeTabChange: commitMainSwipe,
       mainSwipeProgress,
       mainSwipeRef,
       mainSwipeScrollY,

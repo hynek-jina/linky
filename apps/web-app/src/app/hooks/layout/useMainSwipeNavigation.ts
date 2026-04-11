@@ -77,6 +77,18 @@ export const useMainSwipeNavigation = ({
   setMainSwipeProgress,
 }: UseMainSwipeNavigationParams) => {
   const previousRouteKindRef = React.useRef<Route["kind"]>(routeKind);
+  const programmaticScrollRef = React.useRef(false);
+
+  const releaseProgrammaticScrollNextFrame = React.useCallback(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      programmaticScrollRef.current = false;
+    };
+  }, []);
 
   const updateMainSwipeProgress = React.useCallback(
     (value: number) => {
@@ -89,16 +101,29 @@ export const useMainSwipeNavigation = ({
 
   const commitMainSwipe = React.useCallback(
     (target: "contacts" | "wallet") => {
+      if (mainSwipeScrollTimerRef.current !== null) {
+        window.clearTimeout(mainSwipeScrollTimerRef.current);
+        mainSwipeScrollTimerRef.current = null;
+      }
+
       updateMainSwipeProgress(target === "wallet" ? 1 : 0);
       const element = mainSwipeRef.current;
       if (element) {
+        programmaticScrollRef.current = true;
         alignMainSwipeToTarget(element, target);
+        void releaseProgrammaticScrollNextFrame();
       }
       if (target !== routeKind) {
         navigateTo({ route: target });
       }
     },
-    [mainSwipeRef, routeKind, updateMainSwipeProgress],
+    [
+      mainSwipeRef,
+      mainSwipeScrollTimerRef,
+      releaseProgrammaticScrollNextFrame,
+      routeKind,
+      updateMainSwipeProgress,
+    ],
   );
 
   React.useLayoutEffect(() => {
@@ -117,21 +142,35 @@ export const useMainSwipeNavigation = ({
       element.style.scrollBehavior = "auto";
     }
 
+    programmaticScrollRef.current = true;
     alignMainSwipeToTarget(
       element,
       routeKind === "wallet" ? "wallet" : "contacts",
     );
 
+    const releaseProgrammaticScroll = releaseProgrammaticScrollNextFrame();
+
     updateMainSwipeProgress(routeKind === "wallet" ? 1 : 0);
 
-    if (!disableSmoothAlignment) return;
+    if (!disableSmoothAlignment) return releaseProgrammaticScroll;
 
-    return restoreScrollBehaviorNextFrame(
+    const restoreScrollBehavior = restoreScrollBehaviorNextFrame(
       element,
       mainSwipeRef,
       previousScrollBehavior,
     );
-  }, [isMainSwipeRoute, mainSwipeRef, routeKind, updateMainSwipeProgress]);
+
+    return () => {
+      releaseProgrammaticScroll();
+      restoreScrollBehavior();
+    };
+  }, [
+    isMainSwipeRoute,
+    mainSwipeRef,
+    releaseProgrammaticScrollNextFrame,
+    routeKind,
+    updateMainSwipeProgress,
+  ]);
 
   React.useEffect(() => {
     previousRouteKindRef.current = routeKind;
@@ -147,6 +186,10 @@ export const useMainSwipeNavigation = ({
 
   const handleMainSwipeScroll = isMainSwipeRoute
     ? (event: React.UIEvent<HTMLDivElement>) => {
+        if (programmaticScrollRef.current) {
+          return;
+        }
+
         const element = event.currentTarget;
         const width = element.clientWidth || 1;
         const progress = element.scrollLeft / width;
@@ -165,6 +208,7 @@ export const useMainSwipeNavigation = ({
     : undefined;
 
   return {
+    commitMainSwipe,
     handleMainSwipeScroll,
   };
 };

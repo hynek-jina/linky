@@ -14,6 +14,7 @@ interface EvoluDataDetailPageProps {
   evoluContactsOwnerIndex: number;
   evoluContactsOwnerNewContactsCount: number;
   evoluContactsOwnerPointer: string;
+  clearDatabaseArmed: boolean;
   pendingClearDatabase: boolean;
   requestClearDatabase: () => void;
   loadHistoryData: () => Promise<EvoluHistoryRow[]>;
@@ -32,6 +33,7 @@ export function EvoluDataDetailPage({
   evoluContactsOwnerIndex,
   evoluContactsOwnerNewContactsCount,
   evoluContactsOwnerPointer,
+  clearDatabaseArmed,
   pendingClearDatabase,
   requestClearDatabase,
   loadHistoryData,
@@ -197,8 +199,13 @@ export function EvoluDataDetailPage({
           <div className="settings-row" style={{ marginTop: 16 }}>
             <button
               type="button"
-              className={pendingClearDatabase ? "btn-wide danger" : "btn-wide"}
+              className={
+                clearDatabaseArmed
+                  ? "btn-wide secondary danger-armed"
+                  : "btn-wide secondary"
+              }
               onClick={requestClearDatabase}
+              disabled={pendingClearDatabase}
             >
               {t("evoluClearDatabase")}
             </button>

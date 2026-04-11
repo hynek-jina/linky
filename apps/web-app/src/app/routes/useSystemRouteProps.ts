@@ -205,11 +205,30 @@ export const useSystemRouteProps = ({
   tokensRestoreIsBusy,
   wipeEvoluStorage,
 }: UseSystemRoutePropsParams): SystemRouteProps => {
+  const [clearDatabaseArmed, setClearDatabaseArmed] = React.useState(false);
+
   const requestClearDatabase = React.useCallback(() => {
-    if (window.confirm(t("evoluClearDatabaseConfirm"))) {
-      void wipeEvoluStorage();
+    if (!clearDatabaseArmed) {
+      setClearDatabaseArmed(true);
+      pushToast(t("deleteArmedHint"));
+      return;
     }
-  }, [t, wipeEvoluStorage]);
+
+    setClearDatabaseArmed(false);
+    void wipeEvoluStorage();
+  }, [clearDatabaseArmed, pushToast, t, wipeEvoluStorage]);
+
+  React.useEffect(() => {
+    if (!clearDatabaseArmed) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setClearDatabaseArmed(false);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [clearDatabaseArmed]);
 
   return {
     advancedProps: {
@@ -276,6 +295,7 @@ export const useSystemRouteProps = ({
       evoluContactsOwnerIndex,
       evoluContactsOwnerNewContactsCount,
       evoluContactsOwnerPointer,
+      clearDatabaseArmed,
       pendingClearDatabase: evoluWipeStorageIsBusy,
       requestClearDatabase,
       loadHistoryData: loadEvoluHistoryData,
@@ -325,6 +345,7 @@ export const useSystemRouteProps = ({
       evoluServerUrls,
       evoluTableCounts,
       isEvoluServerOffline,
+      clearDatabaseArmed,
       pendingClearDatabase: evoluWipeStorageIsBusy,
       requestClearDatabase,
       syncOwner,

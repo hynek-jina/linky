@@ -13,6 +13,7 @@ interface EvoluServersPageProps {
   evoluServerUrls: string[];
   evoluTableCounts: Record<string, number | null>;
   isEvoluServerOffline: (url: string) => boolean;
+  clearDatabaseArmed: boolean;
   pendingClearDatabase: boolean;
   requestClearDatabase: () => void;
   syncOwner: SyncOwner | null;
@@ -30,6 +31,7 @@ export function EvoluServersPage({
   evoluServerUrls,
   evoluTableCounts,
   isEvoluServerOffline,
+  clearDatabaseArmed,
   pendingClearDatabase,
   requestClearDatabase,
   syncOwner,
@@ -161,8 +163,13 @@ export function EvoluServersPage({
           <div className="settings-row" style={{ marginTop: 16 }}>
             <button
               type="button"
-              className={pendingClearDatabase ? "btn-wide danger" : "btn-wide"}
+              className={
+                clearDatabaseArmed
+                  ? "btn-wide secondary danger-armed"
+                  : "btn-wide secondary"
+              }
               onClick={requestClearDatabase}
+              disabled={pendingClearDatabase}
             >
               {t("evoluClearDatabase")}
             </button>

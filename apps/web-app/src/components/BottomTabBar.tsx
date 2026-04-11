@@ -6,6 +6,7 @@ interface BottomTabBarProps {
   activeTab: "contacts" | "wallet" | null;
   activeProgress?: number;
   contactsLabel: string;
+  onTabChange?: (tab: "contacts" | "wallet") => void;
   t: (key: string) => string;
   walletLabel: string;
 }
@@ -14,6 +15,7 @@ export function BottomTabBar({
   activeTab,
   activeProgress,
   contactsLabel,
+  onTabChange,
   t,
   walletLabel,
 }: BottomTabBarProps): React.ReactElement {
@@ -46,6 +48,12 @@ export function BottomTabBar({
       : activeTab === "wallet"
         ? 1
         : 0;
+  const visualActiveTab: "contacts" | "wallet" | null =
+    activeProgress !== undefined
+      ? progress >= 0.5
+        ? "wallet"
+        : "contacts"
+      : activeTab;
 
   const measureTabs = React.useCallback(() => {
     const container = tabsRef.current;
@@ -90,6 +98,18 @@ export function BottomTabBar({
     tabMetrics.contactsWidth +
     (tabMetrics.walletWidth - tabMetrics.contactsWidth) * progress;
 
+  const handleTabChange = React.useCallback(
+    (tab: "contacts" | "wallet") => {
+      if (tab === activeTab) return;
+      if (onTabChange) {
+        onTabChange(tab);
+        return;
+      }
+      navigateTo({ route: tab });
+    },
+    [activeTab, navigateTo, onTabChange],
+  );
+
   return (
     <div className="contacts-qr-bar" role="region">
       <div className="bottom-tabs-bar" role="tablist" aria-label={t("list")}>
@@ -114,15 +134,15 @@ export function BottomTabBar({
           <BottomTab
             icon="contacts"
             label={contactsLabel}
-            isActive={activeTab === "contacts"}
-            onClick={() => navigateTo({ route: "contacts" })}
+            isActive={visualActiveTab === "contacts"}
+            onClick={() => handleTabChange("contacts")}
             buttonRef={contactsTabRef}
           />
           <BottomTab
             icon="wallet"
             label={walletLabel}
-            isActive={activeTab === "wallet"}
-            onClick={() => navigateTo({ route: "wallet" })}
+            isActive={visualActiveTab === "wallet"}
+            onClick={() => handleTabChange("wallet")}
             buttonRef={walletTabRef}
           />
         </div>

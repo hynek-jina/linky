@@ -206,121 +206,125 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
           </div>
         ) : null}
 
-        <div className="onboarding-return-copy">
-          <div
-            className="onboarding-logo onboarding-return-logo"
-            aria-hidden="true"
-          >
-            <img
-              className="onboarding-logo-svg onboarding-return-logoSvg"
-              src="/icon.svg"
-              alt=""
-              width={256}
-              height={256}
-              loading="eager"
-              decoding="async"
-            />
-          </div>
-          <p className="muted onboarding-avatar-copy onboarding-return-intro">
-            {t("onboardingReturnIntro")}
-          </p>
-        </div>
-
-        <div className="onboarding-return-inputWrap">
-          <label
-            className="onboarding-avatar-nameLabel"
-            htmlFor="onboarding-return-seed"
-          >
-            {t("seed")}
-          </label>
-          <div className="onboarding-return-inputRow">
-            <textarea
-              id="onboarding-return-seed"
-              value={step.input}
-              onChange={(event) => setReturningSlip39Input(event.target.value)}
-              onPaste={(event) => {
-                const text = event.clipboardData?.getData("text") ?? "";
-                if (!text) return;
-
-                event.preventDefault();
-                setReturningSlip39Input(text);
-
-                const pastedAnalysis = analyzeSlip39Input(text);
-                if (pastedAnalysis.isCompleteCandidate) {
-                  void submitReturningSlip39(text);
-                }
-              }}
-              placeholder={t("onboardingReturnPlaceholder")}
-              autoCapitalize="none"
-              autoCorrect="off"
-              autoComplete="off"
-              spellCheck={false}
-              rows={4}
-            />
-            <button
-              type="button"
-              className="onboarding-return-pasteBtn"
-              onClick={() => void pasteReturningSlip39FromClipboard()}
-              disabled={onboardingIsBusy}
-              aria-label={t("onboardingReturnPasteButton")}
-              title={t("onboardingReturnPasteButton")}
+        <div className="onboarding-return-scroll">
+          <div className="onboarding-return-copy">
+            <div
+              className="onboarding-logo onboarding-return-logo"
+              aria-hidden="true"
             >
-              <svg
-                aria-hidden="true"
-                className="onboarding-return-pasteIcon"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <rect
-                  x="5"
-                  y="4"
-                  width="11"
-                  height="13"
-                  rx="2.2"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                />
-                <rect
-                  x="8"
-                  y="7"
-                  width="11"
-                  height="13"
-                  rx="2.2"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                />
-              </svg>
-            </button>
+              <img
+                className="onboarding-logo-svg onboarding-return-logoSvg"
+                src="/icon.svg"
+                alt=""
+                width={256}
+                height={256}
+                loading="eager"
+                decoding="async"
+              />
+            </div>
+            <p className="muted onboarding-avatar-copy onboarding-return-intro">
+              {t("onboardingReturnIntro")}
+            </p>
           </div>
-        </div>
 
-        <div
-          className={helperClassName}
-          role={step.error ? "status" : undefined}
-        >
-          {helperMessage}
-        </div>
+          <div className="onboarding-return-inputWrap">
+            <label
+              className="onboarding-avatar-nameLabel"
+              htmlFor="onboarding-return-seed"
+            >
+              {t("seed")}
+            </label>
+            <div className="onboarding-return-inputRow">
+              <textarea
+                id="onboarding-return-seed"
+                value={step.input}
+                onChange={(event) =>
+                  setReturningSlip39Input(event.target.value)
+                }
+                onPaste={(event) => {
+                  const text = event.clipboardData?.getData("text") ?? "";
+                  if (!text) return;
 
-        {analysis.suggestions.length > 0 ? (
-          <div
-            className="onboarding-return-suggestions"
-            aria-label={t("onboardingReturnSuggestions")}
-          >
-            {analysis.suggestions.map((word) => (
+                  event.preventDefault();
+                  setReturningSlip39Input(text);
+
+                  const pastedAnalysis = analyzeSlip39Input(text);
+                  if (pastedAnalysis.isCompleteCandidate) {
+                    void submitReturningSlip39(text);
+                  }
+                }}
+                placeholder={t("onboardingReturnPlaceholder")}
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+                rows={4}
+              />
               <button
-                key={word}
                 type="button"
-                className="pill pill-muted onboarding-return-suggestion"
-                onClick={() => selectReturningSlip39Suggestion(word)}
+                className="onboarding-return-pasteBtn"
+                onClick={() => void pasteReturningSlip39FromClipboard()}
                 disabled={onboardingIsBusy}
+                aria-label={t("onboardingReturnPasteButton")}
+                title={t("onboardingReturnPasteButton")}
               >
-                {word}
+                <svg
+                  aria-hidden="true"
+                  className="onboarding-return-pasteIcon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <rect
+                    x="5"
+                    y="4"
+                    width="11"
+                    height="13"
+                    rx="2.2"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
+                  <rect
+                    x="8"
+                    y="7"
+                    width="11"
+                    height="13"
+                    rx="2.2"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
+                </svg>
               </button>
-            ))}
+            </div>
           </div>
-        ) : null}
 
-        <div className="onboarding-avatar-actions">
+          <div
+            className={helperClassName}
+            role={step.error ? "status" : undefined}
+          >
+            {helperMessage}
+          </div>
+
+          {analysis.suggestions.length > 0 ? (
+            <div
+              className="onboarding-return-suggestions"
+              aria-label={t("onboardingReturnSuggestions")}
+            >
+              {analysis.suggestions.map((word) => (
+                <button
+                  key={word}
+                  type="button"
+                  className="pill pill-muted onboarding-return-suggestion"
+                  onClick={() => selectReturningSlip39Suggestion(word)}
+                  disabled={onboardingIsBusy}
+                >
+                  {word}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="onboarding-avatar-actions onboarding-avatar-actionsAdaptive">
           <button
             type="button"
             className="btn-wide"
