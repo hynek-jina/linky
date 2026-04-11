@@ -305,6 +305,12 @@ export default defineConfig({
         short_name: "Linky",
         start_url: "/",
         display: "standalone",
+        protocol_handlers: [
+          {
+            protocol: "web+cashu",
+            url: "/#wallet?cashu=%s",
+          },
+        ],
         background_color: "#ffffff",
         theme_color: "#14b8a6",
         icons: [

@@ -99,6 +99,9 @@ const localeStorageKey = "linky.lang";
 const fiatRatesStorageKey = "linky.fiat_rates.v1";
 const fiatRatesTtlMs = 10 * 60 * 1000;
 const satsPerBtc = 100_000_000;
+const linkyWebAppUrl = "https://app.linky.fit";
+const nativeLaunchFallbackDelayMs = 700;
+const pwaLaunchFallbackDelayMs = 1600;
 const REMAINING_TOKEN_FORWARD_RECIPIENT_NPUB =
   "npub1xuxvcnmw4drf8duzalvalxrfxjvwtrjdmwxy0ez2e62uje4drrvqu6pz2w";
 
@@ -395,10 +398,101 @@ const copyTextToClipboard = async (value: string): Promise<boolean> => {
   }
 };
 
-const buildLinkyWalletImportUrl = (token: string): string | null => {
+interface LinkyWalletImportTargets {
+  browserUrl: string;
+  nativeUrl: string;
+  pwaUrl: string;
+}
+
+const buildLinkyWalletImportTargets = (
+  token: string,
+): LinkyWalletImportTargets | null => {
   const trimmed = String(token ?? "").trim();
   if (!trimmed) return null;
-  return `https://app.linky.fit/#wallet?cashu=${encodeURIComponent(trimmed)}`;
+  const encodedToken = encodeURIComponent(trimmed);
+  return {
+    browserUrl: `${linkyWebAppUrl}/#wallet?cashu=${encodedToken}`,
+    nativeUrl: `cashu://receive?token=${encodedToken}`,
+    pwaUrl: `web+cashu://receive?token=${encodedToken}`,
+  };
+};
+
+const openLinkyWalletImport = (token: string): void => {
+  const targets = buildLinkyWalletImportTargets(token);
+  if (!targets || typeof window === "undefined") return;
+
+  let finished = false;
+  const cleanupCallbacks: Array<() => void> = [];
+  const timeoutIds: number[] = [];
+
+  const cleanup = () => {
+    while (timeoutIds.length > 0) {
+      const timeoutId = timeoutIds.pop();
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    }
+
+    while (cleanupCallbacks.length > 0) {
+      const callback = cleanupCallbacks.pop();
+      callback?.();
+    }
+  };
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    cleanup();
+  };
+
+  const isDocumentVisible = () =>
+    typeof document === "undefined" || document.visibilityState === "visible";
+
+  const tryNavigate = (url: string) => {
+    if (finished || !isDocumentVisible()) {
+      finish();
+      return;
+    }
+
+    window.location.assign(url);
+  };
+
+  if (typeof document !== "undefined") {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        finish();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    cleanupCallbacks.push(() => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    });
+  }
+
+  const handlePageHide = () => {
+    finish();
+  };
+
+  window.addEventListener("pagehide", handlePageHide);
+  cleanupCallbacks.push(() => {
+    window.removeEventListener("pagehide", handlePageHide);
+  });
+
+  timeoutIds.push(
+    window.setTimeout(() => {
+      tryNavigate(targets.pwaUrl);
+    }, nativeLaunchFallbackDelayMs),
+  );
+
+  timeoutIds.push(
+    window.setTimeout(() => {
+      finish();
+      window.location.assign(targets.browserUrl);
+    }, pwaLaunchFallbackDelayMs),
+  );
+
+  tryNavigate(targets.nativeUrl);
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -1708,9 +1802,7 @@ function CashuPage() {
   };
 
   const handleOpenInWallet = () => {
-    const walletImportUrl = buildLinkyWalletImportUrl(activeToken);
-    if (!walletImportUrl) return;
-    window.open(walletImportUrl, "_blank", "noopener,noreferrer");
+    openLinkyWalletImport(activeToken);
   };
 
   return (
@@ -1862,9 +1954,14 @@ function CashuPage() {
                       {activeCopy.payoutIntroLead}
                       <a
                         className="cashu-inline-link"
-                        href="https://app.linky.fit"
-                        target="_blank"
-                        rel="noreferrer"
+                        href={
+                          buildLinkyWalletImportTargets(activeToken)
+                            ?.browserUrl ?? linkyWebAppUrl
+                        }
+                        onClick={(event) => {
+                          event.preventDefault();
+                          handleOpenInWallet();
+                        }}
                       >
                         {activeCopy.payoutIntroLink}
                       </a>
