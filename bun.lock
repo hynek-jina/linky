@@ -48,12 +48,14 @@
       "version": "0.1.0",
       "dependencies": {
         "@cashu/cashu-ts": "^2.5.3",
+        "buffer": "^6.0.3",
         "nostr-tools": "^2.17.0",
         "react": "^19.2.3",
         "react-dom": "^19.2.3",
       },
       "devDependencies": {
         "@linky/config": "workspace:*",
+        "@types/node": "^24.10.1",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
         "@vitejs/plugin-react-swc": "^4.2.2",
@@ -67,7 +69,6 @@
       "name": "@linky/web-app",
       "version": "26.4.4",
       "dependencies": {
-        "@capacitor/clipboard": "^7.0.0",
         "@capacitor/core": "^7.4.3",
         "@capacitor/push-notifications": "^7.0.0",
         "@capacitor/share": "^7.0.0",
