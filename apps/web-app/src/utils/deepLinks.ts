@@ -41,6 +41,12 @@ export const buildCashuDeepLink = (rawToken: unknown): string | null => {
   return `cashu://${token}`;
 };
 
+export const buildCashuShareUrl = (rawToken: unknown): string | null => {
+  const token = normalizeStrictCashuToken(String(rawToken ?? ""));
+  if (!token) return null;
+  return `https://linky.fit/cashu/#${encodeURIComponent(token)}`;
+};
+
 const extractNpubFromCandidate = (value: string): string | null => {
   const trimmed = normalizeCandidate(value);
   if (!trimmed) return null;

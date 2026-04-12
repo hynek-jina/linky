@@ -12,6 +12,7 @@ import {
   saveCachedProfilePicture,
 } from "../../nostrProfile";
 import { publishKind0ProfileMetadata } from "../../nostrPublish";
+import { readClipboardText } from "../../platform/clipboard";
 import {
   clearIdentitySecrets,
   persistIdentitySecrets,
@@ -23,16 +24,16 @@ import type { JsonRecord } from "../../types/json";
 import { CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY } from "../../utils/constants";
 import { createSquareAvatarDataUrl } from "../../utils/image";
 import {
+  applySlip39Suggestion,
+  normalizeSlip39Input,
+} from "../../utils/slip39Input";
+import {
   createSlip39Seed,
   deriveCashuBip85MnemonicFromSlip39,
   deriveEvoluOwnerMnemonicFromSlip39,
   deriveNostrKeysFromSlip39,
   looksLikeSlip39Seed,
 } from "../../utils/slip39Nostr";
-import {
-  applySlip39Suggestion,
-  normalizeSlip39Input,
-} from "../../utils/slip39Input";
 import { safeLocalStorageSet } from "../../utils/storage";
 
 export interface PendingOnboardingProfile {
@@ -708,12 +709,12 @@ export const useProfileAuthDomain = ({
     if (onboardingIsBusy) return;
 
     try {
-      if (!navigator.clipboard?.readText) {
+      const text = await readClipboardText();
+      if (text === null) {
         pushToast(t("pasteNotAvailable"));
         return;
       }
 
-      const text = await navigator.clipboard.readText();
       const raw = String(text ?? "").trim();
       if (!raw) {
         pushToast(t("pasteEmpty"));

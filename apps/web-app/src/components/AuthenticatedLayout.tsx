@@ -11,6 +11,7 @@ import { PaidOverlay } from "./PaidOverlay";
 import { ProfileQrModal } from "./ProfileQrModal";
 import { SaveContactPromptModal } from "./SaveContactPromptModal";
 import { ScanModal } from "./ScanModal";
+import { ShareOptionsModal } from "./ShareOptionsModal";
 import { Topbar } from "./Topbar";
 
 interface AuthenticatedLayoutProps {
@@ -140,6 +141,18 @@ export function AuthenticatedLayout({
         <NfcWriteModal
           kind={state.nfcWritePromptKind}
           onCancel={actions.cancelPendingNfcWrite}
+          t={state.t}
+        />
+      ) : null}
+
+      {state.shareOptionsText ? (
+        <ShareOptionsModal
+          onClose={actions.closeShareOptions}
+          onCopy={actions.copyShareOptionsText}
+          onEmail={actions.shareOptionsViaEmail}
+          onSms={actions.shareOptionsViaSms}
+          onWhatsApp={actions.shareOptionsViaWhatsApp}
+          shareText={state.shareOptionsText}
           t={state.t}
         />
       ) : null}

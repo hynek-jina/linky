@@ -1,3 +1,4 @@
+import "../browserPolyfills";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import CashuPage from "./CashuPage";

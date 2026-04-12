@@ -396,6 +396,14 @@ export const cs = {
   copiedToClipboard: "Zkopírováno do schránky.",
   copyFailed: "Kopírování do schránky se nepovedlo.",
   copy: "Kopírovat",
+  shareFailed: "Sdílení se nepovedlo.",
+  shareUnavailable: "Sdílení není na tomto zařízení dostupné.",
+  shareOptionsTitle: "Jak chcete sdílet?",
+  shareOptionsBody:
+    "Vyberte aplikaci nebo akci pro odeslání připravené zprávy.",
+  shareViaWhatsApp: "Poslat přes WhatsApp",
+  shareViaSms: "Poslat SMS",
+  shareViaEmail: "Poslat e-mailem",
 
   pasteArmedHint:
     "Vložením klíčů vymažete aktuální data. Klikněte ještě jednou pro potvrzení.",
@@ -466,6 +474,8 @@ export const cs = {
   cashuSave: "Uložit token",
   cashuExists: "Tento Cashu token už máte uložený.",
   share: "Sdílet",
+  cashuShareMessage: "Posílám peníze {url}",
+  cashuShareMessageWithAmount: "Posílám {amount} {url}",
   uploadToNfc: "Nahrát na NFC",
   uploadProfileToNfc: "Nahrát npub na NFC",
   nfcWriteTapPrompt: "Přiložte NFC tag pro zápis.",

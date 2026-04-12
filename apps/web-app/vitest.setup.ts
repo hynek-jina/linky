@@ -1,4 +1,13 @@
 import "@testing-library/jest-dom/vitest";
+import { Buffer } from "buffer";
+
+if (typeof globalThis.Buffer === "undefined") {
+  Object.defineProperty(globalThis, "Buffer", {
+    configurable: true,
+    value: Buffer,
+    writable: true,
+  });
+}
 
 // Provide a minimal Worker polyfill for jsdom so Evolu can initialize.
 if (typeof globalThis.Worker === "undefined") {

@@ -233,6 +233,52 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null;
+};
+
+const getErrorName = (value: unknown): string | null => {
+  if (value instanceof DOMException) {
+    return value.name;
+  }
+  if (value instanceof Error) {
+    return value.name;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+  const name = value.name;
+  return typeof name === "string" ? name : null;
+};
+
+const getErrorMessage = (value: unknown): string | null => {
+  if (value instanceof DOMException) {
+    return value.message;
+  }
+  if (value instanceof Error) {
+    return value.message;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+  const message = value.message;
+  return typeof message === "string" ? message : null;
+};
+
+const isClipboardReadPermissionError = (value: unknown): boolean => {
+  const name = getErrorName(value);
+  const message = getErrorMessage(value)?.toLowerCase() ?? "";
+
+  if (name !== "NotAllowedError") {
+    return false;
+  }
+
+  return message.includes("readtext") && message.includes("permission denied");
+};
+
 const applyEvoluWebCompatPolyfills = () => {
   // Some iOS/WebKit environments (notably private browsing) may lack
   // `navigator.locks` and/or `BroadcastChannel`, which Evolu's shared worker
@@ -414,11 +460,20 @@ const bootstrap = async () => {
 };
 
 window.addEventListener("unhandledrejection", (event) => {
+  if (isClipboardReadPermissionError(event.reason)) {
+    event.preventDefault();
+    return;
+  }
   renderBootError(event.reason);
 });
 
 window.addEventListener("error", (event) => {
-  renderBootError(event.error ?? event.message);
+  const error = event.error ?? event.message;
+  if (isClipboardReadPermissionError(error)) {
+    event.preventDefault();
+    return;
+  }
+  renderBootError(error);
 });
 
 void bootstrap();

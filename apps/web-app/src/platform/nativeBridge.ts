@@ -13,6 +13,10 @@ type NativeScanResult = {
   value: string | null;
 };
 
+export interface NativeScanStreamHandle {
+  stop: () => void;
+}
+
 interface IosScannerPluginResult {
   cancelled?: boolean;
   message?: string | null;
@@ -50,6 +54,7 @@ interface AndroidSecretStorageBridge {
 
 interface AndroidScannerBridge {
   startScan?: () => void;
+  stopScan?: () => void;
 }
 
 interface AndroidNotificationsBridge {
@@ -353,6 +358,75 @@ export const startNativeQrScan = (): Promise<NativeScanResult> | null => {
       });
     }
   });
+};
+
+export const startNativeQrScanStream = (
+  onResult: (result: NativeScanResult) => void,
+): NativeScanStreamHandle | null => {
+  if (supportsIosNativeQrScan()) {
+    return null;
+  }
+
+  const bridge = getAndroidScannerBridge();
+  if (!isNativePlatform() || !bridge?.startScan) {
+    return null;
+  }
+
+  const eventName = "linky-native-scan-result";
+
+  const onResultEvent: EventListener = (event) => {
+    if (!(event instanceof CustomEvent) || !isRecord(event.detail)) {
+      return;
+    }
+
+    const status = normalizeString(Reflect.get(event.detail, "status"));
+    const value = normalizeString(Reflect.get(event.detail, "value"));
+    const message = normalizeString(Reflect.get(event.detail, "message"));
+
+    if (status === "success" && value) {
+      onResult(
+        message === null
+          ? { cancelled: false, value }
+          : { cancelled: false, message, value },
+      );
+      return;
+    }
+
+    onResult(
+      message === null
+        ? { cancelled: status !== "error", value: null }
+        : { cancelled: status !== "error", message, value: null },
+    );
+  };
+
+  const cleanup = () => {
+    window.removeEventListener(eventName, onResultEvent);
+  };
+
+  window.addEventListener(eventName, onResultEvent);
+
+  try {
+    bridge.startScan();
+  } catch (error) {
+    cleanup();
+    onResult({
+      cancelled: false,
+      message: String(error ?? "Native scanner failed"),
+      value: null,
+    });
+    return null;
+  }
+
+  return {
+    stop: () => {
+      cleanup();
+      try {
+        bridge.stopScan?.();
+      } catch {
+        // ignore native scanner shutdown failures
+      }
+    },
+  };
 };
 
 export const getNativeNotificationPermissionState =

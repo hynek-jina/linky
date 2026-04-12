@@ -3433,6 +3433,28 @@ button.tag-button {
     0 16px 38px rgba(59, 130, 246, 0.28);
 }
 
+.share-options-sheet {
+  width: min(460px, calc(100vw - 24px));
+}
+
+.share-options-preview {
+  width: 100%;
+  min-height: 108px;
+  resize: none;
+  margin: 0 0 14px;
+  border-radius: 14px;
+  border: 1px solid #334155;
+  background: #020817;
+  color: #e2e8f0;
+  padding: 12px 14px;
+  font: inherit;
+  line-height: 1.4;
+}
+
+.share-options-actions {
+  grid-template-columns: 1fr;
+}
+
 @media (max-width: 520px) {
   .nfc-write-overlay {
     padding: 12px;

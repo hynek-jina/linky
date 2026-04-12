@@ -1,7 +1,7 @@
 {
   "name": "@linky/web-app",
   "private": true,
-  "version": "26.1.0",
+  "version": "26.4.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,12 +15,12 @@
   "dependencies": {
     "@capacitor/core": "^7.4.3",
     "@capacitor/push-notifications": "^7.0.0",
+    "@capacitor/share": "^7.0.0",
     "@cashu/cashu-ts": "^2.5.3",
     "@evolu/common": "^7.4.1",
     "@evolu/react": "^10.4.0",
     "@evolu/react-web": "^2.4.0",
     "@linky/core": "workspace:*",
-    "@ngraveio/bc-ur": "^1.1.13",
     "@noble/curves": "^1.4.1",
     "@noble/hashes": "^1.5.0",
     "@scure/base": "^2.0.0",
