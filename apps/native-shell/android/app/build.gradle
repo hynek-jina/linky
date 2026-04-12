@@ -26,6 +26,10 @@ def androidVersionNameOverride = (project.findProperty('LINKY_ANDROID_VERSION_NA
 def androidVersionCodeOverride = (project.findProperty('LINKY_ANDROID_VERSION_CODE') ?: System.getenv('LINKY_ANDROID_VERSION_CODE'))?.toString()?.trim()
 def androidVersionName = androidVersionNameOverride ?: workspaceVersionName
 def androidVersionCode = androidVersionCodeOverride ? Integer.parseInt(androidVersionCodeOverride) : derivedWorkspaceVersionCode
+def requestedTaskNames = gradle.startParameter.taskNames.collect { it.toLowerCase(Locale.ROOT) }
+def isDebugOnlyBuild = !requestedTaskNames.isEmpty() && requestedTaskNames.every { taskName ->
+    taskName.contains('debug') || taskName.contains('test')
+}
 
 def releaseKeystoreProperties = new Properties()
 def releaseKeystorePropertiesFile = file('../keystore.properties')
@@ -76,6 +80,15 @@ android {
         }
     }
     buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+            resValue "string", "app_name", "Linky Dev"
+            resValue "string", "title_activity_main", "Linky Dev"
+            resValue "string", "package_name", "fit.linky.app.debug"
+            resValue "string", "push_notification_channel_id", "linky_debug_messages"
+            resValue "string", "push_notification_channel_name", "Linky debug messages"
+        }
         release {
             minifyEnabled false
             if (hasReleaseSigning) {
@@ -119,8 +132,10 @@ apply from: 'capacitor.build.gradle'
 
 try {
     def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
+    if (servicesJSON.text && !isDebugOnlyBuild) {
         apply plugin: 'com.google.gms.google-services'
+    } else if (isDebugOnlyBuild) {
+        logger.info("google-services plugin not applied for debug-only build. Native push notifications are disabled for the side-by-side debug app")
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")

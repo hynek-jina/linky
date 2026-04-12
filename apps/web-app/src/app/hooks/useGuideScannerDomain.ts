@@ -1,14 +1,10 @@
 import React from "react";
-import {
-  startNativeQrScan,
-  supportsNativeQrScan,
-} from "../../platform/nativeBridge";
 import type {
   NavigatorWithOptionalCameraPermissions,
   WindowWithOptionalBarcodeDetector,
 } from "../../types/browser";
 import type { Route } from "../../types/route";
-import { AnimatedQrDecoder } from "../../utils/animatedQr";
+import { appendPushDebugLog } from "../../utils/pushDebugLog";
 import type { ContactRowLike } from "../types/appTypes";
 import { useContactsGuide } from "./guide/useContactsGuide";
 
@@ -34,6 +30,18 @@ type UseGuideScannerDomainResult = ReturnType<typeof useContactsGuide> & {
   scanAllowsManualContact: boolean;
   scanIsOpen: boolean;
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
+};
+
+const formatScanDebugDetails = (details?: Record<string, unknown>) => {
+  if (!details) {
+    return null;
+  }
+
+  try {
+    return JSON.stringify(details);
+  } catch {
+    return "[unserializable scan details]";
+  }
 };
 
 export const useGuideScannerDomain = ({
@@ -66,11 +74,18 @@ export const useGuideScannerDomain = ({
   const scanVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const scanOpenRequestIdRef = React.useRef(0);
   const scanIsOpenRef = React.useRef(false);
-  const animatedQrDecoderRef = React.useRef(new AnimatedQrDecoder());
 
   React.useEffect(() => {
     scanIsOpenRef.current = scanIsOpen;
   }, [scanIsOpen]);
+
+  const logScanDebug = React.useCallback(
+    (message: string, details?: Record<string, unknown>) => {
+      console.log("[linky][scan]", message, formatScanDebugDetails(details));
+      void appendPushDebugLog("client", `scan ${message}`, details);
+    },
+    [],
+  );
 
   const stopScanStream = React.useCallback(() => {
     const video = scanVideoRef.current;
@@ -106,58 +121,8 @@ export const useGuideScannerDomain = ({
     setScanIsOpen(false);
     setScanEntryPoint(null);
     scanOpenRequestIdRef.current += 1;
-    animatedQrDecoderRef.current.reset();
     stopScanStream();
   }, [stopScanStream]);
-
-  const startNativeScanFallback = React.useCallback((): boolean => {
-    if (!supportsNativeQrScan()) {
-      return false;
-    }
-
-    closeScan();
-    animatedQrDecoderRef.current.reset();
-
-    void (async () => {
-      while (true) {
-        const result = await startNativeQrScan();
-        if (!result) {
-          animatedQrDecoderRef.current.reset();
-          pushToast(t("scanCameraError"));
-          return;
-        }
-
-        if (!result.value) {
-          animatedQrDecoderRef.current.reset();
-          if (!result.cancelled) {
-            pushToast(result.message ?? t("scanCameraError"));
-          }
-          return;
-        }
-
-        const animatedResult = animatedQrDecoderRef.current.receive(
-          result.value,
-        );
-        if (animatedResult.accepted) {
-          const completedText = String(
-            animatedResult.completeText ?? "",
-          ).trim();
-          if (!completedText) {
-            continue;
-          }
-
-          await handleScannedTextRef.current(completedText);
-          return;
-        }
-
-        animatedQrDecoderRef.current.reset();
-        await handleScannedTextRef.current(result.value);
-        return;
-      }
-    })();
-
-    return true;
-  }, [closeScan, pushToast, t]);
 
   const openScanForEntryPoint = React.useCallback(
     (entryPoint: ScanEntryPoint) => {
@@ -165,25 +130,21 @@ export const useGuideScannerDomain = ({
       setScanIsOpen(true);
 
       const requestId = (scanOpenRequestIdRef.current += 1);
-
       const media = navigator.mediaDevices as
-        | { getUserMedia?: (c: MediaStreamConstraints) => Promise<MediaStream> }
+        | {
+            getUserMedia?: (
+              constraints: MediaStreamConstraints,
+            ) => Promise<MediaStream>;
+          }
         | undefined;
-      if (!media?.getUserMedia) {
-        if (startNativeScanFallback()) {
-          return;
-        }
 
+      if (!media?.getUserMedia) {
         pushToast(t("scanCameraError"));
         stopScanStream();
         return;
       }
 
       if (typeof globalThis.isSecureContext === "boolean" && !isSecureContext) {
-        if (startNativeScanFallback()) {
-          return;
-        }
-
         pushToast(t("scanRequiresHttps"));
         stopScanStream();
         return;
@@ -223,31 +184,31 @@ export const useGuideScannerDomain = ({
           if (!ok) {
             await tryGet({ video: true, audio: false });
           }
-        } catch (e) {
-          const err = e as { name?: unknown; message?: unknown };
+        } catch (error) {
+          const err = error as { message?: unknown; name?: unknown };
           const name = String(err?.name ?? "").trim();
-          const message = String(err?.message ?? e ?? "").trim();
+          const message = String(err?.message ?? error ?? "").trim();
 
           let permissionState: string | null = null;
           try {
             const permissions = (
               navigator as NavigatorWithOptionalCameraPermissions
             ).permissions;
-            const res = await permissions?.query?.({ name: "camera" });
-            permissionState = String(res?.state ?? "").trim() || null;
+            const result = await permissions?.query?.({ name: "camera" });
+            permissionState = String(result?.state ?? "").trim() || null;
           } catch {
             // ignore
           }
 
-          console.log("[linky][scan] getUserMedia failed", {
-            name,
-            message,
-            permissionState,
+          logScanDebug("getUserMedia failed", {
             href: globalThis.location?.href ?? null,
             isSecureContext:
               typeof globalThis.isSecureContext === "boolean"
                 ? globalThis.isSecureContext
                 : null,
+            message,
+            name,
+            permissionState,
           });
 
           const isPermissionDenied =
@@ -255,18 +216,16 @@ export const useGuideScannerDomain = ({
             /permission/i.test(message) ||
             /denied/i.test(message);
 
-          if (!isPermissionDenied && startNativeScanFallback()) {
-            return;
-          }
-
-          if (isPermissionDenied) pushToast(t("scanPermissionDenied"));
-          else pushToast(t("scanCameraError"));
-
+          pushToast(
+            isPermissionDenied
+              ? t("scanPermissionDenied")
+              : t("scanCameraError"),
+          );
           stopScanStream();
         }
       })();
     },
-    [pushToast, startNativeScanFallback, stopScanStream, t],
+    [logScanDebug, pushToast, stopScanStream, t],
   );
 
   const openScan = React.useCallback(() => {
@@ -283,17 +242,6 @@ export const useGuideScannerDomain = ({
   }, [onScannedText]);
 
   const handleDetectedScanValue = React.useCallback(async (value: string) => {
-    const animatedResult = animatedQrDecoderRef.current.receive(value);
-    if (animatedResult.accepted) {
-      const completedText = String(animatedResult.completeText ?? "").trim();
-      if (!completedText) {
-        return false;
-      }
-
-      await handleScannedTextRef.current(completedText);
-      return true;
-    }
-
     await handleScannedTextRef.current(value);
     return true;
   }, []);
@@ -309,7 +257,9 @@ export const useGuideScannerDomain = ({
     let handled = false;
 
     const stop = () => {
-      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
       rafId = null;
 
       const video = scanVideoRef.current;
@@ -371,31 +321,37 @@ export const useGuideScannerDomain = ({
 
       const detectorCtor = (window as WindowWithOptionalBarcodeDetector)
         .BarcodeDetector;
-
       const detector = detectorCtor
         ? new detectorCtor({ formats: ["qr_code"] })
         : null;
-
       const jsQr = detector ? null : (await import("jsqr")).default;
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
       const tick = async () => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         if (!video || video.readyState < 2) {
-          rafId = window.requestAnimationFrame(() => void tick());
+          rafId = window.requestAnimationFrame(() => {
+            void tick();
+          });
           return;
         }
 
         const now = Date.now();
         if (now - lastScanAt < 200) {
-          rafId = window.requestAnimationFrame(() => void tick());
+          rafId = window.requestAnimationFrame(() => {
+            void tick();
+          });
           return;
         }
         lastScanAt = now;
 
         try {
-          if (handled) return;
+          if (handled) {
+            return;
+          }
 
           if (detector) {
             const codes = await detector.detect(video);
@@ -409,14 +365,14 @@ export const useGuideScannerDomain = ({
               }
             }
           } else if (jsQr && ctx) {
-            const w = video.videoWidth || 0;
-            const h = video.videoHeight || 0;
-            if (w > 0 && h > 0) {
-              canvas.width = w;
-              canvas.height = h;
-              ctx.drawImage(video, 0, 0, w, h);
-              const imageData = ctx.getImageData(0, 0, w, h);
-              const result = jsQr(imageData.data, w, h);
+            const width = video.videoWidth || 0;
+            const height = video.videoHeight || 0;
+            if (width > 0 && height > 0) {
+              canvas.width = width;
+              canvas.height = height;
+              ctx.drawImage(video, 0, 0, width, height);
+              const imageData = ctx.getImageData(0, 0, width, height);
+              const result = jsQr(imageData.data, width, height);
               const value = String(result?.data ?? "").trim();
               if (value) {
                 const didHandle = await handleDetectedScanValue(value);
@@ -432,10 +388,14 @@ export const useGuideScannerDomain = ({
           // ignore and continue scanning
         }
 
-        rafId = window.requestAnimationFrame(() => void tick());
+        rafId = window.requestAnimationFrame(() => {
+          void tick();
+        });
       };
 
-      rafId = window.requestAnimationFrame(() => void tick());
+      rafId = window.requestAnimationFrame(() => {
+        void tick();
+      });
     };
 
     void run();

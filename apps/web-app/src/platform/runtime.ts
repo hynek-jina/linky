@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import type { CapacitorLike } from "../types/browser";
 
 export type PlatformTarget = "android" | "ios" | "web";
@@ -11,8 +12,16 @@ const getCapacitorGlobal = () => {
   return isCapacitorLike(capacitor) ? capacitor : null;
 };
 
+const getCapacitorInstance = (): CapacitorLike | null => {
+  if (isCapacitorLike(Capacitor)) {
+    return Capacitor;
+  }
+
+  return getCapacitorGlobal();
+};
+
 export const getCapacitorServerUrl = (): string | null => {
-  const capacitor = getCapacitorGlobal();
+  const capacitor = getCapacitorInstance();
   if (!capacitor) return null;
 
   try {
@@ -26,7 +35,7 @@ export const getCapacitorServerUrl = (): string | null => {
 };
 
 export const getPlatformTarget = (): PlatformTarget => {
-  const capacitor = getCapacitorGlobal();
+  const capacitor = getCapacitorInstance();
   if (!capacitor) return "web";
 
   try {
@@ -42,7 +51,7 @@ export const getPlatformTarget = (): PlatformTarget => {
 };
 
 export const isNativePlatform = (): boolean => {
-  const capacitor = getCapacitorGlobal();
+  const capacitor = getCapacitorInstance();
   if (!capacitor) return false;
 
   try {

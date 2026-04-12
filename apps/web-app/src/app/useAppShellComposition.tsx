@@ -1,3 +1,4 @@
+import { Share } from "@capacitor/share";
 import type { Proof } from "@cashu/cashu-ts";
 import * as Evolu from "@evolu/common";
 import { useOwner, useQuery } from "@evolu/react";
@@ -31,6 +32,7 @@ import {
   saveCachedProfilePicture,
   type NostrProfileMetadata,
 } from "../nostrProfile";
+import { writeClipboardText } from "../platform/clipboard";
 import { readStoredNostrNsec } from "../platform/identitySecrets";
 import {
   cancelNativeNfcWrite,
@@ -39,6 +41,7 @@ import {
   startNativeNfcWrite,
   supportsNativeNfcWrite,
 } from "../platform/nativeBridge";
+import { isNativePlatform } from "../platform/runtime";
 import {
   bumpCashuDeterministicCounter,
   getCashuDeterministicCounter,
@@ -853,6 +856,7 @@ export const useAppShellComposition = () => {
   const [cashuIsBusy, setCashuIsBusy] = useState(false);
   const [cashuBulkCheckIsBusy, setCashuBulkCheckIsBusy] = useState(false);
   const [tokensRestoreIsBusy, setTokensRestoreIsBusy] = useState(false);
+  const [shareOptionsText, setShareOptionsText] = useState<string | null>(null);
 
   const cashuOpQueueRef = React.useRef<Promise<void>>(Promise.resolve());
   const enqueueCashuOp = React.useCallback((op: () => Promise<void>) => {
@@ -2843,7 +2847,11 @@ export const useAppShellComposition = () => {
   const copyText = React.useCallback(
     async (value: string) => {
       try {
-        await navigator.clipboard?.writeText(value);
+        const copied = await writeClipboardText(value);
+        if (!copied) {
+          pushToast(t("copyFailed"));
+          return;
+        }
         pushToast(t("copiedToClipboard"));
       } catch {
         pushToast(t("copyFailed"));
@@ -2852,12 +2860,71 @@ export const useAppShellComposition = () => {
     [pushToast, t],
   );
 
+  const closeShareOptions = React.useCallback(() => {
+    setShareOptionsText(null);
+  }, []);
+
+  const openShareOptionsUrl = React.useCallback((url: string) => {
+    if (typeof window === "undefined") return;
+    window.open(url, "_blank", "noopener,noreferrer");
+    setShareOptionsText(null);
+  }, []);
+
+  const copyShareOptionsText = React.useCallback(async () => {
+    const text = String(shareOptionsText ?? "").trim();
+    if (!text) return;
+    await copyText(text);
+    setShareOptionsText(null);
+  }, [copyText, shareOptionsText]);
+
+  const shareOptionsViaEmail = React.useCallback(() => {
+    const text = String(shareOptionsText ?? "").trim();
+    if (!text) return;
+    openShareOptionsUrl(`mailto:?body=${encodeURIComponent(text)}`);
+  }, [openShareOptionsUrl, shareOptionsText]);
+
+  const shareOptionsViaSms = React.useCallback(() => {
+    const text = String(shareOptionsText ?? "").trim();
+    if (!text) return;
+    openShareOptionsUrl(`sms:?body=${encodeURIComponent(text)}`);
+  }, [openShareOptionsUrl, shareOptionsText]);
+
+  const shareOptionsViaWhatsApp = React.useCallback(() => {
+    const text = String(shareOptionsText ?? "").trim();
+    if (!text) return;
+    openShareOptionsUrl(`https://wa.me/?text=${encodeURIComponent(text)}`);
+  }, [openShareOptionsUrl, shareOptionsText]);
+
   const shareText = React.useCallback(
     async (value: string) => {
       const text = String(value ?? "").trim();
       if (!text) {
         pushToast(t("errorPrefix"));
         return;
+      }
+
+      if (isNativePlatform()) {
+        try {
+          await Share.share({ text });
+          return;
+        } catch (error) {
+          const errorMessage =
+            typeof error === "object" &&
+            error !== null &&
+            "message" in error &&
+            typeof error.message === "string"
+              ? error.message
+              : "";
+          if (
+            /cancel/i.test(errorMessage) ||
+            /abort/i.test(errorMessage) ||
+            /dismiss/i.test(errorMessage)
+          ) {
+            return;
+          }
+          pushToast(t("shareFailed"));
+          return;
+        }
       }
 
       if (typeof navigator.share === "function") {
@@ -2873,12 +2940,14 @@ export const useAppShellComposition = () => {
               ? error.name
               : "";
           if (errorName === "AbortError") return;
+          pushToast(t("shareFailed"));
+          return;
         }
       }
 
-      await copyText(text);
+      pushToast(t("shareUnavailable"));
     },
-    [copyText, pushToast, t],
+    [pushToast, t],
   );
 
   const canWriteNfc = supportsNativeNfcWrite();
@@ -2987,15 +3056,20 @@ export const useAppShellComposition = () => {
     [cashuOwnerId, pushToast, setStatus, t, update, writeNfcUriWithToast],
   );
 
-  const shareCashuTokenDeepLink = React.useCallback(
-    async (tokenText: string) => {
-      const deepLink = buildCashuDeepLink(tokenText);
-      if (!deepLink) {
+  const shareCashuTokenText = React.useCallback(
+    async (text: string) => {
+      const trimmed = String(text ?? "").trim();
+      if (!trimmed) {
         pushToast(t("cashuInvalid"));
         return;
       }
 
-      await shareText(deepLink);
+      if (isNativePlatform() || typeof navigator.share === "function") {
+        await shareText(trimmed);
+        return;
+      }
+
+      setShareOptionsText(trimmed);
     },
     [pushToast, shareText, t],
   );
@@ -4008,7 +4082,19 @@ export const useAppShellComposition = () => {
     let text = "";
 
     if (navigator.clipboard?.readText) {
-      text = await navigator.clipboard.readText();
+      try {
+        text = await navigator.clipboard.readText();
+      } catch {
+        if (
+          typeof window !== "undefined" &&
+          typeof window.prompt === "function"
+        ) {
+          text = String(window.prompt(t("scanPastePrompt")) ?? "");
+        } else {
+          pushToast(t("pasteNotAvailable"));
+          return;
+        }
+      }
     } else if (
       typeof window !== "undefined" &&
       typeof window.prompt === "function"
@@ -4106,7 +4192,7 @@ export const useAppShellComposition = () => {
       setCashuDraft,
       setLnAddressPayAmount,
       setMintIconUrlByMint,
-      shareCashuTokenDeepLink,
+      shareCashuTokenText,
       setTopupAmount,
       t,
       topupAmount,
@@ -4383,6 +4469,7 @@ export const useAppShellComposition = () => {
     route,
     scanAllowsManualContact,
     scanIsOpen,
+    shareOptionsText,
     scanVideoRef,
     t,
     topbar,
@@ -4393,11 +4480,13 @@ export const useAppShellComposition = () => {
   const appActions = {
     cancelPendingNfcWrite,
     closeMenu,
+    closeShareOptions,
     closeLightningInvoiceConfirmation,
     closeProfileQr,
     closeScan,
     confirmLightningInvoicePayment,
     contactsGuideNav,
+    copyShareOptionsText,
     copyText,
     onPickProfilePhoto,
     onProfilePhotoSelected,
@@ -4416,6 +4505,9 @@ export const useAppShellComposition = () => {
     setProfileEditName,
     setProfileEditPicture,
     stopContactsGuide,
+    shareOptionsViaEmail,
+    shareOptionsViaSms,
+    shareOptionsViaWhatsApp,
     toggleProfileEditing,
     writeCurrentNpubToNfc,
   };

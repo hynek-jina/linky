@@ -393,6 +393,13 @@ export const en = {
   copiedToClipboard: "Copied to clipboard.",
   copyFailed: "Copy to clipboard failed.",
   copy: "Copy",
+  shareFailed: "Sharing failed.",
+  shareUnavailable: "Sharing is not available on this device.",
+  shareOptionsTitle: "How do you want to share?",
+  shareOptionsBody: "Choose an app or action for the prepared message.",
+  shareViaWhatsApp: "Send via WhatsApp",
+  shareViaSms: "Send as SMS",
+  shareViaEmail: "Send by email",
 
   pasteArmedHint:
     "Pasting keys will wipe current data. Click once more to confirm.",
@@ -461,6 +468,8 @@ export const en = {
   cashuSave: "Save token",
   cashuExists: "You already have this Cashu token saved.",
   share: "Share",
+  cashuShareMessage: "Sending money {url}",
+  cashuShareMessageWithAmount: "Sending {amount} {url}",
   uploadToNfc: "Write to NFC",
   uploadProfileToNfc: "Write npub to NFC",
   nfcWriteTapPrompt: "Tap an NFC tag to write.",

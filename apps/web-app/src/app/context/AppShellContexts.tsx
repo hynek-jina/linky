@@ -80,6 +80,7 @@ export interface AppShellCoreContextValue {
   scanAllowsManualContact: boolean;
   scanIsOpen: boolean;
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
+  shareOptionsText: string | null;
   t: (key: string) => string;
   topbar: TopbarButton | null;
   topbarRight: TopbarButton | null;
@@ -89,6 +90,7 @@ export interface AppShellCoreContextValue {
 export interface AppShellActionsContextValue {
   cancelPendingNfcWrite: () => void;
   closeMenu: () => void;
+  closeShareOptions: () => void;
   closeLightningInvoiceConfirmation: () => void;
   closeProfileQr: () => void;
   closeScan: () => void;
@@ -104,6 +106,7 @@ export interface AppShellActionsContextValue {
   openManualContactFromScan: () => void;
   openProfileQr: () => void;
   pasteScanValue: () => Promise<void>;
+  copyShareOptionsText: () => Promise<void>;
   saveProfileEdits: () => void;
   setDisplayCurrency: (currency: DisplayCurrency) => void;
   setContactNewPrefill: (prefill: {
@@ -123,6 +126,9 @@ export interface AppShellActionsContextValue {
   setProfileEditName: (value: string) => void;
   setProfileEditPicture: (value: string) => void;
   stopContactsGuide: () => void;
+  shareOptionsViaEmail: () => void;
+  shareOptionsViaSms: () => void;
+  shareOptionsViaWhatsApp: () => void;
   toggleProfileEditing: () => void;
   writeCurrentNpubToNfc: () => Promise<void>;
 }

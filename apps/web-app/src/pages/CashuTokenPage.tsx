@@ -1,9 +1,12 @@
 import type { FC } from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import { isCashuTokenExternalizedState } from "../app/lib/cashuTokenState";
+import { extractCashuTokenMeta } from "../app/lib/tokenText";
 import type { CashuTokenRowLike } from "../app/types/appTypes";
 import { parseCashuToken } from "../cashu";
 import { NfcIcon } from "../components/NfcIcon";
 import type { CashuTokenId } from "../evolu";
+import { buildCashuShareUrl } from "../utils/deepLinks";
 
 type CashuTokenPageRow = CashuTokenRowLike & { id: CashuTokenId };
 
@@ -18,7 +21,7 @@ interface CashuTokenPageProps {
   pendingCashuDeleteId: CashuTokenId | null;
   requestDeleteCashuToken: (id: CashuTokenId) => void;
   routeId: CashuTokenId;
-  shareTokenDeepLink: (tokenText: string) => Promise<void>;
+  shareTokenText: (text: string) => Promise<void>;
   t: (key: string) => string;
   writeToNfc: (id: CashuTokenId, tokenText: string) => Promise<void>;
 }
@@ -32,10 +35,11 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   pendingCashuDeleteId,
   requestDeleteCashuToken,
   routeId,
-  shareTokenDeepLink,
+  shareTokenText,
   t,
   writeToNfc,
 }) => {
+  const { formatDisplayedAmountText } = useAppShellCore();
   const row = cashuTokensAll.find(
     (tkn) => tkn.id === routeId && !tkn.isDeleted,
   );
@@ -48,10 +52,11 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
     );
   }
 
-  const tokenText = String(row.token ?? row.rawToken ?? "").trim();
+  const tokenMeta = extractCashuTokenMeta(row);
+  const tokenText = tokenMeta.tokenText;
   const parsed = tokenText ? parseCashuToken(tokenText) : null;
   const mintText =
-    String(row.mint ?? "").trim() ||
+    String(tokenMeta.mint ?? "").trim() ||
     (parsed?.mint ? String(parsed.mint).trim() : "");
   const mintDisplay = (() => {
     if (!mintText) return null;
@@ -62,6 +67,18 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
     }
   })();
   const isExternalized = isCashuTokenExternalizedState(row.state);
+  const shareUrl = buildCashuShareUrl(tokenText);
+  const shareMessage = (() => {
+    if (!shareUrl) return "";
+
+    if (tokenMeta.amount && tokenMeta.amount > 0) {
+      return t("cashuShareMessageWithAmount")
+        .replace("{amount}", formatDisplayedAmountText(tokenMeta.amount))
+        .replace("{url}", shareUrl);
+    }
+
+    return t("cashuShareMessage").replace("{url}", shareUrl);
+  })();
 
   return (
     <section className="panel">
@@ -108,8 +125,8 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
       <div className="settings-row">
         <button
           className="btn-wide secondary"
-          onClick={() => void shareTokenDeepLink(tokenText)}
-          disabled={!tokenText.trim()}
+          onClick={() => void shareTokenText(shareMessage)}
+          disabled={!shareMessage}
         >
           {t("share")}
         </button>

@@ -10,7 +10,7 @@ The shell consumes the bundled output from `apps/web-app/dist` and keeps the pro
 
 Java 17 is required for the Android Gradle plugin. On macOS, the workspace scripts try to resolve an installed JDK 17 automatically before running Capacitor or Gradle.
 
-Capacitor 7 currently generates Android compile options targeting Java 21 in this shell. `scripts/patch-android-java.sh` normalizes those generated files back to Java 17 after `android:add` and `android:sync`.
+Capacitor 7 currently generates Android compile options targeting Java 21 in this shell and some installed plugin Android modules do the same. `scripts/patch-android-java.sh` normalizes both the generated Android Gradle files and the installed Capacitor plugin `build.gradle` files back to Java 17 after `android:add` and `android:sync`.
 
 ## First-time setup
 
@@ -31,6 +31,9 @@ This will:
 1. build `@linky/web-app`
 2. sync the Capacitor Android project
 3. run `assembleDebug`
+
+The debug APK installs alongside the production app as a separate Android package `fit.linky.app.debug` and appears in the launcher as `Linky Dev`.
+Because the existing Firebase config targets the production package, the side-by-side debug app skips the Google Services plugin and native FCM push stays disabled there.
 
 The generated APK loads the bundled `apps/web-app/dist` files from inside the app by default.
 It does **not** use the Vite dev server unless you explicitly opt into live reload with `LINKY_CAP_SERVER_URL` (or `CAP_SERVER_URL`).

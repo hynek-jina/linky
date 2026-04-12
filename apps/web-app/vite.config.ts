@@ -15,15 +15,20 @@ import { VitePWA } from "vite-plugin-pwa";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const sqliteWasmPath = path.join(__dirname, "public/sqlite-wasm/sqlite3.wasm");
+const workspacePackageJsonPath = path.join(
+  __dirname,
+  "..",
+  "..",
+  "package.json",
+);
 
 const isUnknownRecord = (value: unknown): value is Record<string, unknown> => {
   return value !== null && typeof value === "object";
 };
 
-const packageJsonPath = path.join(__dirname, "package.json");
 const appVersion = (() => {
   try {
-    const raw = readFileSync(packageJsonPath, "utf8");
+    const raw = readFileSync(workspacePackageJsonPath, "utf8");
     const pkg = JSON.parse(raw);
     if (!isUnknownRecord(pkg)) return "0.0.0";
     const version = pkg.version;
@@ -339,8 +344,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          if (id.includes("react")) return "react";
-          if (id.includes("@evolu")) return "evolu";
           if (id.includes("nostr-tools")) return "nostr";
           if (id.includes("@cashu")) return "cashu";
           // Keep `buffer` and its deps together to avoid an ESM circular init:

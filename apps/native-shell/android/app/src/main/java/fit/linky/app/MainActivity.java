@@ -14,30 +14,44 @@ import android.nfc.tech.NdefFormatable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.os.SystemClock;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
+import android.util.Log;
 import android.view.View;
 
-import androidx.activity.result.ActivityResultLauncher;
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.zxing.BarcodeFormat;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
-import com.journeyapps.barcodescanner.ScanContract;
-import com.journeyapps.barcodescanner.ScanIntentResult;
-import com.journeyapps.barcodescanner.ScanOptions;
+import com.google.zxing.ResultPoint;
+import com.journeyapps.barcodescanner.BarcodeCallback;
+import com.journeyapps.barcodescanner.BarcodeResult;
+import com.journeyapps.barcodescanner.DecoratedBarcodeView;
+import com.journeyapps.barcodescanner.DefaultDecoderFactory;
+import com.journeyapps.barcodescanner.camera.CameraSettings;
 
 import org.json.JSONObject;
 
+import java.lang.ref.WeakReference;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 public class MainActivity extends BridgeActivity {
+	private static final String SCAN_LOG_TAG = "LinkyScan";
+	private static final int CAMERA_PERMISSION_REQUEST_CODE = 1001;
+	private static final long DUPLICATE_SUPPRESS_MS = 120L;
+	private static volatile WeakReference<MainActivity> activeInstanceRef = new WeakReference<>(null);
 	private static volatile boolean appInForeground = false;
 	private static final String EVENT_DEEP_LINK = "linky-native-deep-link";
 	private static final String EVENT_NFC_WRITE = "linky-native-nfc-write";
@@ -48,6 +62,45 @@ public class MainActivity extends BridgeActivity {
 	private static final String PREF_PENDING_DEEP_LINK_URL = "pending_deep_link_url";
 	private static final String PREF_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested";
 	private static final String FIREBASE_GOOGLE_APP_ID_RESOURCE = "google_app_id";
+	private long lastNativeQrScanAtMs = 0L;
+	private String lastNativeQrValue = null;
+	private DecoratedBarcodeView nativeQrScannerView;
+	private View nativeQrScannerOverlay;
+	private boolean nativeQrScannerOpen = false;
+	private final BarcodeCallback nativeQrBarcodeCallback = new BarcodeCallback() {
+		@Override
+		public void barcodeResult(BarcodeResult result) {
+			String value = result.getText();
+			if (value == null) {
+				return;
+			}
+
+			String normalizedValue = value.trim();
+			if (normalizedValue.isEmpty()) {
+				return;
+			}
+
+			long now = SystemClock.elapsedRealtime();
+			if (
+				normalizedValue.equals(lastNativeQrValue) &&
+				now - lastNativeQrScanAtMs < DUPLICATE_SUPPRESS_MS
+			) {
+				Log.d(SCAN_LOG_TAG, "duplicate frame suppressed value=" + summarizeScanValue(normalizedValue));
+				return;
+			}
+
+			lastNativeQrValue = normalizedValue;
+			lastNativeQrScanAtMs = now;
+			Log.d(SCAN_LOG_TAG, "frame accepted value=" + summarizeScanValue(normalizedValue));
+
+			dispatchScanResult("success", normalizedValue, null);
+		}
+
+		@Override
+		public void possibleResultPoints(List<ResultPoint> resultPoints) {
+			// no-op
+		}
+	};
 	private int latestBottomInsetPx = 0;
 	private int latestKeyboardInsetPx = 0;
 	private int latestTopInsetPx = 0;
@@ -56,13 +109,13 @@ public class MainActivity extends BridgeActivity {
 	private NfcAdapter nfcAdapter;
 	private String pendingNfcWriteUrl = null;
 
-	private ActivityResultLauncher<String> notificationPermissionLauncher;
-	private ActivityResultLauncher<ScanOptions> qrScanLauncher;
+	private androidx.activity.result.ActivityResultLauncher<String> notificationPermissionLauncher;
 	private SharedPreferences bridgePreferences;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		activeInstanceRef = new WeakReference<>(this);
 
 		bridgePreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 		nfcAdapter = NfcAdapter.getDefaultAdapter(this);
@@ -76,8 +129,6 @@ public class MainActivity extends BridgeActivity {
 			)
 		);
 
-		qrScanLauncher = registerForActivityResult(new ScanContract(), this::handleScanResult);
-
 		WebView webView = getBridgeWebView();
 		if (webView == null) {
 			return;
@@ -89,6 +140,33 @@ public class MainActivity extends BridgeActivity {
 		webView.addJavascriptInterface(new LinkyNativeWindowInsetsBridge(), "LinkyNativeWindowInsets");
 		webView.addJavascriptInterface(new LinkyNativeDeepLinksBridge(), "LinkyNativeDeepLinks");
 		webView.addJavascriptInterface(new LinkyNativeNfcBridge(), "LinkyNativeNfc");
+
+		View rootView = webView.getRootView();
+		nativeQrScannerOverlay = rootView.findViewById(R.id.native_qr_scan_overlay);
+		nativeQrScannerView = rootView.findViewById(R.id.zxing_barcode_scanner);
+		Log.d(
+			SCAN_LOG_TAG,
+			"scanner views initialized overlay=" + (nativeQrScannerOverlay != null)
+				+ " view=" + (nativeQrScannerView != null)
+		);
+		if (nativeQrScannerView != null) {
+			CameraSettings cameraSettings = new CameraSettings();
+			cameraSettings.setAutoFocusEnabled(true);
+			cameraSettings.setContinuousFocusEnabled(true);
+			cameraSettings.setBarcodeSceneModeEnabled(true);
+			cameraSettings.setMeteringEnabled(true);
+			cameraSettings.setExposureEnabled(true);
+			nativeQrScannerView.getBarcodeView().setCameraSettings(cameraSettings);
+			nativeQrScannerView.getBarcodeView().setDecoderFactory(
+				new DefaultDecoderFactory(
+					Collections.singletonList(BarcodeFormat.QR_CODE),
+					null,
+					null,
+					2
+				)
+			);
+			nativeQrScannerView.setStatusText("Scan QR code");
+		}
 
 		ViewCompat.setOnApplyWindowInsetsListener(webView, (View view, WindowInsetsCompat insets) -> {
 			Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -112,7 +190,11 @@ public class MainActivity extends BridgeActivity {
 	@Override
 	public void onResume() {
 		super.onResume();
+		activeInstanceRef = new WeakReference<>(this);
 		appInForeground = true;
+		if (nativeQrScannerOpen && hasCameraPermission() && nativeQrScannerView != null) {
+			nativeQrScannerView.resume();
+		}
 		WebView webView = getBridgeWebView();
 		if (webView != null) {
 			webView.post(() -> {
@@ -124,6 +206,9 @@ public class MainActivity extends BridgeActivity {
 
 	@Override
 	public void onPause() {
+		if (nativeQrScannerView != null) {
+			nativeQrScannerView.pause();
+		}
 		super.onPause();
 		appInForeground = false;
 		if (pendingNfcWriteUrl != null) {
@@ -138,6 +223,16 @@ public class MainActivity extends BridgeActivity {
 	public void onStop() {
 		super.onStop();
 		appInForeground = false;
+	}
+
+	@Override
+	public void onDestroy() {
+		MainActivity activeInstance = activeInstanceRef.get();
+		if (activeInstance == this) {
+			activeInstanceRef = new WeakReference<>(null);
+		}
+
+		super.onDestroy();
 	}
 
 	public static boolean isAppInForeground() {
@@ -158,27 +253,43 @@ public class MainActivity extends BridgeActivity {
 		dispatchDeepLinkUrl(deepLinkUrl);
 	}
 
-	private void handleScanResult(ScanIntentResult result) {
+	static void dispatchScanResult(String status, String value, String message) {
+		MainActivity activity = activeInstanceRef.get();
+		if (activity == null) {
+			return;
+		}
+
+		Log.d(
+			SCAN_LOG_TAG,
+			"dispatchScanResult status=" + String.valueOf(status)
+				+ " value=" + summarizeScanValue(value)
+				+ " message=" + String.valueOf(message)
+		);
+
 		JSONObject detail = new JSONObject();
 
 		try {
-			String value = result.getContents();
-			if (value != null && !value.trim().isEmpty()) {
-				detail.put("status", "success");
-				detail.put("value", value.trim());
-			} else {
-				detail.put("status", "cancelled");
+			String normalizedStatus = status == null ? "cancelled" : status.trim();
+			if (normalizedStatus.isEmpty()) {
+				normalizedStatus = "cancelled";
 			}
-		} catch (Exception error) {
-			try {
-				detail.put("status", "error");
-				detail.put("message", error.getMessage() == null ? "Scanner failed" : error.getMessage());
-			} catch (Exception ignored) {
-				// ignore secondary JSON errors
+
+			detail.put("status", normalizedStatus);
+
+			String normalizedValue = value == null ? "" : value.trim();
+			if (!normalizedValue.isEmpty()) {
+				detail.put("value", normalizedValue);
 			}
+
+			String normalizedMessage = message == null ? "" : message.trim();
+			if (!normalizedMessage.isEmpty()) {
+				detail.put("message", normalizedMessage);
+			}
+		} catch (Exception ignored) {
+			// ignore JSON bridge payload failures
 		}
 
-		dispatchWindowEvent(EVENT_SCAN_RESULT, detail);
+		activity.dispatchWindowEvent(EVENT_SCAN_RESULT, detail);
 	}
 
 	private Bridge getCapacitorBridge() {
@@ -190,9 +301,44 @@ public class MainActivity extends BridgeActivity {
 		return bridge == null ? null : bridge.getWebView();
 	}
 
+	@Override
+	public void onBackPressed() {
+		if (nativeQrScannerOpen) {
+			stopNativeQrScanner(true);
+			return;
+		}
+
+		super.onBackPressed();
+	}
+
+	@Override
+	public void onRequestPermissionsResult(
+		int requestCode,
+		@NonNull String[] permissions,
+		@NonNull int[] grantResults
+	) {
+		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+		if (requestCode != CAMERA_PERMISSION_REQUEST_CODE) {
+			return;
+		}
+
+		boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+		if (granted) {
+			Log.d(SCAN_LOG_TAG, "camera permission granted");
+			startNativeQrScannerPreview();
+			return;
+		}
+
+		Log.d(SCAN_LOG_TAG, "camera permission denied");
+		stopNativeQrScanner(false);
+		dispatchScanResult("error", null, "Camera permission denied");
+	}
+
 	private void dispatchWindowEvent(String eventName, JSONObject detail) {
 		WebView webView = getBridgeWebView();
 		if (webView == null) {
+			Log.d(SCAN_LOG_TAG, "dispatchWindowEvent skipped event=" + eventName + " because webView is null");
 			return;
 		}
 
@@ -200,6 +346,80 @@ public class MainActivity extends BridgeActivity {
 		String script = "window.dispatchEvent(new CustomEvent(" + JSONObject.quote(eventName) + ", { detail: " + payload + " }));";
 
 		runOnUiThread(() -> webView.evaluateJavascript(script, null));
+	}
+
+	private boolean hasCameraPermission() {
+		return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+			== PackageManager.PERMISSION_GRANTED;
+	}
+
+	private void openNativeQrScanner() {
+		Log.d(SCAN_LOG_TAG, "openNativeQrScanner requested");
+		if (nativeQrScannerOverlay == null || nativeQrScannerView == null) {
+			Log.d(SCAN_LOG_TAG, "openNativeQrScanner unavailable overlay=" + (nativeQrScannerOverlay != null) + " view=" + (nativeQrScannerView != null));
+			dispatchScanResult("error", null, "Native scanner unavailable");
+			return;
+		}
+
+		nativeQrScannerOpen = true;
+		lastNativeQrValue = null;
+		lastNativeQrScanAtMs = 0L;
+		nativeQrScannerOverlay.setVisibility(View.VISIBLE);
+		nativeQrScannerOverlay.bringToFront();
+
+		if (hasCameraPermission()) {
+			Log.d(SCAN_LOG_TAG, "openNativeQrScanner camera permission already granted");
+			startNativeQrScannerPreview();
+			return;
+		}
+
+		Log.d(SCAN_LOG_TAG, "openNativeQrScanner requesting camera permission");
+
+		ActivityCompat.requestPermissions(
+			this,
+			new String[] { Manifest.permission.CAMERA },
+			CAMERA_PERMISSION_REQUEST_CODE
+		);
+	}
+
+	private void startNativeQrScannerPreview() {
+		if (!nativeQrScannerOpen || nativeQrScannerView == null) {
+			Log.d(SCAN_LOG_TAG, "startNativeQrScannerPreview skipped open=" + nativeQrScannerOpen + " view=" + (nativeQrScannerView != null));
+			return;
+		}
+
+		Log.d(SCAN_LOG_TAG, "startNativeQrScannerPreview start");
+		nativeQrScannerView.decodeContinuous(nativeQrBarcodeCallback);
+		nativeQrScannerView.resume();
+	}
+
+	private void stopNativeQrScanner(boolean dispatchCancelled) {
+		boolean wasOpen = nativeQrScannerOpen;
+		Log.d(SCAN_LOG_TAG, "stopNativeQrScanner dispatchCancelled=" + dispatchCancelled + " wasOpen=" + wasOpen);
+		if (nativeQrScannerView != null) {
+			nativeQrScannerView.pause();
+		}
+		if (nativeQrScannerOverlay != null) {
+			nativeQrScannerOverlay.setVisibility(View.GONE);
+		}
+
+		nativeQrScannerOpen = false;
+		lastNativeQrValue = null;
+		lastNativeQrScanAtMs = 0L;
+
+		if (wasOpen && dispatchCancelled) {
+			dispatchScanResult("cancelled", null, null);
+		}
+	}
+
+	private static String summarizeScanValue(String value) {
+		String normalized = value == null ? "" : value.trim();
+		if (normalized.isEmpty()) {
+			return "<empty>";
+		}
+
+		String prefix = normalized.length() <= 48 ? normalized : normalized.substring(0, 48) + "...";
+		return "len=" + normalized.length() + ", isUr=" + normalized.regionMatches(true, 0, "ur:", 0, 3) + ", prefix=" + prefix;
 	}
 
 	private JSONObject createPermissionDetail(String permission) {
@@ -606,14 +826,12 @@ public class MainActivity extends BridgeActivity {
 	private final class LinkyNativeScannerBridge {
 		@JavascriptInterface
 		public void startScan() {
-			runOnUiThread(() -> {
-				ScanOptions options = new ScanOptions();
-				options.setDesiredBarcodeFormats(ScanOptions.QR_CODE);
-				options.setBeepEnabled(false);
-				options.setOrientationLocked(false);
-				options.setPrompt("Scan QR code");
-				qrScanLauncher.launch(options);
-			});
+			runOnUiThread(() -> openNativeQrScanner());
+		}
+
+		@JavascriptInterface
+		public void stopScan() {
+			runOnUiThread(() -> stopNativeQrScanner(false));
 		}
 	}
 
