@@ -9,9 +9,11 @@ import { getInitials } from "../utils/formatting";
 import { analyzeSlip39Input, SLIP39_WORD_COUNT } from "../utils/slip39Input";
 
 type UnauthenticatedLayoutProps = {
+  canLoadReturningSlip39FromPasswordManager: boolean;
   confirmPendingOnboardingProfile: () => Promise<void>;
   createNewAccount: () => Promise<void>;
   lang: Lang;
+  loadReturningSlip39FromPasswordManager: () => Promise<void>;
   onboardingIsBusy: boolean;
   onboardingPhotoInputRef: React.RefObject<HTMLInputElement | null>;
   onboardingStep: OnboardingStep;
@@ -37,9 +39,11 @@ const formatTemplate = (template: string, vars: Record<string, string>) =>
   );
 
 export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
+  canLoadReturningSlip39FromPasswordManager,
   confirmPendingOnboardingProfile,
   createNewAccount,
   lang,
+  loadReturningSlip39FromPasswordManager,
   onboardingIsBusy,
   onboardingPhotoInputRef,
   onboardingStep,
@@ -227,13 +231,48 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             </p>
           </div>
 
-          <div className="onboarding-return-inputWrap">
+          <form
+            className="onboarding-return-inputWrap"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (canSubmit) void submitReturningSlip39();
+            }}
+            autoComplete="on"
+          >
             <label
               className="onboarding-avatar-nameLabel"
               htmlFor="onboarding-return-seed"
             >
               {t("seed")}
             </label>
+            <input
+              className="password-manager-bridge-input"
+              type="text"
+              name="username"
+              value="Linky"
+              onChange={() => undefined}
+              autoComplete="username"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+            <input
+              className="password-manager-bridge-input"
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              tabIndex={-1}
+              aria-hidden="true"
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value) {
+                  setReturningSlip39Input(value);
+                  const filled = analyzeSlip39Input(value);
+                  if (filled.isCompleteCandidate) {
+                    void submitReturningSlip39(value);
+                  }
+                }
+              }}
+            />
             <div className="onboarding-return-inputRow">
               <textarea
                 id="onboarding-return-seed"
@@ -295,7 +334,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
                 </svg>
               </button>
             </div>
-          </div>
+          </form>
 
           <div
             className={helperClassName}
@@ -325,6 +364,16 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
         </div>
 
         <div className="onboarding-avatar-actions onboarding-avatar-actionsAdaptive">
+          {canLoadReturningSlip39FromPasswordManager ? (
+            <button
+              type="button"
+              className="btn-wide secondary"
+              onClick={() => void loadReturningSlip39FromPasswordManager()}
+              disabled={onboardingIsBusy}
+            >
+              {t("onboardingReturnUseSavedKeys")}
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn-wide"

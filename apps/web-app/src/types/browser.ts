@@ -36,6 +36,28 @@ export interface NavigatorWithOptionalStorage {
   storage?: StorageManager;
 }
 
+export interface CredentialStoreLike {
+  get?: (
+    options?: PasswordCredentialRequestOptions,
+  ) => Promise<Credential | null>;
+}
+
+export interface PasswordCredentialRequestOptions {
+  mediation?: string | undefined;
+  password?: boolean | undefined;
+}
+
+export interface NavigatorUserAgentDataLike {
+  platform?: string;
+}
+
+export interface NavigatorWithOptionalUserAgentData {
+  platform?: string;
+  standalone?: boolean;
+  userAgent?: string;
+  userAgentData?: NavigatorUserAgentDataLike;
+}
+
 export interface BarcodeDetectionLike {
   rawValue?: string;
 }

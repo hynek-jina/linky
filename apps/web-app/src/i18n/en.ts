@@ -48,11 +48,17 @@ export const en = {
   onboardingInvalidNsecOrSeed: "Invalid nsec or SLIP-39 keys.",
   onboardingCreateFailed: "Failed to create account.",
   onboardingReturnIntro:
-    "Enter your 20 SLIP-39 words. You can type them manually or paste them here.",
+    "Enter your 20 SLIP-39 words. If you saved them to your keychain or password manager, you can load them here in one tap.",
   onboardingReturnHint: "Use 20 SLIP-39 words separated by spaces or commas.",
   onboardingReturnPlaceholder: "academic acid acne ...",
   onboardingReturnPasteButton: "Paste from clipboard",
   onboardingReturnConfirm: "Continue",
+  onboardingReturnUseSavedKeys: "Use saved keys",
+  onboardingReturnSavedKeysLoaded: "Saved keys loaded.",
+  onboardingReturnSavedKeysMissing:
+    "No saved Linky keys were found in your password manager.",
+  onboardingReturnSavedKeysUnavailable:
+    "Saved keys can't be read directly from the password manager on this device.",
   onboardingReturnWordCount: "{count}/{total} words",
   onboardingReturnSeparatorHint:
     "Commas and line breaks are converted to spaces automatically.",
@@ -69,6 +75,14 @@ export const en = {
   onboardingAvatarRequired: "Choose an avatar or upload your own photo.",
   onboardingConfirmProfile: "Confirm profile",
   onboardingNameRequired: "Enter a name.",
+  onboardingSaveKeysTitle: "Save your keys",
+  onboardingSaveKeysIntro:
+    "These 20 words unlock {name}. Save them to your keychain or password manager, or copy them somewhere safe.",
+  onboardingSaveKeysSaveKeychain: "Save to keychain",
+  onboardingSaveKeysSavePasswordManager: "Save to password manager",
+  onboardingSaveKeysSaved: "Keys saved to your password manager.",
+  onboardingSaveKeysPromptRequested:
+    "Confirm the save prompt from your browser.",
   onboardingRetry: "Try again",
 
   paymentsHistoryEmpty: "No transactions yet.",

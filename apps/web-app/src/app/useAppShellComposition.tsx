@@ -5,6 +5,7 @@ import { useOwner, useQuery } from "@evolu/react";
 import { nip19, type Event as NostrToolsEvent } from "nostr-tools";
 import React, { useMemo, useState } from "react";
 import { ContactCard } from "../components/ContactCard";
+import type { WalletWarningBanner } from "../components/WalletWarning";
 import { deriveDefaultProfile } from "../derivedProfile";
 import type { CashuTokenId, ContactId } from "../evolu";
 import {
@@ -41,6 +42,7 @@ import {
   startNativeNfcWrite,
   supportsNativeNfcWrite,
 } from "../platform/nativeBridge";
+import { shouldOfferOnboardingPasswordManagerSave } from "../platform/passwordManager";
 import { isNativePlatform } from "../platform/runtime";
 import {
   bumpCashuDeterministicCounter,
@@ -1099,10 +1101,12 @@ export const useAppShellComposition = () => {
   );
 
   const {
+    canLoadReturningSlip39FromPasswordManager,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNpub,
     isSeedLogin,
+    loadReturningSlip39FromPasswordManager,
     logoutArmed,
     onboardingIsBusy,
     onboardingPhotoInputRef,
@@ -2782,6 +2786,58 @@ export const useAppShellComposition = () => {
     setWalletWarningDismissed(true);
   }, []);
 
+  const saveWalletSeedToPasswordManager = React.useCallback(() => {
+    pushToast(t("onboardingSaveKeysPromptRequested"));
+  }, [pushToast, t]);
+
+  const dismissSaveKeysBanner = React.useCallback(() => {
+    safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY, "1");
+    setContactsOnboardingHasBackedUpKeys(true);
+  }, []);
+
+  const walletBanner = React.useMemo<WalletWarningBanner | null>(() => {
+    if (walletWarningApplies) {
+      return walletWarningDismissed
+        ? null
+        : {
+            kind: "early-warning",
+            onDismiss: dismissWalletWarning,
+          };
+    }
+
+    if (contactsOnboardingHasBackedUpKeys) return null;
+    if (!shouldOfferOnboardingPasswordManagerSave()) return null;
+
+    const seed = String(slip39Seed ?? "").trim();
+    const npub = normalizeNpubIdentifier(currentNpub);
+    if (!seed || !npub) return null;
+
+    const profileName = String(effectiveProfileName ?? "").trim() || "Linky";
+
+    return {
+      kind: "save-keys",
+      body: t("onboardingSaveKeysIntro").replace("{name}", profileName),
+      onCopy: copySeed,
+      onDismiss: dismissSaveKeysBanner,
+      onSave: saveWalletSeedToPasswordManager,
+      passwordValue: seed,
+      title: t("onboardingSaveKeysTitle"),
+      usernameValue: npub,
+    };
+  }, [
+    contactsOnboardingHasBackedUpKeys,
+    copySeed,
+    currentNpub,
+    dismissSaveKeysBanner,
+    dismissWalletWarning,
+    effectiveProfileName,
+    saveWalletSeedToPasswordManager,
+    slip39Seed,
+    t,
+    walletWarningApplies,
+    walletWarningDismissed,
+  ]);
+
   const saveCashuFromText = useSaveCashuFromText({
     enqueueCashuOp,
     ensureCashuTokenPersisted,
@@ -3356,10 +3412,14 @@ export const useAppShellComposition = () => {
     pushToast(t("nostrKeysCopied"));
   };
 
-  const copySeed = async () => {
+  async function copySeed() {
     const value = String(slip39Seed ?? "").trim();
     if (value) {
-      await navigator.clipboard?.writeText(value);
+      const didCopy = await writeClipboardText(value);
+      if (!didCopy) {
+        pushToast(t("copyFailed"));
+        return;
+      }
       safeLocalStorageSet(
         CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY,
         "1",
@@ -3370,7 +3430,7 @@ export const useAppShellComposition = () => {
     }
 
     pushToast(t("seedMissing"));
-  };
+  }
 
   const restoreMissingTokens = useRestoreMissingTokens({
     cashuIsBusy,
@@ -4301,7 +4361,6 @@ export const useAppShellComposition = () => {
       contactsSearchInputRef,
       conversationsLabel,
       dismissContactsOnboarding,
-      dismissWalletWarning,
       groupNames,
       handleMainSwipeScroll,
       handleMainSwipeTabChange: commitMainSwipe,
@@ -4320,10 +4379,10 @@ export const useAppShellComposition = () => {
       setActiveGroup,
       setContactsSearch,
       showContactsOnboarding,
-      showWalletWarning: walletWarningApplies && !walletWarningDismissed,
       startContactsGuide,
       t,
       visibleContacts,
+      walletBanner,
     },
     ungroupedCount,
   });
@@ -4515,6 +4574,7 @@ export const useAppShellComposition = () => {
   return {
     appActions,
     appState,
+    canLoadReturningSlip39FromPasswordManager,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNsec,
@@ -4522,6 +4582,7 @@ export const useAppShellComposition = () => {
     formatDisplayedAmountParts,
     isMainSwipeRoute,
     lang,
+    loadReturningSlip39FromPasswordManager,
     mainSwipeRouteProps,
     moneyRouteProps,
     onboardingIsBusy,

@@ -2,38 +2,35 @@ import React from "react";
 import { BottomTabBar } from "../components/BottomTabBar";
 import { WalletActionButton } from "../components/WalletActionButton";
 import { WalletBalance } from "../components/WalletBalance";
-import { WalletWarning } from "../components/WalletWarning";
+import {
+  WalletWarning,
+  type WalletWarningBanner,
+} from "../components/WalletWarning";
 import { useNavigation } from "../hooks/useRouting";
 
 interface WalletPageProps {
   bottomTabActive: "wallet" | "contacts" | null;
   cashuBalance: number;
-  dismissWalletWarning: () => void;
   openScan: () => void;
   scanIsOpen: boolean;
-  showWalletWarning: boolean;
   showBottomTabBar?: boolean;
   t: (key: string) => string;
+  walletBanner: WalletWarningBanner | null;
 }
 
 export const WalletPage: React.FC<WalletPageProps> = ({
   bottomTabActive,
   cashuBalance,
-  dismissWalletWarning,
   openScan,
   scanIsOpen,
-  showWalletWarning,
   showBottomTabBar = true,
   t,
+  walletBanner,
 }) => {
   const navigateTo = useNavigation();
   return (
     <section className="panel panel-plain wallet-panel">
-      <WalletWarning
-        dismissed={!showWalletWarning}
-        onDismiss={dismissWalletWarning}
-        t={t}
-      />
+      <WalletWarning banner={walletBanner} t={t} />
       <div className="panel-header">
         <div className="wallet-hero">
           <WalletBalance balance={cashuBalance} ariaLabel={t("cashuBalance")} />

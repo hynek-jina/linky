@@ -48,11 +48,17 @@ export const cs = {
   onboardingInvalidNsecOrSeed: "Neplatný nsec nebo SLIP-39 klíče.",
   onboardingCreateFailed: "Nepodařilo se vytvořit účet.",
   onboardingReturnIntro:
-    "Zde si můžete obnovit svůj účet nebo jej používat současně na více zařízeních. Pokud již účet máte, přejděte do pokročilého nastavení, zkopírujte své klíče a následně je sem vložte.",
+    "Zde si můžete obnovit svůj účet nebo jej používat současně na více zařízeních. Pokud jste si klíče uložili do Klíčenky nebo správce hesel, můžete je sem načíst jedním klepnutím.",
   onboardingReturnHint: "Zadejte svých 20 slov.",
   onboardingReturnPlaceholder: "academic acid acne ...",
   onboardingReturnPasteButton: "Vložit ze schránky",
   onboardingReturnConfirm: "Pokračovat",
+  onboardingReturnUseSavedKeys: "Použít uložené klíče",
+  onboardingReturnSavedKeysLoaded: "Uložené klíče načteny.",
+  onboardingReturnSavedKeysMissing:
+    "Ve správci hesel se nenašly žádné uložené klíče Linky.",
+  onboardingReturnSavedKeysUnavailable:
+    "Na tomto zařízení nejde číst uložené klíče přímo ze správce hesel.",
   onboardingReturnWordCount: "{count}/{total} slov",
   onboardingReturnSeparatorHint:
     "Čárky a odřádkování automaticky převedu na mezery.",
@@ -69,6 +75,14 @@ export const cs = {
   onboardingAvatarRequired: "Vyberte avatar nebo nahrajte vlastní fotku.",
   onboardingConfirmProfile: "Potvrdit profil",
   onboardingNameRequired: "Zadejte jméno.",
+  onboardingSaveKeysTitle: "Uložte si klíče",
+  onboardingSaveKeysIntro:
+    "Těchto 20 slov odemyká účet {name}. Uložte si je do Klíčenky nebo správce hesel, nebo si je zkopírujte na bezpečné místo.",
+  onboardingSaveKeysSaveKeychain: "Uložit do Klíčenky",
+  onboardingSaveKeysSavePasswordManager: "Uložit do správce hesel",
+  onboardingSaveKeysSaved: "Klíče byly uloženy do správce hesel.",
+  onboardingSaveKeysPromptRequested:
+    "Potvrďte nabídku uložení ve vašem prohlížeči.",
   onboardingRetry: "Zkusit znovu",
 
   paymentsHistoryEmpty: "Zatím žádné transakce.",

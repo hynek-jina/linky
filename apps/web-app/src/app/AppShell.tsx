@@ -16,12 +16,14 @@ const AppShell = () => {
   const {
     appActions,
     appState,
+    canLoadReturningSlip39FromPasswordManager,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNsec,
     formatDisplayedAmountParts,
     isMainSwipeRoute,
     lang,
+    loadReturningSlip39FromPasswordManager,
     mainSwipeRouteProps,
     moneyRouteProps,
     onboardingIsBusy,
@@ -84,10 +86,16 @@ const AppShell = () => {
 
       {!currentNsec ? (
         <UnauthenticatedLayout
+          canLoadReturningSlip39FromPasswordManager={
+            canLoadReturningSlip39FromPasswordManager
+          }
           confirmPendingOnboardingProfile={confirmPendingOnboardingProfile}
           onboardingStep={onboardingStep}
           onboardingIsBusy={onboardingIsBusy}
           lang={lang}
+          loadReturningSlip39FromPasswordManager={
+            loadReturningSlip39FromPasswordManager
+          }
           onboardingPhotoInputRef={onboardingPhotoInputRef}
           openReturningOnboarding={openReturningOnboarding}
           onPendingOnboardingPhotoSelected={onPendingOnboardingPhotoSelected}
