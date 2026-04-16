@@ -20,6 +20,7 @@ import {
   readStoredSlip39Seed,
   writeStoredCashuMnemonic,
 } from "../../platform/identitySecrets";
+import { triggerPasswordManagerSeedSave } from "../../platform/passwordManager";
 import type { JsonRecord } from "../../types/json";
 import { CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY } from "../../utils/constants";
 import { createSquareAvatarDataUrl } from "../../utils/image";
@@ -97,6 +98,10 @@ interface UseProfileAuthDomainResult {
   pickPendingOnboardingPhoto: () => Promise<void>;
   requestDeriveNostrKeys: () => Promise<void>;
   requestLogout: () => void;
+  savePendingOnboardingBackupToPasswordManager: (
+    username: string,
+    password: string,
+  ) => Promise<void>;
   seedMnemonic: string | null;
   selectReturningSlip39Suggestion: (value: string) => void;
   selectPendingOnboardingAvatar: (pictureUrl: string) => void;
@@ -600,6 +605,25 @@ export const useProfileAuthDomain = ({
     updatePendingOnboardingProfile,
   ]);
 
+  const savePendingOnboardingBackupToPasswordManager = React.useCallback(
+    async (username: string, password: string) => {
+      if (onboardingIsBusy) return;
+      if (!onboardingStep || onboardingStep.kind !== "profile") return;
+
+      setOnboardingIsBusy(true);
+      try {
+        await triggerPasswordManagerSeedSave({
+          displayName: onboardingStep.name,
+          password,
+          username,
+        });
+      } finally {
+        setOnboardingIsBusy(false);
+      }
+    },
+    [onboardingIsBusy, onboardingStep],
+  );
+
   const openReturningOnboarding = React.useCallback(() => {
     if (onboardingIsBusy) return;
 
@@ -822,6 +846,7 @@ export const useProfileAuthDomain = ({
     pickPendingOnboardingPhoto,
     requestDeriveNostrKeys,
     requestLogout,
+    savePendingOnboardingBackupToPasswordManager,
     selectReturningSlip39Suggestion,
     selectPendingOnboardingAvatar,
     cashuSeedMnemonic,

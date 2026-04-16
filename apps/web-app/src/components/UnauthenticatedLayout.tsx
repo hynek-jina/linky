@@ -21,6 +21,10 @@ type UnauthenticatedLayoutProps = {
   ) => Promise<void>;
   pasteReturningSlip39FromClipboard: () => Promise<void>;
   pickPendingOnboardingPhoto: () => Promise<void>;
+  savePendingOnboardingBackupToPasswordManager: (
+    username: string,
+    password: string,
+  ) => Promise<void>;
   selectReturningSlip39Suggestion: (value: string) => void;
   selectPendingOnboardingAvatar: (pictureUrl: string) => void;
   setReturningSlip39Input: (value: string) => void;
@@ -36,6 +40,8 @@ const formatTemplate = (template: string, vars: Record<string, string>) =>
     String(vars[key] ?? ""),
   );
 
+const PASSWORD_MANAGER_SAVE_TARGET = "linky-password-manager-save-target";
+
 export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   confirmPendingOnboardingProfile,
   createNewAccount,
@@ -47,6 +53,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   onPendingOnboardingPhotoSelected,
   pasteReturningSlip39FromClipboard,
   pickPendingOnboardingPhoto,
+  savePendingOnboardingBackupToPasswordManager,
   selectReturningSlip39Suggestion,
   selectPendingOnboardingAvatar,
   setReturningSlip39Input,
@@ -59,6 +66,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   const showOnboardingHeader =
     onboardingStep?.kind !== "profile" && onboardingStep?.kind !== "returning";
   const [pickerMenuIsOpen, setPickerMenuIsOpen] = React.useState(false);
+  const passwordManagerSaveFormRef = React.useRef<HTMLFormElement | null>(null);
 
   React.useEffect(() => {
     if (
@@ -235,8 +243,10 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
               {t("seed")}
             </label>
             <div className="onboarding-return-inputRow">
-              <textarea
+              <input
                 id="onboarding-return-seed"
+                name="password"
+                type="password"
                 value={step.input}
                 onChange={(event) =>
                   setReturningSlip39Input(event.target.value)
@@ -256,9 +266,9 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
                 placeholder={t("onboardingReturnPlaceholder")}
                 autoCapitalize="none"
                 autoCorrect="off"
-                autoComplete="off"
+                autoComplete="current-password"
+                autoFocus
                 spellCheck={false}
-                rows={4}
               />
               <button
                 type="button"
@@ -342,6 +352,35 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
     const selectedGeneratedAvatar = profile.avatarChoices.some(
       (choice) => choice.pictureUrl === profile.pictureUrl,
     );
+    const submitPasswordManagerForm = () => {
+      const form = passwordManagerSaveFormRef.current;
+      if (!form) return;
+
+      if (typeof form.requestSubmit === "function") {
+        form.requestSubmit();
+        return;
+      }
+
+      form.submit();
+    };
+
+    const submitProfile = async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      const username = profile.name.trim();
+      const password = profile.slip39Seed;
+
+      if (username && password) {
+        submitPasswordManagerForm();
+        await savePendingOnboardingBackupToPasswordManager(username, password);
+
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, 150);
+        });
+      }
+
+      await confirmPendingOnboardingProfile();
+    };
 
     return (
       <div className="onboarding-avatar-stage">
@@ -412,7 +451,52 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
           </div>
         ) : null}
 
-        <>
+        <iframe
+          aria-hidden="true"
+          className="onboarding-password-save-frame"
+          name={PASSWORD_MANAGER_SAVE_TARGET}
+          tabIndex={-1}
+          title=""
+        />
+
+        <form
+          ref={passwordManagerSaveFormRef}
+          className="onboarding-password-save-form"
+          method="post"
+          action="/"
+          target={PASSWORD_MANAGER_SAVE_TARGET}
+          autoComplete="on"
+          aria-hidden="true"
+        >
+          <input
+            className="onboarding-password-save-input"
+            name="username"
+            type="text"
+            value={profile.name.trim()}
+            readOnly
+            tabIndex={-1}
+            autoCapitalize="words"
+            autoCorrect="off"
+            autoComplete="username"
+            spellCheck={false}
+          />
+          <input
+            className="onboarding-password-save-input"
+            name="password"
+            type="password"
+            value={profile.slip39Seed}
+            readOnly
+            tabIndex={-1}
+            autoCapitalize="none"
+            autoComplete="new-password"
+            spellCheck={false}
+          />
+        </form>
+
+        <form
+          autoComplete="off"
+          onSubmit={(event) => void submitProfile(event)}
+        >
           <p className="muted onboarding-avatar-copy">
             {t("onboardingAvatarIntro")}
           </p>
@@ -446,11 +530,16 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
                 </label>
                 <input
                   id="onboarding-profile-name"
+                  name="profileName"
                   value={profile.name}
                   onChange={(event) =>
                     setPendingOnboardingName(event.target.value)
                   }
                   placeholder={t("namePlaceholder")}
+                  autoComplete="nickname"
+                  autoCapitalize="words"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </div>
             </div>
@@ -534,15 +623,14 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
 
           <div className="onboarding-avatar-actions onboarding-avatar-actionsAdaptive">
             <button
-              type="button"
+              type="submit"
               className="btn-wide"
-              onClick={() => void confirmPendingOnboardingProfile()}
               disabled={onboardingIsBusy}
             >
               {t("onboardingConfirmProfile")}
             </button>
           </div>
-        </>
+        </form>
       </div>
     );
   };

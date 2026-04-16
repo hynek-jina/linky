@@ -67,6 +67,19 @@ export const cs = {
     "Výchozí profil můžete rovnou potvrdit, nebo upravit jméno a avatara.",
   onboardingAvatarGridLabel: "Výběr avatara",
   onboardingAvatarRequired: "Vyberte avatar nebo nahrajte vlastní fotku.",
+  onboardingBackupTitle: "Zálohujte si přístup",
+  onboardingBackupIntro:
+    "Než vstoupíte do aplikace, uložte si svých 20 slov do správce hesel.",
+  onboardingBackupSave: "Uložit do hesel",
+  onboardingBackupCopy: "Zkopírovat do schránky",
+  onboardingBackupEnter: "Rozumím, vstoupit",
+  onboardingBackupSaveRequested:
+    "Požadavek na uložení do správce hesel byl odeslán.",
+  onboardingBackupSaveUnavailable:
+    "Uložení do správce hesel v tomto prohlížeči není dostupné.",
+  onboardingBackupSaveFailed: "Uložení do správce hesel se nepovedlo.",
+  onboardingBackupSaveHint:
+    "Spustil se pokus o uložení jako při přihlášení. Pokud prohlížeč tento formulář rozpozná, může teď nabídnout uložení hesla.",
   onboardingConfirmProfile: "Potvrdit profil",
   onboardingNameRequired: "Zadejte jméno.",
   onboardingRetry: "Zkusit znovu",

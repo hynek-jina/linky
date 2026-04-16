@@ -67,6 +67,18 @@ export const en = {
     "You can confirm the default profile right away, or adjust the name and avatar.",
   onboardingAvatarGridLabel: "Avatar selection",
   onboardingAvatarRequired: "Choose an avatar or upload your own photo.",
+  onboardingBackupTitle: "Backup your access",
+  onboardingBackupIntro:
+    "Save your 20 words to the password manager before entering the app.",
+  onboardingBackupSave: "Save to passwords",
+  onboardingBackupCopy: "Copy to clipboard",
+  onboardingBackupEnter: "Got it, enter",
+  onboardingBackupSaveRequested: "Password manager save requested.",
+  onboardingBackupSaveUnavailable:
+    "Password manager save isn't available in this browser.",
+  onboardingBackupSaveFailed: "Password manager save failed.",
+  onboardingBackupSaveHint:
+    "A sign-in style save was triggered. If the browser recognizes this form, it may offer to save the password now.",
   onboardingConfirmProfile: "Confirm profile",
   onboardingNameRequired: "Enter a name.",
   onboardingRetry: "Try again",
