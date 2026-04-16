@@ -37,6 +37,7 @@ const AppShell = () => {
     recentlyReceivedToken,
     selectReturningSlip39Suggestion,
     selectPendingOnboardingAvatar,
+    savePendingOnboardingBackupToPasswordManager,
     setReturningSlip39Input,
     setOnboardingStep,
     setLang,
@@ -97,6 +98,9 @@ const AppShell = () => {
           pickPendingOnboardingPhoto={pickPendingOnboardingPhoto}
           selectReturningSlip39Suggestion={selectReturningSlip39Suggestion}
           selectPendingOnboardingAvatar={selectPendingOnboardingAvatar}
+          savePendingOnboardingBackupToPasswordManager={
+            savePendingOnboardingBackupToPasswordManager
+          }
           setReturningSlip39Input={setReturningSlip39Input}
           setLang={setLang}
           setPendingOnboardingName={setPendingOnboardingName}
