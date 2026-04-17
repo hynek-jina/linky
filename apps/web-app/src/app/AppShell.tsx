@@ -17,13 +17,13 @@ const AppShell = () => {
     appActions,
     appState,
     canLoadReturningSlip39FromPasswordManager,
+    continueAfterPasswordManagerSave,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNsec,
     formatDisplayedAmountParts,
     isMainSwipeRoute,
     lang,
-    loadReturningSlip39FromPasswordManager,
     mainSwipeRouteProps,
     moneyRouteProps,
     onboardingIsBusy,
@@ -37,6 +37,7 @@ const AppShell = () => {
     pickPendingOnboardingPhoto,
     pushToast,
     recentlyReceivedToken,
+    returningPasswordManagerUsername,
     selectReturningSlip39Suggestion,
     selectPendingOnboardingAvatar,
     setReturningSlip39Input,
@@ -48,6 +49,7 @@ const AppShell = () => {
     systemRouteProps,
     t,
     toasts,
+    triggerReturningSlip39PasswordManagerPrompt,
   } = useAppShellComposition();
 
   const coreContextValue: AppShellCoreContextValue = appState;
@@ -84,18 +86,16 @@ const AppShell = () => {
         t={t}
       />
 
-      {!currentNsec ? (
+      {!currentNsec || onboardingStep ? (
         <UnauthenticatedLayout
           canLoadReturningSlip39FromPasswordManager={
             canLoadReturningSlip39FromPasswordManager
           }
+          continueAfterPasswordManagerSave={continueAfterPasswordManagerSave}
           confirmPendingOnboardingProfile={confirmPendingOnboardingProfile}
           onboardingStep={onboardingStep}
           onboardingIsBusy={onboardingIsBusy}
           lang={lang}
-          loadReturningSlip39FromPasswordManager={
-            loadReturningSlip39FromPasswordManager
-          }
           onboardingPhotoInputRef={onboardingPhotoInputRef}
           openReturningOnboarding={openReturningOnboarding}
           onPendingOnboardingPhotoSelected={onPendingOnboardingPhotoSelected}
@@ -103,6 +103,7 @@ const AppShell = () => {
           createNewAccount={createNewAccount}
           pasteReturningSlip39FromClipboard={pasteReturningSlip39FromClipboard}
           pickPendingOnboardingPhoto={pickPendingOnboardingPhoto}
+          returningPasswordManagerUsername={returningPasswordManagerUsername}
           selectReturningSlip39Suggestion={selectReturningSlip39Suggestion}
           selectPendingOnboardingAvatar={selectPendingOnboardingAvatar}
           setReturningSlip39Input={setReturningSlip39Input}
@@ -110,10 +111,13 @@ const AppShell = () => {
           setPendingOnboardingName={setPendingOnboardingName}
           submitReturningSlip39={submitReturningSlip39}
           t={t}
+          triggerReturningSlip39PasswordManagerPrompt={
+            triggerReturningSlip39PasswordManagerPrompt
+          }
         />
       ) : null}
 
-      {currentNsec ? (
+      {currentNsec && !onboardingStep ? (
         <AppShellContextsProvider
           actions={actionsContextValue}
           core={coreContextValue}

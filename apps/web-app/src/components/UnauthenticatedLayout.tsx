@@ -3,6 +3,7 @@ import type {
   OnboardingStep,
   PendingOnboardingProfile,
   ReturningOnboardingStep,
+  SaveKeysOnboardingStep,
 } from "../app/hooks/useProfileAuthDomain";
 import type { Lang } from "../i18n";
 import { getInitials } from "../utils/formatting";
@@ -10,10 +11,10 @@ import { analyzeSlip39Input, SLIP39_WORD_COUNT } from "../utils/slip39Input";
 
 type UnauthenticatedLayoutProps = {
   canLoadReturningSlip39FromPasswordManager: boolean;
+  continueAfterPasswordManagerSave: () => void;
   confirmPendingOnboardingProfile: () => Promise<void>;
   createNewAccount: () => Promise<void>;
   lang: Lang;
-  loadReturningSlip39FromPasswordManager: () => Promise<void>;
   onboardingIsBusy: boolean;
   onboardingPhotoInputRef: React.RefObject<HTMLInputElement | null>;
   onboardingStep: OnboardingStep;
@@ -23,6 +24,7 @@ type UnauthenticatedLayoutProps = {
   ) => Promise<void>;
   pasteReturningSlip39FromClipboard: () => Promise<void>;
   pickPendingOnboardingPhoto: () => Promise<void>;
+  returningPasswordManagerUsername: string;
   selectReturningSlip39Suggestion: (value: string) => void;
   selectPendingOnboardingAvatar: (pictureUrl: string) => void;
   setReturningSlip39Input: (value: string) => void;
@@ -31,6 +33,9 @@ type UnauthenticatedLayoutProps = {
   setPendingOnboardingName: (value: string) => void;
   submitReturningSlip39: (inputOverride?: string) => Promise<void>;
   t: (key: string) => string;
+  triggerReturningSlip39PasswordManagerPrompt: (options?: {
+    silentWhenMissing?: boolean;
+  }) => Promise<boolean>;
 };
 
 const formatTemplate = (template: string, vars: Record<string, string>) =>
@@ -40,10 +45,10 @@ const formatTemplate = (template: string, vars: Record<string, string>) =>
 
 export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   canLoadReturningSlip39FromPasswordManager,
+  continueAfterPasswordManagerSave,
   confirmPendingOnboardingProfile,
   createNewAccount,
   lang,
-  loadReturningSlip39FromPasswordManager,
   onboardingIsBusy,
   onboardingPhotoInputRef,
   onboardingStep,
@@ -51,6 +56,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   onPendingOnboardingPhotoSelected,
   pasteReturningSlip39FromClipboard,
   pickPendingOnboardingPhoto,
+  returningPasswordManagerUsername,
   selectReturningSlip39Suggestion,
   selectPendingOnboardingAvatar,
   setReturningSlip39Input,
@@ -59,10 +65,22 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   setPendingOnboardingName,
   submitReturningSlip39,
   t,
+  triggerReturningSlip39PasswordManagerPrompt,
 }) => {
   const showOnboardingHeader =
     onboardingStep?.kind !== "profile" && onboardingStep?.kind !== "returning";
   const [pickerMenuIsOpen, setPickerMenuIsOpen] = React.useState(false);
+  const [
+    returningPasswordManagerBridgeArmed,
+    setReturningPasswordManagerBridgeArmed,
+  ] = React.useState(false);
+  const returningPasswordManagerUsernameRef =
+    React.useRef<HTMLInputElement | null>(null);
+  const returningPasswordManagerInputRef =
+    React.useRef<HTMLInputElement | null>(null);
+  const returningSeedTextareaRef = React.useRef<HTMLTextAreaElement | null>(
+    null,
+  );
 
   React.useEffect(() => {
     if (
@@ -72,6 +90,30 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
       return;
     }
     setPickerMenuIsOpen(false);
+  }, [onboardingStep]);
+
+  React.useEffect(() => {
+    const input = returningPasswordManagerUsernameRef.current;
+    if (!input) return;
+    if (input.value === returningPasswordManagerUsername) return;
+
+    input.value = returningPasswordManagerUsername;
+  }, [returningPasswordManagerUsername]);
+
+  React.useEffect(() => {
+    if (onboardingStep?.kind === "returning") return;
+    setReturningPasswordManagerBridgeArmed(false);
+  }, [onboardingStep]);
+
+  React.useEffect(() => {
+    if (onboardingStep?.kind !== "returning") return;
+
+    const input = returningPasswordManagerInputRef.current;
+    if (!input) return;
+    if (document.activeElement === input) return;
+    if (input.value === onboardingStep.input) return;
+
+    input.value = onboardingStep.input;
   }, [onboardingStep]);
 
   const renderPreparingStep = (
@@ -245,37 +287,26 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             >
               {t("seed")}
             </label>
-            <input
-              className="password-manager-bridge-input"
-              type="text"
-              name="username"
-              value="Linky"
-              onChange={() => undefined}
-              autoComplete="username"
-              tabIndex={-1}
-              aria-hidden="true"
-            />
-            <input
-              className="password-manager-bridge-input"
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              tabIndex={-1}
-              aria-hidden="true"
-              onChange={(event) => {
-                const value = event.target.value;
-                if (value) {
-                  setReturningSlip39Input(value);
-                  const filled = analyzeSlip39Input(value);
-                  if (filled.isCompleteCandidate) {
-                    void submitReturningSlip39(value);
-                  }
-                }
-              }}
-            />
+            {canLoadReturningSlip39FromPasswordManager ? (
+              <div
+                className="onboarding-return-passwordManagerBridge"
+                aria-hidden="true"
+              >
+                <input
+                  id="onboarding-return-username"
+                  ref={returningPasswordManagerUsernameRef}
+                  type="text"
+                  name="username"
+                  autoComplete="username"
+                  defaultValue={returningPasswordManagerUsername}
+                  tabIndex={-1}
+                />
+              </div>
+            ) : null}
             <div className="onboarding-return-inputRow">
               <textarea
                 id="onboarding-return-seed"
+                ref={returningSeedTextareaRef}
                 value={step.input}
                 onChange={(event) =>
                   setReturningSlip39Input(event.target.value)
@@ -299,6 +330,39 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
                 spellCheck={false}
                 rows={4}
               />
+              {canLoadReturningSlip39FromPasswordManager ? (
+                <input
+                  id="onboarding-return-password-manager-seed"
+                  ref={returningPasswordManagerInputRef}
+                  className={
+                    returningPasswordManagerBridgeArmed
+                      ? "onboarding-return-passwordManagerInput is-armed"
+                      : "onboarding-return-passwordManagerInput"
+                  }
+                  type="password"
+                  name="password"
+                  autoComplete="current-password"
+                  tabIndex={returningPasswordManagerBridgeArmed ? 0 : -1}
+                  aria-hidden={!returningPasswordManagerBridgeArmed}
+                  onBlur={() => {
+                    setReturningPasswordManagerBridgeArmed(false);
+                  }}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (!value) return;
+
+                    setReturningPasswordManagerBridgeArmed(false);
+                    setReturningSlip39Input(value);
+                    const filled = analyzeSlip39Input(value);
+                    if (filled.isCompleteCandidate) {
+                      void submitReturningSlip39(value);
+                    }
+                    globalThis.setTimeout(() => {
+                      returningSeedTextareaRef.current?.focus();
+                    }, 0);
+                  }}
+                />
+              ) : null}
               <button
                 type="button"
                 className="onboarding-return-pasteBtn"
@@ -368,10 +432,26 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             <button
               type="button"
               className="btn-wide secondary"
-              onClick={() => void loadReturningSlip39FromPasswordManager()}
+              onClick={async () => {
+                setReturningPasswordManagerBridgeArmed(true);
+                returningPasswordManagerInputRef.current?.focus();
+                const loaded =
+                  await triggerReturningSlip39PasswordManagerPrompt({
+                    silentWhenMissing: true,
+                  });
+                if (!loaded) {
+                  globalThis.setTimeout(() => {
+                    returningPasswordManagerInputRef.current?.focus();
+                  }, 0);
+                } else {
+                  globalThis.setTimeout(() => {
+                    returningSeedTextareaRef.current?.focus();
+                  }, 0);
+                }
+              }}
               disabled={onboardingIsBusy}
             >
-              {t("onboardingReturnUseSavedKeys")}
+              {t("onboardingReturnTrySavedKeys")}
             </button>
           ) : null}
           <button
@@ -596,6 +676,96 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
     );
   };
 
+  const renderSaveKeysStep = (step: SaveKeysOnboardingStep) => {
+    return (
+      <div className="onboarding-avatar-stage onboarding-return-stage">
+        <div className="onboarding-return-scroll">
+          <div className="onboarding-return-copy">
+            <div
+              className="onboarding-logo onboarding-return-logo"
+              aria-hidden="true"
+            >
+              <img
+                className="onboarding-logo-svg onboarding-return-logoSvg"
+                src="/icon.svg"
+                alt=""
+                width={256}
+                height={256}
+                loading="eager"
+                decoding="async"
+              />
+            </div>
+            <p className="muted onboarding-avatar-copy onboarding-return-intro">
+              {t("onboardingSaveKeysIntro")}
+            </p>
+          </div>
+
+          <form
+            className="onboarding-return-inputWrap"
+            action="/api/pm-noop"
+            method="post"
+            autoComplete="on"
+          >
+            <label
+              className="onboarding-avatar-nameLabel"
+              htmlFor="onboarding-save-keys-username"
+            >
+              {t("onboardingSaveKeysAccountName")}
+            </label>
+            <input
+              id="onboarding-save-keys-username"
+              type="text"
+              name="username"
+              autoComplete="username"
+              defaultValue={step.accountName}
+            />
+            <input
+              type="text"
+              name="displayName"
+              autoComplete="name"
+              defaultValue={step.accountName}
+              className="onboarding-save-keys-hiddenName"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+            <label
+              className="onboarding-avatar-nameLabel"
+              htmlFor="onboarding-save-keys-password"
+            >
+              {t("onboardingSaveKeysFieldLabel")}
+            </label>
+            <input
+              id="onboarding-save-keys-password"
+              type="password"
+              name="password"
+              autoComplete="new-password"
+              defaultValue={step.seed}
+              className="onboarding-return-passwordManagerInputVisible"
+            />
+
+            <div className="onboarding-avatar-actions onboarding-avatar-actionsAdaptive">
+              <button
+                type="submit"
+                className="btn-wide"
+                disabled={onboardingIsBusy}
+              >
+                {t("onboardingSaveKeysSubmit")}
+              </button>
+              <button
+                type="button"
+                className="btn-wide secondary"
+                onClick={() => continueAfterPasswordManagerSave()}
+                disabled={onboardingIsBusy}
+              >
+                {t("onboardingSaveKeysSkip")}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <section
       className={`panel panel-plain onboarding-panel${showOnboardingHeader ? "" : " onboarding-panel-compact"}`}
@@ -633,6 +803,8 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
           renderProfilePicker(onboardingStep)
         ) : onboardingStep.kind === "returning" ? (
           renderReturnStep(onboardingStep)
+        ) : onboardingStep.kind === "save-keys" ? (
+          renderSaveKeysStep(onboardingStep)
         ) : (
           renderPreparingStep(onboardingStep)
         )

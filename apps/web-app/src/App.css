@@ -509,6 +509,48 @@
   gap: 6px;
 }
 
+.onboarding-return-passwordManagerBridge {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0.01;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.onboarding-return-passwordManagerInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  letter-spacing: 0.04em;
+}
+
+.onboarding-return-passwordManagerInput.is-armed {
+  z-index: 2;
+  opacity: 0.01;
+  pointer-events: auto;
+}
+
+.onboarding-return-passwordManagerInputVisible {
+  letter-spacing: 0.04em;
+}
+
+.onboarding-save-keys-hiddenName {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0.01;
+  pointer-events: none;
+}
+
 .onboarding-return-inputRow {
   position: relative;
 }
@@ -517,32 +559,6 @@
   min-height: 116px;
   padding-right: 58px;
   resize: none;
-}
-
-.password-manager-bridge {
-  display: grid;
-  gap: 8px;
-}
-
-.password-manager-bridge-iframe {
-  position: absolute;
-  width: 0;
-  height: 0;
-  border: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.password-manager-bridge-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 .onboarding-return-pasteBtn {
@@ -2154,12 +2170,6 @@ button.danger {
   position: relative;
 }
 
-.wallet-warning.is-save-keys {
-  padding-right: 12px;
-  background: rgba(59, 130, 246, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.24);
-}
-
 .wallet-warning.is-hidden {
   visibility: hidden;
   pointer-events: none;
@@ -2214,10 +2224,6 @@ button.danger {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
-}
-
-.wallet-warning-actions .password-manager-bridge {
-  display: contents;
 }
 
 .wallet-warning-actions button {

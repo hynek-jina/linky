@@ -48,12 +48,14 @@ export const cs = {
   onboardingInvalidNsecOrSeed: "Neplatný nsec nebo SLIP-39 klíče.",
   onboardingCreateFailed: "Nepodařilo se vytvořit účet.",
   onboardingReturnIntro:
-    "Zde si můžete obnovit svůj účet nebo jej používat současně na více zařízeních. Pokud jste si klíče uložili do Klíčenky nebo správce hesel, můžete je sem načíst jedním klepnutím.",
+    "Zde si můžete obnovit svůj účet nebo jej používat současně na více zařízeních. Pokud jste si klíče uložili do Klíčenky nebo správce hesel, zkusím je nabídnout automaticky.",
   onboardingReturnHint: "Zadejte svých 20 slov.",
   onboardingReturnPlaceholder: "academic acid acne ...",
   onboardingReturnPasteButton: "Vložit ze schránky",
   onboardingReturnConfirm: "Pokračovat",
-  onboardingReturnUseSavedKeys: "Použít uložené klíče",
+  onboardingReturnSavedKeysAccountLabel: "Účet ve správci hesel",
+  onboardingReturnSavedKeysFieldLabel: "Uložené klíče",
+  onboardingReturnTrySavedKeys: "Zkusit načíst uložené klíče",
   onboardingReturnSavedKeysLoaded: "Uložené klíče načteny.",
   onboardingReturnSavedKeysMissing:
     "Ve správci hesel se nenašly žádné uložené klíče Linky.",
@@ -75,14 +77,15 @@ export const cs = {
   onboardingAvatarRequired: "Vyberte avatar nebo nahrajte vlastní fotku.",
   onboardingConfirmProfile: "Potvrdit profil",
   onboardingNameRequired: "Zadejte jméno.",
-  onboardingSaveKeysTitle: "Uložte si klíče",
-  onboardingSaveKeysIntro:
-    "Těchto 20 slov odemyká účet {name}. Uložte si je do Klíčenky nebo správce hesel, nebo si je zkopírujte na bezpečné místo.",
-  onboardingSaveKeysSaveKeychain: "Uložit do Klíčenky",
-  onboardingSaveKeysSavePasswordManager: "Uložit do správce hesel",
   onboardingSaveKeysSaved: "Klíče byly uloženy do správce hesel.",
   onboardingSaveKeysPromptRequested:
     "Potvrďte nabídku uložení ve vašem prohlížeči.",
+  onboardingSaveKeysIntro:
+    "Než budete pokračovat, uložte si své Linky klíče. Safari by je z tohoto formuláře mělo uložit spolu se jménem vašeho profilu.",
+  onboardingSaveKeysAccountName: "Jméno účtu",
+  onboardingSaveKeysFieldLabel: "Uložené klíče",
+  onboardingSaveKeysSubmit: "Uložit do Passwords",
+  onboardingSaveKeysSkip: "Teď ne",
   onboardingRetry: "Zkusit znovu",
 
   paymentsHistoryEmpty: "Zatím žádné transakce.",

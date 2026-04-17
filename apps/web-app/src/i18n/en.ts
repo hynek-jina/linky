@@ -48,12 +48,14 @@ export const en = {
   onboardingInvalidNsecOrSeed: "Invalid nsec or SLIP-39 keys.",
   onboardingCreateFailed: "Failed to create account.",
   onboardingReturnIntro:
-    "Enter your 20 SLIP-39 words. If you saved them to your keychain or password manager, you can load them here in one tap.",
+    "Enter your 20 SLIP-39 words. If you saved them to your keychain or password manager, Linky will try to offer them automatically here.",
   onboardingReturnHint: "Use 20 SLIP-39 words separated by spaces or commas.",
   onboardingReturnPlaceholder: "academic acid acne ...",
   onboardingReturnPasteButton: "Paste from clipboard",
   onboardingReturnConfirm: "Continue",
-  onboardingReturnUseSavedKeys: "Use saved keys",
+  onboardingReturnSavedKeysAccountLabel: "Password manager account",
+  onboardingReturnSavedKeysFieldLabel: "Saved keys",
+  onboardingReturnTrySavedKeys: "Try saved keys",
   onboardingReturnSavedKeysLoaded: "Saved keys loaded.",
   onboardingReturnSavedKeysMissing:
     "No saved Linky keys were found in your password manager.",
@@ -75,14 +77,15 @@ export const en = {
   onboardingAvatarRequired: "Choose an avatar or upload your own photo.",
   onboardingConfirmProfile: "Confirm profile",
   onboardingNameRequired: "Enter a name.",
-  onboardingSaveKeysTitle: "Save your keys",
-  onboardingSaveKeysIntro:
-    "These 20 words unlock {name}. Save them to your keychain or password manager, or copy them somewhere safe.",
-  onboardingSaveKeysSaveKeychain: "Save to keychain",
-  onboardingSaveKeysSavePasswordManager: "Save to password manager",
   onboardingSaveKeysSaved: "Keys saved to your password manager.",
   onboardingSaveKeysPromptRequested:
     "Confirm the save prompt from your browser.",
+  onboardingSaveKeysIntro:
+    "Save your Linky keys before continuing. Safari should store them from this form with your profile name.",
+  onboardingSaveKeysAccountName: "Account name",
+  onboardingSaveKeysFieldLabel: "Saved keys",
+  onboardingSaveKeysSubmit: "Save to Passwords",
+  onboardingSaveKeysSkip: "Skip for now",
   onboardingRetry: "Try again",
 
   paymentsHistoryEmpty: "No transactions yet.",

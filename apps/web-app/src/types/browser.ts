@@ -40,11 +40,22 @@ export interface CredentialStoreLike {
   get?: (
     options?: PasswordCredentialRequestOptions,
   ) => Promise<Credential | null>;
+  store?: (credential: Credential) => Promise<void | Credential | null>;
 }
 
 export interface PasswordCredentialRequestOptions {
-  mediation?: string | undefined;
+  mediation?: "optional" | "required" | "silent" | undefined;
   password?: boolean | undefined;
+}
+
+export interface PasswordCredentialData {
+  id: string;
+  name?: string | undefined;
+  password: string;
+}
+
+export interface PasswordCredentialConstructorLike {
+  new (data: HTMLFormElement | PasswordCredentialData): Credential;
 }
 
 export interface NavigatorUserAgentDataLike {

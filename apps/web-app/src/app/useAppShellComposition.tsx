@@ -42,7 +42,6 @@ import {
   startNativeNfcWrite,
   supportsNativeNfcWrite,
 } from "../platform/nativeBridge";
-import { shouldOfferOnboardingPasswordManagerSave } from "../platform/passwordManager";
 import { isNativePlatform } from "../platform/runtime";
 import {
   bumpCashuDeterministicCounter,
@@ -1102,11 +1101,11 @@ export const useAppShellComposition = () => {
 
   const {
     canLoadReturningSlip39FromPasswordManager,
+    continueAfterPasswordManagerSave,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNpub,
     isSeedLogin,
-    loadReturningSlip39FromPasswordManager,
     logoutArmed,
     onboardingIsBusy,
     onboardingPhotoInputRef,
@@ -1117,9 +1116,11 @@ export const useAppShellComposition = () => {
     pickPendingOnboardingPhoto,
     requestDeriveNostrKeys,
     requestLogout,
+    returningPasswordManagerUsername,
     seedMnemonic,
     selectReturningSlip39Suggestion,
     selectPendingOnboardingAvatar,
+    triggerReturningSlip39PasswordManagerPrompt,
     slip39Seed,
     setReturningSlip39Input,
     setOnboardingStep,
@@ -2786,15 +2787,6 @@ export const useAppShellComposition = () => {
     setWalletWarningDismissed(true);
   }, []);
 
-  const saveWalletSeedToPasswordManager = React.useCallback(() => {
-    pushToast(t("onboardingSaveKeysPromptRequested"));
-  }, [pushToast, t]);
-
-  const dismissSaveKeysBanner = React.useCallback(() => {
-    safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY, "1");
-    setContactsOnboardingHasBackedUpKeys(true);
-  }, []);
-
   const walletBanner = React.useMemo<WalletWarningBanner | null>(() => {
     if (walletWarningApplies) {
       return walletWarningDismissed
@@ -2805,38 +2797,8 @@ export const useAppShellComposition = () => {
           };
     }
 
-    if (contactsOnboardingHasBackedUpKeys) return null;
-    if (!shouldOfferOnboardingPasswordManagerSave()) return null;
-
-    const seed = String(slip39Seed ?? "").trim();
-    const npub = normalizeNpubIdentifier(currentNpub);
-    if (!seed || !npub) return null;
-
-    const profileName = String(effectiveProfileName ?? "").trim() || "Linky";
-
-    return {
-      kind: "save-keys",
-      body: t("onboardingSaveKeysIntro").replace("{name}", profileName),
-      onCopy: copySeed,
-      onDismiss: dismissSaveKeysBanner,
-      onSave: saveWalletSeedToPasswordManager,
-      passwordValue: seed,
-      title: t("onboardingSaveKeysTitle"),
-      usernameValue: npub,
-    };
-  }, [
-    contactsOnboardingHasBackedUpKeys,
-    copySeed,
-    currentNpub,
-    dismissSaveKeysBanner,
-    dismissWalletWarning,
-    effectiveProfileName,
-    saveWalletSeedToPasswordManager,
-    slip39Seed,
-    t,
-    walletWarningApplies,
-    walletWarningDismissed,
-  ]);
+    return null;
+  }, [dismissWalletWarning, walletWarningApplies, walletWarningDismissed]);
 
   const saveCashuFromText = useSaveCashuFromText({
     enqueueCashuOp,
@@ -4575,6 +4537,7 @@ export const useAppShellComposition = () => {
     appActions,
     appState,
     canLoadReturningSlip39FromPasswordManager,
+    continueAfterPasswordManagerSave,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNsec,
@@ -4582,7 +4545,6 @@ export const useAppShellComposition = () => {
     formatDisplayedAmountParts,
     isMainSwipeRoute,
     lang,
-    loadReturningSlip39FromPasswordManager,
     mainSwipeRouteProps,
     moneyRouteProps,
     onboardingIsBusy,
@@ -4596,6 +4558,7 @@ export const useAppShellComposition = () => {
     peopleRouteProps,
     pushToast,
     recentlyReceivedToken,
+    returningPasswordManagerUsername,
     route,
     selectReturningSlip39Suggestion,
     selectPendingOnboardingAvatar,
@@ -4608,5 +4571,6 @@ export const useAppShellComposition = () => {
     systemRouteProps,
     t,
     toasts,
+    triggerReturningSlip39PasswordManagerPrompt,
   };
 };

@@ -22,12 +22,14 @@ import {
 } from "../../platform/identitySecrets";
 import {
   requestStoredPasswordManagerCredential,
+  shouldOfferOnboardingPasswordManagerSave,
   supportsPasswordManagerCredentialAccess,
 } from "../../platform/passwordManager";
 import type { JsonRecord } from "../../types/json";
 import {
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
   CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY,
+  PASSWORD_MANAGER_ACCOUNT_NAME_STORAGE_KEY,
 } from "../../utils/constants";
 import { createSquareAvatarDataUrl } from "../../utils/image";
 import {
@@ -42,6 +44,7 @@ import {
   looksLikeSlip39Seed,
 } from "../../utils/slip39Nostr";
 import {
+  safeLocalStorageGet,
   safeLocalStorageRemove,
   safeLocalStorageSet,
 } from "../../utils/storage";
@@ -63,6 +66,12 @@ export interface ReturningOnboardingStep {
   kind: "returning";
 }
 
+export interface SaveKeysOnboardingStep {
+  accountName: string;
+  kind: "save-keys";
+  seed: string;
+}
+
 type PreparingOnboardingStep = {
   derivedName: string | null;
   error: string | null;
@@ -74,6 +83,7 @@ export type OnboardingStep =
   | PreparingOnboardingStep
   | PendingOnboardingProfile
   | ReturningOnboardingStep
+  | SaveKeysOnboardingStep
   | null;
 
 interface PersistNewProfileParams {
@@ -92,11 +102,11 @@ interface UseProfileAuthDomainParams {
 
 interface UseProfileAuthDomainResult {
   canLoadReturningSlip39FromPasswordManager: boolean;
+  continueAfterPasswordManagerSave: () => void;
   confirmPendingOnboardingProfile: () => Promise<void>;
   createNewAccount: () => Promise<void>;
   currentNpub: string | null;
   isSeedLogin: boolean;
-  loadReturningSlip39FromPasswordManager: (silent?: boolean) => Promise<void>;
   logoutArmed: boolean;
   onboardingIsBusy: boolean;
   onboardingPhotoInputRef: React.RefObject<HTMLInputElement | null>;
@@ -109,9 +119,13 @@ interface UseProfileAuthDomainResult {
   pickPendingOnboardingPhoto: () => Promise<void>;
   requestDeriveNostrKeys: () => Promise<void>;
   requestLogout: () => void;
+  returningPasswordManagerUsername: string;
   seedMnemonic: string | null;
   selectReturningSlip39Suggestion: (value: string) => void;
   selectPendingOnboardingAvatar: (pictureUrl: string) => void;
+  triggerReturningSlip39PasswordManagerPrompt: (options?: {
+    silentWhenMissing?: boolean;
+  }) => Promise<boolean>;
   cashuSeedMnemonic: string | null;
   slip39Seed: string | null;
   setReturningSlip39Input: (value: string) => void;
@@ -125,6 +139,12 @@ export const useProfileAuthDomain = ({
   pushToast,
   t,
 }: UseProfileAuthDomainParams): UseProfileAuthDomainResult => {
+  const initialReturningPasswordManagerUsername = React.useMemo(() => {
+    const raw = String(
+      safeLocalStorageGet(PASSWORD_MANAGER_ACCOUNT_NAME_STORAGE_KEY) ?? "",
+    ).trim();
+    return raw || "Linky";
+  }, []);
   const [currentNpub, setCurrentNpub] = React.useState<string | null>(null);
   const [onboardingIsBusy, setOnboardingIsBusy] = React.useState(false);
   const [onboardingStep, setOnboardingStep] =
@@ -137,6 +157,10 @@ export const useProfileAuthDomain = ({
   const [logoutArmed, setLogoutArmed] = React.useState(false);
   const onboardingPhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isSeedLogin, setIsSeedLogin] = React.useState(false);
+  const [
+    returningPasswordManagerUsername,
+    setReturningPasswordManagerUsername,
+  ] = React.useState(initialReturningPasswordManagerUsername);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -275,6 +299,8 @@ export const useProfileAuthDomain = ({
     [],
   );
 
+  const attemptedReturningPasswordManagerPrefillRef = React.useRef(false);
+
   const publishNewProfileMetadata = React.useCallback(
     async ({
       lnAddress,
@@ -388,6 +414,10 @@ export const useProfileAuthDomain = ({
     }
     globalThis.location.reload();
   }, []);
+
+  const continueAfterPasswordManagerSave = React.useCallback(() => {
+    reloadIntoAuthenticatedApp();
+  }, [reloadIntoAuthenticatedApp]);
 
   const setIdentityFromNsecAndReload = React.useCallback(
     async (
@@ -599,6 +629,22 @@ export const useProfileAuthDomain = ({
     }));
 
     try {
+      const credentials = {
+        accountName: trimmedName,
+        seed: onboardingStep.slip39Seed,
+      };
+      const shouldOfferPasswordManagerSave =
+        shouldOfferOnboardingPasswordManagerSave();
+
+      if (shouldOfferPasswordManagerSave) {
+        const normalizedAccountName = trimmedName || "Linky";
+        setReturningPasswordManagerUsername(normalizedAccountName);
+        safeLocalStorageSet(
+          PASSWORD_MANAGER_ACCOUNT_NAME_STORAGE_KEY,
+          normalizedAccountName,
+        );
+      }
+
       const lnAddress = deriveDefaultProfile(onboardingStep.npub).lnAddress;
 
       try {
@@ -621,6 +667,24 @@ export const useProfileAuthDomain = ({
 
       safeLocalStorageSet(CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY, "1");
 
+      if (shouldOfferPasswordManagerSave) {
+        const persisted = await persistIdentityFromNsec(
+          onboardingStep.nsec,
+          onboardingStep.slip39Seed,
+          "onboardingCreateFailed",
+        );
+        if (!persisted) {
+          return;
+        }
+
+        setOnboardingStep({
+          accountName: credentials.accountName,
+          kind: "save-keys",
+          seed: credentials.seed,
+        });
+        return;
+      }
+
       await setIdentityFromNsecAndReload(
         onboardingStep.nsec,
         onboardingStep.slip39Seed,
@@ -634,28 +698,34 @@ export const useProfileAuthDomain = ({
     onboardingStep,
     publishNewProfileMetadata,
     pushToast,
+    persistIdentityFromNsec,
     setIdentityFromNsecAndReload,
     t,
     updatePendingOnboardingProfile,
   ]);
 
   const loadReturningSlip39FromPasswordManager = React.useCallback(
-    async (silent: boolean = false) => {
-      if (onboardingIsBusy) return;
+    async (
+      silent: boolean = false,
+      mediation: "optional" | "required" | "silent" = "optional",
+    ): Promise<boolean> => {
+      if (onboardingIsBusy) return false;
 
       if (!supportsPasswordManagerCredentialAccess()) {
         if (!silent) {
           pushToast(t("onboardingReturnSavedKeysUnavailable"));
         }
-        return;
+        return false;
       }
 
-      const credential = await requestStoredPasswordManagerCredential();
+      const credential = await requestStoredPasswordManagerCredential({
+        mediation,
+      });
       if (!credential) {
         if (!silent) {
           pushToast(t("onboardingReturnSavedKeysMissing"));
         }
-        return;
+        return false;
       }
 
       const normalizedSlip39 = normalizeSlip39Input(credential.seed);
@@ -663,33 +733,77 @@ export const useProfileAuthDomain = ({
         if (!silent) {
           pushToast(t("onboardingInvalidSeed"));
         }
-        return;
+        return false;
       }
 
-      updateReturningOnboardingStep((current) => ({
-        ...current,
-        error: null,
-        input: normalizedSlip39,
-      }));
+      setOnboardingStep((current) => {
+        if (!current || current.kind !== "returning") {
+          return current;
+        }
+
+        return {
+          ...current,
+          error: null,
+          input: normalizedSlip39,
+        };
+      });
+      const normalizedAccountName =
+        String(credential.accountName ?? "").trim() || "Linky";
+      setReturningPasswordManagerUsername(normalizedAccountName);
+      safeLocalStorageSet(
+        PASSWORD_MANAGER_ACCOUNT_NAME_STORAGE_KEY,
+        normalizedAccountName,
+      );
 
       if (!silent) {
         pushToast(t("onboardingReturnSavedKeysLoaded"));
       }
+      return true;
     },
-    [onboardingIsBusy, pushToast, t, updateReturningOnboardingStep],
+    [onboardingIsBusy, pushToast, t],
   );
 
   const openReturningOnboarding = React.useCallback(() => {
     if (onboardingIsBusy) return;
 
+    attemptedReturningPasswordManagerPrefillRef.current = true;
     setOnboardingStep({
       kind: "returning",
       error: null,
       input: "",
     });
 
-    void loadReturningSlip39FromPasswordManager(true);
+    void loadReturningSlip39FromPasswordManager(true, "required");
   }, [loadReturningSlip39FromPasswordManager, onboardingIsBusy]);
+
+  React.useEffect(() => {
+    if (onboardingStep?.kind !== "returning") {
+      attemptedReturningPasswordManagerPrefillRef.current = false;
+      return;
+    }
+
+    if (attemptedReturningPasswordManagerPrefillRef.current) return;
+    if (onboardingIsBusy) return;
+    if (!canLoadReturningSlip39FromPasswordManager) return;
+
+    attemptedReturningPasswordManagerPrefillRef.current = true;
+    void loadReturningSlip39FromPasswordManager(true, "optional");
+  }, [
+    canLoadReturningSlip39FromPasswordManager,
+    loadReturningSlip39FromPasswordManager,
+    onboardingIsBusy,
+    onboardingStep,
+  ]);
+
+  const triggerReturningSlip39PasswordManagerPrompt = React.useCallback(
+    async (options?: { silentWhenMissing?: boolean }): Promise<boolean> => {
+      return loadReturningSlip39FromPasswordManager(
+        options?.silentWhenMissing === true,
+        "required",
+      );
+    },
+    [loadReturningSlip39FromPasswordManager],
+  );
 
   const setReturningSlip39Input = React.useCallback(
     (value: string) => {
@@ -892,11 +1006,11 @@ export const useProfileAuthDomain = ({
 
   return {
     canLoadReturningSlip39FromPasswordManager,
+    continueAfterPasswordManagerSave,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNpub,
     isSeedLogin,
-    loadReturningSlip39FromPasswordManager,
     logoutArmed,
     onboardingIsBusy,
     onboardingPhotoInputRef,
@@ -907,8 +1021,10 @@ export const useProfileAuthDomain = ({
     pickPendingOnboardingPhoto,
     requestDeriveNostrKeys,
     requestLogout,
+    returningPasswordManagerUsername,
     selectReturningSlip39Suggestion,
     selectPendingOnboardingAvatar,
+    triggerReturningSlip39PasswordManagerPrompt,
     cashuSeedMnemonic,
     seedMnemonic,
     slip39Seed,

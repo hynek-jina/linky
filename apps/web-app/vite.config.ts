@@ -183,6 +183,25 @@ const mintQuoteProxy = (): Plugin => ({
   },
 });
 
+const pmNoopEndpoint = (): Plugin => ({
+  name: "pm-noop-endpoint",
+  configureServer(server: ViteDevServer) {
+    server.middlewares.use(
+      (
+        req: Connect.IncomingMessage,
+        res: ServerResponse,
+        next: Connect.NextFunction,
+      ) => {
+        if ((req.url ?? "") !== "/api/pm-noop") return next();
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "text/html");
+        res.setHeader("Cache-Control", "no-store");
+        res.end("");
+      },
+    );
+  },
+});
+
 const lnurlProxy = (): Plugin => ({
   name: "lnurl-proxy",
   configureServer(server: ViteDevServer) {
@@ -288,6 +307,7 @@ export default defineConfig({
   },
   plugins: [
     serveSqliteWasm(),
+    pmNoopEndpoint(),
     mintQuoteProxy(),
     lnurlProxy(),
     ...(useHttps ? [basicSsl()] : []),
