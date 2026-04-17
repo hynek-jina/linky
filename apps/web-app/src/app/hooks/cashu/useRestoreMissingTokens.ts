@@ -8,7 +8,10 @@ import {
   getCashuRestoreCursor,
   setCashuRestoreCursor,
 } from "../../../utils/cashuDeterministic";
-import { createLoadedCashuWallet } from "../../../utils/cashuWallet";
+import {
+  createLoadedCashuWallet,
+  decodeCashuTokenForMint,
+} from "../../../utils/cashuWallet";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
 import type {
   CashuTokenRowLike,
@@ -109,8 +112,35 @@ export const useRestoreMissingTokens = ({
         const ownerId = await resolveOwnerIdForWrite();
 
         const { getCashuLib } = await import("../../../utils/cashuLib");
-        const { CashuMint, CashuWallet, getDecodedToken, getEncodedToken } =
-          await getCashuLib();
+        const {
+          CashuMint,
+          CashuWallet,
+          getDecodedToken,
+          getEncodedToken,
+          getTokenMetadata,
+        } = await getCashuLib();
+
+        const walletByMintUnit = new Map<
+          string,
+          Promise<Awaited<ReturnType<typeof createLoadedCashuWallet>>>
+        >();
+        const getWalletForMintUnit = (mintUrl: string, unit: string) => {
+          const normalizedMint = normalizeMintUrl(mintUrl);
+          const normalizedUnit = String(unit ?? "").trim() || "sat";
+          const key = `${normalizedMint}|${normalizedUnit}`;
+          const existing = walletByMintUnit.get(key);
+          if (existing) return existing;
+
+          const created = createLoadedCashuWallet({
+            CashuMint,
+            CashuWallet,
+            mintUrl: normalizedMint,
+            unit: normalizedUnit,
+            bip39seed: det.bip39seed,
+          });
+          walletByMintUnit.set(key, created);
+          return created;
+        };
 
         const existingSecretsByMintUnit = new Map<string, Set<string>>();
         const keyOf = (mintUrl: string, unit: string) =>
@@ -134,16 +164,24 @@ export const useRestoreMissingTokens = ({
           if (!tokenText) continue;
 
           try {
-            const decoded = getDecodedToken(tokenText);
-            const mintUrl = String(decoded?.mint ?? row.mint ?? "").trim();
+            const tokenMetadata = getTokenMetadata(tokenText);
+            const mintUrl = String(tokenMetadata.mint ?? row.mint ?? "").trim();
             if (!mintUrl) continue;
             const unit =
-              String(decoded?.unit ?? row.unit ?? "").trim() || "sat";
+              String(tokenMetadata.unit ?? row.unit ?? "").trim() || "sat";
+            const wallet = await getWalletForMintUnit(mintUrl, unit);
+            const decoded = decodeCashuTokenForMint({
+              tokenText,
+              mintUrl,
+              keysets: wallet.keysets,
+              getDecodedToken,
+              getTokenMetadata,
+            });
             const proofs: CashuProof[] = Array.isArray(decoded?.proofs)
               ? decoded.proofs
               : [];
 
-            const set = ensureSet(mintUrl, unit);
+            const set = ensureSet(mintUrl, wallet.unit);
             for (const p of proofs) {
               const secret = String(p?.secret ?? "").trim();
               if (secret) set.add(secret);
@@ -172,8 +210,8 @@ export const useRestoreMissingTokens = ({
           const tokenText = String(row.token ?? row.rawToken ?? "").trim();
           if (!tokenText) continue;
           try {
-            const decoded = getDecodedToken(tokenText);
-            const mintUrl = String(decoded?.mint ?? "").trim();
+            const tokenMetadata = getTokenMetadata(tokenText);
+            const mintUrl = String(tokenMetadata.mint ?? "").trim();
             if (mintUrl) mintCandidates.add(normalizeMintUrl(mintUrl));
           } catch {
             // ignore invalid token strings

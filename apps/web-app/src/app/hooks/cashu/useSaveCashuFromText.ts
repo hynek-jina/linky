@@ -119,6 +119,7 @@ export const useSaveCashuFromText = ({
     async (
       tokenText: string,
       options?: {
+        navigateToTokens?: boolean;
         navigateToWallet?: boolean;
       },
     ) => {
@@ -129,7 +130,9 @@ export const useSaveCashuFromText = ({
       }
       if (isCashuTokenStored(tokenRaw)) {
         setStatus(t("cashuExists"));
-        if (options?.navigateToWallet) {
+        if (options?.navigateToTokens) {
+          navigateTo({ route: "cashuTokens" });
+        } else if (options?.navigateToWallet) {
           navigateTo({ route: "wallet" });
         }
         return;
@@ -156,7 +159,9 @@ export const useSaveCashuFromText = ({
             (acceptedToken !== "" && isCashuTokenStored(acceptedToken))
           ) {
             setStatus(t("cashuExists"));
-            if (options?.navigateToWallet) {
+            if (options?.navigateToTokens) {
+              navigateTo({ route: "cashuTokens" });
+            } else if (options?.navigateToWallet) {
               navigateTo({ route: "wallet" });
             }
             return;
@@ -265,7 +270,9 @@ export const useSaveCashuFromText = ({
               : t("cashuAccepted");
           showPaidOverlay(title);
 
-          if (options?.navigateToWallet) {
+          if (options?.navigateToTokens) {
+            navigateTo({ route: "cashuTokens" });
+          } else if (options?.navigateToWallet) {
             navigateTo({ route: "wallet" });
           }
         } catch (error) {

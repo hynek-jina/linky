@@ -19,8 +19,10 @@ type NavigationAction =
   | { route: "advanced" }
   | { route: "advancedAutoPayLimit" }
   | { route: "advancedPushDebug" }
+  | { route: "cashuTokenEmit" }
   | { route: "cashuToken"; id: CashuTokenId }
   | { route: "cashuTokenNew" }
+  | { route: "cashuTokens" }
   | { route: "chat"; id: string }
   | { route: "contact"; id: ContactId }
   | { route: "contactEdit"; id: ContactId }
@@ -100,6 +102,9 @@ export const navigateTo = (action: NavigationAction): void => {
     case "topupInvoice":
       window.location.assign("#wallet/topup/invoice");
       break;
+    case "cashuTokens":
+      window.location.assign("#wallet/tokens");
+      break;
     case "lnAddressPay":
       window.location.assign(
         `#payln/${encodeURIComponent(String(action.lnAddress))}`,
@@ -107,6 +112,9 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "cashuTokenNew":
       window.location.assign("#wallet/token/new");
+      break;
+    case "cashuTokenEmit":
+      window.location.assign("#wallet/token/emit");
       break;
     case "cashuToken":
       window.location.assign(

@@ -38,6 +38,24 @@ describe("parseRouteFromHash", () => {
 
     expect(parseRouteFromHash()).toEqual({ kind: "wallet" });
   });
+
+  it("parses the main tokens route", () => {
+    replaceHash("#wallet/tokens");
+
+    expect(parseRouteFromHash()).toEqual({ kind: "cashuTokens" });
+  });
+
+  it("parses the token emit route", () => {
+    replaceHash("#wallet/token/emit");
+
+    expect(parseRouteFromHash()).toEqual({ kind: "cashuTokenEmit" });
+  });
+
+  it("parses the token import route", () => {
+    replaceHash("#wallet/token/new");
+
+    expect(parseRouteFromHash()).toEqual({ kind: "cashuTokenNew" });
+  });
 });
 
 describe("parseNativeDeepLinkUrl", () => {

@@ -2,8 +2,13 @@ import { Share } from "@capacitor/share";
 import type { Proof } from "@cashu/cashu-ts";
 import * as Evolu from "@evolu/common";
 import { useOwner, useQuery } from "@evolu/react";
-import { nip19, type Event as NostrToolsEvent } from "nostr-tools";
+import {
+  nip19,
+  type Event as NostrToolsEvent,
+  type UnsignedEvent,
+} from "nostr-tools";
 import React, { useMemo, useState } from "react";
+import { createSendTokenWithTokensAtMint } from "../cashuSend";
 import { ContactCard } from "../components/ContactCard";
 import { deriveDefaultProfile } from "../derivedProfile";
 import type { CashuTokenId, ContactId } from "../evolu";
@@ -28,6 +33,7 @@ import {
   loadCachedProfileAvatarObjectUrl,
   loadCachedProfileMetadata,
   loadCachedProfilePicture,
+  NOSTR_RELAYS,
   saveCachedProfileMetadata,
   saveCachedProfilePicture,
   type NostrProfileMetadata,
@@ -97,6 +103,7 @@ import {
   withLocalStorageLeaseLock,
 } from "../utils/storage";
 import { getUnknownErrorMessage } from "../utils/unknown";
+import { makeLocalId } from "../utils/validation";
 import { useCashuTokenChecks } from "./hooks/cashu/useCashuTokenChecks";
 import { useNpubCashClaim } from "./hooks/cashu/useNpubCashClaim";
 import { useRestoreMissingTokens } from "./hooks/cashu/useRestoreMissingTokens";
@@ -169,9 +176,14 @@ import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
 import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
+  CASHU_TOKEN_STATE_RESERVED,
   isCashuTokenAcceptedState,
+  isCashuTokenEmittedState,
+  isCashuTokenIssuedState,
+  isCashuTokenReservedState,
 } from "./lib/cashuTokenState";
 import type { AppNostrPool } from "./lib/nostrPool";
+import { getSharedAppNostrPool } from "./lib/nostrPool";
 import {
   publishSingleWrappedWithRetry as publishSingleWrappedWithRetryBase,
   publishWrappedWithRetry as publishWrappedWithRetryBase,
@@ -179,9 +191,17 @@ import {
 import {
   buildPaymentAmountAttempts,
   buildPaymentFailureAmountAttempts,
+  getPaymentAmountReserveCap,
   isRetryablePaymentAmountFailure,
 } from "./lib/paymentAmountFallback";
-import { buildCashuMintCandidates as buildCashuMintCandidatesBase } from "./lib/paymentMintSelection";
+import {
+  buildCashuMintCandidates as buildCashuMintCandidatesBase,
+  requiresMultipleMintsForAmount,
+} from "./lib/paymentMintSelection";
+import {
+  wrapEventWithoutPushMarker,
+  wrapEventWithPushMarker,
+} from "./lib/pushWrappedEvent";
 import { showPwaNotification } from "./lib/pwaNotifications";
 import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "./lib/tokenMessageInfo";
 import {
@@ -853,6 +873,7 @@ export const useAppShellComposition = () => {
 
   const [cashuDraft, setCashuDraft] = useState("");
   const cashuDraftRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const [cashuEmitAmount, setCashuEmitAmount] = useState("");
   const [cashuIsBusy, setCashuIsBusy] = useState(false);
   const [cashuBulkCheckIsBusy, setCashuBulkCheckIsBusy] = useState(false);
   const [tokensRestoreIsBusy, setTokensRestoreIsBusy] = useState(false);
@@ -941,6 +962,8 @@ export const useAppShellComposition = () => {
   );
 
   const [chatDraft, setChatDraft] = useState<string>("");
+  const [pendingCashuTokenContactPickId, setPendingCashuTokenContactPickId] =
+    useState<CashuTokenId | null>(null);
   const [chatSendIsBusy, setChatSendIsBusy] = useState(false);
   const [replyContext, setReplyContext] = useState<ReplyContext | null>(null);
   const replyContextRef = React.useRef<ReplyContext | null>(null);
@@ -1857,6 +1880,26 @@ export const useAppShellComposition = () => {
     }, 0);
   }, [cashuTokensWithMeta]);
 
+  const cashuOwnTokens = React.useMemo(
+    () =>
+      cashuTokensWithMeta.filter(
+        (token) =>
+          !isCashuTokenEmittedState(token.state) &&
+          !isCashuTokenReservedState(token.state),
+      ),
+    [cashuTokensWithMeta],
+  );
+
+  const cashuIssuedTokens = React.useMemo(
+    () =>
+      cashuTokensWithMeta.filter(
+        (token) =>
+          isCashuTokenEmittedState(token.state) ||
+          isCashuTokenReservedState(token.state),
+      ),
+    [cashuTokensWithMeta],
+  );
+
   const canPayWithCashu = cashuBalance > 0;
 
   React.useEffect(() => {
@@ -2751,6 +2794,18 @@ export const useAppShellComposition = () => {
     openNewContactPage();
   }, [closeScan, openNewContactPage, route.kind]);
 
+  const scanImageInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const openIssueTokenFromScan = React.useCallback(() => {
+    closeScan();
+    if (route.kind === "cashuTokenEmit") return;
+    navigateTo({ route: "cashuTokenEmit" });
+  }, [closeScan, route.kind]);
+
+  const onPickScanImage = React.useCallback(() => {
+    scanImageInputRef.current?.click();
+  }, []);
+
   const {
     contactsOnboardingCelebrating,
     contactsOnboardingTasks,
@@ -3056,22 +3111,291 @@ export const useAppShellComposition = () => {
     [cashuOwnerId, pushToast, setStatus, t, update, writeNfcUriWithToast],
   );
 
+  const returnCashuTokenToWallet = React.useCallback(
+    async (id: CashuTokenId) => {
+      const ownerId = await resolveOwnerIdForWrite();
+      const payload = {
+        id,
+        state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+        error: null,
+      };
+      const result = ownerId
+        ? update("cashuToken", payload, { ownerId })
+        : update("cashuToken", payload);
+
+      if (!result.ok) {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+        return;
+      }
+
+      setStatus(t("cashuReturnedToWallet"));
+    },
+    [resolveOwnerIdForWrite, setStatus, t, update],
+  );
+
+  const reserveCashuToken = React.useCallback(
+    async (id: CashuTokenId) => {
+      const ownerId = await resolveOwnerIdForWrite();
+      const payload = {
+        id,
+        state:
+          CASHU_TOKEN_STATE_RESERVED as typeof Evolu.NonEmptyString100.Type,
+        error: null,
+      };
+      const result = ownerId
+        ? update("cashuToken", payload, { ownerId })
+        : update("cashuToken", payload);
+
+      if (!result.ok) {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+        return;
+      }
+
+      setStatus(t("cashuReserved"));
+    },
+    [resolveOwnerIdForWrite, setStatus, t, update],
+  );
+
+  const markCashuTokenIssued = React.useCallback(
+    async (id: CashuTokenId): Promise<boolean> => {
+      const ownerId = await resolveOwnerIdForWrite();
+      const payload = {
+        id,
+        state: "issued" as typeof Evolu.NonEmptyString100.Type,
+        error: null,
+      };
+      const result = ownerId
+        ? update("cashuToken", payload, { ownerId })
+        : update("cashuToken", payload);
+
+      if (!result.ok) {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+        return false;
+      }
+
+      return true;
+    },
+    [resolveOwnerIdForWrite, setStatus, t, update],
+  );
+
+  const deleteCashuToken = React.useCallback(
+    async (id: CashuTokenId): Promise<boolean> => {
+      const ownerId = await resolveOwnerIdForWrite();
+      const payload = {
+        id,
+        isDeleted: Evolu.sqliteTrue,
+      };
+      const result = ownerId
+        ? update("cashuToken", payload, { ownerId })
+        : update("cashuToken", payload);
+
+      if (!result.ok) {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+        return false;
+      }
+
+      return true;
+    },
+    [resolveOwnerIdForWrite, setStatus, t, update],
+  );
+
+  const startSendCashuTokenToContact = React.useCallback(
+    async (id: CashuTokenId) => {
+      setPendingCashuTokenContactPickId(id);
+      setStatus(t("cashuSelectContactToSend"));
+      navigateTo({ route: "contacts" });
+    },
+    [setStatus, t],
+  );
+
+  const sendCashuTokenToContact = React.useCallback(
+    async (contact: DisplayContact, tokenId: CashuTokenId) => {
+      setPendingCashuTokenContactPickId(null);
+
+      const row = cashuTokensAllFiltered.find(
+        (candidate) => candidate.id === tokenId && !candidate.isDeleted,
+      );
+      const tokenMeta = row ? extractCashuTokenMeta(row) : null;
+      const tokenText = String(tokenMeta?.tokenText ?? "").trim();
+
+      if (!row || !tokenText || !isCashuTokenIssuedState(row.state)) {
+        setStatus(t("cashuInvalid"));
+        return;
+      }
+
+      const contactId = String(contact.id ?? "").trim();
+      if (!contactId) {
+        setStatus(t("contactNotFound"));
+        return;
+      }
+
+      if (!currentNsec) {
+        setStatus(t("profileMissingNpub"));
+        return;
+      }
+
+      let contactPubHex = normalizePubkeyHex(contact.unknownPubkeyHex);
+      const contactNpub = normalizeNpubIdentifier(contact.npub);
+
+      if (!contactPubHex && contactNpub) {
+        let decodedContact: ReturnType<typeof nip19.decode> | null = null;
+        try {
+          decodedContact = nip19.decode(contactNpub);
+        } catch {
+          decodedContact = null;
+        }
+        if (
+          decodedContact &&
+          decodedContact.type === "npub" &&
+          typeof decodedContact.data === "string"
+        ) {
+          contactPubHex = decodedContact.data;
+        }
+      }
+
+      if (!contactPubHex) {
+        setStatus(t("chatMissingContactNpub"));
+        return;
+      }
+
+      let activeClientId: string | null = null;
+
+      try {
+        const { getEventHash, getPublicKey } = await import("nostr-tools");
+
+        const decodedMe = nip19.decode(currentNsec);
+        if (
+          decodedMe.type !== "nsec" ||
+          !(decodedMe.data instanceof Uint8Array)
+        ) {
+          throw new Error("invalid nsec");
+        }
+
+        const privBytes = decodedMe.data;
+        const myPubHex = getPublicKey(privBytes);
+        const clientId = makeLocalId();
+        activeClientId = clientId;
+        activeNostrMessagePublishClientIdsRef.current.add(clientId);
+
+        const baseEvent = {
+          created_at: Math.ceil(Date.now() / 1e3),
+          kind: 14,
+          pubkey: myPubHex,
+          tags: [
+            ["p", contactPubHex],
+            ["p", myPubHex],
+            ["client", clientId],
+          ],
+          content: tokenText,
+        } satisfies UnsignedEvent;
+
+        const rumorId = getEventHash(baseEvent);
+        const pendingId = appendLocalNostrMessage({
+          contactId,
+          direction: "out",
+          content: tokenText,
+          wrapId: `pending:${clientId}`,
+          rumorId,
+          pubkey: myPubHex,
+          createdAtSec: baseEvent.created_at,
+          status: "pending",
+          clientId,
+        });
+
+        const deleted = await deleteCashuToken(tokenId);
+        if (!deleted) {
+          return;
+        }
+
+        navigateTo({ route: "chat", id: contactId });
+
+        const isOffline =
+          typeof navigator !== "undefined" && navigator.onLine === false;
+        if (isOffline) {
+          setStatus(t("chatQueued"));
+          return;
+        }
+
+        const wrapForMe = wrapEventWithoutPushMarker(
+          baseEvent,
+          privBytes,
+          myPubHex,
+        );
+        const wrapForContact = wrapEventWithPushMarker(
+          baseEvent,
+          privBytes,
+          contactPubHex,
+        );
+
+        const pool = await getSharedAppNostrPool();
+        const publishOutcome = await publishWrappedWithRetry(
+          pool,
+          NOSTR_RELAYS,
+          wrapForMe,
+          wrapForContact,
+        );
+
+        if (!publishOutcome.anySuccess) {
+          setStatus(t("chatQueued"));
+          return;
+        }
+
+        chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
+        if (pendingId) {
+          updateLocalNostrMessage(pendingId, {
+            status: "sent",
+            wrapId: String(wrapForMe.id ?? ""),
+            pubkey: myPubHex,
+            rumorId,
+          });
+        }
+      } catch (error) {
+        setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
+      } finally {
+        if (activeClientId) {
+          activeNostrMessagePublishClientIdsRef.current.delete(activeClientId);
+        }
+      }
+    },
+    [
+      appendLocalNostrMessage,
+      cashuTokensAllFiltered,
+      currentNsec,
+      deleteCashuToken,
+      publishWrappedWithRetry,
+      setStatus,
+      t,
+      updateLocalNostrMessage,
+    ],
+  );
+
   const shareCashuTokenText = React.useCallback(
-    async (text: string) => {
+    async (id: CashuTokenId, text: string) => {
       const trimmed = String(text ?? "").trim();
       if (!trimmed) {
         pushToast(t("cashuInvalid"));
         return;
       }
 
-      if (isNativePlatform() || typeof navigator.share === "function") {
-        await shareText(trimmed);
+      const row = cashuTokensAllFiltered.find(
+        (candidate) => candidate.id === id && !candidate.isDeleted,
+      );
+      if (!row) {
+        pushToast(t("cashuInvalid"));
         return;
       }
 
-      setShareOptionsText(trimmed);
+      if (isNativePlatform() || typeof navigator.share === "function") {
+        await shareText(trimmed);
+      } else {
+        setShareOptionsText(trimmed);
+      }
+
+      if (isCashuTokenAcceptedState(row.state)) {
+        await markCashuTokenIssued(id);
+      }
     },
-    [pushToast, shareText, t],
+    [cashuTokensAllFiltered, markCashuTokenIssued, pushToast, shareText, t],
   );
 
   const writeCurrentNpubToNfc = React.useCallback(async () => {
@@ -3302,7 +3626,17 @@ export const useAppShellComposition = () => {
         isUnknownContact={Boolean(contact.isUnknownContact)}
         tokenInfo={tokenInfo}
         getMintIconUrl={getMintIconUrl}
-        onSelect={() => openContactDetail(contact)}
+        onSelect={() => {
+          if (pendingCashuTokenContactPickId) {
+            void sendCashuTokenToContact(
+              contact,
+              pendingCashuTokenContactPickId,
+            );
+            return;
+          }
+
+          openContactDetail(contact);
+        }}
         onMintIconLoad={(origin, url) => {
           setMintIconUrlByMint((prev) => ({
             ...prev,
@@ -3445,6 +3779,269 @@ export const useAppShellComposition = () => {
           formatMintButtonLabel(mainMintForTokenList),
         )
       : null;
+
+  const emitCashuToken = React.useCallback(async () => {
+    const amountSat = Number.parseInt(cashuEmitAmount.trim(), 10);
+    if (!Number.isFinite(amountSat) || amountSat <= 0) {
+      setStatus(t("payInvalidAmount"));
+      return;
+    }
+
+    if (cashuIsBusy) return;
+    if (cashuBalance < amountSat) {
+      setStatus(t("payInsufficient"));
+      return;
+    }
+
+    const insertCashuTokenRecord = async (args: {
+      amount?: number | null;
+      mint?: string | null;
+      state: "accepted" | "issued";
+      token: string;
+      unit?: string | null;
+    }) => {
+      const payload: {
+        token: typeof Evolu.NonEmptyString.Type;
+        state: typeof Evolu.NonEmptyString100.Type;
+        amount?: typeof Evolu.PositiveInt.Type;
+        mint?: typeof Evolu.NonEmptyString1000.Type;
+        unit?: typeof Evolu.NonEmptyString100.Type;
+      } = {
+        token: args.token as typeof Evolu.NonEmptyString.Type,
+        state: args.state as typeof Evolu.NonEmptyString100.Type,
+      };
+
+      const mint = String(args.mint ?? "").trim();
+      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
+
+      const unit = String(args.unit ?? "").trim();
+      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
+
+      if (typeof args.amount === "number" && args.amount > 0) {
+        payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
+      }
+
+      const ownerId = await resolveOwnerIdForWrite();
+      const result = ownerId
+        ? insert("cashuToken", payload, { ownerId })
+        : insert("cashuToken", payload);
+      return { ownerId, result };
+    };
+
+    const deleteCashuRows = async (
+      rows: readonly { id?: CashuTokenId | string | null }[],
+      ownerIdOverride?: Evolu.OwnerId | null,
+    ) => {
+      for (const row of rows) {
+        if (!row.id) continue;
+        const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
+        const result = ownerIdOverride
+          ? update("cashuToken", payload, { ownerId: ownerIdOverride })
+          : update("cashuToken", payload);
+        if (!result.ok) {
+          throw new Error(String(result.error));
+        }
+      }
+    };
+
+    setCashuIsBusy(true);
+    setStatus(t("cashuEmitting"));
+
+    try {
+      const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
+      for (const row of cashuTokensWithMeta) {
+        if (!isCashuTokenAcceptedState(row.state)) continue;
+
+        const mint = String(row.mint ?? "").trim();
+        if (!mint) continue;
+
+        const tokenText = String(row.token ?? row.rawToken ?? "").trim();
+        if (!tokenText) continue;
+
+        const amount = Number(row.amount ?? 0) || 0;
+        const entry = mintGroups.get(mint) ?? { tokens: [], sum: 0 };
+        entry.tokens.push(tokenText);
+        entry.sum += amount;
+        mintGroups.set(mint, entry);
+      }
+
+      const preferredMint = normalizeMintUrl(defaultMintUrl ?? "");
+      const candidates = buildCashuMintCandidates(mintGroups, preferredMint);
+
+      if (candidates.length === 0) {
+        setStatus(t("payInsufficient"));
+        return;
+      }
+
+      if (requiresMultipleMintsForAmount(candidates, amountSat)) {
+        setStatus(t("payMultiMintUnsupported"));
+        return;
+      }
+
+      const maxReservedFeeSat = getPaymentAmountReserveCap(
+        amountSat,
+        cashuBalance,
+      );
+
+      let selectedTokenId: CashuTokenId | null = null;
+      let finalError: string | null = null;
+
+      for (const candidate of candidates) {
+        if (candidate.sum < amountSat) continue;
+
+        const attempts = buildPaymentAmountAttempts(
+          amountSat,
+          candidate.sum,
+        ).filter((attemptAmountSat) => {
+          return amountSat - attemptAmountSat <= maxReservedFeeSat;
+        });
+
+        if (attempts.length === 0) continue;
+
+        for (const attemptAmountSat of attempts) {
+          const split = await createSendTokenWithTokensAtMint({
+            amount: attemptAmountSat,
+            mint: candidate.mint,
+            tokens: candidate.tokens,
+            unit: "sat",
+          });
+
+          if (!split.ok) {
+            finalError = String(split.error ?? "unknown");
+
+            if (split.remainingToken && split.remainingAmount > 0) {
+              const recoveryInsert = await insertCashuTokenRecord({
+                token: split.remainingToken,
+                mint: split.mint,
+                unit: split.unit,
+                amount: split.remainingAmount,
+                state: "accepted",
+              });
+              if (!recoveryInsert.result.ok) {
+                throw new Error(String(recoveryInsert.result.error));
+              }
+
+              const spentRows = cashuTokensWithMeta.filter((row) => {
+                return (
+                  isCashuTokenAcceptedState(row.state) &&
+                  String(row.mint ?? "").trim() === candidate.mint
+                );
+              });
+              await deleteCashuRows(spentRows, recoveryInsert.ownerId);
+              break;
+            }
+
+            if (isRetryablePaymentAmountFailure(finalError)) {
+              continue;
+            }
+            break;
+          }
+
+          const spentRows = cashuTokensWithMeta.filter((row) => {
+            return (
+              isCashuTokenAcceptedState(row.state) &&
+              String(row.mint ?? "").trim() === candidate.mint
+            );
+          });
+          const spentOwnerId = await resolveOwnerIdForWrite();
+          await deleteCashuRows(spentRows, spentOwnerId);
+
+          if (split.remainingToken && split.remainingAmount > 0) {
+            const remainingInsert = await insertCashuTokenRecord({
+              token: split.remainingToken,
+              mint: split.mint,
+              unit: split.unit,
+              amount: split.remainingAmount,
+              state: "accepted",
+            });
+            if (!remainingInsert.result.ok) {
+              throw new Error(String(remainingInsert.result.error));
+            }
+          }
+
+          const issuedInsert = await insertCashuTokenRecord({
+            token: split.sendToken,
+            mint: split.mint,
+            unit: split.unit,
+            amount: split.sendAmount,
+            state: "issued",
+          });
+          if (!issuedInsert.result.ok) {
+            throw new Error(String(issuedInsert.result.error));
+          }
+
+          selectedTokenId = issuedInsert.result.value.id;
+          logPaymentEvent({
+            direction: "out",
+            status: "ok",
+            amount: split.sendAmount,
+            fee: amountSat - split.sendAmount,
+            mint: split.mint,
+            unit: split.unit,
+            error: null,
+            contactId: null,
+            method: "unknown",
+            phase: "swap",
+          });
+          break;
+        }
+
+        if (selectedTokenId) break;
+      }
+
+      if (!selectedTokenId) {
+        const errorMessage = finalError ?? t("payInsufficient");
+        logPaymentEvent({
+          direction: "out",
+          status: "error",
+          amount: amountSat,
+          fee: null,
+          mint: null,
+          unit: "sat",
+          error: errorMessage,
+          contactId: null,
+          method: "unknown",
+          phase: "swap",
+        });
+        setStatus(`${t("payFailed")}: ${errorMessage}`);
+        return;
+      }
+
+      setCashuEmitAmount("");
+      navigateTo({ route: "cashuToken", id: selectedTokenId });
+    } catch (error) {
+      const errorMessage = getUnknownErrorMessage(error, "unknown");
+      logPaymentEvent({
+        direction: "out",
+        status: "error",
+        amount: amountSat,
+        fee: null,
+        mint: null,
+        unit: "sat",
+        error: errorMessage,
+        contactId: null,
+        method: "unknown",
+        phase: "swap",
+      });
+      setStatus(`${t("payFailed")}: ${errorMessage}`);
+    } finally {
+      setCashuIsBusy(false);
+    }
+  }, [
+    buildCashuMintCandidates,
+    cashuBalance,
+    cashuEmitAmount,
+    cashuIsBusy,
+    cashuTokensWithMeta,
+    defaultMintUrl,
+    insert,
+    logPaymentEvent,
+    resolveOwnerIdForWrite,
+    setCashuEmitAmount,
+    setStatus,
+    t,
+    update,
+  ]);
 
   const meltLargestForeignMintToMainMint = React.useCallback(async () => {
     if (cashuIsBusy) return;
@@ -4114,6 +4711,84 @@ export const useAppShellComposition = () => {
     await handleScannedText(raw);
   }, [handleScannedText, pushToast, t]);
 
+  const onScanImageSelected = React.useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0] ?? null;
+      input.value = "";
+
+      if (!file) {
+        return;
+      }
+
+      const loadImage = async (imageFile: File): Promise<HTMLImageElement> => {
+        const objectUrl = URL.createObjectURL(imageFile);
+
+        try {
+          return await new Promise<HTMLImageElement>((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = () => reject(new Error("image-load-failed"));
+            image.src = objectUrl;
+          });
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+      };
+
+      try {
+        const image = await loadImage(file);
+        const detectorCtor = window.BarcodeDetector;
+
+        if (detectorCtor) {
+          const detector = new detectorCtor({ formats: ["qr_code"] });
+          const detectorValue = String(
+            (await detector.detect(image))?.[0]?.rawValue ?? "",
+          ).trim();
+
+          if (detectorValue) {
+            await handleScannedText(detectorValue);
+            return;
+          }
+        }
+
+        const width = image.naturalWidth || image.width;
+        const height = image.naturalHeight || image.height;
+        if (width <= 0 || height <= 0) {
+          pushToast(t("scanImageUnsupported"));
+          return;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) {
+          pushToast(t("scanImageUnsupported"));
+          return;
+        }
+
+        ctx.drawImage(image, 0, 0, width, height);
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const jsQr = (await import("jsqr")).default;
+        const qrValue = String(
+          jsQr(imageData.data, width, height)?.data ?? "",
+        ).trim();
+
+        if (!qrValue) {
+          pushToast(t("scanImageUnsupported"));
+          return;
+        }
+
+        await handleScannedText(qrValue);
+      } catch {
+        pushToast(t("scanImageUnsupported"));
+      }
+    },
+    [handleScannedText, pushToast, t],
+  );
+
   useScannedTextHandlerRefBridge({
     handleScannedText,
     scannedTextHandlerRef,
@@ -4168,10 +4843,12 @@ export const useAppShellComposition = () => {
       cashuBulkCheckIsBusy,
       cashuDraft,
       cashuDraftRef,
+      cashuEmitAmount,
       cashuIsBusy,
+      cashuIssuedTokens,
       cashuMeltToMainMintButtonLabel,
       cashuTokensAll: cashuTokensAllFiltered,
-      cashuTokensWithMeta,
+      cashuOwnTokens,
       checkAllCashuTokensAndDeleteInvalid,
       checkAndRefreshCashuToken,
       copyText,
@@ -4179,6 +4856,7 @@ export const useAppShellComposition = () => {
       displayUnit,
       effectiveProfileName,
       effectiveProfilePicture,
+      emitCashuToken,
       getMintIconUrl,
       knownLnAddressPayContact,
       knownLnAddressPayContactPictureUrl,
@@ -4186,9 +4864,13 @@ export const useAppShellComposition = () => {
       meltLargestForeignMintToMainMint,
       payLightningAddressWithCashu,
       pendingCashuDeleteId,
+      reserveCashuToken,
       requestDeleteCashuToken,
+      returnCashuTokenToWallet,
+      startSendCashuTokenToContact,
       route,
       saveCashuFromText,
+      setCashuEmitAmount,
       setCashuDraft,
       setLnAddressPayAmount,
       setMintIconUrlByMint,
@@ -4468,6 +5150,7 @@ export const useAppShellComposition = () => {
     profileQrIsOpen,
     route,
     scanAllowsManualContact,
+    scanImageInputRef,
     scanIsOpen,
     shareOptionsText,
     scanVideoRef,
@@ -4489,8 +5172,11 @@ export const useAppShellComposition = () => {
     copyShareOptionsText,
     copyText,
     onPickProfilePhoto,
+    onPickScanImage,
     onProfilePhotoSelected,
+    onScanImageSelected,
     openFeedbackContact,
+    openIssueTokenFromScan,
     openManualContactFromScan,
     openProfileQr,
     pasteScanValue,

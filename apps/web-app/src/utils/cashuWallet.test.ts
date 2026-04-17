@@ -57,6 +57,33 @@ describe("decodeCashuTokenForMint", () => {
     expect(getDecodedToken).toHaveBeenCalledWith("cashuA...", keysets);
   });
 
+  it("supports short keyset tokens once mint keysets are available", () => {
+    const keysets = [{} as MintKeyset];
+    const decodedToken = { mint: "https://mint.example", proofs: [] };
+    const getDecodedToken = vi.fn(
+      (tokenText: string, mappedKeysets?: MintKeyset[]) => {
+        if (!mappedKeysets) {
+          throw new Error(
+            "A short keyset ID v2 was encountered, but got no keysets to map it to.",
+          );
+        }
+        expect(tokenText).toBe("cashuA...");
+        expect(mappedKeysets).toBe(keysets);
+        return decodedToken;
+      },
+    );
+
+    expect(
+      decodeCashuTokenForMint({
+        tokenText: "cashuA...",
+        mintUrl: "https://mint.example",
+        keysets,
+        getTokenMetadata: () => ({ mint: "https://mint.example" }),
+        getDecodedToken,
+      }),
+    ).toBe(decodedToken);
+  });
+
   it("rejects tokens from a different mint before decoding", () => {
     const getDecodedToken = vi.fn(() => ({ mint: "https://other.example" }));
 

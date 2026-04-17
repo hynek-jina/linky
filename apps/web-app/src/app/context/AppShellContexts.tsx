@@ -78,6 +78,7 @@ export interface AppShellCoreContextValue {
   profileQrIsOpen: boolean;
   route: Route;
   scanAllowsManualContact: boolean;
+  scanImageInputRef: React.RefObject<HTMLInputElement | null>;
   scanIsOpen: boolean;
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
   shareOptionsText: string | null;
@@ -102,7 +103,10 @@ export interface AppShellActionsContextValue {
   copyText: (text: string) => Promise<void>;
   onPickProfilePhoto: () => void;
   onProfilePhotoSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onPickScanImage: () => void;
+  onScanImageSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
   openFeedbackContact: () => void;
+  openIssueTokenFromScan: () => void;
   openManualContactFromScan: () => void;
   openProfileQr: () => void;
   pasteScanValue: () => Promise<void>;

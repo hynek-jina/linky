@@ -2,19 +2,29 @@ import React from "react";
 
 interface ScanModalProps {
   closeScan: () => void;
+  onIssueTokenFromScan: () => void;
+  onPickScanImage: () => void;
+  onScanImageSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onTypeManually: () => void;
   pasteScanValue: () => Promise<void>;
+  scanImageInputRef: React.RefObject<HTMLInputElement | null>;
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
   showTypeAction: boolean;
+  showWalletActions: boolean;
   t: (key: string) => string;
 }
 
 export function ScanModal({
   closeScan,
+  onIssueTokenFromScan,
+  onPickScanImage,
+  onScanImageSelected,
   onTypeManually,
   pasteScanValue,
+  scanImageInputRef,
   scanVideoRef,
   showTypeAction,
+  showWalletActions,
   t,
 }: ScanModalProps): React.ReactElement {
   return (
@@ -33,6 +43,13 @@ export function ScanModal({
         </div>
 
         <video ref={scanVideoRef} className="scan-video" />
+        <input
+          ref={scanImageInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={onScanImageSelected}
+        />
 
         <div className="scan-footer">
           <div className="scan-footer-actions">
@@ -105,6 +122,76 @@ export function ScanModal({
               </svg>
               <span className="scan-action-btn-label">{t("paste")}</span>
             </button>
+            {showWalletActions ? (
+              <>
+                <button
+                  type="button"
+                  className="scan-action-btn"
+                  onClick={onIssueTokenFromScan}
+                  aria-label={t("cashuEmit")}
+                  title={t("cashuEmit")}
+                >
+                  <svg
+                    aria-hidden="true"
+                    className="scan-action-btn-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <path
+                      d="M12 5v14M5 12h14"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="8"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    />
+                  </svg>
+                  <span className="scan-action-btn-label">
+                    {t("cashuEmit")}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="scan-action-btn"
+                  onClick={onPickScanImage}
+                  aria-label={t("scanGallery")}
+                  title={t("scanGallery")}
+                >
+                  <svg
+                    aria-hidden="true"
+                    className="scan-action-btn-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <rect
+                      x="3"
+                      y="5"
+                      width="18"
+                      height="14"
+                      rx="2.5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    />
+                    <circle cx="9" cy="10" r="1.6" fill="currentColor" />
+                    <path
+                      d="M6 16l4-4 3 3 3-2 2 3"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span className="scan-action-btn-label">
+                    {t("scanGallery")}
+                  </span>
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       </div>

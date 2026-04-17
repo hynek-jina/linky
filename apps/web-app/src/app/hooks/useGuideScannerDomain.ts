@@ -1,8 +1,5 @@
 import React from "react";
-import type {
-  NavigatorWithOptionalCameraPermissions,
-  WindowWithOptionalBarcodeDetector,
-} from "../../types/browser";
+import type { NavigatorWithOptionalCameraPermissions } from "../../types/browser";
 import type { Route } from "../../types/route";
 import { appendPushDebugLog } from "../../utils/pushDebugLog";
 import type { ContactRowLike } from "../types/appTypes";
@@ -319,8 +316,7 @@ export const useGuideScannerDomain = ({
         // ignore
       }
 
-      const detectorCtor = (window as WindowWithOptionalBarcodeDetector)
-        .BarcodeDetector;
+      const detectorCtor = window.BarcodeDetector;
       const detector = detectorCtor
         ? new detectorCtor({ formats: ["qr_code"] })
         : null;

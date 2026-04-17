@@ -26,7 +26,7 @@ interface UseChatMessageEffectsParams<TContact extends ContactRowLike> {
   route: Route;
   saveCashuFromText: (
     text: string,
-    options?: { navigateToWallet?: boolean },
+    options?: { navigateToTokens?: boolean; navigateToWallet?: boolean },
   ) => Promise<void>;
   selectedContact: TContact | null;
 }

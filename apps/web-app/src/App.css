@@ -104,52 +104,59 @@
   z-index: 2;
   display: flex;
   justify-content: center;
-  padding: 12px 16px calc(var(--floating-safe-area-bottom) + 20px);
+  padding: 10px 12px calc(var(--floating-safe-area-bottom) + 16px);
   background: linear-gradient(0deg, rgba(2, 6, 23, 0.94), rgba(2, 6, 23, 0));
 }
 
 .scan-footer-actions {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: stretch;
   width: 100%;
+  max-width: 420px;
 }
 
 .scan-action-btn {
-  min-width: 164px;
-  min-height: 48px;
+  min-width: 0;
+  min-height: 44px;
+  flex: 1 1 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 0 18px;
+  gap: 6px;
+  padding: 0 12px;
   border: none;
   border-radius: 999px;
   background: #1e293b;
   color: #f9fbfc;
-  font-size: 15px;
-  font-weight: 900;
+  font-size: 13px;
+  font-weight: 800;
   letter-spacing: 0.01em;
   backdrop-filter: blur(10px);
-  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.35);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.3);
 }
 
 .scan-action-btn:hover,
 .scan-action-btn:focus {
   transform: none;
-  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.35);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.3);
   background: #1e293b;
 }
 
 .scan-action-btn-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   line-height: 1;
+  flex: 0 0 auto;
 }
 
 .scan-action-btn-label {
   line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar-title {
@@ -1314,7 +1321,7 @@ button.settings-link:hover {
   padding: 14px;
   border-radius: 24px;
   background: linear-gradient(180deg, #f8fafc, #dbeafe);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: none;
   box-shadow: 0 18px 45px rgba(2, 6, 23, 0.45);
 }
 
@@ -1329,6 +1336,43 @@ button.settings-link:hover {
 
 .topup-invoice-loading {
   margin: 14px 0 0;
+}
+
+.cashu-token-panel {
+  background:
+    radial-gradient(
+      circle at top center,
+      rgba(56, 189, 248, 0.16),
+      transparent 38%
+    ),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(9, 16, 32, 0.98));
+}
+
+.cashu-token-status {
+  margin: 0 0 14px;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.cashu-token-status-error {
+  color: #fca5a5;
+}
+
+.cashu-token-qr-shell {
+  margin-bottom: 16px;
+}
+
+.cashu-token-qr-button {
+  width: 100%;
+  max-width: 380px;
+  padding: 18px;
+  border-radius: 28px;
+}
+
+.cashu-token-qr {
+  width: min(100%, 340px);
 }
 
 .profile-detail {

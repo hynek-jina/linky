@@ -36,7 +36,7 @@ interface UseScannedTextHandlerParams<TContact extends ContactRowLike> {
   ) => void;
   saveCashuFromText: (
     text: string,
-    options?: { navigateToWallet?: boolean },
+    options?: { navigateToTokens?: boolean; navigateToWallet?: boolean },
   ) => Promise<void>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;

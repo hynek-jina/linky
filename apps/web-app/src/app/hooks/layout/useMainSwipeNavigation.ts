@@ -18,7 +18,9 @@ interface MainSwipeScrollable {
 }
 
 const ROUTES_WITHOUT_WALLET_RETURN_ANIMATION = new Set<Route["kind"]>([
+  "cashuTokens",
   "cashuTokenNew",
+  "cashuTokenEmit",
   "cashuToken",
   "topup",
   "topupInvoice",

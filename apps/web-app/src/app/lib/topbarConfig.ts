@@ -89,11 +89,19 @@ export const buildTopbar = ({
     };
   }
 
-  if (route.kind === "cashuTokenNew" || route.kind === "cashuToken") {
+  if (
+    route.kind === "cashuTokens" ||
+    route.kind === "cashuTokenNew" ||
+    route.kind === "cashuTokenEmit" ||
+    route.kind === "cashuToken"
+  ) {
     return {
       icon: "<",
       label: t("close"),
-      onClick: () => navigateTo({ route: "wallet" }),
+      onClick: () =>
+        navigateTo({
+          route: route.kind === "cashuTokens" ? "wallet" : "cashuTokens",
+        }),
     };
   }
 
@@ -269,6 +277,7 @@ export const buildTopbarRight = ({
     route.kind === "advancedAutoPayLimit" ||
     route.kind === "advancedPushDebug" ||
     route.kind === "mints" ||
+    route.kind === "cashuTokens" ||
     route.kind === "cashuToken" ||
     route.kind === "evoluCurrentData" ||
     route.kind === "evoluHistoryData" ||
@@ -293,7 +302,9 @@ export const buildTopbarTitle = (
   if (route.kind === "topup") return t("topupTitle");
   if (route.kind === "topupInvoice") return t("topupInvoiceTitle");
   if (route.kind === "lnAddressPay") return t("pay");
-  if (route.kind === "cashuTokenNew") return t("cashuToken");
+  if (route.kind === "cashuTokens") return t("tokens");
+  if (route.kind === "cashuTokenEmit") return t("cashuEmit");
+  if (route.kind === "cashuTokenNew") return t("cashuAddToken");
   if (route.kind === "cashuToken") return t("cashuToken");
   if (route.kind === "advanced") return t("advanced");
   if (route.kind === "advancedAutoPayLimit") {

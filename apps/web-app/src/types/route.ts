@@ -12,7 +12,9 @@ export type Route =
   | { kind: "topup" }
   | { kind: "topupInvoice" }
   | { kind: "lnAddressPay"; lnAddress: string }
+  | { kind: "cashuTokens" }
   | { kind: "cashuTokenNew" }
+  | { kind: "cashuTokenEmit" }
   | { kind: "cashuToken"; id: CashuTokenId }
   | { kind: "nostrRelays" }
   | { kind: "nostrRelay"; id: string }
@@ -54,6 +56,7 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#wallet") return { kind: "wallet" };
   if (hash === "#wallet/topup") return { kind: "topup" };
   if (hash === "#wallet/topup/invoice") return { kind: "topupInvoice" };
+  if (hash === "#wallet/tokens") return { kind: "cashuTokens" };
 
   const payLnPrefix = "#payln/";
   if (hash.startsWith(payLnPrefix)) {
@@ -62,6 +65,7 @@ export const parseRouteFromHash = (): Route => {
     if (lnAddress) return { kind: "lnAddressPay", lnAddress };
   }
   if (hash === "#wallet/token/new") return { kind: "cashuTokenNew" };
+  if (hash === "#wallet/token/emit") return { kind: "cashuTokenEmit" };
 
   const walletTokenPrefix = "#wallet/token/";
   if (hash.startsWith(walletTokenPrefix)) {

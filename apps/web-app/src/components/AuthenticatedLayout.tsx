@@ -71,10 +71,15 @@ export function AuthenticatedLayout({
       {state.scanIsOpen && (
         <ScanModal
           closeScan={actions.closeScan}
+          onIssueTokenFromScan={actions.openIssueTokenFromScan}
+          onPickScanImage={actions.onPickScanImage}
+          onScanImageSelected={actions.onScanImageSelected}
           onTypeManually={actions.openManualContactFromScan}
           pasteScanValue={actions.pasteScanValue}
+          scanImageInputRef={state.scanImageInputRef}
           scanVideoRef={state.scanVideoRef}
           showTypeAction={state.scanAllowsManualContact}
+          showWalletActions={!state.scanAllowsManualContact}
           t={state.t}
         />
       )}

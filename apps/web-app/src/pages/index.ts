@@ -1,7 +1,9 @@
 export { AdvancedAutoPayLimitPage } from "./AdvancedAutoPayLimitPage";
 export { AdvancedPage } from "./AdvancedPage";
+export { CashuTokenEmitPage } from "./CashuTokenEmitPage";
 export { CashuTokenNewPage } from "./CashuTokenNewPage";
 export { CashuTokenPage } from "./CashuTokenPage";
+export { CashuTokensPage } from "./CashuTokensPage";
 export { ChatPage } from "./ChatPage";
 export { ContactEditPage } from "./ContactEditPage";
 export { ContactNewPage } from "./ContactNewPage";

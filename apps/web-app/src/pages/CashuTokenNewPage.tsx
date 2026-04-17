@@ -1,120 +1,26 @@
-import type { FC } from "react";
-import { useAppShellCore } from "../app/context/AppShellContexts";
-import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
-import { CashuTokenPill } from "../components/CashuTokenPill";
-import type { CashuTokenId } from "../evolu";
-import { useNavigation } from "../hooks/useRouting";
-
-type CashuTokenListItem = CashuTokenRowLike & { id: CashuTokenId };
-
+import type { FC, RefObject } from "react";
 interface CashuTokenNewPageProps {
-  cashuBalance: number;
-  cashuBulkCheckIsBusy: boolean;
   cashuDraft: string;
-  cashuDraftRef: React.RefObject<HTMLTextAreaElement | null>;
+  cashuDraftRef: RefObject<HTMLTextAreaElement | null>;
   cashuIsBusy: boolean;
-  cashuMeltToMainMintButtonLabel: string | null;
-  cashuTokens: readonly CashuTokenListItem[];
-  checkAllCashuTokensAndDeleteInvalid: () => Promise<void>;
-  getMintIconUrl: (mint: MintUrlInput) => {
-    origin: string | null;
-    url: string | null;
-    host: string | null;
-    failed: boolean;
-  };
-  meltLargestForeignMintToMainMint: () => Promise<void>;
   saveCashuFromText: (
     text: string,
-    opts: { navigateToWallet: boolean },
+    opts: { navigateToTokens?: boolean; navigateToWallet?: boolean },
   ) => Promise<void>;
   setCashuDraft: (value: string) => void;
-  setMintIconUrlByMint: React.Dispatch<
-    React.SetStateAction<Record<string, string | null>>
-  >;
   t: (key: string) => string;
 }
 
 export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
-  cashuBalance,
-  cashuBulkCheckIsBusy,
   cashuDraft,
   cashuDraftRef,
   cashuIsBusy,
-  cashuMeltToMainMintButtonLabel,
-  cashuTokens,
-  checkAllCashuTokensAndDeleteInvalid,
-  getMintIconUrl,
-  meltLargestForeignMintToMainMint,
   saveCashuFromText,
   setCashuDraft,
-  setMintIconUrlByMint,
   t,
 }) => {
-  const { formatDisplayedAmountText } = useAppShellCore();
-  const navigateTo = useNavigation();
   return (
     <section className="panel">
-      <div className="ln-list wallet-token-list">
-        <div className="list-header">
-          <span>Cashu · {formatDisplayedAmountText(cashuBalance)}</span>
-          <button
-            type="button"
-            className="btn-small secondary"
-            onClick={() => void checkAllCashuTokensAndDeleteInvalid()}
-            disabled={
-              cashuIsBusy || cashuBulkCheckIsBusy || cashuTokens.length === 0
-            }
-          >
-            {t("cashuCheckAllTokens")}
-          </button>
-        </div>
-        {cashuTokens.length === 0 ? (
-          <p className="muted">{t("cashuEmpty")}</p>
-        ) : (
-          <div className="ln-tags">
-            {cashuTokens.map((token) => (
-              <CashuTokenPill
-                key={token.id}
-                token={token}
-                getMintIconUrl={getMintIconUrl}
-                isError={String(token.state ?? "") === "error"}
-                onMintIconLoad={(origin, url) => {
-                  setMintIconUrlByMint((prev) => ({
-                    ...prev,
-                    [origin]: url,
-                  }));
-                }}
-                onMintIconError={(origin, nextUrl) => {
-                  setMintIconUrlByMint((prev) => ({
-                    ...prev,
-                    [origin]: nextUrl,
-                  }));
-                }}
-                onClick={() =>
-                  navigateTo({
-                    route: "cashuToken",
-                    id: token.id,
-                  })
-                }
-                ariaLabel={t("cashuToken")}
-              />
-            ))}
-          </div>
-        )}
-        {cashuMeltToMainMintButtonLabel ? (
-          <div className="settings-row" style={{ marginTop: 12 }}>
-            <button
-              type="button"
-              className="btn-wide secondary"
-              onClick={() => void meltLargestForeignMintToMainMint()}
-              disabled={cashuIsBusy || cashuBulkCheckIsBusy}
-            >
-              {cashuMeltToMainMintButtonLabel}
-            </button>
-          </div>
-        ) : null}
-      </div>
-
       <label>{t("cashuToken")}</label>
       <textarea
         ref={cashuDraftRef}
@@ -125,7 +31,7 @@ export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
           const tokenRaw = String(text).trim();
           if (!tokenRaw) return;
           e.preventDefault();
-          void saveCashuFromText(tokenRaw, { navigateToWallet: true });
+          void saveCashuFromText(tokenRaw, { navigateToTokens: true });
         }}
         placeholder={t("cashuPasteManualHint")}
       />
@@ -134,7 +40,7 @@ export const CashuTokenNewPage: FC<CashuTokenNewPageProps> = ({
         <button
           className="btn-wide"
           onClick={() =>
-            void saveCashuFromText(cashuDraft, { navigateToWallet: true })
+            void saveCashuFromText(cashuDraft, { navigateToTokens: true })
           }
           disabled={!cashuDraft.trim() || cashuIsBusy}
         >

@@ -2,8 +2,10 @@ import React from "react";
 import {
   AdvancedAutoPayLimitPage,
   AdvancedPage,
+  CashuTokenEmitPage,
   CashuTokenNewPage,
   CashuTokenPage,
+  CashuTokensPage,
   ChatPage,
   ContactEditPage,
   ContactNewPage,
@@ -45,8 +47,10 @@ export interface PeopleRoutesProps {
 }
 
 export interface MoneyRoutesProps {
+  cashuTokenEmitProps: React.ComponentProps<typeof CashuTokenEmitPage>;
   cashuTokenNewProps: React.ComponentProps<typeof CashuTokenNewPage>;
   cashuTokenProps: () => React.ComponentProps<typeof CashuTokenPage>;
+  cashuTokensProps: React.ComponentProps<typeof CashuTokensPage>;
   lnAddressPayProps: React.ComponentProps<typeof LnAddressPayPage>;
   topupInvoiceProps: React.ComponentProps<typeof TopupInvoicePage>;
   topupProps: React.ComponentProps<typeof TopupPage>;
@@ -146,8 +150,16 @@ export const AppRouteContent = (): React.ReactElement => {
         <TopupInvoicePage {...moneyRoutes.topupInvoiceProps} />
       )}
 
+      {route.kind === "cashuTokens" && (
+        <CashuTokensPage {...moneyRoutes.cashuTokensProps} />
+      )}
+
       {route.kind === "cashuTokenNew" && (
         <CashuTokenNewPage {...moneyRoutes.cashuTokenNewProps} />
+      )}
+
+      {route.kind === "cashuTokenEmit" && (
+        <CashuTokenEmitPage {...moneyRoutes.cashuTokenEmitProps} />
       )}
 
       {route.kind === "cashuToken" && (

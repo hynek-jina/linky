@@ -40,7 +40,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
           <button
             type="button"
             className="wallet-tokens-link"
-            onClick={() => navigateTo({ route: "cashuTokenNew" })}
+            onClick={() => navigateTo({ route: "cashuTokens" })}
           >
             {t("tokens")}
           </button>

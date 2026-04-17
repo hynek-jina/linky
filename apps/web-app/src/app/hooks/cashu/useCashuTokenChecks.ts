@@ -11,7 +11,10 @@ import {
   withCashuDeterministicCounterLock,
 } from "../../../utils/cashuDeterministic";
 import { getCashuLib } from "../../../utils/cashuLib";
-import { createLoadedCashuWallet } from "../../../utils/cashuWallet";
+import {
+  createLoadedCashuWallet,
+  decodeCashuTokenForMint,
+} from "../../../utils/cashuWallet";
 import { dedupeCashuProofs } from "../../../utils/cashuProofs";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import { normalizeMintUrl } from "../../../utils/mint";
@@ -27,6 +30,7 @@ import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_PENDING,
   isCashuTokenAcceptedState,
+  isCashuTokenEmittedState,
   normalizeCashuTokenState,
 } from "../../lib/cashuTokenState";
 import type { CashuTokenRowLike } from "../../types/appTypes";
@@ -279,17 +283,39 @@ export const useCashuTokenChecks = ({
           }
         }
 
-        const { CashuMint, CashuWallet, getDecodedToken, getEncodedToken } =
-          await getCashuLib();
+        const {
+          CashuMint,
+          CashuWallet,
+          getDecodedToken,
+          getEncodedToken,
+          getTokenMetadata,
+        } = await getCashuLib();
 
-        const decoded = getDecodedToken(tokenText);
-        const mint = String(decoded?.mint ?? primaryRow.mint ?? "").trim();
+        const tokenMetadata = getTokenMetadata(tokenText);
+        const mint = String(tokenMetadata.mint ?? primaryRow.mint ?? "").trim();
         if (!mint) throw new Error("Token mint missing");
 
         const unit =
-          String(decoded?.unit ?? primaryRow.unit ?? "").trim() || "sat";
+          String(tokenMetadata.unit ?? primaryRow.unit ?? "").trim() || "sat";
+        const det = getCashuDeterministicSeedFromStorage();
+        const wallet = await createLoadedCashuWallet({
+          CashuMint,
+          CashuWallet,
+          mintUrl: mint,
+          ...(unit ? { unit } : {}),
+          ...(det ? { bip39seed: det.bip39seed } : {}),
+        });
+
+        const decoded = decodeCashuTokenForMint({
+          tokenText,
+          mintUrl: mint,
+          keysets: wallet.keysets,
+          getDecodedToken,
+          getTokenMetadata,
+        });
+
         const normalizedMint = normalizeMintUrl(mint);
-        const normalizedUnit = String(unit ?? "").trim() || "sat";
+        const normalizedUnit = String(wallet.unit ?? unit).trim() || "sat";
         const mergedProofs: ProofLike[] = [];
         const mergeIds: CashuTokenId[] = [];
 
@@ -309,7 +335,13 @@ export const useCashuTokenChecks = ({
             unit?: string;
           } | null = null;
           try {
-            candidateDecoded = getDecodedToken(candidateText);
+            candidateDecoded = decodeCashuTokenForMint({
+              tokenText: candidateText,
+              mintUrl: mint,
+              keysets: wallet.keysets,
+              getDecodedToken,
+              getTokenMetadata,
+            });
           } catch {
             continue;
           }
@@ -353,15 +385,6 @@ export const useCashuTokenChecks = ({
         if (!Number.isFinite(total) || total <= 0) {
           throw new Error("Invalid token amount");
         }
-
-        const det = getCashuDeterministicSeedFromStorage();
-        const wallet = await createLoadedCashuWallet({
-          CashuMint,
-          CashuWallet,
-          mintUrl: mint,
-          ...(unit ? { unit } : {}),
-          ...(det ? { bip39seed: det.bip39seed } : {}),
-        });
 
         const walletUnit = wallet.unit;
         const keysetId = wallet.keysetId;
@@ -633,6 +656,7 @@ export const useCashuTokenChecks = ({
       const groups = new Map<string, CashuTokenRow[]>();
       for (const row of cashuTokensAll) {
         if (row?.isDeleted) continue;
+        if (isCashuTokenEmittedState(row?.state)) continue;
         const id = row?.id as CashuTokenId | undefined;
         if (!id) continue;
 

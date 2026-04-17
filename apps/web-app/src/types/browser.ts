@@ -40,16 +40,25 @@ export interface BarcodeDetectionLike {
   rawValue?: string;
 }
 
+export type BarcodeDetectSourceLike =
+  | HTMLCanvasElement
+  | HTMLImageElement
+  | HTMLVideoElement
+  | ImageBitmap
+  | OffscreenCanvas;
+
 export interface BarcodeDetectorLike {
-  detect(image: HTMLVideoElement): Promise<BarcodeDetectionLike[]>;
+  detect(image: BarcodeDetectSourceLike): Promise<BarcodeDetectionLike[]>;
 }
 
 export interface BarcodeDetectorConstructorLike {
   new (options: { formats: string[] }): BarcodeDetectorLike;
 }
 
-export interface WindowWithOptionalBarcodeDetector {
-  BarcodeDetector?: BarcodeDetectorConstructorLike;
+declare global {
+  interface Window {
+    BarcodeDetector?: BarcodeDetectorConstructorLike;
+  }
 }
 
 export interface CameraPermissionStatusLike {
