@@ -1,5 +1,6 @@
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import type { CashuPaymentRequestMessageInfo } from "../app/lib/paymentRequestMessage";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   ChatReactionChip,
@@ -27,8 +28,10 @@ interface ChatMessageProps {
     reply: string;
   };
   canEdit: boolean;
+  canActOnPaymentRequest: boolean;
   canReplyOrReact: boolean;
   chatPendingLabel: string;
+  declineInfo: { requestRumorId: string | null } | null;
   formatChatDayLabel: (ms: number) => string;
   getCashuTokenMessageInfo: (text: string) => CashuTokenMessageInfo | null;
   getMintIconUrl: (mint: MintUrlInput) => MintIcon;
@@ -37,11 +40,16 @@ interface ChatMessageProps {
   messageElRef?: (el: HTMLDivElement | null, messageId: string) => void;
   nextMessage: LocalNostrMessage | null;
   onCopy: (message: LocalNostrMessage) => void;
+  onDeclinePaymentRequest: () => void;
   onEdit: (message: LocalNostrMessage) => void;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
+  onPayPaymentRequest: (requestInfo: CashuPaymentRequestMessageInfo) => void;
   onReact: (message: LocalNostrMessage, emoji: string) => void;
   onReply: (message: LocalNostrMessage) => void;
+  payPaymentRequestDisabled: boolean;
+  paymentRequestInfo: CashuPaymentRequestMessageInfo | null;
+  paymentRequestStatus: "declined" | "paid" | "requested" | null;
   previousMessage: LocalNostrMessage | null;
   reactions: readonly ChatReactionChip[];
   replyQuoteText: string | null;
@@ -54,8 +62,10 @@ const LONG_PRESS_MS = 450;
 export function ChatMessage({
   actionLabels,
   canEdit,
+  canActOnPaymentRequest,
   canReplyOrReact,
   chatPendingLabel,
+  declineInfo,
   formatChatDayLabel,
   getCashuTokenMessageInfo,
   getMintIconUrl,
@@ -64,16 +74,21 @@ export function ChatMessage({
   messageElRef,
   nextMessage,
   onCopy,
+  onDeclinePaymentRequest,
   onEdit,
   onMintIconError,
   onMintIconLoad,
+  onPayPaymentRequest,
   onReact,
   onReply,
+  payPaymentRequestDisabled,
+  paymentRequestInfo,
+  paymentRequestStatus,
   previousMessage,
   reactions,
   replyQuoteText,
 }: ChatMessageProps) {
-  const { formatDisplayedAmountParts, formatDisplayedAmountText } =
+  const { formatDisplayedAmountParts, formatDisplayedAmountText, t } =
     useAppShellCore();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
@@ -114,6 +129,7 @@ export function ChatMessage({
   }).format(d);
 
   const tokenInfo = getCashuTokenMessageInfo(content);
+  const isDeclineMessage = Boolean(declineInfo);
 
   const openMenu = React.useCallback(() => {
     setMenuOpen(true);
@@ -242,92 +258,142 @@ export function ChatMessage({
                 <span>{replyQuoteText}</span>
               </div>
             )}
-            {tokenInfo
-              ? (() => {
-                  const icon = getMintIconUrl(tokenInfo.mintUrl);
-                  const showMintFallback = icon.failed || !icon.url;
-                  const displayAmount = formatDisplayedAmountParts(
-                    tokenInfo.amount ?? 0,
-                  );
-                  const displayAmountText = formatDisplayedAmountText(
-                    tokenInfo.amount ?? 0,
-                  );
-                  return (
-                    <span
-                      className={tokenInfo.isValid ? "pill" : "pill pill-muted"}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                      aria-label={
-                        tokenInfo.mintDisplay
-                          ? `${displayAmountText} · ${tokenInfo.mintDisplay}`
-                          : displayAmountText
+            {paymentRequestInfo ? (
+              <div className="chat-payment-request-card">
+                <div className="chat-payment-request-header">
+                  <span className="chat-payment-request-title">
+                    {t("requestPaymentLabel")}
+                  </span>
+                  <span
+                    className={`chat-payment-request-status is-${paymentRequestStatus ?? "requested"}`}
+                  >
+                    {paymentRequestStatus === "paid"
+                      ? t("paymentRequestStatusPaid")
+                      : paymentRequestStatus === "declined"
+                        ? t("paymentRequestStatusDeclined")
+                        : t("paymentRequestStatusRequested")}
+                  </span>
+                </div>
+                <div className="chat-payment-request-amount">
+                  {formatDisplayedAmountText(paymentRequestInfo.amount)}
+                </div>
+                {canActOnPaymentRequest ? (
+                  <div className="chat-payment-request-actions">
+                    <button
+                      type="button"
+                      className="btn-wide chat-payment-request-pay"
+                      disabled={payPaymentRequestDisabled}
+                      onClick={() => onPayPaymentRequest(paymentRequestInfo)}
+                      title={
+                        payPaymentRequestDisabled
+                          ? t("payInsufficient")
+                          : undefined
                       }
                     >
-                      {icon.url ? (
-                        <img
-                          src={icon.url}
-                          alt=""
-                          width={14}
-                          height={14}
-                          style={{
-                            borderRadius: 9999,
-                            objectFit: "cover",
-                          }}
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          onLoad={() => {
-                            if (icon.origin) {
-                              onMintIconLoad(icon.origin, icon.url);
-                            }
-                          }}
-                          onError={() => {
-                            if (icon.origin) {
-                              const next = getNextMintIconUrl(
-                                icon.url,
-                                icon.origin,
-                              );
-                              onMintIconError(icon.origin, next);
-                            }
-                          }}
-                        />
-                      ) : null}
-                      {showMintFallback && icon.host ? (
-                        <span
-                          className="muted"
-                          style={{
-                            fontSize: 10,
-                            lineHeight: "14px",
-                          }}
-                        >
-                          {icon.host}
-                        </span>
-                      ) : null}
-                      {!showMintFallback && tokenInfo.mintDisplay ? (
-                        <span
-                          className="muted"
-                          style={{
-                            fontSize: 10,
-                            lineHeight: "14px",
-                            maxWidth: 140,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {tokenInfo.mintDisplay}
-                        </span>
-                      ) : null}
-                      <span>
-                        {displayAmount.approxPrefix}
-                        {displayAmount.amountText}
+                      {t("pay")}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-wide secondary chat-payment-request-decline"
+                      onClick={onDeclinePaymentRequest}
+                    >
+                      {t("decline")}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : isDeclineMessage ? (
+              <span className="pill pill-muted">
+                {t("paymentRequestDeclinedMessage")}
+              </span>
+            ) : tokenInfo ? (
+              (() => {
+                const icon = getMintIconUrl(tokenInfo.mintUrl);
+                const showMintFallback = icon.failed || !icon.url;
+                const displayAmount = formatDisplayedAmountParts(
+                  tokenInfo.amount ?? 0,
+                );
+                const displayAmountText = formatDisplayedAmountText(
+                  tokenInfo.amount ?? 0,
+                );
+                return (
+                  <span
+                    className={tokenInfo.isValid ? "pill" : "pill pill-muted"}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                    aria-label={
+                      tokenInfo.mintDisplay
+                        ? `${displayAmountText} · ${tokenInfo.mintDisplay}`
+                        : displayAmountText
+                    }
+                  >
+                    {icon.url ? (
+                      <img
+                        src={icon.url}
+                        alt=""
+                        width={14}
+                        height={14}
+                        style={{
+                          borderRadius: 9999,
+                          objectFit: "cover",
+                        }}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onLoad={() => {
+                          if (icon.origin) {
+                            onMintIconLoad(icon.origin, icon.url);
+                          }
+                        }}
+                        onError={() => {
+                          if (icon.origin) {
+                            const next = getNextMintIconUrl(
+                              icon.url,
+                              icon.origin,
+                            );
+                            onMintIconError(icon.origin, next);
+                          }
+                        }}
+                      />
+                    ) : null}
+                    {showMintFallback && icon.host ? (
+                      <span
+                        className="muted"
+                        style={{
+                          fontSize: 10,
+                          lineHeight: "14px",
+                        }}
+                      >
+                        {icon.host}
                       </span>
+                    ) : null}
+                    {!showMintFallback && tokenInfo.mintDisplay ? (
+                      <span
+                        className="muted"
+                        style={{
+                          fontSize: 10,
+                          lineHeight: "14px",
+                          maxWidth: 140,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {tokenInfo.mintDisplay}
+                      </span>
+                    ) : null}
+                    <span>
+                      {displayAmount.approxPrefix}
+                      {displayAmount.amountText}
                     </span>
-                  );
-                })()
-              : content}
+                  </span>
+                );
+              })()
+            ) : (
+              content
+            )}
           </div>
         </div>
 

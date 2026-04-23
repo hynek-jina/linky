@@ -15,12 +15,14 @@ interface Contact {
 interface ContactPayPageProps {
   cashuBalance: number;
   cashuIsBusy: boolean;
+  contactPaymentIntent: "pay" | "request";
   contactPayMethod: "lightning" | "cashu" | null;
   displayUnit: string;
   nostrPictureByNpub: Record<string, string | null>;
   payAmount: string;
   paySelectedContact: () => Promise<void>;
   payWithCashuEnabled: boolean;
+  requestSelectedContact: () => Promise<void>;
   selectedContact: Contact | null;
   setContactPayMethod: React.Dispatch<
     React.SetStateAction<"lightning" | "cashu" | null>
@@ -32,12 +34,14 @@ interface ContactPayPageProps {
 export const ContactPayPage: FC<ContactPayPageProps> = ({
   cashuBalance,
   cashuIsBusy,
+  contactPaymentIntent,
   contactPayMethod,
   displayUnit,
   nostrPictureByNpub,
   payAmount,
   paySelectedContact,
   payWithCashuEnabled,
+  requestSelectedContact,
   selectedContact,
   setContactPayMethod,
   setPayAmount,
@@ -56,16 +60,18 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
   const ln = String(selectedContact.lnAddress ?? "").trim();
   const npub = normalizeNpubIdentifier(selectedContact.npub);
   const url = npub ? nostrPictureByNpub[npub] : null;
+  const isRequestFlow = contactPaymentIntent === "request";
   const canUseCashu = payWithCashuEnabled && Boolean(npub);
   const canUseLightning = Boolean(ln);
-  const showToggle = canUseCashu && canUseLightning;
-  const method =
-    contactPayMethod === "lightning" || contactPayMethod === "cashu"
+  const showToggle = !isRequestFlow && canUseCashu && canUseLightning;
+  const method = isRequestFlow
+    ? "cashu"
+    : contactPayMethod === "lightning" || contactPayMethod === "cashu"
       ? contactPayMethod
       : canUseCashu
         ? "cashu"
         : "lightning";
-  const icon = method === "lightning" ? "⚡" : "🥜";
+  const icon = isRequestFlow ? "←" : method === "lightning" ? "⚡" : "🥜";
 
   const amountSat = Number.parseInt(payAmount.trim(), 10);
   const validAmount =
@@ -75,11 +81,12 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
   const availableAmountText = `${t("availablePrefix")} ${formatDisplayedAmountText(
     cashuBalance,
   )}`;
-  const invalid =
-    (method === "lightning" ? !ln : !canUseCashu) ||
-    !Number.isFinite(amountSat) ||
-    amountSat <= 0 ||
-    remaining > cashuBalance;
+  const invalid = isRequestFlow
+    ? !npub || !Number.isFinite(amountSat) || amountSat <= 0
+    : (method === "lightning" ? !ln : !canUseCashu) ||
+      !Number.isFinite(amountSat) ||
+      amountSat <= 0 ||
+      remaining > cashuBalance;
 
   return (
     <PaymentAmountPanel
@@ -140,24 +147,28 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
               </div>
             )}
             <p className="muted">
-              <button
-                type="button"
-                className="copyable available-amount-button muted"
-                disabled={!canCoverAnything}
-                onClick={() => {
-                  if (!canCoverAnything) return;
-                  setPayAmount(String(cashuBalance));
-                }}
-              >
-                {availableAmountText}
-              </button>
+              {isRequestFlow ? (
+                t("requestPaymentHint")
+              ) : (
+                <button
+                  type="button"
+                  className="copyable available-amount-button muted"
+                  disabled={!canCoverAnything}
+                  onClick={() => {
+                    if (!canCoverAnything) return;
+                    setPayAmount(String(cashuBalance));
+                  }}
+                >
+                  {availableAmountText}
+                </button>
+              )}
             </p>
           </div>
         </div>
       }
       notices={
         <>
-          {method === "cashu" && !payWithCashuEnabled && (
+          {!isRequestFlow && method === "cashu" && !payWithCashuEnabled && (
             <p className="muted">{t("payWithCashuDisabled")}</p>
           )}
 
@@ -172,13 +183,19 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
       }
       onAmountChange={setPayAmount}
       onSubmit={() => {
+        if (isRequestFlow) {
+          void requestSelectedContact();
+          return;
+        }
         void paySelectedContact();
       }}
-      sendGuideId="pay-send"
+      sendGuideId={isRequestFlow ? "request-send" : "pay-send"}
       stepGuideId="pay-step3"
       submitDisabled={invalid}
+      submitIcon={isRequestFlow ? "←" : undefined}
+      submitLabel={isRequestFlow ? t("requestPaymentSend") : undefined}
       submitTitle={
-        method === "lightning" && remaining > cashuBalance
+        !isRequestFlow && method === "lightning" && remaining > cashuBalance
           ? t("payInsufficient")
           : undefined
       }

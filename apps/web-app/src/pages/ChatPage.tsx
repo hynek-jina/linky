@@ -1,7 +1,14 @@
 import { type FC, useCallback, useEffect, useRef } from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import { aggregateReactions } from "../app/hooks/messages/chatNostrProtocol";
 import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
 import type { ReplyContext } from "../app/hooks/messages/useSendChatMessage";
+import {
+  parseCashuPaymentRequestMessage,
+  parseLinkyPaymentRequestDeclineMessage,
+  type CashuPaymentRequestMessageInfo,
+} from "../app/lib/paymentRequestMessage";
+import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   LocalNostrMessage,
@@ -45,10 +52,19 @@ interface ChatPageProps {
   onAddUnknownContact: () => Promise<void>;
   onRemoveUnknownContactChat: () => Promise<void>;
   onCopy: (message: LocalNostrMessage) => void;
+  onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
   onEdit: (message: LocalNostrMessage) => void;
+  onPayPaymentRequest: (
+    message: LocalNostrMessage,
+    requestInfo: CashuPaymentRequestMessageInfo,
+  ) => Promise<void>;
   onReact: (message: LocalNostrMessage, emoji: string) => void;
   onReply: (message: LocalNostrMessage) => void;
-  openContactPay: (id: string, returnToChat?: boolean) => void;
+  openContactPay: (
+    id: string,
+    returnToChat?: boolean,
+    intent?: "pay" | "request",
+  ) => void;
   payWithCashuEnabled: boolean;
   reactionsByMessageId: Map<string, LocalNostrReaction[]>;
   replyContext: ReplyContext | null;
@@ -80,7 +96,9 @@ export const ChatPage: FC<ChatPageProps> = ({
   onAddUnknownContact,
   onRemoveUnknownContactChat,
   onCopy,
+  onDeclinePaymentRequest,
   onEdit,
+  onPayPaymentRequest,
   onReact,
   onReply,
   openContactPay,
@@ -93,6 +111,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   setMintIconUrlByMint,
   t,
 }) => {
+  const { formatDisplayedAmountText } = useAppShellCore();
   const composeInputRef = useRef<HTMLTextAreaElement | null>(null);
   const composeContainerRef = useRef<HTMLDivElement | null>(null);
   const npub = selectedContact
@@ -300,6 +319,8 @@ export const ChatPage: FC<ChatPageProps> = ({
     (Boolean(ln) || (payWithCashuEnabled && Boolean(npub)));
   const canStartPay =
     (Boolean(ln) && cashuBalance > 0) || (Boolean(npub) && cashuBalance > 0);
+  const canRequestThisContact =
+    !isUnknownContact && Boolean(npub || hasUnknownPubkeyHex);
   const isFeedbackContact = npub === feedbackContactNpub;
 
   const byRumorId = new Map<string, LocalNostrMessage>();
@@ -310,10 +331,47 @@ export const ChatPage: FC<ChatPageProps> = ({
   }
 
   const replyPreviewText = replyContext?.replyToContent
-    ? replyContext.replyToContent
+    ? formatChatMessagePreviewText({
+        content: replyContext.replyToContent,
+        formatDisplayedAmountText,
+        t,
+      })
     : replyContext?.replyToId
-      ? (byRumorId.get(replyContext.replyToId)?.content ?? "")
+      ? formatChatMessagePreviewText({
+          content: byRumorId.get(replyContext.replyToId)?.content ?? "",
+          direction: byRumorId.get(replyContext.replyToId)?.direction ?? null,
+          formatDisplayedAmountText,
+          t,
+        })
       : "";
+  const latestRequestResponseByRumorId = new Map<
+    string,
+    {
+      respondedAtSec: number;
+      status: "declined" | "paid";
+    }
+  >();
+
+  for (const message of chatMessages) {
+    const replyToId = String(message.replyToId ?? "").trim();
+    if (!replyToId) continue;
+
+    const createdAtSec = Number(message.createdAtSec ?? 0) || 0;
+    const isPaymentReply = Boolean(
+      getCashuTokenMessageInfo(String(message.content ?? "")),
+    );
+    const isDeclineReply = Boolean(
+      parseLinkyPaymentRequestDeclineMessage(String(message.content ?? "")),
+    );
+    if (!isPaymentReply && !isDeclineReply) continue;
+
+    const previous = latestRequestResponseByRumorId.get(replyToId);
+    if (previous && previous.respondedAtSec > createdAtSec) continue;
+    latestRequestResponseByRumorId.set(replyToId, {
+      respondedAtSec: createdAtSec,
+      status: isPaymentReply ? "paid" : "declined",
+    });
+  }
   const hasDraftText = Boolean(chatDraft.trim());
 
   const canSendChat = Boolean(
@@ -375,16 +433,41 @@ export const ChatPage: FC<ChatPageProps> = ({
                   chatOwnPubkeyHex,
                 )
               : [];
+            const paymentRequestInfo = parseCashuPaymentRequestMessage(
+              String(message.content ?? ""),
+            );
+            const paymentRequestStatus = rumorId
+              ? (latestRequestResponseByRumorId.get(rumorId)?.status ??
+                "requested")
+              : "requested";
             const replyToId = String(message.replyToId ?? "").trim();
             const fallbackReplyContent =
               String(message.replyToContent ?? "").trim() || null;
             const replyQuoteText = replyToId
-              ? (byRumorId.get(replyToId)?.content ?? fallbackReplyContent)
-              : fallbackReplyContent;
+              ? formatChatMessagePreviewText({
+                  content:
+                    byRumorId.get(replyToId)?.content ??
+                    fallbackReplyContent ??
+                    "",
+                  direction: byRumorId.get(replyToId)?.direction ?? null,
+                  formatDisplayedAmountText,
+                  t,
+                })
+              : fallbackReplyContent
+                ? formatChatMessagePreviewText({
+                    content: fallbackReplyContent,
+                    formatDisplayedAmountText,
+                    t,
+                  })
+                : null;
             const isOwnTextMessage =
               String(message.direction ?? "") === "out" &&
               Boolean(String(message.rumorId ?? "").trim()) &&
-              !getCashuTokenMessageInfo(String(message.content ?? ""));
+              !getCashuTokenMessageInfo(String(message.content ?? "")) &&
+              !paymentRequestInfo &&
+              !parseLinkyPaymentRequestDeclineMessage(
+                String(message.content ?? ""),
+              );
 
             return (
               <ChatMessage
@@ -418,6 +501,29 @@ export const ChatPage: FC<ChatPageProps> = ({
                 canEdit={isOwnTextMessage}
                 canReplyOrReact={Boolean(rumorId)}
                 reactions={reactions}
+                paymentRequestInfo={paymentRequestInfo}
+                paymentRequestStatus={
+                  paymentRequestInfo ? paymentRequestStatus : null
+                }
+                declineInfo={parseLinkyPaymentRequestDeclineMessage(
+                  String(message.content ?? ""),
+                )}
+                onDeclinePaymentRequest={() => {
+                  void onDeclinePaymentRequest(message);
+                }}
+                onPayPaymentRequest={(requestInfo) => {
+                  void onPayPaymentRequest(message, requestInfo);
+                }}
+                canActOnPaymentRequest={
+                  Boolean(paymentRequestInfo) &&
+                  String(message.direction ?? "") === "in" &&
+                  paymentRequestStatus === "requested"
+                }
+                payPaymentRequestDisabled={
+                  !paymentRequestInfo ||
+                  cashuIsBusy ||
+                  paymentRequestInfo.amount > cashuBalance
+                }
                 replyQuoteText={replyQuoteText}
                 onCopy={onCopy}
                 onEdit={onEdit}
@@ -507,20 +613,39 @@ export const ChatPage: FC<ChatPageProps> = ({
           ) : null}
         </div>
         {canPayThisContact && (
-          <button
-            className="btn-wide secondary chat-pay-button"
-            onClick={() => openContactPay(selectedContact.id, true)}
-            disabled={cashuIsBusy || !canStartPay}
-            title={!canStartPay ? t("payInsufficient") : undefined}
-            data-guide="chat-pay"
-          >
-            <span className="btn-label-with-icon">
-              <span className="btn-label-icon" aria-hidden="true">
-                ₿
+          <div className="chat-compose-payment-actions">
+            {canRequestThisContact && (
+              <button
+                className="btn-wide secondary chat-pay-button"
+                onClick={() =>
+                  openContactPay(selectedContact.id, true, "request")
+                }
+                disabled={cashuIsBusy}
+                data-guide="chat-request"
+              >
+                <span className="btn-label-with-icon">
+                  <span className="btn-label-icon" aria-hidden="true">
+                    ←
+                  </span>
+                  <span>{t("requestPayment")}</span>
+                </span>
+              </button>
+            )}
+            <button
+              className="btn-wide secondary chat-pay-button"
+              onClick={() => openContactPay(selectedContact.id, true)}
+              disabled={cashuIsBusy || !canStartPay}
+              title={!canStartPay ? t("payInsufficient") : undefined}
+              data-guide="chat-pay"
+            >
+              <span className="btn-label-with-icon">
+                <span className="btn-label-icon" aria-hidden="true">
+                  ₿
+                </span>
+                <span>{isFeedbackContact ? "Donate" : t("pay")}</span>
               </span>
-              <span>{isFeedbackContact ? "Donate" : t("pay")}</span>
-            </span>
-          </button>
+            </button>
+          </div>
         )}
       </div>
     </section>

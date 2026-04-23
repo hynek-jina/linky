@@ -11,6 +11,7 @@ interface BuildPeopleRoutePropsParams {
   chatOwnPubkeyHex: PeopleRoutesProps["chatProps"]["chatOwnPubkeyHex"];
   chatSendIsBusy: PeopleRoutesProps["chatProps"]["chatSendIsBusy"];
   contactEditsSavable: PeopleRoutesProps["contactEditProps"]["contactEditsSavable"];
+  contactPaymentIntent: PeopleRoutesProps["contactPayProps"]["contactPaymentIntent"];
   contactPayMethod: PeopleRoutesProps["contactPayProps"]["contactPayMethod"];
   copyText: PeopleRoutesProps["profileProps"]["copyText"];
   currentNpub: PeopleRoutesProps["profileProps"]["currentNpub"];
@@ -37,7 +38,9 @@ interface BuildPeopleRoutePropsParams {
   onAddUnknownContact: PeopleRoutesProps["chatProps"]["onAddUnknownContact"];
   onRemoveUnknownContactChat: PeopleRoutesProps["chatProps"]["onRemoveUnknownContactChat"];
   onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
+  onDeclinePaymentRequest: PeopleRoutesProps["chatProps"]["onDeclinePaymentRequest"];
   onEdit: PeopleRoutesProps["chatProps"]["onEdit"];
+  onPayPaymentRequest: PeopleRoutesProps["chatProps"]["onPayPaymentRequest"];
   onPickProfilePhoto: PeopleRoutesProps["profileProps"]["onPickProfilePhoto"];
   onProfilePhotoSelected: PeopleRoutesProps["profileProps"]["onProfilePhotoSelected"];
   onReact: PeopleRoutesProps["chatProps"]["onReact"];
@@ -55,6 +58,7 @@ interface BuildPeopleRoutePropsParams {
   profileEditsSavable: PeopleRoutesProps["profileProps"]["profileEditsSavable"];
   profilePhotoInputRef: PeopleRoutesProps["profileProps"]["profilePhotoInputRef"];
   requestDeleteCurrentContact: PeopleRoutesProps["contactEditProps"]["requestDeleteCurrentContact"];
+  requestSelectedContact: PeopleRoutesProps["contactPayProps"]["requestSelectedContact"];
   resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
   saveProfileEdits: PeopleRoutesProps["profileProps"]["saveProfileEdits"];
   scanIsOpen: PeopleRoutesProps["contactNewProps"]["scanIsOpen"];
@@ -83,6 +87,7 @@ export const buildPeopleRouteProps = ({
   chatOwnPubkeyHex,
   chatSendIsBusy,
   contactEditsSavable,
+  contactPaymentIntent,
   contactPayMethod,
   copyText,
   currentNpub,
@@ -109,7 +114,9 @@ export const buildPeopleRouteProps = ({
   onAddUnknownContact,
   onRemoveUnknownContactChat,
   onCopy,
+  onDeclinePaymentRequest,
   onEdit,
+  onPayPaymentRequest,
   onPickProfilePhoto,
   onProfilePhotoSelected,
   onReact,
@@ -127,6 +134,7 @@ export const buildPeopleRouteProps = ({
   profileEditsSavable,
   profilePhotoInputRef,
   requestDeleteCurrentContact,
+  requestSelectedContact,
   resetEditedContactFieldFromNostr,
   saveProfileEdits,
   scanIsOpen,
@@ -174,6 +182,8 @@ export const buildPeopleRouteProps = ({
       onRemoveUnknownContactChat,
       sendChatMessage,
       openContactPay,
+      onPayPaymentRequest,
+      onDeclinePaymentRequest,
       t,
     },
     contactEditProps: {
@@ -206,12 +216,14 @@ export const buildPeopleRouteProps = ({
       cashuBalance,
       cashuIsBusy,
       payWithCashuEnabled,
+      contactPaymentIntent,
       contactPayMethod,
       setContactPayMethod,
       payAmount,
       setPayAmount,
       displayUnit,
       paySelectedContact,
+      requestSelectedContact,
       t,
     },
     contactProps: {

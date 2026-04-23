@@ -14,6 +14,8 @@ interface PaymentAmountPanelProps {
   sendGuideId?: string | undefined;
   stepGuideId?: string | undefined;
   submitDisabled: boolean;
+  submitIcon?: string | undefined;
+  submitLabel?: string | undefined;
   submitTitle?: string | undefined;
   t: (key: string) => string;
 }
@@ -29,6 +31,8 @@ export const PaymentAmountPanel: FC<PaymentAmountPanelProps> = ({
   sendGuideId,
   stepGuideId,
   submitDisabled,
+  submitIcon,
+  submitLabel,
   submitTitle,
   t,
 }) => {
@@ -65,9 +69,9 @@ export const PaymentAmountPanel: FC<PaymentAmountPanelProps> = ({
           >
             <span className="btn-label-with-icon">
               <span className="btn-label-icon" aria-hidden="true">
-                ₿
+                {submitIcon ?? "₿"}
               </span>
-              <span>{t("paySend")}</span>
+              <span>{submitLabel ?? t("paySend")}</span>
             </span>
           </button>
         </div>

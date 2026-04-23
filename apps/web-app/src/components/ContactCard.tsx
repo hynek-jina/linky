@@ -1,5 +1,6 @@
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   ContactRowLike,
@@ -42,11 +43,21 @@ export const ContactCard: React.FC<ContactCardProps> = ({
   tokenInfo,
   isUnknownContact = false,
 }) => {
-  const { formatDisplayedAmountParts, formatDisplayedAmountText } =
+  const { formatDisplayedAmountParts, formatDisplayedAmountText, t } =
     useAppShellCore();
   const initials = getInitials(String(contact.name ?? ""));
   const lastText = String(lastMessage?.content ?? "").trim();
-  const preview = lastText.length > 40 ? `${lastText.slice(0, 40)}…` : lastText;
+  const rawDirection = String(lastMessage?.direction ?? "").trim();
+  const previewDirection =
+    rawDirection === "in" || rawDirection === "out" ? rawDirection : null;
+  const displayText = formatChatMessagePreviewText({
+    content: lastText,
+    direction: previewDirection,
+    formatDisplayedAmountText,
+    t,
+  });
+  const preview =
+    displayText.length > 40 ? `${displayText.slice(0, 40)}…` : displayText;
   const lastTime = lastMessage
     ? formatContactMessageTimestamp(Number(lastMessage.createdAtSec ?? 0))
     : "";

@@ -19,6 +19,7 @@ import {
   wrapEventWithPushMarker,
   wrapEventWithoutPushMarker,
 } from "../../lib/pushWrappedEvent";
+import type { ReplyContext } from "../messages/useSendChatMessage";
 import {
   buildPaymentAmountAttempts,
   getNextRemainingRequestedPaymentAmount,
@@ -187,8 +188,10 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       amountSat: number;
       fromQueue?: boolean;
       pendingMessageId?: string;
+      replyContext?: ReplyContext | null;
     }): Promise<{ ok: boolean; queued: boolean; error?: string }> => {
-      const { contact, amountSat, fromQueue, pendingMessageId } = args;
+      const { contact, amountSat, fromQueue, pendingMessageId, replyContext } =
+        args;
       const notify = !fromQueue;
 
       const normalizedPendingMessageId =
@@ -602,6 +605,15 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             content: messageText,
           } satisfies UnsignedEvent;
 
+          if (replyContext?.replyToId) {
+            const rootId =
+              String(replyContext.rootMessageId ?? "").trim() ||
+              String(replyContext.replyToId ?? "").trim();
+            const replyId = String(replyContext.replyToId ?? "").trim();
+            if (rootId) baseEvent.tags.push(["e", rootId, "", "root"]);
+            if (replyId) baseEvent.tags.push(["e", replyId, "", "reply"]);
+          }
+
           let pendingId = "";
           if (canReusePendingMessage && !reusedPendingMessage) {
             pendingId = normalizedPendingMessageId ?? "";
@@ -625,6 +637,15 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
               createdAtSec: baseEvent.created_at,
               status: "pending",
               clientId,
+              ...(replyContext?.replyToId
+                ? {
+                    replyToId: replyContext.replyToId,
+                    replyToContent: replyContext.replyToContent,
+                    rootMessageId:
+                      String(replyContext.rootMessageId ?? "").trim() ||
+                      replyContext.replyToId,
+                  }
+                : {}),
             });
           }
 

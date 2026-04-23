@@ -203,6 +203,11 @@ import {
   requiresMultipleMintsForAmount,
 } from "./lib/paymentMintSelection";
 import {
+  buildCashuPaymentRequestMessage,
+  buildLinkyPaymentRequestDeclineMessage,
+  type CashuPaymentRequestMessageInfo,
+} from "./lib/paymentRequestMessage";
+import {
   wrapEventWithoutPushMarker,
   wrapEventWithPushMarker,
 } from "./lib/pushWrappedEvent";
@@ -893,6 +898,9 @@ export const useAppShellComposition = () => {
   const [defaultMintUrl, setDefaultMintUrl] = useState<string | null>(null);
   const [defaultMintUrlDraft, setDefaultMintUrlDraft] = useState<string>("");
 
+  const [contactPaymentIntent, setContactPaymentIntent] = useState<
+    "pay" | "request"
+  >("pay");
   const [payAmount, setPayAmount] = useState<string>("");
   const [lnAddressPayAmount, setLnAddressPayAmount] = useState<string>("");
 
@@ -1283,6 +1291,7 @@ export const useAppShellComposition = () => {
     contactPayBackToChatRef,
     contactsHeaderVisible,
     routeKind: route.kind,
+    setContactPaymentIntent,
     setLnAddressPayAmount,
     setPayAmount,
   });
@@ -3452,12 +3461,17 @@ export const useAppShellComposition = () => {
     });
   }, []);
 
-  const openContactPay = (contactId: string, fromChat = false) => {
+  const openContactPay = (
+    contactId: string,
+    fromChat = false,
+    intent: "pay" | "request" = "pay",
+  ) => {
     const knownContact =
       contacts.find((row) => String(row.id ?? "").trim() === contactId) ?? null;
     if (!knownContact) return;
 
     contactPayBackToChatRef.current = fromChat ? knownContact.id : null;
+    setContactPaymentIntent(intent);
     navigateTo({ route: "contactPay", id: knownContact.id });
   };
 
@@ -4432,7 +4446,8 @@ export const useAppShellComposition = () => {
     route,
     replyContext,
     replyContextRef,
-    selectedContact: selectedChatContact,
+    selectedContact:
+      route.kind === "chat" ? selectedChatContact : selectedContact,
     setReplyContext,
     setChatDraft,
     setChatSendIsBusy,
@@ -4478,6 +4493,75 @@ export const useAppShellComposition = () => {
     }
     await sendChatMessage();
   }, [editChatMessage, editContext, sendChatMessage]);
+
+  const requestSelectedContact = React.useCallback(async () => {
+    if (route.kind !== "contactPay") return;
+    if (!selectedContact) return;
+
+    const amountSat = Number.parseInt(String(payAmount ?? "").trim(), 10);
+    if (!Number.isFinite(amountSat) || amountSat <= 0) {
+      setStatus(t("payInvalidAmount"));
+      return;
+    }
+
+    const normalizedNpub = normalizeNpubIdentifier(selectedContact.npub);
+    if (!normalizedNpub) {
+      setStatus(t("chatMissingContactNpub"));
+      return;
+    }
+
+    let recipientPubkeyHex: string | null = null;
+    try {
+      const decoded = nip19.decode(currentNpub ?? "");
+      if (decoded.type === "npub" && typeof decoded.data === "string") {
+        recipientPubkeyHex = decoded.data;
+      }
+    } catch {
+      recipientPubkeyHex = null;
+    }
+
+    if (!recipientPubkeyHex) {
+      setStatus(t("profileMissingNpub"));
+      return;
+    }
+
+    const recipientNprofile = nip19.nprofileEncode({
+      pubkey: recipientPubkeyHex,
+      relays: NOSTR_RELAYS,
+    });
+    const preferredMint =
+      normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ?? MAIN_MINT_URL;
+    const requestText = buildCashuPaymentRequestMessage({
+      amount: amountSat,
+      mintUrls: [preferredMint],
+      recipientNprofile,
+      requestId: makeLocalId(),
+    });
+
+    await sendChatMessage({
+      clearDraft: false,
+      text: requestText,
+    });
+
+    if (
+      String(contactPayBackToChatRef.current ?? "") ===
+      String(selectedContact.id)
+    ) {
+      navigateTo({ route: "chat", id: selectedContact.id });
+      return;
+    }
+
+    navigateTo({ route: "contact", id: selectedContact.id });
+  }, [
+    currentNpub,
+    defaultMintUrl,
+    payAmount,
+    route.kind,
+    selectedContact,
+    sendChatMessage,
+    setStatus,
+    t,
+  ]);
 
   const onReplyToChatMessage = React.useCallback(
     (message: LocalNostrMessage) => {
@@ -4527,6 +4611,62 @@ export const useAppShellComposition = () => {
       void copyText(String(message.content ?? ""));
     },
     [copyText],
+  );
+
+  const onPayChatPaymentRequest = React.useCallback(
+    async (
+      message: LocalNostrMessage,
+      requestInfo: CashuPaymentRequestMessageInfo,
+    ) => {
+      if (cashuIsBusy) return;
+      if (!selectedChatContact || selectedChatContact.isUnknownContact) return;
+      if (!selectedContact) return;
+
+      const requestRumorId = String(message.rumorId ?? "").trim();
+      if (!requestRumorId) return;
+
+      setCashuIsBusy(true);
+      try {
+        await payContactWithCashuMessage({
+          contact: selectedContact,
+          amountSat: requestInfo.amount,
+          replyContext: {
+            replyToId: requestRumorId,
+            rootMessageId:
+              String(message.rootMessageId ?? "").trim() || requestRumorId,
+            replyToContent: String(message.content ?? "").trim() || null,
+          },
+        });
+      } finally {
+        setCashuIsBusy(false);
+      }
+    },
+    [
+      cashuIsBusy,
+      payContactWithCashuMessage,
+      selectedChatContact,
+      selectedContact,
+      setCashuIsBusy,
+    ],
+  );
+
+  const onDeclineChatPaymentRequest = React.useCallback(
+    async (message: LocalNostrMessage) => {
+      const requestRumorId = String(message.rumorId ?? "").trim();
+      if (!requestRumorId) return;
+
+      await sendChatMessage({
+        clearDraft: false,
+        replyContext: {
+          replyToId: requestRumorId,
+          rootMessageId:
+            String(message.rootMessageId ?? "").trim() || requestRumorId,
+          replyToContent: String(message.content ?? "").trim() || null,
+        },
+        text: buildLinkyPaymentRequestDeclineMessage(requestRumorId),
+      });
+    },
+    [sendChatMessage],
   );
 
   const onCancelReply = React.useCallback(() => {
@@ -4921,6 +5061,7 @@ export const useAppShellComposition = () => {
       chatOwnPubkeyHex,
       chatSendIsBusy,
       contactEditsSavable,
+      contactPaymentIntent,
       contactPayMethod,
       copyText,
       currentNpub,
@@ -4947,7 +5088,9 @@ export const useAppShellComposition = () => {
       onAddUnknownContact: addUnknownContactFromChat,
       onRemoveUnknownContactChat: removeUnknownContactChatFromChat,
       onCopy: onCopyChatMessage,
+      onDeclinePaymentRequest: onDeclineChatPaymentRequest,
       onEdit: onEditChatMessage,
+      onPayPaymentRequest: onPayChatPaymentRequest,
       onPickProfilePhoto,
       onProfilePhotoSelected,
       onReact: onReactToChatMessage,
@@ -4956,6 +5099,7 @@ export const useAppShellComposition = () => {
       openScan,
       payAmount,
       paySelectedContact,
+      requestSelectedContact,
       payWithCashuEnabled,
       pendingDeleteId,
       reactionsByMessageId,

@@ -6,6 +6,9 @@ interface UseRouteAmountResetEffectsParams {
   contactPayBackToChatRef: React.MutableRefObject<ContactId | null>;
   contactsHeaderVisible: boolean;
   routeKind: Route["kind"];
+  setContactPaymentIntent: React.Dispatch<
+    React.SetStateAction<"pay" | "request">
+  >;
   setLnAddressPayAmount: React.Dispatch<React.SetStateAction<string>>;
   setPayAmount: React.Dispatch<React.SetStateAction<string>>;
 }
@@ -14,6 +17,7 @@ export const useRouteAmountResetEffects = ({
   contactPayBackToChatRef,
   contactsHeaderVisible,
   routeKind,
+  setContactPaymentIntent,
   setLnAddressPayAmount,
   setPayAmount,
 }: UseRouteAmountResetEffectsParams): void => {
@@ -21,9 +25,16 @@ export const useRouteAmountResetEffects = ({
     // Reset pay amount when leaving the pay page.
     if (routeKind !== "contactPay") {
       contactPayBackToChatRef.current = null;
+      setContactPaymentIntent("pay");
       setPayAmount("");
     }
-  }, [contactPayBackToChatRef, contactsHeaderVisible, routeKind, setPayAmount]);
+  }, [
+    contactPayBackToChatRef,
+    contactsHeaderVisible,
+    routeKind,
+    setContactPaymentIntent,
+    setPayAmount,
+  ]);
 
   React.useEffect(() => {
     if (routeKind !== "lnAddressPay") {

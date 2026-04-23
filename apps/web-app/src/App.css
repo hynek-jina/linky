@@ -1762,6 +1762,15 @@ button.settings-link:hover {
   margin-bottom: -2px;
 }
 
+.chat-compose-payment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-compose-payment-actions > .chat-pay-button {
+  flex: 1 1 0;
+}
+
 .chat-pay-button:hover,
 .chat-pay-button:focus,
 .chat-pay-button:active {
@@ -2376,6 +2385,81 @@ button.icon {
   background: rgba(148, 163, 184, 0.1);
   color: #94a3b8;
   border: none;
+}
+
+.chat-payment-request-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: min(260px, 72vw);
+}
+
+.chat-payment-request-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-payment-request-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #cbd5e1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.chat-payment-request-status {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chat-payment-request-status.is-requested {
+  background: rgba(250, 204, 21, 0.14);
+  color: #fde68a;
+}
+
+.chat-payment-request-status.is-paid {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+.chat-payment-request-status.is-declined {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+}
+
+.chat-payment-request-amount {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.05;
+  color: #f8fafc;
+}
+
+.chat-payment-request-description {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.chat-payment-request-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-payment-request-actions > button {
+  flex: 1 1 0;
+}
+
+.chat-payment-request-pay {
+  background: var(--app-primary-button-bg);
+  color: var(--app-primary-button-fg);
+  box-shadow: var(--app-primary-button-shadow);
+}
+
+.chat-payment-request-pay:hover {
+  box-shadow: var(--app-primary-button-shadow-hover);
 }
 
 .contact-list {
