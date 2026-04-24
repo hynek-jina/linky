@@ -9,7 +9,6 @@ import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { asRecord } from "../../../utils/validation";
 import type {
-  CashuTokenRowLike,
   LocalMintInfoRow,
   LoggedPaymentEventParams,
 } from "../../types/appTypes";
@@ -18,13 +17,13 @@ type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
 interface UseNpubCashClaimParams {
   cashuIsBusy: boolean;
-  cashuTokensAll: readonly CashuTokenRowLike[];
   currentNpub: string | null;
   currentNsec: string | null;
   enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;
   ensureCashuTokenPersisted: (token: string) => void;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   insert: EvoluMutations["insert"];
+  isCashuTokenStored: (tokenRaw: string) => boolean;
   isMintDeleted: (mintUrl: string) => boolean;
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   makeNip98AuthHeader: (
@@ -56,13 +55,13 @@ interface UseNpubCashClaimParams {
 
 export const useNpubCashClaim = ({
   cashuIsBusy,
-  cashuTokensAll,
   currentNpub,
   currentNsec,
   enqueueCashuOp,
   ensureCashuTokenPersisted,
   formatDisplayedAmountParts,
   insert,
+  isCashuTokenStored,
   isMintDeleted,
   logPaymentEvent,
   makeNip98AuthHeader,
@@ -135,6 +134,7 @@ export const useNpubCashClaim = ({
     async (tokenText: string) => {
       const tokenRaw = tokenText.trim();
       if (!tokenRaw) return;
+      if (isCashuTokenStored(tokenRaw)) return;
 
       await enqueueCashuOp(async () => {
         setCashuIsBusy(true);
@@ -145,23 +145,23 @@ export const useNpubCashClaim = ({
           parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
 
         try {
-          // De-dupe: don't accept/store the same token twice.
-          const alreadyStored = cashuTokensAll.some((row) => {
-            if (row.isDeleted) return false;
-            const stored = String(row.rawToken ?? row.token ?? "").trim();
-            return stored && stored === tokenRaw;
-          });
-          if (alreadyStored) return;
-
           const ownerId = await resolveOwnerIdForWrite();
 
           const accepted = await acceptCashuToken(tokenRaw);
+          const acceptedToken = String(accepted.token ?? "").trim();
+
+          if (
+            isCashuTokenStored(tokenRaw) ||
+            (acceptedToken !== "" && isCashuTokenStored(acceptedToken))
+          ) {
+            return;
+          }
 
           const result = ownerId
             ? insert(
                 "cashuToken",
                 buildCashuTokenPayload({
-                  token: String(accepted.token ?? ""),
+                  token: acceptedToken,
                   rawToken: tokenRaw,
                   mint: String(accepted.mint ?? ""),
                   unit: accepted.unit,
@@ -174,7 +174,7 @@ export const useNpubCashClaim = ({
             : insert(
                 "cashuToken",
                 buildCashuTokenPayload({
-                  token: String(accepted.token ?? ""),
+                  token: acceptedToken,
                   rawToken: tokenRaw,
                   mint: String(accepted.mint ?? ""),
                   unit: accepted.unit,
@@ -188,15 +188,15 @@ export const useNpubCashClaim = ({
             return;
           }
 
-          rememberCashuTokenKnown(tokenRaw, String(accepted.token ?? ""));
+          rememberCashuTokenKnown(tokenRaw, acceptedToken);
           // Remember the last successfully accepted token so we can recover it
           // if storage gets wiped (e.g., private browsing) or if persistence
           // glitches.
           safeLocalStorageSet(
             LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
-            String(accepted.token ?? ""),
+            acceptedToken,
           );
-          ensureCashuTokenPersisted(String(accepted.token ?? ""));
+          ensureCashuTokenPersisted(acceptedToken);
 
           // Minimal receive-only banner: click to copy token.
           if (recentlyReceivedTokenTimerRef.current !== null) {
@@ -328,11 +328,11 @@ export const useNpubCashClaim = ({
       });
     },
     [
-      cashuTokensAll,
       enqueueCashuOp,
       ensureCashuTokenPersisted,
       formatDisplayedAmountParts,
       insert,
+      isCashuTokenStored,
       isMintDeleted,
       buildCashuTokenPayload,
       logPaymentEvent,

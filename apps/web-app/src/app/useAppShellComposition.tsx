@@ -569,6 +569,7 @@ export const useAppShellComposition = () => {
     amount: number | null;
   }>(null);
   const recentlyReceivedTokenTimerRef = React.useRef<number | null>(null);
+  const topupClaimErrorSignatureRef = React.useRef<string | null>(null);
 
   const topupInvoiceStartBalanceRef = React.useRef<number | null>(null);
   const topupInvoicePaidHandledRef = React.useRef(false);
@@ -1613,6 +1614,7 @@ export const useAppShellComposition = () => {
         const claimedBeforeRun =
           readClaimedTopupQuoteFromStorage(claimStorageKey);
         if (claimedBeforeRun) {
+          topupClaimErrorSignatureRef.current = null;
           const restored = await insertClaimedTopupToken(claimedBeforeRun);
           if (restored && !cancelled) {
             if (route.kind === "topupInvoice" && claimedBeforeRun.amount > 0) {
@@ -1634,6 +1636,7 @@ export const useAppShellComposition = () => {
             const alreadyClaimed =
               readClaimedTopupQuoteFromStorage(claimStorageKey);
             if (alreadyClaimed) {
+              topupClaimErrorSignatureRef.current = null;
               const restored = await insertClaimedTopupToken(alreadyClaimed);
               if (restored && !cancelled) {
                 if (
@@ -1659,6 +1662,7 @@ export const useAppShellComposition = () => {
             const status = await wallet.checkMintQuote(quoteId);
             const quoteState = readMintQuoteState(status);
             if (!isClaimableMintQuoteState(quoteState, MintQuoteState)) {
+              topupClaimErrorSignatureRef.current = null;
               return;
             }
 
@@ -1678,6 +1682,7 @@ export const useAppShellComposition = () => {
               }) ?? "",
             ).trim();
             if (!token) throw new Error("Mint produced empty token");
+            topupClaimErrorSignatureRef.current = null;
 
             safeLocalStorageSetJson(claimStorageKey, {
               amount: topupMintQuote.amount,
@@ -1728,8 +1733,21 @@ export const useAppShellComposition = () => {
             if (!cancelled) setTopupMintQuote(null);
           },
         });
-      } catch {
-        // ignore
+      } catch (error) {
+        const message = String(error ?? "").trim() || "topup claim failed";
+        const signature = `${topupMintQuote.quote}:${message}`;
+        if (topupClaimErrorSignatureRef.current !== signature) {
+          topupClaimErrorSignatureRef.current = signature;
+          try {
+            console.warn("[linky][topup] claim retrying", {
+              quote: topupMintQuote.quote,
+              mintUrl: topupMintQuote.mintUrl,
+              error: message,
+            });
+          } catch {
+            // ignore
+          }
+        }
       }
     };
 
@@ -1750,6 +1768,7 @@ export const useAppShellComposition = () => {
     isCashuTokenKnownAny,
     resolveOwnerIdForWrite,
     topupMintQuote,
+    topupClaimErrorSignatureRef,
     t,
     route.kind,
     showRecentlyReceivedTokenToast,
@@ -1917,40 +1936,6 @@ export const useAppShellComposition = () => {
 
   const canPayWithCashu = cashuBalance > 0;
 
-  React.useEffect(() => {
-    if (route.kind !== "topupInvoice") return;
-    if (topupInvoiceIsBusy) return;
-    if (!topupInvoice || !topupInvoiceQr) return;
-
-    const amountSat = Number.parseInt(topupAmount.trim(), 10);
-    if (!Number.isFinite(amountSat) || amountSat <= 0) return;
-
-    if (topupInvoiceStartBalanceRef.current === null) {
-      topupInvoiceStartBalanceRef.current = cashuBalance;
-      return;
-    }
-
-    if (topupInvoicePaidHandledRef.current) return;
-
-    const start = topupInvoiceStartBalanceRef.current ?? 0;
-    const expected = start + amountSat;
-    if (cashuBalance < expected) return;
-
-    finalizeTopupInvoicePaid(amountSat);
-  }, [
-    cashuBalance,
-    finalizeTopupInvoicePaid,
-    formatDisplayedAmountParts,
-    route.kind,
-    showPaidOverlay,
-    t,
-    topupAmount,
-    topupInvoice,
-    topupInvoiceIsBusy,
-    topupPaidNavTimerRef,
-    topupInvoiceQr,
-  ]);
-
   const [contactNewPrefill, setContactNewPrefill] = React.useState<null | {
     lnAddress: string;
     npub: string | null;
@@ -2063,13 +2048,13 @@ export const useAppShellComposition = () => {
 
   const { claimNpubCashOnce, claimNpubCashOnceLatestRef } = useNpubCashClaim({
     cashuIsBusy,
-    cashuTokensAll,
     currentNpub,
     currentNsec,
     enqueueCashuOp,
     ensureCashuTokenPersisted,
     formatDisplayedAmountParts,
     insert,
+    isCashuTokenStored,
     isMintDeleted,
     logPaymentEvent,
     makeNip98AuthHeader,

@@ -65,7 +65,7 @@ const appCommitSha = (() => {
   }
 })();
 
-const useHttps = process.env.VITE_HTTPS === "1";
+const useHttps = process.env.VITE_HTTPS !== "0";
 
 const serveSqliteWasm = (): Plugin => ({
   name: "serve-sqlite-wasm",
@@ -338,7 +338,7 @@ export default defineConfig({
       },
     }),
   ],
-  ...(useHttps ? { server: { host: true, https: {} } } : {}),
+  server: useHttps ? { host: true, https: {} } : { host: true },
   build: {
     rollupOptions: {
       output: {

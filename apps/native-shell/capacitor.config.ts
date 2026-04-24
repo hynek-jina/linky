@@ -8,7 +8,16 @@ const resolveLiveReloadUrl = (): string | null => {
     process.env.CAP_SERVER_URL?.trim() ??
     "";
 
-  return candidate || null;
+  if (!candidate) return null;
+
+  const normalized = candidate.trim();
+  if (!normalized.startsWith("https://")) {
+    throw new Error(
+      "LINKY_CAP_SERVER_URL/CAP_SERVER_URL must use https:// to avoid mixed-origin wallet state",
+    );
+  }
+
+  return normalized;
 };
 
 const liveReloadUrl = resolveLiveReloadUrl();
@@ -27,8 +36,8 @@ const config: CapacitorConfig = {
     ? {
         server: {
           url: liveReloadUrl,
-          cleartext: liveReloadUrl.startsWith("http://"),
-          androidScheme: liveReloadUrl.startsWith("http://") ? "http" : "https",
+          cleartext: false,
+          androidScheme: "https",
           iosScheme: "https",
         },
       }

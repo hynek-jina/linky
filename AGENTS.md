@@ -8,7 +8,7 @@ See @README.md for project overview.
 
 ```bash
 bun install                # Install dependencies
-bun run dev                # Start Vite dev server
+bun run dev                # Start Vite HTTPS dev server
 bun run build              # Production build (tsc -b && vite build)
 bun run site:dev           # Start the public Linky website for linky.fit
 bun run site:build         # Build the public Linky website
@@ -76,7 +76,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 - Core app remains local-first/client-side; optional background notifications are handled by the separate `apps/push` Bun service
 - Payment result logging in `useOwnerScopedStorage` now also queues anonymous payment telemetry in owner-scoped localStorage; `useAnonymousPaymentTelemetry` flushes that queue after the fact over Nostr gift wraps to a fixed collector `npub` using one-off ephemeral sender keys, lease-locking against duplicate multi-tab sends so telemetry never blocks the payment path
 - Native packaging uses a separate Capacitor shell in `apps/native-shell/` so Android/iOS project files stay isolated from the web app source tree
-- Native shells now load bundled `apps/web-app/dist` assets by default; Capacitor live reload must be enabled explicitly via `LINKY_CAP_SERVER_URL` / `CAP_SERVER_URL` before `cap sync` / `cap open`, preventing packaged APKs from pointing at `127.0.0.1`
+- Native shells now load bundled `apps/web-app/dist` assets by default; Capacitor live reload must be enabled explicitly via `LINKY_CAP_SERVER_URL` / `CAP_SERVER_URL` before `cap sync` / `cap open`, and those live-reload URLs must use `https://` so local storage/IndexedDB state does not split across `http` and `https` origins
 - Android debug builds now install side-by-side as package `fit.linky.app.debug` with launcher label `Linky Dev`, so they can coexist with the production app already installed on a phone; that side-by-side debug variant skips the Google Services plugin, so native FCM push stays disabled there unless a matching Firebase package is added later
 - Android release AAB builds derive `versionName` from the workspace `package.json` version and derive `versionCode` from semantic version components (`major * 10000 + minor * 100 + patch`), with optional `LINKY_ANDROID_VERSION_NAME` / `LINKY_ANDROID_VERSION_CODE` overrides for special releases
 - Web app Advanced settings version display is also derived from the workspace root `package.json` via `apps/web-app/vite.config.ts`, so product version bumps only need to happen in one place
@@ -135,13 +135,14 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 
 - **Playwright** E2E tests in `apps/web-app/tests/`
 - **Vitest** unit tests (jsdom environment, Worker polyfill in `vitest.setup.ts`)
-- Dev server for E2E: `http://127.0.0.1:5174`
+- Dev server for E2E: `https://127.0.0.1:5174`
 
 ## Gotchas
 
 - Evolu requires a Worker polyfill in test environments
 - In this workspace/Bun setup, `bunx --cwd apps/web-app playwright test tests` can resolve incorrectly; run `cd apps/web-app && bunx playwright test tests` instead
 - SQLite WASM files served from `public/sqlite-wasm/` with `cache-control: no-store` in dev
+- `apps/web-app` Vite dev server uses HTTPS by default (`VITE_HTTPS=0` disables it only when explicitly needed); Playwright E2E also targets the HTTPS dev origin and ignores the local self-signed cert
 - On web, the `nsec` private key is still mirrored under `linky.nostr_nsec`; native shells are expected to provide secure secret storage via the platform bridge and secrets must never be logged or exposed
 - Android native shells currently back identity secrets with `EncryptedSharedPreferences`, use ZXing-based native QR scanning instead of `getUserMedia` when available, expose Android notification permission to the web app, and register Android FCM push tokens through Capacitor Push Notifications; native builds need `apps/native-shell/android/app/google-services.json`, and the push server needs `PUSH_FIREBASE_SERVICE_ACCOUNT_JSON` for delivery
 - QR scanning now defaults to the shared web-app `getUserMedia` scanner UI across PWA and native shells so Android matches the same `ScanModal` and actions as the web app; animated QR reconstruction has been removed from the scan flow, and the Android native ZXing bridge remains present but is not the default scan flow

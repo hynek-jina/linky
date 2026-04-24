@@ -78,6 +78,8 @@ bun run native:apk:debug
 bun run native:apk:release
 ```
 
+`bun run dev` serves the web app on HTTPS by default via Vite's local certificate support.
+
 Build:
 
 ```bash

@@ -120,10 +120,12 @@ bun run native:ios:open
 For local native debugging against a running Vite server, set one of these environment variables before `cap sync` / `cap open`:
 
 ```bash
-export LINKY_CAP_SERVER_URL=http://127.0.0.1:5174
+export LINKY_CAP_SERVER_URL=https://127.0.0.1:5174
 # or
-export CAP_SERVER_URL=http://127.0.0.1:5174
+export CAP_SERVER_URL=https://127.0.0.1:5174
 ```
+
+The web app dev server now runs on HTTPS by default; plain HTTP live reload URLs are rejected so the native shell does not drift onto a separate browser origin.
 
 If neither variable is set, the native shells use the bundled web assets.
 
