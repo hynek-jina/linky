@@ -33,7 +33,12 @@ export const requestMintQuoteBolt11 = async (args: {
   });
 
   if (!quoteRes.ok) {
-    throw new Error(`Mint quote HTTP ${quoteRes.status}`);
+    const errorText = (await quoteRes.text()).trim();
+    throw new Error(
+      `Mint quote HTTP ${quoteRes.status}${
+        errorText ? `: ${errorText.slice(0, 200)}` : ""
+      }`,
+    );
   }
 
   const rawText = await quoteRes.text();

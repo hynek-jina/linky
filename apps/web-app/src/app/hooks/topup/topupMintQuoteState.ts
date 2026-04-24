@@ -21,6 +21,12 @@ const normalizeMintQuoteState = (value: string): string => {
 export const readMintQuoteState = (value: unknown): string => {
   const state = readObjectField(value, "state");
   if (state !== undefined && state !== null) return String(state);
+
+  const paid = readObjectField(value, "paid");
+  if (typeof paid === "boolean") {
+    return paid ? "PAID" : "UNPAID";
+  }
+
   const status = readObjectField(value, "status");
   return String(status ?? "");
 };

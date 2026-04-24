@@ -1595,10 +1595,32 @@ export const useAppShellComposition = () => {
           if (isCashuTokenKnownAny(claimed.token)) return true;
 
           const ownerId = await resolveOwnerIdForWrite();
-          const payload = {
+          const payload: {
+            token: typeof Evolu.NonEmptyString.Type;
+            state: typeof Evolu.NonEmptyString100.Type;
+            amount?: typeof Evolu.PositiveInt.Type;
+            mint?: typeof Evolu.NonEmptyString1000.Type;
+            unit?: typeof Evolu.NonEmptyString100.Type;
+          } = {
             token: claimed.token as typeof Evolu.NonEmptyString.Type,
             state: "accepted" as typeof Evolu.NonEmptyString100.Type,
           };
+
+          if (Number.isFinite(claimed.amount) && claimed.amount > 0) {
+            payload.amount = Math.trunc(
+              claimed.amount,
+            ) as typeof Evolu.PositiveInt.Type;
+          }
+
+          const claimedMint = String(claimed.mintUrl ?? "").trim();
+          if (claimedMint) {
+            payload.mint = claimedMint as typeof Evolu.NonEmptyString1000.Type;
+          }
+
+          const claimedUnit = String(claimed.unit ?? "").trim();
+          if (claimedUnit) {
+            payload.unit = claimedUnit as typeof Evolu.NonEmptyString100.Type;
+          }
 
           const result = ownerId
             ? insert("cashuToken", payload, { ownerId })
@@ -1695,10 +1717,33 @@ export const useAppShellComposition = () => {
 
             if (!isCashuTokenKnownAny(token)) {
               const ownerId = await resolveOwnerIdForWrite();
-              const payload = {
+              const payload: {
+                token: typeof Evolu.NonEmptyString.Type;
+                state: typeof Evolu.NonEmptyString100.Type;
+                amount?: typeof Evolu.PositiveInt.Type;
+                mint?: typeof Evolu.NonEmptyString1000.Type;
+                unit?: typeof Evolu.NonEmptyString100.Type;
+              } = {
                 token: token as typeof Evolu.NonEmptyString.Type,
                 state: "accepted" as typeof Evolu.NonEmptyString100.Type,
               };
+
+              if (topupMintQuote.amount > 0) {
+                payload.amount = Math.trunc(
+                  topupMintQuote.amount,
+                ) as typeof Evolu.PositiveInt.Type;
+              }
+
+              const claimMint = String(topupMintQuote.mintUrl ?? "").trim();
+              if (claimMint) {
+                payload.mint =
+                  claimMint as typeof Evolu.NonEmptyString1000.Type;
+              }
+
+              const claimUnit = String(unit ?? "").trim();
+              if (claimUnit) {
+                payload.unit = claimUnit as typeof Evolu.NonEmptyString100.Type;
+              }
 
               const result = ownerId
                 ? insert("cashuToken", payload, { ownerId })

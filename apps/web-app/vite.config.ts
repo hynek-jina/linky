@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react-swc";
 import { execSync } from "node:child_process";
+import dns from "node:dns";
 import { readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import type { ServerResponse } from "node:http";
@@ -98,6 +99,31 @@ const serveSqliteWasm = (): Plugin => ({
   },
 });
 
+const describeProxyError = (error: unknown): string => {
+  if (error instanceof Error) {
+    const cause = Reflect.get(error, "cause");
+    const causeText =
+      cause instanceof Error
+        ? cause.message
+        : typeof cause === "string"
+          ? cause
+          : "";
+    return causeText
+      ? `${error.name}: ${error.message} (cause: ${causeText})`
+      : `${error.name}: ${error.message}`;
+  }
+
+  return String(error ?? "");
+};
+
+const lookupIpv4First: NonNullable<http.RequestOptions["lookup"]> = (
+  hostname,
+  _options,
+  callback,
+) => {
+  dns.lookup(hostname, { family: 4 }, callback);
+};
+
 const mintQuoteProxy = (): Plugin => ({
   name: "mint-quote-proxy",
   configureServer(server: ViteDevServer) {
@@ -131,21 +157,27 @@ const mintQuoteProxy = (): Plugin => ({
         req.on("end", async () => {
           try {
             const target = `${mint.replace(/\/+$/, "")}/v1/mint/quote/bolt11`;
-            const url = new URL(target);
-            const isHttps = url.protocol === "https:";
+            const targetUrl = new URL(target);
+            const isHttps = targetUrl.protocol === "https:";
             const client = isHttps ? https : http;
 
             const proxyReq = client.request(
               {
                 method: "POST",
-                hostname: url.hostname,
-                port: url.port ? Number(url.port) : isHttps ? 443 : 80,
-                path: `${url.pathname}${url.search}`,
+                hostname: targetUrl.hostname,
+                port: targetUrl.port
+                  ? Number(targetUrl.port)
+                  : isHttps
+                    ? 443
+                    : 80,
+                path: `${targetUrl.pathname}${targetUrl.search}`,
                 headers: {
                   Accept: "application/json",
                   "Content-Type": "application/json",
                   "Content-Length": Buffer.byteLength(body),
                 },
+                lookup: lookupIpv4First,
+                servername: targetUrl.hostname,
                 timeout: 12_000,
               },
               (proxyRes) => {
@@ -168,14 +200,14 @@ const mintQuoteProxy = (): Plugin => ({
             proxyReq.on("error", (error) => {
               if (res.headersSent) return;
               res.statusCode = 502;
-              res.end(`Proxy error: ${String(error ?? "")}`);
+              res.end(`Proxy error: ${describeProxyError(error)}`);
             });
 
             proxyReq.write(body);
             proxyReq.end();
           } catch (error) {
             res.statusCode = 502;
-            res.end(`Proxy error: ${String(error ?? "")}`);
+            res.end(`Proxy error: ${describeProxyError(error)}`);
           }
         });
       },
@@ -227,6 +259,8 @@ const lnurlProxy = (): Plugin => ({
               headers: {
                 Accept: "application/json",
               },
+              lookup: lookupIpv4First,
+              servername: targetUrl.hostname,
               timeout: 12_000,
             },
             (proxyRes) => {
@@ -249,16 +283,16 @@ const lnurlProxy = (): Plugin => ({
           proxyReq.on("error", (error) => {
             if (res.headersSent) return;
             res.statusCode = 502;
-            res.end(`Proxy error: ${String(error ?? "")}`);
+            res.end(`Proxy error: ${describeProxyError(error)}`);
           });
 
           proxyReq.end();
         } catch (error) {
           server.config.logger.error(
-            `LNURL proxy error: ${String(error ?? "unknown")}`,
+            `LNURL proxy error: ${describeProxyError(error)}`,
           );
           res.statusCode = 502;
-          res.end(`Proxy error: ${String(error ?? "")}`);
+          res.end(`Proxy error: ${describeProxyError(error)}`);
         }
       },
     );

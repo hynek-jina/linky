@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readMintQuoteState } from "../src/app/hooks/topup/topupMintQuoteState";
 import { isTopupMintQuoteClaimableState } from "../src/app/hooks/topup/topupMintClaim";
 import { isCashuOutputsAlreadySignedError } from "../src/utils/cashuErrors";
 
@@ -32,5 +33,10 @@ describe("topup mint claim helpers", () => {
     expect(isCashuOutputsAlreadySignedError(new Error("network failed"))).toBe(
       false,
     );
+  });
+
+  it("reads legacy mint quote paid flags as states", () => {
+    expect(readMintQuoteState({ paid: true })).toBe("PAID");
+    expect(readMintQuoteState({ paid: false })).toBe("UNPAID");
   });
 });
