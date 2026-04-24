@@ -161,13 +161,35 @@ export const useTopupInvoiceQuoteEffects = ({
   ]);
 
   React.useEffect(() => {
+    if (routeKind === "topup") {
+      setTopupInvoice(null);
+      setTopupInvoiceQr(null);
+      setTopupInvoiceError(null);
+      setTopupInvoiceIsBusy(false);
+      setTopupMintQuote(null);
+
+      isFetchingRef.current = false;
+      topupInvoiceStartBalanceRef.current = null;
+      topupInvoicePaidHandledRef.current = false;
+      if (topupPaidNavTimerRef.current !== null) {
+        try {
+          window.clearTimeout(topupPaidNavTimerRef.current);
+        } catch {
+          // ignore
+        }
+        topupPaidNavTimerRef.current = null;
+      }
+      return;
+    }
+
     // Reset topup state when leaving the topup flow.
-    if (routeKind !== "topup" && routeKind !== "topupInvoice") {
+    if (routeKind !== "topupInvoice") {
       setTopupAmount("");
       setTopupInvoice(null);
       setTopupInvoiceQr(null);
       setTopupInvoiceError(null);
       setTopupInvoiceIsBusy(false);
+      setTopupMintQuote(null);
 
       isFetchingRef.current = false;
       topupInvoiceStartBalanceRef.current = null;
