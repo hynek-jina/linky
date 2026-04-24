@@ -78,7 +78,7 @@ bun run native:apk:debug
 bun run native:apk:release
 ```
 
-`bun run dev` serves the web app on HTTPS by default via Vite's local certificate support.
+`bun run dev` serves the web app on HTTPS by default via a locally trusted `mkcert` certificate. On first run, macOS may ask you to trust/install the local development CA.
 
 Build:
 

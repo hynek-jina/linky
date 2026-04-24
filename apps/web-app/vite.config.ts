@@ -1,4 +1,3 @@
-import basicSsl from "@vitejs/plugin-basic-ssl";
 import react from "@vitejs/plugin-react-swc";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -10,6 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Connect, Plugin, ViteDevServer } from "vite";
 import { defineConfig } from "vite";
+import mkcert from "vite-plugin-mkcert";
 import { VitePWA } from "vite-plugin-pwa";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -290,7 +290,7 @@ export default defineConfig({
     serveSqliteWasm(),
     mintQuoteProxy(),
     lnurlProxy(),
-    ...(useHttps ? [basicSsl()] : []),
+    ...(useHttps ? [mkcert({ hosts: ["localhost", "127.0.0.1"] })] : []),
     react(),
     VitePWA({
       devOptions: {
