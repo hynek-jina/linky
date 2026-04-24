@@ -54,10 +54,12 @@ import {
 import { isNativePlatform } from "../platform/runtime";
 import {
   bumpCashuDeterministicCounter,
+  ensureCashuDeterministicCounterAtLeast,
   getCashuDeterministicCounter,
   getCashuDeterministicSeedFromStorage,
   withCashuDeterministicCounterLock,
 } from "../utils/cashuDeterministic";
+import { isCashuOutputsAlreadySignedError } from "../utils/cashuErrors";
 import { getCashuLib } from "../utils/cashuLib";
 import { createLoadedCashuWallet } from "../utils/cashuWallet";
 import {
@@ -145,6 +147,7 @@ import { usePayContactWithCashuMessage } from "./hooks/payments/usePayContactWit
 import { useRouteAmountResetEffects } from "./hooks/payments/useRouteAmountResetEffects";
 import { useProfileEditor } from "./hooks/profile/useProfileEditor";
 import { useProfileMetadataSyncEffect } from "./hooks/profile/useProfileMetadataSyncEffect";
+import { shouldKeepTopupQuoteAfterClaimError } from "./hooks/topup/topupMintClaim";
 import {
   isClaimableMintQuoteState,
   readMintQuoteState,
@@ -404,15 +407,6 @@ const readPendingTopupQuoteFromStorage = (
   }
 };
 
-const isOutputsAlreadySignedError = (error: unknown): boolean => {
-  const message = getUnknownErrorMessage(error, "").toLowerCase();
-  return (
-    message.includes("outputs have already been signed") ||
-    message.includes("already been signed before") ||
-    message.includes("keyset id already signed")
-  );
-};
-
 const isLikelyCorsOrNetworkError = (message: string): boolean => {
   const lower = message.toLowerCase();
   return (
@@ -430,8 +424,74 @@ interface TopupMintProofsWalletLike {
     quote: string,
     options?: { counter?: number },
   ) => Promise<Proof[]>;
+  restore: (
+    start: number,
+    count: number,
+    options?: { keysetId?: string },
+  ) => Promise<{
+    lastCounterWithSignature?: number;
+    proofs: Proof[];
+  }>;
+  checkProofsStates: (proofs: Proof[]) => Promise<Array<{ state?: unknown }>>;
   unit: string;
 }
+
+const filterSpendableTopupProofs = async (
+  wallet: TopupMintProofsWalletLike,
+  proofs: Proof[],
+): Promise<Proof[]> => {
+  if (proofs.length === 0) return proofs;
+
+  try {
+    const states = await wallet.checkProofsStates(proofs);
+    return proofs.filter((_, idx) => {
+      const state = String(states[idx]?.state ?? "")
+        .trim()
+        .toUpperCase();
+      return state === "UNSPENT";
+    });
+  } catch {
+    return proofs;
+  }
+};
+
+const restoreAlreadySignedTopupProofs = async (args: {
+  amount: number;
+  counter: number;
+  keysetId: string;
+  wallet: TopupMintProofsWalletLike;
+}): Promise<{
+  lastCounterWithSignature?: number;
+  proofs: Proof[];
+} | null> => {
+  const restoreCount = 100;
+  const restored = await args.wallet.restore(args.counter, restoreCount, {
+    keysetId: args.keysetId,
+  });
+  const spendableProofs = await filterSpendableTopupProofs(
+    args.wallet,
+    restored.proofs,
+  );
+
+  const selected: Proof[] = [];
+  let selectedAmount = 0;
+  for (const proof of spendableProofs) {
+    selected.push(proof);
+    selectedAmount += Number(proof.amount ?? 0) || 0;
+    if (selectedAmount >= args.amount) break;
+  }
+
+  if (selectedAmount !== args.amount) return null;
+
+  const result: {
+    lastCounterWithSignature?: number;
+    proofs: Proof[];
+  } = { proofs: selected };
+  if (restored.lastCounterWithSignature !== undefined) {
+    result.lastCounterWithSignature = restored.lastCounterWithSignature;
+  }
+  return result;
+};
 
 const mintTopupProofs = async (args: {
   amount: number;
@@ -455,49 +515,57 @@ const mintTopupProofs = async (args: {
       keysetId,
     },
     async () => {
-      let counter = getCashuDeterministicCounter({
+      const counter = getCashuDeterministicCounter({
         mintUrl: args.mintUrl,
         unit,
         keysetId,
       });
-      let proofs: Proof[] | null = null;
-      let lastError: unknown;
 
-      for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const proofs = await args.wallet.mintProofs(args.amount, args.quoteId, {
+          counter,
+        });
+
+        bumpCashuDeterministicCounter({
+          mintUrl: args.mintUrl,
+          unit,
+          keysetId,
+          used: proofs.length,
+        });
+
+        return proofs;
+      } catch (error) {
+        if (!isCashuOutputsAlreadySignedError(error)) throw error;
+
+        let restored: {
+          lastCounterWithSignature?: number;
+          proofs: Proof[];
+        } | null = null;
         try {
-          proofs = await args.wallet.mintProofs(args.amount, args.quoteId, {
+          restored = await restoreAlreadySignedTopupProofs({
+            amount: args.amount,
             counter,
-          });
-          lastError = null;
-          break;
-        } catch (error) {
-          lastError = error;
-          if (!isOutputsAlreadySignedError(error)) throw error;
-
-          bumpCashuDeterministicCounter({
-            mintUrl: args.mintUrl,
-            unit,
             keysetId,
-            used: 64,
+            wallet: args.wallet,
           });
-          counter = getCashuDeterministicCounter({
-            mintUrl: args.mintUrl,
-            unit,
-            keysetId,
-          });
+        } catch {
+          throw error;
         }
+        if (!restored) throw error;
+
+        const lastCounter = restored.lastCounterWithSignature;
+        ensureCashuDeterministicCounterAtLeast({
+          mintUrl: args.mintUrl,
+          unit,
+          keysetId,
+          atLeast:
+            typeof lastCounter === "number" && Number.isFinite(lastCounter)
+              ? lastCounter + 1
+              : counter + restored.proofs.length,
+        });
+
+        return restored.proofs;
       }
-
-      if (!proofs) throw lastError ?? new Error("mint failed");
-
-      bumpCashuDeterministicCounter({
-        mintUrl: args.mintUrl,
-        unit,
-        keysetId,
-        used: proofs.length,
-      });
-
-      return proofs;
     },
   );
 };
@@ -1753,6 +1821,14 @@ export const useAppShellComposition = () => {
             mintUrl: topupMintQuote.mintUrl,
             route: route.kind,
           });
+        }
+        if (
+          shouldKeepTopupQuoteAfterClaimError(
+            error,
+            isCashuOutputsAlreadySignedError,
+          )
+        ) {
+          setStatus(`${t("restoreFailed")}: ${message}`);
         }
       } finally {
         claimInFlight = false;
