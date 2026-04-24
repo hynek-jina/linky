@@ -25,6 +25,11 @@ interface DecodedCashuTokenLike {
   mint?: string;
 }
 
+type CashuMintConstructorArgs = ConstructorParameters<
+  typeof import("@cashu/cashu-ts").CashuMint
+>;
+type CashuMintRequest = NonNullable<CashuMintConstructorArgs[1]>;
+
 const isHexString = (value: string): boolean => {
   return /^[0-9a-f]+$/i.test(value);
 };
@@ -45,6 +50,46 @@ const buildWalletOptions = (
     options.bip39seed = args.bip39seed;
   }
   return options;
+};
+
+const createDirectCashuMintRequest = (): CashuMintRequest => {
+  const directRequest: CashuMintRequest = async (options) => {
+    const method = String(
+      options.method ?? (options.requestBody ? "POST" : "GET"),
+    ).toUpperCase();
+    const body = options.requestBody
+      ? JSON.stringify(options.requestBody)
+      : undefined;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, 12_000);
+
+    try {
+      const response = await fetch(options.endpoint, {
+        method,
+        cache: "no-store",
+        credentials: "omit",
+        headers: {
+          Accept: "application/json",
+          ...(body ? { "Content-Type": "application/json" } : {}),
+        },
+        mode: "cors",
+        ...(body ? { body } : {}),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(text || `Mint HTTP ${response.status}`);
+      }
+
+      return text ? JSON.parse(text) : null;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  };
+
+  return directRequest;
 };
 
 export const isCashuKeysetVerificationError = (error: unknown): boolean => {
@@ -104,14 +149,17 @@ const createWalletInstance = (
   mintUrl: string,
   options: CashuWalletOptions,
 ): CashuWalletClass => {
-  return new CashuWallet(new CashuMint(mintUrl), options);
+  return new CashuWallet(
+    new CashuMint(mintUrl, createDirectCashuMintRequest()),
+    options,
+  );
 };
 
 const createWalletFromFallbackMintData = async (
   args: CreateLoadedCashuWalletArgs,
 ): Promise<CashuWalletClass> => {
   const options = buildWalletOptions(args);
-  const mint = new args.CashuMint(args.mintUrl);
+  const mint = new args.CashuMint(args.mintUrl, createDirectCashuMintRequest());
   const [mintInfo, keysetsResponse] = await Promise.all([
     mint.getInfo(),
     mint.getKeySets(),

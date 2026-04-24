@@ -1,5 +1,4 @@
 import React from "react";
-import { isNativePlatform } from "../../../platform/runtime";
 import type { Route } from "../../../types/route";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
 
@@ -19,16 +18,17 @@ export const requestMintQuoteBolt11 = async (args: {
   mintUrl: string;
 }): Promise<{ invoice: string; quoteId: string }> => {
   const { amountSat, mintUrl } = args;
-  const targetUrl = isNativePlatform()
-    ? `${mintUrl.replace(/\/+$/, "")}/v1/mint/quote/bolt11`
-    : `/api/mint-quote?mint=${encodeURIComponent(mintUrl)}`;
+  const targetUrl = `${mintUrl.replace(/\/+$/, "")}/v1/mint/quote/bolt11`;
 
   const quoteRes = await fetch(targetUrl, {
     method: "POST",
+    cache: "no-store",
+    credentials: "omit",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
     },
+    mode: "cors",
     body: JSON.stringify({ amount: amountSat, unit: "sat" }),
   });
 
@@ -302,9 +302,13 @@ export const useTopupInvoiceQuoteEffects = ({
             lower.includes("networkerror")
               ? "CORS blocked"
               : "";
-          console.log("[linky][topup] mint quote failed", {
+          console.warn("[linky][topup] mint quote failed", {
             mintUrl,
             amountSat,
+            likelyCors:
+              lower.includes("failed to fetch") ||
+              lower.includes("cors") ||
+              lower.includes("networkerror"),
             error: message,
           });
           setTopupInvoiceError(

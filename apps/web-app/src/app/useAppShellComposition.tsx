@@ -413,6 +413,16 @@ const isOutputsAlreadySignedError = (error: unknown): boolean => {
   );
 };
 
+const isLikelyCorsOrNetworkError = (message: string): boolean => {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("failed to fetch") ||
+    lower.includes("cors") ||
+    lower.includes("networkerror") ||
+    lower.includes("load failed")
+  );
+};
+
 interface TopupMintProofsWalletLike {
   keysetId: string;
   mintProofs: (
@@ -1571,7 +1581,11 @@ export const useAppShellComposition = () => {
     if (!topupMintQuote) return;
 
     let cancelled = false;
+    let claimInFlight = false;
+    let lastLoggedClaimError = "";
     const run = async () => {
+      if (claimInFlight) return;
+      claimInFlight = true;
       try {
         const quoteId = String(topupMintQuote.quote ?? "").trim();
         if (!quoteId) return;
@@ -1728,8 +1742,20 @@ export const useAppShellComposition = () => {
             if (!cancelled) setTopupMintQuote(null);
           },
         });
-      } catch {
-        // ignore
+      } catch (error) {
+        const message = getUnknownErrorMessage(error, "unknown");
+        const errorKey = `${topupMintQuote.mintUrl}:${message}`;
+        if (errorKey !== lastLoggedClaimError) {
+          lastLoggedClaimError = errorKey;
+          console.warn("[linky][topup] mint claim failed", {
+            error: message,
+            likelyCors: isLikelyCorsOrNetworkError(message),
+            mintUrl: topupMintQuote.mintUrl,
+            route: route.kind,
+          });
+        }
+      } finally {
+        claimInFlight = false;
       }
     };
 
@@ -1737,10 +1763,28 @@ export const useAppShellComposition = () => {
     const intervalId = window.setInterval(() => {
       void run();
     }, 5000);
+    const runWhenVisible = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      ) {
+        return;
+      }
+      void run();
+    };
+
+    window.addEventListener("focus", runWhenVisible);
+    window.addEventListener("pageshow", runWhenVisible);
+    window.addEventListener("online", runWhenVisible);
+    document.addEventListener("visibilitychange", runWhenVisible);
 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
+      window.removeEventListener("focus", runWhenVisible);
+      window.removeEventListener("pageshow", runWhenVisible);
+      window.removeEventListener("online", runWhenVisible);
+      document.removeEventListener("visibilitychange", runWhenVisible);
     };
   }, [
     appOwnerId,

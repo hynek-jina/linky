@@ -98,91 +98,6 @@ const serveSqliteWasm = (): Plugin => ({
   },
 });
 
-const mintQuoteProxy = (): Plugin => ({
-  name: "mint-quote-proxy",
-  configureServer(server: ViteDevServer) {
-    server.middlewares.use(
-      async (
-        req: Connect.IncomingMessage,
-        res: ServerResponse,
-        next: Connect.NextFunction,
-      ) => {
-        const url = req.url ?? "";
-        if (!url.startsWith("/api/mint-quote")) return next();
-
-        if (req.method !== "POST") {
-          res.statusCode = 405;
-          res.end("Method not allowed");
-          return;
-        }
-
-        const parsed = new URL(url, "http://localhost");
-        const mint = String(parsed.searchParams.get("mint") ?? "").trim();
-        if (!mint) {
-          res.statusCode = 400;
-          res.end("Missing mint");
-          return;
-        }
-
-        let body = "";
-        req.on("data", (chunk) => {
-          body += chunk;
-        });
-        req.on("end", async () => {
-          try {
-            const target = `${mint.replace(/\/+$/, "")}/v1/mint/quote/bolt11`;
-            const url = new URL(target);
-            const isHttps = url.protocol === "https:";
-            const client = isHttps ? https : http;
-
-            const proxyReq = client.request(
-              {
-                method: "POST",
-                hostname: url.hostname,
-                port: url.port ? Number(url.port) : isHttps ? 443 : 80,
-                path: `${url.pathname}${url.search}`,
-                headers: {
-                  Accept: "application/json",
-                  "Content-Type": "application/json",
-                  "Content-Length": Buffer.byteLength(body),
-                },
-                timeout: 12_000,
-              },
-              (proxyRes) => {
-                res.statusCode = proxyRes.statusCode ?? 502;
-                const contentType = proxyRes.headers["content-type"];
-                if (contentType) {
-                  res.setHeader("Content-Type", contentType);
-                } else {
-                  res.setHeader("Content-Type", "application/json");
-                }
-                res.setHeader("Cache-Control", "no-store");
-                proxyRes.pipe(res);
-              },
-            );
-
-            proxyReq.on("timeout", () => {
-              proxyReq.destroy(new Error("Proxy timeout"));
-            });
-
-            proxyReq.on("error", (error) => {
-              if (res.headersSent) return;
-              res.statusCode = 502;
-              res.end(`Proxy error: ${String(error ?? "")}`);
-            });
-
-            proxyReq.write(body);
-            proxyReq.end();
-          } catch (error) {
-            res.statusCode = 502;
-            res.end(`Proxy error: ${String(error ?? "")}`);
-          }
-        });
-      },
-    );
-  },
-});
-
 const lnurlProxy = (): Plugin => ({
   name: "lnurl-proxy",
   configureServer(server: ViteDevServer) {
@@ -288,7 +203,6 @@ export default defineConfig({
   },
   plugins: [
     serveSqliteWasm(),
-    mintQuoteProxy(),
     lnurlProxy(),
     ...(useHttps ? [basicSsl()] : []),
     react(),
