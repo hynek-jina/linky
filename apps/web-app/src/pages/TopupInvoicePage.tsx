@@ -73,7 +73,9 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
         ) : null}
       </div>
 
-      {topupInvoiceQr ? (
+      {topupInvoiceIsBusy ? (
+        loadingMessage
+      ) : topupInvoiceQr ? (
         <div className="topup-invoice-qr-shell">
           <button
             type="button"
@@ -95,8 +97,6 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
           </div>
           {copyButton}
         </div>
-      ) : topupInvoiceIsBusy ? (
-        loadingMessage
       ) : (
         loadingMessage
       )}
