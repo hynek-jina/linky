@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isTopupMintQuoteClaimableState } from "../src/app/hooks/topup/topupMintClaim";
+import {
+  isTopupMintQuoteClaimableState,
+  shouldKeepTopupQuoteAfterClaimError,
+} from "../src/app/hooks/topup/topupMintClaim";
 import { isCashuOutputsAlreadySignedError } from "../src/utils/cashuErrors";
 
 describe("topup mint claim helpers", () => {
@@ -25,6 +28,9 @@ describe("topup mint claim helpers", () => {
       ),
     ).toBe(true);
     expect(
+      isCashuOutputsAlreadySignedError(new Error("outputs already signed")),
+    ).toBe(true);
+    expect(
       isCashuOutputsAlreadySignedError(
         new Error("keyset id already signed before"),
       ),
@@ -32,5 +38,14 @@ describe("topup mint claim helpers", () => {
     expect(isCashuOutputsAlreadySignedError(new Error("network failed"))).toBe(
       false,
     );
+  });
+
+  it("keeps the pending quote after an already-signed restore miss", () => {
+    expect(
+      shouldKeepTopupQuoteAfterClaimError(
+        new Error("outputs already signed"),
+        isCashuOutputsAlreadySignedError,
+      ),
+    ).toBe(true);
   });
 });

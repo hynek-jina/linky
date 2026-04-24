@@ -26,3 +26,10 @@ export const isTopupMintQuoteClaimableState = (
     normalizedState === issuedState
   );
 };
+
+export const shouldKeepTopupQuoteAfterClaimError = (
+  error: unknown,
+  isOutputsAlreadySignedError: (error: unknown) => boolean,
+): boolean => {
+  return isOutputsAlreadySignedError(error);
+};
