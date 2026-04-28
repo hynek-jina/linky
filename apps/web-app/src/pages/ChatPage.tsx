@@ -123,10 +123,6 @@ export const ChatPage: FC<ChatPageProps> = ({
   const isDesktop =
     typeof window !== "undefined" &&
     window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-  const shouldAutoFocusCompose =
-    typeof window !== "undefined" &&
-    window.matchMedia("(hover: none), (pointer: coarse)").matches;
-  const canCompose = Boolean(npub || hasUnknownPubkeyHex);
 
   const focusComposeInput = useCallback(() => {
     const input = composeInputRef.current;
@@ -142,37 +138,6 @@ export const ChatPage: FC<ChatPageProps> = ({
     input.setSelectionRange(length, length);
     return document.activeElement === input;
   }, []);
-
-  useEffect(() => {
-    if (!shouldAutoFocusCompose || !canCompose) return;
-    if (typeof window === "undefined") return;
-
-    let isCancelled = false;
-    let timeoutId: number | null = null;
-    let attempts = 0;
-
-    const tryFocus = () => {
-      if (isCancelled || focusComposeInput()) return;
-      if (attempts >= 3) return;
-      attempts += 1;
-      timeoutId = window.setTimeout(tryFocus, 120);
-    };
-
-    const frameId = window.requestAnimationFrame(tryFocus);
-
-    return () => {
-      isCancelled = true;
-      window.cancelAnimationFrame(frameId);
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [
-    canCompose,
-    focusComposeInput,
-    shouldAutoFocusCompose,
-    selectedContact?.id,
-  ]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
