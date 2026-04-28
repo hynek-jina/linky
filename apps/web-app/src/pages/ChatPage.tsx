@@ -1,14 +1,14 @@
-import { type FC, useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type FC } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { aggregateReactions } from "../app/hooks/messages/chatNostrProtocol";
 import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
 import type { ReplyContext } from "../app/hooks/messages/useSendChatMessage";
+import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
 import {
   parseCashuPaymentRequestMessage,
   parseLinkyPaymentRequestDeclineMessage,
   type CashuPaymentRequestMessageInfo,
 } from "../app/lib/paymentRequestMessage";
-import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   LocalNostrMessage,
@@ -180,6 +180,7 @@ export const ChatPage: FC<ChatPageProps> = ({
 
     const root = document.documentElement;
     const body = document.body;
+    const pendingRefreshTimeouts = new Set<number>();
 
     // Prevent body scroll when keyboard opens on iOS
     const prevHtmlOverflow = root.style.overflow;
@@ -234,11 +235,36 @@ export const ChatPage: FC<ChatPageProps> = ({
       });
     };
 
+    const scheduleViewportRefresh = () => {
+      updateViewportHeight();
+
+      requestAnimationFrame(() => {
+        updateViewportHeight();
+      });
+
+      for (const delayMs of [120, 280]) {
+        const timeoutId = window.setTimeout(() => {
+          pendingRefreshTimeouts.delete(timeoutId);
+          updateViewportHeight();
+        }, delayMs);
+        pendingRefreshTimeouts.add(timeoutId);
+      }
+    };
+
+    const handleComposeFocusChange = (event: FocusEvent) => {
+      const input = composeInputRef.current;
+      if (!input) return;
+      if (event.target !== input) return;
+      scheduleViewportRefresh();
+    };
+
     updateViewportHeight();
 
     const viewport = window.visualViewport;
     window.addEventListener("resize", updateViewportHeight);
     window.addEventListener("linky-native-window-insets", updateViewportHeight);
+    document.addEventListener("focusin", handleComposeFocusChange);
+    document.addEventListener("focusout", handleComposeFocusChange);
     viewport?.addEventListener("resize", updateViewportHeight);
     viewport?.addEventListener("scroll", updateViewportHeight);
 
@@ -248,8 +274,14 @@ export const ChatPage: FC<ChatPageProps> = ({
         "linky-native-window-insets",
         updateViewportHeight,
       );
+      document.removeEventListener("focusin", handleComposeFocusChange);
+      document.removeEventListener("focusout", handleComposeFocusChange);
       viewport?.removeEventListener("resize", updateViewportHeight);
       viewport?.removeEventListener("scroll", updateViewportHeight);
+      for (const timeoutId of pendingRefreshTimeouts) {
+        window.clearTimeout(timeoutId);
+      }
+      pendingRefreshTimeouts.clear();
       root.style.overflow = prevHtmlOverflow;
       body.style.overflow = prevBodyOverflow;
       root.style.removeProperty("--chat-viewport-height");
