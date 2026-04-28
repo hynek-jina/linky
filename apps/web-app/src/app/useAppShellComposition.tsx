@@ -25,7 +25,11 @@ import {
 import { navigateTo, useRouting } from "../hooks/useRouting";
 import { useToasts } from "../hooks/useToasts";
 import { getInitialLang, translations, type Lang } from "../i18n";
-import { inferLightningAddressFromLnurlTarget } from "../lnurlPay";
+import {
+  inferLightningAddressFromLnurlTarget,
+  redeemLnurlWithdraw,
+  type LnurlWithdrawPreview,
+} from "../lnurlPay";
 import {
   cacheProfileAvatarFromUrl,
   fetchNostrProfileMetadata,
@@ -1093,6 +1097,11 @@ export const useAppShellComposition = () => {
     pendingLightningInvoiceConfirmation,
     setPendingLightningInvoiceConfirmation,
   ] = useState<LightningInvoicePreview | null>(null);
+  const [
+    pendingLnurlWithdrawConfirmation,
+    setPendingLnurlWithdrawConfirmation,
+  ] = useState<LnurlWithdrawPreview | null>(null);
+  const [lnurlWithdrawIsBusy, setLnurlWithdrawIsBusy] = useState(false);
 
   const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
   const chatMessageElByIdRef = React.useRef<Map<string, HTMLDivElement>>(
@@ -2889,6 +2898,56 @@ export const useAppShellComposition = () => {
     const ok = await payLightningInvoiceWithCashu(pending.invoice);
     if (ok) setPendingLightningInvoiceConfirmation(null);
   }, [payLightningInvoiceWithCashu, pendingLightningInvoiceConfirmation]);
+
+  const closeLnurlWithdrawConfirmation = React.useCallback(() => {
+    if (lnurlWithdrawIsBusy) return;
+    setPendingLnurlWithdrawConfirmation(null);
+  }, [lnurlWithdrawIsBusy]);
+
+  const confirmLnurlWithdraw = React.useCallback(async () => {
+    const pending = pendingLnurlWithdrawConfirmation;
+    if (!pending || lnurlWithdrawIsBusy) return;
+
+    const mintUrl = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
+    if (!mintUrl) {
+      setStatus(t("topupInvoiceFailed"));
+      return;
+    }
+
+    setLnurlWithdrawIsBusy(true);
+    try {
+      setStatus(t("lnurlWithdrawPreparing"));
+      const { invoice, quoteId } = await requestMintQuoteBolt11({
+        amountSat: pending.amountSat,
+        mintUrl,
+      });
+      await redeemLnurlWithdraw({
+        callback: pending.callback,
+        invoice,
+        k1: pending.k1,
+      });
+      setTopupMintQuote({
+        amount: pending.amountSat,
+        invoice,
+        mintUrl,
+        quote: quoteId,
+        unit: "sat",
+      });
+      setPendingLnurlWithdrawConfirmation(null);
+      setStatus(t("lnurlWithdrawPending"));
+    } catch (error) {
+      const message = getUnknownErrorMessage(error, t("lnurlWithdrawFailed"));
+      setStatus(`${t("errorPrefix")}: ${message}`);
+    } finally {
+      setLnurlWithdrawIsBusy(false);
+    }
+  }, [
+    defaultMintUrl,
+    lnurlWithdrawIsBusy,
+    pendingLnurlWithdrawConfirmation,
+    setStatus,
+    t,
+  ]);
 
   const contactsOnboardingHasSentMessage = useMemo(() => {
     return nostrMessagesRecent.some((m) => String(m.direction ?? "") === "out");
@@ -4876,6 +4935,7 @@ export const useAppShellComposition = () => {
     payLightningInvoiceWithCashu,
     refreshContactFromNostr,
     requestLightningInvoiceConfirmation: setPendingLightningInvoiceConfirmation,
+    requestLnurlWithdrawConfirmation: setPendingLnurlWithdrawConfirmation,
     saveCashuFromText,
     setStatus,
     t,
@@ -5429,6 +5489,7 @@ export const useAppShellComposition = () => {
     nostrPictureByNpub,
     paidOverlayIsOpen,
     paidOverlayTitle,
+    pendingLnurlWithdrawConfirmation,
     pendingLightningInvoiceConfirmation,
     postPaySaveContact,
     profileEditInitialRef,
@@ -5448,15 +5509,18 @@ export const useAppShellComposition = () => {
     topbar,
     topbarRight,
     topbarTitle,
+    lnurlWithdrawIsBusy,
   };
 
   const appActions = {
     cancelPendingNfcWrite,
+    closeLnurlWithdrawConfirmation,
     closeMenu,
     closeShareOptions,
     closeLightningInvoiceConfirmation,
     closeProfileQr,
     closeScan,
+    confirmLnurlWithdraw,
     confirmLightningInvoicePayment,
     contactsGuideNav,
     copyShareOptionsText,

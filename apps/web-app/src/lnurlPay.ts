@@ -21,6 +21,42 @@ type LnurlInvoiceResponse = {
   status?: string;
 };
 
+type LnurlWithdrawRequest = {
+  callback?: string;
+  defaultDescription?: string;
+  k1?: string;
+  maxWithdrawable?: number;
+  minWithdrawable?: number;
+  reason?: string;
+  status?: string;
+  tag?: string;
+};
+
+type LnurlWithdrawCallbackResponse = {
+  reason?: string;
+  status?: string;
+};
+
+export interface LnurlWithdrawPreview {
+  amountSat: number;
+  callback: string;
+  description: string | null;
+  k1: string;
+  maxAmountSat: number;
+  minAmountSat: number;
+  target: string;
+}
+
+export class LnurlTagMismatchError extends Error {
+  public readonly tag: string;
+
+  public constructor(tag: string) {
+    super(`Unexpected LNURL tag: ${tag || "unknown"}`);
+    this.name = "LnurlTagMismatchError";
+    this.tag = tag;
+  }
+}
+
 const isJsonRecord = (value: unknown): value is JsonRecord => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 };
@@ -35,6 +71,17 @@ const isOptionalString = (
   value: JsonValue | undefined,
 ): value is string | undefined => {
   return value === undefined || typeof value === "string";
+};
+
+const isKnownLnurlTag = (
+  value: string | undefined,
+  expected: string,
+): boolean => {
+  return (
+    String(value ?? "")
+      .trim()
+      .toLowerCase() === expected.toLowerCase()
+  );
 };
 
 const LIGHTNING_ADDRESS_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -80,6 +127,15 @@ const normalizeLnurlSchemeUrl = (value: string): string | null => {
   return isHttpUrl(httpUrl) ? httpUrl : null;
 };
 
+const normalizeLnurlWithdrawSchemeUrl = (value: string): string | null => {
+  const normalized = stripLightningPrefix(value);
+  if (!/^lnurlw:\/\//i.test(normalized)) return null;
+
+  const rawTarget = normalized.replace(/^lnurlw:\/\//i, "").trim();
+  const httpUrl = `https://${rawTarget}`;
+  return isHttpUrl(httpUrl) ? httpUrl : null;
+};
+
 const toHttpLnurlUrl = (value: string): string | null => {
   const normalized = stripLightningPrefix(value);
   if (!isHttpUrl(normalized)) return null;
@@ -96,6 +152,21 @@ const resolveLnurlTargetUrlOrNull = (value: string): string | null => {
   return (
     decodeLnurlBech32Url(normalized) ??
     normalizeLnurlSchemeUrl(normalized) ??
+    toHttpLnurlUrl(normalized)
+  );
+};
+
+const resolveAnyLnurlTargetUrlOrNull = (value: string): string | null => {
+  const normalized = stripLightningPrefix(value);
+
+  if (isLightningAddress(normalized)) {
+    return getLnurlpUrlFromLightningAddress(normalized);
+  }
+
+  return (
+    decodeLnurlBech32Url(normalized) ??
+    normalizeLnurlSchemeUrl(normalized) ??
+    normalizeLnurlWithdrawSchemeUrl(normalized) ??
     toHttpLnurlUrl(normalized)
   );
 };
@@ -198,6 +269,29 @@ const isLnurlInvoiceResponse = (
     isOptionalString(value.reason) &&
     isOptionalString(value.status)
   );
+};
+
+const isLnurlWithdrawRequest = (
+  value: unknown,
+): value is LnurlWithdrawRequest => {
+  if (!isJsonRecord(value)) return false;
+  return (
+    isOptionalString(value.callback) &&
+    isOptionalString(value.defaultDescription) &&
+    isOptionalString(value.k1) &&
+    isOptionalNumber(value.maxWithdrawable) &&
+    isOptionalNumber(value.minWithdrawable) &&
+    isOptionalString(value.reason) &&
+    isOptionalString(value.status) &&
+    isOptionalString(value.tag)
+  );
+};
+
+const isLnurlWithdrawCallbackResponse = (
+  value: unknown,
+): value is LnurlWithdrawCallbackResponse => {
+  if (!isJsonRecord(value)) return false;
+  return isOptionalString(value.reason) && isOptionalString(value.status);
 };
 
 const getLnurlpUrlFromLightningAddress = (lightningAddress: string): string => {
@@ -318,4 +412,89 @@ export const fetchLnurlInvoiceForLightningAddress = async (
   comment?: string,
 ): Promise<string> => {
   return fetchLnurlInvoiceForTarget(lightningAddress, amountSat, comment);
+};
+
+const resolveLnurlWithdrawRequestUrl = (value: string): string => {
+  const httpUrl = resolveAnyLnurlTargetUrlOrNull(value);
+  if (httpUrl) return httpUrl;
+
+  throw new Error("Invalid LNURL withdraw target");
+};
+
+export const isLnurlWithdrawTarget = (value: string): boolean => {
+  return resolveAnyLnurlTargetUrlOrNull(value) !== null;
+};
+
+export const fetchLnurlWithdrawPreview = async (
+  withdrawTarget: string,
+): Promise<LnurlWithdrawPreview> => {
+  const requestUrl = resolveLnurlWithdrawRequestUrl(withdrawTarget);
+  const withdrawJson = await fetchLnurlJson(requestUrl);
+  if (!isLnurlWithdrawRequest(withdrawJson)) {
+    throw new Error("Invalid LNURL withdraw response");
+  }
+
+  const tag = String(withdrawJson.tag ?? "").trim();
+  const looksLikeWithdrawRequest =
+    asNonEmptyString(withdrawJson.callback) !== null &&
+    asNonEmptyString(withdrawJson.k1) !== null &&
+    Number.isFinite(Number(withdrawJson.minWithdrawable ?? NaN)) &&
+    Number.isFinite(Number(withdrawJson.maxWithdrawable ?? NaN));
+
+  if (!looksLikeWithdrawRequest && !isKnownLnurlTag(tag, "withdrawRequest")) {
+    throw new LnurlTagMismatchError(tag);
+  }
+
+  if (String(withdrawJson.status ?? "").toUpperCase() === "ERROR") {
+    throw new Error(asNonEmptyString(withdrawJson.reason) ?? "LNURL error");
+  }
+
+  const callback = asNonEmptyString(withdrawJson.callback);
+  if (!callback) throw new Error("LNURL withdraw callback missing");
+
+  const k1 = asNonEmptyString(withdrawJson.k1);
+  if (!k1) throw new Error("LNURL withdraw k1 missing");
+
+  const minWithdrawable = Number(withdrawJson.minWithdrawable ?? NaN);
+  const maxWithdrawable = Number(withdrawJson.maxWithdrawable ?? NaN);
+  if (!Number.isFinite(minWithdrawable) || !Number.isFinite(maxWithdrawable)) {
+    throw new Error("LNURL withdraw min/max missing");
+  }
+
+  const minAmountSat = Math.floor(minWithdrawable / 1000);
+  const maxAmountSat = Math.floor(maxWithdrawable / 1000);
+  if (minAmountSat <= 0 || maxAmountSat <= 0 || maxAmountSat < minAmountSat) {
+    throw new Error("Invalid LNURL withdraw amount");
+  }
+
+  return {
+    amountSat: maxAmountSat,
+    callback,
+    description: asNonEmptyString(withdrawJson.defaultDescription) ?? null,
+    k1,
+    maxAmountSat,
+    minAmountSat,
+    target: getLnurlPayDisplayText(requestUrl),
+  };
+};
+
+export const redeemLnurlWithdraw = async (args: {
+  callback: string;
+  invoice: string;
+  k1: string;
+}): Promise<void> => {
+  const callbackUrl = new URL(args.callback);
+  callbackUrl.searchParams.set("k1", args.k1);
+  callbackUrl.searchParams.set("pr", args.invoice);
+
+  const responseJson = await fetchLnurlJson(callbackUrl.toString());
+  if (!isLnurlWithdrawCallbackResponse(responseJson)) {
+    throw new Error("Invalid LNURL withdraw callback response");
+  }
+
+  if (String(responseJson.status ?? "").toUpperCase() === "ERROR") {
+    throw new Error(
+      asNonEmptyString(responseJson.reason) ?? "LNURL withdraw failed",
+    );
+  }
 };

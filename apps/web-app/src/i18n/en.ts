@@ -542,6 +542,11 @@ export const en = {
   payAmount: "Amount",
   paySend: "Pay",
   payCancel: "Cancel",
+  lnurlWithdrawPreparing: "Preparing withdrawal…",
+  lnurlWithdrawPending: "Withdrawal is waiting to settle into the wallet.",
+  lnurlWithdrawFailed: "LNURLw withdrawal failed",
+  lnurlWithdrawVariableAmount:
+    "Linky will receive the maximum available amount.",
   payMissingLn: "Missing lightning address.",
   payInvalidAmount: "Invalid amount",
   payInsufficient: "Not enough Cashu tokens.",

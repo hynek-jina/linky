@@ -5,6 +5,7 @@ import {
 } from "../app/context/AppShellContexts";
 import { ContactsGuideOverlay } from "./ContactsGuideOverlay";
 import { LightningInvoiceConfirmModal } from "./LightningInvoiceConfirmModal";
+import { LnurlWithdrawConfirmModal } from "./LnurlWithdrawConfirmModal";
 import { MenuModal } from "./MenuModal";
 import { NfcWriteModal } from "./NfcWriteModal";
 import { PaidOverlay } from "./PaidOverlay";
@@ -134,6 +135,16 @@ export function AuthenticatedLayout({
           confirmation={state.pendingLightningInvoiceConfirmation}
           onClose={actions.closeLightningInvoiceConfirmation}
           onConfirm={actions.confirmLightningInvoicePayment}
+          t={state.t}
+        />
+      ) : null}
+
+      {state.pendingLnurlWithdrawConfirmation && !state.paidOverlayIsOpen ? (
+        <LnurlWithdrawConfirmModal
+          confirmation={state.pendingLnurlWithdrawConfirmation}
+          isBusy={state.lnurlWithdrawIsBusy}
+          onClose={actions.closeLnurlWithdrawConfirmation}
+          onConfirm={actions.confirmLnurlWithdraw}
           t={state.t}
         />
       ) : null}

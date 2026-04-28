@@ -4,15 +4,18 @@ import React from "react";
 import type { ContactId } from "../../evolu";
 import { navigateTo } from "../../hooks/useRouting";
 import {
+  fetchLnurlWithdrawPreview,
   inferLightningAddressFromLnurlTarget,
   isLightningAddress,
   isLnurlPayTarget,
+  isLnurlWithdrawTarget,
+  LnurlTagMismatchError,
 } from "../../lnurlPay";
+import { parseNativeDeepLinkUrl } from "../../utils/deepLinks";
 import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
 } from "../../utils/lightningInvoice";
-import { parseNativeDeepLinkUrl } from "../../utils/deepLinks";
 import type { ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -34,6 +37,9 @@ interface UseScannedTextHandlerParams<TContact extends ContactRowLike> {
   requestLightningInvoiceConfirmation: (
     preview: LightningInvoicePreview,
   ) => void;
+  requestLnurlWithdrawConfirmation: (
+    preview: import("../../lnurlPay").LnurlWithdrawPreview,
+  ) => void;
   saveCashuFromText: (
     text: string,
     options?: { navigateToTokens?: boolean; navigateToWallet?: boolean },
@@ -54,6 +60,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
   payLightningInvoiceWithCashu,
   refreshContactFromNostr,
   requestLightningInvoiceConfirmation,
+  requestLnurlWithdrawConfirmation,
   saveCashuFromText,
   setStatus,
   t,
@@ -165,6 +172,24 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
         return;
       }
 
+      if (isLnurlWithdrawTarget(maybeLnAddress)) {
+        try {
+          const withdrawPreview =
+            await fetchLnurlWithdrawPreview(maybeLnAddress);
+          closeScan();
+          requestLnurlWithdrawConfirmation(withdrawPreview);
+          return;
+        } catch (error) {
+          if (!(error instanceof LnurlTagMismatchError)) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            setStatus(`${t("errorPrefix")}: ${message}`);
+            closeScan();
+            return;
+          }
+        }
+      }
+
       if (isLnurlPayTarget(maybeLnAddress)) {
         const inferredLnAddress =
           inferLightningAddressFromLnurlTarget(maybeLnAddress);
@@ -224,6 +249,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       payLightningInvoiceWithCashu,
       refreshContactFromNostr,
       requestLightningInvoiceConfirmation,
+      requestLnurlWithdrawConfirmation,
       saveCashuFromText,
       setStatus,
       t,

@@ -3,6 +3,7 @@ import React from "react";
 import type { DerivedProfileDefaults } from "../../derivedProfile";
 import type { ContactId } from "../../evolu";
 import type { Lang } from "../../i18n";
+import type { LnurlWithdrawPreview } from "../../lnurlPay";
 import type { Route } from "../../types/route";
 import type {
   DisplayAmountParts,
@@ -60,6 +61,7 @@ export interface AppShellCoreContextValue {
   nostrPictureByNpub: Record<string, string | null>;
   paidOverlayIsOpen: boolean;
   paidOverlayTitle: string | null;
+  pendingLnurlWithdrawConfirmation: LnurlWithdrawPreview | null;
   pendingLightningInvoiceConfirmation: LightningInvoicePreview | null;
   postPaySaveContact: {
     amountSat: number;
@@ -86,15 +88,18 @@ export interface AppShellCoreContextValue {
   topbar: TopbarButton | null;
   topbarRight: TopbarButton | null;
   topbarTitle: string | null;
+  lnurlWithdrawIsBusy: boolean;
 }
 
 export interface AppShellActionsContextValue {
   cancelPendingNfcWrite: () => void;
   closeMenu: () => void;
   closeShareOptions: () => void;
+  closeLnurlWithdrawConfirmation: () => void;
   closeLightningInvoiceConfirmation: () => void;
   closeProfileQr: () => void;
   closeScan: () => void;
+  confirmLnurlWithdraw: () => Promise<void>;
   confirmLightningInvoicePayment: () => Promise<void>;
   contactsGuideNav: {
     back: () => void;

@@ -106,7 +106,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
   - `hooks/messages/` contains extracted message/inbox effects (`useNostrPendingFlush`, `useSendChatMessage`, `useEditChatMessage`, `useSendReaction`, `useInboxNotificationsSync`, `useChatMessageEffects`)
   - `hooks/messages/chatNostrProtocol.ts` contains shared reply/edit/reaction Nostr parsing helpers used by sync/send flows
   - `hooks/payments/` contains extracted payment orchestration (`usePayContactWithCashuMessage`)
-  - Lightning pay scan supports lightning addresses plus LNURL-pay bech32 / `lnurlp://` / HTTPS targets; unknown recipients open the same amount-entry UI as contact pay, but without avatar/name until matched to a saved contact
+  - Lightning pay scan supports lightning addresses plus LNURL-pay bech32 / `lnurlp://` / HTTPS targets; LNURL-withdraw (`lnurlw`) QR scans now show the withdrawable sats for confirmation and then pull the amount into the wallet via the selected mint top-up flow; unknown recipients open the same amount-entry UI as contact pay, but without avatar/name until matched to a saved contact
   - `hooks/cashu/` contains extracted cashu helpers (`useSaveCashuFromText`, `useCashuTokenChecks`, `useRestoreMissingTokens`, `useNpubCashClaim`)
   - `hooks/topup/` contains extracted topup quote/reset effects (`useTopupInvoiceQuoteEffects`)
   - `hooks/mint/` contains mint-info store/helpers (`useMintInfoStore`, `mintInfoHelpers`)
