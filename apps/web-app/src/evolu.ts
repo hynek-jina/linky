@@ -589,35 +589,10 @@ export const useEvoluLastError = (opts?: {
 
   useEffect(() => {
     const instance = getEvolu();
-    let lastLogAtMs = 0;
-    let lastLoggedKey = "";
-    const LOG_DEDUPE_MS = 2_000;
-
     const unsub = instance.subscribeError(() => {
       const err = toEvoluLastError(instance.getError());
       setLastError(err);
-      if (!(logToConsole && err)) return;
-
-      let serialized: string;
-      try {
-        serialized =
-          err instanceof Error
-            ? `${err.name}: ${err.message}`
-            : JSON.stringify(err);
-      } catch {
-        serialized = String(err);
-      }
-
-      const now = Date.now();
-      // Suppress identical-error spam: keep at most one log per 2s for
-      // the same error signature. Prevents transient sync transport
-      // failures from drowning the console.
-      if (serialized === lastLoggedKey && now - lastLogAtMs < LOG_DEDUPE_MS) {
-        return;
-      }
-      lastLogAtMs = now;
-      lastLoggedKey = serialized;
-      console.log("[linky][evolu] error", serialized);
+      if (logToConsole && err) console.log("[linky][evolu] error", err);
     });
 
     return () => {
