@@ -1,6 +1,7 @@
 import React from "react";
 import "../App.css";
 import { AuthenticatedLayout } from "../components/AuthenticatedLayout";
+import { PwaUpdateBanner } from "../components/PwaUpdateBanner";
 import { ToastNotifications } from "../components/ToastNotifications";
 import { UnauthenticatedLayout } from "../components/UnauthenticatedLayout";
 import {
@@ -74,6 +75,7 @@ const AppShell = () => {
 
   return (
     <div className={pageClassNameWithSwipe}>
+      <PwaUpdateBanner t={t} />
       <ToastNotifications
         recentlyReceivedToken={recentlyReceivedToken}
         toasts={toasts}

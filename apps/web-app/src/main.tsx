@@ -13,6 +13,7 @@ import type {
 } from "./types/browser";
 import type { JsonValue } from "./types/json";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
+import { markPwaNeedRefresh, recordPwaRegistered } from "./utils/pwaUpdate";
 
 type BufferFromArgs =
   | [arrayLike: ArrayLike<number> | ArrayBufferView]
@@ -141,7 +142,7 @@ if (!getGlobalProcess()) {
   Reflect.set(B.prototype, patchMarker, true);
 })();
 
-registerSW({
+const updateSW = registerSW({
   immediate: true,
   onOfflineReady() {
     console.log("[linky][pwa] offline ready");
@@ -150,6 +151,7 @@ registerSW({
   onNeedRefresh() {
     console.log("[linky][pwa] update available");
     void appendPushDebugLog("client", "pwa update available");
+    markPwaNeedRefresh(true);
   },
   onRegisteredSW(swUrl, registration) {
     console.log("[linky][pwa] sw registered", {
@@ -166,12 +168,47 @@ registerSW({
       scope: registration?.scope ?? null,
       swUrl,
     });
+
+    // vite-plugin-pwa does not auto-poll for SW updates when an
+    // onRegisteredSW callback is supplied. Trigger manual update checks
+    // on a 30s interval plus on focus/visibility/online so the prompt
+    // banner surfaces shortly after a deploy without forcing a hard
+    // refresh. Detected waiting workers also fire the onNeedRefresh
+    // callback above which flips the banner state.
+    if (!registration) return;
+    const checkForUpdate = () => {
+      if (
+        typeof navigator !== "undefined" &&
+        "onLine" in navigator &&
+        navigator.onLine === false
+      ) {
+        return;
+      }
+      void registration.update().catch((error) => {
+        console.log("[linky][pwa] sw update check failed", { error });
+      });
+    };
+    setInterval(checkForUpdate, 30_000);
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", checkForUpdate);
+      window.addEventListener("online", checkForUpdate);
+    }
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkForUpdate();
+      });
+    }
+    if (registration.waiting) {
+      console.log("[linky][pwa] waiting worker present at registration");
+      markPwaNeedRefresh(true);
+    }
   },
   onRegisterError(error) {
     console.log("[linky][pwa] sw register error", { error });
     void appendPushDebugLog("client", "pwa sw register error", { error });
   },
 });
+recordPwaRegistered(updateSW);
 
 if ("serviceWorker" in navigator) {
   console.log("[linky][pwa] controller", {
@@ -434,16 +471,32 @@ const renderBootError = (error: unknown) => {
 };
 
 const bootstrap = async () => {
+  let stage = "init";
+  // Surface a stuck-loading state with the last completed boot stage so we
+  // can tell whether bootstrap froze in dynamic imports, polyfills, or the
+  // first render. Mostly catches iOS Safari private-mode quirks where a
+  // dependency hangs without throwing.
+  const stuckTimer = window.setTimeout(() => {
+    renderBootError(new Error(`Boot stuck after 15s at stage: ${stage}`));
+  }, 15_000);
   try {
+    console.log("[linky][boot] start");
+    stage = "polyfills";
     applyEvoluWebCompatPolyfills();
+    console.log("[linky][boot] polyfills done");
 
+    stage = "import-app";
     const [{ default: App }, { ErrorBoundary }] = await Promise.all([
       import("./App.tsx"),
       import("./ErrorBoundary.tsx"),
     ]);
+    console.log("[linky][boot] app modules loaded");
 
+    stage = "import-evolu";
     const { evolu, EvoluProvider } = await import("./evolu.ts");
+    console.log("[linky][boot] evolu loaded");
 
+    stage = "render";
     createRoot(document.getElementById("root")!).render(
       <StrictMode>
         <EvoluProvider value={evolu}>
@@ -453,9 +506,18 @@ const bootstrap = async () => {
         </EvoluProvider>
       </StrictMode>,
     );
+    console.log("[linky][boot] rendered");
+    window.clearTimeout(stuckTimer);
   } catch (error) {
-    console.error("Boot failed:", error);
-    renderBootError(error);
+    window.clearTimeout(stuckTimer);
+    console.error(`Boot failed at stage ${stage}:`, error);
+    const wrapped =
+      error instanceof Error
+        ? Object.assign(error, {
+            message: `[stage: ${stage}] ${error.message}`,
+          })
+        : new Error(`[stage: ${stage}] ${String(error)}`);
+    renderBootError(wrapped);
   }
 };
 

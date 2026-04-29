@@ -11,7 +11,7 @@ import {
   getCashuDeterministicSeedFromStorage,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
-import { isCashuOutputsAlreadySignedError } from "./utils/cashuErrors";
+import { isCashuRecoverableOutputCollisionError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
 import {
   dedupeCashuProofs,
@@ -50,6 +50,24 @@ type CashuPayErrorResult = {
 
 const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
   proofs.reduce((sum, proof) => sum + proof.amount, 0);
+
+// Number of NUT-08 blank outputs cashu-ts will emit for a given fee reserve.
+// Mirrors cashu-ts CashuWallet.createBlankOutputs:
+//   r = Math.ceil(Math.log2(feeReserve)) || 1; if (r<0) r = 0;
+// Important: every one of these B_'s consumes a deterministic counter slot
+// on the wallet, AND lands in the mint's `promises` table with c_ IS NULL
+// before LN payment. If the mint's change generation returns no signatures
+// (overpaid_fee <= 0) and the mint does not clean up its blanks, those rows
+// remain forever (see report.md). We must bump the counter past the full
+// blank range — not just the change count actually returned — or a future
+// derivation against the same counter will collide with the orphan B_'s.
+const computeNumberOfBlankOutputs = (feeReserve: number): number => {
+  const fr =
+    Number.isFinite(feeReserve) && feeReserve > 0 ? Math.trunc(feeReserve) : 0;
+  if (fr <= 0) return 0;
+  const r = Math.ceil(Math.log2(fr)) || 1;
+  return r < 0 ? 0 : r;
+};
 
 export const getMeltSwapTargetAmount = (
   quotedTotalAmount: number,
@@ -259,7 +277,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
             break;
           } catch (e) {
             lastError = e;
-            if (!isCashuOutputsAlreadySignedError(e) || !det) throw e;
+            if (!isCashuRecoverableOutputCollisionError(e) || !det) throw e;
             bumpCashuDeterministicCounter({
               mintUrl: mint,
               unit: walletUnit,
@@ -332,7 +350,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
               break;
             } catch (e) {
               lastError = e;
-              if (!isCashuOutputsAlreadySignedError(e) || !det) throw e;
+              if (!isCashuRecoverableOutputCollisionError(e) || !det) throw e;
               bumpCashuDeterministicCounter({
                 mintUrl: mint,
                 unit: walletUnit,
@@ -367,11 +385,20 @@ export const meltInvoiceWithTokensAtMint = async (args: {
       }
 
       if (det) {
+        // Advance past the full blank-output range, not just the change count.
+        // cashu-ts emits N = computeNumberOfBlankOutputs(feeReserve) B_'s
+        // starting at `counterAfterSwap`. All N are persisted by the mint
+        // before LN payment, but only the signed ones (`change.length`) are
+        // returned. If we only bump by `change.length` here, the next melt
+        // can re-derive a B_ that is already sitting in the mint's promises
+        // table as `c_ IS NULL` and we'll get OutputsArePending (NUT 11004).
+        const blankCount = computeNumberOfBlankOutputs(feeReserve);
+        const changeCount = melt?.change.length ?? 0;
         bumpCashuDeterministicCounter({
           mintUrl: mint,
           unit: walletUnit,
           keysetId,
-          used: melt?.change.length ?? 0,
+          used: Math.max(blankCount, changeCount),
         });
       }
 

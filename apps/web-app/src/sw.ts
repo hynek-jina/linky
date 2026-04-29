@@ -2,6 +2,8 @@
 /// <reference lib="dom" />
 /// <reference lib="webworker" />
 
+const SW_BUILD_TAG = "linky-sw-2026-04-29T11:50-bump-2";
+
 import type { Event as NostrEvent } from "nostr-tools";
 import { getPublicKey, nip19, SimplePool } from "nostr-tools";
 import { unwrapEvent } from "nostr-tools/nip17";
@@ -409,7 +411,17 @@ registerRoute(
 registerRoute(new NavigationRoute(createHandlerBoundToURL("index.html")));
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(logSw("service worker install"));
+  event.waitUntil(logSw("service worker install", { build: SW_BUILD_TAG }));
+});
+
+// vite-plugin-pwa registerType:"prompt" — the client posts SKIP_WAITING when
+// the user accepts the update banner; without this the new SW would sit in
+// the waiting state forever.
+self.addEventListener("message", (event: ExtendableMessageEvent) => {
+  const data = event.data as { type?: unknown } | null;
+  if (data && typeof data === "object" && data.type === "SKIP_WAITING") {
+    void self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {

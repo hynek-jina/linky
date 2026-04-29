@@ -5,7 +5,7 @@ import {
   getCashuDeterministicSeedFromStorage,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
-import { isCashuOutputsAlreadySignedError } from "./utils/cashuErrors";
+import { isCashuRecoverableOutputCollisionError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
 import {
   dedupeCashuProofs,
@@ -159,7 +159,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
                 break;
               } catch (e) {
                 lastError = e;
-                if (!isCashuOutputsAlreadySignedError(e)) throw e;
+                if (!isCashuRecoverableOutputCollisionError(e)) throw e;
                 bumpCashuDeterministicCounter({
                   mintUrl: mint,
                   unit: walletUnit,
