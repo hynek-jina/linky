@@ -20,6 +20,16 @@ export const useMainSwipePageEffects = ({
   setMainSwipeScrollY,
 }: UseMainSwipePageEffectsParams) => {
   const isMainSwipeRoute = routeKind === "contacts" || routeKind === "wallet";
+  const contactsHeaderVisibleRef = React.useRef(contactsHeaderVisible);
+  const contactsPullProgressRef = React.useRef(contactsPullProgress);
+
+  React.useEffect(() => {
+    contactsHeaderVisibleRef.current = contactsHeaderVisible;
+  }, [contactsHeaderVisible]);
+
+  React.useEffect(() => {
+    contactsPullProgressRef.current = contactsPullProgress;
+  }, [contactsPullProgress]);
 
   React.useEffect(() => {
     if (routeKind !== "contacts") {
@@ -34,21 +44,42 @@ export const useMainSwipePageEffects = ({
     let touchStartY = 0;
     let trackingTouch = false;
 
+    const getWindowScrollTop = () =>
+      Math.max(
+        window.scrollY,
+        window.pageYOffset,
+        document.documentElement.scrollTop,
+        document.body.scrollTop,
+      );
+
+    const isWindowScrolled = () => getWindowScrollTop() > 1;
+
     const resetPull = () => {
       contactsPullDistanceRef.current = 0;
     };
 
+    const hidePullUi = () => {
+      if (contactsHeaderVisibleRef.current) {
+        contactsHeaderVisibleRef.current = false;
+        setContactsHeaderVisible(false);
+      }
+      if (contactsPullProgressRef.current > 0) {
+        contactsPullProgressRef.current = 0;
+        setContactsPullProgress(0);
+      }
+    };
+
     const onScroll = () => {
-      if (isMainSwipeRoute) setMainSwipeScrollY(window.scrollY);
-      if (window.scrollY > 0) {
+      const scrollTop = getWindowScrollTop();
+      if (isMainSwipeRoute) setMainSwipeScrollY(scrollTop);
+      if (scrollTop > 1) {
         resetPull();
-        if (contactsHeaderVisible) setContactsHeaderVisible(false);
-        if (contactsPullProgress > 0) setContactsPullProgress(0);
+        hidePullUi();
       }
     };
 
     const onWheel = (event: WheelEvent) => {
-      if (window.scrollY > 0) return;
+      if (isWindowScrolled()) return;
       if (event.deltaY < 0) {
         contactsPullDistanceRef.current = Math.min(
           contactsPullDistanceRef.current + Math.abs(event.deltaY),
@@ -58,19 +89,22 @@ export const useMainSwipePageEffects = ({
           contactsPullDistanceRef.current / pullThreshold,
           1,
         );
+        contactsPullProgressRef.current = progress;
         setContactsPullProgress(progress);
-        if (progress >= 1) setContactsHeaderVisible(true);
+        if (progress >= 1 && !contactsHeaderVisibleRef.current) {
+          contactsHeaderVisibleRef.current = true;
+          setContactsHeaderVisible(true);
+        }
         return;
       }
       if (event.deltaY > 0) {
         resetPull();
-        if (contactsHeaderVisible) setContactsHeaderVisible(false);
-        if (contactsPullProgress > 0) setContactsPullProgress(0);
+        hidePullUi();
       }
     };
 
     const onTouchStart = (event: TouchEvent) => {
-      if (window.scrollY > 0) return;
+      if (isWindowScrolled()) return;
       const touch = event.touches[0];
       if (!touch) return;
       trackingTouch = true;
@@ -79,28 +113,35 @@ export const useMainSwipePageEffects = ({
     };
 
     const onTouchMove = (event: TouchEvent) => {
-      if (!trackingTouch || window.scrollY > 0) return;
+      if (!trackingTouch || isWindowScrolled()) return;
       const touch = event.touches[0];
       if (!touch) return;
       const delta = touch.clientY - touchStartY;
       if (delta <= 0) {
         resetPull();
-        if (contactsHeaderVisible) setContactsHeaderVisible(false);
-        if (contactsPullProgress > 0) setContactsPullProgress(0);
+        hidePullUi();
         return;
       }
       contactsPullDistanceRef.current = delta;
       const progress = Math.min(delta / pullThreshold, 1);
+      contactsPullProgressRef.current = progress;
       setContactsPullProgress(progress);
-      if (progress >= 1) setContactsHeaderVisible(true);
+      if (progress >= 1 && !contactsHeaderVisibleRef.current) {
+        contactsHeaderVisibleRef.current = true;
+        setContactsHeaderVisible(true);
+      }
     };
 
     const onTouchEnd = () => {
       trackingTouch = false;
-      if (!contactsHeaderVisible) {
+      if (!contactsHeaderVisibleRef.current) {
         resetPull();
-        if (contactsPullProgress > 0) setContactsPullProgress(0);
+        if (contactsPullProgressRef.current > 0) {
+          contactsPullProgressRef.current = 0;
+          setContactsPullProgress(0);
+        }
       } else {
+        contactsPullProgressRef.current = 1;
         setContactsPullProgress(1);
       }
     };
@@ -121,9 +162,7 @@ export const useMainSwipePageEffects = ({
       window.removeEventListener("touchcancel", onTouchEnd);
     };
   }, [
-    contactsHeaderVisible,
     contactsPullDistanceRef,
-    contactsPullProgress,
     isMainSwipeRoute,
     routeKind,
     setContactsHeaderVisible,
