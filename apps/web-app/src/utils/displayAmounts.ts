@@ -187,7 +187,7 @@ export const formatDisplayAmountParts = (
       amountText: getFiatFormatter(locale, currency).format(
         getFiatValue(normalizedAmount, currency, options.fiatRates),
       ),
-      approxPrefix: "~",
+      approxPrefix: normalizedAmount > 0 ? "~" : "",
       unitLabel: getDisplayUnitLabel(currency, options.lang),
     };
   }
