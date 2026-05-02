@@ -115,8 +115,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
         const QRCode = await import("qrcode");
         const qr = await QRCode.toDataURL(tokenText, {
           errorCorrectionLevel: "M",
-          margin: 1,
-          width: 420,
+          margin: 2
         });
         if (!cancelled) {
           setTokenQr(qr);
