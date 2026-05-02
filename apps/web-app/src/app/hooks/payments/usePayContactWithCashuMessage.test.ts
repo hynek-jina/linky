@@ -10,7 +10,7 @@ describe("buildCashuSendAmountAttempts", () => {
         reservedFeeSat: 0,
         maxReservedFeeSat: 5,
       }),
-    ).toEqual([100, 99, 95]);
+    ).toEqual([100, 99, 98, 97, 95]);
   });
 
   it("filters out attempts that would exceed the shared reserve budget", () => {

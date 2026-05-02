@@ -134,10 +134,3 @@ export const buildPaymentFailureAmountAttempts = (
 
   return attempts;
 };
-
-export const getNextRemainingRequestedPaymentAmount = (
-  remainingAmountSat: number,
-  requestedAmountSat: number,
-): number => {
-  return Math.max(0, remainingAmountSat - requestedAmountSat);
-};

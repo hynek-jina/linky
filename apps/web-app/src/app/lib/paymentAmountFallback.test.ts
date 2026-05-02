@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildPaymentFailureAmountAttempts,
   buildPaymentAmountAttempts,
-  getNextRemainingRequestedPaymentAmount,
   getPaymentAmountReserveCap,
   getPaymentAmountShortage,
   isRetryablePaymentAmountFailure,
@@ -14,7 +13,7 @@ describe("buildPaymentAmountAttempts", () => {
   });
 
   it("deduplicates and drops non-positive fallback attempts", () => {
-    expect(buildPaymentAmountAttempts(3, 3)).toEqual([3, 2]);
+    expect(buildPaymentAmountAttempts(3, 3)).toEqual([3, 2, 1]);
     expect(buildPaymentAmountAttempts(1, 1)).toEqual([1]);
   });
 
@@ -74,15 +73,5 @@ describe("isRetryablePaymentAmountFailure", () => {
 
   it("does not retry unrelated failures", () => {
     expect(isRetryablePaymentAmountFailure("Invoice missing")).toBe(false);
-  });
-});
-
-describe("getNextRemainingRequestedPaymentAmount", () => {
-  it("treats reserved fee as consumed from the original request", () => {
-    expect(getNextRemainingRequestedPaymentAmount(249, 249)).toBe(0);
-  });
-
-  it("keeps the rest of the requested total for later mints", () => {
-    expect(getNextRemainingRequestedPaymentAmount(500, 249)).toBe(251);
   });
 });

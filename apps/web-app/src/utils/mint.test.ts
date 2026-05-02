@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getGenericMintIconUrl, getNextMintIconUrl } from "./mint";
+import {
+  getGenericMintIconUrl,
+  getNextMintIconUrl,
+  isTestMintUrl,
+} from "./mint";
 
 describe("getNextMintIconUrl", () => {
   it("falls back to favicon before the generic placeholder", () => {
@@ -22,5 +26,15 @@ describe("getNextMintIconUrl", () => {
 
   it("returns null when the generic placeholder already failed", () => {
     expect(getNextMintIconUrl(getGenericMintIconUrl(), null)).toBe(null);
+  });
+});
+
+describe("isTestMintUrl", () => {
+  it("identifies the offered test mint", () => {
+    expect(isTestMintUrl("https://testnut.cashu.space/")).toBe(true);
+  });
+
+  it("does not flag production mints", () => {
+    expect(isTestMintUrl("https://cashu.cz")).toBe(false);
   });
 });

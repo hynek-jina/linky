@@ -231,6 +231,7 @@ export const en = {
 
   defaultMint: "Default mint",
   selectedMint: "Selected mint",
+  testMintBadge: "test",
   setCustomMint: "Set custom mint",
   mintUrlInvalid: "Invalid mint URL.",
   mintSaved: "Mint saved.",
@@ -242,7 +243,6 @@ export const en = {
   mintsEmpty: "No mints yet. Mints appear here after you accept tokens.",
   mintNotFound: "Mint not found.",
   mintUrl: "URL",
-  mintMpp: "MPP support",
   mintFees: "Fees",
   mintRefresh: "Refresh info",
   mintDelete: "Delete mint",
@@ -559,8 +559,6 @@ export const en = {
   payQueued: "Payment queued for delivery.",
   payQueuedMessage: "Queued payment {amount} {unit} → {name}.",
   payFailed: "Payment failed",
-  payMultiMintUnsupported:
-    "A single Lightning payment cannot yet be assembled from tokens across multiple mints.",
   payPromiseLimit: "Promise limit reached.",
 
   paidSent: "Sent {amount} {unit}.",

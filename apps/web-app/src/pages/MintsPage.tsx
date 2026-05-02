@@ -1,5 +1,6 @@
 import type { MintUrlInput } from "../app/types/appTypes";
 import { MintButton } from "../components/MintButton";
+import { isTestMintUrl } from "../utils/mint";
 
 interface MintIcon {
   failed: boolean;
@@ -59,6 +60,30 @@ export function MintsPage({
     if (selectedMint) set.add(selectedMint);
     return Array.from(set.values());
   })();
+  const standardMints = buttonMints.filter((mint) => !isTestMintUrl(mint));
+  const testMints = buttonMints.filter((mint) => isTestMintUrl(mint));
+
+  const renderMintButton = (mint: string) => {
+    const isSelected = normalizeMintUrl(mint) === selectedMint;
+    const label = stripped(mint);
+    const fallbackLetter = (label.match(/[a-z]/i)?.[0] ?? "?").toUpperCase();
+    const isTestMint = isTestMintUrl(mint);
+
+    return (
+      <MintButton
+        key={mint}
+        mint={mint}
+        getMintIconUrl={getMintIconUrl}
+        isSelected={isSelected}
+        isTestMint={isTestMint}
+        label={label}
+        badgeLabel={isTestMint ? t("testMintBadge") : ""}
+        fallbackLetter={fallbackLetter}
+        disabled={cashuIsBusy}
+        onClick={() => void applyDefaultMintSelection(mint)}
+      />
+    );
+  };
 
   return (
     <section className="panel">
@@ -69,32 +94,17 @@ export function MintsPage({
       </div>
 
       <div className="settings-row" style={{ marginBottom: 10 }}>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
-          }}
-        >
-          {buttonMints.map((mint) => {
-            const isSelected = normalizeMintUrl(mint) === selectedMint;
-            const label = stripped(mint);
-            const fallbackLetter = (
-              label.match(/[a-z]/i)?.[0] ?? "?"
-            ).toUpperCase();
-            return (
-              <MintButton
-                key={mint}
-                mint={mint}
-                getMintIconUrl={getMintIconUrl}
-                isSelected={isSelected}
-                label={label}
-                fallbackLetter={fallbackLetter}
-                disabled={cashuIsBusy}
-                onClick={() => void applyDefaultMintSelection(mint)}
-              />
-            );
-          })}
+        <div className="mint-choice-list">
+          <div className="mint-choice-group">
+            {standardMints.map((mint) => renderMintButton(mint))}
+          </div>
+          {testMints.length > 0 ? (
+            <div className="mint-choice-test-group">
+              <div className="mint-choice-group">
+                {testMints.map((mint) => renderMintButton(mint))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 

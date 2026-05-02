@@ -210,7 +210,7 @@ import {
 } from "./lib/paymentAmountFallback";
 import {
   buildCashuMintCandidates as buildCashuMintCandidatesBase,
-  requiresMultipleMintsForAmount,
+  selectSingleMintCandidateForAmount,
 } from "./lib/paymentMintSelection";
 import {
   buildCashuPaymentRequestMessage,
@@ -2856,10 +2856,9 @@ export const useAppShellComposition = () => {
       return buildCashuMintCandidatesBase(
         mintGroups,
         normalizeMintUrl(preferredMint ?? ""),
-        mintInfoByUrl,
       );
     },
-    [mintInfoByUrl],
+    [],
   );
 
   const publishWrappedWithRetry = React.useCallback(
@@ -3012,7 +3011,6 @@ export const useAppShellComposition = () => {
       formatDisplayedAmountParts,
       insert,
       logPaymentEvent,
-      mintInfoByUrl,
       normalizeMintUrl,
       setCashuIsBusy,
       setContactsOnboardingHasPaid,
@@ -4223,120 +4221,121 @@ export const useAppShellComposition = () => {
         return;
       }
 
-      if (requiresMultipleMintsForAmount(candidates, amountSat)) {
-        setStatus(t("payMultiMintUnsupported"));
+      const candidate = selectSingleMintCandidateForAmount(
+        candidates,
+        amountSat,
+      );
+      if (!candidate) {
+        setStatus(t("payInsufficient"));
         return;
       }
 
       const maxReservedFeeSat = getPaymentAmountReserveCap(
         amountSat,
-        cashuBalance,
+        candidate.sum,
       );
 
       let selectedTokenId: CashuTokenId | null = null;
       let finalError: string | null = null;
 
-      for (const candidate of candidates) {
-        if (candidate.sum < amountSat) continue;
+      const attempts = buildPaymentAmountAttempts(
+        amountSat,
+        candidate.sum,
+      ).filter((attemptAmountSat) => {
+        return amountSat - attemptAmountSat <= maxReservedFeeSat;
+      });
 
-        const attempts = buildPaymentAmountAttempts(
-          amountSat,
-          candidate.sum,
-        ).filter((attemptAmountSat) => {
-          return amountSat - attemptAmountSat <= maxReservedFeeSat;
+      if (attempts.length === 0) {
+        setStatus(t("payInsufficient"));
+        return;
+      }
+
+      for (const attemptAmountSat of attempts) {
+        const split = await createSendTokenWithTokensAtMint({
+          amount: attemptAmountSat,
+          mint: candidate.mint,
+          tokens: candidate.tokens,
+          unit: "sat",
         });
 
-        if (attempts.length === 0) continue;
-
-        for (const attemptAmountSat of attempts) {
-          const split = await createSendTokenWithTokensAtMint({
-            amount: attemptAmountSat,
-            mint: candidate.mint,
-            tokens: candidate.tokens,
-            unit: "sat",
-          });
-
-          if (!split.ok) {
-            finalError = String(split.error ?? "unknown");
-
-            if (split.remainingToken && split.remainingAmount > 0) {
-              const recoveryInsert = await insertCashuTokenRecord({
-                token: split.remainingToken,
-                mint: split.mint,
-                unit: split.unit,
-                amount: split.remainingAmount,
-                state: "accepted",
-              });
-              if (!recoveryInsert.result.ok) {
-                throw new Error(String(recoveryInsert.result.error));
-              }
-
-              const spentRows = cashuTokensWithMeta.filter((row) => {
-                return (
-                  isCashuTokenAcceptedState(row.state) &&
-                  String(row.mint ?? "").trim() === candidate.mint
-                );
-              });
-              await deleteCashuRows(spentRows, recoveryInsert.ownerId);
-              break;
-            }
-
-            if (isRetryablePaymentAmountFailure(finalError)) {
-              continue;
-            }
-            break;
-          }
-
-          const spentRows = cashuTokensWithMeta.filter((row) => {
-            return (
-              isCashuTokenAcceptedState(row.state) &&
-              String(row.mint ?? "").trim() === candidate.mint
-            );
-          });
-          const spentOwnerId = await resolveOwnerIdForWrite();
-          await deleteCashuRows(spentRows, spentOwnerId);
+        if (!split.ok) {
+          finalError = String(split.error ?? "unknown");
 
           if (split.remainingToken && split.remainingAmount > 0) {
-            const remainingInsert = await insertCashuTokenRecord({
+            const recoveryInsert = await insertCashuTokenRecord({
               token: split.remainingToken,
               mint: split.mint,
               unit: split.unit,
               amount: split.remainingAmount,
               state: "accepted",
             });
-            if (!remainingInsert.result.ok) {
-              throw new Error(String(remainingInsert.result.error));
+            if (!recoveryInsert.result.ok) {
+              throw new Error(String(recoveryInsert.result.error));
             }
+
+            const spentRows = cashuTokensWithMeta.filter((row) => {
+              return (
+                isCashuTokenAcceptedState(row.state) &&
+                String(row.mint ?? "").trim() === candidate.mint
+              );
+            });
+            await deleteCashuRows(spentRows, recoveryInsert.ownerId);
+            break;
           }
 
-          const issuedInsert = await insertCashuTokenRecord({
-            token: split.sendToken,
-            mint: split.mint,
-            unit: split.unit,
-            amount: split.sendAmount,
-            state: "issued",
-          });
-          if (!issuedInsert.result.ok) {
-            throw new Error(String(issuedInsert.result.error));
+          if (isRetryablePaymentAmountFailure(finalError)) {
+            continue;
           }
-
-          selectedTokenId = issuedInsert.result.value.id;
-          logPaymentEvent({
-            direction: "out",
-            status: "ok",
-            amount: split.sendAmount,
-            fee: amountSat - split.sendAmount,
-            mint: split.mint,
-            unit: split.unit,
-            error: null,
-            contactId: null,
-            method: "unknown",
-            phase: "swap",
-          });
           break;
         }
 
-        if (selectedTokenId) break;
+        const spentRows = cashuTokensWithMeta.filter((row) => {
+          return (
+            isCashuTokenAcceptedState(row.state) &&
+            String(row.mint ?? "").trim() === candidate.mint
+          );
+        });
+        const spentOwnerId = await resolveOwnerIdForWrite();
+        await deleteCashuRows(spentRows, spentOwnerId);
+
+        if (split.remainingToken && split.remainingAmount > 0) {
+          const remainingInsert = await insertCashuTokenRecord({
+            token: split.remainingToken,
+            mint: split.mint,
+            unit: split.unit,
+            amount: split.remainingAmount,
+            state: "accepted",
+          });
+          if (!remainingInsert.result.ok) {
+            throw new Error(String(remainingInsert.result.error));
+          }
+        }
+
+        const issuedInsert = await insertCashuTokenRecord({
+          token: split.sendToken,
+          mint: split.mint,
+          unit: split.unit,
+          amount: split.sendAmount,
+          state: "issued",
+        });
+        if (!issuedInsert.result.ok) {
+          throw new Error(String(issuedInsert.result.error));
+        }
+
+        selectedTokenId = issuedInsert.result.value.id;
+        logPaymentEvent({
+          direction: "out",
+          status: "ok",
+          amount: split.sendAmount,
+          fee: amountSat - split.sendAmount,
+          mint: split.mint,
+          unit: split.unit,
+          error: null,
+          contactId: null,
+          method: "unknown",
+          phase: "swap",
+        });
+        break;
       }
 
       if (!selectedTokenId) {

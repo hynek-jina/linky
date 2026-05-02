@@ -18,11 +18,10 @@ import {
   buildPaymentAmountAttempts,
   isRetryablePaymentAmountFailure,
 } from "../lib/paymentAmountFallback";
-import { requiresMultipleMintsForAmount } from "../lib/paymentMintSelection";
+import { selectSingleMintCandidateForAmount } from "../lib/paymentMintSelection";
 import type {
   CashuTokenRowLike,
   ContactPayRowLike,
-  LocalMintInfoRow,
   LoggedPaymentEventParams,
   MintUrlInput,
 } from "../types/appTypes";
@@ -47,7 +46,6 @@ interface UseLightningPaymentsDomainParams {
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   insert: EvoluMutations["insert"];
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
-  mintInfoByUrl: Map<string, LocalMintInfoRow>;
   normalizeMintUrl: (url: MintUrlInput) => string | null;
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
   setContactsOnboardingHasPaid: React.Dispatch<React.SetStateAction<boolean>>;
@@ -72,7 +70,6 @@ export const useLightningPaymentsDomain = ({
   formatDisplayedAmountParts,
   insert,
   logPaymentEvent,
-  mintInfoByUrl,
   normalizeMintUrl,
   setCashuIsBusy,
   setContactsOnboardingHasPaid,
@@ -169,30 +166,18 @@ export const useLightningPaymentsDomain = ({
           return false;
         }
 
-        if (
-          typeof invoiceAmountSat === "number" &&
-          requiresMultipleMintsForAmount(candidates, invoiceAmountSat)
-        ) {
-          const errorMessage = t("payMultiMintUnsupported");
-          logPaymentEvent({
-            direction: "out",
-            status: "error",
-            amount: invoiceAmountSat,
-            fee: null,
-            mint: null,
-            unit: "sat",
-            error: errorMessage,
-            contactId: null,
-            method: "lightning_invoice",
-            phase: "melt",
-          });
-          setStatus(`${t("payFailed")}: ${errorMessage}`);
+        const selectedCandidate = selectSingleMintCandidateForAmount(
+          candidates,
+          invoiceAmountSat ?? 0,
+        );
+        if (!selectedCandidate) {
+          setStatus(t("payInsufficient"));
           return false;
         }
 
         let lastError: unknown = null;
         let lastMint: string | null = null;
-        for (const candidate of candidates) {
+        for (const candidate of [selectedCandidate]) {
           try {
             const { meltInvoiceWithTokensAtMint } =
               await import("../../cashuMelt");
@@ -235,11 +220,6 @@ export const useLightningPaymentsDomain = ({
 
               lastError = result.error;
               lastMint = candidate.mint;
-
-              // If no swap happened, we can safely try other mints.
-              if (!result.remainingToken) {
-                continue;
-              }
 
               logPaymentEvent({
                 direction: "out",
@@ -406,30 +386,26 @@ export const useLightningPaymentsDomain = ({
           mintGroups.set(mint, entry);
         }
 
-        const candidates = Array.from(mintGroups.entries())
-          .map(([mint, info]) => ({ mint, ...info }))
-          .sort((a, b) => {
-            const normalize = (u: string) =>
-              String(u ?? "")
-                .trim()
-                .replace(/\/+$/, "");
-            const mpp = (mint: string) => {
-              const row = mintInfoByUrl.get(normalize(mint));
-              return String(row?.supportsMpp ?? "") === "1" ? 1 : 0;
-            };
-            const dmpp = mpp(b.mint) - mpp(a.mint);
-            if (dmpp !== 0) return dmpp;
-            return b.sum - a.sum;
-          });
+        const preferredMint = normalizeMintUrl(defaultMintUrl ?? "");
+        const candidates = buildCashuMintCandidates(mintGroups, preferredMint);
 
         if (candidates.length === 0) {
           setStatus(t("payInsufficient"));
           return;
         }
 
+        const selectedCandidate = selectSingleMintCandidateForAmount(
+          candidates,
+          amountSat,
+        );
+        if (!selectedCandidate) {
+          setStatus(t("payInsufficient"));
+          return;
+        }
+
         const amountAttempts = buildPaymentAmountAttempts(
           amountSat,
-          cashuBalance,
+          selectedCandidate.sum,
         );
         const queuedAmountAttempts = [...amountAttempts];
         const seenAmountAttempts = new Set(queuedAmountAttempts);
@@ -459,16 +435,6 @@ export const useLightningPaymentsDomain = ({
           const hasLowerAmountFallback =
             attemptIndex < queuedAmountAttempts.length - 1;
 
-          if (requiresMultipleMintsForAmount(candidates, attemptedAmountSat)) {
-            if (hasLowerAmountFallback) {
-              continue;
-            }
-
-            finalErrorMessage = t("payMultiMintUnsupported");
-            finalErrorMint = null;
-            break;
-          }
-
           let attemptInvoice: string;
           try {
             setStatus(t("payFetchingInvoice"));
@@ -497,7 +463,7 @@ export const useLightningPaymentsDomain = ({
           let lastMint: string | null = null;
           let shouldRetryWithLowerAmount = false;
 
-          for (const candidate of candidates) {
+          for (const candidate of [selectedCandidate]) {
             try {
               const { meltInvoiceWithTokensAtMint } =
                 await import("../../cashuMelt");
@@ -677,16 +643,17 @@ export const useLightningPaymentsDomain = ({
       }
     },
     [
-      cashuBalance,
+      buildCashuMintCandidates,
       canPayWithCashu,
       cashuIsBusy,
       cashuTokensWithMeta,
       contacts,
+      defaultMintUrl,
       formatDisplayedAmountParts,
       insertCashuToken,
       logPaymentEvent,
       markCashuTokenDeleted,
-      mintInfoByUrl,
+      normalizeMintUrl,
       setCashuIsBusy,
       setContactsOnboardingHasPaid,
       setPostPaySaveContact,
