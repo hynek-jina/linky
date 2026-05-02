@@ -15,6 +15,7 @@ export const cs = {
   appVersionLabel: "Verze",
   reloadApp: "Obnovit aplikaci",
   reloadNow: "Obnovit teď",
+  cancel: "Zrušit",
   dedupeContactsNone: "Žádné duplicity nenalezeny.",
   dedupeContactsResult:
     "Sloučeno {groups} skupin, odstraněno {removed} kontaktů, přesunuto {moved} zpráv.",
@@ -494,6 +495,8 @@ export const cs = {
   cashuMarkReserved: "Označit jako rezervované",
   cashuSendToContact: "Poslat kontaktu",
   cashuSelectContactToSend: "Vyberte kontakt, kterému se token pošle.",
+  cashuContactSendPendingBanner:
+    "Máte připraveno {amount}. Kliknutím na kontakt je odešlete.",
   cashuMarkAvailable: "Označit jako dostupné",
   cashuReserved: "Token byl označen jako rezervovaný.",
   cashuReturnToWallet: "Vrátit do peněženky",

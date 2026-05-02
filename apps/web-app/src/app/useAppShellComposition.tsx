@@ -2297,20 +2297,22 @@ export const useAppShellComposition = () => {
     myProfileLnAddress ?? npubCashLightningAddress;
 
   const {
+    cycleProfileAvatarControl,
     isProfileEditing,
     onPickProfilePhoto,
     onProfilePhotoSelected,
+    profileCustomPictureUrl,
     profileEditInitialRef,
     profileEditLnAddress,
     profileEditName,
     profileEditPicture,
     profileEditsSavable,
     profilePhotoInputRef,
+    profileSelectedPictureKind,
     saveProfileEdits,
     setIsProfileEditing,
     setProfileEditLnAddress,
     setProfileEditName,
-    setProfileEditPicture,
     toggleProfileEditing,
   } = useProfileEditor({
     currentNpub,
@@ -3489,6 +3491,35 @@ export const useAppShellComposition = () => {
     },
     [resolveOwnerIdForWrite, setStatus, t, update],
   );
+
+  const pendingCashuContactSend = React.useMemo(() => {
+    if (!pendingCashuTokenContactPickId) return null;
+
+    const row = cashuTokensAllFiltered.find(
+      (candidate) =>
+        candidate.id === pendingCashuTokenContactPickId &&
+        !candidate.isDeleted &&
+        isCashuTokenIssuedState(candidate.state),
+    );
+    if (!row) return null;
+
+    const meta = extractCashuTokenMeta(row);
+    const amountSat = Number(meta.amount ?? row.amount ?? 0);
+    if (!Number.isFinite(amountSat) || amountSat <= 0) return null;
+
+    return {
+      amountSat: Math.floor(amountSat),
+      tokenId: pendingCashuTokenContactPickId,
+    };
+  }, [cashuTokensAllFiltered, pendingCashuTokenContactPickId]);
+
+  const cancelPendingCashuContactSend = React.useCallback(async () => {
+    const tokenId = pendingCashuContactSend?.tokenId ?? null;
+    setPendingCashuTokenContactPickId(null);
+    if (!tokenId) return;
+
+    await returnCashuTokenToWallet(tokenId);
+  }, [pendingCashuContactSend, returnCashuTokenToWallet]);
 
   const reserveCashuToken = React.useCallback(
     async (id: CashuTokenId) => {
@@ -5030,6 +5061,7 @@ export const useAppShellComposition = () => {
   });
 
   const topbarRight = buildTopbarRight({
+    isProfileEditing,
     route,
     t,
     toggleMenu,
@@ -5340,6 +5372,7 @@ export const useAppShellComposition = () => {
 
   const { moneyRouteProps } = usePaymentMoneyComposition({
     moneyRouteBuilderInput: {
+      canSendCashuTokenToContact: contacts.length > 0,
       canWriteNfc,
       canPayWithCashu,
       cashuBalance,
@@ -5436,6 +5469,7 @@ export const useAppShellComposition = () => {
       onDeclinePaymentRequest: onDeclineChatPaymentRequest,
       onEdit: onEditChatMessage,
       onPayPaymentRequest: onPayChatPaymentRequest,
+      cycleProfileAvatarControl,
       onPickProfilePhoto,
       onProfilePhotoSelected,
       onReact: onReactToChatMessage,
@@ -5448,11 +5482,13 @@ export const useAppShellComposition = () => {
       payWithCashuEnabled,
       pendingDeleteId,
       reactionsByMessageId,
+      profileCustomPictureUrl,
       profileEditLnAddress,
       profileEditName,
       profileEditPicture,
       profileEditsSavable,
       profilePhotoInputRef,
+      profileSelectedPictureKind,
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
       replyContext,
@@ -5467,7 +5503,6 @@ export const useAppShellComposition = () => {
       setPayAmount,
       setProfileEditLnAddress,
       setProfileEditName,
-      setProfileEditPicture,
       t,
     },
   });
@@ -5655,12 +5690,14 @@ export const useAppShellComposition = () => {
     pendingLnurlWithdrawConfirmation,
     pendingLightningInvoiceConfirmation,
     postPaySaveContact,
+    profileCustomPictureUrl,
     profileEditInitialRef,
     profileEditLnAddress,
     profileEditName,
     profileEditPicture,
     profileEditsSavable,
     profilePhotoInputRef,
+    profileSelectedPictureKind,
     profileQrIsOpen,
     route,
     scanAllowsManualContact,
@@ -5688,6 +5725,7 @@ export const useAppShellComposition = () => {
     contactsGuideNav,
     copyShareOptionsText,
     copyText,
+    cycleProfileAvatarControl,
     onPickProfilePhoto,
     onPickScanImage,
     onProfilePhotoSelected,
@@ -5706,7 +5744,6 @@ export const useAppShellComposition = () => {
     setPostPaySaveContact,
     setProfileEditLnAddress,
     setProfileEditName,
-    setProfileEditPicture,
     stopContactsGuide,
     shareOptionsViaEmail,
     shareOptionsViaSms,
@@ -5718,11 +5755,13 @@ export const useAppShellComposition = () => {
   return {
     appActions,
     appState,
+    cancelPendingCashuContactSend,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNsec,
     displayUnit,
     formatDisplayedAmountParts,
+    formatDisplayedAmountText,
     isMainSwipeRoute,
     lang,
     mainSwipeRouteProps,
@@ -5736,6 +5775,7 @@ export const useAppShellComposition = () => {
     pasteReturningSlip39FromClipboard,
     pickPendingOnboardingPhoto,
     peopleRouteProps,
+    pendingCashuContactSend,
     pushToast,
     recentlyReceivedToken,
     route,

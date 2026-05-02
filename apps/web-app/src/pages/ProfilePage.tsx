@@ -1,4 +1,6 @@
 import React from "react";
+import type { AvatarEditorControlId } from "../derivedProfile";
+import { ProfileAvatarEditor } from "../components/ProfileAvatarEditor";
 import { ProfileQrButton } from "../components/ProfileQrButton";
 import {
   formatShortLightningAddress,
@@ -15,6 +17,7 @@ interface DerivedProfile {
 interface ProfilePageProps {
   copyText: (text: string) => Promise<void>;
   currentNpub: string | null;
+  cycleProfileAvatarControl: (controlId: AvatarEditorControlId) => void;
   derivedProfile: DerivedProfile | null;
   effectiveMyLightningAddress: string | null;
   effectiveProfileName: string | null;
@@ -25,21 +28,23 @@ interface ProfilePageProps {
   onProfilePhotoSelected: (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => Promise<void>;
+  profileCustomPictureUrl: string;
   profileEditLnAddress: string;
   profileEditName: string;
   profileEditPicture: string;
   profileEditsSavable: boolean;
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
+  profileSelectedPictureKind: "custom" | "generated";
   saveProfileEdits: () => Promise<void>;
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
-  setProfileEditPicture: (value: string) => void;
   t: (key: string) => string;
 }
 
 export function ProfilePage({
   copyText,
   currentNpub,
+  cycleProfileAvatarControl,
   derivedProfile,
   effectiveMyLightningAddress,
   effectiveProfileName,
@@ -48,15 +53,16 @@ export function ProfilePage({
   myProfileQr,
   onPickProfilePhoto,
   onProfilePhotoSelected,
+  profileCustomPictureUrl,
   profileEditLnAddress,
   profileEditName,
   profileEditPicture,
   profileEditsSavable,
   profilePhotoInputRef,
+  profileSelectedPictureKind,
   saveProfileEdits,
   setProfileEditLnAddress,
   setProfileEditName,
-  setProfileEditPicture,
   t,
 }: ProfilePageProps): React.ReactElement {
   return (
@@ -67,65 +73,20 @@ export function ProfilePage({
         <>
           {isProfileEditing ? (
             <>
-              <div className="profile-detail" style={{ marginBottom: 10 }}>
-                <div className="contact-avatar is-xl" aria-hidden="true">
-                  {profileEditPicture ? (
-                    <img
-                      src={profileEditPicture}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : effectiveProfilePicture ? (
-                    <img
-                      src={effectiveProfilePicture}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="contact-avatar-fallback">
-                      {getInitials(
-                        effectiveProfileName ?? formatShortNpub(currentNpub),
-                      )}
-                    </span>
-                  )}
-                </div>
-
-                <input
-                  ref={profilePhotoInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => void onProfilePhotoSelected(e)}
-                  style={{ display: "none" }}
-                />
-
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => void onPickProfilePhoto()}
-                  >
-                    {t("profileUploadPhoto")}
-                  </button>
-
-                  {derivedProfile &&
-                  profileEditPicture.trim() !== derivedProfile.pictureUrl ? (
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() =>
-                        setProfileEditPicture(derivedProfile.pictureUrl)
-                      }
-                      title={t("restore")}
-                      aria-label={t("restore")}
-                      style={{ paddingInline: 10, minWidth: 40 }}
-                    >
-                      ↺
-                    </button>
-                  ) : null}
-                </div>
-              </div>
+              <ProfileAvatarEditor
+                currentNpub={currentNpub}
+                cycleProfileAvatarControl={cycleProfileAvatarControl}
+                effectiveProfileName={effectiveProfileName}
+                effectiveProfilePicture={effectiveProfilePicture}
+                onPickProfilePhoto={onPickProfilePhoto}
+                onProfilePhotoSelected={onProfilePhotoSelected}
+                profileCustomPictureUrl={profileCustomPictureUrl}
+                profileEditName={profileEditName}
+                profileEditPicture={profileEditPicture}
+                profilePhotoInputRef={profilePhotoInputRef}
+                profileSelectedPictureKind={profileSelectedPictureKind}
+                t={t}
+              />
 
               <div
                 style={{
@@ -135,19 +96,6 @@ export function ProfilePage({
                 }}
               >
                 <label htmlFor="profileName">{t("name")}</label>
-                {derivedProfile &&
-                profileEditName.trim() !== derivedProfile.name ? (
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => setProfileEditName(derivedProfile.name)}
-                    title={t("restore")}
-                    aria-label={t("restore")}
-                    style={{ paddingInline: 10, minWidth: 40 }}
-                  >
-                    ↺
-                  </button>
-                ) : null}
               </div>
               <input
                 id="profileName"

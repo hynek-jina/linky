@@ -4,6 +4,7 @@ import type { MoneyRoutesProps } from "../AppRouteContent";
 type MoneyRouteProps = MoneyRoutesProps;
 
 interface BuildMoneyRoutePropsParams {
+  canSendCashuTokenToContact: boolean;
   canWriteNfc: boolean;
   canPayWithCashu: MoneyRoutesProps["lnAddressPayProps"]["canPayWithCashu"];
   cashuBalance: MoneyRoutesProps["cashuTokensProps"]["cashuBalance"];
@@ -77,6 +78,7 @@ interface BuildMoneyRoutePropsParams {
 }
 
 export const buildMoneyRouteProps = ({
+  canSendCashuTokenToContact,
   canWriteNfc,
   canPayWithCashu,
   cashuBalance,
@@ -165,6 +167,7 @@ export const buildMoneyRouteProps = ({
         throw new Error("invalid route for cashu token");
       }
       return {
+        canSendToContact: canSendCashuTokenToContact,
         canWriteToNfc: canWriteNfc,
         cashuTokensAll,
         routeId: route.id,

@@ -15,6 +15,7 @@ interface BuildPeopleRoutePropsParams {
   contactPayMethod: PeopleRoutesProps["contactPayProps"]["contactPayMethod"];
   copyText: PeopleRoutesProps["profileProps"]["copyText"];
   currentNpub: PeopleRoutesProps["profileProps"]["currentNpub"];
+  cycleProfileAvatarControl: PeopleRoutesProps["profileProps"]["cycleProfileAvatarControl"];
   derivedProfile: PeopleRoutesProps["profileProps"]["derivedProfile"];
   displayUnit: PeopleRoutesProps["contactPayProps"]["displayUnit"];
   editingId: PeopleRoutesProps["contactEditProps"]["editingId"];
@@ -52,11 +53,13 @@ interface BuildPeopleRoutePropsParams {
   payWithCashuEnabled: PeopleRoutesProps["chatProps"]["payWithCashuEnabled"];
   reactionsByMessageId: PeopleRoutesProps["chatProps"]["reactionsByMessageId"];
   pendingDeleteId: PeopleRoutesProps["contactEditProps"]["pendingDeleteId"];
+  profileCustomPictureUrl: PeopleRoutesProps["profileProps"]["profileCustomPictureUrl"];
   profileEditLnAddress: PeopleRoutesProps["profileProps"]["profileEditLnAddress"];
   profileEditName: PeopleRoutesProps["profileProps"]["profileEditName"];
   profileEditPicture: PeopleRoutesProps["profileProps"]["profileEditPicture"];
   profileEditsSavable: PeopleRoutesProps["profileProps"]["profileEditsSavable"];
   profilePhotoInputRef: PeopleRoutesProps["profileProps"]["profilePhotoInputRef"];
+  profileSelectedPictureKind: PeopleRoutesProps["profileProps"]["profileSelectedPictureKind"];
   requestDeleteCurrentContact: PeopleRoutesProps["contactEditProps"]["requestDeleteCurrentContact"];
   requestSelectedContact: PeopleRoutesProps["contactPayProps"]["requestSelectedContact"];
   resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
@@ -72,7 +75,6 @@ interface BuildPeopleRoutePropsParams {
   setPayAmount: PeopleRoutesProps["contactPayProps"]["setPayAmount"];
   setProfileEditLnAddress: PeopleRoutesProps["profileProps"]["setProfileEditLnAddress"];
   setProfileEditName: PeopleRoutesProps["profileProps"]["setProfileEditName"];
-  setProfileEditPicture: PeopleRoutesProps["profileProps"]["setProfileEditPicture"];
   t: PeopleRoutesProps["chatProps"]["t"];
 }
 
@@ -91,6 +93,7 @@ export const buildPeopleRouteProps = ({
   contactPayMethod,
   copyText,
   currentNpub,
+  cycleProfileAvatarControl,
   derivedProfile,
   displayUnit,
   editingId,
@@ -128,11 +131,13 @@ export const buildPeopleRouteProps = ({
   payWithCashuEnabled,
   reactionsByMessageId,
   pendingDeleteId,
+  profileCustomPictureUrl,
   profileEditLnAddress,
   profileEditName,
   profileEditPicture,
   profileEditsSavable,
   profilePhotoInputRef,
+  profileSelectedPictureKind,
   requestDeleteCurrentContact,
   requestSelectedContact,
   resetEditedContactFieldFromNostr,
@@ -148,7 +153,6 @@ export const buildPeopleRouteProps = ({
   setPayAmount,
   setProfileEditLnAddress,
   setProfileEditName,
-  setProfileEditPicture,
   t,
 }: BuildPeopleRoutePropsParams): PeopleRoutesProps => {
   return {
@@ -239,7 +243,9 @@ export const buildPeopleRouteProps = ({
     },
     profileProps: {
       currentNpub,
+      cycleProfileAvatarControl,
       isProfileEditing,
+      profileCustomPictureUrl,
       profileEditPicture,
       effectiveProfilePicture,
       effectiveProfileName,
@@ -250,7 +256,7 @@ export const buildPeopleRouteProps = ({
       myProfileQr,
       effectiveMyLightningAddress,
       profilePhotoInputRef,
-      setProfileEditPicture,
+      profileSelectedPictureKind,
       setProfileEditName,
       setProfileEditLnAddress,
       onProfilePhotoSelected,

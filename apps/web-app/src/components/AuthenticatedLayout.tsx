@@ -92,6 +92,7 @@ export function AuthenticatedLayout({
           copyText={actions.copyText}
           currentNpub={state.currentNpub}
           currentNsec={state.currentNsec}
+          cycleProfileAvatarControl={actions.cycleProfileAvatarControl}
           derivedProfile={state.derivedProfile}
           effectiveMyLightningAddress={state.effectiveMyLightningAddress}
           effectiveProfileName={state.effectiveProfileName}
@@ -102,16 +103,17 @@ export function AuthenticatedLayout({
           onPickProfilePhoto={actions.onPickProfilePhoto}
           onProfilePhotoSelected={actions.onProfilePhotoSelected}
           onSaveProfileEdits={actions.saveProfileEdits}
+          profileCustomPictureUrl={state.profileCustomPictureUrl}
           profileEditInitialRef={state.profileEditInitialRef}
           profileEditLnAddress={state.profileEditLnAddress}
           profileEditName={state.profileEditName}
           profileEditPicture={state.profileEditPicture}
           profileEditsSavable={state.profileEditsSavable}
           profilePhotoInputRef={state.profilePhotoInputRef}
+          profileSelectedPictureKind={state.profileSelectedPictureKind}
           setIsProfileEditing={actions.setIsProfileEditing}
           setProfileEditLnAddress={actions.setProfileEditLnAddress}
           setProfileEditName={actions.setProfileEditName}
-          setProfileEditPicture={actions.setProfileEditPicture}
           t={state.t}
           toggleProfileEditing={actions.toggleProfileEditing}
           writeCurrentNpubToNfc={actions.writeCurrentNpubToNfc}

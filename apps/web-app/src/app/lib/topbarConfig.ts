@@ -12,6 +12,7 @@ interface BuildTopbarArgs {
 }
 
 interface BuildTopbarRightArgs {
+  isProfileEditing: boolean;
   route: Route;
   t: (key: string) => string;
   toggleMenu: () => void;
@@ -243,6 +244,7 @@ export const buildTopbar = ({
 };
 
 export const buildTopbarRight = ({
+  isProfileEditing,
   route,
   t,
   toggleMenu,
@@ -264,7 +266,7 @@ export const buildTopbarRight = ({
     };
   }
 
-  if (route.kind === "profile") {
+  if (route.kind === "profile" && !isProfileEditing) {
     return {
       icon: "✎",
       label: t("edit"),

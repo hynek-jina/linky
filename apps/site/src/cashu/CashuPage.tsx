@@ -358,12 +358,14 @@ const formatCashuDisplayAmount = (
 
   if (displayCurrency === "czk" && fiatRates) {
     const fiatValue = (normalizedAmount / satsPerBtc) * fiatRates.czkPerBtc;
-    return `~${formatInteger(Math.round(fiatValue), lang)} Kč`;
+    const approxPrefix = normalizedAmount > 0 ? "~" : "";
+    return `${approxPrefix}${formatInteger(Math.round(fiatValue), lang)} Kč`;
   }
 
   if (displayCurrency === "usd" && fiatRates) {
     const fiatValue = (normalizedAmount / satsPerBtc) * fiatRates.usdPerBtc;
-    return `~${formatInteger(Math.round(fiatValue), lang)} USD`;
+    const approxPrefix = normalizedAmount > 0 ? "~" : "";
+    return `${approxPrefix}${formatInteger(Math.round(fiatValue), lang)} USD`;
   }
 
   return `${formatInteger(normalizedAmount, lang)} sat`;

@@ -1,10 +1,12 @@
 import React from "react";
+import type { AvatarEditorControlId } from "../derivedProfile";
 import {
   formatShortLightningAddress,
   formatShortNpub,
   getInitials,
 } from "../utils/formatting";
 import { NfcIcon } from "./NfcIcon";
+import { ProfileAvatarEditor } from "./ProfileAvatarEditor";
 import { ProfileQrButton } from "./ProfileQrButton";
 
 interface ProfileQrModalProps {
@@ -13,6 +15,7 @@ interface ProfileQrModalProps {
   copyText: (text: string) => Promise<void>;
   currentNpub: string | null;
   currentNsec: string | null;
+  cycleProfileAvatarControl: (controlId: AvatarEditorControlId) => void;
   derivedProfile: {
     lnAddress: string;
     name: string;
@@ -27,6 +30,7 @@ interface ProfileQrModalProps {
   onPickProfilePhoto: () => void;
   onProfilePhotoSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSaveProfileEdits: () => void;
+  profileCustomPictureUrl: string;
   profileEditInitialRef: React.MutableRefObject<{
     lnAddress: string;
     name: string;
@@ -37,10 +41,10 @@ interface ProfileQrModalProps {
   profileEditPicture: string;
   profileEditsSavable: boolean;
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
+  profileSelectedPictureKind: "custom" | "generated";
   setIsProfileEditing: (editing: boolean) => void;
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
-  setProfileEditPicture: (value: string) => void;
   t: (key: string) => string;
   toggleProfileEditing: () => void;
   writeCurrentNpubToNfc: () => Promise<void>;
@@ -52,6 +56,7 @@ export function ProfileQrModal({
   copyText,
   currentNpub,
   currentNsec,
+  cycleProfileAvatarControl,
   derivedProfile,
   effectiveMyLightningAddress,
   effectiveProfileName,
@@ -62,16 +67,17 @@ export function ProfileQrModal({
   onPickProfilePhoto,
   onProfilePhotoSelected,
   onSaveProfileEdits,
+  profileCustomPictureUrl,
   profileEditInitialRef,
   profileEditLnAddress,
   profileEditName,
   profileEditPicture,
   profileEditsSavable,
   profilePhotoInputRef,
+  profileSelectedPictureKind,
   setIsProfileEditing,
   setProfileEditLnAddress,
   setProfileEditName,
-  setProfileEditPicture,
   t,
   toggleProfileEditing,
   writeCurrentNpubToNfc,
@@ -117,15 +123,17 @@ export function ProfileQrModal({
                 </span>
               </button>
             ) : null}
-            <button
-              className="topbar-btn"
-              onClick={toggleProfileEditing}
-              aria-label={t("edit")}
-              title={t("edit")}
-              disabled={!currentNpub || !currentNsec}
-            >
-              <span aria-hidden="true">✎</span>
-            </button>
+            {!isProfileEditing ? (
+              <button
+                className="topbar-btn"
+                onClick={toggleProfileEditing}
+                aria-label={t("edit")}
+                title={t("edit")}
+                disabled={!currentNpub || !currentNsec}
+              >
+                <span aria-hidden="true">✎</span>
+              </button>
+            ) : null}
             <button
               className="topbar-btn"
               onClick={() => {
@@ -145,65 +153,20 @@ export function ProfileQrModal({
           <p className="muted">{t("profileMissingNpub")}</p>
         ) : isProfileEditing ? (
           <>
-            <div className="profile-detail" style={{ marginBottom: 10 }}>
-              <div className="contact-avatar is-xl" aria-hidden="true">
-                {profileEditPicture ? (
-                  <img
-                    src={profileEditPicture}
-                    alt=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : effectiveProfilePicture ? (
-                  <img
-                    src={effectiveProfilePicture}
-                    alt=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span className="contact-avatar-fallback">
-                    {getInitials(
-                      effectiveProfileName ?? formatShortNpub(currentNpub),
-                    )}
-                  </span>
-                )}
-              </div>
-
-              <input
-                ref={profilePhotoInputRef}
-                type="file"
-                accept="image/*"
-                onChange={(e) => void onProfilePhotoSelected(e)}
-                style={{ display: "none" }}
-              />
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => void onPickProfilePhoto()}
-                >
-                  {t("profileUploadPhoto")}
-                </button>
-
-                {derivedProfile &&
-                profileEditPicture.trim() !== derivedProfile.pictureUrl ? (
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() =>
-                      setProfileEditPicture(derivedProfile.pictureUrl)
-                    }
-                    title={t("restore")}
-                    aria-label={t("restore")}
-                    style={{ paddingInline: 10, minWidth: 40 }}
-                  >
-                    ↺
-                  </button>
-                ) : null}
-              </div>
-            </div>
+            <ProfileAvatarEditor
+              currentNpub={currentNpub}
+              cycleProfileAvatarControl={cycleProfileAvatarControl}
+              effectiveProfileName={effectiveProfileName}
+              effectiveProfilePicture={effectiveProfilePicture}
+              onPickProfilePhoto={onPickProfilePhoto}
+              onProfilePhotoSelected={onProfilePhotoSelected}
+              profileCustomPictureUrl={profileCustomPictureUrl}
+              profileEditName={profileEditName}
+              profileEditPicture={profileEditPicture}
+              profilePhotoInputRef={profilePhotoInputRef}
+              profileSelectedPictureKind={profileSelectedPictureKind}
+              t={t}
+            />
 
             <div
               style={{
@@ -213,19 +176,6 @@ export function ProfileQrModal({
               }}
             >
               <label htmlFor="profileName">{t("name")}</label>
-              {derivedProfile &&
-              profileEditName.trim() !== derivedProfile.name ? (
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setProfileEditName(derivedProfile.name)}
-                  title={t("restore")}
-                  aria-label={t("restore")}
-                  style={{ paddingInline: 10, minWidth: 40 }}
-                >
-                  ↺
-                </button>
-              ) : null}
             </div>
             <input
               id="profileName"

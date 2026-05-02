@@ -1,4 +1,10 @@
 import React from "react";
+import {
+  cycleGeneratedAvatar,
+  deriveGeneratedAvatar,
+  type AvatarEditorControlId,
+  type DerivedAvatarSelection,
+} from "../../../derivedProfile";
 import type { JsonRecord } from "../../../types/json";
 import {
   deleteCachedProfileAvatar,
@@ -50,6 +56,13 @@ export const useProfileEditor = ({
   const [profileEditName, setProfileEditName] = React.useState("");
   const [profileEditLnAddress, setProfileEditLnAddress] = React.useState("");
   const [profileEditPicture, setProfileEditPicture] = React.useState("");
+  const [, setProfileAvatarSelection] = React.useState<DerivedAvatarSelection>(
+    () => deriveGeneratedAvatar("linky").selection,
+  );
+  const [profileCustomPictureUrl, setProfileCustomPictureUrl] =
+    React.useState("");
+  const [profileSelectedPictureKind, setProfileSelectedPictureKind] =
+    React.useState<"custom" | "generated">("generated");
 
   const profilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const profileEditInitialRef = React.useRef<{
@@ -78,14 +91,22 @@ export const useProfileEditor = ({
         "",
     ).trim();
 
+    const generatedAvatar = deriveGeneratedAvatar(currentNpub ?? initialName);
+    const initialPicture = metaPic || generatedAvatar.pictureUrl;
+    const customPicture =
+      metaPic && metaPic !== generatedAvatar.pictureUrl ? metaPic : "";
+
+    setProfileAvatarSelection(generatedAvatar.selection);
+    setProfileCustomPictureUrl(customPicture);
+    setProfileSelectedPictureKind(customPicture ? "custom" : "generated");
     setProfileEditName(initialName);
     setProfileEditLnAddress(initialLn);
-    setProfileEditPicture(metaPic);
+    setProfileEditPicture(initialPicture);
 
     profileEditInitialRef.current = {
       name: initialName,
       lnAddress: initialLn,
-      picture: metaPic,
+      picture: initialPicture,
     };
 
     setIsProfileEditing(true);
@@ -95,6 +116,7 @@ export const useProfileEditor = ({
     effectiveProfilePicture,
     isProfileEditing,
     myProfileMetadata,
+    currentNpub,
   ]);
 
   const profileEditsDirty = React.useMemo(() => {
@@ -257,6 +279,18 @@ export const useProfileEditor = ({
     profilePhotoInputRef.current?.click();
   }, []);
 
+  const cycleProfileAvatarControl = React.useCallback(
+    (controlId: AvatarEditorControlId) => {
+      setProfileAvatarSelection((currentSelection) => {
+        const nextAvatar = cycleGeneratedAvatar(currentSelection, controlId);
+        setProfileSelectedPictureKind("generated");
+        setProfileEditPicture(nextAvatar.pictureUrl);
+        return nextAvatar.selection;
+      });
+    },
+    [],
+  );
+
   const onProfilePhotoSelected = React.useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0] ?? null;
@@ -265,6 +299,8 @@ export const useProfileEditor = ({
 
       try {
         const dataUrl = await createSquareAvatarDataUrl(file, 160);
+        setProfileCustomPictureUrl(dataUrl);
+        setProfileSelectedPictureKind("custom");
         setProfileEditPicture(dataUrl);
       } catch (error) {
         setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
@@ -274,15 +310,18 @@ export const useProfileEditor = ({
   );
 
   return {
+    cycleProfileAvatarControl,
     isProfileEditing,
     onPickProfilePhoto,
     onProfilePhotoSelected,
+    profileCustomPictureUrl,
     profileEditInitialRef,
     profileEditLnAddress,
     profileEditName,
     profileEditPicture,
     profileEditsSavable,
     profilePhotoInputRef,
+    profileSelectedPictureKind,
     saveProfileEdits,
     setIsProfileEditing,
     setProfileEditLnAddress,

@@ -15,6 +15,7 @@ export const en = {
   appVersionLabel: "Version",
   reloadApp: "Reload app",
   reloadNow: "Reload now",
+  cancel: "Cancel",
   dedupeContactsNone: "No duplicates found.",
   dedupeContactsResult:
     "Merged {groups} groups, removed {removed} contacts, moved {moved} messages.",
@@ -487,6 +488,7 @@ export const en = {
   cashuMarkReserved: "Mark as reserved",
   cashuSendToContact: "Send to Contact",
   cashuSelectContactToSend: "Choose a contact to send this token to.",
+  cashuContactSendPendingBanner: "{amount} ready. Tap a contact to send it.",
   cashuMarkAvailable: "Mark as available",
   cashuReserved: "Token was marked as reserved.",
   cashuReturnToWallet: "Return to wallet",

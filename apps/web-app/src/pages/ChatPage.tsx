@@ -146,6 +146,13 @@ export const ChatPage: FC<ChatPageProps> = ({
     const root = document.documentElement;
     const body = document.body;
     const pendingRefreshTimeouts = new Set<number>();
+    const getWindowScrollTop = () =>
+      Math.max(
+        window.scrollY,
+        window.pageYOffset,
+        document.documentElement.scrollTop,
+        document.body.scrollTop,
+      );
 
     // Prevent body scroll when keyboard opens on iOS
     const prevHtmlOverflow = root.style.overflow;
@@ -185,16 +192,9 @@ export const ChatPage: FC<ChatPageProps> = ({
       } else {
         delete root.dataset.chatKeyboardOpen;
       }
-      // Reset any page scroll caused by keyboard focus on iOS
-      if (window.scrollY > 0) {
-        window.scrollTo(0, 0);
-      }
+
       // Keep chat scrolled to bottom when keyboard opens/closes
       requestAnimationFrame(() => {
-        const input = composeInputRef.current;
-        if (input && document.activeElement === input) {
-          input.scrollIntoView({ block: "nearest" });
-        }
         const c = chatMessagesRef.current;
         if (c) c.scrollTop = c.scrollHeight;
       });
@@ -220,6 +220,11 @@ export const ChatPage: FC<ChatPageProps> = ({
       const input = composeInputRef.current;
       if (!input) return;
       if (event.target !== input) return;
+
+      if (event.type === "focusin" && getWindowScrollTop() > 1) {
+        window.scrollTo(0, 0);
+      }
+
       scheduleViewportRefresh();
     };
 

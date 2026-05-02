@@ -1,6 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from "react";
-import type { DerivedProfileDefaults } from "../../derivedProfile";
+import type {
+  AvatarEditorControlId,
+  DerivedProfileDefaults,
+} from "../../derivedProfile";
 import type { ContactId } from "../../evolu";
 import type { Lang } from "../../i18n";
 import type { LnurlWithdrawPreview } from "../../lnurlPay";
@@ -72,11 +75,13 @@ export interface AppShellCoreContextValue {
     name: string;
     picture: string;
   } | null>;
+  profileCustomPictureUrl: string;
   profileEditLnAddress: string;
   profileEditName: string;
   profileEditPicture: string;
   profileEditsSavable: boolean;
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
+  profileSelectedPictureKind: "custom" | "generated";
   profileQrIsOpen: boolean;
   route: Route;
   scanAllowsManualContact: boolean;
@@ -106,6 +111,7 @@ export interface AppShellActionsContextValue {
     next: () => void;
   };
   copyText: (text: string) => Promise<void>;
+  cycleProfileAvatarControl: (controlId: AvatarEditorControlId) => void;
   onPickProfilePhoto: () => void;
   onProfilePhotoSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onPickScanImage: () => void;
@@ -133,7 +139,6 @@ export interface AppShellActionsContextValue {
   ) => void;
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
-  setProfileEditPicture: (value: string) => void;
   stopContactsGuide: () => void;
   shareOptionsViaEmail: () => void;
   shareOptionsViaSms: () => void;
