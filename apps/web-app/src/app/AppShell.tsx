@@ -1,6 +1,7 @@
 import React from "react";
 import "../App.css";
 import { AuthenticatedLayout } from "../components/AuthenticatedLayout";
+import { CashuContactSendBanner } from "../components/CashuContactSendBanner";
 import { PwaUpdateBanner } from "../components/PwaUpdateBanner";
 import { ToastNotifications } from "../components/ToastNotifications";
 import { UnauthenticatedLayout } from "../components/UnauthenticatedLayout";
@@ -17,10 +18,12 @@ const AppShell = () => {
   const {
     appActions,
     appState,
+    cancelPendingCashuContactSend,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNsec,
     formatDisplayedAmountParts,
+    formatDisplayedAmountText,
     isMainSwipeRoute,
     lang,
     mainSwipeRouteProps,
@@ -33,6 +36,7 @@ const AppShell = () => {
     pageClassNameWithSwipe,
     pasteReturningSlip39FromClipboard,
     peopleRouteProps,
+    pendingCashuContactSend,
     pickPendingOnboardingPhoto,
     pushToast,
     recentlyReceivedToken,
@@ -76,6 +80,17 @@ const AppShell = () => {
   return (
     <div className={pageClassNameWithSwipe}>
       <PwaUpdateBanner t={t} />
+      <CashuContactSendBanner
+        amountText={
+          pendingCashuContactSend
+            ? formatDisplayedAmountText(pendingCashuContactSend.amountSat)
+            : null
+        }
+        onCancel={() => {
+          void cancelPendingCashuContactSend();
+        }}
+        t={t}
+      />
       <ToastNotifications
         recentlyReceivedToken={recentlyReceivedToken}
         toasts={toasts}

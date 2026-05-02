@@ -19,6 +19,7 @@ import { buildCashuShareUrl } from "../utils/deepLinks";
 type CashuTokenPageRow = CashuTokenRowLike & { id: CashuTokenId };
 
 interface CashuTokenPageProps {
+  canSendToContact: boolean;
   canWriteToNfc: boolean;
   cashuIsBusy: boolean;
   cashuTokensAll: readonly CashuTokenPageRow[];
@@ -38,6 +39,7 @@ interface CashuTokenPageProps {
 }
 
 export const CashuTokenPage: FC<CashuTokenPageProps> = ({
+  canSendToContact,
   canWriteToNfc,
   cashuIsBusy,
   cashuTokensAll,
@@ -115,7 +117,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
         const QRCode = await import("qrcode");
         const qr = await QRCode.toDataURL(tokenText, {
           errorCorrectionLevel: "M",
-          margin: 2
+          margin: 2,
         });
         if (!cancelled) {
           setTokenQr(qr);
@@ -205,7 +207,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
         </div>
       ) : null}
 
-      {isIssued ? (
+      {isIssued && canSendToContact ? (
         <div className="settings-row">
           <button
             className="btn-wide"
