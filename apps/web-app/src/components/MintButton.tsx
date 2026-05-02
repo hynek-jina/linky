@@ -10,20 +10,24 @@ interface MintIcon {
 }
 
 interface MintButtonProps {
+  badgeLabel?: string;
   disabled?: boolean;
   fallbackLetter: string;
   getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   isSelected: boolean;
+  isTestMint?: boolean;
   label: string;
   mint: string;
   onClick: () => void;
 }
 
 export function MintButton({
+  badgeLabel,
   disabled = false,
   fallbackLetter,
   getMintIconUrl,
   isSelected,
+  isTestMint = false,
   label,
   mint,
   onClick,
@@ -39,13 +43,10 @@ export function MintButton({
     <button
       key={mint}
       type="button"
-      className="ghost"
+      className={`ghost mint-choice${isTestMint ? " is-test-mint" : ""}`}
       disabled={disabled}
       onClick={onClick}
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
         border: isSelected ? "1px solid #22c55e" : undefined,
         boxShadow: isSelected ? "0 0 0 1px rgba(34,197,94,0.35)" : undefined,
       }}
@@ -90,6 +91,9 @@ export function MintButton({
         </span>
       )}
       {label}
+      {badgeLabel ? (
+        <span className="mint-choice-badge">{badgeLabel}</span>
+      ) : null}
     </button>
   );
 }

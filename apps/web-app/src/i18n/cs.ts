@@ -234,6 +234,7 @@ export const cs = {
 
   defaultMint: "Výchozí mint",
   selectedMint: "Zvolený mint",
+  testMintBadge: "test",
   setCustomMint: "Nastavit vlastní mint",
   mintUrlInvalid: "Neplatná URL mintu.",
   mintSaved: "Mint uložen.",
@@ -245,7 +246,6 @@ export const cs = {
   mintsEmpty: "Zatím žádné minty. Minty se objeví po přijetí tokenu.",
   mintNotFound: "Mint nenalezen.",
   mintUrl: "URL",
-  mintMpp: "Podpora MPP",
   mintFees: "Poplatky",
   mintRefresh: "Obnovit info",
   mintDelete: "Odstranit mint",
@@ -501,6 +501,9 @@ export const cs = {
   cashuAddToken: "Přidat token",
   cashuEmit: "Emitovat",
   cashuEmitting: "Vytvářím token…",
+  cashuMultipleMintsWarningTitle: "Tokeny jsou rozdělené mezi minty",
+  cashuMultipleMintsWarningBody:
+    "Dostupné ukazuje největší jeden mint, protože jeden token nejde emitovat z více mintů najednou.",
   cashuMine: "moje",
   cashuIssued: "emitované",
   coinsLabel: "mince:",
@@ -565,8 +568,6 @@ export const cs = {
   payQueued: "Platba čeká na odeslání.",
   payQueuedMessage: "Platba čeká: {amount} {unit} → {name}.",
   payFailed: "Platba se nepovedla",
-  payMultiMintUnsupported:
-    "Jednu lightning platbu zatím nejde složit z tokenů z více mintů.",
   payPromiseLimit: "Dosažen limit slibů.",
 
   paidSent: "Odesláno {amount} {unit}.",

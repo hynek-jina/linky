@@ -8,6 +8,8 @@ export const PRESET_MINTS = [
   "https://cashu.21m.lol",
 ];
 
+export const TEST_MINTS = ["https://testnut.cashu.space"];
+
 export const CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY =
   "linky.cashu.defaultMintOverride.v1";
 
@@ -103,6 +105,15 @@ export const getMintOriginAndHost = (
       return { origin: null, host: raw };
     }
   }
+};
+
+export const isTestMintUrl = (mint: MintStringInput): boolean => {
+  const normalizedMint = normalizeMintUrl(mint).toLowerCase();
+  if (!normalizedMint) return false;
+
+  return TEST_MINTS.some(
+    (testMint) => normalizeMintUrl(testMint).toLowerCase() === normalizedMint,
+  );
 };
 
 export const getGenericMintIconUrl = (): string => {

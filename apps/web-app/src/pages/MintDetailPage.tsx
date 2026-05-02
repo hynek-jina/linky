@@ -71,7 +71,6 @@ export function MintDetailPage({
     );
   }
 
-  const supportsMpp = String(row.supportsMpp ?? "") === "1";
   const feesJson = String(row.feesJson ?? "").trim();
 
   const runtime = getMintRuntime(cleaned);
@@ -105,20 +104,6 @@ export function MintDetailPage({
           </div>
           <div className="settings-right">
             <span className="relay-url">{cleaned}</span>
-          </div>
-        </div>
-
-        <div className="settings-row">
-          <div className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              🧩
-            </span>
-            <span className="settings-label">{t("mintMpp")}</span>
-          </div>
-          <div className="settings-right">
-            <span className={supportsMpp ? "relay-count" : "muted"}>
-              {supportsMpp ? "MPP" : t("unknown")}
-            </span>
           </div>
         </div>
 

@@ -105,13 +105,6 @@ export const classifyPaymentErrorCode = (
   ) {
     return "short_keyset_id_unmapped";
   }
-  if (
-    text.includes("multiple mints") ||
-    text.includes("více mint") ||
-    text.includes("one lightning invoice from multiple mints")
-  ) {
-    return "multi_mint_unsupported";
-  }
   if (text.includes("offline")) return "offline";
   if (text.includes("timeout") || text.includes("timed out")) return "timeout";
   if (text.includes("insufficient")) return "insufficient";
@@ -129,11 +122,7 @@ export const classifyPaymentErrorCode = (
 };
 
 const isDeclinedPaymentErrorCode = (value: string | null): boolean => {
-  return (
-    value === "insufficient" ||
-    value === "invalid_amount" ||
-    value === "multi_mint_unsupported"
-  );
+  return value === "insufficient" || value === "invalid_amount";
 };
 
 export const normalizePaymentTelemetryStatus = (args: {

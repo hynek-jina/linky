@@ -1,22 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { requiresMultipleMintsForAmount } from "./paymentMintSelection";
+import { selectSingleMintCandidateForAmount } from "./paymentMintSelection";
 
-describe("requiresMultipleMintsForAmount", () => {
-  it("returns true when combined balance is enough but no single mint covers the amount", () => {
+describe("selectSingleMintCandidateForAmount", () => {
+  it("selects the first mint that can cover the amount", () => {
     expect(
-      requiresMultipleMintsForAmount([{ sum: 120 }, { sum: 80 }], 150),
-    ).toBe(true);
+      selectSingleMintCandidateForAmount(
+        [
+          { mint: "https://a.example", sum: 120, tokens: ["a"] },
+          { mint: "https://b.example", sum: 200, tokens: ["b"] },
+        ],
+        150,
+      )?.mint,
+    ).toBe("https://b.example");
   });
 
-  it("returns false when a single mint can cover the amount", () => {
+  it("does not combine balances across mints", () => {
     expect(
-      requiresMultipleMintsForAmount([{ sum: 200 }, { sum: 50 }], 150),
-    ).toBe(false);
+      selectSingleMintCandidateForAmount(
+        [
+          { mint: "https://a.example", sum: 120, tokens: ["a"] },
+          { mint: "https://b.example", sum: 80, tokens: ["b"] },
+        ],
+        150,
+      ),
+    ).toBeNull();
   });
 
-  it("returns false when total balance is still insufficient", () => {
+  it("falls back to the first candidate when the amount is unknown", () => {
     expect(
-      requiresMultipleMintsForAmount([{ sum: 60 }, { sum: 40 }], 150),
-    ).toBe(false);
+      selectSingleMintCandidateForAmount(
+        [{ mint: "https://a.example", sum: 60, tokens: ["a"] }],
+        0,
+      )?.mint,
+    ).toBe("https://a.example");
   });
 });

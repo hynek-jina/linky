@@ -11,6 +11,7 @@ interface BuildMoneyRoutePropsParams {
   cashuDraft: MoneyRoutesProps["cashuTokenNewProps"]["cashuDraft"];
   cashuDraftRef: MoneyRoutesProps["cashuTokenNewProps"]["cashuDraftRef"];
   cashuEmitAmount: MoneyRoutesProps["cashuTokenEmitProps"]["cashuEmitAmount"];
+  cashuHasMultipleAcceptedMints: MoneyRoutesProps["cashuTokenEmitProps"]["cashuHasMultipleAcceptedMints"];
   cashuIsBusy: MoneyRoutesProps["cashuTokensProps"]["cashuIsBusy"];
   cashuIssuedTokens: MoneyRoutesProps["cashuTokensProps"]["cashuIssuedTokens"];
   cashuMeltToMainMintButtonLabel: MoneyRoutesProps["cashuTokensProps"]["cashuMeltToMainMintButtonLabel"];
@@ -83,6 +84,7 @@ export const buildMoneyRouteProps = ({
   cashuDraft,
   cashuDraftRef,
   cashuEmitAmount,
+  cashuHasMultipleAcceptedMints,
   cashuIsBusy,
   cashuIssuedTokens,
   cashuMeltToMainMintButtonLabel,
@@ -128,9 +130,12 @@ export const buildMoneyRouteProps = ({
     cashuTokenEmitProps: {
       cashuBalance,
       cashuEmitAmount,
+      cashuHasMultipleAcceptedMints,
       cashuIsBusy,
+      cashuMeltToMainMintButtonLabel,
       displayUnit,
       emitCashuToken,
+      meltLargestForeignMintToMainMint,
       setCashuEmitAmount,
       t,
     },
