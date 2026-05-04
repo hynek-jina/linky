@@ -461,6 +461,15 @@ export const en = {
 
   unit: "Units",
   unitUseBitcoin: "Show ₿ instead of sat",
+  unitCurrent: "Active",
+  unitCycleAction: "Switch unit",
+  unitManageInfo:
+    "Tap the wallet balance or the amount while entering it to switch between allowed currencies.",
+  unitSatName: "Sats",
+  unitBitcoinName: "Bitcoin",
+  unitCzkName: "Czech koruna",
+  unitUsdName: "US dollars",
+  unitHiddenName: "Hidden",
 
   cashuBalance: "Available balance",
   pasteCashu: "Paste cashu",

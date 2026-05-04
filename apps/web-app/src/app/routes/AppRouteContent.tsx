@@ -25,6 +25,7 @@ import {
   NostrRelaysPage,
   ProfilePage,
   PushDebugPage,
+  SettingsPage,
   TopupInvoicePage,
   TopupPage,
 } from "../../pages";
@@ -88,6 +89,8 @@ export const AppRouteContent = (): React.ReactElement => {
 
   return (
     <>
+      {route.kind === "settings" && <SettingsPage />}
+
       {route.kind === "advanced" && (
         <AdvancedPage {...systemRoutes.advancedProps} />
       )}

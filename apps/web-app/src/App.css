@@ -1069,6 +1069,20 @@
   justify-content: center;
 }
 
+.balance-hero-button {
+  width: auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.balance-hero-button:hover {
+  transform: none;
+  box-shadow: none;
+  background: transparent;
+}
+
 .balance-number {
   font-size: 44px;
 }
@@ -1175,9 +1189,34 @@ button.settings-link:hover {
   font-size: 16px;
 }
 
+.settings-label-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .settings-right {
   display: flex;
   align-items: center;
+}
+
+.settings-note {
+  margin: 0 0 16px;
+  line-height: 1.45;
+}
+
+.settings-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.16);
+  color: #99f6e4;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .settings-right-wrap {
@@ -2458,6 +2497,16 @@ button.icon {
   align-items: baseline;
   justify-content: center;
   gap: 10px;
+}
+
+.amount-display-button {
+  width: 100%;
+  box-shadow: none;
+}
+
+.amount-display-button:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .amount-number {

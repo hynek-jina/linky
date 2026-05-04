@@ -26,6 +26,14 @@ export const buildTopbar = ({
   route,
   t,
 }: BuildTopbarArgs): TopbarButton | null => {
+  if (route.kind === "settings") {
+    return {
+      icon: "<",
+      label: t("close"),
+      onClick: navigateToMainReturn,
+    };
+  }
+
   if (route.kind === "advanced") {
     return {
       icon: "<",
@@ -275,6 +283,7 @@ export const buildTopbarRight = ({
   }
 
   if (
+    route.kind === "settings" ||
     route.kind === "advanced" ||
     route.kind === "advancedAutoPayLimit" ||
     route.kind === "advancedPushDebug" ||
@@ -300,6 +309,7 @@ export const buildTopbarTitle = (
   t: (key: string) => string,
 ): string | null => {
   if (route.kind === "contacts") return t("contactsTitle");
+  if (route.kind === "settings") return t("unit");
   if (route.kind === "wallet") return t("wallet");
   if (route.kind === "topup") return t("topupTitle");
   if (route.kind === "topupInvoice") return t("topupInvoiceTitle");

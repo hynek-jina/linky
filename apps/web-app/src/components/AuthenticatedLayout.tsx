@@ -58,10 +58,8 @@ export function AuthenticatedLayout({
       {state.menuIsOpen ? (
         <MenuModal
           closeMenu={actions.closeMenu}
-          displayCurrency={state.displayCurrency}
           lang={state.lang}
           openFeedbackContact={actions.openFeedbackContact}
-          setDisplayCurrency={actions.setDisplayCurrency}
           setLang={actions.setLang}
           t={state.t}
         />

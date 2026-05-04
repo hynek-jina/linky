@@ -468,6 +468,15 @@ export const cs = {
 
   unit: "Jednotky",
   unitUseBitcoin: "Zobrazit ₿ místo sat",
+  unitCurrent: "Aktivní",
+  unitCycleAction: "Přepnout jednotku",
+  unitManageInfo:
+    "Kliknutím na balanci v peněžence nebo při zadávání částky přepínáte mezi povolenými měnami.",
+  unitSatName: "Saty",
+  unitBitcoinName: "Bitcoin",
+  unitCzkName: "České koruny",
+  unitUsdName: "Americké dolary",
+  unitHiddenName: "Skryté",
 
   cashuBalance: "Dostupný zůstatek",
   pasteCashu: "Vložit cashu",

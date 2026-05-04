@@ -63,7 +63,7 @@ export const TopupPage: FC<TopupPageProps> = ({
         </div>
       </div>
 
-      <AmountDisplay amount={topupAmount} />
+      <AmountDisplay amount={topupAmount} cycleOnClick />
 
       <Keypad
         ariaLabel={`${t("payAmount")} (${displayUnit})`}

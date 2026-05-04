@@ -87,6 +87,8 @@ import {
   formatDisplayAmountParts,
   formatDisplayAmountText,
   getDisplayUnitLabel,
+  getNextDisplayCurrency,
+  normalizeAllowedDisplayCurrencies,
   type DisplayCurrency,
 } from "../utils/displayAmounts";
 import { formatShortNpub, getBestNostrName } from "../utils/formatting";
@@ -104,6 +106,7 @@ import {
   setStoredPushNsec,
 } from "../utils/pushNsecStorage";
 import {
+  getInitialAllowedDisplayCurrencies,
   getInitialDisplayCurrency,
   getInitialLightningInvoiceAutoPayLimit,
   getInitialNostrNsec,
@@ -834,6 +837,9 @@ export const useAppShellComposition = () => {
     Record<string, number>
   >(() => ({}));
   const [lang, setLang] = useState<Lang>(() => getInitialLang());
+  const [allowedDisplayCurrencies, setAllowedDisplayCurrencies] = useState<
+    DisplayCurrency[]
+  >(() => getInitialAllowedDisplayCurrencies());
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(() =>
     getInitialDisplayCurrency(),
   );
@@ -843,6 +849,42 @@ export const useAppShellComposition = () => {
   const [lightningInvoiceAutoPayLimit, setLightningInvoiceAutoPayLimit] =
     useState<number>(() => getInitialLightningInvoiceAutoPayLimit());
   const [allowPromisesEnabled] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (allowedDisplayCurrencies.includes(displayCurrency)) return;
+    setDisplayCurrency(allowedDisplayCurrencies[0] ?? "sat");
+  }, [allowedDisplayCurrencies, displayCurrency]);
+
+  const setDisplayCurrencyIfAllowed = React.useCallback(
+    (currency: DisplayCurrency) => {
+      if (!allowedDisplayCurrencies.includes(currency)) return;
+      setDisplayCurrency(currency);
+    },
+    [allowedDisplayCurrencies],
+  );
+
+  const cycleDisplayCurrency = React.useCallback(() => {
+    setDisplayCurrency((current) =>
+      getNextDisplayCurrency(current, allowedDisplayCurrencies),
+    );
+  }, [allowedDisplayCurrencies]);
+
+  const toggleAllowedDisplayCurrency = React.useCallback(
+    (currency: DisplayCurrency) => {
+      setAllowedDisplayCurrencies((current) => {
+        if (current.includes(currency)) {
+          if (current.length <= 1) return current;
+          return current.filter((candidate) => candidate !== currency);
+        }
+
+        return normalizeAllowedDisplayCurrencies(
+          current.concat(currency),
+          currency,
+        );
+      });
+    },
+    [],
+  );
 
   const fiatRates = useFiatRates();
   const displayUnit = getDisplayUnitLabel(displayCurrency, lang);
@@ -1550,6 +1592,7 @@ export const useAppShellComposition = () => {
 
   useAppPreferences({
     allowPromisesEnabled,
+    allowedDisplayCurrencies,
     displayCurrency,
     lang,
     lightningInvoiceAutoPayLimit,
@@ -5698,6 +5741,7 @@ export const useAppShellComposition = () => {
   });
 
   const appState = {
+    allowedDisplayCurrencies,
     applyAmountInputKey: applyDisplayedAmountInputKey,
     cashuBalance,
     cashuIsBusy,
@@ -5765,6 +5809,7 @@ export const useAppShellComposition = () => {
     contactsGuideNav,
     copyShareOptionsText,
     copyText,
+    cycleDisplayCurrency,
     cycleProfileAvatarControl,
     onPickProfilePhoto,
     onPickScanImage,
@@ -5776,7 +5821,6 @@ export const useAppShellComposition = () => {
     openProfileQr,
     pasteScanValue,
     saveProfileEdits,
-    setDisplayCurrency,
     setContactNewPrefill,
     setIsProfileEditing,
     setLang,
@@ -5784,10 +5828,12 @@ export const useAppShellComposition = () => {
     setPostPaySaveContact,
     setProfileEditLnAddress,
     setProfileEditName,
+    setDisplayCurrency: setDisplayCurrencyIfAllowed,
     stopContactsGuide,
     shareOptionsViaEmail,
     shareOptionsViaSms,
     shareOptionsViaWhatsApp,
+    toggleAllowedDisplayCurrency,
     toggleProfileEditing,
     toggleProfileStatusCurrency,
     writeCurrentNpubToNfc,

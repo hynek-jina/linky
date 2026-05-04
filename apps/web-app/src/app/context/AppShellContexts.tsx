@@ -30,6 +30,7 @@ interface ChatContact {
 }
 
 export interface AppShellCoreContextValue {
+  allowedDisplayCurrencies: readonly DisplayCurrency[];
   cashuBalance: number;
   cashuIsBusy: boolean;
   canWriteNfc: boolean;
@@ -115,6 +116,7 @@ export interface AppShellActionsContextValue {
     next: () => void;
   };
   copyText: (text: string) => Promise<void>;
+  cycleDisplayCurrency: () => void;
   cycleProfileAvatarControl: (controlId: AvatarEditorControlId) => void;
   onPickProfilePhoto: () => void;
   onProfilePhotoSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -147,6 +149,7 @@ export interface AppShellActionsContextValue {
   shareOptionsViaEmail: () => void;
   shareOptionsViaSms: () => void;
   shareOptionsViaWhatsApp: () => void;
+  toggleAllowedDisplayCurrency: (currency: DisplayCurrency) => void;
   toggleProfileEditing: () => void;
   toggleProfileStatusCurrency: (
     currency: ProfileStatusCurrency,

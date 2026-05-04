@@ -1,6 +1,10 @@
-import { getDefaultDisplayCurrency } from "./browserPreferences";
+import {
+  getDefaultAllowedDisplayCurrencies,
+  getDefaultDisplayCurrency,
+} from "./browserPreferences";
 import {
   ALLOW_PROMISES_STORAGE_KEY,
+  DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
@@ -8,7 +12,11 @@ import {
   PAY_WITH_CASHU_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "./constants";
-import { parseDisplayCurrency, type DisplayCurrency } from "./displayAmounts";
+import {
+  normalizeAllowedDisplayCurrencies,
+  parseDisplayCurrency,
+  type DisplayCurrency,
+} from "./displayAmounts";
 
 interface StorageStructuredValue {
   toString(): string;
@@ -185,15 +193,59 @@ export const withLocalStorageLeaseLock = async <T>(args: {
 
 export const getInitialDisplayCurrency = (): DisplayCurrency => {
   try {
+    const allowedCurrencies = getInitialAllowedDisplayCurrencies();
     const stored = parseDisplayCurrency(
       localStorage.getItem(DISPLAY_CURRENCY_STORAGE_KEY),
     );
-    if (stored) return stored;
-    return localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1"
-      ? "btc"
-      : getDefaultDisplayCurrency();
+    if (stored && allowedCurrencies.includes(stored)) return stored;
+
+    const legacyDefault =
+      localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1"
+        ? "btc"
+        : getDefaultDisplayCurrency();
+
+    if (allowedCurrencies.includes(legacyDefault)) return legacyDefault;
+
+    return allowedCurrencies[0] ?? legacyDefault;
   } catch {
     return getDefaultDisplayCurrency();
+  }
+};
+
+export const getInitialAllowedDisplayCurrencies = (): DisplayCurrency[] => {
+  try {
+    const rawStored = localStorage.getItem(
+      DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
+    );
+    if (rawStored) {
+      const parsed: unknown = JSON.parse(rawStored);
+      if (Array.isArray(parsed)) {
+        const fallbackCurrency = getDefaultDisplayCurrency();
+        const parsedCurrencies = parsed.filter(
+          (value): value is string => typeof value === "string",
+        );
+        return normalizeAllowedDisplayCurrencies(
+          parsedCurrencies,
+          fallbackCurrency,
+        );
+      }
+    }
+
+    const storedCurrency = parseDisplayCurrency(
+      localStorage.getItem(DISPLAY_CURRENCY_STORAGE_KEY),
+    );
+    const legacyDefault =
+      storedCurrency ??
+      (localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1"
+        ? "btc"
+        : getDefaultDisplayCurrency());
+
+    return normalizeAllowedDisplayCurrencies(
+      getDefaultAllowedDisplayCurrencies().concat(legacyDefault),
+      legacyDefault,
+    );
+  } catch {
+    return getDefaultAllowedDisplayCurrencies();
   }
 };
 

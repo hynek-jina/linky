@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { formatDisplayAmountParts } from "./displayAmounts";
+import {
+  formatDisplayAmountParts,
+  getNextDisplayCurrency,
+  normalizeAllowedDisplayCurrencies,
+} from "./displayAmounts";
 
 const fiatRates = {
   czkPerBtc: 1_000_000,
@@ -34,5 +38,46 @@ describe("formatDisplayAmountParts", () => {
       approxPrefix: "~",
       unitLabel: "USD",
     });
+  });
+
+  it("masks all amounts in hidden mode", () => {
+    expect(
+      formatDisplayAmountParts(123456, {
+        displayCurrency: "hidden",
+        fiatRates,
+        lang: "cs",
+      }),
+    ).toMatchObject({
+      amountText: "*****",
+      approxPrefix: "",
+      unitLabel: "",
+    });
+  });
+});
+
+describe("normalizeAllowedDisplayCurrencies", () => {
+  it("deduplicates and drops invalid currencies", () => {
+    expect(
+      normalizeAllowedDisplayCurrencies(
+        ["usd", "hidden", "sat", "usd", "bad"],
+        "czk",
+      ),
+    ).toEqual(["usd", "hidden", "sat"]);
+  });
+
+  it("falls back to one currency when the list is empty", () => {
+    expect(normalizeAllowedDisplayCurrencies([], "sat")).toEqual(["sat"]);
+  });
+});
+
+describe("getNextDisplayCurrency", () => {
+  it("cycles within the allowed currencies", () => {
+    expect(getNextDisplayCurrency("czk", ["czk", "sat"])).toBe("sat");
+    expect(getNextDisplayCurrency("sat", ["czk", "sat"])).toBe("czk");
+    expect(getNextDisplayCurrency("usd", ["usd", "hidden"])).toBe("hidden");
+  });
+
+  it("stays on the same currency when only one is allowed", () => {
+    expect(getNextDisplayCurrency("sat", ["sat"])).toBe("sat");
   });
 });
