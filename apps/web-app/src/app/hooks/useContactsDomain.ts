@@ -3,6 +3,7 @@ import { useQuery } from "@evolu/react";
 import React from "react";
 import type { ContactId } from "../../evolu";
 import { evolu } from "../../evolu";
+import { isStatusFilterValue } from "../../nostrStatus";
 import type { Route } from "../../types/route";
 import type { OptionalText } from "../types/appTypes";
 
@@ -350,6 +351,7 @@ export const useContactsDomain = ({
   React.useEffect(() => {
     if (!activeGroup) return;
     if (activeGroup === noGroupFilterValue) return;
+    if (isStatusFilterValue(activeGroup)) return;
     if (!groupNames.includes(activeGroup)) {
       setActiveGroup(null);
     }

@@ -24,6 +24,7 @@ export { NostrRelayPage } from "./NostrRelayPage";
 export { NostrRelaysPage } from "./NostrRelaysPage";
 export { ProfilePage } from "./ProfilePage";
 export { PushDebugPage } from "./PushDebugPage";
+export { SettingsPage } from "./SettingsPage";
 export { TopupInvoicePage } from "./TopupInvoicePage";
 export { TopupPage } from "./TopupPage";
 export { WalletPage } from "./WalletPage";

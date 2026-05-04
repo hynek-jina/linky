@@ -1,5 +1,6 @@
 import React from "react";
 import type { AvatarEditorControlId } from "../derivedProfile";
+import type { ProfileStatusCurrency } from "../nostrStatus";
 import {
   formatShortLightningAddress,
   formatShortNpub,
@@ -40,13 +41,19 @@ interface ProfileQrModalProps {
   profileEditName: string;
   profileEditPicture: string;
   profileEditsSavable: boolean;
+  profileStatusCurrencies: readonly ProfileStatusCurrency[];
+  profileStatusIsSaving: boolean;
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
+  selectedProfileStatusCurrencies: readonly ProfileStatusCurrency[];
   profileSelectedPictureKind: "custom" | "generated";
   setIsProfileEditing: (editing: boolean) => void;
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
   t: (key: string) => string;
   toggleProfileEditing: () => void;
+  toggleProfileStatusCurrency: (
+    currency: ProfileStatusCurrency,
+  ) => Promise<void>;
   writeCurrentNpubToNfc: () => Promise<void>;
 }
 
@@ -73,13 +80,17 @@ export function ProfileQrModal({
   profileEditName,
   profileEditPicture,
   profileEditsSavable,
+  profileStatusCurrencies,
+  profileStatusIsSaving,
   profilePhotoInputRef,
+  selectedProfileStatusCurrencies,
   profileSelectedPictureKind,
   setIsProfileEditing,
   setProfileEditLnAddress,
   setProfileEditName,
   t,
   toggleProfileEditing,
+  toggleProfileStatusCurrency,
   writeCurrentNpubToNfc,
 }: ProfileQrModalProps): React.ReactElement {
   const handleCopyNpub = () => {
@@ -227,57 +238,90 @@ export function ProfileQrModal({
             </div>
           </>
         ) : (
-          <div className="profile-detail" style={{ marginTop: 8 }}>
-            <div className="contact-avatar is-xl" aria-hidden="true">
-              {effectiveProfilePicture ? (
-                <img
-                  src={effectiveProfilePicture}
-                  alt=""
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
+          <>
+            <div className="profile-detail" style={{ marginTop: 8 }}>
+              <div className="contact-avatar is-xl" aria-hidden="true">
+                {effectiveProfilePicture ? (
+                  <img
+                    src={effectiveProfilePicture}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="contact-avatar-fallback">
+                    {getInitials(
+                      effectiveProfileName ?? formatShortNpub(currentNpub),
+                    )}
+                  </span>
+                )}
+              </div>
+
+              <h2 className="contact-detail-name">
+                {effectiveProfileName ?? formatShortNpub(currentNpub)}
+              </h2>
+
+              {myProfileQr ? (
+                <ProfileQrButton
+                  qrSrc={myProfileQr}
+                  qrAlt={t("myNpubQr")}
+                  copyLabel={t("copy")}
+                  onCopy={handleCopyNpub}
                 />
               ) : (
-                <span className="contact-avatar-fallback">
-                  {getInitials(
-                    effectiveProfileName ?? formatShortNpub(currentNpub),
-                  )}
-                </span>
+                <p className="muted">{currentNpub}</p>
               )}
+
+              {effectiveMyLightningAddress ? (
+                <button
+                  type="button"
+                  className="copyable contact-detail-ln contact-detail-copy"
+                  onClick={handleCopyLightningAddress}
+                  title={effectiveMyLightningAddress}
+                  aria-label={t("lightningAddress")}
+                >
+                  <span aria-hidden="true">⚡️</span>
+                  <span className="contact-detail-copyText">
+                    {formatShortLightningAddress(effectiveMyLightningAddress)}
+                  </span>
+                  <span className="contact-detail-copyIcon" aria-hidden="true">
+                    ⧉
+                  </span>
+                </button>
+              ) : null}
             </div>
 
-            <h2 className="contact-detail-name">
-              {effectiveProfileName ?? formatShortNpub(currentNpub)}
-            </h2>
+            <div className="profile-status-row">
+              <div className="profile-status-label">
+                {t("profileExchangeStatusLabel")}
+              </div>
+              <div className="profile-status-buttons">
+                {profileStatusCurrencies.map((currency) => {
+                  const isActive =
+                    selectedProfileStatusCurrencies.includes(currency);
 
-            {myProfileQr ? (
-              <ProfileQrButton
-                qrSrc={myProfileQr}
-                qrAlt={t("myNpubQr")}
-                copyLabel={t("copy")}
-                onCopy={handleCopyNpub}
-              />
-            ) : (
-              <p className="muted">{currentNpub}</p>
-            )}
-
-            {effectiveMyLightningAddress ? (
-              <button
-                type="button"
-                className="copyable contact-detail-ln contact-detail-copy"
-                onClick={handleCopyLightningAddress}
-                title={effectiveMyLightningAddress}
-                aria-label={t("lightningAddress")}
-              >
-                <span aria-hidden="true">⚡️</span>
-                <span className="contact-detail-copyText">
-                  {formatShortLightningAddress(effectiveMyLightningAddress)}
-                </span>
-                <span className="contact-detail-copyIcon" aria-hidden="true">
-                  ⧉
-                </span>
-              </button>
-            ) : null}
-          </div>
+                  return (
+                    <button
+                      key={currency}
+                      type="button"
+                      className={
+                        isActive
+                          ? "profile-status-chip"
+                          : "secondary profile-status-chip"
+                      }
+                      aria-pressed={isActive}
+                      disabled={!currentNpub || profileStatusIsSaving}
+                      onClick={() => {
+                        void toggleProfileStatusCurrency(currency);
+                      }}
+                    >
+                      {currency}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -1,6 +1,14 @@
 import { formatInteger, normalizeLocale } from "./formatting";
 
-export type DisplayCurrency = "sat" | "btc" | "czk" | "usd";
+export type DisplayCurrency = "sat" | "btc" | "czk" | "usd" | "hidden";
+
+export const DISPLAY_CURRENCIES: ReadonlyArray<DisplayCurrency> = [
+  "sat",
+  "btc",
+  "czk",
+  "usd",
+  "hidden",
+];
 
 export interface FiatRates {
   czkPerBtc: number;
@@ -35,6 +43,16 @@ const getRateForCurrency = (
 
 const fiatFormatters = new Map<string, Intl.NumberFormat>();
 
+const isDisplayCurrency = (value: unknown): value is DisplayCurrency => {
+  return (
+    value === "sat" ||
+    value === "btc" ||
+    value === "czk" ||
+    value === "usd" ||
+    value === "hidden"
+  );
+};
+
 export const parseDisplayCurrency = (
   value: string | null | undefined,
 ): DisplayCurrency | null => {
@@ -45,7 +63,54 @@ export const parseDisplayCurrency = (
   if (normalized === "btc" || normalized === "b") return "btc";
   if (normalized === "czk") return "czk";
   if (normalized === "usd") return "usd";
+  if (normalized === "hidden" || normalized === "masked") return "hidden";
   return null;
+};
+
+export const normalizeAllowedDisplayCurrencies = (
+  values: readonly string[] | null | undefined,
+  fallbackCurrency: DisplayCurrency,
+): DisplayCurrency[] => {
+  const normalized: DisplayCurrency[] = [];
+
+  for (const candidate of values ?? []) {
+    if (!isDisplayCurrency(candidate)) continue;
+    if (normalized.includes(candidate)) continue;
+    normalized.push(candidate);
+  }
+
+  if (normalized.length > 0) return normalized;
+  return [fallbackCurrency];
+};
+
+export const getNextDisplayCurrency = (
+  currentCurrency: DisplayCurrency,
+  allowedCurrencies: readonly DisplayCurrency[],
+): DisplayCurrency => {
+  const normalizedAllowed = normalizeAllowedDisplayCurrencies(
+    allowedCurrencies,
+    currentCurrency,
+  );
+
+  if (normalizedAllowed.length <= 1)
+    return normalizedAllowed[0] ?? currentCurrency;
+
+  const currentOrderIndex = DISPLAY_CURRENCIES.indexOf(currentCurrency);
+  const orderedAllowed = DISPLAY_CURRENCIES.filter((currency) =>
+    normalizedAllowed.includes(currency),
+  );
+
+  if (orderedAllowed.length <= 1) return orderedAllowed[0] ?? currentCurrency;
+
+  for (let offset = 1; offset <= DISPLAY_CURRENCIES.length; offset += 1) {
+    const nextIndex = (currentOrderIndex + offset) % DISPLAY_CURRENCIES.length;
+    const nextCurrency = DISPLAY_CURRENCIES[nextIndex];
+    if (nextCurrency && orderedAllowed.includes(nextCurrency)) {
+      return nextCurrency;
+    }
+  }
+
+  return orderedAllowed[0] ?? currentCurrency;
 };
 
 export const getDisplayUnitLabel = (
@@ -59,6 +124,8 @@ export const getDisplayUnitLabel = (
       return normalizeLocale(lang).startsWith("cs") ? "Kč" : "CZK";
     case "usd":
       return "USD";
+    case "hidden":
+      return "*****";
     case "sat":
       return "sat";
   }
@@ -173,6 +240,14 @@ export const formatDisplayAmountParts = (
   const normalizedAmount = normalizeAmountSat(amountSat);
   const locale = normalizeLocale(options.lang);
 
+  if (options.displayCurrency === "hidden") {
+    return {
+      amountText: "*****",
+      approxPrefix: "",
+      unitLabel: "",
+    };
+  }
+
   if (options.displayCurrency === "btc") {
     return {
       amountText: formatInteger(normalizedAmount, options.lang),
@@ -204,5 +279,10 @@ export const formatDisplayAmountText = (
   options: DisplayAmountOptions,
 ): string => {
   const parts = formatDisplayAmountParts(amountSat, options);
-  return `${parts.approxPrefix}${parts.amountText} ${parts.unitLabel}`;
+  return [
+    `${parts.approxPrefix}${parts.amountText}`,
+    String(parts.unitLabel ?? "").trim(),
+  ]
+    .filter(Boolean)
+    .join(" ");
 };

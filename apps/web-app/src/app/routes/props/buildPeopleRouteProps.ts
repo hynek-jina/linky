@@ -58,6 +58,8 @@ interface BuildPeopleRoutePropsParams {
   profileEditName: PeopleRoutesProps["profileProps"]["profileEditName"];
   profileEditPicture: PeopleRoutesProps["profileProps"]["profileEditPicture"];
   profileEditsSavable: PeopleRoutesProps["profileProps"]["profileEditsSavable"];
+  profileStatusCurrencies: PeopleRoutesProps["profileProps"]["profileStatusCurrencies"];
+  profileStatusIsSaving: PeopleRoutesProps["profileProps"]["profileStatusIsSaving"];
   profilePhotoInputRef: PeopleRoutesProps["profileProps"]["profilePhotoInputRef"];
   profileSelectedPictureKind: PeopleRoutesProps["profileProps"]["profileSelectedPictureKind"];
   requestDeleteCurrentContact: PeopleRoutesProps["contactEditProps"]["requestDeleteCurrentContact"];
@@ -66,6 +68,7 @@ interface BuildPeopleRoutePropsParams {
   saveProfileEdits: PeopleRoutesProps["profileProps"]["saveProfileEdits"];
   scanIsOpen: PeopleRoutesProps["contactNewProps"]["scanIsOpen"];
   replyContext: PeopleRoutesProps["chatProps"]["replyContext"];
+  selectedProfileStatusCurrencies: PeopleRoutesProps["profileProps"]["selectedProfileStatusCurrencies"];
   selectedContact: PeopleRoutesProps["contactProps"]["selectedContact"];
   sendChatMessage: PeopleRoutesProps["chatProps"]["sendChatMessage"];
   setChatDraft: PeopleRoutesProps["chatProps"]["setChatDraft"];
@@ -76,6 +79,7 @@ interface BuildPeopleRoutePropsParams {
   setProfileEditLnAddress: PeopleRoutesProps["profileProps"]["setProfileEditLnAddress"];
   setProfileEditName: PeopleRoutesProps["profileProps"]["setProfileEditName"];
   t: PeopleRoutesProps["chatProps"]["t"];
+  toggleProfileStatusCurrency: PeopleRoutesProps["profileProps"]["toggleProfileStatusCurrency"];
 }
 
 export const buildPeopleRouteProps = ({
@@ -136,6 +140,8 @@ export const buildPeopleRouteProps = ({
   profileEditName,
   profileEditPicture,
   profileEditsSavable,
+  profileStatusCurrencies,
+  profileStatusIsSaving,
   profilePhotoInputRef,
   profileSelectedPictureKind,
   requestDeleteCurrentContact,
@@ -144,6 +150,7 @@ export const buildPeopleRouteProps = ({
   saveProfileEdits,
   scanIsOpen,
   replyContext,
+  selectedProfileStatusCurrencies,
   selectedContact,
   sendChatMessage,
   setChatDraft,
@@ -154,6 +161,7 @@ export const buildPeopleRouteProps = ({
   setProfileEditLnAddress,
   setProfileEditName,
   t,
+  toggleProfileStatusCurrency,
 }: BuildPeopleRoutePropsParams): PeopleRoutesProps => {
   return {
     chatProps: {
@@ -253,10 +261,13 @@ export const buildPeopleRouteProps = ({
       profileEditLnAddress,
       derivedProfile,
       profileEditsSavable,
+      profileStatusCurrencies,
+      profileStatusIsSaving,
       myProfileQr,
       effectiveMyLightningAddress,
       profilePhotoInputRef,
       profileSelectedPictureKind,
+      selectedProfileStatusCurrencies,
       setProfileEditName,
       setProfileEditLnAddress,
       onProfilePhotoSelected,
@@ -264,6 +275,7 @@ export const buildPeopleRouteProps = ({
       saveProfileEdits,
       copyText,
       t,
+      toggleProfileStatusCurrency,
     },
   };
 };

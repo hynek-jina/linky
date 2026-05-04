@@ -17,6 +17,7 @@ interface UseRoutingViewCompositionParams {
   groupNamesCount: number;
   isMainSwipeRoute: boolean;
   mainSwipeRouteBuilderInput: MainSwipeRouteBuilderInput;
+  statusFilterCount: number;
   ungroupedCount: number;
 }
 
@@ -32,6 +33,7 @@ export const useRoutingViewComposition = ({
   groupNamesCount,
   isMainSwipeRoute,
   mainSwipeRouteBuilderInput,
+  statusFilterCount,
   ungroupedCount,
 }: UseRoutingViewCompositionParams): RoutingViewCompositionResult => {
   const contactsToolbarProgress =
@@ -42,7 +44,8 @@ export const useRoutingViewComposition = ({
       : 0;
 
   const showContactsToolbar = contactsToolbarProgress > 0;
-  const showGroupFilter = showContactsToolbar && groupNamesCount > 0;
+  const showGroupFilter =
+    showContactsToolbar && groupNamesCount + statusFilterCount > 0;
   const showNoGroupFilter = ungroupedCount > 0;
 
   const contactsToolbarStyle = {

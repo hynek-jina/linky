@@ -2,6 +2,7 @@ import type { CashuTokenId, ContactId } from "../evolu";
 
 export type Route =
   | { kind: "contacts" }
+  | { kind: "settings" }
   | { kind: "advanced" }
   | { kind: "advancedAutoPayLimit" }
   | { kind: "advancedPushDebug" }
@@ -37,6 +38,7 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "") return { kind: "wallet" };
   if (hash === "#") return { kind: "contacts" };
   if (hash === "#contacts") return { kind: "contacts" };
+  if (hash === "#settings") return { kind: "settings" };
   if (hash === "#advanced") return { kind: "advanced" };
   if (hash === "#advanced/auto-pay-limit") {
     return { kind: "advancedAutoPayLimit" };

@@ -7,6 +7,7 @@ import type {
   LocalNostrMessage,
   MintUrlInput,
 } from "../app/types/appTypes";
+import { formatDisplayGeneralStatus } from "../nostrStatus";
 import {
   formatContactMessageTimestamp,
   getInitials,
@@ -27,6 +28,7 @@ interface ContactCardProps {
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
   onSelect: (contact: ContactRowLike) => void;
+  statusText?: string | null;
   tokenInfo: CashuTokenMessageInfo | null;
   isUnknownContact?: boolean;
 }
@@ -40,12 +42,17 @@ export const ContactCard: React.FC<ContactCardProps> = ({
   onMintIconError,
   onMintIconLoad,
   onSelect,
+  statusText,
   tokenInfo,
   isUnknownContact = false,
 }) => {
   const { formatDisplayedAmountParts, formatDisplayedAmountText, t } =
     useAppShellCore();
   const initials = getInitials(String(contact.name ?? ""));
+  const contactStatus = formatDisplayGeneralStatus({
+    status: statusText,
+    providesLabel: t("contactStatusProvides"),
+  });
   const lastText = String(lastMessage?.content ?? "").trim();
   const rawDirection = String(lastMessage?.direction ?? "").trim();
   const previewDirection =
@@ -121,7 +128,10 @@ export const ContactCard: React.FC<ContactCardProps> = ({
           <div className="card-title-row">
             {contact.name ? (
               <h4 className="contact-title" style={{ flex: 1 }}>
-                {String(contact.name)}
+                <span>{String(contact.name)}</span>
+                {contactStatus ? (
+                  <span className="contact-status-text">{contactStatus}</span>
+                ) : null}
               </h4>
             ) : null}
             {lastTime ? (

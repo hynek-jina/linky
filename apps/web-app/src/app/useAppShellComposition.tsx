@@ -42,6 +42,12 @@ import {
   saveCachedProfilePicture,
   type NostrProfileMetadata,
 } from "../nostrProfile";
+import {
+  extractStatusFilterCurrencies,
+  isStatusFilterValue,
+  parseStatusFilterValue,
+  PROFILE_STATUS_CURRENCIES,
+} from "../nostrStatus";
 import { writeClipboardText } from "../platform/clipboard";
 import { readStoredNostrNsec } from "../platform/identitySecrets";
 import {
@@ -80,6 +86,7 @@ import {
   MAX_CONTACTS_PER_OWNER,
   NO_GROUP_FILTER,
   PENDING_DEEP_LINK_TEXT_STORAGE_KEY,
+  WALLET_WARNING_BALANCE_THRESHOLD_SAT,
 } from "../utils/constants";
 import { buildCashuDeepLink, parseNativeDeepLinkUrl } from "../utils/deepLinks";
 import {
@@ -87,6 +94,8 @@ import {
   formatDisplayAmountParts,
   formatDisplayAmountText,
   getDisplayUnitLabel,
+  getNextDisplayCurrency,
+  normalizeAllowedDisplayCurrencies,
   type DisplayCurrency,
 } from "../utils/displayAmounts";
 import { formatShortNpub, getBestNostrName } from "../utils/formatting";
@@ -104,6 +113,7 @@ import {
   setStoredPushNsec,
 } from "../utils/pushNsecStorage";
 import {
+  getInitialAllowedDisplayCurrencies,
   getInitialDisplayCurrency,
   getInitialLightningInvoiceAutoPayLimit,
   getInitialNostrNsec,
@@ -154,6 +164,8 @@ import { usePayContactWithCashuMessage } from "./hooks/payments/usePayContactWit
 import { useRouteAmountResetEffects } from "./hooks/payments/useRouteAmountResetEffects";
 import { useProfileEditor } from "./hooks/profile/useProfileEditor";
 import { useProfileMetadataSyncEffect } from "./hooks/profile/useProfileMetadataSyncEffect";
+import { useProfileStatusEditor } from "./hooks/profile/useProfileStatusEditor";
+import { useProfileStatusSyncEffect } from "./hooks/profile/useProfileStatusSyncEffect";
 import { shouldKeepTopupQuoteAfterClaimError } from "./hooks/topup/topupMintClaim";
 import {
   isClaimableMintQuoteState,
@@ -832,6 +844,9 @@ export const useAppShellComposition = () => {
     Record<string, number>
   >(() => ({}));
   const [lang, setLang] = useState<Lang>(() => getInitialLang());
+  const [allowedDisplayCurrencies, setAllowedDisplayCurrencies] = useState<
+    DisplayCurrency[]
+  >(() => getInitialAllowedDisplayCurrencies());
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(() =>
     getInitialDisplayCurrency(),
   );
@@ -841,6 +856,42 @@ export const useAppShellComposition = () => {
   const [lightningInvoiceAutoPayLimit, setLightningInvoiceAutoPayLimit] =
     useState<number>(() => getInitialLightningInvoiceAutoPayLimit());
   const [allowPromisesEnabled] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (allowedDisplayCurrencies.includes(displayCurrency)) return;
+    setDisplayCurrency(allowedDisplayCurrencies[0] ?? "sat");
+  }, [allowedDisplayCurrencies, displayCurrency]);
+
+  const setDisplayCurrencyIfAllowed = React.useCallback(
+    (currency: DisplayCurrency) => {
+      if (!allowedDisplayCurrencies.includes(currency)) return;
+      setDisplayCurrency(currency);
+    },
+    [allowedDisplayCurrencies],
+  );
+
+  const cycleDisplayCurrency = React.useCallback(() => {
+    setDisplayCurrency((current) =>
+      getNextDisplayCurrency(current, allowedDisplayCurrencies),
+    );
+  }, [allowedDisplayCurrencies]);
+
+  const toggleAllowedDisplayCurrency = React.useCallback(
+    (currency: DisplayCurrency) => {
+      setAllowedDisplayCurrencies((current) => {
+        if (current.includes(currency)) {
+          if (current.length <= 1) return current;
+          return current.filter((candidate) => candidate !== currency);
+        }
+
+        return normalizeAllowedDisplayCurrencies(
+          current.concat(currency),
+          currency,
+        );
+      });
+    },
+    [],
+  );
 
   const fiatRates = useFiatRates();
   const displayUnit = getDisplayUnitLabel(displayCurrency, lang);
@@ -1059,6 +1110,9 @@ export const useAppShellComposition = () => {
   const [nostrPictureByNpub, setNostrPictureByNpub] = useState<
     Record<string, string | null>
   >(() => Object.fromEntries(inMemoryNostrPictureCache.entries()));
+  const [nostrStatusByNpub, setNostrStatusByNpub] = useState<
+    Record<string, string | null>
+  >({});
 
   const avatarObjectUrlsByNpubRef = React.useRef<Map<string, string>>(
     new Map(),
@@ -1277,6 +1331,7 @@ export const useAppShellComposition = () => {
   const [myProfileLnAddress, setMyProfileLnAddress] = useState<string | null>(
     null,
   );
+  const [myProfileStatus, setMyProfileStatus] = useState<string | null>(null);
   const [myProfileMetadata, setMyProfileMetadata] =
     useState<NostrProfileMetadata | null>(null);
 
@@ -1288,6 +1343,7 @@ export const useAppShellComposition = () => {
 
   const nostrInFlight = React.useRef<Set<string>>(new Set());
   const nostrMetadataInFlight = React.useRef<Set<string>>(new Set());
+  const nostrStatusInFlight = React.useRef<Set<string>>(new Set());
   const pendingUnknownContactAddRef = React.useRef<{
     sourceContactId: string;
     targetNpub: string;
@@ -1543,6 +1599,7 @@ export const useAppShellComposition = () => {
 
   useAppPreferences({
     allowPromisesEnabled,
+    allowedDisplayCurrencies,
     displayCurrency,
     lang,
     lightningInvoiceAutoPayLimit,
@@ -2394,6 +2451,27 @@ export const useAppShellComposition = () => {
     setMyProfilePicture,
   });
 
+  useProfileStatusSyncEffect({
+    currentNpub,
+    nostrFetchRelays,
+    setMyProfileStatus,
+  });
+
+  const {
+    profileStatusCurrencies,
+    profileStatusIsSaving,
+    selectedProfileStatusCurrencies,
+    toggleProfileStatusCurrency,
+  } = useProfileStatusEditor({
+    currentNpub,
+    currentNsec,
+    myProfileStatus,
+    nostrFetchRelays,
+    setMyProfileStatus,
+    setStatus,
+    t,
+  });
+
   useProfileNpubCashEffects({
     claimNpubCashOnce,
     claimNpubCashOnceLatestRef,
@@ -2421,10 +2499,13 @@ export const useAppShellComposition = () => {
     nostrFetchRelays,
     nostrInFlight,
     nostrMetadataInFlight,
+    nostrStatusByNpub,
+    nostrStatusInFlight,
     nostrPictureByNpub,
     rememberBlobAvatarUrl,
     routeKind: route.kind,
     setNostrPictureByNpub,
+    setNostrStatusByNpub,
     update,
   });
 
@@ -2750,12 +2831,17 @@ export const useAppShellComposition = () => {
     return displayContacts.map((contact) => {
       const idKey = String(contact.id ?? "").trim();
       const groupName = String(contact.groupName ?? "").trim();
+      const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+      const statusFilterValues = normalizedNpub
+        ? extractStatusFilterCurrencies(nostrStatusByNpub[normalizedNpub])
+        : [];
       const haystack = [
         contact.name,
         contact.npub,
         contact.lnAddress,
         contact.groupName,
         contact.unknownPubkeyHex,
+        ...statusFilterValues,
       ]
         .map((value) =>
           String(value ?? "")
@@ -2770,9 +2856,55 @@ export const useAppShellComposition = () => {
         idKey,
         groupName,
         haystack,
+        statusFilterValues,
       };
     });
-  }, [displayContacts]);
+  }, [displayContacts, nostrStatusByNpub]);
+
+  const statusFilterCurrencies = React.useMemo(() => {
+    const uniqueCurrencies = new Set<string>();
+
+    for (const contact of displayContacts) {
+      const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+      if (!normalizedNpub) continue;
+
+      for (const currency of extractStatusFilterCurrencies(
+        nostrStatusByNpub[normalizedNpub],
+      )) {
+        uniqueCurrencies.add(currency);
+      }
+    }
+
+    return [...uniqueCurrencies].sort((left, right) => {
+      const leftKnownIndex = PROFILE_STATUS_CURRENCIES.indexOf(
+        left as (typeof PROFILE_STATUS_CURRENCIES)[number],
+      );
+      const rightKnownIndex = PROFILE_STATUS_CURRENCIES.indexOf(
+        right as (typeof PROFILE_STATUS_CURRENCIES)[number],
+      );
+
+      if (leftKnownIndex >= 0 && rightKnownIndex >= 0) {
+        return leftKnownIndex - rightKnownIndex;
+      }
+      if (leftKnownIndex >= 0) return -1;
+      if (rightKnownIndex >= 0) return 1;
+      return left.localeCompare(right);
+    });
+  }, [displayContacts, nostrStatusByNpub]);
+
+  React.useEffect(() => {
+    if (!isStatusFilterValue(activeGroup)) return;
+
+    const selectedCurrency = parseStatusFilterValue(activeGroup);
+    if (!selectedCurrency) {
+      setActiveGroup(null);
+      return;
+    }
+
+    if (!statusFilterCurrencies.includes(selectedCurrency)) {
+      setActiveGroup(null);
+    }
+  }, [activeGroup, setActiveGroup, statusFilterCurrencies]);
 
   const visibleContacts = useVisibleContacts<DisplayContact>({
     activeGroup,
@@ -3184,7 +3316,8 @@ export const useAppShellComposition = () => {
   const [walletWarningDismissed, setWalletWarningDismissed] =
     React.useState(false);
 
-  const walletWarningApplies = cashuBalance > lightningInvoiceAutoPayLimit;
+  const walletWarningApplies =
+    cashuBalance > WALLET_WARNING_BALANCE_THRESHOLD_SAT;
 
   React.useEffect(() => {
     if (!walletWarningApplies) {
@@ -4001,6 +4134,7 @@ export const useAppShellComposition = () => {
   const renderContactCard = (contact: DisplayContact) => {
     const npub = normalizeNpubIdentifier(contact.npub);
     const avatarUrl = npub ? nostrPictureByNpub[npub] : null;
+    const statusText = npub ? (nostrStatusByNpub[npub] ?? null) : null;
     const contactId = String(contact.id ?? "").trim();
     const last = contactId ? lastMessageByContactId.get(contactId) : null;
     const lastText = String(last?.content ?? "").trim();
@@ -4017,6 +4151,7 @@ export const useAppShellComposition = () => {
         lastMessage={last ?? null}
         hasAttention={hasAttention}
         isUnknownContact={Boolean(contact.isUnknownContact)}
+        statusText={statusText}
         tokenInfo={tokenInfo}
         getMintIconUrl={getMintIconUrl}
         onSelect={() => {
@@ -5460,6 +5595,8 @@ export const useAppShellComposition = () => {
       isSavingContact,
       lang,
       myProfileQr,
+      profileStatusCurrencies,
+      profileStatusIsSaving,
       nostrPictureByNpub,
       onCancelEdit,
       onCancelReply,
@@ -5489,6 +5626,7 @@ export const useAppShellComposition = () => {
       profileEditsSavable,
       profilePhotoInputRef,
       profileSelectedPictureKind,
+      selectedProfileStatusCurrencies,
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
       replyContext,
@@ -5504,6 +5642,7 @@ export const useAppShellComposition = () => {
       setProfileEditLnAddress,
       setProfileEditName,
       t,
+      toggleProfileStatusCurrency,
     },
   });
 
@@ -5547,10 +5686,12 @@ export const useAppShellComposition = () => {
       setContactsSearch,
       showContactsOnboarding,
       showWalletWarning: walletWarningApplies && !walletWarningDismissed,
+      statusFilterCurrencies,
       startContactsGuide,
       t,
       visibleContacts,
     },
+    statusFilterCount: statusFilterCurrencies.length,
     ungroupedCount,
   });
 
@@ -5661,6 +5802,7 @@ export const useAppShellComposition = () => {
   });
 
   const appState = {
+    allowedDisplayCurrencies,
     applyAmountInputKey: applyDisplayedAmountInputKey,
     cashuBalance,
     cashuIsBusy,
@@ -5696,7 +5838,10 @@ export const useAppShellComposition = () => {
     profileEditName,
     profileEditPicture,
     profileEditsSavable,
+    profileStatusCurrencies,
+    profileStatusIsSaving,
     profilePhotoInputRef,
+    selectedProfileStatusCurrencies,
     profileSelectedPictureKind,
     profileQrIsOpen,
     route,
@@ -5725,6 +5870,7 @@ export const useAppShellComposition = () => {
     contactsGuideNav,
     copyShareOptionsText,
     copyText,
+    cycleDisplayCurrency,
     cycleProfileAvatarControl,
     onPickProfilePhoto,
     onPickScanImage,
@@ -5736,7 +5882,6 @@ export const useAppShellComposition = () => {
     openProfileQr,
     pasteScanValue,
     saveProfileEdits,
-    setDisplayCurrency,
     setContactNewPrefill,
     setIsProfileEditing,
     setLang,
@@ -5744,11 +5889,14 @@ export const useAppShellComposition = () => {
     setPostPaySaveContact,
     setProfileEditLnAddress,
     setProfileEditName,
+    setDisplayCurrency: setDisplayCurrencyIfAllowed,
     stopContactsGuide,
     shareOptionsViaEmail,
     shareOptionsViaSms,
     shareOptionsViaWhatsApp,
+    toggleAllowedDisplayCurrency,
     toggleProfileEditing,
+    toggleProfileStatusCurrency,
     writeCurrentNpubToNfc,
   };
 

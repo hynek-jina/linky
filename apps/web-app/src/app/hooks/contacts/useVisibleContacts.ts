@@ -1,4 +1,5 @@
 import React from "react";
+import { parseStatusFilterValue } from "../../../nostrStatus";
 import type { ContactNameRowLike, OptionalNumber } from "../../types/appTypes";
 
 type ContactRow = ContactNameRowLike;
@@ -8,6 +9,7 @@ interface ContactsSearchItem<TContact extends ContactRow> {
   groupName?: string | null;
   haystack: string;
   idKey: string | null;
+  statusFilterValues?: readonly string[];
 }
 
 interface LastMessageRow {
@@ -48,6 +50,12 @@ export const useVisibleContacts = <TContact extends ContactRow>({
       if (!activeGroup) return contactsSearchData;
       if (activeGroup === noGroupFilterValue) {
         return contactsSearchData.filter((item) => !item.groupName);
+      }
+      const statusFilterCurrency = parseStatusFilterValue(activeGroup);
+      if (statusFilterCurrency) {
+        return contactsSearchData.filter((item) =>
+          (item.statusFilterValues ?? []).includes(statusFilterCurrency),
+        );
       }
       return contactsSearchData.filter(
         (item) => item.groupName === activeGroup,

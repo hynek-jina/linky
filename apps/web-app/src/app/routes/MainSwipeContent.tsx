@@ -49,6 +49,7 @@ export interface MainSwipeRouteProps {
   showWalletWarning: boolean;
   showGroupFilter: boolean;
   showNoGroupFilter: boolean;
+  statusFilterCurrencies: string[];
   startContactsGuide: (task: ContactsGuideKey) => void;
   t: (key: string) => string;
   visibleContacts: {
@@ -102,6 +103,7 @@ export const MainSwipeContent = (): React.ReactElement => {
     showWalletWarning,
     showGroupFilter,
     showNoGroupFilter,
+    statusFilterCurrencies,
     startContactsGuide,
     t,
     visibleContacts,
@@ -146,6 +148,7 @@ export const MainSwipeContent = (): React.ReactElement => {
             showNoGroupFilter={showNoGroupFilter}
             noGroupFilterValue={NO_GROUP_FILTER}
             groupNames={groupNames}
+            statusFilterCurrencies={statusFilterCurrencies}
             contacts={contacts}
             visibleContacts={visibleContacts}
             conversationsLabel={conversationsLabel}

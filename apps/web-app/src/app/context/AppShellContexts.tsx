@@ -7,6 +7,7 @@ import type {
 import type { ContactId } from "../../evolu";
 import type { Lang } from "../../i18n";
 import type { LnurlWithdrawPreview } from "../../lnurlPay";
+import type { ProfileStatusCurrency } from "../../nostrStatus";
 import type { Route } from "../../types/route";
 import type {
   DisplayAmountParts,
@@ -29,6 +30,7 @@ interface ChatContact {
 }
 
 export interface AppShellCoreContextValue {
+  allowedDisplayCurrencies: readonly DisplayCurrency[];
   cashuBalance: number;
   cashuIsBusy: boolean;
   canWriteNfc: boolean;
@@ -80,7 +82,10 @@ export interface AppShellCoreContextValue {
   profileEditName: string;
   profileEditPicture: string;
   profileEditsSavable: boolean;
+  profileStatusCurrencies: readonly ProfileStatusCurrency[];
+  profileStatusIsSaving: boolean;
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
+  selectedProfileStatusCurrencies: readonly ProfileStatusCurrency[];
   profileSelectedPictureKind: "custom" | "generated";
   profileQrIsOpen: boolean;
   route: Route;
@@ -111,6 +116,7 @@ export interface AppShellActionsContextValue {
     next: () => void;
   };
   copyText: (text: string) => Promise<void>;
+  cycleDisplayCurrency: () => void;
   cycleProfileAvatarControl: (controlId: AvatarEditorControlId) => void;
   onPickProfilePhoto: () => void;
   onProfilePhotoSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -143,7 +149,11 @@ export interface AppShellActionsContextValue {
   shareOptionsViaEmail: () => void;
   shareOptionsViaSms: () => void;
   shareOptionsViaWhatsApp: () => void;
+  toggleAllowedDisplayCurrency: (currency: DisplayCurrency) => void;
   toggleProfileEditing: () => void;
+  toggleProfileStatusCurrency: (
+    currency: ProfileStatusCurrency,
+  ) => Promise<void>;
   writeCurrentNpubToNfc: () => Promise<void>;
 }
 

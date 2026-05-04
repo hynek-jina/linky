@@ -1,5 +1,7 @@
 export const UNIT_TOGGLE_STORAGE_KEY = "linky_use_btc_symbol";
 export const DISPLAY_CURRENCY_STORAGE_KEY = "linky.display_currency.v1";
+export const DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY =
+  "linky.display_allowed_currencies.v1";
 export const FIAT_RATES_CACHE_STORAGE_KEY = "linky.fiat_rates.v1";
 export const FIAT_RATES_TTL_MS = 10 * 60 * 1000;
 export const NOSTR_NSEC_STORAGE_KEY = "linky.nostr_nsec";
@@ -54,6 +56,7 @@ export const PENDING_DEEP_LINK_TEXT_STORAGE_KEY =
 
 export const PROMISE_TOTAL_CAP_SAT = 100_000;
 export const PROMISE_EXPIRES_SEC = 30 * 24 * 60 * 60;
+export const WALLET_WARNING_BALANCE_THRESHOLD_SAT = 50_000;
 export const LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT = 10_000;
 export const LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS = [
   0, 1_000, 10_000, 100_000,

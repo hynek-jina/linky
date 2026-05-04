@@ -1,7 +1,8 @@
 import React from "react";
-import type { AvatarEditorControlId } from "../derivedProfile";
 import { ProfileAvatarEditor } from "../components/ProfileAvatarEditor";
 import { ProfileQrButton } from "../components/ProfileQrButton";
+import type { AvatarEditorControlId } from "../derivedProfile";
+import type { ProfileStatusCurrency } from "../nostrStatus";
 import {
   formatShortLightningAddress,
   formatShortNpub,
@@ -33,12 +34,18 @@ interface ProfilePageProps {
   profileEditName: string;
   profileEditPicture: string;
   profileEditsSavable: boolean;
+  profileStatusCurrencies: readonly ProfileStatusCurrency[];
+  profileStatusIsSaving: boolean;
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
   profileSelectedPictureKind: "custom" | "generated";
   saveProfileEdits: () => Promise<void>;
+  selectedProfileStatusCurrencies: readonly ProfileStatusCurrency[];
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
   t: (key: string) => string;
+  toggleProfileStatusCurrency: (
+    currency: ProfileStatusCurrency,
+  ) => Promise<void>;
 }
 
 export function ProfilePage({
@@ -58,12 +65,16 @@ export function ProfilePage({
   profileEditName,
   profileEditPicture,
   profileEditsSavable,
+  profileStatusCurrencies,
+  profileStatusIsSaving,
   profilePhotoInputRef,
   profileSelectedPictureKind,
   saveProfileEdits,
+  selectedProfileStatusCurrencies,
   setProfileEditLnAddress,
   setProfileEditName,
   t,
+  toggleProfileStatusCurrency,
 }: ProfilePageProps): React.ReactElement {
   return (
     <section className="panel">
@@ -207,6 +218,37 @@ export function ProfilePage({
               </div>
             </>
           )}
+
+          <div className="profile-status-row">
+            <div className="profile-status-label">
+              {t("profileExchangeStatusLabel")}
+            </div>
+            <div className="profile-status-buttons">
+              {profileStatusCurrencies.map((currency) => {
+                const isActive =
+                  selectedProfileStatusCurrencies.includes(currency);
+
+                return (
+                  <button
+                    key={currency}
+                    type="button"
+                    className={
+                      isActive
+                        ? "profile-status-chip"
+                        : "secondary profile-status-chip"
+                    }
+                    aria-pressed={isActive}
+                    disabled={!currentNpub || profileStatusIsSaving}
+                    onClick={() => {
+                      void toggleProfileStatusCurrency(currency);
+                    }}
+                  >
+                    {currency}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </>
       )}
     </section>

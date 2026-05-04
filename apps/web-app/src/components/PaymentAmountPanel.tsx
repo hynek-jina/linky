@@ -44,7 +44,7 @@ export const PaymentAmountPanel: FC<PaymentAmountPanelProps> = ({
       {notices}
 
       <div {...(stepGuideId ? { "data-guide": stepGuideId } : {})}>
-        <AmountDisplay amount={amount} />
+        <AmountDisplay amount={amount} cycleOnClick />
 
         <Keypad
           ariaLabel={`${t("payAmount")} (${displayUnit})`}

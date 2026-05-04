@@ -10,6 +10,11 @@ import {
   saveCachedProfileMetadata,
   saveCachedProfilePicture,
 } from "../../nostrProfile";
+import {
+  fetchNostrGeneralStatus,
+  loadCachedNostrGeneralStatus,
+  saveCachedNostrGeneralStatus,
+} from "../../nostrStatus";
 import { getBestNostrName } from "../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../utils/nostrNpub";
 import type { ContactRowLike } from "../types/appTypes";
@@ -24,10 +29,15 @@ interface UseContactsNostrPrefetchEffectsParams<
   nostrFetchRelays: string[];
   nostrInFlight: React.MutableRefObject<Set<string>>;
   nostrMetadataInFlight: React.MutableRefObject<Set<string>>;
+  nostrStatusByNpub: Record<string, string | null>;
+  nostrStatusInFlight: React.MutableRefObject<Set<string>>;
   nostrPictureByNpub: Record<string, string | null>;
   rememberBlobAvatarUrl: (npub: string, url: string | null) => string | null;
   routeKind: string;
   setNostrPictureByNpub: React.Dispatch<
+    React.SetStateAction<Record<string, string | null>>
+  >;
+  setNostrStatusByNpub: React.Dispatch<
     React.SetStateAction<Record<string, string | null>>
   >;
   update: EvoluMutations["update"];
@@ -41,10 +51,13 @@ export const useContactsNostrPrefetchEffects = <
   nostrFetchRelays,
   nostrInFlight,
   nostrMetadataInFlight,
+  nostrStatusByNpub,
+  nostrStatusInFlight,
   nostrPictureByNpub,
   rememberBlobAvatarUrl,
   routeKind,
   setNostrPictureByNpub,
+  setNostrStatusByNpub,
   update,
 }: UseContactsNostrPrefetchEffectsParams<TContact>) => {
   const updateContactFromNostr = React.useCallback(
@@ -272,5 +285,66 @@ export const useContactsNostrPrefetchEffects = <
     rememberBlobAvatarUrl,
     nostrFetchRelays,
     setNostrPictureByNpub,
+  ]);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const uniqueNpubs: string[] = [];
+    const seen = new Set<string>();
+    for (const contact of contacts) {
+      const npub = normalizeNpubIdentifier(contact.npub);
+      if (!npub) continue;
+      if (seen.has(npub)) continue;
+      seen.add(npub);
+      uniqueNpubs.push(npub);
+    }
+
+    const run = async () => {
+      for (const npub of uniqueNpubs) {
+        if (nostrStatusByNpub[npub] !== undefined) continue;
+
+        const cached = loadCachedNostrGeneralStatus(npub);
+        if (cached) {
+          setNostrStatusByNpub((prev) =>
+            prev[npub] !== undefined
+              ? prev
+              : { ...prev, [npub]: cached.status },
+          );
+          continue;
+        }
+
+        if (nostrStatusInFlight.current.has(npub)) continue;
+        nostrStatusInFlight.current.add(npub);
+
+        try {
+          const status = await fetchNostrGeneralStatus(npub, {
+            signal: controller.signal,
+            relays: nostrFetchRelays,
+          });
+          saveCachedNostrGeneralStatus(npub, status);
+          if (cancelled) return;
+          setNostrStatusByNpub((prev) => ({ ...prev, [npub]: status }));
+        } catch {
+          if (cancelled) return;
+        } finally {
+          nostrStatusInFlight.current.delete(npub);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [
+    contacts,
+    nostrFetchRelays,
+    nostrStatusByNpub,
+    nostrStatusInFlight,
+    setNostrStatusByNpub,
   ]);
 };

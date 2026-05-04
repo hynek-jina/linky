@@ -3,6 +3,7 @@ import React from "react";
 import type { ContactRowLike } from "../app/types/appTypes";
 import { BottomTabBar } from "../components/BottomTabBar";
 import { ContactAddFabIcon } from "../components/ContactAddFabIcon";
+import { buildStatusFilterValue } from "../nostrStatus";
 
 interface ContactsPageProps {
   activeGroup: string | null;
@@ -24,6 +25,7 @@ interface ContactsPageProps {
   setContactsSearch: (value: string) => void;
   showGroupFilter: boolean;
   showNoGroupFilter: boolean;
+  statusFilterCurrencies: string[];
   showBottomTabBar?: boolean;
   showFab?: boolean;
   t: (key: string) => string;
@@ -54,6 +56,7 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
     setContactsSearch,
     showGroupFilter,
     showNoGroupFilter,
+    statusFilterCurrencies,
     showBottomTabBar = true,
     showFab = true,
     t,
@@ -120,6 +123,25 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
                     {t("noGroup")}
                   </button>
                 )}
+                {statusFilterCurrencies.map((currency) => {
+                  const filterValue = buildStatusFilterValue(currency);
+
+                  return (
+                    <button
+                      key={filterValue}
+                      type="button"
+                      className={
+                        activeGroup === filterValue
+                          ? "group-filter-btn is-active"
+                          : "group-filter-btn"
+                      }
+                      onClick={() => setActiveGroup(filterValue)}
+                      title={currency}
+                    >
+                      {currency}
+                    </button>
+                  );
+                })}
                 {groupNames.map((group) => (
                   <button
                     key={group}

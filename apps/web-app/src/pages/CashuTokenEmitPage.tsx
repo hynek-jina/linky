@@ -100,7 +100,7 @@ export const CashuTokenEmitPage: FC<CashuTokenEmitPageProps> = ({
           </div>
         </div>
 
-        <AmountDisplay amount={cashuEmitAmount} />
+        <AmountDisplay amount={cashuEmitAmount} cycleOnClick />
 
         <Keypad
           ariaLabel={`${t("payAmount")} (${displayUnit})`}

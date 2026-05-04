@@ -1069,6 +1069,20 @@
   justify-content: center;
 }
 
+.balance-hero-button {
+  width: auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.balance-hero-button:hover {
+  transform: none;
+  box-shadow: none;
+  background: transparent;
+}
+
 .balance-number {
   font-size: 44px;
 }
@@ -1175,9 +1189,34 @@ button.settings-link:hover {
   font-size: 16px;
 }
 
+.settings-label-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .settings-right {
   display: flex;
   align-items: center;
+}
+
+.settings-note {
+  margin: 0 0 16px;
+  line-height: 1.45;
+}
+
+.settings-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.16);
+  color: #99f6e4;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .settings-right-wrap {
@@ -1484,6 +1523,33 @@ button.settings-link:hover {
 .profile-note {
   margin: 10px 0 0;
   max-width: 520px;
+}
+
+.profile-status-row {
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.profile-status-label {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.profile-status-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.profile-status-chip {
+  min-width: 0;
+  padding: 7px 12px;
+  font-size: 12px;
 }
 
 .chat-message {
@@ -2433,6 +2499,16 @@ button.icon {
   gap: 10px;
 }
 
+.amount-display-button {
+  width: 100%;
+  box-shadow: none;
+}
+
+.amount-display-button:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .amount-number {
   font-size: 44px;
   font-weight: 900;
@@ -3279,6 +3355,13 @@ button.icon {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.contact-status-text {
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 400;
+  color: #94a3b8;
 }
 
 .contact-indicator {

@@ -33,3 +33,8 @@ export const getDefaultDisplayCurrency = (): DisplayCurrency => {
   if (language.startsWith("en")) return "usd";
   return "sat";
 };
+
+export const getDefaultAllowedDisplayCurrencies = (): DisplayCurrency[] => {
+  const defaultCurrency = getDefaultDisplayCurrency();
+  return defaultCurrency === "sat" ? ["sat"] : [defaultCurrency, "sat"];
+};

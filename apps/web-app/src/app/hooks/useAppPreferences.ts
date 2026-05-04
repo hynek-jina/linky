@@ -2,6 +2,7 @@ import React from "react";
 import { persistLang, type Lang } from "../../i18n";
 import {
   ALLOW_PROMISES_STORAGE_KEY,
+  DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
   PAY_WITH_CASHU_STORAGE_KEY,
@@ -11,6 +12,7 @@ import type { DisplayCurrency } from "../../utils/displayAmounts";
 
 interface UseAppPreferencesParams {
   allowPromisesEnabled: boolean;
+  allowedDisplayCurrencies: readonly DisplayCurrency[];
   displayCurrency: DisplayCurrency;
   lang: Lang;
   lightningInvoiceAutoPayLimit: number;
@@ -19,6 +21,7 @@ interface UseAppPreferencesParams {
 
 export const useAppPreferences = ({
   allowPromisesEnabled,
+  allowedDisplayCurrencies,
   displayCurrency,
   lang,
   lightningInvoiceAutoPayLimit,
@@ -37,13 +40,17 @@ export const useAppPreferences = ({
     try {
       localStorage.setItem(DISPLAY_CURRENCY_STORAGE_KEY, displayCurrency);
       localStorage.setItem(
+        DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
+        JSON.stringify(allowedDisplayCurrencies),
+      );
+      localStorage.setItem(
         UNIT_TOGGLE_STORAGE_KEY,
         displayCurrency === "btc" ? "1" : "0",
       );
     } catch {
       // ignore
     }
-  }, [displayCurrency]);
+  }, [allowedDisplayCurrencies, displayCurrency]);
 
   React.useEffect(() => {
     try {
