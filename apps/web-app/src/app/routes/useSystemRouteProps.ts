@@ -12,6 +12,7 @@ interface UseSystemRoutePropsParams {
   applyDefaultMintSelection: SystemRoutesProps["mintsProps"]["applyDefaultMintSelection"];
   cashuMeltToMainMintButtonLabel: SystemRoutesProps["mintsProps"]["cashuMeltToMainMintButtonLabel"];
   canSaveNewRelay: SystemRoutesProps["nostrRelayNewProps"]["canSaveNewRelay"];
+  cashuIsBusy: SystemRoutesProps["mintsProps"]["cashuIsBusy"];
   connectedRelayCount: SystemRoutesProps["advancedProps"]["connectedRelayCount"];
   copyNostrKeys: SystemRoutesProps["advancedProps"]["copyNostrKeys"];
   copySeed: SystemRoutesProps["advancedProps"]["copySeed"];
@@ -109,6 +110,7 @@ export const useSystemRouteProps = ({
   appOwnerIdRef,
   appVersion,
   applyDefaultMintSelection,
+  cashuIsBusy,
   cashuMeltToMainMintButtonLabel,
   canSaveNewRelay,
   connectedRelayCount,
