@@ -5510,6 +5510,7 @@ export const useAppShellComposition = () => {
 
   const { moneyRouteProps } = usePaymentMoneyComposition({
     moneyRouteBuilderInput: {
+      canRestoreTokens: String(seedMnemonic ?? "").trim().length > 0,
       canSendCashuTokenToContact: contacts.length > 0,
       canWriteNfc,
       canPayWithCashu,
@@ -5539,6 +5540,7 @@ export const useAppShellComposition = () => {
       meltLargestForeignMintToMainMint,
       payLightningAddressWithCashu,
       pendingCashuDeleteId,
+      restoreMissingTokens,
       reserveCashuToken,
       requestDeleteCashuToken,
       returnCashuTokenToWallet,
@@ -5561,6 +5563,7 @@ export const useAppShellComposition = () => {
         normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ??
         MAIN_MINT_URL,
       topupInvoiceQr,
+      tokensRestoreIsBusy,
       writeCashuTokenToNfc,
     },
   });

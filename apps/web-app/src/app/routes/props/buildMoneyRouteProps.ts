@@ -4,6 +4,7 @@ import type { MoneyRoutesProps } from "../AppRouteContent";
 type MoneyRouteProps = MoneyRoutesProps;
 
 interface BuildMoneyRoutePropsParams {
+  canRestoreTokens: boolean;
   canSendCashuTokenToContact: boolean;
   canWriteNfc: boolean;
   canPayWithCashu: MoneyRoutesProps["lnAddressPayProps"]["canPayWithCashu"];
@@ -39,6 +40,7 @@ interface BuildMoneyRoutePropsParams {
   pendingCashuDeleteId: ReturnType<
     MoneyRoutesProps["cashuTokenProps"]
   >["pendingCashuDeleteId"];
+  restoreMissingTokens: MoneyRoutesProps["cashuTokensProps"]["restoreMissingTokens"];
   reserveCashuToken: ReturnType<
     MoneyRoutesProps["cashuTokenProps"]
   >["reserveCashuToken"];
@@ -70,6 +72,7 @@ interface BuildMoneyRoutePropsParams {
   topupInvoiceIsBusy: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceIsBusy"];
   topupMintUrl: MoneyRoutesProps["topupInvoiceProps"]["topupMintUrl"];
   topupInvoiceQr: MoneyRoutesProps["topupInvoiceProps"]["topupInvoiceQr"];
+  tokensRestoreIsBusy: MoneyRoutesProps["cashuTokensProps"]["tokensRestoreIsBusy"];
   writeCashuTokenToNfc: MoneyRoutesProps["cashuTokenProps"] extends () => infer Props
     ? Props extends { writeToNfc: infer Fn }
       ? Fn
@@ -78,6 +81,7 @@ interface BuildMoneyRoutePropsParams {
 }
 
 export const buildMoneyRouteProps = ({
+  canRestoreTokens,
   canSendCashuTokenToContact,
   canWriteNfc,
   canPayWithCashu,
@@ -107,6 +111,7 @@ export const buildMoneyRouteProps = ({
   meltLargestForeignMintToMainMint,
   payLightningAddressWithCashu,
   pendingCashuDeleteId,
+  restoreMissingTokens,
   reserveCashuToken,
   requestDeleteCashuToken,
   returnCashuTokenToWallet,
@@ -126,6 +131,7 @@ export const buildMoneyRouteProps = ({
   topupInvoiceIsBusy,
   topupMintUrl,
   topupInvoiceQr,
+  tokensRestoreIsBusy,
   writeCashuTokenToNfc,
 }: BuildMoneyRoutePropsParams): MoneyRouteProps => {
   return {
@@ -150,6 +156,7 @@ export const buildMoneyRouteProps = ({
       t,
     },
     cashuTokensProps: {
+      canRestoreTokens,
       cashuBalance,
       cashuBulkCheckIsBusy,
       cashuIsBusy,
@@ -159,8 +166,10 @@ export const buildMoneyRouteProps = ({
       checkAllCashuTokensAndDeleteInvalid,
       getMintIconUrl,
       meltLargestForeignMintToMainMint,
+      restoreMissingTokens,
       setMintIconUrlByMint,
       t,
+      tokensRestoreIsBusy,
     },
     cashuTokenProps: () => {
       if (route.kind !== "cashuToken") {

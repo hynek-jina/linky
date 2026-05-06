@@ -2355,24 +2355,6 @@ button.danger {
   flex-wrap: wrap;
 }
 
-.wallet-tokens-link {
-  margin-top: 8px;
-  align-self: center;
-  background: transparent;
-  border: none;
-  padding: 0;
-  color: #94a3b8;
-  font-weight: 600;
-  font-size: 12px;
-  text-decoration: none;
-}
-
-.wallet-tokens-link:hover {
-  transform: none;
-  box-shadow: none;
-  color: #cbd5e1;
-}
-
 .wallet-warning {
   margin-top: 10px;
   background: rgba(251, 191, 36, 0.1);

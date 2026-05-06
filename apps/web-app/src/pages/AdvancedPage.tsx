@@ -10,7 +10,6 @@ import { LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS } from "../utils/constants";
 
 interface AdvancedPageProps {
   __APP_VERSION__: string;
-  cashuIsBusy: boolean;
   connectedRelayCount: number;
   copyNostrKeys: () => void;
   copySeed: () => void;
@@ -36,18 +35,15 @@ interface AdvancedPageProps {
   requestImportAppData: () => void;
   requestDeriveNostrKeys: () => Promise<void>;
   requestLogout: () => void;
-  restoreMissingTokens: () => Promise<void>;
   saveSeedToPasswordManager: () => Promise<PasswordManagerSaveResult>;
   seedMnemonic: string | null;
   setLightningInvoiceAutoPayLimit: (value: number) => void;
   setPayWithCashuEnabled: (value: boolean) => void;
   t: (key: string) => string;
-  tokensRestoreIsBusy: boolean;
 }
 
 export function AdvancedPage({
   __APP_VERSION__,
-  cashuIsBusy,
   connectedRelayCount,
   copyNostrKeys,
   copySeed,
@@ -71,13 +67,11 @@ export function AdvancedPage({
   requestImportAppData,
   requestDeriveNostrKeys,
   requestLogout,
-  restoreMissingTokens,
   saveSeedToPasswordManager,
   seedMnemonic,
   setLightningInvoiceAutoPayLimit,
   setPayWithCashuEnabled,
   t,
-  tokensRestoreIsBusy,
 }: AdvancedPageProps): React.ReactElement {
   const navigateTo = useNavigation();
   const { formatDisplayedAmountParts } = useAppShellCore();
@@ -283,7 +277,13 @@ export function AdvancedPage({
         </div>
       </div>
 
-      <div className="settings-row">
+      <button
+        type="button"
+        className="settings-row settings-link"
+        onClick={() => navigateTo({ route: "cashuTokens" })}
+        aria-label={t("tokens")}
+        title={t("tokens")}
+      >
         <div className="settings-left">
           <span className="settings-icon" aria-hidden="true">
             🪙
@@ -291,17 +291,11 @@ export function AdvancedPage({
           <span className="settings-label">{t("tokens")}</span>
         </div>
         <div className="settings-right">
-          <div className="badge-box">
-            <button
-              className="ghost"
-              onClick={() => void restoreMissingTokens()}
-              disabled={!hasSeedMnemonic || tokensRestoreIsBusy || cashuIsBusy}
-            >
-              {tokensRestoreIsBusy ? t("restoring") : t("restore")}
-            </button>
-          </div>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
         </div>
-      </div>
+      </button>
 
       <div className="settings-row">
         <div className="settings-left">

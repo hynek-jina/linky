@@ -108,6 +108,7 @@ export const cs = {
   lightningInvoiceAutoPayLimit: "Limit autoplatby faktury",
   custom: "Vlastní",
   restore: "Obnovit",
+  restoreTokens: "Obnovit tokeny",
   restoring: "Obnovuji…",
   restoreNothing: "Žádné chybějící tokeny nenalezeny.",
   restoreDone: "Obnoveno {proofs} proofů do {tokens} tokenů.",
@@ -444,7 +445,7 @@ export const cs = {
   topup: "Dobít",
   topupTitle: "Dobít účet",
   topupShowInvoice: "Zobrazit fakturu pro dobití",
-  topupNoAmount: "Libovolná částka",
+  topupNoAmount: "Bez částky",
   topupNoAmountTitle: "Přijmout libovolnou částku",
   topupNoAmountMissingAddress:
     "Nejdřív si v profilu nastavte lightning adresu.",

@@ -107,6 +107,7 @@ export const en = {
   lightningInvoiceAutoPayLimit: "Invoice auto-pay limit",
   custom: "Custom",
   restore: "Restore",
+  restoreTokens: "Restore tokens",
   restoring: "Restoring…",
   restoreNothing: "No missing tokens found.",
   restoreDone: "Restored {proofs} proofs into {tokens} tokens.",
