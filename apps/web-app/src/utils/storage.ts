@@ -4,6 +4,7 @@ import {
 } from "./browserPreferences";
 import {
   ALLOW_PROMISES_STORAGE_KEY,
+  CASHU_AUTOSWAP_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT,
@@ -252,6 +253,18 @@ export const getInitialAllowedDisplayCurrencies = (): DisplayCurrency[] => {
 export const getInitialPayWithCashuEnabled = (): boolean => {
   try {
     const raw = localStorage.getItem(PAY_WITH_CASHU_STORAGE_KEY);
+    const v = String(raw ?? "").trim();
+    // Default: enabled.
+    if (!v) return true;
+    return v === "1";
+  } catch {
+    return true;
+  }
+};
+
+export const getInitialCashuAutoswapEnabled = (): boolean => {
+  try {
+    const raw = localStorage.getItem(CASHU_AUTOSWAP_STORAGE_KEY);
     const v = String(raw ?? "").trim();
     // Default: enabled.
     if (!v) return true;

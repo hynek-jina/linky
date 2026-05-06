@@ -40,12 +40,15 @@ describe("topup mint claim helpers", () => {
     );
   });
 
-  it("keeps the pending quote after an already-signed restore miss", () => {
+  it("drops the pending quote after an already-signed restore miss", () => {
+    // Recovery in mintTopupProofs exhausts the deterministic restore loop
+    // before we land here, so retrying the same quote forever just spams
+    // the mint with the same failing call.
     expect(
       shouldKeepTopupQuoteAfterClaimError(
         new Error("outputs already signed"),
         isCashuOutputsAlreadySignedError,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

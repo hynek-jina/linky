@@ -74,6 +74,7 @@ interface UseSystemRoutePropsParams {
   pendingMintDeleteUrl: SystemRoutesProps["mintDetailProps"]["pendingMintDeleteUrl"];
   pendingRelayDeleteUrl: SystemRoutesProps["nostrRelayProps"]["pendingRelayDeleteUrl"];
   payWithCashuEnabled: SystemRoutesProps["advancedProps"]["payWithCashuEnabled"];
+  cashuAutoswapEnabled: SystemRoutesProps["advancedProps"]["cashuAutoswapEnabled"];
   PRESET_MINTS: SystemRoutesProps["mintsProps"]["PRESET_MINTS"];
   pushToast: SystemRoutesProps["evoluServerNewProps"]["pushToast"];
   refreshMintInfo: SystemRoutesProps["mintDetailProps"]["refreshMintInfo"];
@@ -97,6 +98,7 @@ interface UseSystemRoutePropsParams {
   setNewEvoluServerUrl: SystemRoutesProps["evoluServerNewProps"]["setNewEvoluServerUrl"];
   setNewRelayUrl: SystemRoutesProps["nostrRelayNewProps"]["setNewRelayUrl"];
   setPayWithCashuEnabled: SystemRoutesProps["advancedProps"]["setPayWithCashuEnabled"];
+  setCashuAutoswapEnabled: SystemRoutesProps["advancedProps"]["setCashuAutoswapEnabled"];
   setPendingEvoluServerDeleteUrl: SystemRoutesProps["evoluServerProps"]["setPendingEvoluServerDeleteUrl"];
   setPendingMintDeleteUrl: SystemRoutesProps["mintDetailProps"]["setPendingMintDeleteUrl"];
   setStatus: SystemRoutesProps["evoluServerNewProps"]["setStatus"];
@@ -174,6 +176,7 @@ export const useSystemRouteProps = ({
   pendingMintDeleteUrl,
   pendingRelayDeleteUrl,
   payWithCashuEnabled,
+  cashuAutoswapEnabled,
   PRESET_MINTS,
   pushToast,
   refreshMintInfo,
@@ -197,6 +200,7 @@ export const useSystemRouteProps = ({
   setNewEvoluServerUrl,
   setNewRelayUrl,
   setPayWithCashuEnabled,
+  setCashuAutoswapEnabled,
   setPendingEvoluServerDeleteUrl,
   setPendingMintDeleteUrl,
   setStatus,
@@ -236,6 +240,7 @@ export const useSystemRouteProps = ({
       currentNsec,
       seedMnemonic,
       payWithCashuEnabled,
+      cashuAutoswapEnabled,
       pushToast,
       relayUrls,
       connectedRelayCount,
@@ -255,6 +260,7 @@ export const useSystemRouteProps = ({
       saveSeedToPasswordManager,
       setLightningInvoiceAutoPayLimit,
       setPayWithCashuEnabled,
+      setCashuAutoswapEnabled,
       exportAppData,
       requestImportAppData,
       requestDeriveNostrKeys,

@@ -105,6 +105,7 @@ export const cs = {
   tokens: "Tokeny",
   payWithCashu: "Platit s cashu",
   payWithCashuDisabled: "Platit s cashu je vypnuto v pokročilém nastavení.",
+  cashuAutoswap: "Automaticky směňovat na hlavní mint",
   lightningInvoiceAutoPayLimit: "Limit autoplatby faktury",
   custom: "Vlastní",
   restore: "Obnovit",

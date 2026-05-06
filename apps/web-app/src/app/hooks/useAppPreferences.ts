@@ -2,6 +2,7 @@ import React from "react";
 import { persistLang, type Lang } from "../../i18n";
 import {
   ALLOW_PROMISES_STORAGE_KEY,
+  CASHU_AUTOSWAP_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
@@ -13,6 +14,7 @@ import type { DisplayCurrency } from "../../utils/displayAmounts";
 interface UseAppPreferencesParams {
   allowPromisesEnabled: boolean;
   allowedDisplayCurrencies: readonly DisplayCurrency[];
+  cashuAutoswapEnabled: boolean;
   displayCurrency: DisplayCurrency;
   lang: Lang;
   lightningInvoiceAutoPayLimit: number;
@@ -22,6 +24,7 @@ interface UseAppPreferencesParams {
 export const useAppPreferences = ({
   allowPromisesEnabled,
   allowedDisplayCurrencies,
+  cashuAutoswapEnabled,
   displayCurrency,
   lang,
   lightningInvoiceAutoPayLimit,
@@ -84,4 +87,15 @@ export const useAppPreferences = ({
       // ignore
     }
   }, [allowPromisesEnabled]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(
+        CASHU_AUTOSWAP_STORAGE_KEY,
+        cashuAutoswapEnabled ? "1" : "0",
+      );
+    } catch {
+      // ignore
+    }
+  }, [cashuAutoswapEnabled]);
 };

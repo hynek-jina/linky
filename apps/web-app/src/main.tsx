@@ -316,6 +316,21 @@ const isClipboardReadPermissionError = (value: unknown): boolean => {
   return message.includes("readtext") && message.includes("permission denied");
 };
 
+const isBenignFetchAbortError = (value: unknown): boolean => {
+  const name = getErrorName(value);
+  const message = getErrorMessage(value)?.toLowerCase() ?? "";
+
+  if (name === "AbortError") return true;
+  // Safari surfaces aborted/cancelled fetches as plain `TypeError: Load failed`
+  // or `Fetch is aborted` — both are benign during navigation / tab suspension.
+  if (message.includes("fetch is aborted")) return true;
+  if (name === "TypeError" && message === "load failed") return true;
+
+  return false;
+};
+
+let appHasMounted = false;
+
 const applyEvoluWebCompatPolyfills = () => {
   // Some iOS/WebKit environments (notably private browsing) may lack
   // `navigator.locks` and/or `BroadcastChannel`, which Evolu's shared worker
@@ -508,6 +523,7 @@ const bootstrap = async () => {
     );
     console.log("[linky][boot] rendered");
     window.clearTimeout(stuckTimer);
+    appHasMounted = true;
   } catch (error) {
     window.clearTimeout(stuckTimer);
     console.error(`Boot failed at stage ${stage}:`, error);
@@ -526,6 +542,15 @@ window.addEventListener("unhandledrejection", (event) => {
     event.preventDefault();
     return;
   }
+  if (isBenignFetchAbortError(event.reason)) {
+    event.preventDefault();
+    console.warn("[linky] ignored aborted fetch", event.reason);
+    return;
+  }
+  if (appHasMounted) {
+    console.error("[linky] post-mount unhandled rejection", event.reason);
+    return;
+  }
   renderBootError(event.reason);
 });
 
@@ -533,6 +558,15 @@ window.addEventListener("error", (event) => {
   const error = event.error ?? event.message;
   if (isClipboardReadPermissionError(error)) {
     event.preventDefault();
+    return;
+  }
+  if (isBenignFetchAbortError(error)) {
+    event.preventDefault();
+    console.warn("[linky] ignored aborted fetch", error);
+    return;
+  }
+  if (appHasMounted) {
+    console.error("[linky] post-mount window error", error);
     return;
   }
   renderBootError(error);
