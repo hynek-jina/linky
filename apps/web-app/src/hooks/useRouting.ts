@@ -44,6 +44,7 @@ type NavigationAction =
   | { route: "profile" }
   | { route: "settings" }
   | { route: "topup" }
+  | { route: "topupNoAmount" }
   | { route: "topupInvoice" }
   | { route: "wallet" };
 
@@ -98,6 +99,9 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "topup":
       window.location.assign("#wallet/topup");
+      break;
+    case "topupNoAmount":
+      window.location.assign("#wallet/topup/no-amount");
       break;
     case "topupInvoice":
       window.location.assign("#wallet/topup/invoice");

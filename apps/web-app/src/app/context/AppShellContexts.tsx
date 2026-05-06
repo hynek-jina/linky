@@ -90,6 +90,7 @@ export interface AppShellCoreContextValue {
   profileQrIsOpen: boolean;
   route: Route;
   scanAllowsManualContact: boolean;
+  scanEntryPoint: "contacts" | "receive" | "send" | null;
   scanImageInputRef: React.RefObject<HTMLInputElement | null>;
   scanIsOpen: boolean;
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
@@ -126,6 +127,8 @@ export interface AppShellActionsContextValue {
   openIssueTokenFromScan: () => void;
   openManualContactFromScan: () => void;
   openProfileQr: () => void;
+  openReceiveScan: () => void;
+  openWalletScan: () => void;
   pasteScanValue: () => Promise<void>;
   copyShareOptionsText: () => Promise<void>;
   saveProfileEdits: () => void;

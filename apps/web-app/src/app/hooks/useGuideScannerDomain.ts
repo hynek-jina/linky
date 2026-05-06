@@ -18,13 +18,15 @@ interface UseGuideScannerDomainParams {
   t: (key: string) => string;
 }
 
-export type ScanEntryPoint = "contacts" | "wallet";
+export type ScanEntryPoint = "contacts" | "receive" | "send";
 
 type UseGuideScannerDomainResult = ReturnType<typeof useContactsGuide> & {
   closeScan: () => void;
   openScan: () => void;
+  openReceiveScan: () => void;
   openWalletScan: () => void;
   scanAllowsManualContact: boolean;
+  scanEntryPoint: ScanEntryPoint | null;
   scanIsOpen: boolean;
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
 };
@@ -229,8 +231,12 @@ export const useGuideScannerDomain = ({
     openScanForEntryPoint("contacts");
   }, [openScanForEntryPoint]);
 
+  const openReceiveScan = React.useCallback(() => {
+    openScanForEntryPoint("receive");
+  }, [openScanForEntryPoint]);
+
   const openWalletScan = React.useCallback(() => {
-    openScanForEntryPoint("wallet");
+    openScanForEntryPoint("send");
   }, [openScanForEntryPoint]);
 
   const handleScannedTextRef = React.useRef(onScannedText);
@@ -405,8 +411,10 @@ export const useGuideScannerDomain = ({
     closeScan,
     ...contactsGuideDomain,
     openScan,
+    openReceiveScan,
     openWalletScan,
     scanAllowsManualContact: scanEntryPoint === "contacts",
+    scanEntryPoint,
     scanIsOpen,
     scanVideoRef,
   };

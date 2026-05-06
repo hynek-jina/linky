@@ -82,11 +82,12 @@ export const buildTopbar = ({
     };
   }
 
-  if (route.kind === "topup") {
+  if (route.kind === "topup" || route.kind === "topupNoAmount") {
     return {
       icon: "<",
       label: t("close"),
-      onClick: () => navigateTo({ route: "wallet" }),
+      onClick: () =>
+        navigateTo({ route: route.kind === "topup" ? "wallet" : "topup" }),
     };
   }
 
@@ -312,6 +313,7 @@ export const buildTopbarTitle = (
   if (route.kind === "settings") return t("unit");
   if (route.kind === "wallet") return t("wallet");
   if (route.kind === "topup") return t("topupTitle");
+  if (route.kind === "topupNoAmount") return t("topupNoAmountTitle");
   if (route.kind === "topupInvoice") return t("topupInvoiceTitle");
   if (route.kind === "lnAddressPay") return t("pay");
   if (route.kind === "cashuTokens") return t("tokens");

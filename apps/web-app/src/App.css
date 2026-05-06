@@ -1447,6 +1447,30 @@ button.settings-link:hover {
   margin: 14px 0 0;
 }
 
+.topup-secondary-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.topup-secondary-actions > .btn-wide {
+  min-width: 0;
+  flex: 1 1 0;
+  padding-inline: 8px;
+}
+
+.topup-no-amount-panel {
+  align-items: center;
+}
+
+.topup-no-amount-address {
+  width: 100%;
+  text-align: center;
+  word-break: break-word;
+}
+
 .cashu-token-panel {
   background:
     radial-gradient(

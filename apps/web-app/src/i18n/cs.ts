@@ -444,6 +444,11 @@ export const cs = {
   topup: "Dobít",
   topupTitle: "Dobít účet",
   topupShowInvoice: "Zobrazit fakturu pro dobití",
+  topupNoAmount: "Libovolná částka",
+  topupNoAmountTitle: "Přijmout libovolnou částku",
+  topupNoAmountMissingAddress:
+    "Nejdřív si v profilu nastavte lightning adresu.",
+  topupSetAmount: "Nastavit částku",
   topupInvoiceTitle: "Faktura pro dobití",
   topupInvoiceAmount: "Dobíjíš {amount} {unit}.",
   topupFetchingInvoice: "Načítám fakturu…",
@@ -458,7 +463,9 @@ export const cs = {
     "Přístup ke kameře byl zamítnut. V Brave klikněte na zámek → Nastavení webu → Kamera → Povolit a stránku obnovte.",
   scanGallery: "Galerie",
   scanImageUnsupported: "Ve vybraném obrázku jsem nenašel čitelný QR kód.",
-  scanPastePrompt: "Vložte LN fakturu nebo npub.",
+  scanPastePrompt: "Vložte LN fakturu, Cashu token, LNURL nebo npub.",
+  scanReceiveUnsupportedPayment:
+    "V režimu Přijmout nelze vložit platební QR. Použijte Cashu token, LNURL-withdraw nebo nastavte částku.",
   scanTypeManually: "Zapsat ručně",
   contactExists: "Kontakt už existuje.",
   contactIsYou: "Tohle je váš vlastní profil. Nelze ho uložit jako kontakt.",

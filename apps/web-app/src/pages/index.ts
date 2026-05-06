@@ -26,5 +26,6 @@ export { ProfilePage } from "./ProfilePage";
 export { PushDebugPage } from "./PushDebugPage";
 export { SettingsPage } from "./SettingsPage";
 export { TopupInvoicePage } from "./TopupInvoicePage";
+export { TopupNoAmountPage } from "./TopupNoAmountPage";
 export { TopupPage } from "./TopupPage";
 export { WalletPage } from "./WalletPage";

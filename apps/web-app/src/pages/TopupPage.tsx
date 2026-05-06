@@ -1,5 +1,8 @@
 import type { FC } from "react";
-import { useAppShellCore } from "../app/context/AppShellContexts";
+import {
+  useAppShellActions,
+  useAppShellCore,
+} from "../app/context/AppShellContexts";
 import { AmountDisplay } from "../components/AmountDisplay";
 import { Keypad } from "../components/Keypad";
 import { useNavigation } from "../hooks/useRouting";
@@ -27,6 +30,7 @@ export const TopupPage: FC<TopupPageProps> = ({
   topupInvoiceIsBusy,
 }) => {
   const { applyAmountInputKey } = useAppShellCore();
+  const { openReceiveScan, pasteScanValue } = useAppShellActions();
   const navigateTo = useNavigation();
   const amountSat = Number.parseInt(topupAmount.trim(), 10);
   const invalid =
@@ -90,6 +94,84 @@ export const TopupPage: FC<TopupPageProps> = ({
         >
           {t("topupShowInvoice")}
         </button>
+
+        <div className="topup-secondary-actions">
+          <button
+            type="button"
+            className="btn-wide secondary"
+            onClick={() => navigateTo({ route: "topupNoAmount" })}
+          >
+            <span className="btn-label-with-icon">
+              <span className="btn-label-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="7"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
+                  <path
+                    d="M7 12h10"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M12 7v10"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>
+              <span>{t("topupNoAmount")}</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="btn-wide secondary"
+            onClick={() => void pasteScanValue()}
+          >
+            <span className="btn-label-with-icon">
+              <span className="btn-label-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
+                  <rect
+                    x="5"
+                    y="4"
+                    width="11"
+                    height="13"
+                    rx="2.2"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
+                  <rect
+                    x="8"
+                    y="7"
+                    width="11"
+                    height="13"
+                    rx="2.2"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+              </span>
+              <span>{t("paste")}</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="btn-wide secondary"
+            onClick={openReceiveScan}
+          >
+            <span className="btn-label-with-icon">
+              <span className="btn-label-icon" aria-hidden="true">
+                <span className="contacts-qr-scanIcon" />
+              </span>
+              <span>{t("scan")}</span>
+            </span>
+          </button>
+        </div>
       </div>
     </section>
   );
