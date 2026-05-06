@@ -1447,6 +1447,30 @@ button.settings-link:hover {
   margin: 14px 0 0;
 }
 
+.topup-secondary-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.topup-secondary-actions > .btn-wide {
+  min-width: 0;
+  flex: 1 1 0;
+  padding-inline: 8px;
+}
+
+.topup-no-amount-panel {
+  align-items: center;
+}
+
+.topup-no-amount-address {
+  width: 100%;
+  text-align: center;
+  word-break: break-word;
+}
+
 .cashu-token-panel {
   background:
     radial-gradient(
@@ -2329,24 +2353,6 @@ button.danger {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.wallet-tokens-link {
-  margin-top: 8px;
-  align-self: center;
-  background: transparent;
-  border: none;
-  padding: 0;
-  color: #94a3b8;
-  font-weight: 600;
-  font-size: 12px;
-  text-decoration: none;
-}
-
-.wallet-tokens-link:hover {
-  transform: none;
-  box-shadow: none;
-  color: #cbd5e1;
 }
 
 .wallet-warning {

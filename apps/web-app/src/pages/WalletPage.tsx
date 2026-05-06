@@ -41,13 +41,6 @@ export const WalletPage: React.FC<WalletPageProps> = React.memo(
               balance={cashuBalance}
               ariaLabel={t("cashuBalance")}
             />
-            <button
-              type="button"
-              className="wallet-tokens-link"
-              onClick={() => navigateTo({ route: "cashuTokens" })}
-            >
-              {t("tokens")}
-            </button>
             <div className="wallet-actions">
               <WalletActionButton
                 icon="topup"

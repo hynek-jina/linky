@@ -44,6 +44,7 @@ interface UseScannedTextHandlerParams<TContact extends ContactRowLike> {
     text: string,
     options?: { navigateToTokens?: boolean; navigateToWallet?: boolean },
   ) => Promise<void>;
+  scanEntryPoint: "contacts" | "receive" | "send" | null;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
 }
@@ -62,6 +63,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
   requestLightningInvoiceConfirmation,
   requestLnurlWithdrawConfirmation,
   saveCashuFromText,
+  scanEntryPoint,
   setStatus,
   t,
 }: UseScannedTextHandlerParams<TContact>) => {
@@ -153,6 +155,12 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       const maybeLnAddress = String(normalized ?? "").trim();
       const isLnAddress = isLightningAddress(maybeLnAddress);
       if (isLnAddress) {
+        if (scanEntryPoint === "receive") {
+          setStatus(t("scanReceiveUnsupportedPayment"));
+          closeScan();
+          return;
+        }
+
         const needle = maybeLnAddress.toLowerCase();
         const existing = contacts.find(
           (contact) =>
@@ -191,6 +199,12 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       }
 
       if (isLnurlPayTarget(maybeLnAddress)) {
+        if (scanEntryPoint === "receive") {
+          setStatus(t("scanReceiveUnsupportedPayment"));
+          closeScan();
+          return;
+        }
+
         const inferredLnAddress =
           inferLightningAddressFromLnurlTarget(maybeLnAddress);
         const existing = inferredLnAddress
@@ -212,6 +226,12 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       }
 
       if (/^(lnbc|lntb|lnbcrt)/i.test(normalized)) {
+        if (scanEntryPoint === "receive") {
+          setStatus(t("scanReceiveUnsupportedPayment"));
+          closeScan();
+          return;
+        }
+
         const preview = getLightningInvoicePreview(normalized);
         closeScan();
 
@@ -251,6 +271,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       requestLightningInvoiceConfirmation,
       requestLnurlWithdrawConfirmation,
       saveCashuFromText,
+      scanEntryPoint,
       setStatus,
       t,
       openScannedContactPendingNpubRef,

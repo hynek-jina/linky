@@ -3259,8 +3259,10 @@ export const useAppShellComposition = () => {
     contactsGuideHighlightRect,
     contactsGuideNav,
     openScan,
+    openReceiveScan,
     openWalletScan,
     scanAllowsManualContact,
+    scanEntryPoint,
     scanIsOpen,
     scanVideoRef,
     startContactsGuide,
@@ -5266,6 +5268,7 @@ export const useAppShellComposition = () => {
     requestLightningInvoiceConfirmation: setPendingLightningInvoiceConfirmation,
     requestLnurlWithdrawConfirmation: setPendingLnurlWithdrawConfirmation,
     saveCashuFromText,
+    scanEntryPoint,
     setStatus,
     t,
   });
@@ -5507,6 +5510,7 @@ export const useAppShellComposition = () => {
 
   const { moneyRouteProps } = usePaymentMoneyComposition({
     moneyRouteBuilderInput: {
+      canRestoreTokens: String(seedMnemonic ?? "").trim().length > 0,
       canSendCashuTokenToContact: contacts.length > 0,
       canWriteNfc,
       canPayWithCashu,
@@ -5536,6 +5540,7 @@ export const useAppShellComposition = () => {
       meltLargestForeignMintToMainMint,
       payLightningAddressWithCashu,
       pendingCashuDeleteId,
+      restoreMissingTokens,
       reserveCashuToken,
       requestDeleteCashuToken,
       returnCashuTokenToWallet,
@@ -5558,6 +5563,7 @@ export const useAppShellComposition = () => {
         normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ??
         MAIN_MINT_URL,
       topupInvoiceQr,
+      tokensRestoreIsBusy,
       writeCashuTokenToNfc,
     },
   });
@@ -5700,9 +5706,9 @@ export const useAppShellComposition = () => {
       appOwnerIdRef,
       appVersion: __APP_VERSION__,
       applyDefaultMintSelection,
+      cashuIsBusy,
       cashuMeltToMainMintButtonLabel,
       canSaveNewRelay,
-      cashuIsBusy,
       connectedRelayCount,
       copyNostrKeys,
       copySeed,
@@ -5775,7 +5781,6 @@ export const useAppShellComposition = () => {
       requestImportAppData,
       requestDeriveNostrKeys,
       requestLogout,
-      restoreMissingTokens,
       saveSeedToPasswordManager,
       route,
       safeLocalStorageSetJson,
@@ -5796,7 +5801,6 @@ export const useAppShellComposition = () => {
       setMintInfoAllUnknown: setMintInfoAll,
       syncOwner,
       t,
-      tokensRestoreIsBusy,
       wipeEvoluStorage,
     },
   });
@@ -5846,6 +5850,7 @@ export const useAppShellComposition = () => {
     profileQrIsOpen,
     route,
     scanAllowsManualContact,
+    scanEntryPoint,
     scanImageInputRef,
     scanIsOpen,
     shareOptionsText,
@@ -5880,6 +5885,8 @@ export const useAppShellComposition = () => {
     openIssueTokenFromScan,
     openManualContactFromScan,
     openProfileQr,
+    openReceiveScan,
+    openWalletScan,
     pasteScanValue,
     saveProfileEdits,
     setContactNewPrefill,

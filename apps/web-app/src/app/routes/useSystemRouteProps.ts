@@ -12,7 +12,7 @@ interface UseSystemRoutePropsParams {
   applyDefaultMintSelection: SystemRoutesProps["mintsProps"]["applyDefaultMintSelection"];
   cashuMeltToMainMintButtonLabel: SystemRoutesProps["mintsProps"]["cashuMeltToMainMintButtonLabel"];
   canSaveNewRelay: SystemRoutesProps["nostrRelayNewProps"]["canSaveNewRelay"];
-  cashuIsBusy: SystemRoutesProps["advancedProps"]["cashuIsBusy"];
+  cashuIsBusy: SystemRoutesProps["mintsProps"]["cashuIsBusy"];
   connectedRelayCount: SystemRoutesProps["advancedProps"]["connectedRelayCount"];
   copyNostrKeys: SystemRoutesProps["advancedProps"]["copyNostrKeys"];
   copySeed: SystemRoutesProps["advancedProps"]["copySeed"];
@@ -83,7 +83,6 @@ interface UseSystemRoutePropsParams {
   requestDeriveNostrKeys: SystemRoutesProps["advancedProps"]["requestDeriveNostrKeys"];
   requestImportAppData: SystemRoutesProps["advancedProps"]["requestImportAppData"];
   requestLogout: SystemRoutesProps["advancedProps"]["requestLogout"];
-  restoreMissingTokens: SystemRoutesProps["advancedProps"]["restoreMissingTokens"];
   saveSeedToPasswordManager: SystemRoutesProps["advancedProps"]["saveSeedToPasswordManager"];
   route: Route;
   safeLocalStorageSetJson: SystemRoutesProps["mintDetailProps"]["safeLocalStorageSetJson"];
@@ -104,7 +103,6 @@ interface UseSystemRoutePropsParams {
   setMintInfoAllUnknown: SystemRoutesProps["mintDetailProps"]["setMintInfoAll"];
   syncOwner: SystemRoutesProps["evoluServerProps"]["syncOwner"];
   t: SystemRoutesProps["advancedProps"]["t"];
-  tokensRestoreIsBusy: SystemRoutesProps["advancedProps"]["tokensRestoreIsBusy"];
   wipeEvoluStorage: SystemRoutesProps["evoluServerNewProps"]["wipeEvoluStorage"];
 }
 
@@ -185,7 +183,6 @@ export const useSystemRouteProps = ({
   requestDeriveNostrKeys,
   requestImportAppData,
   requestLogout,
-  restoreMissingTokens,
   saveSeedToPasswordManager,
   route,
   safeLocalStorageSetJson,
@@ -206,7 +203,6 @@ export const useSystemRouteProps = ({
   setMintInfoAllUnknown,
   syncOwner,
   t,
-  tokensRestoreIsBusy,
   wipeEvoluStorage,
 }: UseSystemRoutePropsParams): SystemRouteProps => {
   const [clearDatabaseArmed, setClearDatabaseArmed] = React.useState(false);
@@ -239,8 +235,6 @@ export const useSystemRouteProps = ({
       currentNpub,
       currentNsec,
       seedMnemonic,
-      tokensRestoreIsBusy,
-      cashuIsBusy,
       payWithCashuEnabled,
       pushToast,
       relayUrls,
@@ -258,7 +252,6 @@ export const useSystemRouteProps = ({
       copyNostrKeys,
       copySeed,
       passwordManagerSeedUsername,
-      restoreMissingTokens,
       saveSeedToPasswordManager,
       setLightningInvoiceAutoPayLimit,
       setPayWithCashuEnabled,

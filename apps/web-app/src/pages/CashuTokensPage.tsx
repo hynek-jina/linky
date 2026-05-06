@@ -1,14 +1,15 @@
 import type { Dispatch, FC, SetStateAction } from "react";
-import { useNavigation } from "../hooks/useRouting";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
 import { TokenAddFabIcon } from "../components/TokenAddFabIcon";
 import type { CashuTokenId } from "../evolu";
-import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useNavigation } from "../hooks/useRouting";
 
 type CashuTokenListItem = CashuTokenRowLike & { id: CashuTokenId };
 
 interface CashuTokensPageProps {
+  canRestoreTokens: boolean;
   cashuBalance: number;
   cashuBulkCheckIsBusy: boolean;
   cashuIsBusy: boolean;
@@ -23,11 +24,14 @@ interface CashuTokensPageProps {
     failed: boolean;
   };
   meltLargestForeignMintToMainMint: () => Promise<void>;
+  restoreMissingTokens: () => Promise<void>;
   setMintIconUrlByMint: Dispatch<SetStateAction<Record<string, string | null>>>;
   t: (key: string) => string;
+  tokensRestoreIsBusy: boolean;
 }
 
 export const CashuTokensPage: FC<CashuTokensPageProps> = ({
+  canRestoreTokens,
   cashuBalance,
   cashuBulkCheckIsBusy,
   cashuIsBusy,
@@ -37,8 +41,10 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
   checkAllCashuTokensAndDeleteInvalid,
   getMintIconUrl,
   meltLargestForeignMintToMainMint,
+  restoreMissingTokens,
   setMintIconUrlByMint,
   t,
+  tokensRestoreIsBusy,
 }) => {
   const { formatDisplayedAmountText } = useAppShellCore();
   const navigateTo = useNavigation();
@@ -122,6 +128,16 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
               </button>
             </div>
           ) : null}
+          <div className="settings-row" style={{ marginTop: 12 }}>
+            <button
+              type="button"
+              className="btn-wide secondary"
+              onClick={() => void restoreMissingTokens()}
+              disabled={!canRestoreTokens || tokensRestoreIsBusy || cashuIsBusy}
+            >
+              {tokensRestoreIsBusy ? t("restoring") : t("restoreTokens")}
+            </button>
+          </div>
         </div>
 
         <div className="ln-list wallet-token-list">

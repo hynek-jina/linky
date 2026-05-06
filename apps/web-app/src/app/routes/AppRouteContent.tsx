@@ -27,6 +27,7 @@ import {
   PushDebugPage,
   SettingsPage,
   TopupInvoicePage,
+  TopupNoAmountPage,
   TopupPage,
 } from "../../pages";
 import {
@@ -148,6 +149,8 @@ export const AppRouteContent = (): React.ReactElement => {
       {isMainSwipeRoute && <MainSwipeContent />}
 
       {route.kind === "topup" && <TopupPage {...moneyRoutes.topupProps} />}
+
+      {route.kind === "topupNoAmount" && <TopupNoAmountPage />}
 
       {route.kind === "topupInvoice" && (
         <TopupInvoicePage {...moneyRoutes.topupInvoiceProps} />
