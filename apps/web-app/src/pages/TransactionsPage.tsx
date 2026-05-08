@@ -563,7 +563,7 @@ export function TransactionsPage(): React.ReactElement {
   }, []);
 
   return (
-    <section className="panel transactions-page">
+    <section className="panel panel-plain transactions-page">
       {transactions.length === 0 ? (
         <p className="muted">{t("paymentsHistoryEmpty")}</p>
       ) : (

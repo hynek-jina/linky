@@ -2380,13 +2380,18 @@ button.danger {
 .transactions-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
 .transaction-card {
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.42);
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.transaction-card:nth-child(even) {
+  border-radius: 14px;
+  background: rgba(148, 163, 184, 0.06);
 }
 
 .transaction-card.is-unsuccessful {
@@ -2406,7 +2411,7 @@ button.danger {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 12px 4px;
 }
 
 .transaction-avatar {
