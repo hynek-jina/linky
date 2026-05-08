@@ -6090,6 +6090,7 @@ export const useAppShellComposition = () => {
       canWriteNfc,
       canPayWithCashu,
       cashuBalance,
+      cashuTotalBalance,
       cashuBulkCheckIsBusy,
       cashuDraft,
       cashuDraftRef,
@@ -6239,6 +6240,7 @@ export const useAppShellComposition = () => {
     mainSwipeRouteBuilderInput: {
       activeGroup,
       cashuBalance,
+      cashuTotalBalance,
       contacts: displayContacts,
       contactsOnboardingCelebrating,
       contactsOnboardingTasks,

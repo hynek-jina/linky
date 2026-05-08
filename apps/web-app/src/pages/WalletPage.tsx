@@ -8,6 +8,7 @@ import { useNavigation } from "../hooks/useRouting";
 interface WalletPageProps {
   bottomTabActive: "wallet" | "contacts" | null;
   cashuBalance: number;
+  cashuTotalBalance: number;
   dismissWalletWarning: () => void;
   openScan: () => void;
   scanIsOpen: boolean;
@@ -19,7 +20,7 @@ interface WalletPageProps {
 export const WalletPage: React.FC<WalletPageProps> = React.memo(
   ({
     bottomTabActive,
-    cashuBalance,
+    cashuTotalBalance,
     dismissWalletWarning,
     openScan,
     scanIsOpen,
@@ -38,7 +39,7 @@ export const WalletPage: React.FC<WalletPageProps> = React.memo(
         <div className="panel-header">
           <div className="wallet-hero">
             <WalletBalance
-              balance={cashuBalance}
+              balance={cashuTotalBalance}
               ariaLabel={t("cashuBalance")}
             />
             <div className="wallet-actions">
