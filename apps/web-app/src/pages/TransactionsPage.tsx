@@ -150,6 +150,13 @@ const readRequestIdFromDetails = (details: JsonValue | null): string | null => {
   return readStringFromJson(detailRecord?.requestId);
 };
 
+const readIssuedTokenFromDetails = (
+  details: JsonValue | null,
+): string | null => {
+  const detailRecord = readJsonRecord(details);
+  return readStringFromJson(detailRecord?.issuedToken);
+};
+
 const mergeDetailRecords = (
   primary: JsonValue | null,
   secondary: JsonValue | null,
@@ -267,6 +274,8 @@ export function TransactionsPage(): React.ReactElement {
     items.sort((left, right) => right.createdAtSec - left.createdAtSec);
     const requestByRequestId = new Map<string, TransactionItem>();
     const fulfillmentByRequestId = new Map<string, TransactionItem>();
+    const emittedByToken = new Map<string, TransactionItem>();
+    const spendByUsedToken = new Map<string, TransactionItem>();
 
     for (const item of items) {
       const requestId = readRequestIdFromDetails(item.details);
@@ -285,25 +294,66 @@ export function TransactionsPage(): React.ReactElement {
       }
     }
 
+    for (const item of items) {
+      if (item.status !== "ok") continue;
+
+      const issuedToken = readIssuedTokenFromDetails(item.details);
+      if (issuedToken && !emittedByToken.has(issuedToken)) {
+        emittedByToken.set(issuedToken, item);
+      }
+
+      const detailRecord = readJsonRecord(item.details);
+      const usedTokens = readStringArrayFromJson(detailRecord?.usedInputTokens);
+      for (const token of usedTokens) {
+        if (spendByUsedToken.has(token)) continue;
+        spendByUsedToken.set(token, item);
+      }
+    }
+
     const visibleTransactions = items
       .filter((item) => {
         const requestId = readRequestIdFromDetails(item.details);
-        if (!requestId) return true;
-        if (item.note === requestPaymentLabel) return true;
-        return !requestByRequestId.has(requestId);
+        if (requestId) {
+          if (item.note === requestPaymentLabel) return true;
+          if (requestByRequestId.has(requestId)) return false;
+        }
+
+        const issuedToken = readIssuedTokenFromDetails(item.details);
+        if (!issuedToken) return true;
+        return !spendByUsedToken.has(issuedToken);
       })
       .map((item) => {
+        let mergedItem = item;
+
+        const detailRecord = readJsonRecord(mergedItem.details);
+        const usedTokens = readStringArrayFromJson(
+          detailRecord?.usedInputTokens,
+        );
+        for (const token of usedTokens) {
+          const emittedTransaction = emittedByToken.get(token);
+          if (!emittedTransaction) continue;
+          if (emittedTransaction.id === mergedItem.id) continue;
+          mergedItem = {
+            ...mergedItem,
+            details: mergeDetailRecords(
+              mergedItem.details,
+              emittedTransaction.details,
+            ),
+          };
+          break;
+        }
+
         const requestId = readRequestIdFromDetails(item.details);
         if (!requestId || item.note !== requestPaymentLabel) {
-          return item;
+          return mergedItem;
         }
 
         const fulfillment = fulfillmentByRequestId.get(requestId);
-        if (!fulfillment) return item;
+        if (!fulfillment) return mergedItem;
 
         return {
-          ...item,
-          details: mergeDetailRecords(item.details, fulfillment.details),
+          ...mergedItem,
+          details: mergeDetailRecords(mergedItem.details, fulfillment.details),
         };
       });
 

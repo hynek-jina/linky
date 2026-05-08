@@ -24,6 +24,7 @@ interface UseChatMessageEffectsParams<TContact extends ContactRowLike> {
   saveCashuFromText: (
     text: string,
     options?: {
+      contactId?: string;
       navigateToTokens?: boolean;
       navigateToWallet?: boolean;
       requestId?: string;
@@ -115,7 +116,9 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
       if (isCashuTokenStored(info.tokenRaw)) continue;
 
       const requestId = getRequestIdForPaymentReply(message);
+      const contactId = String(message.contactId ?? "").trim();
       void saveCashuFromText(info.tokenRaw, {
+        ...(contactId ? { contactId } : {}),
         ...(requestId ? { requestId } : {}),
       });
       break;
@@ -156,7 +159,9 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
       if (isCashuTokenStored(info.tokenRaw)) continue;
 
       const requestId = getRequestIdForPaymentReply(message);
+      const contactId = String(message.contactId ?? "").trim();
       void saveCashuFromText(info.tokenRaw, {
+        ...(contactId ? { contactId } : {}),
         ...(requestId ? { requestId } : {}),
       });
       break;

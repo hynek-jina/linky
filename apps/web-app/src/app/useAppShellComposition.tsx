@@ -4071,6 +4071,29 @@ export const useAppShellComposition = () => {
         return;
       }
 
+      const transactionNote =
+        String(contact.name ?? "").trim() ||
+        String(contact.lnAddress ?? "").trim() ||
+        null;
+      const logIssuedTokenSendTransaction = (phase: "complete" | "publish") => {
+        logPaymentEvent({
+          amount: tokenMeta?.amount ?? null,
+          contactId: contact.id as ContactId,
+          details: {
+            usedInputTokens: [tokenText],
+          },
+          direction: "out",
+          error: null,
+          fee: null,
+          method: "cashu_chat",
+          mint: tokenMeta?.mint ?? null,
+          note: transactionNote,
+          phase,
+          status: "ok",
+          unit: tokenMeta?.unit ?? null,
+        });
+      };
+
       let activeClientId: string | null = null;
 
       try {
@@ -4125,6 +4148,7 @@ export const useAppShellComposition = () => {
         const isOffline =
           typeof navigator !== "undefined" && navigator.onLine === false;
         if (isOffline) {
+          logIssuedTokenSendTransaction("publish");
           setStatus(t("chatQueued"));
           return;
         }
@@ -4149,6 +4173,7 @@ export const useAppShellComposition = () => {
         );
 
         if (!publishOutcome.anySuccess) {
+          logIssuedTokenSendTransaction("publish");
           setStatus(t("chatQueued"));
           return;
         }
@@ -4162,6 +4187,8 @@ export const useAppShellComposition = () => {
             rumorId,
           });
         }
+
+        logIssuedTokenSendTransaction("complete");
       } catch (error) {
         setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
       } finally {
@@ -4174,6 +4201,7 @@ export const useAppShellComposition = () => {
       appendLocalNostrMessage,
       cashuTokensAllFiltered,
       currentNsec,
+      logPaymentEvent,
       deleteCashuToken,
       publishWrappedWithRetry,
       setStatus,
@@ -4812,6 +4840,9 @@ export const useAppShellComposition = () => {
           direction: "out",
           status: "ok",
           amount: split.sendAmount,
+          details: {
+            issuedToken: split.sendToken,
+          },
           fee: amountSat - split.sendAmount,
           mint: split.mint,
           unit: split.unit,

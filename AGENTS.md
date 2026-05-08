@@ -49,6 +49,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
   - Cashu token detail uses the receive-invoice style card, shows the token amount above a larger centered QR, hides the raw token string, and lets accepted own tokens be manually marked `reserved` so they stay out of the spendable balance until marked available again
   - Wallet token flow is split into a main `#wallet/tokens` page plus dedicated `#wallet/token/new` import and `#wallet/token/emit` issuance pages; the main list shows `moje` tokens separately from `emitované` ones, and issued/externalized/pending tokens stay out of the spendable balance
   - Wallet now also exposes a small `Transakce` / `Transactions` link from `#wallet` to a dedicated `#wallet/transactions` page that lists all known Evolu-backed payment history rows
+  - Transaction history merges an emitted Cashu token row into the later successful payment row when that exact issued token is subsequently spent, so emit-then-send appears as one history item
 - `apps/native-shell/` - Capacitor native shell that consumes the built `apps/web-app/dist` bundle for Android/iOS packaging
 - `apps/push/` - Bun HTTP push service for Web Push subscription auth/storage and Nostr outer-inbox relay watching
   - ships with `Dockerfile`, `docker-compose.example.yml`, and `.env.production.example` for container deployment with persistent SQLite storage under `/data`
