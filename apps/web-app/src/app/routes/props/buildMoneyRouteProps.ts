@@ -9,6 +9,7 @@ interface BuildMoneyRoutePropsParams {
   canWriteNfc: boolean;
   canPayWithCashu: MoneyRoutesProps["lnAddressPayProps"]["canPayWithCashu"];
   cashuBalance: MoneyRoutesProps["cashuTokensProps"]["cashuBalance"];
+  cashuTotalBalance: MoneyRoutesProps["cashuTokensProps"]["cashuTotalBalance"];
   cashuBulkCheckIsBusy: MoneyRoutesProps["cashuTokensProps"]["cashuBulkCheckIsBusy"];
   cashuDraft: MoneyRoutesProps["cashuTokenNewProps"]["cashuDraft"];
   cashuDraftRef: MoneyRoutesProps["cashuTokenNewProps"]["cashuDraftRef"];
@@ -86,6 +87,7 @@ export const buildMoneyRouteProps = ({
   canWriteNfc,
   canPayWithCashu,
   cashuBalance,
+  cashuTotalBalance,
   cashuBulkCheckIsBusy,
   cashuDraft,
   cashuDraftRef,
@@ -158,6 +160,7 @@ export const buildMoneyRouteProps = ({
     cashuTokensProps: {
       canRestoreTokens,
       cashuBalance,
+      cashuTotalBalance,
       cashuBulkCheckIsBusy,
       cashuIsBusy,
       cashuIssuedTokens,

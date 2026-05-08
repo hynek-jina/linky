@@ -28,4 +28,5 @@ export { SettingsPage } from "./SettingsPage";
 export { TopupInvoicePage } from "./TopupInvoicePage";
 export { TopupNoAmountPage } from "./TopupNoAmountPage";
 export { TopupPage } from "./TopupPage";
+export { TransactionsPage } from "./TransactionsPage";
 export { WalletPage } from "./WalletPage";

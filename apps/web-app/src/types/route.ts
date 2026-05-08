@@ -10,6 +10,7 @@ export type Route =
   | { kind: "mint"; mintUrl: string }
   | { kind: "profile" }
   | { kind: "wallet" }
+  | { kind: "transactions" }
   | { kind: "topup" }
   | { kind: "topupNoAmount" }
   | { kind: "topupInvoice" }
@@ -57,6 +58,7 @@ export const parseRouteFromHash = (): Route => {
   }
   if (hash === "#profile") return { kind: "profile" };
   if (hash === "#wallet") return { kind: "wallet" };
+  if (hash === "#wallet/transactions") return { kind: "transactions" };
   if (hash === "#wallet/topup") return { kind: "topup" };
   if (hash === "#wallet/topup/no-amount") return { kind: "topupNoAmount" };
   if (hash === "#wallet/topup/invoice") return { kind: "topupInvoice" };

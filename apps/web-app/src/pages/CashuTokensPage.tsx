@@ -11,6 +11,7 @@ type CashuTokenListItem = CashuTokenRowLike & { id: CashuTokenId };
 interface CashuTokensPageProps {
   canRestoreTokens: boolean;
   cashuBalance: number;
+  cashuTotalBalance: number;
   cashuBulkCheckIsBusy: boolean;
   cashuIsBusy: boolean;
   cashuMeltToMainMintButtonLabel: string | null;
@@ -32,7 +33,7 @@ interface CashuTokensPageProps {
 
 export const CashuTokensPage: FC<CashuTokensPageProps> = ({
   canRestoreTokens,
-  cashuBalance,
+  cashuTotalBalance,
   cashuBulkCheckIsBusy,
   cashuIsBusy,
   cashuIssuedTokens,
@@ -100,7 +101,7 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
         <div className="ln-list wallet-token-list">
           <div className="list-header">
             <span>
-              {t("cashuMine")} · {formatDisplayedAmountText(cashuBalance)}
+              {t("cashuMine")} · {formatDisplayedAmountText(cashuTotalBalance)}
             </span>
             <button
               type="button"

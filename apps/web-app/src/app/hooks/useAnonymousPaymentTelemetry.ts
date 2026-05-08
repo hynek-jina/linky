@@ -104,6 +104,7 @@ const isLocalPaymentTelemetryEvent = (
   const method = Reflect.get(value, "method");
   const phase = Reflect.get(value, "phase");
   const appVersion = Reflect.get(value, "appVersion");
+  const appHost = Reflect.get(value, "appHost");
   const appRuntime = Reflect.get(value, "appRuntime");
   const amountBucket = Reflect.get(value, "amountBucket");
   const devicePlatform = Reflect.get(value, "devicePlatform");
@@ -123,6 +124,9 @@ const isLocalPaymentTelemetryEvent = (
     isTelemetryMethod(method) &&
     isTelemetryPhase(phase) &&
     typeof appVersion === "string" &&
+    (typeof appHost === "undefined" ||
+      appHost === null ||
+      typeof appHost === "string") &&
     (typeof appRuntime === "undefined" ||
       appRuntime === null ||
       isTelemetryAppRuntime(appRuntime)) &&

@@ -2348,11 +2348,193 @@ button.danger {
   padding-bottom: 132px;
 }
 
+.transactions-page {
+  padding-top: 8px;
+  padding-bottom: 20px;
+}
+
 .wallet-actions {
-  margin-top: 10px;
+  margin-top: 54px;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.wallet-subtle-link {
+  margin-top: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(148, 163, 184, 0.84);
+  font-size: 12px;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.wallet-subtle-link:hover {
+  transform: none;
+  box-shadow: none;
+  color: rgba(203, 213, 225, 0.92);
+}
+
+.transactions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transaction-card {
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.transaction-card:nth-child(even) {
+  border-radius: 14px;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.transaction-card.is-unsuccessful {
+  opacity: 0.58;
+}
+
+.transaction-card.is-expandable {
+  cursor: pointer;
+}
+
+.transaction-card.is-expandable:focus-visible {
+  outline: 2px solid rgba(153, 246, 228, 0.55);
+  outline-offset: 2px;
+}
+
+.transaction-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+}
+
+.transaction-avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+}
+
+.transaction-icon-fallback {
+  font-size: 12px;
+}
+
+.transaction-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.transaction-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-meta {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.transaction-amount {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.transaction-amount.is-positive {
+  color: #99f6e4;
+}
+
+.transaction-amount.is-negative {
+  color: #fda4af;
+}
+
+.transaction-detail-panel {
+  padding: 0 12px 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.transaction-detail-list {
+  display: grid;
+  grid-template-columns: minmax(90px, 130px) minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+}
+
+.transaction-detail-list dt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-transform: lowercase;
+}
+
+.transaction-detail-list dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.transaction-detail-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.transaction-detail-copy:hover,
+.transaction-detail-copy:focus,
+.transaction-detail-copy:active {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.transaction-detail-copy:hover .transaction-detail-copyText,
+.transaction-detail-copy:focus .transaction-detail-copyText,
+.transaction-detail-copy:active .transaction-detail-copyText {
+  text-decoration: underline;
+}
+
+.transaction-detail-copyText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-detail-values {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.transaction-detail-copyIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
 }
 
 .wallet-warning {

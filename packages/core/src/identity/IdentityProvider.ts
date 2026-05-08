@@ -6,20 +6,21 @@ import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { Context, Effect, Layer, Schema } from "effect";
 import { getPublicKey } from "nostr-tools";
 import {
+  CASHU_SEED_PATH,
+  cashuOwnerPath,
+  contactsOwnerPath,
+  messagesOwnerPath,
+  META_OWNER_PATH,
+  NOSTR_PATH,
+  transactionsOwnerPath,
+} from "./derivationPaths";
+import {
   CashuSeed,
   NostrPrivateKey,
   NostrPublicKeyHex,
   OwnerKey,
   OwnerLaneIndex,
 } from "./domain";
-import {
-  CASHU_SEED_PATH,
-  contactsOwnerPath,
-  cashuOwnerPath,
-  messagesOwnerPath,
-  META_OWNER_PATH,
-  NOSTR_PATH,
-} from "./derivationPaths";
 import { MasterSecretProvider } from "./MasterSecretProvider";
 
 export class IdentityProviderError extends Schema.TaggedError<IdentityProviderError>()(
@@ -37,6 +38,7 @@ interface Identities {
   readonly storageContactsOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
   readonly storageCashuOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
   readonly storageMessagesOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
+  readonly storageTransactionsOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
 }
 
 const BIP85_HMAC_KEY = new TextEncoder().encode("bip-entropy-from-k");
@@ -97,6 +99,8 @@ export class IdentityProvider extends Context.Tag("IdentityProvider")<
           deriveOwnerKey(root, cashuOwnerPath(index)),
         storageMessagesOwnerKey: (index: OwnerLaneIndex) =>
           deriveOwnerKey(root, messagesOwnerPath(index)),
+        storageTransactionsOwnerKey: (index: OwnerLaneIndex) =>
+          deriveOwnerKey(root, transactionsOwnerPath(index)),
       };
     }).pipe(
       Effect.catchAllDefect(

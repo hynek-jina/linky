@@ -11,22 +11,30 @@ export const EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY =
   "linky.evolu.contacts_owner_index.v1";
 export const EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY =
   "linky.evolu.messages_owner_index.v1";
+export const EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY =
+  "linky.evolu.transactions_owner_index.v1";
 export const EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY =
   "linky.evolu.contacts_owner_baseline_count.v1";
 export const EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY =
   "linky.evolu.cashu_owner_baseline_count.v1";
 export const EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY =
   "linky.evolu.messages_owner_baseline_count.v1";
+export const EVOLU_TRANSACTIONS_OWNER_BASELINE_COUNT_STORAGE_KEY =
+  "linky.evolu.transactions_owner_baseline_count.v1";
 export const EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY =
   "linky.evolu.contacts_owner_edit_count.v1";
 export const EVOLU_MESSAGES_OWNER_EDIT_COUNT_STORAGE_KEY =
   "linky.evolu.messages_owner_edit_count.v1";
+export const EVOLU_TRANSACTIONS_OWNER_EDIT_COUNT_STORAGE_KEY =
+  "linky.evolu.transactions_owner_edit_count.v1";
 export const EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY =
   "linky.evolu.contacts_owner_last_rotated_at_ms.v1";
 export const EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY =
   "linky.evolu.cashu_owner_last_rotated_at_ms.v1";
 export const EVOLU_MESSAGES_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY =
   "linky.evolu.messages_owner_last_rotated_at_ms.v1";
+export const EVOLU_TRANSACTIONS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY =
+  "linky.evolu.transactions_owner_last_rotated_at_ms.v1";
 export const OWNER_ROTATION_TRIGGER_WRITE_COUNT = 1000;
 export const OWNER_ROTATION_COOLDOWN_MS = 60_000;
 export const MAX_CONTACTS_PER_OWNER = 500;
@@ -59,6 +67,7 @@ export const PROMISE_TOTAL_CAP_SAT = 100_000;
 export const PROMISE_EXPIRES_SEC = 30 * 24 * 60 * 60;
 export const WALLET_WARNING_BALANCE_THRESHOLD_SAT = 50_000;
 export const LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT = 10_000;
+export const CASHU_AUTOSWAP_MIN_SOURCE_SUM = 128;
 export const LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS = [
   0, 1_000, 10_000, 100_000,
 ] as const;

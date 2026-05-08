@@ -6,6 +6,7 @@ interface EvoluHistoryDataPageProps {
   evoluContactsOwnerEditsUntilRotation: number;
   evoluHistoryAllowedOwnerIds: string[];
   evoluMessagesOwnerEditsUntilRotation: number;
+  evoluTransactionsOwnerEditsUntilRotation: number;
   loadHistoryData: (
     limit: number,
     offset: number,
@@ -20,6 +21,7 @@ export function EvoluHistoryDataPage({
   evoluContactsOwnerEditsUntilRotation,
   evoluHistoryAllowedOwnerIds,
   evoluMessagesOwnerEditsUntilRotation,
+  evoluTransactionsOwnerEditsUntilRotation,
   loadHistoryData,
   t,
 }: EvoluHistoryDataPageProps): React.ReactElement {
@@ -142,6 +144,11 @@ export function EvoluHistoryDataPage({
     {
       label: t("evoluMessagesEditsUntilRotation"),
       value: evoluMessagesOwnerEditsUntilRotation,
+      marginBottom: 12,
+    },
+    {
+      label: t("evoluTransactionsEditsUntilRotation"),
+      value: evoluTransactionsOwnerEditsUntilRotation,
       marginBottom: 12,
     },
   ] as const;

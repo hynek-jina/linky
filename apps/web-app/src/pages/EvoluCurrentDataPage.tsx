@@ -6,10 +6,14 @@ interface EvoluCurrentDataPageProps {
   evoluContactsOwnerId: string | null;
   evoluMessagesBackupOwnerId: string | null;
   evoluMessagesOwnerId: string | null;
+  evoluTransactionsBackupOwnerId: string | null;
+  evoluTransactionsOwnerId: string | null;
   requestManualRotateContactsOwner: () => Promise<void>;
   requestManualRotateMessagesOwner: () => Promise<void>;
+  requestManualRotateTransactionsOwner: () => Promise<void>;
   rotateContactsOwnerIsBusy: boolean;
   rotateMessagesOwnerIsBusy: boolean;
+  rotateTransactionsOwnerIsBusy: boolean;
   loadCurrentData: typeof loadEvoluCurrentData;
   t: (key: string) => string;
 }
@@ -19,10 +23,14 @@ export function EvoluCurrentDataPage({
   evoluContactsOwnerId,
   evoluMessagesBackupOwnerId,
   evoluMessagesOwnerId,
+  evoluTransactionsBackupOwnerId,
+  evoluTransactionsOwnerId,
   requestManualRotateContactsOwner,
   requestManualRotateMessagesOwner,
+  requestManualRotateTransactionsOwner,
   rotateContactsOwnerIsBusy,
   rotateMessagesOwnerIsBusy,
+  rotateTransactionsOwnerIsBusy,
   loadCurrentData,
   t,
 }: EvoluCurrentDataPageProps): React.ReactElement {
@@ -54,8 +62,17 @@ export function EvoluCurrentDataPage({
     const backupMessagesOwnerId = String(
       evoluMessagesBackupOwnerId ?? "",
     ).trim();
+    const activeTransactionsOwnerId = String(
+      evoluTransactionsOwnerId ?? "",
+    ).trim();
+    const backupTransactionsOwnerId = String(
+      evoluTransactionsBackupOwnerId ?? "",
+    ).trim();
     const visibleMessageOwnerIds = new Set(
       [activeMessagesOwnerId, backupMessagesOwnerId].filter(Boolean),
+    );
+    const visibleTransactionOwnerIds = new Set(
+      [activeTransactionsOwnerId, backupTransactionsOwnerId].filter(Boolean),
     );
 
     return Object.fromEntries(
@@ -64,7 +81,8 @@ export function EvoluCurrentDataPage({
           tableName !== "contact" &&
           tableName !== "cashuToken" &&
           tableName !== "nostrMessage" &&
-          tableName !== "nostrReaction"
+          tableName !== "nostrReaction" &&
+          tableName !== "transaction"
         ) {
           return [tableName, rows];
         }
@@ -82,6 +100,15 @@ export function EvoluCurrentDataPage({
             rows.filter((row) => readRowOwnerId(row) === activeCashuOwnerId),
           ];
         }
+        if (tableName === "transaction") {
+          if (visibleTransactionOwnerIds.size === 0) return [tableName, []];
+          return [
+            tableName,
+            rows.filter((row) =>
+              visibleTransactionOwnerIds.has(readRowOwnerId(row)),
+            ),
+          ];
+        }
         if (visibleMessageOwnerIds.size === 0) return [tableName, []];
         return [
           tableName,
@@ -95,6 +122,8 @@ export function EvoluCurrentDataPage({
     evoluContactsOwnerId,
     evoluMessagesBackupOwnerId,
     evoluMessagesOwnerId,
+    evoluTransactionsBackupOwnerId,
+    evoluTransactionsOwnerId,
   ]);
 
   const tableNames = Object.keys(filteredCurrentData).filter(
@@ -191,6 +220,23 @@ export function EvoluCurrentDataPage({
                   {rotateMessagesOwnerIsBusy
                     ? t("evoluMessagesOwnerRotating")
                     : t("evoluMessagesOwnerRotate")}
+                </button>
+              </div>
+            )}
+            {tableName === "transaction" && (
+              <div style={{ marginBottom: 10 }}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    if (rotateTransactionsOwnerIsBusy) return;
+                    void requestManualRotateTransactionsOwner();
+                  }}
+                  disabled={rotateTransactionsOwnerIsBusy}
+                >
+                  {rotateTransactionsOwnerIsBusy
+                    ? t("evoluTransactionsOwnerRotating")
+                    : t("evoluTransactionsOwnerRotate")}
                 </button>
               </div>
             )}

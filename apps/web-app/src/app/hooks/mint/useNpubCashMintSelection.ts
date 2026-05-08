@@ -1,11 +1,27 @@
 import React from "react";
+import { CASHU_AUTOSWAP_MIN_SOURCE_SUM } from "../../../utils/constants";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
+  isTestMintUrl,
   normalizeMintUrl,
 } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
 
+interface MintSelectionAutoswapPlanArgs {
+  cashuAutoswapEnabled: boolean;
+  currentMainMintAcceptedBalance: number;
+  currentMintUrl: string | null;
+  nextMintUrl: string;
+}
+
+interface MintSelectionAutoswapPlan {
+  shouldDisableAutoswapForTestMint: boolean;
+  shouldWarnAboutMintChange: boolean;
+}
+
 interface UseNpubCashMintSelectionParams {
+  cashuAutoswapEnabled: boolean;
+  currentMainMintAcceptedBalance: number;
   currentNpub: string | null;
   currentNsec: string | null;
   defaultMintUrl: string | null;
@@ -14,13 +30,69 @@ interface UseNpubCashMintSelectionParams {
   makeLocalStorageKey: (prefix: string) => string;
   npubCashMintSyncRef: React.RefObject<string | null>;
   pushToast: (message: string) => void;
+  requestMintAutoswapChangeConfirmation: (args: {
+    fromMint: string;
+    toMint: string;
+  }) => Promise<boolean>;
+  setCashuAutoswapEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setDefaultMintUrl: React.Dispatch<React.SetStateAction<string | null>>;
   setDefaultMintUrlDraft: React.Dispatch<React.SetStateAction<string>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
 }
 
+export const getMintSelectionDisplayName = (mintUrl: string): string => {
+  const cleaned = normalizeMintUrl(mintUrl);
+  if (!cleaned) return "";
+
+  try {
+    const parsed = new URL(cleaned);
+    return parsed.host || cleaned.replace(/^https?:\/\//i, "");
+  } catch {
+    return cleaned.replace(/^https?:\/\//i, "");
+  }
+};
+
+export const getMintSelectionAutoswapPlan = ({
+  cashuAutoswapEnabled,
+  currentMainMintAcceptedBalance,
+  currentMintUrl,
+  nextMintUrl,
+}: MintSelectionAutoswapPlanArgs): MintSelectionAutoswapPlan => {
+  const currentMint = normalizeMintUrl(currentMintUrl ?? "");
+  const nextMint = normalizeMintUrl(nextMintUrl);
+
+  if (!nextMint || nextMint === currentMint) {
+    return {
+      shouldDisableAutoswapForTestMint: false,
+      shouldWarnAboutMintChange: false,
+    };
+  }
+
+  if (isTestMintUrl(nextMint)) {
+    return {
+      shouldDisableAutoswapForTestMint: cashuAutoswapEnabled,
+      shouldWarnAboutMintChange: false,
+    };
+  }
+
+  if (!cashuAutoswapEnabled) {
+    return {
+      shouldDisableAutoswapForTestMint: false,
+      shouldWarnAboutMintChange: false,
+    };
+  }
+
+  return {
+    shouldDisableAutoswapForTestMint: false,
+    shouldWarnAboutMintChange:
+      currentMainMintAcceptedBalance >= CASHU_AUTOSWAP_MIN_SOURCE_SUM,
+  };
+};
+
 export const useNpubCashMintSelection = ({
+  cashuAutoswapEnabled,
+  currentMainMintAcceptedBalance,
   currentNpub,
   currentNsec,
   defaultMintUrl,
@@ -29,6 +101,8 @@ export const useNpubCashMintSelection = ({
   makeLocalStorageKey,
   npubCashMintSyncRef,
   pushToast,
+  requestMintAutoswapChangeConfirmation,
+  setCashuAutoswapEnabled,
   setDefaultMintUrl,
   setDefaultMintUrlDraft,
   setStatus,
@@ -102,6 +176,24 @@ export const useNpubCashMintSelection = ({
         return;
       }
 
+      const autoswapPlan = getMintSelectionAutoswapPlan({
+        cashuAutoswapEnabled,
+        currentMainMintAcceptedBalance,
+        currentMintUrl: defaultMintUrl,
+        nextMintUrl: cleaned,
+      });
+      let disableAutoswap = autoswapPlan.shouldDisableAutoswapForTestMint;
+
+      if (autoswapPlan.shouldWarnAboutMintChange) {
+        const confirmed = await requestMintAutoswapChangeConfirmation({
+          fromMint: getMintSelectionDisplayName(defaultMintUrl ?? ""),
+          toMint: getMintSelectionDisplayName(cleaned),
+        });
+        if (!confirmed) {
+          disableAutoswap = true;
+        }
+      }
+
       try {
         setStatus(t("mintUpdating"));
         await updateNpubCashMint(cleaned);
@@ -120,13 +212,29 @@ export const useNpubCashMintSelection = ({
       setDefaultMintUrl(cleaned);
       setDefaultMintUrlDraft(cleaned);
       npubCashMintSyncRef.current = cleaned;
+
+      if (disableAutoswap) {
+        setCashuAutoswapEnabled(false);
+        setStatus(
+          autoswapPlan.shouldDisableAutoswapForTestMint
+            ? t("mintSavedAutoswapDisabledTestMint")
+            : t("mintSavedAutoswapDisabled"),
+        );
+        return;
+      }
+
       setStatus(t("mintSaved"));
     },
     [
+      cashuAutoswapEnabled,
+      currentMainMintAcceptedBalance,
+      defaultMintUrl,
       hasMintOverrideRef,
       makeLocalStorageKey,
       npubCashMintSyncRef,
       pushToast,
+      requestMintAutoswapChangeConfirmation,
+      setCashuAutoswapEnabled,
       setDefaultMintUrl,
       setDefaultMintUrlDraft,
       setStatus,

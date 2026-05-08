@@ -1,6 +1,6 @@
-import { Schema } from "effect";
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
+import { Schema } from "effect";
 import { nip19 } from "nostr-tools";
 import { Slip39 } from "slip39-ts";
 import { Unit8ArraySchema } from "../utils/schemas";
@@ -153,6 +153,7 @@ export const OwnerRole = Schema.Literal(
   "meta",
   "contacts",
   "cashu",
+  "transactions",
   "messages",
 );
 export type OwnerRole = typeof OwnerRole.Type;

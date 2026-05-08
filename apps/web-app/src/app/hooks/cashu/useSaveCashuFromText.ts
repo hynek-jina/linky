@@ -119,8 +119,10 @@ export const useSaveCashuFromText = ({
     async (
       tokenText: string,
       options?: {
+        contactId?: string;
         navigateToTokens?: boolean;
         navigateToWallet?: boolean;
+        requestId?: string;
       },
     ) => {
       const tokenRaw = tokenText.trim();
@@ -245,11 +247,16 @@ export const useSaveCashuFromText = ({
             direction: "in",
             status: "ok",
             amount: accepted.amount,
+            contactId: options?.contactId ?? null,
+            details: {
+              acceptedToken,
+              rawToken: tokenRaw,
+              ...(options?.requestId ? { requestId: options.requestId } : {}),
+            },
             fee: null,
             mint: accepted.mint,
             unit: accepted.unit,
             error: null,
-            contactId: null,
             method: "cashu_receive",
             phase: "receive",
           });
@@ -281,11 +288,15 @@ export const useSaveCashuFromText = ({
             direction: "in",
             status: "error",
             amount: parsedAmount,
+            contactId: options?.contactId ?? null,
+            details: {
+              rawToken: tokenRaw,
+              ...(options?.requestId ? { requestId: options.requestId } : {}),
+            },
             fee: null,
             mint: parsedMint,
             unit: null,
             error: message,
-            contactId: null,
             method: "cashu_receive",
             phase: "receive",
           });

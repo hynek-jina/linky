@@ -13,6 +13,7 @@ export interface MainSwipeRouteProps {
   bottomTabActive: "contacts" | "wallet" | null;
   canAddContact: boolean;
   cashuBalance: number;
+  cashuTotalBalance: number;
   contacts: readonly ContactRowLike[];
   contactsOnboardingCelebrating: boolean;
   contactsOnboardingTasks: {
@@ -73,6 +74,7 @@ export const MainSwipeContent = (): React.ReactElement => {
     bottomTabActive,
     canAddContact,
     cashuBalance,
+    cashuTotalBalance,
     contacts,
     contactsOnboardingCelebrating,
     contactsOnboardingTasks,
@@ -174,6 +176,7 @@ export const MainSwipeContent = (): React.ReactElement => {
         >
           <WalletPage
             cashuBalance={cashuBalance}
+            cashuTotalBalance={cashuTotalBalance}
             openScan={openWalletScan}
             scanIsOpen={scanIsOpen}
             bottomTabActive={bottomTabActive}

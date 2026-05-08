@@ -1,10 +1,7 @@
 import React from "react";
 import type { Route } from "../../../types/route";
-import type {
-  ContactRowLike,
-  LocalNostrMessage,
-  NostrMessageSummaryRow,
-} from "../../types/appTypes";
+import { parseCashuPaymentRequestMessage } from "../../lib/paymentRequestMessage";
+import type { ContactRowLike, LocalNostrMessage } from "../../types/appTypes";
 
 interface UseChatMessageEffectsParams<TContact extends ContactRowLike> {
   autoAcceptedChatMessageIdsRef: React.MutableRefObject<Set<string>>;
@@ -22,11 +19,16 @@ interface UseChatMessageEffectsParams<TContact extends ContactRowLike> {
   ) => { isValid: boolean; tokenRaw: string } | null;
   isCashuTokenKnownAny: (tokenRaw: string) => boolean;
   isCashuTokenStored: (tokenRaw: string) => boolean;
-  nostrMessagesRecent: readonly NostrMessageSummaryRow[];
+  nostrMessagesRecent: readonly LocalNostrMessage[];
   route: Route;
   saveCashuFromText: (
     text: string,
-    options?: { navigateToTokens?: boolean; navigateToWallet?: boolean },
+    options?: {
+      contactId?: string;
+      navigateToTokens?: boolean;
+      navigateToWallet?: boolean;
+      requestId?: string;
+    },
   ) => Promise<void>;
   selectedContact: TContact | null;
 }
@@ -50,6 +52,42 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
   saveCashuFromText,
   selectedContact,
 }: UseChatMessageEffectsParams<TContact>) => {
+  const requestIdByMessageRumorId = React.useMemo(() => {
+    const byRumorId = new Map<string, string>();
+
+    for (const message of [...nostrMessagesRecent, ...chatMessages]) {
+      const rumorId = String(message.rumorId ?? "").trim();
+      if (!rumorId) continue;
+
+      const requestInfo = parseCashuPaymentRequestMessage(
+        String(message.content ?? ""),
+      );
+      const requestId = String(requestInfo?.requestId ?? "").trim();
+      if (!requestId) continue;
+
+      byRumorId.set(rumorId, requestId);
+    }
+
+    return byRumorId;
+  }, [chatMessages, nostrMessagesRecent]);
+
+  const getRequestIdForPaymentReply = React.useCallback(
+    (message: LocalNostrMessage): string | null => {
+      const replyToId = String(message.replyToId ?? "").trim();
+      if (replyToId) {
+        return requestIdByMessageRumorId.get(replyToId) ?? null;
+      }
+
+      const rootMessageId = String(message.rootMessageId ?? "").trim();
+      if (rootMessageId) {
+        return requestIdByMessageRumorId.get(rootMessageId) ?? null;
+      }
+
+      return null;
+    },
+    [requestIdByMessageRumorId],
+  );
+
   React.useEffect(() => {
     // Auto-accept Cashu tokens received from others into the wallet.
     if (route.kind !== "chat") return;
@@ -77,7 +115,12 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
       if (isCashuTokenKnownAny(info.tokenRaw)) continue;
       if (isCashuTokenStored(info.tokenRaw)) continue;
 
-      void saveCashuFromText(info.tokenRaw);
+      const requestId = getRequestIdForPaymentReply(message);
+      const contactId = String(message.contactId ?? "").trim();
+      void saveCashuFromText(info.tokenRaw, {
+        ...(contactId ? { contactId } : {}),
+        ...(requestId ? { requestId } : {}),
+      });
       break;
     }
   }, [
@@ -90,6 +133,7 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
     route.kind,
     saveCashuFromText,
     cashuTokensHydratedRef,
+    getRequestIdForPaymentReply,
   ]);
 
   React.useEffect(() => {
@@ -114,7 +158,12 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
       if (isCashuTokenKnownAny(info.tokenRaw)) continue;
       if (isCashuTokenStored(info.tokenRaw)) continue;
 
-      void saveCashuFromText(info.tokenRaw);
+      const requestId = getRequestIdForPaymentReply(message);
+      const contactId = String(message.contactId ?? "").trim();
+      void saveCashuFromText(info.tokenRaw, {
+        ...(contactId ? { contactId } : {}),
+        ...(requestId ? { requestId } : {}),
+      });
       break;
     }
   }, [
@@ -126,6 +175,7 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
     nostrMessagesRecent,
     saveCashuFromText,
     cashuTokensHydratedRef,
+    getRequestIdForPaymentReply,
   ]);
 
   React.useEffect(() => {

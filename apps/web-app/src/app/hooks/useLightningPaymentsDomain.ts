@@ -9,13 +9,16 @@ import {
 } from "../../lnurlPay";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../utils/constants";
 import type { DisplayAmountParts } from "../../utils/displayAmounts";
-import { getLightningInvoicePreview } from "../../utils/lightningInvoice";
+import {
+  getLightningInvoicePreview,
+  type LightningInvoicePreview,
+} from "../../utils/lightningInvoice";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
 import { isCashuTokenAcceptedState } from "../lib/cashuTokenState";
 import {
-  buildPaymentFailureAmountAttempts,
   buildPaymentAmountAttempts,
+  buildPaymentFailureAmountAttempts,
   isRetryablePaymentAmountFailure,
 } from "../lib/paymentAmountFallback";
 import { selectSingleMintCandidateForAmount } from "../lib/paymentMintSelection";
@@ -27,6 +30,28 @@ import type {
 } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const readOptionalString = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const readLightningPreimage = (value: unknown): string | null => {
+  if (!isRecord(value)) return null;
+  if ("paymentPreimage" in value) {
+    const preimage = readOptionalString(value.paymentPreimage);
+    if (preimage) return preimage;
+  }
+  if ("preimage" in value) {
+    const preimage = readOptionalString(value.preimage);
+    if (preimage) return preimage;
+  }
+  return null;
+};
 
 type CashuTokenWithMetaRow = CashuTokenRowLike & { id: CashuTokenId };
 type ContactRow = ContactPayRowLike;
@@ -158,8 +183,8 @@ export const useLightningPaymentsDomain = ({
 
         const preferredMint = normalizeMintUrl(defaultMintUrl ?? "");
         const candidates = buildCashuMintCandidates(mintGroups, preferredMint);
-        const invoiceAmountSat =
-          getLightningInvoicePreview(normalized)?.amountSat;
+        const invoicePreview = getLightningInvoicePreview(normalized);
+        const invoiceAmountSat = invoicePreview?.amountSat;
 
         if (candidates.length === 0) {
           setStatus(t("payInsufficient"));
@@ -225,6 +250,19 @@ export const useLightningPaymentsDomain = ({
                 direction: "out",
                 status: "error",
                 amount: null,
+                details: {
+                  ...(result.remainingToken
+                    ? { gainedToken: result.remainingToken }
+                    : {}),
+                  ...(normalized ? { lightningInvoice: normalized } : {}),
+                  ...(invoicePreview?.description
+                    ? { lightningMemo: invoicePreview.description }
+                    : {}),
+                  ...(readLightningPreimage(result)
+                    ? { lightningPreimage: readLightningPreimage(result) }
+                    : {}),
+                  usedInputTokens: candidate.tokens,
+                },
                 fee: null,
                 mint: result.mint,
                 unit: result.unit,
@@ -272,6 +310,19 @@ export const useLightningPaymentsDomain = ({
               direction: "out",
               status: "ok",
               amount: result.paidAmount,
+              details: {
+                ...(result.remainingToken
+                  ? { gainedToken: result.remainingToken }
+                  : {}),
+                ...(normalized ? { lightningInvoice: normalized } : {}),
+                ...(invoicePreview?.description
+                  ? { lightningMemo: invoicePreview.description }
+                  : {}),
+                ...(readLightningPreimage(result)
+                  ? { lightningPreimage: readLightningPreimage(result) }
+                  : {}),
+                usedInputTokens: candidate.tokens,
+              },
               fee: (() => {
                 const feePaid = Number(
                   (result as { feePaid?: unknown }).feePaid ?? 0,
@@ -310,6 +361,12 @@ export const useLightningPaymentsDomain = ({
           direction: "out",
           status: "error",
           amount: null,
+          details: {
+            ...(normalized ? { lightningInvoice: normalized } : {}),
+            ...(invoicePreview?.description
+              ? { lightningMemo: invoicePreview.description }
+              : {}),
+          },
           fee: null,
           mint: lastMint,
           unit: "sat",
@@ -411,6 +468,8 @@ export const useLightningPaymentsDomain = ({
         const seenAmountAttempts = new Set(queuedAmountAttempts);
         let finalErrorMessage: string | null = null;
         let finalErrorMint: string | null = null;
+        let lastAttemptInvoice: string | null = null;
+        let lastAttemptInvoicePreview: LightningInvoicePreview | null = null;
 
         for (
           let attemptIndex = 0;
@@ -436,12 +495,16 @@ export const useLightningPaymentsDomain = ({
             attemptIndex < queuedAmountAttempts.length - 1;
 
           let attemptInvoice: string;
+          let attemptInvoicePreview: LightningInvoicePreview | null = null;
           try {
             setStatus(t("payFetchingInvoice"));
             attemptInvoice = await fetchLnurlInvoiceForTarget(
               paymentTarget,
               attemptedAmountSat,
             );
+            attemptInvoicePreview = getLightningInvoicePreview(attemptInvoice);
+            lastAttemptInvoice = attemptInvoice;
+            lastAttemptInvoicePreview = attemptInvoicePreview;
           } catch (e) {
             const errorMessage = getUnknownErrorMessage(e, "unknown");
             if (
@@ -560,6 +623,21 @@ export const useLightningPaymentsDomain = ({
                 direction: "out",
                 status: "ok",
                 amount: result.paidAmount,
+                details: {
+                  ...(result.remainingToken
+                    ? { gainedToken: result.remainingToken }
+                    : {}),
+                  ...(attemptInvoice
+                    ? { lightningInvoice: attemptInvoice }
+                    : {}),
+                  ...(attemptInvoicePreview?.description
+                    ? { lightningMemo: attemptInvoicePreview.description }
+                    : {}),
+                  ...(readLightningPreimage(result)
+                    ? { lightningPreimage: readLightningPreimage(result) }
+                    : {}),
+                  usedInputTokens: candidate.tokens,
+                },
                 fee: Number.isFinite(feePaid) && feePaid > 0 ? feePaid : null,
                 mint: result.mint,
                 unit: result.unit,
@@ -629,6 +707,14 @@ export const useLightningPaymentsDomain = ({
           direction: "out",
           status: "error",
           amount: amountSat,
+          details: {
+            ...(lastAttemptInvoice
+              ? { lightningInvoice: lastAttemptInvoice }
+              : {}),
+            ...(lastAttemptInvoicePreview?.description
+              ? { lightningMemo: lastAttemptInvoicePreview.description }
+              : {}),
+          },
           fee: null,
           mint: finalErrorMint,
           unit: "sat",

@@ -42,12 +42,14 @@ export type PaymentTelemetryPhase =
 
 export type LoggedPaymentEventParams = {
   amount?: number | null;
-  contactId?: ContactId | null;
+  contactId?: ContactId | string | null;
+  details?: JsonValue | null;
   direction: "in" | "out";
   error?: string | null;
   fee?: number | null;
   method?: PaymentTelemetryMethod | null;
   mint?: string | null;
+  note?: string | null;
   phase?: PaymentTelemetryPhase | null;
   status: PaymentTelemetryStatus;
   unit?: string | null;
@@ -55,6 +57,7 @@ export type LoggedPaymentEventParams = {
 
 export type LocalPaymentTelemetryEvent = {
   amountBucket: string | null;
+  appHost?: string | null;
   appRuntime?: TelemetryAppRuntime | null;
   appVersion: string;
   attemptCount: number;

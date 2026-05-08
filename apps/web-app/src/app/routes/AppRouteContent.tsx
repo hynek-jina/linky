@@ -29,6 +29,7 @@ import {
   TopupInvoicePage,
   TopupNoAmountPage,
   TopupPage,
+  TransactionsPage,
 } from "../../pages";
 import {
   useAppShellCore,
@@ -149,6 +150,8 @@ export const AppRouteContent = (): React.ReactElement => {
       {isMainSwipeRoute && <MainSwipeContent />}
 
       {route.kind === "topup" && <TopupPage {...moneyRoutes.topupProps} />}
+
+      {route.kind === "transactions" && <TransactionsPage />}
 
       {route.kind === "topupNoAmount" && <TopupNoAmountPage />}
 

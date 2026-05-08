@@ -12,3 +12,6 @@ export const cashuOwnerPath = (index: OwnerLaneIndex): string =>
 
 export const messagesOwnerPath = (index: OwnerLaneIndex): string =>
   `m/83696968'/39'/0'/24'/4'/${index}'`;
+
+export const transactionsOwnerPath = (index: OwnerLaneIndex): string =>
+  `m/83696968'/39'/0'/24'/5'/${index}'`;

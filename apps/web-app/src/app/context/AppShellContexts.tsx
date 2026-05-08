@@ -66,6 +66,10 @@ export interface AppShellCoreContextValue {
   nostrPictureByNpub: Record<string, string | null>;
   paidOverlayIsOpen: boolean;
   paidOverlayTitle: string | null;
+  pendingMintAutoswapChangeConfirmation: {
+    fromMint: string;
+    toMint: string;
+  } | null;
   pendingLnurlWithdrawConfirmation: LnurlWithdrawPreview | null;
   pendingLightningInvoiceConfirmation: LightningInvoicePreview | null;
   postPaySaveContact: {
@@ -104,12 +108,14 @@ export interface AppShellCoreContextValue {
 
 export interface AppShellActionsContextValue {
   cancelPendingNfcWrite: () => void;
+  closeMintAutoswapChangeConfirmation: () => void;
   closeMenu: () => void;
   closeShareOptions: () => void;
   closeLnurlWithdrawConfirmation: () => void;
   closeLightningInvoiceConfirmation: () => void;
   closeProfileQr: () => void;
   closeScan: () => void;
+  confirmMintAutoswapChangeConfirmation: () => void;
   confirmLnurlWithdraw: () => Promise<void>;
   confirmLightningInvoicePayment: () => Promise<void>;
   contactsGuideNav: {

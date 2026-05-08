@@ -77,6 +77,7 @@ import { getCashuLib } from "../utils/cashuLib";
 import { createLoadedCashuWallet } from "../utils/cashuWallet";
 import {
   BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
+  CASHU_AUTOSWAP_MIN_SOURCE_SUM,
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
   CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY,
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
@@ -100,10 +101,14 @@ import {
   type DisplayCurrency,
 } from "../utils/displayAmounts";
 import { formatShortNpub, getBestNostrName } from "../utils/formatting";
-import type { LightningInvoicePreview } from "../utils/lightningInvoice";
+import {
+  getLightningInvoicePreview,
+  type LightningInvoicePreview,
+} from "../utils/lightningInvoice";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
   extractPpk,
+  isTestMintUrl,
   MAIN_MINT_URL,
   normalizeMintUrl,
   PRESET_MINTS,
@@ -970,13 +975,21 @@ export const useAppShellComposition = () => {
   const appOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const cashuOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const messagesOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const transactionsOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const recordTransactionsOwnerWriteRef = React.useRef<
+    ((count?: number) => void) | null
+  >(null);
   const {
     logPaymentEvent,
     makeLocalStorageKey,
+    migrateLegacyPaymentEventsToEvolu,
     readSeenMintsFromStorage,
     rememberSeenMint,
   } = useOwnerScopedStorage({
     appOwnerIdRef,
+    insert,
+    recordTransactionsOwnerWriteRef,
+    transactionsOwnerIdRef,
   });
 
   const route = useRouting();
@@ -1496,6 +1509,16 @@ export const useAppShellComposition = () => {
     pendingLnurlWithdrawConfirmation,
     setPendingLnurlWithdrawConfirmation,
   ] = useState<LnurlWithdrawPreview | null>(null);
+  const [
+    pendingMintAutoswapChangeConfirmation,
+    setPendingMintAutoswapChangeConfirmation,
+  ] = useState<{
+    fromMint: string;
+    toMint: string;
+  } | null>(null);
+  const pendingMintAutoswapChangeResolverRef = React.useRef<
+    ((confirmed: boolean) => void) | null
+  >(null);
   const [lnurlWithdrawIsBusy, setLnurlWithdrawIsBusy] = useState(false);
 
   const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
@@ -1571,8 +1594,33 @@ export const useAppShellComposition = () => {
   });
 
   const finalizeTopupInvoicePaid = React.useCallback(
-    (amountSat: number) => {
+    (args: { amountSat: number; gainedToken?: string | null }) => {
       if (topupInvoicePaidHandledRef.current) return;
+
+      const amountSat = args.amountSat;
+      const topupInvoice = topupMintQuote?.invoice ?? null;
+      const topupInvoicePreview = topupInvoice
+        ? getLightningInvoicePreview(topupInvoice)
+        : null;
+
+      logPaymentEvent({
+        amount: amountSat,
+        details:
+          topupInvoice || args.gainedToken
+            ? {
+                ...(args.gainedToken ? { gainedToken: args.gainedToken } : {}),
+                ...(topupInvoice ? { lightningInvoice: topupInvoice } : {}),
+                ...(topupInvoicePreview?.description
+                  ? { lightningMemo: topupInvoicePreview.description }
+                  : {}),
+              }
+            : null,
+        direction: "in",
+        method: "lightning_invoice",
+        mint: topupMintQuote?.mintUrl ?? defaultMintUrl ?? null,
+        status: "ok",
+        unit: topupMintQuote?.unit ?? "sat",
+      });
 
       topupInvoicePaidHandledRef.current = true;
       topupInvoiceStartBalanceRef.current = null;
@@ -1606,7 +1654,9 @@ export const useAppShellComposition = () => {
       }, 1400);
     },
     [
+      defaultMintUrl,
       formatDisplayedAmountParts,
+      logPaymentEvent,
       setTopupAmount,
       setTopupInvoice,
       setTopupInvoiceError,
@@ -1614,6 +1664,7 @@ export const useAppShellComposition = () => {
       setTopupInvoiceQr,
       showPaidOverlay,
       t,
+      topupMintQuote,
       topupPaidNavTimerRef,
     ],
   );
@@ -1671,10 +1722,17 @@ export const useAppShellComposition = () => {
     messagesSyncOwner,
     recordContactsOwnerWrite,
     recordMessagesOwnerWrite,
+    recordTransactionsOwnerWrite,
     requestManualRotateContactsOwner,
     requestManualRotateMessagesOwner,
+    requestManualRotateTransactionsOwner,
     rotateContactsOwnerIsBusy,
     rotateMessagesOwnerIsBusy,
+    rotateTransactionsOwnerIsBusy,
+    transactionsBackupOwnerId,
+    transactionsOwnerEditsUntilRotation,
+    transactionsOwnerId,
+    transactionsSyncOwner,
   } = useEvoluContactsOwnerRotation({
     appOwnerId,
     getContactsForRotation: () => contactsForRotationRef.current,
@@ -1689,11 +1747,29 @@ export const useAppShellComposition = () => {
   useOwner(contactsSyncOwner);
   useOwner(cashuSyncOwner);
   useOwner(messagesSyncOwner);
+  useOwner(transactionsSyncOwner);
   useOwner(metaSyncOwner);
 
   React.useEffect(() => {
     cashuOwnerIdRef.current = cashuOwnerId;
   }, [cashuOwnerId]);
+
+  React.useEffect(() => {
+    messagesOwnerIdRef.current = messagesOwnerId;
+  }, [messagesOwnerId]);
+
+  React.useEffect(() => {
+    transactionsOwnerIdRef.current = transactionsOwnerId;
+  }, [transactionsOwnerId]);
+
+  React.useEffect(() => {
+    recordTransactionsOwnerWriteRef.current = recordTransactionsOwnerWrite;
+  }, [recordTransactionsOwnerWrite]);
+
+  React.useEffect(() => {
+    if (!appOwnerId) return;
+    migrateLegacyPaymentEventsToEvolu(appOwnerId, transactionsOwnerId);
+  }, [appOwnerId, migrateLegacyPaymentEventsToEvolu, transactionsOwnerId]);
 
   const evoluHistoryAllowedOwnerIds = React.useMemo(() => {
     const ids = [
@@ -1703,6 +1779,8 @@ export const useAppShellComposition = () => {
       String(contactsBackupOwnerId ?? "").trim(),
       String(messagesOwnerId ?? "").trim(),
       String(messagesBackupOwnerId ?? "").trim(),
+      String(transactionsOwnerId ?? "").trim(),
+      String(transactionsBackupOwnerId ?? "").trim(),
       String(metaOwnerId ?? "").trim(),
     ].filter(Boolean);
     return Array.from(new Set(ids));
@@ -1714,6 +1792,8 @@ export const useAppShellComposition = () => {
     messagesBackupOwnerId,
     messagesOwnerId,
     metaOwnerId,
+    transactionsBackupOwnerId,
+    transactionsOwnerId,
   ]);
 
   const visibleMessageOwnerIds = React.useMemo(() => {
@@ -2107,7 +2187,10 @@ export const useAppShellComposition = () => {
           const restored = await insertClaimedTopupToken(claimedBeforeRun);
           if (restored && !cancelled) {
             if (route.kind === "topupInvoice" && claimedBeforeRun.amount > 0) {
-              finalizeTopupInvoicePaid(claimedBeforeRun.amount);
+              finalizeTopupInvoicePaid({
+                amountSat: claimedBeforeRun.amount,
+                gainedToken: claimedBeforeRun.token,
+              });
             }
             setTopupMintQuote(null);
           }
@@ -2131,7 +2214,10 @@ export const useAppShellComposition = () => {
                   route.kind === "topupInvoice" &&
                   alreadyClaimed.amount > 0
                 ) {
-                  finalizeTopupInvoicePaid(alreadyClaimed.amount);
+                  finalizeTopupInvoicePaid({
+                    amountSat: alreadyClaimed.amount,
+                    gainedToken: alreadyClaimed.token,
+                  });
                 }
                 setTopupMintQuote(null);
               }
@@ -2201,7 +2287,10 @@ export const useAppShellComposition = () => {
             );
 
             if (route.kind === "topupInvoice") {
-              finalizeTopupInvoicePaid(topupMintQuote.amount);
+              finalizeTopupInvoicePaid({
+                amountSat: topupMintQuote.amount,
+                gainedToken: token,
+              });
             } else {
               const displayAmount = formatDisplayedAmountParts(
                 topupMintQuote.amount,
@@ -2499,7 +2588,7 @@ export const useAppShellComposition = () => {
     const expected = start + amountSat;
     if (cashuTotalBalance < expected) return;
 
-    finalizeTopupInvoicePaid(amountSat);
+    finalizeTopupInvoicePaid({ amountSat });
   }, [
     cashuTotalBalance,
     finalizeTopupInvoicePaid,
@@ -2610,8 +2699,30 @@ export const useAppShellComposition = () => {
     }
   }, [defaultMintUrl]);
 
+  const currentMainMintAcceptedBalance = React.useMemo(() => {
+    const currentMainMint = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
+    if (!currentMainMint) return 0;
+
+    let sum = 0;
+    for (const row of cashuTokensWithMeta) {
+      if (!isCashuTokenAcceptedState(row.state)) continue;
+
+      const mint = normalizeMintUrl(String(row.mint ?? "").trim());
+      if (mint !== currentMainMint) continue;
+
+      const amount = Number(row.amount ?? 0);
+      if (Number.isFinite(amount) && amount > 0) {
+        sum += amount;
+      }
+    }
+
+    return sum;
+  }, [cashuTokensWithMeta, defaultMintUrl]);
+
   const { applyDefaultMintSelection, makeNip98AuthHeader } =
     useNpubCashMintSelection({
+      cashuAutoswapEnabled,
+      currentMainMintAcceptedBalance,
       currentNpub,
       currentNsec,
       defaultMintUrl,
@@ -2620,11 +2731,54 @@ export const useAppShellComposition = () => {
       makeLocalStorageKey,
       npubCashMintSyncRef,
       pushToast,
+      requestMintAutoswapChangeConfirmation: React.useCallback(
+        (args: { fromMint: string; toMint: string }) => {
+          pendingMintAutoswapChangeResolverRef.current?.(false);
+          return new Promise<boolean>((resolve) => {
+            pendingMintAutoswapChangeResolverRef.current = resolve;
+            setPendingMintAutoswapChangeConfirmation(args);
+          });
+        },
+        [],
+      ),
+      setCashuAutoswapEnabled,
       setDefaultMintUrl,
       setDefaultMintUrlDraft,
       setStatus,
       t,
     });
+
+  React.useEffect(() => {
+    const selectedMint = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
+    if (!cashuAutoswapEnabled) return;
+    if (!isTestMintUrl(selectedMint)) return;
+    setCashuAutoswapEnabled(false);
+  }, [cashuAutoswapEnabled, defaultMintUrl, setCashuAutoswapEnabled]);
+
+  const resolvePendingMintAutoswapChangeConfirmation = React.useCallback(
+    (confirmed: boolean) => {
+      const resolve = pendingMintAutoswapChangeResolverRef.current;
+      pendingMintAutoswapChangeResolverRef.current = null;
+      setPendingMintAutoswapChangeConfirmation(null);
+      resolve?.(confirmed);
+    },
+    [],
+  );
+
+  const closeMintAutoswapChangeConfirmation = React.useCallback(() => {
+    resolvePendingMintAutoswapChangeConfirmation(false);
+  }, [resolvePendingMintAutoswapChangeConfirmation]);
+
+  const confirmMintAutoswapChangeConfirmation = React.useCallback(() => {
+    resolvePendingMintAutoswapChangeConfirmation(true);
+  }, [resolvePendingMintAutoswapChangeConfirmation]);
+
+  React.useEffect(() => {
+    return () => {
+      pendingMintAutoswapChangeResolverRef.current?.(false);
+      pendingMintAutoswapChangeResolverRef.current = null;
+    };
+  }, []);
 
   const { claimNpubCashOnce, claimNpubCashOnceLatestRef } = useNpubCashClaim({
     cashuIsBusy,
@@ -3994,6 +4148,29 @@ export const useAppShellComposition = () => {
         return;
       }
 
+      const transactionNote =
+        String(contact.name ?? "").trim() ||
+        String(contact.lnAddress ?? "").trim() ||
+        null;
+      const logIssuedTokenSendTransaction = (phase: "complete" | "publish") => {
+        logPaymentEvent({
+          amount: tokenMeta?.amount ?? null,
+          contactId: contact.id as ContactId,
+          details: {
+            usedInputTokens: [tokenText],
+          },
+          direction: "out",
+          error: null,
+          fee: null,
+          method: "cashu_chat",
+          mint: tokenMeta?.mint ?? null,
+          note: transactionNote,
+          phase,
+          status: "ok",
+          unit: tokenMeta?.unit ?? null,
+        });
+      };
+
       let activeClientId: string | null = null;
 
       try {
@@ -4048,6 +4225,7 @@ export const useAppShellComposition = () => {
         const isOffline =
           typeof navigator !== "undefined" && navigator.onLine === false;
         if (isOffline) {
+          logIssuedTokenSendTransaction("publish");
           setStatus(t("chatQueued"));
           return;
         }
@@ -4072,6 +4250,7 @@ export const useAppShellComposition = () => {
         );
 
         if (!publishOutcome.anySuccess) {
+          logIssuedTokenSendTransaction("publish");
           setStatus(t("chatQueued"));
           return;
         }
@@ -4085,6 +4264,8 @@ export const useAppShellComposition = () => {
             rumorId,
           });
         }
+
+        logIssuedTokenSendTransaction("complete");
       } catch (error) {
         setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
       } finally {
@@ -4097,6 +4278,7 @@ export const useAppShellComposition = () => {
       appendLocalNostrMessage,
       cashuTokensAllFiltered,
       currentNsec,
+      logPaymentEvent,
       deleteCashuToken,
       publishWrappedWithRetry,
       setStatus,
@@ -4735,6 +4917,9 @@ export const useAppShellComposition = () => {
           direction: "out",
           status: "ok",
           amount: split.sendAmount,
+          details: {
+            issuedToken: split.sendToken,
+          },
           fee: amountSat - split.sendAmount,
           mint: split.mint,
           unit: split.unit,
@@ -5204,10 +5389,9 @@ export const useAppShellComposition = () => {
   // we end up with stranded dust at both the source and target mints. The
   // user can still trigger the manual `Melt to <main mint>` button for any
   // amount.
-  const AUTOSWAP_MIN_SOURCE_SUM = 128;
   const autoswapSignature = React.useMemo(() => {
     if (!largestForeignMintForTokenList) return null;
-    if (largestForeignMintForTokenList.sum < AUTOSWAP_MIN_SOURCE_SUM) {
+    if (largestForeignMintForTokenList.sum < CASHU_AUTOSWAP_MIN_SOURCE_SUM) {
       return null;
     }
     return `${largestForeignMintForTokenList.mint}|${largestForeignMintForTokenList.sum}|${largestForeignMintForTokenList.tokens.length}`;
@@ -5413,16 +5597,34 @@ export const useAppShellComposition = () => {
     });
     const preferredMint =
       normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ?? MAIN_MINT_URL;
+    const requestId = makeLocalId();
     const requestText = buildCashuPaymentRequestMessage({
       amount: amountSat,
       mintUrls: [preferredMint],
       recipientNprofile,
-      requestId: makeLocalId(),
+      requestId,
     });
 
     await sendChatMessage({
       clearDraft: false,
       text: requestText,
+    });
+
+    logPaymentEvent({
+      amount: amountSat,
+      contactId: selectedContact.id,
+      details: {
+        mintUrls: [preferredMint],
+        recipientNprofile,
+        requestId,
+        requestText,
+      },
+      direction: "in",
+      method: "cashu_chat",
+      mint: preferredMint,
+      note: t("requestPaymentLabel"),
+      status: "ok",
+      unit: "sat",
     });
 
     if (
@@ -5441,6 +5643,7 @@ export const useAppShellComposition = () => {
     route.kind,
     selectedContact,
     sendChatMessage,
+    logPaymentEvent,
     setStatus,
     t,
   ]);
@@ -5512,6 +5715,7 @@ export const useAppShellComposition = () => {
         await payContactWithCashuMessage({
           contact: selectedContact,
           amountSat: requestInfo.amount,
+          paymentRequestId: requestInfo.requestId,
           replyContext: {
             replyToId: requestRumorId,
             rootMessageId:
@@ -5886,6 +6090,7 @@ export const useAppShellComposition = () => {
       canWriteNfc,
       canPayWithCashu,
       cashuBalance,
+      cashuTotalBalance,
       cashuBulkCheckIsBusy,
       cashuDraft,
       cashuDraftRef,
@@ -6035,6 +6240,7 @@ export const useAppShellComposition = () => {
     mainSwipeRouteBuilderInput: {
       activeGroup,
       cashuBalance,
+      cashuTotalBalance,
       contacts: displayContacts,
       contactsOnboardingCelebrating,
       contactsOnboardingTasks,
@@ -6115,10 +6321,16 @@ export const useAppShellComposition = () => {
       evoluMessagesBackupOwnerId: messagesBackupOwnerId,
       evoluMessagesOwnerId: messagesOwnerId,
       evoluMessagesOwnerEditsUntilRotation: messagesOwnerEditsUntilRotation,
+      evoluTransactionsBackupOwnerId: transactionsBackupOwnerId,
+      evoluTransactionsOwnerId: transactionsOwnerId,
+      evoluTransactionsOwnerEditsUntilRotation:
+        transactionsOwnerEditsUntilRotation,
       requestManualRotateContactsOwner,
       requestManualRotateMessagesOwner,
+      requestManualRotateTransactionsOwner,
       rotateContactsOwnerIsBusy,
       rotateMessagesOwnerIsBusy,
+      rotateTransactionsOwnerIsBusy,
       exportAppData,
       extractPpk,
       getMintIconUrl,
@@ -6206,6 +6418,7 @@ export const useAppShellComposition = () => {
     nostrPictureByNpub,
     paidOverlayIsOpen,
     paidOverlayTitle,
+    pendingMintAutoswapChangeConfirmation,
     pendingLnurlWithdrawConfirmation,
     pendingLightningInvoiceConfirmation,
     postPaySaveContact,
@@ -6237,12 +6450,14 @@ export const useAppShellComposition = () => {
 
   const appActions = {
     cancelPendingNfcWrite,
+    closeMintAutoswapChangeConfirmation,
     closeLnurlWithdrawConfirmation,
     closeMenu,
     closeShareOptions,
     closeLightningInvoiceConfirmation,
     closeProfileQr,
     closeScan,
+    confirmMintAutoswapChangeConfirmation,
     confirmLnurlWithdraw,
     confirmLightningInvoicePayment,
     contactsGuideNav,

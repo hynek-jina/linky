@@ -1,6 +1,7 @@
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import { getPublicKey, type UnsignedEvent } from "nostr-tools";
 import {
+  getTelemetryAppHost,
   getTelemetryAppRuntime,
   getTelemetryDevicePlatform,
 } from "../../platform/runtime";
@@ -161,6 +162,7 @@ export const createLocalPaymentTelemetryEvent = (
     feeBucket: bucketPositiveNumber(event.fee, FEE_BUCKETS),
     errorCode,
     errorDetail: normalizePaymentTelemetryErrorDetail(event.error),
+    appHost: getTelemetryAppHost(),
     devicePlatform: getTelemetryDevicePlatform(),
     appRuntime: getTelemetryAppRuntime(),
     appVersion: __APP_VERSION__,
@@ -207,6 +209,7 @@ export const createPaymentTelemetryWrappedEvent = (args: {
       feeBucket: args.item.feeBucket,
       errorCode: args.item.errorCode,
       errorDetail: args.item.errorDetail,
+      appHost: args.item.appHost ?? null,
       devicePlatform: args.item.devicePlatform ?? null,
       appRuntime: args.item.appRuntime ?? null,
       appVersion: args.item.appVersion,
