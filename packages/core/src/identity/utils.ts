@@ -8,10 +8,11 @@ import { nip19 } from "nostr-tools";
 import { Slip39 } from "slip39-ts";
 import {
   CASHU_SEED_PATH,
-  contactsOwnerPath,
   cashuOwnerPath,
+  contactsOwnerPath,
   messagesOwnerPath,
   META_OWNER_PATH,
+  transactionsOwnerPath,
 } from "./derivationPaths";
 import {
   Bip39Mnemonic12,
@@ -94,6 +95,7 @@ const deriveOwnerPath = (
   if (role === "meta") return META_OWNER_PATH;
   if (role === "contacts") return contactsOwnerPath(index);
   if (role === "cashu") return cashuOwnerPath(index);
+  if (role === "transactions") return transactionsOwnerPath(index);
   return messagesOwnerPath(index);
 };
 

@@ -15,17 +15,16 @@ import { makeLocalId } from "../../../utils/validation";
 import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import {
-  createLinkyPaymentNoticeEvent,
-  wrapEventWithPushMarker,
-  wrapEventWithoutPushMarker,
-} from "../../lib/pushWrappedEvent";
-import type { ReplyContext } from "../messages/useSendChatMessage";
-import {
   buildPaymentAmountAttempts,
   getPaymentAmountReserveCap,
   isRetryablePaymentAmountFailure,
 } from "../../lib/paymentAmountFallback";
 import { selectSingleMintCandidateForAmount } from "../../lib/paymentMintSelection";
+import {
+  createLinkyPaymentNoticeEvent,
+  wrapEventWithPushMarker,
+  wrapEventWithoutPushMarker,
+} from "../../lib/pushWrappedEvent";
 import type {
   CashuTokenRowLike,
   ContactRowLike,
@@ -36,6 +35,7 @@ import type {
   PublishWrappedResult,
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
+import type { ReplyContext } from "../messages/useSendChatMessage";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -178,10 +178,17 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       amountSat: number;
       fromQueue?: boolean;
       pendingMessageId?: string;
+      paymentRequestId?: string | null;
       replyContext?: ReplyContext | null;
     }): Promise<{ ok: boolean; queued: boolean; error?: string }> => {
-      const { contact, amountSat, fromQueue, pendingMessageId, replyContext } =
-        args;
+      const {
+        contact,
+        amountSat,
+        fromQueue,
+        pendingMessageId,
+        paymentRequestId,
+        replyContext,
+      } = args;
       const notify = !fromQueue;
 
       const normalizedPendingMessageId =
@@ -294,10 +301,12 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         mint: string;
         unit: string | null;
       }> = [];
+      let usedInputTokens: string[] = [];
       const sendTokenMetaByText = new Map<
         string,
         { mint: string; unit: string | null; amount: number }
       >();
+      let gainedToken: string | null = null;
 
       let lastError: unknown = null;
       let lastMint: string | null = null;
@@ -344,6 +353,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           if (notify) setStatus(t("payInsufficient"));
           return { ok: false, queued: false, error: "insufficient" };
         }
+
+        usedInputTokens = [...candidate.tokens];
 
         const requestedAmountSat = cashuToSend;
         const maxReservedFeeSat = getPaymentAmountReserveCap(
@@ -454,6 +465,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             const remainingAmount = split.remainingAmount;
 
             if (remainingToken && remainingAmount > 0) {
+              gainedToken = remainingToken;
               const inserted = insertCashuToken(
                 buildCashuTokenPayload({
                   token: remainingToken,
@@ -746,6 +758,11 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           direction: "out",
           status: "ok",
           amount: sentAmountSat,
+          details: {
+            ...(gainedToken ? { gainedToken } : {}),
+            ...(paymentRequestId ? { requestId: paymentRequestId } : {}),
+            usedInputTokens,
+          },
           fee: null,
           mint: usedMint,
           unit: "sat",

@@ -403,6 +403,10 @@ export type NostrReactionId = typeof NostrReactionId.Type;
 const OwnerMetaId = Evolu.id("OwnerMeta");
 export type OwnerMetaId = typeof OwnerMetaId.Type;
 
+// Primary key pro Transaction tabulku
+const TransactionId = Evolu.id("Transaction");
+export type TransactionId = typeof TransactionId.Type;
+
 // Schema pro Linky app
 export const Schema = {
   contact: {
@@ -479,6 +483,26 @@ export const Schema = {
     // "pending" | "accepted" | "error"
     state: Evolu.nullOr(Evolu.NonEmptyString100),
     error: Evolu.nullOr(Evolu.NonEmptyString1000),
+  },
+
+  transaction: {
+    id: TransactionId,
+    createdAtSec: Evolu.PositiveInt,
+    direction: Evolu.NonEmptyString100,
+    status: Evolu.NonEmptyString100,
+    amount: Evolu.nullOr(Evolu.PositiveInt),
+    fee: Evolu.nullOr(Evolu.PositiveInt),
+    category: Evolu.NonEmptyString100,
+    method: Evolu.nullOr(Evolu.NonEmptyString100),
+    phase: Evolu.nullOr(Evolu.NonEmptyString100),
+    note: Evolu.nullOr(Evolu.NonEmptyString1000),
+    detailsJson: Evolu.nullOr(Evolu.NonEmptyString),
+    iconKind: Evolu.NonEmptyString100,
+    contactId: Evolu.nullOr(ContactId),
+    mint: Evolu.nullOr(Evolu.NonEmptyString1000),
+    unit: Evolu.nullOr(Evolu.NonEmptyString100),
+    error: Evolu.nullOr(Evolu.NonEmptyString1000),
+    pendingLabel: Evolu.nullOr(Evolu.NonEmptyString100),
   },
 
   ownerMeta: {

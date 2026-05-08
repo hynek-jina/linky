@@ -82,6 +82,14 @@ export const buildTopbar = ({
     };
   }
 
+  if (route.kind === "transactions") {
+    return {
+      icon: "<",
+      label: t("close"),
+      onClick: () => navigateTo({ route: "wallet" }),
+    };
+  }
+
   if (route.kind === "topup" || route.kind === "topupNoAmount") {
     return {
       icon: "<",
@@ -291,6 +299,7 @@ export const buildTopbarRight = ({
     route.kind === "mints" ||
     route.kind === "cashuTokens" ||
     route.kind === "cashuToken" ||
+    route.kind === "transactions" ||
     route.kind === "evoluCurrentData" ||
     route.kind === "evoluHistoryData" ||
     route.kind === "contactEdit"
@@ -312,6 +321,7 @@ export const buildTopbarTitle = (
   if (route.kind === "contacts") return t("contactsTitle");
   if (route.kind === "settings") return t("unit");
   if (route.kind === "wallet") return t("wallet");
+  if (route.kind === "transactions") return t("transactionsTitle");
   if (route.kind === "topup") return t("topupTitle");
   if (route.kind === "topupNoAmount") return t("topupNoAmountTitle");
   if (route.kind === "topupInvoice") return t("topupInvoiceTitle");

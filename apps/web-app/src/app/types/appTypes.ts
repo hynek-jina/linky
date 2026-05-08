@@ -43,11 +43,13 @@ export type PaymentTelemetryPhase =
 export type LoggedPaymentEventParams = {
   amount?: number | null;
   contactId?: ContactId | null;
+  details?: JsonValue | null;
   direction: "in" | "out";
   error?: string | null;
   fee?: number | null;
   method?: PaymentTelemetryMethod | null;
   mint?: string | null;
+  note?: string | null;
   phase?: PaymentTelemetryPhase | null;
   status: PaymentTelemetryStatus;
   unit?: string | null;

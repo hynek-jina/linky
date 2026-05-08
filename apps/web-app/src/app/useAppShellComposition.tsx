@@ -100,7 +100,10 @@ import {
   type DisplayCurrency,
 } from "../utils/displayAmounts";
 import { formatShortNpub, getBestNostrName } from "../utils/formatting";
-import type { LightningInvoicePreview } from "../utils/lightningInvoice";
+import {
+  getLightningInvoicePreview,
+  type LightningInvoicePreview,
+} from "../utils/lightningInvoice";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
   extractPpk,
@@ -970,13 +973,21 @@ export const useAppShellComposition = () => {
   const appOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const cashuOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const messagesOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const transactionsOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const recordTransactionsOwnerWriteRef = React.useRef<
+    ((count?: number) => void) | null
+  >(null);
   const {
     logPaymentEvent,
     makeLocalStorageKey,
+    migrateLegacyPaymentEventsToEvolu,
     readSeenMintsFromStorage,
     rememberSeenMint,
   } = useOwnerScopedStorage({
     appOwnerIdRef,
+    insert,
+    recordTransactionsOwnerWriteRef,
+    transactionsOwnerIdRef,
   });
 
   const route = useRouting();
@@ -1571,8 +1582,33 @@ export const useAppShellComposition = () => {
   });
 
   const finalizeTopupInvoicePaid = React.useCallback(
-    (amountSat: number) => {
+    (args: { amountSat: number; gainedToken?: string | null }) => {
       if (topupInvoicePaidHandledRef.current) return;
+
+      const amountSat = args.amountSat;
+      const topupInvoice = topupMintQuote?.invoice ?? null;
+      const topupInvoicePreview = topupInvoice
+        ? getLightningInvoicePreview(topupInvoice)
+        : null;
+
+      logPaymentEvent({
+        amount: amountSat,
+        details:
+          topupInvoice || args.gainedToken
+            ? {
+                ...(args.gainedToken ? { gainedToken: args.gainedToken } : {}),
+                ...(topupInvoice ? { lightningInvoice: topupInvoice } : {}),
+                ...(topupInvoicePreview?.description
+                  ? { lightningMemo: topupInvoicePreview.description }
+                  : {}),
+              }
+            : null,
+        direction: "in",
+        method: "lightning_invoice",
+        mint: topupMintQuote?.mintUrl ?? defaultMintUrl ?? null,
+        status: "ok",
+        unit: topupMintQuote?.unit ?? "sat",
+      });
 
       topupInvoicePaidHandledRef.current = true;
       topupInvoiceStartBalanceRef.current = null;
@@ -1606,7 +1642,9 @@ export const useAppShellComposition = () => {
       }, 1400);
     },
     [
+      defaultMintUrl,
       formatDisplayedAmountParts,
+      logPaymentEvent,
       setTopupAmount,
       setTopupInvoice,
       setTopupInvoiceError,
@@ -1614,6 +1652,7 @@ export const useAppShellComposition = () => {
       setTopupInvoiceQr,
       showPaidOverlay,
       t,
+      topupMintQuote,
       topupPaidNavTimerRef,
     ],
   );
@@ -1671,10 +1710,17 @@ export const useAppShellComposition = () => {
     messagesSyncOwner,
     recordContactsOwnerWrite,
     recordMessagesOwnerWrite,
+    recordTransactionsOwnerWrite,
     requestManualRotateContactsOwner,
     requestManualRotateMessagesOwner,
+    requestManualRotateTransactionsOwner,
     rotateContactsOwnerIsBusy,
     rotateMessagesOwnerIsBusy,
+    rotateTransactionsOwnerIsBusy,
+    transactionsBackupOwnerId,
+    transactionsOwnerEditsUntilRotation,
+    transactionsOwnerId,
+    transactionsSyncOwner,
   } = useEvoluContactsOwnerRotation({
     appOwnerId,
     getContactsForRotation: () => contactsForRotationRef.current,
@@ -1689,11 +1735,29 @@ export const useAppShellComposition = () => {
   useOwner(contactsSyncOwner);
   useOwner(cashuSyncOwner);
   useOwner(messagesSyncOwner);
+  useOwner(transactionsSyncOwner);
   useOwner(metaSyncOwner);
 
   React.useEffect(() => {
     cashuOwnerIdRef.current = cashuOwnerId;
   }, [cashuOwnerId]);
+
+  React.useEffect(() => {
+    messagesOwnerIdRef.current = messagesOwnerId;
+  }, [messagesOwnerId]);
+
+  React.useEffect(() => {
+    transactionsOwnerIdRef.current = transactionsOwnerId;
+  }, [transactionsOwnerId]);
+
+  React.useEffect(() => {
+    recordTransactionsOwnerWriteRef.current = recordTransactionsOwnerWrite;
+  }, [recordTransactionsOwnerWrite]);
+
+  React.useEffect(() => {
+    if (!appOwnerId) return;
+    migrateLegacyPaymentEventsToEvolu(appOwnerId, transactionsOwnerId);
+  }, [appOwnerId, migrateLegacyPaymentEventsToEvolu, transactionsOwnerId]);
 
   const evoluHistoryAllowedOwnerIds = React.useMemo(() => {
     const ids = [
@@ -1703,6 +1767,8 @@ export const useAppShellComposition = () => {
       String(contactsBackupOwnerId ?? "").trim(),
       String(messagesOwnerId ?? "").trim(),
       String(messagesBackupOwnerId ?? "").trim(),
+      String(transactionsOwnerId ?? "").trim(),
+      String(transactionsBackupOwnerId ?? "").trim(),
       String(metaOwnerId ?? "").trim(),
     ].filter(Boolean);
     return Array.from(new Set(ids));
@@ -1714,6 +1780,8 @@ export const useAppShellComposition = () => {
     messagesBackupOwnerId,
     messagesOwnerId,
     metaOwnerId,
+    transactionsBackupOwnerId,
+    transactionsOwnerId,
   ]);
 
   const visibleMessageOwnerIds = React.useMemo(() => {
@@ -2107,7 +2175,10 @@ export const useAppShellComposition = () => {
           const restored = await insertClaimedTopupToken(claimedBeforeRun);
           if (restored && !cancelled) {
             if (route.kind === "topupInvoice" && claimedBeforeRun.amount > 0) {
-              finalizeTopupInvoicePaid(claimedBeforeRun.amount);
+              finalizeTopupInvoicePaid({
+                amountSat: claimedBeforeRun.amount,
+                gainedToken: claimedBeforeRun.token,
+              });
             }
             setTopupMintQuote(null);
           }
@@ -2131,7 +2202,10 @@ export const useAppShellComposition = () => {
                   route.kind === "topupInvoice" &&
                   alreadyClaimed.amount > 0
                 ) {
-                  finalizeTopupInvoicePaid(alreadyClaimed.amount);
+                  finalizeTopupInvoicePaid({
+                    amountSat: alreadyClaimed.amount,
+                    gainedToken: alreadyClaimed.token,
+                  });
                 }
                 setTopupMintQuote(null);
               }
@@ -2201,7 +2275,10 @@ export const useAppShellComposition = () => {
             );
 
             if (route.kind === "topupInvoice") {
-              finalizeTopupInvoicePaid(topupMintQuote.amount);
+              finalizeTopupInvoicePaid({
+                amountSat: topupMintQuote.amount,
+                gainedToken: token,
+              });
             } else {
               const displayAmount = formatDisplayedAmountParts(
                 topupMintQuote.amount,
@@ -2499,7 +2576,7 @@ export const useAppShellComposition = () => {
     const expected = start + amountSat;
     if (cashuTotalBalance < expected) return;
 
-    finalizeTopupInvoicePaid(amountSat);
+    finalizeTopupInvoicePaid({ amountSat });
   }, [
     cashuTotalBalance,
     finalizeTopupInvoicePaid,
@@ -5413,16 +5490,34 @@ export const useAppShellComposition = () => {
     });
     const preferredMint =
       normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ?? MAIN_MINT_URL;
+    const requestId = makeLocalId();
     const requestText = buildCashuPaymentRequestMessage({
       amount: amountSat,
       mintUrls: [preferredMint],
       recipientNprofile,
-      requestId: makeLocalId(),
+      requestId,
     });
 
     await sendChatMessage({
       clearDraft: false,
       text: requestText,
+    });
+
+    logPaymentEvent({
+      amount: amountSat,
+      contactId: selectedContact.id,
+      details: {
+        mintUrls: [preferredMint],
+        recipientNprofile,
+        requestId,
+        requestText,
+      },
+      direction: "in",
+      method: "cashu_chat",
+      mint: preferredMint,
+      note: t("requestPaymentLabel"),
+      status: "ok",
+      unit: "sat",
     });
 
     if (
@@ -5441,6 +5536,7 @@ export const useAppShellComposition = () => {
     route.kind,
     selectedContact,
     sendChatMessage,
+    logPaymentEvent,
     setStatus,
     t,
   ]);
@@ -5512,6 +5608,7 @@ export const useAppShellComposition = () => {
         await payContactWithCashuMessage({
           contact: selectedContact,
           amountSat: requestInfo.amount,
+          paymentRequestId: requestInfo.requestId,
           replyContext: {
             replyToId: requestRumorId,
             rootMessageId:
@@ -6115,10 +6212,16 @@ export const useAppShellComposition = () => {
       evoluMessagesBackupOwnerId: messagesBackupOwnerId,
       evoluMessagesOwnerId: messagesOwnerId,
       evoluMessagesOwnerEditsUntilRotation: messagesOwnerEditsUntilRotation,
+      evoluTransactionsBackupOwnerId: transactionsBackupOwnerId,
+      evoluTransactionsOwnerId: transactionsOwnerId,
+      evoluTransactionsOwnerEditsUntilRotation:
+        transactionsOwnerEditsUntilRotation,
       requestManualRotateContactsOwner,
       requestManualRotateMessagesOwner,
+      requestManualRotateTransactionsOwner,
       rotateContactsOwnerIsBusy,
       rotateMessagesOwnerIsBusy,
+      rotateTransactionsOwnerIsBusy,
       exportAppData,
       extractPpk,
       getMintIconUrl,

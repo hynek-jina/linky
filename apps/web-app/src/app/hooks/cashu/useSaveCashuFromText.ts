@@ -121,6 +121,7 @@ export const useSaveCashuFromText = ({
       options?: {
         navigateToTokens?: boolean;
         navigateToWallet?: boolean;
+        requestId?: string;
       },
     ) => {
       const tokenRaw = tokenText.trim();
@@ -245,6 +246,11 @@ export const useSaveCashuFromText = ({
             direction: "in",
             status: "ok",
             amount: accepted.amount,
+            details: {
+              acceptedToken,
+              rawToken: tokenRaw,
+              ...(options?.requestId ? { requestId: options.requestId } : {}),
+            },
             fee: null,
             mint: accepted.mint,
             unit: accepted.unit,
@@ -281,6 +287,10 @@ export const useSaveCashuFromText = ({
             direction: "in",
             status: "error",
             amount: parsedAmount,
+            details: {
+              rawToken: tokenRaw,
+              ...(options?.requestId ? { requestId: options.requestId } : {}),
+            },
             fee: null,
             mint: parsedMint,
             unit: null,

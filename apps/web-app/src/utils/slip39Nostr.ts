@@ -73,7 +73,7 @@ export const deriveCashuBip85MnemonicFromSlip39 = async (
 
 export const deriveEvoluOwnerMnemonicFromSlip39 = async (
   rawText: string,
-  role: "meta" | "contacts" | "cashu" | "messages",
+  role: "meta" | "contacts" | "cashu" | "messages" | "transactions",
   contactsIndex = 0,
 ): Promise<string | null> => {
   try {
