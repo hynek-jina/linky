@@ -24,6 +24,7 @@ type PaymentTelemetryStatus = "declined" | "error" | "ok";
 
 interface LocalPaymentTelemetryEvent {
   amountBucket: string | null;
+  appHost?: string | null;
   appRuntime?: "native" | "pwa" | "web" | null;
   appVersion: string;
   attemptCount: number;
@@ -99,6 +100,18 @@ const getNavigatorMaxTouchPoints = (): number => {
   return typeof navigator.maxTouchPoints === "number"
     ? navigator.maxTouchPoints
     : 0;
+};
+
+const getTelemetryAppHost = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const host = String(window.location.host ?? "")
+    .trim()
+    .toLowerCase();
+
+  return host ? host.slice(0, 255) : null;
 };
 
 const getTelemetryAppRuntime = (): "native" | "pwa" | "web" => {
@@ -345,6 +358,9 @@ const isLocalPaymentTelemetryEvent = (
     isTelemetryMethod(value.method) &&
     isTelemetryPhase(value.phase) &&
     typeof value.appVersion === "string" &&
+    (typeof value.appHost === "undefined" ||
+      value.appHost === null ||
+      typeof value.appHost === "string") &&
     (typeof value.appRuntime === "undefined" ||
       value.appRuntime === null ||
       isTelemetryAppRuntime(value.appRuntime)) &&
@@ -413,6 +429,7 @@ const createPaymentTelemetryWrappedEvent = (args: {
       feeBucket: args.item.feeBucket,
       errorCode: args.item.errorCode,
       errorDetail: args.item.errorDetail,
+      appHost: args.item.appHost ?? null,
       devicePlatform: args.item.devicePlatform ?? null,
       appRuntime: args.item.appRuntime ?? null,
       appVersion: args.item.appVersion,
@@ -446,6 +463,7 @@ const createLocalPaymentTelemetryEvent = (
     feeBucket: bucketPositiveNumber(args.fee, FEE_BUCKETS),
     errorCode,
     errorDetail: normalizePaymentTelemetryErrorDetail(args.error),
+    appHost: getTelemetryAppHost(),
     devicePlatform: getTelemetryDevicePlatform(),
     appRuntime: getTelemetryAppRuntime(),
     appVersion: __APP_VERSION__,

@@ -58,6 +58,12 @@ describe("createLocalPaymentTelemetryEvent", () => {
   it("stores both a stable error code and the original detail", () => {
     const error =
       "Error: A short keyset ID v2 was encountered, but got no keysets to map it to.";
+    const expectedAppHost =
+      typeof window === "undefined"
+        ? null
+        : String(window.location.host ?? "")
+            .trim()
+            .toLowerCase() || null;
 
     expect(
       createLocalPaymentTelemetryEvent(
@@ -77,6 +83,7 @@ describe("createLocalPaymentTelemetryEvent", () => {
       errorCode: "short_keyset_id_unmapped",
       errorDetail: error,
       mint: "https://mint.minibits.cash/Bitcoin",
+      appHost: expectedAppHost,
       status: "error",
     });
   });

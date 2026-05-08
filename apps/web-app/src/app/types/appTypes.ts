@@ -57,6 +57,7 @@ export type LoggedPaymentEventParams = {
 
 export type LocalPaymentTelemetryEvent = {
   amountBucket: string | null;
+  appHost?: string | null;
   appRuntime?: TelemetryAppRuntime | null;
   appVersion: string;
   attemptCount: number;

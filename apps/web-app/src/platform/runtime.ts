@@ -12,6 +12,18 @@ export type TelemetryDevicePlatform =
   | "windows"
   | "unknown";
 
+export const getTelemetryAppHost = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const host = String(window.location.host ?? "")
+    .trim()
+    .toLowerCase();
+
+  return host ? host.slice(0, 255) : null;
+};
+
 const isCapacitorLike = (value: unknown): value is CapacitorLike => {
   return typeof value === "object" && value !== null;
 };
