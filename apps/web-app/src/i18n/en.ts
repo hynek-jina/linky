@@ -267,7 +267,15 @@ export const en = {
   testMintBadge: "test",
   setCustomMint: "Set custom mint",
   mintUrlInvalid: "Invalid mint URL.",
+  mintAutoswapChangeWarning:
+    "Linky will swap eligible funds from {fromMint} to the {toMint}.",
+  mintAutoswapChangeWarningTitle: "Funds will be swapped to the new mint",
+  mintAutoswapChangeWarningKeep: "OK",
+  mintAutoswapChangeWarningDisable: "Don't swap anything",
   mintSaved: "Mint saved.",
+  mintSavedAutoswapDisabled: "Mint saved. Auto-swap turned off.",
+  mintSavedAutoswapDisabledTestMint:
+    "Mint saved. Auto-swap turned off for the test mint.",
   mintUpdateFailed: "Mint update failed.",
   mintUpdating: "Updating mint…",
   useDefault: "Use default",

@@ -77,6 +77,7 @@ import { getCashuLib } from "../utils/cashuLib";
 import { createLoadedCashuWallet } from "../utils/cashuWallet";
 import {
   BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
+  CASHU_AUTOSWAP_MIN_SOURCE_SUM,
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
   CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY,
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
@@ -107,6 +108,7 @@ import {
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
   extractPpk,
+  isTestMintUrl,
   MAIN_MINT_URL,
   normalizeMintUrl,
   PRESET_MINTS,
@@ -1507,6 +1509,16 @@ export const useAppShellComposition = () => {
     pendingLnurlWithdrawConfirmation,
     setPendingLnurlWithdrawConfirmation,
   ] = useState<LnurlWithdrawPreview | null>(null);
+  const [
+    pendingMintAutoswapChangeConfirmation,
+    setPendingMintAutoswapChangeConfirmation,
+  ] = useState<{
+    fromMint: string;
+    toMint: string;
+  } | null>(null);
+  const pendingMintAutoswapChangeResolverRef = React.useRef<
+    ((confirmed: boolean) => void) | null
+  >(null);
   const [lnurlWithdrawIsBusy, setLnurlWithdrawIsBusy] = useState(false);
 
   const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
@@ -2687,8 +2699,30 @@ export const useAppShellComposition = () => {
     }
   }, [defaultMintUrl]);
 
+  const currentMainMintAcceptedBalance = React.useMemo(() => {
+    const currentMainMint = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
+    if (!currentMainMint) return 0;
+
+    let sum = 0;
+    for (const row of cashuTokensWithMeta) {
+      if (!isCashuTokenAcceptedState(row.state)) continue;
+
+      const mint = normalizeMintUrl(String(row.mint ?? "").trim());
+      if (mint !== currentMainMint) continue;
+
+      const amount = Number(row.amount ?? 0);
+      if (Number.isFinite(amount) && amount > 0) {
+        sum += amount;
+      }
+    }
+
+    return sum;
+  }, [cashuTokensWithMeta, defaultMintUrl]);
+
   const { applyDefaultMintSelection, makeNip98AuthHeader } =
     useNpubCashMintSelection({
+      cashuAutoswapEnabled,
+      currentMainMintAcceptedBalance,
       currentNpub,
       currentNsec,
       defaultMintUrl,
@@ -2697,11 +2731,54 @@ export const useAppShellComposition = () => {
       makeLocalStorageKey,
       npubCashMintSyncRef,
       pushToast,
+      requestMintAutoswapChangeConfirmation: React.useCallback(
+        (args: { fromMint: string; toMint: string }) => {
+          pendingMintAutoswapChangeResolverRef.current?.(false);
+          return new Promise<boolean>((resolve) => {
+            pendingMintAutoswapChangeResolverRef.current = resolve;
+            setPendingMintAutoswapChangeConfirmation(args);
+          });
+        },
+        [],
+      ),
+      setCashuAutoswapEnabled,
       setDefaultMintUrl,
       setDefaultMintUrlDraft,
       setStatus,
       t,
     });
+
+  React.useEffect(() => {
+    const selectedMint = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
+    if (!cashuAutoswapEnabled) return;
+    if (!isTestMintUrl(selectedMint)) return;
+    setCashuAutoswapEnabled(false);
+  }, [cashuAutoswapEnabled, defaultMintUrl, setCashuAutoswapEnabled]);
+
+  const resolvePendingMintAutoswapChangeConfirmation = React.useCallback(
+    (confirmed: boolean) => {
+      const resolve = pendingMintAutoswapChangeResolverRef.current;
+      pendingMintAutoswapChangeResolverRef.current = null;
+      setPendingMintAutoswapChangeConfirmation(null);
+      resolve?.(confirmed);
+    },
+    [],
+  );
+
+  const closeMintAutoswapChangeConfirmation = React.useCallback(() => {
+    resolvePendingMintAutoswapChangeConfirmation(false);
+  }, [resolvePendingMintAutoswapChangeConfirmation]);
+
+  const confirmMintAutoswapChangeConfirmation = React.useCallback(() => {
+    resolvePendingMintAutoswapChangeConfirmation(true);
+  }, [resolvePendingMintAutoswapChangeConfirmation]);
+
+  React.useEffect(() => {
+    return () => {
+      pendingMintAutoswapChangeResolverRef.current?.(false);
+      pendingMintAutoswapChangeResolverRef.current = null;
+    };
+  }, []);
 
   const { claimNpubCashOnce, claimNpubCashOnceLatestRef } = useNpubCashClaim({
     cashuIsBusy,
@@ -5312,10 +5389,9 @@ export const useAppShellComposition = () => {
   // we end up with stranded dust at both the source and target mints. The
   // user can still trigger the manual `Melt to <main mint>` button for any
   // amount.
-  const AUTOSWAP_MIN_SOURCE_SUM = 128;
   const autoswapSignature = React.useMemo(() => {
     if (!largestForeignMintForTokenList) return null;
-    if (largestForeignMintForTokenList.sum < AUTOSWAP_MIN_SOURCE_SUM) {
+    if (largestForeignMintForTokenList.sum < CASHU_AUTOSWAP_MIN_SOURCE_SUM) {
       return null;
     }
     return `${largestForeignMintForTokenList.mint}|${largestForeignMintForTokenList.sum}|${largestForeignMintForTokenList.tokens.length}`;
@@ -6340,6 +6416,7 @@ export const useAppShellComposition = () => {
     nostrPictureByNpub,
     paidOverlayIsOpen,
     paidOverlayTitle,
+    pendingMintAutoswapChangeConfirmation,
     pendingLnurlWithdrawConfirmation,
     pendingLightningInvoiceConfirmation,
     postPaySaveContact,
@@ -6371,12 +6448,14 @@ export const useAppShellComposition = () => {
 
   const appActions = {
     cancelPendingNfcWrite,
+    closeMintAutoswapChangeConfirmation,
     closeLnurlWithdrawConfirmation,
     closeMenu,
     closeShareOptions,
     closeLightningInvoiceConfirmation,
     closeProfileQr,
     closeScan,
+    confirmMintAutoswapChangeConfirmation,
     confirmLnurlWithdraw,
     confirmLightningInvoicePayment,
     contactsGuideNav,

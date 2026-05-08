@@ -269,7 +269,15 @@ export const cs = {
   testMintBadge: "test",
   setCustomMint: "Nastavit vlastní mint",
   mintUrlInvalid: "Neplatná URL mintu.",
+  mintAutoswapChangeWarning:
+    "Linky bude převádět prostředky z původního {fromMint} do {toMint}.",
+  mintAutoswapChangeWarningTitle: "Prostřeky budou převáděny do nového mintu",
+  mintAutoswapChangeWarningKeep: "V pořádku",
+  mintAutoswapChangeWarningDisable: "Nic nepřevádět",
   mintSaved: "Mint uložen.",
+  mintSavedAutoswapDisabled: "Mint uložen. Auto-swap byl vypnut.",
+  mintSavedAutoswapDisabledTestMint:
+    "Mint uložen. Auto-swap byl pro testovací mint vypnut.",
   mintUpdateFailed: "Aktualizace mintu selhala.",
   mintUpdating: "Aktualizuji mint…",
   useDefault: "Použít výchozí",
