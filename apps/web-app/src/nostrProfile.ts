@@ -282,6 +282,25 @@ const asTrimmedNonEmptyString = (value: unknown): string | undefined => {
   return trimmed ? trimmed : undefined;
 };
 
+const isDataImageUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "data:") return false;
+    return /^image\/(?:jpeg|jpg|png|webp|gif);base64,/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+};
+
+export const isDisplayableProfilePictureUrl = (
+  value: unknown,
+): value is string => {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  return isHttpUrl(trimmed) || isDataImageUrl(trimmed);
+};
+
 export const fetchNostrProfileMetadata = async (
   npub: string,
   options?: { signal?: AbortSignal; relays?: string[] },
@@ -378,19 +397,21 @@ export const fetchNostrProfilePicture = async (
   const cachedMeta = cached?.metadata ?? null;
 
   const cachedPicture = cachedMeta?.picture;
-  if (isHttpUrl(cachedPicture)) return cachedPicture;
+  if (isDisplayableProfilePictureUrl(cachedPicture)) {
+    return cachedPicture.trim();
+  }
   const cachedImage = cachedMeta?.image;
-  if (isHttpUrl(cachedImage)) return cachedImage;
+  if (isDisplayableProfilePictureUrl(cachedImage)) return cachedImage.trim();
 
   // If there's no cached picture, try fetching (important when switching relays).
   const metadata = await fetchNostrProfileMetadata(npub, options);
   saveCachedProfileMetadata(npub, metadata);
 
   const picture = metadata?.picture;
-  if (isHttpUrl(picture)) return picture;
+  if (isDisplayableProfilePictureUrl(picture)) return picture.trim();
 
   const image = metadata?.image;
-  if (isHttpUrl(image)) return image;
+  if (isDisplayableProfilePictureUrl(image)) return image.trim();
 
   return null;
 };

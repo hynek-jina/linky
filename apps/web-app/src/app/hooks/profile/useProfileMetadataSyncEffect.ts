@@ -12,6 +12,7 @@ import {
   type NostrProfileMetadata,
 } from "../../../nostrProfile";
 import { getBestNostrName } from "../../../utils/formatting";
+import { isHttpUrl } from "../../../utils/validation";
 
 interface UseProfileMetadataSyncEffectParams {
   currentNpub: string | null;
@@ -38,22 +39,25 @@ export const useProfileMetadataSyncEffect = ({
     // Load current user's Nostr profile (name + picture) from relays.
     if (!currentNpub) return;
 
-    const cachedBlobController = new AbortController();
-    let cancelledBlob = false;
-    void (async () => {
-      try {
-        const blobUrl = await loadCachedProfileAvatarObjectUrl(currentNpub);
-        if (cancelledBlob) return;
-        if (blobUrl) {
-          setMyProfilePicture(rememberBlobAvatarUrl(currentNpub, blobUrl));
-        }
-      } catch {
-        // ignore
-      }
-    })();
-
     const cachedPic = loadCachedProfilePicture(currentNpub);
     if (cachedPic) setMyProfilePicture(cachedPic.url);
+
+    const shouldLoadCachedBlob =
+      !cachedPic || (cachedPic.url !== null && isHttpUrl(cachedPic.url));
+    let cancelledBlob = false;
+    if (shouldLoadCachedBlob) {
+      void (async () => {
+        try {
+          const blobUrl = await loadCachedProfileAvatarObjectUrl(currentNpub);
+          if (cancelledBlob) return;
+          if (blobUrl) {
+            setMyProfilePicture(rememberBlobAvatarUrl(currentNpub, blobUrl));
+          }
+        } catch {
+          // ignore
+        }
+      })();
+    }
 
     const cachedMeta = loadCachedProfileMetadata(currentNpub);
     if (cachedMeta?.metadata) {
@@ -147,7 +151,6 @@ export const useProfileMetadataSyncEffect = ({
       cancelled = true;
       controller.abort();
       cancelledBlob = true;
-      cachedBlobController.abort();
     };
   }, [
     currentNpub,
