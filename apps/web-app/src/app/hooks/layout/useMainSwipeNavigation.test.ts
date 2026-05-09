@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { alignMainSwipeToTarget } from "./useMainSwipeNavigation";
+import {
+  alignMainSwipeToTarget,
+  shouldDisableWalletReturnAnimation,
+} from "./useMainSwipeNavigation";
 
 interface MockMainSwipeElement {
   clientWidth: number;
@@ -57,5 +60,27 @@ describe("alignMainSwipeToTarget", () => {
     alignMainSwipeToTarget(element, "wallet");
 
     expect(element.scrollToCalls).toEqual([]);
+  });
+});
+
+describe("shouldDisableWalletReturnAnimation", () => {
+  it("allows the wallet slide only when moving from contacts", () => {
+    expect(shouldDisableWalletReturnAnimation("wallet", "contacts")).toBe(
+      false,
+    );
+  });
+
+  it("disables the wallet slide when returning from another page", () => {
+    expect(shouldDisableWalletReturnAnimation("wallet", "cashuTokens")).toBe(
+      true,
+    );
+    expect(shouldDisableWalletReturnAnimation("wallet", "profile")).toBe(true);
+    expect(shouldDisableWalletReturnAnimation("wallet", "wallet")).toBe(true);
+  });
+
+  it("does not affect contacts alignment", () => {
+    expect(shouldDisableWalletReturnAnimation("contacts", "wallet")).toBe(
+      false,
+    );
   });
 });

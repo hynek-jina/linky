@@ -20,15 +20,6 @@ interface MainSwipeScrollable {
 
 type MainSwipeTarget = "contacts" | "wallet";
 
-const ROUTES_WITHOUT_WALLET_RETURN_ANIMATION = new Set<Route["kind"]>([
-  "cashuTokens",
-  "cashuTokenNew",
-  "cashuTokenEmit",
-  "cashuToken",
-  "topup",
-  "topupInvoice",
-]);
-
 const getMainSwipeTargetLeft = (
   width: number,
   target: MainSwipeTarget,
@@ -39,12 +30,10 @@ const getMainSwipeProgress = (element: MainSwipeScrollable): number => {
   return element.scrollLeft / width;
 };
 
-const shouldDisableWalletReturnAnimation = (
+export const shouldDisableWalletReturnAnimation = (
   routeKind: Route["kind"],
   previousRouteKind: Route["kind"],
-): boolean =>
-  routeKind === "wallet" &&
-  ROUTES_WITHOUT_WALLET_RETURN_ANIMATION.has(previousRouteKind);
+): boolean => routeKind === "wallet" && previousRouteKind !== "contacts";
 
 const restoreScrollBehaviorNextFrame = (
   element: HTMLDivElement,
