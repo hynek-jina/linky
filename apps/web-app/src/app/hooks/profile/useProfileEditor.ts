@@ -18,6 +18,7 @@ import {
 import { publishKind0ProfileMetadata } from "../../../nostrPublish";
 import { getBestNostrName } from "../../../utils/formatting";
 import { createSquareAvatarDataUrl } from "../../../utils/image";
+import { isHttpUrl } from "../../../utils/validation";
 
 interface UseProfileEditorParams {
   currentNpub: string | null;
@@ -250,7 +251,7 @@ export const useProfileEditor = ({
       setMyProfileName(name || null);
       setMyProfileLnAddress(ln || null);
       setMyProfilePicture(picture || null);
-      if (!picture) {
+      if (!picture || !isHttpUrl(picture)) {
         void deleteCachedProfileAvatar(currentNpub);
       }
 

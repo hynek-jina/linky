@@ -17,6 +17,7 @@ import {
 } from "../../nostrStatus";
 import { getBestNostrName } from "../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../utils/nostrNpub";
+import { isHttpUrl } from "../../utils/validation";
 import type { ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -207,6 +208,14 @@ export const useContactsNostrPrefetchEffects = <
       for (const npub of uniqueNpubs) {
         if (nostrPictureByNpub[npub] !== undefined) continue;
 
+        const cached = loadCachedProfilePicture(npub);
+        if (cached) {
+          setNostrPictureByNpub((prev) =>
+            prev[npub] !== undefined ? prev : { ...prev, [npub]: cached.url },
+          );
+          if (cached.url === null || !isHttpUrl(cached.url)) continue;
+        }
+
         try {
           const blobUrl = await loadCachedProfileAvatarObjectUrl(npub);
           if (cancelled) return;
@@ -219,14 +228,6 @@ export const useContactsNostrPrefetchEffects = <
           }
         } catch {
           // ignore
-        }
-
-        const cached = loadCachedProfilePicture(npub);
-        if (cached) {
-          setNostrPictureByNpub((prev) =>
-            prev[npub] !== undefined ? prev : { ...prev, [npub]: cached.url },
-          );
-          continue;
         }
 
         if (nostrInFlight.current.has(npub)) continue;
