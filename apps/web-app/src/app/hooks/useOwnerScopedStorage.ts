@@ -17,6 +17,7 @@ import {
   createLocalPaymentTelemetryEvent,
   normalizePaymentTelemetryStatus,
 } from "../lib/paymentTelemetry";
+import { isUnknownContactId } from "./messages/contactIdentity";
 import type {
   LocalPaymentEvent,
   LocalPaymentTelemetryEvent,
@@ -143,6 +144,7 @@ const buildTransactionInsertPayload = (args: {
   };
 
   const contactId = String(args.event.contactId ?? "").trim();
+  const storedContactId = isUnknownContactId(contactId) ? "" : contactId;
   const detailsJson = serializeJsonValue(args.event.details);
   const method = String(args.event.method ?? "").trim();
   const note = String(args.event.note ?? "").trim();
@@ -154,7 +156,7 @@ const buildTransactionInsertPayload = (args: {
   if (mint) payload.mint = mint;
   if (unit) payload.unit = unit;
   if (error) payload.error = error.slice(0, 1000);
-  if (contactId) payload.contactId = contactId;
+  if (storedContactId) payload.contactId = storedContactId;
   if (detailsJson) payload.detailsJson = detailsJson;
   if (method) payload.method = method;
   if (note) payload.note = note.slice(0, 1000);
