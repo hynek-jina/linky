@@ -1,7 +1,10 @@
 import { bech32 } from "@scure/base";
+import { isNativePlatform } from "./platform/runtime";
 import type { JsonRecord, JsonValue } from "./types/json";
 import { fetchJson } from "./utils/http";
 import { asNonEmptyString } from "./utils/validation";
+
+const HOSTED_APP_ORIGIN = "https://app.linky.fit";
 
 type LnurlPayRequest = {
   callback?: string;
@@ -308,13 +311,20 @@ const getLnurlpUrlFromLightningAddress = (lightningAddress: string): string => {
   return `https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`;
 };
 
+const getLnurlProxyUrl = (url: string): string => {
+  const proxyPath = `/api/lnurlp?url=${encodeURIComponent(url)}`;
+  if (isNativePlatform()) {
+    return `${HOSTED_APP_ORIGIN}${proxyPath}`;
+  }
+  return proxyPath;
+};
+
 const fetchLnurlJson = async (url: string): Promise<JsonValue> => {
   try {
     return await fetchJson<JsonValue>(url);
   } catch (error) {
     if (typeof window === "undefined") throw error;
-    const proxyUrl = `/api/lnurlp?url=${encodeURIComponent(url)}`;
-    return await fetchJson<JsonValue>(proxyUrl);
+    return await fetchJson<JsonValue>(getLnurlProxyUrl(url));
   }
 };
 
