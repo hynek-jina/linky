@@ -54,6 +54,15 @@ describe("buildPaymentFailureAmountAttempts", () => {
       ),
     ).toEqual([149, 148, 147, 145, 142, 137, 129]);
   });
+
+  it("keeps a valid one-sat retry for tiny melt input-fee shortages", () => {
+    expect(
+      buildPaymentFailureAmountAttempts(
+        2,
+        "MintOperationError: not enough inputs provided for melt. Provided: 2, needed: 3",
+      ),
+    ).toEqual([1]);
+  });
 });
 
 describe("isRetryablePaymentAmountFailure", () => {

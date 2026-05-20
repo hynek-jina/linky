@@ -225,7 +225,6 @@ import {
   buildPaymentAmountAttempts,
   buildPaymentFailureAmountAttempts,
   getPaymentAmountReserveCap,
-  getPaymentAmountShortage,
   isRetryablePaymentAmountFailure,
 } from "./lib/paymentAmountFallback";
 import {
@@ -5244,19 +5243,13 @@ export const useAppShellComposition = () => {
               queuedAmountAttempts.length < MAX_AMOUNT_ATTEMPTS
             ) {
               // Prefer stepping by the exact shortage the mint reported
-              // (`need X, have Y`) — that's strictly forward progress on
-              // borderline balances. Fall back to the multi-step fee
-              // schedule from buildPaymentFailureAmountAttempts only if
-              // the error didn't carry a parseable shortage hint.
-              const shortage = getPaymentAmountShortage(errorMessage);
-              const explicitNext =
-                shortage !== null && shortage > 0
-                  ? amountSat - shortage - 1
-                  : null;
-              const candidates =
-                explicitNext !== null && explicitNext > 0
-                  ? [explicitNext]
-                  : buildPaymentFailureAmountAttempts(amountSat, errorMessage);
+              // (`need X, have Y`), then fall back through the fee ladder.
+              // For tiny balances this matters: 2 sats with a 1-sat input
+              // fee should retry 1 sat, not drop straight to 0.
+              const candidates = buildPaymentFailureAmountAttempts(
+                amountSat,
+                errorMessage,
+              );
               for (const retryAmount of candidates) {
                 if (seenAmountAttempts.has(retryAmount)) continue;
                 seenAmountAttempts.add(retryAmount);
