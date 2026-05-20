@@ -233,7 +233,8 @@ export const meltInvoiceWithTokensAtMint = async (args: {
     const quote = await wallet.createMeltQuote(invoice);
     const paidAmount = quote.amount ?? 0;
     const feeReserve = quote.fee_reserve ?? 0;
-    const quotedTotal = paidAmount + feeReserve;
+    const inputFee = wallet.getFeesForProofs(spendableProofs);
+    const quotedTotal = paidAmount + feeReserve + inputFee;
 
     // Standard NUT-05 / NUT-08 melt: hand wallet.meltProofs the spendable
     // proofs as-is (sum >= quote.amount + quote.fee_reserve) and let the
