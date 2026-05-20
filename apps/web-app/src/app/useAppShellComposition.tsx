@@ -1297,16 +1297,6 @@ export const useAppShellComposition = () => {
     }
   }, [appOwnerId, makeLocalStorageKey]);
 
-  const resolveOwnerIdForWrite = React.useCallback(async () => {
-    if (cashuOwnerIdRef.current) return cashuOwnerIdRef.current;
-    try {
-      const owner = await evolu.appOwner;
-      return owner?.id ?? null;
-    } catch {
-      return null;
-    }
-  }, []);
-
   // Evolu error subscription handled by useEvoluLastError.
 
   const [evoluWipeStorageIsBusy, setEvoluWipeStorageIsBusy] =
@@ -1754,6 +1744,17 @@ export const useAppShellComposition = () => {
     cashuOwnerIdRef.current = cashuOwnerId;
   }, [cashuOwnerId]);
 
+  const resolveOwnerIdForWrite = React.useCallback(async () => {
+    if (cashuOwnerIdRef.current) return cashuOwnerIdRef.current;
+    if (isSeedLogin) return null;
+    try {
+      const owner = await evolu.appOwner;
+      return owner?.id ?? null;
+    } catch {
+      return null;
+    }
+  }, [isSeedLogin]);
+
   React.useEffect(() => {
     messagesOwnerIdRef.current = messagesOwnerId;
   }, [messagesOwnerId]);
@@ -2068,8 +2069,6 @@ export const useAppShellComposition = () => {
       if (!rowId) continue;
       if (migratedMisplacedCashuTokenIdsRef.current.has(rowId)) continue;
 
-      migratedMisplacedCashuTokenIdsRef.current.add(rowId);
-
       if (!hasActiveDuplicate(row)) {
         const token = String(row.token ?? row.rawToken ?? "").trim();
         const rawToken = String(row.rawToken ?? "").trim();
@@ -2111,9 +2110,14 @@ export const useAppShellComposition = () => {
             payload.error = error as typeof Evolu.NonEmptyString1000.Type;
           }
 
-          insert("cashuToken", payload, { ownerId: cashuOwnerId });
+          const insertResult = insert("cashuToken", payload, {
+            ownerId: cashuOwnerId,
+          });
+          if (!insertResult.ok) continue;
         }
       }
+
+      migratedMisplacedCashuTokenIdsRef.current.add(rowId);
 
       update(
         "cashuToken",

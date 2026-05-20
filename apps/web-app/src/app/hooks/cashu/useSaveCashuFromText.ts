@@ -11,6 +11,7 @@ import type {
   OptionalNumber,
   OptionalText,
 } from "../../types/appTypes";
+import { isUnknownContactId } from "../messages/contactIdentity";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -147,11 +148,26 @@ export const useSaveCashuFromText = ({
       const parsedMint = parsed?.mint?.trim() ? parsed.mint.trim() : null;
       const parsedAmount =
         parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
+      const optionContactId = String(options?.contactId ?? "").trim();
+      const unknownContactId = isUnknownContactId(optionContactId)
+        ? optionContactId
+        : null;
+      const paymentContactId = unknownContactId
+        ? null
+        : optionContactId || null;
 
       await enqueueCashuOp(async () => {
         setCashuIsBusy(true);
         try {
           const ownerId = await resolveOwnerIdForWrite();
+          if (!ownerId) {
+            setStatus(`${t("errorPrefix")}: Cashu storage is not ready`);
+            return;
+          }
+          if (isCashuTokenStored(tokenRaw)) {
+            setStatus(t("cashuExists"));
+            return;
+          }
 
           const accepted = await acceptCashuToken(tokenRaw);
           const acceptedToken = String(accepted.token ?? "").trim();
@@ -169,32 +185,19 @@ export const useSaveCashuFromText = ({
             return;
           }
 
-          const result = ownerId
-            ? insert(
-                "cashuToken",
-                buildCashuTokenPayload({
-                  token: acceptedToken,
-                  rawToken: tokenRaw,
-                  mint: String(accepted.mint ?? ""),
-                  unit: accepted.unit,
-                  amount: accepted.amount > 0 ? accepted.amount : null,
-                  state: "accepted",
-                  error: null,
-                }),
-                { ownerId },
-              )
-            : insert(
-                "cashuToken",
-                buildCashuTokenPayload({
-                  token: acceptedToken,
-                  rawToken: tokenRaw,
-                  mint: String(accepted.mint ?? ""),
-                  unit: accepted.unit,
-                  amount: accepted.amount > 0 ? accepted.amount : null,
-                  state: "accepted",
-                  error: null,
-                }),
-              );
+          const result = insert(
+            "cashuToken",
+            buildCashuTokenPayload({
+              token: acceptedToken,
+              rawToken: tokenRaw,
+              mint: String(accepted.mint ?? ""),
+              unit: accepted.unit,
+              amount: accepted.amount > 0 ? accepted.amount : null,
+              state: "accepted",
+              error: null,
+            }),
+            { ownerId },
+          );
           if (!result.ok) {
             setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
             return;
@@ -247,10 +250,11 @@ export const useSaveCashuFromText = ({
             direction: "in",
             status: "ok",
             amount: accepted.amount,
-            contactId: options?.contactId ?? null,
+            contactId: paymentContactId,
             details: {
               acceptedToken,
               rawToken: tokenRaw,
+              ...(unknownContactId ? { unknownContactId } : {}),
               ...(options?.requestId ? { requestId: options.requestId } : {}),
             },
             fee: null,
@@ -288,9 +292,10 @@ export const useSaveCashuFromText = ({
             direction: "in",
             status: "error",
             amount: parsedAmount,
-            contactId: options?.contactId ?? null,
+            contactId: paymentContactId,
             details: {
               rawToken: tokenRaw,
+              ...(unknownContactId ? { unknownContactId } : {}),
               ...(options?.requestId ? { requestId: options.requestId } : {}),
             },
             fee: null,
@@ -301,34 +306,23 @@ export const useSaveCashuFromText = ({
             phase: "receive",
           });
           const ownerId = await resolveOwnerIdForWrite();
-          const result = ownerId
-            ? insert(
-                "cashuToken",
-                buildCashuTokenPayload({
-                  token: tokenRaw,
-                  rawToken: tokenRaw,
-                  mint: parsedMint,
-                  unit: null,
-                  amount:
-                    typeof parsedAmount === "number" ? parsedAmount : null,
-                  state: "error",
-                  error: message,
-                }),
-                { ownerId },
-              )
-            : insert(
-                "cashuToken",
-                buildCashuTokenPayload({
-                  token: tokenRaw,
-                  rawToken: tokenRaw,
-                  mint: parsedMint,
-                  unit: null,
-                  amount:
-                    typeof parsedAmount === "number" ? parsedAmount : null,
-                  state: "error",
-                  error: message,
-                }),
-              );
+          if (!ownerId) {
+            setStatus(`${t("cashuAcceptFailed")}: ${message}`);
+            return;
+          }
+          const result = insert(
+            "cashuToken",
+            buildCashuTokenPayload({
+              token: tokenRaw,
+              rawToken: tokenRaw,
+              mint: parsedMint,
+              unit: null,
+              amount: typeof parsedAmount === "number" ? parsedAmount : null,
+              state: "error",
+              error: message,
+            }),
+            { ownerId },
+          );
           if (result.ok) {
             setStatus(`${t("cashuAcceptFailed")}: ${message}`);
           } else {

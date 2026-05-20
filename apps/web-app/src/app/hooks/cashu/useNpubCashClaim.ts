@@ -154,35 +154,26 @@ export const useNpubCashClaim = ({
           if (alreadyStored) return;
 
           const ownerId = await resolveOwnerIdForWrite();
+          if (!ownerId) {
+            setStatus(`${t("errorPrefix")}: Cashu storage is not ready`);
+            return;
+          }
 
           const accepted = await acceptCashuToken(tokenRaw);
 
-          const result = ownerId
-            ? insert(
-                "cashuToken",
-                buildCashuTokenPayload({
-                  token: String(accepted.token ?? ""),
-                  rawToken: tokenRaw,
-                  mint: String(accepted.mint ?? ""),
-                  unit: accepted.unit,
-                  amount: accepted.amount > 0 ? accepted.amount : null,
-                  state: "accepted",
-                  error: null,
-                }),
-                { ownerId },
-              )
-            : insert(
-                "cashuToken",
-                buildCashuTokenPayload({
-                  token: String(accepted.token ?? ""),
-                  rawToken: tokenRaw,
-                  mint: String(accepted.mint ?? ""),
-                  unit: accepted.unit,
-                  amount: accepted.amount > 0 ? accepted.amount : null,
-                  state: "accepted",
-                  error: null,
-                }),
-              );
+          const result = insert(
+            "cashuToken",
+            buildCashuTokenPayload({
+              token: String(accepted.token ?? ""),
+              rawToken: tokenRaw,
+              mint: String(accepted.mint ?? ""),
+              unit: accepted.unit,
+              amount: accepted.amount > 0 ? accepted.amount : null,
+              state: "accepted",
+              error: null,
+            }),
+            { ownerId },
+          );
           if (!result.ok) {
             setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
             return;
@@ -307,19 +298,6 @@ export const useNpubCashClaim = ({
               }),
               { ownerId },
             );
-          } else {
-            insert(
-              "cashuToken",
-              buildCashuTokenPayload({
-                token: tokenRaw,
-                rawToken: tokenRaw,
-                mint: parsedMint,
-                unit: null,
-                amount: typeof parsedAmount === "number" ? parsedAmount : null,
-                state: "error",
-                error: message,
-              }),
-            );
           }
           setStatus(`${t("cashuAcceptFailed")}: ${message}`);
         } finally {
@@ -359,6 +337,7 @@ export const useNpubCashClaim = ({
     if (!currentNpub) return;
     if (!currentNsec) return;
     if (npubCashClaimInFlightRef.current) return;
+    if (!(await resolveOwnerIdForWrite())) return;
 
     npubCashClaimInFlightRef.current = true;
     const baseUrl = "https://npub.cash";
@@ -402,6 +381,7 @@ export const useNpubCashClaim = ({
     currentNsec,
     makeNip98AuthHeader,
     npubCashClaimInFlightRef,
+    resolveOwnerIdForWrite,
   ]);
 
   const claimNpubCashOnceLatestRef = React.useRef(claimNpubCashOnce);
