@@ -86,29 +86,32 @@ export const useCashuTokenChecks = ({
   t,
   update,
 }: UseCashuTokenChecksParams) => {
-  // Wallet cache shared by the issued-claim helpers (bulk + single-token).
-  // `createLoadedCashuWallet` does loadMint() = GET /v1/info + /v1/keysets
-  // + /v1/keys/<id> internally; without caching, the background 60s tick,
-  // the 10s detail-page poll, and the on-mount auto-check each pay that
-  // 3-call tax on every tick. Keyed by `${mintUrl}|${unit}`; cleared on
-  // hook unmount (logout / shell teardown).
+  // Hook-level wallet cache shared by ALL check paths: bulk
+  // `checkAllCashuTokensAndDeleteInvalid`, single-token
+  // `checkAndRefreshCashuToken`, issued-claim bulk +
+  // single-token. `createLoadedCashuWallet` does
+  // loadMint() = GET /v1/info + /v1/keysets + /v1/keys/<id> internally;
+  // without caching, every retry / interval pays that 3-call tax. Keyed
+  // by `${mintUrl}|${unit}`; cleared on hook unmount (logout / shell
+  // teardown). Wallets are read-only here (NUT-07 checkstate / metadata
+  // for token decode), so sharing across operations is safe.
   type LoadedCashuWallet = Awaited<ReturnType<typeof createLoadedCashuWallet>>;
-  const issuedClaimWalletCacheRef = React.useRef<
-    Map<string, LoadedCashuWallet>
-  >(new Map());
+  const cashuWalletCacheRef = React.useRef<Map<string, LoadedCashuWallet>>(
+    new Map(),
+  );
   React.useEffect(() => {
-    const cache = issuedClaimWalletCacheRef.current;
+    const cache = cashuWalletCacheRef.current;
     return () => {
       cache.clear();
     };
   }, []);
-  const loadIssuedClaimWallet = React.useCallback(
+  const loadCachedCashuWallet = React.useCallback(
     async (args: {
       mintUrl: string;
       unit: string;
     }): Promise<LoadedCashuWallet> => {
       const key = `${args.mintUrl}|${args.unit}`;
-      const cached = issuedClaimWalletCacheRef.current.get(key);
+      const cached = cashuWalletCacheRef.current.get(key);
       if (cached) return cached;
       const { CashuMint, CashuWallet } = await getCashuLib();
       const det = getCashuDeterministicSeedFromStorage();
@@ -119,7 +122,7 @@ export const useCashuTokenChecks = ({
         unit: args.unit,
         ...(det ? { bip39seed: det.bip39seed } : {}),
       });
-      issuedClaimWalletCacheRef.current.set(key, wallet);
+      cashuWalletCacheRef.current.set(key, wallet);
       return wallet;
     },
     [],
@@ -342,13 +345,8 @@ export const useCashuTokenChecks = ({
           }
         }
 
-        const {
-          CashuMint,
-          CashuWallet,
-          getDecodedToken,
-          getEncodedToken,
-          getTokenMetadata,
-        } = await getCashuLib();
+        const { getDecodedToken, getEncodedToken, getTokenMetadata } =
+          await getCashuLib();
 
         const tokenMetadata = getTokenMetadata(tokenText);
         const mint = String(tokenMetadata.mint ?? primaryRow.mint ?? "").trim();
@@ -356,14 +354,7 @@ export const useCashuTokenChecks = ({
 
         const unit =
           String(tokenMetadata.unit ?? primaryRow.unit ?? "").trim() || "sat";
-        const det = getCashuDeterministicSeedFromStorage();
-        const wallet = await createLoadedCashuWallet({
-          CashuMint,
-          CashuWallet,
-          mintUrl: mint,
-          ...(unit ? { unit } : {}),
-          ...(det ? { bip39seed: det.bip39seed } : {}),
-        });
+        const wallet = await loadCachedCashuWallet({ mintUrl: mint, unit });
 
         const decoded = decodeCashuTokenForMint({
           tokenText,
@@ -637,7 +628,15 @@ export const useCashuTokenChecks = ({
         }
       }
     },
-    [cashuIsBusy, pushToast, setCashuIsBusy, setStatus, t, updateCashuToken],
+    [
+      cashuIsBusy,
+      loadCachedCashuWallet,
+      pushToast,
+      setCashuIsBusy,
+      setStatus,
+      t,
+      updateCashuToken,
+    ],
   );
 
   const checkAndRefreshCashuToken = React.useCallback(
@@ -804,7 +803,7 @@ export const useCashuTokenChecks = ({
         for (const group of groups.values()) {
           let wallet: LoadedCashuWallet;
           try {
-            wallet = await loadIssuedClaimWallet({
+            wallet = await loadCachedCashuWallet({
               mintUrl: group.mintUrl,
               unit: group.unit,
             });
@@ -889,7 +888,7 @@ export const useCashuTokenChecks = ({
       }
 
       return { checked: checkedCount, claimed };
-    }, [cashuTokensAll, loadIssuedClaimWallet, updateCashuToken]);
+    }, [cashuTokensAll, loadCachedCashuWallet, updateCashuToken]);
 
   // Same NUT-07 check as the bulk variant but scoped to a single issued
   // token row — used by the issued-token detail page to poll while the
@@ -913,7 +912,7 @@ export const useCashuTokenChecks = ({
 
       let wallet: LoadedCashuWallet;
       try {
-        wallet = await loadIssuedClaimWallet({ mintUrl, unit });
+        wallet = await loadCachedCashuWallet({ mintUrl, unit });
       } catch {
         return false;
       }
@@ -965,7 +964,7 @@ export const useCashuTokenChecks = ({
       });
       return result.ok;
     },
-    [cashuTokensAll, loadIssuedClaimWallet, updateCashuToken],
+    [cashuTokensAll, loadCachedCashuWallet, updateCashuToken],
   );
 
   return {
