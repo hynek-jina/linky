@@ -3785,13 +3785,43 @@ export const useAppShellComposition = () => {
   React.useEffect(() => {
     checkIssuedCashuTokensRef.current = checkIssuedCashuTokensAndDeleteClaimed;
   }, [checkIssuedCashuTokensAndDeleteClaimed]);
+  const formatDisplayedAmountTextRef = React.useRef(formatDisplayedAmountText);
+  React.useEffect(() => {
+    formatDisplayedAmountTextRef.current = formatDisplayedAmountText;
+  }, [formatDisplayedAmountText]);
+  const pushToastRef = React.useRef(pushToast);
+  React.useEffect(() => {
+    pushToastRef.current = pushToast;
+  }, [pushToast]);
+  const claimToastTRef = React.useRef(t);
+  React.useEffect(() => {
+    claimToastTRef.current = t;
+  }, [t]);
   React.useEffect(() => {
     if (!hasAnyIssuedTokensForBackgroundCheck) return;
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
       try {
-        await checkIssuedCashuTokensRef.current();
+        const outcome = await checkIssuedCashuTokensRef.current();
+        if (cancelled) return;
+        if (outcome.claimed.length === 0) return;
+        // Background detection — surface a toast so the user knows the
+        // issued token was redeemed even when they aren't on the QR
+        // screen (the CashuTokenPage poll handles the in-page UX with a
+        // checkmark overlay).
+        const formatter = formatDisplayedAmountTextRef.current;
+        const tt = claimToastTRef.current;
+        for (const entry of outcome.claimed) {
+          const message =
+            entry.amount > 0
+              ? tt("cashuTokenClaimedWithAmount").replace(
+                  "{amount}",
+                  formatter(entry.amount),
+                )
+              : tt("cashuTokenClaimed");
+          pushToastRef.current(message);
+        }
       } catch {
         // ignore — the helper already swallows mint-side errors.
       }
@@ -6145,6 +6175,7 @@ export const useAppShellComposition = () => {
       checkAndRefreshCashuToken,
       checkIssuedCashuTokensAndDeleteClaimed,
       checkSingleIssuedCashuTokenIsClaimed,
+      showPaidOverlay,
       copyText,
       currentNpub,
       displayUnit,

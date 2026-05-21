@@ -86,6 +86,45 @@ export const useCashuTokenChecks = ({
   t,
   update,
 }: UseCashuTokenChecksParams) => {
+  // Wallet cache shared by the issued-claim helpers (bulk + single-token).
+  // `createLoadedCashuWallet` does loadMint() = GET /v1/info + /v1/keysets
+  // + /v1/keys/<id> internally; without caching, the background 60s tick,
+  // the 10s detail-page poll, and the on-mount auto-check each pay that
+  // 3-call tax on every tick. Keyed by `${mintUrl}|${unit}`; cleared on
+  // hook unmount (logout / shell teardown).
+  type LoadedCashuWallet = Awaited<ReturnType<typeof createLoadedCashuWallet>>;
+  const issuedClaimWalletCacheRef = React.useRef<
+    Map<string, LoadedCashuWallet>
+  >(new Map());
+  React.useEffect(() => {
+    const cache = issuedClaimWalletCacheRef.current;
+    return () => {
+      cache.clear();
+    };
+  }, []);
+  const loadIssuedClaimWallet = React.useCallback(
+    async (args: {
+      mintUrl: string;
+      unit: string;
+    }): Promise<LoadedCashuWallet> => {
+      const key = `${args.mintUrl}|${args.unit}`;
+      const cached = issuedClaimWalletCacheRef.current.get(key);
+      if (cached) return cached;
+      const { CashuMint, CashuWallet } = await getCashuLib();
+      const det = getCashuDeterministicSeedFromStorage();
+      const wallet = await createLoadedCashuWallet({
+        CashuMint,
+        CashuWallet,
+        mintUrl: args.mintUrl,
+        unit: args.unit,
+        ...(det ? { bip39seed: det.bip39seed } : {}),
+      });
+      issuedClaimWalletCacheRef.current.set(key, wallet);
+      return wallet;
+    },
+    [],
+  );
+
   const updateCashuToken = React.useCallback(
     function (
       payload: CashuTokenUpdatePayload,
@@ -709,9 +748,9 @@ export const useCashuTokenChecks = ({
   const checkIssuedCashuTokensAndDeleteClaimed =
     React.useCallback(async (): Promise<{
       checked: number;
-      claimed: number;
+      claimed: Array<{ id: CashuTokenId; amount: number }>;
     }> => {
-      if (checkIssuedInFlightRef.current) return { checked: 0, claimed: 0 };
+      if (checkIssuedInFlightRef.current) return { checked: 0, claimed: [] };
 
       // Group issued tokens by source mint+unit so each group needs only
       // one wallet load + one /v1/checkstate round-trip.
@@ -728,9 +767,7 @@ export const useCashuTokenChecks = ({
         }
       >();
 
-      const { CashuMint, CashuWallet, getDecodedToken, getTokenMetadata } =
-        await getCashuLib();
-      const det = getCashuDeterministicSeedFromStorage();
+      const { getDecodedToken, getTokenMetadata } = await getCashuLib();
 
       for (const row of cashuTokensAll) {
         if (row?.isDeleted) continue;
@@ -757,22 +794,19 @@ export const useCashuTokenChecks = ({
         group.tokens.push({ id, proofs: [], tokenText });
       }
 
-      if (groups.size === 0) return { checked: 0, claimed: 0 };
+      if (groups.size === 0) return { checked: 0, claimed: [] };
 
       checkIssuedInFlightRef.current = true;
       let checkedCount = 0;
-      let claimedCount = 0;
+      const claimed: Array<{ id: CashuTokenId; amount: number }> = [];
 
       try {
         for (const group of groups.values()) {
-          let wallet: Awaited<ReturnType<typeof createLoadedCashuWallet>>;
+          let wallet: LoadedCashuWallet;
           try {
-            wallet = await createLoadedCashuWallet({
-              CashuMint,
-              CashuWallet,
+            wallet = await loadIssuedClaimWallet({
               mintUrl: group.mintUrl,
               unit: group.unit,
-              ...(det ? { bip39seed: det.bip39seed } : {}),
             });
           } catch {
             // Mint unreachable — leave the group untouched, the user can
@@ -835,19 +869,27 @@ export const useCashuTokenChecks = ({
 
           for (const id of partition.fullySpentIds) {
             if (!id) continue;
+            const sourceRow = cashuTokensAll.find(
+              (entry) => String(entry?.id ?? "") === String(id),
+            );
+            const amountRaw = Number(sourceRow?.amount ?? 0);
+            const amount =
+              Number.isFinite(amountRaw) && amountRaw > 0
+                ? Math.trunc(amountRaw)
+                : 0;
             const result = updateCashuToken({
               id,
               isDeleted: Evolu.sqliteTrue,
             });
-            if (result.ok) claimedCount += 1;
+            if (result.ok) claimed.push({ id, amount });
           }
         }
       } finally {
         checkIssuedInFlightRef.current = false;
       }
 
-      return { checked: checkedCount, claimed: claimedCount };
-    }, [cashuTokensAll, updateCashuToken]);
+      return { checked: checkedCount, claimed };
+    }, [cashuTokensAll, loadIssuedClaimWallet, updateCashuToken]);
 
   // Same NUT-07 check as the bulk variant but scoped to a single issued
   // token row — used by the issued-token detail page to poll while the
@@ -869,17 +911,9 @@ export const useCashuTokenChecks = ({
       if (!mintUrl) return false;
       const unit = String(row.unit ?? "").trim() || "sat";
 
-      let wallet: Awaited<ReturnType<typeof createLoadedCashuWallet>>;
+      let wallet: LoadedCashuWallet;
       try {
-        const { CashuMint, CashuWallet } = await getCashuLib();
-        const det = getCashuDeterministicSeedFromStorage();
-        wallet = await createLoadedCashuWallet({
-          CashuMint,
-          CashuWallet,
-          mintUrl,
-          unit,
-          ...(det ? { bip39seed: det.bip39seed } : {}),
-        });
+        wallet = await loadIssuedClaimWallet({ mintUrl, unit });
       } catch {
         return false;
       }
@@ -931,7 +965,7 @@ export const useCashuTokenChecks = ({
       });
       return result.ok;
     },
-    [cashuTokensAll, updateCashuToken],
+    [cashuTokensAll, loadIssuedClaimWallet, updateCashuToken],
   );
 
   return {

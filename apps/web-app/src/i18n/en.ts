@@ -638,6 +638,8 @@ export const en = {
 
   // Locale-specific strings
   paid: "Paid",
+  cashuTokenClaimed: "Token claimed",
+  cashuTokenClaimedWithAmount: "Your token of {amount} has been claimed",
   conversations: "Conversations",
   otherContacts: "Other contacts",
   today: "Today",

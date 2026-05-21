@@ -645,6 +645,8 @@ export const cs = {
 
   // Locale-specific strings
   paid: "Zaplaceno",
+  cashuTokenClaimed: "Token byl využit",
+  cashuTokenClaimedWithAmount: "Tvůj token za {amount} byl využit",
   conversations: "Konverzace",
   otherContacts: "Ostatní kontakty",
   today: "Dnes",

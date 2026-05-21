@@ -35,6 +35,7 @@ interface CashuTokenPageProps {
   returnCashuTokenToWallet: (id: CashuTokenId) => Promise<void>;
   routeId: CashuTokenId;
   shareTokenText: (id: CashuTokenId, text: string) => Promise<void>;
+  showPaidOverlay: (title?: string) => void;
   startSendCashuTokenToContact: (id: CashuTokenId) => Promise<void>;
   t: (key: string) => string;
   writeToNfc: (id: CashuTokenId, tokenText: string) => Promise<void>;
@@ -54,6 +55,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   returnCashuTokenToWallet,
   routeId,
   shareTokenText,
+  showPaidOverlay,
   startSendCashuTokenToContact,
   t,
   writeToNfc,
@@ -169,6 +171,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
       try {
         const claimed = await checkSingleIssuedRef.current(routeId);
         if (claimed && !cancelled) {
+          showPaidOverlay(t("cashuTokenClaimed"));
           navigateTo({ route: "cashuTokens" });
         }
       } finally {
@@ -183,7 +186,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isIssued, navigateTo, routeId]);
+  }, [isIssued, navigateTo, routeId, showPaidOverlay, t]);
 
   // If the row vanished after we had loaded it once (claim detector,
   // manual delete, etc.), bounce back to the tokens list instead of

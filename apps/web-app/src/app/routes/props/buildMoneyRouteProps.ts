@@ -30,6 +30,9 @@ interface BuildMoneyRoutePropsParams {
   checkSingleIssuedCashuTokenIsClaimed: ReturnType<
     MoneyRoutesProps["cashuTokenProps"]
   >["checkSingleIssuedCashuTokenIsClaimed"];
+  showPaidOverlay: ReturnType<
+    MoneyRoutesProps["cashuTokenProps"]
+  >["showPaidOverlay"];
   copyText: ReturnType<MoneyRoutesProps["cashuTokenProps"]>["copyText"];
   currentNpub: MoneyRoutesProps["topupProps"]["currentNpub"];
   displayUnit: MoneyRoutesProps["lnAddressPayProps"]["displayUnit"];
@@ -106,6 +109,7 @@ export const buildMoneyRouteProps = ({
   checkAndRefreshCashuToken,
   checkIssuedCashuTokensAndDeleteClaimed,
   checkSingleIssuedCashuTokenIsClaimed,
+  showPaidOverlay,
   copyText,
   currentNpub,
   displayUnit,
@@ -194,6 +198,7 @@ export const buildMoneyRouteProps = ({
         pendingCashuDeleteId,
         checkAndRefreshCashuToken,
         checkSingleIssuedCashuTokenIsClaimed,
+        showPaidOverlay,
         copyText,
         reserveCashuToken,
         requestDeleteCashuToken,

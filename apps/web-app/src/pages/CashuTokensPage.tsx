@@ -21,7 +21,7 @@ interface CashuTokensPageProps {
   checkAllCashuTokensAndDeleteInvalid: () => Promise<void>;
   checkIssuedCashuTokensAndDeleteClaimed: () => Promise<{
     checked: number;
-    claimed: number;
+    claimed: ReadonlyArray<{ id: CashuTokenId; amount: number }>;
   }>;
   getMintIconUrl: (mint: MintUrlInput) => {
     origin: string | null;
