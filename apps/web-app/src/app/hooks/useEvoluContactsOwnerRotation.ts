@@ -25,6 +25,11 @@ import {
   TRANSACTIONS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
 } from "../../utils/constants";
 import { deriveEvoluOwnerMnemonicFromSlip39 } from "../../utils/slip39Nostr";
+import {
+  decodeRotationSnapshot,
+  encodeRotationSnapshot,
+  type RotationSnapshot,
+} from "../lib/rotationSnapshot";
 import type { CashuTokenRowLike, ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -163,64 +168,20 @@ const scoreCashuToken = (token: CashuTokenRowLike): number => {
   return score;
 };
 
-const parseContactsOwnerIndexFromPointer = (value: unknown): number | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  const match = /^contacts-(\d+)$/.exec(trimmed);
-  if (!match) return null;
-  const parsed = Number(match[1]);
-  if (!Number.isFinite(parsed)) return null;
-  if (parsed < 0) return null;
-  return Math.trunc(parsed);
-};
-
-const parseCashuOwnerIndexFromPointer = (value: unknown): number | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  const match = /^cashu-(\d+)$/.exec(trimmed);
-  if (!match) return null;
-  const parsed = Number(match[1]);
-  if (!Number.isFinite(parsed)) return null;
-  if (parsed < 0) return null;
-  return Math.trunc(parsed);
-};
-
-const parseMessagesOwnerIndexFromPointer = (value: unknown): number | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  const match = /^messages-(\d+)$/.exec(trimmed);
-  if (!match) return null;
-  const parsed = Number(match[1]);
-  if (!Number.isFinite(parsed)) return null;
-  if (parsed < 0) return null;
-  return Math.trunc(parsed);
-};
-
-const parseTransactionsOwnerIndexFromPointer = (
-  value: unknown,
-): number | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  const match = /^transactions-(\d+)$/.exec(trimmed);
-  if (!match) return null;
-  const parsed = Number(match[1]);
-  if (!Number.isFinite(parsed)) return null;
-  if (parsed < 0) return null;
-  return Math.trunc(parsed);
-};
-
-const upsertOwnerMetaPointer = (
+const upsertOwnerMetaSnapshot = (
   upsert: EvoluMutations["upsert"],
   ownerId: Evolu.OwnerId,
   scope: "cashu" | "contacts" | "messages" | "transactions",
-  value: string,
+  snapshot: RotationSnapshot,
 ) =>
   upsert(
     "ownerMeta",
     {
       id: createMetaPointerRowId(scope),
       scope: scope as typeof Evolu.NonEmptyString100.Type,
-      value: value as typeof Evolu.NonEmptyString1000.Type,
+      value: encodeRotationSnapshot(
+        snapshot,
+      ) as typeof Evolu.NonEmptyString1000.Type,
     },
     { ownerId },
   );
@@ -880,10 +841,9 @@ export const useEvoluContactsOwnerRotation = ({
     const metaOwnerId = String(ownerSyncData.metaOwner.id).trim();
     if (!metaOwnerId) return;
 
-    let resolvedContactsIndex: number | null = null;
-    let resolvedCashuIndex: number | null = null;
-    let resolvedMessagesIndex: number | null = null;
-    let resolvedTransactionsIndex: number | null = null;
+    let contactsSnap: RotationSnapshot | null = null;
+    let messagesSnap: RotationSnapshot | null = null;
+    let transactionsSnap: RotationSnapshot | null = null;
     for (const row of ownerMetaRows) {
       if (readRowOwnerId(row) !== metaOwnerId) continue;
       const scope =
@@ -891,66 +851,125 @@ export const useEvoluContactsOwnerRotation = ({
           ? row.scope
           : null;
       const scopeText = typeof scope === "string" ? scope.trim() : "";
+      const rawValue = readRowPointerValue(row);
       if (scopeText === "contacts") {
-        const parsed = parseContactsOwnerIndexFromPointer(
-          readRowPointerValue(row),
-        );
-        if (parsed !== null) resolvedContactsIndex = parsed;
-      }
-      if (scopeText === "cashu") {
-        const parsed = parseCashuOwnerIndexFromPointer(
-          readRowPointerValue(row),
-        );
-        if (parsed !== null) resolvedCashuIndex = parsed;
-      }
-      if (scopeText === "messages") {
-        const parsed = parseMessagesOwnerIndexFromPointer(
-          readRowPointerValue(row),
-        );
-        if (parsed !== null) resolvedMessagesIndex = parsed;
-      }
-      if (scopeText === "transactions") {
-        const parsed = parseTransactionsOwnerIndexFromPointer(
-          readRowPointerValue(row),
-        );
-        if (parsed !== null) resolvedTransactionsIndex = parsed;
+        const decoded = decodeRotationSnapshot(rawValue, "contacts");
+        if (decoded) contactsSnap = decoded;
+      } else if (scopeText === "messages") {
+        const decoded = decodeRotationSnapshot(rawValue, "messages");
+        if (decoded) messagesSnap = decoded;
+      } else if (scopeText === "transactions") {
+        const decoded = decodeRotationSnapshot(rawValue, "transactions");
+        if (decoded) transactionsSnap = decoded;
       }
     }
 
-    const resolvedSharedCashuContactsIndex =
-      resolvedContactsIndex ?? resolvedCashuIndex;
+    // When adopting a rotation from another device we must reset baseline +
+    // editCount + lastRotatedAt for the new index. Otherwise the adopter
+    // sees `delta = currentRowCount - 0` once Evolu sync pulls in the
+    // migrated rows and immediately re-rotates, cascading divergent owner
+    // lanes across the fleet.
+    //
+    // JSON snapshots carry the authoritative baseline values. Legacy
+    // `<scope>-N` values lose them — we fall back to baseline=0 and prime
+    // the cooldown with `now`, which matches the existing behaviour and is
+    // the best we can do without a baseline hint from the rotator.
+    const adoptIndex = (params: {
+      indexStorageKey: string;
+      baselineStorageKey: string;
+      editCountStorageKey: string;
+      lastRotatedStorageKey: string;
+      currentIndex: number;
+      nextIndex: number;
+      baseline: number | null;
+      rotatedAtMs: number | null;
+      setCurrentIndex: (next: number) => void;
+      setLocalEditCount: (next: number) => void;
+      extra?: () => void;
+    }) => {
+      const {
+        indexStorageKey,
+        baselineStorageKey,
+        editCountStorageKey,
+        lastRotatedStorageKey,
+        currentIndex,
+        nextIndex,
+        baseline,
+        rotatedAtMs,
+        setCurrentIndex,
+        setLocalEditCount,
+        extra,
+      } = params;
+      if (nextIndex === currentIndex) return;
+      setStoredIndex(indexStorageKey, nextIndex);
+      setCounterValue(baselineStorageKey, nextIndex, baseline ?? 0);
+      setCounterValue(editCountStorageKey, nextIndex, 0);
+      setLocalEditCount(0);
+      setStoredTimestampMs(lastRotatedStorageKey, rotatedAtMs ?? Date.now());
+      setCurrentIndex(nextIndex);
+      extra?.();
+    };
 
-    if (
-      resolvedSharedCashuContactsIndex !== null &&
-      resolvedSharedCashuContactsIndex !== contactsOwnerIndex
-    ) {
-      setStoredIndex(
-        EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
-        resolvedSharedCashuContactsIndex,
-      );
-      setContactsOwnerIndex(resolvedSharedCashuContactsIndex);
+    if (contactsSnap && contactsSnap.index !== contactsOwnerIndex) {
+      const snap = contactsSnap;
+      adoptIndex({
+        indexStorageKey: EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
+        baselineStorageKey: EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        editCountStorageKey: EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY,
+        lastRotatedStorageKey:
+          EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+        currentIndex: contactsOwnerIndex,
+        nextIndex: snap.index,
+        baseline: snap.baseline,
+        rotatedAtMs: snap.rotatedAtMs,
+        setCurrentIndex: setContactsOwnerIndex,
+        setLocalEditCount: setContactsOwnerEditCount,
+        // Contacts + cashu rotate together. Mirror baseline / cooldown for
+        // the cashu lane keyed by the same contacts index.
+        extra: () => {
+          setCounterValue(
+            EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
+            snap.index,
+            snap.cashuBaseline ?? 0,
+          );
+          setStoredTimestampMs(
+            EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+            snap.rotatedAtMs ?? Date.now(),
+          );
+        },
+      });
     }
 
-    if (
-      resolvedMessagesIndex !== null &&
-      resolvedMessagesIndex !== messagesOwnerIndex
-    ) {
-      setStoredIndex(
-        EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
-        resolvedMessagesIndex,
-      );
-      setMessagesOwnerIndex(resolvedMessagesIndex);
+    if (messagesSnap && messagesSnap.index !== messagesOwnerIndex) {
+      adoptIndex({
+        indexStorageKey: EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
+        baselineStorageKey: EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        editCountStorageKey: EVOLU_MESSAGES_OWNER_EDIT_COUNT_STORAGE_KEY,
+        lastRotatedStorageKey:
+          EVOLU_MESSAGES_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+        currentIndex: messagesOwnerIndex,
+        nextIndex: messagesSnap.index,
+        baseline: messagesSnap.baseline,
+        rotatedAtMs: messagesSnap.rotatedAtMs,
+        setCurrentIndex: setMessagesOwnerIndex,
+        setLocalEditCount: setMessagesOwnerEditCount,
+      });
     }
 
-    if (
-      resolvedTransactionsIndex !== null &&
-      resolvedTransactionsIndex !== transactionsOwnerIndex
-    ) {
-      setStoredIndex(
-        EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY,
-        resolvedTransactionsIndex,
-      );
-      setTransactionsOwnerIndex(resolvedTransactionsIndex);
+    if (transactionsSnap && transactionsSnap.index !== transactionsOwnerIndex) {
+      adoptIndex({
+        indexStorageKey: EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY,
+        baselineStorageKey: EVOLU_TRANSACTIONS_OWNER_BASELINE_COUNT_STORAGE_KEY,
+        editCountStorageKey: EVOLU_TRANSACTIONS_OWNER_EDIT_COUNT_STORAGE_KEY,
+        lastRotatedStorageKey:
+          EVOLU_TRANSACTIONS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+        currentIndex: transactionsOwnerIndex,
+        nextIndex: transactionsSnap.index,
+        baseline: transactionsSnap.baseline,
+        rotatedAtMs: transactionsSnap.rotatedAtMs,
+        setCurrentIndex: setTransactionsOwnerIndex,
+        setLocalEditCount: setTransactionsOwnerEditCount,
+      });
     }
   }, [
     contactsOwnerIndex,
@@ -1219,30 +1238,26 @@ export const useEvoluContactsOwnerRotation = ({
         if (result.ok) copiedCashuCount += 1;
       }
 
-      const contactsPointerResult = upsertOwnerMetaPointer(
+      // Encode the full rotation snapshot — adopters need baseline +
+      // cashuBaseline + rotatedAtMs so their local delta calculation
+      // starts at 0 and the cooldown blocks an immediate re-rotation.
+      // Legacy adopters that only know how to parse `contacts-N` ignore
+      // the extra fields (the decoder fallback gives them null).
+      const contactsPointerResult = upsertOwnerMetaSnapshot(
         upsert,
         derived.metaOwner.id,
         "contacts",
-        `contacts-${nextIndex}`,
-      );
-
-      const cashuPointerResult = upsertOwnerMetaPointer(
-        upsert,
-        derived.metaOwner.id,
-        "cashu",
-        `cashu-${nextIndex}`,
+        {
+          index: nextIndex,
+          baseline: copiedCount,
+          cashuBaseline: copiedCashuCount,
+          rotatedAtMs: nowMs,
+        },
       );
 
       if (!contactsPointerResult.ok) {
         pushToast(
           `${t("errorPrefix")}: ${formatMutationError(contactsPointerResult.error)}`,
-        );
-        return;
-      }
-
-      if (!cashuPointerResult.ok) {
-        pushToast(
-          `${t("errorPrefix")}: ${formatMutationError(cashuPointerResult.error)}`,
         );
         return;
       }
@@ -1414,11 +1429,18 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
-      const pointerResult = upsertOwnerMetaPointer(
+      // Messages rotation is pointer-only (no row copy), so baseline = 0
+      // for the new lane. rotatedAtMs primes the adopter's cooldown.
+      const pointerResult = upsertOwnerMetaSnapshot(
         upsert,
         derived.metaOwner.id,
         "messages",
-        `messages-${nextIndex}`,
+        {
+          index: nextIndex,
+          baseline: 0,
+          cashuBaseline: null,
+          rotatedAtMs: nowMs,
+        },
       );
 
       if (!pointerResult.ok) {
@@ -1591,11 +1613,19 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
-      const pointerResult = upsertOwnerMetaPointer(
+      // Transactions rotation is pointer-only (no row copy). Baseline =
+      // 0 + rotatedAtMs primes the adopter's cooldown so it doesn't
+      // re-rotate when Evolu sync floods rows into the new lane.
+      const pointerResult = upsertOwnerMetaSnapshot(
         upsert,
         derived.metaOwner.id,
         "transactions",
-        `transactions-${nextIndex}`,
+        {
+          index: nextIndex,
+          baseline: 0,
+          cashuBaseline: null,
+          rotatedAtMs: nowMs,
+        },
       );
 
       if (!pointerResult.ok) {
