@@ -276,13 +276,11 @@ export const useRestoreMissingTokens = ({
             let wallet: Awaited<ReturnType<typeof createLoadedCashuWallet>>;
 
             try {
-              wallet = await createLoadedCashuWallet({
-                CashuMint,
-                CashuWallet,
-                mintUrl,
-                unit,
-                bip39seed: det.bip39seed,
-              });
+              // Reuse the loadMint() result if we've already touched this
+              // mint+unit earlier in the same restore pass — getWalletForMintUnit
+              // memoises by `${mintUrl}|${unit}` so we don't repay
+              // info+keysets+keys per nested loop iteration.
+              wallet = await getWalletForMintUnit(mintUrl, unit);
             } catch {
               // skip unreachable mints
               continue;

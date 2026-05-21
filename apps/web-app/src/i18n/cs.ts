@@ -532,6 +532,7 @@ export const cs = {
   cashuAcceptFailed: "Nepodařilo se přijmout token",
   cashuCheckToken: "Zkontrolovat token",
   cashuCheckAllTokens: "Zkontrolovat vše",
+  cashuCheckIssuedTokens: "Zkontrolovat využité",
   cashuChecking: "Kontroluji token…",
   cashuCheckOk: "Token je v pořádku.",
   pwaUpdateAvailable: "Nová verze Linky je k dispozici",
@@ -644,6 +645,8 @@ export const cs = {
 
   // Locale-specific strings
   paid: "Zaplaceno",
+  cashuTokenClaimed: "Token byl využit",
+  cashuTokenClaimedWithAmount: "Tvůj token za {amount} byl využit",
   conversations: "Konverzace",
   otherContacts: "Ostatní kontakty",
   today: "Dnes",

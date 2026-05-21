@@ -14,6 +14,7 @@ import { parseCashuToken } from "../cashu";
 import { NfcIcon } from "../components/NfcIcon";
 import { WalletBalance } from "../components/WalletBalance";
 import type { CashuTokenId } from "../evolu";
+import { useNavigation } from "../hooks/useRouting";
 import { buildCashuShareUrl } from "../utils/deepLinks";
 
 type CashuTokenPageRow = CashuTokenRowLike & { id: CashuTokenId };
@@ -26,6 +27,7 @@ interface CashuTokenPageProps {
   checkAndRefreshCashuToken: (
     id: CashuTokenId,
   ) => Promise<"ok" | "invalid" | "transient" | "skipped">;
+  checkSingleIssuedCashuTokenIsClaimed: (id: CashuTokenId) => Promise<boolean>;
   copyText: (text: string) => Promise<void>;
   pendingCashuDeleteId: CashuTokenId | null;
   reserveCashuToken: (id: CashuTokenId) => Promise<void>;
@@ -33,6 +35,7 @@ interface CashuTokenPageProps {
   returnCashuTokenToWallet: (id: CashuTokenId) => Promise<void>;
   routeId: CashuTokenId;
   shareTokenText: (id: CashuTokenId, text: string) => Promise<void>;
+  showPaidOverlay: (title?: string) => void;
   startSendCashuTokenToContact: (id: CashuTokenId) => Promise<void>;
   t: (key: string) => string;
   writeToNfc: (id: CashuTokenId, tokenText: string) => Promise<void>;
@@ -44,6 +47,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   cashuIsBusy,
   cashuTokensAll,
   checkAndRefreshCashuToken,
+  checkSingleIssuedCashuTokenIsClaimed,
   copyText,
   pendingCashuDeleteId,
   reserveCashuToken,
@@ -51,11 +55,13 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   returnCashuTokenToWallet,
   routeId,
   shareTokenText,
+  showPaidOverlay,
   startSendCashuTokenToContact,
   t,
   writeToNfc,
 }) => {
   const { formatDisplayedAmountText } = useAppShellCore();
+  const navigateTo = useNavigation();
   const [tokenQr, setTokenQr] = React.useState<string | null>(null);
   const row = cashuTokensAll.find(
     (tkn) => tkn.id === routeId && !tkn.isDeleted,
@@ -136,12 +142,70 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
     };
   }, [tokenText]);
 
-  if (!row || !tokenMeta) {
-    return (
-      <section className="panel">
-        <p className="muted">{t("errorPrefix")}</p>
-      </section>
-    );
+  // Poll the source mint while the user is staring at the QR of an issued
+  // token (issue #86): wallet.checkProofsStates is the passive NUT-07
+  // query, so it doesn't consume the proofs. Once all proofs flip to
+  // SPENT the helper soft-deletes the row and we navigate back to the
+  // tokens list — staying on the now-orphan detail page would just
+  // render the generic error panel.
+  //
+  // The helper's identity changes whenever cashuTokensAll updates, so
+  // we stash the latest reference in a ref to keep the 10s interval
+  // from being torn down + restarted on every churn. Without this the
+  // tick was effectively firing every couple of seconds under load.
+  const checkSingleIssuedRef = React.useRef(
+    checkSingleIssuedCashuTokenIsClaimed,
+  );
+  React.useEffect(() => {
+    checkSingleIssuedRef.current = checkSingleIssuedCashuTokenIsClaimed;
+  }, [checkSingleIssuedCashuTokenIsClaimed]);
+
+  React.useEffect(() => {
+    if (!isIssued) return;
+
+    let cancelled = false;
+    let inFlight = false;
+    const tick = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        const claimed = await checkSingleIssuedRef.current(routeId);
+        if (claimed && !cancelled) {
+          showPaidOverlay(t("cashuTokenClaimed"));
+          navigateTo({ route: "cashuTokens" });
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+    void tick();
+    const intervalId = window.setInterval(() => {
+      void tick();
+    }, 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isIssued, navigateTo, routeId, showPaidOverlay, t]);
+
+  // If the row vanished after we had loaded it once (claim detector,
+  // manual delete, etc.), bounce back to the tokens list instead of
+  // rendering the generic error panel. Critical: do NOT navigate when
+  // the row is undefined on the FIRST render — cashuTokensAll is
+  // hydrated asynchronously from Evolu and is briefly empty on initial
+  // mount, which would otherwise kick the user out before the QR has
+  // a chance to render.
+  const rowMissing = !row || !tokenMeta;
+  const hadRowRef = React.useRef(false);
+  if (!rowMissing) hadRowRef.current = true;
+  React.useEffect(() => {
+    if (!rowMissing) return;
+    if (!hadRowRef.current) return;
+    navigateTo({ route: "cashuTokens" });
+  }, [navigateTo, rowMissing]);
+
+  if (rowMissing) {
+    return null;
   }
 
   const safeRow = row;

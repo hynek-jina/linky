@@ -3757,6 +3757,8 @@ export const useAppShellComposition = () => {
   const {
     checkAllCashuTokensAndDeleteInvalid,
     checkAndRefreshCashuToken,
+    checkIssuedCashuTokensAndDeleteClaimed,
+    checkSingleIssuedCashuTokenIsClaimed,
     requestDeleteCashuToken,
   } = useCashuTokenChecks({
     appOwnerId: cashuOwnerId,
@@ -3772,6 +3774,77 @@ export const useAppShellComposition = () => {
     t,
     update,
   });
+
+  // Background check for issued-token claims (issue #86). Runs once on
+  // mount and every 60s thereafter while we have any issued tokens —
+  // wallet.checkProofsStates is the passive NUT-07 query that doesn't
+  // consume proofs. The helper itself skips when cashuIsBusy /
+  // bulkCheckIsBusy is true, so concurrent send/melt operations aren't
+  // disturbed. Detection deletes the row, so the issued list cleans up
+  // even when the user isn't sitting on #wallet/tokens.
+  //
+  // The helper's callback identity changes every time cashuTokensAll
+  // updates (Evolu emits frequently). Stashing it in a ref keeps the
+  // 60s interval from being torn down + restarted on every churn — the
+  // earlier inline-deps version was firing the check roughly every
+  // second under load.
+  const hasAnyIssuedTokensForBackgroundCheck = cashuIssuedTokens.length > 0;
+  const checkIssuedCashuTokensRef = React.useRef(
+    checkIssuedCashuTokensAndDeleteClaimed,
+  );
+  React.useEffect(() => {
+    checkIssuedCashuTokensRef.current = checkIssuedCashuTokensAndDeleteClaimed;
+  }, [checkIssuedCashuTokensAndDeleteClaimed]);
+  const formatDisplayedAmountTextRef = React.useRef(formatDisplayedAmountText);
+  React.useEffect(() => {
+    formatDisplayedAmountTextRef.current = formatDisplayedAmountText;
+  }, [formatDisplayedAmountText]);
+  const pushToastRef = React.useRef(pushToast);
+  React.useEffect(() => {
+    pushToastRef.current = pushToast;
+  }, [pushToast]);
+  const claimToastTRef = React.useRef(t);
+  React.useEffect(() => {
+    claimToastTRef.current = t;
+  }, [t]);
+  React.useEffect(() => {
+    if (!hasAnyIssuedTokensForBackgroundCheck) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const outcome = await checkIssuedCashuTokensRef.current();
+        if (cancelled) return;
+        if (outcome.claimed.length === 0) return;
+        // Background detection — surface a toast so the user knows the
+        // issued token was redeemed even when they aren't on the QR
+        // screen (the CashuTokenPage poll handles the in-page UX with a
+        // checkmark overlay).
+        const formatter = formatDisplayedAmountTextRef.current;
+        const tt = claimToastTRef.current;
+        for (const entry of outcome.claimed) {
+          const message =
+            entry.amount > 0
+              ? tt("cashuTokenClaimedWithAmount").replace(
+                  "{amount}",
+                  formatter(entry.amount),
+                )
+              : tt("cashuTokenClaimed");
+          pushToastRef.current(message);
+        }
+      } catch {
+        // ignore — the helper already swallows mint-side errors.
+      }
+    };
+    void tick();
+    const intervalId = window.setInterval(() => {
+      void tick();
+    }, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [hasAnyIssuedTokensForBackgroundCheck]);
 
   const copyText = React.useCallback(
     async (value: string) => {
@@ -6110,6 +6183,9 @@ export const useAppShellComposition = () => {
       cashuOwnTokens,
       checkAllCashuTokensAndDeleteInvalid,
       checkAndRefreshCashuToken,
+      checkIssuedCashuTokensAndDeleteClaimed,
+      checkSingleIssuedCashuTokenIsClaimed,
+      showPaidOverlay,
       copyText,
       currentNpub,
       displayUnit,

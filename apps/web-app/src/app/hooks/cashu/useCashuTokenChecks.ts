@@ -28,6 +28,7 @@ import {
   CASHU_TOKEN_STATE_PENDING,
   isCashuTokenAcceptedState,
   isCashuTokenEmittedState,
+  isCashuTokenIssuedState,
   normalizeCashuTokenState,
 } from "../../lib/cashuTokenState";
 import type { CashuTokenRowLike } from "../../types/appTypes";
@@ -85,6 +86,48 @@ export const useCashuTokenChecks = ({
   t,
   update,
 }: UseCashuTokenChecksParams) => {
+  // Hook-level wallet cache shared by ALL check paths: bulk
+  // `checkAllCashuTokensAndDeleteInvalid`, single-token
+  // `checkAndRefreshCashuToken`, issued-claim bulk +
+  // single-token. `createLoadedCashuWallet` does
+  // loadMint() = GET /v1/info + /v1/keysets + /v1/keys/<id> internally;
+  // without caching, every retry / interval pays that 3-call tax. Keyed
+  // by `${mintUrl}|${unit}`; cleared on hook unmount (logout / shell
+  // teardown). Wallets are read-only here (NUT-07 checkstate / metadata
+  // for token decode), so sharing across operations is safe.
+  type LoadedCashuWallet = Awaited<ReturnType<typeof createLoadedCashuWallet>>;
+  const cashuWalletCacheRef = React.useRef<Map<string, LoadedCashuWallet>>(
+    new Map(),
+  );
+  React.useEffect(() => {
+    const cache = cashuWalletCacheRef.current;
+    return () => {
+      cache.clear();
+    };
+  }, []);
+  const loadCachedCashuWallet = React.useCallback(
+    async (args: {
+      mintUrl: string;
+      unit: string;
+    }): Promise<LoadedCashuWallet> => {
+      const key = `${args.mintUrl}|${args.unit}`;
+      const cached = cashuWalletCacheRef.current.get(key);
+      if (cached) return cached;
+      const { CashuMint, CashuWallet } = await getCashuLib();
+      const det = getCashuDeterministicSeedFromStorage();
+      const wallet = await createLoadedCashuWallet({
+        CashuMint,
+        CashuWallet,
+        mintUrl: args.mintUrl,
+        unit: args.unit,
+        ...(det ? { bip39seed: det.bip39seed } : {}),
+      });
+      cashuWalletCacheRef.current.set(key, wallet);
+      return wallet;
+    },
+    [],
+  );
+
   const updateCashuToken = React.useCallback(
     function (
       payload: CashuTokenUpdatePayload,
@@ -302,13 +345,8 @@ export const useCashuTokenChecks = ({
           }
         }
 
-        const {
-          CashuMint,
-          CashuWallet,
-          getDecodedToken,
-          getEncodedToken,
-          getTokenMetadata,
-        } = await getCashuLib();
+        const { getDecodedToken, getEncodedToken, getTokenMetadata } =
+          await getCashuLib();
 
         const tokenMetadata = getTokenMetadata(tokenText);
         const mint = String(tokenMetadata.mint ?? primaryRow.mint ?? "").trim();
@@ -316,14 +354,7 @@ export const useCashuTokenChecks = ({
 
         const unit =
           String(tokenMetadata.unit ?? primaryRow.unit ?? "").trim() || "sat";
-        const det = getCashuDeterministicSeedFromStorage();
-        const wallet = await createLoadedCashuWallet({
-          CashuMint,
-          CashuWallet,
-          mintUrl: mint,
-          ...(unit ? { unit } : {}),
-          ...(det ? { bip39seed: det.bip39seed } : {}),
-        });
+        const wallet = await loadCachedCashuWallet({ mintUrl: mint, unit });
 
         const decoded = decodeCashuTokenForMint({
           tokenText,
@@ -597,7 +628,15 @@ export const useCashuTokenChecks = ({
         }
       }
     },
-    [cashuIsBusy, pushToast, setCashuIsBusy, setStatus, t, updateCashuToken],
+    [
+      cashuIsBusy,
+      loadCachedCashuWallet,
+      pushToast,
+      setCashuIsBusy,
+      setStatus,
+      t,
+      updateCashuToken,
+    ],
   );
 
   const checkAndRefreshCashuToken = React.useCallback(
@@ -693,9 +732,246 @@ export const useCashuTokenChecks = ({
     ],
   );
 
+  // Detect when a recipient has melted/swapped tokens we emitted (issue #86).
+  // wallet.checkProofsStates is the passive NUT-07 query — it does not
+  // consume proofs, so calling it on issued tokens is safe ("without
+  // ruining it"). Groups tokens by mint+unit so we only loadMint once per
+  // mint and batch one /v1/checkstate per group.
+  //
+  // Critically this helper does NOT toggle cashuIsBusy /
+  // cashuBulkCheckIsBusy — it's a passive read that runs in the
+  // background and must not disable the rest of the cashu UI (issue,
+  // melt-to-mint, restore-tokens, etc.). A local in-flight ref keeps
+  // concurrent self-calls (button spam + background tick) idempotent.
+  const checkIssuedInFlightRef = React.useRef(false);
+  const checkIssuedCashuTokensAndDeleteClaimed =
+    React.useCallback(async (): Promise<{
+      checked: number;
+      claimed: Array<{ id: CashuTokenId; amount: number }>;
+    }> => {
+      if (checkIssuedInFlightRef.current) return { checked: 0, claimed: [] };
+
+      // Group issued tokens by source mint+unit so each group needs only
+      // one wallet load + one /v1/checkstate round-trip.
+      const groups = new Map<
+        string,
+        {
+          mintUrl: string;
+          unit: string;
+          tokens: Array<{
+            id: CashuTokenId;
+            proofs: Proof[];
+            tokenText: string;
+          }>;
+        }
+      >();
+
+      const { getDecodedToken, getTokenMetadata } = await getCashuLib();
+
+      for (const row of cashuTokensAll) {
+        if (row?.isDeleted) continue;
+        if (!isCashuTokenIssuedState(row?.state)) continue;
+
+        const id = row?.id as CashuTokenId | undefined;
+        if (!id) continue;
+
+        const tokenText = String(row.token ?? row.rawToken ?? "").trim();
+        if (!tokenText) continue;
+
+        const parsed = parseCashuToken(tokenText);
+        const mintRaw = String(row.mint ?? parsed?.mint ?? "").trim();
+        const mintUrl = mintRaw ? normalizeMintUrl(mintRaw) : "";
+        if (!mintUrl) continue;
+        const unit = String(row.unit ?? "").trim() || "sat";
+
+        const groupKey = `${mintUrl}|${unit}`;
+        let group = groups.get(groupKey);
+        if (!group) {
+          group = { mintUrl, unit, tokens: [] };
+          groups.set(groupKey, group);
+        }
+        group.tokens.push({ id, proofs: [], tokenText });
+      }
+
+      if (groups.size === 0) return { checked: 0, claimed: [] };
+
+      checkIssuedInFlightRef.current = true;
+      let checkedCount = 0;
+      const claimed: Array<{ id: CashuTokenId; amount: number }> = [];
+
+      try {
+        for (const group of groups.values()) {
+          let wallet: LoadedCashuWallet;
+          try {
+            wallet = await loadCachedCashuWallet({
+              mintUrl: group.mintUrl,
+              unit: group.unit,
+            });
+          } catch {
+            // Mint unreachable — leave the group untouched, the user can
+            // re-run later when the mint comes back.
+            continue;
+          }
+
+          // Decode proofs against the loaded keysets. Tokens that fail to
+          // decode (corrupt / wrong mint) are skipped, not deleted — we
+          // don't have signal here to know whether they were claimed.
+          const decodedTokens: Array<{ id: CashuTokenId; proofs: Proof[] }> =
+            [];
+          for (const entry of group.tokens) {
+            try {
+              const decoded = decodeCashuTokenForMint({
+                tokenText: entry.tokenText,
+                mintUrl: group.mintUrl,
+                keysets: wallet.keysets,
+                getDecodedToken,
+                getTokenMetadata,
+              });
+              const proofs: Proof[] = [];
+              for (const p of decoded.proofs ?? []) {
+                proofs.push({
+                  amount: Number(p.amount ?? 0),
+                  secret: p.secret,
+                  C: p.C,
+                  id: p.id,
+                });
+              }
+              if (proofs.length === 0) continue;
+              decodedTokens.push({ id: entry.id, proofs });
+            } catch {
+              // skip
+            }
+          }
+
+          if (decodedTokens.length === 0) continue;
+
+          let states: ProofState[] = [];
+          try {
+            const flatProofs = decodedTokens.flatMap((entry) => entry.proofs);
+            const response = await wallet.checkProofsStates(flatProofs);
+            states = Array.isArray(response) ? response : [];
+          } catch {
+            // Mint state check failed — skip the group; next manual run
+            // gets another chance.
+            continue;
+          }
+
+          const partition = partitionCashuProofGroupsByState(
+            decodedTokens.map((entry) => ({
+              id: entry.id,
+              proofs: entry.proofs,
+            })),
+            states,
+          );
+
+          checkedCount += decodedTokens.length;
+
+          for (const id of partition.fullySpentIds) {
+            if (!id) continue;
+            const sourceRow = cashuTokensAll.find(
+              (entry) => String(entry?.id ?? "") === String(id),
+            );
+            const amountRaw = Number(sourceRow?.amount ?? 0);
+            const amount =
+              Number.isFinite(amountRaw) && amountRaw > 0
+                ? Math.trunc(amountRaw)
+                : 0;
+            const result = updateCashuToken({
+              id,
+              isDeleted: Evolu.sqliteTrue,
+            });
+            if (result.ok) claimed.push({ id, amount });
+          }
+        }
+      } finally {
+        checkIssuedInFlightRef.current = false;
+      }
+
+      return { checked: checkedCount, claimed };
+    }, [cashuTokensAll, loadCachedCashuWallet, updateCashuToken]);
+
+  // Same NUT-07 check as the bulk variant but scoped to a single issued
+  // token row — used by the issued-token detail page to poll while the
+  // user is staring at the QR. Returns true iff the row was deleted.
+  const checkSingleIssuedCashuTokenIsClaimed = React.useCallback(
+    async (id: CashuTokenId): Promise<boolean> => {
+      const row = cashuTokensAll.find(
+        (entry) => String(entry?.id ?? "") === String(id) && !entry?.isDeleted,
+      );
+      if (!row) return false;
+      if (!isCashuTokenIssuedState(row?.state)) return false;
+
+      const tokenText = String(row.token ?? row.rawToken ?? "").trim();
+      if (!tokenText) return false;
+
+      const parsed = parseCashuToken(tokenText);
+      const mintRaw = String(row.mint ?? parsed?.mint ?? "").trim();
+      const mintUrl = mintRaw ? normalizeMintUrl(mintRaw) : "";
+      if (!mintUrl) return false;
+      const unit = String(row.unit ?? "").trim() || "sat";
+
+      let wallet: LoadedCashuWallet;
+      try {
+        wallet = await loadCachedCashuWallet({ mintUrl, unit });
+      } catch {
+        return false;
+      }
+
+      const proofs: Proof[] = [];
+      try {
+        const { getDecodedToken, getTokenMetadata } = await getCashuLib();
+        const decoded = decodeCashuTokenForMint({
+          tokenText,
+          mintUrl,
+          keysets: wallet.keysets,
+          getDecodedToken,
+          getTokenMetadata,
+        });
+        for (const p of decoded.proofs ?? []) {
+          proofs.push({
+            amount: Number(p.amount ?? 0),
+            secret: p.secret,
+            C: p.C,
+            id: p.id,
+          });
+        }
+      } catch {
+        return false;
+      }
+
+      if (proofs.length === 0) return false;
+
+      let states: ProofState[] = [];
+      try {
+        const response = await wallet.checkProofsStates(proofs);
+        states = Array.isArray(response) ? response : [];
+      } catch {
+        return false;
+      }
+
+      const partition = partitionCashuProofGroupsByState(
+        [{ id, proofs }],
+        states,
+      );
+      const fullySpent = partition.fullySpentIds.some(
+        (entryId) => entryId !== null && String(entryId) === String(id),
+      );
+      if (!fullySpent) return false;
+
+      const result = updateCashuToken({
+        id,
+        isDeleted: Evolu.sqliteTrue,
+      });
+      return result.ok;
+    },
+    [cashuTokensAll, loadCachedCashuWallet, updateCashuToken],
+  );
+
   return {
     checkAllCashuTokensAndDeleteInvalid,
     checkAndRefreshCashuToken,
+    checkIssuedCashuTokensAndDeleteClaimed,
+    checkSingleIssuedCashuTokenIsClaimed,
     requestDeleteCashuToken,
   };
 };

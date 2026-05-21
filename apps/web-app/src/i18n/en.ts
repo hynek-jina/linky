@@ -525,6 +525,7 @@ export const en = {
   cashuAcceptFailed: "Failed to accept token",
   cashuCheckToken: "Check token",
   cashuCheckAllTokens: "Check all",
+  cashuCheckIssuedTokens: "Check claimed",
   cashuChecking: "Checking token…",
   cashuCheckOk: "Token is OK.",
   pwaUpdateAvailable: "A new version of Linky is available",
@@ -637,6 +638,8 @@ export const en = {
 
   // Locale-specific strings
   paid: "Paid",
+  cashuTokenClaimed: "Token claimed",
+  cashuTokenClaimedWithAmount: "Your token of {amount} has been claimed",
   conversations: "Conversations",
   otherContacts: "Other contacts",
   today: "Today",
