@@ -835,6 +835,268 @@ export const useEvoluContactsOwnerRotation = ({
     transactionsOwnerIndex,
   ]);
 
+  // Heal-on-adopt: when the reconciler below adopts a higher index from
+  // another device's rotation, this device's local lane (at the OLD lower
+  // index) may still hold rows that the rotating device never saw. Without
+  // healing, those rows stay orphaned in the old lane and disappear from
+  // the active UI. Copy them forward by re-upserting (id-keyed, so Evolu's
+  // last-write-wins keeps the latest version of any row also touched by
+  // the rotator). Fire-and-forget — failures are non-fatal; subsequent
+  // rotations re-attempt the copy by the same logic.
+  const healAdoptedContactsAndCashuRef = React.useRef<
+    (args: { seed: string; fromIndex: number; toIndex: number }) => void
+  >(() => {});
+  const healAdoptedMessagesRef = React.useRef<
+    (args: { seed: string; fromIndex: number; toIndex: number }) => void
+  >(() => {});
+  const healAdoptedTransactionsRef = React.useRef<
+    (args: { seed: string; fromIndex: number; toIndex: number }) => void
+  >(() => {});
+
+  // Refresh the heal callbacks on every render so they close over the
+  // latest row data + index state. Using refs (vs putting these in the
+  // reconciler deps) keeps the reconciler effect from churning every time
+  // a row syncs in.
+  healAdoptedContactsAndCashuRef.current = ({
+    seed,
+    fromIndex,
+    toIndex,
+  }: {
+    seed: string;
+    fromIndex: number;
+    toIndex: number;
+  }) => {
+    if (fromIndex === toIndex) return;
+    const normalizedSeed = String(seed ?? "").trim();
+    if (!normalizedSeed) return;
+
+    void (async () => {
+      const fromDerived = await deriveContactsAndCashuOwnersFromSeed(
+        normalizedSeed,
+        fromIndex,
+      );
+      const toDerived = await deriveContactsAndCashuOwnersFromSeed(
+        normalizedSeed,
+        toIndex,
+      );
+      if (!fromDerived || !toDerived) return;
+
+      const fromContactsOwnerId = String(fromDerived.contactsOwner.id).trim();
+      const fromCashuOwnerId = String(fromDerived.cashuOwner.id).trim();
+
+      for (const row of allContactsRows) {
+        if (readRowOwnerId(row) !== fromContactsOwnerId) continue;
+        if (
+          typeof row !== "object" ||
+          row === null ||
+          !("id" in row) ||
+          typeof row.id !== "string"
+        ) {
+          continue;
+        }
+        const id = row.id.trim();
+        if (!id) continue;
+        const contact = row as ContactRowLike & { id: string };
+        const name = String(contact.name ?? "").trim();
+        const npub = String(contact.npub ?? "").trim();
+        const lnAddress = String(contact.lnAddress ?? "").trim();
+        const groupName = String(contact.groupName ?? "").trim();
+        if (!name && !npub && !lnAddress && !groupName) continue;
+        upsert(
+          "contact",
+          {
+            id: id as ContactId,
+            name: name ? (name as typeof Evolu.NonEmptyString1000.Type) : null,
+            npub: npub ? (npub as typeof Evolu.NonEmptyString1000.Type) : null,
+            lnAddress: lnAddress
+              ? (lnAddress as typeof Evolu.NonEmptyString1000.Type)
+              : null,
+            groupName: groupName
+              ? (groupName as typeof Evolu.NonEmptyString1000.Type)
+              : null,
+          },
+          { ownerId: toDerived.contactsOwner.id },
+        );
+      }
+
+      for (const row of allCashuTokensRows) {
+        if (readRowOwnerId(row) !== fromCashuOwnerId) continue;
+        const tokenId = readCashuTokenId(row);
+        const tokenText = readCashuTokenValue(row);
+        if (!tokenId || !tokenText) continue;
+        const payload: {
+          id: CashuTokenId;
+          token: typeof Evolu.NonEmptyString.Type;
+          amount?: typeof Evolu.PositiveInt.Type;
+          error?: typeof Evolu.NonEmptyString1000.Type;
+          mint?: typeof Evolu.NonEmptyString1000.Type;
+          rawToken?: typeof Evolu.NonEmptyString.Type;
+          state?: typeof Evolu.NonEmptyString100.Type;
+          unit?: typeof Evolu.NonEmptyString100.Type;
+        } = {
+          id: tokenId as CashuTokenId,
+          token: tokenText as typeof Evolu.NonEmptyString.Type,
+        };
+        const rawToken =
+          typeof row === "object" && row !== null && "rawToken" in row
+            ? readCashuOptionalText(row.rawToken)
+            : null;
+        if (rawToken)
+          payload.rawToken = rawToken as typeof Evolu.NonEmptyString.Type;
+        const mint =
+          typeof row === "object" && row !== null && "mint" in row
+            ? readCashuOptionalText(row.mint)
+            : null;
+        if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
+        const unit =
+          typeof row === "object" && row !== null && "unit" in row
+            ? readCashuOptionalText(row.unit)
+            : null;
+        if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
+        const amount =
+          typeof row === "object" && row !== null && "amount" in row
+            ? readCashuOptionalAmount(row.amount)
+            : null;
+        if (amount && amount > 0)
+          payload.amount = amount as typeof Evolu.PositiveInt.Type;
+        const stateText =
+          typeof row === "object" && row !== null && "state" in row
+            ? readCashuOptionalText(row.state)
+            : null;
+        if (stateText)
+          payload.state = stateText as typeof Evolu.NonEmptyString100.Type;
+        const errorText =
+          typeof row === "object" && row !== null && "error" in row
+            ? readCashuOptionalText(row.error)
+            : null;
+        if (errorText)
+          payload.error = errorText as typeof Evolu.NonEmptyString1000.Type;
+        upsert("cashuToken", payload, {
+          ownerId: toDerived.cashuOwner.id,
+        });
+      }
+    })();
+  };
+
+  healAdoptedMessagesRef.current = ({
+    seed,
+    fromIndex,
+    toIndex,
+  }: {
+    seed: string;
+    fromIndex: number;
+    toIndex: number;
+  }) => {
+    if (fromIndex === toIndex) return;
+    const normalizedSeed = String(seed ?? "").trim();
+    if (!normalizedSeed) return;
+
+    void (async () => {
+      const fromMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
+        normalizedSeed,
+        "messages",
+        fromIndex,
+      );
+      const toMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
+        normalizedSeed,
+        "messages",
+        toIndex,
+      );
+      if (!fromMnemonic || !toMnemonic) return;
+      const fromOwner = toAppOwnerFromMnemonic(fromMnemonic);
+      const toOwner = toAppOwnerFromMnemonic(toMnemonic);
+      if (!fromOwner || !toOwner) return;
+      const fromOwnerId = String(fromOwner.id).trim();
+
+      for (const row of allNostrMessagesRows) {
+        if (readRowOwnerId(row) !== fromOwnerId) continue;
+        if (
+          typeof row !== "object" ||
+          row === null ||
+          !("id" in row) ||
+          typeof row.id !== "string"
+        ) {
+          continue;
+        }
+        // Re-upsert the row payload into the new lane. We let Evolu
+        // schema validation drop any fields that don't apply — but the
+        // row already conformed when first written, so the payload is a
+        // shape-preserving copy.
+        const payload = { ...row } as Record<string, unknown>;
+        delete payload.ownerId;
+        upsert("nostrMessage", payload as never, {
+          ownerId: toOwner.id,
+        });
+      }
+
+      for (const row of allNostrReactionsRows) {
+        if (readRowOwnerId(row) !== fromOwnerId) continue;
+        if (
+          typeof row !== "object" ||
+          row === null ||
+          !("id" in row) ||
+          typeof row.id !== "string"
+        ) {
+          continue;
+        }
+        const payload = { ...row } as Record<string, unknown>;
+        delete payload.ownerId;
+        upsert("nostrReaction", payload as never, {
+          ownerId: toOwner.id,
+        });
+      }
+    })();
+  };
+
+  healAdoptedTransactionsRef.current = ({
+    seed,
+    fromIndex,
+    toIndex,
+  }: {
+    seed: string;
+    fromIndex: number;
+    toIndex: number;
+  }) => {
+    if (fromIndex === toIndex) return;
+    const normalizedSeed = String(seed ?? "").trim();
+    if (!normalizedSeed) return;
+
+    void (async () => {
+      const fromMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
+        normalizedSeed,
+        "transactions",
+        fromIndex,
+      );
+      const toMnemonic = await deriveEvoluOwnerMnemonicFromSlip39(
+        normalizedSeed,
+        "transactions",
+        toIndex,
+      );
+      if (!fromMnemonic || !toMnemonic) return;
+      const fromOwner = toAppOwnerFromMnemonic(fromMnemonic);
+      const toOwner = toAppOwnerFromMnemonic(toMnemonic);
+      if (!fromOwner || !toOwner) return;
+      const fromOwnerId = String(fromOwner.id).trim();
+
+      for (const row of allTransactionsRows) {
+        if (readRowOwnerId(row) !== fromOwnerId) continue;
+        if (
+          typeof row !== "object" ||
+          row === null ||
+          !("id" in row) ||
+          typeof row.id !== "string"
+        ) {
+          continue;
+        }
+        const payload = { ...row } as Record<string, unknown>;
+        delete payload.ownerId;
+        upsert("transaction", payload as never, {
+          ownerId: toOwner.id,
+        });
+      }
+    })();
+  };
+
   React.useEffect(() => {
     if (!ownerSyncData) return;
 
@@ -910,8 +1172,11 @@ export const useEvoluContactsOwnerRotation = ({
       extra?.();
     };
 
+    const normalizedSeed = String(slip39Seed ?? "").trim();
+
     if (contactsSnap && contactsSnap.index !== contactsOwnerIndex) {
       const snap = contactsSnap;
+      const fromContactsIndex = contactsOwnerIndex;
       adoptIndex({
         indexStorageKey: EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
         baselineStorageKey: EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
@@ -938,9 +1203,17 @@ export const useEvoluContactsOwnerRotation = ({
           );
         },
       });
+      if (normalizedSeed) {
+        healAdoptedContactsAndCashuRef.current({
+          seed: normalizedSeed,
+          fromIndex: fromContactsIndex,
+          toIndex: contactsSnap.index,
+        });
+      }
     }
 
     if (messagesSnap && messagesSnap.index !== messagesOwnerIndex) {
+      const fromMessagesIndex = messagesOwnerIndex;
       adoptIndex({
         indexStorageKey: EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
         baselineStorageKey: EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY,
@@ -954,9 +1227,17 @@ export const useEvoluContactsOwnerRotation = ({
         setCurrentIndex: setMessagesOwnerIndex,
         setLocalEditCount: setMessagesOwnerEditCount,
       });
+      if (normalizedSeed) {
+        healAdoptedMessagesRef.current({
+          seed: normalizedSeed,
+          fromIndex: fromMessagesIndex,
+          toIndex: messagesSnap.index,
+        });
+      }
     }
 
     if (transactionsSnap && transactionsSnap.index !== transactionsOwnerIndex) {
+      const fromTransactionsIndex = transactionsOwnerIndex;
       adoptIndex({
         indexStorageKey: EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY,
         baselineStorageKey: EVOLU_TRANSACTIONS_OWNER_BASELINE_COUNT_STORAGE_KEY,
@@ -970,12 +1251,20 @@ export const useEvoluContactsOwnerRotation = ({
         setCurrentIndex: setTransactionsOwnerIndex,
         setLocalEditCount: setTransactionsOwnerEditCount,
       });
+      if (normalizedSeed) {
+        healAdoptedTransactionsRef.current({
+          seed: normalizedSeed,
+          fromIndex: fromTransactionsIndex,
+          toIndex: transactionsSnap.index,
+        });
+      }
     }
   }, [
     contactsOwnerIndex,
     messagesOwnerIndex,
     ownerMetaRows,
     ownerSyncData,
+    slip39Seed,
     transactionsOwnerIndex,
   ]);
 
