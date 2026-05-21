@@ -2,6 +2,7 @@ import React from "react";
 import "../App.css";
 import { AuthenticatedLayout } from "../components/AuthenticatedLayout";
 import { CashuContactSendBanner } from "../components/CashuContactSendBanner";
+import { InstallPwaBanner } from "../components/InstallPwaBanner";
 import { PwaUpdateBanner } from "../components/PwaUpdateBanner";
 import { ToastNotifications } from "../components/ToastNotifications";
 import { UnauthenticatedLayout } from "../components/UnauthenticatedLayout";
@@ -134,6 +135,7 @@ const AppShell = () => {
           core={coreContextValue}
           routes={routeContextValue}
         >
+          <InstallPwaBanner t={t} />
           <AuthenticatedLayout>
             <AppRouteContent />
           </AuthenticatedLayout>
