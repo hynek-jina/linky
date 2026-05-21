@@ -25,7 +25,23 @@ import {
 } from "../../platform/identitySecrets";
 import { triggerPasswordManagerSeedSave } from "../../platform/passwordManager";
 import type { JsonRecord } from "../../types/json";
-import { CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY } from "../../utils/constants";
+import {
+  CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
+  EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
+  EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+  EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
+  EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY,
+  EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
+  EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_EDIT_COUNT_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+  EVOLU_TRANSACTIONS_OWNER_BASELINE_COUNT_STORAGE_KEY,
+  EVOLU_TRANSACTIONS_OWNER_EDIT_COUNT_STORAGE_KEY,
+  EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY,
+  EVOLU_TRANSACTIONS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+} from "../../utils/constants";
 import { createSquareAvatarDataUrl } from "../../utils/image";
 import {
   applySlip39Suggestion,
@@ -120,6 +136,33 @@ interface UseProfileAuthDomainResult {
   setPendingOnboardingName: (value: string) => void;
   submitReturningSlip39: (inputOverride?: string) => Promise<void>;
 }
+
+const OWNER_ROTATION_STORAGE_KEYS = [
+  EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY,
+  EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY,
+  EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
+  EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_BASELINE_COUNT_STORAGE_KEY,
+  EVOLU_TRANSACTIONS_OWNER_BASELINE_COUNT_STORAGE_KEY,
+  EVOLU_CONTACTS_OWNER_EDIT_COUNT_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_EDIT_COUNT_STORAGE_KEY,
+  EVOLU_TRANSACTIONS_OWNER_EDIT_COUNT_STORAGE_KEY,
+  EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+  EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+  EVOLU_MESSAGES_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+  EVOLU_TRANSACTIONS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+] as const;
+
+const resetStoredOwnerRotationState = (): void => {
+  try {
+    for (const storageKey of OWNER_ROTATION_STORAGE_KEYS) {
+      localStorage.removeItem(storageKey);
+    }
+  } catch {
+    // ignore storage unavailability
+  }
+};
 
 export const useProfileAuthDomain = ({
   currentNsec,
@@ -357,6 +400,8 @@ export const useProfileAuthDomain = ({
         nsec: raw,
         slip39Seed: normalizedSlip39,
       });
+
+      resetStoredOwnerRotationState();
 
       setIsSeedLogin(true);
       setSlip39Seed(normalizedSlip39);
@@ -828,6 +873,7 @@ export const useProfileAuthDomain = ({
       setIsSeedLogin(false);
       setCashuSeedMnemonic(null);
       setSlip39Seed(null);
+      resetStoredOwnerRotationState();
 
       try {
         window.location.hash = "#";
