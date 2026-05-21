@@ -185,12 +185,19 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
     };
   }, [isIssued, navigateTo, routeId]);
 
-  // If the row vanished (the issued-token claim detector or any other
-  // path soft-deleted it while we were here), bounce back to the tokens
-  // list instead of rendering the generic error panel.
+  // If the row vanished after we had loaded it once (claim detector,
+  // manual delete, etc.), bounce back to the tokens list instead of
+  // rendering the generic error panel. Critical: do NOT navigate when
+  // the row is undefined on the FIRST render — cashuTokensAll is
+  // hydrated asynchronously from Evolu and is briefly empty on initial
+  // mount, which would otherwise kick the user out before the QR has
+  // a chance to render.
   const rowMissing = !row || !tokenMeta;
+  const hadRowRef = React.useRef(false);
+  if (!rowMissing) hadRowRef.current = true;
   React.useEffect(() => {
     if (!rowMissing) return;
+    if (!hadRowRef.current) return;
     navigateTo({ route: "cashuTokens" });
   }, [navigateTo, rowMissing]);
 

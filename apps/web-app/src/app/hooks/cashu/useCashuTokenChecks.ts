@@ -699,13 +699,19 @@ export const useCashuTokenChecks = ({
   // consume proofs, so calling it on issued tokens is safe ("without
   // ruining it"). Groups tokens by mint+unit so we only loadMint once per
   // mint and batch one /v1/checkstate per group.
+  //
+  // Critically this helper does NOT toggle cashuIsBusy /
+  // cashuBulkCheckIsBusy — it's a passive read that runs in the
+  // background and must not disable the rest of the cashu UI (issue,
+  // melt-to-mint, restore-tokens, etc.). A local in-flight ref keeps
+  // concurrent self-calls (button spam + background tick) idempotent.
+  const checkIssuedInFlightRef = React.useRef(false);
   const checkIssuedCashuTokensAndDeleteClaimed =
     React.useCallback(async (): Promise<{
       checked: number;
       claimed: number;
     }> => {
-      if (cashuBulkCheckIsBusy) return { checked: 0, claimed: 0 };
-      if (cashuIsBusy) return { checked: 0, claimed: 0 };
+      if (checkIssuedInFlightRef.current) return { checked: 0, claimed: 0 };
 
       // Group issued tokens by source mint+unit so each group needs only
       // one wallet load + one /v1/checkstate round-trip.
@@ -753,9 +759,7 @@ export const useCashuTokenChecks = ({
 
       if (groups.size === 0) return { checked: 0, claimed: 0 };
 
-      setCashuBulkCheckIsBusy(true);
-      setCashuIsBusy(true);
-
+      checkIssuedInFlightRef.current = true;
       let checkedCount = 0;
       let claimedCount = 0;
 
@@ -839,19 +843,11 @@ export const useCashuTokenChecks = ({
           }
         }
       } finally {
-        setCashuIsBusy(false);
-        setCashuBulkCheckIsBusy(false);
+        checkIssuedInFlightRef.current = false;
       }
 
       return { checked: checkedCount, claimed: claimedCount };
-    }, [
-      cashuBulkCheckIsBusy,
-      cashuIsBusy,
-      cashuTokensAll,
-      setCashuBulkCheckIsBusy,
-      setCashuIsBusy,
-      updateCashuToken,
-    ]);
+    }, [cashuTokensAll, updateCashuToken]);
 
   // Same NUT-07 check as the bulk variant but scoped to a single issued
   // token row — used by the issued-token detail page to poll while the

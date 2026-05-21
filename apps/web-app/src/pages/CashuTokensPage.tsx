@@ -165,7 +165,7 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
               type="button"
               className="btn-small secondary"
               onClick={() => void checkIssuedCashuTokensAndDeleteClaimed()}
-              disabled={cashuIsBusy || cashuBulkCheckIsBusy || !hasIssuedTokens}
+              disabled={!hasIssuedTokens}
             >
               {t("cashuCheckIssuedTokens")}
             </button>
