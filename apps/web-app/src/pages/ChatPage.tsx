@@ -15,7 +15,10 @@ import type {
   LocalNostrReaction,
   MintUrlInput,
 } from "../app/types/appTypes";
-import { ChatMessage } from "../components/ChatMessage";
+import {
+  ChatMessage,
+  type NpubMessageContactInfo,
+} from "../components/ChatMessage";
 import { ReplyPreview } from "../components/ReplyPreview";
 import { formatChatDayLabel } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
@@ -46,6 +49,7 @@ interface ChatPageProps {
     host: string | null;
     failed: boolean;
   };
+  getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
   lang: string;
   onCancelEdit: () => void;
   onCancelReply: () => void;
@@ -54,6 +58,7 @@ interface ChatPageProps {
   onCopy: (message: LocalNostrMessage) => void;
   onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
   onEdit: (message: LocalNostrMessage) => void;
+  onOpenNpubContact: (npub: string) => void;
   onPayPaymentRequest: (
     message: LocalNostrMessage,
     requestInfo: CashuPaymentRequestMessageInfo,
@@ -90,6 +95,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   feedbackContactNpub,
   getCashuTokenMessageInfo,
   getMintIconUrl,
+  getNpubMessageContactInfo,
   lang,
   onCancelEdit,
   onCancelReply,
@@ -98,6 +104,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   onCopy,
   onDeclinePaymentRequest,
   onEdit,
+  onOpenNpubContact,
   onPayPaymentRequest,
   onReact,
   onReply,
@@ -481,6 +488,7 @@ export const ChatPage: FC<ChatPageProps> = ({
                 formatChatDayLabel={formatChatDayLabelForLang}
                 getCashuTokenMessageInfo={getCashuTokenMessageInfo}
                 getMintIconUrl={getMintIconUrl}
+                getNpubMessageContactInfo={getNpubMessageContactInfo}
                 onMintIconLoad={(origin, url) => {
                   setMintIconUrlByMint((prevByMint) => ({
                     ...prevByMint,
@@ -529,6 +537,7 @@ export const ChatPage: FC<ChatPageProps> = ({
                 replyQuoteText={replyQuoteText}
                 onCopy={onCopy}
                 onEdit={onEdit}
+                onOpenNpubContact={onOpenNpubContact}
                 onReact={onReact}
                 onReply={onReply}
                 chatPendingLabel={t("chatPendingShort")}

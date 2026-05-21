@@ -27,6 +27,7 @@ interface BuildPeopleRoutePropsParams {
   form: PeopleRoutesProps["contactEditProps"]["form"];
   getCashuTokenMessageInfo: PeopleRoutesProps["chatProps"]["getCashuTokenMessageInfo"];
   getMintIconUrl: PeopleRoutesProps["chatProps"]["getMintIconUrl"];
+  getNpubMessageContactInfo: PeopleRoutesProps["chatProps"]["getNpubMessageContactInfo"];
   groupNames: PeopleRoutesProps["contactEditProps"]["groupNames"];
   handleSaveContact: PeopleRoutesProps["contactEditProps"]["handleSaveContact"];
   isProfileEditing: PeopleRoutesProps["profileProps"]["isProfileEditing"];
@@ -41,6 +42,7 @@ interface BuildPeopleRoutePropsParams {
   onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
   onDeclinePaymentRequest: PeopleRoutesProps["chatProps"]["onDeclinePaymentRequest"];
   onEdit: PeopleRoutesProps["chatProps"]["onEdit"];
+  onOpenNpubContact: PeopleRoutesProps["chatProps"]["onOpenNpubContact"];
   onPayPaymentRequest: PeopleRoutesProps["chatProps"]["onPayPaymentRequest"];
   onPickProfilePhoto: PeopleRoutesProps["profileProps"]["onPickProfilePhoto"];
   onProfilePhotoSelected: PeopleRoutesProps["profileProps"]["onProfilePhotoSelected"];
@@ -109,6 +111,7 @@ export const buildPeopleRouteProps = ({
   form,
   getCashuTokenMessageInfo,
   getMintIconUrl,
+  getNpubMessageContactInfo,
   groupNames,
   handleSaveContact,
   isProfileEditing,
@@ -123,6 +126,7 @@ export const buildPeopleRouteProps = ({
   onCopy,
   onDeclinePaymentRequest,
   onEdit,
+  onOpenNpubContact,
   onPayPaymentRequest,
   onPickProfilePhoto,
   onProfilePhotoSelected,
@@ -184,6 +188,7 @@ export const buildPeopleRouteProps = ({
       chatMessageElByIdRef,
       getCashuTokenMessageInfo,
       getMintIconUrl,
+      getNpubMessageContactInfo,
       onReply,
       onEdit,
       onReact,
@@ -194,6 +199,7 @@ export const buildPeopleRouteProps = ({
       onRemoveUnknownContactChat,
       sendChatMessage,
       openContactPay,
+      onOpenNpubContact,
       onPayPaymentRequest,
       onDeclinePaymentRequest,
       t,

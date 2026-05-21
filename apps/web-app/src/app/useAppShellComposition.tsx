@@ -4621,6 +4621,114 @@ export const useAppShellComposition = () => {
     t,
   ]);
 
+  const getNpubMessageContactInfo = React.useCallback(
+    (rawNpub: string) => {
+      const npub = normalizeNpubIdentifier(rawNpub);
+      if (!npub) return null;
+
+      const knownContact =
+        contacts.find(
+          (contact) => normalizeNpubIdentifier(contact.npub) === npub,
+        ) ?? null;
+      const derivedProfile = deriveDefaultProfile(npub, lang);
+      const displayName = buildSavedContactName(
+        String(knownContact?.name ?? "").trim() ||
+          unknownNameByNpub[npub] ||
+          null,
+        npub,
+      );
+      const pictureUrl =
+        nostrPictureByNpub[npub] ?? derivedProfile.pictureUrl ?? null;
+
+      return {
+        displayName,
+        npub,
+        pictureUrl,
+      };
+    },
+    [
+      buildSavedContactName,
+      contacts,
+      lang,
+      nostrPictureByNpub,
+      unknownNameByNpub,
+    ],
+  );
+
+  const openNpubMessageContact = React.useCallback(
+    (rawNpub: string) => {
+      const npub = normalizeNpubIdentifier(rawNpub);
+      if (!npub) return;
+
+      const existing = contacts.find(
+        (contact) => normalizeNpubIdentifier(contact.npub) === npub,
+      );
+      if (existing?.id) {
+        navigateTo({ route: "contact", id: existing.id as ContactId });
+        return;
+      }
+
+      const myNpub = normalizeNpubIdentifier(currentNpub);
+      if (myNpub && myNpub === npub) {
+        navigateTo({ route: "profile" });
+        return;
+      }
+
+      if (contacts.length >= MAX_CONTACTS_PER_OWNER) {
+        setStatus(
+          t("contactsLimitReached").replace(
+            "{max}",
+            String(MAX_CONTACTS_PER_OWNER),
+          ),
+        );
+        return;
+      }
+
+      const defaultProfile = deriveDefaultProfile(npub, lang);
+      const payload = {
+        name: buildSavedContactName(
+          unknownNameByNpub[npub] ?? defaultProfile.name,
+          npub,
+        ) as typeof Evolu.NonEmptyString1000.Type,
+        npub: npub as typeof Evolu.NonEmptyString1000.Type,
+        lnAddress: null,
+        groupName: null,
+      };
+
+      const result = contactsOwnerId
+        ? (() => {
+            const scoped = insert("contact", payload, {
+              ownerId: contactsOwnerId,
+            });
+            if (scoped.ok) return scoped;
+            return insert("contact", payload);
+          })()
+        : insert("contact", payload);
+
+      if (!result.ok) {
+        setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
+        return;
+      }
+
+      openScannedContactPendingNpubRef.current = npub;
+      recordContactsOwnerWrite();
+      setStatus(t("contactSaved"));
+    },
+    [
+      buildSavedContactName,
+      contacts,
+      contactsOwnerId,
+      currentNpub,
+      insert,
+      lang,
+      openScannedContactPendingNpubRef,
+      recordContactsOwnerWrite,
+      setStatus,
+      t,
+      unknownNameByNpub,
+    ],
+  );
+
   React.useEffect(() => {
     const pending = pendingUnknownContactAddRef.current;
     if (!pending) return;
@@ -6285,6 +6393,7 @@ export const useAppShellComposition = () => {
       form,
       getCashuTokenMessageInfo,
       getMintIconUrl,
+      getNpubMessageContactInfo,
       groupNames,
       handleSaveContact,
       isProfileEditing,
@@ -6301,6 +6410,7 @@ export const useAppShellComposition = () => {
       onCopy: onCopyChatMessage,
       onDeclinePaymentRequest: onDeclineChatPaymentRequest,
       onEdit: onEditChatMessage,
+      onOpenNpubContact: openNpubMessageContact,
       onPayPaymentRequest: onPayChatPaymentRequest,
       cycleProfileAvatarControl,
       onPickProfilePhoto,

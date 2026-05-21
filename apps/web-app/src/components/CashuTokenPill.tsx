@@ -108,6 +108,7 @@ export function CashuTokenPill({
         <span>
           {displayAmount.approxPrefix}
           {displayAmount.amountText}
+          {displayAmount.unitLabel ? ` ${displayAmount.unitLabel}` : ""}
         </span>
       </span>
     </button>

@@ -1690,16 +1690,17 @@ button.settings-link:hover {
 }
 
 .chat-bubble.in {
-  background: #111827;
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .chat-bubble.out {
-  background: rgba(20, 184, 166, 0.12);
+  background: rgba(20, 184, 166, 0.18);
+  color: #e2e8f0;
 }
 
 .chat-message.pending .chat-bubble.out {
-  border: 1px dashed rgba(20, 184, 166, 0.6);
-  background: rgba(20, 184, 166, 0.08);
+  border: 1px dashed rgba(34, 197, 94, 0.55);
+  background: rgba(20, 184, 166, 0.12);
   opacity: 0.85;
 }
 
@@ -2841,6 +2842,60 @@ button.icon {
   background: rgba(148, 163, 184, 0.1);
   color: #94a3b8;
   border: none;
+}
+
+.chat-contact-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(100%, 240px);
+  cursor: pointer;
+  vertical-align: middle;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.chat-contact-pill:hover,
+.chat-contact-pill:focus,
+.chat-contact-pill:active {
+  background: rgba(20, 184, 166, 0.12);
+  color: #99f6e4;
+  box-shadow: none;
+  transform: none;
+}
+
+.chat-contact-pill-avatar {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-contact-pill-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chat-contact-pill-avatar-fallback {
+  font-size: 10px;
+  line-height: 1;
+  color: inherit;
+}
+
+.chat-contact-pill-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-payment-request-card {
@@ -4296,6 +4351,19 @@ button.tag-button {
 
 .contacts-checklist-progressFill {
   background: var(--app-primary-button-bg) !important;
+}
+
+.chat-bubble.in {
+  background: rgba(148, 163, 184, 0.18) !important;
+}
+
+.chat-bubble.out {
+  background: rgba(20, 184, 166, 0.18) !important;
+  color: #e2e8f0 !important;
+}
+
+.chat-message.pending .chat-bubble.out {
+  background: rgba(20, 184, 166, 0.12) !important;
 }
 
 .contacts-checklist-item.is-done .contacts-checklist-check.is-done,

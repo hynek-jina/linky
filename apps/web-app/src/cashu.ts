@@ -50,6 +50,7 @@ const asNumber = (value: JsonValue | null | undefined): number | null => {
 export type ParsedCashuToken = {
   amount: number;
   mint: string | null;
+  unit: string | null;
 };
 
 export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
@@ -88,6 +89,7 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
   if (isJsonRecord(decodedCbor)) {
     const rec = decodedCbor;
     const mint = asString(rec.m);
+    const unit = asString(rec.u);
 
     const entries = asJsonArray(rec.t);
 
@@ -102,7 +104,7 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
       }
     }
 
-    return { amount: total, mint };
+    return { amount: total, mint, unit };
   }
 
   if (!isJsonRecord(decoded)) return null;
@@ -111,13 +113,16 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
   const entries = asJsonArray(token.token);
 
   const mints = new Set<string>();
+  const units = new Set<string>();
   let total = 0;
 
   if (entries.length > 0) {
     for (const entry of entries) {
       if (!isJsonRecord(entry)) continue;
       const mint = asString(entry.mint);
+      const unit = asString(entry.unit);
       if (mint) mints.add(mint);
+      if (unit) units.add(unit);
       const proofs = asJsonArray(entry.proofs);
       for (const proof of proofs) {
         if (!isJsonRecord(proof)) continue;
@@ -127,7 +132,9 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
     }
   } else {
     const mint = asString(token.mint);
+    const unit = asString(token.unit);
     if (mint) mints.add(mint);
+    if (unit) units.add(unit);
     const proofs = asJsonArray(token.proofs);
     for (const proof of proofs) {
       if (!isJsonRecord(proof)) continue;
@@ -137,9 +144,11 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
   }
 
   const mint = mints.size === 1 ? Array.from(mints)[0] : null;
+  const unit = units.size === 1 ? Array.from(units)[0] : null;
 
   return {
     amount: total,
     mint,
+    unit,
   };
 };

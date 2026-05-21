@@ -1,7 +1,26 @@
+import { formatShortNpub, previewTokenText } from "../../utils/formatting";
+import { normalizeNpubIdentifier } from "../../utils/nostrNpub";
 import {
   parseCashuPaymentRequestMessage,
   parseLinkyPaymentRequestDeclineMessage,
 } from "./paymentRequestMessage";
+import { extractCashuTokenFromText } from "./tokenText";
+
+const PREVIEW_NPUB_PATTERN =
+  /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?/gi;
+const PREVIEW_CASHU_PATTERN = /cashu[0-9A-Za-z_-]+={0,2}/gi;
+
+const formatInlinePreviewEntities = (content: string): string => {
+  const withShortNpubs = content.replace(PREVIEW_NPUB_PATTERN, (match) => {
+    const normalized = normalizeNpubIdentifier(match);
+    return normalized ? formatShortNpub(normalized) : match;
+  });
+
+  return withShortNpubs.replace(PREVIEW_CASHU_PATTERN, (match) => {
+    const token = extractCashuTokenFromText(match);
+    return previewTokenText(token) ?? match;
+  });
+};
 
 interface FormatChatMessagePreviewArgs {
   content: string;
@@ -30,5 +49,5 @@ export const formatChatMessagePreviewText = ({
       : t("paymentRequestDeclinedPreviewIncoming");
   }
 
-  return content;
+  return formatInlinePreviewEntities(content);
 };
