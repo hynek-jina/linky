@@ -26,6 +26,7 @@ interface CashuTokenPageProps {
   checkAndRefreshCashuToken: (
     id: CashuTokenId,
   ) => Promise<"ok" | "invalid" | "transient" | "skipped">;
+  checkSingleIssuedCashuTokenIsClaimed: (id: CashuTokenId) => Promise<boolean>;
   copyText: (text: string) => Promise<void>;
   pendingCashuDeleteId: CashuTokenId | null;
   reserveCashuToken: (id: CashuTokenId) => Promise<void>;
@@ -44,6 +45,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   cashuIsBusy,
   cashuTokensAll,
   checkAndRefreshCashuToken,
+  checkSingleIssuedCashuTokenIsClaimed,
   copyText,
   pendingCashuDeleteId,
   reserveCashuToken,
@@ -135,6 +137,36 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
       cancelled = true;
     };
   }, [tokenText]);
+
+  // Poll the source mint while the user is staring at the QR of an issued
+  // token (issue #86): wallet.checkProofsStates is the passive NUT-07
+  // query, so it doesn't consume the proofs. Once all proofs flip to
+  // SPENT the helper soft-deletes the row, the page re-renders without
+  // it and the "Token not found" path triggers — at which point we no
+  // longer need to keep polling.
+  React.useEffect(() => {
+    if (!isIssued) return;
+
+    let cancelled = false;
+    let inFlight = false;
+    const tick = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        await checkSingleIssuedCashuTokenIsClaimed(routeId);
+      } finally {
+        inFlight = false;
+      }
+    };
+    void tick();
+    const intervalId = window.setInterval(() => {
+      void tick();
+    }, 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [checkSingleIssuedCashuTokenIsClaimed, isIssued, routeId]);
 
   if (!row || !tokenMeta) {
     return (

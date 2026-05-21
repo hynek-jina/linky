@@ -1,4 +1,5 @@
 import type { Dispatch, FC, SetStateAction } from "react";
+import { useEffect, useRef } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
@@ -18,6 +19,10 @@ interface CashuTokensPageProps {
   cashuOwnTokens: readonly CashuTokenListItem[];
   cashuIssuedTokens: readonly CashuTokenListItem[];
   checkAllCashuTokensAndDeleteInvalid: () => Promise<void>;
+  checkIssuedCashuTokensAndDeleteClaimed: () => Promise<{
+    checked: number;
+    claimed: number;
+  }>;
   getMintIconUrl: (mint: MintUrlInput) => {
     origin: string | null;
     url: string | null;
@@ -40,6 +45,7 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
   cashuMeltToMainMintButtonLabel,
   cashuOwnTokens,
   checkAllCashuTokensAndDeleteInvalid,
+  checkIssuedCashuTokensAndDeleteClaimed,
   getMintIconUrl,
   meltLargestForeignMintToMainMint,
   restoreMissingTokens,
@@ -53,6 +59,15 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
     const amount = Number(token.amount ?? 0);
     return sum + (Number.isFinite(amount) ? amount : 0);
   }, 0);
+
+  const hasIssuedTokens = cashuIssuedTokens.length > 0;
+  const autoCheckedRef = useRef(false);
+  useEffect(() => {
+    if (!hasIssuedTokens) return;
+    if (autoCheckedRef.current) return;
+    autoCheckedRef.current = true;
+    void checkIssuedCashuTokensAndDeleteClaimed();
+  }, [checkIssuedCashuTokensAndDeleteClaimed, hasIssuedTokens]);
 
   const renderTokenList = (
     tokens: readonly CashuTokenListItem[],
@@ -146,6 +161,14 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
             <span>
               {t("cashuIssued")} · {formatDisplayedAmountText(issuedBalance)}
             </span>
+            <button
+              type="button"
+              className="btn-small secondary"
+              onClick={() => void checkIssuedCashuTokensAndDeleteClaimed()}
+              disabled={cashuIsBusy || cashuBulkCheckIsBusy || !hasIssuedTokens}
+            >
+              {t("cashuCheckIssuedTokens")}
+            </button>
           </div>
           {renderTokenList(cashuIssuedTokens, t("cashuIssuedEmpty"))}
           <div className="settings-row" style={{ marginTop: 12 }}>

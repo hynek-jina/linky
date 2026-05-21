@@ -3747,6 +3747,8 @@ export const useAppShellComposition = () => {
   const {
     checkAllCashuTokensAndDeleteInvalid,
     checkAndRefreshCashuToken,
+    checkIssuedCashuTokensAndDeleteClaimed,
+    checkSingleIssuedCashuTokenIsClaimed,
     requestDeleteCashuToken,
   } = useCashuTokenChecks({
     appOwnerId: cashuOwnerId,
@@ -3762,6 +3764,38 @@ export const useAppShellComposition = () => {
     t,
     update,
   });
+
+  // Background check for issued-token claims (issue #86). Runs once on
+  // mount and every 60s thereafter while we have any issued tokens —
+  // wallet.checkProofsStates is the passive NUT-07 query that doesn't
+  // consume proofs. The helper itself skips when cashuIsBusy /
+  // bulkCheckIsBusy is true, so concurrent send/melt operations aren't
+  // disturbed. Detection deletes the row, so the issued list cleans up
+  // even when the user isn't sitting on #wallet/tokens.
+  const hasAnyIssuedTokensForBackgroundCheck = cashuIssuedTokens.length > 0;
+  React.useEffect(() => {
+    if (!hasAnyIssuedTokensForBackgroundCheck) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        await checkIssuedCashuTokensAndDeleteClaimed();
+      } catch {
+        // ignore — the helper already swallows mint-side errors.
+      }
+    };
+    void tick();
+    const intervalId = window.setInterval(() => {
+      void tick();
+    }, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [
+    checkIssuedCashuTokensAndDeleteClaimed,
+    hasAnyIssuedTokensForBackgroundCheck,
+  ]);
 
   const copyText = React.useCallback(
     async (value: string) => {
@@ -6100,6 +6134,8 @@ export const useAppShellComposition = () => {
       cashuOwnTokens,
       checkAllCashuTokensAndDeleteInvalid,
       checkAndRefreshCashuToken,
+      checkIssuedCashuTokensAndDeleteClaimed,
+      checkSingleIssuedCashuTokenIsClaimed,
       copyText,
       currentNpub,
       displayUnit,

@@ -26,6 +26,10 @@ interface BuildMoneyRoutePropsParams {
   checkAndRefreshCashuToken: ReturnType<
     MoneyRoutesProps["cashuTokenProps"]
   >["checkAndRefreshCashuToken"];
+  checkIssuedCashuTokensAndDeleteClaimed: MoneyRoutesProps["cashuTokensProps"]["checkIssuedCashuTokensAndDeleteClaimed"];
+  checkSingleIssuedCashuTokenIsClaimed: ReturnType<
+    MoneyRoutesProps["cashuTokenProps"]
+  >["checkSingleIssuedCashuTokenIsClaimed"];
   copyText: ReturnType<MoneyRoutesProps["cashuTokenProps"]>["copyText"];
   currentNpub: MoneyRoutesProps["topupProps"]["currentNpub"];
   displayUnit: MoneyRoutesProps["lnAddressPayProps"]["displayUnit"];
@@ -100,6 +104,8 @@ export const buildMoneyRouteProps = ({
   cashuOwnTokens,
   checkAllCashuTokensAndDeleteInvalid,
   checkAndRefreshCashuToken,
+  checkIssuedCashuTokensAndDeleteClaimed,
+  checkSingleIssuedCashuTokenIsClaimed,
   copyText,
   currentNpub,
   displayUnit,
@@ -167,6 +173,7 @@ export const buildMoneyRouteProps = ({
       cashuMeltToMainMintButtonLabel,
       cashuOwnTokens,
       checkAllCashuTokensAndDeleteInvalid,
+      checkIssuedCashuTokensAndDeleteClaimed,
       getMintIconUrl,
       meltLargestForeignMintToMainMint,
       restoreMissingTokens,
@@ -186,6 +193,7 @@ export const buildMoneyRouteProps = ({
         cashuIsBusy,
         pendingCashuDeleteId,
         checkAndRefreshCashuToken,
+        checkSingleIssuedCashuTokenIsClaimed,
         copyText,
         reserveCashuToken,
         requestDeleteCashuToken,

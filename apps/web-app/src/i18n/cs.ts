@@ -532,6 +532,7 @@ export const cs = {
   cashuAcceptFailed: "Nepodařilo se přijmout token",
   cashuCheckToken: "Zkontrolovat token",
   cashuCheckAllTokens: "Zkontrolovat vše",
+  cashuCheckIssuedTokens: "Zkontrolovat využité",
   cashuChecking: "Kontroluji token…",
   cashuCheckOk: "Token je v pořádku.",
   pwaUpdateAvailable: "Nová verze Linky je k dispozici",
