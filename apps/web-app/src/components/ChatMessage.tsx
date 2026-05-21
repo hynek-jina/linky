@@ -160,7 +160,11 @@ export function ChatMessage({
       return (
         <span
           key={key}
-          className={info.isValid ? "pill" : "pill pill-muted"}
+          className={
+            info.isValid
+              ? "pill chat-token-pill"
+              : "pill pill-muted chat-token-pill"
+          }
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -199,7 +203,7 @@ export function ChatMessage({
           ) : null}
           {showMintFallback && icon.host ? (
             <span
-              className="muted"
+              className="muted chat-token-pill-fallback"
               style={{
                 fontSize: 10,
                 lineHeight: "14px",
@@ -208,7 +212,7 @@ export function ChatMessage({
               {icon.host}
             </span>
           ) : null}
-          <span>
+          <span className="chat-token-pill-label">
             {displayAmount.approxPrefix}
             {displayAmount.amountText}
             {displayUnitLabel ? ` ${displayUnitLabel}` : ""}

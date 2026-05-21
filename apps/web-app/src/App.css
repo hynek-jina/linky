@@ -1685,6 +1685,8 @@ button.settings-link:hover {
   border-radius: 14px;
   border: none;
   color: #e2e8f0;
+  font-size: 15px;
+  line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -2220,6 +2222,15 @@ h4 {
   border: none;
   box-shadow: none;
   padding: 0;
+}
+
+.page-loading-panel {
+  min-height: calc(100dvh - var(--topbar-height) - 24px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 18px;
+  background: transparent;
 }
 
 .panel-header {
@@ -2824,12 +2835,37 @@ button.icon {
 }
 
 .pill {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
   padding: 6px 12px;
   border-radius: 999px;
   background: rgba(20, 184, 166, 0.12);
   color: #99f6e4;
   border: none;
   font-weight: 700;
+}
+
+.chat-bubble .pill {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.chat-token-pill {
+  vertical-align: middle;
+}
+
+.chat-token-pill-label,
+.chat-contact-pill-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: calc(1em * 1.4);
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.chat-token-pill-fallback {
+  align-self: center;
 }
 
 .pill.pill-error {

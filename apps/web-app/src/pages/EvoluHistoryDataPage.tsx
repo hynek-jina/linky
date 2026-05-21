@@ -124,7 +124,7 @@ export function EvoluHistoryDataPage({
 
   if (isLoading) {
     return (
-      <section className="panel">
+      <section className="panel panel-plain page-loading-panel">
         <p className="muted">{t("loading")}...</p>
       </section>
     );
