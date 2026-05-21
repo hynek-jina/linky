@@ -2143,6 +2143,12 @@ export const useAppShellComposition = () => {
     let cancelled = false;
     let claimInFlight = false;
     let lastLoggedClaimError = "";
+    // Cache the loaded wallet across the 5s polling ticks within this
+    // effect mount. Each tick only does a `checkMintQuote` + the eventual
+    // mintProofs, neither of which needs a fresh `loadMint()`. The effect
+    // tears down when topupMintQuote changes, so the cache is naturally
+    // scoped to one quote / one mintUrl+unit pair.
+    let cachedWallet: LoadedCashuWallet | null = null;
     const run = async () => {
       if (claimInFlight) return;
       claimInFlight = true;
@@ -2227,14 +2233,18 @@ export const useAppShellComposition = () => {
               return;
             }
 
-            const det = getCashuDeterministicSeedFromStorage();
-            const wallet = await createLoadedCashuWallet({
-              CashuMint,
-              CashuWallet,
-              mintUrl: topupMintQuote.mintUrl,
-              ...(topupMintQuote.unit ? { unit: topupMintQuote.unit } : {}),
-              ...(det ? { bip39seed: det.bip39seed } : {}),
-            });
+            let wallet = cachedWallet;
+            if (!wallet) {
+              const det = getCashuDeterministicSeedFromStorage();
+              wallet = await createLoadedCashuWallet({
+                CashuMint,
+                CashuWallet,
+                mintUrl: topupMintQuote.mintUrl,
+                ...(topupMintQuote.unit ? { unit: topupMintQuote.unit } : {}),
+                ...(det ? { bip39seed: det.bip39seed } : {}),
+              });
+              cachedWallet = wallet;
+            }
 
             const status = await wallet.checkMintQuote(quoteId);
             const quoteState = readMintQuoteState(status);
