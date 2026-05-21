@@ -478,11 +478,29 @@ export const useInboxNotificationsSync = <
                 extractReplyContextFromTags(tags);
               const editedFromId = extractEditedFromTag(tags);
               const effectivePubkey = isOutgoing ? myPubHex : resolvedPeerPub;
+              const normalizedIncomingPeerPubkey = isOutgoing
+                ? null
+                : normalizePubkeyHex(effectivePubkey);
+
+              const matchesStoredIncomingPeer = (
+                message: LocalNostrMessage,
+              ): boolean => {
+                if (isOutgoing || !normalizedIncomingPeerPubkey) return false;
+                return (
+                  normalizePubkeyHex(message.pubkey) ===
+                  normalizedIncomingPeerPubkey
+                );
+              };
 
               if (editedFromId) {
                 const target = nostrMessagesLatestRef.current.find(
                   (message) => {
-                    if (String(message.contactId ?? "") !== String(contactId)) {
+                    const matchesContactId =
+                      String(message.contactId ?? "") === String(contactId);
+                    if (
+                      !matchesContactId &&
+                      !matchesStoredIncomingPeer(message)
+                    ) {
                       return false;
                     }
                     if (String(message.direction ?? "") !== messageDirection)
@@ -521,7 +539,12 @@ export const useInboxNotificationsSync = <
 
               const existingMessage = nostrMessagesLatestRef.current.find(
                 (message) => {
-                  if (String(message.contactId ?? "") !== String(contactId)) {
+                  const matchesContactId =
+                    String(message.contactId ?? "") === String(contactId);
+                  if (
+                    !matchesContactId &&
+                    !matchesStoredIncomingPeer(message)
+                  ) {
                     return false;
                   }
                   if (String(message.direction ?? "") !== messageDirection)

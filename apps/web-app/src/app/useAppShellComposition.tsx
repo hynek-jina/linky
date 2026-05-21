@@ -149,6 +149,7 @@ import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardi
 import { useMainMenuState } from "./hooks/layout/useMainMenuState";
 import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
 import {
+  buildUnknownContactId,
   isUnknownContactId,
   normalizePubkeyHex,
 } from "./hooks/messages/contactIdentity";
@@ -3734,6 +3735,27 @@ export const useAppShellComposition = () => {
   });
 
   const handleDelete = (id: ContactId) => {
+    const normalizedContactId = String(id ?? "").trim();
+    const contactToDelete =
+      contacts.find(
+        (contact) => String(contact.id ?? "").trim() === normalizedContactId,
+      ) ?? null;
+    const deletedContactNpub = normalizeNpubIdentifier(contactToDelete?.npub);
+    let unknownThreadContactId: string | null = null;
+    if (deletedContactNpub) {
+      try {
+        const decodedContact = nip19.decode(deletedContactNpub);
+        if (
+          decodedContact.type === "npub" &&
+          typeof decodedContact.data === "string"
+        ) {
+          unknownThreadContactId = buildUnknownContactId(decodedContact.data);
+        }
+      } catch {
+        unknownThreadContactId = null;
+      }
+    }
+
     const result = contactsOwnerId
       ? (() => {
           const scoped = update(
@@ -3746,6 +3768,15 @@ export const useAppShellComposition = () => {
         })()
       : update("contact", { id, isDeleted: Evolu.sqliteTrue });
     if (result.ok) {
+      if (
+        unknownThreadContactId &&
+        unknownThreadContactId !== normalizedContactId
+      ) {
+        reassignLocalNostrMessagesContactId(
+          normalizedContactId,
+          unknownThreadContactId,
+        );
+      }
       recordContactsOwnerWrite();
       setStatus(t("contactDeleted"));
       closeContactDetail();
