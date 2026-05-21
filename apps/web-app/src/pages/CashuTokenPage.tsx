@@ -14,6 +14,7 @@ import { parseCashuToken } from "../cashu";
 import { NfcIcon } from "../components/NfcIcon";
 import { WalletBalance } from "../components/WalletBalance";
 import type { CashuTokenId } from "../evolu";
+import { useNavigation } from "../hooks/useRouting";
 import { buildCashuShareUrl } from "../utils/deepLinks";
 
 type CashuTokenPageRow = CashuTokenRowLike & { id: CashuTokenId };
@@ -58,6 +59,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   writeToNfc,
 }) => {
   const { formatDisplayedAmountText } = useAppShellCore();
+  const navigateTo = useNavigation();
   const [tokenQr, setTokenQr] = React.useState<string | null>(null);
   const row = cashuTokensAll.find(
     (tkn) => tkn.id === routeId && !tkn.isDeleted,
@@ -141,9 +143,21 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   // Poll the source mint while the user is staring at the QR of an issued
   // token (issue #86): wallet.checkProofsStates is the passive NUT-07
   // query, so it doesn't consume the proofs. Once all proofs flip to
-  // SPENT the helper soft-deletes the row, the page re-renders without
-  // it and the "Token not found" path triggers — at which point we no
-  // longer need to keep polling.
+  // SPENT the helper soft-deletes the row and we navigate back to the
+  // tokens list — staying on the now-orphan detail page would just
+  // render the generic error panel.
+  //
+  // The helper's identity changes whenever cashuTokensAll updates, so
+  // we stash the latest reference in a ref to keep the 10s interval
+  // from being torn down + restarted on every churn. Without this the
+  // tick was effectively firing every couple of seconds under load.
+  const checkSingleIssuedRef = React.useRef(
+    checkSingleIssuedCashuTokenIsClaimed,
+  );
+  React.useEffect(() => {
+    checkSingleIssuedRef.current = checkSingleIssuedCashuTokenIsClaimed;
+  }, [checkSingleIssuedCashuTokenIsClaimed]);
+
   React.useEffect(() => {
     if (!isIssued) return;
 
@@ -153,7 +167,10 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
       if (cancelled || inFlight) return;
       inFlight = true;
       try {
-        await checkSingleIssuedCashuTokenIsClaimed(routeId);
+        const claimed = await checkSingleIssuedRef.current(routeId);
+        if (claimed && !cancelled) {
+          navigateTo({ route: "cashuTokens" });
+        }
       } finally {
         inFlight = false;
       }
@@ -166,14 +183,19 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [checkSingleIssuedCashuTokenIsClaimed, isIssued, routeId]);
+  }, [isIssued, navigateTo, routeId]);
 
-  if (!row || !tokenMeta) {
-    return (
-      <section className="panel">
-        <p className="muted">{t("errorPrefix")}</p>
-      </section>
-    );
+  // If the row vanished (the issued-token claim detector or any other
+  // path soft-deleted it while we were here), bounce back to the tokens
+  // list instead of rendering the generic error panel.
+  const rowMissing = !row || !tokenMeta;
+  React.useEffect(() => {
+    if (!rowMissing) return;
+    navigateTo({ route: "cashuTokens" });
+  }, [navigateTo, rowMissing]);
+
+  if (rowMissing) {
+    return null;
   }
 
   const safeRow = row;

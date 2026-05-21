@@ -3772,14 +3772,26 @@ export const useAppShellComposition = () => {
   // bulkCheckIsBusy is true, so concurrent send/melt operations aren't
   // disturbed. Detection deletes the row, so the issued list cleans up
   // even when the user isn't sitting on #wallet/tokens.
+  //
+  // The helper's callback identity changes every time cashuTokensAll
+  // updates (Evolu emits frequently). Stashing it in a ref keeps the
+  // 60s interval from being torn down + restarted on every churn — the
+  // earlier inline-deps version was firing the check roughly every
+  // second under load.
   const hasAnyIssuedTokensForBackgroundCheck = cashuIssuedTokens.length > 0;
+  const checkIssuedCashuTokensRef = React.useRef(
+    checkIssuedCashuTokensAndDeleteClaimed,
+  );
+  React.useEffect(() => {
+    checkIssuedCashuTokensRef.current = checkIssuedCashuTokensAndDeleteClaimed;
+  }, [checkIssuedCashuTokensAndDeleteClaimed]);
   React.useEffect(() => {
     if (!hasAnyIssuedTokensForBackgroundCheck) return;
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
       try {
-        await checkIssuedCashuTokensAndDeleteClaimed();
+        await checkIssuedCashuTokensRef.current();
       } catch {
         // ignore — the helper already swallows mint-side errors.
       }
@@ -3792,10 +3804,7 @@ export const useAppShellComposition = () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [
-    checkIssuedCashuTokensAndDeleteClaimed,
-    hasAnyIssuedTokensForBackgroundCheck,
-  ]);
+  }, [hasAnyIssuedTokensForBackgroundCheck]);
 
   const copyText = React.useCallback(
     async (value: string) => {
