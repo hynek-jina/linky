@@ -36,6 +36,20 @@ export interface NavigatorWithOptionalStorage {
   storage?: StorageManager;
 }
 
+// `navigator.standalone` is the iOS Safari signal for the page running from
+// the home-screen install. TS lib.dom doesn't include it because it isn't
+// in any spec, so type it as an optional boolean.
+export interface NavigatorWithOptionalStandalone {
+  standalone?: boolean;
+}
+
+// `beforeinstallprompt` event (Chromium-only). The spec is still draft, so
+// declare the bits we need.
+export interface BeforeInstallPromptEventLike extends Event {
+  readonly userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+  prompt(): Promise<void>;
+}
+
 export interface BarcodeDetectionLike {
   rawValue?: string;
 }

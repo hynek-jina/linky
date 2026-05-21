@@ -38,6 +38,11 @@ export const EVOLU_TRANSACTIONS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY =
 export const OWNER_ROTATION_TRIGGER_WRITE_COUNT = 1000;
 export const OWNER_ROTATION_COOLDOWN_MS = 60_000;
 export const MAX_CONTACTS_PER_OWNER = 500;
+export const INSTALL_PWA_DISMISSED_AT_MS_STORAGE_KEY =
+  "linky.install_pwa_dismissed_at_ms.v1";
+export const INSTALL_PWA_DISMISS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+export const INSTALL_PWA_FIRST_SHOW_DELAY_MS = 3_000;
+
 export const CONTACTS_ONBOARDING_DISMISSED_STORAGE_KEY =
   "linky.contacts_onboarding_dismissed";
 export const CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY =
