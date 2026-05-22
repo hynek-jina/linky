@@ -8,6 +8,7 @@ export interface CashuTokenMessageInfo {
   mintDisplay: string | null;
   mintUrl: string | null;
   tokenRaw: string;
+  unit: string | null;
 }
 
 const getMintDisplay = (mintValue: MintUrlInput): string | null => {
@@ -50,6 +51,7 @@ export const getCashuTokenMessageInfo = (
     mintDisplay: getMintDisplay(parsed.mint),
     mintUrl: parsed.mint ? String(parsed.mint) : null,
     amount: Number.isFinite(parsed.amount) ? parsed.amount : null,
+    unit: parsed.unit,
     // Best-effort: "valid" means not yet imported into wallet.
     isValid: !isKnownCashuToken(cashuTokensAll, tokenRaw),
   };

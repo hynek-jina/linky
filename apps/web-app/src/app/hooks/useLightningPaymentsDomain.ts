@@ -425,6 +425,7 @@ export const useLightningPaymentsDomain = ({
             .trim()
             .toLowerCase() === inferredLightningAddress.toLowerCase(),
       );
+      const knownContactId = knownContact?.id ?? null;
       const shouldOfferSave = canOfferSave && !knownContact?.id;
 
       try {
@@ -642,7 +643,7 @@ export const useLightningPaymentsDomain = ({
                 mint: result.mint,
                 unit: result.unit,
                 error: null,
-                contactId: null,
+                contactId: knownContactId,
                 method: "lightning_address",
                 phase: "complete",
               });
@@ -719,7 +720,7 @@ export const useLightningPaymentsDomain = ({
           mint: finalErrorMint,
           unit: "sat",
           error: finalErrorMessage,
-          contactId: null,
+          contactId: knownContactId,
           method: "lightning_address",
           phase: finalErrorMint ? "melt" : "invoice_fetch",
         });

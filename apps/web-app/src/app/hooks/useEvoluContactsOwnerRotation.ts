@@ -4,6 +4,8 @@ import React from "react";
 import type { CashuTokenId, ContactId } from "../../evolu";
 import { evolu } from "../../evolu";
 import {
+  CASHU_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
+  CONTACTS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
   EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
   EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
   EVOLU_CONTACTS_OWNER_BASELINE_COUNT_STORAGE_KEY,
@@ -18,8 +20,9 @@ import {
   EVOLU_TRANSACTIONS_OWNER_EDIT_COUNT_STORAGE_KEY,
   EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY,
   EVOLU_TRANSACTIONS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
+  MESSAGES_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
   OWNER_ROTATION_COOLDOWN_MS,
-  OWNER_ROTATION_TRIGGER_WRITE_COUNT,
+  TRANSACTIONS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
 } from "../../utils/constants";
 import { deriveEvoluOwnerMnemonicFromSlip39 } from "../../utils/slip39Nostr";
 import type { CashuTokenRowLike, ContactRowLike } from "../types/appTypes";
@@ -50,6 +53,7 @@ interface UseEvoluContactsOwnerRotationParams {
 interface UseEvoluContactsOwnerRotationResult {
   cashuOwnerId: Evolu.OwnerId | null;
   cashuOwnerEditsUntilRotation: number;
+  cashuOwnerPointer: string;
   cashuSyncOwner: Evolu.SyncOwner | null;
   contactsBackupOwnerId: Evolu.OwnerId | null;
   contactsOwnerEditCount: number;
@@ -84,9 +88,8 @@ interface UseEvoluContactsOwnerRotationResult {
   transactionsSyncOwner: Evolu.SyncOwner | null;
 }
 
-const META_POINTER_ROW_ID = Evolu.createIdFromString<"OwnerMeta">(
-  "contacts-owner-active",
-);
+const createMetaPointerRowId = (scope: string): Evolu.Id =>
+  Evolu.createIdFromString<"OwnerMeta">(`owner-pointer-${scope}`);
 
 const formatMutationError = (error: unknown): string => {
   if (error instanceof Error) return error.message;
@@ -168,6 +171,17 @@ const parseContactsOwnerIndexFromPointer = (value: unknown): number | null => {
   return Math.trunc(parsed);
 };
 
+const parseCashuOwnerIndexFromPointer = (value: unknown): number | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  const match = /^cashu-(\d+)$/.exec(trimmed);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed < 0) return null;
+  return Math.trunc(parsed);
+};
+
 const parseMessagesOwnerIndexFromPointer = (value: unknown): number | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -191,6 +205,22 @@ const parseTransactionsOwnerIndexFromPointer = (
   if (parsed < 0) return null;
   return Math.trunc(parsed);
 };
+
+const upsertOwnerMetaPointer = (
+  upsert: EvoluMutations["upsert"],
+  ownerId: Evolu.OwnerId,
+  scope: "cashu" | "contacts" | "messages" | "transactions",
+  value: string,
+) =>
+  upsert(
+    "ownerMeta",
+    {
+      id: createMetaPointerRowId(scope),
+      scope: scope as typeof Evolu.NonEmptyString100.Type,
+      value: value as typeof Evolu.NonEmptyString1000.Type,
+    },
+    { ownerId },
+  );
 
 const parseCounterMap = (raw: string | null): CounterMap => {
   if (!raw) return {};
@@ -842,6 +872,7 @@ export const useEvoluContactsOwnerRotation = ({
     if (!metaOwnerId) return;
 
     let resolvedContactsIndex: number | null = null;
+    let resolvedCashuIndex: number | null = null;
     let resolvedMessagesIndex: number | null = null;
     let resolvedTransactionsIndex: number | null = null;
     for (const row of ownerMetaRows) {
@@ -857,6 +888,12 @@ export const useEvoluContactsOwnerRotation = ({
         );
         if (parsed !== null) resolvedContactsIndex = parsed;
       }
+      if (scopeText === "cashu") {
+        const parsed = parseCashuOwnerIndexFromPointer(
+          readRowPointerValue(row),
+        );
+        if (parsed !== null) resolvedCashuIndex = parsed;
+      }
       if (scopeText === "messages") {
         const parsed = parseMessagesOwnerIndexFromPointer(
           readRowPointerValue(row),
@@ -871,15 +908,18 @@ export const useEvoluContactsOwnerRotation = ({
       }
     }
 
+    const resolvedSharedCashuContactsIndex =
+      resolvedContactsIndex ?? resolvedCashuIndex;
+
     if (
-      resolvedContactsIndex !== null &&
-      resolvedContactsIndex !== contactsOwnerIndex
+      resolvedSharedCashuContactsIndex !== null &&
+      resolvedSharedCashuContactsIndex !== contactsOwnerIndex
     ) {
       setStoredIndex(
         EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY,
-        resolvedContactsIndex,
+        resolvedSharedCashuContactsIndex,
       );
-      setContactsOwnerIndex(resolvedContactsIndex);
+      setContactsOwnerIndex(resolvedSharedCashuContactsIndex);
     }
 
     if (
@@ -1160,20 +1200,30 @@ export const useEvoluContactsOwnerRotation = ({
         if (result.ok) copiedCashuCount += 1;
       }
 
-      const pointerResult = upsert(
-        "ownerMeta",
-        {
-          id: META_POINTER_ROW_ID,
-          scope: "contacts" as typeof Evolu.NonEmptyString100.Type,
-          value:
-            `contacts-${nextIndex}` as typeof Evolu.NonEmptyString1000.Type,
-        },
-        { ownerId: derived.metaOwner.id },
+      const contactsPointerResult = upsertOwnerMetaPointer(
+        upsert,
+        derived.metaOwner.id,
+        "contacts",
+        `contacts-${nextIndex}`,
       );
 
-      if (!pointerResult.ok) {
+      const cashuPointerResult = upsertOwnerMetaPointer(
+        upsert,
+        derived.metaOwner.id,
+        "cashu",
+        `cashu-${nextIndex}`,
+      );
+
+      if (!contactsPointerResult.ok) {
         pushToast(
-          `${t("errorPrefix")}: ${formatMutationError(pointerResult.error)}`,
+          `${t("errorPrefix")}: ${formatMutationError(contactsPointerResult.error)}`,
+        );
+        return;
+      }
+
+      if (!cashuPointerResult.ok) {
+        pushToast(
+          `${t("errorPrefix")}: ${formatMutationError(cashuPointerResult.error)}`,
         );
         return;
       }
@@ -1345,15 +1395,11 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
-      const pointerResult = upsert(
-        "ownerMeta",
-        {
-          id: META_POINTER_ROW_ID,
-          scope: "messages" as typeof Evolu.NonEmptyString100.Type,
-          value:
-            `messages-${nextIndex}` as typeof Evolu.NonEmptyString1000.Type,
-        },
-        { ownerId: derived.metaOwner.id },
+      const pointerResult = upsertOwnerMetaPointer(
+        upsert,
+        derived.metaOwner.id,
+        "messages",
+        `messages-${nextIndex}`,
       );
 
       if (!pointerResult.ok) {
@@ -1526,15 +1572,11 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
-      const pointerResult = upsert(
-        "ownerMeta",
-        {
-          id: META_POINTER_ROW_ID,
-          scope: "transactions" as typeof Evolu.NonEmptyString100.Type,
-          value:
-            `transactions-${nextIndex}` as typeof Evolu.NonEmptyString1000.Type,
-        },
-        { ownerId: derived.metaOwner.id },
+      const pointerResult = upsertOwnerMetaPointer(
+        upsert,
+        derived.metaOwner.id,
+        "transactions",
+        `transactions-${nextIndex}`,
       );
 
       if (!pointerResult.ok) {
@@ -1654,9 +1696,9 @@ export const useEvoluContactsOwnerRotation = ({
     if (rotateContactsOwnerIsBusy) return;
 
     const shouldRotateContacts =
-      contactsOwnerWriteDelta >= OWNER_ROTATION_TRIGGER_WRITE_COUNT;
+      contactsOwnerWriteDelta >= CONTACTS_OWNER_ROTATION_TRIGGER_WRITE_COUNT;
     const shouldRotateCashu =
-      cashuOwnerWriteDelta >= OWNER_ROTATION_TRIGGER_WRITE_COUNT;
+      cashuOwnerWriteDelta >= CASHU_OWNER_ROTATION_TRIGGER_WRITE_COUNT;
     if (!shouldRotateContacts && !shouldRotateCashu) return;
 
     const nowMs = Date.now();
@@ -1686,7 +1728,8 @@ export const useEvoluContactsOwnerRotation = ({
   React.useEffect(() => {
     if (!isSeedLogin) return;
     if (rotateMessagesOwnerIsBusy) return;
-    if (messagesOwnerWriteDelta < OWNER_ROTATION_TRIGGER_WRITE_COUNT) return;
+    if (messagesOwnerWriteDelta < MESSAGES_OWNER_ROTATION_TRIGGER_WRITE_COUNT)
+      return;
 
     const nowMs = Date.now();
     const cooldownRemainingMs = getCooldownRemainingMs(
@@ -1707,7 +1750,10 @@ export const useEvoluContactsOwnerRotation = ({
   React.useEffect(() => {
     if (!isSeedLogin) return;
     if (rotateTransactionsOwnerIsBusy) return;
-    if (transactionsOwnerWriteDelta < OWNER_ROTATION_TRIGGER_WRITE_COUNT) {
+    if (
+      transactionsOwnerWriteDelta <
+      TRANSACTIONS_OWNER_ROTATION_TRIGGER_WRITE_COUNT
+    ) {
       return;
     }
 
@@ -1733,19 +1779,20 @@ export const useEvoluContactsOwnerRotation = ({
   );
   const contactsOwnerEditsUntilRotation = Math.max(
     0,
-    OWNER_ROTATION_TRIGGER_WRITE_COUNT - contactsOwnerWriteDelta,
+    CONTACTS_OWNER_ROTATION_TRIGGER_WRITE_COUNT - contactsOwnerWriteDelta,
   );
   const cashuOwnerEditsUntilRotation = Math.max(
     0,
-    OWNER_ROTATION_TRIGGER_WRITE_COUNT - cashuOwnerWriteDelta,
+    CASHU_OWNER_ROTATION_TRIGGER_WRITE_COUNT - cashuOwnerWriteDelta,
   );
   const messagesOwnerEditsUntilRotation = Math.max(
     0,
-    OWNER_ROTATION_TRIGGER_WRITE_COUNT - messagesOwnerWriteDelta,
+    MESSAGES_OWNER_ROTATION_TRIGGER_WRITE_COUNT - messagesOwnerWriteDelta,
   );
   const transactionsOwnerEditsUntilRotation = Math.max(
     0,
-    OWNER_ROTATION_TRIGGER_WRITE_COUNT - transactionsOwnerWriteDelta,
+    TRANSACTIONS_OWNER_ROTATION_TRIGGER_WRITE_COUNT -
+      transactionsOwnerWriteDelta,
   );
 
   return {
@@ -1753,6 +1800,7 @@ export const useEvoluContactsOwnerRotation = ({
       ? (ownerSyncData?.cashuOwner.id ?? null)
       : appOwnerId,
     cashuOwnerEditsUntilRotation,
+    cashuOwnerPointer: `cashu-${contactsOwnerIndex}`,
     cashuSyncOwner: isSeedLogin ? (ownerSyncData?.cashuOwner ?? null) : null,
     contactsBackupOwnerId: isSeedLogin ? contactsBackupOwnerId : null,
     contactsOwnerEditCount,

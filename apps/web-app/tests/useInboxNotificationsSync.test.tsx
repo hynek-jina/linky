@@ -750,6 +750,117 @@ describe("useInboxNotificationsSync", () => {
     });
   });
 
+  it("does not replay a deleted contact message when the stored thread still uses the old contact id", async () => {
+    const deletedContactPubkey =
+      "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+
+    const wrapEvent = { id: "wrap-deleted-contact-1" };
+    querySyncMock.mockResolvedValue([wrapEvent]);
+    subscribeMock.mockReturnValue({
+      close: vi.fn(async () => {}),
+    });
+    unwrapEventMock.mockReturnValue({
+      kind: 14,
+      id: "rumor-deleted-contact-1",
+      pubkey: deletedContactPubkey,
+      content: "stale thread message",
+      created_at: 1730000200,
+      tags: [["p", "me-pubkey-hex"]],
+    });
+    nip44DecryptMock.mockImplementation(() => {
+      throw new Error("not encrypted");
+    });
+
+    const appendLocalNostrMessage = vi.fn(() => "message-deleted");
+    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
+    const maybeShowPwaNotification = vi.fn(async () => {});
+    const pushToast = vi.fn();
+    const updateLocalNostrMessage = vi.fn();
+    const updateLocalNostrReaction = vi.fn();
+    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
+    const setContactAttentionById: React.Dispatch<
+      React.SetStateAction<Record<string, number>>
+    > = vi.fn();
+
+    const Harness = () => {
+      useInboxNotificationsSync({
+        appendLocalNostrMessage,
+        appendLocalNostrReaction,
+        contacts: [],
+        currentNsec: "nsec-test",
+        maybeShowPwaNotification,
+        nostrFetchRelays: [],
+        nostrMessageWrapIdsRef: { current: new Set<string>() },
+        nostrMessagesLatestRef: {
+          current: [
+            {
+              id: "stored-message-deleted-1",
+              contactId: "contact-deleted-1",
+              content: "stale thread message",
+              createdAtSec: 1730000200,
+              direction: "in",
+              pubkey: deletedContactPubkey,
+              replyToId: null,
+              replyToContent: null,
+              rootMessageId: null,
+              rumorId: "rumor-deleted-contact-1",
+              status: "sent",
+              wrapId: "old-wrap-deleted-1",
+              editedAtSec: null,
+              editedFromId: null,
+              isEdited: false,
+              originalContent: null,
+            },
+          ] satisfies LocalNostrMessage[],
+        },
+        nostrMessagesRecent: [],
+        nostrReactionWrapIdsRef: { current: new Set<string>() },
+        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+        pushToast,
+        route: { kind: "contacts" },
+        setContactAttentionById,
+        softDeleteLocalNostrReactionsByWrapIds,
+        t: (key: string) =>
+          key === "chatIncomingMessageToast" ? "{name}: {message}" : key,
+        updateLocalNostrMessage,
+        updateLocalNostrReaction,
+      });
+
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<Harness />);
+    });
+    await flushEffects();
+    await flushEffects();
+
+    expect(appendLocalNostrMessage).not.toHaveBeenCalled();
+    expect(pushToast).not.toHaveBeenCalled();
+    expect(maybeShowPwaNotification).not.toHaveBeenCalled();
+    expect(updateLocalNostrMessage).toHaveBeenCalledWith(
+      "stored-message-deleted-1",
+      expect.objectContaining({
+        pubkey: deletedContactPubkey,
+        rumorId: "rumor-deleted-contact-1",
+        status: "sent",
+        wrapId: "wrap-deleted-contact-1",
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("shows a single notify-only payment notice without storing a chat message", async () => {
     Object.defineProperty(document, "visibilityState", {
       configurable: true,

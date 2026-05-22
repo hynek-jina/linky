@@ -7,7 +7,9 @@ import type {
   LocalNostrMessage,
   MintUrlInput,
 } from "../app/types/appTypes";
+import { deriveDefaultProfile } from "../derivedProfile";
 import { getNextMintIconUrl } from "../utils/mint";
+import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { EditIndicator } from "./EditIndicator";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
@@ -18,6 +20,18 @@ interface MintIcon {
   origin: string | null;
   url: string | null;
 }
+
+export interface NpubMessageContactInfo {
+  displayName: string;
+  npub: string;
+  pictureUrl: string | null;
+}
+
+const MESSAGE_CASHU_PATTERN = /cashu[0-9A-Za-z_-]+={0,2}/gi;
+const MESSAGE_NPUB_PATTERN =
+  /^(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?$/i;
+const MESSAGE_INLINE_ENTITY_PATTERN =
+  /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?|cashu[0-9A-Za-z_-]+={0,2}/gi;
 
 interface ChatMessageProps {
   actionLabels: {
@@ -35,6 +49,7 @@ interface ChatMessageProps {
   formatChatDayLabel: (ms: number) => string;
   getCashuTokenMessageInfo: (text: string) => CashuTokenMessageInfo | null;
   getMintIconUrl: (mint: MintUrlInput) => MintIcon;
+  getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
   locale: string;
   message: LocalNostrMessage;
   messageElRef?: (el: HTMLDivElement | null, messageId: string) => void;
@@ -44,6 +59,7 @@ interface ChatMessageProps {
   onEdit: (message: LocalNostrMessage) => void;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
+  onOpenNpubContact: (npub: string) => void;
   onPayPaymentRequest: (requestInfo: CashuPaymentRequestMessageInfo) => void;
   onReact: (message: LocalNostrMessage, emoji: string) => void;
   onReply: (message: LocalNostrMessage) => void;
@@ -69,6 +85,7 @@ export function ChatMessage({
   formatChatDayLabel,
   getCashuTokenMessageInfo,
   getMintIconUrl,
+  getNpubMessageContactInfo,
   locale,
   message,
   messageElRef,
@@ -78,6 +95,7 @@ export function ChatMessage({
   onEdit,
   onMintIconError,
   onMintIconLoad,
+  onOpenNpubContact,
   onPayPaymentRequest,
   onReact,
   onReply,
@@ -130,6 +148,183 @@ export function ChatMessage({
 
   const tokenInfo = getCashuTokenMessageInfo(content);
   const isDeclineMessage = Boolean(declineInfo);
+
+  const renderCashuTokenPill = React.useCallback(
+    (info: CashuTokenMessageInfo, key?: string) => {
+      const icon = getMintIconUrl(info.mintUrl);
+      const showMintFallback = icon.failed || !icon.url;
+      const displayAmount = formatDisplayedAmountParts(info.amount ?? 0);
+      const displayAmountText = formatDisplayedAmountText(info.amount ?? 0);
+      const displayUnitLabel = String(displayAmount.unitLabel ?? "").trim();
+
+      return (
+        <span
+          key={key}
+          className={
+            info.isValid
+              ? "pill chat-token-pill"
+              : "pill pill-muted chat-token-pill"
+          }
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+          aria-label={
+            info.mintDisplay
+              ? `${displayAmountText} · ${info.mintDisplay}`
+              : displayAmountText
+          }
+        >
+          {icon.url ? (
+            <img
+              src={icon.url}
+              alt=""
+              width={14}
+              height={14}
+              style={{
+                borderRadius: 9999,
+                objectFit: "cover",
+              }}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              onLoad={() => {
+                if (icon.origin) {
+                  onMintIconLoad(icon.origin, icon.url);
+                }
+              }}
+              onError={() => {
+                if (icon.origin) {
+                  const next = getNextMintIconUrl(icon.url, icon.origin);
+                  onMintIconError(icon.origin, next);
+                }
+              }}
+            />
+          ) : null}
+          {showMintFallback && icon.host ? (
+            <span
+              className="muted chat-token-pill-fallback"
+              style={{
+                fontSize: 10,
+                lineHeight: "14px",
+              }}
+            >
+              {icon.host}
+            </span>
+          ) : null}
+          <span className="chat-token-pill-label">
+            {displayAmount.approxPrefix}
+            {displayAmount.amountText}
+            {displayUnitLabel ? ` ${displayUnitLabel}` : ""}
+          </span>
+        </span>
+      );
+    },
+    [
+      formatDisplayedAmountParts,
+      formatDisplayedAmountText,
+      getMintIconUrl,
+      onMintIconError,
+      onMintIconLoad,
+    ],
+  );
+
+  const inlineMessageContent = React.useMemo(() => {
+    if (paymentRequestInfo || isDeclineMessage) return null;
+
+    const segments: React.ReactNode[] = [];
+    const matches = Array.from(content.matchAll(MESSAGE_INLINE_ENTITY_PATTERN));
+    if (matches.length === 0) return null;
+
+    let cursor = 0;
+    let replacementCount = 0;
+
+    for (const match of matches) {
+      const matchedText = String(match[0] ?? "");
+      const start = match.index ?? 0;
+      const end = start + matchedText.length;
+
+      if (start > cursor) {
+        segments.push(content.slice(cursor, start));
+      }
+
+      const normalizedNpub = MESSAGE_NPUB_PATTERN.test(matchedText)
+        ? normalizeNpubIdentifier(matchedText)
+        : null;
+      if (normalizedNpub) {
+        const npubContactInfo = getNpubMessageContactInfo(normalizedNpub);
+        if (!npubContactInfo) {
+          segments.push(matchedText);
+        } else {
+          replacementCount += 1;
+          segments.push(
+            <button
+              key={`${messageId}-npub-${start}`}
+              type="button"
+              className="pill chat-contact-pill"
+              onClick={() => onOpenNpubContact(npubContactInfo.npub)}
+              aria-label={npubContactInfo.displayName}
+            >
+              <span className="chat-contact-pill-avatar" aria-hidden="true">
+                {npubContactInfo.pictureUrl ? (
+                  <img
+                    src={npubContactInfo.pictureUrl}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="chat-contact-pill-avatar-fallback">
+                    {deriveDefaultProfile(npubContactInfo.npub).name.charAt(0)}
+                  </span>
+                )}
+              </span>
+              <span className="chat-contact-pill-label">
+                {npubContactInfo.displayName}
+              </span>
+            </button>,
+          );
+        }
+      } else {
+        const inlineTokenInfo = getCashuTokenMessageInfo(matchedText);
+        if (!inlineTokenInfo) {
+          segments.push(matchedText);
+        } else {
+          replacementCount += 1;
+          segments.push(
+            renderCashuTokenPill(
+              inlineTokenInfo,
+              `${messageId}-cashu-${start}`,
+            ),
+          );
+        }
+      }
+
+      cursor = end;
+    }
+
+    if (cursor < content.length) {
+      segments.push(content.slice(cursor));
+    }
+
+    return replacementCount > 0 ? segments : null;
+  }, [
+    content,
+    getCashuTokenMessageInfo,
+    getNpubMessageContactInfo,
+    isDeclineMessage,
+    messageId,
+    onOpenNpubContact,
+    paymentRequestInfo,
+    renderCashuTokenPill,
+  ]);
+
+  const isStandaloneTokenMessage = React.useMemo(() => {
+    if (!tokenInfo) return false;
+    const trimmed = content.trim();
+    const tokenMatch = trimmed.match(MESSAGE_CASHU_PATTERN);
+    return tokenMatch?.[0] === trimmed;
+  }, [content, tokenInfo]);
 
   const openMenu = React.useCallback(() => {
     setMenuOpen(true);
@@ -306,91 +501,10 @@ export function ChatMessage({
               <span className="pill pill-muted">
                 {t("paymentRequestDeclinedMessage")}
               </span>
-            ) : tokenInfo ? (
-              (() => {
-                const icon = getMintIconUrl(tokenInfo.mintUrl);
-                const showMintFallback = icon.failed || !icon.url;
-                const displayAmount = formatDisplayedAmountParts(
-                  tokenInfo.amount ?? 0,
-                );
-                const displayAmountText = formatDisplayedAmountText(
-                  tokenInfo.amount ?? 0,
-                );
-                return (
-                  <span
-                    className={tokenInfo.isValid ? "pill" : "pill pill-muted"}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                    aria-label={
-                      tokenInfo.mintDisplay
-                        ? `${displayAmountText} · ${tokenInfo.mintDisplay}`
-                        : displayAmountText
-                    }
-                  >
-                    {icon.url ? (
-                      <img
-                        src={icon.url}
-                        alt=""
-                        width={14}
-                        height={14}
-                        style={{
-                          borderRadius: 9999,
-                          objectFit: "cover",
-                        }}
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        onLoad={() => {
-                          if (icon.origin) {
-                            onMintIconLoad(icon.origin, icon.url);
-                          }
-                        }}
-                        onError={() => {
-                          if (icon.origin) {
-                            const next = getNextMintIconUrl(
-                              icon.url,
-                              icon.origin,
-                            );
-                            onMintIconError(icon.origin, next);
-                          }
-                        }}
-                      />
-                    ) : null}
-                    {showMintFallback && icon.host ? (
-                      <span
-                        className="muted"
-                        style={{
-                          fontSize: 10,
-                          lineHeight: "14px",
-                        }}
-                      >
-                        {icon.host}
-                      </span>
-                    ) : null}
-                    {!showMintFallback && tokenInfo.mintDisplay ? (
-                      <span
-                        className="muted"
-                        style={{
-                          fontSize: 10,
-                          lineHeight: "14px",
-                          maxWidth: 140,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {tokenInfo.mintDisplay}
-                      </span>
-                    ) : null}
-                    <span>
-                      {displayAmount.approxPrefix}
-                      {displayAmount.amountText}
-                    </span>
-                  </span>
-                );
-              })()
+            ) : inlineMessageContent ? (
+              inlineMessageContent
+            ) : tokenInfo && isStandaloneTokenMessage ? (
+              renderCashuTokenPill(tokenInfo)
             ) : (
               content
             )}
