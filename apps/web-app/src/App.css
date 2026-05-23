@@ -1,7 +1,9 @@
 .page {
   max-width: 1200px;
   margin: 0 auto;
+  min-height: 100vh;
   padding: calc(var(--topbar-height) + 8px) 20px 72px;
+  background: var(--app-flat-bg);
 }
 
 .page.chat-page {
@@ -3265,6 +3267,7 @@ button.icon {
   flex: 0 0 100%;
   min-width: 100%;
   scroll-snap-align: start;
+  background: var(--app-flat-bg);
 }
 
 .page.main-swipe-active {
@@ -3900,10 +3903,11 @@ button.tag-button {
 
 .modal-sheet {
   width: min(520px, calc(100vw - 48px));
-  border: 1px solid #1f2937;
-  background: #0b1222;
+  border: none;
+  background: #040913;
   border-radius: 18px;
   padding: 20px 18px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 /* Small menu modal (top-left) */
@@ -3920,8 +3924,8 @@ button.tag-button {
 
 .menu-modal-sheet {
   width: min(360px, calc(100vw - 24px));
-  border: 1px solid #1f2937;
-  background: #0b1222;
+  border: none;
+  background: #040913;
   border-radius: 14px;
   padding: 10px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);

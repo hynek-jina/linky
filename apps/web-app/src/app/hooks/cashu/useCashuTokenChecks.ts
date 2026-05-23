@@ -8,13 +8,13 @@ import { navigateTo } from "../../../hooks/useRouting";
 import { getCashuDeterministicSeedFromStorage } from "../../../utils/cashuDeterministic";
 import { getCashuLib } from "../../../utils/cashuLib";
 import {
-  createLoadedCashuWallet,
-  decodeCashuTokenForMint,
-} from "../../../utils/cashuWallet";
-import {
   dedupeCashuProofs,
   partitionCashuProofGroupsByState,
 } from "../../../utils/cashuProofs";
+import {
+  createLoadedCashuWallet,
+  decodeCashuTokenForMint,
+} from "../../../utils/cashuWallet";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import { normalizeMintUrl } from "../../../utils/mint";
 import {
@@ -568,10 +568,15 @@ export const useCashuTokenChecks = ({
           proofs,
           unit: walletUnit,
         });
+        const preservedRawToken = rows.reduce<string | null>((found, row) => {
+          if (found) return found;
+          const rawToken = String(row.rawToken ?? "").trim();
+          return rawToken || null;
+        }, null);
         const persistResult = updateCashuToken({
           id: primaryRow.id as CashuTokenId,
           token: verifiedToken as typeof Evolu.NonEmptyString.Type,
-          rawToken: null,
+          rawToken: preservedRawToken,
           mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
           unit: walletUnit
             ? (walletUnit as typeof Evolu.NonEmptyString100.Type)
