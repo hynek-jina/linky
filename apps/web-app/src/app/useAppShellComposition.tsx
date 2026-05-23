@@ -214,6 +214,11 @@ import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRef
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
 import {
+  buildIdentityChangeMessageContent,
+  buildIdentityChangeMessageWrapId,
+  type IdentityChangeMessageSource,
+} from "./lib/identityChangeMessage";
+import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_RESERVED,
   isCashuTokenAcceptedState,
@@ -267,6 +272,8 @@ import type {
 
 const inMemoryNostrPictureCache = new Map<string, string | null>();
 const inMemoryMintIconCache = new Map<string, string | null>();
+const INLINE_NPUB_PATTERN =
+  /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?/gi;
 
 type TranslationKey = keyof (typeof translations)["cs"];
 
@@ -277,6 +284,24 @@ const readObjectField = (value: unknown, field: string): unknown => {
   if (typeof value !== "object" || value === null) return undefined;
   return Reflect.get(value, field);
 };
+
+const extractMentionedNpubs = (content: string): string[] => {
+  const matches = String(content ?? "").match(INLINE_NPUB_PATTERN);
+  if (!matches) return [];
+
+  const seen = new Set<string>();
+  const npubs: string[] = [];
+
+  for (const match of matches) {
+    const npub = normalizeNpubIdentifier(match);
+    if (!npub || seen.has(npub)) continue;
+    seen.add(npub);
+    npubs.push(npub);
+  }
+
+  return npubs;
+};
+
 interface PendingTopupQuoteStorage {
   amount: number;
   createdAtMs: number;
@@ -1517,6 +1542,13 @@ export const useAppShellComposition = () => {
   const [lnurlWithdrawIsBusy, setLnurlWithdrawIsBusy] = useState(false);
 
   const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
+  const appendIdentityChangeNoticesRef = React.useRef<
+    | ((args: {
+        changedAtSec: number;
+        identitySource: IdentityChangeMessageSource;
+      }) => void)
+    | null
+  >(null);
   const chatMessageElByIdRef = React.useRef<Map<string, HTMLDivElement>>(
     new Map(),
   );
@@ -1691,6 +1723,7 @@ export const useAppShellComposition = () => {
     setPendingOnboardingName,
     submitReturningSlip39,
   } = useProfileAuthComposition({
+    appendIdentityChangeNoticesRef,
     currentNsec,
     lang,
     pushToast,
@@ -2599,6 +2632,43 @@ export const useAppShellComposition = () => {
   });
 
   React.useEffect(() => {
+    appendIdentityChangeNoticesRef.current = ({
+      changedAtSec,
+      identitySource,
+    }) => {
+      if (!Number.isFinite(changedAtSec) || changedAtSec <= 0) return;
+
+      for (const contactId of lastMessageByContactId.keys()) {
+        const normalizedContactId = String(contactId ?? "").trim();
+        if (!normalizedContactId) continue;
+        if (isUnknownContactId(normalizedContactId)) continue;
+
+        appendLocalNostrMessage({
+          contactId: normalizedContactId,
+          content: buildIdentityChangeMessageContent({
+            changedAtSec,
+            source: identitySource,
+          }),
+          createdAtSec: Math.trunc(changedAtSec),
+          direction: "out",
+          localOnly: true,
+          pubkey: "",
+          rumorId: null,
+          wrapId: buildIdentityChangeMessageWrapId({
+            changedAtSec,
+            contactId: normalizedContactId,
+            source: identitySource,
+          }),
+        });
+      }
+    };
+
+    return () => {
+      appendIdentityChangeNoticesRef.current = null;
+    };
+  }, [appendLocalNostrMessage, lastMessageByContactId]);
+
+  React.useEffect(() => {
     const pendingTokens = cashuTokensAllFiltered.filter((row) => {
       const state = String(row.state ?? "");
       if (state !== "pending") return false;
@@ -3113,12 +3183,46 @@ export const useAppShellComposition = () => {
     return npubs;
   }, [unknownContacts]);
 
+  const chatMentionedNpubs = React.useMemo(() => {
+    const seen = new Set<string>();
+    const npubs: string[] = [];
+
+    for (const message of chatMessages) {
+      for (const npub of extractMentionedNpubs(String(message.content ?? ""))) {
+        if (seen.has(npub)) continue;
+        seen.add(npub);
+        npubs.push(npub);
+      }
+    }
+
+    return npubs;
+  }, [chatMessages]);
+
+  const prefetchedMessageNpubs = React.useMemo(() => {
+    const seen = new Set<string>();
+    const npubs: string[] = [];
+
+    for (const npub of unknownContactNpubs) {
+      if (seen.has(npub)) continue;
+      seen.add(npub);
+      npubs.push(npub);
+    }
+
+    for (const npub of chatMentionedNpubs) {
+      if (seen.has(npub)) continue;
+      seen.add(npub);
+      npubs.push(npub);
+    }
+
+    return npubs;
+  }, [chatMentionedNpubs, unknownContactNpubs]);
+
   React.useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
 
     const run = async () => {
-      for (const npub of unknownContactNpubs) {
+      for (const npub of prefetchedMessageNpubs) {
         if (unknownNameByNpub[npub] !== undefined) continue;
 
         const cached = loadCachedProfileMetadata(npub);
@@ -3170,7 +3274,7 @@ export const useAppShellComposition = () => {
   }, [
     nostrFetchRelays,
     nostrMetadataInFlight,
-    unknownContactNpubs,
+    prefetchedMessageNpubs,
     unknownNameByNpub,
   ]);
 
@@ -3179,7 +3283,7 @@ export const useAppShellComposition = () => {
     let cancelled = false;
 
     const run = async () => {
-      for (const npub of unknownContactNpubs) {
+      for (const npub of prefetchedMessageNpubs) {
         if (nostrPictureByNpub[npub] !== undefined) continue;
 
         try {
@@ -3257,9 +3361,9 @@ export const useAppShellComposition = () => {
     nostrFetchRelays,
     nostrInFlight,
     nostrPictureByNpub,
+    prefetchedMessageNpubs,
     rememberBlobAvatarUrl,
     setNostrPictureByNpub,
-    unknownContactNpubs,
   ]);
 
   const unknownContactById = React.useMemo(() => {

@@ -14,6 +14,7 @@ import {
   saveCachedProfileMetadata,
   saveCachedProfilePicture,
 } from "../../nostrProfile";
+import type { IdentityChangeMessageSource } from "../lib/identityChangeMessage";
 import { publishKind0ProfileMetadata } from "../../nostrPublish";
 import { readClipboardText } from "../../platform/clipboard";
 import {
@@ -104,6 +105,13 @@ interface PersistNewProfileParams {
 }
 
 interface UseProfileAuthDomainParams {
+  appendIdentityChangeNoticesRef: React.MutableRefObject<
+    | ((args: {
+        changedAtSec: number;
+        identitySource: IdentityChangeMessageSource;
+      }) => void)
+    | null
+  >;
   currentNsec: string | null;
   lang: Lang;
   pushToast: (message: string) => void;
@@ -179,6 +187,7 @@ const ACTIVE_NOSTR_IDENTITY_ROW_ID = Evolu.createIdFromString<"NostrIdentity">(
 );
 
 export const useProfileAuthDomain = ({
+  appendIdentityChangeNoticesRef,
   currentNsec,
   lang,
   pushToast,
@@ -442,6 +451,7 @@ export const useProfileAuthDomain = ({
       options?: {
         identitySource?: NostrIdentitySource;
         invalidMessageKey?: string;
+        recordChatNotice?: boolean;
         switchedAtSec?: number | null;
       },
     ) => {
@@ -473,10 +483,16 @@ export const useProfileAuthDomain = ({
       }
 
       const identitySource = options?.identitySource ?? "derived";
+      const changedAtSec = Math.ceil(Date.now() / 1000);
       const switchedAtSec =
         identitySource === "custom"
-          ? (options?.switchedAtSec ?? Math.ceil(Date.now() / 1000))
+          ? (options?.switchedAtSec ?? changedAtSec)
           : null;
+      const previousNsec = String(currentNsec ?? "").trim();
+      const shouldRecordChatNotice =
+        options?.recordChatNotice === true &&
+        Boolean(previousNsec) &&
+        previousNsec !== raw;
 
       await persistIdentitySecrets({
         appMnemonic,
@@ -493,6 +509,13 @@ export const useProfileAuthDomain = ({
         identitySource,
         switchedAtSec,
       );
+
+      if (shouldRecordChatNotice) {
+        appendIdentityChangeNoticesRef.current?.({
+          changedAtSec,
+          identitySource,
+        });
+      }
 
       resetStoredOwnerRotationState();
 
@@ -518,7 +541,14 @@ export const useProfileAuthDomain = ({
       }
       globalThis.location.reload();
     },
-    [deriveAppMnemonicFromSlip39, pushToast, t, upsertActiveNostrIdentity],
+    [
+      appendIdentityChangeNoticesRef,
+      currentNsec,
+      deriveAppMnemonicFromSlip39,
+      pushToast,
+      t,
+      upsertActiveNostrIdentity,
+    ],
   );
 
   React.useEffect(() => {
@@ -955,6 +985,7 @@ export const useProfileAuthDomain = ({
       await setIdentityFromNsecAndReload(derived.nsec, normalizedSeed, {
         identitySource: "derived",
         invalidMessageKey: "restoreFailed",
+        recordChatNotice: true,
         switchedAtSec: null,
       });
     } finally {
@@ -1000,6 +1031,7 @@ export const useProfileAuthDomain = ({
       await setIdentityFromNsecAndReload(raw, normalizedSeed, {
         identitySource: "custom",
         invalidMessageKey: "nostrPasteInvalid",
+        recordChatNotice: true,
         switchedAtSec: Math.ceil(Date.now() / 1000),
       });
     } finally {

@@ -23,6 +23,7 @@ import type {
   UpdateLocalNostrMessage,
   UpdateLocalNostrReaction,
 } from "../types/appTypes";
+import { isIdentityChangeMessageContent } from "../lib/identityChangeMessage";
 import { isUnknownContactId } from "./messages/contactIdentity";
 import {
   dedupeChatMessages,
@@ -1592,7 +1593,9 @@ export const useMessagesDomain = ({
         if (list) list.push(message);
         else byContact.set(id, [message]);
 
-        lastBy.set(id, message);
+        if (!isIdentityChangeMessageContent(message.content)) {
+          lastBy.set(id, message);
+        }
       }
 
       const recentSlice =

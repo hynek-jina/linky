@@ -1,5 +1,6 @@
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { parseIdentityChangeMessageContent } from "../app/lib/identityChangeMessage";
 import type { CashuPaymentRequestMessageInfo } from "../app/lib/paymentRequestMessage";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
@@ -10,10 +11,6 @@ import type {
 import { deriveDefaultProfile } from "../derivedProfile";
 import { getNextMintIconUrl } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
-import {
-  getInitialNostrIdentitySource,
-  getInitialNostrIdentitySwitchedAtSec,
-} from "../utils/storage";
 import { EditIndicator } from "./EditIndicator";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
@@ -141,17 +138,11 @@ export function ChatMessage({
 
   const nextSec = nextMessage ? Number(nextMessage.createdAtSec ?? 0) || 0 : 0;
   const nextMinuteKey = nextMessage ? Math.floor(nextSec / 60) : null;
+  const isIdentityChangeMessage =
+    parseIdentityChangeMessageContent(content) !== null;
 
   const showDaySeparator = prevDayKey !== dayKey;
-  const identityChangedAtSec = React.useMemo(() => {
-    if (getInitialNostrIdentitySource() !== "custom") return null;
-    return getInitialNostrIdentitySwitchedAtSec();
-  }, []);
-  const showIdentityChangeSeparator =
-    identityChangedAtSec !== null &&
-    createdAtSec >= identityChangedAtSec &&
-    (!previousMessage || prevSec < identityChangedAtSec);
-  const showTime = nextMinuteKey !== minuteKey;
+  const showTime = !isIdentityChangeMessage && nextMinuteKey !== minuteKey;
 
   const timeLabel = new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
@@ -415,143 +406,145 @@ export function ChatMessage({
         </div>
       ) : null}
 
-      {showIdentityChangeSeparator ? (
+      {isIdentityChangeMessage ? (
         <div className="chat-day-separator" role="note">
           {t("chatIdentityChangedNotice")}
         </div>
       ) : null}
 
-      <div
-        className={`chat-message ${isOut ? "out" : "in"}${isPending ? " pending" : ""}`}
-        data-message-id={messageId || undefined}
-        data-rumor-id={rumorId ?? undefined}
-        data-reply-to-id={replyToId ?? undefined}
-        data-root-message-id={rootMessageId ?? undefined}
-        ref={(el) => {
-          messageDivRef.current = el;
-          if (messageElRef && messageId) {
-            messageElRef(el, messageId);
-          }
-        }}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          openMenu();
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      >
-        <MessageActionsMenu
-          canEdit={canEdit}
-          canReplyOrReact={canReplyOrReact}
-          isOpen={menuOpen}
-          labels={actionLabels}
-          onReply={() => onReply(message)}
-          onEdit={() => onEdit(message)}
-          onReact={(emoji) => onReact(message, emoji)}
-          onCopy={() => onCopy(message)}
-          onClose={() => setMenuOpen(false)}
-        />
+      {isIdentityChangeMessage ? null : (
+        <div
+          className={`chat-message ${isOut ? "out" : "in"}${isPending ? " pending" : ""}`}
+          data-message-id={messageId || undefined}
+          data-rumor-id={rumorId ?? undefined}
+          data-reply-to-id={replyToId ?? undefined}
+          data-root-message-id={rootMessageId ?? undefined}
+          ref={(el) => {
+            messageDivRef.current = el;
+            if (messageElRef && messageId) {
+              messageElRef(el, messageId);
+            }
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            openMenu();
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
+          <MessageActionsMenu
+            canEdit={canEdit}
+            canReplyOrReact={canReplyOrReact}
+            isOpen={menuOpen}
+            labels={actionLabels}
+            onReply={() => onReply(message)}
+            onEdit={() => onEdit(message)}
+            onReact={(emoji) => onReact(message, emoji)}
+            onCopy={() => onCopy(message)}
+            onClose={() => setMenuOpen(false)}
+          />
 
-        <div className="chat-bubble-wrap">
-          <div className="chat-message-tools">
-            <button
-              type="button"
-              className="chat-message-action-btn"
-              onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
-              aria-label="Message actions"
-            >
-              ⋯
-            </button>
-          </div>
-          <div className={isOut ? "chat-bubble out" : "chat-bubble in"}>
-            {replyQuoteText && (
-              <div className="chat-reply-quote">
-                <span>{replyQuoteText}</span>
-              </div>
-            )}
-            {paymentRequestInfo ? (
-              <div className="chat-payment-request-card">
-                <div className="chat-payment-request-header">
-                  <span className="chat-payment-request-title">
-                    {t("requestPaymentLabel")}
-                  </span>
-                  <span
-                    className={`chat-payment-request-status is-${paymentRequestStatus ?? "requested"}`}
-                  >
-                    {paymentRequestStatus === "paid"
-                      ? t("paymentRequestStatusPaid")
-                      : paymentRequestStatus === "declined"
-                        ? t("paymentRequestStatusDeclined")
-                        : t("paymentRequestStatusRequested")}
-                  </span>
+          <div className="chat-bubble-wrap">
+            <div className="chat-message-tools">
+              <button
+                type="button"
+                className="chat-message-action-btn"
+                onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
+                aria-label="Message actions"
+              >
+                ⋯
+              </button>
+            </div>
+            <div className={isOut ? "chat-bubble out" : "chat-bubble in"}>
+              {replyQuoteText && (
+                <div className="chat-reply-quote">
+                  <span>{replyQuoteText}</span>
                 </div>
-                <div className="chat-payment-request-amount">
-                  {formatDisplayedAmountText(paymentRequestInfo.amount)}
-                </div>
-                {canActOnPaymentRequest ? (
-                  <div className="chat-payment-request-actions">
-                    <button
-                      type="button"
-                      className="btn-wide chat-payment-request-pay"
-                      disabled={payPaymentRequestDisabled}
-                      onClick={() => onPayPaymentRequest(paymentRequestInfo)}
-                      title={
-                        payPaymentRequestDisabled
-                          ? t("payInsufficient")
-                          : undefined
-                      }
+              )}
+              {paymentRequestInfo ? (
+                <div className="chat-payment-request-card">
+                  <div className="chat-payment-request-header">
+                    <span className="chat-payment-request-title">
+                      {t("requestPaymentLabel")}
+                    </span>
+                    <span
+                      className={`chat-payment-request-status is-${paymentRequestStatus ?? "requested"}`}
                     >
-                      {t("pay")}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-wide secondary chat-payment-request-decline"
-                      onClick={onDeclinePaymentRequest}
-                    >
-                      {t("decline")}
-                    </button>
+                      {paymentRequestStatus === "paid"
+                        ? t("paymentRequestStatusPaid")
+                        : paymentRequestStatus === "declined"
+                          ? t("paymentRequestStatusDeclined")
+                          : t("paymentRequestStatusRequested")}
+                    </span>
                   </div>
-                ) : null}
-              </div>
-            ) : isDeclineMessage ? (
-              <span className="pill pill-muted">
-                {t("paymentRequestDeclinedMessage")}
-              </span>
-            ) : inlineMessageContent ? (
-              inlineMessageContent
-            ) : tokenInfo && isStandaloneTokenMessage ? (
-              renderCashuTokenPill(tokenInfo)
-            ) : (
-              content
-            )}
+                  <div className="chat-payment-request-amount">
+                    {formatDisplayedAmountText(paymentRequestInfo.amount)}
+                  </div>
+                  {canActOnPaymentRequest ? (
+                    <div className="chat-payment-request-actions">
+                      <button
+                        type="button"
+                        className="btn-wide chat-payment-request-pay"
+                        disabled={payPaymentRequestDisabled}
+                        onClick={() => onPayPaymentRequest(paymentRequestInfo)}
+                        title={
+                          payPaymentRequestDisabled
+                            ? t("payInsufficient")
+                            : undefined
+                        }
+                      >
+                        {t("pay")}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-wide secondary chat-payment-request-decline"
+                        onClick={onDeclinePaymentRequest}
+                      >
+                        {t("decline")}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : isDeclineMessage ? (
+                <span className="pill pill-muted">
+                  {t("paymentRequestDeclinedMessage")}
+                </span>
+              ) : inlineMessageContent ? (
+                inlineMessageContent
+              ) : tokenInfo && isStandaloneTokenMessage ? (
+                renderCashuTokenPill(tokenInfo)
+              ) : (
+                content
+              )}
+            </div>
           </div>
+
+          <MessageReactions
+            reactions={reactions}
+            showAddButton={false}
+            onReact={(emoji) => onReact(message, emoji)}
+          />
+
+          {showTime ? (
+            <div className="chat-time">
+              {timeLabel}
+              {message.isEdited ? (
+                <>
+                  {" "}
+                  ·{" "}
+                  <EditIndicator
+                    label={actionLabels.edited}
+                    originalContent={message.originalContent ?? null}
+                  />
+                </>
+              ) : null}
+              {isPending ? ` · ${chatPendingLabel}` : ""}
+            </div>
+          ) : null}
         </div>
-
-        <MessageReactions
-          reactions={reactions}
-          showAddButton={false}
-          onReact={(emoji) => onReact(message, emoji)}
-        />
-
-        {showTime ? (
-          <div className="chat-time">
-            {timeLabel}
-            {message.isEdited ? (
-              <>
-                {" "}
-                ·{" "}
-                <EditIndicator
-                  label={actionLabels.edited}
-                  originalContent={message.originalContent ?? null}
-                />
-              </>
-            ) : null}
-            {isPending ? ` · ${chatPendingLabel}` : ""}
-          </div>
-        ) : null}
-      </div>
+      )}
     </React.Fragment>
   );
 }
