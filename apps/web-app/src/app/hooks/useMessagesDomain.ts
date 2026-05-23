@@ -14,6 +14,7 @@ import {
   safeLocalStorageSetJson,
 } from "../../utils/storage";
 import { makeLocalId } from "../../utils/validation";
+import { isIdentityChangeMessageContent } from "../lib/identityChangeMessage";
 import type {
   LocalNostrMessage,
   LocalNostrReaction,
@@ -23,7 +24,6 @@ import type {
   UpdateLocalNostrMessage,
   UpdateLocalNostrReaction,
 } from "../types/appTypes";
-import { isIdentityChangeMessageContent } from "../lib/identityChangeMessage";
 import { isUnknownContactId } from "./messages/contactIdentity";
 import {
   dedupeChatMessages,

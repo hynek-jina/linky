@@ -214,11 +214,6 @@ import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRef
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
 import {
-  buildIdentityChangeMessageContent,
-  buildIdentityChangeMessageWrapId,
-  type IdentityChangeMessageSource,
-} from "./lib/identityChangeMessage";
-import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_RESERVED,
   isCashuTokenAcceptedState,
@@ -226,6 +221,11 @@ import {
   isCashuTokenIssuedState,
   isCashuTokenReservedState,
 } from "./lib/cashuTokenState";
+import {
+  buildIdentityChangeMessageContent,
+  buildIdentityChangeMessageWrapId,
+  type IdentityChangeMessageSource,
+} from "./lib/identityChangeMessage";
 import type { AppNostrPool } from "./lib/nostrPool";
 import { getSharedAppNostrPool } from "./lib/nostrPool";
 import {

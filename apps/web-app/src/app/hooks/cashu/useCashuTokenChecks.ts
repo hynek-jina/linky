@@ -292,6 +292,14 @@ export const useCashuTokenChecks = ({
             try {
               const accepted = await acceptCashuToken(tokenText);
               const acceptedTokenText = String(accepted.token ?? "").trim();
+
+              if (acceptedTokenText) {
+                safeLocalStorageSet(
+                  LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
+                  acceptedTokenText,
+                );
+              }
+
               const result = updateCashuToken({
                 id: primaryRow.id as CashuTokenId,
                 token: acceptedTokenText as typeof Evolu.NonEmptyString.Type,

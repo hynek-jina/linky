@@ -14,7 +14,6 @@ import {
   saveCachedProfileMetadata,
   saveCachedProfilePicture,
 } from "../../nostrProfile";
-import type { IdentityChangeMessageSource } from "../lib/identityChangeMessage";
 import { publishKind0ProfileMetadata } from "../../nostrPublish";
 import { readClipboardText } from "../../platform/clipboard";
 import {
@@ -59,6 +58,7 @@ import {
   getInitialNostrIdentitySource,
   safeLocalStorageSet,
 } from "../../utils/storage";
+import type { IdentityChangeMessageSource } from "../lib/identityChangeMessage";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
