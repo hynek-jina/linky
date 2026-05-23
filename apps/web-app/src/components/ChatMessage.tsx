@@ -10,6 +10,10 @@ import type {
 import { deriveDefaultProfile } from "../derivedProfile";
 import { getNextMintIconUrl } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
+import {
+  getInitialNostrIdentitySource,
+  getInitialNostrIdentitySwitchedAtSec,
+} from "../utils/storage";
 import { EditIndicator } from "./EditIndicator";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
@@ -139,6 +143,14 @@ export function ChatMessage({
   const nextMinuteKey = nextMessage ? Math.floor(nextSec / 60) : null;
 
   const showDaySeparator = prevDayKey !== dayKey;
+  const identityChangedAtSec = React.useMemo(() => {
+    if (getInitialNostrIdentitySource() !== "custom") return null;
+    return getInitialNostrIdentitySwitchedAtSec();
+  }, []);
+  const showIdentityChangeSeparator =
+    identityChangedAtSec !== null &&
+    createdAtSec >= identityChangedAtSec &&
+    (!previousMessage || prevSec < identityChangedAtSec);
   const showTime = nextMinuteKey !== minuteKey;
 
   const timeLabel = new Intl.DateTimeFormat(locale, {
@@ -400,6 +412,12 @@ export function ChatMessage({
       {showDaySeparator ? (
         <div className="chat-day-separator" aria-hidden="true">
           {formatChatDayLabel(ms)}
+        </div>
+      ) : null}
+
+      {showIdentityChangeSeparator ? (
+        <div className="chat-day-separator" role="note">
+          {t("chatIdentityChangedNotice")}
         </div>
       ) : null}
 

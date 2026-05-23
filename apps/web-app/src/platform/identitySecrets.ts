@@ -25,6 +25,12 @@ interface PersistIdentitySecretsParams {
   switchedAtSec: number | null;
 }
 
+interface PersistSyncedActiveNostrIdentityParams {
+  identitySource: "custom" | "derived";
+  nsec: string;
+  switchedAtSec: number | null;
+}
+
 export const readStoredNostrNsec = async (): Promise<string | null> => {
   return readStoredSecret(NOSTR_NSEC_STORAGE_KEY);
 };
@@ -57,6 +63,30 @@ export const persistIdentitySecrets = async ({
     writeStoredSecret(CASHU_BIP85_MNEMONIC_STORAGE_KEY, cashuMnemonic),
     writeStoredSecret(INITIAL_MNEMONIC_STORAGE_KEY, appMnemonic),
   ]);
+
+  try {
+    localStorage.setItem(NOSTR_IDENTITY_SOURCE_STORAGE_KEY, identitySource);
+    if (switchedAtSec && switchedAtSec > 0) {
+      localStorage.setItem(
+        NOSTR_IDENTITY_SWITCHED_AT_SEC_STORAGE_KEY,
+        String(switchedAtSec),
+      );
+    } else {
+      localStorage.removeItem(NOSTR_IDENTITY_SWITCHED_AT_SEC_STORAGE_KEY);
+    }
+  } catch {
+    // ignore storage unavailability
+  }
+
+  await setStoredPushNsec(nsec);
+};
+
+export const persistSyncedActiveNostrIdentity = async ({
+  identitySource,
+  nsec,
+  switchedAtSec,
+}: PersistSyncedActiveNostrIdentityParams): Promise<void> => {
+  await writeStoredSecret(NOSTR_NSEC_STORAGE_KEY, nsec);
 
   try {
     localStorage.setItem(NOSTR_IDENTITY_SOURCE_STORAGE_KEY, identitySource);

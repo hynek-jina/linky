@@ -49,7 +49,10 @@ import {
   PROFILE_STATUS_CURRENCIES,
 } from "../nostrStatus";
 import { writeClipboardText } from "../platform/clipboard";
-import { readStoredNostrNsec } from "../platform/identitySecrets";
+import {
+  persistSyncedActiveNostrIdentity,
+  readStoredNostrNsec,
+} from "../platform/identitySecrets";
 import {
   cancelNativeNfcWrite,
   consumePendingNativeDeepLinkUrl,
@@ -123,6 +126,8 @@ import {
   getInitialCashuAutoswapEnabled,
   getInitialDisplayCurrency,
   getInitialLightningInvoiceAutoPayLimit,
+  getInitialNostrIdentitySource,
+  getInitialNostrIdentitySwitchedAtSec,
   getInitialNostrNsec,
   getInitialPayWithCashuEnabled,
   safeLocalStorageGet,
@@ -1707,6 +1712,7 @@ export const useAppShellComposition = () => {
     contactsOwnerIndex,
     contactsOwnerNewContactsCount,
     contactsOwnerPointer,
+    identityOwnerId,
     identitySyncOwner,
     metaOwnerId,
     metaSyncOwner,
@@ -1968,6 +1974,100 @@ export const useAppShellComposition = () => {
     [],
   );
   const cashuTokensAll = useQuery(cashuTokensAllQuery);
+
+  const nostrIdentityQuery = useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("nostrIdentity")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue)
+          .orderBy("createdAt", "desc"),
+      ),
+    [],
+  );
+  const nostrIdentityRows = useQuery(nostrIdentityQuery);
+
+  const activeIdentityOwnerId = String(identityOwnerId ?? "").trim();
+  const readOwnerId = React.useCallback((row: unknown): string => {
+    if (typeof row !== "object" || row === null) return "";
+    if (!("ownerId" in row)) return "";
+    const ownerId = row.ownerId;
+    return typeof ownerId === "string" ? ownerId.trim() : "";
+  }, []);
+  const readIdentityText = React.useCallback(
+    (row: unknown, key: "nsec" | "npub" | "source"): string => {
+      if (typeof row !== "object" || row === null) return "";
+      const value = Reflect.get(row, key);
+      return typeof value === "string" ? value.trim() : "";
+    },
+    [],
+  );
+  const readIdentitySwitchedAtSec = React.useCallback((row: unknown) => {
+    if (typeof row !== "object" || row === null) return null;
+    const value = Number(Reflect.get(row, "switchedAtSec"));
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return Math.trunc(value);
+  }, []);
+
+  const activeSyncedNostrIdentity = React.useMemo(() => {
+    if (!activeIdentityOwnerId) return null;
+
+    const row = nostrIdentityRows.find(
+      (candidate) => readOwnerId(candidate) === activeIdentityOwnerId,
+    );
+    if (!row) return null;
+
+    const nsec = readIdentityText(row, "nsec");
+    if (!nsec) return null;
+
+    const source: "custom" | "derived" =
+      readIdentityText(row, "source") === "custom" ? "custom" : "derived";
+
+    return {
+      nsec,
+      npub: readIdentityText(row, "npub") || null,
+      source,
+      switchedAtSec: readIdentitySwitchedAtSec(row),
+    };
+  }, [
+    activeIdentityOwnerId,
+    nostrIdentityRows,
+    readIdentitySwitchedAtSec,
+    readIdentityText,
+    readOwnerId,
+  ]);
+
+  React.useEffect(() => {
+    if (!activeSyncedNostrIdentity) return;
+
+    const localSource = getInitialNostrIdentitySource();
+    const localSwitchedAtSec = getInitialNostrIdentitySwitchedAtSec();
+    const localNsec = String(currentNsec ?? "").trim();
+    const syncedSwitchedAtSec = activeSyncedNostrIdentity.switchedAtSec;
+    const switchedAtMatches =
+      localSwitchedAtSec === syncedSwitchedAtSec ||
+      (!localSwitchedAtSec && !syncedSwitchedAtSec);
+    const alreadyApplied =
+      localNsec === activeSyncedNostrIdentity.nsec &&
+      localSource === activeSyncedNostrIdentity.source &&
+      switchedAtMatches;
+
+    if (alreadyApplied) return;
+
+    void persistSyncedActiveNostrIdentity({
+      identitySource: activeSyncedNostrIdentity.source,
+      nsec: activeSyncedNostrIdentity.nsec,
+      switchedAtSec: activeSyncedNostrIdentity.switchedAtSec,
+    }).then(() => {
+      setCurrentNsec((current) =>
+        current === activeSyncedNostrIdentity.nsec
+          ? current
+          : activeSyncedNostrIdentity.nsec,
+      );
+      globalThis.location.reload();
+    });
+  }, [activeSyncedNostrIdentity, currentNsec]);
 
   const activeCashuOwnerId = String(cashuOwnerId ?? "").trim();
   const readCashuRowOwnerId = React.useCallback((row: unknown): string => {
