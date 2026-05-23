@@ -7,6 +7,10 @@ export const FIAT_RATES_TTL_MS = 10 * 60 * 1000;
 export const NOSTR_NSEC_STORAGE_KEY = "linky.nostr_nsec";
 export const NOSTR_SLIP39_SEED_STORAGE_KEY = "linky.nostr_slip39_seed";
 export const CASHU_BIP85_MNEMONIC_STORAGE_KEY = "linky.cashu_bip85_mnemonic";
+export const NOSTR_IDENTITY_SOURCE_STORAGE_KEY =
+  "linky.nostr_identity_source.v1";
+export const NOSTR_IDENTITY_SWITCHED_AT_SEC_STORAGE_KEY =
+  "linky.nostr_identity_switched_at_sec.v1";
 export const EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY =
   "linky.evolu.contacts_owner_index.v1";
 export const EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY =

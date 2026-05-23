@@ -1660,6 +1660,7 @@ export const useAppShellComposition = () => {
   );
 
   const {
+    activeNostrIdentitySource,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNpub,
@@ -1673,6 +1674,7 @@ export const useAppShellComposition = () => {
     pasteReturningSlip39FromClipboard,
     pickPendingOnboardingPhoto,
     requestDeriveNostrKeys,
+    requestPasteNostrKeys,
     requestLogout,
     savePendingOnboardingBackupToPasswordManager,
     seedMnemonic,
@@ -1688,6 +1690,7 @@ export const useAppShellComposition = () => {
     lang,
     pushToast,
     t,
+    upsert,
   });
 
   const contactsForRotationRef = React.useRef<readonly ContactRowLike[]>([]);
@@ -1704,6 +1707,7 @@ export const useAppShellComposition = () => {
     contactsOwnerIndex,
     contactsOwnerNewContactsCount,
     contactsOwnerPointer,
+    identitySyncOwner,
     metaOwnerId,
     metaSyncOwner,
     messagesBackupOwnerId,
@@ -1739,6 +1743,7 @@ export const useAppShellComposition = () => {
   useOwner(messagesSyncOwner);
   useOwner(transactionsSyncOwner);
   useOwner(metaSyncOwner);
+  useOwner(identitySyncOwner);
 
   React.useEffect(() => {
     cashuOwnerIdRef.current = cashuOwnerId;
@@ -6516,6 +6521,7 @@ export const useAppShellComposition = () => {
       passwordManagerSeedUsername: String(
         effectiveProfileName ?? currentNpub ?? "",
       ).trim(),
+      activeNostrIdentitySource,
       currentNpub,
       currentNsec,
       dedupeContacts,
@@ -6588,6 +6594,7 @@ export const useAppShellComposition = () => {
       requestDeleteSelectedRelay,
       requestImportAppData,
       requestDeriveNostrKeys,
+      requestPasteNostrKeys,
       requestLogout,
       saveSeedToPasswordManager,
       route,

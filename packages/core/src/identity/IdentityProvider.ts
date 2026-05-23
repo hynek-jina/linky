@@ -9,6 +9,7 @@ import {
   CASHU_SEED_PATH,
   cashuOwnerPath,
   contactsOwnerPath,
+  IDENTITY_OWNER_PATH,
   messagesOwnerPath,
   META_OWNER_PATH,
   NOSTR_PATH,
@@ -35,6 +36,7 @@ interface Identities {
   readonly cashuWalletSeed: CashuSeed;
 
   readonly storageMetaOwnerKey: OwnerKey;
+  readonly storageIdentityOwnerKey: OwnerKey;
   readonly storageContactsOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
   readonly storageCashuOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
   readonly storageMessagesOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
@@ -87,12 +89,14 @@ export class IdentityProvider extends Context.Tag("IdentityProvider")<
       const cashuWalletSeed = CashuSeed.make(mnemonicToSeedSync(cashuMnemonic));
 
       const storageMetaOwnerKey = deriveOwnerKey(root, META_OWNER_PATH);
+      const storageIdentityOwnerKey = deriveOwnerKey(root, IDENTITY_OWNER_PATH);
 
       return {
         nostrSigningKey,
         nostrPublicKey,
         cashuWalletSeed,
         storageMetaOwnerKey,
+        storageIdentityOwnerKey,
         storageContactsOwnerKey: (index: OwnerLaneIndex) =>
           deriveOwnerKey(root, contactsOwnerPath(index)),
         storageCashuOwnerKey: (index: OwnerLaneIndex) =>

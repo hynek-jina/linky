@@ -151,6 +151,7 @@ export type Bip39Mnemonic24 = typeof Bip39Mnemonic24.Type;
 
 export const OwnerRole = Schema.Literal(
   "meta",
+  "identity",
   "contacts",
   "cashu",
   "transactions",

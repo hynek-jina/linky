@@ -1,8 +1,8 @@
-import { NOSTR_RELAYS } from "./utils/nostrRelays";
-import { getSharedNostrPool } from "./utils/nostrPool";
-import { isHttpUrl } from "./utils/validation";
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import type { JsonRecord } from "./types/json";
+import { getSharedNostrPool } from "./utils/nostrPool";
+import { NOSTR_RELAYS } from "./utils/nostrRelays";
+import { isHttpUrl } from "./utils/validation";
 
 export type NostrProfileMetadata = {
   displayName?: string;
@@ -303,7 +303,7 @@ export const isDisplayableProfilePictureUrl = (
 
 export const fetchNostrProfileMetadata = async (
   npub: string,
-  options?: { signal?: AbortSignal; relays?: string[] },
+  options?: { relays?: string[]; signal?: AbortSignal; since?: number },
 ): Promise<NostrProfileMetadata | null> => {
   const trimmed = npub.trim();
   if (!trimmed) return null;
@@ -333,11 +333,15 @@ export const fetchNostrProfileMetadata = async (
   try {
     let events: NostrToolsEvent[] = [];
     try {
-      events = await pool.querySync(
-        relays,
-        { kinds: [0], authors: [pubkey], limit: 5 },
-        { maxWait: 8000 },
-      );
+      const filter = {
+        authors: [pubkey],
+        kinds: [0],
+        limit: 5,
+        ...(options?.since && options.since > 0
+          ? { since: options.since }
+          : {}),
+      };
+      events = await pool.querySync(relays, filter, { maxWait: 8000 });
     } catch {
       return null;
     }
@@ -391,7 +395,7 @@ export const fetchNostrProfileMetadata = async (
 
 export const fetchNostrProfilePicture = async (
   npub: string,
-  options?: { signal?: AbortSignal; relays?: string[] },
+  options?: { relays?: string[]; signal?: AbortSignal; since?: number },
 ): Promise<string | null> => {
   const cached = loadCachedProfileMetadata(npub);
   const cachedMeta = cached?.metadata ?? null;

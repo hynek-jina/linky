@@ -5,6 +5,8 @@ import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
 import { formatShortNpub } from "../../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import {
+  getInitialNostrIdentitySource,
+  getInitialNostrIdentitySwitchedAtSec,
   safeLocalStorageGetJson,
   safeLocalStorageSetJson,
 } from "../../../utils/storage";
@@ -129,6 +131,10 @@ export const useInboxNotificationsSync = <
     const activeChatId = route.kind === "chat" ? String(route.id ?? "") : null;
 
     let cancelled = false;
+    const identitySinceSec =
+      getInitialNostrIdentitySource() === "custom"
+        ? getInitialNostrIdentitySwitchedAtSec()
+        : null;
 
     const seenWrapIds = new Set<string>();
     for (const message of nostrMessagesRecent) {
@@ -297,6 +303,8 @@ export const useInboxNotificationsSync = <
               Number.isFinite(createdAtSecRaw) && createdAtSecRaw > 0
                 ? Math.trunc(createdAtSecRaw)
                 : Math.ceil(Date.now() / 1e3);
+
+            if (identitySinceSec && createdAtSec < identitySinceSec) return;
 
             if (cancelled) return;
 
