@@ -160,11 +160,19 @@ export const useNpubCashClaim = ({
           }
 
           const accepted = await acceptCashuToken(tokenRaw);
+          const acceptedToken = String(accepted.token ?? "").trim();
+
+          if (acceptedToken) {
+            safeLocalStorageSet(
+              LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
+              acceptedToken,
+            );
+          }
 
           const result = insert(
             "cashuToken",
             buildCashuTokenPayload({
-              token: String(accepted.token ?? ""),
+              token: acceptedToken,
               rawToken: tokenRaw,
               mint: String(accepted.mint ?? ""),
               unit: accepted.unit,
@@ -179,15 +187,15 @@ export const useNpubCashClaim = ({
             return;
           }
 
-          rememberCashuTokenKnown(tokenRaw, String(accepted.token ?? ""));
+          rememberCashuTokenKnown(tokenRaw, acceptedToken);
           // Remember the last successfully accepted token so we can recover it
           // if storage gets wiped (e.g., private browsing) or if persistence
           // glitches.
           safeLocalStorageSet(
             LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
-            String(accepted.token ?? ""),
+            acceptedToken,
           );
-          ensureCashuTokenPersisted(String(accepted.token ?? ""));
+          ensureCashuTokenPersisted(acceptedToken);
 
           // Minimal receive-only banner: click to copy token.
           if (recentlyReceivedTokenTimerRef.current !== null) {
@@ -198,7 +206,7 @@ export const useNpubCashClaim = ({
             }
           }
           setRecentlyReceivedToken({
-            token: String(accepted.token ?? "").trim(),
+            token: acceptedToken,
             amount:
               typeof accepted.amount === "number" && accepted.amount > 0
                 ? accepted.amount

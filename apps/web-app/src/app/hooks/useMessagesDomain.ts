@@ -14,6 +14,7 @@ import {
   safeLocalStorageSetJson,
 } from "../../utils/storage";
 import { makeLocalId } from "../../utils/validation";
+import { isIdentityChangeMessageContent } from "../lib/identityChangeMessage";
 import type {
   LocalNostrMessage,
   LocalNostrReaction,
@@ -1592,7 +1593,9 @@ export const useMessagesDomain = ({
         if (list) list.push(message);
         else byContact.set(id, [message]);
 
-        lastBy.set(id, message);
+        if (!isIdentityChangeMessageContent(message.content)) {
+          lastBy.set(id, message);
+        }
       }
 
       const recentSlice =

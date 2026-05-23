@@ -9,6 +9,8 @@ import {
   DISPLAY_CURRENCY_STORAGE_KEY,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
+  NOSTR_IDENTITY_SOURCE_STORAGE_KEY,
+  NOSTR_IDENTITY_SWITCHED_AT_SEC_STORAGE_KEY,
   NOSTR_NSEC_STORAGE_KEY,
   PAY_WITH_CASHU_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
@@ -306,6 +308,28 @@ export const getInitialNostrNsec = (): string | null => {
     const raw = localStorage.getItem(NOSTR_NSEC_STORAGE_KEY);
     const v = String(raw ?? "").trim();
     return v ? v : null;
+  } catch {
+    return null;
+  }
+};
+
+export const getInitialNostrIdentitySource = (): "custom" | "derived" => {
+  try {
+    const raw = localStorage.getItem(NOSTR_IDENTITY_SOURCE_STORAGE_KEY);
+    return String(raw ?? "").trim() === "custom" ? "custom" : "derived";
+  } catch {
+    return "derived";
+  }
+};
+
+export const getInitialNostrIdentitySwitchedAtSec = (): number | null => {
+  try {
+    const raw = localStorage.getItem(
+      NOSTR_IDENTITY_SWITCHED_AT_SEC_STORAGE_KEY,
+    );
+    const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return parsed;
   } catch {
     return null;
   }

@@ -34,6 +34,7 @@ type CounterMap = Record<string, number>;
 interface OwnerSyncData {
   cashuOwner: Evolu.AppOwner;
   contactsOwner: Evolu.AppOwner;
+  identityOwner: Evolu.AppOwner;
   messagesOwner: Evolu.AppOwner;
   metaOwner: Evolu.AppOwner;
   transactionsOwner: Evolu.AppOwner;
@@ -63,6 +64,8 @@ interface UseEvoluContactsOwnerRotationResult {
   contactsOwnerIndex: number;
   contactsOwnerNewContactsCount: number;
   contactsOwnerPointer: string;
+  identityOwnerId: Evolu.OwnerId | null;
+  identitySyncOwner: Evolu.SyncOwner | null;
   metaOwnerId: Evolu.OwnerId | null;
   metaSyncOwner: Evolu.SyncOwner | null;
   messagesBackupOwnerId: Evolu.OwnerId | null;
@@ -337,12 +340,14 @@ const deriveOwnerSyncDataFromSeed = async (
 ): Promise<OwnerSyncData | null> => {
   const [
     metaMnemonic,
+    identityMnemonic,
     contactsMnemonic,
     cashuMnemonic,
     messagesMnemonic,
     transactionsMnemonic,
   ] = await Promise.all([
     deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "meta", 0),
+    deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "identity", 0),
     deriveEvoluOwnerMnemonicFromSlip39(
       slip39Seed,
       "contacts",
@@ -363,6 +368,7 @@ const deriveOwnerSyncDataFromSeed = async (
 
   if (
     !metaMnemonic ||
+    !identityMnemonic ||
     !contactsMnemonic ||
     !cashuMnemonic ||
     !messagesMnemonic ||
@@ -370,6 +376,7 @@ const deriveOwnerSyncDataFromSeed = async (
   )
     return null;
   const metaOwner = toAppOwnerFromMnemonic(metaMnemonic);
+  const identityOwner = toAppOwnerFromMnemonic(identityMnemonic);
   const contactsOwner = toAppOwnerFromMnemonic(contactsMnemonic);
   const cashuOwner = toAppOwnerFromMnemonic(cashuMnemonic);
   const messagesOwner = toAppOwnerFromMnemonic(messagesMnemonic);
@@ -377,6 +384,7 @@ const deriveOwnerSyncDataFromSeed = async (
 
   if (
     !metaOwner ||
+    !identityOwner ||
     !contactsOwner ||
     !cashuOwner ||
     !messagesOwner ||
@@ -387,6 +395,7 @@ const deriveOwnerSyncDataFromSeed = async (
   return {
     cashuOwner,
     contactsOwner,
+    identityOwner,
     messagesOwner,
     metaOwner,
     transactionsOwner,
@@ -1814,6 +1823,12 @@ export const useEvoluContactsOwnerRotation = ({
     contactsOwnerIndex,
     contactsOwnerNewContactsCount,
     contactsOwnerPointer: `contacts-${contactsOwnerIndex}`,
+    identityOwnerId: isSeedLogin
+      ? (ownerSyncData?.identityOwner.id ?? null)
+      : appOwnerId,
+    identitySyncOwner: isSeedLogin
+      ? (ownerSyncData?.identityOwner ?? null)
+      : null,
     metaOwnerId: isSeedLogin ? (ownerSyncData?.metaOwner.id ?? null) : null,
     metaSyncOwner: isSeedLogin ? (ownerSyncData?.metaOwner ?? null) : null,
     messagesBackupOwnerId: isSeedLogin ? messagesBackupOwnerId : null,

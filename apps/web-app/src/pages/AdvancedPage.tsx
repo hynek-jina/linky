@@ -10,6 +10,7 @@ import { LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS } from "../utils/constants";
 
 interface AdvancedPageProps {
   __APP_VERSION__: string;
+  activeNostrIdentitySource: "custom" | "derived";
   connectedRelayCount: number;
   copyNostrKeys: () => void;
   copySeed: () => void;
@@ -35,6 +36,7 @@ interface AdvancedPageProps {
   relayUrls: string[];
   requestImportAppData: () => void;
   requestDeriveNostrKeys: () => Promise<void>;
+  requestPasteNostrKeys: () => Promise<void>;
   requestLogout: () => void;
   saveSeedToPasswordManager: () => Promise<PasswordManagerSaveResult>;
   seedMnemonic: string | null;
@@ -46,6 +48,7 @@ interface AdvancedPageProps {
 
 export function AdvancedPage({
   __APP_VERSION__,
+  activeNostrIdentitySource,
   connectedRelayCount,
   copyNostrKeys,
   copySeed,
@@ -69,6 +72,7 @@ export function AdvancedPage({
   relayUrls,
   requestImportAppData,
   requestDeriveNostrKeys,
+  requestPasteNostrKeys,
   requestLogout,
   saveSeedToPasswordManager,
   seedMnemonic,
@@ -81,12 +85,15 @@ export function AdvancedPage({
   const { formatDisplayedAmountParts } = useAppShellCore();
   const [pushStatus, setPushStatus] = useState<string>("");
   const [pushError, setPushError] = useState<string>("");
-  const [nostrDeriveArmed, setNostrDeriveArmed] = useState(false);
+  const [armedNostrAction, setArmedNostrAction] = useState<
+    "derive" | "paste" | null
+  >(null);
   const armTimeoutRef = useRef<number | null>(null);
   const passwordManagerSaveFormRef =
     useRef<PasswordManagerSaveFormHandle | null>(null);
   const hasSeedMnemonic = String(seedMnemonic ?? "").trim().length > 0;
   const hasCurrentNsec = String(currentNsec ?? "").trim().length > 0;
+  const isCustomNostrIdentity = activeNostrIdentitySource === "custom";
   const customAutoPayLimitSelected =
     !LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS.some(
       (limit) => limit === lightningInvoiceAutoPayLimit,
@@ -126,15 +133,20 @@ export function AdvancedPage({
     window.location.reload();
   }, []);
 
-  const armNostrAction = useCallback(() => {
-    clearArmTimeout();
-    setNostrDeriveArmed(true);
-    pushToast(t("nostrDeriveArmedHint"));
-    armTimeoutRef.current = window.setTimeout(() => {
-      setNostrDeriveArmed(false);
-      armTimeoutRef.current = null;
-    }, 5000);
-  }, [clearArmTimeout, pushToast, t]);
+  const armNostrAction = useCallback(
+    (action: "derive" | "paste") => {
+      clearArmTimeout();
+      setArmedNostrAction(action);
+      pushToast(
+        t(action === "derive" ? "nostrDeriveArmedHint" : "nostrPasteArmedHint"),
+      );
+      armTimeoutRef.current = window.setTimeout(() => {
+        setArmedNostrAction(null);
+        armTimeoutRef.current = null;
+      }, 5000);
+    },
+    [clearArmTimeout, pushToast, t],
+  );
 
   useEffect(() => {
     return () => {
@@ -144,7 +156,7 @@ export function AdvancedPage({
 
   useEffect(() => {
     clearArmTimeout();
-    setNostrDeriveArmed(false);
+    setArmedNostrAction(null);
   }, [clearArmTimeout]);
 
   const handleRegisterNotifications = async () => {
@@ -249,25 +261,28 @@ export function AdvancedPage({
             <button
               className="ghost"
               onClick={() => {
-                if (nostrDeriveArmed) {
+                const targetAction = isCustomNostrIdentity ? "derive" : "paste";
+                if (armedNostrAction === targetAction) {
                   clearArmTimeout();
-                  setNostrDeriveArmed(false);
-                  void requestDeriveNostrKeys();
+                  setArmedNostrAction(null);
+                  void (isCustomNostrIdentity
+                    ? requestDeriveNostrKeys()
+                    : requestPasteNostrKeys());
                   return;
                 }
-                armNostrAction();
+                armNostrAction(targetAction);
               }}
               style={
-                nostrDeriveArmed
+                armedNostrAction !== null
                   ? {
                       color: "var(--color-error)",
                       borderColor: "var(--color-error)",
                     }
                   : undefined
               }
-              disabled={!hasCurrentNsec}
+              disabled={!hasCurrentNsec || !hasSeedMnemonic}
             >
-              {t("derive")}
+              {t(isCustomNostrIdentity ? "derive" : "paste")}
             </button>
             <button
               className="ghost"

@@ -420,6 +420,9 @@ export const Schema = {
     id: NostrIdentityId,
     // Bech32 NIP-19 secret key, must start with "nsec".
     nsec: Evolu.NonEmptyString1000,
+    npub: Evolu.nullOr(Evolu.NonEmptyString1000),
+    source: Evolu.nullOr(Evolu.NonEmptyString100),
+    switchedAtSec: Evolu.nullOr(Evolu.PositiveInt),
   },
   nostrMessage: {
     id: NostrMessageId,

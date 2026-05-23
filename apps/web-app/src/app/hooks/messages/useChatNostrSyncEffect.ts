@@ -2,6 +2,10 @@ import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import {
+  getInitialNostrIdentitySource,
+  getInitialNostrIdentitySwitchedAtSec,
+} from "../../../utils/storage";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import type {
   ChatMessageRowLike,
@@ -72,6 +76,10 @@ export const useChatNostrSyncEffect = ({
     if (!currentNsec) return;
 
     let cancelled = false;
+    const identitySinceSec =
+      getInitialNostrIdentitySource() === "custom"
+        ? getInitialNostrIdentitySwitchedAtSec()
+        : null;
 
     const existingWrapIds = chatSeenWrapIdsRef.current;
     for (const m of chatMessages) {
@@ -133,6 +141,8 @@ export const useChatNostrSyncEffect = ({
               Number.isFinite(createdAtSecRaw) && createdAtSecRaw > 0
                 ? Math.trunc(createdAtSecRaw)
                 : Math.ceil(Date.now() / 1e3);
+
+            if (identitySinceSec && createdAtSec < identitySinceSec) return;
 
             if (cancelled) return;
 

@@ -16,6 +16,7 @@ interface UseSystemRoutePropsParams {
   connectedRelayCount: SystemRoutesProps["advancedProps"]["connectedRelayCount"];
   copyNostrKeys: SystemRoutesProps["advancedProps"]["copyNostrKeys"];
   copySeed: SystemRoutesProps["advancedProps"]["copySeed"];
+  activeNostrIdentitySource: SystemRoutesProps["advancedProps"]["activeNostrIdentitySource"];
   currentNpub: SystemRoutesProps["advancedProps"]["currentNpub"];
   currentNsec: SystemRoutesProps["advancedProps"]["currentNsec"];
   dedupeContacts: SystemRoutesProps["advancedProps"]["dedupeContacts"];
@@ -87,6 +88,7 @@ interface UseSystemRoutePropsParams {
   relayUrls: SystemRoutesProps["advancedProps"]["relayUrls"];
   requestDeleteSelectedRelay: SystemRoutesProps["nostrRelayProps"]["requestDeleteSelectedRelay"];
   requestDeriveNostrKeys: SystemRoutesProps["advancedProps"]["requestDeriveNostrKeys"];
+  requestPasteNostrKeys: SystemRoutesProps["advancedProps"]["requestPasteNostrKeys"];
   requestImportAppData: SystemRoutesProps["advancedProps"]["requestImportAppData"];
   requestLogout: SystemRoutesProps["advancedProps"]["requestLogout"];
   saveSeedToPasswordManager: SystemRoutesProps["advancedProps"]["saveSeedToPasswordManager"];
@@ -123,6 +125,7 @@ export const useSystemRouteProps = ({
   connectedRelayCount,
   copyNostrKeys,
   copySeed,
+  activeNostrIdentitySource,
   currentNpub,
   currentNsec,
   dedupeContacts,
@@ -194,6 +197,7 @@ export const useSystemRouteProps = ({
   relayUrls,
   requestDeleteSelectedRelay,
   requestDeriveNostrKeys,
+  requestPasteNostrKeys,
   requestImportAppData,
   requestLogout,
   saveSeedToPasswordManager,
@@ -246,6 +250,7 @@ export const useSystemRouteProps = ({
 
   return {
     advancedProps: {
+      activeNostrIdentitySource,
       currentNpub,
       currentNsec,
       seedMnemonic,
@@ -274,6 +279,7 @@ export const useSystemRouteProps = ({
       exportAppData,
       requestImportAppData,
       requestDeriveNostrKeys,
+      requestPasteNostrKeys,
       dedupeContacts,
       handleImportAppDataFilePicked,
       requestLogout,

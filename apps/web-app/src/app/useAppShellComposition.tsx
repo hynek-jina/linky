@@ -49,7 +49,10 @@ import {
   PROFILE_STATUS_CURRENCIES,
 } from "../nostrStatus";
 import { writeClipboardText } from "../platform/clipboard";
-import { readStoredNostrNsec } from "../platform/identitySecrets";
+import {
+  persistSyncedActiveNostrIdentity,
+  readStoredNostrNsec,
+} from "../platform/identitySecrets";
 import {
   cancelNativeNfcWrite,
   consumePendingNativeDeepLinkUrl,
@@ -123,6 +126,8 @@ import {
   getInitialCashuAutoswapEnabled,
   getInitialDisplayCurrency,
   getInitialLightningInvoiceAutoPayLimit,
+  getInitialNostrIdentitySource,
+  getInitialNostrIdentitySwitchedAtSec,
   getInitialNostrNsec,
   getInitialPayWithCashuEnabled,
   safeLocalStorageGet,
@@ -216,6 +221,11 @@ import {
   isCashuTokenIssuedState,
   isCashuTokenReservedState,
 } from "./lib/cashuTokenState";
+import {
+  buildIdentityChangeMessageContent,
+  buildIdentityChangeMessageWrapId,
+  type IdentityChangeMessageSource,
+} from "./lib/identityChangeMessage";
 import type { AppNostrPool } from "./lib/nostrPool";
 import { getSharedAppNostrPool } from "./lib/nostrPool";
 import {
@@ -262,6 +272,8 @@ import type {
 
 const inMemoryNostrPictureCache = new Map<string, string | null>();
 const inMemoryMintIconCache = new Map<string, string | null>();
+const INLINE_NPUB_PATTERN =
+  /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?/gi;
 
 type TranslationKey = keyof (typeof translations)["cs"];
 
@@ -272,6 +284,24 @@ const readObjectField = (value: unknown, field: string): unknown => {
   if (typeof value !== "object" || value === null) return undefined;
   return Reflect.get(value, field);
 };
+
+const extractMentionedNpubs = (content: string): string[] => {
+  const matches = String(content ?? "").match(INLINE_NPUB_PATTERN);
+  if (!matches) return [];
+
+  const seen = new Set<string>();
+  const npubs: string[] = [];
+
+  for (const match of matches) {
+    const npub = normalizeNpubIdentifier(match);
+    if (!npub || seen.has(npub)) continue;
+    seen.add(npub);
+    npubs.push(npub);
+  }
+
+  return npubs;
+};
+
 interface PendingTopupQuoteStorage {
   amount: number;
   createdAtMs: number;
@@ -1512,6 +1542,13 @@ export const useAppShellComposition = () => {
   const [lnurlWithdrawIsBusy, setLnurlWithdrawIsBusy] = useState(false);
 
   const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
+  const appendIdentityChangeNoticesRef = React.useRef<
+    | ((args: {
+        changedAtSec: number;
+        identitySource: IdentityChangeMessageSource;
+      }) => void)
+    | null
+  >(null);
   const chatMessageElByIdRef = React.useRef<Map<string, HTMLDivElement>>(
     new Map(),
   );
@@ -1660,6 +1697,7 @@ export const useAppShellComposition = () => {
   );
 
   const {
+    activeNostrIdentitySource,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNpub,
@@ -1673,6 +1711,7 @@ export const useAppShellComposition = () => {
     pasteReturningSlip39FromClipboard,
     pickPendingOnboardingPhoto,
     requestDeriveNostrKeys,
+    requestPasteNostrKeys,
     requestLogout,
     savePendingOnboardingBackupToPasswordManager,
     seedMnemonic,
@@ -1684,10 +1723,12 @@ export const useAppShellComposition = () => {
     setPendingOnboardingName,
     submitReturningSlip39,
   } = useProfileAuthComposition({
+    appendIdentityChangeNoticesRef,
     currentNsec,
     lang,
     pushToast,
     t,
+    upsert,
   });
 
   const contactsForRotationRef = React.useRef<readonly ContactRowLike[]>([]);
@@ -1704,6 +1745,8 @@ export const useAppShellComposition = () => {
     contactsOwnerIndex,
     contactsOwnerNewContactsCount,
     contactsOwnerPointer,
+    identityOwnerId,
+    identitySyncOwner,
     metaOwnerId,
     metaSyncOwner,
     messagesBackupOwnerId,
@@ -1739,6 +1782,7 @@ export const useAppShellComposition = () => {
   useOwner(messagesSyncOwner);
   useOwner(transactionsSyncOwner);
   useOwner(metaSyncOwner);
+  useOwner(identitySyncOwner);
 
   React.useEffect(() => {
     cashuOwnerIdRef.current = cashuOwnerId;
@@ -1963,6 +2007,100 @@ export const useAppShellComposition = () => {
     [],
   );
   const cashuTokensAll = useQuery(cashuTokensAllQuery);
+
+  const nostrIdentityQuery = useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("nostrIdentity")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue)
+          .orderBy("createdAt", "desc"),
+      ),
+    [],
+  );
+  const nostrIdentityRows = useQuery(nostrIdentityQuery);
+
+  const activeIdentityOwnerId = String(identityOwnerId ?? "").trim();
+  const readOwnerId = React.useCallback((row: unknown): string => {
+    if (typeof row !== "object" || row === null) return "";
+    if (!("ownerId" in row)) return "";
+    const ownerId = row.ownerId;
+    return typeof ownerId === "string" ? ownerId.trim() : "";
+  }, []);
+  const readIdentityText = React.useCallback(
+    (row: unknown, key: "nsec" | "npub" | "source"): string => {
+      if (typeof row !== "object" || row === null) return "";
+      const value = Reflect.get(row, key);
+      return typeof value === "string" ? value.trim() : "";
+    },
+    [],
+  );
+  const readIdentitySwitchedAtSec = React.useCallback((row: unknown) => {
+    if (typeof row !== "object" || row === null) return null;
+    const value = Number(Reflect.get(row, "switchedAtSec"));
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return Math.trunc(value);
+  }, []);
+
+  const activeSyncedNostrIdentity = React.useMemo(() => {
+    if (!activeIdentityOwnerId) return null;
+
+    const row = nostrIdentityRows.find(
+      (candidate) => readOwnerId(candidate) === activeIdentityOwnerId,
+    );
+    if (!row) return null;
+
+    const nsec = readIdentityText(row, "nsec");
+    if (!nsec) return null;
+
+    const source: "custom" | "derived" =
+      readIdentityText(row, "source") === "custom" ? "custom" : "derived";
+
+    return {
+      nsec,
+      npub: readIdentityText(row, "npub") || null,
+      source,
+      switchedAtSec: readIdentitySwitchedAtSec(row),
+    };
+  }, [
+    activeIdentityOwnerId,
+    nostrIdentityRows,
+    readIdentitySwitchedAtSec,
+    readIdentityText,
+    readOwnerId,
+  ]);
+
+  React.useEffect(() => {
+    if (!activeSyncedNostrIdentity) return;
+
+    const localSource = getInitialNostrIdentitySource();
+    const localSwitchedAtSec = getInitialNostrIdentitySwitchedAtSec();
+    const localNsec = String(currentNsec ?? "").trim();
+    const syncedSwitchedAtSec = activeSyncedNostrIdentity.switchedAtSec;
+    const switchedAtMatches =
+      localSwitchedAtSec === syncedSwitchedAtSec ||
+      (!localSwitchedAtSec && !syncedSwitchedAtSec);
+    const alreadyApplied =
+      localNsec === activeSyncedNostrIdentity.nsec &&
+      localSource === activeSyncedNostrIdentity.source &&
+      switchedAtMatches;
+
+    if (alreadyApplied) return;
+
+    void persistSyncedActiveNostrIdentity({
+      identitySource: activeSyncedNostrIdentity.source,
+      nsec: activeSyncedNostrIdentity.nsec,
+      switchedAtSec: activeSyncedNostrIdentity.switchedAtSec,
+    }).then(() => {
+      setCurrentNsec((current) =>
+        current === activeSyncedNostrIdentity.nsec
+          ? current
+          : activeSyncedNostrIdentity.nsec,
+      );
+      globalThis.location.reload();
+    });
+  }, [activeSyncedNostrIdentity, currentNsec]);
 
   const activeCashuOwnerId = String(cashuOwnerId ?? "").trim();
   const readCashuRowOwnerId = React.useCallback((row: unknown): string => {
@@ -2494,6 +2632,43 @@ export const useAppShellComposition = () => {
   });
 
   React.useEffect(() => {
+    appendIdentityChangeNoticesRef.current = ({
+      changedAtSec,
+      identitySource,
+    }) => {
+      if (!Number.isFinite(changedAtSec) || changedAtSec <= 0) return;
+
+      for (const contactId of lastMessageByContactId.keys()) {
+        const normalizedContactId = String(contactId ?? "").trim();
+        if (!normalizedContactId) continue;
+        if (isUnknownContactId(normalizedContactId)) continue;
+
+        appendLocalNostrMessage({
+          contactId: normalizedContactId,
+          content: buildIdentityChangeMessageContent({
+            changedAtSec,
+            source: identitySource,
+          }),
+          createdAtSec: Math.trunc(changedAtSec),
+          direction: "out",
+          localOnly: true,
+          pubkey: "",
+          rumorId: null,
+          wrapId: buildIdentityChangeMessageWrapId({
+            changedAtSec,
+            contactId: normalizedContactId,
+            source: identitySource,
+          }),
+        });
+      }
+    };
+
+    return () => {
+      appendIdentityChangeNoticesRef.current = null;
+    };
+  }, [appendLocalNostrMessage, lastMessageByContactId]);
+
+  React.useEffect(() => {
     const pendingTokens = cashuTokensAllFiltered.filter((row) => {
       const state = String(row.state ?? "");
       if (state !== "pending") return false;
@@ -3008,12 +3183,46 @@ export const useAppShellComposition = () => {
     return npubs;
   }, [unknownContacts]);
 
+  const chatMentionedNpubs = React.useMemo(() => {
+    const seen = new Set<string>();
+    const npubs: string[] = [];
+
+    for (const message of chatMessages) {
+      for (const npub of extractMentionedNpubs(String(message.content ?? ""))) {
+        if (seen.has(npub)) continue;
+        seen.add(npub);
+        npubs.push(npub);
+      }
+    }
+
+    return npubs;
+  }, [chatMessages]);
+
+  const prefetchedMessageNpubs = React.useMemo(() => {
+    const seen = new Set<string>();
+    const npubs: string[] = [];
+
+    for (const npub of unknownContactNpubs) {
+      if (seen.has(npub)) continue;
+      seen.add(npub);
+      npubs.push(npub);
+    }
+
+    for (const npub of chatMentionedNpubs) {
+      if (seen.has(npub)) continue;
+      seen.add(npub);
+      npubs.push(npub);
+    }
+
+    return npubs;
+  }, [chatMentionedNpubs, unknownContactNpubs]);
+
   React.useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
 
     const run = async () => {
-      for (const npub of unknownContactNpubs) {
+      for (const npub of prefetchedMessageNpubs) {
         if (unknownNameByNpub[npub] !== undefined) continue;
 
         const cached = loadCachedProfileMetadata(npub);
@@ -3065,7 +3274,7 @@ export const useAppShellComposition = () => {
   }, [
     nostrFetchRelays,
     nostrMetadataInFlight,
-    unknownContactNpubs,
+    prefetchedMessageNpubs,
     unknownNameByNpub,
   ]);
 
@@ -3074,7 +3283,7 @@ export const useAppShellComposition = () => {
     let cancelled = false;
 
     const run = async () => {
-      for (const npub of unknownContactNpubs) {
+      for (const npub of prefetchedMessageNpubs) {
         if (nostrPictureByNpub[npub] !== undefined) continue;
 
         try {
@@ -3152,9 +3361,9 @@ export const useAppShellComposition = () => {
     nostrFetchRelays,
     nostrInFlight,
     nostrPictureByNpub,
+    prefetchedMessageNpubs,
     rememberBlobAvatarUrl,
     setNostrPictureByNpub,
-    unknownContactNpubs,
   ]);
 
   const unknownContactById = React.useMemo(() => {
@@ -6516,6 +6725,7 @@ export const useAppShellComposition = () => {
       passwordManagerSeedUsername: String(
         effectiveProfileName ?? currentNpub ?? "",
       ).trim(),
+      activeNostrIdentitySource,
       currentNpub,
       currentNsec,
       dedupeContacts,
@@ -6588,6 +6798,7 @@ export const useAppShellComposition = () => {
       requestDeleteSelectedRelay,
       requestImportAppData,
       requestDeriveNostrKeys,
+      requestPasteNostrKeys,
       requestLogout,
       saveSeedToPasswordManager,
       route,

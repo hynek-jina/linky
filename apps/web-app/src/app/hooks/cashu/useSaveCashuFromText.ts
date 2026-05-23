@@ -172,6 +172,13 @@ export const useSaveCashuFromText = ({
           const accepted = await acceptCashuToken(tokenRaw);
           const acceptedToken = String(accepted.token ?? "").trim();
 
+          if (acceptedToken) {
+            safeLocalStorageSet(
+              LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
+              acceptedToken,
+            );
+          }
+
           if (
             isCashuTokenStored(tokenRaw) ||
             (acceptedToken !== "" && isCashuTokenStored(acceptedToken))

@@ -12,6 +12,10 @@ import {
   type NostrProfileMetadata,
 } from "../../../nostrProfile";
 import { getBestNostrName } from "../../../utils/formatting";
+import {
+  getInitialNostrIdentitySource,
+  getInitialNostrIdentitySwitchedAtSec,
+} from "../../../utils/storage";
 import { isHttpUrl } from "../../../utils/validation";
 
 interface UseProfileMetadataSyncEffectParams {
@@ -73,6 +77,10 @@ export const useProfileMetadataSyncEffect = ({
 
     const controller = new AbortController();
     let cancelled = false;
+    const switchedAtSec =
+      getInitialNostrIdentitySource() === "custom"
+        ? getInitialNostrIdentitySwitchedAtSec()
+        : null;
 
     const run = async () => {
       try {
@@ -80,10 +88,12 @@ export const useProfileMetadataSyncEffect = ({
           fetchNostrProfilePicture(currentNpub, {
             signal: controller.signal,
             relays: nostrFetchRelays,
+            ...(switchedAtSec ? { since: switchedAtSec } : {}),
           }),
           fetchNostrProfileMetadata(currentNpub, {
             signal: controller.signal,
             relays: nostrFetchRelays,
+            ...(switchedAtSec ? { since: switchedAtSec } : {}),
           }),
         ]);
 
