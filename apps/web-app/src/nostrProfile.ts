@@ -140,6 +140,8 @@ type CachedValue = {
   url: string | null;
 };
 
+const PICTURE_REFRESH_TTL_MS = 12 * 60 * 60 * 1000;
+
 // Negative cache (null results) should be short; relays can be slow/unreliable.
 const PICTURE_NONE_TTL_MS = 2 * 60 * 1000;
 const METADATA_NONE_TTL_MS = 2 * 60 * 1000;
@@ -212,6 +214,13 @@ export const saveCachedProfilePicture = (npub: string, url: string | null) => {
   } catch {
     // ignore
   }
+};
+
+export const isCachedProfilePictureStale = (
+  cached: { fetchedAt: number } | undefined,
+): boolean => {
+  if (!cached) return true;
+  return now() - cached.fetchedAt > PICTURE_REFRESH_TTL_MS;
 };
 
 type CachedMetadataValue = {
@@ -299,6 +308,18 @@ export const isDisplayableProfilePictureUrl = (
   const trimmed = value.trim();
   if (!trimmed) return false;
   return isHttpUrl(trimmed) || isDataImageUrl(trimmed);
+};
+
+export const getNostrProfilePictureUrl = (
+  metadata: NostrProfileMetadata | null | undefined,
+): string | null => {
+  const picture = metadata?.picture;
+  if (isDisplayableProfilePictureUrl(picture)) return picture.trim();
+
+  const image = metadata?.image;
+  if (isDisplayableProfilePictureUrl(image)) return image.trim();
+
+  return null;
 };
 
 export const fetchNostrProfileMetadata = async (
@@ -400,22 +421,12 @@ export const fetchNostrProfilePicture = async (
   const cached = loadCachedProfileMetadata(npub);
   const cachedMeta = cached?.metadata ?? null;
 
-  const cachedPicture = cachedMeta?.picture;
-  if (isDisplayableProfilePictureUrl(cachedPicture)) {
-    return cachedPicture.trim();
-  }
-  const cachedImage = cachedMeta?.image;
-  if (isDisplayableProfilePictureUrl(cachedImage)) return cachedImage.trim();
+  const cachedUrl = getNostrProfilePictureUrl(cachedMeta);
+  if (cachedUrl) return cachedUrl;
 
   // If there's no cached picture, try fetching (important when switching relays).
   const metadata = await fetchNostrProfileMetadata(npub, options);
   saveCachedProfileMetadata(npub, metadata);
 
-  const picture = metadata?.picture;
-  if (isDisplayableProfilePictureUrl(picture)) return picture.trim();
-
-  const image = metadata?.image;
-  if (isDisplayableProfilePictureUrl(image)) return image.trim();
-
-  return null;
+  return getNostrProfilePictureUrl(metadata);
 };

@@ -2,8 +2,11 @@ import * as Evolu from "@evolu/common";
 import React from "react";
 import {
   cacheProfileAvatarFromUrl,
+  deleteCachedProfileAvatar,
   fetchNostrProfileMetadata,
   fetchNostrProfilePicture,
+  getNostrProfilePictureUrl,
+  isCachedProfilePictureStale,
   loadCachedProfileAvatarObjectUrl,
   loadCachedProfileMetadata,
   loadCachedProfilePicture,
@@ -206,14 +209,16 @@ export const useContactsNostrPrefetchEffects = <
 
     const run = async () => {
       for (const npub of uniqueNpubs) {
-        if (nostrPictureByNpub[npub] !== undefined) continue;
-
         const cached = loadCachedProfilePicture(npub);
+        const shouldRefreshCachedPicture = isCachedProfilePictureStale(cached);
+
         if (cached) {
           setNostrPictureByNpub((prev) =>
-            prev[npub] !== undefined ? prev : { ...prev, [npub]: cached.url },
+            prev[npub] === cached.url ? prev : { ...prev, [npub]: cached.url },
           );
-          if (cached.url === null || !isHttpUrl(cached.url)) continue;
+          if (cached.url === null || !isHttpUrl(cached.url)) {
+            if (!shouldRefreshCachedPicture) continue;
+          }
         }
 
         try {
@@ -224,33 +229,82 @@ export const useContactsNostrPrefetchEffects = <
               ...prev,
               [npub]: rememberBlobAvatarUrl(npub, blobUrl),
             }));
-            continue;
+            if (!shouldRefreshCachedPicture) continue;
           }
         } catch {
           // ignore
         }
 
+        if (cached && !shouldRefreshCachedPicture) continue;
+
         if (nostrInFlight.current.has(npub)) continue;
         nostrInFlight.current.add(npub);
 
         try {
-          const url = await fetchNostrProfilePicture(npub, {
-            signal: controller.signal,
-            relays: nostrFetchRelays,
-          });
-          saveCachedProfilePicture(npub, url);
-          if (cancelled) return;
-
-          if (url) {
-            const blobUrl = await cacheProfileAvatarFromUrl(npub, url, {
+          if (cached && shouldRefreshCachedPicture) {
+            const metadata = await fetchNostrProfileMetadata(npub, {
               signal: controller.signal,
+              relays: nostrFetchRelays,
             });
             if (cancelled) return;
-            setNostrPictureByNpub((prev) => ({
-              ...prev,
-              [npub]: rememberBlobAvatarUrl(npub, blobUrl || url),
-            }));
+            if (!metadata) continue;
+
+            saveCachedProfileMetadata(npub, metadata);
+            const refreshedUrl = getNostrProfilePictureUrl(metadata);
+            if (refreshedUrl) {
+              saveCachedProfilePicture(npub, refreshedUrl);
+              const blobUrl = await cacheProfileAvatarFromUrl(
+                npub,
+                refreshedUrl,
+                {
+                  signal: controller.signal,
+                },
+              );
+              if (cancelled) return;
+              setNostrPictureByNpub((prev) => ({
+                ...prev,
+                [npub]: rememberBlobAvatarUrl(npub, blobUrl || refreshedUrl),
+              }));
+            } else {
+              saveCachedProfilePicture(npub, null);
+              void deleteCachedProfileAvatar(npub);
+              rememberBlobAvatarUrl(npub, null);
+              setNostrPictureByNpub((prev) => ({
+                ...prev,
+                [npub]: null,
+              }));
+            }
           } else {
+            const url = await fetchNostrProfilePicture(npub, {
+              signal: controller.signal,
+              relays: nostrFetchRelays,
+            });
+            saveCachedProfilePicture(npub, url);
+            if (cancelled) return;
+
+            if (url) {
+              const blobUrl = await cacheProfileAvatarFromUrl(npub, url, {
+                signal: controller.signal,
+              });
+              if (cancelled) return;
+              setNostrPictureByNpub((prev) => ({
+                ...prev,
+                [npub]: rememberBlobAvatarUrl(npub, blobUrl || url),
+              }));
+            } else {
+              setNostrPictureByNpub((prev) => {
+                const existing = prev[npub];
+                if (typeof existing === "string" && existing.trim())
+                  return prev;
+                if (existing === null) return prev;
+                return { ...prev, [npub]: null };
+              });
+            }
+          }
+        } catch {
+          if (cancelled) return;
+          if (!cached) {
+            saveCachedProfilePicture(npub, null);
             setNostrPictureByNpub((prev) => {
               const existing = prev[npub];
               if (typeof existing === "string" && existing.trim()) return prev;
@@ -258,15 +312,6 @@ export const useContactsNostrPrefetchEffects = <
               return { ...prev, [npub]: null };
             });
           }
-        } catch {
-          saveCachedProfilePicture(npub, null);
-          if (cancelled) return;
-          setNostrPictureByNpub((prev) => {
-            const existing = prev[npub];
-            if (typeof existing === "string" && existing.trim()) return prev;
-            if (existing === null) return prev;
-            return { ...prev, [npub]: null };
-          });
         } finally {
           nostrInFlight.current.delete(npub);
         }

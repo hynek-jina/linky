@@ -625,6 +625,7 @@ export const useLightningPaymentsDomain = ({
                 status: "ok",
                 amount: result.paidAmount,
                 details: {
+                  lightningAddress: inferredLightningAddress,
                   ...(result.remainingToken
                     ? { gainedToken: result.remainingToken }
                     : {}),
@@ -709,6 +710,7 @@ export const useLightningPaymentsDomain = ({
           status: "error",
           amount: amountSat,
           details: {
+            lightningAddress: inferredLightningAddress,
             ...(lastAttemptInvoice
               ? { lightningInvoice: lastAttemptInvoice }
               : {}),
