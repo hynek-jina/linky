@@ -3105,18 +3105,7 @@ export const useAppShellComposition = () => {
     setContactsPullProgress,
   });
 
-  const {
-    commitMainSwipe,
-    handleMainSwipePointerCancel,
-    handleMainSwipePointerDown,
-    handleMainSwipePointerMove,
-    handleMainSwipePointerUp,
-    handleMainSwipeScroll,
-    handleMainSwipeTouchCancel,
-    handleMainSwipeTouchEnd,
-    handleMainSwipeTouchMove,
-    handleMainSwipeTouchStart,
-  } = useMainSwipeNavigation({
+  const { commitMainSwipe, handleMainSwipeScroll } = useMainSwipeNavigation({
     isMainSwipeRoute,
     mainSwipeProgressRef,
     mainSwipeRef,
@@ -6994,15 +6983,7 @@ export const useAppShellComposition = () => {
       dismissContactsOnboarding,
       dismissWalletWarning,
       groupNames,
-      handleMainSwipePointerCancel,
-      handleMainSwipePointerDown,
-      handleMainSwipePointerMove,
-      handleMainSwipePointerUp,
       handleMainSwipeScroll,
-      handleMainSwipeTouchCancel,
-      handleMainSwipeTouchEnd,
-      handleMainSwipeTouchMove,
-      handleMainSwipeTouchStart,
       handleMainSwipeTabChange: commitMainSwipe,
       isMainSwipeDragging,
       mainSwipeProgress,

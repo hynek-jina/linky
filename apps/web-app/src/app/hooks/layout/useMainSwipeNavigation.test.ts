@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   alignMainSwipeToTarget,
-  clampMainSwipeLeft,
-  getMainSwipeGestureDecision,
-  isAllowedMainSwipeDrag,
   shouldDisableWalletReturnAnimation,
 } from "./useMainSwipeNavigation";
 
@@ -85,47 +82,5 @@ describe("shouldDisableWalletReturnAnimation", () => {
     expect(shouldDisableWalletReturnAnimation("contacts", "wallet")).toBe(
       false,
     );
-  });
-});
-
-describe("isAllowedMainSwipeDrag", () => {
-  it("only allows contacts to drag toward wallet", () => {
-    expect(isAllowedMainSwipeDrag("contacts", -24)).toBe(true);
-    expect(isAllowedMainSwipeDrag("contacts", 24)).toBe(false);
-  });
-
-  it("only allows wallet to drag back toward contacts", () => {
-    expect(isAllowedMainSwipeDrag("wallet", 24)).toBe(true);
-    expect(isAllowedMainSwipeDrag("wallet", -24)).toBe(false);
-  });
-});
-
-describe("getMainSwipeGestureDecision", () => {
-  it("waits through small diagonal noise before locking contacts swipe", () => {
-    expect(getMainSwipeGestureDecision("contacts", -8, 7)).toBe("wait");
-    expect(getMainSwipeGestureDecision("contacts", -18, 12)).toBe("lock");
-  });
-
-  it("does not cancel a touch sequence for early vertical movement", () => {
-    expect(getMainSwipeGestureDecision("wallet", 10, 18)).toBe("wait");
-  });
-
-  it("does not cancel a touch sequence for an early opposite-direction nudge", () => {
-    expect(getMainSwipeGestureDecision("contacts", 18, 2)).toBe("wait");
-    expect(getMainSwipeGestureDecision("wallet", -18, 2)).toBe("wait");
-  });
-});
-
-describe("clampMainSwipeLeft", () => {
-  it("clamps past the contacts edge", () => {
-    expect(clampMainSwipeLeft(-32, 390)).toBe(0);
-  });
-
-  it("clamps past the wallet edge", () => {
-    expect(clampMainSwipeLeft(512, 390)).toBe(390);
-  });
-
-  it("preserves values inside the swipe range", () => {
-    expect(clampMainSwipeLeft(128, 390)).toBe(128);
   });
 });
