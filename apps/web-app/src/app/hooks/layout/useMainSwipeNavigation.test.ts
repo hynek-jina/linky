@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   alignMainSwipeToTarget,
+  clampMainSwipeLeft,
+  isAllowedMainSwipeDrag,
   shouldDisableWalletReturnAnimation,
 } from "./useMainSwipeNavigation";
 
@@ -82,5 +84,31 @@ describe("shouldDisableWalletReturnAnimation", () => {
     expect(shouldDisableWalletReturnAnimation("contacts", "wallet")).toBe(
       false,
     );
+  });
+});
+
+describe("isAllowedMainSwipeDrag", () => {
+  it("only allows contacts to drag toward wallet", () => {
+    expect(isAllowedMainSwipeDrag("contacts", -24)).toBe(true);
+    expect(isAllowedMainSwipeDrag("contacts", 24)).toBe(false);
+  });
+
+  it("only allows wallet to drag back toward contacts", () => {
+    expect(isAllowedMainSwipeDrag("wallet", 24)).toBe(true);
+    expect(isAllowedMainSwipeDrag("wallet", -24)).toBe(false);
+  });
+});
+
+describe("clampMainSwipeLeft", () => {
+  it("clamps past the contacts edge", () => {
+    expect(clampMainSwipeLeft(-32, 390)).toBe(0);
+  });
+
+  it("clamps past the wallet edge", () => {
+    expect(clampMainSwipeLeft(512, 390)).toBe(390);
+  });
+
+  it("preserves values inside the swipe range", () => {
+    expect(clampMainSwipeLeft(128, 390)).toBe(128);
   });
 });

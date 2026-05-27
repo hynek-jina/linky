@@ -54,7 +54,7 @@ interface ChatPageProps {
   onCancelEdit: () => void;
   onCancelReply: () => void;
   onAddUnknownContact: () => Promise<void>;
-  onRemoveUnknownContactChat: () => Promise<void>;
+  onBlockUnknownContact: () => Promise<void>;
   onCopy: (message: LocalNostrMessage) => void;
   onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
   onEdit: (message: LocalNostrMessage) => void;
@@ -100,7 +100,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   onCancelEdit,
   onCancelReply,
   onAddUnknownContact,
-  onRemoveUnknownContactChat,
+  onBlockUnknownContact,
   onCopy,
   onDeclinePaymentRequest,
   onEdit,
@@ -406,10 +406,10 @@ export const ChatPage: FC<ChatPageProps> = ({
               className="btn-wide secondary"
               type="button"
               onClick={() => {
-                void onRemoveUnknownContactChat();
+                void onBlockUnknownContact();
               }}
             >
-              {t("removeChat")}
+              {t("blockContact")}
             </button>
           </div>
         </div>

@@ -1,6 +1,9 @@
 import React from "react";
 import type { AvatarEditorControlId } from "../derivedProfile";
-import type { ProfileStatusCurrency } from "../nostrStatus";
+import {
+  parseProfileGeneralStatusText,
+  type ProfileStatusCurrency,
+} from "../nostrStatus";
 import {
   formatShortLightningAddress,
   formatShortNpub,
@@ -40,7 +43,9 @@ interface ProfileQrModalProps {
   profileEditLnAddress: string;
   profileEditName: string;
   profileEditPicture: string;
+  profileEditStatus: string;
   profileEditsSavable: boolean;
+  profileStatus: string | null;
   profileStatusCurrencies: readonly ProfileStatusCurrency[];
   profileStatusIsSaving: boolean;
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
@@ -49,6 +54,7 @@ interface ProfileQrModalProps {
   setIsProfileEditing: (editing: boolean) => void;
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
+  setProfileEditStatus: (value: string) => void;
   t: (key: string) => string;
   toggleProfileEditing: () => void;
   toggleProfileStatusCurrency: (
@@ -79,7 +85,9 @@ export function ProfileQrModal({
   profileEditLnAddress,
   profileEditName,
   profileEditPicture,
+  profileEditStatus,
   profileEditsSavable,
+  profileStatus,
   profileStatusCurrencies,
   profileStatusIsSaving,
   profilePhotoInputRef,
@@ -88,11 +96,14 @@ export function ProfileQrModal({
   setIsProfileEditing,
   setProfileEditLnAddress,
   setProfileEditName,
+  setProfileEditStatus,
   t,
   toggleProfileEditing,
   toggleProfileStatusCurrency,
   writeCurrentNpubToNfc,
 }: ProfileQrModalProps): React.ReactElement {
+  const profileStatusText = parseProfileGeneralStatusText(profileStatus);
+
   const handleCopyNpub = () => {
     if (!currentNpub) return;
     void copyText(currentNpub);
@@ -229,6 +240,53 @@ export function ProfileQrModal({
               spellCheck={false}
             />
 
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <label htmlFor="profileStatus">{t("status")}</label>
+            </div>
+            <input
+              id="profileStatus"
+              value={profileEditStatus}
+              onChange={(e) => setProfileEditStatus(e.target.value)}
+              placeholder={t("status")}
+            />
+
+            <div className="profile-status-row">
+              <div className="profile-status-label">
+                {t("profileExchangeStatusLabel")}
+              </div>
+              <div className="profile-status-buttons">
+                {profileStatusCurrencies.map((currency) => {
+                  const isActive =
+                    selectedProfileStatusCurrencies.includes(currency);
+
+                  return (
+                    <button
+                      key={currency}
+                      type="button"
+                      className={
+                        isActive
+                          ? "profile-status-chip"
+                          : "secondary profile-status-chip"
+                      }
+                      aria-pressed={isActive}
+                      disabled={!currentNpub || profileStatusIsSaving}
+                      onClick={() => {
+                        void toggleProfileStatusCurrency(currency);
+                      }}
+                    >
+                      {currency}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="panel-header" style={{ marginTop: 14 }}>
               {profileEditsSavable ? (
                 <button onClick={() => void onSaveProfileEdits()}>
@@ -288,6 +346,12 @@ export function ProfileQrModal({
                     ⧉
                   </span>
                 </button>
+              ) : null}
+
+              {profileStatusText ? (
+                <p className="muted" style={{ marginTop: 8 }}>
+                  {profileStatusText}
+                </p>
               ) : null}
             </div>
 

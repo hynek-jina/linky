@@ -34,6 +34,8 @@ export const useAppPreferences = ({
     persistLang(lang);
     try {
       document.documentElement.lang = lang;
+      document.documentElement.setAttribute("translate", "no");
+      document.documentElement.classList.add("notranslate");
     } catch {
       // ignore
     }

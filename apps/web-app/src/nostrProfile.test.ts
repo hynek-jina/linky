@@ -1,8 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   fetchNostrProfilePicture,
+  isCachedProfilePictureStale,
   isDisplayableProfilePictureUrl,
+  loadCachedProfilePicture,
   saveCachedProfileMetadata,
+  saveCachedProfilePicture,
 } from "./nostrProfile";
 
 const TEST_NPUB =
@@ -30,6 +33,9 @@ describe("isDisplayableProfilePictureUrl", () => {
 
 describe("fetchNostrProfilePicture", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-26T12:00:00.000Z"));
+
     const values = new Map<string, string>();
     const storage: Storage = {
       get length() {
@@ -49,6 +55,7 @@ describe("fetchNostrProfilePicture", () => {
 
   afterEach(() => {
     localStorage.clear();
+    vi.useRealTimers();
   });
 
   it("uses cached raster data image metadata as a profile picture", async () => {
@@ -56,5 +63,19 @@ describe("fetchNostrProfilePicture", () => {
     saveCachedProfileMetadata(TEST_NPUB, { picture });
 
     await expect(fetchNostrProfilePicture(TEST_NPUB)).resolves.toBe(picture);
+  });
+
+  it("marks positive cached profile pictures stale only after the refresh ttl", () => {
+    saveCachedProfilePicture(TEST_NPUB, "https://example.com/avatar.jpg");
+
+    expect(
+      isCachedProfilePictureStale(loadCachedProfilePicture(TEST_NPUB)),
+    ).toBe(false);
+
+    vi.advanceTimersByTime(12 * 60 * 60 * 1000 + 1);
+
+    expect(
+      isCachedProfilePictureStale(loadCachedProfilePicture(TEST_NPUB)),
+    ).toBe(true);
   });
 });

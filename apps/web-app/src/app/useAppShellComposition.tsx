@@ -32,8 +32,11 @@ import {
 } from "../lnurlPay";
 import {
   cacheProfileAvatarFromUrl,
+  deleteCachedProfileAvatar,
   fetchNostrProfileMetadata,
   fetchNostrProfilePicture,
+  getNostrProfilePictureUrl,
+  isCachedProfilePictureStale,
   loadCachedProfileAvatarObjectUrl,
   loadCachedProfileMetadata,
   loadCachedProfilePicture,
@@ -79,6 +82,7 @@ import {
 import { getCashuLib } from "../utils/cashuLib";
 import { createLoadedCashuWallet } from "../utils/cashuWallet";
 import {
+  ARCHIVED_CONTACTS_FILTER,
   BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
   CASHU_AUTOSWAP_MIN_SOURCE_SUM,
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
@@ -1065,7 +1069,6 @@ export const useAppShellComposition = () => {
     route.kind === "wallet" ? 1 : 0,
   );
   const [isMainSwipeDragging, setIsMainSwipeDragging] = useState(false);
-  const [mainSwipeScrollY, setMainSwipeScrollY] = useState(0);
   const mainSwipeProgressRef = React.useRef(route.kind === "wallet" ? 1 : 0);
   const mainSwipeScrollTimerRef = React.useRef<number | null>(null);
 
@@ -2854,6 +2857,7 @@ export const useAppShellComposition = () => {
     profileEditLnAddress,
     profileEditName,
     profileEditPicture,
+    profileEditStatus,
     profileEditsSavable,
     profilePhotoInputRef,
     profileSelectedPictureKind,
@@ -2861,6 +2865,7 @@ export const useAppShellComposition = () => {
     setIsProfileEditing,
     setProfileEditLnAddress,
     setProfileEditName,
+    setProfileEditStatus,
     toggleProfileEditing,
   } = useProfileEditor({
     currentNpub,
@@ -2869,11 +2874,13 @@ export const useAppShellComposition = () => {
     effectiveProfileName,
     effectiveProfilePicture,
     myProfileMetadata,
+    myProfileStatus,
     nostrFetchRelays,
     setMyProfileLnAddress,
     setMyProfileMetadata,
     setMyProfileName,
     setMyProfilePicture,
+    setMyProfileStatus,
     setStatus,
     t,
   });
@@ -3057,7 +3064,6 @@ export const useAppShellComposition = () => {
     nostrMetadataInFlight,
     nostrStatusByNpub,
     nostrStatusInFlight,
-    nostrPictureByNpub,
     rememberBlobAvatarUrl,
     routeKind: route.kind,
     setNostrPictureByNpub,
@@ -3097,10 +3103,16 @@ export const useAppShellComposition = () => {
     routeKind: route.kind,
     setContactsHeaderVisible,
     setContactsPullProgress,
-    setMainSwipeScrollY,
   });
 
-  const { commitMainSwipe, handleMainSwipeScroll } = useMainSwipeNavigation({
+  const {
+    commitMainSwipe,
+    handleMainSwipePointerCancel,
+    handleMainSwipePointerDown,
+    handleMainSwipePointerMove,
+    handleMainSwipePointerUp,
+    handleMainSwipeScroll,
+  } = useMainSwipeNavigation({
     isMainSwipeRoute,
     mainSwipeProgressRef,
     mainSwipeRef,
@@ -3284,7 +3296,14 @@ export const useAppShellComposition = () => {
 
     const run = async () => {
       for (const npub of prefetchedMessageNpubs) {
-        if (nostrPictureByNpub[npub] !== undefined) continue;
+        const cached = loadCachedProfilePicture(npub);
+        const shouldRefreshCachedPicture = isCachedProfilePictureStale(cached);
+
+        if (cached) {
+          setNostrPictureByNpub((prev) =>
+            prev[npub] === cached.url ? prev : { ...prev, [npub]: cached.url },
+          );
+        }
 
         try {
           const blobUrl = await loadCachedProfileAvatarObjectUrl(npub);
@@ -3294,41 +3313,82 @@ export const useAppShellComposition = () => {
               ...prev,
               [npub]: rememberBlobAvatarUrl(npub, blobUrl),
             }));
-            continue;
+            if (!shouldRefreshCachedPicture) continue;
           }
         } catch {
           // ignore
         }
 
-        const cached = loadCachedProfilePicture(npub);
-        if (cached) {
-          setNostrPictureByNpub((prev) =>
-            prev[npub] !== undefined ? prev : { ...prev, [npub]: cached.url },
-          );
-          continue;
-        }
+        if (cached && !shouldRefreshCachedPicture) continue;
 
         if (nostrInFlight.current.has(npub)) continue;
         nostrInFlight.current.add(npub);
 
         try {
-          const url = await fetchNostrProfilePicture(npub, {
-            signal: controller.signal,
-            relays: nostrFetchRelays,
-          });
-          saveCachedProfilePicture(npub, url);
-          if (cancelled) return;
-
-          if (url) {
-            const blobUrl = await cacheProfileAvatarFromUrl(npub, url, {
+          if (cached && shouldRefreshCachedPicture) {
+            const metadata = await fetchNostrProfileMetadata(npub, {
               signal: controller.signal,
+              relays: nostrFetchRelays,
             });
             if (cancelled) return;
-            setNostrPictureByNpub((prev) => ({
-              ...prev,
-              [npub]: rememberBlobAvatarUrl(npub, blobUrl || url),
-            }));
+            if (!metadata) continue;
+
+            saveCachedProfileMetadata(npub, metadata);
+            const refreshedUrl = getNostrProfilePictureUrl(metadata);
+            if (refreshedUrl) {
+              saveCachedProfilePicture(npub, refreshedUrl);
+              const blobUrl = await cacheProfileAvatarFromUrl(
+                npub,
+                refreshedUrl,
+                {
+                  signal: controller.signal,
+                },
+              );
+              if (cancelled) return;
+              setNostrPictureByNpub((prev) => ({
+                ...prev,
+                [npub]: rememberBlobAvatarUrl(npub, blobUrl || refreshedUrl),
+              }));
+            } else {
+              saveCachedProfilePicture(npub, null);
+              void deleteCachedProfileAvatar(npub);
+              rememberBlobAvatarUrl(npub, null);
+              setNostrPictureByNpub((prev) => ({
+                ...prev,
+                [npub]: null,
+              }));
+            }
           } else {
+            const url = await fetchNostrProfilePicture(npub, {
+              signal: controller.signal,
+              relays: nostrFetchRelays,
+            });
+            saveCachedProfilePicture(npub, url);
+            if (cancelled) return;
+
+            if (url) {
+              const blobUrl = await cacheProfileAvatarFromUrl(npub, url, {
+                signal: controller.signal,
+              });
+              if (cancelled) return;
+              setNostrPictureByNpub((prev) => ({
+                ...prev,
+                [npub]: rememberBlobAvatarUrl(npub, blobUrl || url),
+              }));
+            } else {
+              setNostrPictureByNpub((prev) => {
+                const existing = prev[npub];
+                if (typeof existing === "string" && existing.trim())
+                  return prev;
+                if (existing === null) return prev;
+                return { ...prev, [npub]: null };
+              });
+            }
+          }
+        } catch {
+          if (cancelled) return;
+          if (!cached) {
+            saveCachedProfilePicture(npub, null);
             setNostrPictureByNpub((prev) => {
               const existing = prev[npub];
               if (typeof existing === "string" && existing.trim()) return prev;
@@ -3336,15 +3396,6 @@ export const useAppShellComposition = () => {
               return { ...prev, [npub]: null };
             });
           }
-        } catch {
-          saveCachedProfilePicture(npub, null);
-          if (cancelled) return;
-          setNostrPictureByNpub((prev) => {
-            const existing = prev[npub];
-            if (typeof existing === "string" && existing.trim()) return prev;
-            if (existing === null) return prev;
-            return { ...prev, [npub]: null };
-          });
         } finally {
           nostrInFlight.current.delete(npub);
         }
@@ -3360,7 +3411,6 @@ export const useAppShellComposition = () => {
   }, [
     nostrFetchRelays,
     nostrInFlight,
-    nostrPictureByNpub,
     prefetchedMessageNpubs,
     rememberBlobAvatarUrl,
     setNostrPictureByNpub,
@@ -3416,6 +3466,16 @@ export const useAppShellComposition = () => {
   const displayContacts = React.useMemo<DisplayContact[]>(() => {
     return [...contacts, ...unknownContacts];
   }, [contacts, unknownContacts]);
+
+  const displayContactById = React.useMemo(() => {
+    const byId = new Map<string, DisplayContact>();
+    for (const contact of displayContacts) {
+      const id = String(contact.id ?? "").trim();
+      if (!id) continue;
+      byId.set(id, contact);
+    }
+    return byId;
+  }, [displayContacts]);
 
   const displayContactsSearchData = React.useMemo(() => {
     return displayContacts.map((contact) => {
@@ -3483,6 +3543,7 @@ export const useAppShellComposition = () => {
   }, [displayContacts, nostrStatusByNpub]);
 
   React.useEffect(() => {
+    if (activeGroup === ARCHIVED_CONTACTS_FILTER) return;
     if (!isStatusFilterValue(activeGroup)) return;
 
     const selectedCurrency = parseStatusFilterValue(activeGroup);
@@ -3524,6 +3585,7 @@ export const useAppShellComposition = () => {
     currentNpub,
     insert,
     nostrFetchRelays,
+    recordTransactionsOwnerWrite,
     route,
     selectedContact,
     setContactNewPrefill,
@@ -3531,6 +3593,7 @@ export const useAppShellComposition = () => {
     recordContactsOwnerWrite,
     setStatus,
     t,
+    transactionsOwnerId,
     update,
   });
 
@@ -3945,15 +4008,15 @@ export const useAppShellComposition = () => {
 
   const handleDelete = (id: ContactId) => {
     const normalizedContactId = String(id ?? "").trim();
-    const contactToDelete =
+    const contactToArchive =
       contacts.find(
         (contact) => String(contact.id ?? "").trim() === normalizedContactId,
       ) ?? null;
-    const deletedContactNpub = normalizeNpubIdentifier(contactToDelete?.npub);
+    const archivedContactNpub = normalizeNpubIdentifier(contactToArchive?.npub);
     let unknownThreadContactId: string | null = null;
-    if (deletedContactNpub) {
+    if (archivedContactNpub) {
       try {
-        const decodedContact = nip19.decode(deletedContactNpub);
+        const decodedContact = nip19.decode(archivedContactNpub);
         if (
           decodedContact.type === "npub" &&
           typeof decodedContact.data === "string"
@@ -3965,34 +4028,136 @@ export const useAppShellComposition = () => {
       }
     }
 
+    const archivedAtSec = Math.ceil(Date.now() / 1e3);
+
     const result = contactsOwnerId
       ? (() => {
           const scoped = update(
             "contact",
-            { id, isDeleted: Evolu.sqliteTrue },
+            { id, archivedAtSec },
             { ownerId: contactsOwnerId },
           );
           if (scoped.ok) return scoped;
-          return update("contact", { id, isDeleted: Evolu.sqliteTrue });
+          return update("contact", { id, archivedAtSec });
         })()
-      : update("contact", { id, isDeleted: Evolu.sqliteTrue });
+      : update("contact", { id, archivedAtSec });
     if (result.ok) {
       if (
         unknownThreadContactId &&
         unknownThreadContactId !== normalizedContactId
       ) {
         reassignLocalNostrMessagesContactId(
-          normalizedContactId,
           unknownThreadContactId,
+          normalizedContactId,
         );
+        clearContactAttention(unknownThreadContactId);
       }
       recordContactsOwnerWrite();
-      setStatus(t("contactDeleted"));
+      setStatus(t("contactArchived"));
       closeContactDetail();
       return;
     }
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
   };
+
+  const restoreArchivedContact = React.useCallback(
+    (id: ContactId) => {
+      const result = contactsOwnerId
+        ? (() => {
+            const scoped = update(
+              "contact",
+              { id, archivedAtSec: null },
+              { ownerId: contactsOwnerId },
+            );
+            if (scoped.ok) return scoped;
+            return update("contact", { id, archivedAtSec: null });
+          })()
+        : update("contact", { id, archivedAtSec: null });
+
+      if (result.ok) {
+        recordContactsOwnerWrite();
+        setStatus(t("contactRestored"));
+        closeContactDetail();
+        return;
+      }
+
+      setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+    },
+    [
+      closeContactDetail,
+      contactsOwnerId,
+      recordContactsOwnerWrite,
+      setStatus,
+      t,
+      update,
+    ],
+  );
+
+  const blockPubkeyAndPublishMuteList = React.useCallback(
+    async (pubkeyHex: string): Promise<boolean> => {
+      const normalizedPubkey = normalizePubkeyHex(pubkeyHex);
+      if (!normalizedPubkey) return false;
+
+      const mergedBlockedPubkeys = Array.from(
+        new Set(
+          safeLocalStorageGetJson(BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY, [])
+            .map((entry) => normalizePubkeyHex(entry))
+            .filter((entry): entry is string => Boolean(entry))
+            .concat(normalizedPubkey),
+        ),
+      );
+
+      safeLocalStorageSetJson(
+        BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
+        mergedBlockedPubkeys,
+      );
+
+      if (!currentNsec) return true;
+
+      try {
+        const { finalizeEvent, getPublicKey } = await import("nostr-tools");
+
+        const decodedMe = nip19.decode(currentNsec);
+        if (
+          decodedMe.type !== "nsec" ||
+          !(decodedMe.data instanceof Uint8Array)
+        ) {
+          return true;
+        }
+
+        const relays = Array.from(
+          new Set(
+            nostrFetchRelays
+              .map((relay) => String(relay ?? "").trim())
+              .filter(Boolean),
+          ),
+        );
+        if (relays.length === 0) return true;
+
+        const privBytes = decodedMe.data;
+        const pubkey = getPublicKey(privBytes);
+        const baseEvent = {
+          kind: 10000,
+          created_at: Math.ceil(Date.now() / 1e3),
+          tags: mergedBlockedPubkeys.map((blockedPubkey) => [
+            "p",
+            blockedPubkey,
+          ]),
+          content: "",
+          pubkey,
+        } satisfies UnsignedEvent;
+
+        const signed = finalizeEvent(baseEvent, privBytes);
+        const pool = await getSharedAppNostrPool();
+        void Promise.allSettled(pool.publish(relays, signed));
+      } catch {
+        // Local blocklist still applies even if mute-list publish fails.
+      }
+
+      return true;
+    },
+    [currentNsec, nostrFetchRelays],
+  );
 
   const {
     checkAllCashuTokensAndDeleteInvalid,
@@ -4664,7 +4829,6 @@ export const useAppShellComposition = () => {
       return;
     }
     setPendingDeleteId(editingId);
-    setStatus(t("deleteArmedHint"));
   };
 
   const { openFeedbackContact } = useFeedbackContact<(typeof contacts)[number]>(
@@ -4689,6 +4853,82 @@ export const useAppShellComposition = () => {
       return next;
     });
   }, []);
+
+  const blockArchivedContact = React.useCallback(async () => {
+    if (route.kind !== "contactEdit") return;
+    if (!selectedContact?.id) return;
+
+    const normalizedNpub = normalizeNpubIdentifier(selectedContact.npub);
+    if (!normalizedNpub) {
+      setStatus(t("chatMissingContactNpub"));
+      return;
+    }
+
+    const confirmed = window.confirm(t("chatUnknownContactBlockConfirm"));
+    if (!confirmed) return;
+
+    let blockedPubkey: string | null = null;
+    try {
+      const decoded = nip19.decode(normalizedNpub);
+      if (decoded.type === "npub" && typeof decoded.data === "string") {
+        blockedPubkey = normalizePubkeyHex(decoded.data);
+      }
+    } catch {
+      blockedPubkey = null;
+    }
+
+    if (!blockedPubkey) {
+      setStatus(t("chatMissingContactNpub"));
+      return;
+    }
+
+    await blockPubkeyAndPublishMuteList(blockedPubkey);
+
+    const contactId = String(selectedContact.id ?? "").trim();
+    if (contactId) {
+      removeLocalNostrMessagesByContactId(contactId);
+      clearContactAttention(contactId);
+    }
+
+    const result = contactsOwnerId
+      ? (() => {
+          const scoped = update(
+            "contact",
+            { id: selectedContact.id, isDeleted: Evolu.sqliteTrue },
+            { ownerId: contactsOwnerId },
+          );
+          if (scoped.ok) return scoped;
+          return update("contact", {
+            id: selectedContact.id,
+            isDeleted: Evolu.sqliteTrue,
+          });
+        })()
+      : update("contact", {
+          id: selectedContact.id,
+          isDeleted: Evolu.sqliteTrue,
+        });
+
+    if (result.ok) {
+      recordContactsOwnerWrite();
+      setStatus(t("contactBlocked"));
+      closeContactDetail();
+      return;
+    }
+
+    setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+  }, [
+    blockPubkeyAndPublishMuteList,
+    clearContactAttention,
+    closeContactDetail,
+    contactsOwnerId,
+    recordContactsOwnerWrite,
+    removeLocalNostrMessagesByContactId,
+    route.kind,
+    selectedContact,
+    setStatus,
+    t,
+    update,
+  ]);
 
   const openContactPay = (
     contactId: string,
@@ -4807,24 +5047,51 @@ export const useAppShellComposition = () => {
     unknownNameByNpub,
   ]);
 
-  const removeUnknownContactChatFromChat = React.useCallback(async () => {
+  const blockUnknownContactFromChat = React.useCallback(async () => {
     if (route.kind !== "chat") return;
     if (!selectedChatContact?.isUnknownContact) return;
 
-    const confirmed = window.confirm(t("chatUnknownContactRemoveConfirm"));
+    const confirmed = window.confirm(t("chatUnknownContactBlockConfirm"));
     if (!confirmed) return;
 
     const contactId = String(selectedChatContact.id ?? "").trim();
     if (!contactId) return;
 
+    const unknownPubkeyHex = (() => {
+      const directPubkey = normalizePubkeyHex(
+        selectedChatContact.unknownPubkeyHex,
+      );
+      if (directPubkey) return directPubkey;
+
+      const normalizedNpub = normalizeNpubIdentifier(selectedChatContact.npub);
+      if (!normalizedNpub) return null;
+
+      try {
+        const decoded = nip19.decode(normalizedNpub);
+        if (decoded.type !== "npub" || typeof decoded.data !== "string") {
+          return null;
+        }
+        return normalizePubkeyHex(decoded.data);
+      } catch {
+        return null;
+      }
+    })();
+
+    if (!unknownPubkeyHex) return;
+
+    await blockPubkeyAndPublishMuteList(unknownPubkeyHex);
+
     removeLocalNostrMessagesByContactId(contactId);
     clearContactAttention(contactId);
-    setStatus(t("chatUnknownContactRemoved"));
+    setStatus(t("chatUnknownContactBlocked"));
     navigateTo({ route: "contacts" });
   }, [
+    blockPubkeyAndPublishMuteList,
     clearContactAttention,
     removeLocalNostrMessagesByContactId,
     route.kind,
+    selectedChatContact?.npub,
+    selectedChatContact?.unknownPubkeyHex,
     selectedChatContact,
     setStatus,
     t,
@@ -4962,66 +5229,94 @@ export const useAppShellComposition = () => {
     t,
   ]);
 
-  const renderContactCard = (contact: DisplayContact) => {
-    const npub = normalizeNpubIdentifier(contact.npub);
-    const avatarUrl = npub ? nostrPictureByNpub[npub] : null;
-    const statusText = npub ? (nostrStatusByNpub[npub] ?? null) : null;
-    const contactId = String(contact.id ?? "").trim();
-    const last = contactId ? lastMessageByContactId.get(contactId) : null;
-    const lastText = String(last?.content ?? "").trim();
-    const tokenInfo = lastText ? getCashuTokenMessageInfo(lastText) : null;
-    const hasAttention = Boolean(
-      contactAttentionById[String(contact.id ?? "")],
-    );
+  const handleSelectContact = React.useCallback(
+    (contact: DisplayContact) => {
+      if (pendingCashuTokenContactPickId) {
+        void sendCashuTokenToContact(contact, pendingCashuTokenContactPickId);
+        return;
+      }
 
-    return (
-      <ContactCard
-        key={String(contact.id ?? "")}
-        contact={contact}
-        avatarUrl={avatarUrl}
-        lastMessage={last ?? null}
-        hasAttention={hasAttention}
-        isUnknownContact={Boolean(contact.isUnknownContact)}
-        statusText={statusText}
-        tokenInfo={tokenInfo}
-        getMintIconUrl={getMintIconUrl}
-        onSelect={() => {
-          if (pendingCashuTokenContactPickId) {
-            void sendCashuTokenToContact(
-              contact,
-              pendingCashuTokenContactPickId,
-            );
-            return;
-          }
+      openContactDetail(contact);
+    },
+    [
+      openContactDetail,
+      pendingCashuTokenContactPickId,
+      sendCashuTokenToContact,
+    ],
+  );
 
-          openContactDetail(contact);
-        }}
-        onMintIconLoad={(origin, url) => {
-          setMintIconUrlByMint((prev) => ({
-            ...prev,
-            [origin]: url,
-          }));
-        }}
-        onMintIconError={(origin, url) => {
-          setMintIconUrlByMint((prev) => ({
-            ...prev,
-            [origin]: url,
-          }));
-        }}
-      />
-    );
-  };
+  const handleMintIconLoad = React.useCallback(
+    (origin: string, url: string | null) => {
+      setMintIconUrlByMint((prev) => ({
+        ...prev,
+        [origin]: url,
+      }));
+    },
+    [],
+  );
 
-  const renderMainSwipeContactCard = (
-    contact: ContactRowLike,
-  ): React.ReactNode => {
-    const id = String(contact.id ?? "").trim();
-    if (!id) return null;
-    const matched =
-      displayContacts.find((row) => String(row.id ?? "").trim() === id) ?? null;
-    if (!matched) return null;
-    return renderContactCard(matched);
-  };
+  const handleMintIconError = React.useCallback(
+    (origin: string, url: string | null) => {
+      setMintIconUrlByMint((prev) => ({
+        ...prev,
+        [origin]: url,
+      }));
+    },
+    [],
+  );
+
+  const renderContactCard = React.useCallback(
+    (contact: DisplayContact) => {
+      const npub = normalizeNpubIdentifier(contact.npub);
+      const avatarUrl = npub ? nostrPictureByNpub[npub] : null;
+      const statusText = npub ? (nostrStatusByNpub[npub] ?? null) : null;
+      const contactId = String(contact.id ?? "").trim();
+      const last = contactId ? lastMessageByContactId.get(contactId) : null;
+      const lastText = String(last?.content ?? "").trim();
+      const tokenInfo = lastText ? getCashuTokenMessageInfo(lastText) : null;
+      const hasAttention = Boolean(
+        contactAttentionById[String(contact.id ?? "")],
+      );
+
+      return (
+        <ContactCard
+          key={String(contact.id ?? "")}
+          contact={contact}
+          avatarUrl={avatarUrl}
+          lastMessage={last ?? null}
+          hasAttention={hasAttention}
+          isUnknownContact={Boolean(contact.isUnknownContact)}
+          statusText={statusText}
+          tokenInfo={tokenInfo}
+          getMintIconUrl={getMintIconUrl}
+          onSelect={handleSelectContact}
+          onMintIconLoad={handleMintIconLoad}
+          onMintIconError={handleMintIconError}
+        />
+      );
+    },
+    [
+      contactAttentionById,
+      getMintIconUrl,
+      handleMintIconError,
+      handleMintIconLoad,
+      handleSelectContact,
+      lastMessageByContactId,
+      nostrPictureByNpub,
+      nostrStatusByNpub,
+    ],
+  );
+
+  const renderMainSwipeContactCard = React.useCallback(
+    (contact: ContactRowLike): React.ReactNode => {
+      const id = String(contact.id ?? "").trim();
+      if (!id) return null;
+      const matched = displayContactById.get(id) ?? null;
+      if (!matched) return null;
+      return renderContactCard(matched);
+    },
+    [displayContactById, renderContactCard],
+  );
 
   const conversationsLabel = t("conversations");
   const otherContactsLabel = t("otherContacts");
@@ -6615,7 +6910,7 @@ export const useAppShellComposition = () => {
       onCancelEdit,
       onCancelReply,
       onAddUnknownContact: addUnknownContactFromChat,
-      onRemoveUnknownContactChat: removeUnknownContactChatFromChat,
+      onBlockUnknownContact: blockUnknownContactFromChat,
       onCopy: onCopyChatMessage,
       onDeclinePaymentRequest: onDeclineChatPaymentRequest,
       onEdit: onEditChatMessage,
@@ -6632,16 +6927,27 @@ export const useAppShellComposition = () => {
       paySelectedContact,
       requestSelectedContact,
       payWithCashuEnabled,
+      selectedContactStatusText: (() => {
+        const npub = normalizeNpubIdentifier(selectedContact?.npub);
+        return npub ? (nostrStatusByNpub[npub] ?? null) : null;
+      })(),
       pendingDeleteId,
       reactionsByMessageId,
       profileCustomPictureUrl,
       profileEditLnAddress,
       profileEditName,
       profileEditPicture,
+      profileEditStatus,
       profileEditsSavable,
+      profileStatus: myProfileStatus,
       profilePhotoInputRef,
       profileSelectedPictureKind,
+      blockArchivedContact,
       selectedProfileStatusCurrencies,
+      restoreArchivedContact: () => {
+        if (!editingId) return;
+        restoreArchivedContact(editingId);
+      },
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
       replyContext,
@@ -6656,6 +6962,7 @@ export const useAppShellComposition = () => {
       setPayAmount,
       setProfileEditLnAddress,
       setProfileEditName,
+      setProfileEditStatus,
       t,
       toggleProfileStatusCurrency,
     },
@@ -6683,12 +6990,15 @@ export const useAppShellComposition = () => {
       dismissContactsOnboarding,
       dismissWalletWarning,
       groupNames,
+      handleMainSwipePointerCancel,
+      handleMainSwipePointerDown,
+      handleMainSwipePointerMove,
+      handleMainSwipePointerUp,
       handleMainSwipeScroll,
       handleMainSwipeTabChange: commitMainSwipe,
       isMainSwipeDragging,
       mainSwipeProgress,
       mainSwipeRef,
-      mainSwipeScrollY,
       NO_GROUP_FILTER,
       canAddContact,
       openNewContactPage,
@@ -6862,7 +7172,9 @@ export const useAppShellComposition = () => {
     profileEditLnAddress,
     profileEditName,
     profileEditPicture,
+    profileEditStatus,
     profileEditsSavable,
+    profileStatus: myProfileStatus,
     profileStatusCurrencies,
     profileStatusIsSaving,
     profilePhotoInputRef,
@@ -6919,6 +7231,7 @@ export const useAppShellComposition = () => {
     setPostPaySaveContact,
     setProfileEditLnAddress,
     setProfileEditName,
+    setProfileEditStatus,
     setDisplayCurrency: setDisplayCurrencyIfAllowed,
     stopContactsGuide,
     shareOptionsViaEmail,

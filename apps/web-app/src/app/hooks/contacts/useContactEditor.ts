@@ -1,10 +1,15 @@
 import * as Evolu from "@evolu/common";
+import { useQuery } from "@evolu/react";
 import React from "react";
-import type { ContactId } from "../../../evolu";
+import { evolu, type ContactId, type TransactionId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import {
+  cacheProfileAvatarFromUrl,
+  deleteCachedProfileAvatar,
   fetchNostrProfileMetadata,
+  getNostrProfilePictureUrl,
   saveCachedProfileMetadata,
+  saveCachedProfilePicture,
 } from "../../../nostrProfile";
 import type { Route } from "../../../types/route";
 import { MAX_CONTACTS_PER_OWNER } from "../../../utils/constants";
@@ -34,6 +39,7 @@ interface UseContactEditorParams {
   currentNpub: string | null;
   insert: EvoluMutations["insert"];
   nostrFetchRelays: string[];
+  recordTransactionsOwnerWrite: (count?: number) => void;
   route: Route;
   selectedContact: SelectedContactRow | null;
   setContactNewPrefill: React.Dispatch<
@@ -43,8 +49,37 @@ interface UseContactEditorParams {
   recordContactsOwnerWrite: (count?: number) => void;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
+  transactionsOwnerId: Evolu.OwnerId | null;
   update: EvoluMutations["update"];
 }
+
+const readText = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const readLightningAddressFromDetailsJson = (value: unknown): string | null => {
+  const detailsJson = readText(value);
+  if (!detailsJson) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(detailsJson);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      return null;
+    }
+
+    return readText(
+      "lightningAddress" in parsed ? parsed.lightningAddress : null,
+    );
+  } catch {
+    return null;
+  }
+};
 
 export const makeEmptyContactForm = (): ContactFormState => ({
   name: "",
@@ -60,6 +95,7 @@ export const useContactEditor = ({
   currentNpub,
   insert,
   nostrFetchRelays,
+  recordTransactionsOwnerWrite,
   route,
   selectedContact,
   setContactNewPrefill,
@@ -67,6 +103,7 @@ export const useContactEditor = ({
   recordContactsOwnerWrite,
   setStatus,
   t,
+  transactionsOwnerId,
   update,
 }: UseContactEditorParams) => {
   const [form, setForm] = React.useState<ContactFormState>(
@@ -81,6 +118,19 @@ export const useContactEditor = ({
     name: string;
     npub: string;
   } | null>(null);
+  const previousRouteKindRef = React.useRef<Route["kind"] | null>(null);
+
+  const transactionsQuery = React.useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("transaction")
+          .select(["id", "contactId", "method", "detailsJson"])
+          .where("isDeleted", "is not", Evolu.sqliteTrue),
+      ),
+    [],
+  );
+  const transactionRows = useQuery(transactionsQuery);
 
   const openScannedContactPendingNpubRef = React.useRef<string | null>(null);
 
@@ -109,12 +159,70 @@ export const useContactEditor = ({
     [appOwnerId, update],
   );
 
+  const updateTransactionFields = React.useCallback(
+    (payload: { contactId: ContactId; id: TransactionId }) => {
+      if (transactionsOwnerId) {
+        const scoped = update("transaction", payload, {
+          ownerId: transactionsOwnerId,
+        });
+        if (scoped.ok) return scoped;
+      }
+
+      return update("transaction", payload);
+    },
+    [transactionsOwnerId, update],
+  );
+
+  const backfillLightningAddressTransactions = React.useCallback(
+    (contactId: ContactId, lnAddress: string) => {
+      const normalizedLnAddress = lnAddress.trim().toLowerCase();
+      if (!normalizedLnAddress) return;
+
+      let updatedCount = 0;
+      for (const row of transactionRows) {
+        if (typeof row !== "object" || row === null) continue;
+
+        const transactionId = readText("id" in row ? row.id : null);
+        if (!transactionId) continue;
+
+        const existingContactId = readText(
+          "contactId" in row ? row.contactId : null,
+        );
+        if (existingContactId) continue;
+
+        const method = readText("method" in row ? row.method : null);
+        if (method !== "lightning_address") continue;
+
+        const transactionLnAddress = readLightningAddressFromDetailsJson(
+          "detailsJson" in row ? row.detailsJson : null,
+        );
+        if (!transactionLnAddress) continue;
+        if (transactionLnAddress.toLowerCase() !== normalizedLnAddress)
+          continue;
+
+        const result = updateTransactionFields({
+          id: transactionId as TransactionId,
+          contactId,
+        });
+        if (!result.ok) continue;
+        updatedCount += 1;
+      }
+
+      if (updatedCount > 0) {
+        recordTransactionsOwnerWrite(updatedCount);
+      }
+    },
+    [recordTransactionsOwnerWrite, transactionRows, updateTransactionFields],
+  );
+
   React.useEffect(() => {
+    const previousRouteKind = previousRouteKindRef.current;
+    previousRouteKindRef.current = route.kind;
+
     if (route.kind === "contactNew") {
       setPendingDeleteId(null);
       setEditingId(null);
       setContactEditInitial(null);
-      setForm(makeEmptyContactForm());
       if (contactNewPrefill) {
         setForm({
           name: contactNewPrefill.suggestedName ?? "",
@@ -123,6 +231,8 @@ export const useContactEditor = ({
           group: "",
         });
         setContactNewPrefill(null);
+      } else if (previousRouteKind !== "contactNew") {
+        setForm(makeEmptyContactForm());
       }
       return;
     }
@@ -161,6 +271,35 @@ export const useContactEditor = ({
     setContactNewPrefill,
     setPendingDeleteId,
   ]);
+
+  const refreshContactAvatarFromNostr = React.useCallback(
+    async (npub: string) => {
+      const normalized = normalizeNpubIdentifier(String(npub ?? "").trim());
+      if (!normalized) return;
+
+      try {
+        const metadata = await fetchNostrProfileMetadata(normalized, {
+          relays: nostrFetchRelays,
+        });
+
+        saveCachedProfileMetadata(normalized, metadata);
+        if (!metadata) return;
+
+        const pictureUrl = getNostrProfilePictureUrl(metadata);
+        if (pictureUrl) {
+          saveCachedProfilePicture(normalized, pictureUrl);
+          void cacheProfileAvatarFromUrl(normalized, pictureUrl);
+          return;
+        }
+
+        saveCachedProfilePicture(normalized, null);
+        void deleteCachedProfileAvatar(normalized);
+      } catch {
+        // ignore
+      }
+    },
+    [nostrFetchRelays],
+  );
 
   const handleSaveContact = React.useCallback(() => {
     if (isSavingContact) return; // Prevent double-click
@@ -216,6 +355,7 @@ export const useContactEditor = ({
         : null,
       groupName: group ? (group as typeof Evolu.NonEmptyString1000.Type) : null,
     };
+    let savedContactId: ContactId | null = editingId;
 
     const createPayload: Partial<{
       groupName: typeof Evolu.NonEmptyString1000.Type;
@@ -287,6 +427,7 @@ export const useContactEditor = ({
         ? insert("contact", createPayload, { ownerId: appOwnerId })
         : insert("contact", createPayload);
       if (result.ok) {
+        savedContactId = result.value.id;
         recordContactsOwnerWrite();
         setStatus(t("contactSaved"));
       } else {
@@ -294,6 +435,14 @@ export const useContactEditor = ({
         setIsSavingContact(false);
         return;
       }
+    }
+
+    if (savedContactId && lnAddress) {
+      backfillLightningAddressTransactions(savedContactId, lnAddress);
+    }
+
+    if (npub) {
+      void refreshContactAvatarFromNostr(npub);
     }
 
     if (route.kind === "contactEdit" && editingId) {
@@ -308,6 +457,7 @@ export const useContactEditor = ({
     setIsSavingContact(false);
   }, [
     appOwnerId,
+    backfillLightningAddressTransactions,
     clearContactForm,
     contactEditInitial,
     contacts,
@@ -325,6 +475,7 @@ export const useContactEditor = ({
     setStatus,
     t,
     updateContactFields,
+    refreshContactAvatarFromNostr,
   ]);
 
   const refreshContactFromNostr = React.useCallback(

@@ -7,6 +7,11 @@ export const STATUS_FILTER_PREFIX = "status:";
 
 export type ProfileStatusCurrency = (typeof PROFILE_STATUS_CURRENCIES)[number];
 
+export interface ParsedProfileGeneralStatus {
+  currencies: ProfileStatusCurrency[];
+  text: string | null;
+}
+
 type CachedStatusValue = {
   fetchedAt: number;
   status: string | null;
@@ -88,6 +93,35 @@ const parseLinkyProfileExchangeStatus = (
   );
 };
 
+export const parseProfileGeneralStatus = (
+  status: string | null | undefined,
+): ParsedProfileGeneralStatus => {
+  const normalizedStatus = normalizeStatusText(status);
+  if (!normalizedStatus) {
+    return {
+      currencies: [],
+      text: null,
+    };
+  }
+
+  const lines = normalizedStatus.split(/\r?\n/);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const maybeCurrencies = parseLinkyProfileExchangeStatus(lines[index]);
+    if (!maybeCurrencies) continue;
+
+    const text = normalizeStatusText(lines.slice(0, index).join("\n"));
+    return {
+      currencies: maybeCurrencies,
+      text,
+    };
+  }
+
+  return {
+    currencies: [],
+    text: normalizedStatus,
+  };
+};
+
 const getExpirationTimestamp = (event: NostrToolsEvent): number | null => {
   for (const tag of event.tags) {
     if (tag[0] !== "expiration") continue;
@@ -114,28 +148,35 @@ const hasGeneralStatusIdentifier = (event: NostrToolsEvent): boolean => {
 export const parseProfileExchangeStatusCurrencies = (
   status: string | null | undefined,
 ): ProfileStatusCurrency[] => {
-  return parseLinkyProfileExchangeStatus(status) ?? [];
+  return parseProfileGeneralStatus(status).currencies;
+};
+
+export const parseProfileGeneralStatusText = (
+  status: string | null | undefined,
+): string | null => {
+  return parseProfileGeneralStatus(status).text;
 };
 
 export const formatDisplayGeneralStatus = (params: {
   status: string | null | undefined;
   providesLabel: string;
 }): string | null => {
-  const normalizedStatus = normalizeStatusText(params.status);
-  if (!normalizedStatus) return null;
-
-  const currencyCodes = parseCurrencyStatusCodes(normalizedStatus);
-  if (!currencyCodes || currencyCodes.length === 0) {
-    return normalizedStatus;
+  const parsed = parseProfileGeneralStatus(params.status);
+  if (parsed.text && parsed.currencies.length > 0) {
+    return `${parsed.text} - ${params.providesLabel} ${parsed.currencies.join(
+      ", ",
+    )}`;
   }
 
-  return `${params.providesLabel} ${currencyCodes.join(", ")}`;
+  if (parsed.text) return parsed.text;
+  if (parsed.currencies.length === 0) return null;
+  return `${params.providesLabel} ${parsed.currencies.join(", ")}`;
 };
 
 export const extractStatusFilterCurrencies = (
   status: string | null | undefined,
 ): string[] => {
-  return parseCurrencyStatusCodes(status) ?? [];
+  return parseProfileGeneralStatus(status).currencies;
 };
 
 export const buildStatusFilterValue = (currency: string): string => {
@@ -160,14 +201,28 @@ export const parseStatusFilterValue = (
   return currency || null;
 };
 
+export const buildProfileGeneralStatus = (params: {
+  currencies: readonly ProfileStatusCurrency[];
+  text: string | null | undefined;
+}): string | null => {
+  const text = normalizeStatusText(params.text);
+  const selected = PROFILE_STATUS_CURRENCIES.filter((currency) =>
+    params.currencies.includes(currency),
+  );
+
+  if (text && selected.length > 0) {
+    return `${text}\n${selected.join(", ")}`;
+  }
+
+  if (text) return text;
+
+  return selected.length > 0 ? selected.join(", ") : null;
+};
+
 export const buildProfileExchangeStatus = (
   currencies: readonly ProfileStatusCurrency[],
 ): string | null => {
-  const selected = PROFILE_STATUS_CURRENCIES.filter((currency) =>
-    currencies.includes(currency),
-  );
-
-  return selected.length > 0 ? selected.join(", ") : null;
+  return buildProfileGeneralStatus({ currencies, text: null });
 };
 
 export const loadCachedNostrGeneralStatus = (

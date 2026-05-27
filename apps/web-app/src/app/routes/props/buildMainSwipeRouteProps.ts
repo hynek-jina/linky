@@ -16,12 +16,15 @@ interface BuildMainSwipeRoutePropsParams {
   dismissContactsOnboarding: MainSwipeRoutesProps["mainSwipeProps"]["dismissContactsOnboarding"];
   dismissWalletWarning: MainSwipeRoutesProps["mainSwipeProps"]["dismissWalletWarning"];
   groupNames: MainSwipeRoutesProps["mainSwipeProps"]["groupNames"];
+  handleMainSwipePointerCancel: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipePointerCancel"];
+  handleMainSwipePointerDown: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipePointerDown"];
+  handleMainSwipePointerMove: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipePointerMove"];
+  handleMainSwipePointerUp: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipePointerUp"];
   handleMainSwipeScroll: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeScroll"];
   handleMainSwipeTabChange: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeTabChange"];
   isMainSwipeDragging: MainSwipeRoutesProps["mainSwipeProps"]["isMainSwipeDragging"];
   mainSwipeProgress: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeProgress"];
   mainSwipeRef: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeRef"];
-  mainSwipeScrollY: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeScrollY"];
   NO_GROUP_FILTER: MainSwipeRoutesProps["mainSwipeProps"]["NO_GROUP_FILTER"];
   openNewContactPage: MainSwipeRoutesProps["mainSwipeProps"]["openNewContactPage"];
   openScan: MainSwipeRoutesProps["mainSwipeProps"]["openScan"];
@@ -58,12 +61,15 @@ export const buildMainSwipeRouteProps = ({
   dismissContactsOnboarding,
   dismissWalletWarning,
   groupNames,
+  handleMainSwipePointerCancel,
+  handleMainSwipePointerDown,
+  handleMainSwipePointerMove,
+  handleMainSwipePointerUp,
   handleMainSwipeScroll,
   handleMainSwipeTabChange,
   isMainSwipeDragging,
   mainSwipeProgress,
   mainSwipeRef,
-  mainSwipeScrollY,
   NO_GROUP_FILTER,
   openNewContactPage,
   openScan,
@@ -100,12 +106,15 @@ export const buildMainSwipeRouteProps = ({
       dismissContactsOnboarding,
       dismissWalletWarning,
       groupNames,
+      handleMainSwipePointerCancel,
+      handleMainSwipePointerDown,
+      handleMainSwipePointerMove,
+      handleMainSwipePointerUp,
       handleMainSwipeScroll,
       handleMainSwipeTabChange,
       isMainSwipeDragging,
       mainSwipeProgress,
       mainSwipeRef,
-      mainSwipeScrollY,
       NO_GROUP_FILTER,
       openNewContactPage,
       openScan,

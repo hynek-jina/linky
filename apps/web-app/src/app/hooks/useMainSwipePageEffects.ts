@@ -1,5 +1,9 @@
 import React from "react";
 
+export const shouldLockWalletWindowScroll = (routeKind: string): boolean => {
+  return routeKind === "wallet";
+};
+
 interface UseMainSwipePageEffectsParams {
   contactsHeaderVisible: boolean;
   contactsPullDistanceRef: React.MutableRefObject<number>;
@@ -7,7 +11,6 @@ interface UseMainSwipePageEffectsParams {
   routeKind: string;
   setContactsHeaderVisible: React.Dispatch<React.SetStateAction<boolean>>;
   setContactsPullProgress: React.Dispatch<React.SetStateAction<number>>;
-  setMainSwipeScrollY: React.Dispatch<React.SetStateAction<number>>;
 }
 
 export const useMainSwipePageEffects = ({
@@ -17,9 +20,7 @@ export const useMainSwipePageEffects = ({
   routeKind,
   setContactsHeaderVisible,
   setContactsPullProgress,
-  setMainSwipeScrollY,
 }: UseMainSwipePageEffectsParams) => {
-  const isMainSwipeRoute = routeKind === "contacts" || routeKind === "wallet";
   const contactsHeaderVisibleRef = React.useRef(contactsHeaderVisible);
   const contactsPullProgressRef = React.useRef(contactsPullProgress);
 
@@ -71,7 +72,6 @@ export const useMainSwipePageEffects = ({
 
     const onScroll = () => {
       const scrollTop = getWindowScrollTop();
-      if (isMainSwipeRoute) setMainSwipeScrollY(scrollTop);
       if (scrollTop > 1) {
         resetPull();
         hidePullUi();
@@ -98,8 +98,13 @@ export const useMainSwipePageEffects = ({
         return;
       }
       if (event.deltaY > 0) {
-        resetPull();
-        hidePullUi();
+        // On desktop, let downward wheel input start the actual page scroll.
+        // The subsequent scroll event will collapse the visible toolbar once the
+        // page is moving, which avoids a "stuck first tick" feeling.
+        if (!contactsHeaderVisibleRef.current) {
+          resetPull();
+          hidePullUi();
+        }
       }
     };
 
@@ -163,15 +168,13 @@ export const useMainSwipePageEffects = ({
     };
   }, [
     contactsPullDistanceRef,
-    isMainSwipeRoute,
     routeKind,
     setContactsHeaderVisible,
     setContactsPullProgress,
-    setMainSwipeScrollY,
   ]);
 
   React.useEffect(() => {
-    if (routeKind !== "wallet") return;
+    if (!shouldLockWalletWindowScroll(routeKind)) return;
     if (typeof document === "undefined") return;
 
     const html = document.documentElement;
@@ -186,15 +189,14 @@ export const useMainSwipePageEffects = ({
     } catch {
       // ignore
     }
-    setMainSwipeScrollY(0);
 
     return () => {
       html.style.overflow = prevHtmlOverflow;
       body.style.overflow = prevBodyOverflow;
     };
-  }, [routeKind, setMainSwipeScrollY]);
+  }, [routeKind]);
 
   return {
-    isMainSwipeRoute,
+    isMainSwipeRoute: routeKind === "contacts" || routeKind === "wallet",
   };
 };

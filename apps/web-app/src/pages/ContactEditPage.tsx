@@ -2,7 +2,9 @@ import type { FC } from "react";
 import type { ContactId } from "../evolu";
 
 interface Contact {
+  archivedAtSec?: number | string | null;
   id: ContactId;
+  npub?: string | null;
 }
 
 interface ContactFormData {
@@ -19,7 +21,9 @@ interface ContactEditPageProps {
   groupNames: string[];
   handleSaveContact: () => void;
   isSavingContact: boolean;
+  blockArchivedContact: () => Promise<void>;
   pendingDeleteId: ContactId | null;
+  restoreArchivedContact: () => void;
   requestDeleteCurrentContact: () => void;
   resetEditedContactFieldFromNostr: (
     field: "name" | "lnAddress",
@@ -36,13 +40,20 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
   groupNames,
   handleSaveContact,
   isSavingContact,
+  blockArchivedContact,
   pendingDeleteId,
+  restoreArchivedContact,
   requestDeleteCurrentContact,
   resetEditedContactFieldFromNostr,
   selectedContact,
   setForm,
   t,
 }) => {
+  const isArchivedContact = Number(selectedContact?.archivedAtSec ?? 0) > 0;
+  const canBlockArchivedContact = Boolean(
+    String(selectedContact?.npub ?? "").trim(),
+  );
+
   return (
     <section className="panel panel-plain">
       {!selectedContact && <p className="muted">{t("contactNotFound")}</p>}
@@ -145,18 +156,43 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
                 {isSavingContact ? t("saving") : t("saveContact")}
               </button>
             )}
-            <button
-              className={pendingDeleteId === editingId ? "danger" : "ghost"}
-              onClick={requestDeleteCurrentContact}
-              disabled={!editingId}
-              title={
-                pendingDeleteId === editingId
-                  ? "Klikněte znovu pro smazání"
-                  : t("delete")
-              }
-            >
-              {t("delete")}
-            </button>
+            {isArchivedContact ? (
+              <>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={restoreArchivedContact}
+                  disabled={!editingId}
+                  title={t("restoreArchivedContact")}
+                >
+                  {t("restoreArchivedContact")}
+                </button>
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => {
+                    void blockArchivedContact();
+                  }}
+                  disabled={!editingId || !canBlockArchivedContact}
+                  title={t("blockContact")}
+                >
+                  {t("blockContact")}
+                </button>
+              </>
+            ) : (
+              <button
+                className={pendingDeleteId === editingId ? "danger" : "ghost"}
+                onClick={requestDeleteCurrentContact}
+                disabled={!editingId}
+                title={
+                  pendingDeleteId === editingId
+                    ? t("archiveArmedHint")
+                    : t("archiveContact")
+                }
+              >
+                {t("archiveContact")}
+              </button>
+            )}
           </div>
         </div>
       </div>

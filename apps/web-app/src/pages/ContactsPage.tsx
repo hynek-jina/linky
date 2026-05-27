@@ -4,12 +4,12 @@ import type { ContactRowLike } from "../app/types/appTypes";
 import { BottomTabBar } from "../components/BottomTabBar";
 import { ContactAddFabIcon } from "../components/ContactAddFabIcon";
 import { buildStatusFilterValue } from "../nostrStatus";
+import { ARCHIVED_CONTACTS_FILTER } from "../utils/constants";
 
 interface ContactsPageProps {
   activeGroup: string | null;
   bottomTabActive: "contacts" | "wallet" | null;
   canAddContact?: boolean;
-  contacts: readonly ContactRowLike[];
   contactsSearch: string;
   contactsSearchInputRef: React.RefObject<HTMLInputElement | null>;
   contactsToolbarStyle: React.CSSProperties;
@@ -40,7 +40,6 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
     activeGroup,
     bottomTabActive,
     canAddContact = true,
-    contacts,
     contactsSearch,
     contactsSearchInputRef,
     contactsToolbarStyle,
@@ -64,7 +63,7 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
   }) => {
     const totalVisible =
       visibleContacts.conversations.length + visibleContacts.others.length;
-    const hasAnyContacts = contacts.length > 0 || totalVisible > 0;
+    const hasAnyContacts = totalVisible > 0;
 
     return (
       <>
@@ -123,6 +122,17 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
                     {t("noGroup")}
                   </button>
                 )}
+                <button
+                  type="button"
+                  className={
+                    activeGroup === ARCHIVED_CONTACTS_FILTER
+                      ? "group-filter-btn is-active"
+                      : "group-filter-btn"
+                  }
+                  onClick={() => setActiveGroup(ARCHIVED_CONTACTS_FILTER)}
+                >
+                  {t("archiveFilter")}
+                </button>
                 {statusFilterCurrencies.map((currency) => {
                   const filterValue = buildStatusFilterValue(currency);
 

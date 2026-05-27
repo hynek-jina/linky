@@ -322,6 +322,7 @@ export const en = {
   send: "Send",
 
   profile: "Profile",
+  status: "Status",
   profileNoName: "Nostr profile",
   profileExchangeStatusLabel: "I exchange small amounts with people I know:",
   contactStatusProvides: "Provides",
@@ -412,6 +413,11 @@ export const en = {
   edit: "Edit",
   delete: "Delete",
   deleteArmedHint: "Click once more to delete.",
+  archive: "Archive",
+  archiveFilter: "Archive",
+  archiveContact: "Archive contact",
+  archiveArmedHint: "Click once more to archive.",
+  restoreArchivedContact: "Restore contact",
 
   contact: "Contact",
   editContact: "Edit contact",
@@ -446,6 +452,9 @@ export const en = {
   contactSaved: "Contact saved.",
   contactUpdated: "Contact updated.",
   contactDeleted: "Contact deleted.",
+  contactArchived: "Contact archived.",
+  contactRestored: "Contact restored.",
+  contactBlocked: "Contact blocked.",
 
   copiedToClipboard: "Copied to clipboard.",
   copyFailed: "Copy to clipboard failed.",

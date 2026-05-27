@@ -1087,6 +1087,16 @@ export const useEvoluContactsOwnerRotation = ({
                 contact.groupName ?? "",
               ).trim() as typeof Evolu.NonEmptyString1000.Type)
             : null,
+          archivedAtSec:
+            typeof contact.archivedAtSec === "number" &&
+            Number.isFinite(contact.archivedAtSec) &&
+            contact.archivedAtSec > 0
+              ? (contact.archivedAtSec as typeof Evolu.PositiveInt.Type)
+              : contact.archivedAtSec
+                ? (Number(
+                    contact.archivedAtSec,
+                  ) as typeof Evolu.PositiveInt.Type)
+                : null,
         };
 
         const result = upsert("contact", payload, {

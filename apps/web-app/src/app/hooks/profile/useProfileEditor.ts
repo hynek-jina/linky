@@ -5,7 +5,6 @@ import {
   type AvatarEditorControlId,
   type DerivedAvatarSelection,
 } from "../../../derivedProfile";
-import type { JsonRecord } from "../../../types/json";
 import {
   deleteCachedProfileAvatar,
   fetchNostrProfileMetadata,
@@ -16,6 +15,14 @@ import {
   type NostrProfileMetadata,
 } from "../../../nostrProfile";
 import { publishKind0ProfileMetadata } from "../../../nostrPublish";
+import {
+  buildProfileGeneralStatus,
+  parseProfileExchangeStatusCurrencies,
+  parseProfileGeneralStatusText,
+  publishNostrGeneralStatus,
+  saveCachedNostrGeneralStatus,
+} from "../../../nostrStatus";
+import type { JsonRecord } from "../../../types/json";
 import { getBestNostrName } from "../../../utils/formatting";
 import { createSquareAvatarDataUrl } from "../../../utils/image";
 import { isHttpUrl } from "../../../utils/validation";
@@ -27,6 +34,7 @@ interface UseProfileEditorParams {
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
   myProfileMetadata: NostrProfileMetadata | null;
+  myProfileStatus: string | null;
   nostrFetchRelays: string[];
   setMyProfileLnAddress: React.Dispatch<React.SetStateAction<string | null>>;
   setMyProfileMetadata: React.Dispatch<
@@ -34,6 +42,7 @@ interface UseProfileEditorParams {
   >;
   setMyProfileName: React.Dispatch<React.SetStateAction<string | null>>;
   setMyProfilePicture: React.Dispatch<React.SetStateAction<string | null>>;
+  setMyProfileStatus: React.Dispatch<React.SetStateAction<string | null>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
 }
@@ -45,17 +54,20 @@ export const useProfileEditor = ({
   effectiveProfileName,
   effectiveProfilePicture,
   myProfileMetadata,
+  myProfileStatus,
   nostrFetchRelays,
   setMyProfileLnAddress,
   setMyProfileMetadata,
   setMyProfileName,
   setMyProfilePicture,
+  setMyProfileStatus,
   setStatus,
   t,
 }: UseProfileEditorParams) => {
   const [isProfileEditing, setIsProfileEditing] = React.useState(false);
   const [profileEditName, setProfileEditName] = React.useState("");
   const [profileEditLnAddress, setProfileEditLnAddress] = React.useState("");
+  const [profileEditStatus, setProfileEditStatus] = React.useState("");
   const [profileEditPicture, setProfileEditPicture] = React.useState("");
   const [, setProfileAvatarSelection] = React.useState<DerivedAvatarSelection>(
     () => deriveGeneratedAvatar("linky").selection,
@@ -70,6 +82,7 @@ export const useProfileEditor = ({
     lnAddress: string;
     name: string;
     picture: string;
+    status: string;
   } | null>(null);
 
   const toggleProfileEditing = React.useCallback(() => {
@@ -96,18 +109,21 @@ export const useProfileEditor = ({
     const initialPicture = metaPic || generatedAvatar.pictureUrl;
     const customPicture =
       metaPic && metaPic !== generatedAvatar.pictureUrl ? metaPic : "";
+    const initialStatus = parseProfileGeneralStatusText(myProfileStatus) ?? "";
 
     setProfileAvatarSelection(generatedAvatar.selection);
     setProfileCustomPictureUrl(customPicture);
     setProfileSelectedPictureKind(customPicture ? "custom" : "generated");
     setProfileEditName(initialName);
     setProfileEditLnAddress(initialLn);
+    setProfileEditStatus(initialStatus);
     setProfileEditPicture(initialPicture);
 
     profileEditInitialRef.current = {
       name: initialName,
       lnAddress: initialLn,
       picture: initialPicture,
+      status: initialStatus,
     };
 
     setIsProfileEditing(true);
@@ -117,6 +133,7 @@ export const useProfileEditor = ({
     effectiveProfilePicture,
     isProfileEditing,
     myProfileMetadata,
+    myProfileStatus,
     currentNpub,
   ]);
 
@@ -128,17 +145,20 @@ export const useProfileEditor = ({
     const name = profileEditName.trim();
     const ln = profileEditLnAddress.trim();
     const pic = profileEditPicture.trim();
+    const status = profileEditStatus.trim();
 
     return (
       name !== initial.name.trim() ||
       ln !== initial.lnAddress.trim() ||
-      pic !== initial.picture.trim()
+      pic !== initial.picture.trim() ||
+      status !== initial.status.trim()
     );
   }, [
     isProfileEditing,
     profileEditLnAddress,
     profileEditName,
     profileEditPicture,
+    profileEditStatus,
   ]);
 
   const profileEditsSavable =
@@ -154,6 +174,10 @@ export const useProfileEditor = ({
       const name = profileEditName.trim();
       const ln = profileEditLnAddress.trim();
       const picture = profileEditPicture.trim();
+      const nextStatus = buildProfileGeneralStatus({
+        currencies: parseProfileExchangeStatusCurrencies(myProfileStatus),
+        text: profileEditStatus,
+      });
 
       const { nip19 } = await import("nostr-tools");
 
@@ -212,6 +236,13 @@ export const useProfileEditor = ({
       const relaysToUse =
         nostrFetchRelays.length > 0 ? nostrFetchRelays : NOSTR_RELAYS;
 
+      const statusPublish = await publishNostrGeneralStatus({
+        privBytes,
+        relays: relaysToUse,
+        status: nextStatus,
+      });
+      if (!statusPublish.anySuccess) throw new Error("status publish failed");
+
       const publish = await publishKind0ProfileMetadata({
         privBytes,
         relays: relaysToUse,
@@ -246,11 +277,13 @@ export const useProfileEditor = ({
 
       saveCachedProfileMetadata(currentNpub, updatedMeta);
       saveCachedProfilePicture(currentNpub, picture || null);
+      saveCachedNostrGeneralStatus(currentNpub, nextStatus);
       setMyProfileMetadata(updatedMeta);
 
       setMyProfileName(name || null);
       setMyProfileLnAddress(ln || null);
       setMyProfilePicture(picture || null);
+      setMyProfileStatus(nextStatus);
       if (!picture || !isHttpUrl(picture)) {
         void deleteCachedProfileAvatar(currentNpub);
       }
@@ -268,10 +301,13 @@ export const useProfileEditor = ({
     profileEditLnAddress,
     profileEditName,
     profileEditPicture,
+    profileEditStatus,
+    myProfileStatus,
     setMyProfileLnAddress,
     setMyProfileMetadata,
     setMyProfileName,
     setMyProfilePicture,
+    setMyProfileStatus,
     setStatus,
     t,
   ]);
@@ -320,6 +356,7 @@ export const useProfileEditor = ({
     profileEditLnAddress,
     profileEditName,
     profileEditPicture,
+    profileEditStatus,
     profileEditsSavable,
     profilePhotoInputRef,
     profileSelectedPictureKind,
@@ -327,6 +364,7 @@ export const useProfileEditor = ({
     setIsProfileEditing,
     setProfileEditLnAddress,
     setProfileEditName,
+    setProfileEditStatus,
     setProfileEditPicture,
     toggleProfileEditing,
   };

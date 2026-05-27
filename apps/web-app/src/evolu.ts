@@ -415,6 +415,7 @@ export const Schema = {
     npub: Evolu.nullOr(Evolu.NonEmptyString1000),
     lnAddress: Evolu.nullOr(Evolu.NonEmptyString1000),
     groupName: Evolu.nullOr(Evolu.NonEmptyString1000),
+    archivedAtSec: Evolu.nullOr(Evolu.PositiveInt),
   },
   nostrIdentity: {
     id: NostrIdentityId,

@@ -1981,6 +1981,8 @@ button.settings-link:hover {
 .chat-compose textarea {
   min-height: 64px;
   padding-right: 56px;
+  font-size: 16px;
+  line-height: 1.45;
 }
 
 .chat-pay-button {
@@ -3243,7 +3245,8 @@ button.icon {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  touch-action: auto;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
   scrollbar-width: none;
   flex: 1 1 auto;
   min-height: 0;
@@ -3536,18 +3539,46 @@ button.icon {
 .contact-detail-copy-block {
   display: grid;
   gap: 6px;
+  width: 100%;
+  min-width: 0;
+  justify-items: center;
+}
+
+.contact-detail-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
 }
 
 .contact-detail-name {
   margin: 0;
+  flex: 1 1 auto;
   font-size: clamp(28px, 7vw, 36px);
   line-height: 1.05;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .contact-detail-group {
   margin: 0;
   color: #94a3b8;
   font-size: 13px;
+}
+
+.contact-detail-status {
+  margin: 0;
+  width: 100%;
+  color: #94a3b8;
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.3;
+  text-align: center;
 }
 
 .contact-detail-ln {
@@ -3716,20 +3747,36 @@ button.icon {
   display: flex;
   gap: 10px;
   align-items: center;
-  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .contact-title {
-  display: inline-flex;
+  margin: 0;
+  flex: 1;
+  display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.contact-title-text {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .contact-status-text {
+  min-width: 0;
+  flex: 0 1 auto;
   font-size: 11px;
   font-style: italic;
   font-weight: 400;
   color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .contact-indicator {

@@ -32,13 +32,14 @@ interface BuildPeopleRoutePropsParams {
   handleSaveContact: PeopleRoutesProps["contactEditProps"]["handleSaveContact"];
   isProfileEditing: PeopleRoutesProps["profileProps"]["isProfileEditing"];
   isSavingContact: PeopleRoutesProps["contactEditProps"]["isSavingContact"];
+  blockArchivedContact: PeopleRoutesProps["contactEditProps"]["blockArchivedContact"];
   lang: PeopleRoutesProps["chatProps"]["lang"];
   myProfileQr: PeopleRoutesProps["profileProps"]["myProfileQr"];
   nostrPictureByNpub: PeopleRoutesProps["contactProps"]["nostrPictureByNpub"];
+  onBlockUnknownContact: PeopleRoutesProps["chatProps"]["onBlockUnknownContact"];
   onCancelEdit: PeopleRoutesProps["chatProps"]["onCancelEdit"];
   onCancelReply: PeopleRoutesProps["chatProps"]["onCancelReply"];
   onAddUnknownContact: PeopleRoutesProps["chatProps"]["onAddUnknownContact"];
-  onRemoveUnknownContactChat: PeopleRoutesProps["chatProps"]["onRemoveUnknownContactChat"];
   onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
   onDeclinePaymentRequest: PeopleRoutesProps["chatProps"]["onDeclinePaymentRequest"];
   onEdit: PeopleRoutesProps["chatProps"]["onEdit"];
@@ -54,16 +55,20 @@ interface BuildPeopleRoutePropsParams {
   paySelectedContact: PeopleRoutesProps["contactPayProps"]["paySelectedContact"];
   payWithCashuEnabled: PeopleRoutesProps["chatProps"]["payWithCashuEnabled"];
   reactionsByMessageId: PeopleRoutesProps["chatProps"]["reactionsByMessageId"];
+  selectedContactStatusText: PeopleRoutesProps["contactProps"]["statusText"];
   pendingDeleteId: PeopleRoutesProps["contactEditProps"]["pendingDeleteId"];
   profileCustomPictureUrl: PeopleRoutesProps["profileProps"]["profileCustomPictureUrl"];
   profileEditLnAddress: PeopleRoutesProps["profileProps"]["profileEditLnAddress"];
   profileEditName: PeopleRoutesProps["profileProps"]["profileEditName"];
   profileEditPicture: PeopleRoutesProps["profileProps"]["profileEditPicture"];
+  profileEditStatus: PeopleRoutesProps["profileProps"]["profileEditStatus"];
   profileEditsSavable: PeopleRoutesProps["profileProps"]["profileEditsSavable"];
+  profileStatus: PeopleRoutesProps["profileProps"]["profileStatus"];
   profileStatusCurrencies: PeopleRoutesProps["profileProps"]["profileStatusCurrencies"];
   profileStatusIsSaving: PeopleRoutesProps["profileProps"]["profileStatusIsSaving"];
   profilePhotoInputRef: PeopleRoutesProps["profileProps"]["profilePhotoInputRef"];
   profileSelectedPictureKind: PeopleRoutesProps["profileProps"]["profileSelectedPictureKind"];
+  restoreArchivedContact: PeopleRoutesProps["contactEditProps"]["restoreArchivedContact"];
   requestDeleteCurrentContact: PeopleRoutesProps["contactEditProps"]["requestDeleteCurrentContact"];
   requestSelectedContact: PeopleRoutesProps["contactPayProps"]["requestSelectedContact"];
   resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
@@ -80,6 +85,7 @@ interface BuildPeopleRoutePropsParams {
   setPayAmount: PeopleRoutesProps["contactPayProps"]["setPayAmount"];
   setProfileEditLnAddress: PeopleRoutesProps["profileProps"]["setProfileEditLnAddress"];
   setProfileEditName: PeopleRoutesProps["profileProps"]["setProfileEditName"];
+  setProfileEditStatus: PeopleRoutesProps["profileProps"]["setProfileEditStatus"];
   t: PeopleRoutesProps["chatProps"]["t"];
   toggleProfileStatusCurrency: PeopleRoutesProps["profileProps"]["toggleProfileStatusCurrency"];
 }
@@ -116,13 +122,14 @@ export const buildPeopleRouteProps = ({
   handleSaveContact,
   isProfileEditing,
   isSavingContact,
+  blockArchivedContact,
   lang,
   myProfileQr,
   nostrPictureByNpub,
+  onBlockUnknownContact,
   onCancelEdit,
   onCancelReply,
   onAddUnknownContact,
-  onRemoveUnknownContactChat,
   onCopy,
   onDeclinePaymentRequest,
   onEdit,
@@ -138,16 +145,20 @@ export const buildPeopleRouteProps = ({
   paySelectedContact,
   payWithCashuEnabled,
   reactionsByMessageId,
+  selectedContactStatusText,
   pendingDeleteId,
   profileCustomPictureUrl,
   profileEditLnAddress,
   profileEditName,
   profileEditPicture,
+  profileEditStatus,
   profileEditsSavable,
+  profileStatus,
   profileStatusCurrencies,
   profileStatusIsSaving,
   profilePhotoInputRef,
   profileSelectedPictureKind,
+  restoreArchivedContact,
   requestDeleteCurrentContact,
   requestSelectedContact,
   resetEditedContactFieldFromNostr,
@@ -164,6 +175,7 @@ export const buildPeopleRouteProps = ({
   setPayAmount,
   setProfileEditLnAddress,
   setProfileEditName,
+  setProfileEditStatus,
   t,
   toggleProfileStatusCurrency,
 }: BuildPeopleRoutePropsParams): PeopleRoutesProps => {
@@ -196,7 +208,7 @@ export const buildPeopleRouteProps = ({
       onCancelReply,
       onCancelEdit,
       onAddUnknownContact,
-      onRemoveUnknownContactChat,
+      onBlockUnknownContact,
       sendChatMessage,
       openContactPay,
       onOpenNpubContact,
@@ -214,6 +226,8 @@ export const buildPeopleRouteProps = ({
       pendingDeleteId,
       handleSaveContact,
       isSavingContact,
+      blockArchivedContact,
+      restoreArchivedContact,
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
       t,
@@ -253,6 +267,7 @@ export const buildPeopleRouteProps = ({
       payWithCashuEnabled,
       feedbackContactNpub,
       openContactPay,
+      statusText: selectedContactStatusText,
       t,
     },
     profileProps: {
@@ -265,8 +280,10 @@ export const buildPeopleRouteProps = ({
       effectiveProfileName,
       profileEditName,
       profileEditLnAddress,
+      profileEditStatus,
       derivedProfile,
       profileEditsSavable,
+      profileStatus,
       profileStatusCurrencies,
       profileStatusIsSaving,
       myProfileQr,
@@ -276,6 +293,7 @@ export const buildPeopleRouteProps = ({
       selectedProfileStatusCurrencies,
       setProfileEditName,
       setProfileEditLnAddress,
+      setProfileEditStatus,
       onProfilePhotoSelected,
       onPickProfilePhoto,
       saveProfileEdits,

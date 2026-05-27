@@ -31,11 +31,22 @@ export interface MainSwipeRouteProps {
   handleMainSwipeScroll:
     | ((event: React.UIEvent<HTMLDivElement>) => void)
     | undefined;
+  handleMainSwipePointerCancel:
+    | ((event: React.PointerEvent<HTMLDivElement>) => void)
+    | undefined;
+  handleMainSwipePointerDown:
+    | ((event: React.PointerEvent<HTMLDivElement>) => void)
+    | undefined;
+  handleMainSwipePointerMove:
+    | ((event: React.PointerEvent<HTMLDivElement>) => void)
+    | undefined;
+  handleMainSwipePointerUp:
+    | ((event: React.PointerEvent<HTMLDivElement>) => void)
+    | undefined;
   handleMainSwipeTabChange: (target: "contacts" | "wallet") => void;
   isMainSwipeDragging: boolean;
   mainSwipeProgress: number;
   mainSwipeRef: React.RefObject<HTMLDivElement | null>;
-  mainSwipeScrollY: number;
   NO_GROUP_FILTER: string;
   openNewContactPage: () => void;
   openScan: () => void;
@@ -75,7 +86,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     canAddContact,
     cashuBalance,
     cashuTotalBalance,
-    contacts,
     contactsOnboardingCelebrating,
     contactsOnboardingTasks,
     contactsSearch,
@@ -85,12 +95,15 @@ export const MainSwipeContent = (): React.ReactElement => {
     dismissContactsOnboarding,
     dismissWalletWarning,
     groupNames,
+    handleMainSwipePointerCancel,
+    handleMainSwipePointerDown,
+    handleMainSwipePointerMove,
+    handleMainSwipePointerUp,
     handleMainSwipeScroll,
     handleMainSwipeTabChange,
     isMainSwipeDragging,
     mainSwipeProgress,
     mainSwipeRef,
-    mainSwipeScrollY,
     NO_GROUP_FILTER,
     openNewContactPage,
     openScan,
@@ -116,6 +129,10 @@ export const MainSwipeContent = (): React.ReactElement => {
       <div
         className="main-swipe"
         ref={mainSwipeRef}
+        onPointerCancel={handleMainSwipePointerCancel}
+        onPointerDown={handleMainSwipePointerDown}
+        onPointerMove={handleMainSwipePointerMove}
+        onPointerUp={handleMainSwipePointerUp}
         onScroll={handleMainSwipeScroll}
       >
         <div
@@ -151,7 +168,6 @@ export const MainSwipeContent = (): React.ReactElement => {
             noGroupFilterValue={NO_GROUP_FILTER}
             groupNames={groupNames}
             statusFilterCurrencies={statusFilterCurrencies}
-            contacts={contacts}
             visibleContacts={visibleContacts}
             conversationsLabel={conversationsLabel}
             otherContactsLabel={otherContactsLabel}
@@ -165,15 +181,7 @@ export const MainSwipeContent = (): React.ReactElement => {
             t={t}
           />
         </div>
-        <div
-          className="main-swipe-page"
-          aria-hidden={route.kind !== "wallet"}
-          style={
-            mainSwipeScrollY
-              ? { transform: `translateY(${mainSwipeScrollY}px)` }
-              : undefined
-          }
-        >
+        <div className="main-swipe-page" aria-hidden={route.kind !== "wallet"}>
           <WalletPage
             cashuBalance={cashuBalance}
             cashuTotalBalance={cashuTotalBalance}
