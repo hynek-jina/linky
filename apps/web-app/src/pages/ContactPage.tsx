@@ -1,6 +1,7 @@
 import type { FC } from "react";
 import type { ContactId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
+import { formatDisplayGeneralStatus } from "../nostrStatus";
 import { formatShortLightningAddress, getInitials } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
@@ -21,6 +22,7 @@ interface ContactPageProps {
   openContactPay: (id: ContactId) => void;
   payWithCashuEnabled: boolean;
   selectedContact: Contact | null;
+  statusText: string | null;
   t: (key: string) => string;
 }
 
@@ -90,6 +92,7 @@ export const ContactPage: FC<ContactPageProps> = ({
   openContactPay,
   payWithCashuEnabled,
   selectedContact,
+  statusText,
   t,
 }) => {
   const navigateTo = useNavigation();
@@ -116,6 +119,10 @@ export const ContactPage: FC<ContactPageProps> = ({
   const isFeedbackContact = npub === feedbackContactNpub;
   const payLabel = isFeedbackContact ? "Donate" : t("pay");
   const messageLabel = isFeedbackContact ? "Feedback" : t("sendMessage");
+  const contactStatus = formatDisplayGeneralStatus({
+    status: statusText,
+    providesLabel: t("contactStatusProvides"),
+  });
 
   return (
     <section className="panel contact-detail-card">
@@ -148,7 +155,16 @@ export const ContactPage: FC<ContactPageProps> = ({
         </div>
 
         <div className="contact-detail-copy-block">
-          <h2 className="contact-detail-name">{contactName}</h2>
+          <div className="contact-detail-title-row">
+            <h2 className="contact-detail-name" title={contactName}>
+              {contactName}
+            </h2>
+            {contactStatus ? (
+              <p className="contact-detail-status" title={contactStatus}>
+                {contactStatus}
+              </p>
+            ) : null}
+          </div>
           {group ? <p className="contact-detail-group">{group}</p> : null}
         </div>
 

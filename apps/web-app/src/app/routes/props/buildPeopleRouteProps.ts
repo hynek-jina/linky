@@ -54,12 +54,15 @@ interface BuildPeopleRoutePropsParams {
   paySelectedContact: PeopleRoutesProps["contactPayProps"]["paySelectedContact"];
   payWithCashuEnabled: PeopleRoutesProps["chatProps"]["payWithCashuEnabled"];
   reactionsByMessageId: PeopleRoutesProps["chatProps"]["reactionsByMessageId"];
+  selectedContactStatusText: PeopleRoutesProps["contactProps"]["statusText"];
   pendingDeleteId: PeopleRoutesProps["contactEditProps"]["pendingDeleteId"];
   profileCustomPictureUrl: PeopleRoutesProps["profileProps"]["profileCustomPictureUrl"];
   profileEditLnAddress: PeopleRoutesProps["profileProps"]["profileEditLnAddress"];
   profileEditName: PeopleRoutesProps["profileProps"]["profileEditName"];
   profileEditPicture: PeopleRoutesProps["profileProps"]["profileEditPicture"];
+  profileEditStatus: PeopleRoutesProps["profileProps"]["profileEditStatus"];
   profileEditsSavable: PeopleRoutesProps["profileProps"]["profileEditsSavable"];
+  profileStatus: PeopleRoutesProps["profileProps"]["profileStatus"];
   profileStatusCurrencies: PeopleRoutesProps["profileProps"]["profileStatusCurrencies"];
   profileStatusIsSaving: PeopleRoutesProps["profileProps"]["profileStatusIsSaving"];
   profilePhotoInputRef: PeopleRoutesProps["profileProps"]["profilePhotoInputRef"];
@@ -80,6 +83,7 @@ interface BuildPeopleRoutePropsParams {
   setPayAmount: PeopleRoutesProps["contactPayProps"]["setPayAmount"];
   setProfileEditLnAddress: PeopleRoutesProps["profileProps"]["setProfileEditLnAddress"];
   setProfileEditName: PeopleRoutesProps["profileProps"]["setProfileEditName"];
+  setProfileEditStatus: PeopleRoutesProps["profileProps"]["setProfileEditStatus"];
   t: PeopleRoutesProps["chatProps"]["t"];
   toggleProfileStatusCurrency: PeopleRoutesProps["profileProps"]["toggleProfileStatusCurrency"];
 }
@@ -138,12 +142,15 @@ export const buildPeopleRouteProps = ({
   paySelectedContact,
   payWithCashuEnabled,
   reactionsByMessageId,
+  selectedContactStatusText,
   pendingDeleteId,
   profileCustomPictureUrl,
   profileEditLnAddress,
   profileEditName,
   profileEditPicture,
+  profileEditStatus,
   profileEditsSavable,
+  profileStatus,
   profileStatusCurrencies,
   profileStatusIsSaving,
   profilePhotoInputRef,
@@ -164,6 +171,7 @@ export const buildPeopleRouteProps = ({
   setPayAmount,
   setProfileEditLnAddress,
   setProfileEditName,
+  setProfileEditStatus,
   t,
   toggleProfileStatusCurrency,
 }: BuildPeopleRoutePropsParams): PeopleRoutesProps => {
@@ -253,6 +261,7 @@ export const buildPeopleRouteProps = ({
       payWithCashuEnabled,
       feedbackContactNpub,
       openContactPay,
+      statusText: selectedContactStatusText,
       t,
     },
     profileProps: {
@@ -265,8 +274,10 @@ export const buildPeopleRouteProps = ({
       effectiveProfileName,
       profileEditName,
       profileEditLnAddress,
+      profileEditStatus,
       derivedProfile,
       profileEditsSavable,
+      profileStatus,
       profileStatusCurrencies,
       profileStatusIsSaving,
       myProfileQr,
@@ -276,6 +287,7 @@ export const buildPeopleRouteProps = ({
       selectedProfileStatusCurrencies,
       setProfileEditName,
       setProfileEditLnAddress,
+      setProfileEditStatus,
       onProfilePhotoSelected,
       onPickProfilePhoto,
       saveProfileEdits,

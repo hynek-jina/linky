@@ -85,7 +85,9 @@ export interface AppShellCoreContextValue {
   profileEditLnAddress: string;
   profileEditName: string;
   profileEditPicture: string;
+  profileEditStatus: string;
   profileEditsSavable: boolean;
+  profileStatus: string | null;
   profileStatusCurrencies: readonly ProfileStatusCurrency[];
   profileStatusIsSaving: boolean;
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
@@ -154,6 +156,7 @@ export interface AppShellActionsContextValue {
   ) => void;
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
+  setProfileEditStatus: (value: string) => void;
   stopContactsGuide: () => void;
   shareOptionsViaEmail: () => void;
   shareOptionsViaSms: () => void;

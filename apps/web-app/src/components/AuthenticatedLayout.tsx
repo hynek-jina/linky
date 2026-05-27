@@ -108,7 +108,9 @@ export function AuthenticatedLayout({
           profileEditLnAddress={state.profileEditLnAddress}
           profileEditName={state.profileEditName}
           profileEditPicture={state.profileEditPicture}
+          profileEditStatus={state.profileEditStatus}
           profileEditsSavable={state.profileEditsSavable}
+          profileStatus={state.profileStatus}
           profileStatusCurrencies={state.profileStatusCurrencies}
           profileStatusIsSaving={state.profileStatusIsSaving}
           profilePhotoInputRef={state.profilePhotoInputRef}
@@ -119,6 +121,7 @@ export function AuthenticatedLayout({
           setIsProfileEditing={actions.setIsProfileEditing}
           setProfileEditLnAddress={actions.setProfileEditLnAddress}
           setProfileEditName={actions.setProfileEditName}
+          setProfileEditStatus={actions.setProfileEditStatus}
           t={state.t}
           toggleProfileEditing={actions.toggleProfileEditing}
           toggleProfileStatusCurrency={actions.toggleProfileStatusCurrency}

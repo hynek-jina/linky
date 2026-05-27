@@ -1,8 +1,9 @@
 import React from "react";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import {
-  buildProfileExchangeStatus,
+  buildProfileGeneralStatus,
   parseProfileExchangeStatusCurrencies,
+  parseProfileGeneralStatusText,
   PROFILE_STATUS_CURRENCIES,
   publishNostrGeneralStatus,
   saveCachedNostrGeneralStatus,
@@ -20,6 +21,7 @@ interface UseProfileStatusEditorParams {
 }
 
 interface UseProfileStatusEditorResult {
+  profileStatusText: string | null;
   profileStatusCurrencies: readonly ProfileStatusCurrency[];
   profileStatusIsSaving: boolean;
   selectedProfileStatusCurrencies: readonly ProfileStatusCurrency[];
@@ -45,6 +47,11 @@ export const useProfileStatusEditor = ({
     [myProfileStatus],
   );
 
+  const profileStatusText = React.useMemo(
+    () => parseProfileGeneralStatusText(myProfileStatus),
+    [myProfileStatus],
+  );
+
   const toggleProfileStatusCurrency = React.useCallback(
     async (currency: ProfileStatusCurrency) => {
       if (profileStatusIsSaving) return;
@@ -58,7 +65,10 @@ export const useProfileStatusEditor = ({
       const nextSelection = currentSelection.includes(currency)
         ? currentSelection.filter((value) => value !== currency)
         : [...currentSelection, currency];
-      const nextStatus = buildProfileExchangeStatus(nextSelection);
+      const nextStatus = buildProfileGeneralStatus({
+        currencies: nextSelection,
+        text: parseProfileGeneralStatusText(myProfileStatus),
+      });
       const previousStatus = myProfileStatus;
 
       setMyProfileStatus(nextStatus);
@@ -102,6 +112,7 @@ export const useProfileStatusEditor = ({
   );
 
   return {
+    profileStatusText,
     profileStatusCurrencies: PROFILE_STATUS_CURRENCIES,
     profileStatusIsSaving,
     selectedProfileStatusCurrencies,

@@ -324,6 +324,7 @@ export const cs = {
   send: "Odeslat",
 
   profile: "Profil",
+  status: "Status",
   profileNoName: "Nostr profil",
   profileExchangeStatusLabel: "Známým směním malé částky:",
   contactStatusProvides: "Poskytne",

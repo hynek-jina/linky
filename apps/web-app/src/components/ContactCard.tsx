@@ -127,10 +127,17 @@ export const ContactCard: React.FC<ContactCardProps> = ({
         <div className="card-main">
           <div className="card-title-row">
             {contact.name ? (
-              <h4 className="contact-title" style={{ flex: 1 }}>
-                <span>{String(contact.name)}</span>
+              <h4 className="contact-title">
+                <span
+                  className="contact-title-text"
+                  title={String(contact.name)}
+                >
+                  {String(contact.name)}
+                </span>
                 {contactStatus ? (
-                  <span className="contact-status-text">{contactStatus}</span>
+                  <span className="contact-status-text" title={contactStatus}>
+                    {contactStatus}
+                  </span>
                 ) : null}
               </h4>
             ) : null}

@@ -322,6 +322,7 @@ export const en = {
   send: "Send",
 
   profile: "Profile",
+  status: "Status",
   profileNoName: "Nostr profile",
   profileExchangeStatusLabel: "I exchange small amounts with people I know:",
   contactStatusProvides: "Provides",
