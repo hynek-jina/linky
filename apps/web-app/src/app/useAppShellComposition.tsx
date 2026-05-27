@@ -3053,6 +3053,20 @@ export const useAppShellComposition = () => {
     setMyProfileQr,
   });
 
+  React.useEffect(() => {
+    if (route.kind !== "profileEdit") {
+      return;
+    }
+
+    if (profileQrIsOpen) {
+      setProfileQrIsOpen(false);
+    }
+
+    if (!isProfileEditing) {
+      toggleProfileEditing();
+    }
+  }, [isProfileEditing, profileQrIsOpen, route.kind, toggleProfileEditing]);
+
   // Intentionally no automatic publishing of kind-0 profile metadata.
   // We only publish profile changes when the user does so explicitly.
 
@@ -3105,14 +3119,7 @@ export const useAppShellComposition = () => {
     setContactsPullProgress,
   });
 
-  const {
-    commitMainSwipe,
-    handleMainSwipePointerCancel,
-    handleMainSwipePointerDown,
-    handleMainSwipePointerMove,
-    handleMainSwipePointerUp,
-    handleMainSwipeScroll,
-  } = useMainSwipeNavigation({
+  const { commitMainSwipe, handleMainSwipeScroll } = useMainSwipeNavigation({
     isMainSwipeRoute,
     mainSwipeProgressRef,
     mainSwipeRef,
@@ -6500,7 +6507,6 @@ export const useAppShellComposition = () => {
     route,
     t,
     toggleMenu,
-    toggleProfileEditing,
   });
 
   const topbarTitle = buildTopbarTitle(route, t);
@@ -6990,10 +6996,6 @@ export const useAppShellComposition = () => {
       dismissContactsOnboarding,
       dismissWalletWarning,
       groupNames,
-      handleMainSwipePointerCancel,
-      handleMainSwipePointerDown,
-      handleMainSwipePointerMove,
-      handleMainSwipePointerUp,
       handleMainSwipeScroll,
       handleMainSwipeTabChange: commitMainSwipe,
       isMainSwipeDragging,

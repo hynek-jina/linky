@@ -16,10 +16,6 @@ interface BuildMainSwipeRoutePropsParams {
   dismissContactsOnboarding: MainSwipeRoutesProps["mainSwipeProps"]["dismissContactsOnboarding"];
   dismissWalletWarning: MainSwipeRoutesProps["mainSwipeProps"]["dismissWalletWarning"];
   groupNames: MainSwipeRoutesProps["mainSwipeProps"]["groupNames"];
-  handleMainSwipePointerCancel: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipePointerCancel"];
-  handleMainSwipePointerDown: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipePointerDown"];
-  handleMainSwipePointerMove: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipePointerMove"];
-  handleMainSwipePointerUp: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipePointerUp"];
   handleMainSwipeScroll: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeScroll"];
   handleMainSwipeTabChange: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeTabChange"];
   isMainSwipeDragging: MainSwipeRoutesProps["mainSwipeProps"]["isMainSwipeDragging"];
@@ -61,10 +57,6 @@ export const buildMainSwipeRouteProps = ({
   dismissContactsOnboarding,
   dismissWalletWarning,
   groupNames,
-  handleMainSwipePointerCancel,
-  handleMainSwipePointerDown,
-  handleMainSwipePointerMove,
-  handleMainSwipePointerUp,
   handleMainSwipeScroll,
   handleMainSwipeTabChange,
   isMainSwipeDragging,
@@ -106,10 +98,6 @@ export const buildMainSwipeRouteProps = ({
       dismissContactsOnboarding,
       dismissWalletWarning,
       groupNames,
-      handleMainSwipePointerCancel,
-      handleMainSwipePointerDown,
-      handleMainSwipePointerMove,
-      handleMainSwipePointerUp,
       handleMainSwipeScroll,
       handleMainSwipeTabChange,
       isMainSwipeDragging,

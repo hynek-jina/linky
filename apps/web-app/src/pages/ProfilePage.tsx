@@ -183,37 +183,6 @@ export function ProfilePage({
                   </button>
                 ) : null}
               </div>
-
-              <div className="profile-status-row">
-                <div className="profile-status-label">
-                  {t("profileExchangeStatusLabel")}
-                </div>
-                <div className="profile-status-buttons">
-                  {profileStatusCurrencies.map((currency) => {
-                    const isActive =
-                      selectedProfileStatusCurrencies.includes(currency);
-
-                    return (
-                      <button
-                        key={currency}
-                        type="button"
-                        className={
-                          isActive
-                            ? "profile-status-chip"
-                            : "secondary profile-status-chip"
-                        }
-                        aria-pressed={isActive}
-                        disabled={!currentNpub || profileStatusIsSaving}
-                        onClick={() => {
-                          void toggleProfileStatusCurrency(currency);
-                        }}
-                      >
-                        {currency}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
             </>
           ) : (
             <>

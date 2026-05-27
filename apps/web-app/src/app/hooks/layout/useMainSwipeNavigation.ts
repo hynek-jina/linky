@@ -20,46 +20,10 @@ interface MainSwipeScrollable {
 
 type MainSwipeTarget = "contacts" | "wallet";
 
-interface MainSwipePointerState {
-  activePointerId: number | null;
-  didLockHorizontally: boolean;
-  startScrollLeft: number;
-  startX: number;
-  startY: number;
-}
-
-const MAIN_SWIPE_DIRECTION_LOCK_PX = 12;
-
-const createMainSwipePointerState = (): MainSwipePointerState => ({
-  activePointerId: null,
-  didLockHorizontally: false,
-  startScrollLeft: 0,
-  startX: 0,
-  startY: 0,
-});
-
 const getMainSwipeTargetLeft = (
   width: number,
   target: MainSwipeTarget,
 ): number => (target === "wallet" ? width : 0);
-
-export const isAllowedMainSwipeDrag = (
-  routeKind: Route["kind"],
-  deltaX: number,
-): boolean => {
-  if (routeKind === "contacts") {
-    return deltaX < 0;
-  }
-
-  if (routeKind === "wallet") {
-    return deltaX > 0;
-  }
-
-  return false;
-};
-
-export const clampMainSwipeLeft = (left: number, width: number): number =>
-  Math.min(Math.max(left, 0), width);
 
 const getMainSwipeProgress = (element: MainSwipeScrollable): number => {
   const width = element.clientWidth || 1;
@@ -117,9 +81,6 @@ export const useMainSwipeNavigation = ({
   const programmaticTargetRef = React.useRef<MainSwipeTarget | null>(null);
   const programmaticFrameRef = React.useRef<number | null>(null);
   const isDraggingRef = React.useRef(false);
-  const pointerStateRef = React.useRef<MainSwipePointerState>(
-    createMainSwipePointerState(),
-  );
 
   const cancelProgrammaticFrame = React.useCallback(() => {
     if (programmaticFrameRef.current === null) return;
@@ -132,10 +93,6 @@ export const useMainSwipeNavigation = ({
     window.clearTimeout(mainSwipeScrollTimerRef.current);
     mainSwipeScrollTimerRef.current = null;
   }, [mainSwipeScrollTimerRef]);
-
-  const resetPointerState = React.useCallback(() => {
-    pointerStateRef.current = createMainSwipePointerState();
-  }, []);
 
   const updateMainSwipeProgress = React.useCallback(
     (value: number) => {
@@ -273,7 +230,6 @@ export const useMainSwipeNavigation = ({
 
     updateMainSwipeProgress(routeKind === "wallet" ? 1 : 0);
     stopInteractiveState();
-    resetPointerState();
 
     if (!disableSmoothAlignment) return;
 
@@ -290,7 +246,6 @@ export const useMainSwipeNavigation = ({
     cancelProgrammaticFrame,
     isMainSwipeRoute,
     mainSwipeRef,
-    resetPointerState,
     routeKind,
     stopInteractiveState,
     updateMainSwipeProgress,
@@ -305,13 +260,11 @@ export const useMainSwipeNavigation = ({
     cancelProgrammaticFrame();
     programmaticTargetRef.current = null;
     clearMainSwipeScrollTimer();
-    resetPointerState();
     stopInteractiveState();
   }, [
     cancelProgrammaticFrame,
     clearMainSwipeScrollTimer,
     isMainSwipeRoute,
-    resetPointerState,
     stopInteractiveState,
   ]);
 
@@ -319,108 +272,9 @@ export const useMainSwipeNavigation = ({
     () => () => {
       cancelProgrammaticFrame();
       clearMainSwipeScrollTimer();
-      resetPointerState();
     },
-    [cancelProgrammaticFrame, clearMainSwipeScrollTimer, resetPointerState],
+    [cancelProgrammaticFrame, clearMainSwipeScrollTimer],
   );
-
-  const handleMainSwipePointerDown = isMainSwipeRoute
-    ? (event: React.PointerEvent<HTMLDivElement>) => {
-        if (!event.isPrimary || event.pointerType === "mouse") {
-          return;
-        }
-
-        const element = mainSwipeRef.current;
-        pointerStateRef.current = {
-          activePointerId: event.pointerId,
-          didLockHorizontally: false,
-          startScrollLeft: element?.scrollLeft ?? 0,
-          startX: event.clientX,
-          startY: event.clientY,
-        };
-      }
-    : undefined;
-
-  const handleMainSwipePointerMove = isMainSwipeRoute
-    ? (event: React.PointerEvent<HTMLDivElement>) => {
-        const pointerState = pointerStateRef.current;
-        if (pointerState.activePointerId !== event.pointerId) {
-          return;
-        }
-
-        const element = mainSwipeRef.current;
-        if (!element) {
-          return;
-        }
-
-        const deltaX = event.clientX - pointerState.startX;
-        const deltaY = event.clientY - pointerState.startY;
-
-        if (!pointerState.didLockHorizontally) {
-          if (
-            Math.abs(deltaX) < MAIN_SWIPE_DIRECTION_LOCK_PX &&
-            Math.abs(deltaY) < MAIN_SWIPE_DIRECTION_LOCK_PX
-          ) {
-            return;
-          }
-
-          if (Math.abs(deltaY) >= Math.abs(deltaX)) {
-            resetPointerState();
-            return;
-          }
-
-          if (!isAllowedMainSwipeDrag(routeKind, deltaX)) {
-            resetPointerState();
-            return;
-          }
-
-          pointerState.didLockHorizontally = true;
-          cancelProgrammaticFrame();
-          clearMainSwipeScrollTimer();
-
-          if (!isDraggingRef.current) {
-            isDraggingRef.current = true;
-            setIsMainSwipeDragging(true);
-          }
-
-          element.setPointerCapture(event.pointerId);
-        }
-
-        event.preventDefault();
-
-        const width = element.clientWidth || 1;
-        element.scrollLeft = clampMainSwipeLeft(
-          pointerState.startScrollLeft - deltaX,
-          width,
-        );
-        updateMainSwipeProgress(getMainSwipeProgress(element));
-      }
-    : undefined;
-
-  const handleMainSwipePointerRelease = isMainSwipeRoute
-    ? (event: React.PointerEvent<HTMLDivElement>) => {
-        const pointerState = pointerStateRef.current;
-        if (pointerState.activePointerId !== event.pointerId) {
-          return;
-        }
-
-        const didLockHorizontally = pointerState.didLockHorizontally;
-        resetPointerState();
-
-        if (!didLockHorizontally) {
-          return;
-        }
-
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-
-        clearMainSwipeScrollTimer();
-        commitMainSwipe(
-          mainSwipeProgressRef.current > 0.5 ? "wallet" : "contacts",
-        );
-      }
-    : undefined;
 
   const handleMainSwipeScroll = isMainSwipeRoute
     ? (event: React.UIEvent<HTMLDivElement>) => {
@@ -453,10 +307,6 @@ export const useMainSwipeNavigation = ({
 
   return {
     commitMainSwipe,
-    handleMainSwipePointerCancel: handleMainSwipePointerRelease,
-    handleMainSwipePointerDown,
-    handleMainSwipePointerMove,
-    handleMainSwipePointerUp: handleMainSwipePointerRelease,
     handleMainSwipeScroll,
   };
 };

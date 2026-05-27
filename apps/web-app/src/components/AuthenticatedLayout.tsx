@@ -92,38 +92,17 @@ export function AuthenticatedLayout({
           copyText={actions.copyText}
           currentNpub={state.currentNpub}
           currentNsec={state.currentNsec}
-          cycleProfileAvatarControl={actions.cycleProfileAvatarControl}
-          derivedProfile={state.derivedProfile}
           effectiveMyLightningAddress={state.effectiveMyLightningAddress}
           effectiveProfileName={state.effectiveProfileName}
           effectiveProfilePicture={state.effectiveProfilePicture}
-          isProfileEditing={state.isProfileEditing}
           myProfileQr={state.myProfileQr}
-          onClose={actions.closeProfileQr}
-          onPickProfilePhoto={actions.onPickProfilePhoto}
-          onProfilePhotoSelected={actions.onProfilePhotoSelected}
-          onSaveProfileEdits={actions.saveProfileEdits}
-          profileCustomPictureUrl={state.profileCustomPictureUrl}
-          profileEditInitialRef={state.profileEditInitialRef}
-          profileEditLnAddress={state.profileEditLnAddress}
-          profileEditName={state.profileEditName}
-          profileEditPicture={state.profileEditPicture}
-          profileEditStatus={state.profileEditStatus}
-          profileEditsSavable={state.profileEditsSavable}
           profileStatus={state.profileStatus}
           profileStatusCurrencies={state.profileStatusCurrencies}
           profileStatusIsSaving={state.profileStatusIsSaving}
-          profilePhotoInputRef={state.profilePhotoInputRef}
           selectedProfileStatusCurrencies={
             state.selectedProfileStatusCurrencies
           }
-          profileSelectedPictureKind={state.profileSelectedPictureKind}
-          setIsProfileEditing={actions.setIsProfileEditing}
-          setProfileEditLnAddress={actions.setProfileEditLnAddress}
-          setProfileEditName={actions.setProfileEditName}
-          setProfileEditStatus={actions.setProfileEditStatus}
           t={state.t}
-          toggleProfileEditing={actions.toggleProfileEditing}
           toggleProfileStatusCurrency={actions.toggleProfileStatusCurrency}
           writeCurrentNpubToNfc={actions.writeCurrentNpubToNfc}
         />

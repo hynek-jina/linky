@@ -197,7 +197,7 @@ export const AppRouteContent = (): React.ReactElement => {
         <ContactNewPage {...peopleRoutes.contactNewProps} />
       )}
 
-      {route.kind === "profile" && (
+      {(route.kind === "profile" || route.kind === "profileEdit") && (
         <ProfilePage {...peopleRoutes.profileProps} />
       )}
     </>

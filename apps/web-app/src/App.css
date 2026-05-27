@@ -3246,7 +3246,7 @@ button.icon {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: none;
-  touch-action: pan-y;
+  touch-action: auto;
   scrollbar-width: none;
   flex: 1 1 auto;
   min-height: 0;
