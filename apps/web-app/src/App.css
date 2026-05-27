@@ -3246,7 +3246,6 @@ button.icon {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: none;
-  overscroll-behavior-y: contain;
   touch-action: pan-y;
   scrollbar-width: none;
   flex: 1 1 auto;
@@ -3556,10 +3555,10 @@ button.icon {
 
 .contact-detail-name {
   margin: 0;
+  flex: 1 1 auto;
   font-size: clamp(28px, 7vw, 36px);
   line-height: 1.05;
   min-width: 0;
-  max-width: min(100%, 12ch);
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
@@ -3575,7 +3574,7 @@ button.icon {
 .contact-detail-status {
   margin: 0;
   min-width: 0;
-  max-width: min(45%, 24ch);
+  flex: 0 1 auto;
   color: #94a3b8;
   font-size: 14px;
   font-style: italic;
@@ -3773,8 +3772,7 @@ button.icon {
 
 .contact-status-text {
   min-width: 0;
-  max-width: 45%;
-  flex-shrink: 1;
+  flex: 0 1 auto;
   font-size: 11px;
   font-style: italic;
   font-weight: 400;

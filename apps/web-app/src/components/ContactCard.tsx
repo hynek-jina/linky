@@ -33,158 +33,160 @@ interface ContactCardProps {
   isUnknownContact?: boolean;
 }
 
-export const ContactCard: React.FC<ContactCardProps> = ({
-  avatarUrl,
-  contact,
-  getMintIconUrl,
-  hasAttention,
-  lastMessage,
-  onMintIconError,
-  onMintIconLoad,
-  onSelect,
-  statusText,
-  tokenInfo,
-  isUnknownContact = false,
-}) => {
-  const { formatDisplayedAmountParts, formatDisplayedAmountText, t } =
-    useAppShellCore();
-  const initials = getInitials(String(contact.name ?? ""));
-  const contactStatus = formatDisplayGeneralStatus({
-    status: statusText,
-    providesLabel: t("contactStatusProvides"),
-  });
-  const lastText = String(lastMessage?.content ?? "").trim();
-  const rawDirection = String(lastMessage?.direction ?? "").trim();
-  const previewDirection =
-    rawDirection === "in" || rawDirection === "out" ? rawDirection : null;
-  const displayText = formatChatMessagePreviewText({
-    content: lastText,
-    direction: previewDirection,
-    formatDisplayedAmountText,
-    t,
-  });
-  const preview =
-    displayText.length > 40 ? `${displayText.slice(0, 40)}…` : displayText;
-  const lastTime = lastMessage
-    ? formatContactMessageTimestamp(Number(lastMessage.createdAtSec ?? 0))
-    : "";
+export const ContactCard: React.FC<ContactCardProps> = React.memo(
+  ({
+    avatarUrl,
+    contact,
+    getMintIconUrl,
+    hasAttention,
+    lastMessage,
+    onMintIconError,
+    onMintIconLoad,
+    onSelect,
+    statusText,
+    tokenInfo,
+    isUnknownContact = false,
+  }) => {
+    const { formatDisplayedAmountParts, formatDisplayedAmountText, t } =
+      useAppShellCore();
+    const initials = getInitials(String(contact.name ?? ""));
+    const contactStatus = formatDisplayGeneralStatus({
+      status: statusText,
+      providesLabel: t("contactStatusProvides"),
+    });
+    const lastText = String(lastMessage?.content ?? "").trim();
+    const rawDirection = String(lastMessage?.direction ?? "").trim();
+    const previewDirection =
+      rawDirection === "in" || rawDirection === "out" ? rawDirection : null;
+    const displayText = formatChatMessagePreviewText({
+      content: lastText,
+      direction: previewDirection,
+      formatDisplayedAmountText,
+      t,
+    });
+    const preview =
+      displayText.length > 40 ? `${displayText.slice(0, 40)}…` : displayText;
+    const lastTime = lastMessage
+      ? formatContactMessageTimestamp(Number(lastMessage.createdAtSec ?? 0))
+      : "";
 
-  const directionSymbol = (() => {
-    const dir = String(lastMessage?.direction ?? "").trim();
-    if (dir === "out") return "↗";
-    if (dir === "in") return "↘";
-    return "";
-  })();
+    const directionSymbol = (() => {
+      const dir = String(lastMessage?.direction ?? "").trim();
+      if (dir === "out") return "↗";
+      if (dir === "in") return "↘";
+      return "";
+    })();
 
-  const previewText = preview
-    ? directionSymbol
-      ? `${directionSymbol} ${preview}`
-      : preview
-    : "";
+    const previewText = preview
+      ? directionSymbol
+        ? `${directionSymbol} ${preview}`
+        : preview
+      : "";
 
-  const handleClick = () => onSelect(contact);
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      handleClick();
-    }
-  };
+    const handleClick = () => onSelect(contact);
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleClick();
+      }
+    };
 
-  return (
-    <article
-      className="contact-card is-clickable"
-      data-guide="contact-card"
-      data-guide-contact-id={String(contact.id)}
-      role="button"
-      tabIndex={0}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-    >
-      <div className="card-header">
-        <div className="contact-avatar with-badge" aria-hidden="true">
-          <span className="contact-avatar-inner">
-            {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt=""
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <span className="contact-avatar-fallback">{initials}</span>
-            )}
-          </span>
-          {hasAttention ? (
-            <span className="contact-unread-dot" aria-hidden="true" />
-          ) : null}
-          {isUnknownContact ? (
-            <span className="contact-unknown-badge" aria-hidden="true">
-              ?
+    return (
+      <article
+        className="contact-card is-clickable"
+        data-guide="contact-card"
+        data-guide-contact-id={String(contact.id)}
+        role="button"
+        tabIndex={0}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+      >
+        <div className="card-header">
+          <div className="contact-avatar with-badge" aria-hidden="true">
+            <span className="contact-avatar-inner">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="contact-avatar-fallback">{initials}</span>
+              )}
             </span>
-          ) : null}
-        </div>
-
-        <div className="card-main">
-          <div className="card-title-row">
-            {contact.name ? (
-              <h4 className="contact-title">
-                <span
-                  className="contact-title-text"
-                  title={String(contact.name)}
-                >
-                  {String(contact.name)}
-                </span>
-                {contactStatus ? (
-                  <span className="contact-status-text" title={contactStatus}>
-                    {contactStatus}
-                  </span>
-                ) : null}
-              </h4>
+            {hasAttention ? (
+              <span className="contact-unread-dot" aria-hidden="true" />
             ) : null}
-            {lastTime ? (
-              <span
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-end",
-                  gap: 2,
-                }}
-              >
-                {lastTime ? (
-                  <span
-                    className="muted"
-                    style={{ fontSize: 10, whiteSpace: "nowrap" }}
-                  >
-                    {lastTime}
-                  </span>
-                ) : null}
+            {isUnknownContact ? (
+              <span className="contact-unknown-badge" aria-hidden="true">
+                ?
               </span>
             ) : null}
           </div>
 
-          {tokenInfo ? (
-            <TokenPreview
-              tokenInfo={tokenInfo}
-              directionSymbol={directionSymbol}
-              formatDisplayedAmountParts={formatDisplayedAmountParts}
-              formatDisplayedAmountText={formatDisplayedAmountText}
-              getMintIconUrl={getMintIconUrl}
-              onIconLoad={onMintIconLoad}
-              onIconError={onMintIconError}
-            />
-          ) : previewText ? (
-            <div
-              className="muted"
-              style={{ fontSize: 12, marginTop: 4, lineHeight: 1.2 }}
-            >
-              {previewText}
+          <div className="card-main">
+            <div className="card-title-row">
+              {contact.name ? (
+                <h4 className="contact-title">
+                  <span
+                    className="contact-title-text"
+                    title={String(contact.name)}
+                  >
+                    {String(contact.name)}
+                  </span>
+                  {contactStatus ? (
+                    <span className="contact-status-text" title={contactStatus}>
+                      {contactStatus}
+                    </span>
+                  ) : null}
+                </h4>
+              ) : null}
+              {lastTime ? (
+                <span
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    gap: 2,
+                  }}
+                >
+                  {lastTime ? (
+                    <span
+                      className="muted"
+                      style={{ fontSize: 10, whiteSpace: "nowrap" }}
+                    >
+                      {lastTime}
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
             </div>
-          ) : null}
+
+            {tokenInfo ? (
+              <TokenPreview
+                tokenInfo={tokenInfo}
+                directionSymbol={directionSymbol}
+                formatDisplayedAmountParts={formatDisplayedAmountParts}
+                formatDisplayedAmountText={formatDisplayedAmountText}
+                getMintIconUrl={getMintIconUrl}
+                onIconLoad={onMintIconLoad}
+                onIconError={onMintIconError}
+              />
+            ) : previewText ? (
+              <div
+                className="muted"
+                style={{ fontSize: 12, marginTop: 4, lineHeight: 1.2 }}
+              >
+                {previewText}
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
-    </article>
-  );
-};
+      </article>
+    );
+  },
+);
 
 interface TokenPreviewProps {
   directionSymbol: string;

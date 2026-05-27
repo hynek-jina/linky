@@ -25,7 +25,6 @@ interface BuildMainSwipeRoutePropsParams {
   isMainSwipeDragging: MainSwipeRoutesProps["mainSwipeProps"]["isMainSwipeDragging"];
   mainSwipeProgress: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeProgress"];
   mainSwipeRef: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeRef"];
-  mainSwipeScrollY: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeScrollY"];
   NO_GROUP_FILTER: MainSwipeRoutesProps["mainSwipeProps"]["NO_GROUP_FILTER"];
   openNewContactPage: MainSwipeRoutesProps["mainSwipeProps"]["openNewContactPage"];
   openScan: MainSwipeRoutesProps["mainSwipeProps"]["openScan"];
@@ -71,7 +70,6 @@ export const buildMainSwipeRouteProps = ({
   isMainSwipeDragging,
   mainSwipeProgress,
   mainSwipeRef,
-  mainSwipeScrollY,
   NO_GROUP_FILTER,
   openNewContactPage,
   openScan,
@@ -117,7 +115,6 @@ export const buildMainSwipeRouteProps = ({
       isMainSwipeDragging,
       mainSwipeProgress,
       mainSwipeRef,
-      mainSwipeScrollY,
       NO_GROUP_FILTER,
       openNewContactPage,
       openScan,

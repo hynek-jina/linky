@@ -1068,7 +1068,6 @@ export const useAppShellComposition = () => {
     route.kind === "wallet" ? 1 : 0,
   );
   const [isMainSwipeDragging, setIsMainSwipeDragging] = useState(false);
-  const [mainSwipeScrollY, setMainSwipeScrollY] = useState(0);
   const mainSwipeProgressRef = React.useRef(route.kind === "wallet" ? 1 : 0);
   const mainSwipeScrollTimerRef = React.useRef<number | null>(null);
 
@@ -3064,7 +3063,6 @@ export const useAppShellComposition = () => {
     nostrMetadataInFlight,
     nostrStatusByNpub,
     nostrStatusInFlight,
-    nostrPictureByNpub,
     rememberBlobAvatarUrl,
     routeKind: route.kind,
     setNostrPictureByNpub,
@@ -3104,7 +3102,6 @@ export const useAppShellComposition = () => {
     routeKind: route.kind,
     setContactsHeaderVisible,
     setContactsPullProgress,
-    setMainSwipeScrollY,
   });
 
   const {
@@ -3413,7 +3410,6 @@ export const useAppShellComposition = () => {
   }, [
     nostrFetchRelays,
     nostrInFlight,
-    nostrPictureByNpub,
     prefetchedMessageNpubs,
     rememberBlobAvatarUrl,
     setNostrPictureByNpub,
@@ -3469,6 +3465,16 @@ export const useAppShellComposition = () => {
   const displayContacts = React.useMemo<DisplayContact[]>(() => {
     return [...contacts, ...unknownContacts];
   }, [contacts, unknownContacts]);
+
+  const displayContactById = React.useMemo(() => {
+    const byId = new Map<string, DisplayContact>();
+    for (const contact of displayContacts) {
+      const id = String(contact.id ?? "").trim();
+      if (!id) continue;
+      byId.set(id, contact);
+    }
+    return byId;
+  }, [displayContacts]);
 
   const displayContactsSearchData = React.useMemo(() => {
     return displayContacts.map((contact) => {
@@ -5017,66 +5023,94 @@ export const useAppShellComposition = () => {
     t,
   ]);
 
-  const renderContactCard = (contact: DisplayContact) => {
-    const npub = normalizeNpubIdentifier(contact.npub);
-    const avatarUrl = npub ? nostrPictureByNpub[npub] : null;
-    const statusText = npub ? (nostrStatusByNpub[npub] ?? null) : null;
-    const contactId = String(contact.id ?? "").trim();
-    const last = contactId ? lastMessageByContactId.get(contactId) : null;
-    const lastText = String(last?.content ?? "").trim();
-    const tokenInfo = lastText ? getCashuTokenMessageInfo(lastText) : null;
-    const hasAttention = Boolean(
-      contactAttentionById[String(contact.id ?? "")],
-    );
+  const handleSelectContact = React.useCallback(
+    (contact: DisplayContact) => {
+      if (pendingCashuTokenContactPickId) {
+        void sendCashuTokenToContact(contact, pendingCashuTokenContactPickId);
+        return;
+      }
 
-    return (
-      <ContactCard
-        key={String(contact.id ?? "")}
-        contact={contact}
-        avatarUrl={avatarUrl}
-        lastMessage={last ?? null}
-        hasAttention={hasAttention}
-        isUnknownContact={Boolean(contact.isUnknownContact)}
-        statusText={statusText}
-        tokenInfo={tokenInfo}
-        getMintIconUrl={getMintIconUrl}
-        onSelect={() => {
-          if (pendingCashuTokenContactPickId) {
-            void sendCashuTokenToContact(
-              contact,
-              pendingCashuTokenContactPickId,
-            );
-            return;
-          }
+      openContactDetail(contact);
+    },
+    [
+      openContactDetail,
+      pendingCashuTokenContactPickId,
+      sendCashuTokenToContact,
+    ],
+  );
 
-          openContactDetail(contact);
-        }}
-        onMintIconLoad={(origin, url) => {
-          setMintIconUrlByMint((prev) => ({
-            ...prev,
-            [origin]: url,
-          }));
-        }}
-        onMintIconError={(origin, url) => {
-          setMintIconUrlByMint((prev) => ({
-            ...prev,
-            [origin]: url,
-          }));
-        }}
-      />
-    );
-  };
+  const handleMintIconLoad = React.useCallback(
+    (origin: string, url: string | null) => {
+      setMintIconUrlByMint((prev) => ({
+        ...prev,
+        [origin]: url,
+      }));
+    },
+    [],
+  );
 
-  const renderMainSwipeContactCard = (
-    contact: ContactRowLike,
-  ): React.ReactNode => {
-    const id = String(contact.id ?? "").trim();
-    if (!id) return null;
-    const matched =
-      displayContacts.find((row) => String(row.id ?? "").trim() === id) ?? null;
-    if (!matched) return null;
-    return renderContactCard(matched);
-  };
+  const handleMintIconError = React.useCallback(
+    (origin: string, url: string | null) => {
+      setMintIconUrlByMint((prev) => ({
+        ...prev,
+        [origin]: url,
+      }));
+    },
+    [],
+  );
+
+  const renderContactCard = React.useCallback(
+    (contact: DisplayContact) => {
+      const npub = normalizeNpubIdentifier(contact.npub);
+      const avatarUrl = npub ? nostrPictureByNpub[npub] : null;
+      const statusText = npub ? (nostrStatusByNpub[npub] ?? null) : null;
+      const contactId = String(contact.id ?? "").trim();
+      const last = contactId ? lastMessageByContactId.get(contactId) : null;
+      const lastText = String(last?.content ?? "").trim();
+      const tokenInfo = lastText ? getCashuTokenMessageInfo(lastText) : null;
+      const hasAttention = Boolean(
+        contactAttentionById[String(contact.id ?? "")],
+      );
+
+      return (
+        <ContactCard
+          key={String(contact.id ?? "")}
+          contact={contact}
+          avatarUrl={avatarUrl}
+          lastMessage={last ?? null}
+          hasAttention={hasAttention}
+          isUnknownContact={Boolean(contact.isUnknownContact)}
+          statusText={statusText}
+          tokenInfo={tokenInfo}
+          getMintIconUrl={getMintIconUrl}
+          onSelect={handleSelectContact}
+          onMintIconLoad={handleMintIconLoad}
+          onMintIconError={handleMintIconError}
+        />
+      );
+    },
+    [
+      contactAttentionById,
+      getMintIconUrl,
+      handleMintIconError,
+      handleMintIconLoad,
+      handleSelectContact,
+      lastMessageByContactId,
+      nostrPictureByNpub,
+      nostrStatusByNpub,
+    ],
+  );
+
+  const renderMainSwipeContactCard = React.useCallback(
+    (contact: ContactRowLike): React.ReactNode => {
+      const id = String(contact.id ?? "").trim();
+      if (!id) return null;
+      const matched = displayContactById.get(id) ?? null;
+      if (!matched) return null;
+      return renderContactCard(matched);
+    },
+    [displayContactById, renderContactCard],
+  );
 
   const conversationsLabel = t("conversations");
   const otherContactsLabel = t("otherContacts");
@@ -6754,7 +6788,6 @@ export const useAppShellComposition = () => {
       isMainSwipeDragging,
       mainSwipeProgress,
       mainSwipeRef,
-      mainSwipeScrollY,
       NO_GROUP_FILTER,
       canAddContact,
       openNewContactPage,

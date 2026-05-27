@@ -47,7 +47,6 @@ export interface MainSwipeRouteProps {
   isMainSwipeDragging: boolean;
   mainSwipeProgress: number;
   mainSwipeRef: React.RefObject<HTMLDivElement | null>;
-  mainSwipeScrollY: number;
   NO_GROUP_FILTER: string;
   openNewContactPage: () => void;
   openScan: () => void;
@@ -106,7 +105,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     isMainSwipeDragging,
     mainSwipeProgress,
     mainSwipeRef,
-    mainSwipeScrollY,
     NO_GROUP_FILTER,
     openNewContactPage,
     openScan,
@@ -185,15 +183,7 @@ export const MainSwipeContent = (): React.ReactElement => {
             t={t}
           />
         </div>
-        <div
-          className="main-swipe-page"
-          aria-hidden={route.kind !== "wallet"}
-          style={
-            mainSwipeScrollY
-              ? { transform: `translateY(${mainSwipeScrollY}px)` }
-              : undefined
-          }
-        >
+        <div className="main-swipe-page" aria-hidden={route.kind !== "wallet"}>
           <WalletPage
             cashuBalance={cashuBalance}
             cashuTotalBalance={cashuTotalBalance}

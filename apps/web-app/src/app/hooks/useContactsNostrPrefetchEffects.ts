@@ -35,7 +35,6 @@ interface UseContactsNostrPrefetchEffectsParams<
   nostrMetadataInFlight: React.MutableRefObject<Set<string>>;
   nostrStatusByNpub: Record<string, string | null>;
   nostrStatusInFlight: React.MutableRefObject<Set<string>>;
-  nostrPictureByNpub: Record<string, string | null>;
   rememberBlobAvatarUrl: (npub: string, url: string | null) => string | null;
   routeKind: string;
   setNostrPictureByNpub: React.Dispatch<
@@ -57,7 +56,6 @@ export const useContactsNostrPrefetchEffects = <
   nostrMetadataInFlight,
   nostrStatusByNpub,
   nostrStatusInFlight,
-  nostrPictureByNpub,
   rememberBlobAvatarUrl,
   routeKind,
   setNostrPictureByNpub,
@@ -327,7 +325,6 @@ export const useContactsNostrPrefetchEffects = <
   }, [
     contacts,
     nostrInFlight,
-    nostrPictureByNpub,
     rememberBlobAvatarUrl,
     nostrFetchRelays,
     setNostrPictureByNpub,
