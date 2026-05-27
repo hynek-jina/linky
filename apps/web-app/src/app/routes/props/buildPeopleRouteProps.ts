@@ -32,13 +32,14 @@ interface BuildPeopleRoutePropsParams {
   handleSaveContact: PeopleRoutesProps["contactEditProps"]["handleSaveContact"];
   isProfileEditing: PeopleRoutesProps["profileProps"]["isProfileEditing"];
   isSavingContact: PeopleRoutesProps["contactEditProps"]["isSavingContact"];
+  blockArchivedContact: PeopleRoutesProps["contactEditProps"]["blockArchivedContact"];
   lang: PeopleRoutesProps["chatProps"]["lang"];
   myProfileQr: PeopleRoutesProps["profileProps"]["myProfileQr"];
   nostrPictureByNpub: PeopleRoutesProps["contactProps"]["nostrPictureByNpub"];
+  onBlockUnknownContact: PeopleRoutesProps["chatProps"]["onBlockUnknownContact"];
   onCancelEdit: PeopleRoutesProps["chatProps"]["onCancelEdit"];
   onCancelReply: PeopleRoutesProps["chatProps"]["onCancelReply"];
   onAddUnknownContact: PeopleRoutesProps["chatProps"]["onAddUnknownContact"];
-  onRemoveUnknownContactChat: PeopleRoutesProps["chatProps"]["onRemoveUnknownContactChat"];
   onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
   onDeclinePaymentRequest: PeopleRoutesProps["chatProps"]["onDeclinePaymentRequest"];
   onEdit: PeopleRoutesProps["chatProps"]["onEdit"];
@@ -67,6 +68,7 @@ interface BuildPeopleRoutePropsParams {
   profileStatusIsSaving: PeopleRoutesProps["profileProps"]["profileStatusIsSaving"];
   profilePhotoInputRef: PeopleRoutesProps["profileProps"]["profilePhotoInputRef"];
   profileSelectedPictureKind: PeopleRoutesProps["profileProps"]["profileSelectedPictureKind"];
+  restoreArchivedContact: PeopleRoutesProps["contactEditProps"]["restoreArchivedContact"];
   requestDeleteCurrentContact: PeopleRoutesProps["contactEditProps"]["requestDeleteCurrentContact"];
   requestSelectedContact: PeopleRoutesProps["contactPayProps"]["requestSelectedContact"];
   resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
@@ -120,13 +122,14 @@ export const buildPeopleRouteProps = ({
   handleSaveContact,
   isProfileEditing,
   isSavingContact,
+  blockArchivedContact,
   lang,
   myProfileQr,
   nostrPictureByNpub,
+  onBlockUnknownContact,
   onCancelEdit,
   onCancelReply,
   onAddUnknownContact,
-  onRemoveUnknownContactChat,
   onCopy,
   onDeclinePaymentRequest,
   onEdit,
@@ -155,6 +158,7 @@ export const buildPeopleRouteProps = ({
   profileStatusIsSaving,
   profilePhotoInputRef,
   profileSelectedPictureKind,
+  restoreArchivedContact,
   requestDeleteCurrentContact,
   requestSelectedContact,
   resetEditedContactFieldFromNostr,
@@ -204,7 +208,7 @@ export const buildPeopleRouteProps = ({
       onCancelReply,
       onCancelEdit,
       onAddUnknownContact,
-      onRemoveUnknownContactChat,
+      onBlockUnknownContact,
       sendChatMessage,
       openContactPay,
       onOpenNpubContact,
@@ -222,6 +226,8 @@ export const buildPeopleRouteProps = ({
       pendingDeleteId,
       handleSaveContact,
       isSavingContact,
+      blockArchivedContact,
+      restoreArchivedContact,
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
       t,

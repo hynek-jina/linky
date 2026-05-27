@@ -416,6 +416,11 @@ export const cs = {
   edit: "Upravit",
   delete: "Smazat",
   deleteArmedHint: "Pro smazání klikněte ještě jednou.",
+  archive: "Archiv",
+  archiveFilter: "Archiv",
+  archiveContact: "Archivovat",
+  archiveArmedHint: "Pro archivaci klikněte ještě jednou.",
+  restoreArchivedContact: "Vrátit mezi kontakty",
 
   contact: "Kontakt",
   editContact: "Upravit kontakt",
@@ -450,6 +455,9 @@ export const cs = {
   contactSaved: "Kontakt byl uložen.",
   contactUpdated: "Kontakt byl upraven.",
   contactDeleted: "Kontakt byl smazán.",
+  contactArchived: "Kontakt byl archivován.",
+  contactRestored: "Kontakt byl vrácen mezi kontakty.",
+  contactBlocked: "Kontakt byl zablokován.",
 
   copiedToClipboard: "Zkopírováno do schránky.",
   copyFailed: "Kopírování do schránky se nepovedlo.",

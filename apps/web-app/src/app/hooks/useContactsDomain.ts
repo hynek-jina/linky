@@ -5,6 +5,7 @@ import type { ContactId } from "../../evolu";
 import { evolu } from "../../evolu";
 import { isStatusFilterValue } from "../../nostrStatus";
 import type { Route } from "../../types/route";
+import { ARCHIVED_CONTACTS_FILTER } from "../../utils/constants";
 import type { OptionalText } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -303,6 +304,14 @@ export const useContactsDomain = ({
               contact.groupName ?? "",
             ).trim() as typeof Evolu.NonEmptyString1000.Type)
           : null,
+        archivedAtSec:
+          typeof contact.archivedAtSec === "number" &&
+          Number.isFinite(contact.archivedAtSec) &&
+          contact.archivedAtSec > 0
+            ? (contact.archivedAtSec as typeof Evolu.PositiveInt.Type)
+            : contact.archivedAtSec
+              ? (Number(contact.archivedAtSec) as typeof Evolu.PositiveInt.Type)
+              : null,
       };
 
       const result = upsert("contact", payload, { ownerId: appOwnerId });
@@ -328,6 +337,9 @@ export const useContactsDomain = ({
     let ungrouped = 0;
 
     for (const contact of contacts) {
+      const archivedAtSec = Number(contact.archivedAtSec ?? 0);
+      if (Number.isFinite(archivedAtSec) && archivedAtSec > 0) continue;
+
       const raw = (contact.groupName ?? null) as string | null;
       const normalized = (raw ?? "").trim();
       if (!normalized) {
@@ -351,6 +363,7 @@ export const useContactsDomain = ({
   React.useEffect(() => {
     if (!activeGroup) return;
     if (activeGroup === noGroupFilterValue) return;
+    if (activeGroup === ARCHIVED_CONTACTS_FILTER) return;
     if (isStatusFilterValue(activeGroup)) return;
     if (!groupNames.includes(activeGroup)) {
       setActiveGroup(null);

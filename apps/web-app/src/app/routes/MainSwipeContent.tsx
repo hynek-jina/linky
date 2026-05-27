@@ -86,7 +86,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     canAddContact,
     cashuBalance,
     cashuTotalBalance,
-    contacts,
     contactsOnboardingCelebrating,
     contactsOnboardingTasks,
     contactsSearch,
@@ -169,7 +168,6 @@ export const MainSwipeContent = (): React.ReactElement => {
             noGroupFilterValue={NO_GROUP_FILTER}
             groupNames={groupNames}
             statusFilterCurrencies={statusFilterCurrencies}
-            contacts={contacts}
             visibleContacts={visibleContacts}
             conversationsLabel={conversationsLabel}
             otherContactsLabel={otherContactsLabel}

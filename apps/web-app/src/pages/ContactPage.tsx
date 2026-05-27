@@ -159,12 +159,12 @@ export const ContactPage: FC<ContactPageProps> = ({
             <h2 className="contact-detail-name" title={contactName}>
               {contactName}
             </h2>
-            {contactStatus ? (
-              <p className="contact-detail-status" title={contactStatus}>
-                {contactStatus}
-              </p>
-            ) : null}
           </div>
+          {contactStatus ? (
+            <p className="contact-detail-status" title={contactStatus}>
+              {contactStatus}
+            </p>
+          ) : null}
           {group ? <p className="contact-detail-group">{group}</p> : null}
         </div>
 

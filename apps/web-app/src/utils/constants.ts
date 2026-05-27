@@ -69,6 +69,7 @@ export const FEEDBACK_CONTACT_NPUB =
 export const PAYMENT_ANALYTICS_RECIPIENT_NPUB =
   "npub1xuxvcnmw4drf8duzalvalxrfxjvwtrjdmwxy0ez2e62uje4drrvqu6pz2w";
 export const NO_GROUP_FILTER = "__linky_no_group__";
+export const ARCHIVED_CONTACTS_FILTER = "__linky_archived_contacts__";
 
 export const LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY =
   "linky.lastAcceptedCashuToken.v1";

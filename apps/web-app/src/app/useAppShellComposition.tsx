@@ -82,6 +82,7 @@ import {
 import { getCashuLib } from "../utils/cashuLib";
 import { createLoadedCashuWallet } from "../utils/cashuWallet";
 import {
+  ARCHIVED_CONTACTS_FILTER,
   BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
   CASHU_AUTOSWAP_MIN_SOURCE_SUM,
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
@@ -3542,6 +3543,7 @@ export const useAppShellComposition = () => {
   }, [displayContacts, nostrStatusByNpub]);
 
   React.useEffect(() => {
+    if (activeGroup === ARCHIVED_CONTACTS_FILTER) return;
     if (!isStatusFilterValue(activeGroup)) return;
 
     const selectedCurrency = parseStatusFilterValue(activeGroup);
@@ -4006,15 +4008,15 @@ export const useAppShellComposition = () => {
 
   const handleDelete = (id: ContactId) => {
     const normalizedContactId = String(id ?? "").trim();
-    const contactToDelete =
+    const contactToArchive =
       contacts.find(
         (contact) => String(contact.id ?? "").trim() === normalizedContactId,
       ) ?? null;
-    const deletedContactNpub = normalizeNpubIdentifier(contactToDelete?.npub);
+    const archivedContactNpub = normalizeNpubIdentifier(contactToArchive?.npub);
     let unknownThreadContactId: string | null = null;
-    if (deletedContactNpub) {
+    if (archivedContactNpub) {
       try {
-        const decodedContact = nip19.decode(deletedContactNpub);
+        const decodedContact = nip19.decode(archivedContactNpub);
         if (
           decodedContact.type === "npub" &&
           typeof decodedContact.data === "string"
@@ -4026,34 +4028,136 @@ export const useAppShellComposition = () => {
       }
     }
 
+    const archivedAtSec = Math.ceil(Date.now() / 1e3);
+
     const result = contactsOwnerId
       ? (() => {
           const scoped = update(
             "contact",
-            { id, isDeleted: Evolu.sqliteTrue },
+            { id, archivedAtSec },
             { ownerId: contactsOwnerId },
           );
           if (scoped.ok) return scoped;
-          return update("contact", { id, isDeleted: Evolu.sqliteTrue });
+          return update("contact", { id, archivedAtSec });
         })()
-      : update("contact", { id, isDeleted: Evolu.sqliteTrue });
+      : update("contact", { id, archivedAtSec });
     if (result.ok) {
       if (
         unknownThreadContactId &&
         unknownThreadContactId !== normalizedContactId
       ) {
         reassignLocalNostrMessagesContactId(
-          normalizedContactId,
           unknownThreadContactId,
+          normalizedContactId,
         );
+        clearContactAttention(unknownThreadContactId);
       }
       recordContactsOwnerWrite();
-      setStatus(t("contactDeleted"));
+      setStatus(t("contactArchived"));
       closeContactDetail();
       return;
     }
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
   };
+
+  const restoreArchivedContact = React.useCallback(
+    (id: ContactId) => {
+      const result = contactsOwnerId
+        ? (() => {
+            const scoped = update(
+              "contact",
+              { id, archivedAtSec: null },
+              { ownerId: contactsOwnerId },
+            );
+            if (scoped.ok) return scoped;
+            return update("contact", { id, archivedAtSec: null });
+          })()
+        : update("contact", { id, archivedAtSec: null });
+
+      if (result.ok) {
+        recordContactsOwnerWrite();
+        setStatus(t("contactRestored"));
+        closeContactDetail();
+        return;
+      }
+
+      setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+    },
+    [
+      closeContactDetail,
+      contactsOwnerId,
+      recordContactsOwnerWrite,
+      setStatus,
+      t,
+      update,
+    ],
+  );
+
+  const blockPubkeyAndPublishMuteList = React.useCallback(
+    async (pubkeyHex: string): Promise<boolean> => {
+      const normalizedPubkey = normalizePubkeyHex(pubkeyHex);
+      if (!normalizedPubkey) return false;
+
+      const mergedBlockedPubkeys = Array.from(
+        new Set(
+          safeLocalStorageGetJson(BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY, [])
+            .map((entry) => normalizePubkeyHex(entry))
+            .filter((entry): entry is string => Boolean(entry))
+            .concat(normalizedPubkey),
+        ),
+      );
+
+      safeLocalStorageSetJson(
+        BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
+        mergedBlockedPubkeys,
+      );
+
+      if (!currentNsec) return true;
+
+      try {
+        const { finalizeEvent, getPublicKey } = await import("nostr-tools");
+
+        const decodedMe = nip19.decode(currentNsec);
+        if (
+          decodedMe.type !== "nsec" ||
+          !(decodedMe.data instanceof Uint8Array)
+        ) {
+          return true;
+        }
+
+        const relays = Array.from(
+          new Set(
+            nostrFetchRelays
+              .map((relay) => String(relay ?? "").trim())
+              .filter(Boolean),
+          ),
+        );
+        if (relays.length === 0) return true;
+
+        const privBytes = decodedMe.data;
+        const pubkey = getPublicKey(privBytes);
+        const baseEvent = {
+          kind: 10000,
+          created_at: Math.ceil(Date.now() / 1e3),
+          tags: mergedBlockedPubkeys.map((blockedPubkey) => [
+            "p",
+            blockedPubkey,
+          ]),
+          content: "",
+          pubkey,
+        } satisfies UnsignedEvent;
+
+        const signed = finalizeEvent(baseEvent, privBytes);
+        const pool = await getSharedAppNostrPool();
+        void Promise.allSettled(pool.publish(relays, signed));
+      } catch {
+        // Local blocklist still applies even if mute-list publish fails.
+      }
+
+      return true;
+    },
+    [currentNsec, nostrFetchRelays],
+  );
 
   const {
     checkAllCashuTokensAndDeleteInvalid,
@@ -4725,7 +4829,6 @@ export const useAppShellComposition = () => {
       return;
     }
     setPendingDeleteId(editingId);
-    setStatus(t("deleteArmedHint"));
   };
 
   const { openFeedbackContact } = useFeedbackContact<(typeof contacts)[number]>(
@@ -4750,6 +4853,82 @@ export const useAppShellComposition = () => {
       return next;
     });
   }, []);
+
+  const blockArchivedContact = React.useCallback(async () => {
+    if (route.kind !== "contactEdit") return;
+    if (!selectedContact?.id) return;
+
+    const normalizedNpub = normalizeNpubIdentifier(selectedContact.npub);
+    if (!normalizedNpub) {
+      setStatus(t("chatMissingContactNpub"));
+      return;
+    }
+
+    const confirmed = window.confirm(t("chatUnknownContactBlockConfirm"));
+    if (!confirmed) return;
+
+    let blockedPubkey: string | null = null;
+    try {
+      const decoded = nip19.decode(normalizedNpub);
+      if (decoded.type === "npub" && typeof decoded.data === "string") {
+        blockedPubkey = normalizePubkeyHex(decoded.data);
+      }
+    } catch {
+      blockedPubkey = null;
+    }
+
+    if (!blockedPubkey) {
+      setStatus(t("chatMissingContactNpub"));
+      return;
+    }
+
+    await blockPubkeyAndPublishMuteList(blockedPubkey);
+
+    const contactId = String(selectedContact.id ?? "").trim();
+    if (contactId) {
+      removeLocalNostrMessagesByContactId(contactId);
+      clearContactAttention(contactId);
+    }
+
+    const result = contactsOwnerId
+      ? (() => {
+          const scoped = update(
+            "contact",
+            { id: selectedContact.id, isDeleted: Evolu.sqliteTrue },
+            { ownerId: contactsOwnerId },
+          );
+          if (scoped.ok) return scoped;
+          return update("contact", {
+            id: selectedContact.id,
+            isDeleted: Evolu.sqliteTrue,
+          });
+        })()
+      : update("contact", {
+          id: selectedContact.id,
+          isDeleted: Evolu.sqliteTrue,
+        });
+
+    if (result.ok) {
+      recordContactsOwnerWrite();
+      setStatus(t("contactBlocked"));
+      closeContactDetail();
+      return;
+    }
+
+    setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+  }, [
+    blockPubkeyAndPublishMuteList,
+    clearContactAttention,
+    closeContactDetail,
+    contactsOwnerId,
+    recordContactsOwnerWrite,
+    removeLocalNostrMessagesByContactId,
+    route.kind,
+    selectedContact,
+    setStatus,
+    t,
+    update,
+  ]);
 
   const openContactPay = (
     contactId: string,
@@ -4868,24 +5047,51 @@ export const useAppShellComposition = () => {
     unknownNameByNpub,
   ]);
 
-  const removeUnknownContactChatFromChat = React.useCallback(async () => {
+  const blockUnknownContactFromChat = React.useCallback(async () => {
     if (route.kind !== "chat") return;
     if (!selectedChatContact?.isUnknownContact) return;
 
-    const confirmed = window.confirm(t("chatUnknownContactRemoveConfirm"));
+    const confirmed = window.confirm(t("chatUnknownContactBlockConfirm"));
     if (!confirmed) return;
 
     const contactId = String(selectedChatContact.id ?? "").trim();
     if (!contactId) return;
 
+    const unknownPubkeyHex = (() => {
+      const directPubkey = normalizePubkeyHex(
+        selectedChatContact.unknownPubkeyHex,
+      );
+      if (directPubkey) return directPubkey;
+
+      const normalizedNpub = normalizeNpubIdentifier(selectedChatContact.npub);
+      if (!normalizedNpub) return null;
+
+      try {
+        const decoded = nip19.decode(normalizedNpub);
+        if (decoded.type !== "npub" || typeof decoded.data !== "string") {
+          return null;
+        }
+        return normalizePubkeyHex(decoded.data);
+      } catch {
+        return null;
+      }
+    })();
+
+    if (!unknownPubkeyHex) return;
+
+    await blockPubkeyAndPublishMuteList(unknownPubkeyHex);
+
     removeLocalNostrMessagesByContactId(contactId);
     clearContactAttention(contactId);
-    setStatus(t("chatUnknownContactRemoved"));
+    setStatus(t("chatUnknownContactBlocked"));
     navigateTo({ route: "contacts" });
   }, [
+    blockPubkeyAndPublishMuteList,
     clearContactAttention,
     removeLocalNostrMessagesByContactId,
     route.kind,
+    selectedChatContact?.npub,
+    selectedChatContact?.unknownPubkeyHex,
     selectedChatContact,
     setStatus,
     t,
@@ -6704,7 +6910,7 @@ export const useAppShellComposition = () => {
       onCancelEdit,
       onCancelReply,
       onAddUnknownContact: addUnknownContactFromChat,
-      onRemoveUnknownContactChat: removeUnknownContactChatFromChat,
+      onBlockUnknownContact: blockUnknownContactFromChat,
       onCopy: onCopyChatMessage,
       onDeclinePaymentRequest: onDeclineChatPaymentRequest,
       onEdit: onEditChatMessage,
@@ -6736,7 +6942,12 @@ export const useAppShellComposition = () => {
       profileStatus: myProfileStatus,
       profilePhotoInputRef,
       profileSelectedPictureKind,
+      blockArchivedContact,
       selectedProfileStatusCurrencies,
+      restoreArchivedContact: () => {
+        if (!editingId) return;
+        restoreArchivedContact(editingId);
+      },
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
       replyContext,

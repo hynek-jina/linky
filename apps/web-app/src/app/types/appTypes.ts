@@ -158,8 +158,10 @@ export type PublishWrappedResult = {
 };
 
 export type ContactRowLike = {
+  archivedAtSec?: OptionalNumber;
   groupName?: OptionalText;
   id?: ContactIdLike;
+  isUnknownContact?: boolean;
   lnAddress?: OptionalText;
   name?: OptionalText;
   npub?: OptionalText;
@@ -171,7 +173,9 @@ export type ContactIdentityRowLike = {
 };
 
 export type ContactNameRowLike = {
+  archivedAtSec?: OptionalNumber;
   id?: ContactIdLike;
+  isUnknownContact?: boolean;
   name?: OptionalText;
 };
 
