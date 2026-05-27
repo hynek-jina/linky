@@ -16,7 +16,6 @@ interface BuildTopbarRightArgs {
   route: Route;
   t: (key: string) => string;
   toggleMenu: () => void;
-  toggleProfileEditing: () => void;
 }
 
 export const buildTopbar = ({
@@ -79,6 +78,14 @@ export const buildTopbar = ({
       icon: "<",
       label: t("close"),
       onClick: navigateToMainReturn,
+    };
+  }
+
+  if (route.kind === "profileEdit") {
+    return {
+      icon: "<",
+      label: t("close"),
+      onClick: () => navigateTo({ route: "profile" }),
     };
   }
 
@@ -265,7 +272,6 @@ export const buildTopbarRight = ({
   route,
   t,
   toggleMenu,
-  toggleProfileEditing,
 }: BuildTopbarRightArgs): TopbarButton | null => {
   if (route.kind === "nostrRelays") {
     return {
@@ -287,7 +293,7 @@ export const buildTopbarRight = ({
     return {
       icon: "✎",
       label: t("edit"),
-      onClick: toggleProfileEditing,
+      onClick: () => navigateTo({ route: "profileEdit" }),
     };
   }
 
@@ -337,7 +343,9 @@ export const buildTopbarTitle = (
   if (route.kind === "advancedPushDebug") return "Push Debug";
   if (route.kind === "mints") return t("mints");
   if (route.kind === "mint") return t("mints");
-  if (route.kind === "profile") return t("profile");
+  if (route.kind === "profile" || route.kind === "profileEdit") {
+    return t("profile");
+  }
   if (route.kind === "nostrRelays") return t("nostrRelay");
   if (route.kind === "nostrRelay") return t("nostrRelay");
   if (route.kind === "nostrRelayNew") return t("nostrRelay");

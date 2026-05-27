@@ -1,16 +1,12 @@
 import React from "react";
-import type { AvatarEditorControlId } from "../derivedProfile";
-import {
-  parseProfileGeneralStatusText,
-  type ProfileStatusCurrency,
-} from "../nostrStatus";
+import { navigateTo } from "../hooks/useRouting";
+import { parseProfileGeneralStatusText } from "../nostrStatus";
 import {
   formatShortLightningAddress,
   formatShortNpub,
   getInitials,
 } from "../utils/formatting";
 import { NfcIcon } from "./NfcIcon";
-import { ProfileAvatarEditor } from "./ProfileAvatarEditor";
 import { ProfileQrButton } from "./ProfileQrButton";
 
 interface ProfileQrModalProps {
@@ -19,46 +15,17 @@ interface ProfileQrModalProps {
   copyText: (text: string) => Promise<void>;
   currentNpub: string | null;
   currentNsec: string | null;
-  cycleProfileAvatarControl: (controlId: AvatarEditorControlId) => void;
-  derivedProfile: {
-    lnAddress: string;
-    name: string;
-    pictureUrl: string;
-  } | null;
   effectiveMyLightningAddress: string | null;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
-  isProfileEditing: boolean;
   myProfileQr: string | null;
-  onClose: () => void;
-  onPickProfilePhoto: () => void;
-  onProfilePhotoSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onSaveProfileEdits: () => void;
-  profileCustomPictureUrl: string;
-  profileEditInitialRef: React.MutableRefObject<{
-    lnAddress: string;
-    name: string;
-    picture: string;
-  } | null>;
-  profileEditLnAddress: string;
-  profileEditName: string;
-  profileEditPicture: string;
-  profileEditStatus: string;
-  profileEditsSavable: boolean;
   profileStatus: string | null;
-  profileStatusCurrencies: readonly ProfileStatusCurrency[];
   profileStatusIsSaving: boolean;
-  profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
-  selectedProfileStatusCurrencies: readonly ProfileStatusCurrency[];
-  profileSelectedPictureKind: "custom" | "generated";
-  setIsProfileEditing: (editing: boolean) => void;
-  setProfileEditLnAddress: (value: string) => void;
-  setProfileEditName: (value: string) => void;
-  setProfileEditStatus: (value: string) => void;
+  profileStatusCurrencies: readonly import("../nostrStatus").ProfileStatusCurrency[];
+  selectedProfileStatusCurrencies: readonly import("../nostrStatus").ProfileStatusCurrency[];
   t: (key: string) => string;
-  toggleProfileEditing: () => void;
   toggleProfileStatusCurrency: (
-    currency: ProfileStatusCurrency,
+    currency: import("../nostrStatus").ProfileStatusCurrency,
   ) => Promise<void>;
   writeCurrentNpubToNfc: () => Promise<void>;
 }
@@ -69,36 +36,15 @@ export function ProfileQrModal({
   copyText,
   currentNpub,
   currentNsec,
-  cycleProfileAvatarControl,
-  derivedProfile,
   effectiveMyLightningAddress,
   effectiveProfileName,
   effectiveProfilePicture,
-  isProfileEditing,
   myProfileQr,
-  onClose,
-  onPickProfilePhoto,
-  onProfilePhotoSelected,
-  onSaveProfileEdits,
-  profileCustomPictureUrl,
-  profileEditInitialRef,
-  profileEditLnAddress,
-  profileEditName,
-  profileEditPicture,
-  profileEditStatus,
-  profileEditsSavable,
   profileStatus,
   profileStatusCurrencies,
   profileStatusIsSaving,
-  profilePhotoInputRef,
   selectedProfileStatusCurrencies,
-  profileSelectedPictureKind,
-  setIsProfileEditing,
-  setProfileEditLnAddress,
-  setProfileEditName,
-  setProfileEditStatus,
   t,
-  toggleProfileEditing,
   toggleProfileStatusCurrency,
   writeCurrentNpubToNfc,
 }: ProfileQrModalProps): React.ReactElement {
@@ -145,24 +91,21 @@ export function ProfileQrModal({
                 </span>
               </button>
             ) : null}
-            {!isProfileEditing ? (
-              <button
-                className="topbar-btn"
-                onClick={toggleProfileEditing}
-                aria-label={t("edit")}
-                title={t("edit")}
-                disabled={!currentNpub || !currentNsec}
-              >
-                <span aria-hidden="true">✎</span>
-              </button>
-            ) : null}
             <button
               className="topbar-btn"
               onClick={() => {
-                setIsProfileEditing(false);
-                profileEditInitialRef.current = null;
-                onClose();
+                closeProfileQr();
+                navigateTo({ route: "profileEdit" });
               }}
+              aria-label={t("edit")}
+              title={t("edit")}
+              disabled={!currentNpub || !currentNsec}
+            >
+              <span aria-hidden="true">✎</span>
+            </button>
+            <button
+              className="topbar-btn"
+              onClick={closeProfileQr}
               aria-label={t("close")}
               title={t("close")}
             >
@@ -173,128 +116,6 @@ export function ProfileQrModal({
 
         {!currentNpub ? (
           <p className="muted">{t("profileMissingNpub")}</p>
-        ) : isProfileEditing ? (
-          <>
-            <ProfileAvatarEditor
-              currentNpub={currentNpub}
-              cycleProfileAvatarControl={cycleProfileAvatarControl}
-              effectiveProfileName={effectiveProfileName}
-              effectiveProfilePicture={effectiveProfilePicture}
-              onPickProfilePhoto={onPickProfilePhoto}
-              onProfilePhotoSelected={onProfilePhotoSelected}
-              profileCustomPictureUrl={profileCustomPictureUrl}
-              profileEditName={profileEditName}
-              profileEditPicture={profileEditPicture}
-              profilePhotoInputRef={profilePhotoInputRef}
-              profileSelectedPictureKind={profileSelectedPictureKind}
-              t={t}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <label htmlFor="profileName">{t("name")}</label>
-            </div>
-            <input
-              id="profileName"
-              value={profileEditName}
-              onChange={(e) => setProfileEditName(e.target.value)}
-              placeholder={t("name")}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <label htmlFor="profileLn">{t("lightningAddress")}</label>
-              {derivedProfile &&
-              profileEditLnAddress.trim() !== derivedProfile.lnAddress ? (
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() =>
-                    setProfileEditLnAddress(derivedProfile.lnAddress)
-                  }
-                  title={t("restore")}
-                  aria-label={t("restore")}
-                  style={{ paddingInline: 10, minWidth: 40 }}
-                >
-                  ↺
-                </button>
-              ) : null}
-            </div>
-            <input
-              id="profileLn"
-              value={profileEditLnAddress}
-              onChange={(e) => setProfileEditLnAddress(e.target.value)}
-              placeholder={t("lightningAddress")}
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <label htmlFor="profileStatus">{t("status")}</label>
-            </div>
-            <input
-              id="profileStatus"
-              value={profileEditStatus}
-              onChange={(e) => setProfileEditStatus(e.target.value)}
-              placeholder={t("status")}
-            />
-
-            <div className="profile-status-row">
-              <div className="profile-status-label">
-                {t("profileExchangeStatusLabel")}
-              </div>
-              <div className="profile-status-buttons">
-                {profileStatusCurrencies.map((currency) => {
-                  const isActive =
-                    selectedProfileStatusCurrencies.includes(currency);
-
-                  return (
-                    <button
-                      key={currency}
-                      type="button"
-                      className={
-                        isActive
-                          ? "profile-status-chip"
-                          : "secondary profile-status-chip"
-                      }
-                      aria-pressed={isActive}
-                      disabled={!currentNpub || profileStatusIsSaving}
-                      onClick={() => {
-                        void toggleProfileStatusCurrency(currency);
-                      }}
-                    >
-                      {currency}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="panel-header" style={{ marginTop: 14 }}>
-              {profileEditsSavable ? (
-                <button onClick={() => void onSaveProfileEdits()}>
-                  {t("saveChanges")}
-                </button>
-              ) : null}
-            </div>
-          </>
         ) : (
           <>
             <div className="profile-detail" style={{ marginTop: 8 }}>

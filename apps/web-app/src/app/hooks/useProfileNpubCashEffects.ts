@@ -39,8 +39,8 @@ export const useProfileNpubCashEffects = ({
   setMyProfileQr,
 }: UseProfileNpubCashEffectsParams) => {
   React.useEffect(() => {
-    // Leave edit mode when leaving the profile screen.
-    if (routeKind !== "profile" && !profileQrIsOpen) {
+    // Leave edit mode unless the dedicated edit route is active.
+    if (routeKind !== "profileEdit" && !profileQrIsOpen) {
       setIsProfileEditing(false);
     }
   }, [routeKind, profileQrIsOpen, setIsProfileEditing]);

@@ -5,6 +5,7 @@ import {
   type AvatarEditorControlId,
   type DerivedAvatarSelection,
 } from "../../../derivedProfile";
+import { navigateTo } from "../../../hooks/useRouting";
 import {
   deleteCachedProfileAvatar,
   fetchNostrProfileMetadata,
@@ -290,6 +291,7 @@ export const useProfileEditor = ({
 
       setIsProfileEditing(false);
       profileEditInitialRef.current = null;
+      navigateTo({ route: "profile" });
     } catch (error) {
       setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
     }

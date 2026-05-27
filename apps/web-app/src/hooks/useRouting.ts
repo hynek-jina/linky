@@ -42,6 +42,7 @@ type NavigationAction =
   | { route: "nostrRelayNew" }
   | { route: "nostrRelays" }
   | { route: "profile" }
+  | { route: "profileEdit" }
   | { route: "settings" }
   | { route: "transactions" }
   | { route: "topup" }
@@ -131,6 +132,9 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "profile":
       window.location.assign("#profile");
+      break;
+    case "profileEdit":
+      window.location.assign("#profile/edit");
       break;
     case "nostrRelays":
       window.location.assign("#nostr-relays");
