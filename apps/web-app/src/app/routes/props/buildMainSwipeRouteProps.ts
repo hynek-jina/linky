@@ -21,6 +21,10 @@ interface BuildMainSwipeRoutePropsParams {
   handleMainSwipePointerMove: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipePointerMove"];
   handleMainSwipePointerUp: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipePointerUp"];
   handleMainSwipeScroll: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeScroll"];
+  handleMainSwipeTouchCancel: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeTouchCancel"];
+  handleMainSwipeTouchEnd: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeTouchEnd"];
+  handleMainSwipeTouchMove: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeTouchMove"];
+  handleMainSwipeTouchStart: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeTouchStart"];
   handleMainSwipeTabChange: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeTabChange"];
   isMainSwipeDragging: MainSwipeRoutesProps["mainSwipeProps"]["isMainSwipeDragging"];
   mainSwipeProgress: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeProgress"];
@@ -66,6 +70,10 @@ export const buildMainSwipeRouteProps = ({
   handleMainSwipePointerMove,
   handleMainSwipePointerUp,
   handleMainSwipeScroll,
+  handleMainSwipeTouchCancel,
+  handleMainSwipeTouchEnd,
+  handleMainSwipeTouchMove,
+  handleMainSwipeTouchStart,
   handleMainSwipeTabChange,
   isMainSwipeDragging,
   mainSwipeProgress,
@@ -111,6 +119,10 @@ export const buildMainSwipeRouteProps = ({
       handleMainSwipePointerMove,
       handleMainSwipePointerUp,
       handleMainSwipeScroll,
+      handleMainSwipeTouchCancel,
+      handleMainSwipeTouchEnd,
+      handleMainSwipeTouchMove,
+      handleMainSwipeTouchStart,
       handleMainSwipeTabChange,
       isMainSwipeDragging,
       mainSwipeProgress,

@@ -43,6 +43,18 @@ export interface MainSwipeRouteProps {
   handleMainSwipePointerUp:
     | ((event: React.PointerEvent<HTMLDivElement>) => void)
     | undefined;
+  handleMainSwipeTouchCancel:
+    | ((event: React.TouchEvent<HTMLDivElement>) => void)
+    | undefined;
+  handleMainSwipeTouchEnd:
+    | ((event: React.TouchEvent<HTMLDivElement>) => void)
+    | undefined;
+  handleMainSwipeTouchMove:
+    | ((event: React.TouchEvent<HTMLDivElement>) => void)
+    | undefined;
+  handleMainSwipeTouchStart:
+    | ((event: React.TouchEvent<HTMLDivElement>) => void)
+    | undefined;
   handleMainSwipeTabChange: (target: "contacts" | "wallet") => void;
   isMainSwipeDragging: boolean;
   mainSwipeProgress: number;
@@ -100,6 +112,10 @@ export const MainSwipeContent = (): React.ReactElement => {
     handleMainSwipePointerMove,
     handleMainSwipePointerUp,
     handleMainSwipeScroll,
+    handleMainSwipeTouchCancel,
+    handleMainSwipeTouchEnd,
+    handleMainSwipeTouchMove,
+    handleMainSwipeTouchStart,
     handleMainSwipeTabChange,
     isMainSwipeDragging,
     mainSwipeProgress,
@@ -134,6 +150,10 @@ export const MainSwipeContent = (): React.ReactElement => {
         onPointerMove={handleMainSwipePointerMove}
         onPointerUp={handleMainSwipePointerUp}
         onScroll={handleMainSwipeScroll}
+        onTouchCancel={handleMainSwipeTouchCancel}
+        onTouchEnd={handleMainSwipeTouchEnd}
+        onTouchMove={handleMainSwipeTouchMove}
+        onTouchStart={handleMainSwipeTouchStart}
       >
         <div
           className="main-swipe-page"

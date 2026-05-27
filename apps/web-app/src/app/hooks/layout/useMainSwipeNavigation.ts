@@ -22,8 +22,8 @@ type MainSwipeTarget = "contacts" | "wallet";
 
 type MainSwipeGestureDecision = "lock" | "wait";
 
-interface MainSwipePointerState {
-  activePointerId: number | null;
+interface MainSwipeDragState {
+  activeDragId: number | null;
   didLockHorizontally: boolean;
   startScrollLeft: number;
   startX: number;
@@ -32,13 +32,31 @@ interface MainSwipePointerState {
 
 const MAIN_SWIPE_DIRECTION_LOCK_PX = 12;
 
-const createMainSwipePointerState = (): MainSwipePointerState => ({
-  activePointerId: null,
+const createMainSwipeDragState = (): MainSwipeDragState => ({
+  activeDragId: null,
   didLockHorizontally: false,
   startScrollLeft: 0,
   startX: 0,
   startY: 0,
 });
+
+const findTouchByIdentifier = (
+  touchList: React.TouchList,
+  identifier: number | null,
+): React.Touch | null => {
+  if (identifier === null) {
+    return null;
+  }
+
+  for (let index = 0; index < touchList.length; index += 1) {
+    const touch = touchList.item(index);
+    if (touch?.identifier === identifier) {
+      return touch;
+    }
+  }
+
+  return null;
+};
 
 const getMainSwipeTargetLeft = (
   width: number,
@@ -142,8 +160,11 @@ export const useMainSwipeNavigation = ({
   const programmaticTargetRef = React.useRef<MainSwipeTarget | null>(null);
   const programmaticFrameRef = React.useRef<number | null>(null);
   const isDraggingRef = React.useRef(false);
-  const pointerStateRef = React.useRef<MainSwipePointerState>(
-    createMainSwipePointerState(),
+  const pointerStateRef = React.useRef<MainSwipeDragState>(
+    createMainSwipeDragState(),
+  );
+  const touchStateRef = React.useRef<MainSwipeDragState>(
+    createMainSwipeDragState(),
   );
 
   const cancelProgrammaticFrame = React.useCallback(() => {
@@ -159,7 +180,11 @@ export const useMainSwipeNavigation = ({
   }, [mainSwipeScrollTimerRef]);
 
   const resetPointerState = React.useCallback(() => {
-    pointerStateRef.current = createMainSwipePointerState();
+    pointerStateRef.current = createMainSwipeDragState();
+  }, []);
+
+  const resetTouchState = React.useCallback(() => {
+    touchStateRef.current = createMainSwipeDragState();
   }, []);
 
   const updateMainSwipeProgress = React.useCallback(
@@ -299,6 +324,7 @@ export const useMainSwipeNavigation = ({
     updateMainSwipeProgress(routeKind === "wallet" ? 1 : 0);
     stopInteractiveState();
     resetPointerState();
+    resetTouchState();
 
     if (!disableSmoothAlignment) return;
 
@@ -316,6 +342,7 @@ export const useMainSwipeNavigation = ({
     isMainSwipeRoute,
     mainSwipeRef,
     resetPointerState,
+    resetTouchState,
     routeKind,
     stopInteractiveState,
     updateMainSwipeProgress,
@@ -331,12 +358,14 @@ export const useMainSwipeNavigation = ({
     programmaticTargetRef.current = null;
     clearMainSwipeScrollTimer();
     resetPointerState();
+    resetTouchState();
     stopInteractiveState();
   }, [
     cancelProgrammaticFrame,
     clearMainSwipeScrollTimer,
     isMainSwipeRoute,
     resetPointerState,
+    resetTouchState,
     stopInteractiveState,
   ]);
 
@@ -345,19 +374,29 @@ export const useMainSwipeNavigation = ({
       cancelProgrammaticFrame();
       clearMainSwipeScrollTimer();
       resetPointerState();
+      resetTouchState();
     },
-    [cancelProgrammaticFrame, clearMainSwipeScrollTimer, resetPointerState],
+    [
+      cancelProgrammaticFrame,
+      clearMainSwipeScrollTimer,
+      resetPointerState,
+      resetTouchState,
+    ],
   );
 
   const handleMainSwipePointerDown = isMainSwipeRoute
     ? (event: React.PointerEvent<HTMLDivElement>) => {
-        if (!event.isPrimary || event.pointerType === "mouse") {
+        if (
+          !event.isPrimary ||
+          event.pointerType === "mouse" ||
+          event.pointerType === "touch"
+        ) {
           return;
         }
 
         const element = mainSwipeRef.current;
         pointerStateRef.current = {
-          activePointerId: event.pointerId,
+          activeDragId: event.pointerId,
           didLockHorizontally: false,
           startScrollLeft: element?.scrollLeft ?? 0,
           startX: event.clientX,
@@ -369,7 +408,7 @@ export const useMainSwipeNavigation = ({
   const handleMainSwipePointerMove = isMainSwipeRoute
     ? (event: React.PointerEvent<HTMLDivElement>) => {
         const pointerState = pointerStateRef.current;
-        if (pointerState.activePointerId !== event.pointerId) {
+        if (pointerState.activeDragId !== event.pointerId) {
           return;
         }
 
@@ -420,7 +459,7 @@ export const useMainSwipeNavigation = ({
   const handleMainSwipePointerRelease = isMainSwipeRoute
     ? (event: React.PointerEvent<HTMLDivElement>) => {
         const pointerState = pointerStateRef.current;
-        if (pointerState.activePointerId !== event.pointerId) {
+        if (pointerState.activeDragId !== event.pointerId) {
           return;
         }
 
@@ -440,6 +479,97 @@ export const useMainSwipeNavigation = ({
           } catch {
             // Ignore browsers that drop capture before pointerup/cancel.
           }
+        }
+
+        clearMainSwipeScrollTimer();
+        commitMainSwipe(
+          mainSwipeProgressRef.current > 0.5 ? "wallet" : "contacts",
+        );
+      }
+    : undefined;
+
+  const handleMainSwipeTouchStart = isMainSwipeRoute
+    ? (event: React.TouchEvent<HTMLDivElement>) => {
+        const touch = event.touches[0];
+        if (!touch) {
+          return;
+        }
+
+        const element = mainSwipeRef.current;
+        touchStateRef.current = {
+          activeDragId: touch.identifier,
+          didLockHorizontally: false,
+          startScrollLeft: element?.scrollLeft ?? 0,
+          startX: touch.clientX,
+          startY: touch.clientY,
+        };
+      }
+    : undefined;
+
+  const handleMainSwipeTouchMove = isMainSwipeRoute
+    ? (event: React.TouchEvent<HTMLDivElement>) => {
+        const touchState = touchStateRef.current;
+        const touch = findTouchByIdentifier(
+          event.touches,
+          touchState.activeDragId,
+        );
+        if (!touch) {
+          return;
+        }
+
+        const element = mainSwipeRef.current;
+        if (!element) {
+          return;
+        }
+
+        const deltaX = touch.clientX - touchState.startX;
+        const deltaY = touch.clientY - touchState.startY;
+
+        if (!touchState.didLockHorizontally) {
+          if (
+            getMainSwipeGestureDecision(routeKind, deltaX, deltaY) !== "lock"
+          ) {
+            return;
+          }
+
+          touchState.didLockHorizontally = true;
+          cancelProgrammaticFrame();
+          clearMainSwipeScrollTimer();
+
+          if (!isDraggingRef.current) {
+            isDraggingRef.current = true;
+            setIsMainSwipeDragging(true);
+          }
+        }
+
+        event.preventDefault();
+
+        const width = element.clientWidth || 1;
+        element.scrollLeft = clampMainSwipeLeft(
+          touchState.startScrollLeft - deltaX,
+          width,
+        );
+        updateMainSwipeProgress(getMainSwipeProgress(element));
+      }
+    : undefined;
+
+  const handleMainSwipeTouchRelease = isMainSwipeRoute
+    ? (event: React.TouchEvent<HTMLDivElement>) => {
+        const touchState = touchStateRef.current;
+        const hasTrackedTouch =
+          findTouchByIdentifier(
+            event.changedTouches,
+            touchState.activeDragId,
+          ) !== null;
+        if (!hasTrackedTouch) {
+          return;
+        }
+
+        const didLockHorizontally = touchState.didLockHorizontally;
+        resetTouchState();
+
+        if (!didLockHorizontally) {
+          return;
         }
 
         clearMainSwipeScrollTimer();
@@ -485,5 +615,9 @@ export const useMainSwipeNavigation = ({
     handleMainSwipePointerMove,
     handleMainSwipePointerUp: handleMainSwipePointerRelease,
     handleMainSwipeScroll,
+    handleMainSwipeTouchCancel: handleMainSwipeTouchRelease,
+    handleMainSwipeTouchEnd: handleMainSwipeTouchRelease,
+    handleMainSwipeTouchMove,
+    handleMainSwipeTouchStart,
   };
 };
