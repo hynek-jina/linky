@@ -1981,6 +1981,8 @@ button.settings-link:hover {
 .chat-compose textarea {
   min-height: 64px;
   padding-right: 56px;
+  font-size: 16px;
+  line-height: 1.45;
 }
 
 .chat-pay-button {
@@ -3243,7 +3245,9 @@ button.icon {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  touch-action: auto;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
   scrollbar-width: none;
   flex: 1 1 auto;
   min-height: 0;

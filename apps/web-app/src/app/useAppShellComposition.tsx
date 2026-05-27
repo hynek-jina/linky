@@ -3103,7 +3103,14 @@ export const useAppShellComposition = () => {
     setMainSwipeScrollY,
   });
 
-  const { commitMainSwipe, handleMainSwipeScroll } = useMainSwipeNavigation({
+  const {
+    commitMainSwipe,
+    handleMainSwipePointerCancel,
+    handleMainSwipePointerDown,
+    handleMainSwipePointerMove,
+    handleMainSwipePointerUp,
+    handleMainSwipeScroll,
+  } = useMainSwipeNavigation({
     isMainSwipeRoute,
     mainSwipeProgressRef,
     mainSwipeRef,
@@ -6727,6 +6734,10 @@ export const useAppShellComposition = () => {
       dismissContactsOnboarding,
       dismissWalletWarning,
       groupNames,
+      handleMainSwipePointerCancel,
+      handleMainSwipePointerDown,
+      handleMainSwipePointerMove,
+      handleMainSwipePointerUp,
       handleMainSwipeScroll,
       handleMainSwipeTabChange: commitMainSwipe,
       isMainSwipeDragging,
