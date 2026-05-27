@@ -20,6 +20,8 @@ interface MainSwipeScrollable {
 
 type MainSwipeTarget = "contacts" | "wallet";
 
+type MainSwipeGestureDecision = "lock" | "wait";
+
 interface MainSwipePointerState {
   activePointerId: number | null;
   didLockHorizontally: boolean;
@@ -60,6 +62,29 @@ export const isAllowedMainSwipeDrag = (
 
 export const clampMainSwipeLeft = (left: number, width: number): number =>
   Math.min(Math.max(left, 0), width);
+
+export const getMainSwipeGestureDecision = (
+  routeKind: Route["kind"],
+  deltaX: number,
+  deltaY: number,
+): MainSwipeGestureDecision => {
+  if (
+    Math.abs(deltaX) < MAIN_SWIPE_DIRECTION_LOCK_PX &&
+    Math.abs(deltaY) < MAIN_SWIPE_DIRECTION_LOCK_PX
+  ) {
+    return "wait";
+  }
+
+  if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+    return "wait";
+  }
+
+  if (!isAllowedMainSwipeDrag(routeKind, deltaX)) {
+    return "wait";
+  }
+
+  return "lock";
+};
 
 const getMainSwipeProgress = (element: MainSwipeScrollable): number => {
   const width = element.clientWidth || 1;
@@ -358,19 +383,8 @@ export const useMainSwipeNavigation = ({
 
         if (!pointerState.didLockHorizontally) {
           if (
-            Math.abs(deltaX) < MAIN_SWIPE_DIRECTION_LOCK_PX &&
-            Math.abs(deltaY) < MAIN_SWIPE_DIRECTION_LOCK_PX
+            getMainSwipeGestureDecision(routeKind, deltaX, deltaY) !== "lock"
           ) {
-            return;
-          }
-
-          if (Math.abs(deltaY) >= Math.abs(deltaX)) {
-            resetPointerState();
-            return;
-          }
-
-          if (!isAllowedMainSwipeDrag(routeKind, deltaX)) {
-            resetPointerState();
             return;
           }
 
@@ -383,7 +397,13 @@ export const useMainSwipeNavigation = ({
             setIsMainSwipeDragging(true);
           }
 
-          element.setPointerCapture(event.pointerId);
+          if (typeof element.setPointerCapture === "function") {
+            try {
+              element.setPointerCapture(event.pointerId);
+            } catch {
+              // Some mobile browsers reject pointer capture during touch panning.
+            }
+          }
         }
 
         event.preventDefault();
@@ -411,8 +431,15 @@ export const useMainSwipeNavigation = ({
           return;
         }
 
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
+        if (
+          typeof event.currentTarget.hasPointerCapture === "function" &&
+          event.currentTarget.hasPointerCapture(event.pointerId)
+        ) {
+          try {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          } catch {
+            // Ignore browsers that drop capture before pointerup/cancel.
+          }
         }
 
         clearMainSwipeScrollTimer();

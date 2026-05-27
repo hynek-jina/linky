@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   alignMainSwipeToTarget,
   clampMainSwipeLeft,
+  getMainSwipeGestureDecision,
   isAllowedMainSwipeDrag,
   shouldDisableWalletReturnAnimation,
 } from "./useMainSwipeNavigation";
@@ -96,6 +97,22 @@ describe("isAllowedMainSwipeDrag", () => {
   it("only allows wallet to drag back toward contacts", () => {
     expect(isAllowedMainSwipeDrag("wallet", 24)).toBe(true);
     expect(isAllowedMainSwipeDrag("wallet", -24)).toBe(false);
+  });
+});
+
+describe("getMainSwipeGestureDecision", () => {
+  it("waits through small diagonal noise before locking contacts swipe", () => {
+    expect(getMainSwipeGestureDecision("contacts", -8, 7)).toBe("wait");
+    expect(getMainSwipeGestureDecision("contacts", -18, 12)).toBe("lock");
+  });
+
+  it("does not cancel a touch sequence for early vertical movement", () => {
+    expect(getMainSwipeGestureDecision("wallet", 10, 18)).toBe("wait");
+  });
+
+  it("does not cancel a touch sequence for an early opposite-direction nudge", () => {
+    expect(getMainSwipeGestureDecision("contacts", 18, 2)).toBe("wait");
+    expect(getMainSwipeGestureDecision("wallet", -18, 2)).toBe("wait");
   });
 });
 
