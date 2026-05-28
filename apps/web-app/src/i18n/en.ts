@@ -259,6 +259,8 @@ export const en = {
   transactionDetailLightningMemo: "Lightning memo",
   transactionDetailLightningInvoice: "Lightning invoice",
   transactionDetailLightningPreimage: "Lightning preimage",
+  transactionDetailLnurlSuccessMessage: "Message from recipient",
+  transactionDetailLnurlSuccessUrl: "Link from recipient",
 
   mints: "Mints",
 
@@ -627,6 +629,14 @@ export const en = {
   lnurlWithdrawFailed: "LNURLw withdrawal failed",
   lnurlWithdrawVariableAmount:
     "Linky will receive the maximum available amount.",
+  lnurlPayLoading: "Loading payment details…",
+  lnurlPayLoadFailed: "Couldn't load payment details",
+  lnurlPayRangeHint: "Enter amount between {min} and {max} sat.",
+  lnurlPayFixedHint: "Recipient requires exactly {amount} sat.",
+  lnurlPayAmountTooLow: "Amount is below the {min} sat minimum.",
+  lnurlPayAmountTooHigh: "Amount is above the {max} sat maximum.",
+  lnurlSuccessActionMessage: "Message from recipient: {message}",
+  lnurlSuccessActionUrl: "{description} {url}",
   payMissingLn: "Missing lightning address.",
   payInvalidAmount: "Invalid amount",
   payInsufficient: "Not enough Cashu tokens.",

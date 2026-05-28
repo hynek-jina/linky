@@ -145,6 +145,11 @@ const formatCompactToken = (value: string): string => {
   return `${value.slice(0, 12)}...${value.slice(-12)}`;
 };
 
+const formatCompactLongString = (value: string): string => {
+  if (value.length <= 20) return value;
+  return `${value.slice(0, 8)}...${value.slice(-6)}`;
+};
+
 const readRequestIdFromDetails = (details: JsonValue | null): string | null => {
   const detailRecord = readJsonRecord(details);
   return readStringFromJson(detailRecord?.requestId);
@@ -477,6 +482,22 @@ export function TransactionsPage(): React.ReactElement {
     [t],
   );
 
+  const readLnurlSuccessMessage = React.useCallback(
+    (item: TransactionItem): string | null => {
+      const details = readJsonRecord(item.details);
+      if (!details) return null;
+      const message = readStringFromJson(details.lnurlSuccessMessage);
+      if (message) return message;
+      const url = readStringFromJson(details.lnurlSuccessUrl);
+      if (!url) return null;
+      const description = readStringFromJson(
+        details.lnurlSuccessUrlDescription,
+      );
+      return description ? `${description} ${url}` : url;
+    },
+    [],
+  );
+
   const getRequestStatus = React.useCallback(
     (item: TransactionItem): "declined" | "paid" | "pending" | null => {
       if (item.note !== requestPaymentLabel) return null;
@@ -502,6 +523,13 @@ export function TransactionsPage(): React.ReactElement {
       const lightningMemo = readStringFromJson(details.lightningMemo);
       const lightningInvoice = readStringFromJson(details.lightningInvoice);
       const lightningPreimage = readStringFromJson(details.lightningPreimage);
+      const lnurlSuccessMessage = readStringFromJson(
+        details.lnurlSuccessMessage,
+      );
+      const lnurlSuccessUrl = readStringFromJson(details.lnurlSuccessUrl);
+      const lnurlSuccessUrlDescription = readStringFromJson(
+        details.lnurlSuccessUrlDescription,
+      );
 
       return [
         ...(usedTokens.length > 0
@@ -526,6 +554,29 @@ export function TransactionsPage(): React.ReactElement {
               },
             ]
           : []),
+        ...(lnurlSuccessMessage
+          ? [
+              {
+                label: t("transactionDetailLnurlSuccessMessage"),
+                values: [{ value: lnurlSuccessMessage }],
+              },
+            ]
+          : []),
+        ...(lnurlSuccessUrl
+          ? [
+              {
+                label: t("transactionDetailLnurlSuccessUrl"),
+                values: [
+                  {
+                    value: lnurlSuccessUrlDescription
+                      ? `${lnurlSuccessUrlDescription} ${lnurlSuccessUrl}`
+                      : lnurlSuccessUrl,
+                    copyValue: lnurlSuccessUrl,
+                  },
+                ],
+              },
+            ]
+          : []),
         ...(lightningMemo
           ? [
               {
@@ -538,7 +589,12 @@ export function TransactionsPage(): React.ReactElement {
           ? [
               {
                 label: t("transactionDetailLightningInvoice"),
-                values: [{ value: lightningInvoice }],
+                values: [
+                  {
+                    copyValue: lightningInvoice,
+                    value: formatCompactLongString(lightningInvoice),
+                  },
+                ],
               },
             ]
           : []),
@@ -546,7 +602,12 @@ export function TransactionsPage(): React.ReactElement {
           ? [
               {
                 label: t("transactionDetailLightningPreimage"),
-                values: [{ value: lightningPreimage }],
+                values: [
+                  {
+                    copyValue: lightningPreimage,
+                    value: formatCompactLongString(lightningPreimage),
+                  },
+                ],
               },
             ]
           : []),
@@ -636,6 +697,14 @@ export function TransactionsPage(): React.ReactElement {
                   </div>
                   <div className="transaction-main">
                     <div className="transaction-title">{buildTitle(item)}</div>
+                    {(() => {
+                      const lnurlMessage = readLnurlSuccessMessage(item);
+                      return lnurlMessage ? (
+                        <div className="transaction-subtitle">
+                          {lnurlMessage}
+                        </div>
+                      ) : null;
+                    })()}
                     <div className="transaction-meta">
                       {buildMeta(item, requestStatus)}
                     </div>

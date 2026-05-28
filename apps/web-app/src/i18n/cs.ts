@@ -261,6 +261,8 @@ export const cs = {
   transactionDetailLightningMemo: "Lightning memo",
   transactionDetailLightningInvoice: "Lightning invoice",
   transactionDetailLightningPreimage: "Lightning preimage",
+  transactionDetailLnurlSuccessMessage: "Zpráva od příjemce",
+  transactionDetailLnurlSuccessUrl: "Odkaz od příjemce",
 
   mints: "Minty",
 
@@ -634,6 +636,14 @@ export const cs = {
   lnurlWithdrawPending: "Výběr čeká na připsání do peněženky.",
   lnurlWithdrawFailed: "Výběr přes LNURLw selhal",
   lnurlWithdrawVariableAmount: "Linky vyzvedne maximální dostupnou částku.",
+  lnurlPayLoading: "Načítám platební údaje…",
+  lnurlPayLoadFailed: "Nepodařilo se načíst platební údaje",
+  lnurlPayRangeHint: "Zadej částku mezi {min} a {max} sat.",
+  lnurlPayFixedHint: "Příjemce požaduje přesně {amount} sat.",
+  lnurlPayAmountTooLow: "Částka je pod minimum {min} sat.",
+  lnurlPayAmountTooHigh: "Částka přesahuje maximum {max} sat.",
+  lnurlSuccessActionMessage: "Zpráva od příjemce: {message}",
+  lnurlSuccessActionUrl: "{description} {url}",
   payMissingLn: "Chybí lightning adresa.",
   payInvalidAmount: "Neplatná částka",
   payInsufficient: "Nemáte dostatek Cashu tokenů.",

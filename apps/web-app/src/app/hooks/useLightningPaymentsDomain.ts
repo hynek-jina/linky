@@ -6,6 +6,7 @@ import {
   getLnurlPayDisplayText,
   inferLightningAddressFromLnurlTarget,
   isLightningAddress,
+  type LnurlPaySuccessAction,
 } from "../../lnurlPay";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../utils/constants";
 import type { DisplayAmountParts } from "../../utils/displayAmounts";
@@ -497,12 +498,15 @@ export const useLightningPaymentsDomain = ({
 
           let attemptInvoice: string;
           let attemptInvoicePreview: LightningInvoicePreview | null = null;
+          let attemptSuccessAction: LnurlPaySuccessAction | null = null;
           try {
             setStatus(t("payFetchingInvoice"));
-            attemptInvoice = await fetchLnurlInvoiceForTarget(
+            const invoiceResult = await fetchLnurlInvoiceForTarget(
               paymentTarget,
               attemptedAmountSat,
             );
+            attemptInvoice = invoiceResult.pr;
+            attemptSuccessAction = invoiceResult.successAction;
             attemptInvoicePreview = getLightningInvoicePreview(attemptInvoice);
             lastAttemptInvoice = attemptInvoice;
             lastAttemptInvoicePreview = attemptInvoicePreview;
@@ -620,6 +624,19 @@ export const useLightningPaymentsDomain = ({
                 (result as { feePaid?: unknown }).feePaid ?? 0,
               );
 
+              const successActionMessage =
+                attemptSuccessAction?.tag === "message"
+                  ? attemptSuccessAction.message
+                  : null;
+              const successActionUrl =
+                attemptSuccessAction?.tag === "url"
+                  ? attemptSuccessAction.url
+                  : null;
+              const successActionUrlDescription =
+                attemptSuccessAction?.tag === "url"
+                  ? attemptSuccessAction.description
+                  : null;
+
               logPaymentEvent({
                 direction: "out",
                 status: "ok",
@@ -637,6 +654,17 @@ export const useLightningPaymentsDomain = ({
                     : {}),
                   ...(readLightningPreimage(result)
                     ? { lightningPreimage: readLightningPreimage(result) }
+                    : {}),
+                  ...(successActionMessage
+                    ? { lnurlSuccessMessage: successActionMessage }
+                    : {}),
+                  ...(successActionUrl
+                    ? { lnurlSuccessUrl: successActionUrl }
+                    : {}),
+                  ...(successActionUrlDescription
+                    ? {
+                        lnurlSuccessUrlDescription: successActionUrlDescription,
+                      }
                     : {}),
                   usedInputTokens: candidate.tokens,
                 },
@@ -664,6 +692,21 @@ export const useLightningPaymentsDomain = ({
                     String(knownContact?.name ?? "").trim() || displayTarget,
                   ),
               );
+
+              if (successActionMessage) {
+                setStatus(
+                  t("lnurlSuccessActionMessage").replace(
+                    "{message}",
+                    successActionMessage,
+                  ),
+                );
+              } else if (successActionUrl) {
+                setStatus(
+                  t("lnurlSuccessActionUrl")
+                    .replace("{description}", successActionUrlDescription ?? "")
+                    .replace("{url}", successActionUrl),
+                );
+              }
 
               safeLocalStorageSet(
                 CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
