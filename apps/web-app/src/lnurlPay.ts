@@ -407,29 +407,10 @@ const getLnurlpUrlFromLightningAddress = (lightningAddress: string): string => {
   return `https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`;
 };
 
-const HOSTED_PROXY_LOCAL_HOSTS = new Set([
-  "app.linky.fit",
-  "localhost",
-  "127.0.0.1",
-  "0.0.0.0",
-]);
-
 const getLnurlProxyUrl = (url: string): string => {
   const proxyPath = `/api/lnurlp?url=${encodeURIComponent(url)}`;
   if (isNativePlatform()) {
     return `${HOSTED_APP_ORIGIN}${proxyPath}`;
-  }
-  if (typeof window !== "undefined") {
-    const host = String(window.location?.hostname ?? "")
-      .trim()
-      .toLowerCase();
-    // Same-origin proxy only exists on app.linky.fit and the Vite dev server.
-    // Other hosts (linky.gorrdy.cz, staging mirrors, etc.) don't proxy
-    // /api/lnurlp themselves, so route the CORS bypass through the canonical
-    // hosted origin.
-    if (host && !HOSTED_PROXY_LOCAL_HOSTS.has(host)) {
-      return `${HOSTED_APP_ORIGIN}${proxyPath}`;
-    }
   }
   return proxyPath;
 };
