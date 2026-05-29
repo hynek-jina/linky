@@ -1,7 +1,12 @@
 import { bech32 } from "@scure/base";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { isNativePlatform } from "./platform/runtime";
 import type { JsonRecord, JsonValue } from "./types/json";
 import { fetchJson } from "./utils/http";
+import {
+  getLightningInvoiceDescriptionHashHex,
+  parseBolt11AmountMsat,
+} from "./utils/lightningInvoice";
 import { asNonEmptyString } from "./utils/validation";
 
 const HOSTED_APP_ORIGIN = "https://app.linky.fit";
@@ -22,7 +27,28 @@ type LnurlInvoiceResponse = {
   pr?: string;
   reason?: string;
   status?: string;
+  successAction?: JsonValue;
 };
+
+export interface LnurlPaySuccessActionMessage {
+  message: string;
+  tag: "message";
+}
+
+export interface LnurlPaySuccessActionUrl {
+  description: string | null;
+  tag: "url";
+  url: string;
+}
+
+export type LnurlPaySuccessAction =
+  | LnurlPaySuccessActionMessage
+  | LnurlPaySuccessActionUrl;
+
+export interface LnurlPayInvoiceResult {
+  pr: string;
+  successAction: LnurlPaySuccessAction | null;
+}
 
 type LnurlWithdrawRequest = {
   callback?: string;
@@ -47,6 +73,18 @@ export interface LnurlWithdrawPreview {
   k1: string;
   maxAmountSat: number;
   minAmountSat: number;
+  target: string;
+}
+
+export interface LnurlPayPreview {
+  callback: string;
+  commentAllowed: number;
+  description: string | null;
+  maxSendableMsat: number;
+  maxSendableSat: number;
+  metadataRaw: string | null;
+  minSendableMsat: number;
+  minSendableSat: number;
   target: string;
 }
 
@@ -102,6 +140,25 @@ const isHttpUrl = (value: string): boolean => {
   }
 };
 
+// Some LNURL encoders ship URLs with empty path segments (e.g.
+// `https://lnbits.cz/lnurlp//AVH9zJ`). Most servers respond 404 to the empty
+// segment but answer the same content under the collapsed path. Mirror the
+// behavior of other LNURL wallets by collapsing consecutive slashes in the
+// path while leaving the `://` authority and the query/fragment untouched.
+const normalizeLnurlHttpUrl = (value: string): string => {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return value;
+    const collapsedPath = url.pathname.replace(/\/{2,}/g, "/");
+    if (collapsedPath !== url.pathname) {
+      url.pathname = collapsedPath;
+    }
+    return url.toString();
+  } catch {
+    return value;
+  }
+};
+
 const decodeLnurlBech32Url = (value: string): string | null => {
   const normalized = stripLightningPrefix(value);
   if (!/^lnurl1/i.test(normalized)) return null;
@@ -111,7 +168,8 @@ const decodeLnurlBech32Url = (value: string): string | null => {
     if (!decoded) return null;
     const bytes = Uint8Array.from(bech32.fromWords(decoded.words));
     const text = new TextDecoder().decode(bytes).trim();
-    return isHttpUrl(text) ? text : null;
+    if (!isHttpUrl(text)) return null;
+    return normalizeLnurlHttpUrl(text);
   } catch {
     return null;
   }
@@ -274,6 +332,44 @@ const isLnurlInvoiceResponse = (
   );
 };
 
+const parseLnurlPaySuccessAction = (
+  value: JsonValue | undefined,
+): LnurlPaySuccessAction | null => {
+  if (!isJsonRecord(value)) return null;
+  const tag = String(value.tag ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (tag === "message") {
+    const message = asNonEmptyString(value.message);
+    if (!message) return null;
+    return { tag: "message", message };
+  }
+
+  if (tag === "url") {
+    const url = asNonEmptyString(value.url);
+    if (!url) return null;
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+        return null;
+      }
+    } catch {
+      return null;
+    }
+    return {
+      tag: "url",
+      url,
+      description: asNonEmptyString(value.description) ?? null,
+    };
+  }
+
+  // Other LUD-09 tags (e.g. "aes") are intentionally not surfaced here. The
+  // caller can fall back to a generic "Paid" message; we only render the
+  // tags we know how to display safely.
+  return null;
+};
+
 const isLnurlWithdrawRequest = (
   value: unknown,
 ): value is LnurlWithdrawRequest => {
@@ -328,11 +424,117 @@ const fetchLnurlJson = async (url: string): Promise<JsonValue> => {
   }
 };
 
+interface ParsedLnurlPayMetadata {
+  description: string | null;
+}
+
+const parseLnurlPayMetadata = (
+  metadata: string | null,
+): ParsedLnurlPayMetadata | null => {
+  if (!metadata) return null;
+  try {
+    const parsed: unknown = JSON.parse(metadata);
+    if (!Array.isArray(parsed)) return null;
+    let hasTextPlain = false;
+    let description: string | null = null;
+    for (const entry of parsed) {
+      if (!Array.isArray(entry) || entry.length < 2) continue;
+      const [mime, value] = entry;
+      if (typeof mime !== "string" || typeof value !== "string") continue;
+      if (mime.trim().toLowerCase() === "text/plain") {
+        hasTextPlain = true;
+        const trimmed = value.trim();
+        if (trimmed && description === null) description = trimmed;
+      }
+    }
+    return hasTextPlain ? { description } : null;
+  } catch {
+    return null;
+  }
+};
+
+const sha256HexFromString = (input: string): string => {
+  const bytes = sha256(new TextEncoder().encode(input));
+  let hex = "";
+  for (const byte of bytes) hex += byte.toString(16).padStart(2, "0");
+  return hex;
+};
+
+export const fetchLnurlPayPreview = async (
+  paymentTarget: string,
+): Promise<LnurlPayPreview> => {
+  const requestUrl = resolveLnurlPayRequestUrl(paymentTarget);
+  const payReqJson = await fetchLnurlJson(requestUrl);
+  if (!isLnurlPayRequest(payReqJson)) {
+    throw new Error("Invalid LNURL pay response");
+  }
+  const payReq = payReqJson;
+
+  const tag = String(payReq.tag ?? "").trim();
+  const looksLikePayRequest =
+    asNonEmptyString(payReq.callback) !== null &&
+    Number.isFinite(Number(payReq.minSendable ?? NaN)) &&
+    Number.isFinite(Number(payReq.maxSendable ?? NaN));
+
+  if (!looksLikePayRequest && !isKnownLnurlTag(tag, "payRequest")) {
+    throw new LnurlTagMismatchError(tag);
+  }
+
+  if (String(payReq.status ?? "").toUpperCase() === "ERROR") {
+    throw new Error(asNonEmptyString(payReq.reason) ?? "LNURL error");
+  }
+
+  const callback = asNonEmptyString(payReq.callback);
+  if (!callback) throw new Error("LNURL callback missing");
+
+  const minSendableMsat = Number(payReq.minSendable ?? NaN);
+  const maxSendableMsat = Number(payReq.maxSendable ?? NaN);
+  if (
+    !Number.isFinite(minSendableMsat) ||
+    !Number.isFinite(maxSendableMsat) ||
+    minSendableMsat <= 0 ||
+    maxSendableMsat <= 0 ||
+    maxSendableMsat < minSendableMsat
+  ) {
+    throw new Error("Invalid LNURL min/max");
+  }
+
+  const minSendableSat = Math.max(1, Math.ceil(minSendableMsat / 1000));
+  const maxSendableSat = Math.max(
+    minSendableSat,
+    Math.floor(maxSendableMsat / 1000),
+  );
+
+  const metadataRaw = asNonEmptyString(payReq.metadata);
+  const parsedMetadata = parseLnurlPayMetadata(metadataRaw);
+  if (!parsedMetadata) {
+    throw new Error("LNURL metadata missing text/plain entry");
+  }
+
+  const commentAllowedRaw = Number(payReq.commentAllowed ?? 0);
+  const commentAllowed =
+    Number.isFinite(commentAllowedRaw) && commentAllowedRaw > 0
+      ? Math.floor(commentAllowedRaw)
+      : 0;
+
+  return {
+    callback,
+    commentAllowed,
+    description: parsedMetadata.description,
+    maxSendableMsat,
+    maxSendableSat,
+    metadataRaw,
+    minSendableMsat,
+    minSendableSat,
+    target: getLnurlPayDisplayText(requestUrl),
+  };
+};
+
 export const fetchLnurlInvoiceForTarget = async (
   paymentTarget: string,
   amountSat: number,
   comment?: string,
-): Promise<string> => {
+): Promise<LnurlPayInvoiceResult> => {
   if (!Number.isFinite(amountSat) || amountSat <= 0) {
     throw new Error("Invalid amount");
   }
@@ -413,14 +615,36 @@ export const fetchLnurlInvoiceForTarget = async (
     asNonEmptyString(invoiceJson.paymentRequest);
   if (!pr) throw new Error("Invoice missing");
 
-  return pr;
+  // LUD-06 step 7: verify the invoice's `h` tag is sha256(utf8(metadata)) and
+  // its amount equals the user-specified millisatoshis.
+  const metadataRaw = asNonEmptyString(payReq.metadata);
+  if (metadataRaw) {
+    const invoiceHashHex = getLightningInvoiceDescriptionHashHex(pr);
+    if (invoiceHashHex) {
+      const expectedHashHex = sha256HexFromString(metadataRaw);
+      if (invoiceHashHex !== expectedHashHex) {
+        throw new Error("LNURL invoice metadata hash mismatch");
+      }
+    }
+  }
+  const invoiceMsat = parseBolt11AmountMsat(pr);
+  if (invoiceMsat !== null && invoiceMsat !== amountMsat) {
+    throw new Error(
+      `LNURL invoice amount mismatch (expected ${amountMsat} msat, got ${invoiceMsat})`,
+    );
+  }
+
+  return {
+    pr,
+    successAction: parseLnurlPaySuccessAction(invoiceJson.successAction),
+  };
 };
 
 export const fetchLnurlInvoiceForLightningAddress = async (
   lightningAddress: string,
   amountSat: number,
   comment?: string,
-): Promise<string> => {
+): Promise<LnurlPayInvoiceResult> => {
   return fetchLnurlInvoiceForTarget(lightningAddress, amountSat, comment);
 };
 

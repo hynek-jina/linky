@@ -5896,6 +5896,55 @@ export const useAppShellComposition = () => {
         finalError = getUnknownErrorMessage(error, "unknown");
       }
 
+      // Pre-flight fee discovery: ask source mint how much fee_reserve + input
+      // fee it will charge for a probe invoice of the full sourceBalance, then
+      // size the first target-mint invoice as
+      //   sourceAmount = sourceBalance - fee_reserve - input_fee
+      // so the first real melt attempt has the right headroom instead of
+      // burning the entire retry ladder hitting Insufficient.
+      if (sourceMeltContext) {
+        try {
+          const probe = await requestMintQuoteBolt11({
+            amountSat: sourceBalance,
+            mintUrl: targetMint,
+          });
+          const probeMeltQuote = await sourceMeltContext.wallet.createMeltQuote(
+            probe.invoice,
+          );
+          const probeFeeReserve = Number(probeMeltQuote.fee_reserve ?? 0) || 0;
+          const probeInputFee =
+            Number(
+              sourceMeltContext.wallet.getFeesForProofs(
+                sourceMeltContext.spendableProofs,
+              ) ?? 0,
+            ) || 0;
+          const sizedAmount = Math.max(
+            1,
+            sourceBalance - probeFeeReserve - probeInputFee,
+          );
+          if (
+            Number.isFinite(sizedAmount) &&
+            sizedAmount >= 1 &&
+            sizedAmount < sourceBalance
+          ) {
+            // Drop the no-fee-reserve attempts that we now know will fail and
+            // promote the discovered sized amount to the front of the queue.
+            const tail = queuedAmountAttempts.filter(
+              (candidate) => candidate < sizedAmount,
+            );
+            queuedAmountAttempts.length = 0;
+            queuedAmountAttempts.push(sizedAmount, ...tail);
+            seenAmountAttempts.clear();
+            for (const candidate of queuedAmountAttempts) {
+              seenAmountAttempts.add(candidate);
+            }
+          }
+        } catch {
+          // Probe failed (rate-limited mint, network error, etc.). Fall
+          // through to the original retry strategy starting from sourceBalance.
+        }
+      }
+
       let activeSourceRows: Array<{ id?: CashuTokenId | string | null }> =
         sourceRows;
       let activeSourceOwnerId = cashuOwnerId;

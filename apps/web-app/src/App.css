@@ -2546,6 +2546,19 @@ button.danger {
   color: var(--color-text-muted);
 }
 
+.transaction-subtitle {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--color-text-secondary, var(--color-text-primary));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: pre-line;
+  word-break: break-word;
+}
+
 .transaction-amount {
   flex: 0 0 auto;
   font-size: 14px;
