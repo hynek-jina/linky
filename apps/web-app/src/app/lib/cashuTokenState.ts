@@ -55,3 +55,33 @@ export const isCashuTokenEmittedState = (value: unknown): boolean => {
 
 export const isCashuTokenUnavailableState = (value: unknown): boolean =>
   isCashuTokenEmittedState(value) || isCashuTokenReservedState(value);
+
+export const isCashuTokenErrorState = (value: unknown): boolean =>
+  normalizeCashuTokenState(value) === CASHU_TOKEN_STATE_ERROR;
+
+// Error messages on cashuToken rows that signal the proofs are definitively
+// dead at the mint — the user can safely purge these from local storage.
+// Mirrors the patterns checked by `useCashuTokenChecks` when deciding whether
+// a row is unrecoverable.
+const SPENT_OR_INVALID_ERROR_PATTERNS: readonly string[] = [
+  "token already spent",
+  "proofs already spent",
+  "invalid proof",
+  "invalid proofs",
+  "token proofs missing",
+  "invalid token",
+];
+
+export const isCashuTokenDefinitivelySpent = (token: {
+  state?: unknown;
+  error?: unknown;
+}): boolean => {
+  if (!isCashuTokenErrorState(token.state)) return false;
+  const errorText = String(token.error ?? "")
+    .trim()
+    .toLowerCase();
+  if (!errorText) return false;
+  return SPENT_OR_INVALID_ERROR_PATTERNS.some((pattern) =>
+    errorText.includes(pattern),
+  );
+};

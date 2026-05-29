@@ -221,6 +221,7 @@ import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_RESERVED,
   isCashuTokenAcceptedState,
+  isCashuTokenDefinitivelySpent,
   isCashuTokenEmittedState,
   isCashuTokenIssuedState,
   isCashuTokenReservedState,
@@ -2863,6 +2864,54 @@ export const useAppShellComposition = () => {
       ),
     [cashuTokensWithMeta],
   );
+
+  const cashuOwnSpentTokens = React.useMemo(
+    () =>
+      cashuOwnTokens.filter((token) =>
+        isCashuTokenDefinitivelySpent({
+          state: token.state,
+          error: token.error,
+        }),
+      ),
+    [cashuOwnTokens],
+  );
+
+  const [deleteSpentCashuTokensIsBusy, setDeleteSpentCashuTokensIsBusy] =
+    useState(false);
+  const deleteSpentCashuTokens = React.useCallback(async () => {
+    if (deleteSpentCashuTokensIsBusy) return;
+    const targets = cashuOwnSpentTokens
+      .map((token) => token.id)
+      .filter((id): id is CashuTokenId => Boolean(id));
+    if (targets.length === 0) return;
+
+    setDeleteSpentCashuTokensIsBusy(true);
+    try {
+      const ownerId = await resolveOwnerIdForWrite();
+      let deleted = 0;
+      for (const id of targets) {
+        const payload = { id, isDeleted: Evolu.sqliteTrue };
+        const result = ownerId
+          ? update("cashuToken", payload, { ownerId })
+          : update("cashuToken", payload);
+        if (result.ok) deleted += 1;
+      }
+      if (deleted > 0) {
+        setStatus(
+          t("cashuDeleteSpentDone").replace("{count}", String(deleted)),
+        );
+      }
+    } finally {
+      setDeleteSpentCashuTokensIsBusy(false);
+    }
+  }, [
+    cashuOwnSpentTokens,
+    deleteSpentCashuTokensIsBusy,
+    resolveOwnerIdForWrite,
+    setStatus,
+    t,
+    update,
+  ]);
 
   const canPayWithCashu = cashuBalance > 0;
 
@@ -6997,6 +7046,9 @@ export const useAppShellComposition = () => {
       cashuMeltToMainMintButtonLabel,
       cashuTokensAll: cashuTokensAllFiltered,
       cashuOwnTokens,
+      cashuOwnSpentTokensCount: cashuOwnSpentTokens.length,
+      deleteSpentCashuTokens,
+      deleteSpentCashuTokensIsBusy,
       checkAllCashuTokensAndDeleteInvalid,
       checkAndRefreshCashuToken,
       checkIssuedCashuTokensAndDeleteClaimed,

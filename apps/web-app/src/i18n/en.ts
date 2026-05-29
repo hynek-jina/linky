@@ -538,6 +538,8 @@ export const en = {
   cashuCheckToken: "Check token",
   cashuCheckAllTokens: "Check all",
   cashuCheckIssuedTokens: "Check claimed",
+  cashuDeleteSpentTokens: "Delete spent ({count})",
+  cashuDeleteSpentDone: "Removed {count} spent tokens.",
   cashuChecking: "Checking token…",
   cashuCheckOk: "Token is OK.",
   pwaUpdateAvailable: "A new version of Linky is available",

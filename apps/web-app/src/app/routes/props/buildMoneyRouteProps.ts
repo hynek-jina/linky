@@ -22,6 +22,9 @@ interface BuildMoneyRoutePropsParams {
     MoneyRoutesProps["cashuTokenProps"]
   >["cashuTokensAll"];
   cashuOwnTokens: MoneyRoutesProps["cashuTokensProps"]["cashuOwnTokens"];
+  cashuOwnSpentTokensCount: MoneyRoutesProps["cashuTokensProps"]["cashuOwnSpentTokensCount"];
+  deleteSpentCashuTokens: MoneyRoutesProps["cashuTokensProps"]["deleteSpentCashuTokens"];
+  deleteSpentCashuTokensIsBusy: MoneyRoutesProps["cashuTokensProps"]["deleteSpentCashuTokensIsBusy"];
   checkAllCashuTokensAndDeleteInvalid: MoneyRoutesProps["cashuTokensProps"]["checkAllCashuTokensAndDeleteInvalid"];
   checkAndRefreshCashuToken: ReturnType<
     MoneyRoutesProps["cashuTokenProps"]
@@ -105,6 +108,9 @@ export const buildMoneyRouteProps = ({
   cashuMeltToMainMintButtonLabel,
   cashuTokensAll,
   cashuOwnTokens,
+  cashuOwnSpentTokensCount,
+  deleteSpentCashuTokens,
+  deleteSpentCashuTokensIsBusy,
   checkAllCashuTokensAndDeleteInvalid,
   checkAndRefreshCashuToken,
   checkIssuedCashuTokensAndDeleteClaimed,
@@ -176,6 +182,9 @@ export const buildMoneyRouteProps = ({
       cashuIssuedTokens,
       cashuMeltToMainMintButtonLabel,
       cashuOwnTokens,
+      cashuOwnSpentTokensCount,
+      deleteSpentCashuTokens,
+      deleteSpentCashuTokensIsBusy,
       checkAllCashuTokensAndDeleteInvalid,
       checkIssuedCashuTokensAndDeleteClaimed,
       getMintIconUrl,
