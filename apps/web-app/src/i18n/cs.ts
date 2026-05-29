@@ -545,6 +545,8 @@ export const cs = {
   cashuCheckToken: "Zkontrolovat token",
   cashuCheckAllTokens: "Zkontrolovat vše",
   cashuCheckIssuedTokens: "Zkontrolovat využité",
+  cashuDeleteSpentTokens: "Smazat utracené ({count})",
+  cashuDeleteSpentDone: "Smazáno {count} utracených tokenů.",
   cashuChecking: "Kontroluji token…",
   cashuCheckOk: "Token je v pořádku.",
   pwaUpdateAvailable: "Nová verze Linky je k dispozici",

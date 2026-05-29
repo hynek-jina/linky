@@ -17,12 +17,15 @@ interface CashuTokensPageProps {
   cashuIsBusy: boolean;
   cashuMeltToMainMintButtonLabel: string | null;
   cashuOwnTokens: readonly CashuTokenListItem[];
+  cashuOwnSpentTokensCount: number;
   cashuIssuedTokens: readonly CashuTokenListItem[];
   checkAllCashuTokensAndDeleteInvalid: () => Promise<void>;
   checkIssuedCashuTokensAndDeleteClaimed: () => Promise<{
     checked: number;
     claimed: ReadonlyArray<{ id: CashuTokenId; amount: number }>;
   }>;
+  deleteSpentCashuTokens: () => Promise<void>;
+  deleteSpentCashuTokensIsBusy: boolean;
   getMintIconUrl: (mint: MintUrlInput) => {
     origin: string | null;
     url: string | null;
@@ -44,8 +47,11 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
   cashuIssuedTokens,
   cashuMeltToMainMintButtonLabel,
   cashuOwnTokens,
+  cashuOwnSpentTokensCount,
   checkAllCashuTokensAndDeleteInvalid,
   checkIssuedCashuTokensAndDeleteClaimed,
+  deleteSpentCashuTokens,
+  deleteSpentCashuTokensIsBusy,
   getMintIconUrl,
   meltLargestForeignMintToMainMint,
   restoreMissingTokens,
@@ -132,6 +138,21 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
             </button>
           </div>
           {renderTokenList(cashuOwnTokens, t("cashuEmpty"))}
+          {cashuOwnSpentTokensCount > 0 ? (
+            <div className="settings-row" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="btn-wide secondary"
+                onClick={() => void deleteSpentCashuTokens()}
+                disabled={cashuIsBusy || deleteSpentCashuTokensIsBusy}
+              >
+                {t("cashuDeleteSpentTokens").replace(
+                  "{count}",
+                  String(cashuOwnSpentTokensCount),
+                )}
+              </button>
+            </div>
+          ) : null}
           {cashuMeltToMainMintButtonLabel ? (
             <div className="settings-row" style={{ marginTop: 12 }}>
               <button
