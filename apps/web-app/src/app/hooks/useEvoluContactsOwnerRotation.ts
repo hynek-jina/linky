@@ -1268,6 +1268,90 @@ export const useEvoluContactsOwnerRotation = ({
     transactionsOwnerIndex,
   ]);
 
+  // Bootstrap: ensure each scope has a rotation snapshot in ownerMeta.
+  //
+  // Users who joined before rotation pointers existed (or who never crossed
+  // a rotation threshold post-deploy) have local `*OwnerIndex` values that
+  // diverge across devices silently, because the reconciler above has
+  // nothing in ownerMeta to read. Without a manual `Rotate ... owner` click
+  // from Advanced > Evolu data, devices can stay out of sync indefinitely.
+  //
+  // Write the current local snapshot once per scope per session when no
+  // entry exists. The first device to boot post-deploy seeds ownerMeta with
+  // its index + current row counts. Other devices see the snapshot via
+  // Evolu sync, the reconciler adopts the foreign index (if different),
+  // and the heal callback copies their now-orphan lane data forward.
+  //
+  // If two devices boot at the same time and both write their own snapshot
+  // (different local indices), CRDT LWW picks one and the loser adopts
+  // through the same reconciler + heal path. Same convergence outcome.
+  React.useEffect(() => {
+    if (!isSeedLogin) return;
+    if (!ownerSyncData) return;
+    const metaOwnerId = ownerSyncData.metaOwner.id;
+    const metaOwnerIdStr = String(metaOwnerId).trim();
+    if (!metaOwnerIdStr) return;
+
+    const hasSnapshotForScope = (
+      scope: "contacts" | "messages" | "transactions",
+    ): boolean => {
+      for (const row of ownerMetaRows) {
+        if (readRowOwnerId(row) !== metaOwnerIdStr) continue;
+        const rowScope =
+          typeof row === "object" && row !== null && "scope" in row
+            ? row.scope
+            : null;
+        const rowScopeText =
+          typeof rowScope === "string" ? rowScope.trim() : "";
+        if (rowScopeText !== scope) continue;
+        const decoded = decodeRotationSnapshot(readRowPointerValue(row), scope);
+        if (decoded) return true;
+      }
+      return false;
+    };
+
+    const nowMs = Date.now();
+
+    if (!hasSnapshotForScope("contacts")) {
+      upsertOwnerMetaSnapshot(upsert, metaOwnerId, "contacts", {
+        index: contactsOwnerIndex,
+        baseline: contactsOwnerWriteCount,
+        cashuBaseline: cashuOwnerWriteCount,
+        rotatedAtMs: nowMs,
+      });
+    }
+
+    if (!hasSnapshotForScope("messages")) {
+      upsertOwnerMetaSnapshot(upsert, metaOwnerId, "messages", {
+        index: messagesOwnerIndex,
+        baseline: messagesOwnerWriteCount,
+        cashuBaseline: null,
+        rotatedAtMs: nowMs,
+      });
+    }
+
+    if (!hasSnapshotForScope("transactions")) {
+      upsertOwnerMetaSnapshot(upsert, metaOwnerId, "transactions", {
+        index: transactionsOwnerIndex,
+        baseline: transactionsOwnerWriteCount,
+        cashuBaseline: null,
+        rotatedAtMs: nowMs,
+      });
+    }
+  }, [
+    cashuOwnerWriteCount,
+    contactsOwnerIndex,
+    contactsOwnerWriteCount,
+    isSeedLogin,
+    messagesOwnerIndex,
+    messagesOwnerWriteCount,
+    ownerMetaRows,
+    ownerSyncData,
+    transactionsOwnerIndex,
+    transactionsOwnerWriteCount,
+    upsert,
+  ]);
+
   const rotateContactsAndCashuOwner = React.useCallback(async () => {
     if (rotateContactsOwnerIsBusy) return;
 
