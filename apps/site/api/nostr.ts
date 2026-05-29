@@ -5,7 +5,7 @@ import {
   proxyFixedUrl,
   type ApiRequest,
   type ApiResponse,
-} from "./_npubcash";
+} from "./_npubcash.js";
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   try {

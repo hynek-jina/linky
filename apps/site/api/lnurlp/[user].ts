@@ -6,7 +6,7 @@ import {
   proxyFixedUrl,
   type ApiRequest,
   type ApiResponse,
-} from "../_npubcash";
+} from "../_npubcash.js";
 
 interface LnurlPayResponse {
   callback?: unknown;
