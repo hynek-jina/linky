@@ -1314,6 +1314,10 @@ export const useAppShellComposition = () => {
         hasMintOverrideRef.current = true;
         setDefaultMintUrl(seededMint);
         setDefaultMintUrlDraft(seededMint);
+        // Mirror the onboarding-seeded value into Evolu so a brand-new
+        // account converges to cashu.cz across devices even before the user
+        // touches the mint UI.
+        upsertDefaultMintToOwnerMetaRef.current(seededMint);
         return;
       }
     }
@@ -1786,6 +1790,107 @@ export const useAppShellComposition = () => {
   useOwner(transactionsSyncOwner);
   useOwner(metaSyncOwner);
   useOwner(identitySyncOwner);
+
+  // Default mint cross-tab + cross-device sync via Evolu `ownerMeta`.
+  //
+  // Background: the per-owner localStorage override
+  // (`linky.cashu.defaultMintOverride.v1.<owner>`) is tab-local, so other
+  // tabs (and other devices) don't see the change until reload. ownerMeta is
+  // an Evolu lane that already propagates via BroadcastChannel (same-origin
+  // tabs, instant) and via the Evolu sync server (other devices), so we
+  // mirror the default-mint value into it.
+  const ownerMetaDefaultMintRowId = React.useMemo(
+    () => Evolu.createIdFromString<"OwnerMeta">("owner-pointer-defaultMint"),
+    [],
+  );
+
+  const ownerMetaDefaultMintQuery = useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("ownerMeta")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue)
+          .where(
+            "scope",
+            "=",
+            "defaultMint" as typeof Evolu.NonEmptyString100.Type,
+          ),
+      ),
+    [],
+  );
+  const ownerMetaDefaultMintRows = useQuery(ownerMetaDefaultMintQuery);
+
+  const ownerMetaDefaultMintValue = React.useMemo(() => {
+    for (const row of ownerMetaDefaultMintRows) {
+      if (typeof row !== "object" || row === null) continue;
+      if (!("value" in row)) continue;
+      const raw = String(row.value ?? "").trim();
+      if (!raw) continue;
+      const cleaned = normalizeMintUrl(raw);
+      if (cleaned) return cleaned;
+    }
+    return null;
+  }, [ownerMetaDefaultMintRows]);
+
+  // ownerMeta -> local state: when another tab/device wrote a different
+  // default mint, pick it up here. This is the ONLY direction watched as an
+  // effect. A symmetric `defaultMintUrl -> ownerMeta` watcher would
+  // ping-pong with the remote: in the same render where this effect queues
+  // setDefaultMintUrl(remoteValue), the symmetric effect would read the
+  // STALE local `defaultMintUrl` and upsert it back, racing with the remote
+  // value. Two devices in this state oscillate every few ms (visible in
+  // ownerMeta CRDT history). Explicit pushes happen instead from
+  // `upsertDefaultMintToOwnerMeta` called by user actions and the seed
+  // effect.
+  React.useEffect(() => {
+    if (!ownerMetaDefaultMintValue) return;
+    if (!appOwnerId) return;
+    const current = normalizeMintUrl(defaultMintUrl ?? "");
+    if (current === ownerMetaDefaultMintValue) return;
+    setDefaultMintUrl(ownerMetaDefaultMintValue);
+    setDefaultMintUrlDraft(ownerMetaDefaultMintValue);
+    hasMintOverrideRef.current = true;
+    try {
+      const overrideKey = makeLocalStorageKey(
+        CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
+      );
+      safeLocalStorageSet(overrideKey, ownerMetaDefaultMintValue);
+    } catch {
+      // ignore
+    }
+  }, [
+    appOwnerId,
+    defaultMintUrl,
+    makeLocalStorageKey,
+    ownerMetaDefaultMintValue,
+  ]);
+
+  const upsertDefaultMintToOwnerMeta = React.useCallback(
+    (mintUrl: string | null | undefined) => {
+      if (!metaOwnerId) return;
+      const cleaned = normalizeMintUrl(mintUrl ?? "");
+      if (!cleaned) return;
+      if (cleaned === ownerMetaDefaultMintValue) return;
+      upsert(
+        "ownerMeta",
+        {
+          id: ownerMetaDefaultMintRowId,
+          scope: "defaultMint" as typeof Evolu.NonEmptyString100.Type,
+          value: cleaned as typeof Evolu.NonEmptyString1000.Type,
+        },
+        { ownerId: metaOwnerId },
+      );
+    },
+    [metaOwnerId, ownerMetaDefaultMintRowId, ownerMetaDefaultMintValue, upsert],
+  );
+
+  const upsertDefaultMintToOwnerMetaRef = React.useRef(
+    upsertDefaultMintToOwnerMeta,
+  );
+  React.useEffect(() => {
+    upsertDefaultMintToOwnerMetaRef.current = upsertDefaultMintToOwnerMeta;
+  }, [upsertDefaultMintToOwnerMeta]);
 
   React.useEffect(() => {
     cashuOwnerIdRef.current = cashuOwnerId;
@@ -2915,34 +3020,47 @@ export const useAppShellComposition = () => {
     return sum;
   }, [cashuTokensWithMeta, defaultMintUrl]);
 
-  const { applyDefaultMintSelection, makeNip98AuthHeader } =
-    useNpubCashMintSelection({
-      cashuAutoswapEnabled,
-      currentMainMintAcceptedBalance,
-      currentNpub,
-      currentNsec,
-      defaultMintUrl,
-      defaultMintUrlDraft,
-      hasMintOverrideRef,
-      makeLocalStorageKey,
-      npubCashMintSyncRef,
-      pushToast,
-      requestMintAutoswapChangeConfirmation: React.useCallback(
-        (args: { fromMint: string; toMint: string }) => {
-          pendingMintAutoswapChangeResolverRef.current?.(false);
-          return new Promise<boolean>((resolve) => {
-            pendingMintAutoswapChangeResolverRef.current = resolve;
-            setPendingMintAutoswapChangeConfirmation(args);
-          });
-        },
-        [],
-      ),
-      setCashuAutoswapEnabled,
-      setDefaultMintUrl,
-      setDefaultMintUrlDraft,
-      setStatus,
-      t,
-    });
+  const {
+    applyDefaultMintSelection: applyDefaultMintSelectionInner,
+    makeNip98AuthHeader,
+  } = useNpubCashMintSelection({
+    cashuAutoswapEnabled,
+    currentMainMintAcceptedBalance,
+    currentNpub,
+    currentNsec,
+    defaultMintUrl,
+    defaultMintUrlDraft,
+    hasMintOverrideRef,
+    makeLocalStorageKey,
+    npubCashMintSyncRef,
+    pushToast,
+    requestMintAutoswapChangeConfirmation: React.useCallback(
+      (args: { fromMint: string; toMint: string }) => {
+        pendingMintAutoswapChangeResolverRef.current?.(false);
+        return new Promise<boolean>((resolve) => {
+          pendingMintAutoswapChangeResolverRef.current = resolve;
+          setPendingMintAutoswapChangeConfirmation(args);
+        });
+      },
+      [],
+    ),
+    setCashuAutoswapEnabled,
+    setDefaultMintUrl,
+    setDefaultMintUrlDraft,
+    setStatus,
+    t,
+  });
+
+  const applyDefaultMintSelection = React.useCallback(
+    async (mintUrl: string): Promise<void> => {
+      await applyDefaultMintSelectionInner(mintUrl);
+      // Mirror the user's explicit choice into Evolu's ownerMeta so other
+      // tabs/devices converge. Done here (not in a defaultMintUrl-watch
+      // effect) to avoid stale-closure ping-pong with the remote.
+      upsertDefaultMintToOwnerMetaRef.current(mintUrl);
+    },
+    [applyDefaultMintSelectionInner],
+  );
 
   React.useEffect(() => {
     const selectedMint = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
