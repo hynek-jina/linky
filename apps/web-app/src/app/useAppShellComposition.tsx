@@ -10,7 +10,11 @@ import {
 import React, { useMemo, useState } from "react";
 import { createSendTokenWithTokensAtMint } from "../cashuSend";
 import { ContactCard } from "../components/ContactCard";
-import { deriveDefaultProfile } from "../derivedProfile";
+import {
+  DEFAULT_LIGHTNING_ADDRESS_DOMAIN,
+  deriveDefaultLightningAddress,
+  deriveDefaultProfile,
+} from "../derivedProfile";
 import type { CashuTokenId, ContactId } from "../evolu";
 import {
   evolu,
@@ -121,6 +125,8 @@ import {
   PRESET_MINTS,
 } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
+import { parseNpubCashProfileInfo } from "../utils/npubCashInfo";
+import { resolveNpubCashServerBaseUrl } from "../utils/npubCashServer";
 import {
   clearStoredPushNsec,
   setStoredPushNsec,
@@ -1596,6 +1602,8 @@ export const useAppShellComposition = () => {
   const [myProfileLnAddress, setMyProfileLnAddress] = useState<string | null>(
     null,
   );
+  const [ownedProfileLightningAddresses, setOwnedProfileLightningAddresses] =
+    useState<string[]>([]);
   const [myProfileStatus, setMyProfileStatus] = useState<string | null>(null);
   const [myProfileMetadata, setMyProfileMetadata] =
     useState<NostrProfileMetadata | null>(null);
@@ -2022,8 +2030,10 @@ export const useAppShellComposition = () => {
   });
 
   useTopupInvoiceQuoteEffects({
-    currentNpub,
     defaultMintUrl,
+    effectiveMyLightningAddress:
+      myProfileLnAddress ??
+      (currentNpub ? deriveDefaultLightningAddress(currentNpub) : null),
     routeKind: route.kind,
     t,
     topupAmount,
@@ -2990,9 +3000,9 @@ export const useAppShellComposition = () => {
     amountSat: number;
   }>(null);
 
-  const npubCashLightningAddress = useMemo(() => {
+  const defaultLightningAddress = useMemo(() => {
     if (!currentNpub) return null;
-    return `${currentNpub}@npub.cash`;
+    return deriveDefaultLightningAddress(currentNpub);
   }, [currentNpub]);
 
   const derivedProfile = useMemo(() => {
@@ -3005,7 +3015,17 @@ export const useAppShellComposition = () => {
     myProfilePicture ?? derivedProfile?.pictureUrl ?? null;
 
   const effectiveMyLightningAddress =
-    myProfileLnAddress ?? npubCashLightningAddress;
+    myProfileLnAddress ?? defaultLightningAddress;
+
+  const npubCashServerBaseUrl = useMemo(() => {
+    return resolveNpubCashServerBaseUrl(effectiveMyLightningAddress);
+  }, [effectiveMyLightningAddress]);
+
+  const profileClaimLightningAddressServerBaseUrl = useMemo(() => {
+    return resolveNpubCashServerBaseUrl(
+      `claim@${DEFAULT_LIGHTNING_ADDRESS_DOMAIN}`,
+    );
+  }, []);
 
   const {
     cycleProfileAvatarControl,
@@ -3021,6 +3041,7 @@ export const useAppShellComposition = () => {
     profileEditsSavable,
     profilePhotoInputRef,
     profileSelectedPictureKind,
+    saveClaimedLightningAddress,
     saveProfileEdits,
     setIsProfileEditing,
     setProfileEditLnAddress,
@@ -3087,6 +3108,9 @@ export const useAppShellComposition = () => {
     defaultMintUrlDraft,
     hasMintOverrideRef,
     makeLocalStorageKey,
+    npubCashServerBaseUrl,
+    ownedLightningAddresses: ownedProfileLightningAddresses,
+    profileClaimLightningAddressServerBaseUrl,
     npubCashMintSyncRef,
     pushToast,
     requestMintAutoswapChangeConfirmation: React.useCallback(
@@ -3116,6 +3140,57 @@ export const useAppShellComposition = () => {
     },
     [applyDefaultMintSelectionInner],
   );
+
+  React.useEffect(() => {
+    if (!currentNpub || !currentNsec) {
+      setOwnedProfileLightningAddresses([]);
+      return;
+    }
+
+    setOwnedProfileLightningAddresses([]);
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const loadOwnedLightningAddresses = async () => {
+      try {
+        const url = `${profileClaimLightningAddressServerBaseUrl}/api/v1/info`;
+        const auth = await makeNip98AuthHeader(url, "GET");
+        const response = await fetch(url, {
+          method: "GET",
+          headers: { Authorization: auth },
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          if (!cancelled) {
+            setOwnedProfileLightningAddresses([]);
+          }
+          return;
+        }
+
+        const json = await response.json();
+        if (cancelled) return;
+
+        const info = parseNpubCashProfileInfo(json);
+        setOwnedProfileLightningAddresses(info.ownedLightningAddresses);
+      } catch {
+        if (cancelled) return;
+        setOwnedProfileLightningAddresses([]);
+      }
+    };
+
+    void loadOwnedLightningAddresses();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [
+    currentNpub,
+    currentNsec,
+    makeNip98AuthHeader,
+    profileClaimLightningAddressServerBaseUrl,
+  ]);
 
   React.useEffect(() => {
     const selectedMint = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
@@ -3163,6 +3238,7 @@ export const useAppShellComposition = () => {
     makeNip98AuthHeader,
     maybeShowPwaNotification,
     mintInfoByUrl,
+    npubCashServerBaseUrl,
     npubCashClaimInFlightRef,
     recentlyReceivedTokenTimerRef,
     refreshMintInfo,
@@ -3215,6 +3291,7 @@ export const useAppShellComposition = () => {
     currentNsec,
     hasMintOverrideRef,
     makeNip98AuthHeader,
+    npubCashServerBaseUrl,
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
     npubCashInfoLoadedForNpubRef,
@@ -7134,6 +7211,7 @@ export const useAppShellComposition = () => {
       isProfileEditing,
       isSavingContact,
       lang,
+      makeNip98AuthHeader,
       myProfileQr,
       profileStatusCurrencies,
       profileStatusIsSaving,
@@ -7155,15 +7233,18 @@ export const useAppShellComposition = () => {
       openContactPay,
       openScan,
       payAmount,
+      payLightningInvoiceWithCashu,
       paySelectedContact,
       requestSelectedContact,
       payWithCashuEnabled,
+      ownedLightningAddresses: ownedProfileLightningAddresses,
       selectedContactStatusText: (() => {
         const npub = normalizeNpubIdentifier(selectedContact?.npub);
         return npub ? (nostrStatusByNpub[npub] ?? null) : null;
       })(),
       pendingDeleteId,
       reactionsByMessageId,
+      profileClaimLightningAddressServerBaseUrl,
       profileCustomPictureUrl,
       profileEditLnAddress,
       profileEditName,
@@ -7182,6 +7263,7 @@ export const useAppShellComposition = () => {
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
       replyContext,
+      saveClaimedLightningAddress,
       saveProfileEdits,
       scanIsOpen,
       selectedContact,

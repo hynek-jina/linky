@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getMintSelectionAutoswapPlan,
   getMintSelectionDisplayName,
+  resolveMintSyncServerBaseUrl,
 } from "./useNpubCashMintSelection";
 
 describe("getMintSelectionAutoswapPlan", () => {
@@ -53,5 +54,27 @@ describe("getMintSelectionDisplayName", () => {
     expect(getMintSelectionDisplayName("https://mint.minibits.cash")).toBe(
       "mint.minibits.cash",
     );
+  });
+});
+
+describe("resolveMintSyncServerBaseUrl", () => {
+  it("uses the dedicated Linky claim host when the user owns a hosted Linky alias", () => {
+    expect(
+      resolveMintSyncServerBaseUrl({
+        npubCashServerBaseUrl: "https://npub.cash",
+        ownedLightningAddresses: ["alice@linky.fit"],
+        profileClaimLightningAddressServerBaseUrl: "https://npub.linky.fit",
+      }),
+    ).toBe("https://npub.linky.fit");
+  });
+
+  it("falls back to the current lightning-address host when no hosted Linky alias is owned", () => {
+    expect(
+      resolveMintSyncServerBaseUrl({
+        npubCashServerBaseUrl: "https://npub.cash",
+        ownedLightningAddresses: [],
+        profileClaimLightningAddressServerBaseUrl: "https://npub.linky.fit",
+      }),
+    ).toBe("https://npub.cash");
   });
 });

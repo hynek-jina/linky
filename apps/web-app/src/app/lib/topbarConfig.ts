@@ -89,6 +89,14 @@ export const buildTopbar = ({
     };
   }
 
+  if (route.kind === "profileClaimLightningAddress") {
+    return {
+      icon: "<",
+      label: t("close"),
+      onClick: () => navigateTo({ route: "profileEdit" }),
+    };
+  }
+
   if (route.kind === "transactions") {
     return {
       icon: "<",
@@ -308,7 +316,8 @@ export const buildTopbarRight = ({
     route.kind === "transactions" ||
     route.kind === "evoluCurrentData" ||
     route.kind === "evoluHistoryData" ||
-    route.kind === "contactEdit"
+    route.kind === "contactEdit" ||
+    route.kind === "profileClaimLightningAddress"
   ) {
     return null;
   }
@@ -343,7 +352,11 @@ export const buildTopbarTitle = (
   if (route.kind === "advancedPushDebug") return "Push Debug";
   if (route.kind === "mints") return t("mints");
   if (route.kind === "mint") return t("mints");
-  if (route.kind === "profile" || route.kind === "profileEdit") {
+  if (
+    route.kind === "profile" ||
+    route.kind === "profileEdit" ||
+    route.kind === "profileClaimLightningAddress"
+  ) {
     return t("profile");
   }
   if (route.kind === "nostrRelays") return t("nostrRelay");

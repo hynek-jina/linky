@@ -74,8 +74,8 @@ export const topupMintQuoteMatchesRequest = (
 };
 
 interface UseTopupInvoiceQuoteEffectsParams {
-  currentNpub: string | null;
   defaultMintUrl: string | null;
+  effectiveMyLightningAddress: string | null;
   routeKind: Route["kind"];
   t: (key: string) => string;
   topupAmount: string;
@@ -99,8 +99,8 @@ interface UseTopupInvoiceQuoteEffectsParams {
 }
 
 export const useTopupInvoiceQuoteEffects = ({
-  currentNpub,
   defaultMintUrl,
+  effectiveMyLightningAddress,
   routeKind,
   t,
   topupAmount,
@@ -221,7 +221,7 @@ export const useTopupInvoiceQuoteEffects = ({
     if (isFetchingRef.current) return;
     if (topupInvoicePaidHandledRef.current) return;
 
-    const lnAddress = currentNpub ? `${currentNpub}@npub.cash` : "";
+    const lnAddress = String(effectiveMyLightningAddress ?? "").trim();
     const amountSat = Number.parseInt(topupAmount.trim(), 10);
     const invalid = !lnAddress || !Number.isFinite(amountSat) || amountSat <= 0;
     if (invalid) {
@@ -355,8 +355,8 @@ export const useTopupInvoiceQuoteEffects = ({
     // re-trigger and cancel its own in-flight fetch. The isFetchingRef guard
     // prevents concurrent requests instead.
   }, [
-    currentNpub,
     defaultMintUrl,
+    effectiveMyLightningAddress,
     routeKind,
     setTopupInvoice,
     setTopupInvoiceError,

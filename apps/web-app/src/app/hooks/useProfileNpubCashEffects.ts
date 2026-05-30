@@ -10,6 +10,7 @@ interface UseProfileNpubCashEffectsParams {
   currentNsec: string | null;
   hasMintOverrideRef: React.MutableRefObject<boolean>;
   makeNip98AuthHeader: (url: string, method: "GET" | "POST") => Promise<string>;
+  npubCashServerBaseUrl: string;
   npubCashInfoInFlightRef: React.MutableRefObject<boolean>;
   npubCashInfoLoadedAtMsRef: React.MutableRefObject<number>;
   npubCashInfoLoadedForNpubRef: React.MutableRefObject<string | null>;
@@ -28,6 +29,7 @@ export const useProfileNpubCashEffects = ({
   currentNsec,
   hasMintOverrideRef,
   makeNip98AuthHeader,
+  npubCashServerBaseUrl,
   npubCashInfoInFlightRef,
   npubCashInfoLoadedAtMsRef,
   npubCashInfoLoadedForNpubRef,
@@ -109,23 +111,22 @@ export const useProfileNpubCashEffects = ({
   }, [showProfileQr, currentNpub, setMyProfileQr]);
 
   React.useEffect(() => {
-    // npub.cash integration:
+    // Hosted npub.cash-compatible integration:
     // - read default mint (preferred mint) for the user
     // - auto-claim pending payments and store them as Cashu tokens
-    // Always active when we have Nostr keys so payments to the derived
-    // `${npub}@npub.cash` keep working even if the user sets a custom address.
+    // Uses the server bound to the current lightning-address domain.
     if (!currentNpub) return;
     if (!currentNsec) return;
 
     let cancelled = false;
-    const baseUrl = "https://npub.cash";
     const infoController = new AbortController();
+    const infoCacheKey = `${currentNpub}|${npubCashServerBaseUrl}`;
 
     const loadInfo = async () => {
       if (npubCashInfoInFlightRef.current) return;
       const nowMs = Date.now();
       if (
-        npubCashInfoLoadedForNpubRef.current === currentNpub &&
+        npubCashInfoLoadedForNpubRef.current === infoCacheKey &&
         nowMs - npubCashInfoLoadedAtMsRef.current < 10 * 60_000
       ) {
         return;
@@ -133,7 +134,7 @@ export const useProfileNpubCashEffects = ({
 
       npubCashInfoInFlightRef.current = true;
       try {
-        const url = `${baseUrl}/api/v1/info`;
+        const url = `${npubCashServerBaseUrl}/api/v1/info`;
         const auth = await makeNip98AuthHeader(url, "GET");
         const res = await fetch(url, {
           method: "GET",
@@ -162,7 +163,7 @@ export const useProfileNpubCashEffects = ({
           }
         }
 
-        npubCashInfoLoadedForNpubRef.current = currentNpub;
+        npubCashInfoLoadedForNpubRef.current = infoCacheKey;
         npubCashInfoLoadedAtMsRef.current = Date.now();
       } catch {
         // ignore
@@ -194,6 +195,7 @@ export const useProfileNpubCashEffects = ({
     currentNsec,
     hasMintOverrideRef,
     makeNip98AuthHeader,
+    npubCashServerBaseUrl,
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
     npubCashInfoLoadedForNpubRef,

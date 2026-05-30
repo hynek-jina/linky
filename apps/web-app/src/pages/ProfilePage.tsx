@@ -2,6 +2,7 @@ import React from "react";
 import { ProfileAvatarEditor } from "../components/ProfileAvatarEditor";
 import { ProfileQrButton } from "../components/ProfileQrButton";
 import type { AvatarEditorControlId } from "../derivedProfile";
+import { useNavigation } from "../hooks/useRouting";
 import {
   parseProfileGeneralStatusText,
   type ProfileStatusCurrency,
@@ -32,6 +33,7 @@ interface ProfilePageProps {
   onProfilePhotoSelected: (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => Promise<void>;
+  ownedLightningAddresses: readonly string[];
   profileCustomPictureUrl: string;
   profileEditLnAddress: string;
   profileEditName: string;
@@ -66,6 +68,7 @@ export function ProfilePage({
   myProfileQr,
   onPickProfilePhoto,
   onProfilePhotoSelected,
+  ownedLightningAddresses,
   profileCustomPictureUrl,
   profileEditLnAddress,
   profileEditName,
@@ -85,7 +88,9 @@ export function ProfilePage({
   t,
   toggleProfileStatusCurrency,
 }: ProfilePageProps): React.ReactElement {
+  const navigateTo = useNavigation();
   const profileStatusText = parseProfileGeneralStatusText(profileStatus);
+  const hasOwnedLightningAddress = ownedLightningAddresses.length > 0;
 
   return (
     <section className="panel">
@@ -134,21 +139,34 @@ export function ProfilePage({
                 }}
               >
                 <label htmlFor="profileLn">{t("lightningAddress")}</label>
-                {derivedProfile &&
-                profileEditLnAddress.trim() !== derivedProfile.lnAddress ? (
+                <div style={{ display: "flex", gap: 8 }}>
                   <button
                     type="button"
                     className="secondary"
                     onClick={() =>
-                      setProfileEditLnAddress(derivedProfile.lnAddress)
+                      navigateTo({ route: "profileClaimLightningAddress" })
                     }
-                    title={t("restore")}
-                    aria-label={t("restore")}
-                    style={{ paddingInline: 10, minWidth: 40 }}
+                    style={{ paddingInline: 10 }}
                   >
-                    ↺
+                    {t("claimOwnLightningAddressAction")}
                   </button>
-                ) : null}
+                  {!hasOwnedLightningAddress &&
+                  derivedProfile &&
+                  profileEditLnAddress.trim() !== derivedProfile.lnAddress ? (
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() =>
+                        setProfileEditLnAddress(derivedProfile.lnAddress)
+                      }
+                      title={t("restore")}
+                      aria-label={t("restore")}
+                      style={{ paddingInline: 10, minWidth: 40 }}
+                    >
+                      ↺
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <input
                 id="profileLn"

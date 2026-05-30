@@ -38,6 +38,7 @@ interface UseNpubCashClaimParams {
     tag?: string,
   ) => Promise<void>;
   mintInfoByUrl: ReadonlyMap<string, LocalMintInfoRow>;
+  npubCashServerBaseUrl: string;
   npubCashClaimInFlightRef: React.MutableRefObject<boolean>;
   recentlyReceivedTokenTimerRef: React.MutableRefObject<number | null>;
   refreshMintInfo: (mintUrl: string) => Promise<void> | void;
@@ -68,6 +69,7 @@ export const useNpubCashClaim = ({
   makeNip98AuthHeader,
   maybeShowPwaNotification,
   mintInfoByUrl,
+  npubCashServerBaseUrl,
   npubCashClaimInFlightRef,
   recentlyReceivedTokenTimerRef,
   refreshMintInfo,
@@ -348,9 +350,8 @@ export const useNpubCashClaim = ({
     if (!(await resolveOwnerIdForWrite())) return;
 
     npubCashClaimInFlightRef.current = true;
-    const baseUrl = "https://npub.cash";
     try {
-      const url = `${baseUrl}/api/v1/claim`;
+      const url = `${npubCashServerBaseUrl}/api/v1/claim`;
       const auth = await makeNip98AuthHeader(url, "GET");
       const res = await fetch(url, {
         method: "GET",
@@ -388,6 +389,7 @@ export const useNpubCashClaim = ({
     currentNpub,
     currentNsec,
     makeNip98AuthHeader,
+    npubCashServerBaseUrl,
     npubCashClaimInFlightRef,
     resolveOwnerIdForWrite,
   ]);
