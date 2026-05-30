@@ -3,7 +3,6 @@ import React from "react";
 import { useNavigation } from "../hooks/useRouting";
 
 interface EvoluServersPageProps {
-  evoluDatabaseBytes: number | null;
   evoluHasError: boolean;
   evoluHistoryCount: number | null;
   evoluServerStatusByUrl: Record<
@@ -20,11 +19,7 @@ interface EvoluServersPageProps {
   t: (key: string) => string;
 }
 
-const ONE_MB = 1024 * 1024;
-const OVERHEAD_BYTES = 172 * 1024; // 172 KB overhead prázdné SQLite DB
-
 export function EvoluServersPage({
-  evoluDatabaseBytes,
   evoluHasError,
   evoluHistoryCount,
   evoluServerStatusByUrl,
@@ -38,17 +33,6 @@ export function EvoluServersPage({
   t,
 }: EvoluServersPageProps): React.ReactElement {
   const navigateTo = useNavigation();
-
-  const rawDbBytes = evoluDatabaseBytes ?? 0;
-  const dataBytes = rawDbBytes - OVERHEAD_BYTES;
-  const percentage = Math.min(Math.max((dataBytes / ONE_MB) * 100, -100), 100);
-
-  // Determine color based percentage - using direct colors instead of CSS variables
-  const getProgressColor = () => {
-    if (percentage > 90) return "#ef4444"; // Red
-    if (percentage > 70) return "#f59e0b"; // Orange/Amber
-    return "#22c55e"; // Green
-  };
 
   const totalCurrentRows = Object.values(evoluTableCounts).reduce<number>(
     (sum, count) => sum + (count ?? 0),
@@ -120,99 +104,54 @@ export function EvoluServersPage({
         </div>
       )}
 
-      {/* Database info section */}
-      {evoluDatabaseBytes !== null && (
-        <>
-          <div className="settings-row" style={{ marginTop: 24 }}>
-            <div className="settings-left">
-              <span className="settings-label">Used data</span>
-            </div>
-            <div className="settings-right">
-              <span className="muted" />
-            </div>
-          </div>
+      <div className="settings-row" style={{ marginTop: 16 }}>
+        <button
+          type="button"
+          className={
+            clearDatabaseArmed
+              ? "btn-wide secondary danger-armed"
+              : "btn-wide secondary"
+          }
+          onClick={requestClearDatabase}
+          disabled={pendingClearDatabase}
+        >
+          {t("evoluClearDatabase")}
+        </button>
+      </div>
 
-          {/* Progress bar showing usage of 1MB limit */}
-          <div style={{ marginTop: 8, marginBottom: 16 }}>
-            <div
-              style={{
-                width: "100%",
-                height: 8,
-                backgroundColor: "var(--color-border)",
-                borderRadius: 4,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${percentage}%`,
-                  height: "100%",
-                  backgroundColor: getProgressColor(),
-                  transition: "width 0.3s ease",
-                }}
-              />
-            </div>
-            <div
-              style={{ marginTop: 4, textAlign: "center", fontSize: 12 }}
-              className="muted"
-            >
-              {percentage.toFixed(1)}% {t("evoluOfLimit")}
-            </div>
-          </div>
+      <h3 style={{ marginTop: 24, marginBottom: 12 }}>{t("evoluRowCounts")}</h3>
 
-          <div className="settings-row" style={{ marginTop: 16 }}>
-            <button
-              type="button"
-              className={
-                clearDatabaseArmed
-                  ? "btn-wide secondary danger-armed"
-                  : "btn-wide secondary"
-              }
-              onClick={requestClearDatabase}
-              disabled={pendingClearDatabase}
-            >
-              {t("evoluClearDatabase")}
-            </button>
-          </div>
+      <div
+        className="settings-row settings-link"
+        onClick={() => navigateTo({ route: "evoluCurrentData" })}
+        style={{ cursor: "pointer" }}
+      >
+        <div className="settings-left">
+          <span className="settings-label">{t("evoluData")}</span>
+        </div>
+        <div className="settings-right">
+          <span className="muted">{totalCurrentRows} rows</span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </div>
+      </div>
 
-          {/* Row counts with links */}
-          <h3 style={{ marginTop: 24, marginBottom: 12 }}>
-            {t("evoluRowCounts")}
-          </h3>
-
-          <div
-            className="settings-row settings-link"
-            onClick={() => navigateTo({ route: "evoluCurrentData" })}
-            style={{ cursor: "pointer" }}
-          >
-            <div className="settings-left">
-              <span className="settings-label">{t("evoluData")}</span>
-            </div>
-            <div className="settings-right">
-              <span className="muted">{totalCurrentRows} rows</span>
-              <span className="settings-chevron" aria-hidden="true">
-                &gt;
-              </span>
-            </div>
-          </div>
-
-          <div
-            className="settings-row settings-link"
-            onClick={() => navigateTo({ route: "evoluHistoryData" })}
-            style={{ cursor: "pointer" }}
-          >
-            <div className="settings-left">
-              <span className="settings-label">{t("evoluHistory")}</span>
-            </div>
-            <div className="settings-right">
-              <span className="muted">{historyRows} rows</span>
-              <span className="settings-chevron" aria-hidden="true">
-                &gt;
-              </span>
-            </div>
-          </div>
-        </>
-      )}
+      <div
+        className="settings-row settings-link"
+        onClick={() => navigateTo({ route: "evoluHistoryData" })}
+        style={{ cursor: "pointer" }}
+      >
+        <div className="settings-left">
+          <span className="settings-label">{t("evoluHistory")}</span>
+        </div>
+        <div className="settings-right">
+          <span className="muted">{historyRows} rows</span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </div>
+      </div>
     </section>
   );
 }
