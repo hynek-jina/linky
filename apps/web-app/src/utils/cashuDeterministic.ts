@@ -43,6 +43,42 @@ const CASHU_COUNTER_STORAGE_PREFIX = "linky.cashu.detCounter.v1";
 const CASHU_RESTORE_CURSOR_STORAGE_PREFIX = "linky.cashu.restoreCursor.v1";
 const CASHU_COUNTER_LOCK_PREFIX = "linky.cashu.detCounterLock.v1";
 
+// All localStorage prefixes whose state is tied to a specific cashu BIP-85
+// mnemonic. If the mnemonic changes, every entry under these prefixes refers
+// to a derivation tree the new mnemonic cannot reproduce — counters become
+// stale offsets, restore cursors point at empty regions, and any new mint
+// starts at a counter past the new seed's actual signed range. Wipe these
+// whenever the cashu mnemonic is replaced with a different value.
+const CASHU_SEED_BOUND_PREFIXES = [
+  CASHU_COUNTER_STORAGE_PREFIX,
+  CASHU_RESTORE_CURSOR_STORAGE_PREFIX,
+  CASHU_COUNTER_LOCK_PREFIX,
+] as const;
+
+export const wipeCashuDeterministicState = (): void => {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (CASHU_SEED_BOUND_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // ignore individual key failure
+      }
+    }
+  } catch {
+    // ignore storage unavailability
+  }
+  // Drop the in-memory queue too; the locks were keyed to the previous seed.
+  counterLocks.clear();
+};
+
 // In-memory per-keyset queue to ensure we never reuse the same deterministic
 // output counter range due to overlapping async mint operations.
 // Note: this does not coordinate across browser tabs/windows.

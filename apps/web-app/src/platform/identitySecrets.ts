@@ -1,4 +1,5 @@
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "../mnemonic";
+import { wipeCashuDeterministicState } from "../utils/cashuDeterministic";
 import {
   CASHU_BIP85_MNEMONIC_STORAGE_KEY,
   NOSTR_IDENTITY_SOURCE_STORAGE_KEY,
@@ -15,6 +16,27 @@ import {
   removeStoredSecret,
   writeStoredSecret,
 } from "./secretStorage";
+
+// Per-mint/keyset deterministic counters live in localStorage under
+// `linky.cashu.detCounter.v1:*` and are bound to whichever cashu BIP-85
+// mnemonic was active when they were last bumped. When the mnemonic itself
+// changes (re-onboarding, paste-nsec then derive back, restore-from-different
+// SLIP-39, ...) the counters become stale — they still point past the new
+// seed's actual signed range at the mint, so future mints start at an
+// arbitrary offset and NUT-09 restore from 0 silently gives up before
+// reaching them. Wipe whenever we're about to write a *different* mnemonic.
+const wipeCashuStateIfMnemonicChanged = async (
+  nextCashuMnemonic: string,
+): Promise<void> => {
+  const next = String(nextCashuMnemonic ?? "").trim();
+  if (!next) return;
+  const current = (
+    await readStoredSecret(CASHU_BIP85_MNEMONIC_STORAGE_KEY)
+  )?.trim();
+  if (!current) return; // no prior state to wipe
+  if (current === next) return; // unchanged
+  wipeCashuDeterministicState();
+};
 
 interface PersistIdentitySecretsParams {
   appMnemonic: string;
@@ -46,6 +68,7 @@ export const readStoredCashuMnemonic = async (): Promise<string | null> => {
 export const writeStoredCashuMnemonic = async (
   cashuMnemonic: string,
 ): Promise<void> => {
+  await wipeCashuStateIfMnemonicChanged(cashuMnemonic);
   await writeStoredSecret(CASHU_BIP85_MNEMONIC_STORAGE_KEY, cashuMnemonic);
 };
 
@@ -57,6 +80,8 @@ export const persistIdentitySecrets = async ({
   slip39Seed,
   switchedAtSec,
 }: PersistIdentitySecretsParams): Promise<void> => {
+  await wipeCashuStateIfMnemonicChanged(cashuMnemonic);
+
   await Promise.all([
     writeStoredSecret(NOSTR_NSEC_STORAGE_KEY, nsec),
     writeStoredSecret(NOSTR_SLIP39_SEED_STORAGE_KEY, slip39Seed),
@@ -106,6 +131,11 @@ export const persistSyncedActiveNostrIdentity = async ({
 };
 
 export const clearIdentitySecrets = async (): Promise<void> => {
+  // The deterministic counters belong to the seed that's being cleared. If
+  // the user logs in again with a different seed they'd otherwise inherit
+  // stale offsets that break NUT-09 restore.
+  wipeCashuDeterministicState();
+
   await Promise.all([
     removeStoredSecret(NOSTR_NSEC_STORAGE_KEY),
     removeStoredSecret(NOSTR_SLIP39_SEED_STORAGE_KEY),

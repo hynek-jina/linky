@@ -319,6 +319,21 @@ export const useRestoreMissingTokens = ({
               );
               const start = Math.max(0, highWater - restoreRescanWindow);
 
+              // cashu-ts batchRestore arg semantics (see source):
+              //   t (1st)  = total gap budget in counter positions
+              //   e (2nd)  = positions per HTTP /v1/restore request
+              //   stops after ceil(t / e) consecutive empty rounds
+              //
+              // The cashu-ts default `(300, 100)` is fine for healthy
+              // wallets: any consecutive activity keeps the scan going and
+              // a fully empty keyset finishes in ~1-2 s. We deliberately
+              // do NOT bump this further to chase very stale counters —
+              // those should be prevented at the source via
+              // `wipeCashuDeterministicState()` whenever the cashu BIP-85
+              // mnemonic changes. Widening the budget here would cost
+              // every user 5-50 s of restore wait just to rescue a handful
+              // of pre-fix wallets that can also recover by re-onboarding
+              // (which now wipes stale counters).
               const batchRestore = async (counterStart: number) =>
                 await wallet.batchRestore(300, 100, counterStart, keysetId);
 
