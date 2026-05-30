@@ -2,6 +2,7 @@ import React from "react";
 import { ProfileAvatarEditor } from "../components/ProfileAvatarEditor";
 import { ProfileQrButton } from "../components/ProfileQrButton";
 import type { AvatarEditorControlId } from "../derivedProfile";
+import { useNavigation } from "../hooks/useRouting";
 import {
   parseProfileGeneralStatusText,
   type ProfileStatusCurrency,
@@ -85,6 +86,7 @@ export function ProfilePage({
   t,
   toggleProfileStatusCurrency,
 }: ProfilePageProps): React.ReactElement {
+  const navigateTo = useNavigation();
   const profileStatusText = parseProfileGeneralStatusText(profileStatus);
 
   return (
@@ -134,21 +136,33 @@ export function ProfilePage({
                 }}
               >
                 <label htmlFor="profileLn">{t("lightningAddress")}</label>
-                {derivedProfile &&
-                profileEditLnAddress.trim() !== derivedProfile.lnAddress ? (
+                <div style={{ display: "flex", gap: 8 }}>
                   <button
                     type="button"
                     className="secondary"
                     onClick={() =>
-                      setProfileEditLnAddress(derivedProfile.lnAddress)
+                      navigateTo({ route: "profileClaimLightningAddress" })
                     }
-                    title={t("restore")}
-                    aria-label={t("restore")}
-                    style={{ paddingInline: 10, minWidth: 40 }}
+                    style={{ paddingInline: 10 }}
                   >
-                    ↺
+                    {t("claimOwnLightningAddressAction")}
                   </button>
-                ) : null}
+                  {derivedProfile &&
+                  profileEditLnAddress.trim() !== derivedProfile.lnAddress ? (
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() =>
+                        setProfileEditLnAddress(derivedProfile.lnAddress)
+                      }
+                      title={t("restore")}
+                      aria-label={t("restore")}
+                      style={{ paddingInline: 10, minWidth: 40 }}
+                    >
+                      ↺
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <input
                 id="profileLn"

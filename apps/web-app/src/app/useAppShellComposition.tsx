@@ -10,7 +10,11 @@ import {
 import React, { useMemo, useState } from "react";
 import { createSendTokenWithTokensAtMint } from "../cashuSend";
 import { ContactCard } from "../components/ContactCard";
-import { deriveDefaultProfile } from "../derivedProfile";
+import {
+  DEFAULT_LIGHTNING_ADDRESS_DOMAIN,
+  deriveDefaultLightningAddress,
+  deriveDefaultProfile,
+} from "../derivedProfile";
 import type { CashuTokenId, ContactId } from "../evolu";
 import {
   evolu,
@@ -2025,7 +2029,8 @@ export const useAppShellComposition = () => {
   useTopupInvoiceQuoteEffects({
     defaultMintUrl,
     effectiveMyLightningAddress:
-      myProfileLnAddress ?? (currentNpub ? `${currentNpub}@npub.cash` : null),
+      myProfileLnAddress ??
+      (currentNpub ? deriveDefaultLightningAddress(currentNpub) : null),
     routeKind: route.kind,
     t,
     topupAmount,
@@ -2992,9 +2997,9 @@ export const useAppShellComposition = () => {
     amountSat: number;
   }>(null);
 
-  const npubCashLightningAddress = useMemo(() => {
+  const defaultLightningAddress = useMemo(() => {
     if (!currentNpub) return null;
-    return `${currentNpub}@npub.cash`;
+    return deriveDefaultLightningAddress(currentNpub);
   }, [currentNpub]);
 
   const derivedProfile = useMemo(() => {
@@ -3007,11 +3012,17 @@ export const useAppShellComposition = () => {
     myProfilePicture ?? derivedProfile?.pictureUrl ?? null;
 
   const effectiveMyLightningAddress =
-    myProfileLnAddress ?? npubCashLightningAddress;
+    myProfileLnAddress ?? defaultLightningAddress;
 
   const npubCashServerBaseUrl = useMemo(() => {
     return resolveNpubCashServerBaseUrl(effectiveMyLightningAddress);
   }, [effectiveMyLightningAddress]);
+
+  const profileClaimLightningAddressServerBaseUrl = useMemo(() => {
+    return resolveNpubCashServerBaseUrl(
+      `claim@${DEFAULT_LIGHTNING_ADDRESS_DOMAIN}`,
+    );
+  }, []);
 
   const {
     cycleProfileAvatarControl,
@@ -3027,6 +3038,7 @@ export const useAppShellComposition = () => {
     profileEditsSavable,
     profilePhotoInputRef,
     profileSelectedPictureKind,
+    saveClaimedLightningAddress,
     saveProfileEdits,
     setIsProfileEditing,
     setProfileEditLnAddress,
@@ -7143,6 +7155,7 @@ export const useAppShellComposition = () => {
       isProfileEditing,
       isSavingContact,
       lang,
+      makeNip98AuthHeader,
       myProfileQr,
       profileStatusCurrencies,
       profileStatusIsSaving,
@@ -7164,6 +7177,7 @@ export const useAppShellComposition = () => {
       openContactPay,
       openScan,
       payAmount,
+      payLightningInvoiceWithCashu,
       paySelectedContact,
       requestSelectedContact,
       payWithCashuEnabled,
@@ -7173,6 +7187,7 @@ export const useAppShellComposition = () => {
       })(),
       pendingDeleteId,
       reactionsByMessageId,
+      profileClaimLightningAddressServerBaseUrl,
       profileCustomPictureUrl,
       profileEditLnAddress,
       profileEditName,
@@ -7191,6 +7206,7 @@ export const useAppShellComposition = () => {
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
       replyContext,
+      saveClaimedLightningAddress,
       saveProfileEdits,
       scanIsOpen,
       selectedContact,

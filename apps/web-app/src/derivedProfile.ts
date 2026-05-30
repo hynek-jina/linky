@@ -7,6 +7,8 @@ export type DerivedProfileDefaults = {
   pictureUrl: string;
 };
 
+export const DEFAULT_LIGHTNING_ADDRESS_DOMAIN = "linky.fit";
+
 export type AvatarEditorControlId =
   | "top"
   | "hairColor"
@@ -611,6 +613,21 @@ const dicebearAvataaarsUrlForNpub = (npub: string): string => {
   return deriveGeneratedAvatar(npub).pictureUrl;
 };
 
+export const deriveDefaultLightningAddress = (npub: string): string => {
+  const normalized = String(npub ?? "").trim();
+  return normalized ? `${normalized}@${DEFAULT_LIGHTNING_ADDRESS_DOMAIN}` : "";
+};
+
+export const parseDefaultLightningAddressNpub = (
+  lightningAddress: string,
+): string | null => {
+  const normalized = String(lightningAddress ?? "").trim();
+  const suffix = `@${DEFAULT_LIGHTNING_ADDRESS_DOMAIN}`;
+  if (!normalized.toLowerCase().endsWith(suffix)) return null;
+  const npub = normalized.slice(0, -suffix.length).trim();
+  return npub || null;
+};
+
 export const deriveDefaultProfile = (
   npub: string,
   lang: Lang = "en",
@@ -618,6 +635,6 @@ export const deriveDefaultProfile = (
   const normalized = String(npub ?? "").trim();
   const name = pickDeterministicName(normalized, lang);
   const pictureUrl = dicebearAvataaarsUrlForNpub(normalized);
-  const lnAddress = normalized ? `${normalized}@npub.cash` : "";
+  const lnAddress = deriveDefaultLightningAddress(normalized);
   return { name, lnAddress, pictureUrl };
 };

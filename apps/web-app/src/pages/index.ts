@@ -22,6 +22,7 @@ export { MintsPage } from "./MintsPage";
 export { NostrRelayNewPage } from "./NostrRelayNewPage";
 export { NostrRelayPage } from "./NostrRelayPage";
 export { NostrRelaysPage } from "./NostrRelaysPage";
+export { ProfileLightningAddressClaimPage } from "./ProfileLightningAddressClaimPage";
 export { ProfilePage } from "./ProfilePage";
 export { PushDebugPage } from "./PushDebugPage";
 export { SettingsPage } from "./SettingsPage";

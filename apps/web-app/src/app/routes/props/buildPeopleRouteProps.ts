@@ -34,6 +34,7 @@ interface BuildPeopleRoutePropsParams {
   isSavingContact: PeopleRoutesProps["contactEditProps"]["isSavingContact"];
   blockArchivedContact: PeopleRoutesProps["contactEditProps"]["blockArchivedContact"];
   lang: PeopleRoutesProps["chatProps"]["lang"];
+  makeNip98AuthHeader: PeopleRoutesProps["profileClaimLightningAddressProps"]["makeNip98AuthHeader"];
   myProfileQr: PeopleRoutesProps["profileProps"]["myProfileQr"];
   nostrPictureByNpub: PeopleRoutesProps["contactProps"]["nostrPictureByNpub"];
   onBlockUnknownContact: PeopleRoutesProps["chatProps"]["onBlockUnknownContact"];
@@ -52,11 +53,13 @@ interface BuildPeopleRoutePropsParams {
   openContactPay: PeopleRoutesProps["chatProps"]["openContactPay"];
   openScan: PeopleRoutesProps["contactNewProps"]["openScan"];
   payAmount: PeopleRoutesProps["contactPayProps"]["payAmount"];
+  payLightningInvoiceWithCashu: PeopleRoutesProps["profileClaimLightningAddressProps"]["payLightningInvoiceWithCashu"];
   paySelectedContact: PeopleRoutesProps["contactPayProps"]["paySelectedContact"];
   payWithCashuEnabled: PeopleRoutesProps["chatProps"]["payWithCashuEnabled"];
   reactionsByMessageId: PeopleRoutesProps["chatProps"]["reactionsByMessageId"];
   selectedContactStatusText: PeopleRoutesProps["contactProps"]["statusText"];
   pendingDeleteId: PeopleRoutesProps["contactEditProps"]["pendingDeleteId"];
+  profileClaimLightningAddressServerBaseUrl: PeopleRoutesProps["profileClaimLightningAddressProps"]["serverBaseUrl"];
   profileCustomPictureUrl: PeopleRoutesProps["profileProps"]["profileCustomPictureUrl"];
   profileEditLnAddress: PeopleRoutesProps["profileProps"]["profileEditLnAddress"];
   profileEditName: PeopleRoutesProps["profileProps"]["profileEditName"];
@@ -72,6 +75,7 @@ interface BuildPeopleRoutePropsParams {
   requestDeleteCurrentContact: PeopleRoutesProps["contactEditProps"]["requestDeleteCurrentContact"];
   requestSelectedContact: PeopleRoutesProps["contactPayProps"]["requestSelectedContact"];
   resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
+  saveClaimedLightningAddress: PeopleRoutesProps["profileClaimLightningAddressProps"]["saveClaimedLightningAddress"];
   saveProfileEdits: PeopleRoutesProps["profileProps"]["saveProfileEdits"];
   scanIsOpen: PeopleRoutesProps["contactNewProps"]["scanIsOpen"];
   replyContext: PeopleRoutesProps["chatProps"]["replyContext"];
@@ -124,6 +128,7 @@ export const buildPeopleRouteProps = ({
   isSavingContact,
   blockArchivedContact,
   lang,
+  makeNip98AuthHeader,
   myProfileQr,
   nostrPictureByNpub,
   onBlockUnknownContact,
@@ -142,11 +147,13 @@ export const buildPeopleRouteProps = ({
   openContactPay,
   openScan,
   payAmount,
+  payLightningInvoiceWithCashu,
   paySelectedContact,
   payWithCashuEnabled,
   reactionsByMessageId,
   selectedContactStatusText,
   pendingDeleteId,
+  profileClaimLightningAddressServerBaseUrl,
   profileCustomPictureUrl,
   profileEditLnAddress,
   profileEditName,
@@ -162,6 +169,7 @@ export const buildPeopleRouteProps = ({
   requestDeleteCurrentContact,
   requestSelectedContact,
   resetEditedContactFieldFromNostr,
+  saveClaimedLightningAddress,
   saveProfileEdits,
   scanIsOpen,
   replyContext,
@@ -268,6 +276,16 @@ export const buildPeopleRouteProps = ({
       feedbackContactNpub,
       openContactPay,
       statusText: selectedContactStatusText,
+      t,
+    },
+    profileClaimLightningAddressProps: {
+      cashuBalance,
+      cashuIsBusy,
+      effectiveMyLightningAddress,
+      makeNip98AuthHeader,
+      payLightningInvoiceWithCashu,
+      saveClaimedLightningAddress,
+      serverBaseUrl: profileClaimLightningAddressServerBaseUrl,
       t,
     },
     profileProps: {

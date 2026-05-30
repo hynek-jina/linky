@@ -1,6 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { parseDefaultLightningAddressNpub } from "../derivedProfile";
 import { useNavigation } from "../hooks/useRouting";
 
 interface SaveContactPromptModalProps {
@@ -28,13 +29,7 @@ export function SaveContactPromptModal({
 
   const handleSave = () => {
     const ln = String(lnAddress ?? "").trim();
-
-    const npub = (() => {
-      const lower = ln.toLowerCase();
-      if (!lower.endsWith("@npub.cash")) return null;
-      const left = ln.slice(0, -"@npub.cash".length).trim();
-      return left || null;
-    })();
+    const npub = parseDefaultLightningAddressNpub(ln);
 
     flushSync(() => {
       setContactNewPrefill({

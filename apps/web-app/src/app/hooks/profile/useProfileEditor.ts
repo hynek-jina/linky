@@ -48,6 +48,14 @@ interface UseProfileEditorParams {
   t: (key: string) => string;
 }
 
+interface PersistProfileValuesArgs {
+  lightningAddress: string;
+  name: string;
+  navigateToProfile: boolean;
+  picture: string;
+  status: string;
+}
+
 export const useProfileEditor = ({
   currentNpub,
   currentNsec,
@@ -165,154 +173,210 @@ export const useProfileEditor = ({
   const profileEditsSavable =
     profileEditsDirty && Boolean(currentNpub && currentNsec);
 
+  const persistProfileValues = React.useCallback(
+    async ({
+      lightningAddress,
+      name,
+      navigateToProfile,
+      picture,
+      status,
+    }: PersistProfileValuesArgs): Promise<boolean> => {
+      try {
+        if (!currentNpub || !currentNsec) {
+          setStatus(t("profileMissingNpub"));
+          return false;
+        }
+
+        const trimmedName = name.trim();
+        const trimmedLightningAddress = lightningAddress.trim();
+        const trimmedPicture = picture.trim();
+        const trimmedStatus = status.trim();
+        const nextStatus = buildProfileGeneralStatus({
+          currencies: parseProfileExchangeStatusCurrencies(myProfileStatus),
+          text: status,
+        });
+
+        const { nip19 } = await import("nostr-tools");
+
+        const decoded = nip19.decode(currentNsec);
+        if (decoded.type !== "nsec") throw new Error("Invalid nsec");
+        const privBytes = decoded.data as Uint8Array;
+
+        const cachedPrev =
+          loadCachedProfileMetadata(currentNpub)?.metadata ?? null;
+        const livePrev = await Promise.race([
+          fetchNostrProfileMetadata(currentNpub, {
+            relays: nostrFetchRelays,
+          }).catch(() => null),
+          new Promise<null>((resolve) =>
+            window.setTimeout(() => resolve(null), 2000),
+          ),
+        ]);
+
+        const prev = (livePrev ??
+          cachedPrev ??
+          myProfileMetadata ??
+          {}) as NostrProfileMetadata;
+
+        const contentObj: JsonRecord = {
+          ...(prev.name ? { name: prev.name } : {}),
+          ...(prev.displayName ? { display_name: prev.displayName } : {}),
+          ...(prev.picture ? { picture: prev.picture } : {}),
+          ...(prev.image ? { image: prev.image } : {}),
+          ...(prev.lud16 ? { lud16: prev.lud16 } : {}),
+          ...(prev.lud06 ? { lud06: prev.lud06 } : {}),
+        };
+
+        if (trimmedName) {
+          contentObj.name = trimmedName;
+          contentObj.display_name = trimmedName;
+        } else {
+          delete contentObj.name;
+          delete contentObj.display_name;
+        }
+
+        if (trimmedLightningAddress) {
+          contentObj.lud16 = trimmedLightningAddress;
+        } else {
+          delete contentObj.lud16;
+          delete contentObj.lud06;
+        }
+
+        if (trimmedPicture) {
+          contentObj.picture = trimmedPicture;
+          contentObj.image = trimmedPicture;
+        } else {
+          delete contentObj.picture;
+          delete contentObj.image;
+        }
+
+        const relaysToUse =
+          nostrFetchRelays.length > 0 ? nostrFetchRelays : NOSTR_RELAYS;
+
+        const statusPublish = await publishNostrGeneralStatus({
+          privBytes,
+          relays: relaysToUse,
+          status: nextStatus,
+        });
+        if (!statusPublish.anySuccess) throw new Error("status publish failed");
+
+        const publish = await publishKind0ProfileMetadata({
+          privBytes,
+          relays: relaysToUse,
+          content: contentObj,
+        });
+        if (!publish.anySuccess) throw new Error("publish failed");
+
+        const updatedMeta: NostrProfileMetadata = { ...prev };
+
+        if (trimmedName) {
+          updatedMeta.name = trimmedName;
+          updatedMeta.displayName = trimmedName;
+        } else {
+          delete updatedMeta.name;
+          delete updatedMeta.displayName;
+        }
+
+        if (trimmedLightningAddress) {
+          updatedMeta.lud16 = trimmedLightningAddress;
+        } else {
+          delete updatedMeta.lud16;
+          delete updatedMeta.lud06;
+        }
+
+        if (trimmedPicture) {
+          updatedMeta.picture = trimmedPicture;
+          updatedMeta.image = trimmedPicture;
+        } else {
+          delete updatedMeta.picture;
+          delete updatedMeta.image;
+        }
+
+        saveCachedProfileMetadata(currentNpub, updatedMeta);
+        saveCachedProfilePicture(currentNpub, trimmedPicture || null);
+        saveCachedNostrGeneralStatus(currentNpub, nextStatus);
+        setMyProfileMetadata(updatedMeta);
+        setMyProfileName(trimmedName || null);
+        setMyProfileLnAddress(trimmedLightningAddress || null);
+        setMyProfilePicture(trimmedPicture || null);
+        setMyProfileStatus(nextStatus);
+        setProfileEditName(trimmedName);
+        setProfileEditLnAddress(trimmedLightningAddress);
+        setProfileEditPicture(trimmedPicture);
+        setProfileEditStatus(trimmedStatus);
+
+        profileEditInitialRef.current = {
+          lnAddress: trimmedLightningAddress,
+          name: trimmedName,
+          picture: trimmedPicture,
+          status: trimmedStatus,
+        };
+
+        if (!trimmedPicture || !isHttpUrl(trimmedPicture)) {
+          void deleteCachedProfileAvatar(currentNpub);
+        }
+
+        if (navigateToProfile) {
+          setIsProfileEditing(false);
+          profileEditInitialRef.current = null;
+          navigateTo({ route: "profile" });
+        }
+
+        return true;
+      } catch (error) {
+        setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
+        return false;
+      }
+    },
+    [
+      currentNpub,
+      currentNsec,
+      myProfileMetadata,
+      myProfileStatus,
+      nostrFetchRelays,
+      setMyProfileLnAddress,
+      setMyProfileMetadata,
+      setMyProfileName,
+      setMyProfilePicture,
+      setMyProfileStatus,
+      setStatus,
+      t,
+    ],
+  );
+
   const saveProfileEdits = React.useCallback(async () => {
-    try {
-      if (!currentNpub || !currentNsec) {
-        setStatus(t("profileMissingNpub"));
-        return;
-      }
-
-      const name = profileEditName.trim();
-      const ln = profileEditLnAddress.trim();
-      const picture = profileEditPicture.trim();
-      const nextStatus = buildProfileGeneralStatus({
-        currencies: parseProfileExchangeStatusCurrencies(myProfileStatus),
-        text: profileEditStatus,
-      });
-
-      const { nip19 } = await import("nostr-tools");
-
-      const decoded = nip19.decode(currentNsec);
-      if (decoded.type !== "nsec") throw new Error("Invalid nsec");
-      const privBytes = decoded.data as Uint8Array;
-
-      const cachedPrev =
-        loadCachedProfileMetadata(currentNpub)?.metadata ?? null;
-      const livePrev = await Promise.race([
-        fetchNostrProfileMetadata(currentNpub, {
-          relays: nostrFetchRelays,
-        }).catch(() => null),
-        new Promise<null>((resolve) =>
-          window.setTimeout(() => resolve(null), 2000),
-        ),
-      ]);
-
-      const prev = (livePrev ??
-        cachedPrev ??
-        myProfileMetadata ??
-        {}) as NostrProfileMetadata;
-
-      const contentObj: JsonRecord = {
-        ...(prev.name ? { name: prev.name } : {}),
-        ...(prev.displayName ? { display_name: prev.displayName } : {}),
-        ...(prev.picture ? { picture: prev.picture } : {}),
-        ...(prev.image ? { image: prev.image } : {}),
-        ...(prev.lud16 ? { lud16: prev.lud16 } : {}),
-        ...(prev.lud06 ? { lud06: prev.lud06 } : {}),
-      };
-
-      if (name) {
-        contentObj.name = name;
-        contentObj.display_name = name;
-      } else {
-        delete contentObj.name;
-        delete contentObj.display_name;
-      }
-
-      if (ln) {
-        contentObj.lud16 = ln;
-      } else {
-        delete contentObj.lud16;
-        delete contentObj.lud06;
-      }
-
-      if (picture) {
-        contentObj.picture = picture;
-        contentObj.image = picture;
-      } else {
-        delete contentObj.picture;
-        delete contentObj.image;
-      }
-
-      const relaysToUse =
-        nostrFetchRelays.length > 0 ? nostrFetchRelays : NOSTR_RELAYS;
-
-      const statusPublish = await publishNostrGeneralStatus({
-        privBytes,
-        relays: relaysToUse,
-        status: nextStatus,
-      });
-      if (!statusPublish.anySuccess) throw new Error("status publish failed");
-
-      const publish = await publishKind0ProfileMetadata({
-        privBytes,
-        relays: relaysToUse,
-        content: contentObj,
-      });
-      if (!publish.anySuccess) throw new Error("publish failed");
-
-      const updatedMeta: NostrProfileMetadata = { ...prev };
-
-      if (name) {
-        updatedMeta.name = name;
-        updatedMeta.displayName = name;
-      } else {
-        delete updatedMeta.name;
-        delete updatedMeta.displayName;
-      }
-
-      if (ln) {
-        updatedMeta.lud16 = ln;
-      } else {
-        delete updatedMeta.lud16;
-        delete updatedMeta.lud06;
-      }
-
-      if (picture) {
-        updatedMeta.picture = picture;
-        updatedMeta.image = picture;
-      } else {
-        delete updatedMeta.picture;
-        delete updatedMeta.image;
-      }
-
-      saveCachedProfileMetadata(currentNpub, updatedMeta);
-      saveCachedProfilePicture(currentNpub, picture || null);
-      saveCachedNostrGeneralStatus(currentNpub, nextStatus);
-      setMyProfileMetadata(updatedMeta);
-
-      setMyProfileName(name || null);
-      setMyProfileLnAddress(ln || null);
-      setMyProfilePicture(picture || null);
-      setMyProfileStatus(nextStatus);
-      if (!picture || !isHttpUrl(picture)) {
-        void deleteCachedProfileAvatar(currentNpub);
-      }
-
-      setIsProfileEditing(false);
-      profileEditInitialRef.current = null;
-      navigateTo({ route: "profile" });
-    } catch (error) {
-      setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
-    }
+    await persistProfileValues({
+      lightningAddress: profileEditLnAddress,
+      name: profileEditName,
+      navigateToProfile: true,
+      picture: profileEditPicture,
+      status: profileEditStatus,
+    });
   }, [
-    currentNpub,
-    currentNsec,
-    myProfileMetadata,
-    nostrFetchRelays,
     profileEditLnAddress,
     profileEditName,
     profileEditPicture,
     profileEditStatus,
-    myProfileStatus,
-    setMyProfileLnAddress,
-    setMyProfileMetadata,
-    setMyProfileName,
-    setMyProfilePicture,
-    setMyProfileStatus,
-    setStatus,
-    t,
+    persistProfileValues,
   ]);
+
+  const saveClaimedLightningAddress = React.useCallback(
+    async (lightningAddress: string): Promise<boolean> => {
+      return persistProfileValues({
+        lightningAddress,
+        name: profileEditName,
+        navigateToProfile: false,
+        picture: profileEditPicture,
+        status: profileEditStatus,
+      });
+    },
+    [
+      persistProfileValues,
+      profileEditName,
+      profileEditPicture,
+      profileEditStatus,
+    ],
+  );
 
   const onPickProfilePhoto = React.useCallback(async () => {
     profilePhotoInputRef.current?.click();
@@ -362,6 +426,7 @@ export const useProfileEditor = ({
     profileEditsSavable,
     profilePhotoInputRef,
     profileSelectedPictureKind,
+    saveClaimedLightningAddress,
     saveProfileEdits,
     setIsProfileEditing,
     setProfileEditLnAddress,
