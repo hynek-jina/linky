@@ -319,8 +319,24 @@ export const useRestoreMissingTokens = ({
               );
               const start = Math.max(0, highWater - restoreRescanWindow);
 
+              // cashu-ts batchRestore arg semantics (see source):
+              //   t (1st)  = total gap budget in counter positions
+              //   e (2nd)  = positions per HTTP /v1/restore request
+              //   stops after ceil(t / e) consecutive empty rounds
+              //
+              // The library defaults `(300, 100)` mean only 3 empty rounds
+              // (~300 positions) before giving up. That breaks restore for
+              // any wallet whose deterministic counter is stale relative to
+              // the actual signed range — e.g., after a cashu mnemonic
+              // change leaves the counter at N but no proofs at 0..N-1 with
+              // the new seed. The scan dies long before reaching the
+              // freshly-minted proofs at counter N.
+              //
+              // 20000 / 200 = 100 empty rounds → ~20000 positions tolerated,
+              // 200 outputs per request stays well under cashu.cz's payload
+              // limit (>~1000 hits HTTP 422 on cashu.cz).
               const batchRestore = async (counterStart: number) =>
-                await wallet.batchRestore(300, 100, counterStart, keysetId);
+                await wallet.batchRestore(20000, 200, counterStart, keysetId);
 
               let restored: {
                 lastCounterWithSignature?: number;
