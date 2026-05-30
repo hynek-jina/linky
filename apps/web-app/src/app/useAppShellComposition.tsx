@@ -121,6 +121,7 @@ import {
   PRESET_MINTS,
 } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
+import { resolveNpubCashServerBaseUrl } from "../utils/npubCashServer";
 import {
   clearStoredPushNsec,
   setStoredPushNsec,
@@ -2022,8 +2023,9 @@ export const useAppShellComposition = () => {
   });
 
   useTopupInvoiceQuoteEffects({
-    currentNpub,
     defaultMintUrl,
+    effectiveMyLightningAddress:
+      myProfileLnAddress ?? (currentNpub ? `${currentNpub}@npub.cash` : null),
     routeKind: route.kind,
     t,
     topupAmount,
@@ -3007,6 +3009,10 @@ export const useAppShellComposition = () => {
   const effectiveMyLightningAddress =
     myProfileLnAddress ?? npubCashLightningAddress;
 
+  const npubCashServerBaseUrl = useMemo(() => {
+    return resolveNpubCashServerBaseUrl(effectiveMyLightningAddress);
+  }, [effectiveMyLightningAddress]);
+
   const {
     cycleProfileAvatarControl,
     isProfileEditing,
@@ -3087,6 +3093,7 @@ export const useAppShellComposition = () => {
     defaultMintUrlDraft,
     hasMintOverrideRef,
     makeLocalStorageKey,
+    npubCashServerBaseUrl,
     npubCashMintSyncRef,
     pushToast,
     requestMintAutoswapChangeConfirmation: React.useCallback(
@@ -3163,6 +3170,7 @@ export const useAppShellComposition = () => {
     makeNip98AuthHeader,
     maybeShowPwaNotification,
     mintInfoByUrl,
+    npubCashServerBaseUrl,
     npubCashClaimInFlightRef,
     recentlyReceivedTokenTimerRef,
     refreshMintInfo,
@@ -3215,6 +3223,7 @@ export const useAppShellComposition = () => {
     currentNsec,
     hasMintOverrideRef,
     makeNip98AuthHeader,
+    npubCashServerBaseUrl,
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
     npubCashInfoLoadedForNpubRef,

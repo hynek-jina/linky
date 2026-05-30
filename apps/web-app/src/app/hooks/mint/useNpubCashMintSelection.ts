@@ -28,6 +28,7 @@ interface UseNpubCashMintSelectionParams {
   defaultMintUrlDraft: string;
   hasMintOverrideRef: React.RefObject<boolean>;
   makeLocalStorageKey: (prefix: string) => string;
+  npubCashServerBaseUrl: string;
   npubCashMintSyncRef: React.RefObject<string | null>;
   pushToast: (message: string) => void;
   requestMintAutoswapChangeConfirmation: (args: {
@@ -99,6 +100,7 @@ export const useNpubCashMintSelection = ({
   defaultMintUrlDraft,
   hasMintOverrideRef,
   makeLocalStorageKey,
+  npubCashServerBaseUrl,
   npubCashMintSyncRef,
   pushToast,
   requestMintAutoswapChangeConfirmation,
@@ -142,8 +144,7 @@ export const useNpubCashMintSelection = ({
       const cleaned = normalizeMintUrl(mintUrl);
       if (!cleaned) return;
 
-      const baseUrl = "https://npub.cash";
-      const url = `${baseUrl}/api/v1/info/mint`;
+      const url = `${npubCashServerBaseUrl}/api/v1/info/mint`;
 
       const payload = { mintUrl: cleaned };
       const auth = await makeNip98AuthHeader(url, "PUT", payload);
@@ -159,7 +160,7 @@ export const useNpubCashMintSelection = ({
         throw new Error("npub.cash mint update failed");
       }
     },
-    [currentNpub, currentNsec, makeNip98AuthHeader],
+    [currentNpub, currentNsec, makeNip98AuthHeader, npubCashServerBaseUrl],
   );
 
   const applyDefaultMintSelection = React.useCallback(
