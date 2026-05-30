@@ -17,6 +17,7 @@ interface ProfileLightningAddressClaimPageProps {
   cashuIsBusy: boolean;
   effectiveMyLightningAddress: string | null;
   makeNip98AuthHeader: Nip98AuthHeaderFactory;
+  ownedLightningAddresses: readonly string[];
   payLightningInvoiceWithCashu: (invoice: string) => Promise<boolean>;
   saveClaimedLightningAddress: (lightningAddress: string) => Promise<boolean>;
   serverBaseUrl: string;
@@ -37,6 +38,7 @@ export function ProfileLightningAddressClaimPage({
   cashuIsBusy,
   effectiveMyLightningAddress,
   makeNip98AuthHeader,
+  ownedLightningAddresses,
   payLightningInvoiceWithCashu,
   saveClaimedLightningAddress,
   serverBaseUrl,
@@ -44,6 +46,8 @@ export function ProfileLightningAddressClaimPage({
 }: ProfileLightningAddressClaimPageProps): React.ReactElement {
   const navigateTo = useNavigation();
   const [usernameInput, setUsernameInput] = React.useState("");
+  const [activatingLightningAddress, setActivatingLightningAddress] =
+    React.useState<string | null>(null);
   const [isChecking, setIsChecking] = React.useState(false);
   const [isConfirming, setIsConfirming] = React.useState(false);
   const [previewResult, setPreviewResult] = React.useState<null | {
@@ -67,19 +71,36 @@ export function ProfileLightningAddressClaimPage({
     () => getOwnLightningAddressFromUsername(normalizedUsername),
     [normalizedUsername],
   );
+  const normalizedEffectiveMyLightningAddress = React.useMemo(
+    () =>
+      String(effectiveMyLightningAddress ?? "")
+        .trim()
+        .toLowerCase(),
+    [effectiveMyLightningAddress],
+  );
+  const visibleOwnedLightningAddresses = React.useMemo(() => {
+    const seen = new Set<string>();
+    const addresses: string[] = [];
+
+    for (const candidate of ownedLightningAddresses) {
+      const normalized = String(candidate ?? "")
+        .trim()
+        .toLowerCase();
+      if (!normalized || seen.has(normalized)) continue;
+      seen.add(normalized);
+      addresses.push(normalized);
+    }
+
+    return addresses;
+  }, [ownedLightningAddresses]);
+  const hasOwnedLightningAddresses = visibleOwnedLightningAddresses.length > 0;
 
   React.useEffect(() => {
     setSubmissionError(null);
   }, [normalizedUsername]);
 
   React.useEffect(() => {
-    if (!normalizedUsername) {
-      setIsChecking(false);
-      setPreviewResult(null);
-      return;
-    }
-
-    if (validationIssue) {
+    if (hasOwnedLightningAddresses || !normalizedUsername || validationIssue) {
       setIsChecking(false);
       setPreviewResult(null);
       return;
@@ -129,7 +150,13 @@ export function ProfileLightningAddressClaimPage({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [makeNip98AuthHeader, normalizedUsername, serverBaseUrl, validationIssue]);
+  }, [
+    hasOwnedLightningAddresses,
+    makeNip98AuthHeader,
+    normalizedUsername,
+    serverBaseUrl,
+    validationIssue,
+  ]);
 
   const availablePreview = previewResult?.preview ?? null;
   const quotedAmount = availablePreview?.invoice.amountSat ?? null;
@@ -149,6 +176,9 @@ export function ProfileLightningAddressClaimPage({
   })();
 
   const availabilityMessage = (() => {
+    if (hasOwnedLightningAddresses) {
+      return t("claimOwnLightningAddressOwnedHint");
+    }
     if (!normalizedUsername) return t("claimOwnLightningAddressHint");
     if (validationMessage) return validationMessage;
     if (isChecking) return t("claimOwnLightningAddressChecking");
@@ -230,46 +260,86 @@ export function ProfileLightningAddressClaimPage({
     t,
   ]);
 
+  const handleActivateOwnedLightningAddress = React.useCallback(
+    async (lightningAddress: string) => {
+      const normalized = String(lightningAddress ?? "")
+        .trim()
+        .toLowerCase();
+      if (!normalized) return;
+      if (
+        activatingLightningAddress ||
+        normalized === normalizedEffectiveMyLightningAddress
+      ) {
+        return;
+      }
+
+      setSubmissionError(null);
+      setActivatingLightningAddress(normalized);
+      try {
+        const saved = await saveClaimedLightningAddress(normalized);
+        if (!saved) return;
+        navigateTo({ route: "profileEdit" });
+      } finally {
+        setActivatingLightningAddress(null);
+      }
+    },
+    [
+      activatingLightningAddress,
+      navigateTo,
+      normalizedEffectiveMyLightningAddress,
+      saveClaimedLightningAddress,
+    ],
+  );
+
   return (
     <section className="panel">
       <div className="panel-header" style={{ marginBottom: 12 }}>
         <strong>{t("claimOwnLightningAddressTitle")}</strong>
       </div>
 
+      {visibleOwnedLightningAddresses.length > 0 ? (
+        <div style={{ marginBottom: 16 }}>
+          <p className="muted" style={{ marginBottom: 8, marginTop: 0 }}>
+            {t("claimOwnLightningAddressOwned")}
+          </p>
+          {visibleOwnedLightningAddresses.map((lightningAddress) => {
+            const isActive =
+              lightningAddress === normalizedEffectiveMyLightningAddress;
+            const isActivating =
+              activatingLightningAddress === lightningAddress;
+
+            return (
+              <div className="settings-row" key={lightningAddress}>
+                <div className="settings-left">
+                  <span className="settings-label">
+                    {formatShortLightningAddress(lightningAddress)}
+                  </span>
+                </div>
+                <div className="settings-right">
+                  <button
+                    className="secondary"
+                    disabled={isActive || isActivating || isConfirming}
+                    onClick={() => {
+                      void handleActivateOwnedLightningAddress(
+                        lightningAddress,
+                      );
+                    }}
+                  >
+                    {isActive
+                      ? t("claimOwnLightningAddressActive")
+                      : t("claimOwnLightningAddressActivate")}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
       {effectiveMyLightningAddress ? (
         <p className="muted" style={{ marginTop: 0 }}>
           {t("claimOwnLightningAddressCurrent")}:{" "}
           {formatShortLightningAddress(effectiveMyLightningAddress)}
-        </p>
-      ) : null}
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <label htmlFor="profileClaimLightningUsername">
-          {t("claimOwnLightningAddressInputLabel")}
-        </label>
-      </div>
-
-      <input
-        id="profileClaimLightningUsername"
-        autoCapitalize="none"
-        autoCorrect="off"
-        inputMode="text"
-        onChange={(event) => setUsernameInput(event.target.value)}
-        placeholder={t("claimOwnLightningAddressPlaceholder")}
-        spellCheck={false}
-        value={usernameInput}
-      />
-
-      {desiredLightningAddress ? (
-        <p className="muted" style={{ marginTop: 8 }}>
-          {t("claimOwnLightningAddressDesired")}:{" "}
-          {formatShortLightningAddress(desiredLightningAddress)}
         </p>
       ) : null}
 
@@ -279,34 +349,87 @@ export function ProfileLightningAddressClaimPage({
         </div>
       </div>
 
-      {availablePreview ? (
-        <div style={{ marginTop: 16 }}>
-          <div className="settings-row">
-            <div className="settings-left">
-              <span className="settings-label">
-                {t("claimOwnLightningAddressPrice")}
-              </span>
-            </div>
-            <div className="settings-right">
-              {quotedAmount === null ? (
-                <span className="muted">
-                  {t("lightningInvoiceConfirmUnknownAmount")}
-                </span>
-              ) : (
-                <WalletBalance
-                  ariaLabel={t("claimOwnLightningAddressPrice")}
-                  balance={quotedAmount}
-                />
-              )}
-            </div>
+      {!hasOwnedLightningAddresses ? (
+        <>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <label htmlFor="profileClaimLightningUsername">
+              {t("claimOwnLightningAddressInputLabel")}
+            </label>
           </div>
 
-          {availablePreview.invoice.description ? (
+          <input
+            id="profileClaimLightningUsername"
+            autoCapitalize="none"
+            autoCorrect="off"
+            inputMode="text"
+            onChange={(event) => setUsernameInput(event.target.value)}
+            placeholder={t("claimOwnLightningAddressPlaceholder")}
+            spellCheck={false}
+            value={usernameInput}
+          />
+
+          {desiredLightningAddress ? (
             <p className="muted" style={{ marginTop: 8 }}>
-              {availablePreview.invoice.description}
+              {t("claimOwnLightningAddressDesired")}:{" "}
+              {formatShortLightningAddress(desiredLightningAddress)}
             </p>
           ) : null}
-        </div>
+
+          {availablePreview ? (
+            <div style={{ marginTop: 16 }}>
+              <div className="settings-row">
+                <div className="settings-left">
+                  <span className="settings-label">
+                    {t("claimOwnLightningAddressPrice")}
+                  </span>
+                </div>
+                <div className="settings-right">
+                  {quotedAmount === null ? (
+                    <span className="muted">
+                      {t("lightningInvoiceConfirmUnknownAmount")}
+                    </span>
+                  ) : (
+                    <WalletBalance
+                      ariaLabel={t("claimOwnLightningAddressPrice")}
+                      balance={quotedAmount}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {availablePreview.invoice.description ? (
+                <p className="muted" style={{ marginTop: 8 }}>
+                  {availablePreview.invoice.description}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="panel-header" style={{ marginTop: 16 }}>
+            <button
+              disabled={
+                !availablePreview ||
+                activatingLightningAddress !== null ||
+                cashuIsBusy ||
+                isChecking ||
+                isConfirming ||
+                insufficientBalance
+              }
+              onClick={() => {
+                void handleConfirm();
+              }}
+              title={insufficientBalance ? t("payInsufficient") : undefined}
+            >
+              {t("claimOwnLightningAddressConfirm")}
+            </button>
+          </div>
+        </>
       ) : null}
 
       {submissionError ? (
@@ -314,24 +437,6 @@ export function ProfileLightningAddressClaimPage({
           {submissionError}
         </p>
       ) : null}
-
-      <div className="panel-header" style={{ marginTop: 16 }}>
-        <button
-          disabled={
-            !availablePreview ||
-            cashuIsBusy ||
-            isChecking ||
-            isConfirming ||
-            insufficientBalance
-          }
-          onClick={() => {
-            void handleConfirm();
-          }}
-          title={insufficientBalance ? t("payInsufficient") : undefined}
-        >
-          {t("claimOwnLightningAddressConfirm")}
-        </button>
-      </div>
     </section>
   );
 }

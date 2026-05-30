@@ -125,6 +125,7 @@ import {
   PRESET_MINTS,
 } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
+import { parseNpubCashProfileInfo } from "../utils/npubCashInfo";
 import { resolveNpubCashServerBaseUrl } from "../utils/npubCashServer";
 import {
   clearStoredPushNsec,
@@ -1601,6 +1602,8 @@ export const useAppShellComposition = () => {
   const [myProfileLnAddress, setMyProfileLnAddress] = useState<string | null>(
     null,
   );
+  const [ownedProfileLightningAddresses, setOwnedProfileLightningAddresses] =
+    useState<string[]>([]);
   const [myProfileStatus, setMyProfileStatus] = useState<string | null>(null);
   const [myProfileMetadata, setMyProfileMetadata] =
     useState<NostrProfileMetadata | null>(null);
@@ -3106,6 +3109,8 @@ export const useAppShellComposition = () => {
     hasMintOverrideRef,
     makeLocalStorageKey,
     npubCashServerBaseUrl,
+    ownedLightningAddresses: ownedProfileLightningAddresses,
+    profileClaimLightningAddressServerBaseUrl,
     npubCashMintSyncRef,
     pushToast,
     requestMintAutoswapChangeConfirmation: React.useCallback(
@@ -3135,6 +3140,57 @@ export const useAppShellComposition = () => {
     },
     [applyDefaultMintSelectionInner],
   );
+
+  React.useEffect(() => {
+    if (!currentNpub || !currentNsec) {
+      setOwnedProfileLightningAddresses([]);
+      return;
+    }
+
+    setOwnedProfileLightningAddresses([]);
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const loadOwnedLightningAddresses = async () => {
+      try {
+        const url = `${profileClaimLightningAddressServerBaseUrl}/api/v1/info`;
+        const auth = await makeNip98AuthHeader(url, "GET");
+        const response = await fetch(url, {
+          method: "GET",
+          headers: { Authorization: auth },
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          if (!cancelled) {
+            setOwnedProfileLightningAddresses([]);
+          }
+          return;
+        }
+
+        const json = await response.json();
+        if (cancelled) return;
+
+        const info = parseNpubCashProfileInfo(json);
+        setOwnedProfileLightningAddresses(info.ownedLightningAddresses);
+      } catch {
+        if (cancelled) return;
+        setOwnedProfileLightningAddresses([]);
+      }
+    };
+
+    void loadOwnedLightningAddresses();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [
+    currentNpub,
+    currentNsec,
+    makeNip98AuthHeader,
+    profileClaimLightningAddressServerBaseUrl,
+  ]);
 
   React.useEffect(() => {
     const selectedMint = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
@@ -7181,6 +7237,7 @@ export const useAppShellComposition = () => {
       paySelectedContact,
       requestSelectedContact,
       payWithCashuEnabled,
+      ownedLightningAddresses: ownedProfileLightningAddresses,
       selectedContactStatusText: (() => {
         const npub = normalizeNpubIdentifier(selectedContact?.npub);
         return npub ? (nostrStatusByNpub[npub] ?? null) : null;

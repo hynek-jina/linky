@@ -33,6 +33,7 @@ interface ProfilePageProps {
   onProfilePhotoSelected: (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => Promise<void>;
+  ownedLightningAddresses: readonly string[];
   profileCustomPictureUrl: string;
   profileEditLnAddress: string;
   profileEditName: string;
@@ -67,6 +68,7 @@ export function ProfilePage({
   myProfileQr,
   onPickProfilePhoto,
   onProfilePhotoSelected,
+  ownedLightningAddresses,
   profileCustomPictureUrl,
   profileEditLnAddress,
   profileEditName,
@@ -88,6 +90,7 @@ export function ProfilePage({
 }: ProfilePageProps): React.ReactElement {
   const navigateTo = useNavigation();
   const profileStatusText = parseProfileGeneralStatusText(profileStatus);
+  const hasOwnedLightningAddress = ownedLightningAddresses.length > 0;
 
   return (
     <section className="panel">
@@ -147,7 +150,8 @@ export function ProfilePage({
                   >
                     {t("claimOwnLightningAddressAction")}
                   </button>
-                  {derivedProfile &&
+                  {!hasOwnedLightningAddress &&
+                  derivedProfile &&
                   profileEditLnAddress.trim() !== derivedProfile.lnAddress ? (
                     <button
                       type="button"

@@ -121,6 +121,11 @@ export const en = {
   claimOwnLightningAddressAvailable: "Address is available.",
   claimOwnLightningAddressPrice: "Price",
   claimOwnLightningAddressConfirm: "Pay and use",
+  claimOwnLightningAddressOwned: "Paid Linky addresses",
+  claimOwnLightningAddressOwnedHint:
+    "A custom lightning address has already been purchased for this account. You can only reactivate it here.",
+  claimOwnLightningAddressActivate: "Activate",
+  claimOwnLightningAddressActive: "Active",
   claimOwnLightningAddressTooShort: "Use at least 3 characters.",
   claimOwnLightningAddressInvalid:
     "Use letters and numbers only, without the npub1 prefix.",

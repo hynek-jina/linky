@@ -52,6 +52,7 @@ interface BuildPeopleRoutePropsParams {
   onReply: PeopleRoutesProps["chatProps"]["onReply"];
   openContactPay: PeopleRoutesProps["chatProps"]["openContactPay"];
   openScan: PeopleRoutesProps["contactNewProps"]["openScan"];
+  ownedLightningAddresses: PeopleRoutesProps["profileProps"]["ownedLightningAddresses"];
   payAmount: PeopleRoutesProps["contactPayProps"]["payAmount"];
   payLightningInvoiceWithCashu: PeopleRoutesProps["profileClaimLightningAddressProps"]["payLightningInvoiceWithCashu"];
   paySelectedContact: PeopleRoutesProps["contactPayProps"]["paySelectedContact"];
@@ -146,6 +147,7 @@ export const buildPeopleRouteProps = ({
   onReply,
   openContactPay,
   openScan,
+  ownedLightningAddresses,
   payAmount,
   payLightningInvoiceWithCashu,
   paySelectedContact,
@@ -283,6 +285,7 @@ export const buildPeopleRouteProps = ({
       cashuIsBusy,
       effectiveMyLightningAddress,
       makeNip98AuthHeader,
+      ownedLightningAddresses,
       payLightningInvoiceWithCashu,
       saveClaimedLightningAddress,
       serverBaseUrl: profileClaimLightningAddressServerBaseUrl,
@@ -314,6 +317,7 @@ export const buildPeopleRouteProps = ({
       setProfileEditStatus,
       onProfilePhotoSelected,
       onPickProfilePhoto,
+      ownedLightningAddresses,
       saveProfileEdits,
       copyText,
       t,

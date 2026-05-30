@@ -29,6 +29,8 @@ interface UseNpubCashMintSelectionParams {
   hasMintOverrideRef: React.RefObject<boolean>;
   makeLocalStorageKey: (prefix: string) => string;
   npubCashServerBaseUrl: string;
+  ownedLightningAddresses: readonly string[];
+  profileClaimLightningAddressServerBaseUrl: string;
   npubCashMintSyncRef: React.RefObject<string | null>;
   pushToast: (message: string) => void;
   requestMintAutoswapChangeConfirmation: (args: {
@@ -52,6 +54,16 @@ export const getMintSelectionDisplayName = (mintUrl: string): string => {
   } catch {
     return cleaned.replace(/^https?:\/\//i, "");
   }
+};
+
+export const resolveMintSyncServerBaseUrl = (args: {
+  npubCashServerBaseUrl: string;
+  ownedLightningAddresses: readonly string[];
+  profileClaimLightningAddressServerBaseUrl: string;
+}): string => {
+  return args.ownedLightningAddresses.length > 0
+    ? args.profileClaimLightningAddressServerBaseUrl
+    : args.npubCashServerBaseUrl;
 };
 
 export const getMintSelectionAutoswapPlan = ({
@@ -101,6 +113,8 @@ export const useNpubCashMintSelection = ({
   hasMintOverrideRef,
   makeLocalStorageKey,
   npubCashServerBaseUrl,
+  ownedLightningAddresses,
+  profileClaimLightningAddressServerBaseUrl,
   npubCashMintSyncRef,
   pushToast,
   requestMintAutoswapChangeConfirmation,
@@ -144,7 +158,12 @@ export const useNpubCashMintSelection = ({
       const cleaned = normalizeMintUrl(mintUrl);
       if (!cleaned) return;
 
-      const url = `${npubCashServerBaseUrl}/api/v1/info/mint`;
+      const syncServerBaseUrl = resolveMintSyncServerBaseUrl({
+        npubCashServerBaseUrl,
+        ownedLightningAddresses,
+        profileClaimLightningAddressServerBaseUrl,
+      });
+      const url = `${syncServerBaseUrl}/api/v1/info/mint`;
 
       const payload = { mintUrl: cleaned };
       const auth = await makeNip98AuthHeader(url, "PUT", payload);
@@ -160,7 +179,14 @@ export const useNpubCashMintSelection = ({
         throw new Error("npub.cash mint update failed");
       }
     },
-    [currentNpub, currentNsec, makeNip98AuthHeader, npubCashServerBaseUrl],
+    [
+      currentNpub,
+      currentNsec,
+      makeNip98AuthHeader,
+      npubCashServerBaseUrl,
+      ownedLightningAddresses,
+      profileClaimLightningAddressServerBaseUrl,
+    ],
   );
 
   const applyDefaultMintSelection = React.useCallback(
@@ -205,6 +231,8 @@ export const useNpubCashMintSelection = ({
         } else {
           pushToast(t("mintUpdateFailed"));
         }
+        setStatus(null);
+        return;
       }
 
       const key = makeLocalStorageKey(CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY);

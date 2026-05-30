@@ -122,6 +122,11 @@ export const cs = {
   claimOwnLightningAddressAvailable: "Adresa je dostupná.",
   claimOwnLightningAddressPrice: "Cena",
   claimOwnLightningAddressConfirm: "Zaplatit a použít",
+  claimOwnLightningAddressOwned: "Zaplacené Linky adresy",
+  claimOwnLightningAddressOwnedHint:
+    "Vlastní lightning adresa už byla pro tento účet pořízena. Tady ji můžete jen znovu aktivovat.",
+  claimOwnLightningAddressActivate: "Aktivovat",
+  claimOwnLightningAddressActive: "Aktivní",
   claimOwnLightningAddressTooShort: "Použijte aspoň 3 znaky.",
   claimOwnLightningAddressInvalid:
     "Použijte jen písmena a čísla, bez prefixu npub1.",
