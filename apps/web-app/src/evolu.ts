@@ -646,6 +646,7 @@ export const getEvoluDatabaseInfo = async (): Promise<{
     "nostrIdentity",
     "nostrMessage",
     "nostrReaction",
+    "transaction",
     "ownerMeta",
   ] as const;
 
@@ -756,20 +757,29 @@ const uint8ArrayToBase64 = (bytes: unknown): string => {
   }
 };
 
+const timestampToMs = (timestampBytes: unknown): number | null => {
+  const arr = toByteArray(timestampBytes);
+  if (arr.length < 8) return null;
+
+  try {
+    let millis = 0;
+    for (let i = 0; i < 6; i++) {
+      millis = millis * 256 + arr[i];
+    }
+    return Number.isFinite(millis) && millis > 0 ? millis : null;
+  } catch {
+    return null;
+  }
+};
+
 // Helper to convert timestamp bytes to readable date
 // Evolu timestamp format: 16 bytes, hybrid logical clock (HLC)
 // First 8 bytes: [millis (48 bits) + counter (16 bits)] in big-endian
 // Reference: https://evolu.dev/docs/how-evolu-works
 const timestampToDate = (timestampBytes: unknown): string => {
-  const arr = toByteArray(timestampBytes);
-  if (arr.length < 8) return "";
+  const millis = timestampToMs(timestampBytes);
+  if (millis === null) return "";
   try {
-    // Convert bytes to milliseconds since epoch
-    // First 6 bytes = 48-bit milliseconds timestamp (big-endian)
-    let millis = 0;
-    for (let i = 0; i < 6; i++) {
-      millis = millis * 256 + arr[i];
-    }
     const date = new Date(millis);
     if (isNaN(date.getTime())) return "Invalid timestamp";
     return date.toLocaleString("cs-CZ");
@@ -787,6 +797,14 @@ export interface EvoluHistoryRow {
   value: JsonValue;
   timestamp: string;
   [key: string]: JsonValue;
+}
+
+export interface EvoluHistoryMutationEntry {
+  id: string;
+  ownerId: string;
+  table: string;
+  timestampKey: string;
+  timestampMs: number | null;
 }
 
 // Load history data from evolu_history table with pagination support
@@ -822,6 +840,30 @@ export const loadEvoluHistoryData = async (
   }
 };
 
+export const loadEvoluHistoryMutationEntries = async (): Promise<
+  readonly EvoluHistoryMutationEntry[]
+> => {
+  const instance = getEvolu();
+
+  try {
+    const q = createUntypedQuery(instance, (db) =>
+      db.selectFrom("evolu_history").selectAll(),
+    );
+    const rows = await loadUntypedQueryRows(instance, q);
+
+    return rows.map((row) => ({
+      id: uint8ArrayToBase64(row.id),
+      ownerId: uint8ArrayToBase64(row.ownerId),
+      table: String(row.table ?? ""),
+      timestampKey: uint8ArrayToBase64(row.timestamp),
+      timestampMs: timestampToMs(row.timestamp),
+    }));
+  } catch (err) {
+    console.error("Failed to load evolu history mutation entries:", err);
+    return [];
+  }
+};
+
 // Load current data from all tables
 export const loadEvoluCurrentData = async (): Promise<
   Record<string, Record<string, JsonValue>[]>
@@ -832,6 +874,7 @@ export const loadEvoluCurrentData = async (): Promise<
     "nostrIdentity",
     "nostrMessage",
     "nostrReaction",
+    "transaction",
     "ownerMeta",
   ] as const;
 

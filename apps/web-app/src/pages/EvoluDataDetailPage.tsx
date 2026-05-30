@@ -14,6 +14,9 @@ interface EvoluDataDetailPageProps {
   evoluContactsOwnerIndex: number;
   evoluContactsOwnerNewContactsCount: number;
   evoluContactsOwnerPointer: string;
+  evoluTransactionsOwnerId: string | null;
+  evoluTransactionsOwnerIndex: number;
+  evoluTransactionsOwnerPointer: string;
   clearDatabaseArmed: boolean;
   pendingClearDatabase: boolean;
   requestClearDatabase: () => void;
@@ -33,6 +36,9 @@ export function EvoluDataDetailPage({
   evoluContactsOwnerIndex,
   evoluContactsOwnerNewContactsCount,
   evoluContactsOwnerPointer,
+  evoluTransactionsOwnerId,
+  evoluTransactionsOwnerIndex,
+  evoluTransactionsOwnerPointer,
   clearDatabaseArmed,
   pendingClearDatabase,
   requestClearDatabase,
@@ -40,9 +46,9 @@ export function EvoluDataDetailPage({
   loadCurrentData,
   t,
 }: EvoluDataDetailPageProps): React.ReactElement {
-  const [ownerView, setOwnerView] = useState<"all" | "meta" | "contacts">(
-    "all",
-  );
+  const [ownerView, setOwnerView] = useState<
+    "all" | "meta" | "contacts" | "transactions"
+  >("all");
   const [showHistoryData, setShowHistoryData] = useState(false);
   const [showCurrentData, setShowCurrentData] = useState(false);
   const [historyData, setHistoryData] = useState<EvoluHistoryRow[]>([]);
@@ -82,6 +88,7 @@ export function EvoluDataDetailPage({
     "nostrIdentity",
     "nostrMessage",
     "nostrReaction",
+    "transaction",
   ];
   const systemTables = ["ownerMeta"];
 
@@ -89,6 +96,7 @@ export function EvoluDataDetailPage({
   const scopedEntries = tableEntries.filter(([name]) => {
     if (ownerView === "meta") return name === "ownerMeta";
     if (ownerView === "contacts") return name === "contact";
+    if (ownerView === "transactions") return name === "transaction";
     return true;
   });
   const userTableEntries = scopedEntries
@@ -133,22 +141,68 @@ export function EvoluDataDetailPage({
 
   const currentDataEntries = React.useMemo(() => {
     const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
+    const activeTransactionsOwnerId = String(
+      evoluTransactionsOwnerId ?? "",
+    ).trim();
 
     return Object.entries(currentData)
       .filter(([tableName]) => {
         if (ownerView === "meta") return tableName === "ownerMeta";
         if (ownerView === "contacts") return tableName === "contact";
+        if (ownerView === "transactions") return tableName === "transaction";
         return true;
       })
       .map(([tableName, rows]) => {
-        if (tableName !== "contact") return [tableName, rows] as const;
-        if (!activeContactsOwnerId) return [tableName, rows] as const;
-        return [
-          tableName,
-          rows.filter((row) => readRowOwnerId(row) === activeContactsOwnerId),
-        ] as const;
+        if (tableName === "contact") {
+          if (!activeContactsOwnerId) return [tableName, rows] as const;
+          return [
+            tableName,
+            rows.filter((row) => readRowOwnerId(row) === activeContactsOwnerId),
+          ] as const;
+        }
+
+        if (tableName === "transaction") {
+          if (!activeTransactionsOwnerId) return [tableName, rows] as const;
+          return [
+            tableName,
+            rows.filter(
+              (row) => readRowOwnerId(row) === activeTransactionsOwnerId,
+            ),
+          ] as const;
+        }
+
+        return [tableName, rows] as const;
       });
-  }, [currentData, evoluContactsOwnerId, ownerView]);
+  }, [currentData, evoluContactsOwnerId, evoluTransactionsOwnerId, ownerView]);
+
+  const visibleHistoryRows = React.useMemo(() => {
+    const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
+    const activeTransactionsOwnerId = String(
+      evoluTransactionsOwnerId ?? "",
+    ).trim();
+
+    if (ownerView === "meta") {
+      return historyData.filter((row) => row.table === "ownerMeta");
+    }
+
+    if (ownerView === "contacts") {
+      return historyData.filter(
+        (row) =>
+          row.table === "contact" &&
+          readRowOwnerId(row) === activeContactsOwnerId,
+      );
+    }
+
+    if (ownerView === "transactions") {
+      return historyData.filter(
+        (row) =>
+          row.table === "transaction" &&
+          readRowOwnerId(row) === activeTransactionsOwnerId,
+      );
+    }
+
+    return historyData;
+  }, [evoluContactsOwnerId, evoluTransactionsOwnerId, historyData, ownerView]);
 
   return (
     <section className="panel">
@@ -240,6 +294,15 @@ export function EvoluDataDetailPage({
             >
               {t("contactsTitle")}
             </button>
+            <button
+              type="button"
+              className={
+                ownerView === "transactions" ? "secondary" : "btn-wide"
+              }
+              onClick={() => setOwnerView("transactions")}
+            >
+              {t("transactionsTitle")}
+            </button>
           </div>
 
           <div className="settings-row">
@@ -286,6 +349,28 @@ export function EvoluDataDetailPage({
                 {evoluContactsOwnerEditCount} /{" "}
                 {CONTACTS_OWNER_ROTATION_TRIGGER_WRITE_COUNT}
               </span>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-label">
+                {t("evoluTransactionsOwner")}
+              </span>
+            </div>
+            <div className="settings-right">
+              <span className="muted">{evoluTransactionsOwnerPointer}</span>
+            </div>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-left">
+              <span className="settings-label">
+                {t("evoluTransactionsOwnerIndex")}
+              </span>
+            </div>
+            <div className="settings-right">
+              <span className="muted">{evoluTransactionsOwnerIndex}</span>
             </div>
           </div>
 
@@ -409,7 +494,7 @@ export function EvoluDataDetailPage({
                         </tbody>
                       </table>
                     ) : (
-                      <p className="muted">{t("evoluServersEmpty")}</p>
+                      <p className="muted">{t("evoluNoDataYet")}</p>
                     )}
                   </div>
                 ))}
@@ -422,7 +507,7 @@ export function EvoluDataDetailPage({
             <div style={{ marginTop: 16 }}>
               <h4>{t("evoluHistoryDataJson")}</h4>
               <div style={{ maxHeight: 400, overflow: "auto" }}>
-                {historyData.length > 0 ? (
+                {visibleHistoryRows.length > 0 ? (
                   <table
                     style={{
                       width: "100%",
@@ -482,7 +567,7 @@ export function EvoluDataDetailPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {historyData.map((row, idx) => (
+                      {visibleHistoryRows.map((row, idx) => (
                         <tr key={idx}>
                           <td
                             style={{
@@ -542,7 +627,7 @@ export function EvoluDataDetailPage({
                     </tbody>
                   </table>
                 ) : (
-                  <p className="muted">{t("evoluServersEmpty")}</p>
+                  <p className="muted">{t("evoluNoDataYet")}</p>
                 )}
               </div>
             </div>
@@ -553,7 +638,7 @@ export function EvoluDataDetailPage({
           </h3>
 
           {userTableEntries.length === 0 ? (
-            <p className="muted">{t("evoluServersEmpty")}</p>
+            <p className="muted">{t("evoluNoDataYet")}</p>
           ) : (
             userTableEntries.map(([tableName, count]) => {
               const rows = count ?? 0;

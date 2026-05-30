@@ -13,7 +13,7 @@
 // still parse (with the missing fields nulled), so old clients keep working
 // while new clients reap the full benefit.
 
-export type RotationScope = "contacts" | "messages" | "transactions";
+export type RotationScope = "cashu" | "contacts" | "messages" | "transactions";
 
 export interface RotationSnapshot {
   /** New owner lane index (e.g. 3 → owner derivation path uses `<scope>-3`). */
@@ -35,6 +35,7 @@ export interface RotationSnapshot {
 }
 
 const LEGACY_REGEX: Record<RotationScope, RegExp> = {
+  cashu: /^cashu-(\d+)$/,
   contacts: /^contacts-(\d+)$/,
   messages: /^messages-(\d+)$/,
   transactions: /^transactions-(\d+)$/,

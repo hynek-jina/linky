@@ -13,6 +13,8 @@ export const NOSTR_IDENTITY_SWITCHED_AT_SEC_STORAGE_KEY =
   "linky.nostr_identity_switched_at_sec.v1";
 export const EVOLU_CONTACTS_OWNER_INDEX_STORAGE_KEY =
   "linky.evolu.contacts_owner_index.v1";
+export const EVOLU_CASHU_OWNER_INDEX_STORAGE_KEY =
+  "linky.evolu.cashu_owner_index.v1";
 export const EVOLU_MESSAGES_OWNER_INDEX_STORAGE_KEY =
   "linky.evolu.messages_owner_index.v1";
 export const EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY =

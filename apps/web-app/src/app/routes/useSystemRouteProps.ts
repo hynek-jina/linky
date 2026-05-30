@@ -35,22 +35,28 @@ interface UseSystemRoutePropsParams {
   evoluTableCounts: SystemRoutesProps["evoluDataDetailProps"]["evoluTableCounts"];
   evoluContactsOwnerEditCount: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerEditCount"];
   evoluCashuOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluCashuOwnerId"];
+  evoluCashuOwnerIndex: SystemRoutesProps["evoluCurrentDataProps"]["evoluCashuOwnerIndex"];
   evoluContactsOwnerId: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerId"];
   evoluContactsOwnerIndex: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerIndex"];
   evoluContactsOwnerNewContactsCount: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerNewContactsCount"];
   evoluContactsOwnerPointer: SystemRoutesProps["evoluDataDetailProps"]["evoluContactsOwnerPointer"];
+  evoluTransactionsOwnerPointer: SystemRoutesProps["evoluDataDetailProps"]["evoluTransactionsOwnerPointer"];
   evoluContactsOwnerEditsUntilRotation: SystemRoutesProps["evoluHistoryDataProps"]["evoluContactsOwnerEditsUntilRotation"];
   evoluCashuOwnerEditsUntilRotation: SystemRoutesProps["evoluHistoryDataProps"]["evoluCashuOwnerEditsUntilRotation"];
   evoluHistoryAllowedOwnerIds: SystemRoutesProps["evoluHistoryDataProps"]["evoluHistoryAllowedOwnerIds"];
   evoluMessagesBackupOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluMessagesBackupOwnerId"];
   evoluMessagesOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluMessagesOwnerId"];
+  evoluMessagesOwnerIndex: SystemRoutesProps["evoluCurrentDataProps"]["evoluMessagesOwnerIndex"];
   evoluMessagesOwnerEditsUntilRotation: SystemRoutesProps["evoluHistoryDataProps"]["evoluMessagesOwnerEditsUntilRotation"];
   evoluTransactionsBackupOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluTransactionsBackupOwnerId"];
   evoluTransactionsOwnerId: SystemRoutesProps["evoluCurrentDataProps"]["evoluTransactionsOwnerId"];
+  evoluTransactionsOwnerIndex: SystemRoutesProps["evoluCurrentDataProps"]["evoluTransactionsOwnerIndex"];
   evoluTransactionsOwnerEditsUntilRotation: SystemRoutesProps["evoluHistoryDataProps"]["evoluTransactionsOwnerEditsUntilRotation"];
+  requestManualRotateCashuOwner: SystemRoutesProps["evoluCurrentDataProps"]["requestManualRotateCashuOwner"];
   requestManualRotateContactsOwner: SystemRoutesProps["evoluCurrentDataProps"]["requestManualRotateContactsOwner"];
   requestManualRotateMessagesOwner: SystemRoutesProps["evoluCurrentDataProps"]["requestManualRotateMessagesOwner"];
   requestManualRotateTransactionsOwner: SystemRoutesProps["evoluCurrentDataProps"]["requestManualRotateTransactionsOwner"];
+  rotateCashuOwnerIsBusy: SystemRoutesProps["evoluCurrentDataProps"]["rotateCashuOwnerIsBusy"];
   rotateContactsOwnerIsBusy: SystemRoutesProps["evoluCurrentDataProps"]["rotateContactsOwnerIsBusy"];
   rotateMessagesOwnerIsBusy: SystemRoutesProps["evoluCurrentDataProps"]["rotateMessagesOwnerIsBusy"];
   rotateTransactionsOwnerIsBusy: SystemRoutesProps["evoluCurrentDataProps"]["rotateTransactionsOwnerIsBusy"];
@@ -144,22 +150,28 @@ export const useSystemRouteProps = ({
   evoluTableCounts,
   evoluContactsOwnerEditCount,
   evoluCashuOwnerId,
+  evoluCashuOwnerIndex,
   evoluContactsOwnerId,
   evoluContactsOwnerIndex,
   evoluContactsOwnerNewContactsCount,
   evoluContactsOwnerPointer,
+  evoluTransactionsOwnerPointer,
   evoluContactsOwnerEditsUntilRotation,
   evoluCashuOwnerEditsUntilRotation,
   evoluHistoryAllowedOwnerIds,
   evoluMessagesBackupOwnerId,
   evoluMessagesOwnerId,
+  evoluMessagesOwnerIndex,
   evoluMessagesOwnerEditsUntilRotation,
   evoluTransactionsBackupOwnerId,
   evoluTransactionsOwnerId,
+  evoluTransactionsOwnerIndex,
   evoluTransactionsOwnerEditsUntilRotation,
+  requestManualRotateCashuOwner,
   requestManualRotateContactsOwner,
   requestManualRotateMessagesOwner,
   requestManualRotateTransactionsOwner,
+  rotateCashuOwnerIsBusy,
   rotateContactsOwnerIsBusy,
   rotateMessagesOwnerIsBusy,
   rotateTransactionsOwnerIsBusy,
@@ -296,15 +308,25 @@ export const useSystemRouteProps = ({
       t,
     },
     evoluCurrentDataProps: {
+      evoluCashuOwnerEditsUntilRotation,
       evoluCashuOwnerId,
+      evoluCashuOwnerIndex,
+      evoluContactsOwnerEditsUntilRotation,
       evoluContactsOwnerId,
+      evoluContactsOwnerIndex,
+      evoluMessagesOwnerEditsUntilRotation,
       evoluMessagesBackupOwnerId,
       evoluMessagesOwnerId,
+      evoluMessagesOwnerIndex,
+      evoluTransactionsOwnerEditsUntilRotation,
       evoluTransactionsBackupOwnerId,
       evoluTransactionsOwnerId,
+      evoluTransactionsOwnerIndex,
+      requestManualRotateCashuOwner,
       requestManualRotateContactsOwner,
       requestManualRotateMessagesOwner,
       requestManualRotateTransactionsOwner,
+      rotateCashuOwnerIsBusy,
       rotateContactsOwnerIsBusy,
       rotateMessagesOwnerIsBusy,
       rotateTransactionsOwnerIsBusy,
@@ -320,6 +342,9 @@ export const useSystemRouteProps = ({
       evoluContactsOwnerIndex,
       evoluContactsOwnerNewContactsCount,
       evoluContactsOwnerPointer,
+      evoluTransactionsOwnerId,
+      evoluTransactionsOwnerIndex,
+      evoluTransactionsOwnerPointer,
       clearDatabaseArmed,
       pendingClearDatabase: evoluWipeStorageIsBusy,
       requestClearDatabase,
