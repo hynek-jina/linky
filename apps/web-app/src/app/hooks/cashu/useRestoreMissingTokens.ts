@@ -324,19 +324,18 @@ export const useRestoreMissingTokens = ({
               //   e (2nd)  = positions per HTTP /v1/restore request
               //   stops after ceil(t / e) consecutive empty rounds
               //
-              // The library defaults `(300, 100)` mean only 3 empty rounds
-              // (~300 positions) before giving up. That breaks restore for
-              // any wallet whose deterministic counter is stale relative to
-              // the actual signed range — e.g., after a cashu mnemonic
-              // change leaves the counter at N but no proofs at 0..N-1 with
-              // the new seed. The scan dies long before reaching the
-              // freshly-minted proofs at counter N.
-              //
-              // 20000 / 200 = 100 empty rounds → ~20000 positions tolerated,
-              // 200 outputs per request stays well under cashu.cz's payload
-              // limit (>~1000 hits HTTP 422 on cashu.cz).
+              // The cashu-ts default `(300, 100)` is fine for healthy
+              // wallets: any consecutive activity keeps the scan going and
+              // a fully empty keyset finishes in ~1-2 s. We deliberately
+              // do NOT bump this further to chase very stale counters —
+              // those should be prevented at the source via
+              // `wipeCashuDeterministicState()` whenever the cashu BIP-85
+              // mnemonic changes. Widening the budget here would cost
+              // every user 5-50 s of restore wait just to rescue a handful
+              // of pre-fix wallets that can also recover by re-onboarding
+              // (which now wipes stale counters).
               const batchRestore = async (counterStart: number) =>
-                await wallet.batchRestore(20000, 200, counterStart, keysetId);
+                await wallet.batchRestore(300, 100, counterStart, keysetId);
 
               let restored: {
                 lastCounterWithSignature?: number;
