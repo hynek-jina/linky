@@ -389,7 +389,6 @@ export const useSystemRouteProps = ({
       t,
     },
     evoluServersProps: {
-      evoluDatabaseBytes,
       evoluHasError,
       evoluHistoryCount,
       evoluServerStatusByUrl,
