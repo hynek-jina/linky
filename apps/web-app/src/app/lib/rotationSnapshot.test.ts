@@ -39,6 +39,17 @@ describe("rotationSnapshot", () => {
       expect(decodeRotationSnapshot(encoded, "transactions")).toEqual(snap);
     });
 
+    it("preserves cashu snapshot", () => {
+      const snap = {
+        index: 4,
+        baseline: 87,
+        cashuBaseline: null,
+        rotatedAtMs: 1_716_350_000_000,
+      } as const;
+      const encoded = encodeRotationSnapshot(snap);
+      expect(decodeRotationSnapshot(encoded, "cashu")).toEqual(snap);
+    });
+
     it("strips cashuBaseline when decoded under a non-contacts scope", () => {
       const encoded = encodeRotationSnapshot({
         index: 4,
@@ -69,6 +80,15 @@ describe("rotationSnapshot", () => {
     it("decodes contacts-N", () => {
       expect(decodeRotationSnapshot("contacts-3", "contacts")).toEqual({
         index: 3,
+        baseline: null,
+        cashuBaseline: null,
+        rotatedAtMs: null,
+      });
+    });
+
+    it("decodes cashu-N", () => {
+      expect(decodeRotationSnapshot("cashu-4", "cashu")).toEqual({
+        index: 4,
         baseline: null,
         cashuBaseline: null,
         rotatedAtMs: null,
