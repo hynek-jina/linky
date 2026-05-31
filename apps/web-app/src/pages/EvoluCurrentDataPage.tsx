@@ -11,6 +11,7 @@ interface EvoluCurrentDataPageProps {
   evoluCashuOwnerEditsUntilRotation: number;
   evoluCashuOwnerId: string | null;
   evoluCashuOwnerIndex: number;
+  evoluCashuVisibleOwnerIds: readonly string[];
   evoluContactsOwnerEditsUntilRotation: number;
   evoluContactsOwnerId: string | null;
   evoluContactsOwnerIndex: number;
@@ -18,10 +19,12 @@ interface EvoluCurrentDataPageProps {
   evoluMessagesOwnerEditsUntilRotation: number;
   evoluMessagesOwnerId: string | null;
   evoluMessagesOwnerIndex: number;
+  evoluMessagesVisibleOwnerIds: readonly string[];
   evoluTransactionsBackupOwnerId: string | null;
   evoluTransactionsOwnerEditsUntilRotation: number;
   evoluTransactionsOwnerId: string | null;
   evoluTransactionsOwnerIndex: number;
+  evoluTransactionsVisibleOwnerIds: readonly string[];
   requestManualRotateCashuOwner: () => Promise<void>;
   requestManualRotateContactsOwner: () => Promise<void>;
   requestManualRotateMessagesOwner: () => Promise<void>;
@@ -56,17 +59,18 @@ export function EvoluCurrentDataPage({
   evoluCashuOwnerEditsUntilRotation,
   evoluCashuOwnerId,
   evoluCashuOwnerIndex,
+  evoluCashuVisibleOwnerIds,
   evoluContactsOwnerEditsUntilRotation,
   evoluContactsOwnerId,
   evoluContactsOwnerIndex,
-  evoluMessagesBackupOwnerId,
   evoluMessagesOwnerEditsUntilRotation,
   evoluMessagesOwnerId,
   evoluMessagesOwnerIndex,
-  evoluTransactionsBackupOwnerId,
+  evoluMessagesVisibleOwnerIds,
   evoluTransactionsOwnerEditsUntilRotation,
   evoluTransactionsOwnerId,
   evoluTransactionsOwnerIndex,
+  evoluTransactionsVisibleOwnerIds,
   requestManualRotateCashuOwner,
   requestManualRotateContactsOwner,
   requestManualRotateMessagesOwner,
@@ -96,22 +100,20 @@ export function EvoluCurrentDataPage({
 
   const filteredCurrentData = React.useMemo(() => {
     const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
-    const activeCashuOwnerId = String(evoluCashuOwnerId ?? "").trim();
-    const activeMessagesOwnerId = String(evoluMessagesOwnerId ?? "").trim();
-    const backupMessagesOwnerId = String(
-      evoluMessagesBackupOwnerId ?? "",
-    ).trim();
-    const activeTransactionsOwnerId = String(
-      evoluTransactionsOwnerId ?? "",
-    ).trim();
-    const backupTransactionsOwnerId = String(
-      evoluTransactionsBackupOwnerId ?? "",
-    ).trim();
+    const visibleCashuOwnerIds = new Set(
+      [evoluCashuOwnerId, ...evoluCashuVisibleOwnerIds]
+        .map((ownerId) => String(ownerId ?? "").trim())
+        .filter(Boolean),
+    );
     const visibleMessageOwnerIds = new Set(
-      [activeMessagesOwnerId, backupMessagesOwnerId].filter(Boolean),
+      [evoluMessagesOwnerId, ...evoluMessagesVisibleOwnerIds]
+        .map((ownerId) => String(ownerId ?? "").trim())
+        .filter(Boolean),
     );
     const visibleTransactionOwnerIds = new Set(
-      [activeTransactionsOwnerId, backupTransactionsOwnerId].filter(Boolean),
+      [evoluTransactionsOwnerId, ...evoluTransactionsVisibleOwnerIds]
+        .map((ownerId) => String(ownerId ?? "").trim())
+        .filter(Boolean),
     );
 
     return Object.fromEntries(
@@ -127,10 +129,10 @@ export function EvoluCurrentDataPage({
           ];
         }
         if (tableName === "cashuToken") {
-          if (!activeCashuOwnerId) return [tableName, []];
+          if (visibleCashuOwnerIds.size === 0) return [tableName, []];
           return [
             tableName,
-            rows.filter((row) => readRowOwnerId(row) === activeCashuOwnerId),
+            rows.filter((row) => visibleCashuOwnerIds.has(readRowOwnerId(row))),
           ];
         }
         if (tableName === "transaction") {
@@ -152,11 +154,12 @@ export function EvoluCurrentDataPage({
   }, [
     currentData,
     evoluCashuOwnerId,
+    evoluCashuVisibleOwnerIds,
     evoluContactsOwnerId,
-    evoluMessagesBackupOwnerId,
     evoluMessagesOwnerId,
-    evoluTransactionsBackupOwnerId,
+    evoluMessagesVisibleOwnerIds,
     evoluTransactionsOwnerId,
+    evoluTransactionsVisibleOwnerIds,
   ]);
 
   const dataSections = React.useMemo(

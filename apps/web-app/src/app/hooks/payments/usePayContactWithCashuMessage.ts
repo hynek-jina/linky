@@ -12,6 +12,7 @@ import { normalizeMintUrl } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
+import { hasMatchingCashuToken } from "../../lib/cashuTokenIdentity";
 import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import {
@@ -73,6 +74,7 @@ interface UsePayContactWithCashuMessageParams {
     preferredMint: string,
   ) => Array<{ mint: string; sum: number; tokens: string[] }>;
   cashuBalance: number;
+  cashuTokensAll: readonly CashuTokenRowLike[];
   cashuTokensWithMeta: readonly CashuTokenRowLike[];
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   currentNpub: string | null;
@@ -115,6 +117,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   appendLocalNostrMessage,
   buildCashuMintCandidates,
   cashuBalance,
+  cashuTokensAll,
   cashuTokensWithMeta,
   chatSeenWrapIdsRef,
   currentNpub,
@@ -277,9 +280,19 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       const insertCashuToken = (
         payload: ReturnType<typeof buildCashuTokenPayload>,
       ) => {
-        return cashuWriteOwnerId
+        if (hasMatchingCashuToken(cashuTokensAll, payload)) {
+          return { ok: true, error: null, skippedDuplicate: true };
+        }
+
+        const result = cashuWriteOwnerId
           ? insert("cashuToken", payload, { ownerId: cashuWriteOwnerId })
           : insert("cashuToken", payload);
+
+        return {
+          ok: result.ok,
+          error: result.ok ? null : String(result.error),
+          skippedDuplicate: false,
+        };
       };
 
       const updateCashuToken = (payload: {

@@ -1,14 +1,15 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
+import { useDeferredOnlineReady } from "../../../hooks/useDeferredOnlineReady";
+import {
+  LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
+  LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
+} from "../../../utils/constants";
 import {
   MAIN_MINT_URL,
   normalizeMintUrl,
   PRESET_MINTS,
 } from "../../../utils/mint";
-import {
-  LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
-  LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
-} from "../../../utils/constants";
 import {
   safeLocalStorageGetJson,
   safeLocalStorageSet,
@@ -59,6 +60,7 @@ export const useMintInfoStore = ({
   defaultMintUrl,
   rememberSeenMint,
 }: UseMintInfoStoreParams): UseMintInfoStoreResult => {
+  const canRunNetworkWork = useDeferredOnlineReady();
   const [mintInfoAll, setMintInfoAll] = React.useState<LocalMintInfoRow[]>(
     () => [],
   );
@@ -217,6 +219,9 @@ export const useMintInfoStore = ({
     async (mintUrl: string) => {
       const cleaned = normalizeMintUrl(mintUrl);
       if (!cleaned || isMintDeleted(cleaned)) return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        return;
+      }
       if (mintInfoCheckOnceRef.current.has(cleaned)) return;
 
       mintInfoCheckOnceRef.current.add(cleaned);
@@ -333,10 +338,11 @@ export const useMintInfoStore = ({
       return;
     }
 
-    if (!getMintRuntime(cleaned)) {
+    if (canRunNetworkWork && !getMintRuntime(cleaned)) {
       void refreshMintInfo(cleaned);
     }
   }, [
+    canRunNetworkWork,
     defaultMintUrl,
     getMintRuntime,
     isMintDeleted,
@@ -375,11 +381,15 @@ export const useMintInfoStore = ({
 
       const lastChecked = getMintRuntime(cleaned)?.lastCheckedAtSec ?? 0;
       const oneDay = 86_400;
-      if (lastChecked === 0 || nowSec - lastChecked > oneDay) {
+      if (
+        canRunNetworkWork &&
+        (lastChecked === 0 || nowSec - lastChecked > oneDay)
+      ) {
         void refreshMintInfo(cleaned);
       }
     }
   }, [
+    canRunNetworkWork,
     defaultMintUrl,
     encounteredMintUrls,
     getMintRuntime,

@@ -1,4 +1,5 @@
 import React from "react";
+import { useDeferredOnlineReady } from "../../hooks/useDeferredOnlineReady";
 import {
   FIAT_RATES_CACHE_STORAGE_KEY,
   FIAT_RATES_TTL_MS,
@@ -86,6 +87,7 @@ const fetchFiatRates = async (
 };
 
 export const useFiatRates = (): FiatRates | null => {
+  const canRunNetworkWork = useDeferredOnlineReady();
   const [fiatRates, setFiatRates] = React.useState<FiatRates | null>(() =>
     readCachedFiatRates(),
   );
@@ -93,6 +95,16 @@ export const useFiatRates = (): FiatRates | null => {
   React.useEffect(() => {
     let cancelled = false;
     let activeController: AbortController | null = null;
+
+    const cached = readCachedFiatRates();
+    setFiatRates(cached);
+
+    if (!canRunNetworkWork) {
+      return () => {
+        cancelled = true;
+        activeController?.abort();
+      };
+    }
 
     const syncRates = async () => {
       const cached = readCachedFiatRates();
@@ -124,7 +136,7 @@ export const useFiatRates = (): FiatRates | null => {
       if (activeController) activeController.abort();
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [canRunNetworkWork]);
 
   return fiatRates;
 };
