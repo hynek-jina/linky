@@ -17,6 +17,7 @@ interface EvoluDataDetailPageProps {
   evoluTransactionsOwnerId: string | null;
   evoluTransactionsOwnerIndex: number;
   evoluTransactionsOwnerPointer: string;
+  evoluTransactionsVisibleOwnerIds: readonly string[];
   clearDatabaseArmed: boolean;
   pendingClearDatabase: boolean;
   requestClearDatabase: () => void;
@@ -39,6 +40,7 @@ export function EvoluDataDetailPage({
   evoluTransactionsOwnerId,
   evoluTransactionsOwnerIndex,
   evoluTransactionsOwnerPointer,
+  evoluTransactionsVisibleOwnerIds,
   clearDatabaseArmed,
   pendingClearDatabase,
   requestClearDatabase,
@@ -141,9 +143,11 @@ export function EvoluDataDetailPage({
 
   const currentDataEntries = React.useMemo(() => {
     const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
-    const activeTransactionsOwnerId = String(
-      evoluTransactionsOwnerId ?? "",
-    ).trim();
+    const visibleTransactionsOwnerIds = new Set(
+      [evoluTransactionsOwnerId, ...evoluTransactionsVisibleOwnerIds]
+        .map((ownerId) => String(ownerId ?? "").trim())
+        .filter(Boolean),
+    );
 
     return Object.entries(currentData)
       .filter(([tableName]) => {
@@ -162,24 +166,34 @@ export function EvoluDataDetailPage({
         }
 
         if (tableName === "transaction") {
-          if (!activeTransactionsOwnerId) return [tableName, rows] as const;
+          if (visibleTransactionsOwnerIds.size === 0) {
+            return [tableName, rows] as const;
+          }
           return [
             tableName,
-            rows.filter(
-              (row) => readRowOwnerId(row) === activeTransactionsOwnerId,
+            rows.filter((row) =>
+              visibleTransactionsOwnerIds.has(readRowOwnerId(row)),
             ),
           ] as const;
         }
 
         return [tableName, rows] as const;
       });
-  }, [currentData, evoluContactsOwnerId, evoluTransactionsOwnerId, ownerView]);
+  }, [
+    currentData,
+    evoluContactsOwnerId,
+    evoluTransactionsOwnerId,
+    evoluTransactionsVisibleOwnerIds,
+    ownerView,
+  ]);
 
   const visibleHistoryRows = React.useMemo(() => {
     const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
-    const activeTransactionsOwnerId = String(
-      evoluTransactionsOwnerId ?? "",
-    ).trim();
+    const visibleTransactionsOwnerIds = new Set(
+      [evoluTransactionsOwnerId, ...evoluTransactionsVisibleOwnerIds]
+        .map((ownerId) => String(ownerId ?? "").trim())
+        .filter(Boolean),
+    );
 
     if (ownerView === "meta") {
       return historyData.filter((row) => row.table === "ownerMeta");
@@ -197,12 +211,18 @@ export function EvoluDataDetailPage({
       return historyData.filter(
         (row) =>
           row.table === "transaction" &&
-          readRowOwnerId(row) === activeTransactionsOwnerId,
+          visibleTransactionsOwnerIds.has(readRowOwnerId(row)),
       );
     }
 
     return historyData;
-  }, [evoluContactsOwnerId, evoluTransactionsOwnerId, historyData, ownerView]);
+  }, [
+    evoluContactsOwnerId,
+    evoluTransactionsOwnerId,
+    evoluTransactionsVisibleOwnerIds,
+    historyData,
+    ownerView,
+  ]);
 
   return (
     <section className="panel">

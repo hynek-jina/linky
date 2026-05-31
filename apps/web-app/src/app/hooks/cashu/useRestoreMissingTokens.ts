@@ -13,6 +13,7 @@ import {
   decodeCashuTokenForMint,
 } from "../../../utils/cashuWallet";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
+import { hasMatchingCashuToken } from "../../lib/cashuTokenIdentity";
 import type {
   CashuTokenRowLike,
   LoggedPaymentEventParams,
@@ -464,6 +465,10 @@ export const useRestoreMissingTokens = ({
                   amount,
                   state: "accepted",
                 });
+
+                if (hasMatchingCashuToken(cashuTokensAll, payload)) {
+                  continue;
+                }
 
                 const r = ownerId
                   ? insert("cashuToken", payload, { ownerId })

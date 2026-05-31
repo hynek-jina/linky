@@ -16,6 +16,7 @@ import {
 } from "../../utils/lightningInvoice";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
+import { hasMatchingCashuToken } from "../lib/cashuTokenIdentity";
 import { isCashuTokenAcceptedState } from "../lib/cashuTokenState";
 import {
   buildPaymentAmountAttempts,
@@ -66,6 +67,7 @@ interface UseLightningPaymentsDomainParams {
   cashuBalance: number;
   cashuIsBusy: boolean;
   cashuOwnerId: Evolu.OwnerId | null;
+  cashuTokensAll: readonly CashuTokenRowLike[];
   cashuTokensWithMeta: CashuTokenWithMetaRow[];
   contacts: readonly ContactRow[];
   defaultMintUrl: string | null;
@@ -90,6 +92,7 @@ export const useLightningPaymentsDomain = ({
   cashuBalance,
   cashuIsBusy,
   cashuOwnerId,
+  cashuTokensAll,
   cashuTokensWithMeta,
   contacts,
   defaultMintUrl,
@@ -117,6 +120,10 @@ export const useLightningPaymentsDomain = ({
 
   const insertCashuToken = React.useCallback(
     (payload: CashuTokenInsertPayload) => {
+      if (hasMatchingCashuToken(cashuTokensAll, payload)) {
+        return { ok: true, error: null, skippedDuplicate: true };
+      }
+
       const sparsePayload: {
         state: typeof Evolu.NonEmptyString100.Type;
         token: typeof Evolu.NonEmptyString.Type;
@@ -135,11 +142,17 @@ export const useLightningPaymentsDomain = ({
       if (payload.amount) sparsePayload.amount = payload.amount;
       if (payload.error) sparsePayload.error = payload.error;
 
-      if (cashuOwnerId)
-        return insert("cashuToken", sparsePayload, { ownerId: cashuOwnerId });
-      return insert("cashuToken", sparsePayload);
+      const result = cashuOwnerId
+        ? insert("cashuToken", sparsePayload, { ownerId: cashuOwnerId })
+        : insert("cashuToken", sparsePayload);
+
+      return {
+        ok: result.ok,
+        error: result.ok ? null : String(result.error),
+        skippedDuplicate: false,
+      };
     },
-    [cashuOwnerId, insert],
+    [cashuOwnerId, cashuTokensAll, insert],
   );
 
   const markCashuTokenDeleted = React.useCallback(

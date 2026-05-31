@@ -1752,6 +1752,7 @@ export const useAppShellComposition = () => {
     cashuOwnerEditsUntilRotation,
     cashuOwnerIndex,
     cashuSyncOwner,
+    cashuVisibleOwnerIds,
     contactsSyncOwner,
     contactsOwnerEditCount,
     contactsOwnerEditsUntilRotation,
@@ -1769,6 +1770,7 @@ export const useAppShellComposition = () => {
     messagesOwnerEditsUntilRotation,
     messagesOwnerIndex,
     messagesSyncOwner,
+    messagesVisibleOwnerIds,
     recordContactsOwnerWrite,
     recordMessagesOwnerWrite,
     recordTransactionsOwnerWrite,
@@ -1786,6 +1788,7 @@ export const useAppShellComposition = () => {
     transactionsOwnerIndex,
     transactionsOwnerPointer,
     transactionsSyncOwner,
+    transactionsVisibleOwnerIds,
   } = useEvoluContactsOwnerRotation({
     appOwnerId,
     isSeedLogin,
@@ -1939,34 +1942,31 @@ export const useAppShellComposition = () => {
   const evoluHistoryAllowedOwnerIds = React.useMemo(() => {
     const ids = [
       String(appOwnerId ?? "").trim(),
-      String(cashuOwnerId ?? "").trim(),
-      String(messagesOwnerId ?? "").trim(),
-      String(messagesBackupOwnerId ?? "").trim(),
-      String(transactionsOwnerId ?? "").trim(),
-      String(transactionsBackupOwnerId ?? "").trim(),
+      ...cashuVisibleOwnerIds.map((ownerId) => String(ownerId ?? "").trim()),
+      ...messagesVisibleOwnerIds.map((ownerId) => String(ownerId ?? "").trim()),
+      ...transactionsVisibleOwnerIds.map((ownerId) =>
+        String(ownerId ?? "").trim(),
+      ),
       String(metaOwnerId ?? "").trim(),
       ...contactsVisibleOwnerIds.map((ownerId) => String(ownerId ?? "").trim()),
     ].filter(Boolean);
     return Array.from(new Set(ids));
   }, [
     appOwnerId,
-    cashuOwnerId,
+    cashuVisibleOwnerIds,
     contactsVisibleOwnerIds,
-    messagesBackupOwnerId,
-    messagesOwnerId,
+    messagesVisibleOwnerIds,
     metaOwnerId,
-    transactionsBackupOwnerId,
-    transactionsOwnerId,
+    transactionsVisibleOwnerIds,
   ]);
 
   const visibleMessageOwnerIds = React.useMemo(() => {
     const ids = [
-      String(messagesOwnerId ?? "").trim(),
-      String(messagesBackupOwnerId ?? "").trim(),
       String(appOwnerId ?? "").trim(),
+      ...messagesVisibleOwnerIds.map((ownerId) => String(ownerId ?? "").trim()),
     ].filter(Boolean);
     return Array.from(new Set(ids));
-  }, [appOwnerId, messagesBackupOwnerId, messagesOwnerId]);
+  }, [appOwnerId, messagesVisibleOwnerIds]);
 
   const {
     canSaveNewRelay,
@@ -2222,6 +2222,15 @@ export const useAppShellComposition = () => {
   }, [activeSyncedNostrIdentity, currentNsec]);
 
   const activeCashuOwnerId = String(cashuOwnerId ?? "").trim();
+  const visibleCashuOwnerIds = React.useMemo(
+    () =>
+      new Set(
+        cashuVisibleOwnerIds
+          .map((ownerId) => String(ownerId ?? "").trim())
+          .filter(Boolean),
+      ),
+    [cashuVisibleOwnerIds],
+  );
   const readCashuRowOwnerId = React.useCallback((row: unknown): string => {
     if (typeof row !== "object" || row === null) return "";
     if (!("ownerId" in row)) return "";
@@ -2230,19 +2239,102 @@ export const useAppShellComposition = () => {
     return ownerId.trim();
   }, []);
 
+  const readCashuRowAliases = React.useCallback(
+    (row: { rawToken?: string | null; token?: string | null } | null) => {
+      return [
+        String(row?.rawToken ?? "").trim(),
+        String(row?.token ?? "").trim(),
+      ].filter(Boolean);
+    },
+    [],
+  );
+
+  const dedupeVisibleCashuRows = React.useCallback(
+    function dedupeVisibleCashuRows<
+      TRow extends { rawToken?: string | null; token?: string | null },
+    >(rows: readonly TRow[]): TRow[] {
+      if (visibleCashuOwnerIds.size === 0) return [];
+
+      const ownerRank = new Map<string, number>();
+      let rank = 0;
+      for (const normalizedOwnerId of visibleCashuOwnerIds) {
+        if (!normalizedOwnerId || ownerRank.has(normalizedOwnerId)) continue;
+        ownerRank.set(normalizedOwnerId, rank);
+        rank += 1;
+      }
+
+      const canonicalByAlias = new Map<string, string>();
+      const bestByCanonical = new Map<string, TRow>();
+
+      const isCandidateBetter = (candidate: TRow, existing: TRow): boolean => {
+        const candidateOwnerId = readCashuRowOwnerId(candidate);
+        const existingOwnerId = readCashuRowOwnerId(existing);
+
+        if (
+          candidateOwnerId === activeCashuOwnerId &&
+          existingOwnerId !== activeCashuOwnerId
+        ) {
+          return true;
+        }
+
+        if (
+          existingOwnerId === activeCashuOwnerId &&
+          candidateOwnerId !== activeCashuOwnerId
+        ) {
+          return false;
+        }
+
+        const candidateRank = ownerRank.get(candidateOwnerId) ?? -1;
+        const existingRank = ownerRank.get(existingOwnerId) ?? -1;
+        return candidateRank > existingRank;
+      };
+
+      for (const row of rows) {
+        const ownerId = readCashuRowOwnerId(row);
+        if (!visibleCashuOwnerIds.has(ownerId)) continue;
+
+        const rowCandidates = readCashuRowAliases(row);
+        if (rowCandidates.length === 0) continue;
+
+        const canonicalKey =
+          rowCandidates.find((candidate) => canonicalByAlias.has(candidate)) ??
+          rowCandidates[0];
+        const existing = bestByCanonical.get(canonicalKey);
+
+        if (!existing || isCandidateBetter(row, existing)) {
+          bestByCanonical.set(canonicalKey, row);
+        }
+
+        for (const candidate of rowCandidates) {
+          canonicalByAlias.set(candidate, canonicalKey);
+        }
+      }
+
+      return rows.filter((row) => {
+        const rowCandidates = readCashuRowAliases(row);
+        if (rowCandidates.length === 0) return false;
+
+        const canonicalKey =
+          rowCandidates.find((candidate) => canonicalByAlias.has(candidate)) ??
+          rowCandidates[0];
+        return bestByCanonical.get(canonicalKey) === row;
+      });
+    },
+    [
+      activeCashuOwnerId,
+      readCashuRowAliases,
+      readCashuRowOwnerId,
+      visibleCashuOwnerIds,
+    ],
+  );
+
   const cashuTokensFiltered = React.useMemo(() => {
-    if (!activeCashuOwnerId) return [] as typeof cashuTokens;
-    return cashuTokens.filter(
-      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
-    );
-  }, [activeCashuOwnerId, cashuTokens, readCashuRowOwnerId]);
+    return dedupeVisibleCashuRows(cashuTokens);
+  }, [cashuTokens, dedupeVisibleCashuRows]);
 
   const cashuTokensAllFiltered = React.useMemo(() => {
-    if (!activeCashuOwnerId) return [] as typeof cashuTokensAll;
-    return cashuTokensAll.filter(
-      (row) => readCashuRowOwnerId(row) === activeCashuOwnerId,
-    );
-  }, [activeCashuOwnerId, cashuTokensAll, readCashuRowOwnerId]);
+    return dedupeVisibleCashuRows(cashuTokensAll);
+  }, [cashuTokensAll, dedupeVisibleCashuRows]);
 
   const cashuTokensWithMeta = useMemo(
     () =>
@@ -3968,6 +4060,7 @@ export const useAppShellComposition = () => {
     appendLocalNostrMessage,
     buildCashuMintCandidates,
     cashuBalance,
+    cashuTokensAll,
     cashuTokensWithMeta,
     chatSeenWrapIdsRef,
     currentNpub,
@@ -4073,6 +4166,7 @@ export const useAppShellComposition = () => {
       cashuBalance,
       cashuIsBusy,
       cashuOwnerId,
+      cashuTokensAll,
       cashuTokensWithMeta,
       contacts,
       defaultMintUrl,
@@ -4884,6 +4978,67 @@ export const useAppShellComposition = () => {
 
   const deleteCashuToken = React.useCallback(
     async (id: CashuTokenId): Promise<boolean> => {
+      const matchingAliases = new Set<string>();
+
+      for (const row of cashuTokensAll) {
+        if (row.isDeleted || row.id !== id) continue;
+        for (const alias of readCashuRowAliases(row)) {
+          matchingAliases.add(alias);
+        }
+      }
+
+      let aliasesExpanded = true;
+      while (aliasesExpanded) {
+        aliasesExpanded = false;
+
+        for (const row of cashuTokensAll) {
+          if (row.isDeleted) continue;
+          const rowAliases = readCashuRowAliases(row);
+          if (
+            rowAliases.length === 0 ||
+            !rowAliases.some((alias) => matchingAliases.has(alias))
+          ) {
+            continue;
+          }
+
+          for (const alias of rowAliases) {
+            if (matchingAliases.has(alias)) continue;
+            matchingAliases.add(alias);
+            aliasesExpanded = true;
+          }
+        }
+      }
+
+      const rowsToDelete =
+        matchingAliases.size > 0
+          ? cashuTokensAll.filter((row) => {
+              if (row.isDeleted) return false;
+              return readCashuRowAliases(row).some((alias) =>
+                matchingAliases.has(alias),
+              );
+            })
+          : [];
+
+      if (rowsToDelete.length > 0) {
+        for (const row of rowsToDelete) {
+          const rowOwnerId = readCashuRowOwnerId(row);
+          const payload = {
+            id: row.id,
+            isDeleted: Evolu.sqliteTrue,
+          };
+          const result = rowOwnerId
+            ? update("cashuToken", payload, { ownerId: row.ownerId })
+            : update("cashuToken", payload);
+
+          if (!result.ok) {
+            setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+            return false;
+          }
+        }
+
+        return true;
+      }
+
       const ownerId = await resolveOwnerIdForWrite();
       const payload = {
         id,
@@ -4900,7 +5055,15 @@ export const useAppShellComposition = () => {
 
       return true;
     },
-    [resolveOwnerIdForWrite, setStatus, t, update],
+    [
+      cashuTokensAll,
+      readCashuRowAliases,
+      readCashuRowOwnerId,
+      resolveOwnerIdForWrite,
+      setStatus,
+      t,
+      update,
+    ],
   );
 
   const startSendCashuTokenToContact = React.useCallback(
@@ -5791,6 +5954,27 @@ export const useAppShellComposition = () => {
       token: string;
       unit?: string | null;
     }) => {
+      const targetAliases = readCashuRowAliases({
+        rawToken: null,
+        token: args.token,
+      });
+      const ownerId = await resolveOwnerIdForWrite();
+      const existingRow = cashuTokensAll.find((row) => {
+        return readCashuRowAliases(row).some((alias) =>
+          targetAliases.includes(alias),
+        );
+      });
+
+      if (existingRow) {
+        return {
+          ownerId,
+          ok: true,
+          error: null,
+          rowId: existingRow.id,
+          skippedDuplicate: true,
+        };
+      }
+
       const payload: {
         token: typeof Evolu.NonEmptyString.Type;
         state: typeof Evolu.NonEmptyString100.Type;
@@ -5812,11 +5996,16 @@ export const useAppShellComposition = () => {
         payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
       }
 
-      const ownerId = await resolveOwnerIdForWrite();
       const result = ownerId
         ? insert("cashuToken", payload, { ownerId })
         : insert("cashuToken", payload);
-      return { ownerId, result };
+      return {
+        ownerId,
+        ok: result.ok,
+        error: result.ok ? null : String(result.error),
+        rowId: result.ok ? result.value.id : null,
+        skippedDuplicate: false,
+      };
     };
 
     const deleteCashuRows = async (
@@ -5912,8 +6101,8 @@ export const useAppShellComposition = () => {
               amount: split.remainingAmount,
               state: "accepted",
             });
-            if (!recoveryInsert.result.ok) {
-              throw new Error(String(recoveryInsert.result.error));
+            if (!recoveryInsert.ok) {
+              throw new Error(String(recoveryInsert.error));
             }
 
             const spentRows = cashuTokensWithMeta.filter((row) => {
@@ -5949,8 +6138,8 @@ export const useAppShellComposition = () => {
             amount: split.remainingAmount,
             state: "accepted",
           });
-          if (!remainingInsert.result.ok) {
-            throw new Error(String(remainingInsert.result.error));
+          if (!remainingInsert.ok) {
+            throw new Error(String(remainingInsert.error));
           }
         }
 
@@ -5961,11 +6150,13 @@ export const useAppShellComposition = () => {
           amount: split.sendAmount,
           state: "issued",
         });
-        if (!issuedInsert.result.ok) {
-          throw new Error(String(issuedInsert.result.error));
+        if (!issuedInsert.ok || !issuedInsert.rowId) {
+          throw new Error(
+            String(issuedInsert.error ?? "missing issued token id"),
+          );
         }
 
-        selectedTokenId = issuedInsert.result.value.id;
+        selectedTokenId = issuedInsert.rowId;
         logPaymentEvent({
           direction: "out",
           status: "ok",
@@ -6027,10 +6218,12 @@ export const useAppShellComposition = () => {
     cashuBalance,
     cashuEmitAmount,
     cashuIsBusy,
+    cashuTokensAll,
     cashuTokensWithMeta,
     defaultMintUrl,
     insert,
     logPaymentEvent,
+    readCashuRowAliases,
     resolveOwnerIdForWrite,
     setCashuEmitAmount,
     setStatus,
@@ -6119,6 +6312,27 @@ export const useAppShellComposition = () => {
       token: string;
       unit?: string | null;
     }) => {
+      const targetAliases = readCashuRowAliases({
+        rawToken: args.rawToken ?? null,
+        token: args.token,
+      });
+      const ownerId = await resolveOwnerIdForWrite();
+      const existingRow = cashuTokensAll.find((row) => {
+        return readCashuRowAliases(row).some((alias) =>
+          targetAliases.includes(alias),
+        );
+      });
+
+      if (existingRow) {
+        return {
+          ownerId,
+          ok: true,
+          error: null,
+          rowId: existingRow.id,
+          skippedDuplicate: true,
+        };
+      }
+
       const payload: AcceptedCashuTokenPayload = {
         token: args.token,
         state: "accepted",
@@ -6130,11 +6344,16 @@ export const useAppShellComposition = () => {
         payload.amount = args.amount;
       }
 
-      const ownerId = await resolveOwnerIdForWrite();
       const result = ownerId
         ? insert("cashuToken", payload, { ownerId })
         : insert("cashuToken", payload);
-      return { ownerId, result };
+      return {
+        ownerId,
+        ok: result.ok,
+        error: result.ok ? null : String(result.error),
+        rowId: result.ok ? result.value.id : null,
+        skippedDuplicate: false,
+      };
     };
 
     const markRowsDeleted = async (
@@ -6305,15 +6524,17 @@ export const useAppShellComposition = () => {
                   unit: meltResult.unit,
                   amount: meltResult.remainingAmount,
                 });
-                if (!recoveryInsert.result.ok) {
-                  throw new Error(String(recoveryInsert.result.error));
+                if (!recoveryInsert.ok || !recoveryInsert.rowId) {
+                  throw new Error(
+                    String(recoveryInsert.error ?? "missing recovery token id"),
+                  );
                 }
 
                 await markRowsDeleted(activeSourceRows, activeSourceOwnerId);
 
                 activeSourceRows = [
                   {
-                    id: recoveryInsert.result.value.id,
+                    id: recoveryInsert.rowId,
                   },
                 ];
                 activeSourceOwnerId = recoveryInsert.ownerId;
@@ -6329,8 +6550,8 @@ export const useAppShellComposition = () => {
                 unit: meltResult.unit,
                 amount: meltResult.remainingAmount,
               });
-              if (!recoveryInsert.result.ok) {
-                throw new Error(String(recoveryInsert.result.error));
+              if (!recoveryInsert.ok) {
+                throw new Error(String(recoveryInsert.error));
               }
               await markRowsDeleted(activeSourceRows, activeSourceOwnerId);
               finalError = errorMessage;
@@ -6373,8 +6594,8 @@ export const useAppShellComposition = () => {
               unit: meltResult.unit,
               amount: meltResult.remainingAmount,
             });
-            if (!remainingInsert.result.ok) {
-              throw new Error(String(remainingInsert.result.error));
+            if (!remainingInsert.ok) {
+              throw new Error(String(remainingInsert.error));
             }
           }
 
@@ -6456,12 +6677,14 @@ export const useAppShellComposition = () => {
   }, [
     cashuIsBusy,
     cashuOwnerId,
+    cashuTokensAll,
     cashuTokensWithMeta,
     defaultMintUrl,
     formatDisplayedAmountParts,
     formatMintButtonLabel,
     insert,
     isCashuTokenKnownAny,
+    readCashuRowAliases,
     rememberSeenMint,
     resolveOwnerIdForWrite,
     setCashuIsBusy,
@@ -7432,13 +7655,16 @@ export const useAppShellComposition = () => {
       evoluContactsOwnerEditCount: contactsOwnerEditCount,
       evoluCashuOwnerId: cashuOwnerId,
       evoluCashuOwnerIndex: cashuOwnerIndex,
+      evoluCashuVisibleOwnerIds: cashuVisibleOwnerIds,
       evoluContactsOwnerId: contactsOwnerId,
       evoluContactsOwnerIndex: contactsOwnerIndex,
       evoluContactsOwnerNewContactsCount: contactsOwnerNewContactsCount,
       evoluContactsOwnerPointer: contactsOwnerPointer,
+      evoluMessagesVisibleOwnerIds: messagesVisibleOwnerIds,
       evoluTransactionsOwnerId: transactionsOwnerId,
       evoluTransactionsOwnerIndex: transactionsOwnerIndex,
       evoluTransactionsOwnerPointer: transactionsOwnerPointer,
+      evoluTransactionsVisibleOwnerIds: transactionsVisibleOwnerIds,
       evoluContactsOwnerEditsUntilRotation: contactsOwnerEditsUntilRotation,
       evoluCashuOwnerEditsUntilRotation: cashuOwnerEditsUntilRotation,
       evoluHistoryAllowedOwnerIds,
