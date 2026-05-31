@@ -96,11 +96,27 @@ export const useContactsNostrPrefetchEffects = <
 
         const currentName = String(contact.name ?? "").trim();
         const currentLn = String(contact.lnAddress ?? "").trim();
+        const currentLnNormalized = currentLn.toLowerCase();
         const shouldNormalizeNpub = rawNpub !== npub;
 
         const needsName = !currentName;
-        const needsLn = !currentLn;
-        if (!needsName && !needsLn && !shouldNormalizeNpub) continue;
+        if (!needsName && !shouldNormalizeNpub && currentLnNormalized) {
+          const cached = loadCachedProfileMetadata(npub);
+          const cachedLn = cached?.metadata
+            ? String(cached.metadata.lud16 ?? "").trim() ||
+              String(cached.metadata.lud06 ?? "").trim()
+            : "";
+          if (cachedLn && cachedLn.toLowerCase() !== currentLnNormalized) {
+            updateContactFromNostr({
+              id: contact.id,
+              lnAddress: cachedLn as typeof Evolu.NonEmptyString1000.Type,
+              ...(shouldNormalizeNpub
+                ? { npub: npub as typeof Evolu.NonEmptyString1000.Type }
+                : {}),
+            });
+            continue;
+          }
+        }
 
         // Try cached metadata first.
         const cached = loadCachedProfileMetadata(npub);
@@ -109,6 +125,8 @@ export const useContactsNostrPrefetchEffects = <
           const ln =
             String(cached.metadata.lud16 ?? "").trim() ||
             String(cached.metadata.lud06 ?? "").trim();
+          const shouldSyncLn =
+            Boolean(ln) && ln.toLowerCase() !== currentLnNormalized;
           const patch: Partial<{
             name: typeof Evolu.NonEmptyString1000.Type;
             lnAddress: typeof Evolu.NonEmptyString1000.Type;
@@ -118,7 +136,7 @@ export const useContactsNostrPrefetchEffects = <
           if (needsName && bestName) {
             patch.name = bestName as typeof Evolu.NonEmptyString1000.Type;
           }
-          if (needsLn && ln) {
+          if (shouldSyncLn) {
             patch.lnAddress = ln as typeof Evolu.NonEmptyString1000.Type;
           }
           if (shouldNormalizeNpub) {
@@ -148,6 +166,8 @@ export const useContactsNostrPrefetchEffects = <
           const ln =
             String(metadata.lud16 ?? "").trim() ||
             String(metadata.lud06 ?? "").trim();
+          const shouldSyncLn =
+            Boolean(ln) && ln.toLowerCase() !== currentLnNormalized;
 
           const patch: Partial<{
             name: typeof Evolu.NonEmptyString1000.Type;
@@ -158,7 +178,7 @@ export const useContactsNostrPrefetchEffects = <
           if (needsName && bestName) {
             patch.name = bestName as typeof Evolu.NonEmptyString1000.Type;
           }
-          if (needsLn && ln) {
+          if (shouldSyncLn) {
             patch.lnAddress = ln as typeof Evolu.NonEmptyString1000.Type;
           }
           if (shouldNormalizeNpub) {
