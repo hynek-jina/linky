@@ -1747,14 +1747,11 @@ export const useAppShellComposition = () => {
     upsert,
   });
 
-  const contactsForRotationRef = React.useRef<readonly ContactRowLike[]>([]);
-
   const {
     cashuOwnerId,
     cashuOwnerEditsUntilRotation,
     cashuOwnerIndex,
     cashuSyncOwner,
-    contactsBackupOwnerId,
     contactsSyncOwner,
     contactsOwnerEditCount,
     contactsOwnerEditsUntilRotation,
@@ -1762,6 +1759,7 @@ export const useAppShellComposition = () => {
     contactsOwnerIndex,
     contactsOwnerNewContactsCount,
     contactsOwnerPointer,
+    contactsVisibleOwnerIds,
     identityOwnerId,
     identitySyncOwner,
     metaOwnerId,
@@ -1790,7 +1788,6 @@ export const useAppShellComposition = () => {
     transactionsSyncOwner,
   } = useEvoluContactsOwnerRotation({
     appOwnerId,
-    getContactsForRotation: () => contactsForRotationRef.current,
     isSeedLogin,
     pushToast,
     slip39Seed,
@@ -1942,21 +1939,19 @@ export const useAppShellComposition = () => {
   const evoluHistoryAllowedOwnerIds = React.useMemo(() => {
     const ids = [
       String(appOwnerId ?? "").trim(),
-      String(contactsOwnerId ?? "").trim(),
       String(cashuOwnerId ?? "").trim(),
-      String(contactsBackupOwnerId ?? "").trim(),
       String(messagesOwnerId ?? "").trim(),
       String(messagesBackupOwnerId ?? "").trim(),
       String(transactionsOwnerId ?? "").trim(),
       String(transactionsBackupOwnerId ?? "").trim(),
       String(metaOwnerId ?? "").trim(),
+      ...contactsVisibleOwnerIds.map((ownerId) => String(ownerId ?? "").trim()),
     ].filter(Boolean);
     return Array.from(new Set(ids));
   }, [
     appOwnerId,
     cashuOwnerId,
-    contactsBackupOwnerId,
-    contactsOwnerId,
+    contactsVisibleOwnerIds,
     messagesBackupOwnerId,
     messagesOwnerId,
     metaOwnerId,
@@ -2104,11 +2099,10 @@ export const useAppShellComposition = () => {
     t,
     update,
     upsert,
+    visibleOwnerIds: contactsVisibleOwnerIds,
   });
 
-  React.useEffect(() => {
-    contactsForRotationRef.current = contacts;
-  }, [contacts]);
+  const activeContactsOwnerContactCount = contactsOwnerNewContactsCount;
 
   const cashuTokensQuery = useMemo(
     () =>
@@ -3836,6 +3830,7 @@ export const useAppShellComposition = () => {
     resetEditedContactFieldFromNostr,
     setForm,
   } = useContactEditor({
+    activeOwnerContactsCount: activeContactsOwnerContactCount,
     appOwnerId: contactsOwnerId,
     contactNewPrefill,
     contacts,
@@ -3852,6 +3847,7 @@ export const useAppShellComposition = () => {
     t,
     transactionsOwnerId,
     update,
+    upsert,
   });
 
   const closeContactDetail = () => {
@@ -3861,7 +3857,7 @@ export const useAppShellComposition = () => {
   };
 
   const openNewContactPage = React.useCallback(() => {
-    if (contacts.length >= MAX_CONTACTS_PER_OWNER) {
+    if (activeContactsOwnerContactCount >= MAX_CONTACTS_PER_OWNER) {
       const message = t("contactsLimitReached").replace(
         "{max}",
         String(MAX_CONTACTS_PER_OWNER),
@@ -3885,16 +3881,17 @@ export const useAppShellComposition = () => {
     }
     navigateTo({ route: "contactNew" });
   }, [
+    activeContactsOwnerContactCount,
     clearContactForm,
     contactNewPrefill,
-    contacts.length,
     pushToast,
     setContactNewPrefill,
     setForm,
     t,
   ]);
 
-  const canAddContact = contacts.length < MAX_CONTACTS_PER_OWNER;
+  const canAddContact =
+    activeContactsOwnerContactCount < MAX_CONTACTS_PER_OWNER;
 
   const { closeMenu, menuIsOpen, navigateToMainReturn, openMenu, toggleMenu } =
     useMainMenuState({
@@ -4286,9 +4283,41 @@ export const useAppShellComposition = () => {
     }
 
     const archivedAtSec = Math.ceil(Date.now() / 1e3);
+    const archivePayload = contactToArchive
+      ? {
+          id,
+          archivedAtSec: archivedAtSec as typeof Evolu.PositiveInt.Type,
+          name: String(contactToArchive.name ?? "").trim()
+            ? (String(
+                contactToArchive.name ?? "",
+              ).trim() as typeof Evolu.NonEmptyString1000.Type)
+            : null,
+          npub: String(contactToArchive.npub ?? "").trim()
+            ? (String(
+                contactToArchive.npub ?? "",
+              ).trim() as typeof Evolu.NonEmptyString1000.Type)
+            : null,
+          lnAddress: String(contactToArchive.lnAddress ?? "").trim()
+            ? (String(
+                contactToArchive.lnAddress ?? "",
+              ).trim() as typeof Evolu.NonEmptyString1000.Type)
+            : null,
+          groupName: String(contactToArchive.groupName ?? "").trim()
+            ? (String(
+                contactToArchive.groupName ?? "",
+              ).trim() as typeof Evolu.NonEmptyString1000.Type)
+            : null,
+        }
+      : null;
 
     const result = contactsOwnerId
       ? (() => {
+          if (archivePayload) {
+            const scopedUpsert = upsert("contact", archivePayload, {
+              ownerId: contactsOwnerId,
+            });
+            if (scopedUpsert.ok) return scopedUpsert;
+          }
           const scoped = update(
             "contact",
             { id, archivedAtSec },
@@ -4319,8 +4348,43 @@ export const useAppShellComposition = () => {
 
   const restoreArchivedContact = React.useCallback(
     (id: ContactId) => {
+      const contactToRestore =
+        contacts.find((contact) => contact.id === id) ?? null;
+      const restorePayload = contactToRestore
+        ? {
+            id,
+            archivedAtSec: null,
+            name: String(contactToRestore.name ?? "").trim()
+              ? (String(
+                  contactToRestore.name ?? "",
+                ).trim() as typeof Evolu.NonEmptyString1000.Type)
+              : null,
+            npub: String(contactToRestore.npub ?? "").trim()
+              ? (String(
+                  contactToRestore.npub ?? "",
+                ).trim() as typeof Evolu.NonEmptyString1000.Type)
+              : null,
+            lnAddress: String(contactToRestore.lnAddress ?? "").trim()
+              ? (String(
+                  contactToRestore.lnAddress ?? "",
+                ).trim() as typeof Evolu.NonEmptyString1000.Type)
+              : null,
+            groupName: String(contactToRestore.groupName ?? "").trim()
+              ? (String(
+                  contactToRestore.groupName ?? "",
+                ).trim() as typeof Evolu.NonEmptyString1000.Type)
+              : null,
+          }
+        : null;
+
       const result = contactsOwnerId
         ? (() => {
+            if (restorePayload) {
+              const scopedUpsert = upsert("contact", restorePayload, {
+                ownerId: contactsOwnerId,
+              });
+              if (scopedUpsert.ok) return scopedUpsert;
+            }
             const scoped = update(
               "contact",
               { id, archivedAtSec: null },
@@ -4342,11 +4406,13 @@ export const useAppShellComposition = () => {
     },
     [
       closeContactDetail,
+      contacts,
       contactsOwnerId,
       recordContactsOwnerWrite,
       setStatus,
       t,
       update,
+      upsert,
     ],
   );
 
@@ -5407,7 +5473,7 @@ export const useAppShellComposition = () => {
         return;
       }
 
-      if (contacts.length >= MAX_CONTACTS_PER_OWNER) {
+      if (activeContactsOwnerContactCount >= MAX_CONTACTS_PER_OWNER) {
         setStatus(
           t("contactsLimitReached").replace(
             "{max}",
@@ -5448,6 +5514,7 @@ export const useAppShellComposition = () => {
       setStatus(t("contactSaved"));
     },
     [
+      activeContactsOwnerContactCount,
       buildSavedContactName,
       contacts,
       contactsOwnerId,

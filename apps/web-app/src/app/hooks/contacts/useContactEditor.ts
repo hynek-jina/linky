@@ -15,11 +15,7 @@ import type { Route } from "../../../types/route";
 import { MAX_CONTACTS_PER_OWNER } from "../../../utils/constants";
 import { getBestNostrName } from "../../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
-import type {
-  ContactFormState,
-  ContactIdentityRowLike,
-  ContactRowLike,
-} from "../../types/appTypes";
+import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -29,10 +25,11 @@ export interface ContactNewPrefill {
   suggestedName: string | null;
 }
 
-type ContactRow = ContactIdentityRowLike;
+type ContactRow = ContactRowLike;
 type SelectedContactRow = ContactRowLike & { id: ContactId };
 
 interface UseContactEditorParams {
+  activeOwnerContactsCount: number;
   appOwnerId: Evolu.OwnerId | null;
   contactNewPrefill: ContactNewPrefill | null;
   contacts: readonly ContactRow[];
@@ -51,6 +48,7 @@ interface UseContactEditorParams {
   t: (key: string) => string;
   transactionsOwnerId: Evolu.OwnerId | null;
   update: EvoluMutations["update"];
+  upsert: EvoluMutations["upsert"];
 }
 
 const readText = (value: unknown): string | null => {
@@ -89,6 +87,7 @@ export const makeEmptyContactForm = (): ContactFormState => ({
 });
 
 export const useContactEditor = ({
+  activeOwnerContactsCount,
   appOwnerId,
   contactNewPrefill,
   contacts,
@@ -105,6 +104,7 @@ export const useContactEditor = ({
   t,
   transactionsOwnerId,
   update,
+  upsert,
 }: UseContactEditorParams) => {
   const [form, setForm] = React.useState<ContactFormState>(
     makeEmptyContactForm(),
@@ -140,6 +140,58 @@ export const useContactEditor = ({
     setContactEditInitial(null);
   }, []);
 
+  const buildFullContactOverridePayload = React.useCallback(
+    (
+      payload: {
+        id: ContactId;
+      } & Partial<
+        Record<
+          "groupName" | "lnAddress" | "name" | "npub",
+          typeof Evolu.NonEmptyString1000.Type | null
+        >
+      >,
+    ) => {
+      const currentOwnerId = readText(appOwnerId);
+      if (!currentOwnerId) return null;
+
+      const source =
+        contacts.find((contact) => contact.id === payload.id) ?? null;
+      const sourceOwnerId = readText(source?.ownerId);
+      if (!source || !sourceOwnerId || sourceOwnerId === currentOwnerId) {
+        return null;
+      }
+
+      return {
+        id: payload.id,
+        name:
+          payload.name !== undefined
+            ? payload.name
+            : (readText(source.name) as
+                | typeof Evolu.NonEmptyString1000.Type
+                | null),
+        npub:
+          payload.npub !== undefined
+            ? payload.npub
+            : (readText(source.npub) as
+                | typeof Evolu.NonEmptyString1000.Type
+                | null),
+        lnAddress:
+          payload.lnAddress !== undefined
+            ? payload.lnAddress
+            : (readText(source.lnAddress) as
+                | typeof Evolu.NonEmptyString1000.Type
+                | null),
+        groupName:
+          payload.groupName !== undefined
+            ? payload.groupName
+            : (readText(source.groupName) as
+                | typeof Evolu.NonEmptyString1000.Type
+                | null),
+      };
+    },
+    [appOwnerId, contacts],
+  );
+
   const updateContactFields = React.useCallback(
     (
       payload: {
@@ -151,12 +203,17 @@ export const useContactEditor = ({
         >
       >,
     ) => {
+      const fullOverridePayload = buildFullContactOverridePayload(payload);
+      if (fullOverridePayload && appOwnerId) {
+        return upsert("contact", fullOverridePayload, { ownerId: appOwnerId });
+      }
+
       if (!appOwnerId) return update("contact", payload);
       const scoped = update("contact", payload, { ownerId: appOwnerId });
       if (scoped.ok) return scoped;
       return update("contact", payload);
     },
-    [appOwnerId, update],
+    [appOwnerId, buildFullContactOverridePayload, update, upsert],
   );
 
   const updateTransactionFields = React.useCallback(
@@ -316,7 +373,7 @@ export const useContactEditor = ({
       return;
     }
 
-    if (!editingId && contacts.length >= MAX_CONTACTS_PER_OWNER) {
+    if (!editingId && activeOwnerContactsCount >= MAX_CONTACTS_PER_OWNER) {
       setStatus(
         t("contactsLimitReached").replace(
           "{max}",
@@ -456,6 +513,7 @@ export const useContactEditor = ({
     navigateTo({ route: "contacts" });
     setIsSavingContact(false);
   }, [
+    activeOwnerContactsCount,
     appOwnerId,
     backfillLightningAddressTransactions,
     clearContactForm,
@@ -475,6 +533,7 @@ export const useContactEditor = ({
     setStatus,
     t,
     updateContactFields,
+    upsert,
     refreshContactAvatarFromNostr,
   ]);
 

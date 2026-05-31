@@ -165,11 +165,13 @@ export type ContactRowLike = {
   lnAddress?: OptionalText;
   name?: OptionalText;
   npub?: OptionalText;
+  ownerId?: OptionalText;
 };
 
 export type ContactIdentityRowLike = {
   id?: ContactIdLike;
   npub?: OptionalText;
+  ownerId?: OptionalText;
 };
 
 export type ContactNameRowLike = {
