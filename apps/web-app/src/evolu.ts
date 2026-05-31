@@ -3,6 +3,7 @@ import { createEvolu, SimpleName } from "@evolu/common";
 import { createUseEvolu, EvoluProvider } from "@evolu/react";
 import { evoluReactWebDeps } from "@evolu/react-web";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useDeferredOnlineReady } from "./hooks/useDeferredOnlineReady";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
 import type { JsonValue } from "./types/json";
 import {
@@ -973,6 +974,7 @@ export const useEvoluServersManager = (opts?: {
 }) => {
   const probeIntervalMs = opts?.probeIntervalMs ?? 15000;
   const probeTimeoutMs = opts?.probeTimeoutMs ?? 3500;
+  const canRunNetworkWork = useDeferredOnlineReady();
 
   const [configuredUrls, setConfiguredUrlsState] = useState<string[]>(() => [
     ...getEvoluConfiguredServerUrls(),
@@ -1026,6 +1028,8 @@ export const useEvoluServersManager = (opts?: {
 
   useEffect(() => {
     if (activeUrls.length === 0) return;
+    if (!canRunNetworkWork) return;
+
     let cancelled = false;
 
     const run = async () => {
@@ -1057,13 +1061,23 @@ export const useEvoluServersManager = (opts?: {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [activeUrls, probeIntervalMs, probeTimeoutMs]);
+  }, [activeUrls, canRunNetworkWork, probeIntervalMs, probeTimeoutMs]);
+
+  const effectiveStatusByUrl = useMemo(() => {
+    if (canRunNetworkWork) return statusByUrl;
+
+    const next = { ...statusByUrl };
+    for (const url of activeUrls) {
+      next[url] = "disconnected";
+    }
+    return next;
+  }, [activeUrls, canRunNetworkWork, statusByUrl]);
 
   return {
     configuredUrls,
     disabledUrls,
     activeUrls,
-    statusByUrl,
+    statusByUrl: effectiveStatusByUrl,
     reloadRequired,
     refreshFromStorage,
     setServerUrls,

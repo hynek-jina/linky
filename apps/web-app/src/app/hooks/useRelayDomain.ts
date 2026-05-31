@@ -1,5 +1,6 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React from "react";
+import { useDeferredOnlineReady } from "../../hooks/useDeferredOnlineReady";
 import { navigateTo } from "../../hooks/useRouting";
 import { NOSTR_RELAYS } from "../../nostrProfile";
 import { isNativePlatform } from "../../platform/runtime";
@@ -76,6 +77,7 @@ export const useRelayDomain = ({
   setStatus,
   t,
 }: UseRelayDomainParams): UseRelayDomainResult => {
+  const canRunNetworkWork = useDeferredOnlineReady();
   const [newRelayUrl, setNewRelayUrl] = React.useState<string>("");
   const [relayStatusByUrl, setRelayStatusByUrl] = React.useState<
     Record<string, "checking" | "connected" | "disconnected">
@@ -96,6 +98,7 @@ export const useRelayDomain = ({
   }, [pendingRelayDeleteUrl]);
 
   React.useEffect(() => {
+    if (!canRunNetworkWork) return;
     if (!currentNsec) return;
 
     const initPush = async () => {
@@ -150,7 +153,7 @@ export const useRelayDomain = ({
     if ("serviceWorker" in navigator && "PushManager" in window) {
       void initPush();
     }
-  }, [currentNsec]);
+  }, [canRunNetworkWork, currentNsec]);
 
   React.useEffect(() => {
     if (!currentNsec) {
@@ -262,6 +265,7 @@ export const useRelayDomain = ({
 
   React.useEffect(() => {
     if (relayUrls.length === 0) return;
+    if (!canRunNetworkWork) return;
 
     let cancelled = false;
     setRelayStatusByUrl((prev) => {
@@ -291,13 +295,23 @@ export const useRelayDomain = ({
     return () => {
       cancelled = true;
     };
-  }, [checkRelayConnection, relayUrls]);
+  }, [canRunNetworkWork, checkRelayConnection, relayUrls]);
+
+  const effectiveRelayStatusByUrl = React.useMemo(() => {
+    if (canRunNetworkWork) return relayStatusByUrl;
+
+    const next = { ...relayStatusByUrl };
+    for (const url of relayUrls) {
+      next[url] = "disconnected";
+    }
+    return next;
+  }, [canRunNetworkWork, relayStatusByUrl, relayUrls]);
 
   const connectedRelayCount = React.useMemo(() => {
     return relayUrls.reduce((sum, url) => {
-      return sum + (relayStatusByUrl[url] === "connected" ? 1 : 0);
+      return sum + (effectiveRelayStatusByUrl[url] === "connected" ? 1 : 0);
     }, 0);
-  }, [relayStatusByUrl, relayUrls]);
+  }, [effectiveRelayStatusByUrl, relayUrls]);
 
   const nostrRelayOverallStatus = React.useMemo<
     "connected" | "checking" | "disconnected"
@@ -305,10 +319,10 @@ export const useRelayDomain = ({
     if (relayUrls.length === 0) return "disconnected";
     if (connectedRelayCount > 0) return "connected";
     const anyChecking = relayUrls.some(
-      (url) => (relayStatusByUrl[url] ?? "checking") === "checking",
+      (url) => (effectiveRelayStatusByUrl[url] ?? "checking") === "checking",
     );
     return anyChecking ? "checking" : "disconnected";
-  }, [connectedRelayCount, relayStatusByUrl, relayUrls]);
+  }, [connectedRelayCount, effectiveRelayStatusByUrl, relayUrls]);
 
   const selectedRelayUrl = React.useMemo(() => {
     if (route.kind !== "nostrRelay") return null;
@@ -411,6 +425,7 @@ export const useRelayDomain = ({
   const relayProfileSyncForNpubRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
+    if (!canRunNetworkWork) return;
     if (!currentNpub) return;
 
     if (relayProfileSyncForNpubRef.current === currentNpub) return;
@@ -502,7 +517,13 @@ export const useRelayDomain = ({
     return () => {
       cancelled = true;
     };
-  }, [currentNpub, currentNsec, publishNostrRelayLists, relayUrls]);
+  }, [
+    canRunNetworkWork,
+    currentNpub,
+    currentNsec,
+    publishNostrRelayLists,
+    relayUrls,
+  ]);
 
   const saveNewRelay = React.useCallback(() => {
     const url = newRelayUrl.trim();
@@ -571,7 +592,7 @@ export const useRelayDomain = ({
     nostrFetchRelays,
     nostrRelayOverallStatus,
     pendingRelayDeleteUrl,
-    relayStatusByUrl,
+    relayStatusByUrl: effectiveRelayStatusByUrl,
     relayUrls,
     requestDeleteSelectedRelay,
     saveNewRelay,
