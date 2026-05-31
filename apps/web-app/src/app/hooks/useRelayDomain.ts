@@ -40,6 +40,35 @@ function isPushSubscriptionChangeMessage(
   );
 }
 
+function extractUniqueRelayTags(
+  event: NostrToolsEvent | undefined,
+  tagName: string,
+): string[] {
+  const tags = Array.isArray(event?.tags) ? event.tags : [];
+  const extracted: string[] = [];
+  for (const tag of tags) {
+    if (!Array.isArray(tag)) continue;
+    if (tag[0] !== tagName) continue;
+    const url = String(tag[1] ?? "").trim();
+    if (!url) continue;
+    extracted.push(url);
+  }
+
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const url of extracted) {
+    if (seen.has(url)) continue;
+    seen.add(url);
+    unique.push(url);
+  }
+  return unique;
+}
+
+function haveSameRelayUrls(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((url, index) => url === right[index]);
+}
+
 export const useRelayDomain = ({
   currentNpub,
   currentNsec,
@@ -287,7 +316,7 @@ export const useRelayDomain = ({
     return url || null;
   }, [route]);
 
-  const publishNostrRelayList = React.useCallback(
+  const publishNostrRelayLists = React.useCallback(
     async (urls: string[]) => {
       if (!currentNsec) throw new Error("Missing nsec");
 
@@ -313,16 +342,6 @@ export const useRelayDomain = ({
         urls: unique,
       });
 
-      const baseEvent = {
-        kind: 10002,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: unique.map((u) => ["r", u] as string[]),
-        content: "",
-        pubkey,
-      } satisfies UnsignedEvent;
-
-      const signed: NostrToolsEvent = finalizeEvent(baseEvent, privBytes);
-
       const relaysToUse = (() => {
         const combined = [...NOSTR_RELAYS, ...unique];
         const out: string[] = [];
@@ -337,17 +356,54 @@ export const useRelayDomain = ({
         return out;
       })();
 
+      const relayEvents = [
+        {
+          kind: 10002,
+          logLabel: "relay list",
+          tags: unique.map((u) => ["r", u] as string[]),
+        },
+        {
+          kind: 10050,
+          logLabel: "dm inbox relay list",
+          tags: unique.map((u) => ["relay", u] as string[]),
+        },
+      ] satisfies Array<{
+        kind: 10002 | 10050;
+        logLabel: string;
+        tags: string[][];
+      }>;
+
       const pool = await getSharedAppNostrPool();
-      const publishResults = await Promise.allSettled(
-        pool.publish(relaysToUse, signed),
+
+      await Promise.all(
+        relayEvents.map(async ({ kind, logLabel, tags }) => {
+          const baseEvent = {
+            kind,
+            created_at: Math.floor(Date.now() / 1000),
+            tags,
+            content: "",
+            pubkey,
+          } satisfies UnsignedEvent;
+
+          const signed: NostrToolsEvent = finalizeEvent(baseEvent, privBytes);
+          const publishResults = await Promise.allSettled(
+            pool.publish(relaysToUse, signed),
+          );
+          const anySuccess = publishResults.some(
+            (result) => result.status === "fulfilled",
+          );
+
+          if (!anySuccess) {
+            const firstError = publishResults.find(
+              (result): result is PromiseRejectedResult =>
+                result.status === "rejected",
+            )?.reason;
+            throw new Error(
+              `${logLabel}: ${String(firstError ?? "publish failed")}`,
+            );
+          }
+        }),
       );
-      const anySuccess = publishResults.some((r) => r.status === "fulfilled");
-      if (!anySuccess) {
-        const firstError = publishResults.find(
-          (r): r is PromiseRejectedResult => r.status === "rejected",
-        )?.reason;
-        throw new Error(String(firstError ?? "publish failed"));
-      }
     },
     [currentNsec],
   );
@@ -387,52 +443,54 @@ export const useRelayDomain = ({
 
         const events = await pool.querySync(
           queryRelays,
-          { kinds: [10002], authors: [pubkey], limit: 5 },
+          { kinds: [10002, 10050], authors: [pubkey], limit: 10 },
           { maxWait: 5000 },
         );
 
-        const relayListEvents = Array.isArray(events) ? events : [];
+        const relayMetadataEvents = Array.isArray(events) ? events : [];
 
-        const newest = relayListEvents
+        const newestRelayList = relayMetadataEvents
+          .filter((event) => event.kind === 10002)
           .slice()
           .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0];
 
-        const urls = (() => {
-          const tags = Array.isArray(newest?.tags) ? newest.tags : [];
-          const extracted: string[] = [];
-          for (const tag of tags) {
-            if (!Array.isArray(tag)) continue;
-            if (tag[0] !== "r") continue;
-            const url = String(tag[1] ?? "").trim();
-            if (!url) continue;
-            extracted.push(url);
-          }
-          const unique: string[] = [];
-          const seen = new Set<string>();
-          for (const u of extracted) {
-            if (seen.has(u)) continue;
-            seen.add(u);
-            unique.push(u);
-          }
-          return unique;
-        })();
+        const newestInboxRelayList = relayMetadataEvents
+          .filter((event) => event.kind === 10050)
+          .slice()
+          .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0];
+
+        const relayListUrls = extractUniqueRelayTags(newestRelayList, "r");
+        const inboxRelayUrls = extractUniqueRelayTags(
+          newestInboxRelayList,
+          "relay",
+        );
+        const urls = relayListUrls.length > 0 ? relayListUrls : inboxRelayUrls;
 
         console.log("[linky][nostr] relay list", {
-          eventId: String(newest?.id ?? ""),
-          createdAt: newest?.created_at ?? null,
-          urls,
+          inboxEventId: String(newestInboxRelayList?.id ?? ""),
+          inboxUrls: inboxRelayUrls,
+          relayEventId: String(newestRelayList?.id ?? ""),
+          relayCreatedAt: newestRelayList?.created_at ?? null,
+          relayUrls: relayListUrls,
         });
 
         if (cancelled) return;
 
         if (urls.length > 0) {
           setRelayUrls(urls);
+
+          if (
+            currentNsec &&
+            !haveSameRelayUrls(relayListUrls, inboxRelayUrls)
+          ) {
+            await publishNostrRelayLists(urls);
+          }
           return;
         }
 
         setRelayUrls([...NOSTR_RELAYS]);
         if (!currentNsec) return;
-        await publishNostrRelayList(NOSTR_RELAYS);
+        await publishNostrRelayLists(NOSTR_RELAYS);
       } catch (e) {
         console.log("[linky][nostr] relay sync failed", {
           error: String(e ?? "unknown"),
@@ -444,7 +502,7 @@ export const useRelayDomain = ({
     return () => {
       cancelled = true;
     };
-  }, [currentNpub, currentNsec, publishNostrRelayList, relayUrls]);
+  }, [currentNpub, currentNsec, publishNostrRelayLists, relayUrls]);
 
   const saveNewRelay = React.useCallback(() => {
     const url = newRelayUrl.trim();
@@ -461,7 +519,7 @@ export const useRelayDomain = ({
 
     const nextUrls = [...relayUrls, url];
     setRelayUrls(nextUrls);
-    void publishNostrRelayList(nextUrls).catch((e) => {
+    void publishNostrRelayLists(nextUrls).catch((e) => {
       console.log("[linky][nostr] publish relay list failed", {
         error: String(e ?? "unknown"),
       });
@@ -469,7 +527,7 @@ export const useRelayDomain = ({
 
     setNewRelayUrl("");
     navigateTo({ route: "nostrRelays" });
-  }, [newRelayUrl, publishNostrRelayList, relayUrls, setStatus, t]);
+  }, [newRelayUrl, publishNostrRelayLists, relayUrls, setStatus, t]);
 
   const requestDeleteSelectedRelay = React.useCallback(() => {
     if (route.kind !== "nostrRelay") return;
@@ -483,7 +541,7 @@ export const useRelayDomain = ({
       const nextUrls = relayUrls.filter((u) => u !== selectedRelayUrl);
       setRelayUrls(nextUrls);
       setPendingRelayDeleteUrl(null);
-      void publishNostrRelayList(nextUrls).catch((e) => {
+      void publishNostrRelayLists(nextUrls).catch((e) => {
         console.log("[linky][nostr] publish relay list failed", {
           error: String(e ?? "unknown"),
         });
@@ -496,7 +554,7 @@ export const useRelayDomain = ({
     setStatus(t("deleteArmedHint"));
   }, [
     pendingRelayDeleteUrl,
-    publishNostrRelayList,
+    publishNostrRelayLists,
     relayUrls,
     route.kind,
     selectedRelayUrl,

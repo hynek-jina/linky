@@ -6,7 +6,11 @@ import { evolu } from "../../evolu";
 import { isStatusFilterValue } from "../../nostrStatus";
 import type { Route } from "../../types/route";
 import { ARCHIVED_CONTACTS_FILTER } from "../../utils/constants";
-import type { OptionalText } from "../types/appTypes";
+import type {
+  OptionalBooleanTextNumber,
+  OptionalNumber,
+  OptionalText,
+} from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -28,7 +32,43 @@ interface UseContactsDomainParams {
   t: (key: string) => string;
   update: EvoluMutations["update"];
   upsert: EvoluMutations["upsert"];
+  visibleOwnerIds: readonly Evolu.OwnerId[];
 }
+
+const readContactId = (row: unknown): string => {
+  if (typeof row !== "object" || row === null) return "";
+  if (!("id" in row)) return "";
+  const id = row.id;
+  if (typeof id !== "string") return "";
+  return id.trim();
+};
+
+const readCreatedAt = (value: OptionalNumber): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return parsed;
+};
+
+const isDeletedRow = (value: OptionalBooleanTextNumber): boolean => {
+  if (value === true || value === 1) return true;
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return text === "1" || text === "true";
+};
+
+const shouldReplaceContactVersion = (
+  candidateOwnerRank: number,
+  candidateCreatedAt: number,
+  existingOwnerRank: number,
+  existingCreatedAt: number,
+): boolean => {
+  if (candidateOwnerRank !== existingOwnerRank) {
+    return candidateOwnerRank > existingOwnerRank;
+  }
+
+  return candidateCreatedAt >= existingCreatedAt;
+};
 
 export const useContactsDomain = ({
   appOwnerId,
@@ -40,6 +80,7 @@ export const useContactsDomain = ({
   t,
   update,
   upsert,
+  visibleOwnerIds,
 }: UseContactsDomainParams) => {
   const [dedupeContactsIsBusy, setDedupeContactsIsBusy] = React.useState(false);
   const [activeGroup, setActiveGroup] = React.useState<string | null>(null);
@@ -50,22 +91,98 @@ export const useContactsDomain = ({
   const contactsQuery = React.useMemo(
     () =>
       evolu.createQuery((db) =>
-        db
-          .selectFrom("contact")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .orderBy("createdAt", "desc"),
+        db.selectFrom("contact").selectAll().orderBy("createdAt", "desc"),
       ),
     [],
   );
 
   const allContacts = useQuery(contactsQuery);
 
+  const visibleOwnerIdTexts = React.useMemo(
+    () =>
+      visibleOwnerIds
+        .map((ownerId) => String(ownerId ?? "").trim())
+        .filter(Boolean),
+    [visibleOwnerIds],
+  );
+
+  const visibleOwnerRankById = React.useMemo(() => {
+    const rankById = new Map<string, number>();
+    for (const [index, ownerId] of visibleOwnerIdTexts.entries()) {
+      rankById.set(ownerId, index);
+    }
+    return rankById;
+  }, [visibleOwnerIdTexts]);
+
   const contacts = React.useMemo(() => {
-    const ownerId = String(appOwnerId ?? "").trim();
-    if (!ownerId) return [];
-    return allContacts.filter((contact) => getRowOwnerId(contact) === ownerId);
-  }, [allContacts, appOwnerId]);
+    if (visibleOwnerRankById.size === 0) return [];
+
+    type ContactQueryRow = (typeof allContacts)[number];
+
+    const latestById = new Map<
+      string,
+      {
+        createdAt: number;
+        ownerRank: number;
+        row: ContactQueryRow;
+      }
+    >();
+
+    for (const contact of allContacts) {
+      const ownerId = getRowOwnerId(contact);
+      const ownerRank = visibleOwnerRankById.get(ownerId);
+      if (ownerRank === undefined) continue;
+
+      const contactId = readContactId(contact);
+      if (!contactId) continue;
+
+      const createdAt = readCreatedAt(
+        typeof contact === "object" &&
+          contact !== null &&
+          "createdAt" in contact
+          ? contact.createdAt
+          : null,
+      );
+
+      const existing = latestById.get(contactId);
+      if (
+        !existing ||
+        shouldReplaceContactVersion(
+          ownerRank,
+          createdAt,
+          existing.ownerRank,
+          existing.createdAt,
+        )
+      ) {
+        latestById.set(contactId, {
+          createdAt,
+          ownerRank,
+          row: contact,
+        });
+      }
+    }
+
+    return Array.from(latestById.values())
+      .map(({ row }) => row)
+      .filter((row) => {
+        if (typeof row !== "object" || row === null) return false;
+        const maybeDeleted = "isDeleted" in row ? row.isDeleted : null;
+        return !isDeletedRow(maybeDeleted as OptionalBooleanTextNumber);
+      })
+      .sort(
+        (a, b) =>
+          readCreatedAt(
+            typeof b === "object" && b !== null && "createdAt" in b
+              ? b.createdAt
+              : null,
+          ) -
+          readCreatedAt(
+            typeof a === "object" && a !== null && "createdAt" in a
+              ? a.createdAt
+              : null,
+          ),
+      );
+  }, [allContacts, visibleOwnerRankById]);
 
   const dedupeContacts = React.useCallback(async () => {
     if (dedupeContactsIsBusy) return;
