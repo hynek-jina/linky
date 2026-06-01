@@ -6,8 +6,8 @@ import type { JsonValue } from "../../../types/json";
 import type { Route } from "../../../types/route";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
+import { extractUniqueClaimTokens } from "../../../utils/npubCashClaimResponse";
 import { safeLocalStorageSet } from "../../../utils/storage";
-import { asRecord } from "../../../utils/validation";
 import type {
   CashuTokenRowLike,
   LocalMintInfoRow,
@@ -359,20 +359,7 @@ export const useNpubCashClaim = ({
       });
       if (!res.ok) return;
       const json = (await res.json()) as JsonValue;
-      const root = asRecord(json);
-      if (!root || root.error) return;
-
-      const tokens: string[] = [];
-      const data = asRecord(root.data);
-      const token = String(data?.token ?? root.token ?? "").trim();
-      if (token) tokens.push(token);
-      const dataTokens = data?.tokens;
-      if (Array.isArray(dataTokens)) {
-        for (const item of dataTokens) {
-          const text = String(item ?? "").trim();
-          if (text) tokens.push(text);
-        }
-      }
+      const tokens = extractUniqueClaimTokens(json);
       if (tokens.length === 0) return;
 
       for (const tokenText of tokens) {
