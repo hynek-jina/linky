@@ -1,8 +1,10 @@
 import React from "react";
-import type {
-  BeforeInstallPromptEventLike,
-  NavigatorWithOptionalStandalone,
-} from "../types/browser";
+import type { BeforeInstallPromptEventLike } from "../types/browser";
+import {
+  getTelemetryAppRuntime,
+  getTelemetryDevicePlatform,
+  isNativePlatform,
+} from "../platform/runtime";
 import {
   INSTALL_PWA_DISMISS_COOLDOWN_MS,
   INSTALL_PWA_DISMISSED_AT_MS_STORAGE_KEY,
@@ -21,13 +23,31 @@ const isStandaloneDisplay = (): boolean => {
   } catch {
     // ignore
   }
-  const nav = window.navigator as NavigatorWithOptionalStandalone;
-  return nav.standalone === true;
+  return Reflect.get(window.navigator, "standalone") === true;
+};
+
+const getUserAgent = (): string => {
+  if (typeof navigator === "undefined") return "";
+  return String(navigator.userAgent ?? "");
+};
+
+const isMobileBrowser = (): boolean => {
+  const platform = getTelemetryDevicePlatform();
+  return platform === "android" || platform === "iphone" || platform === "ipad";
 };
 
 const isIosBrowser = (): boolean => {
-  if (typeof navigator === "undefined") return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const platform = getTelemetryDevicePlatform();
+  return platform === "iphone" || platform === "ipad";
+};
+
+const isIosSafari = (): boolean => {
+  if (!isIosBrowser()) return false;
+  const userAgent = getUserAgent();
+  return (
+    /safari/i.test(userAgent) &&
+    !/crios|fxios|edgios|opios|duckduckgo/i.test(userAgent)
+  );
 };
 
 const readDismissedAtMs = (): number => {
@@ -46,9 +66,8 @@ const isDismissCooldownActive = (): boolean => {
 const isBeforeInstallPromptEvent = (
   event: Event,
 ): event is BeforeInstallPromptEventLike => {
-  if (typeof (event as { prompt?: unknown }).prompt !== "function")
-    return false;
-  const userChoice = (event as { userChoice?: unknown }).userChoice;
+  if (typeof Reflect.get(event, "prompt") !== "function") return false;
+  const userChoice = Reflect.get(event, "userChoice");
   return userChoice !== undefined && userChoice !== null;
 };
 
@@ -59,10 +78,14 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
     null,
   );
   const isIos = React.useMemo(() => isIosBrowser(), []);
+  const isSafariOnIos = React.useMemo(() => isIosSafari(), []);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
+    if (isNativePlatform()) return;
     if (isStandaloneDisplay()) return;
+    if (getTelemetryAppRuntime() === "pwa") return;
+    if (!isMobileBrowser()) return;
     if (isDismissCooldownActive()) return;
 
     let showTimerId: number | null = null;
@@ -95,9 +118,9 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
 
-    // iOS Safari never fires beforeinstallprompt — show the instruction
-    // banner directly after the same delay.
-    if (isIos) scheduleShow();
+    // iOS never fires beforeinstallprompt. Some Android browsers also skip it,
+    // so mobile visitors still get the manual install path.
+    scheduleShow();
 
     return () => {
       cancelled = true;
@@ -140,26 +163,74 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
   if (!visible) return null;
 
   const canPromptNative = !isIos && deferredPromptRef.current !== null;
-  const hint = isIos
-    ? t("installPwaHintIos")
+  const intro = isIos
+    ? isSafariOnIos
+      ? t("installPwaIntroIos")
+      : t("installPwaIntroIosOtherBrowser")
     : canPromptNative
-      ? t("installPwaHintAndroid")
-      : t("installPwaHintAndroid");
+      ? t("installPwaIntroAndroidPrompt")
+      : t("installPwaIntroAndroidManual");
+  const steps = isIos
+    ? [
+        {
+          icon: "↑",
+          text: t("installPwaStepIosShare"),
+        },
+        {
+          icon: "+",
+          text: t("installPwaStepIosAdd"),
+        },
+      ]
+    : [
+        {
+          icon: "⋮",
+          text: t("installPwaStepAndroidMenu"),
+        },
+        {
+          icon: "+",
+          text: t("installPwaStepAndroidAdd"),
+        },
+      ];
 
   return (
-    <div className="install-pwa-banner" role="dialog" aria-live="polite">
-      <div className="install-pwa-banner-icon" aria-hidden="true">
-        ⚡
-      </div>
-      <div className="install-pwa-banner-text">
-        <strong>{t("installPwaTitle")}</strong>
-        <span>{hint}</span>
-      </div>
-      <div className="install-pwa-banner-actions">
+    <div className="install-pwa-overlay" role="presentation">
+      <section
+        className="install-pwa-sheet"
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="install-pwa-title"
+        aria-describedby="install-pwa-description"
+      >
+        <header className="install-pwa-header">
+          <h2 id="install-pwa-title">{t("installPwaTitle")}</h2>
+          <button
+            type="button"
+            className="install-pwa-cancel"
+            onClick={dismiss}
+          >
+            {t("installPwaDismiss")}
+          </button>
+        </header>
+
+        <p id="install-pwa-description" className="install-pwa-intro">
+          {intro}
+        </p>
+
+        <ol className="install-pwa-steps">
+          {steps.map((step) => (
+            <li key={step.text}>
+              <span className="install-pwa-step-icon" aria-hidden="true">
+                {step.icon}
+              </span>
+              <span>{step.text}</span>
+            </li>
+          ))}
+        </ol>
+
         {canPromptNative ? (
           <button
             type="button"
-            className="install-pwa-banner-install"
+            className="install-pwa-install"
             onClick={() => {
               void install();
             }}
@@ -168,15 +239,7 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
             {t("installPwaInstall")}
           </button>
         ) : null}
-        <button
-          type="button"
-          className="install-pwa-banner-dismiss"
-          aria-label={t("installPwaDismiss")}
-          onClick={dismiss}
-        >
-          ×
-        </button>
-      </div>
+      </section>
     </div>
   );
 };

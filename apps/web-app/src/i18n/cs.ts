@@ -595,8 +595,19 @@ export const cs = {
   pwaUpdateAvailable: "Nová verze Linky je k dispozici",
   pwaUpdateButton: "Aktualizovat",
   installPwaTitle: "Přidat na plochu",
-  installPwaHintAndroid: "Spusť Linky jako aplikaci, bez lišty prohlížeče.",
-  installPwaHintIos: "Klepni na Sdílet ↑ → Přidat na plochu.",
+  installPwaIntroAndroidPrompt:
+    "Linky funguje nejlépe jako nainstalovaná aplikace: přes celou obrazovku, offline a s notifikacemi.",
+  installPwaIntroAndroidManual:
+    "Linky funguje nejlépe jako nainstalovaná aplikace. V Chromu nebo mobilním prohlížeči:",
+  installPwaIntroIos:
+    "Linky má funkce aplikace. Přidej si ji na plochu, ať běží přes celou obrazovku a může posílat notifikace. V Safari:",
+  installPwaIntroIosOtherBrowser:
+    "Linky má funkce aplikace. Otevři tuto stránku v Safari a potom:",
+  installPwaStepAndroidMenu: "Otevři menu prohlížeče.",
+  installPwaStepAndroidAdd:
+    "Klepni na Instalovat aplikaci nebo Přidat na plochu.",
+  installPwaStepIosShare: "Klepni dole na tlačítko Sdílet.",
+  installPwaStepIosAdd: "Klepni na Přidat na plochu.",
   installPwaInstall: "Přidat",
   installPwaDismiss: "Zavřít",
   cashuCheckFailed: "Kontrola selhala",

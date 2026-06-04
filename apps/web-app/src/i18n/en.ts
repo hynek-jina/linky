@@ -588,10 +588,20 @@ export const en = {
   pwaUpdateAvailable: "A new version of Linky is available",
   pwaUpdateButton: "Update",
   installPwaTitle: "Add to home screen",
-  installPwaHintAndroid: "Run Linky like an app, without the browser bar.",
-  installPwaHintIos: "Tap Share ↑ → Add to Home Screen.",
+  installPwaIntroAndroidPrompt:
+    "Linky works best as an installed app: fullscreen, offline-ready, and ready for notifications.",
+  installPwaIntroAndroidManual:
+    "Linky works best as an installed app. In Chrome or your mobile browser:",
+  installPwaIntroIos:
+    "Linky has app functionality. Add it to your home screen to use it fullscreen and receive notifications. In Safari:",
+  installPwaIntroIosOtherBrowser:
+    "Linky has app functionality. Open this page in Safari, then:",
+  installPwaStepAndroidMenu: "Open the browser menu.",
+  installPwaStepAndroidAdd: "Tap Install app or Add to Home screen.",
+  installPwaStepIosShare: "Tap the Share button in the bottom toolbar.",
+  installPwaStepIosAdd: "Tap Add to Home Screen.",
   installPwaInstall: "Install",
-  installPwaDismiss: "Dismiss",
+  installPwaDismiss: "Cancel",
   cashuCheckFailed: "Check failed",
   cashuInvalid: "Token is invalid or already spent.",
   cashuStatus: "Status",
