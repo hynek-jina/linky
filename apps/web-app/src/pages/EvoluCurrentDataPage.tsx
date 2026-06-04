@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import type { loadEvoluCurrentData } from "../evolu";
+import { writeClipboardText } from "../platform/clipboard";
 import {
   CASHU_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
   CONTACTS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
@@ -55,6 +56,14 @@ function isTrackedTable(tableName: string): boolean {
   );
 }
 
+function stringifyCellValue(value: unknown): string {
+  if (typeof value === "object" && value !== null) {
+    return JSON.stringify(value);
+  }
+
+  return String(value ?? "");
+}
+
 export function EvoluCurrentDataPage({
   evoluCashuOwnerEditsUntilRotation,
   evoluCashuOwnerId,
@@ -90,6 +99,7 @@ export function EvoluCurrentDataPage({
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>(
     {},
   );
+  const [copiedCellKey, setCopiedCellKey] = useState<string | null>(null);
 
   useEffect(() => {
     loadCurrentData().then((data) => {
@@ -97,6 +107,20 @@ export function EvoluCurrentDataPage({
       setIsLoading(false);
     });
   }, [loadCurrentData]);
+
+  useEffect(() => {
+    if (copiedCellKey === null) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setCopiedCellKey((current) =>
+        current === copiedCellKey ? null : current,
+      );
+    }, 1500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [copiedCellKey]);
 
   const filteredCurrentData = React.useMemo(() => {
     const activeContactsOwnerId = String(evoluContactsOwnerId ?? "").trim();
@@ -316,6 +340,7 @@ export function EvoluCurrentDataPage({
                 ? Math.min(100, Math.max(0, (usedEdits / rotationLimit) * 100))
                 : 0;
             const isExpanded = expandedTables[tableName] === true;
+            const isCashuTokenTable = tableName === "cashuToken";
             const visibleRows = isExpanded
               ? rows
               : rows.slice(0, previewRowCount);
@@ -563,20 +588,65 @@ export function EvoluCurrentDataPage({
                                   ([key]) =>
                                     !["createdAt", "updatedAt"].includes(key),
                                 )
-                                .map(([, val], valueIdx) => (
-                                  <td
-                                    key={valueIdx}
-                                    style={{
-                                      padding: 4,
-                                      borderBottom:
-                                        "1px solid var(--color-border)",
-                                    }}
-                                  >
-                                    {typeof val === "object" && val !== null
-                                      ? JSON.stringify(val).slice(0, 50)
-                                      : String(val ?? "").slice(0, 50)}
-                                  </td>
-                                ))}
+                                .map(([key, val], valueIdx) => {
+                                  const fullValue = stringifyCellValue(val);
+                                  const previewValue = fullValue.slice(0, 50);
+                                  const cellKey = `${tableName}:${idx}:${key}`;
+                                  const isCopied = copiedCellKey === cellKey;
+
+                                  return (
+                                    <td
+                                      key={valueIdx}
+                                      style={{
+                                        padding: 4,
+                                        borderBottom:
+                                          "1px solid var(--color-border)",
+                                      }}
+                                    >
+                                      {isCashuTokenTable ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            void writeClipboardText(
+                                              fullValue,
+                                            ).then((copied) => {
+                                              if (!copied) return;
+                                              setCopiedCellKey(cellKey);
+                                            });
+                                          }}
+                                          title={
+                                            isCopied
+                                              ? t("copiedToClipboard")
+                                              : t("copy")
+                                          }
+                                          aria-label={
+                                            isCopied
+                                              ? t("copiedToClipboard")
+                                              : t("copy")
+                                          }
+                                          style={{
+                                            appearance: "none",
+                                            background: "none",
+                                            border: 0,
+                                            color: "inherit",
+                                            cursor: "pointer",
+                                            font: "inherit",
+                                            padding: 0,
+                                            textAlign: "left",
+                                            width: "100%",
+                                            wordBreak: "break-all",
+                                          }}
+                                        >
+                                          {isCopied
+                                            ? t("copiedToClipboard")
+                                            : previewValue}
+                                        </button>
+                                      ) : (
+                                        previewValue
+                                      )}
+                                    </td>
+                                  );
+                                })}
                             </tr>
                           ))}
                         </tbody>

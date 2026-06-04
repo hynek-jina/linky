@@ -19,6 +19,13 @@ export const readCashuTokenAliases = (
   return Array.from(aliases);
 };
 
+const isDeletedCashuRow = (row: CashuTokenRowLike): boolean => {
+  const normalized = String(row.isDeleted ?? "")
+    .trim()
+    .toLowerCase();
+  return normalized === "1" || normalized === "true";
+};
+
 export const hasMatchingCashuToken = (
   rows: readonly CashuTokenRowLike[],
   value: CashuTokenIdentityLike | null | undefined,
@@ -27,6 +34,7 @@ export const hasMatchingCashuToken = (
   if (aliases.size === 0) return false;
 
   return rows.some((row) => {
+    if (isDeletedCashuRow(row)) return false;
     return readCashuTokenAliases(row).some((alias) => aliases.has(alias));
   });
 };
