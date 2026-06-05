@@ -594,21 +594,21 @@ export const cs = {
   cashuCheckOk: "Token je v pořádku.",
   pwaUpdateAvailable: "Nová verze Linky je k dispozici",
   pwaUpdateButton: "Aktualizovat",
-  installPwaTitle: "Přidat na plochu",
+  installPwaTitle: "Instalovat Linky",
   installPwaIntroAndroidPrompt:
-    "Linky funguje nejlépe jako nainstalovaná aplikace: přes celou obrazovku, offline a s notifikacemi.",
+    "Nainstalujte si Linky pro rychlejší spuštění, lepší zobrazení a upozornění na zprávu nebo platbu.",
   installPwaIntroAndroidManual:
-    "Linky funguje nejlépe jako nainstalovaná aplikace. V Chromu nebo mobilním prohlížeči:",
+    "Linky je aplikace. Přidejte si ji na plochu, ať se vám lépe zobrazuje a můžete dostávat upozornění na zprávu nebo platbu.",
   installPwaIntroIos:
-    "Linky má funkce aplikace. Přidej si ji na plochu, ať běží přes celou obrazovku a může posílat notifikace. V Safari:",
+    "Linky je aplikace. Přidejte si ji na plochu, ať se vám lépe zobrazuje a můžete dostávat upozornění na zprávu nebo platbu. V Safari:",
   installPwaIntroIosOtherBrowser:
-    "Linky má funkce aplikace. Otevři tuto stránku v Safari a potom:",
+    "Apple dovoluje přidání na plochu jen v Safari. Otevřete Linky v Safari a potom:",
   installPwaStepAndroidMenu: "Otevři menu prohlížeče.",
   installPwaStepAndroidAdd:
     "Klepni na Instalovat aplikaci nebo Přidat na plochu.",
-  installPwaStepIosShare: "Klepni dole na tlačítko Sdílet.",
-  installPwaStepIosAdd: "Klepni na Přidat na plochu.",
-  installPwaInstall: "Přidat",
+  installPwaStepIosShare: "Klikni dole na tlačítko Sdílet.",
+  installPwaStepIosAdd: "Klikni na Přidat na plochu.",
+  installPwaInstall: "Instalovat",
   installPwaDismiss: "Zavřít",
   cashuCheckFailed: "Kontrola selhala",
   cashuInvalid: "Token je neplatný nebo už byl použit.",

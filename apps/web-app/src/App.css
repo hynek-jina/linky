@@ -127,6 +127,47 @@
   line-height: 1.45;
 }
 
+.install-pwa-app-card {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin: 22px 22px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, #ecfeff 0%, #f8fafc 100%);
+  border: 1px solid rgba(20, 184, 166, 0.18);
+  border-radius: 14px;
+}
+
+.install-pwa-app-icon {
+  width: 64px;
+  height: 64px;
+  display: block;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(20, 184, 166, 0.18);
+}
+
+.install-pwa-app-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.install-pwa-app-meta strong {
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.install-pwa-app-meta span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
 .install-pwa-steps {
   display: flex;
   flex-direction: column;
@@ -157,6 +198,13 @@
   color: #3b82f6;
   font-size: 34px;
   line-height: 1;
+  border-radius: 12px;
+  background: #eff6ff;
+}
+
+.install-pwa-step-icon svg {
+  width: 24px;
+  height: 24px;
 }
 
 .install-pwa-install {

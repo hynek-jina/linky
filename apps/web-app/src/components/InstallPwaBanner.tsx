@@ -1,10 +1,10 @@
 import React from "react";
-import type { BeforeInstallPromptEventLike } from "../types/browser";
 import {
   getTelemetryAppRuntime,
   getTelemetryDevicePlatform,
   isNativePlatform,
 } from "../platform/runtime";
+import type { BeforeInstallPromptEventLike } from "../types/browser";
 import {
   INSTALL_PWA_DISMISS_COOLDOWN_MS,
   INSTALL_PWA_DISMISSED_AT_MS_STORAGE_KEY,
@@ -14,6 +14,11 @@ import { safeLocalStorageGet, safeLocalStorageSet } from "../utils/storage";
 
 interface InstallPwaBannerProps {
   t: (key: string) => string;
+}
+
+interface InstallStep {
+  icon: React.ReactNode;
+  text: string;
 }
 
 const isStandaloneDisplay = (): boolean => {
@@ -71,14 +76,94 @@ const isBeforeInstallPromptEvent = (
   return userChoice !== undefined && userChoice !== null;
 };
 
+const hasInstalledRelatedPwa = async (): Promise<boolean> => {
+  if (typeof navigator === "undefined") return false;
+  const getInstalledRelatedApps = Reflect.get(
+    navigator,
+    "getInstalledRelatedApps",
+  );
+  if (typeof getInstalledRelatedApps !== "function") return false;
+
+  try {
+    const apps = await getInstalledRelatedApps.call(navigator);
+    if (!Array.isArray(apps)) return false;
+    return apps.some((app) => Reflect.get(app, "platform") === "webapp");
+  } catch {
+    return false;
+  }
+};
+
+const getInstallAppDomain = (): string => {
+  if (typeof window === "undefined") return "app.linky.fit";
+  return window.location.hostname || "app.linky.fit";
+};
+
+const InstallBrowserMenuIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="12" cy="5" r="1.75" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.75" fill="currentColor" />
+    <circle cx="12" cy="19" r="1.75" fill="currentColor" />
+  </svg>
+);
+
+const InstallIosShareIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M12 3.5v10"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M8.5 7 12 3.5 15.5 7"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M6 10.5v8a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5v-8"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const InstallAddToHomeIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M7 4.5h10A2.5 2.5 0 0 1 19.5 7v10a2.5 2.5 0 0 1-2.5 2.5H7A2.5 2.5 0 0 1 4.5 17V7A2.5 2.5 0 0 1 7 4.5Z"
+      stroke="currentColor"
+      strokeWidth="1.9"
+    />
+    <path
+      d="M12 8.5v7"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+    />
+    <path
+      d="M8.5 12h7"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
   const [visible, setVisible] = React.useState(false);
   const [prompting, setPrompting] = React.useState(false);
+  const [promptAvailable, setPromptAvailable] = React.useState(false);
   const deferredPromptRef = React.useRef<BeforeInstallPromptEventLike | null>(
     null,
   );
   const isIos = React.useMemo(() => isIosBrowser(), []);
   const isSafariOnIos = React.useMemo(() => isIosSafari(), []);
+  const appDomain = React.useMemo(() => getInstallAppDomain(), []);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -107,11 +192,13 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
       event.preventDefault();
       if (!isBeforeInstallPromptEvent(event)) return;
       deferredPromptRef.current = event;
+      setPromptAvailable(true);
       scheduleShow();
     };
 
     const handleAppInstalled = () => {
       deferredPromptRef.current = null;
+      setPromptAvailable(false);
       setVisible(false);
     };
 
@@ -119,8 +206,17 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
     window.addEventListener("appinstalled", handleAppInstalled);
 
     // iOS never fires beforeinstallprompt. Some Android browsers also skip it,
-    // so mobile visitors still get the manual install path.
-    scheduleShow();
+    // so mobile visitors still get the manual install path. Chromium can also
+    // report a same-scope installed PWA, which lets us suppress this banner.
+    void (async () => {
+      if (await hasInstalledRelatedPwa()) {
+        deferredPromptRef.current = null;
+        setPromptAvailable(false);
+        setVisible(false);
+        return;
+      }
+      scheduleShow();
+    })();
 
     return () => {
       cancelled = true;
@@ -148,9 +244,12 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
     try {
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
+      deferredPromptRef.current = null;
+      setPromptAvailable(false);
       if (outcome === "accepted") {
-        deferredPromptRef.current = null;
         setVisible(false);
+      } else {
+        dismiss();
       }
     } catch {
       // user cancelled or the prompt is no longer valid; keep banner so they
@@ -158,11 +257,11 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
     } finally {
       setPrompting(false);
     }
-  }, []);
+  }, [dismiss]);
 
   if (!visible) return null;
 
-  const canPromptNative = !isIos && deferredPromptRef.current !== null;
+  const canPromptNative = !isIos && promptAvailable;
   const intro = isIos
     ? isSafariOnIos
       ? t("installPwaIntroIos")
@@ -170,24 +269,24 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
     : canPromptNative
       ? t("installPwaIntroAndroidPrompt")
       : t("installPwaIntroAndroidManual");
-  const steps = isIos
+  const steps: InstallStep[] = isIos
     ? [
         {
-          icon: "↑",
+          icon: <InstallIosShareIcon />,
           text: t("installPwaStepIosShare"),
         },
         {
-          icon: "+",
+          icon: <InstallAddToHomeIcon />,
           text: t("installPwaStepIosAdd"),
         },
       ]
     : [
         {
-          icon: "⋮",
+          icon: <InstallBrowserMenuIcon />,
           text: t("installPwaStepAndroidMenu"),
         },
         {
-          icon: "+",
+          icon: <InstallAddToHomeIcon />,
           text: t("installPwaStepAndroidAdd"),
         },
       ];
@@ -212,20 +311,30 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
           </button>
         </header>
 
+        <div className="install-pwa-app-card">
+          <img src="/pwa-192x192.png" alt="" className="install-pwa-app-icon" />
+          <div className="install-pwa-app-meta">
+            <strong>Linky</strong>
+            <span>{appDomain}</span>
+          </div>
+        </div>
+
         <p id="install-pwa-description" className="install-pwa-intro">
           {intro}
         </p>
 
-        <ol className="install-pwa-steps">
-          {steps.map((step) => (
-            <li key={step.text}>
-              <span className="install-pwa-step-icon" aria-hidden="true">
-                {step.icon}
-              </span>
-              <span>{step.text}</span>
-            </li>
-          ))}
-        </ol>
+        {canPromptNative ? null : (
+          <ol className="install-pwa-steps">
+            {steps.map((step) => (
+              <li key={step.text}>
+                <span className="install-pwa-step-icon" aria-hidden="true">
+                  {step.icon}
+                </span>
+                <span>{step.text}</span>
+              </li>
+            ))}
+          </ol>
+        )}
 
         {canPromptNative ? (
           <button
