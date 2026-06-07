@@ -21,6 +21,21 @@ interface InstallStep {
   text: string;
 }
 
+let cachedInstallPrompt: BeforeInstallPromptEventLike | null = null;
+let globalListenersRegistered = false;
+const installPromptListeners = new Set<
+  (prompt: BeforeInstallPromptEventLike | null) => void
+>();
+
+const notifyInstallPromptListeners = (
+  prompt: BeforeInstallPromptEventLike | null,
+) => {
+  cachedInstallPrompt = prompt;
+  for (const listener of installPromptListeners) {
+    listener(prompt);
+  }
+};
+
 const isStandaloneDisplay = (): boolean => {
   if (typeof window === "undefined") return false;
   try {
@@ -75,6 +90,25 @@ const isBeforeInstallPromptEvent = (
   const userChoice = Reflect.get(event, "userChoice");
   return userChoice !== undefined && userChoice !== null;
 };
+
+const registerGlobalInstallPromptListeners = () => {
+  if (globalListenersRegistered) return;
+  if (typeof window === "undefined") return;
+
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    if (!isBeforeInstallPromptEvent(event)) return;
+    notifyInstallPromptListeners(event);
+  });
+
+  window.addEventListener("appinstalled", () => {
+    notifyInstallPromptListeners(null);
+  });
+
+  globalListenersRegistered = true;
+};
+
+registerGlobalInstallPromptListeners();
 
 const hasInstalledRelatedPwa = async (): Promise<boolean> => {
   if (typeof navigator === "undefined") return false;
@@ -175,9 +209,8 @@ const InstallAddToHomeIcon: React.FC = () => (
 export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
   const [visible, setVisible] = React.useState(false);
   const [prompting, setPrompting] = React.useState(false);
-  const [promptAvailable, setPromptAvailable] = React.useState(false);
-  const deferredPromptRef = React.useRef<BeforeInstallPromptEventLike | null>(
-    null,
+  const [promptAvailable, setPromptAvailable] = React.useState(
+    cachedInstallPrompt !== null,
   );
   const isIos = React.useMemo(() => isIosBrowser(), []);
   const isSafariOnIos = React.useMemo(() => isIosSafari(), []);
@@ -206,30 +239,26 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
       }, INSTALL_PWA_FIRST_SHOW_DELAY_MS);
     };
 
-    const handleBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      if (!isBeforeInstallPromptEvent(event)) return;
-      deferredPromptRef.current = event;
-      setPromptAvailable(true);
-      scheduleShow();
-    };
-
-    const handleAppInstalled = () => {
-      deferredPromptRef.current = null;
-      setPromptAvailable(false);
+    const handleInstallPromptChange = (
+      prompt: BeforeInstallPromptEventLike | null,
+    ) => {
+      setPromptAvailable(prompt !== null);
+      if (prompt) {
+        scheduleShow();
+        return;
+      }
       setVisible(false);
     };
 
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", handleAppInstalled);
+    installPromptListeners.add(handleInstallPromptChange);
+    handleInstallPromptChange(cachedInstallPrompt);
 
     // iOS never fires beforeinstallprompt. Some Android browsers also skip it,
     // so mobile visitors still get the manual install path. Chromium can also
     // report a same-scope installed PWA, which lets us suppress this banner.
     void (async () => {
       if (await hasInstalledRelatedPwa()) {
-        deferredPromptRef.current = null;
-        setPromptAvailable(false);
+        notifyInstallPromptListeners(null);
         setVisible(false);
         return;
       }
@@ -239,11 +268,7 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
     return () => {
       cancelled = true;
       if (showTimerId !== null) window.clearTimeout(showTimerId);
-      window.removeEventListener(
-        "beforeinstallprompt",
-        handleBeforeInstallPrompt,
-      );
-      window.removeEventListener("appinstalled", handleAppInstalled);
+      installPromptListeners.delete(handleInstallPromptChange);
     };
   }, [isIos]);
 
@@ -256,14 +281,13 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
   }, []);
 
   const install = React.useCallback(async () => {
-    const deferredPrompt = deferredPromptRef.current;
+    const deferredPrompt = cachedInstallPrompt;
     if (!deferredPrompt) return;
     setPrompting(true);
     try {
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      deferredPromptRef.current = null;
-      setPromptAvailable(false);
+      notifyInstallPromptListeners(null);
       if (outcome === "accepted") {
         setVisible(false);
       } else {
@@ -350,6 +374,18 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
             <strong>Linky</strong>
             <span>{appDomain}</span>
           </div>
+          {canPromptNative ? (
+            <button
+              type="button"
+              className="install-pwa-install install-pwa-install-inline"
+              onClick={() => {
+                void install();
+              }}
+              disabled={prompting}
+            >
+              {t("installPwaInstall")}
+            </button>
+          ) : null}
         </div>
 
         <p id="install-pwa-description" className="install-pwa-intro">
@@ -368,19 +404,6 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
             ))}
           </ol>
         )}
-
-        {canPromptNative ? (
-          <button
-            type="button"
-            className="install-pwa-install"
-            onClick={() => {
-              void install();
-            }}
-            disabled={prompting}
-          >
-            {t("installPwaInstall")}
-          </button>
-        ) : null}
       </section>
     </div>
   );

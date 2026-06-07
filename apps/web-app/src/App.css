@@ -220,6 +220,14 @@
   cursor: pointer;
 }
 
+.install-pwa-install-inline {
+  margin: 0;
+  justify-self: end;
+  min-width: 132px;
+  padding-inline: 20px;
+  border-radius: 999px;
+}
+
 .install-pwa-install:disabled {
   opacity: 0.6;
   cursor: progress;
