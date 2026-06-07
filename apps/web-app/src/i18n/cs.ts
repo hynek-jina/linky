@@ -594,10 +594,22 @@ export const cs = {
   cashuCheckOk: "Token je v pořádku.",
   pwaUpdateAvailable: "Nová verze Linky je k dispozici",
   pwaUpdateButton: "Aktualizovat",
-  installPwaTitle: "Přidat na plochu",
-  installPwaHintAndroid: "Spusť Linky jako aplikaci, bez lišty prohlížeče.",
-  installPwaHintIos: "Klepni na Sdílet ↑ → Přidat na plochu.",
-  installPwaInstall: "Přidat",
+  installPwaTitle: "Instalovat Linky",
+  installPwaIntroAndroidPrompt:
+    "Nainstalujte si Linky pro rychlejší spuštění, lepší zobrazení a upozornění na zprávu nebo platbu.",
+  installPwaIntroAndroidManual:
+    "Linky je aplikace. Přidejte si ji na plochu, ať se vám lépe zobrazuje a můžete dostávat upozornění na zprávu nebo platbu.",
+  installPwaIntroIos:
+    "Linky je aplikace. Přidejte si ji na plochu, ať se vám lépe zobrazuje a můžete dostávat upozornění na zprávu nebo platbu. V Safari:",
+  installPwaIntroIosOtherBrowser:
+    "Otevřete aplikaci v Safari. Apple dovoluje přidání na plochu jen v Safari:",
+  installPwaStepAndroidMenu: "Otevři menu prohlížeče.",
+  installPwaStepAndroidAdd:
+    "Klepni na Instalovat aplikaci nebo Přidat na plochu.",
+  installPwaStepIosOpenSafari: "Otevřete tuto stránku v Safari.",
+  installPwaStepIosShare: "Klikni dole na tlačítko Sdílet.",
+  installPwaStepIosAdd: "Klikni na Přidat na plochu.",
+  installPwaInstall: "Instalovat",
   installPwaDismiss: "Zavřít",
   cashuCheckFailed: "Kontrola selhala",
   cashuInvalid: "Token je neplatný nebo už byl použit.",

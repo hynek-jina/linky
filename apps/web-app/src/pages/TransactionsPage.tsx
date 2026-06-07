@@ -12,7 +12,11 @@ import {
 import { deriveDefaultProfile } from "../derivedProfile";
 import { evolu } from "../evolu";
 import type { JsonValue } from "../types/json";
-import { getInitials } from "../utils/formatting";
+import {
+  formatInteger,
+  getInitials,
+  normalizeLocale,
+} from "../utils/formatting";
 
 type TransactionStatus = "declined" | "error" | "ok";
 type TransactionDirection = "in" | "out";
@@ -155,6 +159,13 @@ const readRequestIdFromDetails = (details: JsonValue | null): string | null => {
   return readStringFromJson(detailRecord?.requestId);
 };
 
+const readRequestTextFromDetails = (
+  details: JsonValue | null,
+): string | null => {
+  const detailRecord = readJsonRecord(details);
+  return readStringFromJson(detailRecord?.requestText);
+};
+
 const readIssuedTokenFromDetails = (
   details: JsonValue | null,
 ): string | null => {
@@ -177,13 +188,23 @@ const mergeDetailRecords = (
   };
 };
 
+const isPaymentRequestTransaction = (item: TransactionItem): boolean => {
+  return (
+    item.direction === "in" &&
+    item.method === "cashu_chat" &&
+    readRequestIdFromDetails(item.details) !== null &&
+    readRequestTextFromDetails(item.details) !== null
+  );
+};
+
 export function TransactionsPage(): React.ReactElement {
-  const { formatDisplayedAmountText, nostrPictureByNpub, t } =
+  const { formatDisplayedAmountText, lang, nostrPictureByNpub, t } =
     useAppShellCore();
   const { copyText } = useAppShellActions();
   const [expandedById, setExpandedById] = React.useState<
     Record<string, boolean>
   >({});
+  const locale = React.useMemo(() => normalizeLocale(lang), [lang]);
 
   const contactsQuery = React.useMemo(
     () =>
@@ -242,8 +263,6 @@ export function TransactionsPage(): React.ReactElement {
     return byId;
   }, [contactRows]);
 
-  const requestPaymentLabel = t("requestPaymentLabel");
-
   const { fulfilledRequestIds, transactions } = React.useMemo(() => {
     const items: TransactionItem[] = [];
     for (const row of transactionRows) {
@@ -286,7 +305,7 @@ export function TransactionsPage(): React.ReactElement {
       const requestId = readRequestIdFromDetails(item.details);
       if (!requestId) continue;
 
-      if (item.note === requestPaymentLabel) {
+      if (isPaymentRequestTransaction(item)) {
         if (!requestByRequestId.has(requestId)) {
           requestByRequestId.set(requestId, item);
         }
@@ -319,7 +338,7 @@ export function TransactionsPage(): React.ReactElement {
       .filter((item) => {
         const requestId = readRequestIdFromDetails(item.details);
         if (requestId) {
-          if (item.note === requestPaymentLabel) return true;
+          if (isPaymentRequestTransaction(item)) return true;
           if (requestByRequestId.has(requestId)) return false;
         }
 
@@ -349,7 +368,7 @@ export function TransactionsPage(): React.ReactElement {
         }
 
         const requestId = readRequestIdFromDetails(item.details);
-        if (!requestId || item.note !== requestPaymentLabel) {
+        if (!requestId || !isPaymentRequestTransaction(item)) {
           return mergedItem;
         }
 
@@ -366,7 +385,7 @@ export function TransactionsPage(): React.ReactElement {
       fulfilledRequestIds: new Set(fulfillmentByRequestId.keys()),
       transactions: visibleTransactions,
     };
-  }, [requestPaymentLabel, transactionRows]);
+  }, [transactionRows]);
 
   const declinedRequestIds = React.useMemo(() => {
     const requestIdByRumorId = new Map<string, string>();
@@ -416,6 +435,7 @@ export function TransactionsPage(): React.ReactElement {
 
   const buildTitle = React.useCallback(
     (item: TransactionItem): string => {
+      if (isPaymentRequestTransaction(item)) return t("requestPaymentLabel");
       if (item.note) return item.note;
 
       const contact = item.contactId ? contactsById.get(item.contactId) : null;
@@ -452,34 +472,63 @@ export function TransactionsPage(): React.ReactElement {
     [contactsById, t],
   );
 
+  const formatDateText = React.useCallback(
+    (createdAtSec: number): string => {
+      return new Intl.DateTimeFormat(locale, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(createdAtSec * 1000));
+    },
+    [locale],
+  );
+
   const formatAmountText = React.useCallback(
     (amount: number | null, unit: string | null): string => {
       if (amount === null) return "";
       if (unit && unit !== "sat") {
-        return `${amount.toLocaleString()} ${unit}`;
+        return `${formatInteger(amount, lang)} ${unit}`;
       }
       return formatDisplayedAmountText(amount);
     },
-    [formatDisplayedAmountText],
+    [formatDisplayedAmountText, lang],
   );
 
-  const buildMeta = React.useCallback(
+  const buildProblemStatusPill = React.useCallback(
     (
       item: TransactionItem,
       requestStatus: "declined" | "paid" | "pending" | null,
-    ): string => {
-      const statusText =
-        requestStatus === "pending" || item.pendingLabel === "pending"
-          ? t("transactionPending")
-          : requestStatus === "declined"
-            ? t("paymentRequestStatusDeclined")
-            : item.status === "error" || item.status === "declined"
-              ? t("transactionFailed")
-              : null;
-      const dateText = new Date(item.createdAtSec * 1000).toLocaleString();
-      return statusText ? `${statusText} · ${dateText}` : dateText;
+    ): { className: string; label: string } | null => {
+      if (requestStatus === "pending" || item.pendingLabel === "pending") {
+        return {
+          className: "pill pill-muted transaction-status-pill",
+          label: t("transactionPending"),
+        };
+      }
+      if (requestStatus === "declined") {
+        return {
+          className: "pill pill-error transaction-status-pill",
+          label: t("paymentRequestStatusDeclined"),
+        };
+      }
+      if (item.status === "error" || item.status === "declined") {
+        return {
+          className: "pill pill-error transaction-status-pill",
+          label: t("transactionFailed"),
+        };
+      }
+      return null;
     },
     [t],
+  );
+
+  const buildMeta = React.useCallback(
+    (item: TransactionItem): string => {
+      return formatDateText(item.createdAtSec);
+    },
+    [formatDateText],
   );
 
   const readLnurlSuccessMessage = React.useCallback(
@@ -500,38 +549,65 @@ export function TransactionsPage(): React.ReactElement {
 
   const getRequestStatus = React.useCallback(
     (item: TransactionItem): "declined" | "paid" | "pending" | null => {
-      if (item.note !== requestPaymentLabel) return null;
+      if (!isPaymentRequestTransaction(item)) return null;
       const requestId = readRequestIdFromDetails(item.details);
       if (!requestId) return null;
       if (fulfilledRequestIds.has(requestId)) return "paid";
       if (declinedRequestIds.has(requestId)) return "declined";
       return "pending";
     },
-    [declinedRequestIds, fulfilledRequestIds, requestPaymentLabel],
+    [declinedRequestIds, fulfilledRequestIds],
   );
 
   const buildDetailEntries = React.useCallback(
     (item: TransactionItem): TransactionDetailEntry[] => {
       const details = readJsonRecord(item.details);
-      if (!details) return [];
+      const feeText =
+        item.direction === "out"
+          ? formatAmountText(item.fee ?? 0, item.unit)
+          : "";
 
-      const usedTokens = readStringArrayFromJson(details.usedInputTokens);
+      const usedTokens = readStringArrayFromJson(details?.usedInputTokens);
       const gainedTokens = [
-        readStringFromJson(details.gainedToken),
-        readStringFromJson(details.acceptedToken),
+        readStringFromJson(details?.gainedToken),
+        readStringFromJson(details?.acceptedToken),
       ].filter((value): value is string => value !== null);
-      const lightningMemo = readStringFromJson(details.lightningMemo);
-      const lightningInvoice = readStringFromJson(details.lightningInvoice);
-      const lightningPreimage = readStringFromJson(details.lightningPreimage);
+      const lightningMemo = readStringFromJson(details?.lightningMemo);
+      const lightningInvoice = readStringFromJson(details?.lightningInvoice);
+      const lightningPreimage = readStringFromJson(details?.lightningPreimage);
       const lnurlSuccessMessage = readStringFromJson(
-        details.lnurlSuccessMessage,
+        details?.lnurlSuccessMessage,
       );
-      const lnurlSuccessUrl = readStringFromJson(details.lnurlSuccessUrl);
+      const lnurlSuccessUrl = readStringFromJson(details?.lnurlSuccessUrl);
       const lnurlSuccessUrlDescription = readStringFromJson(
-        details.lnurlSuccessUrlDescription,
+        details?.lnurlSuccessUrlDescription,
       );
 
       return [
+        ...(feeText
+          ? [
+              {
+                label: t("paymentsHistoryFee"),
+                values: [{ value: feeText }],
+              },
+            ]
+          : []),
+        ...(item.mint
+          ? [
+              {
+                label: t("transactionDetailMint"),
+                values: [{ value: item.mint }],
+              },
+            ]
+          : []),
+        ...(item.error
+          ? [
+              {
+                label: t("transactionDetailError"),
+                values: [{ value: item.error }],
+              },
+            ]
+          : []),
         ...(usedTokens.length > 0
           ? [
               {
@@ -613,7 +689,7 @@ export function TransactionsPage(): React.ReactElement {
           : []),
       ];
     },
-    [t],
+    [formatAmountText, t],
   );
 
   const toggleExpanded = React.useCallback((id: string) => {
@@ -647,6 +723,10 @@ export function TransactionsPage(): React.ReactElement {
                 : "transaction-amount is-negative";
             const isExpanded = expandedById[item.id] === true;
             const requestStatus = getRequestStatus(item);
+            const problemStatusPill = buildProblemStatusPill(
+              item,
+              requestStatus,
+            );
             const detailEntries = buildDetailEntries(item);
             const hasDetails = detailEntries.length > 0;
             const isUnsuccessful =
@@ -706,14 +786,15 @@ export function TransactionsPage(): React.ReactElement {
                       ) : null;
                     })()}
                     <div className="transaction-meta">
-                      {buildMeta(item, requestStatus)}
+                      <span>{buildMeta(item)}</span>
+                      {problemStatusPill ? (
+                        <span className={problemStatusPill.className}>
+                          {problemStatusPill.label}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
-                  <div className={amountClassName}>
-                    {amountText
-                      ? `${item.direction === "in" ? "+" : "-"}${amountText}`
-                      : ""}
-                  </div>
+                  <div className={amountClassName}>{amountText || ""}</div>
                 </article>
                 {hasDetails && isExpanded ? (
                   <div className="transaction-detail-panel">

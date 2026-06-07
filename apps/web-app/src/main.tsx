@@ -1,5 +1,6 @@
 import { Buffer } from "buffer";
 import { StrictMode } from "react";
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import "./index.css";
@@ -512,15 +513,18 @@ const bootstrap = async () => {
     console.log("[linky][boot] evolu loaded");
 
     stage = "render";
-    createRoot(document.getElementById("root")!).render(
-      <StrictMode>
-        <EvoluProvider value={evolu}>
-          <ErrorBoundary>
-            <App />
-          </ErrorBoundary>
-        </EvoluProvider>
-      </StrictMode>,
-    );
+    const root = createRoot(document.getElementById("root")!);
+    flushSync(() => {
+      root.render(
+        <StrictMode>
+          <EvoluProvider value={evolu}>
+            <ErrorBoundary>
+              <App />
+            </ErrorBoundary>
+          </EvoluProvider>
+        </StrictMode>,
+      );
+    });
     console.log("[linky][boot] rendered");
     window.clearTimeout(stuckTimer);
     appHasMounted = true;

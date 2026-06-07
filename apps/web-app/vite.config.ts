@@ -222,12 +222,21 @@ export default defineConfig({
       manifest: {
         name: "Linky",
         short_name: "Linky",
+        id: "/",
+        scope: "/",
         start_url: "/",
         display: "standalone",
         protocol_handlers: [
           {
             protocol: "web+cashu",
             url: "/#wallet?cashu=%s",
+          },
+        ],
+        related_applications: [
+          {
+            platform: "webapp",
+            url: "/manifest.webmanifest",
+            id: "/",
           },
         ],
         background_color: "#ffffff",

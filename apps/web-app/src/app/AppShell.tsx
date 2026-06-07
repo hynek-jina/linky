@@ -16,6 +16,7 @@ import { AppRouteContent } from "./routes/AppRouteContent";
 import { useAppShellComposition } from "./useAppShellComposition";
 
 const AppShell = () => {
+  if (import.meta.env.DEV) console.log("[linky][render] AppShell");
   const {
     appActions,
     appState,
@@ -100,6 +101,7 @@ const AppShell = () => {
         setRecentlyReceivedToken={setRecentlyReceivedToken}
         t={t}
       />
+      <InstallPwaBanner t={t} />
 
       {!currentNsec ? (
         <UnauthenticatedLayout
@@ -135,7 +137,6 @@ const AppShell = () => {
           core={coreContextValue}
           routes={routeContextValue}
         >
-          <InstallPwaBanner t={t} />
           <AuthenticatedLayout>
             <AppRouteContent />
           </AuthenticatedLayout>

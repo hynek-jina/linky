@@ -124,6 +124,7 @@ export const useTopupInvoiceQuoteEffects = ({
   // Using state (topupInvoiceIsBusy) as a dependency would cause the effect
   // to re-trigger and abort the in-flight request when React re-renders.
   const isFetchingRef = React.useRef(false);
+  const hasPendingTopupQuote = topupMintQuote !== null;
 
   React.useEffect(() => {
     if (routeKind !== "topupInvoice") return;
@@ -131,12 +132,15 @@ export const useTopupInvoiceQuoteEffects = ({
     if (topupInvoice === topupMintQuote.invoice && topupInvoiceQr) return;
 
     let cancelled = false;
+    const invoiceChanged = topupInvoice !== topupMintQuote.invoice;
 
     void (async () => {
+      if (invoiceChanged && topupInvoiceQr) {
+        setTopupInvoiceQr(null);
+      }
+
       setTopupInvoice(topupMintQuote.invoice);
       setTopupInvoiceError(null);
-
-      if (topupInvoiceQr) return;
 
       const QRCode = await import("qrcode");
       const qr = await QRCode.toDataURL(topupMintQuote.invoice, {
@@ -166,7 +170,6 @@ export const useTopupInvoiceQuoteEffects = ({
       setTopupInvoiceQr(null);
       setTopupInvoiceError(null);
       setTopupInvoiceIsBusy(false);
-      setTopupMintQuote(null);
 
       isFetchingRef.current = false;
       topupInvoiceStartBalanceRef.current = null;
@@ -184,12 +187,14 @@ export const useTopupInvoiceQuoteEffects = ({
 
     // Reset topup state when leaving the topup flow.
     if (routeKind !== "topupInvoice") {
-      setTopupAmount("");
       setTopupInvoice(null);
       setTopupInvoiceQr(null);
       setTopupInvoiceError(null);
       setTopupInvoiceIsBusy(false);
-      setTopupMintQuote(null);
+
+      if (!hasPendingTopupQuote) {
+        setTopupAmount("");
+      }
 
       isFetchingRef.current = false;
       topupInvoiceStartBalanceRef.current = null;
@@ -205,12 +210,12 @@ export const useTopupInvoiceQuoteEffects = ({
     }
   }, [
     routeKind,
+    hasPendingTopupQuote,
     setTopupAmount,
     setTopupInvoice,
     setTopupInvoiceError,
     setTopupInvoiceIsBusy,
     setTopupInvoiceQr,
-    setTopupMintQuote,
     topupInvoicePaidHandledRef,
     topupInvoiceStartBalanceRef,
     topupPaidNavTimerRef,
