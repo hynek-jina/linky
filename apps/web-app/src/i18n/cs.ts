@@ -602,10 +602,11 @@ export const cs = {
   installPwaIntroIos:
     "Linky je aplikace. Přidejte si ji na plochu, ať se vám lépe zobrazuje a můžete dostávat upozornění na zprávu nebo platbu. V Safari:",
   installPwaIntroIosOtherBrowser:
-    "Apple dovoluje přidání na plochu jen v Safari. Otevřete Linky v Safari a potom:",
+    "Otevřete aplikaci v Safari. Apple dovoluje přidání na plochu jen v Safari:",
   installPwaStepAndroidMenu: "Otevři menu prohlížeče.",
   installPwaStepAndroidAdd:
     "Klepni na Instalovat aplikaci nebo Přidat na plochu.",
+  installPwaStepIosOpenSafari: "Otevřete tuto stránku v Safari.",
   installPwaStepIosShare: "Klikni dole na tlačítko Sdílet.",
   installPwaStepIosAdd: "Klikni na Přidat na plochu.",
   installPwaInstall: "Instalovat",

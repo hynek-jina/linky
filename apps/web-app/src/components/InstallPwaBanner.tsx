@@ -132,6 +132,24 @@ const InstallIosShareIcon: React.FC = () => (
   </svg>
 );
 
+const InstallIosSafariIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.9" />
+    <path
+      d="M14.8 9.2 10.2 13.8"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+    />
+    <path
+      d="m14.8 9.2-1.2 4-3.4.6.6-3.4 4-1.2Z"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 const InstallAddToHomeIcon: React.FC = () => (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <path
@@ -270,16 +288,31 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
       ? t("installPwaIntroAndroidPrompt")
       : t("installPwaIntroAndroidManual");
   const steps: InstallStep[] = isIos
-    ? [
-        {
-          icon: <InstallIosShareIcon />,
-          text: t("installPwaStepIosShare"),
-        },
-        {
-          icon: <InstallAddToHomeIcon />,
-          text: t("installPwaStepIosAdd"),
-        },
-      ]
+    ? isSafariOnIos
+      ? [
+          {
+            icon: <InstallIosShareIcon />,
+            text: t("installPwaStepIosShare"),
+          },
+          {
+            icon: <InstallAddToHomeIcon />,
+            text: t("installPwaStepIosAdd"),
+          },
+        ]
+      : [
+          {
+            icon: <InstallIosSafariIcon />,
+            text: t("installPwaStepIosOpenSafari"),
+          },
+          {
+            icon: <InstallIosShareIcon />,
+            text: t("installPwaStepIosShare"),
+          },
+          {
+            icon: <InstallAddToHomeIcon />,
+            text: t("installPwaStepIosAdd"),
+          },
+        ]
     : [
         {
           icon: <InstallBrowserMenuIcon />,

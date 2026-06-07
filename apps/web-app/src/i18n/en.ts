@@ -595,9 +595,10 @@ export const en = {
   installPwaIntroIos:
     "Linky is an app. Add it to your home screen for a better layout and notifications for messages or payments. In Safari:",
   installPwaIntroIosOtherBrowser:
-    "Apple only allows adding this app to the home screen in Safari. Open Linky in Safari, then:",
+    "Open the app in Safari. Apple only allows adding it to the home screen in Safari:",
   installPwaStepAndroidMenu: "Open the browser menu.",
   installPwaStepAndroidAdd: "Tap Install app or Add to Home screen.",
+  installPwaStepIosOpenSafari: "Open this page in Safari.",
   installPwaStepIosShare: "Tap the Share button in the bottom toolbar.",
   installPwaStepIosAdd: "Tap Add to Home Screen.",
   installPwaInstall: "Install",
