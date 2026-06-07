@@ -368,7 +368,13 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
           </button>
         </header>
 
-        <div className="install-pwa-app-card">
+        <div
+          className={
+            canPromptNative
+              ? "install-pwa-app-card install-pwa-app-card-with-action"
+              : "install-pwa-app-card"
+          }
+        >
           <img src="/pwa-192x192.png" alt="" className="install-pwa-app-icon" />
           <div className="install-pwa-app-meta">
             <strong>Linky</strong>

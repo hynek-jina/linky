@@ -139,6 +139,10 @@
   border-radius: 14px;
 }
 
+.install-pwa-app-card-with-action {
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+}
+
 .install-pwa-app-icon {
   width: 64px;
   height: 64px;
@@ -222,7 +226,8 @@
 
 .install-pwa-install-inline {
   margin: 0;
-  justify-self: end;
+  align-self: center;
+  justify-self: center;
   min-width: 132px;
   padding-inline: 20px;
   border-radius: 999px;
