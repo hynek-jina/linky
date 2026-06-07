@@ -2627,9 +2627,19 @@ button.danger {
 }
 
 .transaction-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   margin-top: 3px;
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+.transaction-status-pill {
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .transaction-subtitle {

@@ -341,7 +341,9 @@ export const useLightningPaymentsDomain = ({
                 const feePaid = Number(
                   (result as { feePaid?: unknown }).feePaid ?? 0,
                 );
-                return Number.isFinite(feePaid) && feePaid > 0 ? feePaid : null;
+                return Number.isFinite(feePaid) && feePaid >= 0
+                  ? Math.trunc(feePaid)
+                  : null;
               })(),
               mint: result.mint,
               unit: result.unit,
@@ -681,7 +683,10 @@ export const useLightningPaymentsDomain = ({
                     : {}),
                   usedInputTokens: candidate.tokens,
                 },
-                fee: Number.isFinite(feePaid) && feePaid > 0 ? feePaid : null,
+                fee:
+                  Number.isFinite(feePaid) && feePaid >= 0
+                    ? Math.trunc(feePaid)
+                    : null,
                 mint: result.mint,
                 unit: result.unit,
                 error: null,

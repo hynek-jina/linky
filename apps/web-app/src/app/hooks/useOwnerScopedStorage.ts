@@ -17,13 +17,13 @@ import {
   createLocalPaymentTelemetryEvent,
   normalizePaymentTelemetryStatus,
 } from "../lib/paymentTelemetry";
-import { isUnknownContactId } from "./messages/contactIdentity";
 import type {
   LocalPaymentEvent,
   LocalPaymentTelemetryEvent,
   LoggedPaymentEventParams,
   MintUrlInput,
 } from "../types/appTypes";
+import { isUnknownContactId } from "./messages/contactIdentity";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -103,7 +103,7 @@ const buildTransactionInsertPayload = (args: {
       ? Math.floor(args.event.amount)
       : null;
   const fee =
-    typeof args.event.fee === "number" && args.event.fee > 0
+    typeof args.event.fee === "number" && args.event.fee >= 0
       ? Math.floor(args.event.fee)
       : null;
   const mint = String(args.event.mint ?? "").trim();
