@@ -11,9 +11,11 @@ type CtaMode = "android-apk" | "google-play" | "web";
 
 type Locale = "cs" | "en";
 
-interface FeatureVideoCopy {
+interface UspItemCopy {
   title: string;
   description: string;
+  imageSrc: string;
+  imageAlt: string;
 }
 
 interface LocaleCopy {
@@ -34,13 +36,11 @@ interface LocaleCopy {
   imageTitle: string;
   githubLabel: string;
   nostrLabel: string;
-  featureSectionTitle: string;
-  featureVideos: [
-    FeatureVideoCopy,
-    FeatureVideoCopy,
-    FeatureVideoCopy,
-    FeatureVideoCopy,
-  ];
+  uspSectionTitle: string;
+  uspItems: [UspItemCopy, UspItemCopy, UspItemCopy];
+  closingSectionTitle: string;
+  closingSectionDescription: string;
+  closingImageAlt: string;
 }
 
 const latestAndroidApkUrl =
@@ -68,27 +68,36 @@ const copy: Record<Locale, LocaleCopy> = {
     imageTitle: "Fotorealistické setkání lidí s aplikací Linky",
     githubLabel: "GitHub",
     nostrLabel: "Nostr profil",
-    featureSectionTitle: "Jak to funguje",
-    featureVideos: [
+    uspSectionTitle: "Proč Linky",
+    uspItems: [
       {
-        title: "Vytvoření profilu",
-        description: "Na tři kliknutí máte profil a lightning adresu.",
-      },
-      {
-        title: "Nahrání prostředků",
+        title: "Posílejte bitcoin stejně jako zprávu",
         description:
-          "Po kliknutí na Přijmout zadáte částku. Jakmile proplatíte lightnign fakturu, tak se vám prostředky objeví v Linky.",
+          "Vyberete kontakt, zadáte částku a pošlete platbu stejně jakoukoliv zprávu.",
+        imageSrc: "/contacts_mock.png",
+        imageAlt: "Ukázka posílání bitcoinu kontaktu v aplikaci Linky",
       },
       {
-        title: "Přidání kontaktu",
-        description: "Načtete QR kód a kontakt se sám přidá.",
-      },
-      {
-        title: "Platba na kontakt",
+        title: "Vyžádejte si platbu",
         description:
-          "U kontaktu vyberete platbu, zadáte částku a potvrdíte. Hotovo.",
+          "Pošlete si žádost o zaplacení přímo v chatu a druhá strana ji může potvrdit jedním klepnutím.",
+        imageSrc: "/request_mock.png",
+        imageAlt: "Ukázka žádosti o platbu v aplikaci Linky",
+      },
+      {
+        title: "Pošlete bitcoin i lidem bez peněženky",
+        description:
+          "Platbu můžete připravit i pro někoho, kdo ještě žádnou peněženku nemá. Linky mu ji pomůže jednoduše převzít.",
+        imageSrc: "/issue_mock.png",
+        imageAlt:
+          "Ukázka sdílení bitcoinu lidem bez peněženky v aplikaci Linky",
       },
     ],
+    closingSectionTitle: "Soukromí",
+    closingSectionDescription:
+      "Uživatelé nepotřebují telefonní číslo, e-mail ani žádné doklady.",
+    closingImageAlt:
+      "Ukázka soukromého používání aplikace Linky bez osobních údajů",
   },
   en: {
     czechLabel: "Czech",
@@ -109,52 +118,43 @@ const copy: Record<Locale, LocaleCopy> = {
     imageTitle: "Photorealistic meeting of people with the Linky app",
     githubLabel: "GitHub",
     nostrLabel: "Nostr profile",
-    featureSectionTitle: "How it works",
-    featureVideos: [
+    uspSectionTitle: "Why Linky",
+    uspItems: [
       {
-        title: "Creating a profile",
+        title: "Send bitcoin like a message",
         description:
-          "In just a few taps, you have your profile and lightning address ready to go.",
+          "Pick a contact, enter an amount, and send money as naturally as sending a chat message.",
+        imageSrc: "/contacts_mock.png",
+        imageAlt: "Preview of sending bitcoin to a contact in the Linky app",
       },
       {
-        title: "Uploading funds",
+        title: "Request a payment",
         description:
-          "After clicking Accept, you enter the amount. Once you pay the lightning invoice, the funds appear in Linky.",
+          "Send a payment request directly in the chat so the other person can settle it with a single tap.",
+        imageSrc: "/request_mock.png",
+        imageAlt: "Preview of requesting a payment in the Linky app",
       },
       {
-        title: "Adding a contact",
-        description: "Scan a QR code and the contact is automatically added.",
-      },
-      {
-        title: "Paying a contact",
-        description: "Select a contact, enter the amount, and confirm. Done.",
+        title: "Send bitcoin even to people without a wallet",
+        description:
+          "You can prepare a payment for someone who does not have a wallet yet. Linky makes the handoff simple.",
+        imageSrc: "/issue_mock.png",
+        imageAlt:
+          "Preview of sending bitcoin to people without a wallet in the Linky app",
       },
     ],
+    closingSectionTitle: "Privacy",
+    closingSectionDescription:
+      "Users do not need a phone number, email address, or any identity documents.",
+    closingImageAlt:
+      "Preview of private Linky usage without personal information",
   },
 };
 
 const localeStorageKey = "linky.lang";
-const featureVideoSources = [
-  "/videos/feature-1.webm",
-  "/videos/feature-2.webm",
-  "/videos/feature-3.webm",
-  "/videos/feature-4.webm",
-] as const;
 
 const isNodeTarget = (value: EventTarget | null): value is Node => {
   return value instanceof Node;
-};
-
-const isVideoElement = (
-  value: HTMLVideoElement | null | undefined,
-): value is HTMLVideoElement => {
-  return value instanceof HTMLVideoElement;
-};
-
-const isHTMLElement = (
-  value: Element | null | undefined,
-): value is HTMLElement => {
-  return value instanceof HTMLElement;
 };
 
 const getInitialLocale = (): Locale => {
@@ -180,44 +180,33 @@ const getDefaultCtaMode = (): CtaMode => {
   return isAndroid && isMobile ? "google-play" : "web";
 };
 
-function App() {
-  const [locale, setLocale] = useState<Locale>(getInitialLocale);
-  const [displayCurrency, setDisplayCurrency] = useState<SiteDisplayCurrency>(
-    getInitialSiteDisplayCurrency,
-  );
-  const [preferredCtaMode, setPreferredCtaMode] =
-    useState<CtaMode>(getDefaultCtaMode);
+interface AppCtaProps {
+  androidApkCta: string;
+  ctaMenuLabel: string;
+  ctaMode: CtaMode;
+  googlePlayCta: string;
+  onPrimaryAction: () => void;
+  onSelectMode: (mode: CtaMode) => void;
+  webCta: string;
+}
+
+function AppCta({
+  androidApkCta,
+  ctaMenuLabel,
+  ctaMode,
+  googlePlayCta,
+  onPrimaryAction,
+  onSelectMode,
+  webCta,
+}: AppCtaProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activeFeatureIndex, setActiveFeatureIndex] = useState(0);
-  const [isFeaturePlaying, setIsFeaturePlaying] = useState(false);
-  const [currentFeatureAspectRatio, setCurrentFeatureAspectRatio] =
-    useState<number>(9 / 19.5);
-  const activeCopy = useMemo(() => copy[locale], [locale]);
-  const activeFeature = activeCopy.featureVideos[activeFeatureIndex];
   const ctaMenuRef = useRef<HTMLDivElement | null>(null);
-  const featureSectionRef = useRef<HTMLElement | null>(null);
-  const featureVideoRef = useRef<HTMLVideoElement | null>(null);
-  const featurePlaybackStartedRef = useRef(false);
-  const playedFeatureIndexesRef = useRef<Set<number>>(new Set());
-  const ctaMode = preferredCtaMode;
   const primaryCtaLabel =
     ctaMode === "google-play"
-      ? activeCopy.googlePlayCta
+      ? googlePlayCta
       : ctaMode === "android-apk"
-        ? activeCopy.androidApkCta
-        : activeCopy.webCta;
-
-  useEffect(() => {
-    document.documentElement.lang = activeCopy.htmlLang;
-  }, [activeCopy.htmlLang]);
-
-  useEffect(() => {
-    window.localStorage.setItem(localeStorageKey, locale);
-  }, [locale]);
-
-  useEffect(() => {
-    window.localStorage.setItem(siteDisplayCurrencyStorageKey, displayCurrency);
-  }, [displayCurrency]);
+        ? androidApkCta
+        : webCta;
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -238,117 +227,103 @@ function App() {
     };
   }, []);
 
-  const resetFeaturePlayback = () => {
-    playedFeatureIndexesRef.current.clear();
-    featurePlaybackStartedRef.current = false;
-    setActiveFeatureIndex(0);
-    setIsFeaturePlaying(false);
-    setCurrentFeatureAspectRatio(9 / 19.5);
+  return (
+    <div className="cta-row" ref={ctaMenuRef}>
+      <div className="cta-group">
+        <button className="primary-cta" type="button" onClick={onPrimaryAction}>
+          {primaryCtaLabel}
+        </button>
+        <>
+          <button
+            className={menuOpen ? "cta-toggle is-open" : "cta-toggle"}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={ctaMenuLabel}
+            onClick={() => setMenuOpen((value) => !value)}
+          >
+            <span className="cta-toggle-icon" aria-hidden="true">
+              ▾
+            </span>
+          </button>
 
-    const video = featureVideoRef.current;
-    if (isVideoElement(video)) {
-      video.pause();
-      video.currentTime = 0;
-    }
-  };
+          {menuOpen ? (
+            <div className="cta-menu" role="menu">
+              <button
+                className={
+                  ctaMode === "web" ? "cta-option is-selected" : "cta-option"
+                }
+                type="button"
+                role="menuitemradio"
+                aria-checked={ctaMode === "web"}
+                onClick={() => {
+                  onSelectMode("web");
+                  setMenuOpen(false);
+                }}
+              >
+                <span className="cta-option-label">{webCta}</span>
+              </button>
+              <button
+                className={
+                  ctaMode === "google-play"
+                    ? "cta-option is-selected"
+                    : "cta-option"
+                }
+                type="button"
+                role="menuitemradio"
+                aria-checked={ctaMode === "google-play"}
+                onClick={() => {
+                  onSelectMode("google-play");
+                  setMenuOpen(false);
+                }}
+              >
+                <span className="cta-option-label">{googlePlayCta}</span>
+              </button>
+              <button
+                className={
+                  ctaMode === "android-apk"
+                    ? "cta-option is-selected"
+                    : "cta-option"
+                }
+                type="button"
+                role="menuitemradio"
+                aria-checked={ctaMode === "android-apk"}
+                onClick={() => {
+                  onSelectMode("android-apk");
+                  setMenuOpen(false);
+                }}
+              >
+                <span className="cta-option-label">{androidApkCta}</span>
+              </button>
+            </div>
+          ) : null}
+        </>
+      </div>
+    </div>
+  );
+}
 
-  const playFeature = (index: number) => {
-    playedFeatureIndexesRef.current.delete(index);
-    featurePlaybackStartedRef.current = true;
-    if (activeFeatureIndex === index) {
-      const video = featureVideoRef.current;
-      if (!isVideoElement(video)) {
-        return;
-      }
-
-      video.currentTime = 0;
-      void video
-        .play()
-        .then(() => {
-          setIsFeaturePlaying(true);
-        })
-        .catch(() => {
-          setIsFeaturePlaying(false);
-        });
-      return;
-    }
-
-    setActiveFeatureIndex(index);
-  };
-
-  useEffect(() => {
-    const video = featureVideoRef.current;
-    if (!isVideoElement(video)) {
-      return;
-    }
-
-    const handleVideoEnd = () => {
-      playedFeatureIndexesRef.current.add(activeFeatureIndex);
-      setIsFeaturePlaying(false);
-
-      const nextIndex = activeFeatureIndex + 1;
-      if (nextIndex < featureVideoSources.length) {
-        setActiveFeatureIndex(nextIndex);
-        featurePlaybackStartedRef.current = true;
-      }
-    };
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting && isHTMLElement(entry.target)) {
-            if (playedFeatureIndexesRef.current.has(activeFeatureIndex)) {
-              continue;
-            }
-
-            featurePlaybackStartedRef.current = true;
-            video.currentTime = 0;
-            void video
-              .play()
-              .then(() => {
-                setIsFeaturePlaying(true);
-              })
-              .catch(() => {
-                setIsFeaturePlaying(false);
-              });
-          }
-        }
-      },
-      {
-        threshold: 0.65,
-        rootMargin: "0px 0px -8% 0px",
-      },
-    );
-
-    const section = featureSectionRef.current;
-    if (isHTMLElement(section)) {
-      observer.observe(section);
-    }
-
-    video.addEventListener("ended", handleVideoEnd);
-
-    return () => {
-      observer.disconnect();
-      video.removeEventListener("ended", handleVideoEnd);
-    };
-  }, [activeFeatureIndex]);
+function App() {
+  const [locale, setLocale] = useState<Locale>(getInitialLocale);
+  const [displayCurrency, setDisplayCurrency] = useState<SiteDisplayCurrency>(
+    getInitialSiteDisplayCurrency,
+  );
+  const [preferredCtaMode, setPreferredCtaMode] =
+    useState<CtaMode>(getDefaultCtaMode);
+  const activeCopy = useMemo(() => copy[locale], [locale]);
+  const ctaMode = preferredCtaMode;
 
   useEffect(() => {
-    const video = featureVideoRef.current;
-    if (!isVideoElement(video) || !featurePlaybackStartedRef.current) {
-      return;
-    }
+    document.documentElement.lang = activeCopy.htmlLang;
+  }, [activeCopy.htmlLang]);
 
-    video.currentTime = 0;
-    void video
-      .play()
-      .then(() => {
-        setIsFeaturePlaying(true);
-      })
-      .catch(() => {
-        setIsFeaturePlaying(false);
-      });
-  }, [activeFeatureIndex]);
+  useEffect(() => {
+    window.localStorage.setItem(localeStorageKey, locale);
+  }, [locale]);
+
+  useEffect(() => {
+    window.localStorage.setItem(siteDisplayCurrencyStorageKey, displayCurrency);
+  }, [displayCurrency]);
 
   const openWebApp = () => {
     window.open("https://app.linky.fit", "_blank", "noopener,noreferrer");
@@ -400,7 +375,6 @@ function App() {
           displayCurrency={displayCurrency}
           locale={locale}
           onLocaleChange={(nextLocale) => {
-            resetFeaturePlayback();
             setLocale(nextLocale);
           }}
           setDisplayCurrency={setDisplayCurrency}
@@ -409,174 +383,71 @@ function App() {
 
       <section className="hero">
         <div className="hero-copy">
-          <h1>{activeCopy.title}</h1>
-          <p className="lede">{activeCopy.subtitle}</p>
+          <div className="hero-intro">
+            <h1>{activeCopy.title}</h1>
+            <p className="lede">{activeCopy.subtitle}</p>
 
-          <div className="cta-row" ref={ctaMenuRef}>
-            <div className="cta-group">
-              <button
-                className="primary-cta"
-                type="button"
-                onClick={handlePrimaryAction}
-              >
-                {primaryCtaLabel}
-              </button>
-              <>
-                <button
-                  className={menuOpen ? "cta-toggle is-open" : "cta-toggle"}
-                  type="button"
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  aria-label={activeCopy.ctaMenuLabel}
-                  onClick={() => setMenuOpen((value) => !value)}
-                >
-                  <span className="cta-toggle-icon" aria-hidden="true">
-                    ▾
-                  </span>
-                </button>
-
-                {menuOpen ? (
-                  <div className="cta-menu" role="menu">
-                    <button
-                      className={
-                        ctaMode === "web"
-                          ? "cta-option is-selected"
-                          : "cta-option"
-                      }
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={ctaMode === "web"}
-                      onClick={() => {
-                        setPreferredCtaMode("web");
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <span className="cta-option-label">
-                        {activeCopy.webCta}
-                      </span>
-                    </button>
-                    <button
-                      className={
-                        ctaMode === "google-play"
-                          ? "cta-option is-selected"
-                          : "cta-option"
-                      }
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={ctaMode === "google-play"}
-                      onClick={() => {
-                        setPreferredCtaMode("google-play");
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <span className="cta-option-label">
-                        {activeCopy.googlePlayCta}
-                      </span>
-                    </button>
-                    <button
-                      className={
-                        ctaMode === "android-apk"
-                          ? "cta-option is-selected"
-                          : "cta-option"
-                      }
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={ctaMode === "android-apk"}
-                      onClick={() => {
-                        setPreferredCtaMode("android-apk");
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <span className="cta-option-label">
-                        {activeCopy.androidApkCta}
-                      </span>
-                    </button>
-                  </div>
-                ) : null}
-              </>
-            </div>
-          </div>
-        </div>
-
-        <aside className="hero-visual" aria-label={activeCopy.imageTitle}>
-          <img
-            className="hero-image"
-            src="/hero-meeting.png"
-            alt={activeCopy.imageTitle}
-          />
-        </aside>
-      </section>
-
-      <section className="feature-showcase" ref={featureSectionRef}>
-        <div className="section-heading">
-          <h2>{activeCopy.featureSectionTitle}</h2>
-        </div>
-
-        <article
-          className={
-            isFeaturePlaying ? "feature-stage is-active" : "feature-stage"
-          }
-          aria-label={activeCopy.featureSectionTitle}
-        >
-          <div
-            className="feature-stage-media"
-            style={{ aspectRatio: String(currentFeatureAspectRatio) }}
-            onMouseEnter={() => {
-              if (playedFeatureIndexesRef.current.has(activeFeatureIndex)) {
-                return;
-              }
-
-              playFeature(activeFeatureIndex);
-            }}
-          >
-            <video
-              key={featureVideoSources[activeFeatureIndex]}
-              ref={featureVideoRef}
-              className="feature-video"
-              src={featureVideoSources[activeFeatureIndex]}
-              muted
-              playsInline
-              preload="metadata"
-              onLoadedMetadata={(event) => {
-                const video = event.currentTarget;
-                const aspectRatio =
-                  video.videoWidth > 0 && video.videoHeight > 0
-                    ? video.videoWidth / video.videoHeight
-                    : 9 / 19.5;
-
-                setCurrentFeatureAspectRatio(aspectRatio);
-              }}
+            <AppCta
+              androidApkCta={activeCopy.androidApkCta}
+              ctaMenuLabel={activeCopy.ctaMenuLabel}
+              ctaMode={ctaMode}
+              googlePlayCta={activeCopy.googlePlayCta}
+              onPrimaryAction={handlePrimaryAction}
+              onSelectMode={setPreferredCtaMode}
+              webCta={activeCopy.webCta}
             />
           </div>
 
-          <div className="feature-copy">
-            <p className="feature-index">0{activeFeatureIndex + 1}</p>
-            <h3>{activeFeature.title}</h3>
-            <p>{activeFeature.description}</p>
+          <div className="hero-visual" aria-label={activeCopy.imageTitle}>
+            <img
+              className="hero-image"
+              src="/app_in_hand.png"
+              alt={activeCopy.imageTitle}
+            />
           </div>
+        </div>
+      </section>
 
-          <div className="feature-dots" aria-label="Feature video navigation">
-            {featureVideoSources.map((source, index) => {
-              const isSelected = index === activeFeatureIndex;
+      <section className="usp-section" aria-label={activeCopy.uspSectionTitle}>
+        <div className="usp-grid">
+          {activeCopy.uspItems.map((item) => {
+            return (
+              <article key={item.title} className="usp-card">
+                <div className="usp-card-media">
+                  <img src={item.imageSrc} alt={item.imageAlt} />
+                </div>
+                <div className="usp-card-copy">
+                  <h2>{item.title}</h2>
+                  <p>{item.description}</p>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
 
-              return (
-                <button
-                  key={source}
-                  className={
-                    isSelected ? "feature-dot is-active" : "feature-dot"
-                  }
-                  type="button"
-                  aria-label={`Video ${index + 1}`}
-                  aria-pressed={isSelected}
-                  onClick={() => {
-                    setIsFeaturePlaying(false);
-                    playFeature(index);
-                  }}
-                />
-              );
-            })}
-          </div>
-        </article>
+      <section className="closing-section">
+        <div className="closing-copy">
+          <h2>{activeCopy.closingSectionTitle}</h2>
+          <p>{activeCopy.closingSectionDescription}</p>
+          <AppCta
+            androidApkCta={activeCopy.androidApkCta}
+            ctaMenuLabel={activeCopy.ctaMenuLabel}
+            ctaMode={ctaMode}
+            googlePlayCta={activeCopy.googlePlayCta}
+            onPrimaryAction={handlePrimaryAction}
+            onSelectMode={setPreferredCtaMode}
+            webCta={activeCopy.webCta}
+          />
+        </div>
+
+        <div className="closing-visual">
+          <img
+            className="closing-image"
+            src="/not_personal.png"
+            alt={activeCopy.closingImageAlt}
+          />
+        </div>
       </section>
 
       <footer className="footer-links">
