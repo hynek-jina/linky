@@ -543,6 +543,8 @@ export const en = {
 
   scan: "Scan",
   scanUnsupported: "Unsupported QR code.",
+  scanUnsupportedBitcoinUri:
+    "This Bitcoin URI only offers on-chain settlement, which Linky doesn't support.",
   scanCameraError: "Camera not available.",
   scanRequiresHttps:
     "Camera requires a secure context (HTTPS). Open Linky over https or install it as a PWA.",
