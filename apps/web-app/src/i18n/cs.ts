@@ -550,6 +550,8 @@ export const cs = {
 
   scan: "Skenovat",
   scanUnsupported: "Nepodporovaný QR kód.",
+  scanUnsupportedBitcoinUri:
+    "Tato Bitcoin URI nabízí jen on-chain platbu, kterou Linky neumí.",
   scanCameraError: "Kamera není dostupná.",
   scanRequiresHttps:
     "Kamera vyžaduje bezpečné připojení (HTTPS). Otevřete Linky přes https nebo jako nainstalovanou PWA.",
