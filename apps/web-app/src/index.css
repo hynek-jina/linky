@@ -41,6 +41,24 @@ body {
   color: #e2e8f0;
 }
 
+#root {
+  min-height: 100vh;
+  background: var(--app-flat-bg);
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  body {
+    display: flex;
+    justify-content: center;
+    overflow-x: hidden;
+  }
+
+  #root {
+    width: min(480px, 100dvh);
+    min-height: 100dvh;
+  }
+}
+
 a {
   color: #2dd4bf;
   text-decoration: none;
