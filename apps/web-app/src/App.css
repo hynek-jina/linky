@@ -476,8 +476,8 @@
 }
 
 .topbar-profile-btn {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border-radius: 999px;
   overflow: hidden;
   background: #0b1222;
@@ -492,7 +492,7 @@
 }
 
 .topbar-profile-fallback {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   color: #cbd5e1;
 }

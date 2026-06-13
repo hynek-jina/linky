@@ -5,17 +5,22 @@ interface UseShowProfileQrOnTiltParams {
   onShowProfileQr: () => void;
 }
 
-const INVERTED_BETA_THRESHOLD = -110;
-const DEEPLY_INVERTED_BETA_THRESHOLD = 155;
-const RESET_BETA_THRESHOLD = -60;
-const RESET_DEEP_BETA_THRESHOLD = 130;
+const FORWARD_BETA_THRESHOLD = 95;
+const BACKWARD_BETA_THRESHOLD = -95;
+const RESET_BETA_MIN = -45;
+const RESET_BETA_MAX = 65;
+const FORWARD_GRAVITY_Y_THRESHOLD = 6.4;
+const RESET_GRAVITY_Y_THRESHOLD = 3.2;
 const OPEN_COOLDOWN_MS = 2500;
 
 const isProfileQrTilt = (beta: number): boolean =>
-  beta <= INVERTED_BETA_THRESHOLD || beta >= DEEPLY_INVERTED_BETA_THRESHOLD;
+  beta <= BACKWARD_BETA_THRESHOLD || beta >= FORWARD_BETA_THRESHOLD;
 
 const isResetTilt = (beta: number): boolean =>
-  beta > RESET_BETA_THRESHOLD && beta < RESET_DEEP_BETA_THRESHOLD;
+  beta > RESET_BETA_MIN && beta < RESET_BETA_MAX;
+
+const readFiniteNumber = (value: number | null | undefined): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
 
 export const useShowProfileQrOnTilt = ({
   enabled,
@@ -36,17 +41,7 @@ export const useShowProfileQrOnTilt = ({
     }
     if (typeof window === "undefined") return;
 
-    const onDeviceOrientation = (event: DeviceOrientationEvent) => {
-      const beta = event.beta;
-      if (typeof beta !== "number" || !Number.isFinite(beta)) return;
-
-      if (isResetTilt(beta)) {
-        armedRef.current = true;
-        return;
-      }
-
-      if (!armedRef.current || !isProfileQrTilt(beta)) return;
-
+    const maybeOpenProfileQr = () => {
       const now = Date.now();
       if (now - lastOpenedAtRef.current < OPEN_COOLDOWN_MS) return;
 
@@ -55,12 +50,44 @@ export const useShowProfileQrOnTilt = ({
       onShowProfileQrRef.current();
     };
 
+    const onDeviceOrientation = (event: DeviceOrientationEvent) => {
+      const beta = readFiniteNumber(event.beta);
+      if (beta === null) return;
+
+      if (isResetTilt(beta)) {
+        armedRef.current = true;
+        return;
+      }
+
+      if (!armedRef.current || !isProfileQrTilt(beta)) return;
+
+      maybeOpenProfileQr();
+    };
+
+    const onDeviceMotion = (event: DeviceMotionEvent) => {
+      const gravityY = readFiniteNumber(event.accelerationIncludingGravity?.y);
+      if (gravityY === null) return;
+
+      if (gravityY < RESET_GRAVITY_Y_THRESHOLD) {
+        armedRef.current = true;
+        return;
+      }
+
+      if (!armedRef.current || gravityY < FORWARD_GRAVITY_Y_THRESHOLD) return;
+
+      maybeOpenProfileQr();
+    };
+
     window.addEventListener("deviceorientation", onDeviceOrientation, {
+      passive: true,
+    });
+    window.addEventListener("devicemotion", onDeviceMotion, {
       passive: true,
     });
 
     return () => {
       window.removeEventListener("deviceorientation", onDeviceOrientation);
+      window.removeEventListener("devicemotion", onDeviceMotion);
     };
   }, [enabled]);
 };
