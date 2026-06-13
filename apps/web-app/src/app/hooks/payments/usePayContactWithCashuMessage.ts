@@ -12,6 +12,7 @@ import { normalizeMintUrl } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
+import { resolveCashuRowOwnerLane } from "../../lib/cashuOwnerLane";
 import { hasMatchingCashuToken } from "../../lib/cashuTokenIdentity";
 import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
@@ -76,6 +77,7 @@ interface UsePayContactWithCashuMessageParams {
   cashuBalance: number;
   cashuTokensAll: readonly CashuTokenRowLike[];
   cashuTokensWithMeta: readonly CashuTokenRowLike[];
+  cashuVisibleOwnerIds: readonly Evolu.OwnerId[];
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   currentNpub: string | null;
   currentNsec: string | null;
@@ -119,6 +121,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   cashuBalance,
   cashuTokensAll,
   cashuTokensWithMeta,
+  cashuVisibleOwnerIds,
   chatSeenWrapIdsRef,
   currentNpub,
   currentNsec,
@@ -295,13 +298,33 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         };
       };
 
-      const updateCashuToken = (payload: {
-        id: CashuTokenId;
-        isDeleted: typeof Evolu.sqliteTrue;
-      }) => {
-        return cashuWriteOwnerId
-          ? update("cashuToken", payload, { ownerId: cashuWriteOwnerId })
+      // Soft-deletes MUST target the owner lane that actually holds the row.
+      // Evolu keys rows by (ownerId, id), so deleting a spent token under the
+      // active write lane when it lives in an older cashu-n lane silently
+      // no-ops and leaves the token spendable — blocking the next payment.
+      const updateCashuToken = (
+        payload: {
+          id: CashuTokenId;
+          isDeleted: typeof Evolu.sqliteTrue;
+        },
+        targetOwnerId?: Evolu.OwnerId | null,
+      ) => {
+        const ownerId = targetOwnerId ?? cashuWriteOwnerId;
+        return ownerId
+          ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
+      };
+
+      const deleteSpentTokensForMint = (mintUrl: string) => {
+        for (const row of cashuTokensWithMeta) {
+          if (!isCashuTokenAcceptedState(row.state)) continue;
+          if (String(row.mint ?? "").trim() !== mintUrl) continue;
+          const deleted = updateCashuToken(
+            { id: row.id as CashuTokenId, isDeleted: Evolu.sqliteTrue },
+            resolveCashuRowOwnerLane(row, cashuVisibleOwnerIds),
+          );
+          if (!deleted.ok) throw deleted.error;
+        }
       };
 
       const remainingAmount = amountSat;
@@ -421,21 +444,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
                 );
                 if (!inserted.ok) throw inserted.error;
 
-                const spentTokenIds = cashuTokensWithMeta
-                  .filter(
-                    (row) =>
-                      isCashuTokenAcceptedState(row.state) &&
-                      String(row.mint ?? "").trim() === candidate.mint,
-                  )
-                  .map((row) => row.id as CashuTokenId);
-
-                for (const id of spentTokenIds) {
-                  const deleted = updateCashuToken({
-                    id,
-                    isDeleted: Evolu.sqliteTrue,
-                  });
-                  if (!deleted.ok) throw deleted.error;
-                }
+                deleteSpentTokensForMint(candidate.mint);
 
                 logPayStep("swap-recovery", {
                   mint: split.mint,
@@ -458,21 +467,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
               break;
             }
 
-            const spentTokenIds = cashuTokensWithMeta
-              .filter(
-                (row) =>
-                  isCashuTokenAcceptedState(row.state) &&
-                  String(row.mint ?? "").trim() === candidate.mint,
-              )
-              .map((row) => row.id as CashuTokenId);
-
-            for (const id of spentTokenIds) {
-              const deleted = updateCashuToken({
-                id,
-                isDeleted: Evolu.sqliteTrue,
-              });
-              if (!deleted.ok) throw deleted.error;
-            }
+            deleteSpentTokensForMint(candidate.mint);
 
             const remainingToken = split.remainingToken;
             const remainingAmount = split.remainingAmount;
@@ -837,6 +832,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
     [
       cashuBalance,
       cashuTokensWithMeta,
+      cashuVisibleOwnerIds,
       chatSeenWrapIdsRef,
       activePublishClientIdsRef,
       currentNpub,

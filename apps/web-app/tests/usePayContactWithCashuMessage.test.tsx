@@ -112,12 +112,20 @@ describe("usePayContactWithCashuMessage", () => {
         return { ok: true };
       },
     );
-    const update = vi.fn((table: string, payload: { id?: string | null }) => {
-      if (table === "cashuToken") {
-        operations.push(`update:${String(payload.id ?? "")}`);
-      }
-      return { ok: true };
-    });
+    const update = vi.fn(
+      (
+        table: string,
+        payload: { id?: string | null },
+        options?: { ownerId?: string },
+      ) => {
+        if (table === "cashuToken") {
+          operations.push(
+            `update:${String(payload.id ?? "")}:${String(options?.ownerId ?? "none")}`,
+          );
+        }
+        return { ok: true };
+      },
+    );
 
     let payContactWithCashuMessage: ReturnType<
       typeof usePayContactWithCashuMessage<ContactRowLike>
@@ -140,9 +148,11 @@ describe("usePayContactWithCashuMessage", () => {
             : [];
         },
         cashuBalance: 1000,
+        cashuTokensAll: [],
         cashuTokensWithMeta: [
           {
             id: "old-token-1",
+            ownerId: "lane-old",
             state: "accepted",
             mint: "https://mint.example",
             token: "cashu-old-token",
@@ -150,18 +160,24 @@ describe("usePayContactWithCashuMessage", () => {
             unit: "sat",
           },
         ],
+        // Active write lane differs from the lane that holds the spent token.
+        cashuVisibleOwnerIds: ["lane-old", "lane-active"],
         chatSeenWrapIdsRef: { current: new Set<string>() },
         currentNpub: "npub-test",
         currentNsec: "nsec-test",
         defaultMintUrl: "https://mint.example",
-        displayUnit: "sat",
         enqueuePendingPayment: vi.fn(),
-        formatInteger: (value) => String(value),
+        formatDisplayedAmountParts: () => ({
+          approxPrefix: "",
+          amountText: "600",
+          unitLabel: "sat",
+        }),
         insert,
         logPayStep: vi.fn(),
         logPaymentEvent: vi.fn(),
         nostrMessagesLocal: [],
         payWithCashuEnabled: true,
+        resolveOwnerIdForWrite: vi.fn(async () => "lane-active"),
         publishSingleWrappedWithRetry: vi.fn(async () => ({
           anySuccess: true,
           error: null,
@@ -171,7 +187,6 @@ describe("usePayContactWithCashuMessage", () => {
           error: null,
         })),
         pushToast: vi.fn(),
-        resolveOwnerIdForWrite: vi.fn(async () => null),
         setContactsOnboardingHasPaid: vi.fn(),
         setStatus: vi.fn(),
         showPaidOverlay: vi.fn(),
@@ -208,9 +223,13 @@ describe("usePayContactWithCashuMessage", () => {
       });
     });
 
-    expect(operations).toContain("update:old-token-1");
+    // The spent token is soft-deleted in ITS OWN lane (lane-old), not the
+    // active write lane (lane-active) — otherwise Evolu's (ownerId, id) keying
+    // makes the delete a no-op and the token stays spendable.
+    expect(operations).toContain("update:old-token-1:lane-old");
+    expect(operations).not.toContain("update:old-token-1:lane-active");
     expect(operations).toContain("insert:cashu-change-token:accepted");
-    expect(operations.indexOf("update:old-token-1")).toBeLessThan(
+    expect(operations.indexOf("update:old-token-1:lane-old")).toBeLessThan(
       operations.indexOf("insert:cashu-change-token:accepted"),
     );
 

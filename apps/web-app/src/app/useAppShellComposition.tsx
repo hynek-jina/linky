@@ -223,6 +223,7 @@ import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
+import { resolveCashuRowOwnerLane } from "./lib/cashuOwnerLane";
 import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_RESERVED,
@@ -2902,13 +2903,23 @@ export const useAppShellComposition = () => {
         id: row.id as CashuTokenId,
         isDeleted: Evolu.sqliteTrue,
       };
-      if (cashuOwnerId) {
-        update("cashuToken", payload, { ownerId: cashuOwnerId });
+      // Target the lane that holds the row (Evolu keys rows by (ownerId, id));
+      // deleting under the active lane no-ops on rows in older cashu-n lanes.
+      const rowOwnerId =
+        resolveCashuRowOwnerLane(row, cashuVisibleOwnerIds) ?? cashuOwnerId;
+      if (rowOwnerId) {
+        update("cashuToken", payload, { ownerId: rowOwnerId });
       } else {
         update("cashuToken", payload);
       }
     }
-  }, [cashuOwnerId, cashuTokensAllFiltered, nostrMessagesLocal, update]);
+  }, [
+    cashuOwnerId,
+    cashuTokensAllFiltered,
+    cashuVisibleOwnerIds,
+    nostrMessagesLocal,
+    update,
+  ]);
 
   // lastMessageByContactId provided by the derived Nostr index above.
 
@@ -2982,17 +2993,23 @@ export const useAppShellComposition = () => {
     useState(false);
   const deleteSpentCashuTokens = React.useCallback(async () => {
     if (deleteSpentCashuTokensIsBusy) return;
-    const targets = cashuOwnSpentTokens
-      .map((token) => token.id)
-      .filter((id): id is CashuTokenId => Boolean(id));
+    const targets = cashuOwnSpentTokens.filter((token) => Boolean(token.id));
     if (targets.length === 0) return;
 
     setDeleteSpentCashuTokensIsBusy(true);
     try {
-      const ownerId = await resolveOwnerIdForWrite();
+      const fallbackOwnerId = await resolveOwnerIdForWrite();
       let deleted = 0;
-      for (const id of targets) {
-        const payload = { id, isDeleted: Evolu.sqliteTrue };
+      for (const token of targets) {
+        const payload = {
+          id: token.id as CashuTokenId,
+          isDeleted: Evolu.sqliteTrue,
+        };
+        // Delete in the row's own lane; Evolu keys rows by (ownerId, id) so a
+        // delete under the active lane silently misses rows in older lanes.
+        const ownerId =
+          resolveCashuRowOwnerLane(token, cashuVisibleOwnerIds) ??
+          fallbackOwnerId;
         const result = ownerId
           ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
@@ -3008,6 +3025,7 @@ export const useAppShellComposition = () => {
     }
   }, [
     cashuOwnSpentTokens,
+    cashuVisibleOwnerIds,
     deleteSpentCashuTokensIsBusy,
     resolveOwnerIdForWrite,
     setStatus,
@@ -4062,6 +4080,7 @@ export const useAppShellComposition = () => {
     cashuBalance,
     cashuTokensAll,
     cashuTokensWithMeta,
+    cashuVisibleOwnerIds,
     chatSeenWrapIdsRef,
     currentNpub,
     currentNsec,
