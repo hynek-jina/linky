@@ -4607,6 +4607,7 @@ export const useAppShellComposition = () => {
     cashuBulkCheckIsBusy,
     cashuIsBusy,
     cashuTokensAll: cashuTokensAllFiltered,
+    cashuVisibleOwnerIds,
     pendingCashuDeleteId,
     pushToast,
     setCashuBulkCheckIsBusy,
@@ -6029,14 +6030,20 @@ export const useAppShellComposition = () => {
     };
 
     const deleteCashuRows = async (
-      rows: readonly { id?: CashuTokenId | string | null }[],
-      ownerIdOverride?: Evolu.OwnerId | null,
+      rows: readonly {
+        id?: CashuTokenId | string | null;
+        ownerId?: unknown;
+      }[],
+      fallbackOwnerId?: Evolu.OwnerId | null,
     ) => {
       for (const row of rows) {
         if (!row.id) continue;
         const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
-        const result = ownerIdOverride
-          ? update("cashuToken", payload, { ownerId: ownerIdOverride })
+        const ownerId =
+          resolveCashuRowOwnerLane(row, cashuVisibleOwnerIds) ??
+          fallbackOwnerId;
+        const result = ownerId
+          ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
         if (!result.ok) {
           throw new Error(String(result.error));
@@ -6240,6 +6247,7 @@ export const useAppShellComposition = () => {
     cashuIsBusy,
     cashuTokensAll,
     cashuTokensWithMeta,
+    cashuVisibleOwnerIds,
     defaultMintUrl,
     insert,
     logPaymentEvent,
@@ -6377,14 +6385,20 @@ export const useAppShellComposition = () => {
     };
 
     const markRowsDeleted = async (
-      rows: Array<{ id?: CashuTokenId | string | null }>,
-      ownerIdOverride?: Evolu.OwnerId | null,
+      rows: Array<{
+        id?: CashuTokenId | string | null;
+        ownerId?: unknown;
+      }>,
+      fallbackOwnerId?: Evolu.OwnerId | null,
     ) => {
       for (const row of rows) {
         if (!row.id) continue;
         const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
-        const result = ownerIdOverride
-          ? update("cashuToken", payload, { ownerId: ownerIdOverride })
+        const ownerId =
+          resolveCashuRowOwnerLane(row, cashuVisibleOwnerIds) ??
+          fallbackOwnerId;
+        const result = ownerId
+          ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
         if (!result.ok) {
           throw new Error(String(result.error));
@@ -6699,6 +6713,7 @@ export const useAppShellComposition = () => {
     cashuOwnerId,
     cashuTokensAll,
     cashuTokensWithMeta,
+    cashuVisibleOwnerIds,
     defaultMintUrl,
     formatDisplayedAmountParts,
     formatMintButtonLabel,

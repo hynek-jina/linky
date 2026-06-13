@@ -1,5 +1,10 @@
 import type * as Evolu from "@evolu/common";
 
+interface CashuOwnerLaneRow {
+  readonly id?: unknown;
+  readonly ownerId?: unknown;
+}
+
 /**
  * Read the persisted owner-lane id from an aggregated cashu token row.
  *
@@ -37,4 +42,21 @@ export const resolveCashuRowOwnerLane = (
   return (
     visibleOwnerIds.find((owner) => String(owner).trim() === rowOwnerId) ?? null
   );
+};
+
+export const resolveCashuTokenOwnerLaneById = (
+  rows: readonly CashuOwnerLaneRow[],
+  id: unknown,
+  visibleOwnerIds: readonly Evolu.OwnerId[],
+  fallbackOwnerId: Evolu.OwnerId | null,
+): Evolu.OwnerId | null => {
+  const idText = String(id ?? "").trim();
+  if (!idText) return fallbackOwnerId;
+
+  const row =
+    rows.find((entry) => {
+      return String(entry.id ?? "").trim() === idText;
+    }) ?? null;
+
+  return resolveCashuRowOwnerLane(row, visibleOwnerIds) ?? fallbackOwnerId;
 };
