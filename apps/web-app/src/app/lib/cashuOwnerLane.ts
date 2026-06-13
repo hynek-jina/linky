@@ -1,4 +1,4 @@
-import type * as Evolu from "@evolu/common";
+import * as Evolu from "@evolu/common";
 
 interface CashuOwnerLaneRow {
   readonly id?: unknown;
@@ -16,9 +16,18 @@ interface CashuOwnerLaneRow {
 export const readCashuRowOwnerId = (row: unknown): string => {
   if (typeof row !== "object" || row === null) return "";
   if (!("ownerId" in row)) return "";
-  const ownerId = (row as { ownerId?: unknown }).ownerId;
+  const ownerId = Reflect.get(row, "ownerId");
   if (typeof ownerId !== "string") return "";
   return ownerId.trim();
+};
+
+export const resolveCashuRowStoredOwnerLane = (
+  row: unknown,
+): Evolu.OwnerId | null => {
+  const rowOwnerId = readCashuRowOwnerId(row);
+  if (!rowOwnerId) return null;
+  const parsed = Evolu.OwnerId.fromUnknown(rowOwnerId);
+  return parsed.ok ? parsed.value : null;
 };
 
 /**
@@ -37,17 +46,17 @@ export const resolveCashuRowOwnerLane = (
   row: unknown,
   visibleOwnerIds: readonly Evolu.OwnerId[],
 ): Evolu.OwnerId | null => {
-  const rowOwnerId = readCashuRowOwnerId(row);
-  if (!rowOwnerId) return null;
+  const storedOwnerId = resolveCashuRowStoredOwnerLane(row);
+  if (!storedOwnerId) return null;
+  const rowOwnerId = String(storedOwnerId);
   return (
     visibleOwnerIds.find((owner) => String(owner).trim() === rowOwnerId) ?? null
   );
 };
 
-export const resolveCashuTokenOwnerLaneById = (
+export const resolveCashuTokenStoredOwnerLaneById = (
   rows: readonly CashuOwnerLaneRow[],
   id: unknown,
-  visibleOwnerIds: readonly Evolu.OwnerId[],
   fallbackOwnerId: Evolu.OwnerId | null,
 ): Evolu.OwnerId | null => {
   const idText = String(id ?? "").trim();
@@ -58,5 +67,5 @@ export const resolveCashuTokenOwnerLaneById = (
       return String(entry.id ?? "").trim() === idText;
     }) ?? null;
 
-  return resolveCashuRowOwnerLane(row, visibleOwnerIds) ?? fallbackOwnerId;
+  return resolveCashuRowStoredOwnerLane(row) ?? fallbackOwnerId;
 };

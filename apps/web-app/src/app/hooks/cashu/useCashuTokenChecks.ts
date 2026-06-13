@@ -31,7 +31,7 @@ import {
   isCashuTokenIssuedState,
   normalizeCashuTokenState,
 } from "../../lib/cashuTokenState";
-import { resolveCashuTokenOwnerLaneById } from "../../lib/cashuOwnerLane";
+import { resolveCashuTokenStoredOwnerLaneById } from "../../lib/cashuOwnerLane";
 import type { CashuTokenRowLike } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
@@ -61,7 +61,6 @@ interface UseCashuTokenChecksParams {
   cashuBulkCheckIsBusy: boolean;
   cashuIsBusy: boolean;
   cashuTokensAll: readonly CashuTokenRow[];
-  cashuVisibleOwnerIds: readonly Evolu.OwnerId[];
   pendingCashuDeleteId: CashuTokenId | null;
   pushToast: (message: string) => void;
   setCashuBulkCheckIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
@@ -79,7 +78,6 @@ export const useCashuTokenChecks = ({
   cashuBulkCheckIsBusy,
   cashuIsBusy,
   cashuTokensAll,
-  cashuVisibleOwnerIds,
   pendingCashuDeleteId,
   pushToast,
   setCashuBulkCheckIsBusy,
@@ -135,10 +133,9 @@ export const useCashuTokenChecks = ({
     function (
       payload: CashuTokenUpdatePayload,
     ): ReturnType<EvoluMutations["update"]> {
-      const ownerId = resolveCashuTokenOwnerLaneById(
+      const ownerId = resolveCashuTokenStoredOwnerLaneById(
         cashuTokensAll,
         payload.id,
-        cashuVisibleOwnerIds,
         appOwnerId,
       );
 
@@ -146,7 +143,7 @@ export const useCashuTokenChecks = ({
         ? update("cashuToken", payload, { ownerId })
         : update("cashuToken", payload);
     },
-    [appOwnerId, cashuTokensAll, cashuVisibleOwnerIds, update],
+    [appOwnerId, cashuTokensAll, update],
   );
 
   const handleDeleteCashuToken = React.useCallback(

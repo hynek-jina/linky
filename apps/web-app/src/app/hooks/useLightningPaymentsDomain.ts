@@ -16,7 +16,7 @@ import {
 } from "../../utils/lightningInvoice";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
-import { resolveCashuRowOwnerLane } from "../lib/cashuOwnerLane";
+import { resolveCashuRowStoredOwnerLane } from "../lib/cashuOwnerLane";
 import { hasMatchingCashuToken } from "../lib/cashuTokenIdentity";
 import { isCashuTokenAcceptedState } from "../lib/cashuTokenState";
 import {
@@ -70,7 +70,6 @@ interface UseLightningPaymentsDomainParams {
   cashuOwnerId: Evolu.OwnerId | null;
   cashuTokensAll: readonly CashuTokenRowLike[];
   cashuTokensWithMeta: CashuTokenWithMetaRow[];
-  cashuVisibleOwnerIds: readonly Evolu.OwnerId[];
   contacts: readonly ContactRow[];
   defaultMintUrl: string | null;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
@@ -96,7 +95,6 @@ export const useLightningPaymentsDomain = ({
   cashuOwnerId,
   cashuTokensAll,
   cashuTokensWithMeta,
-  cashuVisibleOwnerIds,
   contacts,
   defaultMintUrl,
   formatDisplayedAmountParts,
@@ -161,13 +159,24 @@ export const useLightningPaymentsDomain = ({
   const markCashuTokenDeleted = React.useCallback(
     (row: CashuTokenWithMetaRow) => {
       const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
-      const rowOwnerId =
-        resolveCashuRowOwnerLane(row, cashuVisibleOwnerIds) ?? cashuOwnerId;
+      const rowOwnerId = resolveCashuRowStoredOwnerLane(row) ?? cashuOwnerId;
       if (rowOwnerId)
         return update("cashuToken", payload, { ownerId: rowOwnerId });
       return update("cashuToken", payload);
     },
-    [cashuOwnerId, cashuVisibleOwnerIds, update],
+    [cashuOwnerId, update],
+  );
+
+  const deleteAcceptedCashuTokensForMint = React.useCallback(
+    (mintUrl: string) => {
+      for (const row of cashuTokensWithMeta) {
+        if (!isCashuTokenAcceptedState(row.state)) continue;
+        if (String(row.mint ?? "").trim() !== mintUrl) continue;
+        const deleted = markCashuTokenDeleted(row);
+        if (!deleted.ok) throw deleted.error;
+      }
+    },
+    [cashuTokensWithMeta, markCashuTokenDeleted],
   );
 
   const payLightningInvoiceWithCashu = React.useCallback(
@@ -251,14 +260,7 @@ export const useLightningPaymentsDomain = ({
                 });
 
                 if (inserted.ok) {
-                  for (const row of cashuTokensWithMeta) {
-                    if (
-                      isCashuTokenAcceptedState(row.state) &&
-                      String(row.mint ?? "").trim() === candidate.mint
-                    ) {
-                      markCashuTokenDeleted(row);
-                    }
-                  }
+                  deleteAcceptedCashuTokensForMint(candidate.mint);
                 }
               }
 
@@ -316,14 +318,7 @@ export const useLightningPaymentsDomain = ({
               if (!inserted.ok) throw inserted.error;
             }
 
-            for (const row of cashuTokensWithMeta) {
-              if (
-                isCashuTokenAcceptedState(row.state) &&
-                String(row.mint ?? "").trim() === candidate.mint
-              ) {
-                markCashuTokenDeleted(row);
-              }
-            }
+            deleteAcceptedCashuTokensForMint(candidate.mint);
 
             logPaymentEvent({
               direction: "out",
@@ -413,7 +408,7 @@ export const useLightningPaymentsDomain = ({
       formatDisplayedAmountParts,
       insertCashuToken,
       logPaymentEvent,
-      markCashuTokenDeleted,
+      deleteAcceptedCashuTokensForMint,
       normalizeMintUrl,
       setCashuIsBusy,
       setContactsOnboardingHasPaid,
@@ -581,14 +576,7 @@ export const useLightningPaymentsDomain = ({
                   });
 
                   if (inserted.ok) {
-                    for (const row of cashuTokensWithMeta) {
-                      if (
-                        isCashuTokenAcceptedState(row.state) &&
-                        String(row.mint ?? "").trim() === candidate.mint
-                      ) {
-                        markCashuTokenDeleted(row);
-                      }
-                    }
+                    deleteAcceptedCashuTokensForMint(candidate.mint);
                   }
                 }
 
@@ -631,14 +619,7 @@ export const useLightningPaymentsDomain = ({
                 if (!inserted.ok) throw inserted.error;
               }
 
-              for (const row of cashuTokensWithMeta) {
-                if (
-                  isCashuTokenAcceptedState(row.state) &&
-                  String(row.mint ?? "").trim() === candidate.mint
-                ) {
-                  markCashuTokenDeleted(row);
-                }
-              }
+              deleteAcceptedCashuTokensForMint(candidate.mint);
 
               const feePaid = Number(
                 (result as { feePaid?: unknown }).feePaid ?? 0,
@@ -807,7 +788,7 @@ export const useLightningPaymentsDomain = ({
       formatDisplayedAmountParts,
       insertCashuToken,
       logPaymentEvent,
-      markCashuTokenDeleted,
+      deleteAcceptedCashuTokensForMint,
       normalizeMintUrl,
       setCashuIsBusy,
       setContactsOnboardingHasPaid,

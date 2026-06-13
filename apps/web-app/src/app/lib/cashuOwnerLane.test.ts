@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   readCashuRowOwnerId,
   resolveCashuRowOwnerLane,
-  resolveCashuTokenOwnerLaneById,
+  resolveCashuRowStoredOwnerLane,
+  resolveCashuTokenStoredOwnerLaneById,
 } from "./cashuOwnerLane";
 
 const owner0 = Evolu.OwnerId.orThrow("aaaaaaaaaaaaaaaaaaaaaa");
@@ -23,24 +24,26 @@ describe("cashu owner lane helpers", () => {
     expect(resolveCashuRowOwnerLane({ ownerId: owner2 }, [owner0])).toBe(null);
   });
 
+  it("resolves the stored row owner even when it is not visible", () => {
+    expect(resolveCashuRowStoredOwnerLane({ ownerId: owner2 })).toBe(owner2);
+  });
+
   it("resolves an update owner by token id before falling back", () => {
     expect(
-      resolveCashuTokenOwnerLaneById(
+      resolveCashuTokenStoredOwnerLaneById(
         [
           { id: "token-a", ownerId: owner0 },
           { id: "token-b", ownerId: owner1 },
         ],
         "token-b",
-        [owner0, owner1],
         owner2,
       ),
     ).toBe(owner1);
 
     expect(
-      resolveCashuTokenOwnerLaneById(
+      resolveCashuTokenStoredOwnerLaneById(
         [{ id: "token-a", ownerId: owner0 }],
         "token-b",
-        [owner0],
         owner2,
       ),
     ).toBe(owner2);

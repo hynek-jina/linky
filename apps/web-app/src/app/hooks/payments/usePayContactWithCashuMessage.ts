@@ -12,7 +12,7 @@ import { normalizeMintUrl } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
-import { resolveCashuRowOwnerLane } from "../../lib/cashuOwnerLane";
+import { resolveCashuRowStoredOwnerLane } from "../../lib/cashuOwnerLane";
 import { hasMatchingCashuToken } from "../../lib/cashuTokenIdentity";
 import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
@@ -77,7 +77,6 @@ interface UsePayContactWithCashuMessageParams {
   cashuBalance: number;
   cashuTokensAll: readonly CashuTokenRowLike[];
   cashuTokensWithMeta: readonly CashuTokenRowLike[];
-  cashuVisibleOwnerIds: readonly Evolu.OwnerId[];
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   currentNpub: string | null;
   currentNsec: string | null;
@@ -121,7 +120,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   cashuBalance,
   cashuTokensAll,
   cashuTokensWithMeta,
-  cashuVisibleOwnerIds,
   chatSeenWrapIdsRef,
   currentNpub,
   currentNsec,
@@ -321,7 +319,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           if (String(row.mint ?? "").trim() !== mintUrl) continue;
           const deleted = updateCashuToken(
             { id: row.id as CashuTokenId, isDeleted: Evolu.sqliteTrue },
-            resolveCashuRowOwnerLane(row, cashuVisibleOwnerIds),
+            resolveCashuRowStoredOwnerLane(row),
           );
           if (!deleted.ok) throw deleted.error;
         }
@@ -832,7 +830,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
     [
       cashuBalance,
       cashuTokensWithMeta,
-      cashuVisibleOwnerIds,
       chatSeenWrapIdsRef,
       activePublishClientIdsRef,
       currentNpub,

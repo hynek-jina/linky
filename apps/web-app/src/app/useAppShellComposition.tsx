@@ -223,7 +223,7 @@ import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
-import { resolveCashuRowOwnerLane } from "./lib/cashuOwnerLane";
+import { resolveCashuRowStoredOwnerLane } from "./lib/cashuOwnerLane";
 import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_RESERVED,
@@ -2905,21 +2905,14 @@ export const useAppShellComposition = () => {
       };
       // Target the lane that holds the row (Evolu keys rows by (ownerId, id));
       // deleting under the active lane no-ops on rows in older cashu-n lanes.
-      const rowOwnerId =
-        resolveCashuRowOwnerLane(row, cashuVisibleOwnerIds) ?? cashuOwnerId;
+      const rowOwnerId = resolveCashuRowStoredOwnerLane(row) ?? cashuOwnerId;
       if (rowOwnerId) {
         update("cashuToken", payload, { ownerId: rowOwnerId });
       } else {
         update("cashuToken", payload);
       }
     }
-  }, [
-    cashuOwnerId,
-    cashuTokensAllFiltered,
-    cashuVisibleOwnerIds,
-    nostrMessagesLocal,
-    update,
-  ]);
+  }, [cashuOwnerId, cashuTokensAllFiltered, nostrMessagesLocal, update]);
 
   // lastMessageByContactId provided by the derived Nostr index above.
 
@@ -3008,8 +3001,7 @@ export const useAppShellComposition = () => {
         // Delete in the row's own lane; Evolu keys rows by (ownerId, id) so a
         // delete under the active lane silently misses rows in older lanes.
         const ownerId =
-          resolveCashuRowOwnerLane(token, cashuVisibleOwnerIds) ??
-          fallbackOwnerId;
+          resolveCashuRowStoredOwnerLane(token) ?? fallbackOwnerId;
         const result = ownerId
           ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
@@ -3025,7 +3017,6 @@ export const useAppShellComposition = () => {
     }
   }, [
     cashuOwnSpentTokens,
-    cashuVisibleOwnerIds,
     deleteSpentCashuTokensIsBusy,
     resolveOwnerIdForWrite,
     setStatus,
@@ -4080,7 +4071,6 @@ export const useAppShellComposition = () => {
     cashuBalance,
     cashuTokensAll,
     cashuTokensWithMeta,
-    cashuVisibleOwnerIds,
     chatSeenWrapIdsRef,
     currentNpub,
     currentNsec,
@@ -4187,7 +4177,6 @@ export const useAppShellComposition = () => {
       cashuOwnerId,
       cashuTokensAll,
       cashuTokensWithMeta,
-      cashuVisibleOwnerIds,
       contacts,
       defaultMintUrl,
       formatDisplayedAmountParts,
@@ -4607,7 +4596,6 @@ export const useAppShellComposition = () => {
     cashuBulkCheckIsBusy,
     cashuIsBusy,
     cashuTokensAll: cashuTokensAllFiltered,
-    cashuVisibleOwnerIds,
     pendingCashuDeleteId,
     pushToast,
     setCashuBulkCheckIsBusy,
@@ -6039,9 +6027,7 @@ export const useAppShellComposition = () => {
       for (const row of rows) {
         if (!row.id) continue;
         const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
-        const ownerId =
-          resolveCashuRowOwnerLane(row, cashuVisibleOwnerIds) ??
-          fallbackOwnerId;
+        const ownerId = resolveCashuRowStoredOwnerLane(row) ?? fallbackOwnerId;
         const result = ownerId
           ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
@@ -6247,7 +6233,6 @@ export const useAppShellComposition = () => {
     cashuIsBusy,
     cashuTokensAll,
     cashuTokensWithMeta,
-    cashuVisibleOwnerIds,
     defaultMintUrl,
     insert,
     logPaymentEvent,
@@ -6394,9 +6379,7 @@ export const useAppShellComposition = () => {
       for (const row of rows) {
         if (!row.id) continue;
         const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
-        const ownerId =
-          resolveCashuRowOwnerLane(row, cashuVisibleOwnerIds) ??
-          fallbackOwnerId;
+        const ownerId = resolveCashuRowStoredOwnerLane(row) ?? fallbackOwnerId;
         const result = ownerId
           ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
@@ -6713,7 +6696,6 @@ export const useAppShellComposition = () => {
     cashuOwnerId,
     cashuTokensAll,
     cashuTokensWithMeta,
-    cashuVisibleOwnerIds,
     defaultMintUrl,
     formatDisplayedAmountParts,
     formatMintButtonLabel,
