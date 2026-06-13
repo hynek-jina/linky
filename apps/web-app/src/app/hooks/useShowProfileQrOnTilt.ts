@@ -2,6 +2,7 @@ import React from "react";
 
 interface UseShowProfileQrOnTiltParams {
   enabled: boolean;
+  onHideProfileQr: () => void;
   onShowProfileQr: () => void;
 }
 
@@ -38,11 +39,18 @@ const requestSensorPermission = async (constructor: unknown): Promise<void> => {
 
 export const useShowProfileQrOnTilt = ({
   enabled,
+  onHideProfileQr,
   onShowProfileQr,
 }: UseShowProfileQrOnTiltParams): void => {
   const armedRef = React.useRef(true);
   const lastOpenedAtRef = React.useRef(0);
+  const openedByTiltRef = React.useRef(false);
+  const onHideProfileQrRef = React.useRef(onHideProfileQr);
   const onShowProfileQrRef = React.useRef(onShowProfileQr);
+
+  React.useEffect(() => {
+    onHideProfileQrRef.current = onHideProfileQr;
+  }, [onHideProfileQr]);
 
   React.useEffect(() => {
     onShowProfileQrRef.current = onShowProfileQr;
@@ -51,6 +59,7 @@ export const useShowProfileQrOnTilt = ({
   React.useEffect(() => {
     if (!enabled) {
       armedRef.current = true;
+      openedByTiltRef.current = false;
       return;
     }
     if (typeof window === "undefined") return;
@@ -69,8 +78,16 @@ export const useShowProfileQrOnTilt = ({
       if (now - lastOpenedAtRef.current < OPEN_COOLDOWN_MS) return;
 
       armedRef.current = false;
+      openedByTiltRef.current = true;
       lastOpenedAtRef.current = now;
       onShowProfileQrRef.current();
+    };
+
+    const maybeCloseProfileQr = () => {
+      armedRef.current = true;
+      if (!openedByTiltRef.current) return;
+      openedByTiltRef.current = false;
+      onHideProfileQrRef.current();
     };
 
     const onDeviceOrientation = (event: DeviceOrientationEvent) => {
@@ -78,7 +95,7 @@ export const useShowProfileQrOnTilt = ({
       if (beta === null) return;
 
       if (isResetTilt(beta)) {
-        armedRef.current = true;
+        maybeCloseProfileQr();
         return;
       }
 
@@ -92,7 +109,7 @@ export const useShowProfileQrOnTilt = ({
       if (gravityY === null) return;
 
       if (gravityY < GRAVITY_RESET_THRESHOLD) {
-        armedRef.current = true;
+        maybeCloseProfileQr();
         return;
       }
 

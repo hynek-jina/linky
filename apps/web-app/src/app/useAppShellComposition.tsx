@@ -7648,6 +7648,7 @@ export const useAppShellComposition = () => {
       mainSwipeRef,
       NO_GROUP_FILTER,
       canAddContact,
+      closeProfileQr,
       openNewContactPage,
       openProfileQr,
       openScan,
