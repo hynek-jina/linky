@@ -239,7 +239,7 @@ export const useOwnerScopedStorage = ({
 
   const logPaymentEvent = React.useCallback(
     (event: LoggedPaymentEventParams) => {
-      const ownerId = appOwnerIdRef.current;
+      const ownerId = appOwnerIdRef.current ?? transactionsOwnerIdRef.current;
       if (!ownerId) return;
 
       const nowSec = Math.floor(Date.now() / 1000);

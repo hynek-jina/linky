@@ -16,6 +16,7 @@ import {
 } from "../../utils/lightningInvoice";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
+import { resolveCashuRowOwnerLane } from "../lib/cashuOwnerLane";
 import { hasMatchingCashuToken } from "../lib/cashuTokenIdentity";
 import { isCashuTokenAcceptedState } from "../lib/cashuTokenState";
 import {
@@ -69,6 +70,7 @@ interface UseLightningPaymentsDomainParams {
   cashuOwnerId: Evolu.OwnerId | null;
   cashuTokensAll: readonly CashuTokenRowLike[];
   cashuTokensWithMeta: CashuTokenWithMetaRow[];
+  cashuVisibleOwnerIds: readonly Evolu.OwnerId[];
   contacts: readonly ContactRow[];
   defaultMintUrl: string | null;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
@@ -94,6 +96,7 @@ export const useLightningPaymentsDomain = ({
   cashuOwnerId,
   cashuTokensAll,
   cashuTokensWithMeta,
+  cashuVisibleOwnerIds,
   contacts,
   defaultMintUrl,
   formatDisplayedAmountParts,
@@ -156,13 +159,15 @@ export const useLightningPaymentsDomain = ({
   );
 
   const markCashuTokenDeleted = React.useCallback(
-    (id: CashuTokenId) => {
-      const payload = { id, isDeleted: Evolu.sqliteTrue };
-      if (cashuOwnerId)
-        return update("cashuToken", payload, { ownerId: cashuOwnerId });
+    (row: CashuTokenWithMetaRow) => {
+      const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
+      const rowOwnerId =
+        resolveCashuRowOwnerLane(row, cashuVisibleOwnerIds) ?? cashuOwnerId;
+      if (rowOwnerId)
+        return update("cashuToken", payload, { ownerId: rowOwnerId });
       return update("cashuToken", payload);
     },
-    [cashuOwnerId, update],
+    [cashuOwnerId, cashuVisibleOwnerIds, update],
   );
 
   const payLightningInvoiceWithCashu = React.useCallback(
@@ -251,7 +256,7 @@ export const useLightningPaymentsDomain = ({
                       isCashuTokenAcceptedState(row.state) &&
                       String(row.mint ?? "").trim() === candidate.mint
                     ) {
-                      markCashuTokenDeleted(row.id);
+                      markCashuTokenDeleted(row);
                     }
                   }
                 }
@@ -316,7 +321,7 @@ export const useLightningPaymentsDomain = ({
                 isCashuTokenAcceptedState(row.state) &&
                 String(row.mint ?? "").trim() === candidate.mint
               ) {
-                markCashuTokenDeleted(row.id);
+                markCashuTokenDeleted(row);
               }
             }
 
@@ -581,7 +586,7 @@ export const useLightningPaymentsDomain = ({
                         isCashuTokenAcceptedState(row.state) &&
                         String(row.mint ?? "").trim() === candidate.mint
                       ) {
-                        markCashuTokenDeleted(row.id);
+                        markCashuTokenDeleted(row);
                       }
                     }
                   }
@@ -631,7 +636,7 @@ export const useLightningPaymentsDomain = ({
                   isCashuTokenAcceptedState(row.state) &&
                   String(row.mint ?? "").trim() === candidate.mint
                 ) {
-                  markCashuTokenDeleted(row.id);
+                  markCashuTokenDeleted(row);
                 }
               }
 

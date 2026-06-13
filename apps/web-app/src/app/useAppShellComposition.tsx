@@ -4187,6 +4187,7 @@ export const useAppShellComposition = () => {
       cashuOwnerId,
       cashuTokensAll,
       cashuTokensWithMeta,
+      cashuVisibleOwnerIds,
       contacts,
       defaultMintUrl,
       formatDisplayedAmountParts,

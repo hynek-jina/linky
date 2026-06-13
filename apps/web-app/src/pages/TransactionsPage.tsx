@@ -295,7 +295,11 @@ export function TransactionsPage(): React.ReactElement {
         unit: readText("unit" in row ? row.unit : null),
       });
     }
-    items.sort((left, right) => right.createdAtSec - left.createdAtSec);
+    items.sort((left, right) => {
+      const createdAtDiff = right.createdAtSec - left.createdAtSec;
+      if (createdAtDiff !== 0) return createdAtDiff;
+      return right.id.localeCompare(left.id);
+    });
     const requestByRequestId = new Map<string, TransactionItem>();
     const fulfillmentByRequestId = new Map<string, TransactionItem>();
     const emittedByToken = new Map<string, TransactionItem>();
@@ -338,8 +342,13 @@ export function TransactionsPage(): React.ReactElement {
       .filter((item) => {
         const requestId = readRequestIdFromDetails(item.details);
         if (requestId) {
-          if (isPaymentRequestTransaction(item)) return true;
+          if (isPaymentRequestTransaction(item)) {
+            return requestByRequestId.get(requestId)?.id === item.id;
+          }
           if (requestByRequestId.has(requestId)) return false;
+          if (item.status === "ok") {
+            return fulfillmentByRequestId.get(requestId)?.id === item.id;
+          }
         }
 
         const issuedToken = readIssuedTokenFromDetails(item.details);
