@@ -6,16 +6,22 @@ interface UseShowProfileQrOnTiltParams {
   onShowProfileQr: () => void;
 }
 
-const FORWARD_BETA_THRESHOLD = 110;
-const RESET_BETA_THRESHOLD = 65;
-const GRAVITY_TILT_THRESHOLD = 5.4;
-const GRAVITY_RESET_THRESHOLD = 2.4;
+const FORWARD_BETA_THRESHOLD = -95;
+const RESET_BETA_THRESHOLD = -45;
+const GRAVITY_TILT_THRESHOLD = -5.4;
+const GRAVITY_RESET_THRESHOLD = -2.4;
 const OPEN_COOLDOWN_MS = 2500;
 
 const isProfileQrTilt = (beta: number): boolean =>
-  beta >= FORWARD_BETA_THRESHOLD;
+  beta <= FORWARD_BETA_THRESHOLD;
 
-const isResetTilt = (beta: number): boolean => beta < RESET_BETA_THRESHOLD;
+const isResetTilt = (beta: number): boolean => beta > RESET_BETA_THRESHOLD;
+
+const isMotionProfileQrTilt = (gravityY: number): boolean =>
+  gravityY <= GRAVITY_TILT_THRESHOLD;
+
+const isMotionResetTilt = (gravityY: number): boolean =>
+  gravityY > GRAVITY_RESET_THRESHOLD;
 
 const readFiniteNumber = (value: number | null | undefined): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -44,7 +50,9 @@ export const useShowProfileQrOnTilt = ({
 }: UseShowProfileQrOnTiltParams): void => {
   const armedRef = React.useRef(true);
   const lastOpenedAtRef = React.useRef(0);
+  const motionTiltedRef = React.useRef(false);
   const openedByTiltRef = React.useRef(false);
+  const orientationTiltedRef = React.useRef(false);
   const onHideProfileQrRef = React.useRef(onHideProfileQr);
   const onShowProfileQrRef = React.useRef(onShowProfileQr);
 
@@ -59,7 +67,9 @@ export const useShowProfileQrOnTilt = ({
   React.useEffect(() => {
     if (!enabled) {
       armedRef.current = true;
+      motionTiltedRef.current = false;
       openedByTiltRef.current = false;
+      orientationTiltedRef.current = false;
       return;
     }
     if (typeof window === "undefined") return;
@@ -74,6 +84,7 @@ export const useShowProfileQrOnTilt = ({
     };
 
     const maybeOpenProfileQr = () => {
+      if (!motionTiltedRef.current && !orientationTiltedRef.current) return;
       const now = Date.now();
       if (now - lastOpenedAtRef.current < OPEN_COOLDOWN_MS) return;
 
@@ -84,6 +95,7 @@ export const useShowProfileQrOnTilt = ({
     };
 
     const maybeCloseProfileQr = () => {
+      if (motionTiltedRef.current || orientationTiltedRef.current) return;
       armedRef.current = true;
       if (!openedByTiltRef.current) return;
       openedByTiltRef.current = false;
@@ -94,28 +106,34 @@ export const useShowProfileQrOnTilt = ({
       const beta = readFiniteNumber(event.beta);
       if (beta === null) return;
 
-      if (isResetTilt(beta)) {
-        maybeCloseProfileQr();
+      if (isProfileQrTilt(beta)) {
+        orientationTiltedRef.current = true;
+        if (armedRef.current) maybeOpenProfileQr();
         return;
       }
 
-      if (!armedRef.current || !isProfileQrTilt(beta)) return;
-
-      maybeOpenProfileQr();
+      if (isResetTilt(beta)) {
+        orientationTiltedRef.current = false;
+        maybeCloseProfileQr();
+        return;
+      }
     };
 
     const onDeviceMotion = (event: DeviceMotionEvent) => {
       const gravityY = readFiniteNumber(event.accelerationIncludingGravity?.y);
       if (gravityY === null) return;
 
-      if (gravityY < GRAVITY_RESET_THRESHOLD) {
-        maybeCloseProfileQr();
+      if (isMotionProfileQrTilt(gravityY)) {
+        motionTiltedRef.current = true;
+        if (armedRef.current) maybeOpenProfileQr();
         return;
       }
 
-      if (!armedRef.current || gravityY < GRAVITY_TILT_THRESHOLD) return;
-
-      maybeOpenProfileQr();
+      if (isMotionResetTilt(gravityY)) {
+        motionTiltedRef.current = false;
+        maybeCloseProfileQr();
+        return;
+      }
     };
 
     window.addEventListener("pointerdown", requestPermissionsFromGesture, {
