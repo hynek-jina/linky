@@ -5,19 +5,16 @@ interface UseShowProfileQrOnTiltParams {
   onShowProfileQr: () => void;
 }
 
-const TILT_ANGLE_THRESHOLD = 70;
-const RESET_ANGLE_THRESHOLD = 35;
+const FORWARD_BETA_THRESHOLD = 110;
+const RESET_BETA_THRESHOLD = 65;
 const GRAVITY_TILT_THRESHOLD = 5.4;
 const GRAVITY_RESET_THRESHOLD = 2.4;
 const OPEN_COOLDOWN_MS = 2500;
 
-const isProfileQrTilt = (beta: number, gamma: number | null): boolean =>
-  Math.abs(beta) >= TILT_ANGLE_THRESHOLD ||
-  (gamma !== null && Math.abs(gamma) >= TILT_ANGLE_THRESHOLD);
+const isProfileQrTilt = (beta: number): boolean =>
+  beta >= FORWARD_BETA_THRESHOLD;
 
-const isResetTilt = (beta: number, gamma: number | null): boolean =>
-  Math.abs(beta) < RESET_ANGLE_THRESHOLD &&
-  (gamma === null || Math.abs(gamma) < RESET_ANGLE_THRESHOLD);
+const isResetTilt = (beta: number): boolean => beta < RESET_BETA_THRESHOLD;
 
 const readFiniteNumber = (value: number | null | undefined): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -78,15 +75,14 @@ export const useShowProfileQrOnTilt = ({
 
     const onDeviceOrientation = (event: DeviceOrientationEvent) => {
       const beta = readFiniteNumber(event.beta);
-      const gamma = readFiniteNumber(event.gamma);
       if (beta === null) return;
 
-      if (isResetTilt(beta, gamma)) {
+      if (isResetTilt(beta)) {
         armedRef.current = true;
         return;
       }
 
-      if (!armedRef.current || !isProfileQrTilt(beta, gamma)) return;
+      if (!armedRef.current || !isProfileQrTilt(beta)) return;
 
       maybeOpenProfileQr();
     };
@@ -94,14 +90,13 @@ export const useShowProfileQrOnTilt = ({
     const onDeviceMotion = (event: DeviceMotionEvent) => {
       const gravityY = readFiniteNumber(event.accelerationIncludingGravity?.y);
       if (gravityY === null) return;
-      const absGravityY = Math.abs(gravityY);
 
-      if (absGravityY < GRAVITY_RESET_THRESHOLD) {
+      if (gravityY < GRAVITY_RESET_THRESHOLD) {
         armedRef.current = true;
         return;
       }
 
-      if (!armedRef.current || absGravityY < GRAVITY_TILT_THRESHOLD) return;
+      if (!armedRef.current || gravityY < GRAVITY_TILT_THRESHOLD) return;
 
       maybeOpenProfileQr();
     };
