@@ -729,7 +729,7 @@ export const en = {
   // Error and UI strings
   evoluWipeStorageFailed:
     "Missing stored mnemonic (cannot clear Evolu storage).",
-  copyTokenTitle: "Click to copy token",
-  tokenReceivedClickToCopy: "Received {amount} {unit}. Click to copy token.",
-  tokenReceived: "Token accepted. Click to copy token.",
+  copyTokenTitle: "Token accepted",
+  tokenReceivedClickToCopy: "Received {amount} {unit}.",
+  tokenReceived: "Token accepted.",
 } as const;

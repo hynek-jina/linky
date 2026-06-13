@@ -31,6 +31,7 @@ import {
   isCashuTokenIssuedState,
   normalizeCashuTokenState,
 } from "../../lib/cashuTokenState";
+import { resolveCashuTokenStoredOwnerLaneById } from "../../lib/cashuOwnerLane";
 import type { CashuTokenRowLike } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
@@ -132,14 +133,17 @@ export const useCashuTokenChecks = ({
     function (
       payload: CashuTokenUpdatePayload,
     ): ReturnType<EvoluMutations["update"]> {
-      if (!appOwnerId) return update("cashuToken", payload);
+      const ownerId = resolveCashuTokenStoredOwnerLaneById(
+        cashuTokensAll,
+        payload.id,
+        appOwnerId,
+      );
 
-      const scoped = update("cashuToken", payload, { ownerId: appOwnerId });
-      if (scoped.ok) return scoped;
-
-      return update("cashuToken", payload);
+      return ownerId
+        ? update("cashuToken", payload, { ownerId })
+        : update("cashuToken", payload);
     },
-    [appOwnerId, update],
+    [appOwnerId, cashuTokensAll, update],
   );
 
   const handleDeleteCashuToken = React.useCallback(
@@ -152,13 +156,7 @@ export const useCashuTokenChecks = ({
       const row = cashuTokensAll.find(
         (tkn) => String(tkn?.id ?? "") === String(id),
       );
-      const result = appOwnerId
-        ? update(
-            "cashuToken",
-            { id, isDeleted: Evolu.sqliteTrue },
-            { ownerId: appOwnerId },
-          )
-        : update("cashuToken", { id, isDeleted: Evolu.sqliteTrue });
+      const result = updateCashuToken({ id, isDeleted: Evolu.sqliteTrue });
       if (result.ok) {
         const token = String(row?.token ?? "").trim();
         const rawToken = String(row?.rawToken ?? "").trim();
@@ -183,7 +181,7 @@ export const useCashuTokenChecks = ({
         setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
       }
     },
-    [appOwnerId, cashuTokensAll, setPendingCashuDeleteId, setStatus, t, update],
+    [cashuTokensAll, setPendingCashuDeleteId, setStatus, t, updateCashuToken],
   );
 
   const refreshCashuTokenGroup = React.useCallback(

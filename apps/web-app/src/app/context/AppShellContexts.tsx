@@ -55,6 +55,8 @@ export interface AppShellCoreContextValue {
   effectiveMyLightningAddress: string | null;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
+  evoluAppOwnerId: string | null;
+  evoluTransactionsVisibleOwnerIds: readonly string[];
   applyAmountInputKey: (currentAmount: string, key: string) => string;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   formatDisplayedAmountText: (amountSat: number) => string;

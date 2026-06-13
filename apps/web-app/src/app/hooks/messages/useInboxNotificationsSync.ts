@@ -1,5 +1,6 @@
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
+import type { PushToastOptions } from "../../../hooks/useToasts";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
 import { formatShortNpub } from "../../../utils/formatting";
@@ -67,6 +68,11 @@ const persistSeenPaymentNoticeWrapIds = (
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 type AppendLocalNostrReaction = (reaction: NewLocalNostrReaction) => string;
 
+interface OpenInboxMessageToastParams {
+  contactId: string;
+  messageId?: string;
+}
+
 interface UseInboxNotificationsSyncParams<
   TContact extends ContactNameRowLike & { npub?: string | null | undefined },
   TRoute extends RouteWithOptionalId,
@@ -86,7 +92,8 @@ interface UseInboxNotificationsSyncParams<
   nostrMessagesRecent: readonly NostrMessageSummaryRow[];
   nostrReactionWrapIdsRef: React.MutableRefObject<Set<string>>;
   nostrReactionsLatestRef: React.MutableRefObject<LocalNostrReaction[]>;
-  pushToast: (message: string) => void;
+  onOpenInboxMessageToast: (params: OpenInboxMessageToastParams) => void;
+  pushToast: (message: string, options?: PushToastOptions) => void;
   route: TRoute;
   setContactAttentionById: React.Dispatch<
     React.SetStateAction<Record<string, number>>
@@ -112,6 +119,7 @@ export const useInboxNotificationsSync = <
   nostrMessagesRecent,
   nostrReactionWrapIdsRef,
   nostrReactionsLatestRef,
+  onOpenInboxMessageToast,
   pushToast,
   route,
   setContactAttentionById,
@@ -588,7 +596,7 @@ export const useInboxNotificationsSync = <
                 return;
               }
 
-              appendLocalNostrMessage({
+              const insertedMessageId = appendLocalNostrMessage({
                 contactId,
                 direction: isOutgoing ? "out" : "in",
                 content,
@@ -637,6 +645,16 @@ export const useInboxNotificationsSync = <
                     t("chatIncomingMessageToast")
                       .replace("{name}", senderLabel)
                       .replace("{message}", preview),
+                    {
+                      onClick: () => {
+                        onOpenInboxMessageToast({
+                          contactId,
+                          ...(insertedMessageId
+                            ? { messageId: insertedMessageId }
+                            : {}),
+                        });
+                      },
+                    },
                   );
                 }
 
@@ -797,6 +815,7 @@ export const useInboxNotificationsSync = <
     nostrMessagesLatestRef,
     nostrReactionWrapIdsRef,
     nostrReactionsLatestRef,
+    onOpenInboxMessageToast,
     pushToast,
     route,
     setContactAttentionById,

@@ -223,6 +223,7 @@ import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
+import { resolveCashuRowStoredOwnerLane } from "./lib/cashuOwnerLane";
 import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_RESERVED,
@@ -1034,7 +1035,7 @@ export const useAppShellComposition = () => {
   });
 
   const route = useRouting();
-  const { toasts, pushToast } = useToasts();
+  const { dismissToast, toasts, pushToast } = useToasts();
 
   const evoluServers = useEvoluServersManager();
   const evoluServerUrls = evoluServers.configuredUrls;
@@ -2902,8 +2903,11 @@ export const useAppShellComposition = () => {
         id: row.id as CashuTokenId,
         isDeleted: Evolu.sqliteTrue,
       };
-      if (cashuOwnerId) {
-        update("cashuToken", payload, { ownerId: cashuOwnerId });
+      // Target the lane that holds the row (Evolu keys rows by (ownerId, id));
+      // deleting under the active lane no-ops on rows in older cashu-n lanes.
+      const rowOwnerId = resolveCashuRowStoredOwnerLane(row) ?? cashuOwnerId;
+      if (rowOwnerId) {
+        update("cashuToken", payload, { ownerId: rowOwnerId });
       } else {
         update("cashuToken", payload);
       }
@@ -2982,17 +2986,22 @@ export const useAppShellComposition = () => {
     useState(false);
   const deleteSpentCashuTokens = React.useCallback(async () => {
     if (deleteSpentCashuTokensIsBusy) return;
-    const targets = cashuOwnSpentTokens
-      .map((token) => token.id)
-      .filter((id): id is CashuTokenId => Boolean(id));
+    const targets = cashuOwnSpentTokens.filter((token) => Boolean(token.id));
     if (targets.length === 0) return;
 
     setDeleteSpentCashuTokensIsBusy(true);
     try {
-      const ownerId = await resolveOwnerIdForWrite();
+      const fallbackOwnerId = await resolveOwnerIdForWrite();
       let deleted = 0;
-      for (const id of targets) {
-        const payload = { id, isDeleted: Evolu.sqliteTrue };
+      for (const token of targets) {
+        const payload = {
+          id: token.id as CashuTokenId,
+          isDeleted: Evolu.sqliteTrue,
+        };
+        // Delete in the row's own lane; Evolu keys rows by (ownerId, id) so a
+        // delete under the active lane silently misses rows in older lanes.
+        const ownerId =
+          resolveCashuRowStoredOwnerLane(token) ?? fallbackOwnerId;
         const result = ownerId
           ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
@@ -4168,6 +4177,7 @@ export const useAppShellComposition = () => {
       cashuOwnerId,
       cashuTokensAll,
       cashuTokensWithMeta,
+      cashuVisibleOwnerIds,
       contacts,
       defaultMintUrl,
       formatDisplayedAmountParts,
@@ -6009,14 +6019,18 @@ export const useAppShellComposition = () => {
     };
 
     const deleteCashuRows = async (
-      rows: readonly { id?: CashuTokenId | string | null }[],
-      ownerIdOverride?: Evolu.OwnerId | null,
+      rows: readonly {
+        id?: CashuTokenId | string | null;
+        ownerId?: unknown;
+      }[],
+      fallbackOwnerId?: Evolu.OwnerId | null,
     ) => {
       for (const row of rows) {
         if (!row.id) continue;
         const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
-        const result = ownerIdOverride
-          ? update("cashuToken", payload, { ownerId: ownerIdOverride })
+        const ownerId = resolveCashuRowStoredOwnerLane(row) ?? fallbackOwnerId;
+        const result = ownerId
+          ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
         if (!result.ok) {
           throw new Error(String(result.error));
@@ -6357,14 +6371,18 @@ export const useAppShellComposition = () => {
     };
 
     const markRowsDeleted = async (
-      rows: Array<{ id?: CashuTokenId | string | null }>,
-      ownerIdOverride?: Evolu.OwnerId | null,
+      rows: Array<{
+        id?: CashuTokenId | string | null;
+        ownerId?: unknown;
+      }>,
+      fallbackOwnerId?: Evolu.OwnerId | null,
     ) => {
       for (const row of rows) {
         if (!row.id) continue;
         const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
-        const result = ownerIdOverride
-          ? update("cashuToken", payload, { ownerId: ownerIdOverride })
+        const ownerId = resolveCashuRowStoredOwnerLane(row) ?? fallbackOwnerId;
+        const result = ownerId
+          ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
         if (!result.ok) {
           throw new Error(String(result.error));
@@ -7118,6 +7136,18 @@ export const useAppShellComposition = () => {
     [cashuTokensAllFiltered],
   );
 
+  const openInboxMessageToast = React.useCallback(
+    (params: { contactId: string; messageId?: string }) => {
+      const contactId = String(params.contactId ?? "").trim();
+      if (!contactId) return;
+      const messageId = String(params.messageId ?? "").trim();
+
+      navigateTo({ route: "chat", id: contactId });
+      triggerChatScrollToBottom(messageId || undefined);
+    },
+    [triggerChatScrollToBottom],
+  );
+
   useInboxNotificationsSync({
     appendLocalNostrMessage,
     appendLocalNostrReaction,
@@ -7130,6 +7160,7 @@ export const useAppShellComposition = () => {
     nostrMessagesRecent,
     nostrReactionWrapIdsRef,
     nostrReactionsLatestRef,
+    onOpenInboxMessageToast: openInboxMessageToast,
     pushToast,
     route,
     setContactAttentionById,
@@ -7600,7 +7631,9 @@ export const useAppShellComposition = () => {
       mainSwipeRef,
       NO_GROUP_FILTER,
       canAddContact,
+      closeProfileQr,
       openNewContactPage,
+      openProfileQr,
       openScan,
       openWalletScan,
       otherContactsLabel,
@@ -7761,6 +7794,10 @@ export const useAppShellComposition = () => {
     effectiveMyLightningAddress,
     effectiveProfileName,
     effectiveProfilePicture,
+    evoluAppOwnerId: appOwnerId ? String(appOwnerId) : null,
+    evoluTransactionsVisibleOwnerIds: transactionsVisibleOwnerIds.map(
+      (ownerId) => String(ownerId),
+    ),
     formatDisplayedAmountParts,
     formatDisplayedAmountText,
     isProfileEditing,
@@ -7858,6 +7895,7 @@ export const useAppShellComposition = () => {
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNsec,
+    dismissToast,
     displayUnit,
     formatDisplayedAmountParts,
     formatDisplayedAmountText,

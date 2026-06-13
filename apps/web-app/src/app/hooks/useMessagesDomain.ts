@@ -207,6 +207,35 @@ type NostrMessageInsertPayload = {
   rumorId?: string;
 };
 
+const localMessageFromInsertPayload = (
+  id: string,
+  payload: NostrMessageInsertPayload,
+): LocalNostrMessage => {
+  const message: LocalNostrMessage = {
+    id,
+    contactId: payload.contactId,
+    direction: payload.direction,
+    content: payload.content,
+    wrapId: payload.wrapId,
+    rumorId: payload.rumorId ?? null,
+    pubkey: payload.pubkey ?? "",
+    createdAtSec: payload.createdAtSec,
+    status: payload.status,
+    localOnly: payload.localOnly === "1",
+    replyToId: payload.replyToId ?? null,
+    replyToContent: payload.replyToContent ?? null,
+    rootMessageId: payload.rootMessageId ?? null,
+    editedAtSec: payload.editedAtSec ?? null,
+    editedFromId: payload.editedFromId ?? null,
+    isEdited: payload.isEdited === "1",
+    originalContent: payload.originalContent ?? null,
+  };
+
+  if (payload.clientId) message.clientId = payload.clientId;
+
+  return message;
+};
+
 const buildMessageInsertPayload = (
   message: NewLocalNostrMessage,
 ): NostrMessageInsertPayload | null => {
@@ -793,6 +822,13 @@ export const useMessagesDomain = ({
       if (!result.ok) return "";
 
       const messageId = toText(result.value.id);
+      const insertedMessage = localMessageFromInsertPayload(messageId, payload);
+      nostrMessagesLatestRef.current = dedupeNostrMessagesByPriority([
+        ...nostrMessagesLatestRef.current,
+        insertedMessage,
+      ]);
+      nostrMessageWrapIdsRef.current.add(payload.wrapId);
+
       if (
         activeChatRouteId &&
         toTrimmedText(message.contactId) === toTrimmedText(activeChatRouteId)

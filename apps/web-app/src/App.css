@@ -348,13 +348,13 @@
   font-weight: 800;
   letter-spacing: 0.01em;
   backdrop-filter: blur(10px);
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.3);
+  box-shadow: none;
 }
 
 .scan-action-btn:hover,
 .scan-action-btn:focus {
   transform: none;
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.3);
+  box-shadow: none;
   background: #1e293b;
 }
 
@@ -476,8 +476,8 @@
 }
 
 .topbar-profile-btn {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border-radius: 999px;
   overflow: hidden;
   background: #0b1222;
@@ -492,7 +492,7 @@
 }
 
 .topbar-profile-fallback {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   color: #cbd5e1;
 }
@@ -604,7 +604,7 @@
 
 .onboarding-avatar-choice.is-selected {
   background: rgba(13, 148, 136, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.28);
+  box-shadow: none;
 }
 
 .onboarding-avatar-choiceImage,
@@ -698,7 +698,7 @@
   }
 
   .onboarding-avatar-actionsAdaptive .btn-wide {
-    box-shadow: 0 18px 40px rgba(2, 6, 23, 0.45);
+    box-shadow: none;
   }
 
   .onboarding-return-scroll {
@@ -1415,7 +1415,7 @@ button.settings-link:hover {
 
 .settings-choice.is-selected {
   background: rgba(20, 184, 166, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.28);
+  box-shadow: none;
   color: #99f6e4;
 }
 
@@ -1605,7 +1605,7 @@ button.settings-link:hover {
   border-radius: 24px;
   background: linear-gradient(180deg, #f8fafc, #dbeafe);
   border: none;
-  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.45);
+  box-shadow: none;
 }
 
 .topup-invoice-qr {
@@ -2105,11 +2105,11 @@ button.settings-link:hover {
   justify-content: center;
   background: var(--app-primary-button-bg);
   color: var(--app-primary-button-fg);
-  box-shadow: 0 8px 18px rgba(45, 212, 191, 0.22);
+  box-shadow: none;
 }
 
 .chat-compose-send-button:hover {
-  box-shadow: 0 10px 24px rgba(45, 212, 191, 0.28);
+  box-shadow: none;
 }
 
 .chat-compose-send-button:disabled {
@@ -2387,21 +2387,30 @@ button {
   color: var(--app-primary-button-fg);
   font-weight: 700;
   cursor: pointer;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease;
+  transition: transform 0.12s ease;
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 25px rgba(45, 212, 191, 0.25);
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
-  box-shadow: none;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+button:focus,
+button:focus-visible,
+button:active {
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 button.secondary {
@@ -3115,11 +3124,11 @@ button.icon {
 .chat-payment-request-pay {
   background: var(--app-primary-button-bg);
   color: var(--app-primary-button-fg);
-  box-shadow: var(--app-primary-button-shadow);
+  box-shadow: none;
 }
 
 .chat-payment-request-pay:hover {
-  box-shadow: var(--app-primary-button-shadow-hover);
+  box-shadow: none;
 }
 
 .contact-list {
@@ -3243,7 +3252,7 @@ button.icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 16px 40px rgba(45, 212, 191, 0.35);
+  box-shadow: none;
 }
 
 .contacts-fab-svgIcon {
@@ -3270,12 +3279,12 @@ button.icon {
 
 .contacts-fab:hover {
   transform: translateY(-1px);
-  box-shadow: 0 20px 48px rgba(13, 148, 136, 0.4);
+  box-shadow: none;
 }
 
 .contacts-fab.is-disabled {
   background: linear-gradient(135deg, #9ca3af, #6b7280);
-  box-shadow: 0 12px 28px rgba(75, 85, 99, 0.35);
+  box-shadow: none;
 }
 
 .bottom-tabs-bar {
@@ -4037,6 +4046,13 @@ button.tag-button {
   line-height: 1.2;
 }
 
+.toast-button {
+  appearance: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
 .paid-overlay {
   position: fixed;
   inset: 0;
@@ -4295,17 +4311,13 @@ button.tag-button {
   color: #d7fff7;
   font-size: 18px;
   font-weight: 800;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 14px 36px rgba(59, 130, 246, 0.24);
+  box-shadow: none;
 }
 
 .nfc-write-cancel:hover {
   transform: none;
   background: linear-gradient(180deg, #5aa6ff 0%, #478def 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 16px 38px rgba(59, 130, 246, 0.28);
+  box-shadow: none;
 }
 
 .share-options-sheet {

@@ -16,7 +16,12 @@ import {
 } from "../../utils/lightningInvoice";
 import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
-import { hasMatchingCashuToken } from "../lib/cashuTokenIdentity";
+import { resolveCashuRowStoredOwnerLane } from "../lib/cashuOwnerLane";
+import {
+  hasMatchingCashuToken,
+  isDeletedCashuRow,
+  readCashuTokenAliases,
+} from "../lib/cashuTokenIdentity";
 import { isCashuTokenAcceptedState } from "../lib/cashuTokenState";
 import {
   buildPaymentAmountAttempts,
@@ -58,6 +63,53 @@ const readLightningPreimage = (value: unknown): string | null => {
 type CashuTokenWithMetaRow = CashuTokenRowLike & { id: CashuTokenId };
 type ContactRow = ContactPayRowLike;
 
+const isCashuTokenRowWithId = (
+  row: CashuTokenRowLike,
+): row is CashuTokenWithMetaRow => {
+  return typeof row.id === "string" && row.id.trim().length > 0;
+};
+
+export const findAcceptedCashuRowsToDelete = (args: {
+  fallbackMintUrl: string;
+  normalizeMintUrl: (url: MintUrlInput) => string | null;
+  rows: readonly CashuTokenRowLike[];
+  tokenTexts: readonly string[];
+}): CashuTokenWithMetaRow[] => {
+  const usedTokens = new Set(
+    args.tokenTexts
+      .map((tokenText) => String(tokenText ?? "").trim())
+      .filter(Boolean),
+  );
+  if (usedTokens.size === 0) return [];
+
+  const exactRows: CashuTokenWithMetaRow[] = [];
+  for (const row of args.rows) {
+    if (!isCashuTokenRowWithId(row)) continue;
+    if (isDeletedCashuRow(row)) continue;
+    if (!isCashuTokenAcceptedState(row.state)) continue;
+    const matchesInput = readCashuTokenAliases(row).some((alias) =>
+      usedTokens.has(alias),
+    );
+    if (matchesInput) exactRows.push(row);
+  }
+
+  if (exactRows.length > 0) return exactRows;
+
+  const fallbackMint = args.normalizeMintUrl(args.fallbackMintUrl);
+  if (!fallbackMint) return [];
+
+  const fallbackRows: CashuTokenWithMetaRow[] = [];
+  for (const row of args.rows) {
+    if (!isCashuTokenRowWithId(row)) continue;
+    if (isDeletedCashuRow(row)) continue;
+    if (!isCashuTokenAcceptedState(row.state)) continue;
+    if (args.normalizeMintUrl(row.mint) !== fallbackMint) continue;
+    fallbackRows.push(row);
+  }
+
+  return fallbackRows;
+};
+
 interface UseLightningPaymentsDomainParams {
   buildCashuMintCandidates: (
     mintGroups: Map<string, { tokens: string[]; sum: number }>,
@@ -69,6 +121,7 @@ interface UseLightningPaymentsDomainParams {
   cashuOwnerId: Evolu.OwnerId | null;
   cashuTokensAll: readonly CashuTokenRowLike[];
   cashuTokensWithMeta: CashuTokenWithMetaRow[];
+  cashuVisibleOwnerIds: readonly Evolu.OwnerId[];
   contacts: readonly ContactRow[];
   defaultMintUrl: string | null;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
@@ -94,6 +147,7 @@ export const useLightningPaymentsDomain = ({
   cashuOwnerId,
   cashuTokensAll,
   cashuTokensWithMeta,
+  cashuVisibleOwnerIds,
   contacts,
   defaultMintUrl,
   formatDisplayedAmountParts,
@@ -156,13 +210,61 @@ export const useLightningPaymentsDomain = ({
   );
 
   const markCashuTokenDeleted = React.useCallback(
-    (id: CashuTokenId) => {
-      const payload = { id, isDeleted: Evolu.sqliteTrue };
-      if (cashuOwnerId)
-        return update("cashuToken", payload, { ownerId: cashuOwnerId });
-      return update("cashuToken", payload);
+    (row: CashuTokenWithMetaRow) => {
+      const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
+      const ownerCandidates = new Map<string, Evolu.OwnerId>();
+      const addOwnerCandidate = (ownerId: Evolu.OwnerId | null) => {
+        if (!ownerId) return;
+        ownerCandidates.set(String(ownerId), ownerId);
+      };
+
+      addOwnerCandidate(resolveCashuRowStoredOwnerLane(row));
+      addOwnerCandidate(cashuOwnerId);
+      for (const ownerId of cashuVisibleOwnerIds) {
+        addOwnerCandidate(ownerId);
+      }
+
+      if (ownerCandidates.size === 0) return update("cashuToken", payload);
+
+      let firstError: unknown = null;
+      let firstSuccess: ReturnType<EvoluMutations["update"]> | null = null;
+      for (const ownerId of ownerCandidates.values()) {
+        const result = update("cashuToken", payload, { ownerId });
+        if (result.ok) {
+          if (!firstSuccess) firstSuccess = result;
+          continue;
+        }
+        if (firstError === null) firstError = result.error;
+      }
+
+      if (firstSuccess) return firstSuccess;
+
+      return {
+        ok: false,
+        error: firstError ?? "cashu token delete failed",
+      };
     },
-    [cashuOwnerId, update],
+    [cashuOwnerId, cashuVisibleOwnerIds, update],
+  );
+
+  const deleteAcceptedCashuTokensByText = React.useCallback(
+    (tokenTexts: readonly string[], fallbackMintUrl: string) => {
+      const rowsToDelete = findAcceptedCashuRowsToDelete({
+        fallbackMintUrl,
+        normalizeMintUrl,
+        rows: cashuTokensAll,
+        tokenTexts,
+      });
+      if (rowsToDelete.length === 0) {
+        throw new Error("No local rows matched spent Cashu token inputs");
+      }
+
+      for (const row of rowsToDelete) {
+        const deleted = markCashuTokenDeleted(row);
+        if (!deleted.ok) throw deleted.error;
+      }
+    },
+    [cashuTokensAll, markCashuTokenDeleted, normalizeMintUrl],
   );
 
   const payLightningInvoiceWithCashu = React.useCallback(
@@ -246,14 +348,10 @@ export const useLightningPaymentsDomain = ({
                 });
 
                 if (inserted.ok) {
-                  for (const row of cashuTokensWithMeta) {
-                    if (
-                      isCashuTokenAcceptedState(row.state) &&
-                      String(row.mint ?? "").trim() === candidate.mint
-                    ) {
-                      markCashuTokenDeleted(row.id);
-                    }
-                  }
+                  deleteAcceptedCashuTokensByText(
+                    candidate.tokens,
+                    candidate.mint,
+                  );
                 }
               }
 
@@ -292,32 +390,36 @@ export const useLightningPaymentsDomain = ({
               return false;
             }
 
-            if (result.remainingToken && result.remainingAmount > 0) {
-              const inserted = insertCashuToken({
-                token:
-                  result.remainingToken as typeof Evolu.NonEmptyString.Type,
-                rawToken: null,
-                mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
-                unit: result.unit
-                  ? (result.unit as typeof Evolu.NonEmptyString100.Type)
-                  : null,
-                amount:
-                  result.remainingAmount > 0
-                    ? (result.remainingAmount as typeof Evolu.PositiveInt.Type)
+            const localPersistenceErrors: string[] = [];
+            try {
+              if (result.remainingToken && result.remainingAmount > 0) {
+                const inserted = insertCashuToken({
+                  token:
+                    result.remainingToken as typeof Evolu.NonEmptyString.Type,
+                  rawToken: null,
+                  mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
+                  unit: result.unit
+                    ? (result.unit as typeof Evolu.NonEmptyString100.Type)
                     : null,
-                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-                error: null,
-              });
-              if (!inserted.ok) throw inserted.error;
-            }
-
-            for (const row of cashuTokensWithMeta) {
-              if (
-                isCashuTokenAcceptedState(row.state) &&
-                String(row.mint ?? "").trim() === candidate.mint
-              ) {
-                markCashuTokenDeleted(row.id);
+                  amount:
+                    result.remainingAmount > 0
+                      ? (result.remainingAmount as typeof Evolu.PositiveInt.Type)
+                      : null,
+                  state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                  error: null,
+                });
+                if (!inserted.ok) {
+                  localPersistenceErrors.push(
+                    `change insert: ${String(inserted.error ?? "unknown")}`,
+                  );
+                }
               }
+
+              deleteAcceptedCashuTokensByText(candidate.tokens, candidate.mint);
+            } catch (e) {
+              localPersistenceErrors.push(
+                `spent delete: ${getUnknownErrorMessage(e, "unknown")}`,
+              );
             }
 
             logPaymentEvent({
@@ -334,6 +436,9 @@ export const useLightningPaymentsDomain = ({
                   : {}),
                 ...(readLightningPreimage(result)
                   ? { lightningPreimage: readLightningPreimage(result) }
+                  : {}),
+                ...(localPersistenceErrors.length > 0
+                  ? { localPersistenceError: localPersistenceErrors.join("; ") }
                   : {}),
                 usedInputTokens: candidate.tokens,
               },
@@ -408,7 +513,7 @@ export const useLightningPaymentsDomain = ({
       formatDisplayedAmountParts,
       insertCashuToken,
       logPaymentEvent,
-      markCashuTokenDeleted,
+      deleteAcceptedCashuTokensByText,
       normalizeMintUrl,
       setCashuIsBusy,
       setContactsOnboardingHasPaid,
@@ -576,14 +681,10 @@ export const useLightningPaymentsDomain = ({
                   });
 
                   if (inserted.ok) {
-                    for (const row of cashuTokensWithMeta) {
-                      if (
-                        isCashuTokenAcceptedState(row.state) &&
-                        String(row.mint ?? "").trim() === candidate.mint
-                      ) {
-                        markCashuTokenDeleted(row.id);
-                      }
-                    }
+                    deleteAcceptedCashuTokensByText(
+                      candidate.tokens,
+                      candidate.mint,
+                    );
                   }
                 }
 
@@ -607,32 +708,39 @@ export const useLightningPaymentsDomain = ({
                 break;
               }
 
-              if (result.remainingToken && result.remainingAmount > 0) {
-                const inserted = insertCashuToken({
-                  token:
-                    result.remainingToken as typeof Evolu.NonEmptyString.Type,
-                  rawToken: null,
-                  mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
-                  unit: result.unit
-                    ? (result.unit as typeof Evolu.NonEmptyString100.Type)
-                    : null,
-                  amount:
-                    result.remainingAmount > 0
-                      ? (result.remainingAmount as typeof Evolu.PositiveInt.Type)
+              const localPersistenceErrors: string[] = [];
+              try {
+                if (result.remainingToken && result.remainingAmount > 0) {
+                  const inserted = insertCashuToken({
+                    token:
+                      result.remainingToken as typeof Evolu.NonEmptyString.Type,
+                    rawToken: null,
+                    mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
+                    unit: result.unit
+                      ? (result.unit as typeof Evolu.NonEmptyString100.Type)
                       : null,
-                  state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-                  error: null,
-                });
-                if (!inserted.ok) throw inserted.error;
-              }
-
-              for (const row of cashuTokensWithMeta) {
-                if (
-                  isCashuTokenAcceptedState(row.state) &&
-                  String(row.mint ?? "").trim() === candidate.mint
-                ) {
-                  markCashuTokenDeleted(row.id);
+                    amount:
+                      result.remainingAmount > 0
+                        ? (result.remainingAmount as typeof Evolu.PositiveInt.Type)
+                        : null,
+                    state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                    error: null,
+                  });
+                  if (!inserted.ok) {
+                    localPersistenceErrors.push(
+                      `change insert: ${String(inserted.error ?? "unknown")}`,
+                    );
+                  }
                 }
+
+                deleteAcceptedCashuTokensByText(
+                  candidate.tokens,
+                  candidate.mint,
+                );
+              } catch (e) {
+                localPersistenceErrors.push(
+                  `spent delete: ${getUnknownErrorMessage(e, "unknown")}`,
+                );
               }
 
               const feePaid = Number(
@@ -669,6 +777,12 @@ export const useLightningPaymentsDomain = ({
                     : {}),
                   ...(readLightningPreimage(result)
                     ? { lightningPreimage: readLightningPreimage(result) }
+                    : {}),
+                  ...(localPersistenceErrors.length > 0
+                    ? {
+                        localPersistenceError:
+                          localPersistenceErrors.join("; "),
+                      }
                     : {}),
                   ...(successActionMessage
                     ? { lnurlSuccessMessage: successActionMessage }
@@ -802,7 +916,7 @@ export const useLightningPaymentsDomain = ({
       formatDisplayedAmountParts,
       insertCashuToken,
       logPaymentEvent,
-      markCashuTokenDeleted,
+      deleteAcceptedCashuTokensByText,
       normalizeMintUrl,
       setCashuIsBusy,
       setContactsOnboardingHasPaid,

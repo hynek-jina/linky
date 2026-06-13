@@ -6,6 +6,7 @@ import { ContactsPage } from "../../pages/ContactsPage";
 import { WalletPage } from "../../pages/WalletPage";
 import type { Route } from "../../types/route";
 import { useMainSwipeRoutes } from "../context/AppShellContexts";
+import { useShowProfileQrOnTilt } from "../hooks/useShowProfileQrOnTilt";
 import type { ContactRowLike, ContactsGuideKey } from "../types/appTypes";
 
 export interface MainSwipeRouteProps {
@@ -36,7 +37,9 @@ export interface MainSwipeRouteProps {
   mainSwipeProgress: number;
   mainSwipeRef: React.RefObject<HTMLDivElement | null>;
   NO_GROUP_FILTER: string;
+  closeProfileQr: () => void;
   openNewContactPage: () => void;
+  openProfileQr: () => void;
   openScan: () => void;
   openWalletScan: () => void;
   otherContactsLabel: string;
@@ -89,7 +92,9 @@ export const MainSwipeContent = (): React.ReactElement => {
     mainSwipeProgress,
     mainSwipeRef,
     NO_GROUP_FILTER,
+    closeProfileQr,
     openNewContactPage,
+    openProfileQr,
     openScan,
     openWalletScan,
     otherContactsLabel,
@@ -107,6 +112,13 @@ export const MainSwipeContent = (): React.ReactElement => {
     t,
     visibleContacts,
   } = mainSwipeProps;
+
+  useShowProfileQrOnTilt({
+    enabled:
+      (route.kind === "contacts" || route.kind === "wallet") && !scanIsOpen,
+    onHideProfileQr: closeProfileQr,
+    onShowProfileQr: openProfileQr,
+  });
 
   return (
     <>
