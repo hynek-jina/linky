@@ -4177,6 +4177,7 @@ export const useAppShellComposition = () => {
       cashuOwnerId,
       cashuTokensAll,
       cashuTokensWithMeta,
+      cashuVisibleOwnerIds,
       contacts,
       defaultMintUrl,
       formatDisplayedAmountParts,
@@ -7793,6 +7794,10 @@ export const useAppShellComposition = () => {
     effectiveMyLightningAddress,
     effectiveProfileName,
     effectiveProfilePicture,
+    evoluAppOwnerId: appOwnerId ? String(appOwnerId) : null,
+    evoluTransactionsVisibleOwnerIds: transactionsVisibleOwnerIds.map(
+      (ownerId) => String(ownerId),
+    ),
     formatDisplayedAmountParts,
     formatDisplayedAmountText,
     isProfileEditing,

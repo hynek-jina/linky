@@ -198,8 +198,14 @@ const isPaymentRequestTransaction = (item: TransactionItem): boolean => {
 };
 
 export function TransactionsPage(): React.ReactElement {
-  const { formatDisplayedAmountText, lang, nostrPictureByNpub, t } =
-    useAppShellCore();
+  const {
+    evoluAppOwnerId,
+    evoluTransactionsVisibleOwnerIds,
+    formatDisplayedAmountText,
+    lang,
+    nostrPictureByNpub,
+    t,
+  } = useAppShellCore();
   const { copyText } = useAppShellActions();
   const [expandedById, setExpandedById] = React.useState<
     Record<string, boolean>
@@ -265,8 +271,21 @@ export function TransactionsPage(): React.ReactElement {
 
   const { fulfilledRequestIds, transactions } = React.useMemo(() => {
     const items: TransactionItem[] = [];
+    const visibleOwnerIds = new Set(
+      [evoluAppOwnerId, ...evoluTransactionsVisibleOwnerIds]
+        .map((ownerId) => readText(ownerId))
+        .filter((ownerId): ownerId is string => ownerId !== null),
+    );
     for (const row of transactionRows) {
       if (typeof row !== "object" || row === null) continue;
+      const ownerId = readText("ownerId" in row ? row.ownerId : null);
+      if (
+        ownerId &&
+        visibleOwnerIds.size > 0 &&
+        !visibleOwnerIds.has(ownerId)
+      ) {
+        continue;
+      }
       const id = readText("id" in row ? row.id : null);
       const createdAtSec = readPositiveInt(
         "createdAtSec" in row ? row.createdAtSec : null,
@@ -394,7 +413,7 @@ export function TransactionsPage(): React.ReactElement {
       fulfilledRequestIds: new Set(fulfillmentByRequestId.keys()),
       transactions: visibleTransactions,
     };
-  }, [transactionRows]);
+  }, [evoluAppOwnerId, evoluTransactionsVisibleOwnerIds, transactionRows]);
 
   const declinedRequestIds = React.useMemo(() => {
     const requestIdByRumorId = new Map<string, string>();

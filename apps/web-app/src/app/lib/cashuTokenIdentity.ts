@@ -19,7 +19,7 @@ export const readCashuTokenAliases = (
   return Array.from(aliases);
 };
 
-const isDeletedCashuRow = (row: CashuTokenRowLike): boolean => {
+export const isDeletedCashuRow = (row: CashuTokenRowLike): boolean => {
   const normalized = String(row.isDeleted ?? "")
     .trim()
     .toLowerCase();

@@ -950,12 +950,12 @@ export const useEvoluContactsOwnerRotation = ({
     if (
       !hasCounterValue(
         EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
-        contactsOwnerIndex,
+        cashuOwnerIndex,
       )
     ) {
       setCounterValue(
         EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
-        contactsOwnerIndex,
+        cashuOwnerIndex,
         cashuOwnerWriteCount,
       );
     }
@@ -987,6 +987,7 @@ export const useEvoluContactsOwnerRotation = ({
     }
   }, [
     cashuOwnerWriteCount,
+    cashuOwnerIndex,
     contactsOwnerIndex,
     contactsOwnerWriteCount,
     isSeedLogin,
@@ -1250,6 +1251,27 @@ export const useEvoluContactsOwnerRotation = ({
     transactionsOwnerIndex,
   ]);
 
+  React.useEffect(() => {
+    if (!isSeedLogin) return;
+    if (!fixedOwnerSyncData) return;
+    if (!ownerSyncData) return;
+    if (rotationSnapshots.cashu) return;
+    if (cashuOwnerIndex <= 0) return;
+    if (cashuOwnerWriteCount > 0) return;
+
+    setStoredIndex(EVOLU_CASHU_OWNER_INDEX_STORAGE_KEY, 0);
+    setCounterValue(EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY, 0, 0);
+    setStoredTimestampMs(EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY, 0);
+    setCashuOwnerIndex(0);
+  }, [
+    cashuOwnerIndex,
+    cashuOwnerWriteCount,
+    fixedOwnerSyncData,
+    isSeedLogin,
+    ownerSyncData,
+    rotationSnapshots.cashu,
+  ]);
+
   // Bootstrap or upgrade the active scope snapshots in ownerMeta.
   //
   // Users who joined before rotation pointers existed (or who never crossed
@@ -1298,17 +1320,23 @@ export const useEvoluContactsOwnerRotation = ({
     const shouldWriteSnapshot = (
       snapshot: RotationSnapshot | null,
       currentIndex: number,
+      currentWriteCount: number,
     ): boolean => {
       if (snapshot) {
         return needsStructuredSnapshotUpgrade(snapshot, currentIndex);
       }
-      return allowMissingOwnerMetaBootstrap && currentIndex > 0;
+      return (
+        allowMissingOwnerMetaBootstrap &&
+        currentIndex > 0 &&
+        currentWriteCount > 0
+      );
     };
 
     if (
       shouldWriteSnapshot(
         readSnapshotForScope("cashu"),
         resolvedCashuOwnerIndex,
+        cashuOwnerWriteCount,
       )
     ) {
       upsertOwnerMetaSnapshot(upsert, metaOwnerId, "cashu", {
@@ -1323,6 +1351,7 @@ export const useEvoluContactsOwnerRotation = ({
       shouldWriteSnapshot(
         readSnapshotForScope("contacts"),
         resolvedContactsOwnerIndex,
+        contactsOwnerWriteCount,
       )
     ) {
       upsertOwnerMetaSnapshot(upsert, metaOwnerId, "contacts", {
@@ -1337,6 +1366,7 @@ export const useEvoluContactsOwnerRotation = ({
       shouldWriteSnapshot(
         readSnapshotForScope("messages"),
         resolvedMessagesOwnerIndex,
+        messagesOwnerWriteCount,
       )
     ) {
       upsertOwnerMetaSnapshot(upsert, metaOwnerId, "messages", {
@@ -1351,6 +1381,7 @@ export const useEvoluContactsOwnerRotation = ({
       shouldWriteSnapshot(
         readSnapshotForScope("transactions"),
         resolvedTransactionsOwnerIndex,
+        transactionsOwnerWriteCount,
       )
     ) {
       upsertOwnerMetaSnapshot(upsert, metaOwnerId, "transactions", {
