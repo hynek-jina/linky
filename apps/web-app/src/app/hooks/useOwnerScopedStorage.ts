@@ -102,8 +102,14 @@ const buildTransactionInsertPayload = (args: {
     typeof args.event.amount === "number" && args.event.amount > 0
       ? Math.floor(args.event.amount)
       : null;
+  // `transaction.fee` is `nullOr(PositiveInt)`, so 0 is NOT valid. A `fee: 0`
+  // payload fails schema validation, and because Evolu batches every mutation
+  // issued in the same microtask into one transaction, a single invalid
+  // mutation silently drops the whole batch — including the cashu token
+  // insert/delete issued alongside it (e.g. Lightning melt with feePaid === 0).
+  // Treat a zero fee as "no fee" and omit it.
   const fee =
-    typeof args.event.fee === "number" && args.event.fee >= 0
+    typeof args.event.fee === "number" && args.event.fee > 0
       ? Math.floor(args.event.fee)
       : null;
   const mint = String(args.event.mint ?? "").trim();
