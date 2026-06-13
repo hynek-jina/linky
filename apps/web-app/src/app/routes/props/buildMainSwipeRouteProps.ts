@@ -23,6 +23,7 @@ interface BuildMainSwipeRoutePropsParams {
   mainSwipeRef: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeRef"];
   NO_GROUP_FILTER: MainSwipeRoutesProps["mainSwipeProps"]["NO_GROUP_FILTER"];
   openNewContactPage: MainSwipeRoutesProps["mainSwipeProps"]["openNewContactPage"];
+  openProfileQr: MainSwipeRoutesProps["mainSwipeProps"]["openProfileQr"];
   openScan: MainSwipeRoutesProps["mainSwipeProps"]["openScan"];
   openWalletScan: MainSwipeRoutesProps["mainSwipeProps"]["openWalletScan"];
   otherContactsLabel: MainSwipeRoutesProps["mainSwipeProps"]["otherContactsLabel"];
@@ -64,6 +65,7 @@ export const buildMainSwipeRouteProps = ({
   mainSwipeRef,
   NO_GROUP_FILTER,
   openNewContactPage,
+  openProfileQr,
   openScan,
   openWalletScan,
   otherContactsLabel,
@@ -105,6 +107,7 @@ export const buildMainSwipeRouteProps = ({
       mainSwipeRef,
       NO_GROUP_FILTER,
       openNewContactPage,
+      openProfileQr,
       openScan,
       openWalletScan,
       otherContactsLabel,

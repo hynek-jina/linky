@@ -3243,7 +3243,7 @@ button.icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 16px 40px rgba(45, 212, 191, 0.35);
+  box-shadow: none;
 }
 
 .contacts-fab-svgIcon {
@@ -3270,7 +3270,7 @@ button.icon {
 
 .contacts-fab:hover {
   transform: translateY(-1px);
-  box-shadow: 0 20px 48px rgba(13, 148, 136, 0.4);
+  box-shadow: none;
 }
 
 .contacts-fab.is-disabled {

@@ -7621,6 +7621,7 @@ export const useAppShellComposition = () => {
       NO_GROUP_FILTER,
       canAddContact,
       openNewContactPage,
+      openProfileQr,
       openScan,
       openWalletScan,
       otherContactsLabel,
