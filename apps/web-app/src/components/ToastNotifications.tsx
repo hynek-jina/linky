@@ -1,30 +1,24 @@
 import React from "react";
+import type { Toast } from "../hooks/useToasts";
 import type { DisplayAmountParts } from "../utils/displayAmounts";
-
-type Toast = {
-  id: string;
-  message: string;
-};
 
 type RecentlyReceivedToken = {
   token: string;
   amount: number | null;
 } | null;
 
-type ToastNotificationsProps = {
+interface ToastNotificationsProps {
+  dismissToast: (id: string) => void;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
-  pushToast: (message: string) => void;
   recentlyReceivedToken: RecentlyReceivedToken;
-  setRecentlyReceivedToken: (token: RecentlyReceivedToken) => void;
   t: (key: string) => string;
   toasts: Toast[];
-};
+}
 
 export const ToastNotifications: React.FC<ToastNotificationsProps> = ({
+  dismissToast,
   formatDisplayedAmountParts,
-  pushToast,
   recentlyReceivedToken,
-  setRecentlyReceivedToken,
   t,
   toasts,
 }) => {
@@ -32,25 +26,7 @@ export const ToastNotifications: React.FC<ToastNotificationsProps> = ({
     <>
       {recentlyReceivedToken?.token ? (
         <div className="toast-container" aria-live="polite">
-          <div
-            className="toast"
-            role="status"
-            onClick={() => {
-              const token = String(recentlyReceivedToken.token ?? "").trim();
-              if (!token) return;
-              void (async () => {
-                try {
-                  await navigator.clipboard?.writeText(token);
-                  pushToast(t("copiedToClipboard"));
-                  setRecentlyReceivedToken(null);
-                } catch {
-                  pushToast(t("copyFailed"));
-                }
-              })();
-            }}
-            style={{ cursor: "pointer" }}
-            title={t("copyTokenTitle")}
-          >
+          <div className="toast" role="status">
             {(() => {
               const amount =
                 typeof recentlyReceivedToken.amount === "number"
@@ -74,9 +50,22 @@ export const ToastNotifications: React.FC<ToastNotificationsProps> = ({
       {toasts.length ? (
         <div className="toast-container" aria-live="polite">
           {toasts.map((toast) => (
-            <div key={toast.id} className="toast">
-              {toast.message}
-            </div>
+            <React.Fragment key={toast.id}>
+              {toast.onClick ? (
+                <button
+                  className="toast toast-button"
+                  type="button"
+                  onClick={() => {
+                    dismissToast(toast.id);
+                    toast.onClick?.();
+                  }}
+                >
+                  {toast.message}
+                </button>
+              ) : (
+                <div className="toast">{toast.message}</div>
+              )}
+            </React.Fragment>
           ))}
         </div>
       ) : null}

@@ -4037,6 +4037,13 @@ button.tag-button {
   line-height: 1.2;
 }
 
+.toast-button {
+  appearance: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
 .paid-overlay {
   position: fixed;
   inset: 0;

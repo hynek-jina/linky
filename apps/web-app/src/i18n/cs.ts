@@ -737,8 +737,7 @@ export const cs = {
   // Error and UI strings
   evoluWipeStorageFailed:
     "Chybí uložený mnemonic (nelze vyčistit Evolu storage).",
-  copyTokenTitle: "Klikni pro zkopírování tokenu",
-  tokenReceivedClickToCopy:
-    "Přijato {amount} {unit}. Klikni pro zkopírování tokenu.",
-  tokenReceived: "Token přijat. Klikni pro zkopírování tokenu.",
+  copyTokenTitle: "Token přijat",
+  tokenReceivedClickToCopy: "Přijato {amount} {unit}.",
+  tokenReceived: "Token přijat.",
 } as const;

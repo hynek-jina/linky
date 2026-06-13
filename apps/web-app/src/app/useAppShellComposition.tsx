@@ -1035,7 +1035,7 @@ export const useAppShellComposition = () => {
   });
 
   const route = useRouting();
-  const { toasts, pushToast } = useToasts();
+  const { dismissToast, toasts, pushToast } = useToasts();
 
   const evoluServers = useEvoluServersManager();
   const evoluServerUrls = evoluServers.configuredUrls;
@@ -7138,6 +7138,18 @@ export const useAppShellComposition = () => {
     [cashuTokensAllFiltered],
   );
 
+  const openInboxMessageToast = React.useCallback(
+    (params: { contactId: string; messageId?: string }) => {
+      const contactId = String(params.contactId ?? "").trim();
+      if (!contactId) return;
+      const messageId = String(params.messageId ?? "").trim();
+
+      navigateTo({ route: "chat", id: contactId });
+      triggerChatScrollToBottom(messageId || undefined);
+    },
+    [triggerChatScrollToBottom],
+  );
+
   useInboxNotificationsSync({
     appendLocalNostrMessage,
     appendLocalNostrReaction,
@@ -7150,6 +7162,7 @@ export const useAppShellComposition = () => {
     nostrMessagesRecent,
     nostrReactionWrapIdsRef,
     nostrReactionsLatestRef,
+    onOpenInboxMessageToast: openInboxMessageToast,
     pushToast,
     route,
     setContactAttentionById,
@@ -7879,6 +7892,7 @@ export const useAppShellComposition = () => {
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNsec,
+    dismissToast,
     displayUnit,
     formatDisplayedAmountParts,
     formatDisplayedAmountText,

@@ -199,7 +199,7 @@ export const useNpubCashClaim = ({
           );
           ensureCashuTokenPersisted(acceptedToken);
 
-          // Minimal receive-only banner: click to copy token.
+          // Minimal receive-only banner shown after a token is accepted.
           if (recentlyReceivedTokenTimerRef.current !== null) {
             try {
               window.clearTimeout(recentlyReceivedTokenTimerRef.current);
