@@ -26,6 +26,8 @@ import {
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./chatNostrProtocol";
 import { readUnknownPubkeyHex } from "./contactIdentity";
+import type { KnownNostrMessageIdentityIndex } from "./messageHelpers";
+import { hasKnownNostrMessageIdentity } from "./messageHelpers";
 
 const normalizeText = (value: unknown): string => String(value ?? "").trim();
 
@@ -36,6 +38,7 @@ interface UseChatNostrSyncEffectParams {
   chatMessagesLatestRef: React.MutableRefObject<readonly ChatMessageRowLike[]>;
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   currentNsec: string | null;
+  knownNostrMessageIdentityIndex: KnownNostrMessageIdentityIndex;
   logPayStep: (step: string, data?: PaymentLogData) => void;
   nostrMessageWrapIdsRef: React.MutableRefObject<Set<string>>;
   nostrReactionWrapIdsRef: React.MutableRefObject<Set<string>>;
@@ -54,6 +57,7 @@ export const useChatNostrSyncEffect = ({
   chatMessagesLatestRef,
   chatSeenWrapIdsRef,
   currentNsec,
+  knownNostrMessageIdentityIndex,
   logPayStep,
   nostrMessageWrapIdsRef,
   nostrReactionWrapIdsRef,
@@ -129,6 +133,14 @@ export const useChatNostrSyncEffect = ({
             const wrapId = String(wrap?.id ?? "");
             if (!wrapId) return;
             if (existingWrapIds.has(wrapId)) return;
+            if (
+              hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
+                wrapId,
+              })
+            ) {
+              existingWrapIds.add(wrapId);
+              return;
+            }
             existingWrapIds.add(wrapId);
 
             const inner = unwrapEvent(wrap, privBytes) as NostrToolsEvent;
@@ -205,12 +217,24 @@ export const useChatNostrSyncEffect = ({
                 : taggedPeerPub === contactPubHex
                   ? contactPubHex
                   : innerPub;
+              const messageDirection = isIncoming ? "in" : "out";
+
+              if (
+                hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
+                  contactId: String(selectedContact.id),
+                  direction: messageDirection,
+                  ...(tagClientId ? { clientId: tagClientId } : {}),
+                  ...(rumorId ? { rumorId } : {}),
+                  wrapId,
+                })
+              ) {
+                return;
+              }
 
               if (editedFromId) {
-                const direction = isIncoming ? "in" : "out";
                 const messages = chatMessagesLatestRef.current;
                 const target = messages.find((message) => {
-                  if (String(message.direction ?? "") !== direction)
+                  if (String(message.direction ?? "") !== messageDirection)
                     return false;
                   return (
                     String(message.rumorId ?? "").trim() === editedFromId ||
@@ -240,10 +264,9 @@ export const useChatNostrSyncEffect = ({
               }
 
               if (!editedFromId && rumorId) {
-                const direction = isIncoming ? "in" : "out";
                 const messages = chatMessagesLatestRef.current;
                 const existingEditedVersion = messages.find((message) => {
-                  if (normalizeText(message.direction) !== direction)
+                  if (normalizeText(message.direction) !== messageDirection)
                     return false;
                   return normalizeText(message.editedFromId) === rumorId;
                 });
@@ -311,8 +334,7 @@ export const useChatNostrSyncEffect = ({
 
               const existingMessage = chatMessagesLatestRef.current.find(
                 (message) => {
-                  const direction = isIncoming ? "in" : "out";
-                  if (String(message.direction ?? "") !== direction)
+                  if (String(message.direction ?? "") !== messageDirection)
                     return false;
                   if (
                     rumorId &&
@@ -513,6 +535,7 @@ export const useChatNostrSyncEffect = ({
     chatMessagesLatestRef,
     chatSeenWrapIdsRef,
     currentNsec,
+    knownNostrMessageIdentityIndex,
     logPayStep,
     nostrMessageWrapIdsRef,
     nostrReactionWrapIdsRef,

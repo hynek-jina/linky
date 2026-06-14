@@ -2,6 +2,20 @@ import type { LocalNostrMessage } from "../../types/appTypes";
 
 const normalizeText = (value: unknown): string => String(value ?? "").trim();
 
+export interface KnownNostrMessageIdentityIndex {
+  clientIds: ReadonlySet<string>;
+  rumorKeys: ReadonlySet<string>;
+  wrapIds: ReadonlySet<string>;
+}
+
+interface NostrMessageIdentityInput {
+  clientId?: unknown;
+  contactId?: unknown;
+  direction?: unknown;
+  rumorId?: unknown;
+  wrapId?: unknown;
+}
+
 export const getLocalNostrMessageRumorKey = (
   message: Pick<LocalNostrMessage, "contactId" | "direction" | "rumorId">,
 ): string => {
@@ -13,6 +27,58 @@ export const getLocalNostrMessageRumorKey = (
   if (!contactId || (direction !== "in" && direction !== "out")) return "";
 
   return `${contactId}|${direction}|${rumorId}`;
+};
+
+const getNostrMessageRumorKeyFromInput = (
+  message: NostrMessageIdentityInput,
+): string => {
+  const rumorId = normalizeText(message.rumorId);
+  if (!rumorId) return "";
+
+  const contactId = normalizeText(message.contactId);
+  const direction = normalizeText(message.direction);
+  if (!contactId || (direction !== "in" && direction !== "out")) return "";
+
+  return `${contactId}|${direction}|${rumorId}`;
+};
+
+export const buildKnownNostrMessageIdentityIndex = (
+  messages: readonly LocalNostrMessage[],
+): KnownNostrMessageIdentityIndex => {
+  const wrapIds = new Set<string>();
+  const clientIds = new Set<string>();
+  const rumorKeys = new Set<string>();
+
+  for (const message of messages) {
+    if (normalizeText(message.status) === "pending") continue;
+
+    const wrapId = normalizeText(message.wrapId);
+    if (wrapId) wrapIds.add(wrapId);
+
+    const clientId = normalizeText(message.clientId);
+    if (clientId) clientIds.add(clientId);
+
+    const rumorKey = getLocalNostrMessageRumorKey(message);
+    if (rumorKey) rumorKeys.add(rumorKey);
+  }
+
+  return { clientIds, rumorKeys, wrapIds };
+};
+
+export const hasKnownNostrMessageIdentity = (
+  index: KnownNostrMessageIdentityIndex,
+  message: NostrMessageIdentityInput,
+): boolean => {
+  const wrapId = normalizeText(message.wrapId);
+  if (wrapId && index.wrapIds.has(wrapId)) return true;
+
+  const clientId = normalizeText(message.clientId);
+  if (clientId && index.clientIds.has(clientId)) return true;
+
+  const rumorKey = getNostrMessageRumorKeyFromInput(message);
+  if (rumorKey && index.rumorKeys.has(rumorKey)) return true;
+
+  return false;
 };
 
 const pickPreferredMessage = (

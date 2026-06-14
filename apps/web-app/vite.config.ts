@@ -188,12 +188,43 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ["@evolu/react-web"],
+    // App is intentionally imported lazily from main.tsx so boot diagnostics
+    // can catch module-load failures. Vite's dep scanner does not eagerly walk
+    // that dynamic import, so include app/runtime deps here to avoid mid-boot
+    // re-optimization and 504 "Outdated Optimize Dep" responses.
     include: [
+      "@capacitor/clipboard",
+      "@capacitor/core",
+      "@capacitor/push-notifications",
+      "@capacitor/share",
+      "@cashu/cashu-ts",
+      "@evolu/common",
+      "@evolu/react",
+      "@noble/hashes/hmac.js",
+      "@noble/hashes/sha2.js",
+      "@scure/base",
+      "@scure/bip32",
+      "@scure/bip39",
+      "@scure/bip39/wordlists/english",
+      "buffer",
+      "cbor-x",
+      "effect",
+      "jsqr",
+      "nostr-tools",
+      "nostr-tools/nip17",
+      "nostr-tools/nip44",
+      "nostr-tools/nip59",
+      "qrcode",
       "react",
       "react-dom",
       "react-dom/client",
       "react/jsx-runtime",
       "react/jsx-dev-runtime",
+      "slip39-ts",
+      "workbox-precaching",
+      "workbox-routing",
+      "workbox-strategies",
+      "workbox-window",
     ],
   },
   resolve: {

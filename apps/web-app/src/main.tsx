@@ -332,6 +332,98 @@ const isBenignFetchAbortError = (value: unknown): boolean => {
 
 let appHasMounted = false;
 
+const DYNAMIC_IMPORT_FETCH_RELOAD_KEY =
+  "linky.boot.dynamic_import_fetch_reload_at.v2";
+const DYNAMIC_IMPORT_FETCH_RETRY_COOLDOWN_MS = 10_000;
+
+const isLocalDevOrigin = (): boolean => {
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+};
+
+const isDynamicImportFetchError = (value: unknown): boolean => {
+  const message = getErrorMessage(value)?.toLowerCase() ?? "";
+  return (
+    message.includes("failed to fetch dynamically imported module") ||
+    message.includes("error loading dynamically imported module")
+  );
+};
+
+const hasRecentlyRetriedDynamicImportFetch = (): boolean => {
+  try {
+    const raw = window.sessionStorage.getItem(DYNAMIC_IMPORT_FETCH_RELOAD_KEY);
+    if (!raw) return false;
+
+    const lastRetryAt = Number(raw);
+    return (
+      Number.isFinite(lastRetryAt) &&
+      Date.now() - lastRetryAt < DYNAMIC_IMPORT_FETCH_RETRY_COOLDOWN_MS
+    );
+  } catch {
+    return false;
+  }
+};
+
+const markDynamicImportFetchRetry = () => {
+  try {
+    window.sessionStorage.setItem(
+      DYNAMIC_IMPORT_FETCH_RELOAD_KEY,
+      String(Date.now()),
+    );
+  } catch {
+    // ignore storage failures; the reload is still useful in dev
+  }
+};
+
+const clearDynamicImportFetchRetry = () => {
+  try {
+    window.sessionStorage.removeItem(DYNAMIC_IMPORT_FETCH_RELOAD_KEY);
+  } catch {
+    // ignore
+  }
+};
+
+const recoverFromLocalDynamicImportFetch = async (
+  stage: string,
+  error: unknown,
+): Promise<boolean> => {
+  if (
+    stage !== "import-app" ||
+    !isLocalDevOrigin() ||
+    !isDynamicImportFetchError(error) ||
+    hasRecentlyRetriedDynamicImportFetch()
+  ) {
+    return false;
+  }
+
+  markDynamicImportFetchRetry();
+  console.warn(
+    "[linky][boot] retrying after dev dynamic import fetch failure",
+    {
+      href: window.location.href,
+    },
+  );
+
+  if ("serviceWorker" in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(
+      registrations
+        .filter((registration) => {
+          return new URL(registration.scope).origin === window.location.origin;
+        })
+        .map((registration) => registration.unregister()),
+    );
+  }
+
+  if ("caches" in globalThis) {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
+  }
+
+  window.location.reload();
+  return true;
+};
+
 const applyEvoluWebCompatPolyfills = () => {
   // Some iOS/WebKit environments (notably private browsing) may lack
   // `navigator.locks` and/or `BroadcastChannel`, which Evolu's shared worker
@@ -528,9 +620,11 @@ const bootstrap = async () => {
     console.log("[linky][boot] rendered");
     window.clearTimeout(stuckTimer);
     appHasMounted = true;
+    clearDynamicImportFetchRetry();
   } catch (error) {
     window.clearTimeout(stuckTimer);
     console.error(`Boot failed at stage ${stage}:`, error);
+    if (await recoverFromLocalDynamicImportFetch(stage, error)) return;
     const wrapped =
       error instanceof Error
         ? Object.assign(error, {
