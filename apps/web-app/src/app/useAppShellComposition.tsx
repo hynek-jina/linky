@@ -3580,6 +3580,10 @@ export const useAppShellComposition = () => {
       const unknownPubkeyHex =
         candidatePubkeyFromThread ?? candidatePubkeyFromLast ?? null;
       if (unknownPubkeyHex && blockedPubkeys.has(unknownPubkeyHex)) continue;
+      const ownPubkey = normalizePubkeyHex(chatOwnPubkeyHex);
+      if (unknownPubkeyHex && ownPubkey && unknownPubkeyHex === ownPubkey) {
+        continue;
+      }
 
       const unknownNpub = encodeUnknownNpub(unknownPubkeyHex);
       const bestName = unknownNpub
@@ -3604,6 +3608,38 @@ export const useAppShellComposition = () => {
     lastMessageByContactId,
     nostrMessagesLocal,
     unknownNameByNpub,
+  ]);
+
+  React.useEffect(() => {
+    for (const unknownContact of unknownContacts) {
+      const unknownContactId = String(unknownContact.id ?? "").trim();
+      const unknownNpub = normalizeNpubIdentifier(unknownContact.npub);
+      if (!unknownContactId || !unknownNpub) continue;
+
+      const knownContact = contacts.find((contact) => {
+        const knownContactId = String(contact.id ?? "").trim();
+        if (!knownContactId || knownContactId === unknownContactId) {
+          return false;
+        }
+        return normalizeNpubIdentifier(contact.npub) === unknownNpub;
+      });
+
+      const knownContactId = String(knownContact?.id ?? "").trim();
+      if (!knownContactId) continue;
+
+      reassignLocalNostrMessagesContactId(unknownContactId, knownContactId);
+      setContactAttentionById((prev) => {
+        if (prev[unknownContactId] === undefined) return prev;
+        const next = { ...prev };
+        delete next[unknownContactId];
+        return next;
+      });
+    }
+  }, [
+    contacts,
+    reassignLocalNostrMessagesContactId,
+    setContactAttentionById,
+    unknownContacts,
   ]);
 
   const unknownContactNpubs = React.useMemo(() => {

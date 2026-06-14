@@ -384,7 +384,7 @@ export const useRestoreMissingTokens = ({
                     return state === "UNSPENT";
                   });
                 } catch {
-                  return proofs;
+                  return [];
                 }
               };
 

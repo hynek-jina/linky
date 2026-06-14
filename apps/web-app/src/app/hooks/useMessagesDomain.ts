@@ -82,6 +82,14 @@ const isSqliteTrueish = (value: unknown): boolean => {
   return normalized === "true";
 };
 
+const resolveStoredOwnerId = (row: Record<string, unknown>): OwnerId | null => {
+  if (!("ownerId" in row)) return null;
+  const ownerId = toTrimmedText(row.ownerId);
+  if (!ownerId) return null;
+  const parsed = Evolu.OwnerId.fromUnknown(ownerId);
+  return parsed.ok ? parsed.value : null;
+};
+
 const parseCreatedAtSec = (value: unknown): number =>
   toPositiveInt(value, Math.ceil(Date.now() / 1000));
 
@@ -350,6 +358,7 @@ const overlayMessagesKeyForOwner = (ownerId: string): string =>
 
 interface NostrMessageUpdatePayload {
   clientId?: string | null;
+  contactId?: string;
   content?: string;
   editedAtSec?: number | null;
   editedFromId?: string | null;
@@ -635,28 +644,85 @@ export const useMessagesDomain = ({
     [insert, messagesOwnerId, recordMessagesOwnerWrite],
   );
 
+  const getVisibleRowOwnerIdsById = React.useCallback(
+    (rows: readonly Record<string, unknown>[], id: unknown): OwnerId[] => {
+      const normalizedId = toTrimmedText(id);
+      if (!normalizedId) return [];
+
+      const ownerIds: OwnerId[] = [];
+      const seenOwnerIds = new Set<string>();
+      for (const row of rows) {
+        if (!isVisibleMessageOwner(row)) continue;
+        if (toTrimmedText(row.id) !== normalizedId) continue;
+
+        const ownerId = resolveStoredOwnerId(row);
+        if (!ownerId) continue;
+
+        const ownerIdText = String(ownerId);
+        if (seenOwnerIds.has(ownerIdText)) continue;
+        seenOwnerIds.add(ownerIdText);
+        ownerIds.push(ownerId);
+      }
+
+      return ownerIds;
+    },
+    [isVisibleMessageOwner],
+  );
+
   const updateNostrMessage = React.useCallback(
     (payload: NostrMessageUpdatePayload) => {
-      if (messagesOwnerId) {
-        update("nostrMessage", payload, { ownerId: messagesOwnerId });
-      } else {
-        update("nostrMessage", payload);
+      const rowOwnerIds = getVisibleRowOwnerIdsById(
+        nostrMessageRows,
+        payload.id,
+      );
+      if (rowOwnerIds.length > 0) {
+        for (const ownerId of rowOwnerIds) {
+          update("nostrMessage", payload, { ownerId });
+        }
+        recordMessagesOwnerWrite(rowOwnerIds.length);
+        return;
       }
+
+      if (messagesOwnerId)
+        update("nostrMessage", payload, { ownerId: messagesOwnerId });
+      else update("nostrMessage", payload);
       recordMessagesOwnerWrite();
     },
-    [messagesOwnerId, recordMessagesOwnerWrite, update],
+    [
+      getVisibleRowOwnerIdsById,
+      messagesOwnerId,
+      nostrMessageRows,
+      recordMessagesOwnerWrite,
+      update,
+    ],
   );
 
   const updateNostrReaction = React.useCallback(
     (payload: NostrReactionUpdatePayload) => {
-      if (messagesOwnerId) {
-        update("nostrReaction", payload, { ownerId: messagesOwnerId });
-      } else {
-        update("nostrReaction", payload);
+      const rowOwnerIds = getVisibleRowOwnerIdsById(
+        nostrReactionRows,
+        payload.id,
+      );
+      if (rowOwnerIds.length > 0) {
+        for (const ownerId of rowOwnerIds) {
+          update("nostrReaction", payload, { ownerId });
+        }
+        recordMessagesOwnerWrite(rowOwnerIds.length);
+        return;
       }
+
+      if (messagesOwnerId)
+        update("nostrReaction", payload, { ownerId: messagesOwnerId });
+      else update("nostrReaction", payload);
       recordMessagesOwnerWrite();
     },
-    [messagesOwnerId, recordMessagesOwnerWrite, update],
+    [
+      getVisibleRowOwnerIdsById,
+      messagesOwnerId,
+      nostrReactionRows,
+      recordMessagesOwnerWrite,
+      update,
+    ],
   );
 
   const [pendingPayments, setPendingPayments] = React.useState<
@@ -1360,8 +1426,21 @@ export const useMessagesDomain = ({
           : message,
       );
       persistOverlayMessages(nextOverlayMessages);
+
+      for (const row of nostrMessageRows) {
+        if (!isVisibleMessageOwner(row)) continue;
+        if (toTrimmedText(row.contactId) !== normalizedFrom) continue;
+        const id = toTrimmedText(row.id);
+        if (!id) continue;
+        updateNostrMessage({ id, contactId: normalizedTo });
+      }
     },
-    [persistOverlayMessages],
+    [
+      isVisibleMessageOwner,
+      nostrMessageRows,
+      persistOverlayMessages,
+      updateNostrMessage,
+    ],
   );
 
   const removeLocalNostrMessagesByContactId = React.useCallback(
@@ -1372,8 +1451,21 @@ export const useMessagesDomain = ({
         (message) => toTrimmedText(message.contactId) !== normalizedContactId,
       );
       persistOverlayMessages(nextOverlayMessages);
+
+      for (const row of nostrMessageRows) {
+        if (!isVisibleMessageOwner(row)) continue;
+        if (toTrimmedText(row.contactId) !== normalizedContactId) continue;
+        const id = toTrimmedText(row.id);
+        if (!id) continue;
+        updateNostrMessage({ id, isDeleted: Evolu.sqliteTrue });
+      }
     },
-    [persistOverlayMessages],
+    [
+      isVisibleMessageOwner,
+      nostrMessageRows,
+      persistOverlayMessages,
+      updateNostrMessage,
+    ],
   );
 
   const retentionPruneTimerRef = React.useRef<number | null>(null);
