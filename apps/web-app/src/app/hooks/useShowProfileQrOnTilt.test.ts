@@ -5,6 +5,9 @@ import {
   isMotionResetTilt,
   isProfileQrTilt,
   isResetTilt,
+  isScreenProfileQrTilt,
+  isScreenResetTilt,
+  normalizeScreenAngle,
 } from "./useShowProfileQrOnTilt";
 
 describe("profile QR tilt thresholds", () => {
@@ -33,5 +36,26 @@ describe("profile QR tilt thresholds", () => {
   it("resets motion after returning near calibrated gravity", () => {
     expect(isMotionResetTilt(-8.7, -9.8)).toBe(true);
     expect(isMotionResetTilt(-6, -9.8)).toBe(false);
+  });
+
+  it("opens when the browser reports upside-down portrait", () => {
+    expect(normalizeScreenAngle(-180)).toBe(180);
+    expect(isScreenProfileQrTilt({ angle: 180, type: null })).toBe(true);
+    expect(
+      isScreenProfileQrTilt({ angle: null, type: "portrait-secondary" }),
+    ).toBe(true);
+    expect(isScreenProfileQrTilt({ angle: 0, type: "portrait-primary" })).toBe(
+      false,
+    );
+  });
+
+  it("resets when the browser returns to primary portrait", () => {
+    expect(isScreenResetTilt({ angle: 0, type: null })).toBe(true);
+    expect(isScreenResetTilt({ angle: null, type: "portrait-primary" })).toBe(
+      true,
+    );
+    expect(isScreenResetTilt({ angle: 180, type: "portrait-secondary" })).toBe(
+      false,
+    );
   });
 });
