@@ -674,6 +674,8 @@ export const en = {
   paymentRequestStatusPaid: "Paid",
   paymentRequestStatusDeclined: "Declined",
   paymentRequestDeclinedMessage: "Payment request declined.",
+  paymentRequestUnknownContact:
+    "This payment request belongs to a Nostr contact you have not saved yet.",
   payTo: "Pay to",
   availablePrefix: "available:",
   promisedPrefix: "promised:",

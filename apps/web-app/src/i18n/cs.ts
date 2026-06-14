@@ -683,6 +683,8 @@ export const cs = {
   paymentRequestStatusPaid: "Zaplaceno",
   paymentRequestStatusDeclined: "Odmítnuto",
   paymentRequestDeclinedMessage: "Žádost o platbu byla odmítnuta.",
+  paymentRequestUnknownContact:
+    "Tato žádost o platbu patří Nostr kontaktu, který ještě nemáte uložený.",
   payTo: "Platba pro",
   availablePrefix: "dostupné:",
   promisedPrefix: "slíbeno:",

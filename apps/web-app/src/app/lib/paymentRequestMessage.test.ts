@@ -30,6 +30,7 @@ describe("paymentRequestMessage", () => {
     expect(parsed?.mintUrls).toEqual(["https://mint.example"]);
     expect(parsed?.requestId).toBe("request-1");
     expect(parsed?.transportNprofile).toBe(recipientNprofile);
+    expect(parsed?.transportPubkeyHex).toBe("f".repeat(64));
     expect(parsed?.unit).toBe("sat");
   });
 

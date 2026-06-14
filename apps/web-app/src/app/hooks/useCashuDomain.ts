@@ -4,6 +4,7 @@ import React from "react";
 import { parseCashuToken } from "../../cashu";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../utils/constants";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
+import { isCashuTokenErrorState } from "../lib/cashuTokenState";
 import type {
   CashuTokenRowLike,
   LoggedPaymentEventParams,
@@ -157,6 +158,7 @@ export const useCashuDomain = ({
       const current = cashuTokensAllRef.current;
       return current.some((row) => {
         if (row.isDeleted) return false;
+        if (isCashuTokenErrorState(row.state)) return false;
         return rowMatchesToken(row, raw);
       });
     },
@@ -170,7 +172,10 @@ export const useCashuDomain = ({
       if (isOptimisticallyKnownCashuToken(raw)) return true;
 
       const current = cashuTokensAllRef.current;
-      return current.some((row) => rowMatchesToken(row, raw));
+      return current.some((row) => {
+        if (isCashuTokenErrorState(row.state)) return false;
+        return rowMatchesToken(row, raw);
+      });
     },
     [isOptimisticallyKnownCashuToken, normalizeCashuTokenText, rowMatchesToken],
   );
