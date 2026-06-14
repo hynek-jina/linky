@@ -11,6 +11,7 @@ import {
   isLnurlWithdrawTarget,
   LnurlTagMismatchError,
 } from "../../lnurlPay";
+import { parseBip321Uri, pickBip321PayableLeg } from "../../utils/bip321";
 import { parseNativeDeepLinkUrl } from "../../utils/deepLinks";
 import {
   getLightningInvoicePreview,
@@ -81,7 +82,24 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       if (!raw) return;
 
       const parsedDeepLink = parseNativeDeepLinkUrl(raw);
-      const scanText = String(parsedDeepLink?.text ?? raw).trim();
+      let scanText = String(parsedDeepLink?.text ?? raw).trim();
+
+      // BIP 321 / BIP 21 — unified `bitcoin:` URI. The address part is
+      // onchain (Linky doesn't settle onchain) so we promote the best
+      // available off-chain leg (Cashu request > BOLT11 > LNURL > lightning
+      // address) into `scanText` and let the rest of the handler dispatch it
+      // through the existing flows. Unrecognized extension params (Ark,
+      // silent payments, BOLT12 `lno`) are ignored per spec.
+      const bip321 = parseBip321Uri(scanText);
+      if (bip321) {
+        const leg = pickBip321PayableLeg(bip321);
+        if (!leg) {
+          setStatus(t("scanUnsupportedBitcoinUri"));
+          closeScan();
+          return;
+        }
+        scanText = leg.value;
+      }
 
       const normalized = scanText
         .replace(/^nostr:/i, "")

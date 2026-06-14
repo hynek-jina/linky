@@ -1595,6 +1595,21 @@ button.settings-link:hover {
   gap: 14px;
 }
 
+.topup-invoice-mode-bar {
+  margin-bottom: 0;
+  width: 100%;
+}
+
+.topup-invoice-mode-tabs {
+  max-width: 100%;
+  gap: 4px;
+}
+
+.topup-invoice-mode-tabs .bottom-tab {
+  min-width: 0;
+  padding: 10px 12px;
+}
+
 .topup-invoice-qr-button {
   width: 100%;
   max-width: 320px;
@@ -3350,6 +3365,12 @@ button.icon {
 .bottom-tab.is-active {
   background: transparent;
   color: #042f2e;
+}
+
+.bottom-tab:disabled {
+  color: #475569;
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .bottom-tabs.no-indicator .bottom-tab.is-active {

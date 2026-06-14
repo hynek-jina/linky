@@ -299,6 +299,41 @@ const readObjectField = (value: unknown, field: string): unknown => {
   return Reflect.get(value, field);
 };
 
+type CashuProofPayload = Record<string, unknown> & {
+  C: string;
+  amount: number;
+  secret: string;
+};
+
+const isCashuProofPayload = (value: unknown): value is CashuProofPayload => {
+  if (typeof value !== "object" || value === null) return false;
+  return (
+    typeof Reflect.get(value, "amount") === "number" &&
+    typeof Reflect.get(value, "secret") === "string" &&
+    typeof Reflect.get(value, "C") === "string"
+  );
+};
+
+const readDecodedCashuProofs = (decodedToken: unknown): CashuProofPayload[] => {
+  const directProofs = readObjectField(decodedToken, "proofs");
+  if (Array.isArray(directProofs)) {
+    return directProofs.filter(isCashuProofPayload);
+  }
+
+  const tokenEntries = readObjectField(decodedToken, "token");
+  if (!Array.isArray(tokenEntries)) return [];
+
+  const proofs: CashuProofPayload[] = [];
+  for (const entry of tokenEntries) {
+    const entryProofs = readObjectField(entry, "proofs");
+    if (!Array.isArray(entryProofs)) continue;
+    for (const proof of entryProofs) {
+      if (isCashuProofPayload(proof)) proofs.push(proof);
+    }
+  }
+  return proofs;
+};
+
 const extractMentionedNpubs = (content: string): string[] => {
   const matches = String(content ?? "").match(INLINE_NPUB_PATTERN);
   if (!matches) return [];
@@ -1434,7 +1469,13 @@ export const useAppShellComposition = () => {
 
   const [topupAmount, setTopupAmount] = useState<string>("");
   const [topupInvoice, setTopupInvoice] = useState<string | null>(null);
+  const [topupInvoiceCashuRequest, setTopupInvoiceCashuRequest] = useState<
+    string | null
+  >(null);
   const [topupInvoiceQr, setTopupInvoiceQr] = useState<string | null>(null);
+  const [topupInvoiceQrPayload, setTopupInvoiceQrPayload] = useState<
+    string | null
+  >(null);
   const [topupInvoiceError, setTopupInvoiceError] = useState<string | null>(
     null,
   );
@@ -2027,6 +2068,21 @@ export const useAppShellComposition = () => {
     setPayAmount,
   });
 
+  const topupRecipientNprofile = React.useMemo(() => {
+    try {
+      const decoded = nip19.decode(currentNpub ?? "");
+      if (decoded.type !== "npub" || typeof decoded.data !== "string") {
+        return null;
+      }
+      return nip19.nprofileEncode({
+        pubkey: decoded.data,
+        relays: NOSTR_RELAYS,
+      });
+    } catch {
+      return null;
+    }
+  }, [currentNpub]);
+
   useTopupInvoiceQuoteEffects({
     defaultMintUrl,
     effectiveMyLightningAddress:
@@ -2038,17 +2094,22 @@ export const useAppShellComposition = () => {
     topupInvoice,
     topupInvoiceError,
     topupInvoiceIsBusy,
+    topupInvoiceCashuRequest,
     topupInvoicePaidHandledRef,
     topupInvoiceQr,
+    topupInvoiceQrPayload,
     topupInvoiceStartBalanceRef,
     topupMintQuote,
     topupPaidNavTimerRef,
     topupRefreshKey: myProfileName,
+    topupRecipientNprofile,
     setTopupAmount,
     setTopupInvoice,
+    setTopupInvoiceCashuRequest,
     setTopupInvoiceError,
     setTopupInvoiceIsBusy,
     setTopupInvoiceQr,
+    setTopupInvoiceQrPayload,
     setTopupMintQuote,
   });
 
@@ -3519,6 +3580,10 @@ export const useAppShellComposition = () => {
       const unknownPubkeyHex =
         candidatePubkeyFromThread ?? candidatePubkeyFromLast ?? null;
       if (unknownPubkeyHex && blockedPubkeys.has(unknownPubkeyHex)) continue;
+      const ownPubkey = normalizePubkeyHex(chatOwnPubkeyHex);
+      if (unknownPubkeyHex && ownPubkey && unknownPubkeyHex === ownPubkey) {
+        continue;
+      }
 
       const unknownNpub = encodeUnknownNpub(unknownPubkeyHex);
       const bestName = unknownNpub
@@ -3543,6 +3608,38 @@ export const useAppShellComposition = () => {
     lastMessageByContactId,
     nostrMessagesLocal,
     unknownNameByNpub,
+  ]);
+
+  React.useEffect(() => {
+    for (const unknownContact of unknownContacts) {
+      const unknownContactId = String(unknownContact.id ?? "").trim();
+      const unknownNpub = normalizeNpubIdentifier(unknownContact.npub);
+      if (!unknownContactId || !unknownNpub) continue;
+
+      const knownContact = contacts.find((contact) => {
+        const knownContactId = String(contact.id ?? "").trim();
+        if (!knownContactId || knownContactId === unknownContactId) {
+          return false;
+        }
+        return normalizeNpubIdentifier(contact.npub) === unknownNpub;
+      });
+
+      const knownContactId = String(knownContact?.id ?? "").trim();
+      if (!knownContactId) continue;
+
+      reassignLocalNostrMessagesContactId(unknownContactId, knownContactId);
+      setContactAttentionById((prev) => {
+        if (prev[unknownContactId] === undefined) return prev;
+        const next = { ...prev };
+        delete next[unknownContactId];
+        return next;
+      });
+    }
+  }, [
+    contacts,
+    reassignLocalNostrMessagesContactId,
+    setContactAttentionById,
+    unknownContacts,
   ]);
 
   const unknownContactNpubs = React.useMemo(() => {
@@ -4075,37 +4172,36 @@ export const useAppShellComposition = () => {
     [],
   );
 
-  const payContactWithCashuMessage = usePayContactWithCashuMessage<
-    (typeof contacts)[number]
-  >({
-    activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
-    appendLocalNostrMessage,
-    buildCashuMintCandidates,
-    cashuBalance,
-    cashuTokensAll,
-    cashuTokensWithMeta,
-    chatSeenWrapIdsRef,
-    currentNpub,
-    currentNsec,
-    defaultMintUrl,
-    enqueuePendingPayment,
-    formatDisplayedAmountParts,
-    insert,
-    logPayStep,
-    logPaymentEvent,
-    nostrMessagesLocal,
-    payWithCashuEnabled,
-    publishSingleWrappedWithRetry,
-    publishWrappedWithRetry,
-    pushToast,
-    resolveOwnerIdForWrite,
-    setContactsOnboardingHasPaid,
-    setStatus,
-    showPaidOverlay,
-    t,
-    update,
-    updateLocalNostrMessage,
-  });
+  const payContactWithCashuMessage =
+    usePayContactWithCashuMessage<ContactRowLike>({
+      activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
+      appendLocalNostrMessage,
+      buildCashuMintCandidates,
+      cashuBalance,
+      cashuTokensAll,
+      cashuTokensWithMeta,
+      chatSeenWrapIdsRef,
+      currentNpub,
+      currentNsec,
+      defaultMintUrl,
+      enqueuePendingPayment,
+      formatDisplayedAmountParts,
+      insert,
+      logPayStep,
+      logPaymentEvent,
+      nostrMessagesLocal,
+      payWithCashuEnabled,
+      publishSingleWrappedWithRetry,
+      publishWrappedWithRetry,
+      pushToast,
+      resolveOwnerIdForWrite,
+      setContactsOnboardingHasPaid,
+      setStatus,
+      showPaidOverlay,
+      t,
+      update,
+      updateLocalNostrMessage,
+    });
 
   useNostrPendingFlush({
     activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
@@ -4207,6 +4303,96 @@ export const useAppShellComposition = () => {
     [contacts],
   );
 
+  const ensureContactForCashuPaymentRequest = React.useCallback(
+    (requestInfo: CashuPaymentRequestMessageInfo): ContactRowLike | null => {
+      const existing = findContactForCashuPaymentRequest(requestInfo);
+      if (existing?.id) return existing;
+
+      const requestPubkeyHex = normalizePubkeyHex(
+        requestInfo.transportPubkeyHex,
+      );
+      if (!requestPubkeyHex) return null;
+
+      let npub: string | null = null;
+      try {
+        npub = nip19.npubEncode(requestPubkeyHex);
+      } catch {
+        return null;
+      }
+
+      const normalizedNpub = normalizeNpubIdentifier(npub);
+      if (!normalizedNpub) return null;
+
+      const duplicate = contacts.find(
+        (contact) => normalizeNpubIdentifier(contact.npub) === normalizedNpub,
+      );
+      if (duplicate?.id) return duplicate;
+
+      if (activeContactsOwnerContactCount >= MAX_CONTACTS_PER_OWNER) {
+        setStatus(
+          t("contactsLimitReached").replace(
+            "{max}",
+            String(MAX_CONTACTS_PER_OWNER),
+          ),
+        );
+        return null;
+      }
+
+      const defaultProfile = deriveDefaultProfile(normalizedNpub, lang);
+      const contactName = buildSavedContactName(
+        unknownNameByNpub[normalizedNpub] ?? defaultProfile.name,
+        normalizedNpub,
+      );
+      const payload = {
+        name: contactName as typeof Evolu.NonEmptyString1000.Type,
+        npub: normalizedNpub as typeof Evolu.NonEmptyString1000.Type,
+        lnAddress: null,
+        groupName: null,
+      };
+
+      const result = contactsOwnerId
+        ? (() => {
+            const scoped = insert("contact", payload, {
+              ownerId: contactsOwnerId,
+            });
+            if (scoped.ok) return scoped;
+            return insert("contact", payload);
+          })()
+        : insert("contact", payload);
+
+      if (!result.ok) {
+        setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
+        return null;
+      }
+
+      recordContactsOwnerWrite();
+      openScannedContactPendingNpubRef.current = normalizedNpub;
+
+      return {
+        id: result.value.id,
+        name: contactName,
+        npub: normalizedNpub,
+        lnAddress: null,
+        groupName: null,
+        ownerId: contactsOwnerId,
+      };
+    },
+    [
+      activeContactsOwnerContactCount,
+      buildSavedContactName,
+      contacts,
+      contactsOwnerId,
+      findContactForCashuPaymentRequest,
+      insert,
+      lang,
+      openScannedContactPendingNpubRef,
+      recordContactsOwnerWrite,
+      setStatus,
+      t,
+      unknownNameByNpub,
+    ],
+  );
+
   const findPreviousCashuPaymentRequestMessage = React.useCallback(
     (
       requestInfo: CashuPaymentRequestMessageInfo,
@@ -4256,12 +4442,360 @@ export const useAppShellComposition = () => {
     [chatMessages, nostrMessagesLocal, nostrMessagesRecent],
   );
 
+  const payCashuPaymentRequestViaPost = React.useCallback(
+    async (requestInfo: CashuPaymentRequestMessageInfo): Promise<boolean> => {
+      const postUrlRaw = String(requestInfo.transportPostUrl ?? "").trim();
+      if (!postUrlRaw) return false;
+
+      let postUrl: URL;
+      try {
+        postUrl = new URL(postUrlRaw);
+      } catch {
+        setStatus(t("paymentRequestUnknownContact"));
+        return false;
+      }
+
+      if (postUrl.protocol !== "https:" && postUrl.protocol !== "http:") {
+        setStatus(t("paymentRequestUnknownContact"));
+        return false;
+      }
+
+      if (cashuBalance < requestInfo.amount) {
+        setStatus(t("payInsufficient"));
+        return true;
+      }
+
+      setCashuIsBusy(true);
+      setStatus(t("payPaying"));
+
+      const cashuWriteOwnerId = await resolveOwnerIdForWrite();
+      const insertCashuToken = (args: {
+        amount: number | null;
+        mint: string | null;
+        state: "accepted" | "pending";
+        token: string;
+        unit: string | null;
+      }) => {
+        const payload: {
+          token: typeof Evolu.NonEmptyString.Type;
+          state: typeof Evolu.NonEmptyString100.Type;
+          amount?: typeof Evolu.PositiveInt.Type;
+          mint?: typeof Evolu.NonEmptyString1000.Type;
+          unit?: typeof Evolu.NonEmptyString100.Type;
+        } = {
+          token: args.token as typeof Evolu.NonEmptyString.Type,
+          state: args.state as typeof Evolu.NonEmptyString100.Type,
+        };
+
+        const mint = String(args.mint ?? "").trim();
+        if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
+
+        const unit = String(args.unit ?? "").trim();
+        if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
+
+        if (
+          typeof args.amount === "number" &&
+          Number.isFinite(args.amount) &&
+          args.amount > 0
+        ) {
+          payload.amount = Math.trunc(
+            args.amount,
+          ) as typeof Evolu.PositiveInt.Type;
+        }
+
+        return cashuWriteOwnerId
+          ? insert("cashuToken", payload, { ownerId: cashuWriteOwnerId })
+          : insert("cashuToken", payload);
+      };
+
+      const updateCashuToken = (
+        payload: {
+          id: CashuTokenId;
+          isDeleted: typeof Evolu.sqliteTrue;
+        },
+        targetOwnerId?: Evolu.OwnerId | null,
+      ) => {
+        const ownerId = targetOwnerId ?? cashuWriteOwnerId;
+        return ownerId
+          ? update("cashuToken", payload, { ownerId })
+          : update("cashuToken", payload);
+      };
+
+      let sentAmountSat = 0;
+      let usedMint: string | null = null;
+      let usedInputTokens: string[] = [];
+      let sendToken: string | null = null;
+      let sendTokenAmount = 0;
+      let sendTokenUnit: string | null = null;
+      let lastError: unknown = null;
+
+      try {
+        const requestedMints = new Set<string>();
+        for (const mintUrl of requestInfo.mintUrls) {
+          const normalizedMint = normalizeMintUrl(mintUrl);
+          if (normalizedMint) requestedMints.add(normalizedMint);
+        }
+
+        const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
+        for (const row of cashuTokensWithMeta) {
+          if (!isCashuTokenAcceptedState(row.state)) continue;
+          const mint = normalizeMintUrl(String(row.mint ?? "").trim());
+          if (!mint) continue;
+          if (requestedMints.size > 0 && !requestedMints.has(mint)) continue;
+
+          const tokenText = String(row.token ?? row.rawToken ?? "").trim();
+          if (!tokenText) continue;
+
+          const amount = Number(row.amount ?? 0) || 0;
+          const entry = mintGroups.get(mint) ?? { tokens: [], sum: 0 };
+          entry.tokens.push(tokenText);
+          entry.sum += amount;
+          mintGroups.set(mint, entry);
+        }
+
+        const preferredMint =
+          requestInfo.mintUrls
+            .map((mintUrl) => normalizeMintUrl(mintUrl))
+            .find((mintUrl) => Boolean(mintUrl)) ??
+          normalizeMintUrl(defaultMintUrl ?? "");
+        const candidates = buildCashuMintCandidates(mintGroups, preferredMint);
+        const candidate = selectSingleMintCandidateForAmount(
+          candidates,
+          requestInfo.amount,
+        );
+        if (!candidate) {
+          setStatus(t("payInsufficient"));
+          return true;
+        }
+
+        usedInputTokens = [...candidate.tokens];
+        const maxReservedFeeSat = getPaymentAmountReserveCap(
+          requestInfo.amount,
+          candidate.sum,
+        );
+        const attempts = buildPaymentAmountAttempts(
+          requestInfo.amount,
+          candidate.sum,
+        ).filter((attemptAmountSat) => {
+          return requestInfo.amount - attemptAmountSat <= maxReservedFeeSat;
+        });
+
+        for (let index = 0; index < attempts.length; index += 1) {
+          const attemptAmountSat = attempts[index];
+          const hasLowerAmountFallback = index < attempts.length - 1;
+
+          try {
+            const split = await createSendTokenWithTokensAtMint({
+              amount: attemptAmountSat,
+              mint: candidate.mint,
+              tokens: candidate.tokens,
+              unit: "sat",
+            });
+
+            if (!split.ok) {
+              lastError = split.error;
+              if (
+                hasLowerAmountFallback &&
+                isRetryablePaymentAmountFailure(String(split.error ?? ""))
+              ) {
+                continue;
+              }
+              break;
+            }
+
+            const spentRows = cashuTokensWithMeta.filter((row) => {
+              if (!isCashuTokenAcceptedState(row.state)) return false;
+              const tokenText = String(row.token ?? row.rawToken ?? "").trim();
+              return candidate.tokens.includes(tokenText);
+            });
+            for (const row of spentRows) {
+              const rowId = row.id;
+              if (!rowId) continue;
+              const deleted = updateCashuToken(
+                { id: rowId as CashuTokenId, isDeleted: Evolu.sqliteTrue },
+                resolveCashuRowStoredOwnerLane(row),
+              );
+              if (!deleted.ok) throw deleted.error;
+            }
+
+            if (split.remainingToken && split.remainingAmount > 0) {
+              const inserted = insertCashuToken({
+                token: split.remainingToken,
+                mint: split.mint,
+                unit: split.unit ?? null,
+                amount: split.remainingAmount,
+                state: "accepted",
+              });
+              if (!inserted.ok) throw inserted.error;
+            }
+
+            sendToken = split.sendToken;
+            sendTokenAmount = split.sendAmount;
+            sendTokenUnit = split.unit ?? null;
+            sentAmountSat = split.sendAmount;
+            usedMint = split.mint;
+            break;
+          } catch (error) {
+            lastError = error;
+            if (
+              hasLowerAmountFallback &&
+              isRetryablePaymentAmountFailure(
+                getUnknownErrorMessage(error, "unknown"),
+              )
+            ) {
+              continue;
+            }
+            break;
+          }
+        }
+
+        if (!sendToken) {
+          const errorMessage = getUnknownErrorMessage(
+            lastError,
+            "insufficient funds",
+          );
+          logPaymentEvent({
+            direction: "out",
+            status: "error",
+            amount: requestInfo.amount,
+            fee: null,
+            mint: usedMint,
+            unit: "sat",
+            error: errorMessage,
+            contactId: null,
+            method: "cashu_chat",
+            phase: "swap",
+          });
+          setStatus(`${t("payFailed")}: ${errorMessage}`);
+          return true;
+        }
+
+        const { getDecodedToken } = await getCashuLib();
+        const decodedToken = getDecodedToken(sendToken);
+        const proofs = readDecodedCashuProofs(decodedToken);
+        if (proofs.length === 0) throw new Error("empty payment proofs");
+
+        const body: Record<string, unknown> = {
+          mint: usedMint,
+          unit: sendTokenUnit ?? "sat",
+          proofs,
+        };
+        if (requestInfo.requestId) body.id = requestInfo.requestId;
+        if (requestInfo.description) body.memo = requestInfo.description;
+
+        const response = await fetch(postUrl.toString(), {
+          method: "POST",
+          cache: "no-store",
+          credentials: "omit",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          mode: "cors",
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Payment request POST ${response.status}`);
+        }
+
+        logPaymentEvent({
+          direction: "out",
+          status: "ok",
+          amount: sentAmountSat,
+          details: {
+            ...(requestInfo.requestId
+              ? { requestId: requestInfo.requestId }
+              : {}),
+            postUrl: postUrl.toString(),
+            usedInputTokens,
+          },
+          fee: null,
+          mint: usedMint,
+          unit: sendTokenUnit ?? "sat",
+          error: null,
+          contactId: null,
+          method: "cashu_chat",
+          phase: "complete",
+        });
+
+        const displayAmount = formatDisplayedAmountParts(sentAmountSat);
+        showPaidOverlay(
+          t("paidSentTo")
+            .replace(
+              "{amount}",
+              `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+            )
+            .replace("{unit}", displayAmount.unitLabel)
+            .replace(
+              "{name}",
+              requestInfo.description || postUrl.hostname || t("appTitle"),
+            ),
+        );
+        setStatus(t("paySuccess"));
+        safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
+        setContactsOnboardingHasPaid(true);
+        return true;
+      } catch (error) {
+        if (sendToken) {
+          const inserted = insertCashuToken({
+            token: sendToken,
+            mint: usedMint,
+            unit: sendTokenUnit,
+            amount: sendTokenAmount,
+            state: "accepted",
+          });
+          if (!inserted.ok) {
+            console.warn("[linky][payment-request] recovery insert failed", {
+              error: String(inserted.error ?? ""),
+            });
+          }
+        }
+
+        const errorMessage = getUnknownErrorMessage(error, "unknown");
+        logPaymentEvent({
+          direction: "out",
+          status: "error",
+          amount: requestInfo.amount,
+          fee: null,
+          mint: usedMint,
+          unit: sendTokenUnit ?? "sat",
+          error: errorMessage,
+          contactId: null,
+          method: "cashu_chat",
+          phase: "publish",
+        });
+        setStatus(`${t("payFailed")}: ${errorMessage}`);
+        return true;
+      } finally {
+        setCashuIsBusy(false);
+      }
+    },
+    [
+      buildCashuMintCandidates,
+      cashuBalance,
+      cashuTokensWithMeta,
+      defaultMintUrl,
+      formatDisplayedAmountParts,
+      insert,
+      logPaymentEvent,
+      resolveOwnerIdForWrite,
+      setCashuIsBusy,
+      setContactsOnboardingHasPaid,
+      setStatus,
+      showPaidOverlay,
+      t,
+      update,
+    ],
+  );
+
   const payCashuPaymentRequest = React.useCallback(
     async (requestInfo: CashuPaymentRequestMessageInfo) => {
       if (cashuIsBusy) return;
 
-      const contact = findContactForCashuPaymentRequest(requestInfo);
+      const contact = ensureContactForCashuPaymentRequest(requestInfo);
       if (!contact?.id) {
+        if (await payCashuPaymentRequestViaPost(requestInfo)) return;
         setStatus(t("paymentRequestUnknownContact"));
         return;
       }
@@ -4301,8 +4835,9 @@ export const useAppShellComposition = () => {
     },
     [
       cashuIsBusy,
-      findContactForCashuPaymentRequest,
+      ensureContactForCashuPaymentRequest,
       findPreviousCashuPaymentRequestMessage,
+      payCashuPaymentRequestViaPost,
       payContactWithCashuMessage,
       setCashuIsBusy,
       setStatus,
@@ -7634,11 +8169,13 @@ export const useAppShellComposition = () => {
       topupInvoice,
       topupInvoiceError,
       topupInvoiceIsBusy,
+      topupInvoiceCashuRequest,
       topupMintUrl:
         topupMintQuote?.mintUrl ??
         normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ??
         MAIN_MINT_URL,
       topupInvoiceQr,
+      topupInvoiceQrPayload,
       tokensRestoreIsBusy,
       writeCashuTokenToNfc,
     },

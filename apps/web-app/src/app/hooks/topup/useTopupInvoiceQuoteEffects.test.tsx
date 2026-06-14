@@ -35,9 +35,14 @@ const HookHarness = ({
     string | null
   >(null);
   const [topupInvoiceIsBusy, setTopupInvoiceIsBusy] = React.useState(false);
+  const [topupInvoiceCashuRequest, setTopupInvoiceCashuRequest] =
+    React.useState<string | null>(null);
   const [topupInvoiceQr, setTopupInvoiceQr] = React.useState<string | null>(
     initialTopupInvoiceQr,
   );
+  const [topupInvoiceQrPayload, setTopupInvoiceQrPayload] = React.useState<
+    string | null
+  >(initialTopupInvoiceQr ? initialTopupInvoice : null);
   const [currentTopupMintQuote, setTopupMintQuote] =
     React.useState<TopupMintQuoteDraft | null>(topupMintQuote);
   const topupInvoicePaidHandledRef = React.useRef(false);
@@ -53,17 +58,22 @@ const HookHarness = ({
     topupInvoice,
     topupInvoiceError,
     topupInvoiceIsBusy,
+    topupInvoiceCashuRequest,
     topupInvoicePaidHandledRef,
     topupInvoiceQr,
+    topupInvoiceQrPayload,
     topupInvoiceStartBalanceRef,
     topupMintQuote: currentTopupMintQuote,
     topupPaidNavTimerRef,
     topupRefreshKey: null,
+    topupRecipientNprofile: null,
     setTopupAmount,
     setTopupInvoice,
+    setTopupInvoiceCashuRequest,
     setTopupInvoiceError,
     setTopupInvoiceIsBusy,
     setTopupInvoiceQr,
+    setTopupInvoiceQrPayload,
     setTopupMintQuote,
   });
 
@@ -72,7 +82,9 @@ const HookHarness = ({
       <div data-testid="invoice">{topupInvoice ?? ""}</div>
       <div data-testid="amount">{topupAmount}</div>
       <div data-testid="quote">{currentTopupMintQuote?.quote ?? ""}</div>
+      <div data-testid="cashu-request">{topupInvoiceCashuRequest ?? ""}</div>
       <div data-testid="qr">{topupInvoiceQr ?? ""}</div>
+      <div data-testid="qr-payload">{topupInvoiceQrPayload ?? ""}</div>
     </div>
   );
 };

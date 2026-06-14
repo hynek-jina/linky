@@ -537,12 +537,18 @@ export const en = {
   topupInvoiceAmount: "You will top up {amount} {unit}.",
   topupFetchingInvoice: "Fetching invoice…",
   topupInvoiceFailed: "Failed to fetch invoice",
+  topupQrModeLabel: "Receive QR type",
+  topupQrModeCashu: "Cashu",
+  topupQrModeUniversal: "Universal",
+  topupQrModeLightning: "Lightning",
   walletOpen: "Open wallet",
   walletReceive: "Receive",
   walletSend: "Send",
 
   scan: "Scan",
   scanUnsupported: "Unsupported QR code.",
+  scanUnsupportedBitcoinUri:
+    "This Bitcoin URI only offers on-chain settlement, which Linky doesn't support.",
   scanCameraError: "Camera not available.",
   scanRequiresHttps:
     "Camera requires a secure context (HTTPS). Open Linky over https or install it as a PWA.",

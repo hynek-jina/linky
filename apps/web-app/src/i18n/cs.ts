@@ -547,9 +547,15 @@ export const cs = {
   topupInvoiceAmount: "Dobíjíš {amount} {unit}.",
   topupFetchingInvoice: "Načítám fakturu…",
   topupInvoiceFailed: "Nepodařilo se načíst fakturu",
+  topupQrModeLabel: "Typ přijímacího QR",
+  topupQrModeCashu: "Cashu",
+  topupQrModeUniversal: "Univerzální",
+  topupQrModeLightning: "Lightning",
 
   scan: "Skenovat",
   scanUnsupported: "Nepodporovaný QR kód.",
+  scanUnsupportedBitcoinUri:
+    "Tato Bitcoin URI nabízí jen on-chain platbu, kterou Linky neumí.",
   scanCameraError: "Kamera není dostupná.",
   scanRequiresHttps:
     "Kamera vyžaduje bezpečné připojení (HTTPS). Otevřete Linky přes https nebo jako nainstalovanou PWA.",

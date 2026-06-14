@@ -24,6 +24,7 @@ export interface CashuPaymentRequestMessageInfo {
   mintUrls: string[];
   requestId: string | null;
   transportNprofile: string | null;
+  transportPostUrl: string | null;
   transportPubkeyHex: string | null;
   unit: string;
 }
@@ -187,6 +188,12 @@ export const parseCashuPaymentRequestMessage = (
   const transportPubkeyHex = transportNprofile
     ? decodeNprofilePubkey(transportNprofile)
     : null;
+  const postTransport =
+    transports.find((transport) => toTrimmedString(transport.t) === "post") ??
+    null;
+  const transportPostUrl = postTransport
+    ? toTrimmedString(postTransport.a)
+    : null;
 
   return {
     amount: Math.trunc(decoded.a),
@@ -197,6 +204,7 @@ export const parseCashuPaymentRequestMessage = (
       : [],
     requestId: toTrimmedString(decoded.i) || null,
     transportNprofile,
+    transportPostUrl,
     transportPubkeyHex,
     unit,
   };
