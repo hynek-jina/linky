@@ -14,7 +14,9 @@ export const usePortraitOrientationLock = (): void => {
         if (!orientation) return;
         const lock = Reflect.get(orientation, "lock");
         if (typeof lock !== "function") return;
-        void Reflect.apply(lock, orientation, ["portrait"]);
+        void Promise.resolve(
+          Reflect.apply(lock, orientation, ["portrait"]),
+        ).catch(() => {});
       } catch {
         // Normal browser tabs often reject orientation locks. Installed PWAs and
         // native shells are the places where this can actually stick.

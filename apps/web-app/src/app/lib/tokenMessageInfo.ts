@@ -1,5 +1,6 @@
 import { parseCashuToken } from "../../cashu";
 import type { CashuTokenRowLike, MintUrlInput } from "../types/appTypes";
+import { isCashuTokenErrorState } from "./cashuTokenState";
 import { extractCashuTokenFromText } from "./tokenText";
 
 export interface CashuTokenMessageInfo {
@@ -27,6 +28,7 @@ const isKnownCashuToken = (
 ): boolean => {
   return cashuTokensAll.some((row) => {
     if (row.isDeleted) return false;
+    if (isCashuTokenErrorState(row.state)) return false;
     const storedRaw = String(row.rawToken ?? "").trim();
     const storedToken = String(row.token ?? "").trim();
     return (

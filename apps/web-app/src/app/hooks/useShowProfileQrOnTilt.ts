@@ -6,25 +6,82 @@ interface UseShowProfileQrOnTiltParams {
   onShowProfileQr: () => void;
 }
 
-const FORWARD_BETA_THRESHOLD = -95;
-const RESET_BETA_THRESHOLD = -45;
-const GRAVITY_TILT_THRESHOLD = -5.4;
-const GRAVITY_RESET_THRESHOLD = -2.4;
+const ORIENTATION_TILT_DELTA = 35;
+const ORIENTATION_RESET_DELTA = 12;
+const GRAVITY_TILT_DELTA = 3.2;
+const GRAVITY_RESET_DELTA = 1.2;
 const OPEN_COOLDOWN_MS = 2500;
 
-const isProfileQrTilt = (beta: number): boolean =>
-  beta <= FORWARD_BETA_THRESHOLD;
+export const getAngleDelta = (value: number, baseline: number): number => {
+  let delta = value - baseline;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  return delta;
+};
 
-const isResetTilt = (beta: number): boolean => beta > RESET_BETA_THRESHOLD;
+export const isProfileQrTilt = (beta: number, baseline: number): boolean =>
+  Math.abs(getAngleDelta(beta, baseline)) >= ORIENTATION_TILT_DELTA;
 
-const isMotionProfileQrTilt = (gravityY: number): boolean =>
-  gravityY <= GRAVITY_TILT_THRESHOLD;
+export const isResetTilt = (beta: number, baseline: number): boolean =>
+  Math.abs(getAngleDelta(beta, baseline)) <= ORIENTATION_RESET_DELTA;
 
-const isMotionResetTilt = (gravityY: number): boolean =>
-  gravityY > GRAVITY_RESET_THRESHOLD;
+export const isMotionProfileQrTilt = (
+  gravityY: number,
+  baseline: number,
+): boolean => Math.abs(gravityY - baseline) >= GRAVITY_TILT_DELTA;
+
+export const isMotionResetTilt = (
+  gravityY: number,
+  baseline: number,
+): boolean => Math.abs(gravityY - baseline) <= GRAVITY_RESET_DELTA;
+
+export const normalizeScreenAngle = (angle: number): number => {
+  const normalized = angle % 360;
+  return normalized < 0 ? normalized + 360 : normalized;
+};
+
+export const isScreenProfileQrTilt = ({
+  angle,
+  type,
+}: {
+  angle: number | null;
+  type: string | null;
+}): boolean => {
+  if (type === "portrait-secondary") return true;
+  return angle !== null && normalizeScreenAngle(angle) === 180;
+};
+
+export const isScreenResetTilt = ({
+  angle,
+  type,
+}: {
+  angle: number | null;
+  type: string | null;
+}): boolean => {
+  if (type === "portrait-primary") return true;
+  return angle !== null && normalizeScreenAngle(angle) === 0;
+};
 
 const readFiniteNumber = (value: number | null | undefined): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
+
+const readString = (value: unknown): string | null =>
+  typeof value === "string" ? value : null;
+
+const readScreenOrientation = (): {
+  angle: number | null;
+  type: string | null;
+} => {
+  const orientation = window.screen.orientation;
+  const angle =
+    readFiniteNumber(orientation?.angle) ??
+    readFiniteNumber(Reflect.get(window, "orientation"));
+
+  return {
+    angle,
+    type: readString(orientation?.type),
+  };
+};
 
 const requestSensorPermission = async (constructor: unknown): Promise<void> => {
   if (!constructor) return;
@@ -49,12 +106,15 @@ export const useShowProfileQrOnTilt = ({
   onShowProfileQr,
 }: UseShowProfileQrOnTiltParams): void => {
   const armedRef = React.useRef(true);
+  const baselineBetaRef = React.useRef<number | null>(null);
+  const baselineGravityYRef = React.useRef<number | null>(null);
   const lastOpenedAtRef = React.useRef(0);
   const motionTiltedRef = React.useRef(false);
   const openedByTiltRef = React.useRef(false);
   const orientationTiltedRef = React.useRef(false);
   const onHideProfileQrRef = React.useRef(onHideProfileQr);
   const onShowProfileQrRef = React.useRef(onShowProfileQr);
+  const screenTiltedRef = React.useRef(false);
 
   React.useEffect(() => {
     onHideProfileQrRef.current = onHideProfileQr;
@@ -67,9 +127,12 @@ export const useShowProfileQrOnTilt = ({
   React.useEffect(() => {
     if (!enabled) {
       armedRef.current = true;
+      baselineBetaRef.current = null;
+      baselineGravityYRef.current = null;
       motionTiltedRef.current = false;
       openedByTiltRef.current = false;
       orientationTiltedRef.current = false;
+      screenTiltedRef.current = false;
       return;
     }
     if (typeof window === "undefined") return;
@@ -84,7 +147,13 @@ export const useShowProfileQrOnTilt = ({
     };
 
     const maybeOpenProfileQr = () => {
-      if (!motionTiltedRef.current && !orientationTiltedRef.current) return;
+      if (
+        !motionTiltedRef.current &&
+        !orientationTiltedRef.current &&
+        !screenTiltedRef.current
+      ) {
+        return;
+      }
       const now = Date.now();
       if (now - lastOpenedAtRef.current < OPEN_COOLDOWN_MS) return;
 
@@ -95,7 +164,13 @@ export const useShowProfileQrOnTilt = ({
     };
 
     const maybeCloseProfileQr = () => {
-      if (motionTiltedRef.current || orientationTiltedRef.current) return;
+      if (
+        motionTiltedRef.current ||
+        orientationTiltedRef.current ||
+        screenTiltedRef.current
+      ) {
+        return;
+      }
       armedRef.current = true;
       if (!openedByTiltRef.current) return;
       openedByTiltRef.current = false;
@@ -105,14 +180,19 @@ export const useShowProfileQrOnTilt = ({
     const onDeviceOrientation = (event: DeviceOrientationEvent) => {
       const beta = readFiniteNumber(event.beta);
       if (beta === null) return;
+      const baselineBeta = baselineBetaRef.current;
+      if (baselineBeta === null) {
+        baselineBetaRef.current = beta;
+        return;
+      }
 
-      if (isProfileQrTilt(beta)) {
+      if (isProfileQrTilt(beta, baselineBeta)) {
         orientationTiltedRef.current = true;
         if (armedRef.current) maybeOpenProfileQr();
         return;
       }
 
-      if (isResetTilt(beta)) {
+      if (isResetTilt(beta, baselineBeta)) {
         orientationTiltedRef.current = false;
         maybeCloseProfileQr();
         return;
@@ -122,15 +202,36 @@ export const useShowProfileQrOnTilt = ({
     const onDeviceMotion = (event: DeviceMotionEvent) => {
       const gravityY = readFiniteNumber(event.accelerationIncludingGravity?.y);
       if (gravityY === null) return;
+      const baselineGravityY = baselineGravityYRef.current;
+      if (baselineGravityY === null) {
+        baselineGravityYRef.current = gravityY;
+        return;
+      }
 
-      if (isMotionProfileQrTilt(gravityY)) {
+      if (isMotionProfileQrTilt(gravityY, baselineGravityY)) {
         motionTiltedRef.current = true;
         if (armedRef.current) maybeOpenProfileQr();
         return;
       }
 
-      if (isMotionResetTilt(gravityY)) {
+      if (isMotionResetTilt(gravityY, baselineGravityY)) {
         motionTiltedRef.current = false;
+        maybeCloseProfileQr();
+        return;
+      }
+    };
+
+    const onScreenOrientationChange = () => {
+      const screenOrientation = readScreenOrientation();
+
+      if (isScreenProfileQrTilt(screenOrientation)) {
+        screenTiltedRef.current = true;
+        if (armedRef.current) maybeOpenProfileQr();
+        return;
+      }
+
+      if (isScreenResetTilt(screenOrientation)) {
+        screenTiltedRef.current = false;
         maybeCloseProfileQr();
         return;
       }
@@ -151,6 +252,17 @@ export const useShowProfileQrOnTilt = ({
     window.addEventListener("devicemotion", onDeviceMotion, {
       passive: true,
     });
+    window.screen.orientation?.addEventListener(
+      "change",
+      onScreenOrientationChange,
+    );
+    window.addEventListener("orientationchange", onScreenOrientationChange, {
+      passive: true,
+    });
+    window.addEventListener("resize", onScreenOrientationChange, {
+      passive: true,
+    });
+    onScreenOrientationChange();
 
     return () => {
       window.removeEventListener("pointerdown", requestPermissionsFromGesture);
@@ -158,6 +270,15 @@ export const useShowProfileQrOnTilt = ({
       window.removeEventListener("click", requestPermissionsFromGesture);
       window.removeEventListener("deviceorientation", onDeviceOrientation);
       window.removeEventListener("devicemotion", onDeviceMotion);
+      window.screen.orientation?.removeEventListener(
+        "change",
+        onScreenOrientationChange,
+      );
+      window.removeEventListener(
+        "orientationchange",
+        onScreenOrientationChange,
+      );
+      window.removeEventListener("resize", onScreenOrientationChange);
     };
   }, [enabled]);
 };

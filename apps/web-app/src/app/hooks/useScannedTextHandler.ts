@@ -16,6 +16,10 @@ import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
 } from "../../utils/lightningInvoice";
+import {
+  parseCashuPaymentRequestMessage,
+  type CashuPaymentRequestMessageInfo,
+} from "../lib/paymentRequestMessage";
 import type { ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -29,6 +33,9 @@ interface UseScannedTextHandlerParams<TContact extends ContactRowLike> {
   insert: EvoluMutations["insert"];
   lightningInvoiceAutoPayLimit: number;
   openScannedContactPendingNpubRef: React.MutableRefObject<string | null>;
+  payCashuPaymentRequest: (
+    requestInfo: CashuPaymentRequestMessageInfo,
+  ) => Promise<void>;
   payLightningInvoiceWithCashu: (invoice: string) => Promise<boolean>;
   refreshContactFromNostr: (
     id: ContactId,
@@ -58,6 +65,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
   insert,
   lightningInvoiceAutoPayLimit,
   openScannedContactPendingNpubRef,
+  payCashuPaymentRequest,
   payLightningInvoiceWithCashu,
   refreshContactFromNostr,
   requestLightningInvoiceConfirmation,
@@ -80,6 +88,22 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
         .replace(/^lightning:/i, "")
         .replace(/^cashu:/i, "")
         .trim();
+
+      const cashuPaymentRequest =
+        parseCashuPaymentRequestMessage(normalized) ??
+        parseCashuPaymentRequestMessage(scanText) ??
+        parseCashuPaymentRequestMessage(raw);
+      if (cashuPaymentRequest) {
+        if (scanEntryPoint === "receive") {
+          setStatus(t("scanReceiveUnsupportedPayment"));
+          closeScan();
+          return;
+        }
+
+        closeScan();
+        await payCashuPaymentRequest(cashuPaymentRequest);
+        return;
+      }
 
       const cashu =
         extractCashuTokenFromText(normalized) ??
@@ -275,6 +299,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       setStatus,
       t,
       openScannedContactPendingNpubRef,
+      payCashuPaymentRequest,
     ],
   );
 };

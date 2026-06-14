@@ -6,7 +6,9 @@ import {
 } from "./displayAmounts";
 
 const fiatRates = {
+  chfPerBtc: 45_000,
   czkPerBtc: 1_000_000,
+  eurPerBtc: 46_000,
   fetchedAtMs: 0,
   usdPerBtc: 50_000,
 };
@@ -59,10 +61,10 @@ describe("normalizeAllowedDisplayCurrencies", () => {
   it("deduplicates and drops invalid currencies", () => {
     expect(
       normalizeAllowedDisplayCurrencies(
-        ["usd", "hidden", "sat", "usd", "bad"],
+        ["usd", "eur", "chf", "hidden", "sat", "usd", "bad"],
         "czk",
       ),
-    ).toEqual(["usd", "hidden", "sat"]);
+    ).toEqual(["usd", "eur", "chf", "hidden", "sat"]);
   });
 
   it("falls back to one currency when the list is empty", () => {

@@ -13,7 +13,11 @@ import {
   extractReplyContextFromTags,
   isNestedEncryptedNip44Payload,
 } from "../src/app/hooks/messages/chatNostrProtocol";
-import { dedupeNostrMessagesByPriority } from "../src/app/hooks/messages/messageHelpers";
+import {
+  buildKnownNostrMessageIdentityIndex,
+  dedupeNostrMessagesByPriority,
+  hasKnownNostrMessageIdentity,
+} from "../src/app/hooks/messages/messageHelpers";
 
 const makeMessage = (
   id: string,
@@ -171,5 +175,60 @@ describe("dedupeNostrMessagesByPriority", () => {
     expect(deduped).toHaveLength(1);
     expect(deduped[0]?.wrapId).toBe("wrap-fixed");
     expect(deduped[0]?.clientId).toBe("client-fixed");
+  });
+});
+
+describe("known nostr message identity index", () => {
+  it("keeps every raw wrap id even when the display dedupe would merge rows", () => {
+    const rawMessages = [
+      makeMessage("1", {
+        rumorId: "rumor-fixed",
+        wrapId: "wrap-original",
+      }),
+      makeMessage("2", {
+        rumorId: "rumor-fixed",
+        wrapId: "wrap-rewrapped",
+      }),
+    ];
+
+    expect(dedupeNostrMessagesByPriority(rawMessages)).toHaveLength(1);
+
+    const index = buildKnownNostrMessageIdentityIndex(rawMessages);
+
+    expect(
+      hasKnownNostrMessageIdentity(index, { wrapId: "wrap-original" }),
+    ).toBe(true);
+    expect(
+      hasKnownNostrMessageIdentity(index, { wrapId: "wrap-rewrapped" }),
+    ).toBe(true);
+    expect(
+      hasKnownNostrMessageIdentity(index, {
+        contactId: "contact-1",
+        direction: "in",
+        rumorId: "rumor-fixed",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not treat pending outgoing messages as confirmed relay events", () => {
+    const index = buildKnownNostrMessageIdentityIndex([
+      makeMessage("1", {
+        clientId: "client-pending",
+        direction: "out",
+        rumorId: "rumor-pending",
+        status: "pending",
+        wrapId: "pending:local",
+      }),
+    ]);
+
+    expect(
+      hasKnownNostrMessageIdentity(index, {
+        clientId: "client-pending",
+        contactId: "contact-1",
+        direction: "out",
+        rumorId: "rumor-pending",
+        wrapId: "wrap-real",
+      }),
+    ).toBe(false);
   });
 });

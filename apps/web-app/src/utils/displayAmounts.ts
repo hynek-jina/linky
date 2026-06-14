@@ -1,17 +1,23 @@
 import { formatInteger, normalizeLocale } from "./formatting";
 
-export type DisplayCurrency = "sat" | "btc" | "czk" | "usd" | "hidden";
+export type FiatDisplayCurrency = "czk" | "eur" | "chf" | "usd";
+
+export type DisplayCurrency = "sat" | "btc" | FiatDisplayCurrency | "hidden";
 
 export const DISPLAY_CURRENCIES: ReadonlyArray<DisplayCurrency> = [
   "sat",
   "btc",
   "czk",
+  "eur",
+  "chf",
   "usd",
   "hidden",
 ];
 
 export interface FiatRates {
+  chfPerBtc: number;
   czkPerBtc: number;
+  eurPerBtc: number;
   fetchedAtMs: number;
   usdPerBtc: number;
 }
@@ -32,14 +38,27 @@ const SATS_PER_BTC = 100_000_000;
 
 const isFiatCurrency = (
   displayCurrency: DisplayCurrency,
-): displayCurrency is "czk" | "usd" =>
-  displayCurrency === "czk" || displayCurrency === "usd";
+): displayCurrency is FiatDisplayCurrency =>
+  displayCurrency === "czk" ||
+  displayCurrency === "eur" ||
+  displayCurrency === "chf" ||
+  displayCurrency === "usd";
 
 const getRateForCurrency = (
-  displayCurrency: "czk" | "usd",
+  displayCurrency: FiatDisplayCurrency,
   fiatRates: FiatRates,
-): number =>
-  displayCurrency === "czk" ? fiatRates.czkPerBtc : fiatRates.usdPerBtc;
+): number => {
+  switch (displayCurrency) {
+    case "czk":
+      return fiatRates.czkPerBtc;
+    case "eur":
+      return fiatRates.eurPerBtc;
+    case "chf":
+      return fiatRates.chfPerBtc;
+    case "usd":
+      return fiatRates.usdPerBtc;
+  }
+};
 
 const fiatFormatters = new Map<string, Intl.NumberFormat>();
 
@@ -48,6 +67,8 @@ const isDisplayCurrency = (value: unknown): value is DisplayCurrency => {
     value === "sat" ||
     value === "btc" ||
     value === "czk" ||
+    value === "eur" ||
+    value === "chf" ||
     value === "usd" ||
     value === "hidden"
   );
@@ -62,6 +83,8 @@ export const parseDisplayCurrency = (
   if (normalized === "sat") return "sat";
   if (normalized === "btc" || normalized === "b") return "btc";
   if (normalized === "czk") return "czk";
+  if (normalized === "eur") return "eur";
+  if (normalized === "chf") return "chf";
   if (normalized === "usd") return "usd";
   if (normalized === "hidden" || normalized === "masked") return "hidden";
   return null;
@@ -122,6 +145,10 @@ export const getDisplayUnitLabel = (
       return "₿";
     case "czk":
       return normalizeLocale(lang).startsWith("cs") ? "Kč" : "CZK";
+    case "eur":
+      return "EUR";
+    case "chf":
+      return "CHF";
     case "usd":
       return "USD";
     case "hidden":
@@ -133,7 +160,7 @@ export const getDisplayUnitLabel = (
 
 const getFiatFormatter = (
   locale: string,
-  currency: "czk" | "usd",
+  currency: FiatDisplayCurrency,
 ): Intl.NumberFormat => {
   const cacheKey = `${locale}:${currency}`;
   const existing = fiatFormatters.get(cacheKey);
@@ -154,7 +181,7 @@ const normalizeAmountSat = (amountSat: number): number => {
 
 const getFiatValue = (
   amountSat: number,
-  displayCurrency: "czk" | "usd",
+  displayCurrency: FiatDisplayCurrency,
   fiatRates: FiatRates,
 ): number => {
   const btcAmount = amountSat / SATS_PER_BTC;

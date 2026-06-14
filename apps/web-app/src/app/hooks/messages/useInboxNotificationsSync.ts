@@ -34,6 +34,8 @@ import {
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./chatNostrProtocol";
 import { buildUnknownContactId, normalizePubkeyHex } from "./contactIdentity";
+import type { KnownNostrMessageIdentityIndex } from "./messageHelpers";
+import { hasKnownNostrMessageIdentity } from "./messageHelpers";
 
 const PAYMENT_NOTICE_SEEN_WRAP_IDS_STORAGE_KEY_PREFIX =
   "linky.nostr.payment_notice_seen_wrap_ids.v1";
@@ -87,6 +89,7 @@ interface UseInboxNotificationsSyncParams<
     tag?: string,
   ) => Promise<void>;
   nostrFetchRelays: string[];
+  knownNostrMessageIdentityIndex: KnownNostrMessageIdentityIndex;
   nostrMessageWrapIdsRef: React.MutableRefObject<Set<string>>;
   nostrMessagesLatestRef: React.MutableRefObject<LocalNostrMessage[]>;
   nostrMessagesRecent: readonly NostrMessageSummaryRow[];
@@ -114,6 +117,7 @@ export const useInboxNotificationsSync = <
   currentNsec,
   maybeShowPwaNotification,
   nostrFetchRelays,
+  knownNostrMessageIdentityIndex,
   nostrMessageWrapIdsRef,
   nostrMessagesLatestRef,
   nostrMessagesRecent,
@@ -297,6 +301,14 @@ export const useInboxNotificationsSync = <
             const wrapId = String(wrap?.id ?? "");
             if (!wrapId) return;
             if (seenWrapIds.has(wrapId)) return;
+            if (
+              hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
+                wrapId,
+              })
+            ) {
+              seenWrapIds.add(wrapId);
+              return;
+            }
             seenWrapIds.add(wrapId);
 
             const inner = unwrapEvent(wrap, privBytes) as NostrToolsEvent;
@@ -488,6 +500,18 @@ export const useInboxNotificationsSync = <
               if (rumorKey) {
                 if (seenRumorKeys.has(rumorKey)) return;
                 seenRumorKeys.add(rumorKey);
+              }
+
+              if (
+                hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
+                  contactId,
+                  direction: messageDirection,
+                  ...(tagClientId ? { clientId: tagClientId } : {}),
+                  ...(rumorId ? { rumorId } : {}),
+                  wrapId,
+                })
+              ) {
+                return;
               }
 
               const { replyToId, rootMessageId } =
@@ -810,6 +834,7 @@ export const useInboxNotificationsSync = <
     updateLocalNostrReaction,
     maybeShowPwaNotification,
     nostrFetchRelays,
+    knownNostrMessageIdentityIndex,
     nostrMessagesRecent,
     nostrMessageWrapIdsRef,
     nostrMessagesLatestRef,

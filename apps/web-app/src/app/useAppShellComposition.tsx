@@ -230,6 +230,7 @@ import {
   isCashuTokenAcceptedState,
   isCashuTokenDefinitivelySpent,
   isCashuTokenEmittedState,
+  isCashuTokenErrorState,
   isCashuTokenIssuedState,
   isCashuTokenReservedState,
 } from "./lib/cashuTokenState";
@@ -257,6 +258,7 @@ import {
 import {
   buildCashuPaymentRequestMessage,
   buildLinkyPaymentRequestDeclineMessage,
+  parseCashuPaymentRequestMessage,
   type CashuPaymentRequestMessageInfo,
 } from "./lib/paymentRequestMessage";
 import {
@@ -2252,7 +2254,11 @@ export const useAppShellComposition = () => {
 
   const dedupeVisibleCashuRows = React.useCallback(
     function dedupeVisibleCashuRows<
-      TRow extends { rawToken?: string | null; token?: string | null },
+      TRow extends {
+        rawToken?: string | null;
+        state?: unknown;
+        token?: string | null;
+      },
     >(rows: readonly TRow[]): TRow[] {
       if (visibleCashuOwnerIds.size === 0) return [];
 
@@ -2270,6 +2276,12 @@ export const useAppShellComposition = () => {
       const isCandidateBetter = (candidate: TRow, existing: TRow): boolean => {
         const candidateOwnerId = readCashuRowOwnerId(candidate);
         const existingOwnerId = readCashuRowOwnerId(existing);
+        const candidateIsError = isCashuTokenErrorState(candidate.state);
+        const existingIsError = isCashuTokenErrorState(existing.state);
+
+        if (candidateIsError !== existingIsError) {
+          return !candidateIsError;
+        }
 
         if (
           candidateOwnerId === activeCashuOwnerId &&
@@ -2814,6 +2826,7 @@ export const useAppShellComposition = () => {
     chatMessages,
     chatMessagesLatestRef,
     enqueuePendingPayment,
+    knownNostrMessageIdentityIndex,
     lastMessageByContactId,
     nostrMessageWrapIdsRef,
     nostrMessagesLatestRef,
@@ -4167,6 +4180,135 @@ export const useAppShellComposition = () => {
     setStatus,
     t,
   ]);
+
+  const findContactForCashuPaymentRequest = React.useCallback(
+    (requestInfo: CashuPaymentRequestMessageInfo) => {
+      const requestPubkeyHex = normalizePubkeyHex(
+        requestInfo.transportPubkeyHex,
+      );
+      if (!requestPubkeyHex) return null;
+
+      for (const contact of contacts) {
+        const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+        if (!normalizedNpub) continue;
+
+        try {
+          const decoded = nip19.decode(normalizedNpub);
+          if (decoded.type !== "npub") continue;
+          if (typeof decoded.data !== "string") continue;
+          if (decoded.data === requestPubkeyHex) return contact;
+        } catch {
+          // ignore malformed contact npubs
+        }
+      }
+
+      return null;
+    },
+    [contacts],
+  );
+
+  const findPreviousCashuPaymentRequestMessage = React.useCallback(
+    (
+      requestInfo: CashuPaymentRequestMessageInfo,
+      contactId: string,
+    ): LocalNostrMessage | null => {
+      const normalizedContactId = String(contactId ?? "").trim();
+      if (!normalizedContactId) return null;
+
+      const requestId = String(requestInfo.requestId ?? "").trim();
+      const encodedRequest = String(requestInfo.encodedRequest ?? "").trim();
+      if (!requestId && !encodedRequest) return null;
+
+      const candidates = [
+        ...chatMessages,
+        ...nostrMessagesRecent,
+        ...nostrMessagesLocal,
+      ];
+
+      for (let index = candidates.length - 1; index >= 0; index -= 1) {
+        const message = candidates[index];
+        if (String(message.contactId ?? "").trim() !== normalizedContactId) {
+          continue;
+        }
+        if (String(message.direction ?? "").trim() !== "in") continue;
+
+        const rumorId = String(message.rumorId ?? "").trim();
+        if (!rumorId) continue;
+
+        const previousInfo = parseCashuPaymentRequestMessage(
+          String(message.content ?? ""),
+        );
+        if (!previousInfo) continue;
+
+        const previousRequestId = String(previousInfo.requestId ?? "").trim();
+        if (requestId && previousRequestId === requestId) return message;
+
+        if (
+          !requestId &&
+          String(previousInfo.encodedRequest ?? "").trim() === encodedRequest
+        ) {
+          return message;
+        }
+      }
+
+      return null;
+    },
+    [chatMessages, nostrMessagesLocal, nostrMessagesRecent],
+  );
+
+  const payCashuPaymentRequest = React.useCallback(
+    async (requestInfo: CashuPaymentRequestMessageInfo) => {
+      if (cashuIsBusy) return;
+
+      const contact = findContactForCashuPaymentRequest(requestInfo);
+      if (!contact?.id) {
+        setStatus(t("paymentRequestUnknownContact"));
+        return;
+      }
+
+      setCashuIsBusy(true);
+      try {
+        const previousRequestMessage = findPreviousCashuPaymentRequestMessage(
+          requestInfo,
+          String(contact.id ?? ""),
+        );
+        const previousRequestRumorId = String(
+          previousRequestMessage?.rumorId ?? "",
+        ).trim();
+
+        await payContactWithCashuMessage({
+          contact,
+          amountSat: requestInfo.amount,
+          paymentRequestId: requestInfo.requestId,
+          ...(previousRequestRumorId
+            ? {
+                replyContext: {
+                  replyToId: previousRequestRumorId,
+                  rootMessageId:
+                    String(
+                      previousRequestMessage?.rootMessageId ?? "",
+                    ).trim() || previousRequestRumorId,
+                  replyToContent:
+                    String(previousRequestMessage?.content ?? "").trim() ||
+                    null,
+                },
+              }
+            : {}),
+        });
+      } finally {
+        setCashuIsBusy(false);
+      }
+    },
+    [
+      cashuIsBusy,
+      findContactForCashuPaymentRequest,
+      findPreviousCashuPaymentRequestMessage,
+      payContactWithCashuMessage,
+      setCashuIsBusy,
+      setStatus,
+      t,
+    ],
+  );
 
   const { payLightningAddressWithCashu, payLightningInvoiceWithCashu } =
     useLightningPaymentsDomain({
@@ -6827,6 +6969,7 @@ export const useAppShellComposition = () => {
     chatMessagesLatestRef,
     chatSeenWrapIdsRef,
     currentNsec,
+    knownNostrMessageIdentityIndex,
     logPayStep,
     nostrMessageWrapIdsRef,
     nostrReactionWrapIdsRef,
@@ -7155,6 +7298,7 @@ export const useAppShellComposition = () => {
     currentNsec,
     maybeShowPwaNotification,
     nostrFetchRelays,
+    knownNostrMessageIdentityIndex,
     nostrMessageWrapIdsRef,
     nostrMessagesLatestRef,
     nostrMessagesRecent,
@@ -7187,6 +7331,7 @@ export const useAppShellComposition = () => {
     insert,
     lightningInvoiceAutoPayLimit,
     openScannedContactPendingNpubRef,
+    payCashuPaymentRequest,
     payLightningInvoiceWithCashu,
     refreshContactFromNostr,
     requestLightningInvoiceConfirmation: setPendingLightningInvoiceConfirmation,

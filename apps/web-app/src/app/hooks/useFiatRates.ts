@@ -13,14 +13,22 @@ const readObjectField = (value: unknown, field: string): unknown => {
 };
 
 const isFiatRates = (value: unknown): value is FiatRates => {
+  const chfPerBtc = readObjectField(value, "chfPerBtc");
   const czkPerBtc = readObjectField(value, "czkPerBtc");
+  const eurPerBtc = readObjectField(value, "eurPerBtc");
   const fetchedAtMs = readObjectField(value, "fetchedAtMs");
   const usdPerBtc = readObjectField(value, "usdPerBtc");
 
   return (
+    typeof chfPerBtc === "number" &&
+    Number.isFinite(chfPerBtc) &&
+    chfPerBtc > 0 &&
     typeof czkPerBtc === "number" &&
     Number.isFinite(czkPerBtc) &&
     czkPerBtc > 0 &&
+    typeof eurPerBtc === "number" &&
+    Number.isFinite(eurPerBtc) &&
+    eurPerBtc > 0 &&
     typeof fetchedAtMs === "number" &&
     Number.isFinite(fetchedAtMs) &&
     fetchedAtMs > 0 &&
@@ -50,18 +58,33 @@ const isFiatRatesStale = (value: FiatRates | null): boolean => {
 const parseFetchedRates = (value: unknown): FiatRates | null => {
   const data = readObjectField(value, "data");
   const rates = readObjectField(data, "rates");
+  const chfRaw = readObjectField(rates, "CHF");
   const czkRaw = readObjectField(rates, "CZK");
+  const eurRaw = readObjectField(rates, "EUR");
   const usdRaw = readObjectField(rates, "USD");
 
+  const chf = Number.parseFloat(String(chfRaw ?? ""));
   const czk = Number.parseFloat(String(czkRaw ?? ""));
+  const eur = Number.parseFloat(String(eurRaw ?? ""));
   const usd = Number.parseFloat(String(usdRaw ?? ""));
 
-  if (!Number.isFinite(czk) || czk <= 0 || !Number.isFinite(usd) || usd <= 0) {
+  if (
+    !Number.isFinite(chf) ||
+    chf <= 0 ||
+    !Number.isFinite(czk) ||
+    czk <= 0 ||
+    !Number.isFinite(eur) ||
+    eur <= 0 ||
+    !Number.isFinite(usd) ||
+    usd <= 0
+  ) {
     return null;
   }
 
   return {
+    chfPerBtc: chf,
     czkPerBtc: czk,
+    eurPerBtc: eur,
     fetchedAtMs: Date.now(),
     usdPerBtc: usd,
   };

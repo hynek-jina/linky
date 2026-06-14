@@ -26,6 +26,7 @@ import type {
 } from "../types/appTypes";
 import { isUnknownContactId } from "./messages/contactIdentity";
 import {
+  buildKnownNostrMessageIdentityIndex,
   dedupeChatMessages,
   dedupeNostrMessagesByPriority,
   getLocalNostrMessageRumorKey,
@@ -497,6 +498,17 @@ export const useMessagesDomain = ({
     }
     const deduped = dedupeNostrMessagesByPriority(parsed);
     return deduped.sort((a, b) => a.createdAtSec - b.createdAtSec);
+  }, [isVisibleMessageOwner, nostrMessageRows]);
+
+  const knownNostrMessageIdentityIndex = React.useMemo(() => {
+    const parsed: LocalNostrMessage[] = [];
+    for (const row of nostrMessageRows) {
+      if (!isVisibleMessageOwner(row)) continue;
+      const normalized = toLocalNostrMessage(row);
+      if (normalized) parsed.push(normalized);
+    }
+
+    return buildKnownNostrMessageIdentityIndex(parsed);
   }, [isVisibleMessageOwner, nostrMessageRows]);
 
   const persistOverlayMessages = React.useCallback(
@@ -1678,6 +1690,7 @@ export const useMessagesDomain = ({
     chatMessagesLatestRef,
     enqueuePendingPayment,
     lastMessageByContactId,
+    knownNostrMessageIdentityIndex,
     nostrMessageWrapIdsRef,
     nostrMessagesLatestRef,
     nostrMessagesLocal,
