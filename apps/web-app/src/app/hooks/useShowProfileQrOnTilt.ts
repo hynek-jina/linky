@@ -6,23 +6,34 @@ interface UseShowProfileQrOnTiltParams {
   onShowProfileQr: () => void;
 }
 
-const FORWARD_BETA_THRESHOLD = -95;
-const RESET_BETA_THRESHOLD = -45;
-const GRAVITY_TILT_THRESHOLD = 5.4;
-const GRAVITY_RESET_THRESHOLD = 2.4;
+const ORIENTATION_TILT_DELTA = 35;
+const ORIENTATION_RESET_DELTA = 12;
+const GRAVITY_TILT_DELTA = 3.2;
+const GRAVITY_RESET_DELTA = 1.2;
 const OPEN_COOLDOWN_MS = 2500;
 
-export const isProfileQrTilt = (beta: number): boolean =>
-  beta <= FORWARD_BETA_THRESHOLD;
+export const getAngleDelta = (value: number, baseline: number): number => {
+  let delta = value - baseline;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  return delta;
+};
 
-export const isResetTilt = (beta: number): boolean =>
-  beta > RESET_BETA_THRESHOLD;
+export const isProfileQrTilt = (beta: number, baseline: number): boolean =>
+  Math.abs(getAngleDelta(beta, baseline)) >= ORIENTATION_TILT_DELTA;
 
-export const isMotionProfileQrTilt = (gravityY: number): boolean =>
-  gravityY >= GRAVITY_TILT_THRESHOLD;
+export const isResetTilt = (beta: number, baseline: number): boolean =>
+  Math.abs(getAngleDelta(beta, baseline)) <= ORIENTATION_RESET_DELTA;
 
-export const isMotionResetTilt = (gravityY: number): boolean =>
-  gravityY < GRAVITY_RESET_THRESHOLD;
+export const isMotionProfileQrTilt = (
+  gravityY: number,
+  baseline: number,
+): boolean => Math.abs(gravityY - baseline) >= GRAVITY_TILT_DELTA;
+
+export const isMotionResetTilt = (
+  gravityY: number,
+  baseline: number,
+): boolean => Math.abs(gravityY - baseline) <= GRAVITY_RESET_DELTA;
 
 const readFiniteNumber = (value: number | null | undefined): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -50,6 +61,8 @@ export const useShowProfileQrOnTilt = ({
   onShowProfileQr,
 }: UseShowProfileQrOnTiltParams): void => {
   const armedRef = React.useRef(true);
+  const baselineBetaRef = React.useRef<number | null>(null);
+  const baselineGravityYRef = React.useRef<number | null>(null);
   const lastOpenedAtRef = React.useRef(0);
   const motionTiltedRef = React.useRef(false);
   const openedByTiltRef = React.useRef(false);
@@ -68,6 +81,8 @@ export const useShowProfileQrOnTilt = ({
   React.useEffect(() => {
     if (!enabled) {
       armedRef.current = true;
+      baselineBetaRef.current = null;
+      baselineGravityYRef.current = null;
       motionTiltedRef.current = false;
       openedByTiltRef.current = false;
       orientationTiltedRef.current = false;
@@ -106,14 +121,19 @@ export const useShowProfileQrOnTilt = ({
     const onDeviceOrientation = (event: DeviceOrientationEvent) => {
       const beta = readFiniteNumber(event.beta);
       if (beta === null) return;
+      const baselineBeta = baselineBetaRef.current;
+      if (baselineBeta === null) {
+        baselineBetaRef.current = beta;
+        return;
+      }
 
-      if (isProfileQrTilt(beta)) {
+      if (isProfileQrTilt(beta, baselineBeta)) {
         orientationTiltedRef.current = true;
         if (armedRef.current) maybeOpenProfileQr();
         return;
       }
 
-      if (isResetTilt(beta)) {
+      if (isResetTilt(beta, baselineBeta)) {
         orientationTiltedRef.current = false;
         maybeCloseProfileQr();
         return;
@@ -123,14 +143,19 @@ export const useShowProfileQrOnTilt = ({
     const onDeviceMotion = (event: DeviceMotionEvent) => {
       const gravityY = readFiniteNumber(event.accelerationIncludingGravity?.y);
       if (gravityY === null) return;
+      const baselineGravityY = baselineGravityYRef.current;
+      if (baselineGravityY === null) {
+        baselineGravityYRef.current = gravityY;
+        return;
+      }
 
-      if (isMotionProfileQrTilt(gravityY)) {
+      if (isMotionProfileQrTilt(gravityY, baselineGravityY)) {
         motionTiltedRef.current = true;
         if (armedRef.current) maybeOpenProfileQr();
         return;
       }
 
-      if (isMotionResetTilt(gravityY)) {
+      if (isMotionResetTilt(gravityY, baselineGravityY)) {
         motionTiltedRef.current = false;
         maybeCloseProfileQr();
         return;

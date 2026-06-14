@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getAngleDelta,
   isMotionProfileQrTilt,
   isMotionResetTilt,
   isProfileQrTilt,
@@ -7,25 +8,30 @@ import {
 } from "./useShowProfileQrOnTilt";
 
 describe("profile QR tilt thresholds", () => {
-  it("opens only after a forward orientation tilt", () => {
-    expect(isProfileQrTilt(-100)).toBe(true);
-    expect(isProfileQrTilt(-90)).toBe(false);
-    expect(isProfileQrTilt(90)).toBe(false);
+  it("normalizes orientation deltas across the beta wrap-around", () => {
+    expect(getAngleDelta(-170, 170)).toBe(20);
+    expect(getAngleDelta(170, -170)).toBe(-20);
   });
 
-  it("resets after returning from the forward tilt", () => {
-    expect(isResetTilt(-40)).toBe(true);
-    expect(isResetTilt(-60)).toBe(false);
+  it("opens after a significant orientation change from normal use", () => {
+    expect(isProfileQrTilt(35, 90)).toBe(true);
+    expect(isProfileQrTilt(145, 90)).toBe(true);
+    expect(isProfileQrTilt(68, 90)).toBe(false);
   });
 
-  it("does not treat normal portrait gravity as forward tilt", () => {
-    expect(isMotionProfileQrTilt(-9.8)).toBe(false);
-    expect(isMotionProfileQrTilt(0)).toBe(false);
-    expect(isMotionProfileQrTilt(6)).toBe(true);
+  it("resets after returning near the calibrated orientation", () => {
+    expect(isResetTilt(96, 90)).toBe(true);
+    expect(isResetTilt(60, 90)).toBe(false);
   });
 
-  it("resets motion after tilting back toward normal use", () => {
-    expect(isMotionResetTilt(1)).toBe(true);
-    expect(isMotionResetTilt(3)).toBe(false);
+  it("opens only after gravity changes away from normal use", () => {
+    expect(isMotionProfileQrTilt(-9.8, -9.8)).toBe(false);
+    expect(isMotionProfileQrTilt(-7, -9.8)).toBe(false);
+    expect(isMotionProfileQrTilt(0, -9.8)).toBe(true);
+  });
+
+  it("resets motion after returning near calibrated gravity", () => {
+    expect(isMotionResetTilt(-8.7, -9.8)).toBe(true);
+    expect(isMotionResetTilt(-6, -9.8)).toBe(false);
   });
 });
