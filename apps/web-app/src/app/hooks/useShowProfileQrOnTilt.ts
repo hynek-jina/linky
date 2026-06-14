@@ -8,20 +8,21 @@ interface UseShowProfileQrOnTiltParams {
 
 const FORWARD_BETA_THRESHOLD = -95;
 const RESET_BETA_THRESHOLD = -45;
-const GRAVITY_TILT_THRESHOLD = -5.4;
-const GRAVITY_RESET_THRESHOLD = -2.4;
+const GRAVITY_TILT_THRESHOLD = 5.4;
+const GRAVITY_RESET_THRESHOLD = 2.4;
 const OPEN_COOLDOWN_MS = 2500;
 
-const isProfileQrTilt = (beta: number): boolean =>
+export const isProfileQrTilt = (beta: number): boolean =>
   beta <= FORWARD_BETA_THRESHOLD;
 
-const isResetTilt = (beta: number): boolean => beta > RESET_BETA_THRESHOLD;
+export const isResetTilt = (beta: number): boolean =>
+  beta > RESET_BETA_THRESHOLD;
 
-const isMotionProfileQrTilt = (gravityY: number): boolean =>
-  gravityY <= GRAVITY_TILT_THRESHOLD;
+export const isMotionProfileQrTilt = (gravityY: number): boolean =>
+  gravityY >= GRAVITY_TILT_THRESHOLD;
 
-const isMotionResetTilt = (gravityY: number): boolean =>
-  gravityY > GRAVITY_RESET_THRESHOLD;
+export const isMotionResetTilt = (gravityY: number): boolean =>
+  gravityY < GRAVITY_RESET_THRESHOLD;
 
 const readFiniteNumber = (value: number | null | undefined): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
