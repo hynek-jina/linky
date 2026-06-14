@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseBip321Uri, pickBip321PayableLeg } from "./bip321";
+import {
+  buildBip321PaymentUri,
+  parseBip321Uri,
+  pickBip321PayableLeg,
+} from "./bip321";
 
 describe("parseBip321Uri", () => {
   it("returns null for non-bitcoin: input", () => {
@@ -17,6 +21,7 @@ describe("parseBip321Uri", () => {
       amountBtc: null,
       amountSat: null,
       lightning: null,
+      creq: null,
       lnurl: null,
       lno: null,
       label: null,
@@ -50,6 +55,13 @@ describe("parseBip321Uri", () => {
       "bitcoin:bc1qabc?lightning=lnbc11110n1p4zjw6t",
     );
     expect(parsed?.lightning).toBe("lnbc11110n1p4zjw6t");
+  });
+
+  it("extracts a cashu request", () => {
+    const parsed = parseBip321Uri("bitcoin:?creq=creqAabc123");
+
+    expect(parsed?.creq).toBe("creqAabc123");
+    expect(parsed?.extensions).toEqual({});
   });
 
   it("strips a `lightning:` prefix from the lightning param", () => {
@@ -103,9 +115,30 @@ describe("parseBip321Uri", () => {
     expect(parseBip321Uri("bitcoin:bc1qabc?amount=-1")?.amountSat).toBeNull();
     expect(parseBip321Uri("bitcoin:bc1qabc?amount=")?.amountSat).toBeNull();
   });
+
+  it("builds a multi-rail URI with lightning and cashu request", () => {
+    const uri = buildBip321PaymentUri({
+      lightning: "lightning:lnbc1abc",
+      creq: "creqAabc123",
+    });
+
+    expect(uri).toBe("bitcoin:?lightning=lnbc1abc&creq=creqAabc123");
+    expect(parseBip321Uri(uri)?.lightning).toBe("lnbc1abc");
+    expect(parseBip321Uri(uri)?.creq).toBe("creqAabc123");
+  });
 });
 
 describe("pickBip321PayableLeg", () => {
+  it("prefers Cashu request over BOLT11", () => {
+    const parsed = parseBip321Uri(
+      "bitcoin:?lightning=lnbc1abc&creq=creqAabc123",
+    );
+    expect(pickBip321PayableLeg(parsed!)).toEqual({
+      kind: "cashu-request",
+      value: "creqAabc123",
+    });
+  });
+
   it("prefers BOLT11 over LNURL", () => {
     const parsed = parseBip321Uri(
       "bitcoin:bc1qabc?lightning=lnbc1abc&lnurl=LNURL1xyz",

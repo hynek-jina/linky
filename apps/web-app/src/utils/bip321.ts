@@ -20,6 +20,7 @@ export interface Bip321Parsed {
   address: string | null;
   amountBtc: number | null;
   amountSat: number | null;
+  creq: string | null;
   extensions: Record<string, string>;
   label: string | null;
   lightning: string | null;
@@ -36,6 +37,7 @@ const BIP321_RESERVED_PARAMS: ReadonlySet<string> = new Set([
   "lnurl",
   "lno",
   "message",
+  "creq",
   // `pj` (PayJoin) and `pjos` are reserved by BIP 78 — we don't act on them
   // but they're not extensions in the BIP 321 sense.
   "pj",
@@ -120,6 +122,7 @@ export const parseBip321Uri = (input: unknown): Bip321Parsed | null => {
     address: lnAddress ? null : address,
     amountBtc: Number.isFinite(amountBtc) ? amountBtc : null,
     amountSat,
+    creq: get("creq"),
     extensions,
     label: get("label"),
     lightning,
@@ -130,8 +133,23 @@ export const parseBip321Uri = (input: unknown): Bip321Parsed | null => {
   };
 };
 
+export const buildBip321PaymentUri = (args: {
+  creq?: string | null;
+  lightning?: string | null;
+}): string | null => {
+  const params = new URLSearchParams();
+  const lightning = String(args.lightning ?? "").trim();
+  const creq = String(args.creq ?? "").trim();
+
+  if (lightning) params.set("lightning", stripLightningPrefix(lightning));
+  if (creq) params.set("creq", creq);
+
+  const query = params.toString();
+  return query ? `bitcoin:?${query}` : null;
+};
+
 export interface Bip321PayableLeg {
-  kind: "lightning" | "lnurl" | "ln-address";
+  kind: "cashu-request" | "lightning" | "lnurl" | "ln-address";
   value: string;
 }
 
@@ -140,9 +158,10 @@ export interface Bip321PayableLeg {
  * settle. Order matches what most senders intend when they include
  * multiple rails:
  *
- *   1. `lightning=` (BOLT11) — exact invoice with locked amount.
- *   2. `lnurl=` — LNURL-pay; user picks amount within mint/max.
- *   3. Lightning address in the address part of the URI.
+ *   1. `creq=` (Cashu request) — native Cashu transfer over Nostr.
+ *   2. `lightning=` (BOLT11) — exact invoice with locked amount.
+ *   3. `lnurl=` — LNURL-pay; user picks amount within mint/max.
+ *   4. Lightning address in the address part of the URI.
  *
  * Returns `null` when the URI has only onchain content (Linky doesn't
  * settle onchain) or an unsupported rail (BOLT12, Ark, silent payments).
@@ -150,6 +169,9 @@ export interface Bip321PayableLeg {
 export const pickBip321PayableLeg = (
   parsed: Bip321Parsed,
 ): Bip321PayableLeg | null => {
+  if (parsed.creq && /^creqA/i.test(parsed.creq)) {
+    return { kind: "cashu-request", value: parsed.creq };
+  }
   if (parsed.lightning && /^(lnbc|lntb|lnbcrt)/i.test(parsed.lightning)) {
     return { kind: "lightning", value: parsed.lightning };
   }

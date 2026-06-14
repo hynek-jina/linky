@@ -1,6 +1,8 @@
 import React from "react";
 import type { Route } from "../../../types/route";
+import { buildBip321PaymentUri } from "../../../utils/bip321";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
+import { buildCashuPaymentRequestMessage } from "../../lib/paymentRequestMessage";
 
 export interface TopupMintQuoteDraft {
   amount: number;
@@ -73,6 +75,38 @@ export const topupMintQuoteMatchesRequest = (
   return quote.amount === args.amount && quote.mintUrl === args.mintUrl;
 };
 
+const buildTopupInvoiceCashuRequest = (args: {
+  amountSat: number;
+  mintUrl: string;
+  quoteId: string;
+  recipientNprofile: string | null;
+}): string | null => {
+  const recipientNprofile = String(args.recipientNprofile ?? "").trim();
+  if (!recipientNprofile) return null;
+
+  return buildCashuPaymentRequestMessage({
+    amount: args.amountSat,
+    mintUrls: [args.mintUrl],
+    recipientNprofile,
+    requestId: args.quoteId,
+  });
+};
+
+const buildTopupInvoiceQrPayload = (args: {
+  cashuRequest: string | null;
+  invoice: string;
+}): string => {
+  const cashuRequest = String(args.cashuRequest ?? "").trim();
+  if (!cashuRequest) return args.invoice;
+
+  return (
+    buildBip321PaymentUri({
+      lightning: args.invoice,
+      creq: cashuRequest,
+    }) ?? args.invoice
+  );
+};
+
 interface UseTopupInvoiceQuoteEffectsParams {
   defaultMintUrl: string | null;
   effectiveMyLightningAddress: string | null;
@@ -82,17 +116,24 @@ interface UseTopupInvoiceQuoteEffectsParams {
   topupInvoice: string | null;
   topupInvoiceError: string | null;
   topupInvoiceIsBusy: boolean;
+  topupInvoiceCashuRequest: string | null;
   topupInvoicePaidHandledRef: React.MutableRefObject<boolean>;
   topupInvoiceQr: string | null;
+  topupInvoiceQrPayload: string | null;
   topupInvoiceStartBalanceRef: React.MutableRefObject<number | null>;
   topupMintQuote: TopupMintQuoteDraft | null;
   topupPaidNavTimerRef: React.MutableRefObject<number | null>;
   topupRefreshKey: string | null;
+  topupRecipientNprofile: string | null;
   setTopupAmount: React.Dispatch<React.SetStateAction<string>>;
   setTopupInvoice: React.Dispatch<React.SetStateAction<string | null>>;
+  setTopupInvoiceCashuRequest: React.Dispatch<
+    React.SetStateAction<string | null>
+  >;
   setTopupInvoiceError: React.Dispatch<React.SetStateAction<string | null>>;
   setTopupInvoiceIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
   setTopupInvoiceQr: React.Dispatch<React.SetStateAction<string | null>>;
+  setTopupInvoiceQrPayload: React.Dispatch<React.SetStateAction<string | null>>;
   setTopupMintQuote: React.Dispatch<
     React.SetStateAction<TopupMintQuoteDraft | null>
   >;
@@ -107,17 +148,22 @@ export const useTopupInvoiceQuoteEffects = ({
   topupInvoice,
   topupInvoiceError,
   topupInvoiceIsBusy,
+  topupInvoiceCashuRequest,
   topupInvoicePaidHandledRef,
   topupInvoiceQr,
+  topupInvoiceQrPayload,
   topupInvoiceStartBalanceRef,
   topupMintQuote,
   topupPaidNavTimerRef,
   topupRefreshKey,
+  topupRecipientNprofile,
   setTopupAmount,
   setTopupInvoice,
+  setTopupInvoiceCashuRequest,
   setTopupInvoiceError,
   setTopupInvoiceIsBusy,
   setTopupInvoiceQr,
+  setTopupInvoiceQrPayload,
   setTopupMintQuote,
 }: UseTopupInvoiceQuoteEffectsParams) => {
   // Ref-based guard to prevent the fetch effect from cancelling itself.
@@ -129,21 +175,45 @@ export const useTopupInvoiceQuoteEffects = ({
   React.useEffect(() => {
     if (routeKind !== "topupInvoice") return;
     if (!topupMintQuote?.invoice) return;
-    if (topupInvoice === topupMintQuote.invoice && topupInvoiceQr) return;
+    const cashuRequest = buildTopupInvoiceCashuRequest({
+      amountSat: topupMintQuote.amount,
+      mintUrl: topupMintQuote.mintUrl,
+      quoteId: topupMintQuote.quote,
+      recipientNprofile: topupRecipientNprofile,
+    });
+    const qrPayload = buildTopupInvoiceQrPayload({
+      cashuRequest,
+      invoice: topupMintQuote.invoice,
+    });
+    if (
+      topupInvoice === topupMintQuote.invoice &&
+      topupInvoiceCashuRequest === cashuRequest &&
+      topupInvoiceQr &&
+      topupInvoiceQrPayload === qrPayload
+    ) {
+      return;
+    }
 
     let cancelled = false;
     const invoiceChanged = topupInvoice !== topupMintQuote.invoice;
+    const cashuRequestChanged = topupInvoiceCashuRequest !== cashuRequest;
+    const payloadChanged = topupInvoiceQrPayload !== qrPayload;
 
     void (async () => {
-      if (invoiceChanged && topupInvoiceQr) {
+      if (
+        (invoiceChanged || cashuRequestChanged || payloadChanged) &&
+        topupInvoiceQr
+      ) {
         setTopupInvoiceQr(null);
       }
 
       setTopupInvoice(topupMintQuote.invoice);
+      setTopupInvoiceCashuRequest(cashuRequest);
+      setTopupInvoiceQrPayload(qrPayload);
       setTopupInvoiceError(null);
 
       const QRCode = await import("qrcode");
-      const qr = await QRCode.toDataURL(topupMintQuote.invoice, {
+      const qr = await QRCode.toDataURL(qrPayload, {
         margin: 1,
         width: 320,
       });
@@ -157,17 +227,24 @@ export const useTopupInvoiceQuoteEffects = ({
   }, [
     routeKind,
     setTopupInvoice,
+    setTopupInvoiceCashuRequest,
     setTopupInvoiceError,
     setTopupInvoiceQr,
+    setTopupInvoiceQrPayload,
     topupInvoice,
+    topupInvoiceCashuRequest,
     topupInvoiceQr,
+    topupInvoiceQrPayload,
     topupMintQuote,
+    topupRecipientNprofile,
   ]);
 
   React.useEffect(() => {
     if (routeKind === "topup") {
       setTopupInvoice(null);
+      setTopupInvoiceCashuRequest(null);
       setTopupInvoiceQr(null);
+      setTopupInvoiceQrPayload(null);
       setTopupInvoiceError(null);
       setTopupInvoiceIsBusy(false);
 
@@ -188,7 +265,9 @@ export const useTopupInvoiceQuoteEffects = ({
     // Reset topup state when leaving the topup flow.
     if (routeKind !== "topupInvoice") {
       setTopupInvoice(null);
+      setTopupInvoiceCashuRequest(null);
       setTopupInvoiceQr(null);
+      setTopupInvoiceQrPayload(null);
       setTopupInvoiceError(null);
       setTopupInvoiceIsBusy(false);
 
@@ -213,9 +292,11 @@ export const useTopupInvoiceQuoteEffects = ({
     hasPendingTopupQuote,
     setTopupAmount,
     setTopupInvoice,
+    setTopupInvoiceCashuRequest,
     setTopupInvoiceError,
     setTopupInvoiceIsBusy,
     setTopupInvoiceQr,
+    setTopupInvoiceQrPayload,
     topupInvoicePaidHandledRef,
     topupInvoiceStartBalanceRef,
     topupPaidNavTimerRef,
@@ -231,7 +312,9 @@ export const useTopupInvoiceQuoteEffects = ({
     const invalid = !lnAddress || !Number.isFinite(amountSat) || amountSat <= 0;
     if (invalid) {
       setTopupInvoice(null);
+      setTopupInvoiceCashuRequest(null);
       setTopupInvoiceQr(null);
+      setTopupInvoiceQrPayload(null);
       setTopupInvoiceError(null);
       setTopupInvoiceIsBusy(false);
       return;
@@ -240,7 +323,9 @@ export const useTopupInvoiceQuoteEffects = ({
     const mintUrl = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
     if (!mintUrl) {
       setTopupInvoice(null);
+      setTopupInvoiceCashuRequest(null);
       setTopupInvoiceQr(null);
+      setTopupInvoiceQrPayload(null);
       setTopupInvoiceError(t("topupInvoiceFailed"));
       setTopupInvoiceIsBusy(false);
       return;
@@ -260,7 +345,9 @@ export const useTopupInvoiceQuoteEffects = ({
     let cancelled = false;
     isFetchingRef.current = true;
     setTopupInvoice(null);
+    setTopupInvoiceCashuRequest(null);
     setTopupInvoiceQr(null);
+    setTopupInvoiceQrPayload(null);
     setTopupInvoiceError(null);
     setTopupInvoiceIsBusy(true);
 
@@ -311,9 +398,21 @@ export const useTopupInvoiceQuoteEffects = ({
         });
 
         setTopupInvoice(invoice);
+        const cashuRequest = buildTopupInvoiceCashuRequest({
+          amountSat,
+          mintUrl,
+          quoteId,
+          recipientNprofile: topupRecipientNprofile,
+        });
+        setTopupInvoiceCashuRequest(cashuRequest);
+        const qrPayload = buildTopupInvoiceQrPayload({
+          cashuRequest,
+          invoice,
+        });
+        setTopupInvoiceQrPayload(qrPayload);
 
         const QRCode = await import("qrcode");
-        const qr = await QRCode.toDataURL(invoice, {
+        const qr = await QRCode.toDataURL(qrPayload, {
           margin: 1,
           width: 320,
         });
@@ -364,9 +463,11 @@ export const useTopupInvoiceQuoteEffects = ({
     effectiveMyLightningAddress,
     routeKind,
     setTopupInvoice,
+    setTopupInvoiceCashuRequest,
     setTopupInvoiceError,
     setTopupInvoiceIsBusy,
     setTopupInvoiceQr,
+    setTopupInvoiceQrPayload,
     setTopupMintQuote,
     t,
     topupAmount,
@@ -374,6 +475,7 @@ export const useTopupInvoiceQuoteEffects = ({
     topupInvoicePaidHandledRef,
     topupInvoiceStartBalanceRef,
     topupRefreshKey,
+    topupRecipientNprofile,
   ]);
 
   React.useEffect(() => {

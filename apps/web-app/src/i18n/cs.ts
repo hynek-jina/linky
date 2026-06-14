@@ -547,6 +547,10 @@ export const cs = {
   topupInvoiceAmount: "Dobíjíš {amount} {unit}.",
   topupFetchingInvoice: "Načítám fakturu…",
   topupInvoiceFailed: "Nepodařilo se načíst fakturu",
+  topupQrModeLabel: "Typ přijímacího QR",
+  topupQrModeCashu: "Cashu",
+  topupQrModeUniversal: "Univerzální",
+  topupQrModeLightning: "Lightning",
 
   scan: "Skenovat",
   scanUnsupported: "Nepodporovaný QR kód.",
