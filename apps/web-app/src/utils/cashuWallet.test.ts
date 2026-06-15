@@ -1,4 +1,3 @@
-import type { MintKeyset } from "@cashu/cashu-ts";
 import { describe, expect, it, vi } from "vitest";
 import {
   decodeCashuTokenForMint,
@@ -39,64 +38,55 @@ describe("isCashuKeysetVerificationError", () => {
 });
 
 describe("decodeCashuTokenForMint", () => {
-  it("passes mint keysets into token decoding", () => {
-    const keysets: MintKeyset[] = [];
+  it("uses the loaded wallet to decode tokens", () => {
     const decodedToken = { mint: "https://mint.example", proofs: [] };
-    const getDecodedToken = vi.fn(() => decodedToken);
+    const wallet = { decodeToken: vi.fn(() => decodedToken) };
 
     expect(
       decodeCashuTokenForMint({
         tokenText: "cashuA...",
         mintUrl: "https://mint.example",
-        keysets,
         getTokenMetadata: () => ({ mint: "https://mint.example" }),
-        getDecodedToken,
+        wallet,
       }),
     ).toBe(decodedToken);
 
-    expect(getDecodedToken).toHaveBeenCalledWith("cashuA...", keysets);
+    expect(wallet.decodeToken).toHaveBeenCalledWith("cashuA...");
   });
 
-  it("supports short keyset tokens once mint keysets are available", () => {
-    const keysets = [{} as MintKeyset];
+  it("lets wallet decoding handle short keyset tokens", () => {
     const decodedToken = { mint: "https://mint.example", proofs: [] };
-    const getDecodedToken = vi.fn(
-      (tokenText: string, mappedKeysets?: MintKeyset[]) => {
-        if (!mappedKeysets) {
-          throw new Error(
-            "A short keyset ID v2 was encountered, but got no keysets to map it to.",
-          );
-        }
+    const wallet = {
+      decodeToken: vi.fn((tokenText: string) => {
         expect(tokenText).toBe("cashuA...");
-        expect(mappedKeysets).toBe(keysets);
         return decodedToken;
-      },
-    );
+      }),
+    };
 
     expect(
       decodeCashuTokenForMint({
         tokenText: "cashuA...",
         mintUrl: "https://mint.example",
-        keysets,
         getTokenMetadata: () => ({ mint: "https://mint.example" }),
-        getDecodedToken,
+        wallet,
       }),
     ).toBe(decodedToken);
   });
 
   it("rejects tokens from a different mint before decoding", () => {
-    const getDecodedToken = vi.fn(() => ({ mint: "https://other.example" }));
+    const wallet = {
+      decodeToken: vi.fn(() => ({ mint: "https://other.example", proofs: [] })),
+    };
 
     expect(() =>
       decodeCashuTokenForMint({
         tokenText: "cashuA...",
         mintUrl: "https://mint.example",
-        keysets: [],
         getTokenMetadata: () => ({ mint: "https://other.example" }),
-        getDecodedToken,
+        wallet,
       }),
     ).toThrow("Mixed mints not supported");
 
-    expect(getDecodedToken).not.toHaveBeenCalled();
+    expect(wallet.decodeToken).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import type { MintKeyset, Proof } from "@cashu/cashu-ts";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -198,15 +199,13 @@ const GENERIC_MINT_ICON_DATA_URL = `data:image/svg+xml,${GENERIC_MINT_ICON_SVG}`
 const getCashuLib = async () => await import("@cashu/cashu-ts");
 
 type CashuLib = Awaited<ReturnType<typeof getCashuLib>>;
-type CashuWalletLike = InstanceType<CashuLib["CashuWallet"]>;
-type CashuMintKeysetLike = CashuWalletLike["keysets"][number];
+type CashuWalletLike = InstanceType<CashuLib["Wallet"]>;
+type CashuMintKeysetLike = MintKeyset;
 type ProofStatesResponse = Awaited<
   ReturnType<CashuWalletLike["checkProofsStates"]>
 >;
 type CashuProofStateLike = ProofStatesResponse[number];
-type CashuProofLike = Parameters<
-  CashuLib["getEncodedToken"]
->[0]["proofs"][number];
+type CashuProofLike = Proof;
 
 const cashuLibPromise = getCashuLib();
 
@@ -624,11 +623,45 @@ const resolveMintIconUrl = (mintUrl: string, mintInfo: unknown): string => {
   return GENERIC_MINT_ICON_DATA_URL;
 };
 
+const hasToNumber = (value: unknown): value is { toNumber: () => number } => {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "toNumber" in value &&
+    typeof value.toNumber === "function"
+  );
+};
+
+const cashuAmountToNumber = (amount: unknown): number => {
+  if (amount === null || amount === undefined) return 0;
+  if (typeof amount === "number") {
+    if (!Number.isFinite(amount)) return 0;
+    return Math.trunc(amount);
+  }
+  if (typeof amount === "bigint") {
+    const next = Number(amount);
+    if (!Number.isSafeInteger(next)) {
+      throw new Error("Cashu amount exceeds safe integer range");
+    }
+    return next;
+  }
+  if (typeof amount === "string") {
+    const next = Number(amount);
+    if (!Number.isFinite(next)) return 0;
+    if (!Number.isSafeInteger(next)) {
+      throw new Error("Cashu amount exceeds safe integer range");
+    }
+    return Math.trunc(next);
+  }
+  if (hasToNumber(amount)) return amount.toNumber();
+  return 0;
+};
+
 const sumProofAmounts = (proofs: readonly CashuProofLike[]): number => {
   let sum = 0;
 
   for (const proof of proofs) {
-    const amount = Number(proof.amount ?? 0);
+    const amount = cashuAmountToNumber(proof.amount);
     if (Number.isFinite(amount) && amount > 0) {
       sum += Math.trunc(amount);
     }
@@ -829,7 +862,7 @@ const findBestRedeemQuote = async (
   comment?: string,
 ): Promise<{
   feeReserve: number;
-  quote: Awaited<ReturnType<CashuWalletLike["createMeltQuote"]>>;
+  quote: Awaited<ReturnType<CashuWalletLike["createMeltQuoteBolt11"]>>;
   quoteAmount: number;
   swapTargetAmount: number;
 }> => {
@@ -840,7 +873,7 @@ const findBestRedeemQuote = async (
   );
   let best: {
     feeReserve: number;
-    quote: Awaited<ReturnType<CashuWalletLike["createMeltQuote"]>>;
+    quote: Awaited<ReturnType<CashuWalletLike["createMeltQuoteBolt11"]>>;
     quoteAmount: number;
     swapTargetAmount: number;
     total: number;
@@ -856,9 +889,9 @@ const findBestRedeemQuote = async (
         requestedAmount,
         comment,
       );
-      const quote = await wallet.createMeltQuote(invoice);
-      const quoteAmount = Number(quote.amount ?? 0);
-      const feeReserve = Number(quote.fee_reserve ?? 0);
+      const quote = await wallet.createMeltQuoteBolt11(invoice);
+      const quoteAmount = cashuAmountToNumber(quote.amount);
+      const feeReserve = cashuAmountToNumber(quote.fee_reserve);
       const total = quoteAmount + feeReserve;
       const swapTargetAmount = getMeltSwapTargetAmount(total, availableAmount);
 
@@ -914,7 +947,7 @@ const buildProofKey = (proof: CashuProofLike): string => {
     String(proof.id ?? "").trim(),
     String(proof.secret ?? "").trim(),
     String(proof.C ?? "").trim(),
-    String(Number(proof.amount ?? 0) || 0),
+    String(cashuAmountToNumber(proof.amount)),
   ].join("|");
 };
 
@@ -955,7 +988,7 @@ const sleep = async (delayMs: number): Promise<void> => {
 
 const waitForConfirmedMeltQuote = async (
   wallet: CashuWalletLike,
-  quote: Awaited<ReturnType<CashuWalletLike["createMeltQuote"]>>,
+  quote: Awaited<ReturnType<CashuWalletLike["createMeltQuoteBolt11"]>>,
   initialState: string,
 ): Promise<string> => {
   let state = initialState;
@@ -968,7 +1001,7 @@ const waitForConfirmedMeltQuote = async (
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     await sleep(500);
 
-    const checkedQuote = await wallet.checkMeltQuote(quote);
+    const checkedQuote = await wallet.checkMeltQuoteBolt11(quote);
     state = String(checkedQuote.state ?? "")
       .trim()
       .toUpperCase();
@@ -1213,8 +1246,8 @@ const createLoadedWallet = async (
   mintUrl: string,
   unit: string,
 ): Promise<CashuWalletLike> => {
-  const mint = new lib.CashuMint(mintUrl);
-  const wallet = new lib.CashuWallet(mint, { unit });
+  const mint = new lib.Mint(mintUrl);
+  const wallet = new lib.Wallet(mint, { unit });
 
   try {
     await wallet.loadMint();
@@ -1253,13 +1286,16 @@ const createLoadedWallet = async (
       throw new Error(`Mint keys for keyset ${keyset.id} are unavailable`);
     }
 
-    const fallbackWallet = new lib.CashuWallet(mint, {
-      keysets: keysetsResponse.keysets,
-      keys,
-      mintInfo,
-      unit,
-    });
-    fallbackWallet.keysetId = keyset.id;
+    const cache = {
+      mintUrl,
+      keysets: keysetsResponse.keysets.map((candidate) => {
+        if (candidate.id !== keyset.id) return candidate;
+        return { ...candidate, keys: keys.keys };
+      }),
+    };
+    const fallbackWallet = new lib.Wallet(mint, { unit });
+    fallbackWallet.loadMintFromCache(mintInfo, cache);
+    fallbackWallet.bindKeyset(keyset.id);
     return fallbackWallet;
   }
 };
@@ -1274,7 +1310,7 @@ const inspectToken = async (token: string): Promise<TokenSnapshot> => {
 
   const wallet = await createLoadedWallet(lib, mint, "sat");
 
-  const decoded = lib.getDecodedToken(token, wallet.keysets);
+  const decoded = wallet.decodeToken(token);
   const proofs = dedupeProofs(
     Array.isArray(decoded.proofs) ? decoded.proofs : [],
   );
@@ -1296,7 +1332,9 @@ const inspectToken = async (token: string): Promise<TokenSnapshot> => {
   return {
     amount: sumProofAmounts(unspentProofs),
     hasMpp:
-      methods.length > 0 ? methods.some((method) => method.mpp === true) : null,
+      methods.length > 0
+        ? methods.some((method) => String(method.method ?? "").trim() !== "")
+        : null,
     iconUrl: resolveMintIconUrl(mint, mintInfo),
     isValid: unspentProofs.length > 0,
     mint,
@@ -1333,7 +1371,7 @@ const redeemToken = async (
     );
   }
 
-  const decoded = lib.getDecodedToken(token, wallet.keysets);
+  const decoded = wallet.decodeToken(token);
   const proofs = dedupeProofs(
     Array.isArray(decoded.proofs) ? decoded.proofs : [],
   );
@@ -1401,9 +1439,9 @@ const redeemToken = async (
       break;
     }
 
-    let swapped: Awaited<ReturnType<CashuWalletLike["swap"]>>;
+    let swapped: Awaited<ReturnType<CashuWalletLike["send"]>>;
     try {
-      swapped = await wallet.swap(bestQuote.swapTargetAmount, unspentProofs);
+      swapped = await wallet.send(bestQuote.swapTargetAmount, unspentProofs);
     } catch (error) {
       const errorMessage = getErrorMessage(error, "Swap failed");
       if (
@@ -1418,10 +1456,10 @@ const redeemToken = async (
       break;
     }
 
-    let melt: Awaited<ReturnType<CashuWalletLike["meltProofs"]>>;
+    let melt: Awaited<ReturnType<CashuWalletLike["meltProofsBolt11"]>>;
 
     try {
-      melt = await wallet.meltProofs(bestQuote.quote, swapped.send);
+      melt = await wallet.meltProofsBolt11(bestQuote.quote, swapped.send);
     } catch (error) {
       const errorMessage = getErrorMessage(error, "Melt failed");
       if (

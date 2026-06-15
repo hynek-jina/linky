@@ -1,6 +1,6 @@
 import type {
+  MeltQuoteBolt11Response,
   MeltProofsResponse,
-  MeltQuoteResponse,
   Proof,
   ProofState,
 } from "@cashu/cashu-ts";
@@ -13,8 +13,10 @@ import {
 import { isCashuRecoverableOutputCollisionError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
 import {
+  cashuAmountToNumber,
   dedupeCashuProofs,
   filterUnspentCashuProofs,
+  sumCashuProofAmounts,
 } from "./utils/cashuProofs";
 import {
   createLoadedCashuWallet,
@@ -47,9 +49,6 @@ type CashuPayErrorResult = {
   unit: string | null;
 };
 
-const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
-  proofs.reduce((sum, proof) => sum + proof.amount, 0);
-
 // Number of NUT-08 blank outputs cashu-ts will emit for a given fee reserve.
 // Mirrors cashu-ts CashuWallet.createBlankOutputs:
 //   r = Math.ceil(Math.log2(feeReserve)) || 1; if (r<0) r = 0;
@@ -73,7 +72,7 @@ interface ParsedMeltProofsResponse {
   fee?: number;
   feePaid?: number;
   fee_paid?: number;
-  quote: MeltQuoteResponse;
+  quote: MeltQuoteBolt11Response;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -82,7 +81,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isProof = (value: unknown): value is Proof => {
   if (!isRecord(value)) return false;
   return (
-    typeof value.amount === "number" &&
+    "amount" in value &&
     typeof value.secret === "string" &&
     typeof value.C === "string" &&
     typeof value.id === "string"
@@ -93,14 +92,16 @@ const isProofArray = (value: unknown): value is Proof[] => {
   return Array.isArray(value) && value.every(isProof);
 };
 
-const isMeltQuoteResponse = (value: unknown): value is MeltQuoteResponse => {
+const isMeltQuoteResponse = (
+  value: unknown,
+): value is MeltQuoteBolt11Response => {
   if (!isRecord(value)) return false;
   return (
     typeof value.quote === "string" &&
-    typeof value.amount === "number" &&
-    typeof value.fee_reserve === "number" &&
+    "amount" in value &&
+    "fee_reserve" in value &&
     typeof value.state === "string" &&
-    typeof value.expiry === "number" &&
+    (typeof value.expiry === "number" || value.expiry === null) &&
     typeof value.request === "string" &&
     typeof value.unit === "string"
   );
@@ -147,13 +148,12 @@ export const prepareMeltMintContext = async (args: {
   unit?: string | null;
 }): Promise<MeltMintContext> => {
   const { mint, tokens, unit } = args;
-  const { CashuMint, CashuWallet, getDecodedToken, getTokenMetadata } =
-    await getCashuLib();
+  const { Mint, Wallet, getTokenMetadata } = await getCashuLib();
 
   const det = getCashuDeterministicSeedFromStorage();
   const wallet = await createLoadedCashuWallet({
-    CashuMint,
-    CashuWallet,
+    Mint,
+    Wallet,
     mintUrl: mint,
     ...(unit ? { unit } : {}),
     ...(det ? { bip39seed: det.bip39seed } : {}),
@@ -164,17 +164,11 @@ export const prepareMeltMintContext = async (args: {
     const decoded = decodeCashuTokenForMint({
       tokenText,
       mintUrl: mint,
-      keysets: wallet.keysets,
-      getDecodedToken,
       getTokenMetadata,
+      wallet,
     });
     for (const proof of decoded.proofs ?? []) {
-      allProofs.push({
-        amount: Number(proof.amount ?? 0),
-        secret: proof.secret,
-        C: proof.C,
-        id: proof.id,
-      });
+      allProofs.push(proof);
     }
   }
 
@@ -230,10 +224,12 @@ export const meltInvoiceWithTokensAtMint = async (args: {
   try {
     const spendableProofs = contextSpendableProofs;
 
-    const quote = await wallet.createMeltQuote(invoice);
-    const paidAmount = quote.amount ?? 0;
-    const feeReserve = quote.fee_reserve ?? 0;
-    const inputFee = wallet.getFeesForProofs(spendableProofs);
+    const quote = await wallet.createMeltQuoteBolt11(invoice);
+    const paidAmount = cashuAmountToNumber(quote.amount);
+    const feeReserve = cashuAmountToNumber(quote.fee_reserve);
+    const inputFee = cashuAmountToNumber(
+      wallet.getFeesForProofs(spendableProofs),
+    );
     const quotedTotal = paidAmount + feeReserve + inputFee;
 
     // Standard NUT-05 / NUT-08 melt: hand wallet.meltProofs the spendable
@@ -241,7 +237,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
     // mint return the difference as NUT-08 blinded change. cashu-ts builds
     // the blank outputs internally; no pre-swap is needed and no extra
     // input fee is paid for re-denominating proofs.
-    const have = getProofAmountSum(spendableProofs);
+    const have = sumCashuProofAmounts(spendableProofs);
     if (have < quotedTotal) {
       return {
         ok: false,
@@ -272,7 +268,8 @@ export const meltInvoiceWithTokensAtMint = async (args: {
 
         const meltOnce = async (counter: number) =>
           parseMeltResponse(
-            await wallet.meltProofs(quote, spendableProofs, {
+            await wallet.meltProofsBolt11(quote, spendableProofs, undefined, {
+              type: "deterministic",
               counter,
             }),
           );
@@ -312,7 +309,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
           if (!melt) throw lastError ?? new Error("melt failed");
         } else {
           melt = parseMeltResponse(
-            await wallet.meltProofs(quote, spendableProofs),
+            await wallet.meltProofsBolt11(quote, spendableProofs),
           );
         }
       } catch (e) {
@@ -331,7 +328,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
           paidAmount,
           feeReserve,
           feePaid: 0,
-          remainingAmount: getProofAmountSum(spendableProofs),
+          remainingAmount: sumCashuProofAmounts(spendableProofs),
           remainingToken: null,
           error: getUnknownErrorMessage(e, "melt failed"),
         };
@@ -362,7 +359,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
       })();
 
       const remainingProofs = melt?.change ?? [];
-      const remainingAmount = getProofAmountSum(remainingProofs);
+      const remainingAmount = sumCashuProofAmounts(remainingProofs);
 
       const remainingToken =
         remainingProofs.length > 0
@@ -399,7 +396,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
       paidAmount: 0,
       feeReserve: 0,
       feePaid: 0,
-      remainingAmount: getProofAmountSum(contextSpendableProofs),
+      remainingAmount: sumCashuProofAmounts(contextSpendableProofs),
       remainingToken: null,
       error: getUnknownErrorMessage(e, "melt failed"),
     };

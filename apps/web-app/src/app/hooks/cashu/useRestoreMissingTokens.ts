@@ -12,6 +12,7 @@ import {
   createLoadedCashuWallet,
   decodeCashuTokenForMint,
 } from "../../../utils/cashuWallet";
+import { sumCashuProofAmounts } from "../../../utils/cashuProofs";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
 import { hasMatchingCashuToken } from "../../lib/cashuTokenIdentity";
 import type {
@@ -113,13 +114,8 @@ export const useRestoreMissingTokens = ({
         const ownerId = await resolveOwnerIdForWrite();
 
         const { getCashuLib } = await import("../../../utils/cashuLib");
-        const {
-          CashuMint,
-          CashuWallet,
-          getDecodedToken,
-          getEncodedToken,
-          getTokenMetadata,
-        } = await getCashuLib();
+        const { Mint, Wallet, getEncodedToken, getTokenMetadata } =
+          await getCashuLib();
 
         const walletByMintUnit = new Map<
           string,
@@ -133,8 +129,8 @@ export const useRestoreMissingTokens = ({
           if (existing) return existing;
 
           const created = createLoadedCashuWallet({
-            CashuMint,
-            CashuWallet,
+            Mint,
+            Wallet,
             mintUrl: normalizedMint,
             unit: normalizedUnit,
             bip39seed: det.bip39seed,
@@ -174,9 +170,8 @@ export const useRestoreMissingTokens = ({
             const decoded = decodeCashuTokenForMint({
               tokenText,
               mintUrl,
-              keysets: wallet.keysets,
-              getDecodedToken,
               getTokenMetadata,
+              wallet,
             });
             const proofs: CashuProof[] = Array.isArray(decoded?.proofs)
               ? decoded.proofs
@@ -287,7 +282,7 @@ export const useRestoreMissingTokens = ({
               continue;
             }
 
-            const keysets = await wallet.getKeySets();
+            const keysets = wallet.keyChain.getKeysets();
             for (const ks of keysets) {
               const ksUnit = String(
                 (ks as { unit?: unknown })?.unit ?? "",
@@ -445,10 +440,7 @@ export const useRestoreMissingTokens = ({
               const chunkSize = 200;
               for (let i = 0; i < spendableProofs.length; i += chunkSize) {
                 const chunk = spendableProofs.slice(i, i + chunkSize);
-                const amount = chunk.reduce(
-                  (sum: number, p) => sum + (Number(p?.amount ?? 0) || 0),
-                  0,
-                );
+                const amount = sumCashuProofAmounts(chunk);
                 if (!Number.isFinite(amount) || amount <= 0) continue;
 
                 const token = getEncodedToken({

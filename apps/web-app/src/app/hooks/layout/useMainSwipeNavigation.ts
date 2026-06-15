@@ -23,10 +23,10 @@ type MainSwipeTarget = "contacts" | "wallet";
 const getMainSwipeTargetLeft = (
   width: number,
   target: MainSwipeTarget,
-): number => (target === "wallet" ? width : 0);
+): number => (target === "wallet" && width > 0 ? width : 0);
 
 const getMainSwipeProgress = (element: MainSwipeScrollable): number => {
-  const width = element.clientWidth || 1;
+  const width = element.clientWidth > 0 ? element.clientWidth : 1;
   return element.scrollLeft / width;
 };
 
@@ -58,7 +58,9 @@ export const alignMainSwipeToTarget = (
   target: MainSwipeTarget,
   behavior: ScrollBehavior = "auto",
 ): void => {
-  const width = element.clientWidth || 1;
+  const width = element.clientWidth;
+  if (target === "wallet" && width <= 0) return;
+
   const targetLeft = getMainSwipeTargetLeft(width, target);
 
   if (Math.abs(element.scrollLeft - targetLeft) <= 0.01) {
@@ -221,26 +223,50 @@ export const useMainSwipeNavigation = ({
       element.style.scrollBehavior = "auto";
     }
 
+    const target = routeKind === "wallet" ? "wallet" : "contacts";
+    const syncMainSwipeToRoute = () => {
+      if (mainSwipeRef.current !== element) return;
+      alignMainSwipeToTarget(element, target);
+      updateMainSwipeProgress(target === "wallet" ? 1 : 0);
+      stopInteractiveState();
+    };
+
     cancelProgrammaticFrame();
     programmaticTargetRef.current = null;
-    alignMainSwipeToTarget(
-      element,
-      routeKind === "wallet" ? "wallet" : "contacts",
-    );
+    syncMainSwipeToRoute();
 
-    updateMainSwipeProgress(routeKind === "wallet" ? 1 : 0);
-    stopInteractiveState();
+    const syncFrame = window.requestAnimationFrame(() => {
+      syncMainSwipeToRoute();
+    });
 
-    if (!disableSmoothAlignment) return;
+    let resizeObserver: ResizeObserver | null = null;
+    let removeResizeListener: (() => void) | null = null;
 
-    const restoreScrollBehavior = restoreScrollBehaviorNextFrame(
-      element,
-      mainSwipeRef,
-      previousScrollBehavior,
-    );
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", syncMainSwipeToRoute);
+      removeResizeListener = () => {
+        window.removeEventListener("resize", syncMainSwipeToRoute);
+      };
+    } else {
+      resizeObserver = new ResizeObserver(() => {
+        syncMainSwipeToRoute();
+      });
+      resizeObserver.observe(element);
+    }
+
+    const restoreScrollBehavior = disableSmoothAlignment
+      ? restoreScrollBehaviorNextFrame(
+          element,
+          mainSwipeRef,
+          previousScrollBehavior,
+        )
+      : null;
 
     return () => {
-      restoreScrollBehavior();
+      window.cancelAnimationFrame(syncFrame);
+      resizeObserver?.disconnect();
+      removeResizeListener?.();
+      restoreScrollBehavior?.();
     };
   }, [
     cancelProgrammaticFrame,

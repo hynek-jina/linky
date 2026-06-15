@@ -1,4 +1,4 @@
-import type { Proof, ProofState } from "@cashu/cashu-ts";
+import { Amount, type Proof, type ProofState } from "@cashu/cashu-ts";
 import { describe, expect, it } from "vitest";
 import {
   filterUnspentCashuProofs,
@@ -7,7 +7,7 @@ import {
 
 const mkProof = (n: number): Proof => ({
   id: `ks${n}`,
-  amount: n,
+  amount: Amount.from(n),
   secret: `sec${n}`,
   C: `c${n}`,
 });

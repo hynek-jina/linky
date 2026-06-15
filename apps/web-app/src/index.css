@@ -47,15 +47,44 @@ body {
 }
 
 @media (orientation: landscape) and (max-height: 600px) {
+  html,
   body {
-    display: flex;
-    justify-content: center;
-    overflow-x: hidden;
+    width: 100dvw;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
   }
 
   #root {
-    width: min(480px, 100dvh);
-    min-height: 100dvh;
+    visibility: hidden;
+  }
+
+  body::before,
+  body::after {
+    content: "";
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    z-index: 9999;
+    pointer-events: none;
+  }
+
+  body::before {
+    inset: 0;
+    left: 0;
+    top: 0;
+    background: var(--app-flat-bg);
+  }
+
+  body::after {
+    width: 42px;
+    height: 70px;
+    border: 3px solid #2dd4bf;
+    border-radius: 13px;
+    box-shadow:
+      0 0 0 1px rgba(45, 212, 191, 0.2),
+      0 18px 42px rgba(0, 0, 0, 0.35);
+    transform: translate(-50%, -50%) rotate(-90deg);
   }
 }
 

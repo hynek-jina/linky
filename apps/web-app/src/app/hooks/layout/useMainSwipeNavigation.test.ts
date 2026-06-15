@@ -61,6 +61,14 @@ describe("alignMainSwipeToTarget", () => {
 
     expect(element.scrollToCalls).toEqual([]);
   });
+
+  it("waits to align the wallet until the swipe has a measured width", () => {
+    const element = createElement(0, 0);
+
+    alignMainSwipeToTarget(element, "wallet");
+
+    expect(element.scrollToCalls).toEqual([]);
+  });
 });
 
 describe("shouldDisableWalletReturnAnimation", () => {

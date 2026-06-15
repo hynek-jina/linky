@@ -83,20 +83,24 @@ const readScreenOrientation = (): {
   };
 };
 
-const requestSensorPermission = async (constructor: unknown): Promise<void> => {
-  if (!constructor) return;
+const requestSensorPermission = async (
+  constructor: unknown,
+): Promise<boolean> => {
+  if (!constructor) return true;
   if (typeof constructor !== "object" && typeof constructor !== "function") {
-    return;
+    return true;
   }
 
   const requestPermission = Reflect.get(constructor, "requestPermission");
-  if (typeof requestPermission !== "function") return;
+  if (typeof requestPermission !== "function") return true;
 
   try {
-    await Reflect.apply(requestPermission, constructor, []);
+    const result = await Reflect.apply(requestPermission, constructor, []);
+    return result === "granted";
   } catch {
     // Browsers that do not allow prompting here will simply keep sensor events
     // silent; the profile button remains the reliable manual path.
+    return false;
   }
 };
 
@@ -137,13 +141,16 @@ export const useShowProfileQrOnTilt = ({
     }
     if (typeof window === "undefined") return;
 
-    let permissionRequested = false;
+    let sensorPermissionReady = false;
 
     const requestPermissionsFromGesture = () => {
-      if (permissionRequested) return;
-      permissionRequested = true;
-      void requestSensorPermission(window.DeviceOrientationEvent);
-      void requestSensorPermission(window.DeviceMotionEvent);
+      if (sensorPermissionReady) return;
+      void Promise.all([
+        requestSensorPermission(window.DeviceOrientationEvent),
+        requestSensorPermission(window.DeviceMotionEvent),
+      ]).then(([orientationReady, motionReady]) => {
+        sensorPermissionReady = orientationReady || motionReady;
+      });
     };
 
     const maybeOpenProfileQr = () => {
@@ -237,10 +244,10 @@ export const useShowProfileQrOnTilt = ({
       }
     };
 
-    window.addEventListener("pointerdown", requestPermissionsFromGesture, {
+    window.addEventListener("pointerup", requestPermissionsFromGesture, {
       passive: true,
     });
-    window.addEventListener("touchstart", requestPermissionsFromGesture, {
+    window.addEventListener("touchend", requestPermissionsFromGesture, {
       passive: true,
     });
     window.addEventListener("click", requestPermissionsFromGesture, {
@@ -265,8 +272,8 @@ export const useShowProfileQrOnTilt = ({
     onScreenOrientationChange();
 
     return () => {
-      window.removeEventListener("pointerdown", requestPermissionsFromGesture);
-      window.removeEventListener("touchstart", requestPermissionsFromGesture);
+      window.removeEventListener("pointerup", requestPermissionsFromGesture);
+      window.removeEventListener("touchend", requestPermissionsFromGesture);
       window.removeEventListener("click", requestPermissionsFromGesture);
       window.removeEventListener("deviceorientation", onDeviceOrientation);
       window.removeEventListener("devicemotion", onDeviceMotion);

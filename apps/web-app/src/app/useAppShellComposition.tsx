@@ -1,5 +1,5 @@
 import { Share } from "@capacitor/share";
-import type { Proof } from "@cashu/cashu-ts";
+import type { MintProofsConfig, OutputType, Proof } from "@cashu/cashu-ts";
 import * as Evolu from "@evolu/common";
 import { useOwner, useQuery } from "@evolu/react";
 import {
@@ -84,6 +84,10 @@ import {
   isCashuOutputsArePendingError,
 } from "../utils/cashuErrors";
 import { getCashuLib } from "../utils/cashuLib";
+import {
+  cashuAmountToNumber,
+  sumCashuProofAmounts,
+} from "../utils/cashuProofs";
 import { createLoadedCashuWallet } from "../utils/cashuWallet";
 import {
   ARCHIVED_CONTACTS_FILTER,
@@ -308,30 +312,20 @@ type CashuProofPayload = Record<string, unknown> & {
 const isCashuProofPayload = (value: unknown): value is CashuProofPayload => {
   if (typeof value !== "object" || value === null) return false;
   return (
-    typeof Reflect.get(value, "amount") === "number" &&
+    Reflect.get(value, "amount") !== undefined &&
     typeof Reflect.get(value, "secret") === "string" &&
     typeof Reflect.get(value, "C") === "string"
   );
 };
 
-const readDecodedCashuProofs = (decodedToken: unknown): CashuProofPayload[] => {
-  const directProofs = readObjectField(decodedToken, "proofs");
-  if (Array.isArray(directProofs)) {
-    return directProofs.filter(isCashuProofPayload);
-  }
-
-  const tokenEntries = readObjectField(decodedToken, "token");
-  if (!Array.isArray(tokenEntries)) return [];
-
-  const proofs: CashuProofPayload[] = [];
-  for (const entry of tokenEntries) {
-    const entryProofs = readObjectField(entry, "proofs");
-    if (!Array.isArray(entryProofs)) continue;
-    for (const proof of entryProofs) {
-      if (isCashuProofPayload(proof)) proofs.push(proof);
-    }
-  }
-  return proofs;
+const normalizeCashuProofPayload = (
+  proof: unknown,
+): CashuProofPayload | null => {
+  if (!isCashuProofPayload(proof)) return null;
+  return {
+    ...proof,
+    amount: cashuAmountToNumber(Reflect.get(proof, "amount")),
+  };
 };
 
 const extractMentionedNpubs = (content: string): string[] => {
@@ -598,10 +592,11 @@ const isLikelyCorsOrNetworkError = (message: string): boolean => {
 
 interface TopupMintProofsWalletLike {
   keysetId: string;
-  mintProofs: (
+  mintProofsBolt11: (
     amount: number,
     quote: string,
-    options?: { counter?: number },
+    config?: MintProofsConfig,
+    outputType?: OutputType,
   ) => Promise<Proof[]>;
   restore: (
     start: number,
@@ -642,7 +637,7 @@ const findExactSubsetByAmount = (
   const indexed = proofs
     .map((proof, idx) => ({
       idx,
-      amount: Number(proof.amount ?? 0) || 0,
+      amount: cashuAmountToNumber(proof.amount),
       proof,
     }))
     .filter((entry) => entry.amount > 0 && entry.amount <= target)
@@ -700,10 +695,7 @@ const restoreAlreadySignedTopupProofs = async (args: {
     restored.proofs,
   );
 
-  const totalSpendable = spendableProofs.reduce(
-    (sum, proof) => sum + (Number(proof.amount ?? 0) || 0),
-    0,
-  );
+  const totalSpendable = sumCashuProofAmounts(spendableProofs);
 
   if (totalSpendable < args.amount) {
     // Mint has signatures here but they're (mostly) SPENT. Common cause:
@@ -749,7 +741,7 @@ const mintTopupProofs = async (args: {
   const keysetId = String(args.wallet.keysetId ?? "").trim();
 
   if (!(det && unit && keysetId)) {
-    return await args.wallet.mintProofs(args.amount, args.quoteId);
+    return await args.wallet.mintProofsBolt11(args.amount, args.quoteId);
   }
 
   return await withCashuDeterministicCounterLock(
@@ -784,10 +776,11 @@ const mintTopupProofs = async (args: {
 
       while (true) {
         try {
-          const proofs = await args.wallet.mintProofs(
+          const proofs = await args.wallet.mintProofsBolt11(
             args.amount,
             args.quoteId,
-            { counter },
+            undefined,
+            { type: "deterministic", counter },
           );
 
           bumpCashuDeterministicCounter({
@@ -926,15 +919,15 @@ const claimAutoswapPendingEntry = async (args: {
   args.inFlightSet.add(key);
 
   try {
-    const { CashuMint, CashuWallet, MintQuoteState, getEncodedToken } =
+    const { Mint, Wallet, MintQuoteState, getEncodedToken } =
       await getCashuLib();
     const det = getCashuDeterministicSeedFromStorage();
     const walletCacheKey = `${args.claim.mintUrl}|${args.claim.unit || "sat"}`;
     let wallet = args.walletCache?.get(walletCacheKey);
     if (!wallet) {
       wallet = await createLoadedCashuWallet({
-        CashuMint,
-        CashuWallet,
+        Mint,
+        Wallet,
         mintUrl: args.claim.mintUrl,
         unit: args.claim.unit || "sat",
         ...(det ? { bip39seed: det.bip39seed } : {}),
@@ -942,7 +935,7 @@ const claimAutoswapPendingEntry = async (args: {
       args.walletCache?.set(walletCacheKey, wallet);
     }
 
-    const status = await wallet.checkMintQuote(args.claim.quote);
+    const status = await wallet.checkMintQuoteBolt11(args.claim.quote);
     const state = readMintQuoteState(status);
     if (!isClaimableMintQuoteState(state, MintQuoteState)) {
       return { kind: "not_claimable_yet" };
@@ -2630,7 +2623,7 @@ export const useAppShellComposition = () => {
           return;
         }
 
-        const { CashuMint, CashuWallet, MintQuoteState, getEncodedToken } =
+        const { Mint, Wallet, MintQuoteState, getEncodedToken } =
           await getCashuLib();
         await withLocalStorageLeaseLock({
           key: claimLockKey,
@@ -2661,8 +2654,8 @@ export const useAppShellComposition = () => {
             if (!wallet) {
               const det = getCashuDeterministicSeedFromStorage();
               wallet = await createLoadedCashuWallet({
-                CashuMint,
-                CashuWallet,
+                Mint,
+                Wallet,
                 mintUrl: topupMintQuote.mintUrl,
                 ...(topupMintQuote.unit ? { unit: topupMintQuote.unit } : {}),
                 ...(det ? { bip39seed: det.bip39seed } : {}),
@@ -2670,7 +2663,7 @@ export const useAppShellComposition = () => {
               cachedWallet = wallet;
             }
 
-            const status = await wallet.checkMintQuote(quoteId);
+            const status = await wallet.checkMintQuoteBolt11(quoteId);
             const quoteState = readMintQuoteState(status);
             if (!isClaimableMintQuoteState(quoteState, MintQuoteState)) {
               return;
@@ -4526,6 +4519,7 @@ export const useAppShellComposition = () => {
       let usedInputTokens: string[] = [];
       let sendToken: string | null = null;
       let sendTokenAmount = 0;
+      let sendProofs: Proof[] = [];
       let sendTokenUnit: string | null = null;
       let lastError: unknown = null;
 
@@ -4631,6 +4625,7 @@ export const useAppShellComposition = () => {
 
             sendToken = split.sendToken;
             sendTokenAmount = split.sendAmount;
+            sendProofs = split.sendProofs;
             sendTokenUnit = split.unit ?? null;
             sentAmountSat = split.sendAmount;
             usedMint = split.mint;
@@ -4670,9 +4665,10 @@ export const useAppShellComposition = () => {
           return true;
         }
 
-        const { getDecodedToken } = await getCashuLib();
-        const decodedToken = getDecodedToken(sendToken);
-        const proofs = readDecodedCashuProofs(decodedToken);
+        const proofs = sendProofs.flatMap((proof) => {
+          const normalized = normalizeCashuProofPayload(proof);
+          return normalized ? [normalized] : [];
+        });
         if (proofs.length === 0) throw new Error("empty payment proofs");
 
         const body: Record<string, unknown> = {
@@ -7097,11 +7093,11 @@ export const useAppShellComposition = () => {
       // load below independently fetches info+keysets+keys via cashu-ts,
       // which is what melt actually needs.
 
-      const { CashuMint, CashuWallet } = await getCashuLib();
+      const { Mint, Wallet } = await getCashuLib();
       const det = getCashuDeterministicSeedFromStorage();
       const targetWallet = await createLoadedCashuWallet({
-        CashuMint,
-        CashuWallet,
+        Mint,
+        Wallet,
         mintUrl: targetMint,
         unit: "sat",
         ...(det ? { bip39seed: det.bip39seed } : {}),
@@ -7139,16 +7135,16 @@ export const useAppShellComposition = () => {
             amountSat: sourceBalance,
             mintUrl: targetMint,
           });
-          const probeMeltQuote = await sourceMeltContext.wallet.createMeltQuote(
-            probe.invoice,
+          const probeMeltQuote =
+            await sourceMeltContext.wallet.createMeltQuoteBolt11(probe.invoice);
+          const probeFeeReserve = cashuAmountToNumber(
+            probeMeltQuote.fee_reserve,
           );
-          const probeFeeReserve = Number(probeMeltQuote.fee_reserve ?? 0) || 0;
-          const probeInputFee =
-            Number(
-              sourceMeltContext.wallet.getFeesForProofs(
-                sourceMeltContext.spendableProofs,
-              ) ?? 0,
-            ) || 0;
+          const probeInputFee = cashuAmountToNumber(
+            sourceMeltContext.wallet.getFeesForProofs(
+              sourceMeltContext.spendableProofs,
+            ),
+          );
           const sizedAmount = Math.max(
             1,
             sourceBalance - probeFeeReserve - probeInputFee,

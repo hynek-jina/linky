@@ -1,4 +1,10 @@
 import React from "react";
+import {
+  startNativeQrScan,
+  startNativeQrScanStream,
+  type NativeScanStreamHandle,
+  supportsNativeQrScan,
+} from "../../platform/nativeBridge";
 import type { NavigatorWithOptionalCameraPermissions } from "../../types/browser";
 import type { Route } from "../../types/route";
 import { appendPushDebugLog } from "../../utils/pushDebugLog";
@@ -73,6 +79,7 @@ export const useGuideScannerDomain = ({
   const scanVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const scanOpenRequestIdRef = React.useRef(0);
   const scanIsOpenRef = React.useRef(false);
+  const nativeScanHandleRef = React.useRef<NativeScanStreamHandle | null>(null);
 
   React.useEffect(() => {
     scanIsOpenRef.current = scanIsOpen;
@@ -87,6 +94,14 @@ export const useGuideScannerDomain = ({
   );
 
   const stopScanStream = React.useCallback(() => {
+    const nativeScanHandle = nativeScanHandleRef.current;
+    nativeScanHandleRef.current = null;
+    try {
+      nativeScanHandle?.stop();
+    } catch {
+      // ignore
+    }
+
     const video = scanVideoRef.current;
     if (video) {
       try {
@@ -117,18 +132,100 @@ export const useGuideScannerDomain = ({
   }, []);
 
   const closeScan = React.useCallback(() => {
+    scanIsOpenRef.current = false;
     setScanIsOpen(false);
     setScanEntryPoint(null);
     scanOpenRequestIdRef.current += 1;
     stopScanStream();
   }, [stopScanStream]);
 
+  const handleScannedTextRef = React.useRef(onScannedText);
+  React.useEffect(() => {
+    handleScannedTextRef.current = onScannedText;
+  }, [onScannedText]);
+
+  const handleDetectedScanValue = React.useCallback(async (value: string) => {
+    await handleScannedTextRef.current(value);
+    return true;
+  }, []);
+
+  const handleNativeScanResult = React.useCallback(
+    async (
+      requestId: number,
+      result: {
+        cancelled: boolean;
+        message?: string;
+        value: string | null;
+      },
+    ) => {
+      if (
+        requestId !== scanOpenRequestIdRef.current ||
+        !scanIsOpenRef.current
+      ) {
+        return;
+      }
+
+      const value = String(result.value ?? "").trim();
+      if (value) {
+        const nativeScanHandle = nativeScanHandleRef.current;
+        nativeScanHandleRef.current = null;
+        try {
+          nativeScanHandle?.stop();
+        } catch {
+          // ignore
+        }
+
+        await handleDetectedScanValue(value);
+        return;
+      }
+
+      if (result.cancelled) {
+        closeScan();
+        return;
+      }
+
+      const message = String(result.message ?? "").trim();
+      logScanDebug("native scan failed", {
+        message,
+      });
+      pushToast(
+        /permission/i.test(message) || /denied/i.test(message)
+          ? t("scanPermissionDenied")
+          : message || t("scanCameraError"),
+      );
+      closeScan();
+    },
+    [closeScan, handleDetectedScanValue, logScanDebug, pushToast, t],
+  );
+
   const openScanForEntryPoint = React.useCallback(
     (entryPoint: ScanEntryPoint) => {
+      stopScanStream();
+      scanIsOpenRef.current = true;
       setScanEntryPoint(entryPoint);
       setScanIsOpen(true);
 
       const requestId = (scanOpenRequestIdRef.current += 1);
+
+      if (supportsNativeQrScan()) {
+        const nativeScanHandle = startNativeQrScanStream((result) => {
+          void handleNativeScanResult(requestId, result);
+        });
+
+        if (nativeScanHandle) {
+          nativeScanHandleRef.current = nativeScanHandle;
+          return;
+        }
+
+        const nativeScan = startNativeQrScan();
+        if (nativeScan) {
+          void nativeScan.then((result) => {
+            void handleNativeScanResult(requestId, result);
+          });
+          return;
+        }
+      }
+
       const media = navigator.mediaDevices as
         | {
             getUserMedia?: (
@@ -224,7 +321,7 @@ export const useGuideScannerDomain = ({
         }
       })();
     },
-    [logScanDebug, pushToast, stopScanStream, t],
+    [handleNativeScanResult, logScanDebug, pushToast, stopScanStream, t],
   );
 
   const openScan = React.useCallback(() => {
@@ -238,16 +335,6 @@ export const useGuideScannerDomain = ({
   const openWalletScan = React.useCallback(() => {
     openScanForEntryPoint("send");
   }, [openScanForEntryPoint]);
-
-  const handleScannedTextRef = React.useRef(onScannedText);
-  React.useEffect(() => {
-    handleScannedTextRef.current = onScannedText;
-  }, [onScannedText]);
-
-  const handleDetectedScanValue = React.useCallback(async (value: string) => {
-    await handleScannedTextRef.current(value);
-    return true;
-  }, []);
 
   React.useEffect(() => {
     if (!scanIsOpen) return;

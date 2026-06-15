@@ -1,4 +1,4 @@
-import type { Proof, ProofState } from "@cashu/cashu-ts";
+import type { Proof, ProofLike, ProofState } from "@cashu/cashu-ts";
 import * as Evolu from "@evolu/common";
 import React from "react";
 import { parseCashuToken } from "../../../cashu";
@@ -10,6 +10,7 @@ import { getCashuLib } from "../../../utils/cashuLib";
 import {
   dedupeCashuProofs,
   partitionCashuProofGroupsByState,
+  sumCashuProofAmounts,
 } from "../../../utils/cashuProofs";
 import {
   createLoadedCashuWallet,
@@ -48,13 +49,6 @@ type CashuTokenUpdatePayload = Readonly<{
   token?: string;
   unit?: string | null;
 }>;
-
-interface ProofLike {
-  C?: string;
-  amount?: number;
-  id?: string;
-  secret?: string;
-}
 
 interface UseCashuTokenChecksParams {
   appOwnerId: Evolu.OwnerId | null;
@@ -114,11 +108,11 @@ export const useCashuTokenChecks = ({
       const key = `${args.mintUrl}|${args.unit}`;
       const cached = cashuWalletCacheRef.current.get(key);
       if (cached) return cached;
-      const { CashuMint, CashuWallet } = await getCashuLib();
+      const { Mint, Wallet } = await getCashuLib();
       const det = getCashuDeterministicSeedFromStorage();
       const wallet = await createLoadedCashuWallet({
-        CashuMint,
-        CashuWallet,
+        Mint,
+        Wallet,
         mintUrl: args.mintUrl,
         unit: args.unit,
         ...(det ? { bip39seed: det.bip39seed } : {}),
@@ -261,13 +255,11 @@ export const useCashuTokenChecks = ({
         );
       };
 
-      const normalizeProofs = (
-        items: ProofLike[],
-      ): Array<{ C: string; amount: number; id: string; secret: string }> =>
+      const normalizeProofs = (items: ProofLike[]): Proof[] =>
         items.filter(
-          (p): p is { C: string; amount: number; id: string; secret: string } =>
+          (p): p is Proof =>
             !!p &&
-            typeof (p as { amount?: unknown }).amount === "number" &&
+            Reflect.get(p, "amount") !== undefined &&
             typeof (p as { secret?: unknown }).secret === "string" &&
             typeof (p as { C?: unknown }).C === "string" &&
             typeof (p as { id?: unknown }).id === "string",
@@ -351,8 +343,7 @@ export const useCashuTokenChecks = ({
           }
         }
 
-        const { getDecodedToken, getEncodedToken, getTokenMetadata } =
-          await getCashuLib();
+        const { getEncodedToken, getTokenMetadata } = await getCashuLib();
 
         const tokenMetadata = getTokenMetadata(tokenText);
         const mint = String(tokenMetadata.mint ?? primaryRow.mint ?? "").trim();
@@ -365,9 +356,8 @@ export const useCashuTokenChecks = ({
         const decoded = decodeCashuTokenForMint({
           tokenText,
           mintUrl: mint,
-          keysets: wallet.keysets,
-          getDecodedToken,
           getTokenMetadata,
+          wallet,
         });
 
         const normalizedMint = normalizeMintUrl(mint);
@@ -414,9 +404,8 @@ export const useCashuTokenChecks = ({
             candidateDecoded = decodeCashuTokenForMint({
               tokenText: candidateText,
               mintUrl: mint,
-              keysets: wallet.keysets,
-              getDecodedToken,
               getTokenMetadata,
+              wallet,
             });
           } catch {
             continue;
@@ -456,9 +445,7 @@ export const useCashuTokenChecks = ({
         // partition logic still tracks it.
         if (candidates.length === 0) {
           const fallbackProofs = normalizeProofs(
-            Array.isArray(decoded?.proofs)
-              ? (decoded.proofs as ProofLike[])
-              : [],
+            Array.isArray(decoded?.proofs) ? decoded.proofs : [],
           );
           if (fallbackProofs.length) {
             candidates.push({
@@ -550,11 +537,7 @@ export const useCashuTokenChecks = ({
         );
         if (!proofs.length) throw new Error("Token proofs missing");
 
-        const total = proofs.reduce(
-          (sum: number, p: { amount?: number }) =>
-            sum + (Number(p?.amount ?? 0) || 0),
-          0,
-        );
+        const total = sumCashuProofAmounts(proofs);
         if (!Number.isFinite(total) || total <= 0) {
           throw new Error("Invalid token amount");
         }
@@ -777,7 +760,7 @@ export const useCashuTokenChecks = ({
         }
       >();
 
-      const { getDecodedToken, getTokenMetadata } = await getCashuLib();
+      const { getTokenMetadata } = await getCashuLib();
 
       for (const row of cashuTokensAll) {
         if (row?.isDeleted) continue;
@@ -834,19 +817,12 @@ export const useCashuTokenChecks = ({
               const decoded = decodeCashuTokenForMint({
                 tokenText: entry.tokenText,
                 mintUrl: group.mintUrl,
-                keysets: wallet.keysets,
-                getDecodedToken,
                 getTokenMetadata,
+                wallet,
               });
-              const proofs: Proof[] = [];
-              for (const p of decoded.proofs ?? []) {
-                proofs.push({
-                  amount: Number(p.amount ?? 0),
-                  secret: p.secret,
-                  C: p.C,
-                  id: p.id,
-                });
-              }
+              const proofs = Array.isArray(decoded.proofs)
+                ? decoded.proofs
+                : [];
               if (proofs.length === 0) continue;
               decodedTokens.push({ id: entry.id, proofs });
             } catch {
@@ -930,21 +906,15 @@ export const useCashuTokenChecks = ({
 
       const proofs: Proof[] = [];
       try {
-        const { getDecodedToken, getTokenMetadata } = await getCashuLib();
+        const { getTokenMetadata } = await getCashuLib();
         const decoded = decodeCashuTokenForMint({
           tokenText,
           mintUrl,
-          keysets: wallet.keysets,
-          getDecodedToken,
           getTokenMetadata,
+          wallet,
         });
         for (const p of decoded.proofs ?? []) {
-          proofs.push({
-            amount: Number(p.amount ?? 0),
-            secret: p.secret,
-            C: p.C,
-            id: p.id,
-          });
+          proofs.push(p);
         }
       } catch {
         return false;
