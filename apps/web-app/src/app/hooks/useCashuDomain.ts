@@ -173,7 +173,6 @@ export const useCashuDomain = ({
 
       const current = cashuTokensAllRef.current;
       return current.some((row) => {
-        if (isCashuTokenErrorState(row.state)) return false;
         return rowMatchesToken(row, raw);
       });
     },

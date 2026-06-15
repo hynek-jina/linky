@@ -29,12 +29,22 @@ describe("getCashuTokenMessageInfo", () => {
     ).toBe(false);
   });
 
-  it("does not treat failed accept attempts as already known", () => {
+  it("treats failed accept attempts as already known for auto-import", () => {
     const token = buildCashuToken();
 
     expect(
       getCashuTokenMessageInfo(token, [{ rawToken: token, state: "error" }])
         ?.isValid,
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("treats deleted failed tokens as already known for auto-import", () => {
+    const token = buildCashuToken();
+
+    expect(
+      getCashuTokenMessageInfo(token, [
+        { isDeleted: "1", rawToken: token, state: "error" },
+      ])?.isValid,
+    ).toBe(false);
   });
 });
