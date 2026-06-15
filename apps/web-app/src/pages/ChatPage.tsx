@@ -124,6 +124,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   const npub = selectedContact
     ? normalizeNpubIdentifier(selectedContact.npub)
     : null;
+  const selectedContactId = selectedContact?.id ?? null;
   const hasUnknownPubkeyHex = Boolean(
     String(selectedContact?.unknownPubkeyHex ?? "").trim(),
   );
@@ -149,6 +150,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   useEffect(() => {
     if (typeof document === "undefined") return;
     if (typeof window === "undefined") return;
+    if (!selectedContactId) return;
 
     const root = document.documentElement;
     const body = document.body;
@@ -265,7 +267,7 @@ export const ChatPage: FC<ChatPageProps> = ({
       root.style.removeProperty("--chat-keyboard-inset");
       delete root.dataset.chatKeyboardOpen;
     };
-  }, [chatMessagesRef]);
+  }, [chatMessagesRef, selectedContactId]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;

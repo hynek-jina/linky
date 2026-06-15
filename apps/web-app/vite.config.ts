@@ -257,7 +257,7 @@ export default defineConfig({
         scope: "/",
         start_url: "/",
         display: "standalone",
-        orientation: "portrait",
+        orientation: "portrait-primary",
         protocol_handlers: [
           {
             protocol: "web+cashu",

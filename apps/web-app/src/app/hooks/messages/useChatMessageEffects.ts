@@ -189,8 +189,12 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
     if (route.kind !== "chat") return;
     if (!selectedContact) return;
 
-    const contactId = String(selectedContact.id ?? "");
+    const routeContactId = String(route.id ?? "").trim();
+    if (!routeContactId) return;
+
+    const contactId = String(selectedContact.id ?? "").trim();
     if (!contactId) return;
+    if (contactId !== routeContactId) return;
 
     const container = chatMessagesRef.current;
     if (!container) return;
@@ -200,14 +204,14 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
       : null;
     if (!last) return;
 
-    const prevCount = chatLastMessageCountRef.current[contactId] ?? 0;
-    chatLastMessageCountRef.current[contactId] = chatMessages.length;
+    const prevCount = chatLastMessageCountRef.current[routeContactId] ?? 0;
+    chatLastMessageCountRef.current[routeContactId] = chatMessages.length;
 
     const firstForThisContact =
-      chatDidInitialScrollForContactRef.current !== contactId;
+      chatDidInitialScrollForContactRef.current !== routeContactId;
 
     if (firstForThisContact) {
-      chatDidInitialScrollForContactRef.current = contactId;
+      chatDidInitialScrollForContactRef.current = routeContactId;
 
       const target = last;
       const targetId = String(target.id ?? "");
@@ -286,7 +290,7 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
       });
     }
   }, [
-    route.kind,
+    route,
     selectedContact,
     chatMessages,
     chatMessagesRef,
