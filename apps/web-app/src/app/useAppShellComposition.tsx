@@ -318,36 +318,14 @@ const isCashuProofPayload = (value: unknown): value is CashuProofPayload => {
   );
 };
 
-const readDecodedCashuProofs = (decodedToken: unknown): CashuProofPayload[] => {
-  const normalizeProof = (proof: unknown): CashuProofPayload | null => {
-    if (!isCashuProofPayload(proof)) return null;
-    return {
-      ...proof,
-      amount: cashuAmountToNumber(Reflect.get(proof, "amount")),
-    };
+const normalizeCashuProofPayload = (
+  proof: unknown,
+): CashuProofPayload | null => {
+  if (!isCashuProofPayload(proof)) return null;
+  return {
+    ...proof,
+    amount: cashuAmountToNumber(Reflect.get(proof, "amount")),
   };
-
-  const directProofs = readObjectField(decodedToken, "proofs");
-  if (Array.isArray(directProofs)) {
-    return directProofs.flatMap((proof) => {
-      const normalized = normalizeProof(proof);
-      return normalized ? [normalized] : [];
-    });
-  }
-
-  const tokenEntries = readObjectField(decodedToken, "token");
-  if (!Array.isArray(tokenEntries)) return [];
-
-  const proofs: CashuProofPayload[] = [];
-  for (const entry of tokenEntries) {
-    const entryProofs = readObjectField(entry, "proofs");
-    if (!Array.isArray(entryProofs)) continue;
-    for (const proof of entryProofs) {
-      const normalized = normalizeProof(proof);
-      if (normalized) proofs.push(normalized);
-    }
-  }
-  return proofs;
 };
 
 const extractMentionedNpubs = (content: string): string[] => {
@@ -4541,6 +4519,7 @@ export const useAppShellComposition = () => {
       let usedInputTokens: string[] = [];
       let sendToken: string | null = null;
       let sendTokenAmount = 0;
+      let sendProofs: Proof[] = [];
       let sendTokenUnit: string | null = null;
       let lastError: unknown = null;
 
@@ -4646,6 +4625,7 @@ export const useAppShellComposition = () => {
 
             sendToken = split.sendToken;
             sendTokenAmount = split.sendAmount;
+            sendProofs = split.sendProofs;
             sendTokenUnit = split.unit ?? null;
             sentAmountSat = split.sendAmount;
             usedMint = split.mint;
@@ -4685,9 +4665,10 @@ export const useAppShellComposition = () => {
           return true;
         }
 
-        const { getDecodedToken } = await getCashuLib();
-        const decodedToken = getDecodedToken(sendToken, []);
-        const proofs = readDecodedCashuProofs(decodedToken);
+        const proofs = sendProofs.flatMap((proof) => {
+          const normalized = normalizeCashuProofPayload(proof);
+          return normalized ? [normalized] : [];
+        });
         if (proofs.length === 0) throw new Error("empty payment proofs");
 
         const body: Record<string, unknown> = {

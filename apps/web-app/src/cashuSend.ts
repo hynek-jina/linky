@@ -26,6 +26,7 @@ export type CashuSendResult =
       remainingAmount: number;
       remainingToken: string | null;
       sendAmount: number;
+      sendProofs: Proof[];
       sendToken: string;
       unit: string | null;
     }
@@ -248,6 +249,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
       mint,
       unit: walletUnit,
       sendAmount,
+      sendProofs,
       sendToken,
       remainingAmount,
       remainingToken,
