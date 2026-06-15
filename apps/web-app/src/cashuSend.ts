@@ -8,17 +8,16 @@ import {
 import { isCashuRecoverableOutputCollisionError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
 import {
+  cashuAmountToNumber,
   dedupeCashuProofs,
   filterUnspentCashuProofs,
+  sumCashuProofAmounts,
 } from "./utils/cashuProofs";
 import {
   createLoadedCashuWallet,
   decodeCashuTokenForMint,
 } from "./utils/cashuWallet";
 import { getUnknownErrorMessage } from "./utils/unknown";
-
-const getProofAmountSum = (proofs: Array<{ amount: number }>) =>
-  proofs.reduce((sum, proof) => sum + proof.amount, 0);
 
 export type CashuSendResult =
   | {
@@ -61,18 +60,13 @@ export const createSendTokenWithTokensAtMint = async (args: {
     };
   }
 
-  const {
-    CashuMint,
-    CashuWallet,
-    getDecodedToken,
-    getEncodedToken,
-    getTokenMetadata,
-  } = await getCashuLib();
+  const { Mint, Wallet, getEncodedToken, getTokenMetadata } =
+    await getCashuLib();
 
   const det = getCashuDeterministicSeedFromStorage();
   const wallet = await createLoadedCashuWallet({
-    CashuMint,
-    CashuWallet,
+    Mint,
+    Wallet,
     mintUrl: mint,
     ...(unit ? { unit } : {}),
     ...(det ? { bip39seed: det.bip39seed } : {}),
@@ -87,17 +81,11 @@ export const createSendTokenWithTokensAtMint = async (args: {
       const decoded = decodeCashuTokenForMint({
         tokenText,
         mintUrl: mint,
-        keysets: wallet.keysets,
-        getDecodedToken,
         getTokenMetadata,
+        wallet,
       });
       for (const proof of decoded.proofs ?? []) {
-        allProofs.push({
-          amount: Number(proof.amount ?? 0),
-          secret: proof.secret,
-          C: proof.C,
-          id: proof.id,
-        });
+        allProofs.push(proof);
       }
     }
   } catch (e) {
@@ -123,7 +111,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
       // Keep previous behavior if state checks are unavailable.
     }
 
-    const have = getProofAmountSum(spendableProofs);
+    const have = sumCashuProofAmounts(spendableProofs);
     if (have < sendAmount) {
       return {
         ok: false,
@@ -147,7 +135,10 @@ export const createSendTokenWithTokensAtMint = async (args: {
             });
 
             const swapOnce = async (counter: number) =>
-              await wallet.swap(sendAmount, spendableProofs, { counter });
+              await wallet.send(sendAmount, spendableProofs, undefined, {
+                send: { type: "deterministic", counter },
+                keep: { type: "deterministic", counter: 0 },
+              });
 
             let counter = counter0;
             let swapped: SendResponse | null = null;
@@ -188,12 +179,12 @@ export const createSendTokenWithTokensAtMint = async (args: {
             return swapped;
           },
         )
-      : wallet.swap(sendAmount, spendableProofs));
+      : wallet.send(sendAmount, spendableProofs));
 
     // Recovery: if the caller fails after swap, this token should represent
     // the user's full funds (keep + send).
     const recoveryProofs = [...(swapped.keep ?? []), ...(swapped.send ?? [])];
-    const recoveryAmount = getProofAmountSum(recoveryProofs);
+    const recoveryAmount = sumCashuProofAmounts(recoveryProofs);
     const recoveryToken =
       recoveryProofs.length > 0
         ? getEncodedToken({
@@ -226,7 +217,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
     }
 
     const remainingProofs = swapped.keep ?? [];
-    const remainingAmount = getProofAmountSum(remainingProofs);
+    const remainingAmount = sumCashuProofAmounts(remainingProofs);
     const remainingToken =
       remainingProofs.length > 0
         ? getEncodedToken({
@@ -239,7 +230,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
     try {
       const denomSummary = (proofs: Proof[]) =>
         proofs.reduce<Record<string, number>>((acc, p) => {
-          const amt = Number(p.amount ?? 0) || 0;
+          const amt = cashuAmountToNumber(p.amount);
           if (amt > 0) acc[String(amt)] = (acc[String(amt)] ?? 0) + 1;
           return acc;
         }, {});
@@ -267,7 +258,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
       mint,
       unit: unit ?? null,
       sendAmount,
-      remainingAmount: getProofAmountSum(spendableProofs),
+      remainingAmount: sumCashuProofAmounts(spendableProofs),
       remainingToken: null,
       error: getUnknownErrorMessage(e, "swap failed"),
     };

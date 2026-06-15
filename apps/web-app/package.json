@@ -17,7 +17,7 @@
     "@capacitor/core": "^7.4.3",
     "@capacitor/push-notifications": "^7.0.0",
     "@capacitor/share": "^7.0.0",
-    "@cashu/cashu-ts": "^2.5.3",
+    "@cashu/cashu-ts": "^4.0.0",
     "@evolu/common": "^7.4.1",
     "@evolu/react": "^10.4.0",
     "@evolu/react-web": "^2.4.0",

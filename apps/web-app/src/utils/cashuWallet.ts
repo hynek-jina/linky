@@ -1,12 +1,13 @@
 import type {
-  CashuWallet as CashuWalletClass,
   MintKeyset,
+  Token,
+  Wallet as CashuWalletClass,
 } from "@cashu/cashu-ts";
 import { getUnknownErrorMessage } from "./unknown";
 
 interface CreateLoadedCashuWalletArgs {
-  CashuMint: typeof import("@cashu/cashu-ts").CashuMint;
-  CashuWallet: typeof import("@cashu/cashu-ts").CashuWallet;
+  Mint: typeof import("@cashu/cashu-ts").Mint;
+  Wallet: typeof import("@cashu/cashu-ts").Wallet;
   bip39seed?: Uint8Array;
   mintUrl: string;
   unit?: string | null;
@@ -21,14 +22,11 @@ interface CashuTokenMetadataLike {
   mint?: string;
 }
 
-interface DecodedCashuTokenLike {
-  mint?: string;
-}
-
 type CashuMintConstructorArgs = ConstructorParameters<
-  typeof import("@cashu/cashu-ts").CashuMint
+  typeof import("@cashu/cashu-ts").Mint
 >;
-type CashuMintRequest = NonNullable<CashuMintConstructorArgs[1]>;
+type CashuMintOptions = NonNullable<CashuMintConstructorArgs[1]>;
+type CashuMintRequest = NonNullable<CashuMintOptions["customRequest"]>;
 
 const isHexString = (value: string): boolean => {
   return /^[0-9a-f]+$/i.test(value);
@@ -121,14 +119,11 @@ export const pickPreferredMintKeyset = (
   return matches[0] ?? null;
 };
 
-export const decodeCashuTokenForMint = <
-  TDecoded extends DecodedCashuTokenLike,
->(args: {
-  getDecodedToken: (tokenText: string, keysets?: MintKeyset[]) => TDecoded;
+export const decodeCashuTokenForMint = <TDecoded extends Token>(args: {
   getTokenMetadata: (tokenText: string) => CashuTokenMetadataLike;
-  keysets: MintKeyset[];
   mintUrl: string;
   tokenText: string;
+  wallet: { decodeToken: (tokenText: string) => TDecoded };
 }): TDecoded => {
   const tokenMetadata = args.getTokenMetadata(args.tokenText);
   const tokenMintUrl = normalizeMintUrlValue(tokenMetadata.mint ?? "");
@@ -140,17 +135,17 @@ export const decodeCashuTokenForMint = <
     throw new Error("Mixed mints not supported");
   }
 
-  return args.getDecodedToken(args.tokenText, args.keysets);
+  return args.wallet.decodeToken(args.tokenText);
 };
 
 const createWalletInstance = (
-  CashuMint: typeof import("@cashu/cashu-ts").CashuMint,
-  CashuWallet: typeof import("@cashu/cashu-ts").CashuWallet,
+  Mint: typeof import("@cashu/cashu-ts").Mint,
+  Wallet: typeof import("@cashu/cashu-ts").Wallet,
   mintUrl: string,
   options: CashuWalletOptions,
 ): CashuWalletClass => {
-  return new CashuWallet(
-    new CashuMint(mintUrl, createDirectCashuMintRequest()),
+  return new Wallet(
+    new Mint(mintUrl, { customRequest: createDirectCashuMintRequest() }),
     options,
   );
 };
@@ -159,7 +154,9 @@ const createWalletFromFallbackMintData = async (
   args: CreateLoadedCashuWalletArgs,
 ): Promise<CashuWalletClass> => {
   const options = buildWalletOptions(args);
-  const mint = new args.CashuMint(args.mintUrl, createDirectCashuMintRequest());
+  const mint = new args.Mint(args.mintUrl, {
+    customRequest: createDirectCashuMintRequest(),
+  });
   const [mintInfo, keysetsResponse] = await Promise.all([
     mint.getInfo(),
     mint.getKeySets(),
@@ -180,13 +177,16 @@ const createWalletFromFallbackMintData = async (
     throw new Error(`Mint keys for keyset ${keyset.id} are unavailable`);
   }
 
-  const wallet = new args.CashuWallet(mint, {
-    ...options,
-    mintInfo,
-    keysets: keysetsResponse.keysets,
-    keys,
-  });
-  wallet.keysetId = keyset.id;
+  const cache = {
+    mintUrl: args.mintUrl,
+    keysets: keysetsResponse.keysets.map((candidate) => {
+      if (candidate.id !== keyset.id) return candidate;
+      return { ...candidate, keys: keys.keys };
+    }),
+  };
+  const wallet = new args.Wallet(mint, options);
+  wallet.loadMintFromCache(mintInfo, cache);
+  wallet.bindKeyset(keyset.id);
   return wallet;
 };
 
@@ -195,8 +195,8 @@ export const createLoadedCashuWallet = async (
 ): Promise<CashuWalletClass> => {
   const options = buildWalletOptions(args);
   const wallet = createWalletInstance(
-    args.CashuMint,
-    args.CashuWallet,
+    args.Mint,
+    args.Wallet,
     args.mintUrl,
     options,
   );

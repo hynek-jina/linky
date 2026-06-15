@@ -11,6 +11,7 @@ import {
   isCashuRecoverableOutputCollisionError,
 } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
+import { sumCashuProofAmounts } from "./utils/cashuProofs";
 import {
   createLoadedCashuWallet,
   decodeCashuTokenForMint,
@@ -29,13 +30,8 @@ export const acceptCashuToken = async (
   const tokenText = rawToken.trim();
   if (!tokenText) throw new Error("Empty token");
 
-  const {
-    CashuMint,
-    CashuWallet,
-    getDecodedToken,
-    getEncodedToken,
-    getTokenMetadata,
-  } = await getCashuLib();
+  const { Mint, Wallet, getEncodedToken, getTokenMetadata } =
+    await getCashuLib();
 
   const tokenMetadata = getTokenMetadata(tokenText);
   const mintUrl = String(tokenMetadata.mint ?? "").trim();
@@ -44,8 +40,8 @@ export const acceptCashuToken = async (
   const det = getCashuDeterministicSeedFromStorage();
 
   const wallet = await createLoadedCashuWallet({
-    CashuMint,
-    CashuWallet,
+    Mint,
+    Wallet,
     mintUrl,
     ...(tokenMetadata.unit ? { unit: tokenMetadata.unit } : {}),
     ...(det ? { bip39seed: det.bip39seed } : {}),
@@ -54,9 +50,8 @@ export const acceptCashuToken = async (
   const decoded = decodeCashuTokenForMint({
     tokenText,
     mintUrl,
-    keysets: wallet.keysets,
-    getDecodedToken,
     getTokenMetadata,
+    wallet,
   });
 
   const unit = wallet.unit;
@@ -67,7 +62,10 @@ export const acceptCashuToken = async (
         { mintUrl, unit, keysetId },
         async () => {
           const receiveOnce = async (counter: number) =>
-            await wallet.receive(decoded, { counter });
+            await wallet.receive(decoded, undefined, {
+              type: "deterministic",
+              counter,
+            });
 
           let counter = getCashuDeterministicCounter({
             mintUrl,
@@ -157,7 +155,7 @@ export const acceptCashuToken = async (
       )
     : wallet.receive(decoded));
 
-  const amount = proofs.reduce((sum, proof) => sum + (proof.amount ?? 0), 0);
+  const amount = sumCashuProofAmounts(proofs);
 
   const acceptedToken = getEncodedToken({
     mint: mintUrl,

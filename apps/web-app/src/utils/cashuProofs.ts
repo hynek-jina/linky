@@ -1,11 +1,53 @@
-import type { Proof, ProofState } from "@cashu/cashu-ts";
+import type { Proof, ProofLike, ProofState } from "@cashu/cashu-ts";
+
+const hasToNumber = (value: unknown): value is { toNumber: () => number } => {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "toNumber" in value &&
+    typeof value.toNumber === "function"
+  );
+};
+
+export const cashuAmountToNumber = (amount: unknown): number => {
+  if (amount === null || amount === undefined) return 0;
+  if (typeof amount === "number") {
+    if (!Number.isFinite(amount)) return 0;
+    return Math.trunc(amount);
+  }
+  if (typeof amount === "bigint") {
+    const next = Number(amount);
+    if (!Number.isSafeInteger(next)) {
+      throw new Error("Cashu amount exceeds safe integer range");
+    }
+    return next;
+  }
+  if (typeof amount === "string") {
+    const next = Number(amount);
+    if (!Number.isFinite(next)) return 0;
+    if (!Number.isSafeInteger(next)) {
+      throw new Error("Cashu amount exceeds safe integer range");
+    }
+    return Math.trunc(next);
+  }
+  if (hasToNumber(amount)) return amount.toNumber();
+  return 0;
+};
+
+export const sumCashuProofAmounts = (
+  proofs: readonly Pick<ProofLike, "amount">[],
+): number => {
+  return proofs.reduce((sum, proof) => {
+    return sum + cashuAmountToNumber(proof.amount);
+  }, 0);
+};
 
 const buildProofKey = (proof: Proof): string => {
   return [
     String(proof.id ?? "").trim(),
     String(proof.secret ?? "").trim(),
     String(proof.C ?? "").trim(),
-    String(Number(proof.amount ?? 0) || 0),
+    String(cashuAmountToNumber(proof.amount)),
   ].join("|");
 };
 
