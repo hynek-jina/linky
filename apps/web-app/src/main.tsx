@@ -14,7 +14,11 @@ import type {
 } from "./types/browser";
 import type { JsonValue } from "./types/json";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
-import { markPwaNeedRefresh, recordPwaRegistered } from "./utils/pwaUpdate";
+import {
+  markPwaNeedRefresh,
+  recordPwaControllerChange,
+  recordPwaRegistered,
+} from "./utils/pwaUpdate";
 
 type BufferFromArgs =
   | [arrayLike: ArrayLike<number> | ArrayBufferView]
@@ -227,6 +231,7 @@ if ("serviceWorker" in navigator) {
   });
 
   navigator.serviceWorker.addEventListener("controllerchange", () => {
+    recordPwaControllerChange();
     console.log("[linky][pwa] controller change", {
       hasController: Boolean(navigator.serviceWorker.controller),
     });

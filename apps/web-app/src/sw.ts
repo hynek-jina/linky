@@ -425,7 +425,9 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(logSw("service worker activate"));
+  event.waitUntil(
+    Promise.all([self.clients.claim(), logSw("service worker activate")]),
+  );
 });
 
 self.addEventListener("error", (event: ErrorEvent) => {
