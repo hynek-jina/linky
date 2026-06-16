@@ -6,6 +6,7 @@ interface ScanModalProps {
   onIssueToken: () => void;
   onPickScanImage: () => void;
   onScanImageSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onTypePayment: () => void;
   onTypeManually: () => void;
   pasteScanValue: () => Promise<void>;
   scanEntryPoint: "contacts" | "receive" | "send" | null;
@@ -21,6 +22,7 @@ export function ScanModal({
   onIssueToken,
   onPickScanImage,
   onScanImageSelected,
+  onTypePayment,
   onTypeManually,
   pasteScanValue,
   scanEntryPoint,
@@ -73,6 +75,15 @@ export function ScanModal({
         />
 
         <div className="scan-footer">
+          {isSendScan ? (
+            <button
+              type="button"
+              className="scan-manual-entry-btn"
+              onClick={onTypePayment}
+            >
+              {t("manualPayOpen")}
+            </button>
+          ) : null}
           <div className="scan-footer-actions">
             {showTypeAction ? (
               <button

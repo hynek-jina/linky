@@ -18,6 +18,7 @@ import {
   EvoluServerPage,
   EvoluServersPage,
   LnAddressPayPage,
+  ManualPayPage,
   MintDetailPage,
   MintsPage,
   NostrRelayNewPage,
@@ -59,6 +60,7 @@ export interface MoneyRoutesProps {
   cashuTokenProps: () => React.ComponentProps<typeof CashuTokenPage>;
   cashuTokensProps: React.ComponentProps<typeof CashuTokensPage>;
   lnAddressPayProps: React.ComponentProps<typeof LnAddressPayPage>;
+  manualPayProps: React.ComponentProps<typeof ManualPayPage>;
   topupInvoiceProps: React.ComponentProps<typeof TopupInvoicePage>;
   topupProps: React.ComponentProps<typeof TopupPage>;
 }
@@ -189,6 +191,10 @@ export const AppRouteContent = (): React.ReactElement => {
 
       {route.kind === "lnAddressPay" && (
         <LnAddressPayPage {...moneyRoutes.lnAddressPayProps} />
+      )}
+
+      {route.kind === "manualPay" && (
+        <ManualPayPage {...moneyRoutes.manualPayProps} />
       )}
 
       {route.kind === "chat" && <ChatPage {...peopleRoutes.chatProps} />}

@@ -136,6 +136,7 @@ export interface AppShellActionsContextValue {
   openFeedbackContact: () => void;
   openIssueTokenFromScan: () => void;
   openManualContactFromScan: () => void;
+  openManualPayFromScan: () => void;
   openProfileQr: () => void;
   openReceiveScan: () => void;
   openWalletScan: () => void;

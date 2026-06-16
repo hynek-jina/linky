@@ -10,6 +10,7 @@ export type NostrProfileMetadata = {
   lud06?: string;
   lud16?: string;
   name?: string;
+  nip05?: string;
   picture?: string;
 };
 
@@ -239,6 +240,7 @@ const isNostrProfileMetadata = (
     (value.lud06 === undefined || typeof value.lud06 === "string") &&
     (value.lud16 === undefined || typeof value.lud16 === "string") &&
     (value.name === undefined || typeof value.name === "string") &&
+    (value.nip05 === undefined || typeof value.nip05 === "string") &&
     (value.picture === undefined || typeof value.picture === "string")
   );
 };
@@ -392,6 +394,7 @@ export const fetchNostrProfileMetadata = async (
       asTrimmedNonEmptyString(obj.displayName);
     const lud16 = asTrimmedNonEmptyString(obj.lud16);
     const lud06 = asTrimmedNonEmptyString(obj.lud06);
+    const nip05 = asTrimmedNonEmptyString(obj.nip05);
 
     const picture = asTrimmedNonEmptyString(obj.picture);
     const image = asTrimmedNonEmptyString(obj.image);
@@ -401,6 +404,7 @@ export const fetchNostrProfileMetadata = async (
       ...(displayName ? { displayName } : {}),
       ...(lud16 ? { lud16 } : {}),
       ...(lud06 ? { lud06 } : {}),
+      ...(nip05 ? { nip05 } : {}),
       ...(picture ? { picture } : {}),
       ...(image ? { image } : {}),
     };

@@ -46,6 +46,9 @@ interface BuildMoneyRoutePropsParams {
   knownLnAddressPayContact: MoneyRoutesProps["lnAddressPayProps"]["knownContact"];
   knownLnAddressPayContactPictureUrl: MoneyRoutesProps["lnAddressPayProps"]["knownContactPictureUrl"];
   lnAddressPayAmount: MoneyRoutesProps["lnAddressPayProps"]["lnAddressPayAmount"];
+  manualPayContacts: MoneyRoutesProps["manualPayProps"]["contacts"];
+  manualPayNostrPictureByNpub: MoneyRoutesProps["manualPayProps"]["nostrPictureByNpub"];
+  onSubmitManualPayText: MoneyRoutesProps["manualPayProps"]["onSubmitText"];
   meltLargestForeignMintToMainMint: MoneyRoutesProps["cashuTokensProps"]["meltLargestForeignMintToMainMint"];
   payLightningAddressWithCashu: MoneyRoutesProps["lnAddressPayProps"]["payLightningAddressWithCashu"];
   pendingCashuDeleteId: ReturnType<
@@ -128,6 +131,9 @@ export const buildMoneyRouteProps = ({
   knownLnAddressPayContact,
   knownLnAddressPayContactPictureUrl,
   lnAddressPayAmount,
+  manualPayContacts,
+  manualPayNostrPictureByNpub,
+  onSubmitManualPayText,
   meltLargestForeignMintToMainMint,
   payLightningAddressWithCashu,
   pendingCashuDeleteId,
@@ -233,6 +239,12 @@ export const buildMoneyRouteProps = ({
       setLnAddressPayAmount,
       displayUnit,
       payLightningAddressWithCashu,
+      t,
+    },
+    manualPayProps: {
+      contacts: manualPayContacts,
+      nostrPictureByNpub: manualPayNostrPictureByNpub,
+      onSubmitText: onSubmitManualPayText,
       t,
     },
     topupInvoiceProps: {

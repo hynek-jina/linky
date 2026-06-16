@@ -36,6 +36,7 @@ type NavigationAction =
   | { route: "evoluServerNew" }
   | { route: "evoluServers" }
   | { route: "lnAddressPay"; lnAddress: string }
+  | { route: "manualPay" }
   | { route: "mint"; mintUrl: string }
   | { route: "mints" }
   | { route: "nostrRelay"; id: string }
@@ -119,6 +120,9 @@ export const navigateTo = (action: NavigationAction): void => {
       window.location.assign(
         `#payln/${encodeURIComponent(String(action.lnAddress))}`,
       );
+      break;
+    case "manualPay":
+      window.location.assign("#wallet/pay");
       break;
     case "cashuTokenNew":
       window.location.assign("#wallet/token/new");

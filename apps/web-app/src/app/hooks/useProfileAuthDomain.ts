@@ -43,6 +43,7 @@ import {
   EVOLU_TRANSACTIONS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
 } from "../../utils/constants";
 import { createSquareAvatarDataUrl } from "../../utils/image";
+import { getDefaultNip05IdentifierFromAddress } from "../../utils/nostrNip05";
 import {
   applySlip39Suggestion,
   normalizeSlip39Input,
@@ -410,6 +411,7 @@ export const useProfileAuthDomain = ({
       }
 
       const trimmedLnAddress = lnAddress.trim();
+      const nip05 = getDefaultNip05IdentifierFromAddress(trimmedLnAddress);
       const trimmedName = name.trim();
       const trimmedPicture = pictureUrl.trim();
       const content: JsonRecord = {
@@ -417,6 +419,7 @@ export const useProfileAuthDomain = ({
           ? { name: trimmedName, display_name: trimmedName }
           : {}),
         ...(trimmedLnAddress ? { lud16: trimmedLnAddress } : {}),
+        ...(nip05 ? { nip05 } : {}),
         ...(trimmedPicture
           ? { picture: trimmedPicture, image: trimmedPicture }
           : {}),
@@ -435,6 +438,7 @@ export const useProfileAuthDomain = ({
       saveCachedProfileMetadata(npub, {
         ...(trimmedName ? { name: trimmedName, displayName: trimmedName } : {}),
         ...(trimmedLnAddress ? { lud16: trimmedLnAddress } : {}),
+        ...(nip05 ? { nip05 } : {}),
         ...(trimmedPicture
           ? { picture: trimmedPicture, image: trimmedPicture }
           : {}),

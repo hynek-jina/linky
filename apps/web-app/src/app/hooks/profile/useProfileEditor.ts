@@ -26,6 +26,7 @@ import {
 import type { JsonRecord } from "../../../types/json";
 import { getBestNostrName } from "../../../utils/formatting";
 import { createSquareAvatarDataUrl } from "../../../utils/image";
+import { getDefaultNip05IdentifierFromAddress } from "../../../utils/nostrNip05";
 import { isHttpUrl } from "../../../utils/validation";
 
 interface UseProfileEditorParams {
@@ -189,6 +190,9 @@ export const useProfileEditor = ({
 
         const trimmedName = name.trim();
         const trimmedLightningAddress = lightningAddress.trim();
+        const nextNip05 = getDefaultNip05IdentifierFromAddress(
+          trimmedLightningAddress,
+        );
         const trimmedPicture = picture.trim();
         const trimmedStatus = status.trim();
         const nextStatus = buildProfileGeneralStatus({
@@ -225,6 +229,7 @@ export const useProfileEditor = ({
           ...(prev.image ? { image: prev.image } : {}),
           ...(prev.lud16 ? { lud16: prev.lud16 } : {}),
           ...(prev.lud06 ? { lud06: prev.lud06 } : {}),
+          ...(prev.nip05 ? { nip05: prev.nip05 } : {}),
         };
 
         if (trimmedName) {
@@ -240,6 +245,12 @@ export const useProfileEditor = ({
         } else {
           delete contentObj.lud16;
           delete contentObj.lud06;
+        }
+
+        if (nextNip05) {
+          contentObj.nip05 = nextNip05;
+        } else if (getDefaultNip05IdentifierFromAddress(prev.nip05)) {
+          delete contentObj.nip05;
         }
 
         if (trimmedPicture) {
@@ -282,6 +293,12 @@ export const useProfileEditor = ({
         } else {
           delete updatedMeta.lud16;
           delete updatedMeta.lud06;
+        }
+
+        if (nextNip05) {
+          updatedMeta.nip05 = nextNip05;
+        } else if (getDefaultNip05IdentifierFromAddress(prev.nip05)) {
+          delete updatedMeta.nip05;
         }
 
         if (trimmedPicture) {

@@ -74,6 +74,7 @@ export function AuthenticatedLayout({
           onIssueToken={actions.openIssueTokenFromScan}
           onPickScanImage={actions.onPickScanImage}
           onScanImageSelected={actions.onScanImageSelected}
+          onTypePayment={actions.openManualPayFromScan}
           onTypeManually={actions.openManualContactFromScan}
           pasteScanValue={actions.pasteScanValue}
           scanEntryPoint={state.scanEntryPoint}
