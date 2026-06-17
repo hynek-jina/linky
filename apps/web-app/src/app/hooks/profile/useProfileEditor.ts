@@ -28,6 +28,10 @@ import { getBestNostrName } from "../../../utils/formatting";
 import { createSquareAvatarDataUrl } from "../../../utils/image";
 import { getDefaultNip05IdentifierFromAddress } from "../../../utils/nostrNip05";
 import { isHttpUrl } from "../../../utils/validation";
+import {
+  applyLightningAddressToProfileMetadata,
+  buildKind0ProfileContent,
+} from "../../lib/profileMetadata";
 
 interface UseProfileEditorParams {
   currentNpub: string | null;
@@ -379,19 +383,93 @@ export const useProfileEditor = ({
 
   const saveClaimedLightningAddress = React.useCallback(
     async (lightningAddress: string): Promise<boolean> => {
-      return persistProfileValues({
-        lightningAddress,
-        name: profileEditName,
-        navigateToProfile: false,
-        picture: profileEditPicture,
-        status: profileEditStatus,
-      });
+      try {
+        if (!currentNpub || !currentNsec) {
+          setStatus(t("profileMissingNpub"));
+          return false;
+        }
+
+        const { nip19 } = await import("nostr-tools");
+        const decoded = nip19.decode(currentNsec);
+        if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
+          throw new Error("Invalid nsec");
+        }
+        const privBytes = decoded.data;
+
+        const cachedPrev =
+          loadCachedProfileMetadata(currentNpub)?.metadata ?? null;
+        const livePrev = await Promise.race([
+          fetchNostrProfileMetadata(currentNpub, {
+            relays: nostrFetchRelays,
+          }).catch(() => null),
+          new Promise<null>((resolve) =>
+            window.setTimeout(() => resolve(null), 2000),
+          ),
+        ]);
+
+        const emptyMetadata: NostrProfileMetadata = {};
+        const prev =
+          livePrev ?? cachedPrev ?? myProfileMetadata ?? emptyMetadata;
+        const next = applyLightningAddressToProfileMetadata(
+          prev,
+          lightningAddress,
+        );
+        const relaysToUse =
+          nostrFetchRelays.length > 0 ? nostrFetchRelays : NOSTR_RELAYS;
+
+        const publish = await publishKind0ProfileMetadata({
+          privBytes,
+          relays: relaysToUse,
+          content: buildKind0ProfileContent(next.metadata),
+        });
+        if (!publish.anySuccess) throw new Error("publish failed");
+
+        const bestName = getBestNostrName(next.metadata);
+        const picture = String(
+          next.metadata.picture ??
+            next.metadata.image ??
+            effectiveProfilePicture ??
+            "",
+        ).trim();
+        const statusText = parseProfileGeneralStatusText(myProfileStatus) ?? "";
+
+        saveCachedProfileMetadata(currentNpub, next.metadata);
+        setMyProfileMetadata(next.metadata);
+        setMyProfileLnAddress(next.lightningAddress || null);
+        setMyProfileName(bestName ?? effectiveProfileName);
+        setMyProfilePicture(picture || effectiveProfilePicture);
+
+        setProfileEditName(bestName ?? effectiveProfileName ?? "");
+        setProfileEditLnAddress(next.lightningAddress);
+        setProfileEditPicture(picture);
+        setProfileEditStatus(statusText);
+        profileEditInitialRef.current = {
+          lnAddress: next.lightningAddress,
+          name: bestName ?? effectiveProfileName ?? "",
+          picture,
+          status: statusText,
+        };
+
+        return true;
+      } catch (error) {
+        setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
+        return false;
+      }
     },
     [
-      persistProfileValues,
-      profileEditName,
-      profileEditPicture,
-      profileEditStatus,
+      currentNpub,
+      currentNsec,
+      effectiveProfileName,
+      effectiveProfilePicture,
+      myProfileMetadata,
+      myProfileStatus,
+      nostrFetchRelays,
+      setMyProfileLnAddress,
+      setMyProfileMetadata,
+      setMyProfileName,
+      setMyProfilePicture,
+      setStatus,
+      t,
     ],
   );
 

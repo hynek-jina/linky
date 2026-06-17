@@ -133,6 +133,7 @@ export const cs = {
   claimOwnLightningAddressTaken: "Tato adresa je už zabraná.",
   claimOwnLightningAddressAlreadySet:
     "Vlastní lightning adresa už je pro tento účet nastavená.",
+  claimOwnLightningAddressVerifyExisting: "Vyžádat ověření",
   claimOwnLightningAddressCheckFailed: "Nepodařilo se ověřit dostupnost.",
   claimOwnLightningAddressUnpaid: "Platba ještě nebyla potvrzena.",
   restoreTokens: "Obnovit tokeny",

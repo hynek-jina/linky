@@ -50,6 +50,8 @@ export function ProfileLightningAddressClaimPage({
     React.useState<string | null>(null);
   const [isChecking, setIsChecking] = React.useState(false);
   const [isConfirming, setIsConfirming] = React.useState(false);
+  const [isVerifyingExistingAddress, setIsVerifyingExistingAddress] =
+    React.useState(false);
   const [previewResult, setPreviewResult] = React.useState<null | {
     kind: "already_set" | "available" | "error" | "taken";
     message?: string;
@@ -159,6 +161,10 @@ export function ProfileLightningAddressClaimPage({
   ]);
 
   const availablePreview = previewResult?.preview ?? null;
+  const canVerifyExistingAddress =
+    previewResult?.kind === "already_set" &&
+    Boolean(desiredLightningAddress) &&
+    !validationIssue;
   const quotedAmount = availablePreview?.invoice.amountSat ?? null;
   const insufficientBalance =
     quotedAmount !== null && Number.isFinite(quotedAmount)
@@ -260,6 +266,47 @@ export function ProfileLightningAddressClaimPage({
     t,
   ]);
 
+  const handleVerifyExistingAddress = React.useCallback(async () => {
+    if (!canVerifyExistingAddress || !desiredLightningAddress) return;
+    if (isVerifyingExistingAddress) return;
+
+    setSubmissionError(null);
+    setIsVerifyingExistingAddress(true);
+    try {
+      const saved = await saveClaimedLightningAddress(desiredLightningAddress);
+      if (!saved) return;
+      navigateTo({ route: "profileEdit" });
+    } finally {
+      setIsVerifyingExistingAddress(false);
+    }
+  }, [
+    canVerifyExistingAddress,
+    desiredLightningAddress,
+    isVerifyingExistingAddress,
+    navigateTo,
+    saveClaimedLightningAddress,
+  ]);
+
+  const handleVerifyLightningAddress = React.useCallback(
+    async (lightningAddress: string) => {
+      const normalized = String(lightningAddress ?? "")
+        .trim()
+        .toLowerCase();
+      if (!normalized || isVerifyingExistingAddress) return;
+
+      setSubmissionError(null);
+      setIsVerifyingExistingAddress(true);
+      try {
+        const saved = await saveClaimedLightningAddress(normalized);
+        if (!saved) return;
+        navigateTo({ route: "profileEdit" });
+      } finally {
+        setIsVerifyingExistingAddress(false);
+      }
+    },
+    [isVerifyingExistingAddress, navigateTo, saveClaimedLightningAddress],
+  );
+
   const handleActivateOwnedLightningAddress = React.useCallback(
     async (lightningAddress: string) => {
       const normalized = String(lightningAddress ?? "")
@@ -318,7 +365,12 @@ export function ProfileLightningAddressClaimPage({
                 <div className="settings-right">
                   <button
                     className="secondary"
-                    disabled={isActive || isActivating || isConfirming}
+                    disabled={
+                      isActive ||
+                      isActivating ||
+                      isConfirming ||
+                      isVerifyingExistingAddress
+                    }
                     onClick={() => {
                       void handleActivateOwnedLightningAddress(
                         lightningAddress,
@@ -329,6 +381,21 @@ export function ProfileLightningAddressClaimPage({
                       ? t("claimOwnLightningAddressActive")
                       : t("claimOwnLightningAddressActivate")}
                   </button>
+                  {isActive ? (
+                    <button
+                      className="secondary"
+                      disabled={
+                        isActivating ||
+                        isConfirming ||
+                        isVerifyingExistingAddress
+                      }
+                      onClick={() => {
+                        void handleVerifyLightningAddress(lightningAddress);
+                      }}
+                    >
+                      {t("claimOwnLightningAddressVerifyExisting")}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );
@@ -411,24 +478,46 @@ export function ProfileLightningAddressClaimPage({
             </div>
           ) : null}
 
-          <div className="panel-header" style={{ marginTop: 16 }}>
-            <button
-              disabled={
-                !availablePreview ||
-                activatingLightningAddress !== null ||
-                cashuIsBusy ||
-                isChecking ||
-                isConfirming ||
-                insufficientBalance
-              }
-              onClick={() => {
-                void handleConfirm();
-              }}
-              title={insufficientBalance ? t("payInsufficient") : undefined}
-            >
-              {t("claimOwnLightningAddressConfirm")}
-            </button>
-          </div>
+          {availablePreview ? (
+            <div className="panel-header" style={{ marginTop: 16 }}>
+              <button
+                disabled={
+                  activatingLightningAddress !== null ||
+                  cashuIsBusy ||
+                  isChecking ||
+                  isConfirming ||
+                  isVerifyingExistingAddress ||
+                  insufficientBalance
+                }
+                onClick={() => {
+                  void handleConfirm();
+                }}
+                title={insufficientBalance ? t("payInsufficient") : undefined}
+              >
+                {t("claimOwnLightningAddressConfirm")}
+              </button>
+            </div>
+          ) : null}
+
+          {canVerifyExistingAddress ? (
+            <div className="panel-header" style={{ marginTop: 12 }}>
+              <button
+                className="secondary"
+                disabled={
+                  activatingLightningAddress !== null ||
+                  cashuIsBusy ||
+                  isChecking ||
+                  isConfirming ||
+                  isVerifyingExistingAddress
+                }
+                onClick={() => {
+                  void handleVerifyExistingAddress();
+                }}
+              >
+                {t("claimOwnLightningAddressVerifyExisting")}
+              </button>
+            </div>
+          ) : null}
         </>
       ) : null}
 

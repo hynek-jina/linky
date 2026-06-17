@@ -132,6 +132,7 @@ export const en = {
   claimOwnLightningAddressTaken: "This address is already taken.",
   claimOwnLightningAddressAlreadySet:
     "A custom lightning address is already set for this account.",
+  claimOwnLightningAddressVerifyExisting: "Request verification",
   claimOwnLightningAddressCheckFailed: "Couldn't check availability.",
   claimOwnLightningAddressUnpaid: "Payment has not settled yet.",
   restoreTokens: "Restore tokens",
