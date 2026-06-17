@@ -46,7 +46,7 @@ body {
   background: var(--app-flat-bg);
 }
 
-@media (orientation: landscape) and (max-height: 600px) {
+@media (orientation: landscape) and (max-height: 600px) and (min-aspect-ratio: 3/2) {
   html,
   body {
     width: 100dvw;

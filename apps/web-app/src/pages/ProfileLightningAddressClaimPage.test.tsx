@@ -126,6 +126,7 @@ describe("ProfileLightningAddressClaimPage", () => {
           effectiveMyLightningAddress={null}
           makeNip98AuthHeader={async () => "nip98-token"}
           ownedLightningAddresses={[]}
+          ownedLightningAddressesLoading={false}
           payLightningInvoiceWithCashu={async () => false}
           saveClaimedLightningAddress={saveClaimedLightningAddress}
           serverBaseUrl="https://npub.linky.fit"
@@ -172,6 +173,7 @@ describe("ProfileLightningAddressClaimPage", () => {
           effectiveMyLightningAddress="alice42@linky.fit"
           makeNip98AuthHeader={async () => "nip98-token"}
           ownedLightningAddresses={["alice42@linky.fit"]}
+          ownedLightningAddressesLoading={false}
           payLightningInvoiceWithCashu={async () => false}
           saveClaimedLightningAddress={saveClaimedLightningAddress}
           serverBaseUrl="https://npub.linky.fit"
@@ -193,5 +195,31 @@ describe("ProfileLightningAddressClaimPage", () => {
       "alice42@linky.fit",
     );
     expect(navigateMock).toHaveBeenCalledWith({ route: "profileEdit" });
+  });
+
+  it("does not show the claim input while owned addresses are still loading", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <ProfileLightningAddressClaimPage
+          cashuBalance={0}
+          cashuIsBusy={false}
+          effectiveMyLightningAddress={null}
+          makeNip98AuthHeader={async () => "nip98-token"}
+          ownedLightningAddresses={[]}
+          ownedLightningAddressesLoading={true}
+          payLightningInvoiceWithCashu={async () => false}
+          saveClaimedLightningAddress={async () => true}
+          serverBaseUrl="https://npub.linky.fit"
+          t={translate}
+        />,
+      );
+    });
+
+    expect(container.querySelector("input")).toBeNull();
+    expect(container.textContent).toContain("Ověřuji dostupnost a cenu...");
   });
 });
