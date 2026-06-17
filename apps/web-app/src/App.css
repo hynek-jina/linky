@@ -316,9 +316,30 @@
   bottom: 0;
   z-index: 2;
   display: flex;
+  flex-direction: column;
   justify-content: center;
+  align-items: center;
+  gap: 8px;
   padding: 10px 12px calc(var(--floating-safe-area-bottom) + 16px);
   background: linear-gradient(0deg, rgba(2, 6, 23, 0.94), rgba(2, 6, 23, 0));
+}
+
+.scan-manual-entry-btn {
+  width: 100%;
+  max-width: 420px;
+  min-height: 46px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+  box-shadow: none;
+  text-align: left;
+}
+
+.scan-manual-entry-btn:hover,
+.scan-manual-entry-btn:focus {
+  transform: none;
+  box-shadow: none;
+  background: rgba(15, 23, 42, 0.95);
 }
 
 .scan-footer-actions {
@@ -3220,6 +3241,69 @@ button.icon {
 
 .contacts-search-bar {
   margin: 6px 0 8px;
+}
+
+.manual-pay-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.manual-pay-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.manual-pay-label {
+  margin-top: 0;
+}
+
+.manual-pay-hint {
+  margin: 0;
+  font-size: 13px;
+}
+
+.manual-pay-submit {
+  margin-top: 4px;
+}
+
+.manual-pay-suggestions-title {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.manual-pay-contact {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  color: inherit;
+}
+
+.manual-pay-contact:hover,
+.manual-pay-contact:focus {
+  transform: none;
+  box-shadow: none;
+}
+
+.contact-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.contact-name {
+  color: #f8fafc;
+  font-weight: 800;
+}
+
+.contact-meta {
+  margin-top: 2px;
+  color: var(--app-muted);
+  font-size: 13px;
 }
 
 .group-filter-bar {

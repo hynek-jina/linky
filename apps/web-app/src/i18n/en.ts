@@ -132,6 +132,7 @@ export const en = {
   claimOwnLightningAddressTaken: "This address is already taken.",
   claimOwnLightningAddressAlreadySet:
     "A custom lightning address is already set for this account.",
+  claimOwnLightningAddressVerifyExisting: "Request verification",
   claimOwnLightningAddressCheckFailed: "Couldn't check availability.",
   claimOwnLightningAddressUnpaid: "Payment has not settled yet.",
   restoreTokens: "Restore tokens",
@@ -475,12 +476,12 @@ export const en = {
 
   contactNotFound: "Contact not found.",
   name: "Name",
-  npub: "npub",
+  npub: "Identifier",
   lightningAddress: "Lightning address",
   group: "Group",
 
   namePlaceholder: "E.g. Alice",
-  npubPlaceholder: "nostr public key",
+  npubPlaceholder: "npub or verified nam (NIP-05)",
   lightningAddressPlaceholder: "e.g. alice@getalby.com",
   groupPlaceholder: "e.g. Friends",
 
@@ -496,6 +497,8 @@ export const en = {
   contactsLimitReached: "Contact limit reached ({max}).",
   contactSaved: "Contact saved.",
   contactUpdated: "Contact updated.",
+  nip05NotFound: "NIP-05 name {identifier} was not found.",
+  nip05ResolveFailed: "NIP-05 name {identifier} could not be checked.",
   contactDeleted: "Contact deleted.",
   contactArchived: "Contact archived.",
   contactRestored: "Contact restored.",
@@ -544,6 +547,13 @@ export const en = {
   walletOpen: "Open wallet",
   walletReceive: "Receive",
   walletSend: "Send",
+  manualPayTitle: "Send",
+  manualPayOpen: "Type recipient",
+  manualPayLabel: "Recipient",
+  manualPayPlaceholder: "Lightning address, invoice, LNURL, Cashu request…",
+  manualPayContinue: "Continue",
+  manualPaySuggestions: "Matching contacts",
+  manualPayLinkyAliasHint: "Will try {address}",
 
   scan: "Scan",
   scanUnsupported: "Unsupported QR code.",

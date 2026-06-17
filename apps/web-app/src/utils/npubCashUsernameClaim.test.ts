@@ -61,6 +61,36 @@ describe("npubCashUsernameClaim", () => {
     expect(result.invoice.invoice).toBe("lnbc1testinvoice");
   });
 
+  it("parses username previews that are already set for the signed account", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: true,
+              message: "Username already set",
+            }),
+            {
+              headers: { "Content-Type": "application/json" },
+              status: 400,
+            },
+          ),
+      ),
+    );
+
+    const result = await requestOwnLightningAddressClaimPreview({
+      makeNip98AuthHeader: async () => "nip98-token",
+      serverBaseUrl: "https://npub.linky.fit",
+      username: "Alice42",
+    });
+
+    expect(result).toEqual({
+      kind: "already_set",
+      message: "Username already set",
+    });
+  });
+
   it("treats repeated finalize responses as already set", async () => {
     vi.stubGlobal(
       "fetch",

@@ -30,6 +30,8 @@ const translate = (key: string): string => {
       return "Scan";
     case "scanTypeManually":
       return "Type";
+    case "manualPayOpen":
+      return "Type recipient";
     default:
       return key;
   }
@@ -46,6 +48,7 @@ describe("ScanModal", () => {
     onIssueToken: () => {},
     onPickScanImage: () => {},
     onScanImageSelected: () => {},
+    onTypePayment: () => {},
     onTypeManually: () => {},
     pasteScanValue: async () => {},
     scanEntryPoint: null,
@@ -161,5 +164,35 @@ describe("ScanModal", () => {
     });
 
     expect(onIssueToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows manual recipient action in send flow and calls it", async () => {
+    const onTypePayment = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <ScanModal
+          {...baseProps}
+          onTypePayment={onTypePayment}
+          scanEntryPoint="send"
+          showWalletActions={true}
+        />,
+      );
+    });
+
+    const button = Array.from(container.querySelectorAll("button")).find(
+      (element) => element.textContent?.includes("Type recipient"),
+    );
+
+    expect(button).toBeTruthy();
+
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onTypePayment).toHaveBeenCalledTimes(1);
   });
 });

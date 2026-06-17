@@ -14,6 +14,10 @@ import {
 import type { Route } from "../../../types/route";
 import { MAX_CONTACTS_PER_OWNER } from "../../../utils/constants";
 import { getBestNostrName } from "../../../utils/formatting";
+import {
+  DEFAULT_NIP05_DOMAIN,
+  resolveNip05Input,
+} from "../../../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
 
@@ -358,17 +362,15 @@ export const useContactEditor = ({
     [nostrFetchRelays],
   );
 
-  const handleSaveContact = React.useCallback(() => {
+  const handleSaveContact = React.useCallback(async () => {
     if (isSavingContact) return; // Prevent double-click
 
     const name = form.name.trim();
     const rawNpub = form.npub.trim();
-    const npub = normalizeNpubIdentifier(rawNpub) ?? rawNpub;
-    const currentProfileNpub = normalizeNpubIdentifier(currentNpub);
-    const lnAddress = form.lnAddress.trim();
+    const lnAddressInput = form.lnAddress.trim();
     const group = form.group.trim();
 
-    if (!name && !npub && !lnAddress) {
+    if (!name && !rawNpub && !lnAddressInput) {
       setStatus(t("fillAtLeastOne"));
       return;
     }
@@ -383,9 +385,48 @@ export const useContactEditor = ({
       return;
     }
 
+    setIsSavingContact(true);
+
+    let npub = rawNpub ? (normalizeNpubIdentifier(rawNpub) ?? rawNpub) : "";
+    let lnAddress = lnAddressInput;
+
+    if (rawNpub) {
+      const nip05Result = await resolveNip05Input(rawNpub);
+      if (nip05Result.kind === "resolved") {
+        npub = nip05Result.npub;
+        if (
+          !lnAddress &&
+          nip05Result.identifier.domain === DEFAULT_NIP05_DOMAIN
+        ) {
+          lnAddress = nip05Result.identifier.identifier;
+        }
+      } else if (nip05Result.kind === "not_found") {
+        setStatus(
+          t("nip05NotFound").replace(
+            "{identifier}",
+            nip05Result.identifier.identifier,
+          ),
+        );
+        setIsSavingContact(false);
+        return;
+      } else if (nip05Result.kind === "error") {
+        setStatus(
+          t("nip05ResolveFailed").replace(
+            "{identifier}",
+            nip05Result.identifier.identifier,
+          ),
+        );
+        setIsSavingContact(false);
+        return;
+      }
+    }
+
+    const currentProfileNpub = normalizeNpubIdentifier(currentNpub);
+
     if (npub && currentProfileNpub && npub === currentProfileNpub) {
       setStatus(t("contactIsYou"));
       navigateTo({ route: "profile" });
+      setIsSavingContact(false);
       return;
     }
 
@@ -398,11 +439,10 @@ export const useContactEditor = ({
       if (duplicate?.id) {
         setStatus(t("contactExists"));
         navigateTo({ route: "contact", id: duplicate.id as ContactId });
+        setIsSavingContact(false);
         return;
       }
     }
-
-    setIsSavingContact(true);
 
     const payload = {
       name: name ? (name as typeof Evolu.NonEmptyString1000.Type) : null,

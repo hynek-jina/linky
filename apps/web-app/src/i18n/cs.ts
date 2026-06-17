@@ -133,6 +133,7 @@ export const cs = {
   claimOwnLightningAddressTaken: "Tato adresa je už zabraná.",
   claimOwnLightningAddressAlreadySet:
     "Vlastní lightning adresa už je pro tento účet nastavená.",
+  claimOwnLightningAddressVerifyExisting: "Vyžádat ověření",
   claimOwnLightningAddressCheckFailed: "Nepodařilo se ověřit dostupnost.",
   claimOwnLightningAddressUnpaid: "Platba ještě nebyla potvrzena.",
   restoreTokens: "Obnovit tokeny",
@@ -478,12 +479,12 @@ export const cs = {
 
   contactNotFound: "Kontakt nenalezen.",
   name: "Jméno",
-  npub: "npub",
+  npub: "Identifikátor",
   lightningAddress: "Lightning adresa",
   group: "Skupina",
 
   namePlaceholder: "Např. Alice",
-  npubPlaceholder: "nostr veřejný klíč",
+  npubPlaceholder: "npub nebo ověřené jméno (NIP-05)",
   lightningAddressPlaceholder: "např. alice@zapsat.cz",
   groupPlaceholder: "např. Friends",
 
@@ -499,6 +500,8 @@ export const cs = {
   contactsLimitReached: "Byl dosažen limit kontaktů ({max}).",
   contactSaved: "Kontakt byl uložen.",
   contactUpdated: "Kontakt byl upraven.",
+  nip05NotFound: "NIP-05 jméno {identifier} nebylo nalezeno.",
+  nip05ResolveFailed: "NIP-05 jméno {identifier} se nepodařilo ověřit.",
   contactDeleted: "Kontakt byl smazán.",
   contactArchived: "Kontakt byl archivován.",
   contactRestored: "Kontakt byl vrácen mezi kontakty.",
@@ -551,6 +554,13 @@ export const cs = {
   topupQrModeCashu: "Cashu",
   topupQrModeUniversal: "Univerzální",
   topupQrModeLightning: "Lightning",
+  manualPayTitle: "Odeslat",
+  manualPayOpen: "Zadat příjemce ručně",
+  manualPayLabel: "Příjemce",
+  manualPayPlaceholder: "Lightning adresa, faktura, LNURL, Cashu request…",
+  manualPayContinue: "Pokračovat",
+  manualPaySuggestions: "Shodné kontakty",
+  manualPayLinkyAliasHint: "Zkusím {address}",
 
   scan: "Skenovat",
   scanUnsupported: "Nepodporovaný QR kód.",

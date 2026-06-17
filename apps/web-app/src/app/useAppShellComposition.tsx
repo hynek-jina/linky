@@ -4979,6 +4979,12 @@ export const useAppShellComposition = () => {
     navigateTo({ route: "cashuTokenEmit" });
   }, [closeScan, route.kind]);
 
+  const openManualPayFromScan = React.useCallback(() => {
+    closeScan();
+    if (route.kind === "manualPay") return;
+    navigateTo({ route: "manualPay" });
+  }, [closeScan, route.kind]);
+
   const onPickScanImage = React.useCallback(() => {
     scanImageInputRef.current?.click();
   }, []);
@@ -8062,6 +8068,13 @@ export const useAppShellComposition = () => {
     [handleScannedText, pushToast, t],
   );
 
+  const onSubmitManualPayText = React.useCallback(
+    async (text: string) => {
+      await handleScannedText(text);
+    },
+    [handleScannedText],
+  );
+
   useScannedTextHandlerRefBridge({
     handleScannedText,
     scannedTextHandlerRef,
@@ -8144,6 +8157,9 @@ export const useAppShellComposition = () => {
       knownLnAddressPayContact,
       knownLnAddressPayContactPictureUrl,
       lnAddressPayAmount,
+      manualPayContacts: contacts,
+      manualPayNostrPictureByNpub: nostrPictureByNpub,
+      onSubmitManualPayText,
       meltLargestForeignMintToMainMint,
       payLightningAddressWithCashu,
       pendingCashuDeleteId,
@@ -8542,6 +8558,7 @@ export const useAppShellComposition = () => {
     openFeedbackContact,
     openIssueTokenFromScan,
     openManualContactFromScan,
+    openManualPayFromScan,
     openProfileQr,
     openReceiveScan,
     openWalletScan,
