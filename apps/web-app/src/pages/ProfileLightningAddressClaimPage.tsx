@@ -18,6 +18,7 @@ interface ProfileLightningAddressClaimPageProps {
   effectiveMyLightningAddress: string | null;
   makeNip98AuthHeader: Nip98AuthHeaderFactory;
   ownedLightningAddresses: readonly string[];
+  ownedLightningAddressesLoading: boolean;
   payLightningInvoiceWithCashu: (invoice: string) => Promise<boolean>;
   saveClaimedLightningAddress: (lightningAddress: string) => Promise<boolean>;
   serverBaseUrl: string;
@@ -39,6 +40,7 @@ export function ProfileLightningAddressClaimPage({
   effectiveMyLightningAddress,
   makeNip98AuthHeader,
   ownedLightningAddresses,
+  ownedLightningAddressesLoading,
   payLightningInvoiceWithCashu,
   saveClaimedLightningAddress,
   serverBaseUrl,
@@ -102,7 +104,12 @@ export function ProfileLightningAddressClaimPage({
   }, [normalizedUsername]);
 
   React.useEffect(() => {
-    if (hasOwnedLightningAddresses || !normalizedUsername || validationIssue) {
+    if (
+      ownedLightningAddressesLoading ||
+      hasOwnedLightningAddresses ||
+      !normalizedUsername ||
+      validationIssue
+    ) {
       setIsChecking(false);
       setPreviewResult(null);
       return;
@@ -156,6 +163,7 @@ export function ProfileLightningAddressClaimPage({
     hasOwnedLightningAddresses,
     makeNip98AuthHeader,
     normalizedUsername,
+    ownedLightningAddressesLoading,
     serverBaseUrl,
     validationIssue,
   ]);
@@ -182,6 +190,9 @@ export function ProfileLightningAddressClaimPage({
   })();
 
   const availabilityMessage = (() => {
+    if (ownedLightningAddressesLoading) {
+      return t("claimOwnLightningAddressChecking");
+    }
     if (hasOwnedLightningAddresses) {
       return t("claimOwnLightningAddressOwnedHint");
     }
@@ -416,7 +427,7 @@ export function ProfileLightningAddressClaimPage({
         </div>
       </div>
 
-      {!hasOwnedLightningAddresses ? (
+      {!ownedLightningAddressesLoading && !hasOwnedLightningAddresses ? (
         <>
           <div
             style={{

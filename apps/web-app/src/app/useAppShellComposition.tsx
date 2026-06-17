@@ -1641,6 +1641,10 @@ export const useAppShellComposition = () => {
   );
   const [ownedProfileLightningAddresses, setOwnedProfileLightningAddresses] =
     useState<string[]>([]);
+  const [
+    ownedProfileLightningAddressesLoading,
+    setOwnedProfileLightningAddressesLoading,
+  ] = useState(true);
   const [myProfileStatus, setMyProfileStatus] = useState<string | null>(null);
   const [myProfileMetadata, setMyProfileMetadata] =
     useState<NostrProfileMetadata | null>(null);
@@ -3306,10 +3310,12 @@ export const useAppShellComposition = () => {
   React.useEffect(() => {
     if (!currentNpub || !currentNsec) {
       setOwnedProfileLightningAddresses([]);
+      setOwnedProfileLightningAddressesLoading(false);
       return;
     }
 
     setOwnedProfileLightningAddresses([]);
+    setOwnedProfileLightningAddressesLoading(true);
 
     const controller = new AbortController();
     let cancelled = false;
@@ -3326,6 +3332,7 @@ export const useAppShellComposition = () => {
         if (!response.ok) {
           if (!cancelled) {
             setOwnedProfileLightningAddresses([]);
+            setOwnedProfileLightningAddressesLoading(false);
           }
           return;
         }
@@ -3335,9 +3342,11 @@ export const useAppShellComposition = () => {
 
         const info = parseNpubCashProfileInfo(json);
         setOwnedProfileLightningAddresses(info.ownedLightningAddresses);
+        setOwnedProfileLightningAddressesLoading(false);
       } catch {
         if (cancelled) return;
         setOwnedProfileLightningAddresses([]);
+        setOwnedProfileLightningAddressesLoading(false);
       }
     };
 
@@ -8253,6 +8262,7 @@ export const useAppShellComposition = () => {
       requestSelectedContact,
       payWithCashuEnabled,
       ownedLightningAddresses: ownedProfileLightningAddresses,
+      ownedLightningAddressesLoading: ownedProfileLightningAddressesLoading,
       selectedContactStatusText: (() => {
         const npub = normalizeNpubIdentifier(selectedContact?.npub);
         return npub ? (nostrStatusByNpub[npub] ?? null) : null;
