@@ -3,6 +3,7 @@ import {
   useAppShellActions,
   useAppShellCore,
 } from "../app/context/AppShellContexts";
+import { STILL_IMAGE_QR_SCAN_EVENT } from "../app/lib/scanCapture";
 import { ContactsGuideOverlay } from "./ContactsGuideOverlay";
 import { LightningInvoiceConfirmModal } from "./LightningInvoiceConfirmModal";
 import { LnurlWithdrawConfirmModal } from "./LnurlWithdrawConfirmModal";
@@ -25,6 +26,21 @@ export function AuthenticatedLayout({
 }: AuthenticatedLayoutProps): React.ReactElement {
   const actions = useAppShellActions();
   const state = useAppShellCore();
+  const scanCaptureInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  React.useEffect(() => {
+    const openStillImageQrScan = () => {
+      scanCaptureInputRef.current?.click();
+    };
+
+    window.addEventListener(STILL_IMAGE_QR_SCAN_EVENT, openStillImageQrScan);
+    return () => {
+      window.removeEventListener(
+        STILL_IMAGE_QR_SCAN_EVENT,
+        openStillImageQrScan,
+      );
+    };
+  }, []);
 
   return (
     <>
@@ -67,6 +83,15 @@ export function AuthenticatedLayout({
       ) : null}
 
       {children}
+
+      <input
+        ref={scanCaptureInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={actions.onScanImageSelected}
+      />
 
       {state.scanIsOpen && (
         <ScanModal

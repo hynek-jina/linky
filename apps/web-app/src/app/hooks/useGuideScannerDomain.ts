@@ -5,9 +5,11 @@ import {
   type NativeScanStreamHandle,
   supportsNativeQrScan,
 } from "../../platform/nativeBridge";
+import { shouldUseStillImageQrScan } from "../../platform/runtime";
 import type { NavigatorWithOptionalCameraPermissions } from "../../types/browser";
 import type { Route } from "../../types/route";
 import { appendPushDebugLog } from "../../utils/pushDebugLog";
+import { requestStillImageQrScan } from "../lib/scanCapture";
 import type { ContactRowLike } from "../types/appTypes";
 import { useContactsGuide } from "./guide/useContactsGuide";
 
@@ -224,6 +226,14 @@ export const useGuideScannerDomain = ({
           });
           return;
         }
+      }
+
+      if (shouldUseStillImageQrScan()) {
+        logScanDebug("using still image scanner", {
+          reason: "ios-pwa",
+        });
+        requestStillImageQrScan();
+        return;
       }
 
       const media = navigator.mediaDevices as

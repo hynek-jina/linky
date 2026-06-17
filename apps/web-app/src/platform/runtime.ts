@@ -169,3 +169,17 @@ export const getTelemetryDevicePlatform = (): TelemetryDevicePlatform => {
 
   return "unknown";
 };
+
+export const shouldUseStillImageQrScan = (): boolean => {
+  if (isNativePlatform()) {
+    return false;
+  }
+
+  const runtime = getTelemetryAppRuntime();
+  if (runtime !== "pwa") {
+    return false;
+  }
+
+  const platform = getTelemetryDevicePlatform();
+  return platform === "iphone" || platform === "ipad";
+};

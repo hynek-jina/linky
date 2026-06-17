@@ -83,27 +83,6 @@ const readScreenOrientation = (): {
   };
 };
 
-const requestSensorPermission = async (
-  constructor: unknown,
-): Promise<boolean> => {
-  if (!constructor) return true;
-  if (typeof constructor !== "object" && typeof constructor !== "function") {
-    return true;
-  }
-
-  const requestPermission = Reflect.get(constructor, "requestPermission");
-  if (typeof requestPermission !== "function") return true;
-
-  try {
-    const result = await Reflect.apply(requestPermission, constructor, []);
-    return result === "granted";
-  } catch {
-    // Browsers that do not allow prompting here will simply keep sensor events
-    // silent; the profile button remains the reliable manual path.
-    return false;
-  }
-};
-
 export const useShowProfileQrOnTilt = ({
   enabled,
   onHideProfileQr,
@@ -140,18 +119,6 @@ export const useShowProfileQrOnTilt = ({
       return;
     }
     if (typeof window === "undefined") return;
-
-    let sensorPermissionReady = false;
-
-    const requestPermissionsFromGesture = () => {
-      if (sensorPermissionReady) return;
-      void Promise.all([
-        requestSensorPermission(window.DeviceOrientationEvent),
-        requestSensorPermission(window.DeviceMotionEvent),
-      ]).then(([orientationReady, motionReady]) => {
-        sensorPermissionReady = orientationReady || motionReady;
-      });
-    };
 
     const maybeOpenProfileQr = () => {
       if (
@@ -244,15 +211,6 @@ export const useShowProfileQrOnTilt = ({
       }
     };
 
-    window.addEventListener("pointerup", requestPermissionsFromGesture, {
-      passive: true,
-    });
-    window.addEventListener("touchend", requestPermissionsFromGesture, {
-      passive: true,
-    });
-    window.addEventListener("click", requestPermissionsFromGesture, {
-      passive: true,
-    });
     window.addEventListener("deviceorientation", onDeviceOrientation, {
       passive: true,
     });
@@ -272,9 +230,6 @@ export const useShowProfileQrOnTilt = ({
     onScreenOrientationChange();
 
     return () => {
-      window.removeEventListener("pointerup", requestPermissionsFromGesture);
-      window.removeEventListener("touchend", requestPermissionsFromGesture);
-      window.removeEventListener("click", requestPermissionsFromGesture);
       window.removeEventListener("deviceorientation", onDeviceOrientation);
       window.removeEventListener("devicemotion", onDeviceMotion);
       window.screen.orientation?.removeEventListener(
