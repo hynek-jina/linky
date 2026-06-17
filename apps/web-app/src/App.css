@@ -3734,6 +3734,23 @@ button.icon {
   height: 112px;
 }
 
+.contact-detail-avatar-button {
+  padding: 0;
+  min-width: 112px;
+  color: inherit;
+  cursor: pointer;
+  box-shadow: none;
+  transform: none;
+}
+
+.contact-detail-avatar-button:hover,
+.contact-detail-avatar-button:focus,
+.contact-detail-avatar-button:active {
+  background: #0b1222;
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.28);
+  transform: none;
+}
+
 .contact-detail-card {
   border-radius: 24px;
   background:

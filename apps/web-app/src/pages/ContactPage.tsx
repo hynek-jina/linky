@@ -123,25 +123,33 @@ export const ContactPage: FC<ContactPageProps> = ({
     status: statusText,
     providesLabel: t("contactStatusProvides"),
   });
+  const avatarContent = url ? (
+    <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" />
+  ) : (
+    <span className="contact-avatar-fallback">
+      {getInitials(String(selectedContact.name ?? ""))}
+    </span>
+  );
 
   return (
     <section className="panel contact-detail-card">
       <div className="contact-detail">
         <div className="contact-detail-header">
-          <div className="contact-avatar is-xl" aria-hidden="true">
-            {url ? (
-              <img
-                src={url}
-                alt=""
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <span className="contact-avatar-fallback">
-                {getInitials(String(selectedContact.name ?? ""))}
-              </span>
-            )}
-          </div>
+          {npub ? (
+            <button
+              type="button"
+              className="contact-avatar is-xl contact-detail-avatar-button"
+              onClick={() => void copyText(npub)}
+              aria-label={`${t("copy")} ${t("npub")}`}
+              title={npub}
+            >
+              {avatarContent}
+            </button>
+          ) : (
+            <div className="contact-avatar is-xl" aria-hidden="true">
+              {avatarContent}
+            </div>
+          )}
 
           <button
             type="button"
