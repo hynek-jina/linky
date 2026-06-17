@@ -47,7 +47,6 @@ export function ProfileLightningAddressClaimPage({
   t,
 }: ProfileLightningAddressClaimPageProps): React.ReactElement {
   const navigateTo = useNavigation();
-  const usernameInputRef = React.useRef<HTMLInputElement | null>(null);
   const [usernameInput, setUsernameInput] = React.useState("");
   const [activatingLightningAddress, setActivatingLightningAddress] =
     React.useState<string | null>(null);
@@ -179,16 +178,6 @@ export function ProfileLightningAddressClaimPage({
     quotedAmount !== null && Number.isFinite(quotedAmount)
       ? quotedAmount > cashuBalance
       : false;
-
-  const focusUsernameInput = React.useCallback(() => {
-    const input = usernameInputRef.current;
-    if (!input) return;
-    try {
-      input.focus({ preventScroll: true });
-    } catch {
-      input.focus();
-    }
-  }, []);
 
   const validationMessage = (() => {
     if (validationIssue === "too_short") {
@@ -454,15 +443,10 @@ export function ProfileLightningAddressClaimPage({
 
           <input
             id="profileClaimLightningUsername"
-            ref={usernameInputRef}
-            type="text"
             autoCapitalize="none"
-            autoComplete="off"
             autoCorrect="off"
             inputMode="text"
             onChange={(event) => setUsernameInput(event.target.value)}
-            onClick={focusUsernameInput}
-            onPointerDown={focusUsernameInput}
             placeholder={t("claimOwnLightningAddressPlaceholder")}
             spellCheck={false}
             value={usernameInput}

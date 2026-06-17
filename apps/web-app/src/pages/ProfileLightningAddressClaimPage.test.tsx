@@ -222,34 +222,4 @@ describe("ProfileLightningAddressClaimPage", () => {
     expect(container.querySelector("input")).toBeNull();
     expect(container.textContent).toContain("Ověřuji dostupnost a cenu...");
   });
-
-  it("keeps focus on the username input after a direct tap", async () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <ProfileLightningAddressClaimPage
-          cashuBalance={0}
-          cashuIsBusy={false}
-          effectiveMyLightningAddress={null}
-          makeNip98AuthHeader={async () => "nip98-token"}
-          ownedLightningAddresses={[]}
-          ownedLightningAddressesLoading={false}
-          payLightningInvoiceWithCashu={async () => false}
-          saveClaimedLightningAddress={async () => true}
-          serverBaseUrl="https://npub.linky.fit"
-          t={translate}
-        />,
-      );
-    });
-
-    const input = getSingleInput(container);
-    await act(async () => {
-      input.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(document.activeElement).toBe(input);
-  });
 });
