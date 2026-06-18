@@ -3,6 +3,7 @@ import type {
   MeltProofsResponse,
   Proof,
   ProofState,
+  SendResponse,
 } from "@cashu/cashu-ts";
 import {
   bumpCashuDeterministicCounter,
@@ -227,16 +228,8 @@ export const meltInvoiceWithTokensAtMint = async (args: {
     const quote = await wallet.createMeltQuoteBolt11(invoice);
     const paidAmount = cashuAmountToNumber(quote.amount);
     const feeReserve = cashuAmountToNumber(quote.fee_reserve);
-    const inputFee = cashuAmountToNumber(
-      wallet.getFeesForProofs(spendableProofs),
-    );
-    const quotedTotal = paidAmount + feeReserve + inputFee;
+    const quotedTotal = paidAmount + feeReserve;
 
-    // Standard NUT-05 / NUT-08 melt: hand wallet.meltProofs the spendable
-    // proofs as-is (sum >= quote.amount + quote.fee_reserve) and let the
-    // mint return the difference as NUT-08 blinded change. cashu-ts builds
-    // the blank outputs internally; no pre-swap is needed and no extra
-    // input fee is paid for re-denominating proofs.
     const have = sumCashuProofAmounts(spendableProofs);
     if (have < quotedTotal) {
       return {
@@ -253,6 +246,98 @@ export const meltInvoiceWithTokensAtMint = async (args: {
     }
 
     const run = async (): Promise<CashuPayResult | CashuPayErrorResult> => {
+      const amountToSend = quote.amount.add(quote.fee_reserve);
+      let swapped: SendResponse | null = null;
+
+      const swapOnce = async (counter: number | null) => {
+        if (typeof counter === "number") {
+          return await wallet.send(
+            amountToSend,
+            spendableProofs,
+            { includeFees: true },
+            {
+              send: { type: "deterministic", counter },
+              keep: { type: "deterministic", counter: 0 },
+            },
+          );
+        }
+
+        return await wallet.send(amountToSend, spendableProofs, {
+          includeFees: true,
+        });
+      };
+
+      try {
+        const counter0 = det
+          ? getCashuDeterministicCounter({
+              mintUrl: mint,
+              unit: walletUnit,
+              keysetId,
+            })
+          : null;
+
+        if (typeof counter0 === "number") {
+          let counter = counter0;
+          let lastError: unknown;
+          for (let attempt = 0; attempt < 5; attempt += 1) {
+            try {
+              swapped = await swapOnce(counter);
+              lastError = null;
+              break;
+            } catch (e) {
+              lastError = e;
+              if (!isCashuRecoverableOutputCollisionError(e) || !det) throw e;
+              bumpCashuDeterministicCounter({
+                mintUrl: mint,
+                unit: walletUnit,
+                keysetId,
+                used: 64,
+              });
+              counter = getCashuDeterministicCounter({
+                mintUrl: mint,
+                unit: walletUnit,
+                keysetId,
+              });
+            }
+          }
+
+          if (!swapped) throw lastError ?? new Error("swap failed");
+
+          bumpCashuDeterministicCounter({
+            mintUrl: mint,
+            unit: walletUnit,
+            keysetId,
+            used: swapped.keep.length + swapped.send.length,
+          });
+        } else {
+          swapped = await swapOnce(null);
+        }
+      } catch (e) {
+        return {
+          ok: false,
+          mint,
+          unit: unit ?? null,
+          paidAmount,
+          feeReserve,
+          feePaid: 0,
+          remainingAmount: sumCashuProofAmounts(spendableProofs),
+          remainingToken: null,
+          error: getUnknownErrorMessage(e, "swap failed"),
+        };
+      }
+
+      const proofsToKeep = swapped.keep ?? [];
+      const proofsToMelt = swapped.send ?? [];
+      const recoveryProofs = [...proofsToKeep, ...proofsToMelt];
+      const recoveryAmount = sumCashuProofAmounts(recoveryProofs);
+      const recoveryToken =
+        recoveryProofs.length > 0
+          ? getEncodedToken({
+              mint,
+              proofs: recoveryProofs,
+              unit: walletUnit,
+            })
+          : null;
       let melt: ParsedMeltProofsResponse | null = null;
 
       try {
@@ -268,7 +353,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
 
         const meltOnce = async (counter: number) =>
           parseMeltResponse(
-            await wallet.meltProofsBolt11(quote, spendableProofs, undefined, {
+            await wallet.meltProofsBolt11(quote, proofsToMelt, undefined, {
               type: "deterministic",
               counter,
             }),
@@ -309,18 +394,10 @@ export const meltInvoiceWithTokensAtMint = async (args: {
           if (!melt) throw lastError ?? new Error("melt failed");
         } else {
           melt = parseMeltResponse(
-            await wallet.meltProofsBolt11(quote, spendableProofs),
+            await wallet.meltProofsBolt11(quote, proofsToMelt),
           );
         }
       } catch (e) {
-        // Without a pre-swap there are no intermediate proofs to encode as
-        // a recovery token. The original spendableProofs are either still
-        // unspent at the source mint (mint never accepted them) or already
-        // committed (mint accepted but we lost the response). The autoswap
-        // / LN-pay caller will retry-with-smaller-amount on retryable
-        // errors; for the rare "appeared-failed-but-committed" race the
-        // user can fall back to the existing Restore action in Advanced,
-        // which scans the deterministic counter range for stranded proofs.
         return {
           ok: false,
           mint,
@@ -328,21 +405,25 @@ export const meltInvoiceWithTokensAtMint = async (args: {
           paidAmount,
           feeReserve,
           feePaid: 0,
-          remainingAmount: sumCashuProofAmounts(spendableProofs),
-          remainingToken: null,
+          remainingAmount: recoveryAmount,
+          remainingToken: recoveryToken,
           error: getUnknownErrorMessage(e, "melt failed"),
         };
       }
 
       if (det) {
         // Advance past the full blank-output range, not just the change count.
-        // cashu-ts emits N = computeNumberOfBlankOutputs(feeReserve) B_'s
+        // cashu-ts emits N = computeNumberOfBlankOutputs(excess) B_'s
         // starting at the post-melt counter. All N are persisted by the mint
         // before LN payment, but only the signed ones (`change.length`) are
         // returned. If we only bump by `change.length` here, the next melt
         // can re-derive a B_ that is already sitting in the mint's promises
         // table as `c_ IS NULL` and we'll get OutputsArePending (NUT 11004).
-        const blankCount = computeNumberOfBlankOutputs(feeReserve);
+        const meltOutputExcess = Math.max(
+          0,
+          sumCashuProofAmounts(proofsToMelt) - paidAmount,
+        );
+        const blankCount = computeNumberOfBlankOutputs(meltOutputExcess);
         const changeCount = melt?.change.length ?? 0;
         bumpCashuDeterministicCounter({
           mintUrl: mint,
@@ -358,7 +439,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
         return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
       })();
 
-      const remainingProofs = melt?.change ?? [];
+      const remainingProofs = [...proofsToKeep, ...(melt?.change ?? [])];
       const remainingAmount = sumCashuProofAmounts(remainingProofs);
 
       const remainingToken =
