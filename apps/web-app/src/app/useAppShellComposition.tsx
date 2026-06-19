@@ -365,6 +365,7 @@ interface ClaimedTopupQuoteStorage {
 
 const PENDING_TOPUP_QUOTE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const CLAIMED_TOPUP_QUOTE_STORAGE_KEY_PREFIX = "linky.topup.claimed.v1";
+const CLAIMED_AUTOSWAP_QUOTE_STORAGE_KEY_PREFIX = "linky.autoswap.claimed.v1";
 const CLAIMED_TOPUP_QUOTE_LOCK_STORAGE_KEY_PREFIX = "linky.topup.claimLock.v1";
 
 const encodeStorageSegment = (value: string): string =>
@@ -465,6 +466,16 @@ const makeClaimedTopupQuoteStorageKey = (args: {
   quote: string;
 }): string => {
   return `${CLAIMED_TOPUP_QUOTE_STORAGE_KEY_PREFIX}.${encodeStorageSegment(
+    args.ownerId,
+  )}.${encodeStorageSegment(args.mintUrl)}.${encodeStorageSegment(args.quote)}`;
+};
+
+const makeClaimedAutoswapQuoteStorageKey = (args: {
+  mintUrl: string;
+  ownerId: string;
+  quote: string;
+}): string => {
+  return `${CLAIMED_AUTOSWAP_QUOTE_STORAGE_KEY_PREFIX}.${encodeStorageSegment(
     args.ownerId,
   )}.${encodeStorageSegment(args.mintUrl)}.${encodeStorageSegment(args.quote)}`;
 };
@@ -905,6 +916,7 @@ type LoadedCashuWallet = Awaited<ReturnType<typeof createLoadedCashuWallet>>;
 
 const claimAutoswapPendingEntry = async (args: {
   claim: AutoswapPendingClaim;
+  claimOwnerKey: string;
   claimsKey: string;
   ctx: AutoswapClaimContext;
   inFlightSet: Set<string>;
@@ -919,6 +931,43 @@ const claimAutoswapPendingEntry = async (args: {
   args.inFlightSet.add(key);
 
   try {
+    const claimStorageKey = makeClaimedAutoswapQuoteStorageKey({
+      ownerId: args.claimOwnerKey,
+      mintUrl: args.claim.mintUrl,
+      quote: args.claim.quote,
+    });
+    const insertClaimedToken = async (
+      claimed: ClaimedTopupQuoteStorage,
+    ): Promise<{ ok: true } | { ok: false; reason: string }> => {
+      if (args.ctx.isCashuTokenKnownAny(claimed.token)) return { ok: true };
+
+      const ownerId = await args.ctx.resolveOwnerIdForWrite();
+      const payload = {
+        token: claimed.token as typeof Evolu.NonEmptyString.Type,
+        state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+      };
+      const result = ownerId
+        ? args.ctx.insert("cashuToken", payload, { ownerId })
+        : args.ctx.insert("cashuToken", payload);
+      if (!result.ok) {
+        return { ok: false, reason: String(result.error) };
+      }
+      return { ok: true };
+    };
+
+    const claimedBeforeRun = readClaimedTopupQuoteFromStorage(claimStorageKey);
+    if (claimedBeforeRun) {
+      const restored = await insertClaimedToken(claimedBeforeRun);
+      if (!restored.ok) {
+        return { kind: "failed", reason: restored.reason };
+      }
+      removePendingAutoswapClaim(args.claimsKey, {
+        mintUrl: args.claim.mintUrl,
+        quote: args.claim.quote,
+      });
+      return { kind: "claimed" };
+    }
+
     const { Mint, Wallet, MintQuoteState, getEncodedToken } =
       await getCashuLib();
     const det = getCashuDeterministicSeedFromStorage();
@@ -957,18 +1006,25 @@ const claimAutoswapPendingEntry = async (args: {
     ).trim();
     if (!token) return { kind: "failed", reason: "empty token" };
 
-    if (!args.ctx.isCashuTokenKnownAny(token)) {
-      const ownerId = await args.ctx.resolveOwnerIdForWrite();
-      const payload = {
-        token: token as typeof Evolu.NonEmptyString.Type,
-        state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-      };
-      const result = ownerId
-        ? args.ctx.insert("cashuToken", payload, { ownerId })
-        : args.ctx.insert("cashuToken", payload);
-      if (!result.ok) {
-        return { kind: "failed", reason: String(result.error) };
-      }
+    safeLocalStorageSetJson(claimStorageKey, {
+      amount: args.claim.amount,
+      claimedAtMs: Date.now(),
+      mintUrl: args.claim.mintUrl,
+      quote: args.claim.quote,
+      token,
+      unit: wallet.unit ?? args.claim.unit ?? "sat",
+    });
+
+    const inserted = await insertClaimedToken({
+      amount: args.claim.amount,
+      claimedAtMs: Date.now(),
+      mintUrl: args.claim.mintUrl,
+      quote: args.claim.quote,
+      token,
+      unit: wallet.unit ?? args.claim.unit ?? "sat",
+    });
+    if (!inserted.ok) {
+      return { kind: "failed", reason: inserted.reason };
     }
 
     removePendingAutoswapClaim(args.claimsKey, {
@@ -7314,9 +7370,9 @@ export const useAppShellComposition = () => {
           // can fire it inline here for instant UX without any duplicate
           // risk: if the 5s tick happens to overlap, the second caller
           // sees in_flight and bails.
-          const pendingClaimsKey = makePendingAutoswapClaimsKey(
-            String(appOwnerIdRef.current ?? "anon"),
-          );
+          const pendingClaimOwnerKey = String(appOwnerId ?? "anon");
+          const pendingClaimsKey =
+            makePendingAutoswapClaimsKey(pendingClaimOwnerKey);
           const pendingClaim: AutoswapPendingClaim = {
             amount: amountSat,
             createdAtMs: Date.now(),
@@ -7335,6 +7391,7 @@ export const useAppShellComposition = () => {
             // background tick on its next 5s pass.
             const outcome = await claimAutoswapPendingEntry({
               claim: pendingClaim,
+              claimOwnerKey: pendingClaimOwnerKey,
               claimsKey: pendingClaimsKey,
               ctx: {
                 insert,
@@ -7386,6 +7443,7 @@ export const useAppShellComposition = () => {
     cashuTokensAll,
     cashuTokensWithMeta,
     defaultMintUrl,
+    appOwnerId,
     formatDisplayedAmountParts,
     formatMintButtonLabel,
     insert,
@@ -7452,7 +7510,18 @@ export const useAppShellComposition = () => {
   const appOwnerIdValue = appOwnerId;
   React.useEffect(() => {
     const ownerKey = String(appOwnerIdValue ?? "anon");
-    const claimsKey = makePendingAutoswapClaimsKey(ownerKey);
+    const claimSources = [
+      {
+        claimsKey: makePendingAutoswapClaimsKey(ownerKey),
+        ownerKey,
+      },
+    ];
+    if (ownerKey !== "anon") {
+      claimSources.push({
+        claimsKey: makePendingAutoswapClaimsKey("anon"),
+        ownerKey: "anon",
+      });
+    }
     const inFlightSet = autoswapClaimInFlightRef.current;
     const walletCache = autoswapClaimWalletCacheRef.current;
 
@@ -7462,32 +7531,40 @@ export const useAppShellComposition = () => {
 
     const tick = async () => {
       if (cancelled || tickInFlight) return;
-      const pending = readPendingAutoswapClaims(claimsKey);
-      if (pending.length === 0) return;
+      const pendingSources = claimSources
+        .map((source) => ({
+          ...source,
+          pending: readPendingAutoswapClaims(source.claimsKey),
+        }))
+        .filter((source) => source.pending.length > 0);
+      if (pendingSources.length === 0) return;
       tickInFlight = true;
       try {
-        for (const claim of pending) {
-          if (cancelled) break;
-          const outcome = await claimAutoswapPendingEntry({
-            claim,
-            claimsKey,
-            ctx: {
-              insert,
-              isCashuTokenKnownAny,
-              resolveOwnerIdForWrite,
-            },
-            inFlightSet,
-            walletCache,
-          });
-          if (outcome.kind === "failed") {
-            const warnKey = `${claim.mintUrl}:${claim.quote}:${outcome.reason}`;
-            if (warnKey !== lastWarnedKey) {
-              lastWarnedKey = warnKey;
-              console.warn("[linky][autoswap] background claim failed", {
-                error: outcome.reason,
-                mintUrl: claim.mintUrl,
-                quote: claim.quote,
-              });
+        for (const source of pendingSources) {
+          for (const claim of source.pending) {
+            if (cancelled) break;
+            const outcome = await claimAutoswapPendingEntry({
+              claim,
+              claimOwnerKey: source.ownerKey,
+              claimsKey: source.claimsKey,
+              ctx: {
+                insert,
+                isCashuTokenKnownAny,
+                resolveOwnerIdForWrite,
+              },
+              inFlightSet,
+              walletCache,
+            });
+            if (outcome.kind === "failed") {
+              const warnKey = `${claim.mintUrl}:${claim.quote}:${outcome.reason}`;
+              if (warnKey !== lastWarnedKey) {
+                lastWarnedKey = warnKey;
+                console.warn("[linky][autoswap] background claim failed", {
+                  error: outcome.reason,
+                  mintUrl: claim.mintUrl,
+                  quote: claim.quote,
+                });
+              }
             }
           }
         }
