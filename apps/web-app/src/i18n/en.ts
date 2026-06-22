@@ -504,6 +504,7 @@ export const en = {
   contactUpdated: "Contact updated.",
   nip05NotFound: "NIP-05 name {identifier} was not found.",
   nip05ResolveFailed: "NIP-05 name {identifier} could not be checked.",
+  verifiedNip05: "Verified NIP-05 name",
   contactDeleted: "Contact deleted.",
   contactArchived: "Contact archived.",
   contactRestored: "Contact restored.",

@@ -3896,6 +3896,14 @@ button.icon {
   white-space: nowrap;
 }
 
+.contact-detail-nip05-check {
+  flex: 0 0 auto;
+  color: var(--app-primary-button-bg);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .contact-detail-group {
   margin: 0;
   color: #94a3b8;

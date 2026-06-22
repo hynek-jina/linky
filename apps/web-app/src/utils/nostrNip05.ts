@@ -203,3 +203,18 @@ export const resolveNip05Input = async (
   if (!identifier) return { kind: "none" };
   return resolveNip05Identifier(identifier, options);
 };
+
+export const resolveVerifiedNip05Identifier = async (
+  value: unknown,
+  expectedNpub: string,
+  options?: { signal?: AbortSignal },
+): Promise<string | null> => {
+  const normalizedExpectedNpub = expectedNpub.trim().toLowerCase();
+  if (!normalizedExpectedNpub) return null;
+
+  const result = await resolveNip05Input(value, options);
+  if (result.kind !== "resolved") return null;
+  if (result.npub.toLowerCase() !== normalizedExpectedNpub) return null;
+
+  return result.identifier.identifier;
+};

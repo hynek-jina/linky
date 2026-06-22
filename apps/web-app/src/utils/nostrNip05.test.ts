@@ -4,6 +4,7 @@ import {
   getDefaultNip05IdentifierFromAddress,
   parseNip05IdentifierInput,
   resolveNip05Input,
+  resolveVerifiedNip05Identifier,
 } from "./nostrNip05";
 
 const pubkeyHex =
@@ -103,5 +104,33 @@ describe("resolveNip05Input", () => {
       },
       kind: "not_found",
     });
+  });
+});
+
+describe("resolveVerifiedNip05Identifier", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns the normalized identifier when it resolves to the expected npub", async () => {
+    mockFetchJson({ names: { hynek: pubkeyHex } });
+
+    await expect(
+      resolveVerifiedNip05Identifier(
+        "Hynek@Linky.Fit",
+        nip19.npubEncode(pubkeyHex),
+      ),
+    ).resolves.toBe("hynek@linky.fit");
+  });
+
+  it("does not verify an identifier that resolves to another npub", async () => {
+    mockFetchJson({ names: { hynek: pubkeyHex } });
+
+    await expect(
+      resolveVerifiedNip05Identifier(
+        "hynek@linky.fit",
+        nip19.npubEncode("a".repeat(64)),
+      ),
+    ).resolves.toBeNull();
   });
 });

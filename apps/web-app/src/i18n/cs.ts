@@ -507,6 +507,7 @@ export const cs = {
   contactUpdated: "Kontakt byl upraven.",
   nip05NotFound: "NIP-05 jméno {identifier} nebylo nalezeno.",
   nip05ResolveFailed: "NIP-05 jméno {identifier} se nepodařilo ověřit.",
+  verifiedNip05: "Ověřené NIP-05 jméno",
   contactDeleted: "Kontakt byl smazán.",
   contactArchived: "Kontakt byl archivován.",
   contactRestored: "Kontakt byl vrácen mezi kontakty.",
