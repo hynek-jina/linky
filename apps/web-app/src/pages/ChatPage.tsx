@@ -33,6 +33,7 @@ interface Contact {
 
 interface ChatPageProps {
   cashuBalance: number;
+  cashuBalanceAfterMelt: number;
   cashuIsBusy: boolean;
   chatDraft: string;
   chatMessageElByIdRef: React.MutableRefObject<Map<string, HTMLDivElement>>;
@@ -84,6 +85,7 @@ interface ChatPageProps {
 
 export const ChatPage: FC<ChatPageProps> = ({
   cashuBalance,
+  cashuBalanceAfterMelt,
   cashuIsBusy,
   chatDraft,
   chatMessageElByIdRef,
@@ -534,7 +536,7 @@ export const ChatPage: FC<ChatPageProps> = ({
                 payPaymentRequestDisabled={
                   !paymentRequestInfo ||
                   cashuIsBusy ||
-                  paymentRequestInfo.amount > cashuBalance
+                  paymentRequestInfo.amount > cashuBalanceAfterMelt
                 }
                 replyQuoteText={replyQuoteText}
                 onCopy={onCopy}

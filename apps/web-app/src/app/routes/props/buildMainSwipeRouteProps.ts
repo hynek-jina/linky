@@ -37,6 +37,7 @@ interface BuildMainSwipeRoutePropsParams {
   showWalletWarning: MainSwipeRoutesProps["mainSwipeProps"]["showWalletWarning"];
   showGroupFilter: MainSwipeRoutesProps["mainSwipeProps"]["showGroupFilter"];
   showNoGroupFilter: MainSwipeRoutesProps["mainSwipeProps"]["showNoGroupFilter"];
+  showProfileQrOnTiltEnabled: MainSwipeRoutesProps["mainSwipeProps"]["showProfileQrOnTiltEnabled"];
   statusFilterCurrencies: MainSwipeRoutesProps["mainSwipeProps"]["statusFilterCurrencies"];
   startContactsGuide: MainSwipeRoutesProps["mainSwipeProps"]["startContactsGuide"];
   t: MainSwipeRoutesProps["mainSwipeProps"]["t"];
@@ -80,6 +81,7 @@ export const buildMainSwipeRouteProps = ({
   showWalletWarning,
   showGroupFilter,
   showNoGroupFilter,
+  showProfileQrOnTiltEnabled,
   statusFilterCurrencies,
   startContactsGuide,
   t,
@@ -123,6 +125,7 @@ export const buildMainSwipeRouteProps = ({
       showWalletWarning,
       showGroupFilter,
       showNoGroupFilter,
+      showProfileQrOnTiltEnabled,
       statusFilterCurrencies,
       startContactsGuide,
       t,

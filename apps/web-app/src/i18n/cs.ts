@@ -107,6 +107,7 @@ export const cs = {
   payWithCashu: "Platit s cashu",
   payWithCashuDisabled: "Platit s cashu je vypnuto v pokročilém nastavení.",
   cashuAutoswap: "Automaticky směňovat na hlavní mint",
+  showProfileQrOnTilt: "Otočením telefonu zobrazit profil",
   lightningInvoiceAutoPayLimit: "Limit autoplatby faktury",
   custom: "Vlastní",
   restore: "Obnovit",
@@ -150,6 +151,10 @@ export const cs = {
   cashuMeltToMainMintDone:
     "Převedeno {amount} {unit} do hlavního mintu {mint}.",
   cashuMeltToMainMintFailed: "Převod do hlavního mintu selhal",
+  cashuPaymentMeltTitle: "Převést prostředky pro platbu?",
+  cashuPaymentMeltBody:
+    "V žádném mintu není dost pro tuto platbu. Převést všechny tokeny z {fromMint} do hlavního mintu {toMint}? Po převodu můžete původní platbu znovu potvrdit.",
+  cashuPaymentMeltConfirm: "Převést do hlavního mintu",
   nostrKeysUpdated: "Nostr klíče byly uloženy.",
   nostrKeysDerived: "Nostr klíče byly znovu odvozeny z klíčů.",
   nostrPasteArmedHint:

@@ -122,6 +122,7 @@ describe("ProfileLightningAddressClaimPage", () => {
       root.render(
         <ProfileLightningAddressClaimPage
           cashuBalance={0}
+          cashuBalanceAfterMelt={0}
           cashuIsBusy={false}
           effectiveMyLightningAddress={null}
           makeNip98AuthHeader={async () => "nip98-token"}
@@ -169,6 +170,7 @@ describe("ProfileLightningAddressClaimPage", () => {
       root.render(
         <ProfileLightningAddressClaimPage
           cashuBalance={0}
+          cashuBalanceAfterMelt={0}
           cashuIsBusy={false}
           effectiveMyLightningAddress="alice42@linky.fit"
           makeNip98AuthHeader={async () => "nip98-token"}
@@ -206,6 +208,7 @@ describe("ProfileLightningAddressClaimPage", () => {
       root.render(
         <ProfileLightningAddressClaimPage
           cashuBalance={0}
+          cashuBalanceAfterMelt={0}
           cashuIsBusy={false}
           effectiveMyLightningAddress={null}
           makeNip98AuthHeader={async () => "nip98-token"}

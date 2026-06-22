@@ -52,6 +52,7 @@ export interface MainSwipeRouteProps {
   showWalletWarning: boolean;
   showGroupFilter: boolean;
   showNoGroupFilter: boolean;
+  showProfileQrOnTiltEnabled: boolean;
   statusFilterCurrencies: string[];
   startContactsGuide: (task: ContactsGuideKey) => void;
   t: (key: string) => string;
@@ -107,6 +108,7 @@ export const MainSwipeContent = (): React.ReactElement => {
     showWalletWarning,
     showGroupFilter,
     showNoGroupFilter,
+    showProfileQrOnTiltEnabled,
     statusFilterCurrencies,
     startContactsGuide,
     t,
@@ -115,7 +117,9 @@ export const MainSwipeContent = (): React.ReactElement => {
 
   useShowProfileQrOnTilt({
     enabled:
-      (route.kind === "contacts" || route.kind === "wallet") && !scanIsOpen,
+      showProfileQrOnTiltEnabled &&
+      (route.kind === "contacts" || route.kind === "wallet") &&
+      !scanIsOpen,
     onHideProfileQr: closeProfileQr,
     onShowProfileQr: openProfileQr,
   });

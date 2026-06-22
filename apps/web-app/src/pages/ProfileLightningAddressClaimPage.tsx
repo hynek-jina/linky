@@ -14,6 +14,7 @@ import {
 
 interface ProfileLightningAddressClaimPageProps {
   cashuBalance: number;
+  cashuBalanceAfterMelt: number;
   cashuIsBusy: boolean;
   effectiveMyLightningAddress: string | null;
   makeNip98AuthHeader: Nip98AuthHeaderFactory;
@@ -36,6 +37,7 @@ const wait = (ms: number): Promise<void> => {
 
 export function ProfileLightningAddressClaimPage({
   cashuBalance,
+  cashuBalanceAfterMelt,
   cashuIsBusy,
   effectiveMyLightningAddress,
   makeNip98AuthHeader,
@@ -176,7 +178,7 @@ export function ProfileLightningAddressClaimPage({
   const quotedAmount = availablePreview?.invoice.amountSat ?? null;
   const insufficientBalance =
     quotedAmount !== null && Number.isFinite(quotedAmount)
-      ? quotedAmount > cashuBalance
+      ? quotedAmount > Math.max(cashuBalance, cashuBalanceAfterMelt)
       : false;
 
   const validationMessage = (() => {

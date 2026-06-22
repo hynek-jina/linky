@@ -32,6 +32,7 @@ interface ChatContact {
 export interface AppShellCoreContextValue {
   allowedDisplayCurrencies: readonly DisplayCurrency[];
   cashuBalance: number;
+  cashuBalanceAfterMelt: number;
   cashuIsBusy: boolean;
   canWriteNfc: boolean;
   chatTopbarContact: ChatContact | null;
@@ -69,6 +70,10 @@ export interface AppShellCoreContextValue {
   paidOverlayIsOpen: boolean;
   paidOverlayTitle: string | null;
   pendingMintAutoswapChangeConfirmation: {
+    fromMint: string;
+    toMint: string;
+  } | null;
+  pendingPaymentMintMeltConfirmation: {
     fromMint: string;
     toMint: string;
   } | null;
@@ -113,6 +118,7 @@ export interface AppShellCoreContextValue {
 export interface AppShellActionsContextValue {
   cancelPendingNfcWrite: () => void;
   closeMintAutoswapChangeConfirmation: () => void;
+  closePaymentMintMeltConfirmation: () => void;
   closeMenu: () => void;
   closeShareOptions: () => void;
   closeLnurlWithdrawConfirmation: () => void;
@@ -120,6 +126,7 @@ export interface AppShellActionsContextValue {
   closeProfileQr: () => void;
   closeScan: () => void;
   confirmMintAutoswapChangeConfirmation: () => void;
+  confirmPaymentMintMelt: () => Promise<void>;
   confirmLnurlWithdraw: () => Promise<void>;
   confirmLightningInvoicePayment: () => Promise<void>;
   contactsGuideNav: {

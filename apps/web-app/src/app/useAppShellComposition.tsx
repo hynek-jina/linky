@@ -144,6 +144,7 @@ import {
   getInitialNostrIdentitySwitchedAtSec,
   getInitialNostrNsec,
   getInitialPayWithCashuEnabled,
+  getInitialShowProfileQrOnTiltEnabled,
   safeLocalStorageGet,
   safeLocalStorageGetJson,
   safeLocalStorageRemove,
@@ -222,6 +223,7 @@ import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
 import { usePaidOverlayState } from "./hooks/usePaidOverlayState";
 import { usePaymentsDomain } from "./hooks/usePaymentsDomain";
 import { useProfileNpubCashEffects } from "./hooks/useProfileNpubCashEffects";
+import { usePortraitOrientationLock } from "./hooks/usePortraitOrientationLock";
 import { useRelayDomain } from "./hooks/useRelayDomain";
 import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
@@ -259,6 +261,10 @@ import {
   buildCashuMintCandidates as buildCashuMintCandidatesBase,
   selectSingleMintCandidateForAmount,
 } from "./lib/paymentMintSelection";
+import {
+  canOfferPaymentMintMelt,
+  getPaymentMintMeltPlan,
+} from "./lib/paymentMintMelt";
 import {
   buildCashuPaymentRequestMessage,
   buildLinkyPaymentRequestDeclineMessage,
@@ -1200,6 +1206,8 @@ export const useAppShellComposition = () => {
   const [cashuAutoswapEnabled, setCashuAutoswapEnabled] = useState<boolean>(
     () => getInitialCashuAutoswapEnabled(),
   );
+  const [showProfileQrOnTiltEnabled, setShowProfileQrOnTiltEnabled] =
+    useState<boolean>(() => getInitialShowProfileQrOnTiltEnabled());
   const [lightningInvoiceAutoPayLimit, setLightningInvoiceAutoPayLimit] =
     useState<number>(() => getInitialLightningInvoiceAutoPayLimit());
   const [allowPromisesEnabled] = useState<boolean>(false);
@@ -1646,6 +1654,16 @@ export const useAppShellComposition = () => {
   const pendingMintAutoswapChangeResolverRef = React.useRef<
     ((confirmed: boolean) => void) | null
   >(null);
+  const [
+    pendingPaymentMintMeltConfirmation,
+    setPendingPaymentMintMeltConfirmation,
+  ] = useState<{
+    fromMint: string;
+    toMint: string;
+  } | null>(null);
+  const meltLargestForeignMintToMainMintRef = React.useRef<() => Promise<void>>(
+    async () => {},
+  );
   const [lnurlWithdrawIsBusy, setLnurlWithdrawIsBusy] = useState(false);
 
   const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
@@ -2174,7 +2192,10 @@ export const useAppShellComposition = () => {
     lang,
     lightningInvoiceAutoPayLimit,
     payWithCashuEnabled,
+    showProfileQrOnTiltEnabled,
   });
+
+  usePortraitOrientationLock(showProfileQrOnTiltEnabled);
 
   useArmedDeleteTimeouts({
     pendingCashuDeleteId,
@@ -3075,6 +3096,43 @@ export const useAppShellComposition = () => {
 
     return largestBalance;
   }, [cashuAcceptedMintBalances]);
+
+  const paymentMintMeltPlan = React.useMemo(() => {
+    return getPaymentMintMeltPlan({
+      mainMint: normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL),
+      balances: Array.from(cashuAcceptedMintBalances, ([mint, sum]) => ({
+        mint,
+        sum,
+      })),
+    });
+  }, [cashuAcceptedMintBalances, defaultMintUrl]);
+
+  const cashuBalanceAfterMelt = Math.max(
+    cashuBalance,
+    paymentMintMeltPlan?.maxBalanceAfterMelt ?? 0,
+  );
+
+  const requestPaymentMintMelt = React.useCallback(
+    (amountSat: number): boolean => {
+      if (
+        !canOfferPaymentMintMelt({
+          amountSat,
+          currentBalance: cashuBalance,
+          plan: paymentMintMeltPlan,
+        }) ||
+        !paymentMintMeltPlan
+      ) {
+        return false;
+      }
+
+      setPendingPaymentMintMeltConfirmation({
+        fromMint: paymentMintMeltPlan.fromMint,
+        toMint: paymentMintMeltPlan.toMint,
+      });
+      return true;
+    },
+    [cashuBalance, paymentMintMeltPlan],
+  );
 
   const cashuHasMultipleAcceptedMints = cashuAcceptedMintBalances.size > 1;
 
@@ -4297,6 +4355,13 @@ export const useAppShellComposition = () => {
       return;
     }
 
+    if (amountSat > cashuBalance) {
+      if (!requestPaymentMintMelt(amountSat)) {
+        setStatus(t("payInsufficient"));
+      }
+      return;
+    }
+
     const normalizedMethod =
       contactPayMethod === "lightning" || contactPayMethod === "cashu"
         ? contactPayMethod
@@ -4324,9 +4389,11 @@ export const useAppShellComposition = () => {
     }
   }, [
     cashuIsBusy,
+    cashuBalance,
     contactPayMethod,
     payAmount,
     payContactWithCashuMessage,
+    requestPaymentMintMelt,
     route.kind,
     selectedContact,
     setCashuIsBusy,
@@ -4853,6 +4920,23 @@ export const useAppShellComposition = () => {
   const payCashuPaymentRequest = React.useCallback(
     async (requestInfo: CashuPaymentRequestMessageInfo) => {
       if (cashuIsBusy) return;
+      if (requestInfo.amount > cashuBalance) {
+        const requestedMints = requestInfo.mintUrls.flatMap((mintUrl) => {
+          const normalizedMint = normalizeMintUrl(mintUrl);
+          return normalizedMint ? [normalizedMint] : [];
+        });
+        const targetMainMint = paymentMintMeltPlan?.toMint ?? "";
+        const mainMintIsAccepted =
+          requestedMints.length === 0 ||
+          (Boolean(targetMainMint) && requestedMints.includes(targetMainMint));
+        if (
+          !mainMintIsAccepted ||
+          !requestPaymentMintMelt(requestInfo.amount)
+        ) {
+          setStatus(t("payInsufficient"));
+        }
+        return;
+      }
 
       const contact = ensureContactForCashuPaymentRequest(requestInfo);
       if (!contact?.id) {
@@ -4896,40 +4980,84 @@ export const useAppShellComposition = () => {
     },
     [
       cashuIsBusy,
+      cashuBalance,
       ensureContactForCashuPaymentRequest,
       findPreviousCashuPaymentRequestMessage,
       payCashuPaymentRequestViaPost,
       payContactWithCashuMessage,
+      paymentMintMeltPlan?.toMint,
+      requestPaymentMintMelt,
       setCashuIsBusy,
       setStatus,
       t,
     ],
   );
 
-  const { payLightningAddressWithCashu, payLightningInvoiceWithCashu } =
-    useLightningPaymentsDomain({
-      buildCashuMintCandidates,
-      canPayWithCashu,
+  const {
+    payLightningAddressWithCashu: payLightningAddressWithCashuBase,
+    payLightningInvoiceWithCashu: payLightningInvoiceWithCashuBase,
+  } = useLightningPaymentsDomain({
+    buildCashuMintCandidates,
+    canPayWithCashu,
+    cashuBalance,
+    cashuIsBusy,
+    cashuOwnerId,
+    cashuTokensAll,
+    cashuTokensWithMeta,
+    cashuVisibleOwnerIds,
+    contacts,
+    defaultMintUrl,
+    formatDisplayedAmountParts,
+    insert,
+    logPaymentEvent,
+    normalizeMintUrl,
+    setCashuIsBusy,
+    setContactsOnboardingHasPaid,
+    setPostPaySaveContact,
+    setStatus,
+    showPaidOverlay,
+    t,
+    update,
+  });
+
+  const payLightningAddressWithCashu = React.useCallback(
+    async (lnAddress: string, amountSat: number): Promise<void> => {
+      if (amountSat > cashuBalance) {
+        if (!requestPaymentMintMelt(amountSat)) {
+          setStatus(t("payInsufficient"));
+        }
+        return;
+      }
+      await payLightningAddressWithCashuBase(lnAddress, amountSat);
+    },
+    [
       cashuBalance,
-      cashuIsBusy,
-      cashuOwnerId,
-      cashuTokensAll,
-      cashuTokensWithMeta,
-      cashuVisibleOwnerIds,
-      contacts,
-      defaultMintUrl,
-      formatDisplayedAmountParts,
-      insert,
-      logPaymentEvent,
-      normalizeMintUrl,
-      setCashuIsBusy,
-      setContactsOnboardingHasPaid,
-      setPostPaySaveContact,
+      payLightningAddressWithCashuBase,
+      requestPaymentMintMelt,
       setStatus,
-      showPaidOverlay,
       t,
-      update,
-    });
+    ],
+  );
+
+  const payLightningInvoiceWithCashu = React.useCallback(
+    async (invoice: string): Promise<boolean> => {
+      const amountSat = getLightningInvoicePreview(invoice)?.amountSat ?? null;
+      if (amountSat !== null && amountSat > cashuBalance) {
+        if (!requestPaymentMintMelt(amountSat)) {
+          setStatus(t("payInsufficient"));
+        }
+        return false;
+      }
+      return await payLightningInvoiceWithCashuBase(invoice);
+    },
+    [
+      cashuBalance,
+      payLightningInvoiceWithCashuBase,
+      requestPaymentMintMelt,
+      setStatus,
+      t,
+    ],
+  );
 
   const closeLightningInvoiceConfirmation = React.useCallback(() => {
     setPendingLightningInvoiceConfirmation(null);
@@ -7459,13 +7587,21 @@ export const useAppShellComposition = () => {
 
   const autoswapAttemptedSignatureRef = React.useRef<string | null>(null);
   const autoswapInFlightRef = React.useRef(false);
-  const meltLargestForeignMintToMainMintRef = React.useRef(
-    meltLargestForeignMintToMainMint,
-  );
   React.useEffect(() => {
     meltLargestForeignMintToMainMintRef.current =
       meltLargestForeignMintToMainMint;
   }, [meltLargestForeignMintToMainMint]);
+
+  const closePaymentMintMeltConfirmation = React.useCallback(() => {
+    if (cashuIsBusy) return;
+    setPendingPaymentMintMeltConfirmation(null);
+  }, [cashuIsBusy]);
+
+  const confirmPaymentMintMelt = React.useCallback(async () => {
+    if (cashuIsBusy) return;
+    setPendingPaymentMintMeltConfirmation(null);
+    await meltLargestForeignMintToMainMintRef.current();
+  }, [cashuIsBusy]);
 
   // Below this threshold the melt fee_reserve typically dominates the
   // foreign-mint balance, so the swap fails with "Insufficient funds" and
@@ -8214,6 +8350,7 @@ export const useAppShellComposition = () => {
       canWriteNfc,
       canPayWithCashu,
       cashuBalance,
+      cashuBalanceAfterMelt,
       cashuTotalBalance,
       cashuBulkCheckIsBusy,
       cashuDraft,
@@ -8282,6 +8419,7 @@ export const useAppShellComposition = () => {
   const { peopleRouteProps } = useProfilePeopleComposition({
     peopleRouteBuilderInput: {
       cashuBalance,
+      cashuBalanceAfterMelt,
       cashuIsBusy,
       chatSelectedContact: selectedChatContact,
       chatDraft,
@@ -8421,6 +8559,7 @@ export const useAppShellComposition = () => {
       renderContactCard: renderMainSwipeContactCard,
       route,
       scanIsOpen,
+      showProfileQrOnTiltEnabled,
       setActiveGroup,
       setContactsSearch,
       showContactsOnboarding,
@@ -8522,6 +8661,7 @@ export const useAppShellComposition = () => {
       pendingRelayDeleteUrl,
       payWithCashuEnabled,
       cashuAutoswapEnabled,
+      showProfileQrOnTiltEnabled,
       PRESET_MINTS,
       pushToast,
       refreshMintInfo,
@@ -8547,6 +8687,7 @@ export const useAppShellComposition = () => {
       setNewRelayUrl,
       setPayWithCashuEnabled,
       setCashuAutoswapEnabled,
+      setShowProfileQrOnTiltEnabled,
       setPendingEvoluServerDeleteUrl,
       setPendingMintDeleteUrl,
       setStatus,
@@ -8561,6 +8702,7 @@ export const useAppShellComposition = () => {
     allowedDisplayCurrencies,
     applyAmountInputKey: applyDisplayedAmountInputKey,
     cashuBalance,
+    cashuBalanceAfterMelt,
     cashuIsBusy,
     canWriteNfc,
     chatTopbarContact,
@@ -8590,6 +8732,7 @@ export const useAppShellComposition = () => {
     paidOverlayIsOpen,
     paidOverlayTitle,
     pendingMintAutoswapChangeConfirmation,
+    pendingPaymentMintMeltConfirmation,
     pendingLnurlWithdrawConfirmation,
     pendingLightningInvoiceConfirmation,
     postPaySaveContact,
@@ -8624,6 +8767,7 @@ export const useAppShellComposition = () => {
   const appActions = {
     cancelPendingNfcWrite,
     closeMintAutoswapChangeConfirmation,
+    closePaymentMintMeltConfirmation,
     closeLnurlWithdrawConfirmation,
     closeMenu,
     closeShareOptions,
@@ -8631,6 +8775,7 @@ export const useAppShellComposition = () => {
     closeProfileQr,
     closeScan,
     confirmMintAutoswapChangeConfirmation,
+    confirmPaymentMintMelt,
     confirmLnurlWithdraw,
     confirmLightningInvoicePayment,
     contactsGuideNav,
