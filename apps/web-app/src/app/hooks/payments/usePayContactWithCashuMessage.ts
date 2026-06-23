@@ -2,7 +2,7 @@ import * as Evolu from "@evolu/common";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React from "react";
 import { createSendTokenWithTokensAtMint } from "../../../cashuSend";
-import type { CashuTokenId, ContactId } from "../../../evolu";
+import { type CashuTokenId, type ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../../utils/constants";
@@ -13,7 +13,10 @@ import { safeLocalStorageSet } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
 import { resolveCashuRowStoredOwnerLane } from "../../lib/cashuOwnerLane";
-import { hasMatchingCashuToken } from "../../lib/cashuTokenIdentity";
+import {
+  createCashuTokenId,
+  hasMatchingCashuToken,
+} from "../../lib/cashuTokenIdentity";
 import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import {
@@ -87,7 +90,7 @@ interface UsePayContactWithCashuMessageParams {
     messageId?: string;
   }) => void;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
-  insert: EvoluMutations["insert"];
+  upsert: EvoluMutations["upsert"];
   logPayStep: (step: string, data?: PaymentLogData) => void;
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   nostrMessagesLocal: LocalNostrMessage[];
@@ -126,7 +129,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   defaultMintUrl,
   enqueuePendingPayment,
   formatDisplayedAmountParts,
-  insert,
+  upsert,
   logPayStep,
   logPaymentEvent,
   nostrMessagesLocal,
@@ -151,25 +154,14 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       unit: string | null;
     }) => {
       const payload: {
+        id: CashuTokenId;
         token: typeof Evolu.NonEmptyString.Type;
         state: typeof Evolu.NonEmptyString100.Type;
-        amount?: typeof Evolu.PositiveInt.Type;
-        mint?: typeof Evolu.NonEmptyString1000.Type;
-        unit?: typeof Evolu.NonEmptyString100.Type;
       } = {
+        id: createCashuTokenId(args.token),
         token: args.token as typeof Evolu.NonEmptyString.Type,
         state: args.state as typeof Evolu.NonEmptyString100.Type,
       };
-
-      const mint = String(args.mint ?? "").trim();
-      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
-
-      const unit = String(args.unit ?? "").trim();
-      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
-
-      if (typeof args.amount === "number" && args.amount > 0) {
-        payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
-      }
 
       return payload;
     },
@@ -286,12 +278,14 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         }
 
         const result = cashuWriteOwnerId
-          ? insert("cashuToken", payload, { ownerId: cashuWriteOwnerId })
-          : insert("cashuToken", payload);
+          ? upsert("cashuToken", payload, { ownerId: cashuWriteOwnerId })
+          : upsert("cashuToken", payload);
 
         return {
           ok: result.ok,
-          error: result.ok ? null : String(result.error),
+          error: result.ok
+            ? null
+            : getUnknownErrorMessage(result.error, "unknown"),
           skippedDuplicate: false,
         };
       };
@@ -836,7 +830,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       currentNsec,
       enqueuePendingPayment,
       formatDisplayedAmountParts,
-      insert,
+      upsert,
       logPayStep,
       logPaymentEvent,
       pushToast,

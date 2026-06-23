@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createCashuTokenId } from "./cashuTokenIdentity";
 import { getCashuTokenMessageInfo } from "./tokenMessageInfo";
 
 const buildCashuToken = (): string => {
@@ -44,6 +45,16 @@ describe("getCashuTokenMessageInfo", () => {
     expect(
       getCashuTokenMessageInfo(token, [
         { isDeleted: "1", rawToken: token, state: "error" },
+      ])?.isValid,
+    ).toBe(false);
+  });
+
+  it("recognizes an accepted token by the original token-derived id", () => {
+    const token = buildCashuToken();
+
+    expect(
+      getCashuTokenMessageInfo(token, [
+        { id: createCashuTokenId(token), token: "cashu-accepted-token" },
       ])?.isValid,
     ).toBe(false);
   });

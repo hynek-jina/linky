@@ -1,6 +1,12 @@
+import * as Evolu from "@evolu/common";
+import type { CashuTokenId } from "../../evolu";
 import type { CashuTokenRowLike } from "../types/appTypes";
 
+export const createCashuTokenId = (token: string): CashuTokenId =>
+  Evolu.createIdFromString<"CashuToken">(token.trim());
+
 interface CashuTokenIdentityLike {
+  id?: unknown;
   rawToken?: unknown;
   token?: unknown;
 }
@@ -32,8 +38,12 @@ export const hasMatchingCashuToken = (
 ): boolean => {
   const aliases = new Set(readCashuTokenAliases(value));
   if (aliases.size === 0) return false;
+  const candidateIds = new Set(
+    Array.from(aliases, (alias) => String(createCashuTokenId(alias))),
+  );
 
   return rows.some((row) => {
+    if (candidateIds.has(String(row.id ?? "").trim())) return true;
     if (isDeletedCashuRow(row)) return false;
     return readCashuTokenAliases(row).some((alias) => aliases.has(alias));
   });

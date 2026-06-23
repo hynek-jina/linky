@@ -1,5 +1,6 @@
 import { parseCashuToken } from "../../cashu";
 import type { CashuTokenRowLike, MintUrlInput } from "../types/appTypes";
+import { createCashuTokenId } from "./cashuTokenIdentity";
 import { extractCashuTokenFromText } from "./tokenText";
 
 export interface CashuTokenMessageInfo {
@@ -25,10 +26,12 @@ const isKnownCashuToken = (
   cashuTokensAll: readonly CashuTokenRowLike[],
   tokenRaw: string,
 ): boolean => {
+  const tokenId = String(createCashuTokenId(tokenRaw));
   return cashuTokensAll.some((row) => {
     const storedRaw = String(row.rawToken ?? "").trim();
     const storedToken = String(row.token ?? "").trim();
     return (
+      String(row.id ?? "") === tokenId ||
       (storedRaw !== "" && storedRaw === tokenRaw) ||
       (storedToken !== "" && storedToken === tokenRaw)
     );

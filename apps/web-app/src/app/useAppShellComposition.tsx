@@ -15,10 +15,11 @@ import {
   deriveDefaultLightningAddress,
   deriveDefaultProfile,
 } from "../derivedProfile";
-import type { CashuTokenId, ContactId } from "../evolu";
 import {
   evolu,
   normalizeEvoluServerUrl,
+  type CashuTokenId,
+  type ContactId,
   useEvolu,
   useEvoluDatabaseInfoState,
   useEvoluLastError,
@@ -144,6 +145,7 @@ import {
   getInitialNostrIdentitySwitchedAtSec,
   getInitialNostrNsec,
   getInitialPayWithCashuEnabled,
+  getInitialShowProfileQrOnTiltEnabled,
   safeLocalStorageGet,
   safeLocalStorageGetJson,
   safeLocalStorageRemove,
@@ -222,12 +224,14 @@ import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
 import { usePaidOverlayState } from "./hooks/usePaidOverlayState";
 import { usePaymentsDomain } from "./hooks/usePaymentsDomain";
 import { useProfileNpubCashEffects } from "./hooks/useProfileNpubCashEffects";
+import { usePortraitOrientationLock } from "./hooks/usePortraitOrientationLock";
 import { useRelayDomain } from "./hooks/useRelayDomain";
 import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
 import { resolveCashuRowStoredOwnerLane } from "./lib/cashuOwnerLane";
+import { createCashuTokenId } from "./lib/cashuTokenIdentity";
 import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_RESERVED,
@@ -259,6 +263,10 @@ import {
   buildCashuMintCandidates as buildCashuMintCandidatesBase,
   selectSingleMintCandidateForAmount,
 } from "./lib/paymentMintSelection";
+import {
+  canOfferPaymentMintMelt,
+  getPaymentMintMeltPlan,
+} from "./lib/paymentMintMelt";
 import {
   buildCashuPaymentRequestMessage,
   buildLinkyPaymentRequestDeclineMessage,
@@ -885,9 +893,10 @@ const mintTopupProofs = async (args: {
 };
 
 interface AutoswapClaimContext {
-  insert: (
+  upsert: (
     table: "cashuToken",
     payload: {
+      id: CashuTokenId;
       token: typeof Evolu.NonEmptyString.Type;
       state: typeof Evolu.NonEmptyString100.Type;
     },
@@ -943,14 +952,18 @@ const claimAutoswapPendingEntry = async (args: {
 
       const ownerId = await args.ctx.resolveOwnerIdForWrite();
       const payload = {
+        id: createCashuTokenId(claimed.token),
         token: claimed.token as typeof Evolu.NonEmptyString.Type,
         state: "accepted" as typeof Evolu.NonEmptyString100.Type,
       };
       const result = ownerId
-        ? args.ctx.insert("cashuToken", payload, { ownerId })
-        : args.ctx.insert("cashuToken", payload);
+        ? args.ctx.upsert("cashuToken", payload, { ownerId })
+        : args.ctx.upsert("cashuToken", payload);
       if (!result.ok) {
-        return { ok: false, reason: String(result.error) };
+        return {
+          ok: false,
+          reason: getUnknownErrorMessage(result.error, "unknown"),
+        };
       }
       return { ok: true };
     };
@@ -1200,6 +1213,8 @@ export const useAppShellComposition = () => {
   const [cashuAutoswapEnabled, setCashuAutoswapEnabled] = useState<boolean>(
     () => getInitialCashuAutoswapEnabled(),
   );
+  const [showProfileQrOnTiltEnabled, setShowProfileQrOnTiltEnabled] =
+    useState<boolean>(() => getInitialShowProfileQrOnTiltEnabled());
   const [lightningInvoiceAutoPayLimit, setLightningInvoiceAutoPayLimit] =
     useState<number>(() => getInitialLightningInvoiceAutoPayLimit());
   const [allowPromisesEnabled] = useState<boolean>(false);
@@ -1646,6 +1661,16 @@ export const useAppShellComposition = () => {
   const pendingMintAutoswapChangeResolverRef = React.useRef<
     ((confirmed: boolean) => void) | null
   >(null);
+  const [
+    pendingPaymentMintMeltConfirmation,
+    setPendingPaymentMintMeltConfirmation,
+  ] = useState<{
+    fromMint: string;
+    toMint: string;
+  } | null>(null);
+  const meltLargestForeignMintToMainMintRef = React.useRef<() => Promise<void>>(
+    async () => {},
+  );
   const [lnurlWithdrawIsBusy, setLnurlWithdrawIsBusy] = useState(false);
 
   const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
@@ -2174,7 +2199,10 @@ export const useAppShellComposition = () => {
     lang,
     lightningInvoiceAutoPayLimit,
     payWithCashuEnabled,
+    showProfileQrOnTiltEnabled,
   });
+
+  usePortraitOrientationLock(showProfileQrOnTiltEnabled);
 
   useArmedDeleteTimeouts({
     pendingCashuDeleteId,
@@ -2369,6 +2397,7 @@ export const useAppShellComposition = () => {
   const dedupeVisibleCashuRows = React.useCallback(
     function dedupeVisibleCashuRows<
       TRow extends {
+        id?: string | null;
         rawToken?: string | null;
         state?: unknown;
         token?: string | null;
@@ -2386,6 +2415,12 @@ export const useAppShellComposition = () => {
 
       const canonicalByAlias = new Map<string, string>();
       const bestByCanonical = new Map<string, TRow>();
+      const readRowCandidates = (row: TRow): string[] => {
+        const id = String(row.id ?? "").trim();
+        return id
+          ? [id, ...readCashuRowAliases(row)]
+          : readCashuRowAliases(row);
+      };
 
       const isCandidateBetter = (candidate: TRow, existing: TRow): boolean => {
         const candidateOwnerId = readCashuRowOwnerId(candidate);
@@ -2420,7 +2455,7 @@ export const useAppShellComposition = () => {
         const ownerId = readCashuRowOwnerId(row);
         if (!visibleCashuOwnerIds.has(ownerId)) continue;
 
-        const rowCandidates = readCashuRowAliases(row);
+        const rowCandidates = readRowCandidates(row);
         if (rowCandidates.length === 0) continue;
 
         const canonicalKey =
@@ -2438,7 +2473,7 @@ export const useAppShellComposition = () => {
       }
 
       return rows.filter((row) => {
-        const rowCandidates = readCashuRowAliases(row);
+        const rowCandidates = readRowCandidates(row);
         if (rowCandidates.length === 0) return false;
 
         const canonicalKey =
@@ -2494,7 +2529,7 @@ export const useAppShellComposition = () => {
     appOwnerId: cashuOwnerId,
     appOwnerIdRef: cashuOwnerIdRef,
     cashuTokensAll,
-    insert,
+    upsert,
     logPaymentEvent,
   });
 
@@ -2517,14 +2552,24 @@ export const useAppShellComposition = () => {
     });
 
     const hasActiveDuplicate = (row: (typeof cashuTokensAll)[number]) => {
+      const identityToken = String(row.rawToken ?? row.token ?? "").trim();
       const rowCandidates = [
+        String(row.id ?? "").trim(),
+        identityToken ? String(createCashuTokenId(identityToken)) : "",
         String(row.rawToken ?? "").trim(),
         String(row.token ?? "").trim(),
       ].filter(Boolean);
       if (rowCandidates.length === 0) return false;
 
       return activeRows.some((activeRow) => {
+        const activeIdentityToken = String(
+          activeRow.rawToken ?? activeRow.token ?? "",
+        ).trim();
         const activeCandidates = [
+          String(activeRow.id ?? "").trim(),
+          activeIdentityToken
+            ? String(createCashuTokenId(activeIdentityToken))
+            : "",
           String(activeRow.rawToken ?? "").trim(),
           String(activeRow.token ?? "").trim(),
         ].filter(Boolean);
@@ -2548,45 +2593,26 @@ export const useAppShellComposition = () => {
       if (!hasActiveDuplicate(row)) {
         const token = String(row.token ?? row.rawToken ?? "").trim();
         const rawToken = String(row.rawToken ?? "").trim();
-        const mint = String(row.mint ?? "").trim();
-        const unit = String(row.unit ?? "").trim();
         const state = String(row.state ?? "").trim() || "accepted";
         const error = String(row.error ?? "").trim();
-        const amount = Number(row.amount ?? 0);
 
         if (token) {
           const payload: {
+            id: CashuTokenId;
             token: typeof Evolu.NonEmptyString.Type;
             state: typeof Evolu.NonEmptyString100.Type;
-            amount?: typeof Evolu.PositiveInt.Type;
             error?: typeof Evolu.NonEmptyString1000.Type;
-            mint?: typeof Evolu.NonEmptyString1000.Type;
-            rawToken?: typeof Evolu.NonEmptyString.Type;
-            unit?: typeof Evolu.NonEmptyString100.Type;
           } = {
+            id: createCashuTokenId(rawToken || token),
             token: token as typeof Evolu.NonEmptyString.Type,
             state: state as typeof Evolu.NonEmptyString100.Type,
           };
 
-          if (rawToken) {
-            payload.rawToken = rawToken as typeof Evolu.NonEmptyString.Type;
-          }
-          if (mint) {
-            payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
-          }
-          if (unit) {
-            payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
-          }
-          if (Number.isFinite(amount) && amount > 0) {
-            payload.amount = Math.trunc(
-              amount,
-            ) as typeof Evolu.PositiveInt.Type;
-          }
           if (error) {
             payload.error = error as typeof Evolu.NonEmptyString1000.Type;
           }
 
-          const insertResult = insert("cashuToken", payload, {
+          const insertResult = upsert("cashuToken", payload, {
             ownerId: cashuOwnerId,
           });
           if (!insertResult.ok) continue;
@@ -2609,7 +2635,7 @@ export const useAppShellComposition = () => {
     appOwnerId,
     cashuOwnerId,
     cashuTokensAll,
-    insert,
+    upsert,
     readCashuRowOwnerId,
     update,
   ]);
@@ -2652,15 +2678,18 @@ export const useAppShellComposition = () => {
 
           const ownerId = await resolveOwnerIdForWrite();
           const payload = {
+            id: createCashuTokenId(claimed.token),
             token: claimed.token as typeof Evolu.NonEmptyString.Type,
             state: "accepted" as typeof Evolu.NonEmptyString100.Type,
           };
 
           const result = ownerId
-            ? insert("cashuToken", payload, { ownerId })
-            : insert("cashuToken", payload);
+            ? upsert("cashuToken", payload, { ownerId })
+            : upsert("cashuToken", payload);
           if (!result.ok) {
-            setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+            setStatus(
+              `${t("errorPrefix")}: ${getUnknownErrorMessage(result.error, "unknown")}`,
+            );
             return false;
           }
 
@@ -2758,15 +2787,18 @@ export const useAppShellComposition = () => {
             if (!isCashuTokenKnownAny(token)) {
               const ownerId = await resolveOwnerIdForWrite();
               const payload = {
+                id: createCashuTokenId(token),
                 token: token as typeof Evolu.NonEmptyString.Type,
                 state: "accepted" as typeof Evolu.NonEmptyString100.Type,
               };
 
               const result = ownerId
-                ? insert("cashuToken", payload, { ownerId })
-                : insert("cashuToken", payload);
+                ? upsert("cashuToken", payload, { ownerId })
+                : upsert("cashuToken", payload);
               if (!result.ok) {
-                setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+                setStatus(
+                  `${t("errorPrefix")}: ${getUnknownErrorMessage(result.error, "unknown")}`,
+                );
                 return;
               }
             }
@@ -2861,7 +2893,7 @@ export const useAppShellComposition = () => {
     appOwnerId,
     formatDisplayedAmountParts,
     finalizeTopupInvoicePaid,
-    insert,
+    upsert,
     isCashuTokenKnownAny,
     resolveOwnerIdForWrite,
     topupMintQuote,
@@ -3075,6 +3107,43 @@ export const useAppShellComposition = () => {
 
     return largestBalance;
   }, [cashuAcceptedMintBalances]);
+
+  const paymentMintMeltPlan = React.useMemo(() => {
+    return getPaymentMintMeltPlan({
+      mainMint: normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL),
+      balances: Array.from(cashuAcceptedMintBalances, ([mint, sum]) => ({
+        mint,
+        sum,
+      })),
+    });
+  }, [cashuAcceptedMintBalances, defaultMintUrl]);
+
+  const cashuBalanceAfterMelt = Math.max(
+    cashuBalance,
+    paymentMintMeltPlan?.maxBalanceAfterMelt ?? 0,
+  );
+
+  const requestPaymentMintMelt = React.useCallback(
+    (amountSat: number): boolean => {
+      if (
+        !canOfferPaymentMintMelt({
+          amountSat,
+          currentBalance: cashuBalance,
+          plan: paymentMintMeltPlan,
+        }) ||
+        !paymentMintMeltPlan
+      ) {
+        return false;
+      }
+
+      setPendingPaymentMintMeltConfirmation({
+        fromMint: paymentMintMeltPlan.fromMint,
+        toMint: paymentMintMeltPlan.toMint,
+      });
+      return true;
+    },
+    [cashuBalance, paymentMintMeltPlan],
+  );
 
   const cashuHasMultipleAcceptedMints = cashuAcceptedMintBalances.size > 1;
 
@@ -3459,7 +3528,7 @@ export const useAppShellComposition = () => {
     enqueueCashuOp,
     ensureCashuTokenPersisted,
     formatDisplayedAmountParts,
-    insert,
+    upsert,
     isMintDeleted,
     logPaymentEvent,
     makeNip98AuthHeader,
@@ -4244,7 +4313,7 @@ export const useAppShellComposition = () => {
       defaultMintUrl,
       enqueuePendingPayment,
       formatDisplayedAmountParts,
-      insert,
+      upsert,
       logPayStep,
       logPaymentEvent,
       nostrMessagesLocal,
@@ -4297,6 +4366,13 @@ export const useAppShellComposition = () => {
       return;
     }
 
+    if (amountSat > cashuBalance) {
+      if (!requestPaymentMintMelt(amountSat)) {
+        setStatus(t("payInsufficient"));
+      }
+      return;
+    }
+
     const normalizedMethod =
       contactPayMethod === "lightning" || contactPayMethod === "cashu"
         ? contactPayMethod
@@ -4324,9 +4400,11 @@ export const useAppShellComposition = () => {
     }
   }, [
     cashuIsBusy,
+    cashuBalance,
     contactPayMethod,
     payAmount,
     payContactWithCashuMessage,
+    requestPaymentMintMelt,
     route.kind,
     selectedContact,
     setCashuIsBusy,
@@ -4535,35 +4613,18 @@ export const useAppShellComposition = () => {
         unit: string | null;
       }) => {
         const payload: {
+          id: CashuTokenId;
           token: typeof Evolu.NonEmptyString.Type;
           state: typeof Evolu.NonEmptyString100.Type;
-          amount?: typeof Evolu.PositiveInt.Type;
-          mint?: typeof Evolu.NonEmptyString1000.Type;
-          unit?: typeof Evolu.NonEmptyString100.Type;
         } = {
+          id: createCashuTokenId(args.token),
           token: args.token as typeof Evolu.NonEmptyString.Type,
           state: args.state as typeof Evolu.NonEmptyString100.Type,
         };
 
-        const mint = String(args.mint ?? "").trim();
-        if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
-
-        const unit = String(args.unit ?? "").trim();
-        if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
-
-        if (
-          typeof args.amount === "number" &&
-          Number.isFinite(args.amount) &&
-          args.amount > 0
-        ) {
-          payload.amount = Math.trunc(
-            args.amount,
-          ) as typeof Evolu.PositiveInt.Type;
-        }
-
         return cashuWriteOwnerId
-          ? insert("cashuToken", payload, { ownerId: cashuWriteOwnerId })
-          : insert("cashuToken", payload);
+          ? upsert("cashuToken", payload, { ownerId: cashuWriteOwnerId })
+          : upsert("cashuToken", payload);
       };
 
       const updateCashuToken = (
@@ -4838,7 +4899,6 @@ export const useAppShellComposition = () => {
       cashuTokensWithMeta,
       defaultMintUrl,
       formatDisplayedAmountParts,
-      insert,
       logPaymentEvent,
       resolveOwnerIdForWrite,
       setCashuIsBusy,
@@ -4847,12 +4907,30 @@ export const useAppShellComposition = () => {
       showPaidOverlay,
       t,
       update,
+      upsert,
     ],
   );
 
   const payCashuPaymentRequest = React.useCallback(
     async (requestInfo: CashuPaymentRequestMessageInfo) => {
       if (cashuIsBusy) return;
+      if (requestInfo.amount > cashuBalance) {
+        const requestedMints = requestInfo.mintUrls.flatMap((mintUrl) => {
+          const normalizedMint = normalizeMintUrl(mintUrl);
+          return normalizedMint ? [normalizedMint] : [];
+        });
+        const targetMainMint = paymentMintMeltPlan?.toMint ?? "";
+        const mainMintIsAccepted =
+          requestedMints.length === 0 ||
+          (Boolean(targetMainMint) && requestedMints.includes(targetMainMint));
+        if (
+          !mainMintIsAccepted ||
+          !requestPaymentMintMelt(requestInfo.amount)
+        ) {
+          setStatus(t("payInsufficient"));
+        }
+        return;
+      }
 
       const contact = ensureContactForCashuPaymentRequest(requestInfo);
       if (!contact?.id) {
@@ -4896,40 +4974,90 @@ export const useAppShellComposition = () => {
     },
     [
       cashuIsBusy,
+      cashuBalance,
       ensureContactForCashuPaymentRequest,
       findPreviousCashuPaymentRequestMessage,
       payCashuPaymentRequestViaPost,
       payContactWithCashuMessage,
+      paymentMintMeltPlan?.toMint,
+      requestPaymentMintMelt,
       setCashuIsBusy,
       setStatus,
       t,
     ],
   );
 
-  const { payLightningAddressWithCashu, payLightningInvoiceWithCashu } =
-    useLightningPaymentsDomain({
-      buildCashuMintCandidates,
-      canPayWithCashu,
+  const {
+    payLightningAddressWithCashu: payLightningAddressWithCashuBase,
+    payLightningInvoiceWithCashu: payLightningInvoiceWithCashuBase,
+  } = useLightningPaymentsDomain({
+    buildCashuMintCandidates,
+    canPayWithCashu,
+    cashuBalance,
+    cashuIsBusy,
+    cashuOwnerId,
+    cashuTokensAll,
+    cashuTokensWithMeta,
+    cashuVisibleOwnerIds,
+    contacts,
+    defaultMintUrl,
+    formatDisplayedAmountParts,
+    upsert,
+    logPaymentEvent,
+    normalizeMintUrl,
+    setCashuIsBusy,
+    setContactsOnboardingHasPaid,
+    setPostPaySaveContact,
+    setStatus,
+    showPaidOverlay,
+    t,
+    update,
+  });
+
+  const payLightningAddressWithCashu = React.useCallback(
+    async (lnAddress: string, amountSat: number): Promise<void> => {
+      if (amountSat > cashuBalance) {
+        if (!requestPaymentMintMelt(amountSat)) {
+          setStatus(t("payInsufficient"));
+        }
+        return;
+      }
+      const paid = await payLightningAddressWithCashuBase(lnAddress, amountSat);
+      if (paid) navigateTo({ route: "wallet" });
+    },
+    [
       cashuBalance,
-      cashuIsBusy,
-      cashuOwnerId,
-      cashuTokensAll,
-      cashuTokensWithMeta,
-      cashuVisibleOwnerIds,
-      contacts,
-      defaultMintUrl,
-      formatDisplayedAmountParts,
-      insert,
-      logPaymentEvent,
-      normalizeMintUrl,
-      setCashuIsBusy,
-      setContactsOnboardingHasPaid,
-      setPostPaySaveContact,
+      payLightningAddressWithCashuBase,
+      requestPaymentMintMelt,
       setStatus,
-      showPaidOverlay,
       t,
-      update,
-    });
+    ],
+  );
+
+  const payLightningInvoiceWithCashu = React.useCallback(
+    async (invoice: string): Promise<boolean> => {
+      const amountSat = getLightningInvoicePreview(invoice)?.amountSat ?? null;
+      if (amountSat !== null && amountSat > cashuBalance) {
+        if (!requestPaymentMintMelt(amountSat)) {
+          setStatus(t("payInsufficient"));
+        }
+        return false;
+      }
+      const paid = await payLightningInvoiceWithCashuBase(invoice);
+      if (paid && route.kind === "manualPay") {
+        navigateTo({ route: "wallet" });
+      }
+      return paid;
+    },
+    [
+      cashuBalance,
+      payLightningInvoiceWithCashuBase,
+      requestPaymentMintMelt,
+      route.kind,
+      setStatus,
+      t,
+    ],
+  );
 
   const closeLightningInvoiceConfirmation = React.useCallback(() => {
     setPendingLightningInvoiceConfirmation(null);
@@ -5090,7 +5218,7 @@ export const useAppShellComposition = () => {
     enqueueCashuOp,
     ensureCashuTokenPersisted,
     formatDisplayedAmountParts,
-    insert,
+    upsert,
     isCashuTokenStored,
     isMintDeleted,
     logPaymentEvent,
@@ -5617,7 +5745,6 @@ export const useAppShellComposition = () => {
 
       const payload = {
         id,
-        rawToken: trimmed as typeof Evolu.NonEmptyString.Type,
         state:
           CASHU_TOKEN_STATE_EXTERNALIZED as typeof Evolu.NonEmptyString100.Type,
         error: null,
@@ -6572,6 +6699,7 @@ export const useAppShellComposition = () => {
         contacts,
         importDataFileInputRef,
         insert,
+        upsert,
         pushToast,
         t,
         update,
@@ -6619,7 +6747,7 @@ export const useAppShellComposition = () => {
     cashuTokensAll: cashuTokensAllFiltered,
     defaultMintUrl,
     enqueueCashuOp,
-    insert,
+    upsert,
     isMintDeleted,
     logPaymentEvent,
     mintInfoDeduped,
@@ -6712,10 +6840,14 @@ export const useAppShellComposition = () => {
         rawToken: null,
         token: args.token,
       });
+      const targetId = String(createCashuTokenId(args.token));
       const ownerId = await resolveOwnerIdForWrite();
       const existingRow = cashuTokensAll.find((row) => {
-        return readCashuRowAliases(row).some((alias) =>
-          targetAliases.includes(alias),
+        return (
+          String(row.id ?? "") === targetId ||
+          readCashuRowAliases(row).some((alias) =>
+            targetAliases.includes(alias),
+          )
         );
       });
 
@@ -6730,33 +6862,24 @@ export const useAppShellComposition = () => {
       }
 
       const payload: {
+        id: CashuTokenId;
         token: typeof Evolu.NonEmptyString.Type;
         state: typeof Evolu.NonEmptyString100.Type;
-        amount?: typeof Evolu.PositiveInt.Type;
-        mint?: typeof Evolu.NonEmptyString1000.Type;
-        unit?: typeof Evolu.NonEmptyString100.Type;
       } = {
+        id: createCashuTokenId(args.token),
         token: args.token as typeof Evolu.NonEmptyString.Type,
         state: args.state as typeof Evolu.NonEmptyString100.Type,
       };
 
-      const mint = String(args.mint ?? "").trim();
-      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
-
-      const unit = String(args.unit ?? "").trim();
-      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
-
-      if (typeof args.amount === "number" && args.amount > 0) {
-        payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
-      }
-
       const result = ownerId
-        ? insert("cashuToken", payload, { ownerId })
-        : insert("cashuToken", payload);
+        ? upsert("cashuToken", payload, { ownerId })
+        : upsert("cashuToken", payload);
       return {
         ownerId,
         ok: result.ok,
-        error: result.ok ? null : String(result.error),
+        error: result.ok
+          ? null
+          : getUnknownErrorMessage(result.error, "unknown"),
         rowId: result.ok ? result.value.id : null,
         skippedDuplicate: false,
       };
@@ -6777,7 +6900,7 @@ export const useAppShellComposition = () => {
           ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
         if (!result.ok) {
-          throw new Error(String(result.error));
+          throw new Error(getUnknownErrorMessage(result.error, "unknown"));
         }
       }
     };
@@ -6979,7 +7102,6 @@ export const useAppShellComposition = () => {
     cashuTokensAll,
     cashuTokensWithMeta,
     defaultMintUrl,
-    insert,
     logPaymentEvent,
     readCashuRowAliases,
     resolveOwnerIdForWrite,
@@ -6987,6 +7109,7 @@ export const useAppShellComposition = () => {
     setStatus,
     t,
     update,
+    upsert,
   ]);
 
   // Shared per-quote in-flight set so the inline claim trigger in the
@@ -7055,12 +7178,9 @@ export const useAppShellComposition = () => {
     }
 
     interface AcceptedCashuTokenPayload {
-      amount?: number;
-      mint?: string;
-      rawToken?: string;
+      id: CashuTokenId;
       state: "accepted";
       token: string;
-      unit?: string;
     }
 
     const insertAcceptedToken = async (args: {
@@ -7074,10 +7194,14 @@ export const useAppShellComposition = () => {
         rawToken: args.rawToken ?? null,
         token: args.token,
       });
+      const targetId = String(createCashuTokenId(args.rawToken || args.token));
       const ownerId = await resolveOwnerIdForWrite();
       const existingRow = cashuTokensAll.find((row) => {
-        return readCashuRowAliases(row).some((alias) =>
-          targetAliases.includes(alias),
+        return (
+          String(row.id ?? "") === targetId ||
+          readCashuRowAliases(row).some((alias) =>
+            targetAliases.includes(alias),
+          )
         );
       });
 
@@ -7092,23 +7216,20 @@ export const useAppShellComposition = () => {
       }
 
       const payload: AcceptedCashuTokenPayload = {
+        id: createCashuTokenId(args.rawToken || args.token),
         token: args.token,
         state: "accepted",
       };
-      if (args.rawToken) payload.rawToken = args.rawToken;
-      if (args.mint) payload.mint = args.mint;
-      if (args.unit) payload.unit = args.unit;
-      if (typeof args.amount === "number" && args.amount > 0) {
-        payload.amount = args.amount;
-      }
 
       const result = ownerId
-        ? insert("cashuToken", payload, { ownerId })
-        : insert("cashuToken", payload);
+        ? upsert("cashuToken", payload, { ownerId })
+        : upsert("cashuToken", payload);
       return {
         ownerId,
         ok: result.ok,
-        error: result.ok ? null : String(result.error),
+        error: result.ok
+          ? null
+          : getUnknownErrorMessage(result.error, "unknown"),
         rowId: result.ok ? result.value.id : null,
         skippedDuplicate: false,
       };
@@ -7129,7 +7250,7 @@ export const useAppShellComposition = () => {
           ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
         if (!result.ok) {
-          throw new Error(String(result.error));
+          throw new Error(getUnknownErrorMessage(result.error, "unknown"));
         }
       }
     };
@@ -7394,7 +7515,7 @@ export const useAppShellComposition = () => {
               claimOwnerKey: pendingClaimOwnerKey,
               claimsKey: pendingClaimsKey,
               ctx: {
-                insert,
+                upsert,
                 isCashuTokenKnownAny,
                 resolveOwnerIdForWrite,
               },
@@ -7446,7 +7567,7 @@ export const useAppShellComposition = () => {
     appOwnerId,
     formatDisplayedAmountParts,
     formatMintButtonLabel,
-    insert,
+    upsert,
     isCashuTokenKnownAny,
     readCashuRowAliases,
     rememberSeenMint,
@@ -7459,13 +7580,21 @@ export const useAppShellComposition = () => {
 
   const autoswapAttemptedSignatureRef = React.useRef<string | null>(null);
   const autoswapInFlightRef = React.useRef(false);
-  const meltLargestForeignMintToMainMintRef = React.useRef(
-    meltLargestForeignMintToMainMint,
-  );
   React.useEffect(() => {
     meltLargestForeignMintToMainMintRef.current =
       meltLargestForeignMintToMainMint;
   }, [meltLargestForeignMintToMainMint]);
+
+  const closePaymentMintMeltConfirmation = React.useCallback(() => {
+    if (cashuIsBusy) return;
+    setPendingPaymentMintMeltConfirmation(null);
+  }, [cashuIsBusy]);
+
+  const confirmPaymentMintMelt = React.useCallback(async () => {
+    if (cashuIsBusy) return;
+    setPendingPaymentMintMeltConfirmation(null);
+    await meltLargestForeignMintToMainMintRef.current();
+  }, [cashuIsBusy]);
 
   // Below this threshold the melt fee_reserve typically dominates the
   // foreign-mint balance, so the swap fails with "Insufficient funds" and
@@ -7548,7 +7677,7 @@ export const useAppShellComposition = () => {
               claimOwnerKey: source.ownerKey,
               claimsKey: source.claimsKey,
               ctx: {
-                insert,
+                upsert,
                 isCashuTokenKnownAny,
                 resolveOwnerIdForWrite,
               },
@@ -7583,7 +7712,7 @@ export const useAppShellComposition = () => {
       window.clearInterval(intervalId);
       walletCache.clear();
     };
-  }, [appOwnerIdValue, insert, isCashuTokenKnownAny, resolveOwnerIdForWrite]);
+  }, [appOwnerIdValue, isCashuTokenKnownAny, resolveOwnerIdForWrite, upsert]);
 
   useChatNostrSyncEffect({
     appendLocalNostrMessage,
@@ -8214,6 +8343,7 @@ export const useAppShellComposition = () => {
       canWriteNfc,
       canPayWithCashu,
       cashuBalance,
+      cashuBalanceAfterMelt,
       cashuTotalBalance,
       cashuBulkCheckIsBusy,
       cashuDraft,
@@ -8282,6 +8412,7 @@ export const useAppShellComposition = () => {
   const { peopleRouteProps } = useProfilePeopleComposition({
     peopleRouteBuilderInput: {
       cashuBalance,
+      cashuBalanceAfterMelt,
       cashuIsBusy,
       chatSelectedContact: selectedChatContact,
       chatDraft,
@@ -8421,6 +8552,7 @@ export const useAppShellComposition = () => {
       renderContactCard: renderMainSwipeContactCard,
       route,
       scanIsOpen,
+      showProfileQrOnTiltEnabled,
       setActiveGroup,
       setContactsSearch,
       showContactsOnboarding,
@@ -8522,6 +8654,7 @@ export const useAppShellComposition = () => {
       pendingRelayDeleteUrl,
       payWithCashuEnabled,
       cashuAutoswapEnabled,
+      showProfileQrOnTiltEnabled,
       PRESET_MINTS,
       pushToast,
       refreshMintInfo,
@@ -8547,6 +8680,7 @@ export const useAppShellComposition = () => {
       setNewRelayUrl,
       setPayWithCashuEnabled,
       setCashuAutoswapEnabled,
+      setShowProfileQrOnTiltEnabled,
       setPendingEvoluServerDeleteUrl,
       setPendingMintDeleteUrl,
       setStatus,
@@ -8561,6 +8695,7 @@ export const useAppShellComposition = () => {
     allowedDisplayCurrencies,
     applyAmountInputKey: applyDisplayedAmountInputKey,
     cashuBalance,
+    cashuBalanceAfterMelt,
     cashuIsBusy,
     canWriteNfc,
     chatTopbarContact,
@@ -8590,6 +8725,7 @@ export const useAppShellComposition = () => {
     paidOverlayIsOpen,
     paidOverlayTitle,
     pendingMintAutoswapChangeConfirmation,
+    pendingPaymentMintMeltConfirmation,
     pendingLnurlWithdrawConfirmation,
     pendingLightningInvoiceConfirmation,
     postPaySaveContact,
@@ -8624,6 +8760,7 @@ export const useAppShellComposition = () => {
   const appActions = {
     cancelPendingNfcWrite,
     closeMintAutoswapChangeConfirmation,
+    closePaymentMintMeltConfirmation,
     closeLnurlWithdrawConfirmation,
     closeMenu,
     closeShareOptions,
@@ -8631,6 +8768,7 @@ export const useAppShellComposition = () => {
     closeProfileQr,
     closeScan,
     confirmMintAutoswapChangeConfirmation,
+    confirmPaymentMintMelt,
     confirmLnurlWithdraw,
     confirmLightningInvoicePayment,
     contactsGuideNav,

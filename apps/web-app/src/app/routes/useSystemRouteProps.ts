@@ -90,6 +90,7 @@ interface UseSystemRoutePropsParams {
   pendingRelayDeleteUrl: SystemRoutesProps["nostrRelayProps"]["pendingRelayDeleteUrl"];
   payWithCashuEnabled: SystemRoutesProps["advancedProps"]["payWithCashuEnabled"];
   cashuAutoswapEnabled: SystemRoutesProps["advancedProps"]["cashuAutoswapEnabled"];
+  showProfileQrOnTiltEnabled: SystemRoutesProps["advancedProps"]["showProfileQrOnTiltEnabled"];
   PRESET_MINTS: SystemRoutesProps["mintsProps"]["PRESET_MINTS"];
   pushToast: SystemRoutesProps["evoluServerNewProps"]["pushToast"];
   refreshMintInfo: SystemRoutesProps["mintDetailProps"]["refreshMintInfo"];
@@ -115,6 +116,7 @@ interface UseSystemRoutePropsParams {
   setNewRelayUrl: SystemRoutesProps["nostrRelayNewProps"]["setNewRelayUrl"];
   setPayWithCashuEnabled: SystemRoutesProps["advancedProps"]["setPayWithCashuEnabled"];
   setCashuAutoswapEnabled: SystemRoutesProps["advancedProps"]["setCashuAutoswapEnabled"];
+  setShowProfileQrOnTiltEnabled: SystemRoutesProps["advancedProps"]["setShowProfileQrOnTiltEnabled"];
   setPendingEvoluServerDeleteUrl: SystemRoutesProps["evoluServerProps"]["setPendingEvoluServerDeleteUrl"];
   setPendingMintDeleteUrl: SystemRoutesProps["mintDetailProps"]["setPendingMintDeleteUrl"];
   setStatus: SystemRoutesProps["evoluServerNewProps"]["setStatus"];
@@ -208,6 +210,7 @@ export const useSystemRouteProps = ({
   pendingRelayDeleteUrl,
   payWithCashuEnabled,
   cashuAutoswapEnabled,
+  showProfileQrOnTiltEnabled,
   PRESET_MINTS,
   pushToast,
   refreshMintInfo,
@@ -233,6 +236,7 @@ export const useSystemRouteProps = ({
   setNewRelayUrl,
   setPayWithCashuEnabled,
   setCashuAutoswapEnabled,
+  setShowProfileQrOnTiltEnabled,
   setPendingEvoluServerDeleteUrl,
   setPendingMintDeleteUrl,
   setStatus,
@@ -274,6 +278,7 @@ export const useSystemRouteProps = ({
       seedMnemonic,
       payWithCashuEnabled,
       cashuAutoswapEnabled,
+      showProfileQrOnTiltEnabled,
       pushToast,
       relayUrls,
       connectedRelayCount,
@@ -294,6 +299,7 @@ export const useSystemRouteProps = ({
       setLightningInvoiceAutoPayLimit,
       setPayWithCashuEnabled,
       setCashuAutoswapEnabled,
+      setShowProfileQrOnTiltEnabled,
       exportAppData,
       requestImportAppData,
       requestDeriveNostrKeys,

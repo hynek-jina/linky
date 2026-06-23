@@ -7,6 +7,7 @@ import {
   DISPLAY_CURRENCY_STORAGE_KEY,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
   PAY_WITH_CASHU_STORAGE_KEY,
+  SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "../../utils/constants";
 import type { DisplayCurrency } from "../../utils/displayAmounts";
@@ -19,6 +20,7 @@ interface UseAppPreferencesParams {
   lang: Lang;
   lightningInvoiceAutoPayLimit: number;
   payWithCashuEnabled: boolean;
+  showProfileQrOnTiltEnabled: boolean;
 }
 
 export const useAppPreferences = ({
@@ -29,6 +31,7 @@ export const useAppPreferences = ({
   lang,
   lightningInvoiceAutoPayLimit,
   payWithCashuEnabled,
+  showProfileQrOnTiltEnabled,
 }: UseAppPreferencesParams): void => {
   React.useEffect(() => {
     persistLang(lang);
@@ -100,4 +103,15 @@ export const useAppPreferences = ({
       // ignore
     }
   }, [cashuAutoswapEnabled]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(
+        SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY,
+        showProfileQrOnTiltEnabled ? "1" : "0",
+      );
+    } catch {
+      // ignore
+    }
+  }, [showProfileQrOnTiltEnabled]);
 };

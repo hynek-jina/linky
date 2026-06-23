@@ -10,6 +10,7 @@ import { MenuModal } from "./MenuModal";
 import { MintAutoswapConfirmModal } from "./MintAutoswapConfirmModal";
 import { NfcWriteModal } from "./NfcWriteModal";
 import { PaidOverlay } from "./PaidOverlay";
+import { PaymentMintMeltConfirmModal } from "./PaymentMintMeltConfirmModal";
 import { ProfileQrModal } from "./ProfileQrModal";
 import { SaveContactPromptModal } from "./SaveContactPromptModal";
 import { ScanModal } from "./ScanModal";
@@ -119,9 +120,11 @@ export function AuthenticatedLayout({
         />
       ) : null}
 
-      {state.pendingLightningInvoiceConfirmation && !state.paidOverlayIsOpen ? (
+      {state.pendingLightningInvoiceConfirmation &&
+      !state.pendingPaymentMintMeltConfirmation &&
+      !state.paidOverlayIsOpen ? (
         <LightningInvoiceConfirmModal
-          cashuBalance={state.cashuBalance}
+          cashuBalance={state.cashuBalanceAfterMelt}
           cashuIsBusy={state.cashuIsBusy}
           confirmation={state.pendingLightningInvoiceConfirmation}
           onClose={actions.closeLightningInvoiceConfirmation}
@@ -148,6 +151,17 @@ export function AuthenticatedLayout({
           onConfirm={actions.confirmMintAutoswapChangeConfirmation}
           t={state.t}
           toMint={state.pendingMintAutoswapChangeConfirmation.toMint}
+        />
+      ) : null}
+
+      {state.pendingPaymentMintMeltConfirmation && !state.paidOverlayIsOpen ? (
+        <PaymentMintMeltConfirmModal
+          fromMint={state.pendingPaymentMintMeltConfirmation.fromMint}
+          isBusy={state.cashuIsBusy}
+          onClose={actions.closePaymentMintMeltConfirmation}
+          onConfirm={actions.confirmPaymentMintMelt}
+          t={state.t}
+          toMint={state.pendingPaymentMintMeltConfirmation.toMint}
         />
       ) : null}
 

@@ -63,6 +63,8 @@ export const CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY =
 export const CASHU_RECOVERY_VAULT_STORAGE_KEY = "linky.cashu_recovery_vault";
 export const PAY_WITH_CASHU_STORAGE_KEY = "linky.pay_with_cashu";
 export const CASHU_AUTOSWAP_STORAGE_KEY = "linky.cashu_autoswap.v1";
+export const SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY =
+  "linky.show_profile_qr_on_tilt.v1";
 export const ALLOW_PROMISES_STORAGE_KEY = "linky.allow_promises";
 export const LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY =
   "linky.lightning_invoice_auto_pay_limit";

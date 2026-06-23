@@ -17,6 +17,7 @@ import {
   createLocalPaymentTelemetryEvent,
   normalizePaymentTelemetryStatus,
 } from "../lib/paymentTelemetry";
+import { createCashuTokenId } from "../lib/cashuTokenIdentity";
 import type {
   LocalPaymentEvent,
   LocalPaymentTelemetryEvent,
@@ -28,11 +29,9 @@ import { isUnknownContactId } from "./messages/contactIdentity";
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
 type TransactionInsertPayload = {
-  category: string;
   createdAtSec: number;
   detailsJson?: string;
   direction: "in" | "out";
-  iconKind: string;
   status: string;
   amount?: number;
   contactId?: string;
@@ -40,9 +39,6 @@ type TransactionInsertPayload = {
   fee?: number;
   method?: string;
   mint?: string;
-  note?: string;
-  pendingLabel?: string;
-  phase?: string;
   unit?: string;
 };
 
@@ -65,7 +61,7 @@ type TransactionEventLike = {
 const LEGACY_PAYMENT_EVENTS_MIGRATED_SUFFIX = ".migratedToEvolu.v2";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const serializeJsonValue = (
   value: JsonValue | null | undefined,
@@ -77,6 +73,68 @@ const serializeJsonValue = (
   } catch {
     return null;
   }
+};
+
+const readDetailString = (
+  value: Record<string, unknown>,
+  key: string,
+): string | null => {
+  const candidate = value[key];
+  if (typeof candidate !== "string") return null;
+  const trimmed = candidate.trim();
+  return trimmed || null;
+};
+
+const readDetailStrings = (
+  value: Record<string, unknown>,
+  key: string,
+): string[] => {
+  const candidate = value[key];
+  if (!Array.isArray(candidate)) return [];
+  return candidate.flatMap((entry) => {
+    if (typeof entry !== "string") return [];
+    const trimmed = entry.trim();
+    return trimmed ? [trimmed] : [];
+  });
+};
+
+const compactTransactionDetails = (
+  value: JsonValue | null | undefined,
+): JsonValue | null => {
+  if (!isRecord(value)) return null;
+
+  const compact: Record<string, JsonValue> = {};
+  const copyString = (key: string): void => {
+    const text = readDetailString(value, key);
+    if (text) compact[key] = text;
+  };
+
+  copyString("requestId");
+  copyString("lightningInvoice");
+  copyString("lightningPreimage");
+  copyString("lnurlSuccessMessage");
+  copyString("lnurlSuccessUrl");
+  copyString("lnurlSuccessUrlDescription");
+
+  const usedTokenIds = readDetailStrings(value, "usedInputTokens").map(
+    (token) => String(createCashuTokenId(token)),
+  );
+  if (usedTokenIds.length > 0) compact.usedTokenIds = usedTokenIds;
+
+  const gainedTokenIds = [
+    readDetailString(value, "gainedToken"),
+    readDetailString(value, "acceptedToken"),
+  ].flatMap((token) => (token ? [String(createCashuTokenId(token))] : []));
+  if (gainedTokenIds.length > 0) {
+    compact.gainedTokenIds = Array.from(new Set(gainedTokenIds));
+  }
+
+  const issuedToken = readDetailString(value, "issuedToken");
+  if (issuedToken) {
+    compact.issuedTokenId = String(createCashuTokenId(issuedToken));
+  }
+
+  return Object.keys(compact).length > 0 ? compact : null;
 };
 
 const isLegacyPaymentEvent = (value: unknown): value is LocalPaymentEvent => {
@@ -94,7 +152,7 @@ const isLegacyPaymentEvent = (value: unknown): value is LocalPaymentEvent => {
   return Number.isFinite(createdAtSec) && createdAtSec > 0;
 };
 
-const buildTransactionInsertPayload = (args: {
+export const buildTransactionInsertPayload = (args: {
   createdAtSec: number;
   event: TransactionEventLike;
 }): TransactionInsertPayload => {
@@ -125,37 +183,24 @@ const buildTransactionInsertPayload = (args: {
         : "error",
   });
 
-  const category = (() => {
-    if (args.event.method === "cashu_chat") return "contacts";
-    if (
-      args.event.method === "lightning_address" ||
-      args.event.method === "lightning_invoice"
-    ) {
-      return "lightning";
-    }
-    return "cashu";
-  })();
+  const method = String(args.event.method ?? "").trim();
+  const phase = String(args.event.phase ?? "").trim();
+  const storedMethod =
+    method === "unknown" && phase === "swap" ? "cashu_emit" : method;
+  const transactionStatus =
+    status === "ok" && phase === "publish" ? "pending" : status;
 
   const payload: TransactionInsertPayload = {
-    category,
     createdAtSec: args.createdAtSec,
     direction: args.event.direction,
-    iconKind:
-      category === "contacts"
-        ? "contact"
-        : category === "lightning"
-          ? "lightning"
-          : "cashu",
-    status,
+    status: transactionStatus,
   };
 
   const contactId = String(args.event.contactId ?? "").trim();
   const storedContactId = isUnknownContactId(contactId) ? "" : contactId;
-  const detailsJson = serializeJsonValue(args.event.details);
-  const method = String(args.event.method ?? "").trim();
-  const note = String(args.event.note ?? "").trim();
-  const phase = String(args.event.phase ?? "").trim();
-  const pendingLabel = status === "ok" && phase === "publish" ? "pending" : "";
+  const detailsJson = serializeJsonValue(
+    compactTransactionDetails(args.event.details),
+  );
 
   if (amount !== null) payload.amount = amount;
   if (fee !== null) payload.fee = fee;
@@ -164,10 +209,7 @@ const buildTransactionInsertPayload = (args: {
   if (error) payload.error = error.slice(0, 1000);
   if (storedContactId) payload.contactId = storedContactId;
   if (detailsJson) payload.detailsJson = detailsJson;
-  if (method) payload.method = method;
-  if (note) payload.note = note.slice(0, 1000);
-  if (phase) payload.phase = phase;
-  if (pendingLabel) payload.pendingLabel = pendingLabel;
+  if (storedMethod) payload.method = storedMethod;
 
   return payload;
 };

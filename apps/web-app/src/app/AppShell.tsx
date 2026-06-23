@@ -12,13 +12,11 @@ import {
   type AppShellCoreContextValue,
   type AppShellRouteContextValue,
 } from "./context/AppShellContexts";
-import { usePortraitOrientationLock } from "./hooks/usePortraitOrientationLock";
 import { AppRouteContent } from "./routes/AppRouteContent";
 import { useAppShellComposition } from "./useAppShellComposition";
 
 const AppShell = () => {
   if (import.meta.env.DEV) console.log("[linky][render] AppShell");
-  usePortraitOrientationLock();
   const {
     appActions,
     appState,

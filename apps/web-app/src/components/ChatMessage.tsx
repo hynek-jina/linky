@@ -1,6 +1,10 @@
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { parseIdentityChangeMessageContent } from "../app/lib/identityChangeMessage";
+import {
+  extractMessageLinks,
+  normalizeMessageLinkMatch,
+} from "../app/lib/messageLinks";
 import type { CashuPaymentRequestMessageInfo } from "../app/lib/paymentRequestMessage";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
@@ -12,6 +16,7 @@ import { deriveDefaultProfile } from "../derivedProfile";
 import { getNextMintIconUrl } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { EditIndicator } from "./EditIndicator";
+import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
 
@@ -32,7 +37,7 @@ const MESSAGE_CASHU_PATTERN = /cashu[0-9A-Za-z_-]+={0,2}/gi;
 const MESSAGE_NPUB_PATTERN =
   /^(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?$/i;
 const MESSAGE_INLINE_ENTITY_PATTERN =
-  /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?|cashu[0-9A-Za-z_-]+={0,2}/gi;
+  /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?|cashu[0-9A-Za-z_-]+={0,2}|(?:https?:\/\/|www\.)[^\s<>"']+/gi;
 
 interface ChatMessageProps {
   actionLabels: {
@@ -251,10 +256,27 @@ export function ChatMessage({
         segments.push(content.slice(cursor, start));
       }
 
+      const messageLink = normalizeMessageLinkMatch(matchedText);
       const normalizedNpub = MESSAGE_NPUB_PATTERN.test(matchedText)
         ? normalizeNpubIdentifier(matchedText)
         : null;
-      if (normalizedNpub) {
+      if (messageLink) {
+        replacementCount += 1;
+        segments.push(
+          <a
+            key={`${messageId}-link-${start}`}
+            className="chat-message-link"
+            href={messageLink.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {messageLink.displayText}
+          </a>,
+        );
+        if (messageLink.trailingText) {
+          segments.push(messageLink.trailingText);
+        }
+      } else if (normalizedNpub) {
         const npubContactInfo = getNpubMessageContactInfo(normalizedNpub);
         if (!npubContactInfo) {
           segments.push(matchedText);
@@ -328,6 +350,13 @@ export function ChatMessage({
     const tokenMatch = trimmed.match(MESSAGE_CASHU_PATTERN);
     return tokenMatch?.[0] === trimmed;
   }, [content, tokenInfo]);
+
+  const previewUrl = React.useMemo(() => {
+    if (paymentRequestInfo || isDeclineMessage || isStandaloneTokenMessage) {
+      return null;
+    }
+    return extractMessageLinks(content)[0]?.url ?? null;
+  }, [content, isDeclineMessage, isStandaloneTokenMessage, paymentRequestInfo]);
 
   const openMenu = React.useCallback(() => {
     setMenuOpen(true);
@@ -518,6 +547,9 @@ export function ChatMessage({
               ) : (
                 content
               )}
+              {previewUrl ? (
+                <LinkPreviewCard key={previewUrl} url={previewUrl} />
+              ) : null}
             </div>
           </div>
 

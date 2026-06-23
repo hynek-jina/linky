@@ -12,24 +12,34 @@ export const extractCashuTokenMeta = (
   const storedUnit = String(row.unit ?? "").trim() || null;
   const storedAmount = Number(row.amount ?? 0);
 
-  let mint = storedMint ? storedMint : null;
-  const unit = storedUnit;
-  let amount =
-    Number.isFinite(storedAmount) && storedAmount > 0
-      ? Math.floor(storedAmount)
-      : null;
+  let mint: string | null = null;
+  let unit: string | null = null;
+  let amount: number | null = null;
 
-  if ((!mint || !amount) && tokenText) {
+  if (tokenText) {
     const parsed = parseCashuToken(tokenText);
     if (parsed) {
-      if (!mint && parsed.mint) {
-        const parsedMint = String(parsed.mint).trim();
-        mint = parsedMint ? parsedMint : null;
-      }
-      if (!amount && Number.isFinite(parsed.amount) && parsed.amount > 0) {
+      const parsedMint = String(parsed.mint ?? "").trim();
+      mint = parsedMint || null;
+      const parsedUnit = String(parsed.unit ?? "").trim();
+      // Cashu tokens without an explicit unit use sat by default. Linky only
+      // accepts sat-denominated wallet tokens.
+      unit = parsedUnit || "sat";
+      if (Number.isFinite(parsed.amount) && parsed.amount > 0) {
         amount = Math.floor(parsed.amount);
       }
     }
+  }
+
+  // Old rows can still carry the former metadata snapshots. They are only a
+  // fallback for malformed/legacy tokens and are no longer written.
+  if (!mint) mint = storedMint || null;
+  if (!unit) unit = storedUnit;
+  if (!amount) {
+    amount =
+      Number.isFinite(storedAmount) && storedAmount > 0
+        ? Math.floor(storedAmount)
+        : null;
   }
 
   return { tokenText, mint, unit, amount };

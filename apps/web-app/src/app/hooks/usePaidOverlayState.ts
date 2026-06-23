@@ -61,7 +61,7 @@ export const usePaidOverlayState = ({
       paidOverlayTimerRef.current = window.setTimeout(() => {
         setPaidOverlayIsOpen(false);
         paidOverlayTimerRef.current = null;
-      }, 3000);
+      }, 2000);
     },
     [t],
   );

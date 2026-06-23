@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createCashuTokenId,
   hasMatchingCashuToken,
   readCashuTokenAliases,
 } from "./cashuTokenIdentity";
@@ -46,5 +47,32 @@ describe("hasMatchingCashuToken", () => {
         },
       ),
     ).toBe(false);
+  });
+
+  it("matches the original token through its deterministic row id", () => {
+    const originalToken = "cashu-original-token";
+
+    expect(
+      hasMatchingCashuToken(
+        [
+          {
+            id: createCashuTokenId(originalToken),
+            token: "cashu-accepted-token",
+          },
+        ],
+        { token: originalToken },
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps a soft-deleted deterministic id reserved", () => {
+    const token = "cashu-deleted-deterministic-token";
+
+    expect(
+      hasMatchingCashuToken(
+        [{ id: createCashuTokenId(token), isDeleted: "1", token }],
+        { token },
+      ),
+    ).toBe(true);
   });
 });

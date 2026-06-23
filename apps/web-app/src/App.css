@@ -1824,6 +1824,97 @@ button.settings-link:hover {
   color: #e2e8f0;
 }
 
+.chat-message-link {
+  color: #7dd3fc;
+  text-decoration: underline;
+  text-decoration-color: rgba(125, 211, 252, 0.55);
+  text-underline-offset: 2px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.chat-message-link:hover {
+  color: #bae6fd;
+}
+
+.chat-link-preview {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 10px -6px -4px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.5);
+  color: inherit;
+  text-decoration: none;
+  white-space: normal;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.chat-link-preview-placeholder {
+  min-height: 1px;
+  margin-top: 0;
+  border: 0;
+}
+
+.chat-link-preview-image {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  object-fit: cover;
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.chat-link-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px 10px;
+}
+
+.chat-link-preview-site {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-link-preview-favicon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  object-fit: contain;
+}
+
+.chat-link-preview-title,
+.chat-link-preview-description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+.chat-link-preview-title {
+  color: #e2e8f0;
+  font-size: 14px;
+  line-height: 1.25;
+  -webkit-line-clamp: 2;
+}
+
+.chat-link-preview-description {
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-line-clamp: 3;
+}
+
 .chat-message.pending .chat-bubble.out {
   border: 1px dashed rgba(34, 197, 94, 0.55);
   background: rgba(20, 184, 166, 0.12);
@@ -3803,6 +3894,14 @@ button.icon {
   text-overflow: ellipsis;
   text-align: center;
   white-space: nowrap;
+}
+
+.contact-detail-nip05-check {
+  flex: 0 0 auto;
+  color: var(--app-primary-button-bg);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .contact-detail-group {

@@ -18,6 +18,7 @@ import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
 import { resolveCashuRowStoredOwnerLane } from "../lib/cashuOwnerLane";
 import {
+  createCashuTokenId,
   hasMatchingCashuToken,
   isDeletedCashuRow,
   readCashuTokenAliases,
@@ -125,7 +126,7 @@ interface UseLightningPaymentsDomainParams {
   contacts: readonly ContactRow[];
   defaultMintUrl: string | null;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
-  insert: EvoluMutations["insert"];
+  upsert: EvoluMutations["upsert"];
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   normalizeMintUrl: (url: MintUrlInput) => string | null;
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
@@ -151,7 +152,7 @@ export const useLightningPaymentsDomain = ({
   contacts,
   defaultMintUrl,
   formatDisplayedAmountParts,
-  insert,
+  upsert,
   logPaymentEvent,
   normalizeMintUrl,
   setCashuIsBusy,
@@ -166,7 +167,6 @@ export const useLightningPaymentsDomain = ({
     amount: typeof Evolu.PositiveInt.Type | null;
     error: typeof Evolu.NonEmptyString1000.Type | null;
     mint: typeof Evolu.NonEmptyString1000.Type | null;
-    rawToken: typeof Evolu.NonEmptyString.Type | null;
     state: typeof Evolu.NonEmptyString100.Type;
     token: typeof Evolu.NonEmptyString.Type;
     unit: typeof Evolu.NonEmptyString100.Type | null;
@@ -196,34 +196,30 @@ export const useLightningPaymentsDomain = ({
       }
 
       const sparsePayload: {
+        id: CashuTokenId;
         state: typeof Evolu.NonEmptyString100.Type;
         token: typeof Evolu.NonEmptyString.Type;
-        amount?: typeof Evolu.PositiveInt.Type;
         error?: typeof Evolu.NonEmptyString1000.Type;
-        mint?: typeof Evolu.NonEmptyString1000.Type;
-        rawToken?: typeof Evolu.NonEmptyString.Type;
-        unit?: typeof Evolu.NonEmptyString100.Type;
       } = {
+        id: createCashuTokenId(payload.token),
         token: payload.token,
         state: payload.state,
       };
-      if (payload.rawToken) sparsePayload.rawToken = payload.rawToken;
-      if (payload.mint) sparsePayload.mint = payload.mint;
-      if (payload.unit) sparsePayload.unit = payload.unit;
-      if (payload.amount) sparsePayload.amount = payload.amount;
       if (payload.error) sparsePayload.error = payload.error;
 
       const result = cashuOwnerId
-        ? insert("cashuToken", sparsePayload, { ownerId: cashuOwnerId })
-        : insert("cashuToken", sparsePayload);
+        ? upsert("cashuToken", sparsePayload, { ownerId: cashuOwnerId })
+        : upsert("cashuToken", sparsePayload);
 
       return {
         ok: result.ok,
-        error: result.ok ? null : String(result.error),
+        error: result.ok
+          ? null
+          : getUnknownErrorMessage(result.error, "unknown"),
         skippedDuplicate: false,
       };
     },
-    [cashuOwnerId, cashuTokensAll, insert],
+    [cashuOwnerId, cashuTokensAll, upsert],
   );
 
   const markCashuTokenDeleted = React.useCallback(
@@ -352,7 +348,6 @@ export const useLightningPaymentsDomain = ({
                 const inserted = insertCashuToken(
                   {
                     token: recoveryToken as typeof Evolu.NonEmptyString.Type,
-                    rawToken: null,
                     mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
                     unit: result.unit
                       ? (result.unit as typeof Evolu.NonEmptyString100.Type)
@@ -417,7 +412,6 @@ export const useLightningPaymentsDomain = ({
                   {
                     token:
                       result.remainingToken as typeof Evolu.NonEmptyString.Type,
-                    rawToken: null,
                     mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
                     unit: result.unit
                       ? (result.unit as typeof Evolu.NonEmptyString100.Type)
@@ -549,13 +543,13 @@ export const useLightningPaymentsDomain = ({
   const payLightningAddressWithCashu = React.useCallback(
     async (lnAddress: string, amountSat: number) => {
       const paymentTarget = String(lnAddress ?? "").trim();
-      if (!paymentTarget) return;
+      if (!paymentTarget) return false;
       if (!Number.isFinite(amountSat) || amountSat <= 0) {
         setStatus(`${t("errorPrefix")}: ${t("payInvalidAmount")}`);
-        return;
+        return false;
       }
-      if (!canPayWithCashu) return;
-      if (cashuIsBusy) return;
+      if (!canPayWithCashu) return false;
+      if (cashuIsBusy) return false;
       setCashuIsBusy(true);
 
       const displayTarget = getLnurlPayDisplayText(paymentTarget);
@@ -593,7 +587,7 @@ export const useLightningPaymentsDomain = ({
 
         if (candidates.length === 0) {
           setStatus(t("payInsufficient"));
-          return;
+          return false;
         }
 
         const selectedCandidate = selectSingleMintCandidateForAmount(
@@ -602,7 +596,7 @@ export const useLightningPaymentsDomain = ({
         );
         if (!selectedCandidate) {
           setStatus(t("payInsufficient"));
-          return;
+          return false;
         }
 
         const amountAttempts = buildPaymentAmountAttempts(
@@ -691,7 +685,6 @@ export const useLightningPaymentsDomain = ({
                   const inserted = insertCashuToken(
                     {
                       token: recoveryToken as typeof Evolu.NonEmptyString.Type,
-                      rawToken: null,
                       mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
                       unit: result.unit
                         ? (result.unit as typeof Evolu.NonEmptyString100.Type)
@@ -741,7 +734,6 @@ export const useLightningPaymentsDomain = ({
                     {
                       token:
                         result.remainingToken as typeof Evolu.NonEmptyString.Type,
-                      rawToken: null,
                       mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
                       unit: result.unit
                         ? (result.unit as typeof Evolu.NonEmptyString100.Type)
@@ -881,7 +873,7 @@ export const useLightningPaymentsDomain = ({
                   amountSat: result.paidAmount,
                 });
               }
-              return;
+              return true;
             } catch (e) {
               lastError = e;
               lastMint = candidate.mint;
@@ -931,6 +923,7 @@ export const useLightningPaymentsDomain = ({
           phase: finalErrorMint ? "melt" : "invoice_fetch",
         });
         setStatus(`${t("payFailed")}: ${finalErrorMessage}`);
+        return false;
       } finally {
         setCashuIsBusy(false);
       }

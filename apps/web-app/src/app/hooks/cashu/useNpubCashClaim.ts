@@ -8,11 +8,16 @@ import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants"
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { extractUniqueClaimTokens } from "../../../utils/npubCashClaimResponse";
 import { safeLocalStorageSet } from "../../../utils/storage";
+import { getUnknownErrorMessage } from "../../../utils/unknown";
 import type {
   CashuTokenRowLike,
   LocalMintInfoRow,
   LoggedPaymentEventParams,
 } from "../../types/appTypes";
+import {
+  createCashuTokenId,
+  hasMatchingCashuToken,
+} from "../../lib/cashuTokenIdentity";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -24,7 +29,7 @@ interface UseNpubCashClaimParams {
   enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;
   ensureCashuTokenPersisted: (token: string) => void;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
-  insert: EvoluMutations["insert"];
+  upsert: EvoluMutations["upsert"];
   isMintDeleted: (mintUrl: string) => boolean;
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   makeNip98AuthHeader: (
@@ -63,7 +68,7 @@ export const useNpubCashClaim = ({
   enqueueCashuOp,
   ensureCashuTokenPersisted,
   formatDisplayedAmountParts,
-  insert,
+  upsert,
   isMintDeleted,
   logPaymentEvent,
   makeNip98AuthHeader,
@@ -88,37 +93,21 @@ export const useNpubCashClaim = ({
       amount: number | null;
       error: string | null;
       mint: string | null;
-      rawToken: string;
+      identityToken: string;
       state: "accepted" | "error";
       token: string;
       unit: string | null;
     }) => {
       const payload: {
+        id: ReturnType<typeof createCashuTokenId>;
         token: typeof Evolu.NonEmptyString.Type;
         state: typeof Evolu.NonEmptyString100.Type;
-        amount?: typeof Evolu.PositiveInt.Type;
         error?: typeof Evolu.NonEmptyString1000.Type;
-        mint?: typeof Evolu.NonEmptyString1000.Type;
-        rawToken?: typeof Evolu.NonEmptyString.Type;
-        unit?: typeof Evolu.NonEmptyString100.Type;
       } = {
+        id: createCashuTokenId(args.identityToken),
         token: args.token as typeof Evolu.NonEmptyString.Type,
         state: args.state as typeof Evolu.NonEmptyString100.Type,
       };
-
-      const rawToken = String(args.rawToken ?? "").trim();
-      if (rawToken)
-        payload.rawToken = rawToken as typeof Evolu.NonEmptyString.Type;
-
-      const mint = String(args.mint ?? "").trim();
-      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
-
-      const unit = String(args.unit ?? "").trim();
-      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
-
-      if (typeof args.amount === "number" && args.amount > 0) {
-        payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
-      }
 
       const error = String(args.error ?? "").trim();
       if (error) {
@@ -148,10 +137,8 @@ export const useNpubCashClaim = ({
 
         try {
           // De-dupe: don't accept/store the same token twice.
-          const alreadyStored = cashuTokensAll.some((row) => {
-            if (row.isDeleted) return false;
-            const stored = String(row.rawToken ?? row.token ?? "").trim();
-            return stored && stored === tokenRaw;
+          const alreadyStored = hasMatchingCashuToken(cashuTokensAll, {
+            token: tokenRaw,
           });
           if (alreadyStored) return;
 
@@ -171,11 +158,11 @@ export const useNpubCashClaim = ({
             );
           }
 
-          const result = insert(
+          const result = upsert(
             "cashuToken",
             buildCashuTokenPayload({
               token: acceptedToken,
-              rawToken: tokenRaw,
+              identityToken: tokenRaw,
               mint: String(accepted.mint ?? ""),
               unit: accepted.unit,
               amount: accepted.amount > 0 ? accepted.amount : null,
@@ -185,7 +172,9 @@ export const useNpubCashClaim = ({
             { ownerId },
           );
           if (!result.ok) {
-            setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+            setStatus(
+              `${t("errorPrefix")}: ${getUnknownErrorMessage(result.error, "unknown")}`,
+            );
             return;
           }
 
@@ -278,7 +267,7 @@ export const useNpubCashClaim = ({
               : t("cashuAccepted");
           void maybeShowPwaNotification(t("mints"), body, "cashu_claim");
         } catch (error) {
-          const message = String(error).trim() || "Accept failed";
+          const message = getUnknownErrorMessage(error, "Accept failed");
 
           logPaymentEvent({
             direction: "in",
@@ -295,11 +284,11 @@ export const useNpubCashClaim = ({
 
           const ownerId = await resolveOwnerIdForWrite();
           if (ownerId) {
-            insert(
+            upsert(
               "cashuToken",
               buildCashuTokenPayload({
                 token: tokenRaw,
-                rawToken: tokenRaw,
+                identityToken: tokenRaw,
                 mint: parsedMint,
                 unit: null,
                 amount: typeof parsedAmount === "number" ? parsedAmount : null,
@@ -320,7 +309,7 @@ export const useNpubCashClaim = ({
       enqueueCashuOp,
       ensureCashuTokenPersisted,
       formatDisplayedAmountParts,
-      insert,
+      upsert,
       isMintDeleted,
       buildCashuTokenPayload,
       logPaymentEvent,

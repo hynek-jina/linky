@@ -106,6 +106,7 @@ export const en = {
   payWithCashu: "Pay with Cashu",
   payWithCashuDisabled: "Pay with Cashu is disabled in Advanced settings.",
   cashuAutoswap: "Auto-swap to main mint",
+  showProfileQrOnTilt: "Show profile when phone is turned",
   lightningInvoiceAutoPayLimit: "Invoice auto-pay limit",
   custom: "Custom",
   restore: "Restore",
@@ -147,6 +148,10 @@ export const en = {
     "Converting {amount} {unit} to the main mint in the background.",
   cashuMeltToMainMintDone: "Converted {amount} {unit} to the main mint {mint}.",
   cashuMeltToMainMintFailed: "Main mint conversion failed",
+  cashuPaymentMeltTitle: "Move funds for this payment?",
+  cashuPaymentMeltBody:
+    "No single mint can cover this payment. Move all tokens from {fromMint} to the main mint {toMint}? You can confirm the original payment again after the melt.",
+  cashuPaymentMeltConfirm: "Move to main mint",
   nostrKeysUpdated: "Nostr keys saved.",
   nostrKeysDerived: "Nostr keys derived from keys.",
   nostrPasteArmedHint:
@@ -499,6 +504,7 @@ export const en = {
   contactUpdated: "Contact updated.",
   nip05NotFound: "NIP-05 name {identifier} was not found.",
   nip05ResolveFailed: "NIP-05 name {identifier} could not be checked.",
+  verifiedNip05: "Verified NIP-05 name",
   contactDeleted: "Contact deleted.",
   contactArchived: "Contact archived.",
   contactRestored: "Contact restored.",

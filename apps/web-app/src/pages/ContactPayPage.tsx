@@ -14,6 +14,7 @@ interface Contact {
 
 interface ContactPayPageProps {
   cashuBalance: number;
+  cashuBalanceAfterMelt: number;
   cashuIsBusy: boolean;
   contactPaymentIntent: "pay" | "request";
   contactPayMethod: "lightning" | "cashu" | null;
@@ -33,6 +34,7 @@ interface ContactPayPageProps {
 
 export const ContactPayPage: FC<ContactPayPageProps> = ({
   cashuBalance,
+  cashuBalanceAfterMelt,
   cashuIsBusy,
   contactPaymentIntent,
   contactPayMethod,
@@ -86,7 +88,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
     : (method === "lightning" ? !ln : !canUseCashu) ||
       !Number.isFinite(amountSat) ||
       amountSat <= 0 ||
-      remaining > cashuBalance;
+      remaining > cashuBalanceAfterMelt;
 
   return (
     <PaymentAmountPanel
@@ -195,7 +197,9 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
       submitIcon={isRequestFlow ? "←" : undefined}
       submitLabel={isRequestFlow ? t("requestPaymentSend") : undefined}
       submitTitle={
-        !isRequestFlow && method === "lightning" && remaining > cashuBalance
+        !isRequestFlow &&
+        method === "lightning" &&
+        remaining > cashuBalanceAfterMelt
           ? t("payInsufficient")
           : undefined
       }

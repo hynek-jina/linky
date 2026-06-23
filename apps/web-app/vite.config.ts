@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import type { Connect, Plugin, ViteDevServer } from "vite";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+import { fetchLinkPreview } from "./server/linkPreview";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -180,6 +181,46 @@ const lnurlProxy = (): Plugin => ({
   },
 });
 
+const linkPreviewApi = (): Plugin => ({
+  name: "link-preview-api",
+  configureServer(server: ViteDevServer) {
+    server.middlewares.use(
+      async (
+        req: Connect.IncomingMessage,
+        res: ServerResponse,
+        next: Connect.NextFunction,
+      ) => {
+        const requestUrl = req.url ?? "";
+        if (!requestUrl.startsWith("/api/link-preview")) return next();
+
+        if (req.method !== "GET") {
+          res.statusCode = 405;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Method not allowed" }));
+          return;
+        }
+
+        try {
+          const parsed = new URL(requestUrl, "http://localhost");
+          const target = String(parsed.searchParams.get("url") ?? "").trim();
+          const preview = await fetchLinkPreview(target);
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-store");
+          res.end(JSON.stringify(preview));
+        } catch (error) {
+          server.config.logger.warn(
+            `Link preview error: ${String(error ?? "unknown")}`,
+          );
+          res.statusCode = 422;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Preview unavailable" }));
+        }
+      },
+    );
+  },
+});
+
 export default defineConfig({
   define: {
     global: "globalThis",
@@ -234,6 +275,7 @@ export default defineConfig({
   },
   plugins: [
     serveSqliteWasm(),
+    linkPreviewApi(),
     lnurlProxy(),
     ...(useHttps ? [basicSsl()] : []),
     react(),

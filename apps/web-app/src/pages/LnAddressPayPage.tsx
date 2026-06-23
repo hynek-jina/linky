@@ -17,6 +17,7 @@ interface LnAddressPayKnownContact {
 interface LnAddressPayPageProps {
   canPayWithCashu: boolean;
   cashuBalance: number;
+  cashuBalanceAfterMelt: number;
   cashuIsBusy: boolean;
   displayUnit: string;
   knownContact: LnAddressPayKnownContact | null;
@@ -34,6 +35,7 @@ interface LnAddressPayPageProps {
 export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
   canPayWithCashu,
   cashuBalance,
+  cashuBalanceAfterMelt,
   cashuIsBusy,
   displayUnit,
   knownContact,
@@ -123,14 +125,14 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
     !canPayWithCashu ||
     !Number.isFinite(amountSat) ||
     amountSat <= 0 ||
-    amountSat > cashuBalance ||
+    amountSat > cashuBalanceAfterMelt ||
     previewLoading ||
     previewError !== null ||
     amountBelowRange ||
     amountAboveRange;
 
   let submitTitle: string | undefined;
-  if (amountSat > cashuBalance) {
+  if (amountSat > cashuBalanceAfterMelt) {
     submitTitle = t("payInsufficient");
   } else if (amountBelowRange && minSendableSat !== null) {
     submitTitle = t("lnurlPayAmountTooLow").replace(

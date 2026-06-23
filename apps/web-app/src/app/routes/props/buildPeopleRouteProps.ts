@@ -2,6 +2,7 @@ import type { PeopleRoutesProps } from "../AppRouteContent";
 
 interface BuildPeopleRoutePropsParams {
   cashuBalance: PeopleRoutesProps["chatProps"]["cashuBalance"];
+  cashuBalanceAfterMelt: PeopleRoutesProps["chatProps"]["cashuBalanceAfterMelt"];
   cashuIsBusy: PeopleRoutesProps["chatProps"]["cashuIsBusy"];
   chatSelectedContact: PeopleRoutesProps["chatProps"]["selectedContact"];
   chatDraft: PeopleRoutesProps["chatProps"]["chatDraft"];
@@ -98,6 +99,7 @@ interface BuildPeopleRoutePropsParams {
 
 export const buildPeopleRouteProps = ({
   cashuBalance,
+  cashuBalanceAfterMelt,
   cashuIsBusy,
   chatSelectedContact,
   chatDraft,
@@ -203,6 +205,7 @@ export const buildPeopleRouteProps = ({
       editContext,
       replyContext,
       cashuBalance,
+      cashuBalanceAfterMelt,
       cashuIsBusy,
       payWithCashuEnabled,
       feedbackContactNpub,
@@ -258,6 +261,7 @@ export const buildPeopleRouteProps = ({
       selectedContact,
       nostrPictureByNpub,
       cashuBalance,
+      cashuBalanceAfterMelt,
       cashuIsBusy,
       payWithCashuEnabled,
       contactPaymentIntent,
@@ -284,6 +288,7 @@ export const buildPeopleRouteProps = ({
     },
     profileClaimLightningAddressProps: {
       cashuBalance,
+      cashuBalanceAfterMelt,
       cashuIsBusy,
       effectiveMyLightningAddress,
       makeNip98AuthHeader,

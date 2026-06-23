@@ -5,6 +5,7 @@ import { parseCashuToken } from "../../cashu";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../utils/constants";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
 import { isCashuTokenErrorState } from "../lib/cashuTokenState";
+import { createCashuTokenId } from "../lib/cashuTokenIdentity";
 import type {
   CashuTokenRowLike,
   LoggedPaymentEventParams,
@@ -16,7 +17,7 @@ interface UseCashuDomainParams {
   appOwnerId: OwnerId | null;
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
   cashuTokensAll: readonly CashuTokenRowLike[];
-  insert: EvoluMutations["insert"];
+  upsert: EvoluMutations["upsert"];
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
 }
 
@@ -24,7 +25,7 @@ export const useCashuDomain = ({
   appOwnerId,
   appOwnerIdRef,
   cashuTokensAll,
-  insert,
+  upsert,
   logPaymentEvent,
 }: UseCashuDomainParams) => {
   const buildCashuTokenPayload = React.useCallback(
@@ -35,23 +36,14 @@ export const useCashuDomain = ({
       token: string;
     }) => {
       const payload: {
+        id: ReturnType<typeof createCashuTokenId>;
         token: typeof Evolu.NonEmptyString.Type;
         state: typeof Evolu.NonEmptyString100.Type;
-        amount?: typeof Evolu.PositiveInt.Type;
-        mint?: typeof Evolu.NonEmptyString1000.Type;
       } = {
+        id: createCashuTokenId(args.token),
         token: args.token as typeof Evolu.NonEmptyString.Type,
         state: args.state as typeof Evolu.NonEmptyString100.Type,
       };
-
-      const mint = String(args.mint ?? "").trim();
-      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
-
-      if (typeof args.amount === "number" && args.amount > 0) {
-        payload.amount = Math.floor(
-          args.amount,
-        ) as typeof Evolu.PositiveInt.Type;
-      }
 
       return payload;
     },
@@ -78,6 +70,9 @@ export const useCashuDomain = ({
     (row: CashuTokenRowLike, tokenRaw: string): boolean => {
       const candidate = normalizeCashuTokenText(tokenRaw);
       if (!candidate) return false;
+      if (String(row.id ?? "") === String(createCashuTokenId(candidate))) {
+        return true;
+      }
 
       const storedRaw = String(row.rawToken ?? "").trim();
       const storedToken = String(row.token ?? "").trim();
@@ -156,7 +151,9 @@ export const useCashuDomain = ({
       if (isOptimisticallyKnownCashuToken(raw)) return true;
 
       const current = cashuTokensAllRef.current;
+      const deterministicId = String(createCashuTokenId(raw));
       return current.some((row) => {
+        if (String(row.id ?? "") === deterministicId) return true;
         if (row.isDeleted) return false;
         if (isCashuTokenErrorState(row.state)) return false;
         return rowMatchesToken(row, raw);
@@ -213,7 +210,7 @@ export const useCashuDomain = ({
           const amount =
             parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
 
-          const result = insert(
+          const result = upsert(
             "cashuToken",
             buildCashuTokenPayload({
               token: remembered,
@@ -247,7 +244,7 @@ export const useCashuDomain = ({
     [
       appOwnerIdRef,
       buildCashuTokenPayload,
-      insert,
+      upsert,
       isCashuTokenKnownAny,
       logPaymentEvent,
       rowMatchesToken,
@@ -300,7 +297,7 @@ export const useCashuDomain = ({
     const mint = parsed?.mint?.trim() ? parsed.mint.trim() : null;
     const amount = parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
 
-    const result = insert(
+    const result = upsert(
       "cashuToken",
       buildCashuTokenPayload({
         token: remembered,
@@ -330,7 +327,7 @@ export const useCashuDomain = ({
     appOwnerIdRef,
     buildCashuTokenPayload,
     cashuTokensAll,
-    insert,
+    upsert,
     isCashuTokenKnownAny,
     logPaymentEvent,
     rowMatchesToken,

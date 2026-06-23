@@ -1,7 +1,8 @@
 import React from "react";
 
-export const usePortraitOrientationLock = (): void => {
+export const usePortraitOrientationLock = (enabled: boolean): void => {
   React.useEffect(() => {
+    if (!enabled) return;
     if (typeof window === "undefined") return;
 
     let lockRequested = false;
@@ -37,5 +38,5 @@ export const usePortraitOrientationLock = (): void => {
       window.removeEventListener("touchstart", requestLock);
       window.removeEventListener("click", requestLock);
     };
-  }, []);
+  }, [enabled]);
 };

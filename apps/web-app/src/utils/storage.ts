@@ -13,6 +13,7 @@ import {
   NOSTR_IDENTITY_SWITCHED_AT_SEC_STORAGE_KEY,
   NOSTR_NSEC_STORAGE_KEY,
   PAY_WITH_CASHU_STORAGE_KEY,
+  SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "./constants";
 import {
@@ -268,11 +269,19 @@ export const getInitialCashuAutoswapEnabled = (): boolean => {
   try {
     const raw = localStorage.getItem(CASHU_AUTOSWAP_STORAGE_KEY);
     const v = String(raw ?? "").trim();
-    // Default: enabled.
-    if (!v) return true;
+    // Opt-in: keep an explicitly stored preference, otherwise stay disabled.
+    if (!v) return false;
     return v === "1";
   } catch {
-    return true;
+    return false;
+  }
+};
+
+export const getInitialShowProfileQrOnTiltEnabled = (): boolean => {
+  try {
+    return localStorage.getItem(SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY) === "1";
+  } catch {
+    return false;
   }
 };
 
