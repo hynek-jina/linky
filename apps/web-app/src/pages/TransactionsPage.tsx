@@ -9,8 +9,10 @@ import {
   parseCashuPaymentRequestMessage,
   parseLinkyPaymentRequestDeclineMessage,
 } from "../app/lib/paymentRequestMessage";
+import { createCashuTokenId } from "../app/lib/cashuTokenIdentity";
 import { deriveDefaultProfile } from "../derivedProfile";
 import { evolu } from "../evolu";
+import { getLightningInvoicePreview } from "../utils/lightningInvoice";
 import type { JsonValue } from "../types/json";
 import {
   formatInteger,
@@ -18,7 +20,7 @@ import {
   normalizeLocale,
 } from "../utils/formatting";
 
-type TransactionStatus = "declined" | "error" | "ok";
+type TransactionStatus = "declined" | "error" | "ok" | "pending";
 type TransactionDirection = "in" | "out";
 
 interface ContactSummary {
@@ -80,7 +82,10 @@ const readDirection = (value: unknown): TransactionDirection | null => {
 };
 
 const readStatus = (value: unknown): TransactionStatus | null => {
-  return value === "declined" || value === "error" || value === "ok"
+  return value === "declined" ||
+    value === "error" ||
+    value === "ok" ||
+    value === "pending"
     ? value
     : null;
 };
@@ -159,18 +164,48 @@ const readRequestIdFromDetails = (details: JsonValue | null): string | null => {
   return readStringFromJson(detailRecord?.requestId);
 };
 
-const readRequestTextFromDetails = (
-  details: JsonValue | null,
-): string | null => {
-  const detailRecord = readJsonRecord(details);
-  return readStringFromJson(detailRecord?.requestText);
-};
-
 const readIssuedTokenFromDetails = (
   details: JsonValue | null,
 ): string | null => {
   const detailRecord = readJsonRecord(details);
   return readStringFromJson(detailRecord?.issuedToken);
+};
+
+const readTokenReferenceIds = (
+  details: JsonValue | null,
+  idKey: string,
+  legacyTokenKey: string,
+): string[] => {
+  const detailRecord = readJsonRecord(details);
+  const storedIds = readStringArrayFromJson(detailRecord?.[idKey]);
+  const legacyTokens = readStringArrayFromJson(detailRecord?.[legacyTokenKey]);
+  return Array.from(
+    new Set([
+      ...storedIds,
+      ...legacyTokens.map((token) => String(createCashuTokenId(token))),
+    ]),
+  );
+};
+
+const readIssuedTokenReferenceId = (
+  details: JsonValue | null,
+): string | null => {
+  const detailRecord = readJsonRecord(details);
+  const storedId = readStringFromJson(detailRecord?.issuedTokenId);
+  if (storedId) return storedId;
+  const legacyToken = readIssuedTokenFromDetails(details);
+  return legacyToken ? String(createCashuTokenId(legacyToken)) : null;
+};
+
+const deriveTransactionCategory = (
+  method: string | null,
+  legacyCategory: string | null,
+): string => {
+  if (method === "cashu_chat") return "contacts";
+  if (method === "lightning_address" || method === "lightning_invoice") {
+    return "lightning";
+  }
+  return legacyCategory || "cashu";
 };
 
 const mergeDetailRecords = (
@@ -192,8 +227,7 @@ const isPaymentRequestTransaction = (item: TransactionItem): boolean => {
   return (
     item.direction === "in" &&
     item.method === "cashu_chat" &&
-    readRequestIdFromDetails(item.details) !== null &&
-    readRequestTextFromDetails(item.details) !== null
+    readRequestIdFromDetails(item.details) !== null
   );
 };
 
@@ -234,6 +268,11 @@ export function TransactionsPage(): React.ReactElement {
     [],
   );
 
+  const cashuTokensQuery = React.useMemo(
+    () => evolu.createQuery((db) => db.selectFrom("cashuToken").selectAll()),
+    [],
+  );
+
   const nostrMessagesQuery = React.useMemo(
     () =>
       evolu.createQuery((db) =>
@@ -246,8 +285,24 @@ export function TransactionsPage(): React.ReactElement {
   );
 
   const contactRows = useQuery(contactsQuery);
+  const cashuTokenRows = useQuery(cashuTokensQuery);
   const nostrMessageRows = useQuery(nostrMessagesQuery);
   const transactionRows = useQuery(transactionsQuery);
+
+  const tokenByReferenceId = React.useMemo(() => {
+    const tokens = new Map<string, string>();
+    for (const row of cashuTokenRows) {
+      for (const candidate of [
+        "token" in row ? row.token : null,
+        "rawToken" in row ? row.rawToken : null,
+      ]) {
+        const token = readText(candidate);
+        if (!token) continue;
+        tokens.set(String(createCashuTokenId(token)), token);
+      }
+    }
+    return tokens;
+  }, [cashuTokenRows]);
 
   const contactsById = React.useMemo(() => {
     const byId = new Map<string, ContactSummary>();
@@ -295,9 +350,13 @@ export function TransactionsPage(): React.ReactElement {
       );
       const status = readStatus("status" in row ? row.status : null);
       if (!id || !createdAtSec || !direction || !status) continue;
+      const method = readText("method" in row ? row.method : null);
       items.push({
         amount: readAmount("amount" in row ? row.amount : null),
-        category: readText("category" in row ? row.category : null) || "cashu",
+        category: deriveTransactionCategory(
+          method,
+          readText("category" in row ? row.category : null),
+        ),
         contactId: readText("contactId" in row ? row.contactId : null),
         createdAtSec,
         details: parseJsonValue("detailsJson" in row ? row.detailsJson : null),
@@ -305,7 +364,7 @@ export function TransactionsPage(): React.ReactElement {
         error: readText("error" in row ? row.error : null),
         fee: readAmount("fee" in row ? row.fee : null),
         id,
-        method: readText("method" in row ? row.method : null),
+        method,
         mint: readText("mint" in row ? row.mint : null),
         note: readText("note" in row ? row.note : null),
         pendingLabel: readText("pendingLabel" in row ? row.pendingLabel : null),
@@ -344,16 +403,19 @@ export function TransactionsPage(): React.ReactElement {
     for (const item of items) {
       if (item.status !== "ok") continue;
 
-      const issuedToken = readIssuedTokenFromDetails(item.details);
-      if (issuedToken && !emittedByToken.has(issuedToken)) {
-        emittedByToken.set(issuedToken, item);
+      const issuedTokenId = readIssuedTokenReferenceId(item.details);
+      if (issuedTokenId && !emittedByToken.has(issuedTokenId)) {
+        emittedByToken.set(issuedTokenId, item);
       }
 
-      const detailRecord = readJsonRecord(item.details);
-      const usedTokens = readStringArrayFromJson(detailRecord?.usedInputTokens);
-      for (const token of usedTokens) {
-        if (spendByUsedToken.has(token)) continue;
-        spendByUsedToken.set(token, item);
+      const usedTokenIds = readTokenReferenceIds(
+        item.details,
+        "usedTokenIds",
+        "usedInputTokens",
+      );
+      for (const tokenId of usedTokenIds) {
+        if (spendByUsedToken.has(tokenId)) continue;
+        spendByUsedToken.set(tokenId, item);
       }
     }
 
@@ -370,19 +432,20 @@ export function TransactionsPage(): React.ReactElement {
           }
         }
 
-        const issuedToken = readIssuedTokenFromDetails(item.details);
-        if (!issuedToken) return true;
-        return !spendByUsedToken.has(issuedToken);
+        const issuedTokenId = readIssuedTokenReferenceId(item.details);
+        if (!issuedTokenId) return true;
+        return !spendByUsedToken.has(issuedTokenId);
       })
       .map((item) => {
         let mergedItem = item;
 
-        const detailRecord = readJsonRecord(mergedItem.details);
-        const usedTokens = readStringArrayFromJson(
-          detailRecord?.usedInputTokens,
+        const usedTokenIds = readTokenReferenceIds(
+          mergedItem.details,
+          "usedTokenIds",
+          "usedInputTokens",
         );
-        for (const token of usedTokens) {
-          const emittedTransaction = emittedByToken.get(token);
+        for (const tokenId of usedTokenIds) {
+          const emittedTransaction = emittedByToken.get(tokenId);
           if (!emittedTransaction) continue;
           if (emittedTransaction.id === mergedItem.id) continue;
           mergedItem = {
@@ -494,7 +557,9 @@ export function TransactionsPage(): React.ReactElement {
       }
       if (item.method === "cashu_receive") return t("transactionCashuInserted");
       if (item.method === "cashu_restore") return t("transactionCashuRestored");
-      if (item.phase === "swap") return t("transactionCashuSwap");
+      if (item.method === "cashu_emit" || item.phase === "swap") {
+        return t("transactionCashuSwap");
+      }
       return t("transactionCashuIssued");
     },
     [contactsById, t],
@@ -529,7 +594,11 @@ export function TransactionsPage(): React.ReactElement {
       item: TransactionItem,
       requestStatus: "declined" | "paid" | "pending" | null,
     ): { className: string; label: string } | null => {
-      if (requestStatus === "pending" || item.pendingLabel === "pending") {
+      if (
+        requestStatus === "pending" ||
+        item.status === "pending" ||
+        item.pendingLabel === "pending"
+      ) {
         return {
           className: "pill pill-muted transaction-status-pill",
           label: t("transactionPending"),
@@ -595,13 +664,37 @@ export function TransactionsPage(): React.ReactElement {
           ? formatAmountText(item.fee ?? 0, item.unit)
           : "";
 
-      const usedTokens = readStringArrayFromJson(details?.usedInputTokens);
-      const gainedTokens = [
+      const legacyUsedTokens = readStringArrayFromJson(
+        details?.usedInputTokens,
+      );
+      const usedTokens = Array.from(
+        new Set([
+          ...legacyUsedTokens,
+          ...readStringArrayFromJson(details?.usedTokenIds).flatMap((id) => {
+            const token = tokenByReferenceId.get(id);
+            return token ? [token] : [];
+          }),
+        ]),
+      );
+      const legacyGainedTokens = [
         readStringFromJson(details?.gainedToken),
         readStringFromJson(details?.acceptedToken),
       ].filter((value): value is string => value !== null);
-      const lightningMemo = readStringFromJson(details?.lightningMemo);
+      const gainedTokens = Array.from(
+        new Set([
+          ...legacyGainedTokens,
+          ...readStringArrayFromJson(details?.gainedTokenIds).flatMap((id) => {
+            const token = tokenByReferenceId.get(id);
+            return token ? [token] : [];
+          }),
+        ]),
+      );
       const lightningInvoice = readStringFromJson(details?.lightningInvoice);
+      const lightningMemo =
+        readStringFromJson(details?.lightningMemo) ??
+        (lightningInvoice
+          ? (getLightningInvoicePreview(lightningInvoice)?.description ?? null)
+          : null);
       const lightningPreimage = readStringFromJson(details?.lightningPreimage);
       const lnurlSuccessMessage = readStringFromJson(
         details?.lnurlSuccessMessage,
@@ -717,7 +810,7 @@ export function TransactionsPage(): React.ReactElement {
           : []),
       ];
     },
-    [formatAmountText, t],
+    [formatAmountText, t, tokenByReferenceId],
   );
 
   const toggleExpanded = React.useCallback((id: string) => {

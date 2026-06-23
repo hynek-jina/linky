@@ -493,17 +493,22 @@ export const Schema = {
 
   transaction: {
     id: TransactionId,
+    // Event time is intentionally stored separately from Evolu's updatedAt:
+    // later row updates must not change when the payment actually happened.
     createdAtSec: Evolu.PositiveInt,
     direction: Evolu.NonEmptyString100,
     status: Evolu.NonEmptyString100,
     amount: Evolu.nullOr(Evolu.PositiveInt),
     fee: Evolu.nullOr(Evolu.PositiveInt),
-    category: Evolu.NonEmptyString100,
+    // Deprecated compatibility column. New writes derive category from method.
+    category: Evolu.nullOr(Evolu.NonEmptyString100),
     method: Evolu.nullOr(Evolu.NonEmptyString100),
+    // Deprecated compatibility columns. New writes use method + status and
+    // derive labels/icons in the transaction view.
     phase: Evolu.nullOr(Evolu.NonEmptyString100),
     note: Evolu.nullOr(Evolu.NonEmptyString1000),
     detailsJson: Evolu.nullOr(Evolu.NonEmptyString),
-    iconKind: Evolu.NonEmptyString100,
+    iconKind: Evolu.nullOr(Evolu.NonEmptyString100),
     contactId: Evolu.nullOr(ContactId),
     mint: Evolu.nullOr(Evolu.NonEmptyString1000),
     unit: Evolu.nullOr(Evolu.NonEmptyString100),
