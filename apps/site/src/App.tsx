@@ -57,9 +57,9 @@ const copy: Record<Locale, LocaleCopy> = {
     menuLabel: "Menu",
     openAppLabel: "Otevřít aplikaci",
     switchLabel: "Jazyk",
-    title: "Bitcoin pro lidi, na kterých vám záleží",
+    title: "Budujte svou bitcoinovou síť",
     subtitle:
-      "Linky přináší svobodu komunikace i plateb v jedné aplikaci. Díky cashu snadno zaplatíte, nostr zajistí soukromé zprávy a evolu se postará o bezpečnou synchronizaci vašich dat.",
+      "Každou platbou vytváříte a posilujete vztahy s lidmi kolem sebe. S Linky posíláte bitcoin stejně jednoduše jako běžnou zprávu - svým blízkým i komukoliv dalšímu.",
     webCta: "Webová aplikace",
     googlePlayCta: "Google Play",
     androidApkCta: "Android APK",
@@ -107,9 +107,9 @@ const copy: Record<Locale, LocaleCopy> = {
     menuLabel: "Menu",
     openAppLabel: "Open web app",
     switchLabel: "Language",
-    title: "Bitcoin for the people you care about",
+    title: "Build your bitcoin network",
     subtitle:
-      "Linky brings freedom to communication and payments in a single app. Cashu makes payments easy, nostr ensures private messaging, and evolu takes care of securely syncing your data.",
+      "Every payment helps you grow and strengthen your network of people. With Linky, you send bitcoin as easily as a message - to friends, family, or anyone else.",
     webCta: "Web app",
     googlePlayCta: "Google Play",
     androidApkCta: "Android APK",

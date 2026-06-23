@@ -9,7 +9,10 @@ const getMintErrorCode = (error: unknown): number | null => {
 };
 
 export const isCashuOutputsAlreadySignedError = (error: unknown): boolean => {
-  if (getMintErrorCode(error) === 11005) return true;
+  const code = getMintErrorCode(error);
+  // NUT-00 currently assigns 11005, but nutshell and compatible mints have
+  // also returned 11003 for the same `outputs already signed` condition.
+  if (code === 11003 || code === 11005) return true;
   const message = getUnknownErrorMessage(error, "").toLowerCase();
   return (
     message.includes("outputs have already been signed") ||
