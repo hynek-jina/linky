@@ -5022,7 +5022,8 @@ export const useAppShellComposition = () => {
         }
         return;
       }
-      await payLightningAddressWithCashuBase(lnAddress, amountSat);
+      const paid = await payLightningAddressWithCashuBase(lnAddress, amountSat);
+      if (paid) navigateTo({ route: "wallet" });
     },
     [
       cashuBalance,
@@ -5042,12 +5043,17 @@ export const useAppShellComposition = () => {
         }
         return false;
       }
-      return await payLightningInvoiceWithCashuBase(invoice);
+      const paid = await payLightningInvoiceWithCashuBase(invoice);
+      if (paid && route.kind === "manualPay") {
+        navigateTo({ route: "wallet" });
+      }
+      return paid;
     },
     [
       cashuBalance,
       payLightningInvoiceWithCashuBase,
       requestPaymentMintMelt,
+      route.kind,
       setStatus,
       t,
     ],

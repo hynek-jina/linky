@@ -543,13 +543,13 @@ export const useLightningPaymentsDomain = ({
   const payLightningAddressWithCashu = React.useCallback(
     async (lnAddress: string, amountSat: number) => {
       const paymentTarget = String(lnAddress ?? "").trim();
-      if (!paymentTarget) return;
+      if (!paymentTarget) return false;
       if (!Number.isFinite(amountSat) || amountSat <= 0) {
         setStatus(`${t("errorPrefix")}: ${t("payInvalidAmount")}`);
-        return;
+        return false;
       }
-      if (!canPayWithCashu) return;
-      if (cashuIsBusy) return;
+      if (!canPayWithCashu) return false;
+      if (cashuIsBusy) return false;
       setCashuIsBusy(true);
 
       const displayTarget = getLnurlPayDisplayText(paymentTarget);
@@ -587,7 +587,7 @@ export const useLightningPaymentsDomain = ({
 
         if (candidates.length === 0) {
           setStatus(t("payInsufficient"));
-          return;
+          return false;
         }
 
         const selectedCandidate = selectSingleMintCandidateForAmount(
@@ -596,7 +596,7 @@ export const useLightningPaymentsDomain = ({
         );
         if (!selectedCandidate) {
           setStatus(t("payInsufficient"));
-          return;
+          return false;
         }
 
         const amountAttempts = buildPaymentAmountAttempts(
@@ -873,7 +873,7 @@ export const useLightningPaymentsDomain = ({
                   amountSat: result.paidAmount,
                 });
               }
-              return;
+              return true;
             } catch (e) {
               lastError = e;
               lastMint = candidate.mint;
@@ -923,6 +923,7 @@ export const useLightningPaymentsDomain = ({
           phase: finalErrorMint ? "melt" : "invoice_fetch",
         });
         setStatus(`${t("payFailed")}: ${finalErrorMessage}`);
+        return false;
       } finally {
         setCashuIsBusy(false);
       }
