@@ -4,6 +4,7 @@ import type { ContactId } from "../../evolu";
 import type { JsonValue } from "../../types/json";
 import { asRecord } from "../../utils/validation";
 import type { CashuTokenRowLike, ContactRowLike } from "../types/appTypes";
+import { createCashuTokenId } from "../lib/cashuTokenIdentity";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -18,6 +19,7 @@ interface UseAppDataTransferParams<
   contacts: readonly TContact[];
   importDataFileInputRef: React.RefObject<HTMLInputElement | null>;
   insert: EvoluMutations["insert"];
+  upsert: EvoluMutations["upsert"];
   pushToast: (message: string) => void;
   t: (key: string) => string;
   update: EvoluMutations["update"];
@@ -34,48 +36,30 @@ export const useAppDataTransfer = <
   contacts,
   importDataFileInputRef,
   insert,
+  upsert,
   pushToast,
   t,
   update,
 }: UseAppDataTransferParams<TContact, TCashuToken>) => {
   const buildImportedCashuTokenPayload = React.useCallback(
     (args: {
-      amount: number | null;
       error: string | null;
-      mint: string | null;
       rawToken: string | null;
       state: string | null;
       token: string;
-      unit: string | null;
     }) => {
       const payload: {
+        id: ReturnType<typeof createCashuTokenId>;
         token: typeof Evolu.NonEmptyString.Type;
-        amount?: typeof Evolu.PositiveInt.Type;
         error?: typeof Evolu.NonEmptyString1000.Type;
-        mint?: typeof Evolu.NonEmptyString1000.Type;
-        rawToken?: typeof Evolu.NonEmptyString.Type;
         state?: typeof Evolu.NonEmptyString100.Type;
-        unit?: typeof Evolu.NonEmptyString100.Type;
       } = {
+        id: createCashuTokenId(args.rawToken || args.token),
         token: args.token as typeof Evolu.NonEmptyString.Type,
       };
 
-      const rawToken = String(args.rawToken ?? "").trim();
-      if (rawToken)
-        payload.rawToken = rawToken as typeof Evolu.NonEmptyString.Type;
-
-      const mint = String(args.mint ?? "").trim();
-      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
-
-      const unit = String(args.unit ?? "").trim();
-      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
-
       const state = String(args.state ?? "").trim();
       if (state) payload.state = state as typeof Evolu.NonEmptyString100.Type;
-
-      if (typeof args.amount === "number" && args.amount > 0) {
-        payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
-      }
 
       const error = String(args.error ?? "").trim();
       if (error) payload.error = error as typeof Evolu.NonEmptyString1000.Type;
@@ -100,20 +84,16 @@ export const useAppDataTransfer = <
           lnAddress: String(contact.lnAddress ?? "").trim() || null,
           groupName: String(contact.groupName ?? "").trim() || null,
         })),
-        cashuTokens: cashuTokens.map((token) => ({
-          token: String(token.token ?? "").trim(),
-          rawToken: String(token.rawToken ?? "").trim() || null,
-          mint: String(token.mint ?? "").trim() || null,
-          unit: String(token.unit ?? "").trim() || null,
-          amount:
-            typeof token.amount === "number" && Number.isFinite(token.amount)
-              ? token.amount
-              : token.amount
-                ? Number(token.amount)
-                : null,
-          state: String(token.state ?? "").trim() || null,
-          error: String(token.error ?? "").trim() || null,
-        })),
+        cashuTokens: cashuTokens.map((token) => {
+          const tokenText = String(token.token ?? "").trim();
+          const rawToken = String(token.rawToken ?? "").trim();
+          return {
+            token: tokenText,
+            rawToken: rawToken && rawToken !== tokenText ? rawToken : null,
+            state: String(token.state ?? "").trim() || null,
+            error: String(token.error ?? "").trim() || null,
+          };
+        }),
       };
 
       const text = JSON.stringify(payload, null, 2);
@@ -190,11 +170,13 @@ export const useAppDataTransfer = <
       }
 
       const existingTokenSet = new Set<string>();
+      const existingTokenIdSet = new Set<string>();
       for (const token of cashuTokensAll) {
         const encoded = String(token.token ?? "").trim();
         const raw = String(token.rawToken ?? "").trim();
         if (encoded) existingTokenSet.add(encoded);
         if (raw) existingTokenSet.add(raw);
+        if (token.id) existingTokenIdSet.add(String(token.id));
       }
 
       let addedContacts = 0;
@@ -284,30 +266,25 @@ export const useAppDataTransfer = <
         if (existingTokenSet.has(token)) continue;
 
         const rawToken = sanitizeText(rec.rawToken, 100000);
-        const mint = sanitizeText(rec.mint, 1000);
-        const unit = sanitizeText(rec.unit, 100);
+        const tokenId = String(createCashuTokenId(rawToken || token));
+        if (existingTokenIdSet.has(tokenId)) continue;
         const state = sanitizeText(rec.state, 100);
         const error = sanitizeText(rec.error, 1000);
-        const amountNum = Math.trunc(Number(rec.amount ?? 0));
-        const amount =
-          Number.isFinite(amountNum) && amountNum > 0 ? amountNum : null;
 
         const payload = buildImportedCashuTokenPayload({
           token,
           rawToken,
-          mint,
-          unit,
-          amount,
           state,
           error,
         });
         const result = cashuOwnerId
-          ? insert("cashuToken", payload, { ownerId: cashuOwnerId })
-          : insert("cashuToken", payload);
+          ? upsert("cashuToken", payload, { ownerId: cashuOwnerId })
+          : upsert("cashuToken", payload);
         if (result.ok) {
           addedTokens += 1;
           existingTokenSet.add(token);
           if (rawToken) existingTokenSet.add(rawToken);
+          existingTokenIdSet.add(tokenId);
         }
       }
 
@@ -330,6 +307,7 @@ export const useAppDataTransfer = <
       pushToast,
       t,
       update,
+      upsert,
     ],
   );
 

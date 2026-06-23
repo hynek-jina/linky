@@ -566,10 +566,7 @@ export function EvoluCurrentDataPage({
                             }}
                           >
                             {Object.keys(rows[0])
-                              .filter(
-                                (key) =>
-                                  !["createdAt", "updatedAt"].includes(key),
-                              )
+                              .filter((key) => key !== "createdAt")
                               .map((key) => (
                                 <th
                                   key={key}
@@ -584,10 +581,7 @@ export function EvoluCurrentDataPage({
                           {visibleRows.map((row, idx) => (
                             <tr key={idx}>
                               {Object.entries(row)
-                                .filter(
-                                  ([key]) =>
-                                    !["createdAt", "updatedAt"].includes(key),
-                                )
+                                .filter(([key]) => key !== "createdAt")
                                 .map(([key, val], valueIdx) => {
                                   const fullValue = stringifyCellValue(val);
                                   const previewValue = fullValue.slice(0, 50);

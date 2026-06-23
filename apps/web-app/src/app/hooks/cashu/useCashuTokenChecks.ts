@@ -40,14 +40,10 @@ type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 type CashuTokenRow = CashuTokenRowLike & { id?: CashuTokenId | string | null };
 type CashuTokenUpdatePayload = Readonly<{
   id: CashuTokenId;
-  amount?: number | null;
   error?: string | null;
   isDeleted?: number;
-  mint?: string | null;
-  rawToken?: string | null;
   state?: string | null;
   token?: string;
-  unit?: string | null;
 }>;
 
 interface UseCashuTokenChecksParams {
@@ -293,17 +289,6 @@ export const useCashuTokenChecks = ({
               const result = updateCashuToken({
                 id: primaryRow.id as CashuTokenId,
                 token: acceptedTokenText as typeof Evolu.NonEmptyString.Type,
-                rawToken: tokenText
-                  ? (tokenText as typeof Evolu.NonEmptyString.Type)
-                  : null,
-                mint: accepted.mint as typeof Evolu.NonEmptyString1000.Type,
-                unit: accepted.unit
-                  ? (accepted.unit as typeof Evolu.NonEmptyString100.Type)
-                  : null,
-                amount:
-                  accepted.amount > 0
-                    ? (accepted.amount as typeof Evolu.PositiveInt.Type)
-                    : null,
                 state:
                   CASHU_TOKEN_STATE_ACCEPTED as typeof Evolu.NonEmptyString100.Type,
                 error: null,
@@ -557,23 +542,9 @@ export const useCashuTokenChecks = ({
           proofs,
           unit: walletUnit,
         });
-        const preservedRawToken = rows.reduce<string | null>((found, row) => {
-          if (found) return found;
-          const rawToken = String(row.rawToken ?? "").trim();
-          return rawToken || null;
-        }, null);
         const persistResult = updateCashuToken({
           id: primaryRow.id as CashuTokenId,
           token: verifiedToken as typeof Evolu.NonEmptyString.Type,
-          rawToken: preservedRawToken,
-          mint: mint ? (mint as typeof Evolu.NonEmptyString1000.Type) : null,
-          unit: walletUnit
-            ? (walletUnit as typeof Evolu.NonEmptyString100.Type)
-            : null,
-          amount:
-            total > 0
-              ? (Math.floor(total) as typeof Evolu.PositiveInt.Type)
-              : null,
           state:
             CASHU_TOKEN_STATE_ACCEPTED as typeof Evolu.NonEmptyString100.Type,
           error: null,

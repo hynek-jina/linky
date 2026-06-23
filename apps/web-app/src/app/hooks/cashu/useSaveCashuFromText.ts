@@ -6,11 +6,13 @@ import { navigateTo } from "../../../hooks/useRouting";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { safeLocalStorageSet } from "../../../utils/storage";
+import { getUnknownErrorMessage } from "../../../utils/unknown";
 import type {
   LoggedPaymentEventParams,
   OptionalNumber,
   OptionalText,
 } from "../../types/appTypes";
+import { createCashuTokenId } from "../../lib/cashuTokenIdentity";
 import { isUnknownContactId } from "../messages/contactIdentity";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
@@ -25,7 +27,7 @@ interface UseSaveCashuFromTextParams {
   enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;
   ensureCashuTokenPersisted: (token: string) => void;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
-  insert: EvoluMutations["insert"];
+  upsert: EvoluMutations["upsert"];
   isCashuTokenStored: (tokenRaw: string) => boolean;
   isMintDeleted: (mintUrl: string) => boolean;
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
@@ -49,7 +51,7 @@ export const useSaveCashuFromText = ({
   enqueueCashuOp,
   ensureCashuTokenPersisted,
   formatDisplayedAmountParts,
-  insert,
+  upsert,
   isCashuTokenStored,
   isMintDeleted,
   logPaymentEvent,
@@ -71,37 +73,21 @@ export const useSaveCashuFromText = ({
       amount: number | null;
       error: string | null;
       mint: string | null;
-      rawToken: string;
+      identityToken: string;
       state: "accepted" | "error";
       token: string;
       unit: string | null;
     }) => {
       const payload: {
+        id: ReturnType<typeof createCashuTokenId>;
         token: typeof Evolu.NonEmptyString.Type;
         state: typeof Evolu.NonEmptyString100.Type;
-        amount?: typeof Evolu.PositiveInt.Type;
         error?: typeof Evolu.NonEmptyString1000.Type;
-        mint?: typeof Evolu.NonEmptyString1000.Type;
-        rawToken?: typeof Evolu.NonEmptyString.Type;
-        unit?: typeof Evolu.NonEmptyString100.Type;
       } = {
+        id: createCashuTokenId(args.identityToken),
         token: args.token as typeof Evolu.NonEmptyString.Type,
         state: args.state as typeof Evolu.NonEmptyString100.Type,
       };
-
-      const rawToken = String(args.rawToken ?? "").trim();
-      if (rawToken)
-        payload.rawToken = rawToken as typeof Evolu.NonEmptyString.Type;
-
-      const mint = String(args.mint ?? "").trim();
-      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
-
-      const unit = String(args.unit ?? "").trim();
-      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
-
-      if (typeof args.amount === "number" && args.amount > 0) {
-        payload.amount = args.amount as typeof Evolu.PositiveInt.Type;
-      }
 
       const error = String(args.error ?? "").trim();
       if (error) {
@@ -192,11 +178,11 @@ export const useSaveCashuFromText = ({
             return;
           }
 
-          const result = insert(
+          const result = upsert(
             "cashuToken",
             buildCashuTokenPayload({
               token: acceptedToken,
-              rawToken: tokenRaw,
+              identityToken: tokenRaw,
               mint: String(accepted.mint ?? ""),
               unit: accepted.unit,
               amount: accepted.amount > 0 ? accepted.amount : null,
@@ -206,7 +192,9 @@ export const useSaveCashuFromText = ({
             { ownerId },
           );
           if (!result.ok) {
-            setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+            setStatus(
+              `${t("errorPrefix")}: ${getUnknownErrorMessage(result.error, "unknown")}`,
+            );
             return;
           }
 
@@ -294,7 +282,7 @@ export const useSaveCashuFromText = ({
             navigateTo({ route: "wallet" });
           }
         } catch (error) {
-          const message = String(error).trim() || "Accept failed";
+          const message = getUnknownErrorMessage(error, "Accept failed");
           logPaymentEvent({
             direction: "in",
             status: "error",
@@ -317,11 +305,11 @@ export const useSaveCashuFromText = ({
             setStatus(`${t("cashuAcceptFailed")}: ${message}`);
             return;
           }
-          const result = insert(
+          const result = upsert(
             "cashuToken",
             buildCashuTokenPayload({
               token: tokenRaw,
-              rawToken: tokenRaw,
+              identityToken: tokenRaw,
               mint: parsedMint,
               unit: null,
               amount: typeof parsedAmount === "number" ? parsedAmount : null,
@@ -333,7 +321,9 @@ export const useSaveCashuFromText = ({
           if (result.ok) {
             setStatus(`${t("cashuAcceptFailed")}: ${message}`);
           } else {
-            setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+            setStatus(
+              `${t("errorPrefix")}: ${getUnknownErrorMessage(result.error, "unknown")}`,
+            );
           }
         } finally {
           setCashuIsBusy(false);
@@ -344,7 +334,7 @@ export const useSaveCashuFromText = ({
       enqueueCashuOp,
       ensureCashuTokenPersisted,
       formatDisplayedAmountParts,
-      insert,
+      upsert,
       isCashuTokenStored,
       isMintDeleted,
       logPaymentEvent,

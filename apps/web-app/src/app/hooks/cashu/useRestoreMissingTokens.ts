@@ -14,7 +14,10 @@ import {
 } from "../../../utils/cashuWallet";
 import { sumCashuProofAmounts } from "../../../utils/cashuProofs";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
-import { hasMatchingCashuToken } from "../../lib/cashuTokenIdentity";
+import {
+  createCashuTokenId,
+  hasMatchingCashuToken,
+} from "../../lib/cashuTokenIdentity";
 import type {
   CashuTokenRowLike,
   LoggedPaymentEventParams,
@@ -28,7 +31,7 @@ interface UseRestoreMissingTokensParams {
   cashuTokensAll: readonly CashuTokenRowLike[];
   defaultMintUrl: string | null;
   enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;
-  insert: EvoluMutations["insert"];
+  upsert: EvoluMutations["upsert"];
   isMintDeleted: (mintUrl: string) => boolean;
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   mintInfoDeduped: readonly { canonicalUrl?: string | null }[];
@@ -47,7 +50,7 @@ export const useRestoreMissingTokens = ({
   cashuTokensAll,
   defaultMintUrl,
   enqueueCashuOp,
-  insert,
+  upsert,
   isMintDeleted,
   logPaymentEvent,
   mintInfoDeduped,
@@ -69,27 +72,14 @@ export const useRestoreMissingTokens = ({
       unit: string | null;
     }) => {
       const payload: {
+        id: ReturnType<typeof createCashuTokenId>;
         token: typeof Evolu.NonEmptyString.Type;
         state: typeof Evolu.NonEmptyString100.Type;
-        amount?: typeof Evolu.PositiveInt.Type;
-        mint?: typeof Evolu.NonEmptyString1000.Type;
-        unit?: typeof Evolu.NonEmptyString100.Type;
       } = {
+        id: createCashuTokenId(args.token),
         token: args.token as typeof Evolu.NonEmptyString.Type,
         state: args.state as typeof Evolu.NonEmptyString100.Type,
       };
-
-      const mint = String(args.mint ?? "").trim();
-      if (mint) payload.mint = mint as typeof Evolu.NonEmptyString1000.Type;
-
-      const unit = String(args.unit ?? "").trim();
-      if (unit) payload.unit = unit as typeof Evolu.NonEmptyString100.Type;
-
-      if (Number.isFinite(args.amount) && args.amount > 0) {
-        payload.amount = Math.trunc(
-          args.amount,
-        ) as typeof Evolu.PositiveInt.Type;
-      }
 
       return payload;
     },
@@ -463,8 +453,8 @@ export const useRestoreMissingTokens = ({
                 }
 
                 const r = ownerId
-                  ? insert("cashuToken", payload, { ownerId })
-                  : insert("cashuToken", payload);
+                  ? upsert("cashuToken", payload, { ownerId })
+                  : upsert("cashuToken", payload);
 
                 if (r.ok) {
                   createdTokensTotal += 1;
@@ -508,7 +498,7 @@ export const useRestoreMissingTokens = ({
     cashuTokensAll,
     defaultMintUrl,
     enqueueCashuOp,
-    insert,
+    upsert,
     isMintDeleted,
     logPaymentEvent,
     buildCashuTokenPayload,

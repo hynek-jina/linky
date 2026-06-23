@@ -478,12 +478,13 @@ export const Schema = {
     id: CashuTokenId,
     // Most recent (accepted) token.
     token: Evolu.NonEmptyString,
-    // Original pasted token (useful for debugging/re-accept).
+    // Deprecated compatibility column. New rows use a deterministic id derived
+    // from the original token and only store the latest spendable token here.
     rawToken: Evolu.nullOr(Evolu.NonEmptyString),
-    // Stored only if token references exactly one mint.
+    // Deprecated compatibility columns. New writes derive this metadata from
+    // token; keep the columns while older clients/data still use them.
     mint: Evolu.nullOr(Evolu.NonEmptyString1000),
     unit: Evolu.nullOr(Evolu.NonEmptyString100),
-    // Stored total amount (usually in sats) when known.
     amount: Evolu.nullOr(Evolu.PositiveInt),
     // "pending" | "accepted" | "error"
     state: Evolu.nullOr(Evolu.NonEmptyString100),

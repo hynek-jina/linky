@@ -25,6 +25,15 @@ export const getUnknownErrorMessage = (
     return value.message || fallback;
   }
 
+  if (typeof value === "object") {
+    try {
+      const json = JSON.stringify(value);
+      if (json && json !== "{}") return json;
+    } catch {
+      // Fall back to String below for circular/non-serializable values.
+    }
+  }
+
   const message = String(value);
   return message || fallback;
 };
