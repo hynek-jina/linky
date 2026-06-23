@@ -121,10 +121,21 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
 
       try {
         const QRCode = await import("qrcode");
-        const qr = await QRCode.toDataURL(tokenText, {
-          errorCorrectionLevel: "M",
-          margin: 2,
-        });
+        let qr: string;
+        try {
+          qr = await QRCode.toDataURL(tokenText, {
+            errorCorrectionLevel: "M",
+            margin: 2,
+          });
+        } catch {
+          // Large multi-proof Cashu tokens can exceed QR capacity at M while
+          // still fitting at L. Copy/share remain available if even L cannot
+          // represent the token.
+          qr = await QRCode.toDataURL(tokenText, {
+            errorCorrectionLevel: "L",
+            margin: 2,
+          });
+        }
         if (!cancelled) {
           setTokenQr(qr);
         }
@@ -197,7 +208,18 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   // a chance to render.
   const rowMissing = !row || !tokenMeta;
   const hadRowRef = React.useRef(false);
+  const [showMissingRecovery, setShowMissingRecovery] = React.useState(false);
   if (!rowMissing) hadRowRef.current = true;
+  React.useEffect(() => {
+    setShowMissingRecovery(false);
+    if (!rowMissing || hadRowRef.current) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setShowMissingRecovery(true);
+    }, 750);
+    return () => window.clearTimeout(timeoutId);
+  }, [routeId, rowMissing]);
+
   React.useEffect(() => {
     if (!rowMissing) return;
     if (!hadRowRef.current) return;
@@ -205,7 +227,27 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   }, [navigateTo, rowMissing]);
 
   if (rowMissing) {
-    return null;
+    if (!showMissingRecovery) return null;
+
+    return (
+      <section className="panel topup-invoice-panel cashu-token-panel">
+        <p className="cashu-token-status cashu-token-status-error">
+          {t("cashuInvalid")}
+        </p>
+        <div className="settings-row">
+          <button
+            className={
+              pendingCashuDeleteId === routeId
+                ? "btn-wide secondary danger-armed"
+                : "btn-wide secondary"
+            }
+            onClick={() => requestDeleteCashuToken(routeId)}
+          >
+            {t("delete")}
+          </button>
+        </div>
+      </section>
+    );
   }
 
   const safeRow = row;

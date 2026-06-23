@@ -238,10 +238,10 @@ import {
   isCashuTokenAcceptedState,
   isCashuTokenDefinitivelySpent,
   isCashuTokenEmittedState,
-  isCashuTokenErrorState,
   isCashuTokenIssuedState,
   isCashuTokenReservedState,
 } from "./lib/cashuTokenState";
+import { isCashuRowCandidateBetter } from "./lib/cashuRowPreference";
 import {
   buildIdentityChangeMessageContent,
   buildIdentityChangeMessageWrapId,
@@ -2249,20 +2249,6 @@ export const useAppShellComposition = () => {
 
   const activeContactsOwnerContactCount = contactsOwnerNewContactsCount;
 
-  const cashuTokensQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db
-          .selectFrom("cashuToken")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .orderBy("createdAt", "desc"),
-      ),
-    [],
-  );
-
-  const cashuTokens = useQuery(cashuTokensQuery);
-
   const cashuTokensAllQuery = useMemo(
     () =>
       evolu.createQuery((db) =>
@@ -2398,6 +2384,8 @@ export const useAppShellComposition = () => {
     function dedupeVisibleCashuRows<
       TRow extends {
         id?: string | null;
+        isDeleted?: unknown;
+        ownerId?: unknown;
         rawToken?: string | null;
         state?: unknown;
         token?: string | null;
@@ -2423,32 +2411,12 @@ export const useAppShellComposition = () => {
       };
 
       const isCandidateBetter = (candidate: TRow, existing: TRow): boolean => {
-        const candidateOwnerId = readCashuRowOwnerId(candidate);
-        const existingOwnerId = readCashuRowOwnerId(existing);
-        const candidateIsError = isCashuTokenErrorState(candidate.state);
-        const existingIsError = isCashuTokenErrorState(existing.state);
-
-        if (candidateIsError !== existingIsError) {
-          return !candidateIsError;
-        }
-
-        if (
-          candidateOwnerId === activeCashuOwnerId &&
-          existingOwnerId !== activeCashuOwnerId
-        ) {
-          return true;
-        }
-
-        if (
-          existingOwnerId === activeCashuOwnerId &&
-          candidateOwnerId !== activeCashuOwnerId
-        ) {
-          return false;
-        }
-
-        const candidateRank = ownerRank.get(candidateOwnerId) ?? -1;
-        const existingRank = ownerRank.get(existingOwnerId) ?? -1;
-        return candidateRank > existingRank;
+        return isCashuRowCandidateBetter({
+          activeOwnerId: activeCashuOwnerId,
+          candidate,
+          existing,
+          ownerRank,
+        });
       };
 
       for (const row of rows) {
@@ -2491,8 +2459,10 @@ export const useAppShellComposition = () => {
   );
 
   const cashuTokensFiltered = React.useMemo(() => {
-    return dedupeVisibleCashuRows(cashuTokens);
-  }, [cashuTokens, dedupeVisibleCashuRows]);
+    return dedupeVisibleCashuRows(cashuTokensAll).filter(
+      (row) => !row.isDeleted,
+    );
+  }, [cashuTokensAll, dedupeVisibleCashuRows]);
 
   const cashuTokensAllFiltered = React.useMemo(() => {
     return dedupeVisibleCashuRows(cashuTokensAll);
@@ -6690,21 +6660,22 @@ export const useAppShellComposition = () => {
   const otherContactsLabel = t("otherContacts");
 
   const { exportAppData, handleImportAppDataFilePicked, requestImportAppData } =
-    useAppDataTransfer<(typeof contacts)[number], (typeof cashuTokens)[number]>(
-      {
-        appOwnerId: contactsOwnerId,
-        cashuOwnerId,
-        cashuTokens: cashuTokensFiltered,
-        cashuTokensAll: cashuTokensAllFiltered,
-        contacts,
-        importDataFileInputRef,
-        insert,
-        upsert,
-        pushToast,
-        t,
-        update,
-      },
-    );
+    useAppDataTransfer<
+      (typeof contacts)[number],
+      (typeof cashuTokensAll)[number]
+    >({
+      appOwnerId: contactsOwnerId,
+      cashuOwnerId,
+      cashuTokens: cashuTokensFiltered,
+      cashuTokensAll: cashuTokensAllFiltered,
+      contacts,
+      importDataFileInputRef,
+      insert,
+      upsert,
+      pushToast,
+      t,
+      update,
+    });
 
   const copyNostrKeys = async () => {
     const nsec = String(currentNsec ?? "").trim();

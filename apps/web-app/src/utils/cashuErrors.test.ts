@@ -39,6 +39,13 @@ describe("isCashuOutputsAlreadySignedError", () => {
     expect(isCashuOutputsAlreadySignedError(err)).toBe(true);
   });
 
+  it("matches the legacy mint error code 11003 without relying on detail", () => {
+    const err = Object.assign(new Error("mint operation failed"), {
+      code: 11003,
+    });
+    expect(isCashuOutputsAlreadySignedError(err)).toBe(true);
+  });
+
   it("does not confuse pending with already-signed", () => {
     const pending = Object.assign(new Error("outputs are pending"), {
       code: 11004,
