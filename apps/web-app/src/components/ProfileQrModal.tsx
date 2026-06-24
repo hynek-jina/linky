@@ -1,4 +1,5 @@
 import React from "react";
+import { Copy, Pencil, Radio, X } from "lucide-react";
 import { navigateTo } from "../hooks/useRouting";
 import { parseProfileGeneralStatusText } from "../nostrStatus";
 import {
@@ -6,7 +7,6 @@ import {
   formatShortNpub,
   getInitials,
 } from "../utils/formatting";
-import { NfcIcon } from "./icons";
 import { ProfileQrButton } from "./ProfileQrButton";
 
 interface ProfileQrModalProps {
@@ -87,7 +87,7 @@ export function ProfileQrModal({
                   aria-hidden="true"
                   style={{ display: "inline-flex", width: 18, height: 18 }}
                 >
-                  <NfcIcon />
+                  <Radio size={18} />
                 </span>
               </button>
             ) : null}
@@ -101,7 +101,7 @@ export function ProfileQrModal({
               title={t("edit")}
               disabled={!currentNpub || !currentNsec}
             >
-              <span aria-hidden="true">✎</span>
+              <Pencil size={18} aria-hidden="true" />
             </button>
             <button
               className="topbar-btn"
@@ -109,7 +109,7 @@ export function ProfileQrModal({
               aria-label={t("close")}
               title={t("close")}
             >
-              <span aria-hidden="true">×</span>
+              <X size={20} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -164,7 +164,7 @@ export function ProfileQrModal({
                     {formatShortLightningAddress(effectiveMyLightningAddress)}
                   </span>
                   <span className="contact-detail-copyIcon" aria-hidden="true">
-                    ⧉
+                    <Copy size={16} />
                   </span>
                 </button>
               ) : null}

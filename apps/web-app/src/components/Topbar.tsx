@@ -1,4 +1,5 @@
 import React from "react";
+import { Settings } from "lucide-react";
 import type { ContactId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import type { Route } from "../types/route";
@@ -141,7 +142,13 @@ export function Topbar({
             ? { "data-guide": "open-menu" }
             : {})}
         >
-          <span aria-hidden="true">{topbarRight.icon}</span>
+          <span aria-hidden="true">
+            {topbarRight.label === t("menu") ? (
+              <Settings size={20} />
+            ) : (
+              topbarRight.icon
+            )}
+          </span>
         </button>
       ) : (
         <span className="topbar-spacer" aria-hidden="true" />

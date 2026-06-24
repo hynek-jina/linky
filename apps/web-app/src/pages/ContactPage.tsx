@@ -1,4 +1,5 @@
 import { useEffect, useState, type FC } from "react";
+import { Pencil } from "lucide-react";
 import { MessageIcon } from "../components/icons";
 import type { ContactId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
@@ -193,7 +194,7 @@ export const ContactPage: FC<ContactPageProps> = ({
             aria-label={t("editContact")}
             title={t("editContact")}
           >
-            ✎
+            <Pencil size={18} aria-hidden="true" />
           </button>
         </div>
 

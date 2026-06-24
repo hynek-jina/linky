@@ -1,15 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bell,
+  Bean,
   Bitcoin,
   BrushCleaning,
-  ClipboardCopy,
   Cloud,
   Coins,
   Copy,
   Download,
   FlaskConical,
-  KeyRound,
   Landmark,
   Languages,
   LogOut,
@@ -19,6 +18,7 @@ import {
   RotateCw,
   ShieldCheck,
   Upload,
+  UserRound,
   Zap,
 } from "lucide-react";
 import {
@@ -386,7 +386,7 @@ export function AdvancedPage({
         <div className="settings-row">
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              <Coins size={18} />
+              <Bean size={18} />
             </span>
             <span className="settings-label">{t("preferCashu")}</span>
           </div>
@@ -518,6 +518,10 @@ export function AdvancedPage({
             </span>
           </span>
         </button>
+      </div>
+
+      <div className="settings-section">
+        <h2 className="settings-section-title">{t("settingsDebug")}</h2>
 
         <button
           type="button"
@@ -645,7 +649,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              <ClipboardCopy size={18} />
+              <Copy size={18} />
             </span>
             <span className="settings-label">{t("copyKeys")}</span>
           </span>
@@ -678,6 +682,28 @@ export function AdvancedPage({
         <button
           type="button"
           className={
+            armedSecurityAction === "copyNostr"
+              ? "settings-row settings-link settings-sensitive-action is-armed"
+              : "settings-row settings-link settings-sensitive-action"
+          }
+          onClick={() => requestSecurityAction("copyNostr", copyNostrKeys)}
+          disabled={!hasCurrentNsec}
+          data-guide="copy-nostr-keys"
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              <Copy size={18} />
+            </span>
+            <span className="settings-label">{t("copyNostrKeys")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={
             armedSecurityAction === "pasteNostr"
               ? "settings-row settings-link settings-sensitive-action is-armed"
               : "settings-row settings-link settings-sensitive-action"
@@ -693,31 +719,9 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              <KeyRound size={18} />
+              <UserRound size={18} />
             </span>
             <span className="settings-label">{t("pasteCustomNostrKeys")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
-
-        <button
-          type="button"
-          className={
-            armedSecurityAction === "copyNostr"
-              ? "settings-row settings-link settings-sensitive-action is-armed"
-              : "settings-row settings-link settings-sensitive-action"
-          }
-          onClick={() => requestSecurityAction("copyNostr", copyNostrKeys)}
-          disabled={!hasCurrentNsec}
-          data-guide="copy-nostr-keys"
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Copy size={18} />
-            </span>
-            <span className="settings-label">{t("copyNostrKeys")}</span>
           </span>
           <span className="settings-chevron" aria-hidden="true">
             &gt;

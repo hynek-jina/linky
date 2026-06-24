@@ -1,4 +1,5 @@
 import React from "react";
+import { Copy } from "lucide-react";
 import {
   useAppShellActions,
   useAppShellCore,
@@ -75,7 +76,7 @@ export function TopupNoAmountPage(): React.ReactElement {
           >
             <span className="btn-label-with-icon">
               <span className="btn-label-icon" aria-hidden="true">
-                ⧉
+                <Copy size={16} />
               </span>
               <span>{t("copy")}</span>
             </span>

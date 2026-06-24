@@ -1,5 +1,5 @@
 import React from "react";
-import { Languages } from "lucide-react";
+import { Languages, Settings } from "lucide-react";
 import type {
   OnboardingStep,
   PendingOnboardingProfile,
@@ -225,7 +225,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             aria-label={t("menu")}
             title={t("menu")}
           >
-            <span aria-hidden="true">☰</span>
+            <Settings size={20} aria-hidden="true" />
           </button>
         </header>
 
@@ -393,7 +393,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             aria-label={t("menu")}
             title={t("menu")}
           >
-            <span aria-hidden="true">☰</span>
+            <Settings size={20} aria-hidden="true" />
           </button>
         </header>
 
@@ -549,7 +549,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
               title={t("menu")}
               disabled={onboardingIsBusy}
             >
-              <span aria-hidden="true">☰</span>
+              <Settings size={20} aria-hidden="true" />
             </button>
           </header>
 

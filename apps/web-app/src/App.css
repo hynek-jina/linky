@@ -3524,22 +3524,6 @@ button.icon {
   display: block;
 }
 
-.contacts-fab-icon-stroke {
-  fill: none;
-  stroke: var(--app-primary-button-fg);
-  stroke-width: 2.1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.contacts-fab-icon-plus {
-  fill: none;
-  stroke: var(--app-primary-button-fg);
-  stroke-width: 2.1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .contacts-fab:hover {
   transform: translateY(-1px);
   box-shadow: none;
@@ -3789,16 +3773,6 @@ button.icon {
   border-radius: 999px;
   object-fit: cover;
   display: block;
-}
-
-.contacts-qr-scanIcon {
-  width: 16px;
-  height: 16px;
-  display: block;
-  border: 2px dashed currentColor;
-  border-radius: 5px;
-  box-sizing: border-box;
-  opacity: 0.9;
 }
 
 .group-filter-btn {

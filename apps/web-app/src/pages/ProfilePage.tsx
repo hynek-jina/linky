@@ -1,4 +1,5 @@
 import React from "react";
+import { Copy } from "lucide-react";
 import { ProfileAvatarEditor } from "../components/ProfileAvatarEditor";
 import { ProfileQrButton } from "../components/ProfileQrButton";
 import type { AvatarEditorControlId } from "../derivedProfile";
@@ -256,7 +257,7 @@ export function ProfilePage({
                       className="contact-detail-copyIcon"
                       aria-hidden="true"
                     >
-                      ⧉
+                      <Copy size={16} />
                     </span>
                   </button>
                 ) : null}

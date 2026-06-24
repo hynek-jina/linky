@@ -1,3 +1,4 @@
+import { ArrowUpToLine } from "lucide-react";
 import { TopupIcon } from "./icons";
 
 interface WalletActionButtonProps {
@@ -19,7 +20,7 @@ export function WalletActionButton({
     icon === "topup" ? (
       <TopupIcon size={18} strokeWidth={2} />
     ) : (
-      <span className="contacts-qr-scanIcon" />
+      <ArrowUpToLine size={18} />
     );
 
   return (

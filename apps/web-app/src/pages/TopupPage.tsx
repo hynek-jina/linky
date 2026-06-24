@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import { ScanLine } from "lucide-react";
 import {
   useAppShellActions,
   useAppShellCore,
@@ -128,7 +129,7 @@ export const TopupPage: FC<TopupPageProps> = ({
           >
             <span className="btn-label-with-icon">
               <span className="btn-label-icon" aria-hidden="true">
-                <span className="contacts-qr-scanIcon" />
+                <ScanLine size={18} />
               </span>
               <span>{t("scan")}</span>
             </span>

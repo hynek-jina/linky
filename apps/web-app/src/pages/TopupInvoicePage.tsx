@@ -1,4 +1,5 @@
 import React, { type FC } from "react";
+import { Copy } from "lucide-react";
 import { WalletBalance } from "../components/WalletBalance";
 
 type TopupInvoiceQrMode = "cashu" | "universal" | "lightning";
@@ -252,7 +253,7 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
     >
       <span className="btn-label-with-icon">
         <span className="btn-label-icon" aria-hidden="true">
-          ⧉
+          <Copy size={16} />
         </span>
         <span>{t("copy")}</span>
       </span>
