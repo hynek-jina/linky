@@ -13,7 +13,6 @@ interface UseContactsGuideParams {
   contacts: readonly ContactRowLike[];
   contactsOnboardingHasPaid: boolean;
   contactsOnboardingHasSentMessage: boolean;
-  openMenu: () => void;
   openNewContactPage: () => void;
   route: Route;
 }
@@ -36,7 +35,6 @@ export const useContactsGuide = ({
   contacts,
   contactsOnboardingHasPaid,
   contactsOnboardingHasSentMessage,
-  openMenu,
   openNewContactPage,
   route,
 }: UseContactsGuideParams) => {
@@ -216,20 +214,10 @@ export const useContactsGuide = ({
         },
         {
           id: "backup_keys_2",
-          selector: '[data-guide="open-advanced"]',
-          titleKey: "guideBackupKeysStep2Title",
-          bodyKey: "guideBackupKeysStep2Body",
-          ensure: () => {
-            ensureRoute("contacts");
-            openMenu();
-          },
-        },
-        {
-          id: "backup_keys_3",
           selector: '[data-guide="copy-seed"]',
           titleKey: "guideBackupKeysStep3Title",
           bodyKey: "guideBackupKeysStep3Body",
-          ensure: () => ensureRoute("advanced"),
+          ensure: () => ensureRoute("settings"),
         },
       ],
     };
@@ -239,7 +227,6 @@ export const useContactsGuide = ({
     contacts,
     contactsGuide,
     contactsGuideTargetContactId,
-    openMenu,
     openNewContactPage,
     route,
   ]);

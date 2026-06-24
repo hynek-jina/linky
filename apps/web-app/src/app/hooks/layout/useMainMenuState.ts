@@ -48,9 +48,10 @@ export const useMainMenuState = ({
 
   const openMenu = React.useCallback(() => {
     setMainReturnFromRoute(route);
-    setMenuIsOpen(true);
+    setMenuIsOpen(false);
     onOpen?.();
     menuOpenRouteRef.current = route.kind;
+    navigateTo({ route: "settings" });
   }, [onOpen, route, setMainReturnFromRoute]);
 
   const closeMenu = React.useCallback(() => {

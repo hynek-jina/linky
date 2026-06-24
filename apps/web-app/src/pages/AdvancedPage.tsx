@@ -1,12 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useAppShellCore } from "../app/context/AppShellContexts";
+import {
+  useAppShellActions,
+  useAppShellCore,
+} from "../app/context/AppShellContexts";
 import {
   PasswordManagerSaveForm,
   type PasswordManagerSaveFormHandle,
 } from "../components/PasswordManagerSaveForm";
 import { useNavigation } from "../hooks/useRouting";
+import { getNativeNotificationPermissionState } from "../platform/nativeBridge";
 import type { PasswordManagerSaveResult } from "../platform/passwordManager";
-import { LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS } from "../utils/constants";
+import { isNativePlatform } from "../platform/runtime";
 
 interface AdvancedPageProps {
   __APP_VERSION__: string;
@@ -50,7 +54,6 @@ interface AdvancedPageProps {
 
 export function AdvancedPage({
   __APP_VERSION__,
-  activeNostrIdentitySource,
   connectedRelayCount,
   copyNostrKeys,
   copySeed,
@@ -70,47 +73,38 @@ export function AdvancedPage({
   passwordManagerSeedUsername,
   payWithCashuEnabled,
   cashuAutoswapEnabled,
-  showProfileQrOnTiltEnabled,
   pushToast,
   relayUrls,
   requestImportAppData,
-  requestDeriveNostrKeys,
   requestPasteNostrKeys,
   requestLogout,
   saveSeedToPasswordManager,
   seedMnemonic,
-  setLightningInvoiceAutoPayLimit,
   setPayWithCashuEnabled,
   setCashuAutoswapEnabled,
-  setShowProfileQrOnTiltEnabled,
   t,
 }: AdvancedPageProps): React.ReactElement {
   const navigateTo = useNavigation();
-  const { formatDisplayedAmountParts } = useAppShellCore();
-  const [pushStatus, setPushStatus] = useState<string>("");
-  const [pushError, setPushError] = useState<string>("");
-  const [armedNostrAction, setArmedNostrAction] = useState<
-    "derive" | "paste" | null
+  const { formatDisplayedAmountParts, lang } = useAppShellCore();
+  const { openFeedbackContact, setLang } = useAppShellActions();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationsIsBusy, setNotificationsIsBusy] = useState(false);
+  const [armedSecurityAction, setArmedSecurityAction] = useState<
+    "copyNostr" | "copySeed" | "pasteNostr" | "saveSeed" | null
   >(null);
   const armTimeoutRef = useRef<number | null>(null);
   const passwordManagerSaveFormRef =
     useRef<PasswordManagerSaveFormHandle | null>(null);
   const hasSeedMnemonic = String(seedMnemonic ?? "").trim().length > 0;
   const hasCurrentNsec = String(currentNsec ?? "").trim().length > 0;
-  const isCustomNostrIdentity = activeNostrIdentitySource === "custom";
-  const customAutoPayLimitSelected =
-    !LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS.some(
-      (limit) => limit === lightningInvoiceAutoPayLimit,
-    );
   const appVersionLabel = __APP_COMMIT_SHA__
-    ? `v${__APP_VERSION__} (${__APP_COMMIT_SHA__})`
-    : `v${__APP_VERSION__}`;
+    ? `${__APP_VERSION__} (${__APP_COMMIT_SHA__})`
+    : `${__APP_VERSION__}`;
 
   const getAutoPayLimitLabel = useCallback(
     (limit: number) => {
-      if (limit === 0) return "0";
       const displayAmount = formatDisplayedAmountParts(limit);
-      return `${displayAmount.approxPrefix}${displayAmount.amountText}`;
+      return `${displayAmount.approxPrefix}${displayAmount.amountText} ${displayAmount.unitLabel}`;
     },
     [formatDisplayedAmountParts],
   );
@@ -137,19 +131,28 @@ export function AdvancedPage({
     window.location.reload();
   }, []);
 
-  const armNostrAction = useCallback(
-    (action: "derive" | "paste") => {
+  const requestSecurityAction = useCallback(
+    (
+      action: "copyNostr" | "copySeed" | "pasteNostr" | "saveSeed",
+      run: () => void | Promise<void>,
+      hintKey = "sensitiveActionArmedHint",
+    ) => {
+      if (armedSecurityAction === action) {
+        clearArmTimeout();
+        setArmedSecurityAction(null);
+        void run();
+        return;
+      }
+
       clearArmTimeout();
-      setArmedNostrAction(action);
-      pushToast(
-        t(action === "derive" ? "nostrDeriveArmedHint" : "nostrPasteArmedHint"),
-      );
+      setArmedSecurityAction(action);
+      pushToast(t(hintKey));
       armTimeoutRef.current = window.setTimeout(() => {
-        setArmedNostrAction(null);
+        setArmedSecurityAction(null);
         armTimeoutRef.current = null;
       }, 5000);
     },
-    [clearArmTimeout, pushToast, t],
+    [armedSecurityAction, clearArmTimeout, pushToast, t],
   );
 
   useEffect(() => {
@@ -160,41 +163,87 @@ export function AdvancedPage({
 
   useEffect(() => {
     clearArmTimeout();
-    setArmedNostrAction(null);
+    setArmedSecurityAction(null);
   }, [clearArmTimeout]);
 
-  const handleRegisterNotifications = async () => {
-    setPushStatus(t("notificationsRegistering"));
-    setPushError("");
-
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setPushError(t("notificationsUnsupported"));
+  useEffect(() => {
+    if (isNativePlatform()) {
+      setNotificationsEnabled(
+        getNativeNotificationPermissionState() === "granted",
+      );
       return;
     }
 
+    if (
+      !("Notification" in window) ||
+      Notification.permission !== "granted" ||
+      !("serviceWorker" in navigator)
+    ) {
+      setNotificationsEnabled(false);
+      return;
+    }
+
+    let isActive = true;
+    void (async () => {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = registration
+          ? await registration.pushManager.getSubscription()
+          : null;
+        if (isActive) setNotificationsEnabled(subscription !== null);
+      } catch {
+        if (isActive) setNotificationsEnabled(false);
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const handleNotificationsChange = async (enabled: boolean) => {
     if (!currentNsec) {
-      setPushError(t("notificationsNotLoggedIn"));
+      pushToast(t("notificationsNotLoggedIn"));
       return;
     }
 
+    setNotificationsIsBusy(true);
     try {
-      const permission = await Notification.requestPermission();
+      const {
+        registerPushNotifications,
+        requestNotificationPermission,
+        unregisterPushNotifications,
+      } = await import("../utils/pushNotifications");
 
-      if (permission === "granted") {
-        const { registerPushNotifications } =
-          await import("../utils/pushNotifications");
-        const result = await registerPushNotifications(currentNsec);
-
-        if (result.success) {
-          setPushStatus(`✅ ${t("notificationsRegistered")}`);
-        } else {
-          setPushError(`❌ ${result.error || t("notificationsError")}`);
+      if (enabled) {
+        pushToast(t("notificationsRegistering"));
+        const permissionGranted = await requestNotificationPermission();
+        if (!permissionGranted) {
+          pushToast(t("notificationsDenied"));
+          return;
         }
+
+        const result = await registerPushNotifications(currentNsec);
+        if (result.success) {
+          setNotificationsEnabled(true);
+          pushToast(t("notificationsRegistered"));
+        } else {
+          pushToast(String(result.error ?? t("notificationsError")));
+        }
+        return;
+      }
+
+      const disabled = await unregisterPushNotifications(currentNsec);
+      if (disabled) {
+        setNotificationsEnabled(false);
+        pushToast(t("notificationsDisabled"));
       } else {
-        setPushError(`❌ ${t("notificationsDenied")}`);
+        pushToast(t("notificationsDisableError"));
       }
     } catch {
-      setPushError(`❌ ${t("notificationsError")}`);
+      pushToast(t("notificationsError"));
+    } finally {
+      setNotificationsIsBusy(false);
     }
   };
 
@@ -223,440 +272,459 @@ export function AdvancedPage({
   }, [hasSeedMnemonic, pushToast, saveSeedToPasswordManager, t]);
 
   return (
-    <section className="panel">
+    <section className="panel settings-page">
       <PasswordManagerSaveForm
         ref={passwordManagerSaveFormRef}
         username={passwordManagerSeedUsername}
         password={String(seedMnemonic ?? "")}
       />
 
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🔑
-          </span>
-          <span className="settings-label">{t("keys")}</span>
-        </div>
-        <div className="settings-right">
-          <div className="badge-box">
-            <button
-              className="ghost"
-              onClick={() => void handleSaveSeed()}
-              disabled={!hasSeedMnemonic}
-            >
-              {t("onboardingBackupSave")}
-            </button>
-            <button className="ghost" onClick={copySeed} data-guide="copy-seed">
-              {t("copyCurrent")}
-            </button>
-          </div>
-        </div>
-      </div>
+      <div className="settings-section">
+        <h2 className="settings-section-title">{t("settingsGeneral")}</h2>
 
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🦤
-          </span>
-          <span className="settings-label">{t("nostrKeys")}</span>
-        </div>
-        <div className="settings-right">
-          <div className="badge-box">
-            <button
-              className="ghost"
-              onClick={() => {
-                const targetAction = isCustomNostrIdentity ? "derive" : "paste";
-                if (armedNostrAction === targetAction) {
-                  clearArmTimeout();
-                  setArmedNostrAction(null);
-                  void (isCustomNostrIdentity
-                    ? requestDeriveNostrKeys()
-                    : requestPasteNostrKeys());
-                  return;
-                }
-                armNostrAction(targetAction);
-              }}
-              style={
-                armedNostrAction !== null
-                  ? {
-                      color: "var(--color-error)",
-                      borderColor: "var(--color-error)",
-                    }
-                  : undefined
+        <div className="settings-row">
+          <div className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🌐
+            </span>
+            <span className="settings-label">{t("language")}</span>
+          </div>
+          <div className="settings-right">
+            <select
+              className="select"
+              value={lang}
+              onChange={(event) =>
+                setLang(event.target.value === "cs" ? "cs" : "en")
               }
-              disabled={!hasCurrentNsec || !hasSeedMnemonic}
+              aria-label={t("language")}
             >
-              {t(isCustomNostrIdentity ? "derive" : "paste")}
-            </button>
-            <button
-              className="ghost"
-              onClick={copyNostrKeys}
-              disabled={!hasCurrentNsec}
-              data-guide="copy-nostr-keys"
-            >
-              {t("copyCurrent")}
-            </button>
+              <option value="cs">{t("czech")}</option>
+              <option value="en">{t("english")}</option>
+            </select>
           </div>
         </div>
-      </div>
 
-      <button
-        type="button"
-        className="settings-row settings-link"
-        onClick={() => navigateTo({ route: "cashuTokens" })}
-        aria-label={t("tokens")}
-        title={t("tokens")}
-      >
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🪙
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={() => navigateTo({ route: "settingsUnits" })}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              ₿
+            </span>
+            <span className="settings-label">{t("unit")}</span>
           </span>
-          <span className="settings-label">{t("tokens")}</span>
-        </div>
-        <div className="settings-right">
           <span className="settings-chevron" aria-hidden="true">
             &gt;
           </span>
-        </div>
-      </button>
+        </button>
 
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🥜
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={openFeedbackContact}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              💬
+            </span>
+            <span className="settings-label">{t("feedback")}</span>
           </span>
-          <span className="settings-label">{t("payWithCashu")}</span>
-        </div>
-        <div className="settings-right">
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
+        <div className="settings-row">
+          <div className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🔔
+            </span>
+            <span className="settings-label">{t("notifications")}</span>
+          </div>
           <label className="switch">
             <input
               className="switch-input"
               type="checkbox"
-              aria-label={t("payWithCashu")}
-              checked={payWithCashuEnabled}
-              onChange={(e) => setPayWithCashuEnabled(e.target.checked)}
+              aria-label={t("notifications")}
+              checked={notificationsEnabled}
+              disabled={!currentNsec || notificationsIsBusy}
+              onChange={(event) =>
+                void handleNotificationsChange(event.target.checked)
+              }
             />
           </label>
         </div>
       </div>
 
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🔄
-          </span>
-          <span className="settings-label">{t("cashuAutoswap")}</span>
+      <div className="settings-section">
+        <h2 className="settings-section-title">{t("settingsPayments")}</h2>
+
+        <div className="settings-row">
+          <div className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🥜
+            </span>
+            <span className="settings-label">{t("preferCashu")}</span>
+          </div>
+          <label className="switch">
+            <input
+              className="switch-input"
+              type="checkbox"
+              aria-label={t("preferCashu")}
+              checked={payWithCashuEnabled}
+              onChange={(event) => setPayWithCashuEnabled(event.target.checked)}
+            />
+          </label>
         </div>
-        <div className="settings-right">
+
+        <div className="settings-row">
+          <div className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🔄
+            </span>
+            <span className="settings-label">{t("cashuAutoswap")}</span>
+          </div>
           <label className="switch">
             <input
               className="switch-input"
               type="checkbox"
               aria-label={t("cashuAutoswap")}
               checked={cashuAutoswapEnabled}
-              onChange={(e) => setCashuAutoswapEnabled(e.target.checked)}
-            />
-          </label>
-        </div>
-      </div>
-
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🔄
-          </span>
-          <span className="settings-label">{t("showProfileQrOnTilt")}</span>
-        </div>
-        <div className="settings-right">
-          <label className="switch">
-            <input
-              className="switch-input"
-              type="checkbox"
-              aria-label={t("showProfileQrOnTilt")}
-              checked={showProfileQrOnTiltEnabled}
-              onChange={(e) => setShowProfileQrOnTiltEnabled(e.target.checked)}
-            />
-          </label>
-        </div>
-      </div>
-
-      <div className="settings-row settings-row-stack-mobile">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            ⚡
-          </span>
-          <span className="settings-label">
-            {t("lightningInvoiceAutoPayLimit")}
-          </span>
-        </div>
-        <div className="settings-right settings-right-wrap">
-          <div className="badge-box autopay-limit-options" role="group">
-            {LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS.map((limit) => (
-              <button
-                key={limit}
-                type="button"
-                className={
-                  !customAutoPayLimitSelected &&
-                  limit === lightningInvoiceAutoPayLimit
-                    ? "ghost settings-choice is-selected"
-                    : "ghost settings-choice"
-                }
-                onClick={() => setLightningInvoiceAutoPayLimit(limit)}
-                aria-pressed={
-                  !customAutoPayLimitSelected &&
-                  limit === lightningInvoiceAutoPayLimit
-                }
-              >
-                {getAutoPayLimitLabel(limit)}
-              </button>
-            ))}
-            <button
-              type="button"
-              className={
-                customAutoPayLimitSelected
-                  ? "ghost settings-choice is-selected"
-                  : "ghost settings-choice"
+              onChange={(event) =>
+                setCashuAutoswapEnabled(event.target.checked)
               }
-              onClick={() => navigateTo({ route: "advancedAutoPayLimit" })}
-              aria-pressed={customAutoPayLimitSelected}
-            >
-              {customAutoPayLimitSelected
-                ? getAutoPayLimitLabel(lightningInvoiceAutoPayLimit)
-                : t("custom")}
-            </button>
-          </div>
+            />
+          </label>
         </div>
-      </div>
 
-      <button
-        type="button"
-        className="settings-row settings-link"
-        onClick={() => navigateTo({ route: "nostrRelays" })}
-        aria-label={t("nostrRelay")}
-        title={t("nostrRelay")}
-      >
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            📡
-          </span>
-          <span className="settings-label">{t("nostrRelay")}</span>
-        </div>
-        <div className="settings-right">
-          <span className="relay-count" aria-label="relay status">
-            {connectedRelayCount}/{relayUrls.length}
-          </span>
-          <span
-            className={
-              nostrRelayOverallStatus === "connected"
-                ? "status-dot connected"
-                : nostrRelayOverallStatus === "checking"
-                  ? "status-dot checking"
-                  : "status-dot disconnected"
-            }
-            aria-label={nostrRelayOverallStatus}
-            title={nostrRelayOverallStatus}
-            style={{ marginLeft: 10 }}
-          />
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </div>
-      </button>
-
-      <button
-        type="button"
-        className="settings-row settings-link"
-        onClick={() => navigateTo({ route: "evoluServers" })}
-        aria-label={t("evoluServer")}
-        title={t("evoluServer")}
-      >
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            ☁
-          </span>
-          <span className="settings-label">{t("evoluServer")}</span>
-        </div>
-        <div className="settings-right">
-          <span className="relay-count" aria-label="evolu sync status">
-            {evoluConnectedServerCount}/{evoluServerUrls.length}
-          </span>
-          <span
-            className={
-              evoluOverallStatus === "connected"
-                ? "status-dot connected"
-                : evoluOverallStatus === "checking"
-                  ? "status-dot checking"
-                  : "status-dot disconnected"
-            }
-            aria-label={evoluOverallStatus}
-            title={evoluOverallStatus}
-            style={{ marginLeft: 10 }}
-          />
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </div>
-      </button>
-
-      <button
-        type="button"
-        className="settings-row settings-link"
-        onClick={() => navigateTo({ route: "mints" })}
-        aria-label={t("mints")}
-        title={t("mints")}
-      >
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🏦
-          </span>
-          <span className="settings-label">{t("mints")}</span>
-        </div>
-        <div className="settings-right">
-          {defaultMintDisplay ? (
-            <span className="relay-url">{defaultMintDisplay}</span>
-          ) : (
-            <span className="muted">—</span>
-          )}
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </div>
-      </button>
-
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            📦
-          </span>
-          <span className="settings-label">{t("data")}</span>
-        </div>
-        <div className="settings-right">
-          <div className="badge-box">
-            <button className="ghost" onClick={exportAppData}>
-              {t("exportData")}
-            </button>
-            <button className="ghost" onClick={requestImportAppData}>
-              {t("importData")}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Push Notifications */}
-      <div
-        className="settings-row"
-        style={{ marginTop: 20, borderTop: "1px solid #eee", paddingTop: 20 }}
-      >
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🔔
-          </span>
-          <span className="settings-label">{t("notifications")}</span>
-        </div>
-        <div className="settings-right">
-          <button
-            className="ghost"
-            onClick={handleRegisterNotifications}
-            disabled={!currentNsec}
-          >
-            {t("enable")}
-          </button>
-        </div>
-      </div>
-
-      {pushStatus && (
-        <div className="settings-row">
-          <div style={{ padding: "8px", fontSize: "12px", color: "#666" }}>
-            {pushStatus}
-          </div>
-        </div>
-      )}
-
-      {pushError && (
-        <div className="settings-row">
-          <div style={{ padding: "8px", fontSize: "12px", color: "#c00" }}>
-            {pushError}
-          </div>
-        </div>
-      )}
-
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            🧪
-          </span>
-          <span className="settings-label">Push / SW debug</span>
-        </div>
-        <div className="settings-right">
-          <button
-            className="ghost"
-            onClick={() => navigateTo({ route: "advancedPushDebug" })}
-          >
-            Open
-          </button>
-        </div>
-      </div>
-
-      <div className="settings-row">
         <button
           type="button"
-          className="btn-wide secondary"
-          onClick={() => void dedupeContacts()}
-          disabled={dedupeContactsIsBusy}
+          className="settings-row settings-link"
+          onClick={() => navigateTo({ route: "advancedAutoPayLimit" })}
         >
-          {t("dedupeContacts")}
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              ⚡
+            </span>
+            <span className="settings-label">
+              {t("lightningInvoiceAutoPayLimit")}
+            </span>
+          </span>
+          <span className="settings-right">
+            <span className="settings-tail-content settings-value">
+              {getAutoPayLimitLabel(lightningInvoiceAutoPayLimit)}
+            </span>
+            <span className="settings-chevron" aria-hidden="true">
+              &gt;
+            </span>
+          </span>
         </button>
       </div>
 
-      <input
-        ref={importDataFileInputRef}
-        type="file"
-        accept=".txt,.json,application/json,text/plain"
-        style={{ display: "none" }}
-        onChange={(e) => {
-          const file = e.target.files?.[0] ?? null;
-          e.currentTarget.value = "";
-          void handleImportAppDataFilePicked(file);
-        }}
-      />
+      <div className="settings-section">
+        <h2 className="settings-section-title">{t("settingsNetwork")}</h2>
 
-      <div className="settings-row">
-        <div className="settings-left">
-          <span className="settings-icon" aria-hidden="true">
-            ♻️
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={() => navigateTo({ route: "nostrRelays" })}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              📡
+            </span>
+            <span className="settings-label">Nostr</span>
           </span>
-          <span className="settings-label">{t("reloadApp")}</span>
-        </div>
-        <div className="settings-right">
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => void handleReloadApp()}
-          >
-            {t("reloadNow")}
-          </button>
-        </div>
+          <span className="settings-right">
+            <span className="settings-tail-content settings-connection-state">
+              <span className="relay-count">
+                {connectedRelayCount}/{relayUrls.length}
+              </span>
+              <span className={`status-dot ${nostrRelayOverallStatus}`} />
+            </span>
+            <span className="settings-chevron" aria-hidden="true">
+              &gt;
+            </span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={() => navigateTo({ route: "evoluServers" })}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              ☁️
+            </span>
+            <span className="settings-label">Evolu</span>
+          </span>
+          <span className="settings-right">
+            <span className="settings-tail-content settings-connection-state">
+              <span className="relay-count">
+                {evoluConnectedServerCount}/{evoluServerUrls.length}
+              </span>
+              <span className={`status-dot ${evoluOverallStatus}`} />
+            </span>
+            <span className="settings-chevron" aria-hidden="true">
+              &gt;
+            </span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={() => navigateTo({ route: "mints" })}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🏦
+            </span>
+            <span className="settings-label">Mint</span>
+          </span>
+          <span className="settings-right">
+            {defaultMintDisplay ? (
+              <span className="settings-tail-content settings-value settings-value-truncate">
+                {defaultMintDisplay}
+              </span>
+            ) : null}
+            <span className="settings-chevron" aria-hidden="true">
+              &gt;
+            </span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={() => navigateTo({ route: "cashuTokens" })}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🪙
+            </span>
+            <span className="settings-label">{t("tokens")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={exportAppData}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              📤
+            </span>
+            <span className="settings-label">{t("exportData")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={requestImportAppData}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              📥
+            </span>
+            <span className="settings-label">{t("importData")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={() => void dedupeContacts()}
+          disabled={dedupeContactsIsBusy}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🧹
+            </span>
+            <span className="settings-label">{t("dedupeContacts")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
+        <input
+          ref={importDataFileInputRef}
+          type="file"
+          accept=".txt,.json,application/json,text/plain"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0] ?? null;
+            e.currentTarget.value = "";
+            void handleImportAppDataFilePicked(file);
+          }}
+        />
+
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={() => void handleReloadApp()}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              ♻️
+            </span>
+            <span className="settings-label">{t("reloadApp")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={() => navigateTo({ route: "advancedPushDebug" })}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🧪
+            </span>
+            <span className="settings-label">Push / SW Debug (log)</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
       </div>
 
-      <div className="settings-row">
+      <div className="settings-section">
+        <h2 className="settings-section-title">{t("settingsSecurity")}</h2>
+
+        <button
+          type="button"
+          className={
+            armedSecurityAction === "copySeed"
+              ? "settings-row settings-link settings-sensitive-action is-armed"
+              : "settings-row settings-link settings-sensitive-action"
+          }
+          onClick={() => requestSecurityAction("copySeed", copySeed)}
+          disabled={!hasSeedMnemonic}
+          data-guide="copy-seed"
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              📋
+            </span>
+            <span className="settings-label">{t("copyKeys")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={
+            armedSecurityAction === "saveSeed"
+              ? "settings-row settings-link settings-sensitive-action is-armed"
+              : "settings-row settings-link settings-sensitive-action"
+          }
+          onClick={() => requestSecurityAction("saveSeed", handleSaveSeed)}
+          disabled={!hasSeedMnemonic}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🔐
+            </span>
+            <span className="settings-label">{t("saveKeysToPasswords")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={
+            armedSecurityAction === "pasteNostr"
+              ? "settings-row settings-link settings-sensitive-action is-armed"
+              : "settings-row settings-link settings-sensitive-action"
+          }
+          onClick={() =>
+            requestSecurityAction(
+              "pasteNostr",
+              requestPasteNostrKeys,
+              "nostrPasteArmedHint",
+            )
+          }
+          disabled={!hasCurrentNsec || !hasSeedMnemonic}
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🦤
+            </span>
+            <span className="settings-label">{t("pasteCustomNostrKeys")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className={
+            armedSecurityAction === "copyNostr"
+              ? "settings-row settings-link settings-sensitive-action is-armed"
+              : "settings-row settings-link settings-sensitive-action"
+          }
+          onClick={() => requestSecurityAction("copyNostr", copyNostrKeys)}
+          disabled={!hasCurrentNsec}
+          data-guide="copy-nostr-keys"
+        >
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              📋
+            </span>
+            <span className="settings-label">{t("copyNostrKeys")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
+        </button>
+
         <button
           type="button"
           className={
             logoutArmed
-              ? "btn-wide secondary danger-armed"
-              : "btn-wide secondary"
+              ? "settings-row settings-link settings-danger-link is-armed"
+              : "settings-row settings-link settings-danger-link"
           }
           onClick={requestLogout}
         >
-          {t("logout")}
+          <span className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              🚪
+            </span>
+            <span className="settings-label">{t("logout")}</span>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            &gt;
+          </span>
         </button>
       </div>
 
-      <div
-        className="muted"
-        style={{ marginTop: 14, textAlign: "center", fontSize: 12 }}
-      >
-        {t("appVersionLabel")}: {appVersionLabel}
+      <div className="settings-version">
+        <div className="muted">{appVersionLabel}</div>
       </div>
     </section>
   );

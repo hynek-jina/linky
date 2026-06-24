@@ -46,6 +46,7 @@ type NavigationAction =
   | { route: "profileClaimLightningAddress" }
   | { route: "profileEdit" }
   | { route: "settings" }
+  | { route: "settingsUnits" }
   | { route: "transactions" }
   | { route: "topup" }
   | { route: "topupNoAmount" }
@@ -59,6 +60,9 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "settings":
       window.location.assign("#settings");
+      break;
+    case "settingsUnits":
+      window.location.assign("#settings/units");
       break;
     case "advanced":
       window.location.assign("#advanced");

@@ -1313,9 +1313,12 @@ button.settings-link:hover {
 }
 
 .settings-chevron {
+  width: 14px;
+  flex: 0 0 14px;
   color: #94a3b8;
   font-weight: 800;
   margin-left: 10px;
+  text-align: right;
 }
 
 .relay-count {
@@ -1371,7 +1374,7 @@ button.settings-link:hover {
   align-items: center;
   gap: 10px;
   color: #e2e8f0;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .settings-icon {
@@ -1511,6 +1514,67 @@ button.settings-link:hover {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.settings-page {
+  padding-top: 4px;
+}
+
+.settings-section {
+  padding: 14px 0 6px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.settings-section:first-of-type {
+  padding-top: 0;
+}
+
+.settings-section:last-of-type {
+  border-bottom: 0;
+}
+
+.settings-section .settings-row:last-child {
+  margin-bottom: 0;
+}
+
+.settings-value {
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.settings-value-truncate {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-tail-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.settings-connection-state {
+  gap: 8px;
+}
+
+button.settings-danger-link.is-armed .settings-left,
+button.settings-sensitive-action.is-armed .settings-left {
+  color: var(--app-danger-button-bg);
+}
+
+button.settings-danger-link.is-armed,
+button.settings-sensitive-action.is-armed {
+  background: transparent !important;
+  color: inherit !important;
+}
+
+.settings-version {
+  padding: 20px 0 4px;
+  text-align: center;
+  font-size: 13px;
 }
 
 .qr {

@@ -4201,7 +4201,7 @@ export const useAppShellComposition = () => {
   const canAddContact =
     activeContactsOwnerContactCount < MAX_CONTACTS_PER_OWNER;
 
-  const { closeMenu, menuIsOpen, navigateToMainReturn, openMenu, toggleMenu } =
+  const { closeMenu, menuIsOpen, navigateToMainReturn, toggleMenu } =
     useMainMenuState({
       onClose: () => {
         setPendingDeleteId(null);
@@ -5119,7 +5119,6 @@ export const useAppShellComposition = () => {
     contacts,
     contactsOnboardingHasPaid,
     contactsOnboardingHasSentMessage,
-    openMenu,
     openNewContactPage,
     onScannedText: (rawValue: string) =>
       scannedTextHandlerRef.current(rawValue),
