@@ -6,7 +6,7 @@ import {
   formatShortNpub,
   getInitials,
 } from "../utils/formatting";
-import { NfcIcon } from "./NfcIcon";
+import { NfcIcon } from "./icons";
 import { ProfileQrButton } from "./ProfileQrButton";
 
 interface ProfileQrModalProps {

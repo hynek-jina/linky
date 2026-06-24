@@ -1,6 +1,6 @@
 import React from "react";
 import { BottomTabBar } from "../../components/BottomTabBar";
-import { ContactAddFabIcon } from "../../components/ContactAddFabIcon";
+import { ContactAddIcon } from "../../components/icons";
 import { ContactsChecklist } from "../../components/ContactsChecklist";
 import { ContactsPage } from "../../pages/ContactsPage";
 import { WalletPage } from "../../pages/WalletPage";
@@ -214,7 +214,7 @@ export const MainSwipeContent = (): React.ReactElement => {
           pointerEvents: mainSwipeProgress < 0.5 ? "auto" : "none",
         }}
       >
-        <ContactAddFabIcon />
+        <ContactAddIcon className="contacts-fab-svgIcon" />
       </button>
     </>
   );

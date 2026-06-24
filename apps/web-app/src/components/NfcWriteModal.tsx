@@ -1,5 +1,5 @@
 import React from "react";
-import { NfcIcon } from "./NfcIcon";
+import { NfcIcon } from "./icons";
 
 interface NfcWriteModalProps {
   kind: "profile" | "token";

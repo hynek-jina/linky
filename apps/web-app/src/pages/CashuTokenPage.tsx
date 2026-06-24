@@ -11,7 +11,7 @@ import {
 import { extractCashuTokenMeta } from "../app/lib/tokenText";
 import type { CashuTokenRowLike } from "../app/types/appTypes";
 import { parseCashuToken } from "../cashu";
-import { NfcIcon } from "../components/NfcIcon";
+import { NfcIcon } from "../components/icons";
 import { WalletBalance } from "../components/WalletBalance";
 import type { CashuTokenId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";

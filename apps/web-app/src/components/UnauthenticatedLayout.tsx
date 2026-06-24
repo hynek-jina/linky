@@ -15,6 +15,7 @@ import {
   PasswordManagerSaveForm,
   type PasswordManagerSaveFormHandle,
 } from "./PasswordManagerSaveForm";
+import { PasteIcon } from "./icons";
 
 type UnauthenticatedLayoutProps = {
   confirmPendingOnboardingProfile: () => Promise<void>;
@@ -293,31 +294,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
                 aria-label={t("onboardingReturnPasteButton")}
                 title={t("onboardingReturnPasteButton")}
               >
-                <svg
-                  aria-hidden="true"
-                  className="onboarding-return-pasteIcon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <rect
-                    x="5"
-                    y="4"
-                    width="11"
-                    height="13"
-                    rx="2.2"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                  <rect
-                    x="8"
-                    y="7"
-                    width="11"
-                    height="13"
-                    rx="2.2"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                </svg>
+                <PasteIcon className="onboarding-return-pasteIcon" />
               </button>
             </div>
           </div>

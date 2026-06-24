@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
-import { TokenAddFabIcon } from "../components/TokenAddFabIcon";
+import { TokenAddIcon } from "../components/icons";
 import type { CashuTokenId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 
@@ -212,7 +212,7 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
         aria-label={t("cashuAddToken")}
         title={t("cashuAddToken")}
       >
-        <TokenAddFabIcon />
+        <TokenAddIcon className="contacts-fab-svgIcon" />
       </button>
     </>
   );
