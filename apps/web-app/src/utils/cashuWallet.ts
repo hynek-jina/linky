@@ -22,12 +22,6 @@ interface CashuTokenMetadataLike {
   mint?: string;
 }
 
-type CashuMintConstructorArgs = ConstructorParameters<
-  typeof import("@cashu/cashu-ts").Mint
->;
-type CashuMintOptions = NonNullable<CashuMintConstructorArgs[1]>;
-type CashuMintRequest = NonNullable<CashuMintOptions["customRequest"]>;
-
 const isHexString = (value: string): boolean => {
   return /^[0-9a-f]+$/i.test(value);
 };
@@ -48,46 +42,6 @@ const buildWalletOptions = (
     options.bip39seed = args.bip39seed;
   }
   return options;
-};
-
-const createDirectCashuMintRequest = (): CashuMintRequest => {
-  const directRequest: CashuMintRequest = async (options) => {
-    const method = String(
-      options.method ?? (options.requestBody ? "POST" : "GET"),
-    ).toUpperCase();
-    const body = options.requestBody
-      ? JSON.stringify(options.requestBody)
-      : undefined;
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => {
-      controller.abort();
-    }, 12_000);
-
-    try {
-      const response = await fetch(options.endpoint, {
-        method,
-        cache: "no-store",
-        credentials: "omit",
-        headers: {
-          Accept: "application/json",
-          ...(body ? { "Content-Type": "application/json" } : {}),
-        },
-        mode: "cors",
-        ...(body ? { body } : {}),
-        signal: controller.signal,
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        throw new Error(text || `Mint HTTP ${response.status}`);
-      }
-
-      return text ? JSON.parse(text) : null;
-    } finally {
-      window.clearTimeout(timeoutId);
-    }
-  };
-
-  return directRequest;
 };
 
 export const isCashuKeysetVerificationError = (error: unknown): boolean => {
@@ -144,19 +98,18 @@ const createWalletInstance = (
   mintUrl: string,
   options: CashuWalletOptions,
 ): CashuWalletClass => {
-  return new Wallet(
-    new Mint(mintUrl, { customRequest: createDirectCashuMintRequest() }),
-    options,
-  );
+  // cashu-ts performs a direct CORS request by default. Keep its native
+  // request implementation here: v4 uses JSONInt for Amount values, honours
+  // caller abort signals and parses u64 responses safely. The old custom
+  // request used JSON.stringify, which turned Amount(1) into the string "1".
+  return new Wallet(new Mint(mintUrl), options);
 };
 
 const createWalletFromFallbackMintData = async (
   args: CreateLoadedCashuWalletArgs,
 ): Promise<CashuWalletClass> => {
   const options = buildWalletOptions(args);
-  const mint = new args.Mint(args.mintUrl, {
-    customRequest: createDirectCashuMintRequest(),
-  });
+  const mint = new args.Mint(args.mintUrl);
   const [mintInfo, keysetsResponse] = await Promise.all([
     mint.getInfo(),
     mint.getKeySets(),

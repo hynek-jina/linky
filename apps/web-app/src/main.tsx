@@ -647,7 +647,6 @@ window.addEventListener("unhandledrejection", (event) => {
   }
   if (isBenignFetchAbortError(event.reason)) {
     event.preventDefault();
-    console.warn("[linky] ignored aborted fetch", event.reason);
     return;
   }
   if (appHasMounted) {
@@ -665,7 +664,6 @@ window.addEventListener("error", (event) => {
   }
   if (isBenignFetchAbortError(error)) {
     event.preventDefault();
-    console.warn("[linky] ignored aborted fetch", error);
     return;
   }
   if (appHasMounted) {

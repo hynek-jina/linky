@@ -7,8 +7,11 @@ import type {
 } from "@cashu/cashu-ts";
 import {
   bumpCashuDeterministicCounter,
+  CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE,
   getCashuDeterministicCounter,
   getCashuDeterministicSeedFromStorage,
+  getCashuSwapCounterUsage,
+  getCashuSwapOutputCounters,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
 import { isCashuRecoverableOutputCollisionError } from "./utils/cashuErrors";
@@ -251,13 +254,20 @@ export const meltInvoiceWithTokensAtMint = async (args: {
 
       const swapOnce = async (counter: number | null) => {
         if (typeof counter === "number") {
+          const outputCounters = getCashuSwapOutputCounters(counter);
           return await wallet.send(
             amountToSend,
             spendableProofs,
             { includeFees: true },
             {
-              send: { type: "deterministic", counter },
-              keep: { type: "deterministic", counter: 0 },
+              send: {
+                type: "deterministic",
+                counter: outputCounters.send,
+              },
+              keep: {
+                type: "deterministic",
+                counter: outputCounters.keep,
+              },
             },
           );
         }
@@ -291,7 +301,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
                 mintUrl: mint,
                 unit: walletUnit,
                 keysetId,
-                used: 64,
+                used: CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE * 2,
               });
               counter = getCashuDeterministicCounter({
                 mintUrl: mint,
@@ -307,7 +317,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
             mintUrl: mint,
             unit: walletUnit,
             keysetId,
-            used: swapped.keep.length + swapped.send.length,
+            used: getCashuSwapCounterUsage(swapped.keep.length),
           });
         } else {
           swapped = await swapOnce(null);
