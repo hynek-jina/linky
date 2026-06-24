@@ -1,4 +1,5 @@
 import React from "react";
+import { Languages } from "lucide-react";
 import type {
   OnboardingStep,
   PendingOnboardingProfile,
@@ -96,7 +97,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
           <div className="settings-row">
             <div className="settings-left">
               <span className="settings-icon" aria-hidden="true">
-                🌐
+                <Languages size={18} />
               </span>
               <span className="settings-label">{t("language")}</span>
             </div>

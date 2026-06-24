@@ -1,5 +1,27 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Bell,
+  Bitcoin,
+  BrushCleaning,
+  ClipboardCopy,
+  Cloud,
+  Coins,
+  Copy,
+  Download,
+  FlaskConical,
+  KeyRound,
+  Landmark,
+  Languages,
+  LogOut,
+  MessageCircle,
+  RadioTower,
+  RefreshCw,
+  RotateCw,
+  ShieldCheck,
+  Upload,
+  Zap,
+} from "lucide-react";
+import {
   useAppShellActions,
   useAppShellCore,
 } from "../app/context/AppShellContexts";
@@ -285,7 +307,7 @@ export function AdvancedPage({
         <div className="settings-row">
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🌐
+              <Languages size={18} />
             </span>
             <span className="settings-label">{t("language")}</span>
           </div>
@@ -311,7 +333,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              ₿
+              <Bitcoin size={18} />
             </span>
             <span className="settings-label">{t("unit")}</span>
           </span>
@@ -327,7 +349,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              💬
+              <MessageCircle size={18} />
             </span>
             <span className="settings-label">{t("feedback")}</span>
           </span>
@@ -339,7 +361,7 @@ export function AdvancedPage({
         <div className="settings-row">
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🔔
+              <Bell size={18} />
             </span>
             <span className="settings-label">{t("notifications")}</span>
           </div>
@@ -364,7 +386,7 @@ export function AdvancedPage({
         <div className="settings-row">
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🥜
+              <Coins size={18} />
             </span>
             <span className="settings-label">{t("preferCashu")}</span>
           </div>
@@ -382,7 +404,7 @@ export function AdvancedPage({
         <div className="settings-row">
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🔄
+              <RefreshCw size={18} />
             </span>
             <span className="settings-label">{t("cashuAutoswap")}</span>
           </div>
@@ -406,7 +428,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              ⚡
+              <Zap size={18} />
             </span>
             <span className="settings-label">
               {t("lightningInvoiceAutoPayLimit")}
@@ -433,7 +455,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              📡
+              <RadioTower size={18} />
             </span>
             <span className="settings-label">Nostr</span>
           </span>
@@ -457,7 +479,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              ☁️
+              <Cloud size={18} />
             </span>
             <span className="settings-label">Evolu</span>
           </span>
@@ -481,7 +503,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🏦
+              <Landmark size={18} />
             </span>
             <span className="settings-label">Mint</span>
           </span>
@@ -504,7 +526,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🪙
+              <Coins size={18} />
             </span>
             <span className="settings-label">{t("tokens")}</span>
           </span>
@@ -520,7 +542,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              📤
+              <Upload size={18} />
             </span>
             <span className="settings-label">{t("exportData")}</span>
           </span>
@@ -536,7 +558,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              📥
+              <Download size={18} />
             </span>
             <span className="settings-label">{t("importData")}</span>
           </span>
@@ -553,7 +575,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🧹
+              <BrushCleaning size={18} />
             </span>
             <span className="settings-label">{t("dedupeContacts")}</span>
           </span>
@@ -581,7 +603,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              ♻️
+              <RotateCw size={18} />
             </span>
             <span className="settings-label">{t("reloadApp")}</span>
           </span>
@@ -597,7 +619,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🧪
+              <FlaskConical size={18} />
             </span>
             <span className="settings-label">Push / SW Debug (log)</span>
           </span>
@@ -623,7 +645,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              📋
+              <ClipboardCopy size={18} />
             </span>
             <span className="settings-label">{t("copyKeys")}</span>
           </span>
@@ -644,7 +666,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🔐
+              <ShieldCheck size={18} />
             </span>
             <span className="settings-label">{t("saveKeysToPasswords")}</span>
           </span>
@@ -671,7 +693,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🦤
+              <KeyRound size={18} />
             </span>
             <span className="settings-label">{t("pasteCustomNostrKeys")}</span>
           </span>
@@ -693,7 +715,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              📋
+              <Copy size={18} />
             </span>
             <span className="settings-label">{t("copyNostrKeys")}</span>
           </span>
@@ -713,7 +735,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🚪
+              <LogOut size={18} />
             </span>
             <span className="settings-label">{t("logout")}</span>
           </span>

@@ -1379,8 +1379,17 @@ button.settings-link:hover {
 
 .settings-icon {
   width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
   display: inline-flex;
+  align-items: center;
   justify-content: center;
+  color: #94a3b8;
+}
+
+.settings-icon svg {
+  display: block;
+  stroke-width: 2;
 }
 
 .settings-label {

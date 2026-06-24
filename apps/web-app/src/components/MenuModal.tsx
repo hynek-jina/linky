@@ -1,4 +1,5 @@
 import React from "react";
+import { Bitcoin, Languages, Settings } from "lucide-react";
 import { useNavigation } from "../hooks/useRouting";
 import type { Lang } from "../i18n";
 import { MessageIcon } from "./icons";
@@ -36,7 +37,7 @@ export function MenuModal({
         <div className="settings-row">
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              🌐
+              <Languages size={18} />
             </span>
             <span className="settings-label">{t("language")}</span>
           </div>
@@ -65,7 +66,7 @@ export function MenuModal({
         >
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              ₿
+              <Bitcoin size={18} />
             </span>
             <span className="settings-label">{t("unit")}</span>
           </div>
@@ -89,7 +90,7 @@ export function MenuModal({
         >
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              ⚙️
+              <Settings size={18} />
             </span>
             <span className="settings-label">{t("advanced")}</span>
           </div>
