@@ -43,6 +43,25 @@ const CASHU_COUNTER_STORAGE_PREFIX = "linky.cashu.detCounter.v1";
 const CASHU_RESTORE_CURSOR_STORAGE_PREFIX = "linky.cashu.restoreCursor.v1";
 const CASHU_COUNTER_LOCK_PREFIX = "linky.cashu.detCounterLock.v1";
 
+// A Cashu amount is split into binary denominations. Even the full Bitcoin
+// supply needs fewer than 64 outputs, so two adjacent blocks safely keep the
+// send and change derivations disjoint during one swap.
+export const CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE = 64;
+
+export const getCashuSwapOutputCounters = (
+  counter: number,
+): { keep: number; send: number } => ({
+  send: counter,
+  keep: counter + CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE,
+});
+
+export const getCashuSwapCounterUsage = (keepProofCount: number): number => {
+  const safeKeepProofCount = Number.isFinite(keepProofCount)
+    ? Math.max(0, Math.floor(keepProofCount))
+    : 0;
+  return CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE + safeKeepProofCount;
+};
+
 // All localStorage prefixes whose state is tied to a specific cashu BIP-85
 // mnemonic. If the mnemonic changes, every entry under these prefixes refers
 // to a derivation tree the new mnemonic cannot reproduce — counters become

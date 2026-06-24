@@ -1,8 +1,11 @@
 import type { Proof, ProofState, SendResponse } from "@cashu/cashu-ts";
 import {
   bumpCashuDeterministicCounter,
+  CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE,
   getCashuDeterministicCounter,
   getCashuDeterministicSeedFromStorage,
+  getCashuSwapCounterUsage,
+  getCashuSwapOutputCounters,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
 import { isCashuRecoverableOutputCollisionError } from "./utils/cashuErrors";
@@ -135,11 +138,19 @@ export const createSendTokenWithTokensAtMint = async (args: {
               keysetId,
             });
 
-            const swapOnce = async (counter: number) =>
-              await wallet.send(sendAmount, spendableProofs, undefined, {
-                send: { type: "deterministic", counter },
-                keep: { type: "deterministic", counter: 0 },
+            const swapOnce = async (counter: number) => {
+              const outputCounters = getCashuSwapOutputCounters(counter);
+              return await wallet.send(sendAmount, spendableProofs, undefined, {
+                send: {
+                  type: "deterministic",
+                  counter: outputCounters.send,
+                },
+                keep: {
+                  type: "deterministic",
+                  counter: outputCounters.keep,
+                },
               });
+            };
 
             let counter = counter0;
             let swapped: SendResponse | null = null;
@@ -156,7 +167,7 @@ export const createSendTokenWithTokensAtMint = async (args: {
                   mintUrl: mint,
                   unit: walletUnit,
                   keysetId,
-                  used: 64,
+                  used: CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE * 2,
                 });
                 counter = getCashuDeterministicCounter({
                   mintUrl: mint,
@@ -169,12 +180,11 @@ export const createSendTokenWithTokensAtMint = async (args: {
             if (!swapped) throw lastError ?? new Error("swap failed");
 
             const keepLen = swapped.keep.length;
-            const sendLen = swapped.send.length;
             bumpCashuDeterministicCounter({
               mintUrl: mint,
               unit: walletUnit,
               keysetId,
-              used: keepLen + sendLen,
+              used: getCashuSwapCounterUsage(keepLen),
             });
 
             return swapped;
