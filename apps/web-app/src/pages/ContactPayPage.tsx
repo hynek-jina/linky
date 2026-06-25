@@ -1,5 +1,7 @@
 import type { FC } from "react";
+import { Bean, Zap } from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { RequestIcon } from "../components/icons";
 import { PaymentAmountPanel } from "../components/PaymentAmountPanel";
 import type { ContactId } from "../evolu";
 import { getInitials } from "../utils/formatting";
@@ -73,7 +75,13 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
       : canUseCashu
         ? "cashu"
         : "lightning";
-  const icon = isRequestFlow ? "←" : method === "lightning" ? "⚡" : "🥜";
+  const methodIcon = isRequestFlow ? (
+    <RequestIcon size={18} />
+  ) : method === "lightning" ? (
+    <Zap size={18} />
+  ) : (
+    <Bean size={18} />
+  );
 
   const amountSat = Number.parseInt(payAmount.trim(), 10);
   const validAmount =
@@ -144,7 +152,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
                       : undefined
                   }
                 >
-                  {icon}
+                  {methodIcon}
                 </button>
               </div>
             )}
@@ -194,7 +202,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
       sendGuideId={isRequestFlow ? "request-send" : "pay-send"}
       stepGuideId="pay-step3"
       submitDisabled={invalid}
-      submitIcon={isRequestFlow ? "←" : undefined}
+      submitIcon={isRequestFlow ? <RequestIcon size={18} /> : undefined}
       submitLabel={isRequestFlow ? t("requestPaymentSend") : undefined}
       submitTitle={
         !isRequestFlow &&

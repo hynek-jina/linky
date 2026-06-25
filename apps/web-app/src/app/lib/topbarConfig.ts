@@ -12,6 +12,7 @@ interface BuildTopbarArgs {
 }
 
 interface BuildTopbarRightArgs {
+  chatEditContactId: ContactId | null;
   isProfileEditing: boolean;
   route: Route;
   t: (key: string) => string;
@@ -149,7 +150,10 @@ export const buildTopbar = ({
       label: t("close"),
       onClick: () =>
         navigateTo({
-          route: route.kind === "cashuTokens" ? "wallet" : "cashuTokens",
+          route:
+            route.kind === "cashuTokens" || route.kind === "cashuTokenEmit"
+              ? "wallet"
+              : "cashuTokens",
         }),
     };
   }
@@ -292,6 +296,7 @@ export const buildTopbar = ({
 };
 
 export const buildTopbarRight = ({
+  chatEditContactId,
   isProfileEditing,
   route,
   t,
@@ -315,9 +320,27 @@ export const buildTopbarRight = ({
 
   if (route.kind === "profile" && !isProfileEditing) {
     return {
-      icon: "✎",
+      icon: "edit",
       label: t("edit"),
       onClick: () => navigateTo({ route: "profileEdit" }),
+    };
+  }
+
+  if (route.kind === "chat") {
+    if (!chatEditContactId) return null;
+    return {
+      icon: "edit",
+      label: t("edit"),
+      onClick: () =>
+        navigateTo({ route: "contactEdit", id: chatEditContactId }),
+    };
+  }
+
+  if (route.kind === "contact") {
+    return {
+      icon: "edit",
+      label: t("editContact"),
+      onClick: () => navigateTo({ route: "contactEdit", id: route.id }),
     };
   }
 
@@ -328,12 +351,18 @@ export const buildTopbarRight = ({
     route.kind === "advancedAutoPayLimit" ||
     route.kind === "advancedPushDebug" ||
     route.kind === "mints" ||
+    route.kind === "topup" ||
+    route.kind === "topupNoAmount" ||
+    route.kind === "topupInvoice" ||
+    route.kind === "manualPay" ||
     route.kind === "cashuTokens" ||
+    route.kind === "cashuTokenEmit" ||
     route.kind === "cashuToken" ||
     route.kind === "transactions" ||
     route.kind === "evoluCurrentData" ||
     route.kind === "evoluHistoryData" ||
     route.kind === "contactEdit" ||
+    route.kind === "profileEdit" ||
     route.kind === "profileClaimLightningAddress"
   ) {
     return null;

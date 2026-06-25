@@ -2269,6 +2269,12 @@ button.settings-sensitive-action.is-armed {
   padding-right: 56px;
   font-size: 16px;
   line-height: 1.45;
+  background: rgba(30, 41, 59, 0.82);
+  border: none;
+}
+
+.chat-compose textarea:focus {
+  background: rgba(30, 41, 59, 0.94);
 }
 
 .chat-pay-button {
@@ -2634,6 +2640,25 @@ button.ghost {
   border: none;
   color: #cbd5e1;
   padding-inline: 14px;
+}
+
+button.icon-only-ghost,
+button.icon-only-ghost:hover,
+button.icon-only-ghost:focus,
+button.icon-only-ghost:active,
+button.icon-only-ghost:disabled {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  box-shadow: none;
+  transform: none;
 }
 
 .mint-choice-list,
@@ -3423,6 +3448,15 @@ button.icon {
   margin-top: 0;
 }
 
+.manual-pay-form input {
+  background: rgba(30, 41, 59, 0.82);
+  border: none;
+}
+
+.manual-pay-form input:focus {
+  background: rgba(30, 41, 59, 0.94);
+}
+
 .manual-pay-hint {
   margin: 0;
   font-size: 13px;
@@ -3978,22 +4012,6 @@ button.icon {
   gap: 8px;
 }
 
-.contact-detail-edit {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  font-size: 15px;
-  line-height: 1;
-}
-
 .contact-detail-copy {
   max-width: 100%;
   font: inherit;
@@ -4381,10 +4399,6 @@ button.tag-button {
 
 .modal-header .modal-title {
   margin-bottom: 0;
-}
-
-.profile-qr-sheet {
-  max-width: 520px;
 }
 
 .modal-title {

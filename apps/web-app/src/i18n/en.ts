@@ -14,6 +14,7 @@ export const en = {
   paymentsHistory: "Payment history",
   transactionsTitle: "Transactions",
   feedback: "Feedback",
+  donate: "Donate",
   data: "Data",
   exportData: "Export data",
   importData: "Import data",

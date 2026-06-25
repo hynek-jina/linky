@@ -1,5 +1,5 @@
 import React from "react";
-import { Copy } from "lucide-react";
+import { BadgePlus, Copy, Radio, RefreshCcw, Save } from "lucide-react";
 import { ProfileAvatarEditor } from "../components/ProfileAvatarEditor";
 import { ProfileQrButton } from "../components/ProfileQrButton";
 import type { AvatarEditorControlId } from "../derivedProfile";
@@ -21,6 +21,7 @@ interface DerivedProfile {
 }
 
 interface ProfilePageProps {
+  canWriteToNfc: boolean;
   copyText: (text: string) => Promise<void>;
   currentNpub: string | null;
   cycleProfileAvatarControl: (controlId: AvatarEditorControlId) => void;
@@ -55,9 +56,11 @@ interface ProfilePageProps {
   toggleProfileStatusCurrency: (
     currency: ProfileStatusCurrency,
   ) => Promise<void>;
+  writeCurrentNpubToNfc: () => Promise<void>;
 }
 
 export function ProfilePage({
+  canWriteToNfc,
   copyText,
   currentNpub,
   cycleProfileAvatarControl,
@@ -88,6 +91,7 @@ export function ProfilePage({
   setProfileEditStatus,
   t,
   toggleProfileStatusCurrency,
+  writeCurrentNpubToNfc,
 }: ProfilePageProps): React.ReactElement {
   const navigateTo = useNavigation();
   const profileStatusText = parseProfileGeneralStatusText(profileStatus);
@@ -143,28 +147,28 @@ export function ProfilePage({
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     type="button"
-                    className="secondary"
+                    className="icon-only-ghost"
                     onClick={() =>
                       navigateTo({ route: "profileClaimLightningAddress" })
                     }
-                    style={{ paddingInline: 10 }}
+                    title={t("claimOwnLightningAddressAction")}
+                    aria-label={t("claimOwnLightningAddressAction")}
                   >
-                    {t("claimOwnLightningAddressAction")}
+                    <BadgePlus size={18} aria-hidden="true" />
                   </button>
                   {!hasOwnedLightningAddress &&
                   derivedProfile &&
                   profileEditLnAddress.trim() !== derivedProfile.lnAddress ? (
                     <button
                       type="button"
-                      className="secondary"
+                      className="icon-only-ghost"
                       onClick={() =>
                         setProfileEditLnAddress(derivedProfile.lnAddress)
                       }
                       title={t("restore")}
                       aria-label={t("restore")}
-                      style={{ paddingInline: 10, minWidth: 40 }}
                     >
-                      ↺
+                      <RefreshCcw size={18} aria-hidden="true" />
                     </button>
                   ) : null}
                 </div>
@@ -198,7 +202,12 @@ export function ProfilePage({
               <div className="panel-header" style={{ marginTop: 14 }}>
                 {profileEditsSavable ? (
                   <button onClick={() => void saveProfileEdits()}>
-                    {t("saveChanges")}
+                    <span className="btn-label-with-icon">
+                      <span className="btn-label-icon" aria-hidden="true">
+                        <Save size={18} />
+                      </span>
+                      <span>{t("saveChanges")}</span>
+                    </span>
                   </button>
                 ) : null}
               </div>
@@ -240,6 +249,19 @@ export function ProfilePage({
                 ) : (
                   <p className="muted">{currentNpub}</p>
                 )}
+
+                {canWriteToNfc ? (
+                  <button
+                    type="button"
+                    className="icon-only-ghost"
+                    onClick={() => void writeCurrentNpubToNfc()}
+                    aria-label={t("uploadProfileToNfc")}
+                    title={t("uploadProfileToNfc")}
+                    disabled={!currentNpub}
+                  >
+                    <Radio size={18} aria-hidden="true" />
+                  </button>
+                ) : null}
 
                 {effectiveMyLightningAddress ? (
                   <button

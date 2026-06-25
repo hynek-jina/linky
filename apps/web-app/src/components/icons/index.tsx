@@ -6,11 +6,15 @@ import {
   Compass,
   Copy as LucideCopy,
   EllipsisVertical,
+  HandCoins,
+  HeartHandshake,
   Images,
   Keyboard as LucideKeyboard,
   MessageCircle,
+  MessageCircleMore,
   Pencil,
   Radio,
+  ReceiptText,
   Reply,
   Send as LucideSend,
   Share2,
@@ -63,6 +67,26 @@ export function AddToHomeIcon({ size = 24, ...props }: IconProps) {
 
 export function MessageIcon({ size = 24, ...props }: IconProps) {
   return <MessageCircle size={size} {...props} />;
+}
+
+export function MessagesIcon({ size = 24, ...props }: IconProps) {
+  return <MessageCircleMore size={size} {...props} />;
+}
+
+export function FeedbackIcon({ size = 24, ...props }: IconProps) {
+  return <MessageCircle size={size} {...props} />;
+}
+
+export function PayIcon({ size = 24, ...props }: IconProps) {
+  return <HandCoins size={size} {...props} />;
+}
+
+export function DonateIcon({ size = 24, ...props }: IconProps) {
+  return <HeartHandshake size={size} {...props} />;
+}
+
+export function RequestIcon({ size = 24, ...props }: IconProps) {
+  return <ReceiptText size={size} {...props} />;
 }
 
 export function ReplyIcon({ size = 24, ...props }: IconProps) {

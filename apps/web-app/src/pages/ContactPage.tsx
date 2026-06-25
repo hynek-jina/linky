@@ -1,6 +1,10 @@
 import { useEffect, useState, type FC } from "react";
-import { Pencil } from "lucide-react";
-import { MessageIcon } from "../components/icons";
+import {
+  DonateIcon,
+  FeedbackIcon,
+  MessagesIcon,
+  PayIcon,
+} from "../components/icons";
 import type { ContactId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import {
@@ -153,8 +157,8 @@ export const ContactPage: FC<ContactPageProps> = ({
     hasLightningAddress || (payWithCashuEnabled && canMessage);
   const canStartPay = cashuBalance > 0 && canPayThisContact;
   const isFeedbackContact = npub === feedbackContactNpub;
-  const payLabel = isFeedbackContact ? "Donate" : t("pay");
-  const messageLabel = isFeedbackContact ? "Feedback" : t("sendMessage");
+  const payLabel = isFeedbackContact ? t("donate") : t("pay");
+  const messageLabel = isFeedbackContact ? t("feedback") : t("sendMessage");
   const contactStatus = formatDisplayGeneralStatus({
     status: statusText,
     providesLabel: t("contactStatusProvides"),
@@ -186,16 +190,6 @@ export const ContactPage: FC<ContactPageProps> = ({
               {avatarContent}
             </div>
           )}
-
-          <button
-            type="button"
-            className="secondary contact-detail-edit"
-            onClick={() => navigateTo({ route: "contactEdit", id: contactId })}
-            aria-label={t("editContact")}
-            title={t("editContact")}
-          >
-            <Pencil size={18} aria-hidden="true" />
-          </button>
         </div>
 
         <div className="contact-detail-copy-block">
@@ -239,7 +233,13 @@ export const ContactPage: FC<ContactPageProps> = ({
 
         {canPayThisContact && (
           <ContactActionButton
-            icon="₿"
+            icon={
+              isFeedbackContact ? (
+                <DonateIcon size={18} />
+              ) : (
+                <PayIcon size={18} />
+              )
+            }
             onClick={() => openContactPay(contactId)}
             disabled={cashuIsBusy || !canStartPay}
             title={!canStartPay ? t("payInsufficient") : undefined}
@@ -252,7 +252,13 @@ export const ContactPage: FC<ContactPageProps> = ({
         {canMessage && (
           <ContactActionButton
             className="btn-wide secondary"
-            icon={<MessageIcon size={18} />}
+            icon={
+              isFeedbackContact ? (
+                <FeedbackIcon size={18} />
+              ) : (
+                <MessagesIcon size={18} />
+              )
+            }
             onClick={() => navigateTo({ route: "chat", id: contactId })}
             dataGuide="contact-message"
           >

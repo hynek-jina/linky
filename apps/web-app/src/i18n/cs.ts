@@ -14,6 +14,7 @@ export const cs = {
   paymentsHistory: "Historie plateb",
   transactionsTitle: "Transakce",
   feedback: "Zpětná vazba",
+  donate: "Přispět",
   data: "Data",
   exportData: "Export dat",
   importData: "Import dat",

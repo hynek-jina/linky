@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import { Archive, RefreshCcw, Save } from "lucide-react";
 import type { ContactId } from "../evolu";
 
 interface Contact {
@@ -72,13 +73,12 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
               String(form.name ?? "").trim() && (
                 <button
                   type="button"
-                  className="secondary"
+                  className="icon-only-ghost"
                   onClick={() => void resetEditedContactFieldFromNostr("name")}
                   title={t("restore")}
                   aria-label={t("restore")}
-                  style={{ paddingInline: 10, minWidth: 40 }}
                 >
-                  ↺
+                  <RefreshCcw size={18} aria-hidden="true" />
                 </button>
               )}
           </div>
@@ -107,15 +107,14 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
               String(form.lnAddress ?? "").trim() && (
                 <button
                   type="button"
-                  className="secondary"
+                  className="icon-only-ghost"
                   onClick={() =>
                     void resetEditedContactFieldFromNostr("lnAddress")
                   }
                   title={t("restore")}
                   aria-label={t("restore")}
-                  style={{ paddingInline: 10, minWidth: 40 }}
                 >
-                  ↺
+                  <RefreshCcw size={18} aria-hidden="true" />
                 </button>
               )}
           </div>
@@ -144,7 +143,14 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
             {editingId ? (
               contactEditsSavable && (
                 <button onClick={handleSaveContact} disabled={isSavingContact}>
-                  {isSavingContact ? t("saving") : t("saveChanges")}
+                  <span className="btn-label-with-icon">
+                    <span className="btn-label-icon" aria-hidden="true">
+                      <Save size={18} />
+                    </span>
+                    <span>
+                      {isSavingContact ? t("saving") : t("saveChanges")}
+                    </span>
+                  </span>
                 </button>
               )
             ) : (
@@ -190,7 +196,12 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
                     : t("archiveContact")
                 }
               >
-                {t("archiveContact")}
+                <span className="btn-label-with-icon">
+                  <span className="btn-label-icon" aria-hidden="true">
+                    <Archive size={18} />
+                  </span>
+                  <span>{t("archiveContact")}</span>
+                </span>
               </button>
             )}
           </div>

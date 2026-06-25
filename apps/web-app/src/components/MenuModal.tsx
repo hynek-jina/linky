@@ -2,7 +2,7 @@ import React from "react";
 import { Bitcoin, Languages, Settings } from "lucide-react";
 import { useNavigation } from "../hooks/useRouting";
 import type { Lang } from "../i18n";
-import { MessageIcon } from "./icons";
+import { FeedbackIcon } from "./icons";
 
 interface MenuModalProps {
   closeMenu: () => void;
@@ -113,7 +113,7 @@ export function MenuModal({
         >
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              <MessageIcon size={18} />
+              <FeedbackIcon size={18} />
             </span>
             <span className="settings-label">{t("feedback")}</span>
           </div>

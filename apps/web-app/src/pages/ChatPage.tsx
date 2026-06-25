@@ -19,7 +19,12 @@ import {
   ChatMessage,
   type NpubMessageContactInfo,
 } from "../components/ChatMessage";
-import { SendIcon } from "../components/icons";
+import {
+  DonateIcon,
+  PayIcon,
+  RequestIcon,
+  SendIcon,
+} from "../components/icons";
 import { ReplyPreview } from "../components/ReplyPreview";
 import { formatChatDayLabel } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
@@ -620,7 +625,7 @@ export const ChatPage: FC<ChatPageProps> = ({
               >
                 <span className="btn-label-with-icon">
                   <span className="btn-label-icon" aria-hidden="true">
-                    ←
+                    <RequestIcon size={18} />
                   </span>
                   <span>{t("requestPayment")}</span>
                 </span>
@@ -635,9 +640,13 @@ export const ChatPage: FC<ChatPageProps> = ({
             >
               <span className="btn-label-with-icon">
                 <span className="btn-label-icon" aria-hidden="true">
-                  ₿
+                  {isFeedbackContact ? (
+                    <DonateIcon size={18} />
+                  ) : (
+                    <PayIcon size={18} />
+                  )}
                 </span>
-                <span>{isFeedbackContact ? "Donate" : t("pay")}</span>
+                <span>{isFeedbackContact ? t("donate") : t("pay")}</span>
               </span>
             </button>
           </div>

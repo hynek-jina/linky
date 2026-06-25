@@ -12,7 +12,6 @@ import {
   Landmark,
   Languages,
   LogOut,
-  MessageCircle,
   RadioTower,
   RefreshCw,
   RotateCw,
@@ -29,6 +28,7 @@ import {
   PasswordManagerSaveForm,
   type PasswordManagerSaveFormHandle,
 } from "../components/PasswordManagerSaveForm";
+import { FeedbackIcon } from "../components/icons";
 import { useNavigation } from "../hooks/useRouting";
 import { getNativeNotificationPermissionState } from "../platform/nativeBridge";
 import type { PasswordManagerSaveResult } from "../platform/passwordManager";
@@ -349,7 +349,7 @@ export function AdvancedPage({
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
-              <MessageCircle size={18} />
+              <FeedbackIcon size={18} />
             </span>
             <span className="settings-label">{t("feedback")}</span>
           </span>
