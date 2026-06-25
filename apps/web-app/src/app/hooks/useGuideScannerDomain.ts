@@ -16,7 +16,6 @@ interface UseGuideScannerDomainParams {
   contacts: readonly ContactRowLike[];
   contactsOnboardingHasPaid: boolean;
   contactsOnboardingHasSentMessage: boolean;
-  openMenu: () => void;
   openNewContactPage: () => void;
   onScannedText: (rawValue: string) => Promise<void>;
   pushToast: (message: string) => void;
@@ -54,7 +53,6 @@ export const useGuideScannerDomain = ({
   contacts,
   contactsOnboardingHasPaid,
   contactsOnboardingHasSentMessage,
-  openMenu,
   openNewContactPage,
   onScannedText,
   pushToast,
@@ -66,7 +64,6 @@ export const useGuideScannerDomain = ({
     contacts,
     contactsOnboardingHasPaid,
     contactsOnboardingHasSentMessage,
-    openMenu,
     openNewContactPage,
     route,
   });

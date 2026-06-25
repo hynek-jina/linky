@@ -1642,7 +1642,6 @@ export const useAppShellComposition = () => {
     }
   }, [nostrPictureByNpub]);
 
-  const [profileQrIsOpen, setProfileQrIsOpen] = useState(false);
   const [
     pendingLightningInvoiceConfirmation,
     setPendingLightningInvoiceConfirmation,
@@ -3561,7 +3560,6 @@ export const useAppShellComposition = () => {
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
     npubCashInfoLoadedForNpubRef,
-    profileQrIsOpen,
     routeKind: route.kind,
     setDefaultMintUrl,
     setDefaultMintUrlDraft,
@@ -3574,14 +3572,10 @@ export const useAppShellComposition = () => {
       return;
     }
 
-    if (profileQrIsOpen) {
-      setProfileQrIsOpen(false);
-    }
-
     if (!isProfileEditing) {
       toggleProfileEditing();
     }
-  }, [isProfileEditing, profileQrIsOpen, route.kind, toggleProfileEditing]);
+  }, [isProfileEditing, route.kind, toggleProfileEditing]);
 
   // Intentionally no automatic publishing of kind-0 profile metadata.
   // We only publish profile changes when the user does so explicitly.
@@ -4201,7 +4195,7 @@ export const useAppShellComposition = () => {
   const canAddContact =
     activeContactsOwnerContactCount < MAX_CONTACTS_PER_OWNER;
 
-  const { closeMenu, menuIsOpen, navigateToMainReturn, openMenu, toggleMenu } =
+  const { closeMenu, menuIsOpen, navigateToMainReturn, toggleMenu } =
     useMainMenuState({
       onClose: () => {
         setPendingDeleteId(null);
@@ -5119,7 +5113,6 @@ export const useAppShellComposition = () => {
     contacts,
     contactsOnboardingHasPaid,
     contactsOnboardingHasSentMessage,
-    openMenu,
     openNewContactPage,
     onScannedText: (rawValue: string) =>
       scannedTextHandlerRef.current(rawValue),
@@ -7976,6 +7969,10 @@ export const useAppShellComposition = () => {
   });
 
   const topbarRight = buildTopbarRight({
+    chatEditContactId:
+      route.kind === "chat" && !selectedChatContact?.isUnknownContact
+        ? (selectedContact?.id ?? null)
+        : null,
     isProfileEditing,
     route,
     t,
@@ -8038,12 +8035,10 @@ export const useAppShellComposition = () => {
   });
 
   const openProfileQr = React.useCallback(() => {
-    setProfileQrIsOpen(true);
+    navigateTo({ route: "profile" });
   }, []);
 
-  const closeProfileQr = React.useCallback(() => {
-    setProfileQrIsOpen(false);
-  }, []);
+  const closeProfileQr = React.useCallback(() => {}, []);
 
   const handleScannedText = useScannedTextHandler<(typeof contacts)[number]>({
     appOwnerId: contactsOwnerId,
@@ -8392,6 +8387,7 @@ export const useAppShellComposition = () => {
       chatMessagesRef,
       chatOwnPubkeyHex,
       chatSendIsBusy,
+      canWriteNfc,
       contactEditsSavable,
       contactPaymentIntent,
       contactPayMethod,
@@ -8482,6 +8478,7 @@ export const useAppShellComposition = () => {
       setProfileEditStatus,
       t,
       toggleProfileStatusCurrency,
+      writeCurrentNpubToNfc,
     },
   });
 
@@ -8713,7 +8710,6 @@ export const useAppShellComposition = () => {
     profilePhotoInputRef,
     selectedProfileStatusCurrencies,
     profileSelectedPictureKind,
-    profileQrIsOpen,
     route,
     scanAllowsManualContact,
     scanEntryPoint,

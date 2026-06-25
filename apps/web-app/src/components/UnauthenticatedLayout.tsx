@@ -1,4 +1,5 @@
 import React from "react";
+import { Languages, Settings } from "lucide-react";
 import type {
   OnboardingStep,
   PendingOnboardingProfile,
@@ -15,6 +16,7 @@ import {
   PasswordManagerSaveForm,
   type PasswordManagerSaveFormHandle,
 } from "./PasswordManagerSaveForm";
+import { PasteIcon } from "./icons";
 
 type UnauthenticatedLayoutProps = {
   confirmPendingOnboardingProfile: () => Promise<void>;
@@ -95,7 +97,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
           <div className="settings-row">
             <div className="settings-left">
               <span className="settings-icon" aria-hidden="true">
-                🌐
+                <Languages size={18} />
               </span>
               <span className="settings-label">{t("language")}</span>
             </div>
@@ -223,7 +225,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             aria-label={t("menu")}
             title={t("menu")}
           >
-            <span aria-hidden="true">☰</span>
+            <Settings size={20} aria-hidden="true" />
           </button>
         </header>
 
@@ -293,31 +295,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
                 aria-label={t("onboardingReturnPasteButton")}
                 title={t("onboardingReturnPasteButton")}
               >
-                <svg
-                  aria-hidden="true"
-                  className="onboarding-return-pasteIcon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <rect
-                    x="5"
-                    y="4"
-                    width="11"
-                    height="13"
-                    rx="2.2"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                  <rect
-                    x="8"
-                    y="7"
-                    width="11"
-                    height="13"
-                    rx="2.2"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                </svg>
+                <PasteIcon className="onboarding-return-pasteIcon" />
               </button>
             </div>
           </div>
@@ -415,7 +393,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             aria-label={t("menu")}
             title={t("menu")}
           >
-            <span aria-hidden="true">☰</span>
+            <Settings size={20} aria-hidden="true" />
           </button>
         </header>
 
@@ -571,7 +549,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
               title={t("menu")}
               disabled={onboardingIsBusy}
             >
-              <span aria-hidden="true">☰</span>
+              <Settings size={20} aria-hidden="true" />
             </button>
           </header>
 

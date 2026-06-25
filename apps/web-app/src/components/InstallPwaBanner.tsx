@@ -11,6 +11,7 @@ import {
   INSTALL_PWA_FIRST_SHOW_DELAY_MS,
 } from "../utils/constants";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../utils/storage";
+import { AddToHomeIcon, BrowserMenuIcon, SafariIcon, ShareIcon } from "./icons";
 
 interface InstallPwaBannerProps {
   t: (key: string) => string;
@@ -132,80 +133,6 @@ const getInstallAppDomain = (): string => {
   return window.location.hostname || "app.linky.fit";
 };
 
-const InstallBrowserMenuIcon: React.FC = () => (
-  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <circle cx="12" cy="5" r="1.75" fill="currentColor" />
-    <circle cx="12" cy="12" r="1.75" fill="currentColor" />
-    <circle cx="12" cy="19" r="1.75" fill="currentColor" />
-  </svg>
-);
-
-const InstallIosShareIcon: React.FC = () => (
-  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="M12 3.5v10"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M8.5 7 12 3.5 15.5 7"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M6 10.5v8a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5v-8"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const InstallIosSafariIcon: React.FC = () => (
-  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.9" />
-    <path
-      d="M14.8 9.2 10.2 13.8"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-    />
-    <path
-      d="m14.8 9.2-1.2 4-3.4.6.6-3.4 4-1.2Z"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const InstallAddToHomeIcon: React.FC = () => (
-  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path
-      d="M7 4.5h10A2.5 2.5 0 0 1 19.5 7v10a2.5 2.5 0 0 1-2.5 2.5H7A2.5 2.5 0 0 1 4.5 17V7A2.5 2.5 0 0 1 7 4.5Z"
-      stroke="currentColor"
-      strokeWidth="1.9"
-    />
-    <path
-      d="M12 8.5v7"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-    />
-    <path
-      d="M8.5 12h7"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
 export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
   const [visible, setVisible] = React.useState(false);
   const [prompting, setPrompting] = React.useState(false);
@@ -315,35 +242,35 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ t }) => {
     ? isSafariOnIos
       ? [
           {
-            icon: <InstallIosShareIcon />,
+            icon: <ShareIcon />,
             text: t("installPwaStepIosShare"),
           },
           {
-            icon: <InstallAddToHomeIcon />,
+            icon: <AddToHomeIcon />,
             text: t("installPwaStepIosAdd"),
           },
         ]
       : [
           {
-            icon: <InstallIosSafariIcon />,
+            icon: <SafariIcon />,
             text: t("installPwaStepIosOpenSafari"),
           },
           {
-            icon: <InstallIosShareIcon />,
+            icon: <ShareIcon />,
             text: t("installPwaStepIosShare"),
           },
           {
-            icon: <InstallAddToHomeIcon />,
+            icon: <AddToHomeIcon />,
             text: t("installPwaStepIosAdd"),
           },
         ]
     : [
         {
-          icon: <InstallBrowserMenuIcon />,
+          icon: <BrowserMenuIcon />,
           text: t("installPwaStepAndroidMenu"),
         },
         {
-          icon: <InstallAddToHomeIcon />,
+          icon: <AddToHomeIcon />,
           text: t("installPwaStepAndroidAdd"),
         },
       ];

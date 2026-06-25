@@ -19,6 +19,12 @@ import {
   ChatMessage,
   type NpubMessageContactInfo,
 } from "../components/ChatMessage";
+import {
+  DonateIcon,
+  PayIcon,
+  RequestIcon,
+  SendIcon,
+} from "../components/icons";
 import { ReplyPreview } from "../components/ReplyPreview";
 import { formatChatDayLabel } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
@@ -601,28 +607,7 @@ export const ChatPage: FC<ChatPageProps> = ({
               data-guide="chat-send"
             >
               <span className="chat-compose-send-icon" aria-hidden="true">
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M21 3L10 14"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M21 3L14 21L10 14L3 10L21 3Z"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                <SendIcon size={18} />
               </span>
             </button>
           ) : null}
@@ -640,7 +625,7 @@ export const ChatPage: FC<ChatPageProps> = ({
               >
                 <span className="btn-label-with-icon">
                   <span className="btn-label-icon" aria-hidden="true">
-                    ←
+                    <RequestIcon size={18} />
                   </span>
                   <span>{t("requestPayment")}</span>
                 </span>
@@ -655,9 +640,13 @@ export const ChatPage: FC<ChatPageProps> = ({
             >
               <span className="btn-label-with-icon">
                 <span className="btn-label-icon" aria-hidden="true">
-                  ₿
+                  {isFeedbackContact ? (
+                    <DonateIcon size={18} />
+                  ) : (
+                    <PayIcon size={18} />
+                  )}
                 </span>
-                <span>{isFeedbackContact ? "Donate" : t("pay")}</span>
+                <span>{isFeedbackContact ? t("donate") : t("pay")}</span>
               </span>
             </button>
           </div>

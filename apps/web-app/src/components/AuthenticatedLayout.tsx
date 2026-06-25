@@ -11,7 +11,6 @@ import { MintAutoswapConfirmModal } from "./MintAutoswapConfirmModal";
 import { NfcWriteModal } from "./NfcWriteModal";
 import { PaidOverlay } from "./PaidOverlay";
 import { PaymentMintMeltConfirmModal } from "./PaymentMintMeltConfirmModal";
-import { ProfileQrModal } from "./ProfileQrModal";
 import { SaveContactPromptModal } from "./SaveContactPromptModal";
 import { ScanModal } from "./ScanModal";
 import { ShareOptionsModal } from "./ShareOptionsModal";
@@ -84,29 +83,6 @@ export function AuthenticatedLayout({
           showTypeAction={state.scanAllowsManualContact}
           showWalletActions={!state.scanAllowsManualContact}
           t={state.t}
-        />
-      )}
-
-      {state.profileQrIsOpen && (
-        <ProfileQrModal
-          canWriteToNfc={state.canWriteNfc}
-          closeProfileQr={actions.closeProfileQr}
-          copyText={actions.copyText}
-          currentNpub={state.currentNpub}
-          currentNsec={state.currentNsec}
-          effectiveMyLightningAddress={state.effectiveMyLightningAddress}
-          effectiveProfileName={state.effectiveProfileName}
-          effectiveProfilePicture={state.effectiveProfilePicture}
-          myProfileQr={state.myProfileQr}
-          profileStatus={state.profileStatus}
-          profileStatusCurrencies={state.profileStatusCurrencies}
-          profileStatusIsSaving={state.profileStatusIsSaving}
-          selectedProfileStatusCurrencies={
-            state.selectedProfileStatusCurrencies
-          }
-          t={state.t}
-          toggleProfileStatusCurrency={actions.toggleProfileStatusCurrency}
-          writeCurrentNpubToNfc={actions.writeCurrentNpubToNfc}
         />
       )}
 

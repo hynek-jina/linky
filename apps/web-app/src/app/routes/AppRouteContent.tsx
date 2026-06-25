@@ -97,7 +97,11 @@ export const AppRouteContent = (): React.ReactElement => {
 
   return (
     <>
-      {route.kind === "settings" && <SettingsPage />}
+      {route.kind === "settings" && (
+        <AdvancedPage {...systemRoutes.advancedProps} />
+      )}
+
+      {route.kind === "settingsUnits" && <SettingsPage />}
 
       {route.kind === "advanced" && (
         <AdvancedPage {...systemRoutes.advancedProps} />

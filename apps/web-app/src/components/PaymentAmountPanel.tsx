@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { AmountDisplay } from "./AmountDisplay";
+import { PayIcon } from "./icons";
 import { Keypad } from "./Keypad";
 
 interface PaymentAmountPanelProps {
@@ -14,7 +15,7 @@ interface PaymentAmountPanelProps {
   sendGuideId?: string | undefined;
   stepGuideId?: string | undefined;
   submitDisabled: boolean;
-  submitIcon?: string | undefined;
+  submitIcon?: ReactNode | undefined;
   submitLabel?: string | undefined;
   submitTitle?: string | undefined;
   t: (key: string) => string;
@@ -69,7 +70,7 @@ export const PaymentAmountPanel: FC<PaymentAmountPanelProps> = ({
           >
             <span className="btn-label-with-icon">
               <span className="btn-label-icon" aria-hidden="true">
-                {submitIcon ?? "₿"}
+                {submitIcon ?? <PayIcon size={18} />}
               </span>
               <span>{submitLabel ?? t("paySend")}</span>
             </span>

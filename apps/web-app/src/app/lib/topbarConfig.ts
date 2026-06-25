@@ -12,6 +12,7 @@ interface BuildTopbarArgs {
 }
 
 interface BuildTopbarRightArgs {
+  chatEditContactId: ContactId | null;
   isProfileEditing: boolean;
   route: Route;
   t: (key: string) => string;
@@ -33,6 +34,14 @@ export const buildTopbar = ({
     };
   }
 
+  if (route.kind === "settingsUnits") {
+    return {
+      icon: "<",
+      label: t("close"),
+      onClick: () => navigateTo({ route: "settings" }),
+    };
+  }
+
   if (route.kind === "advanced") {
     return {
       icon: "<",
@@ -45,7 +54,7 @@ export const buildTopbar = ({
     return {
       icon: "<",
       label: t("close"),
-      onClick: () => navigateTo({ route: "advanced" }),
+      onClick: () => navigateTo({ route: "settings" }),
     };
   }
 
@@ -53,7 +62,7 @@ export const buildTopbar = ({
     return {
       icon: "<",
       label: t("close"),
-      onClick: () => navigateTo({ route: "advanced" }),
+      onClick: () => navigateTo({ route: "settings" }),
     };
   }
 
@@ -61,7 +70,7 @@ export const buildTopbar = ({
     return {
       icon: "<",
       label: t("close"),
-      onClick: () => navigateTo({ route: "advanced" }),
+      onClick: () => navigateTo({ route: "settings" }),
     };
   }
 
@@ -141,7 +150,10 @@ export const buildTopbar = ({
       label: t("close"),
       onClick: () =>
         navigateTo({
-          route: route.kind === "cashuTokens" ? "wallet" : "cashuTokens",
+          route:
+            route.kind === "cashuTokens" || route.kind === "cashuTokenEmit"
+              ? "wallet"
+              : "cashuTokens",
         }),
     };
   }
@@ -166,7 +178,7 @@ export const buildTopbar = ({
     return {
       icon: "<",
       label: t("close"),
-      onClick: () => navigateTo({ route: "advanced" }),
+      onClick: () => navigateTo({ route: "settings" }),
     };
   }
 
@@ -174,7 +186,7 @@ export const buildTopbar = ({
     return {
       icon: "<",
       label: t("close"),
-      onClick: () => navigateTo({ route: "advanced" }),
+      onClick: () => navigateTo({ route: "settings" }),
     };
   }
 
@@ -284,6 +296,7 @@ export const buildTopbar = ({
 };
 
 export const buildTopbarRight = ({
+  chatEditContactId,
   isProfileEditing,
   route,
   t,
@@ -307,24 +320,49 @@ export const buildTopbarRight = ({
 
   if (route.kind === "profile" && !isProfileEditing) {
     return {
-      icon: "✎",
+      icon: "edit",
       label: t("edit"),
       onClick: () => navigateTo({ route: "profileEdit" }),
     };
   }
 
+  if (route.kind === "chat") {
+    if (!chatEditContactId) return null;
+    return {
+      icon: "edit",
+      label: t("edit"),
+      onClick: () =>
+        navigateTo({ route: "contactEdit", id: chatEditContactId }),
+    };
+  }
+
+  if (route.kind === "contact") {
+    return {
+      icon: "edit",
+      label: t("editContact"),
+      onClick: () => navigateTo({ route: "contactEdit", id: route.id }),
+    };
+  }
+
   if (
     route.kind === "settings" ||
+    route.kind === "settingsUnits" ||
     route.kind === "advanced" ||
     route.kind === "advancedAutoPayLimit" ||
     route.kind === "advancedPushDebug" ||
     route.kind === "mints" ||
+    route.kind === "topup" ||
+    route.kind === "topupNoAmount" ||
+    route.kind === "topupInvoice" ||
+    route.kind === "manualPay" ||
     route.kind === "cashuTokens" ||
+    route.kind === "cashuTokenEmit" ||
     route.kind === "cashuToken" ||
     route.kind === "transactions" ||
     route.kind === "evoluCurrentData" ||
     route.kind === "evoluHistoryData" ||
     route.kind === "contactEdit" ||
+    route.kind === "profileEdit" ||
     route.kind === "profileClaimLightningAddress"
   ) {
     return null;
@@ -342,7 +380,8 @@ export const buildTopbarTitle = (
   t: (key: string) => string,
 ): string | null => {
   if (route.kind === "contacts") return t("contactsTitle");
-  if (route.kind === "settings") return t("unit");
+  if (route.kind === "settings") return t("settings");
+  if (route.kind === "settingsUnits") return t("unit");
   if (route.kind === "wallet") return t("wallet");
   if (route.kind === "transactions") return t("transactionsTitle");
   if (route.kind === "topup") return t("topupTitle");
@@ -354,7 +393,7 @@ export const buildTopbarTitle = (
   if (route.kind === "cashuTokenEmit") return t("cashuEmit");
   if (route.kind === "cashuTokenNew") return t("cashuAddToken");
   if (route.kind === "cashuToken") return t("cashuToken");
-  if (route.kind === "advanced") return t("advanced");
+  if (route.kind === "advanced") return t("settings");
   if (route.kind === "advancedAutoPayLimit") {
     return t("lightningInvoiceAutoPayLimit");
   }

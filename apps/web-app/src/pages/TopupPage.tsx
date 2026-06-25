@@ -1,9 +1,11 @@
 import type { FC } from "react";
+import { ScanLine } from "lucide-react";
 import {
   useAppShellActions,
   useAppShellCore,
 } from "../app/context/AppShellContexts";
 import { AmountDisplay } from "../components/AmountDisplay";
+import { NoAmountIcon, PasteIcon } from "../components/icons";
 import { Keypad } from "../components/Keypad";
 import { useNavigation } from "../hooks/useRouting";
 import { formatShortNpub, getInitials } from "../utils/formatting";
@@ -103,27 +105,7 @@ export const TopupPage: FC<TopupPageProps> = ({
           >
             <span className="btn-label-with-icon">
               <span className="btn-label-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="7"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                  <path
-                    d="M7 12h10"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M12 7v10"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <NoAmountIcon size={18} />
               </span>
               <span>{t("topupNoAmount")}</span>
             </span>
@@ -135,26 +117,7 @@ export const TopupPage: FC<TopupPageProps> = ({
           >
             <span className="btn-label-with-icon">
               <span className="btn-label-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
-                  <rect
-                    x="5"
-                    y="4"
-                    width="11"
-                    height="13"
-                    rx="2.2"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                  <rect
-                    x="8"
-                    y="7"
-                    width="11"
-                    height="13"
-                    rx="2.2"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                </svg>
+                <PasteIcon size={18} />
               </span>
               <span>{t("paste")}</span>
             </span>
@@ -166,7 +129,7 @@ export const TopupPage: FC<TopupPageProps> = ({
           >
             <span className="btn-label-with-icon">
               <span className="btn-label-icon" aria-hidden="true">
-                <span className="contacts-qr-scanIcon" />
+                <ScanLine size={18} />
               </span>
               <span>{t("scan")}</span>
             </span>

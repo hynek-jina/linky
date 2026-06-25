@@ -16,6 +16,7 @@ import { deriveDefaultProfile } from "../derivedProfile";
 import { getNextMintIconUrl } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { EditIndicator } from "./EditIndicator";
+import { PayIcon } from "./icons";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
@@ -524,7 +525,12 @@ export function ChatMessage({
                             : undefined
                         }
                       >
-                        {t("pay")}
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            <PayIcon size={18} />
+                          </span>
+                          <span>{t("pay")}</span>
+                        </span>
                       </button>
                       <button
                         type="button"

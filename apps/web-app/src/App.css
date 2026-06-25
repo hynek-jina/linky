@@ -1313,9 +1313,12 @@ button.settings-link:hover {
 }
 
 .settings-chevron {
+  width: 14px;
+  flex: 0 0 14px;
   color: #94a3b8;
   font-weight: 800;
   margin-left: 10px;
+  text-align: right;
 }
 
 .relay-count {
@@ -1371,13 +1374,22 @@ button.settings-link:hover {
   align-items: center;
   gap: 10px;
   color: #e2e8f0;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .settings-icon {
   width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
   display: inline-flex;
+  align-items: center;
   justify-content: center;
+  color: #94a3b8;
+}
+
+.settings-icon svg {
+  display: block;
+  stroke-width: 2;
 }
 
 .settings-label {
@@ -1511,6 +1523,67 @@ button.settings-link:hover {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.settings-page {
+  padding-top: 4px;
+}
+
+.settings-section {
+  padding: 14px 0 6px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.settings-section:first-of-type {
+  padding-top: 0;
+}
+
+.settings-section:last-of-type {
+  border-bottom: 0;
+}
+
+.settings-section .settings-row:last-child {
+  margin-bottom: 0;
+}
+
+.settings-value {
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.settings-value-truncate {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-tail-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.settings-connection-state {
+  gap: 8px;
+}
+
+button.settings-danger-link.is-armed .settings-left,
+button.settings-sensitive-action.is-armed .settings-left {
+  color: var(--app-danger-button-bg);
+}
+
+button.settings-danger-link.is-armed,
+button.settings-sensitive-action.is-armed {
+  background: transparent !important;
+  color: inherit !important;
+}
+
+.settings-version {
+  padding: 20px 0 4px;
+  text-align: center;
+  font-size: 13px;
 }
 
 .qr {
@@ -2196,6 +2269,12 @@ button.settings-link:hover {
   padding-right: 56px;
   font-size: 16px;
   line-height: 1.45;
+  background: rgba(30, 41, 59, 0.82);
+  border: none;
+}
+
+.chat-compose textarea:focus {
+  background: rgba(30, 41, 59, 0.94);
 }
 
 .chat-pay-button {
@@ -2561,6 +2640,25 @@ button.ghost {
   border: none;
   color: #cbd5e1;
   padding-inline: 14px;
+}
+
+button.icon-only-ghost,
+button.icon-only-ghost:hover,
+button.icon-only-ghost:focus,
+button.icon-only-ghost:active,
+button.icon-only-ghost:disabled {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  box-shadow: none;
+  transform: none;
 }
 
 .mint-choice-list,
@@ -3350,6 +3448,15 @@ button.icon {
   margin-top: 0;
 }
 
+.manual-pay-form input {
+  background: rgba(30, 41, 59, 0.82);
+  border: none;
+}
+
+.manual-pay-form input:focus {
+  background: rgba(30, 41, 59, 0.94);
+}
+
 .manual-pay-hint {
   margin: 0;
   font-size: 13px;
@@ -3449,22 +3556,6 @@ button.icon {
   width: 38px;
   height: 38px;
   display: block;
-}
-
-.contacts-fab-icon-stroke {
-  fill: none;
-  stroke: var(--app-primary-button-fg);
-  stroke-width: 2.1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.contacts-fab-icon-plus {
-  fill: none;
-  stroke: var(--app-primary-button-fg);
-  stroke-width: 2.1;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .contacts-fab:hover {
@@ -3718,16 +3809,6 @@ button.icon {
   display: block;
 }
 
-.contacts-qr-scanIcon {
-  width: 16px;
-  height: 16px;
-  display: block;
-  border: 2px dashed currentColor;
-  border-radius: 5px;
-  box-sizing: border-box;
-  opacity: 0.9;
-}
-
 .group-filter-btn {
   flex: 0 0 auto;
   border-radius: 999px;
@@ -3929,22 +4010,6 @@ button.icon {
   align-items: center;
   justify-content: center;
   gap: 8px;
-}
-
-.contact-detail-edit {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  font-size: 15px;
-  line-height: 1;
 }
 
 .contact-detail-copy {
@@ -4334,10 +4399,6 @@ button.tag-button {
 
 .modal-header .modal-title {
   margin-bottom: 0;
-}
-
-.profile-qr-sheet {
-  max-width: 520px;
 }
 
 .modal-title {

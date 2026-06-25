@@ -33,6 +33,14 @@ describe("parseRouteFromHash", () => {
     expect(parseRouteFromHash()).toEqual({ kind: "contacts" });
   });
 
+  it("parses settings and its units subpage", () => {
+    replaceHash("#settings");
+    expect(parseRouteFromHash()).toEqual({ kind: "settings" });
+
+    replaceHash("#settings/units");
+    expect(parseRouteFromHash()).toEqual({ kind: "settingsUnits" });
+  });
+
   it("falls back to wallet for unknown hashes", () => {
     replaceHash("#unknown-route");
 

@@ -32,7 +32,7 @@ export const useContactPayMethod = ({
       (payWithCashuEnabled || allowPromisesEnabled) && Boolean(npub);
     const canUseLightning = Boolean(ln);
 
-    // Default: prefer Cashu when possible.
+    // Default: prefer cashu when possible.
     if (canUseCashu) {
       setContactPayMethod("cashu");
       return;

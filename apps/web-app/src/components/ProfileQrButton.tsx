@@ -1,4 +1,5 @@
 import React from "react";
+import { Copy } from "lucide-react";
 
 interface ProfileQrButtonProps {
   copyLabel: string;
@@ -23,7 +24,7 @@ export function ProfileQrButton({
     >
       <img className="qr profile-qr-image" src={qrSrc} alt={qrAlt} />
       <span className="profile-qr-copyBadge" aria-hidden="true">
-        ⧉
+        <Copy size={18} />
       </span>
     </button>
   );

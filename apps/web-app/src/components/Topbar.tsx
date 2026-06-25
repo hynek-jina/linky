@@ -1,9 +1,11 @@
 import React from "react";
+import { Settings } from "lucide-react";
 import type { ContactId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import type { Route } from "../types/route";
 import { formatShortNpub, getInitials } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
+import { EditIcon } from "./icons";
 
 interface TopbarButton {
   icon: string;
@@ -141,7 +143,15 @@ export function Topbar({
             ? { "data-guide": "open-menu" }
             : {})}
         >
-          <span aria-hidden="true">{topbarRight.icon}</span>
+          <span aria-hidden="true">
+            {topbarRight.label === t("menu") ? (
+              <Settings size={20} />
+            ) : topbarRight.icon === "edit" ? (
+              <EditIcon size={18} />
+            ) : (
+              topbarRight.icon
+            )}
+          </span>
         </button>
       ) : (
         <span className="topbar-spacer" aria-hidden="true" />

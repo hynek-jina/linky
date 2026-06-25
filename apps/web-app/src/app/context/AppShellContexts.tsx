@@ -100,7 +100,6 @@ export interface AppShellCoreContextValue {
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
   selectedProfileStatusCurrencies: readonly ProfileStatusCurrency[];
   profileSelectedPictureKind: "custom" | "generated";
-  profileQrIsOpen: boolean;
   route: Route;
   scanAllowsManualContact: boolean;
   scanEntryPoint: "contacts" | "receive" | "send" | null;

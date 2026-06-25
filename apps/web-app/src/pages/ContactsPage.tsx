@@ -2,7 +2,7 @@ import type { FC } from "react";
 import React from "react";
 import type { ContactRowLike } from "../app/types/appTypes";
 import { BottomTabBar } from "../components/BottomTabBar";
-import { ContactAddFabIcon } from "../components/ContactAddFabIcon";
+import { ContactAddIcon } from "../components/icons";
 import { buildStatusFilterValue } from "../nostrStatus";
 import { ARCHIVED_CONTACTS_FILTER } from "../utils/constants";
 
@@ -235,7 +235,7 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
             title={t("addContact")}
             data-guide="contact-add-button"
           >
-            <ContactAddFabIcon />
+            <ContactAddIcon className="contacts-fab-svgIcon" />
           </button>
         ) : null}
       </>

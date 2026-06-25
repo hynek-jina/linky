@@ -1,5 +1,12 @@
 import React from "react";
 import { useNavigation } from "../hooks/useRouting";
+import {
+  GalleryIcon,
+  IssueTokenIcon,
+  KeyboardIcon,
+  PasteIcon,
+  TopupIcon,
+} from "./icons";
 
 interface ScanModalProps {
   closeScan: () => void;
@@ -93,28 +100,7 @@ export function ScanModal({
                 aria-label={t("scanTypeManually")}
                 title={t("scanTypeManually")}
               >
-                <svg
-                  aria-hidden="true"
-                  className="scan-action-btn-icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <rect
-                    x="3"
-                    y="6"
-                    width="18"
-                    height="12"
-                    rx="2.5"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                  <path
-                    d="M7 10h.01M10 10h.01M13 10h.01M16 10h.01M8 14h8"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <KeyboardIcon className="scan-action-btn-icon" />
                 <span className="scan-action-btn-label">
                   {t("scanTypeManually")}
                 </span>
@@ -127,31 +113,7 @@ export function ScanModal({
               aria-label={t("paste")}
               title={t("paste")}
             >
-              <svg
-                aria-hidden="true"
-                className="scan-action-btn-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <rect
-                  x="5"
-                  y="4"
-                  width="11"
-                  height="13"
-                  rx="2.2"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                />
-                <rect
-                  x="8"
-                  y="7"
-                  width="11"
-                  height="13"
-                  rx="2.2"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                />
-              </svg>
+              <PasteIcon className="scan-action-btn-icon" />
               <span className="scan-action-btn-label">{t("paste")}</span>
             </button>
             {isReceiveScan ? (
@@ -166,32 +128,7 @@ export function ScanModal({
                   aria-label={t("topupSetAmount")}
                   title={t("topupSetAmount")}
                 >
-                  <svg
-                    aria-hidden="true"
-                    className="scan-action-btn-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <path
-                      d="M12 3v10"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                    />
-                    <path
-                      d="M8 9l4 4 4-4"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M4 14h16v6H4v-6Z"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <TopupIcon className="scan-action-btn-icon" />
                   <span className="scan-action-btn-label">
                     {t("topupSetAmount")}
                   </span>
@@ -203,30 +140,7 @@ export function ScanModal({
                   aria-label={t("scanGallery")}
                   title={t("scanGallery")}
                 >
-                  <svg
-                    aria-hidden="true"
-                    className="scan-action-btn-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <rect
-                      x="3"
-                      y="5"
-                      width="18"
-                      height="14"
-                      rx="2.5"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    />
-                    <circle cx="9" cy="10" r="1.6" fill="currentColor" />
-                    <path
-                      d="M6 16l4-4 3 3 3-2 2 3"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <GalleryIcon className="scan-action-btn-icon" />
                   <span className="scan-action-btn-label">
                     {t("scanGallery")}
                   </span>
@@ -242,32 +156,7 @@ export function ScanModal({
                     aria-label={t("cashuEmit")}
                     title={t("cashuEmit")}
                   >
-                    <svg
-                      aria-hidden="true"
-                      className="scan-action-btn-icon"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <path
-                        d="M12 4v16"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M4 12h16"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r="8"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                      />
-                    </svg>
+                    <IssueTokenIcon className="scan-action-btn-icon" />
                     <span className="scan-action-btn-label">
                       {t("cashuEmit")}
                     </span>
@@ -280,30 +169,7 @@ export function ScanModal({
                   aria-label={t("scanGallery")}
                   title={t("scanGallery")}
                 >
-                  <svg
-                    aria-hidden="true"
-                    className="scan-action-btn-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <rect
-                      x="3"
-                      y="5"
-                      width="18"
-                      height="14"
-                      rx="2.5"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    />
-                    <circle cx="9" cy="10" r="1.6" fill="currentColor" />
-                    <path
-                      d="M6 16l4-4 3 3 3-2 2 3"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <GalleryIcon className="scan-action-btn-icon" />
                   <span className="scan-action-btn-label">
                     {t("scanGallery")}
                   </span>

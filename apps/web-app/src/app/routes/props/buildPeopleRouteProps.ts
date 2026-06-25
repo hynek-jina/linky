@@ -4,6 +4,7 @@ interface BuildPeopleRoutePropsParams {
   cashuBalance: PeopleRoutesProps["chatProps"]["cashuBalance"];
   cashuBalanceAfterMelt: PeopleRoutesProps["chatProps"]["cashuBalanceAfterMelt"];
   cashuIsBusy: PeopleRoutesProps["chatProps"]["cashuIsBusy"];
+  canWriteNfc: PeopleRoutesProps["profileProps"]["canWriteToNfc"];
   chatSelectedContact: PeopleRoutesProps["chatProps"]["selectedContact"];
   chatDraft: PeopleRoutesProps["chatProps"]["chatDraft"];
   chatMessageElByIdRef: PeopleRoutesProps["chatProps"]["chatMessageElByIdRef"];
@@ -95,12 +96,14 @@ interface BuildPeopleRoutePropsParams {
   setProfileEditStatus: PeopleRoutesProps["profileProps"]["setProfileEditStatus"];
   t: PeopleRoutesProps["chatProps"]["t"];
   toggleProfileStatusCurrency: PeopleRoutesProps["profileProps"]["toggleProfileStatusCurrency"];
+  writeCurrentNpubToNfc: PeopleRoutesProps["profileProps"]["writeCurrentNpubToNfc"];
 }
 
 export const buildPeopleRouteProps = ({
   cashuBalance,
   cashuBalanceAfterMelt,
   cashuIsBusy,
+  canWriteNfc,
   chatSelectedContact,
   chatDraft,
   chatMessageElByIdRef,
@@ -192,6 +195,7 @@ export const buildPeopleRouteProps = ({
   setProfileEditStatus,
   t,
   toggleProfileStatusCurrency,
+  writeCurrentNpubToNfc,
 }: BuildPeopleRoutePropsParams): PeopleRoutesProps => {
   return {
     chatProps: {
@@ -300,6 +304,7 @@ export const buildPeopleRouteProps = ({
       t,
     },
     profileProps: {
+      canWriteToNfc: canWriteNfc,
       currentNpub,
       cycleProfileAvatarControl,
       isProfileEditing,
@@ -330,6 +335,7 @@ export const buildPeopleRouteProps = ({
       copyText,
       t,
       toggleProfileStatusCurrency,
+      writeCurrentNpubToNfc,
     },
   };
 };
