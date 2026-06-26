@@ -1,4 +1,7 @@
 import type { FC } from "react";
+import { ScanLine, Save } from "lucide-react";
+import { PasteIcon } from "../components/icons";
+import { readClipboardText } from "../platform/clipboard";
 
 interface ContactFormData {
   name: string;
@@ -8,6 +11,7 @@ interface ContactFormData {
 }
 
 interface ContactNewPageProps {
+  autofillNewContactFromIdentifier: (identifier?: string) => Promise<void>;
   form: ContactFormData;
   groupNames: string[];
   handleSaveContact: () => void;
@@ -19,6 +23,7 @@ interface ContactNewPageProps {
 }
 
 export const ContactNewPage: FC<ContactNewPageProps> = ({
+  autofillNewContactFromIdentifier,
   form,
   groupNames,
   handleSaveContact,
@@ -28,22 +33,44 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   setForm,
   t,
 }) => {
+  const pasteIdentifier = async () => {
+    const text = await readClipboardText();
+    if (!text) return;
+    const identifier = text.trim();
+    setForm({ ...form, npub: identifier });
+    void autofillNewContactFromIdentifier(identifier);
+  };
+
   return (
     <section className="panel panel-plain">
       <div className="form-grid">
         <div className="form-col">
+          <div className="contact-new-identifier-row">
+            <label>{t("npub")}</label>
+            <button
+              type="button"
+              className="icon-only-ghost"
+              onClick={() => void pasteIdentifier()}
+              title={t("paste")}
+              aria-label={t("paste")}
+            >
+              <PasteIcon size={18} aria-hidden="true" />
+            </button>
+          </div>
+          <input
+            value={form.npub}
+            onChange={(e) => setForm({ ...form, npub: e.target.value })}
+            onBlur={() => {
+              void autofillNewContactFromIdentifier();
+            }}
+            placeholder={t("npubPlaceholder")}
+          />
+
           <label>{t("name")}</label>
           <input
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             placeholder={t("namePlaceholder")}
-          />
-
-          <label>{t("npub")}</label>
-          <input
-            value={form.npub}
-            onChange={(e) => setForm({ ...form, npub: e.target.value })}
-            placeholder={t("npubPlaceholder")}
           />
 
           <label>{t("lightningAddress")}</label>
@@ -70,7 +97,12 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
 
           <div className="actions">
             <button onClick={handleSaveContact} disabled={isSavingContact}>
-              {isSavingContact ? t("saving") : t("saveContact")}
+              <span className="btn-label-with-icon">
+                <span className="btn-label-icon" aria-hidden="true">
+                  <Save size={18} />
+                </span>
+                <span>{isSavingContact ? t("saving") : t("saveContact")}</span>
+              </span>
             </button>
             <button
               type="button"
@@ -79,7 +111,12 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
               disabled={scanIsOpen}
               data-guide="scan-contact-button"
             >
-              {t("contactLoadQr")}
+              <span className="btn-label-with-icon">
+                <span className="btn-label-icon" aria-hidden="true">
+                  <ScanLine size={18} />
+                </span>
+                <span>{t("contactLoadQr")}</span>
+              </span>
             </button>
           </div>
         </div>

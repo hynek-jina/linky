@@ -4088,6 +4088,7 @@ export const useAppShellComposition = () => {
   });
 
   const {
+    autofillNewContactFromIdentifier,
     clearContactForm,
     contactEditsSavable,
     editingId,
@@ -8354,6 +8355,7 @@ export const useAppShellComposition = () => {
       contactEditsSavable,
       contactPaymentIntent,
       contactPayMethod,
+      autofillNewContactFromIdentifier,
       copyText,
       currentNpub,
       derivedProfile,

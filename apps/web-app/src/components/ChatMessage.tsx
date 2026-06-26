@@ -1,4 +1,5 @@
 import React from "react";
+import { X } from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { parseIdentityChangeMessageContent } from "../app/lib/identityChangeMessage";
 import {
@@ -545,7 +546,12 @@ export function ChatMessage({
                         className="btn-wide secondary chat-payment-request-decline"
                         onClick={onDeclinePaymentRequest}
                       >
-                        {t("decline")}
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            <X size={18} />
+                          </span>
+                          <span>{t("decline")}</span>
+                        </span>
                       </button>
                     </div>
                   ) : null}
