@@ -201,6 +201,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
       }}
       sendGuideId={isRequestFlow ? "request-send" : "pay-send"}
       stepGuideId="pay-step3"
+      submitBusy={!isRequestFlow && cashuIsBusy}
       submitDisabled={invalid}
       submitIcon={isRequestFlow ? <RequestIcon size={18} /> : undefined}
       submitLabel={isRequestFlow ? t("requestPaymentSend") : undefined}

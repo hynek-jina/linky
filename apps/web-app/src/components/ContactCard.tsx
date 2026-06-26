@@ -273,6 +273,7 @@ const TokenPreview: React.FC<TokenPreviewProps> = ({
         <span>
           {displayAmount.approxPrefix}
           {displayAmount.amountText}
+          {displayAmount.unitLabel ? ` ${displayAmount.unitLabel}` : ""}
         </span>
       </span>
     </div>

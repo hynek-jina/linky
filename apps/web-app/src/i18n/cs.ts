@@ -777,6 +777,4 @@ export const cs = {
   evoluWipeStorageFailed:
     "Chybí uložený mnemonic (nelze vyčistit Evolu storage).",
   copyTokenTitle: "Token přijat",
-  tokenReceivedClickToCopy: "Přijato {amount} {unit}.",
-  tokenReceived: "Token přijat.",
 } as const;

@@ -4295,6 +4295,22 @@ button.tag-button {
   display: block;
 }
 
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  display: block;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: btn-spinner-spin 0.7s linear infinite;
+}
+
+@keyframes btn-spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .danger-armed {
   background: var(--app-danger-button-bg) !important;
   color: #f8fafc !important;

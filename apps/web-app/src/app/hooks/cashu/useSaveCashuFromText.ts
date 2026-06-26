@@ -32,15 +32,11 @@ interface UseSaveCashuFromTextParams {
   isMintDeleted: (mintUrl: string) => boolean;
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   mintInfoByUrl: Map<string, CashuTokenMetaRow>;
-  recentlyReceivedTokenTimerRef: React.MutableRefObject<number | null>;
   refreshMintInfo: (mintUrl: string) => Promise<void>;
   resolveOwnerIdForWrite: () => Promise<Evolu.OwnerId | null>;
   rememberCashuTokenKnown: (...tokens: readonly string[]) => void;
   setCashuDraft: React.Dispatch<React.SetStateAction<string>>;
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
-  setRecentlyReceivedToken: React.Dispatch<
-    React.SetStateAction<{ amount: number | null; token: string } | null>
-  >;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   showPaidOverlay: (title?: string) => void;
   t: (key: string) => string;
@@ -56,13 +52,11 @@ export const useSaveCashuFromText = ({
   isMintDeleted,
   logPaymentEvent,
   mintInfoByUrl,
-  recentlyReceivedTokenTimerRef,
   refreshMintInfo,
   resolveOwnerIdForWrite,
   rememberCashuTokenKnown,
   setCashuDraft,
   setCashuIsBusy,
-  setRecentlyReceivedToken,
   setStatus,
   showPaidOverlay,
   t,
@@ -205,25 +199,6 @@ export const useSaveCashuFromText = ({
           );
           ensureCashuTokenPersisted(acceptedToken);
 
-          if (recentlyReceivedTokenTimerRef.current !== null) {
-            try {
-              window.clearTimeout(recentlyReceivedTokenTimerRef.current);
-            } catch {
-              // ignore
-            }
-          }
-          setRecentlyReceivedToken({
-            token: acceptedToken,
-            amount:
-              typeof accepted.amount === "number" && accepted.amount > 0
-                ? accepted.amount
-                : null,
-          });
-          recentlyReceivedTokenTimerRef.current = window.setTimeout(() => {
-            setRecentlyReceivedToken(null);
-            recentlyReceivedTokenTimerRef.current = null;
-          }, 25_000);
-
           const cleanedMint = String(accepted.mint ?? "")
             .trim()
             .replace(/\/+$/, "");
@@ -340,12 +315,10 @@ export const useSaveCashuFromText = ({
       logPaymentEvent,
       mintInfoByUrl,
       refreshMintInfo,
-      recentlyReceivedTokenTimerRef,
       resolveOwnerIdForWrite,
       rememberCashuTokenKnown,
       setCashuDraft,
       setCashuIsBusy,
-      setRecentlyReceivedToken,
       setStatus,
       showPaidOverlay,
       t,

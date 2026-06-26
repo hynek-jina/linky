@@ -544,6 +544,7 @@ export const ChatPage: FC<ChatPageProps> = ({
                   cashuIsBusy ||
                   paymentRequestInfo.amount > cashuBalanceAfterMelt
                 }
+                payPaymentRequestBusy={cashuIsBusy}
                 replyQuoteText={replyQuoteText}
                 onCopy={onCopy}
                 onEdit={onEdit}

@@ -70,6 +70,7 @@ interface ChatMessageProps {
   onPayPaymentRequest: (requestInfo: CashuPaymentRequestMessageInfo) => void;
   onReact: (message: LocalNostrMessage, emoji: string) => void;
   onReply: (message: LocalNostrMessage) => void;
+  payPaymentRequestBusy: boolean;
   payPaymentRequestDisabled: boolean;
   paymentRequestInfo: CashuPaymentRequestMessageInfo | null;
   paymentRequestStatus: "declined" | "paid" | "requested" | null;
@@ -106,6 +107,7 @@ export function ChatMessage({
   onPayPaymentRequest,
   onReact,
   onReply,
+  payPaymentRequestBusy,
   payPaymentRequestDisabled,
   paymentRequestInfo,
   paymentRequestStatus,
@@ -520,16 +522,22 @@ export function ChatMessage({
                         disabled={payPaymentRequestDisabled}
                         onClick={() => onPayPaymentRequest(paymentRequestInfo)}
                         title={
-                          payPaymentRequestDisabled
+                          payPaymentRequestDisabled && !payPaymentRequestBusy
                             ? t("payInsufficient")
                             : undefined
                         }
                       >
                         <span className="btn-label-with-icon">
                           <span className="btn-label-icon" aria-hidden="true">
-                            <PayIcon size={18} />
+                            {payPaymentRequestBusy ? (
+                              <span className="btn-spinner" />
+                            ) : (
+                              <PayIcon size={18} />
+                            )}
                           </span>
-                          <span>{t("pay")}</span>
+                          <span>
+                            {payPaymentRequestBusy ? t("payPaying") : t("pay")}
+                          </span>
                         </span>
                       </button>
                       <button

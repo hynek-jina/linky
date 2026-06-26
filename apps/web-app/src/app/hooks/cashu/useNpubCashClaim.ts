@@ -45,15 +45,11 @@ interface UseNpubCashClaimParams {
   mintInfoByUrl: ReadonlyMap<string, LocalMintInfoRow>;
   npubCashServerBaseUrl: string;
   npubCashClaimInFlightRef: React.MutableRefObject<boolean>;
-  recentlyReceivedTokenTimerRef: React.MutableRefObject<number | null>;
   refreshMintInfo: (mintUrl: string) => Promise<void> | void;
   resolveOwnerIdForWrite: () => Promise<Evolu.OwnerId | null>;
   rememberCashuTokenKnown: (...tokens: readonly string[]) => void;
   routeKind: Route["kind"];
   setCashuIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
-  setRecentlyReceivedToken: React.Dispatch<
-    React.SetStateAction<null | { amount: number | null; token: string }>
-  >;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   showPaidOverlay: (title?: string) => void;
   t: (key: string) => string;
@@ -76,13 +72,11 @@ export const useNpubCashClaim = ({
   mintInfoByUrl,
   npubCashServerBaseUrl,
   npubCashClaimInFlightRef,
-  recentlyReceivedTokenTimerRef,
   refreshMintInfo,
   resolveOwnerIdForWrite,
   rememberCashuTokenKnown,
   routeKind,
   setCashuIsBusy,
-  setRecentlyReceivedToken,
   setStatus,
   showPaidOverlay,
   t,
@@ -187,26 +181,6 @@ export const useNpubCashClaim = ({
             acceptedToken,
           );
           ensureCashuTokenPersisted(acceptedToken);
-
-          // Minimal receive-only banner shown after a token is accepted.
-          if (recentlyReceivedTokenTimerRef.current !== null) {
-            try {
-              window.clearTimeout(recentlyReceivedTokenTimerRef.current);
-            } catch {
-              // ignore
-            }
-          }
-          setRecentlyReceivedToken({
-            token: acceptedToken,
-            amount:
-              typeof accepted.amount === "number" && accepted.amount > 0
-                ? accepted.amount
-                : null,
-          });
-          recentlyReceivedTokenTimerRef.current = window.setTimeout(() => {
-            setRecentlyReceivedToken(null);
-            recentlyReceivedTokenTimerRef.current = null;
-          }, 25_000);
 
           const cleanedMint = String(accepted.mint ?? "")
             .trim()
@@ -320,12 +294,10 @@ export const useNpubCashClaim = ({
       rememberCashuTokenKnown,
       routeKind,
       setCashuIsBusy,
-      setRecentlyReceivedToken,
       setStatus,
       showPaidOverlay,
       t,
       touchMintInfo,
-      recentlyReceivedTokenTimerRef,
     ],
   );
 
