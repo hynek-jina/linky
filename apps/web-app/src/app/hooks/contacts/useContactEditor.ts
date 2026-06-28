@@ -622,6 +622,67 @@ export const useContactEditor = ({
     [nostrFetchRelays, updateContactFields],
   );
 
+  const autofillNewContactFromIdentifier = React.useCallback(
+    async (identifier?: string) => {
+      if (route.kind !== "contactNew") return;
+
+      const rawIdentifier = String(identifier ?? form.npub ?? "").trim();
+      if (!rawIdentifier) return;
+
+      let resolvedNpub = normalizeNpubIdentifier(rawIdentifier);
+      let fallbackLnAddress = "";
+
+      const nip05Result = await resolveNip05Input(rawIdentifier);
+      if (nip05Result.kind === "resolved") {
+        resolvedNpub = nip05Result.npub;
+        if (nip05Result.identifier.domain === DEFAULT_NIP05_DOMAIN) {
+          fallbackLnAddress = nip05Result.identifier.identifier;
+        }
+      }
+
+      if (!resolvedNpub) return;
+
+      try {
+        const metadata = await fetchNostrProfileMetadata(resolvedNpub, {
+          relays: nostrFetchRelays,
+        });
+        saveCachedProfileMetadata(resolvedNpub, metadata);
+
+        const bestName = metadata ? (getBestNostrName(metadata) ?? "") : "";
+        const metadataLn = metadata
+          ? String(metadata.lud16 ?? "").trim() ||
+            String(metadata.lud06 ?? "").trim()
+          : "";
+        const nextLnAddress = metadataLn || fallbackLnAddress;
+
+        setForm((prev) => {
+          if (String(prev.npub ?? "").trim() !== rawIdentifier) return prev;
+
+          return {
+            ...prev,
+            name: String(prev.name ?? "").trim() ? prev.name : bestName,
+            lnAddress: String(prev.lnAddress ?? "").trim()
+              ? prev.lnAddress
+              : nextLnAddress,
+          };
+        });
+      } catch {
+        if (!fallbackLnAddress) return;
+
+        setForm((prev) => {
+          if (String(prev.npub ?? "").trim() !== rawIdentifier) return prev;
+          if (String(prev.lnAddress ?? "").trim()) return prev;
+
+          return {
+            ...prev,
+            lnAddress: fallbackLnAddress,
+          };
+        });
+      }
+    },
+    [form.npub, nostrFetchRelays, route.kind],
+  );
+
   React.useEffect(() => {
     const targetNpub = openScannedContactPendingNpubRef.current;
     if (!targetNpub) return;
@@ -731,6 +792,7 @@ export const useContactEditor = ({
   ]);
 
   return {
+    autofillNewContactFromIdentifier,
     clearContactForm,
     contactEditsSavable,
     editingId,

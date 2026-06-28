@@ -1525,6 +1525,10 @@ button.settings-link:hover {
   text-transform: uppercase;
 }
 
+.contact-list-section-title {
+  margin: 10px 0 6px;
+}
+
 .settings-page {
   padding-top: 4px;
 }
@@ -3344,6 +3348,13 @@ button.icon {
 
 .chat-payment-request-actions > button {
   flex: 1 1 0;
+  min-width: 0;
+  padding-inline: 12px;
+}
+
+.chat-payment-request-actions .btn-label-with-icon {
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .chat-payment-request-pay {
@@ -3380,6 +3391,12 @@ button.icon {
 
 .contacts-search-bar input {
   padding-right: 44px;
+  border: none;
+  background: rgba(30, 41, 59, 0.82);
+}
+
+.contacts-search-bar input:focus {
+  background: rgba(30, 41, 59, 0.94);
 }
 
 .contacts-search-bar input[type="search"]::-webkit-search-cancel-button,
@@ -3409,6 +3426,17 @@ button.icon {
   background: #0f172a;
   transform: translateY(-50%);
   box-shadow: none;
+}
+
+.contact-new-identifier-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.contact-new-identifier-row label {
+  margin-top: 0;
 }
 
 .contact-card {
@@ -4293,6 +4321,22 @@ button.tag-button {
 
 .btn-label-icon svg {
   display: block;
+}
+
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  display: block;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: btn-spinner-spin 0.7s linear infinite;
+}
+
+@keyframes btn-spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .danger-armed {

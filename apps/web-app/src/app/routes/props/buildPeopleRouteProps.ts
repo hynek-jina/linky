@@ -15,6 +15,7 @@ interface BuildPeopleRoutePropsParams {
   contactEditsSavable: PeopleRoutesProps["contactEditProps"]["contactEditsSavable"];
   contactPaymentIntent: PeopleRoutesProps["contactPayProps"]["contactPaymentIntent"];
   contactPayMethod: PeopleRoutesProps["contactPayProps"]["contactPayMethod"];
+  autofillNewContactFromIdentifier: PeopleRoutesProps["contactNewProps"]["autofillNewContactFromIdentifier"];
   copyText: PeopleRoutesProps["profileProps"]["copyText"];
   currentNpub: PeopleRoutesProps["profileProps"]["currentNpub"];
   cycleProfileAvatarControl: PeopleRoutesProps["profileProps"]["cycleProfileAvatarControl"];
@@ -114,6 +115,7 @@ export const buildPeopleRouteProps = ({
   contactEditsSavable,
   contactPaymentIntent,
   contactPayMethod,
+  autofillNewContactFromIdentifier,
   copyText,
   currentNpub,
   cycleProfileAvatarControl,
@@ -252,6 +254,7 @@ export const buildPeopleRouteProps = ({
       t,
     },
     contactNewProps: {
+      autofillNewContactFromIdentifier,
       form,
       setForm,
       groupNames,

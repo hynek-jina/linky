@@ -27,6 +27,27 @@ const isNodeTarget = (value: EventTarget | null): value is Node => {
 
 const appUrl = "https://app.linky.fit";
 
+function SiteLanguagesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="m5 8 6 6" />
+      <path d="m4 14 6-6 2-3" />
+      <path d="M2 5h12" />
+      <path d="M7 2h1" />
+      <path d="m22 22-5-10-5 10" />
+      <path d="M14 18h6" />
+    </svg>
+  );
+}
+
+function SiteBitcoinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M11.767 19.089c4.924.868 6.14-6.025 1.216-6.894m-1.216 6.894L5.86 18.047m5.908 1.042-.347 1.97m1.563-8.864c4.924.869 6.14-6.025 1.215-6.893m-1.215 6.893-3.94-.694m5.155-6.2L8.29 4.26m5.908 1.042.348-1.97M7.48 20.364l3.126-17.727" />
+    </svg>
+  );
+}
+
 export function SiteHeaderMenu({
   copy,
   displayCurrency,
@@ -81,7 +102,7 @@ export function SiteHeaderMenu({
           <div className="site-menu-row">
             <div className="site-menu-left">
               <span className="site-menu-icon" aria-hidden="true">
-                A
+                <SiteLanguagesIcon />
               </span>
               <span className="site-menu-label">{copy.switchLabel}</span>
             </div>
@@ -104,7 +125,7 @@ export function SiteHeaderMenu({
           <div className="site-menu-row">
             <div className="site-menu-left">
               <span className="site-menu-icon" aria-hidden="true">
-                ₿
+                <SiteBitcoinIcon />
               </span>
               <span className="site-menu-label">{copy.currencyLabel}</span>
             </div>

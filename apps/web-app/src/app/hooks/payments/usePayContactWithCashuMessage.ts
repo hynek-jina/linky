@@ -249,7 +249,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           messageId,
         });
         if (notify) {
-          setStatus(t("payQueued"));
           showPaidOverlay(
             t("paidQueuedTo")
               .replace(
@@ -265,8 +264,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         }
         return { ok: true, queued: true };
       }
-
-      if (notify) setStatus(t("payPaying"));
 
       const cashuWriteOwnerId = await resolveOwnerIdForWrite();
 
@@ -789,7 +786,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
               .replace("{name}", displayName),
           );
 
-          setStatus(hasPendingMessages ? t("payQueued") : t("paySuccess"));
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
           navigateTo({ route: "chat", id: contact.id as ContactId });

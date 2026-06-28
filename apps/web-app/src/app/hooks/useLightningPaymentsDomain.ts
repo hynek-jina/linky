@@ -293,8 +293,6 @@ export const useLightningPaymentsDomain = ({
 
       setCashuIsBusy(true);
       try {
-        setStatus(t("payPaying"));
-
         const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
         for (const row of cashuTokensWithMeta) {
           if (!isCashuTokenAcceptedState(row.state)) continue;
@@ -485,7 +483,6 @@ export const useLightningPaymentsDomain = ({
                 .replace("{unit}", displayAmount.unitLabel),
             );
 
-            setStatus(t("paySuccess"));
             safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
             setContactsOnboardingHasPaid(true);
             return true;
@@ -637,7 +634,6 @@ export const useLightningPaymentsDomain = ({
           let attemptInvoicePreview: LightningInvoicePreview | null = null;
           let attemptSuccessAction: LnurlPaySuccessAction | null = null;
           try {
-            setStatus(t("payFetchingInvoice"));
             const invoiceResult = await fetchLnurlInvoiceForTarget(
               paymentTarget,
               attemptedAmountSat,
@@ -661,8 +657,6 @@ export const useLightningPaymentsDomain = ({
             finalErrorMint = null;
             break;
           }
-
-          setStatus(t("payPaying"));
 
           let lastError: unknown = null;
           let lastMint: string | null = null;

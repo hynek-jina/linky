@@ -1150,12 +1150,6 @@ export const useAppShellComposition = () => {
   const [status, setStatus] = useState<string | null>(null);
   const importDataFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const [recentlyReceivedToken, setRecentlyReceivedToken] = useState<null | {
-    token: string;
-    amount: number | null;
-  }>(null);
-  const recentlyReceivedTokenTimerRef = React.useRef<number | null>(null);
-
   const topupInvoiceStartBalanceRef = React.useRef<number | null>(null);
   const topupInvoicePaidHandledRef = React.useRef(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<ContactId | null>(
@@ -1586,25 +1580,6 @@ export const useAppShellComposition = () => {
       JSON.stringify(toPendingTopupQuoteStorage(topupMintQuote)),
     );
   }, [appOwnerId, pendingTopupStorageKey, topupMintQuote]);
-
-  const showRecentlyReceivedTokenToast = React.useCallback(
-    (token: string, amount: number | null) => {
-      if (recentlyReceivedTokenTimerRef.current !== null) {
-        try {
-          window.clearTimeout(recentlyReceivedTokenTimerRef.current);
-        } catch {
-          // ignore
-        }
-      }
-
-      setRecentlyReceivedToken({ token, amount });
-      recentlyReceivedTokenTimerRef.current = window.setTimeout(() => {
-        setRecentlyReceivedToken(null);
-        recentlyReceivedTokenTimerRef.current = null;
-      }, 25_000);
-    },
-    [setRecentlyReceivedToken],
-  );
 
   const [chatDraft, setChatDraft] = useState<string>("");
   const [pendingCashuTokenContactPickId, setPendingCashuTokenContactPickId] =
@@ -2772,11 +2747,6 @@ export const useAppShellComposition = () => {
               }
             }
 
-            showRecentlyReceivedTokenToast(
-              token,
-              topupMintQuote.amount > 0 ? topupMintQuote.amount : null,
-            );
-
             if (route.kind === "topupInvoice") {
               finalizeTopupInvoicePaid({
                 amountSat: topupMintQuote.amount,
@@ -2868,7 +2838,6 @@ export const useAppShellComposition = () => {
     topupMintQuote,
     t,
     route.kind,
-    showRecentlyReceivedTokenToast,
     showPaidOverlay,
     setStatus,
   ]);
@@ -3505,13 +3474,11 @@ export const useAppShellComposition = () => {
     mintInfoByUrl,
     npubCashServerBaseUrl,
     npubCashClaimInFlightRef,
-    recentlyReceivedTokenTimerRef,
     refreshMintInfo,
     resolveOwnerIdForWrite,
     rememberCashuTokenKnown,
     routeKind: route.kind,
     setCashuIsBusy,
-    setRecentlyReceivedToken,
     setStatus,
     showPaidOverlay,
     t,
@@ -4121,6 +4088,7 @@ export const useAppShellComposition = () => {
   });
 
   const {
+    autofillNewContactFromIdentifier,
     clearContactForm,
     contactEditsSavable,
     editingId,
@@ -4566,7 +4534,6 @@ export const useAppShellComposition = () => {
       }
 
       setCashuIsBusy(true);
-      setStatus(t("payPaying"));
 
       const cashuWriteOwnerId = await resolveOwnerIdForWrite();
       const insertCashuToken = (args: {
@@ -4818,7 +4785,6 @@ export const useAppShellComposition = () => {
               requestInfo.description || postUrl.hostname || t("appTitle"),
             ),
         );
-        setStatus(t("paySuccess"));
         safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
         setContactsOnboardingHasPaid(true);
         return true;
@@ -5186,13 +5152,11 @@ export const useAppShellComposition = () => {
     isMintDeleted,
     logPaymentEvent,
     mintInfoByUrl,
-    recentlyReceivedTokenTimerRef,
     refreshMintInfo,
     resolveOwnerIdForWrite,
     rememberCashuTokenKnown,
     setCashuDraft,
     setCashuIsBusy,
-    setRecentlyReceivedToken,
     setStatus,
     showPaidOverlay,
     t,
@@ -8391,6 +8355,7 @@ export const useAppShellComposition = () => {
       contactEditsSavable,
       contactPaymentIntent,
       contactPayMethod,
+      autofillNewContactFromIdentifier,
       copyText,
       currentNpub,
       derivedProfile,
@@ -8801,7 +8766,6 @@ export const useAppShellComposition = () => {
     peopleRouteProps,
     pendingCashuContactSend,
     pushToast,
-    recentlyReceivedToken,
     route,
     cyclePendingOnboardingAvatarControl,
     selectReturningSlip39Suggestion,
@@ -8810,7 +8774,6 @@ export const useAppShellComposition = () => {
     setReturningSlip39Input,
     setOnboardingStep,
     setPendingOnboardingName,
-    setRecentlyReceivedToken,
     submitReturningSlip39,
     systemRouteProps,
     t,

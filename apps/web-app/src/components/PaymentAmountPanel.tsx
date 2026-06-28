@@ -14,6 +14,7 @@ interface PaymentAmountPanelProps {
   onSubmit: () => void;
   sendGuideId?: string | undefined;
   stepGuideId?: string | undefined;
+  submitBusy?: boolean | undefined;
   submitDisabled: boolean;
   submitIcon?: ReactNode | undefined;
   submitLabel?: string | undefined;
@@ -31,6 +32,7 @@ export const PaymentAmountPanel: FC<PaymentAmountPanelProps> = ({
   onSubmit,
   sendGuideId,
   stepGuideId,
+  submitBusy,
   submitDisabled,
   submitIcon,
   submitLabel,
@@ -38,6 +40,7 @@ export const PaymentAmountPanel: FC<PaymentAmountPanelProps> = ({
   t,
 }) => {
   const { applyAmountInputKey } = useAppShellCore();
+  const isSubmitBusy = submitBusy ?? cashuIsBusy;
 
   return (
     <section className="panel">
@@ -70,9 +73,15 @@ export const PaymentAmountPanel: FC<PaymentAmountPanelProps> = ({
           >
             <span className="btn-label-with-icon">
               <span className="btn-label-icon" aria-hidden="true">
-                {submitIcon ?? <PayIcon size={18} />}
+                {isSubmitBusy ? (
+                  <span className="btn-spinner" />
+                ) : (
+                  (submitIcon ?? <PayIcon size={18} />)
+                )}
               </span>
-              <span>{submitLabel ?? t("paySend")}</span>
+              <span>
+                {isSubmitBusy ? t("payPaying") : (submitLabel ?? t("paySend"))}
+              </span>
             </span>
           </button>
         </div>

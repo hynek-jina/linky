@@ -237,6 +237,7 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
         if (invalid) return;
         void payLightningAddressWithCashu(lnAddress, amountSat);
       }}
+      submitBusy={cashuIsBusy}
       submitDisabled={invalid}
       submitTitle={submitTitle}
       t={t}

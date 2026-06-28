@@ -25,7 +25,6 @@ const AppShell = () => {
     createNewAccount,
     currentNsec,
     dismissToast,
-    formatDisplayedAmountParts,
     formatDisplayedAmountText,
     isMainSwipeRoute,
     lang,
@@ -41,7 +40,6 @@ const AppShell = () => {
     peopleRouteProps,
     pendingCashuContactSend,
     pickPendingOnboardingPhoto,
-    recentlyReceivedToken,
     cyclePendingOnboardingAvatarControl,
     selectReturningSlip39Suggestion,
     savePendingOnboardingBackupToPasswordManager,
@@ -92,13 +90,7 @@ const AppShell = () => {
         }}
         t={t}
       />
-      <ToastNotifications
-        recentlyReceivedToken={recentlyReceivedToken}
-        toasts={toasts}
-        dismissToast={dismissToast}
-        formatDisplayedAmountParts={formatDisplayedAmountParts}
-        t={t}
-      />
+      <ToastNotifications toasts={toasts} dismissToast={dismissToast} />
       <InstallPwaBanner t={t} />
 
       {!currentNsec ? (

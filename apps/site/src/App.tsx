@@ -51,7 +51,7 @@ const googlePlayUrl =
 const copy: Record<Locale, LocaleCopy> = {
   cs: {
     czechLabel: "Čeština",
-    currencyLabel: "Měna",
+    currencyLabel: "Jednotky",
     englishLabel: "English",
     htmlLang: "cs",
     menuLabel: "Menu",
@@ -101,7 +101,7 @@ const copy: Record<Locale, LocaleCopy> = {
   },
   en: {
     czechLabel: "Czech",
-    currencyLabel: "Currency",
+    currencyLabel: "Units",
     englishLabel: "English",
     htmlLang: "en",
     menuLabel: "Menu",

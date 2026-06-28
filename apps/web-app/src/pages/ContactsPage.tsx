@@ -180,15 +180,7 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
               <>
                 {visibleContacts.conversations.length > 0 && (
                   <React.Fragment key="conversations">
-                    <div
-                      className="muted"
-                      style={{
-                        fontSize: 11,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.08em",
-                        margin: "6px 0 6px",
-                      }}
-                    >
+                    <div className="settings-section-title contact-list-section-title">
                       {conversationsLabel}
                     </div>
                     {visibleContacts.conversations.map(renderContactCard)}
@@ -197,15 +189,7 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
 
                 {visibleContacts.others.length > 0 && (
                   <React.Fragment key="others">
-                    <div
-                      className="muted"
-                      style={{
-                        fontSize: 11,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.08em",
-                        margin: "10px 0 6px",
-                      }}
-                    >
+                    <div className="settings-section-title contact-list-section-title">
                       {otherContactsLabel}
                     </div>
                     {visibleContacts.others.map(renderContactCard)}
