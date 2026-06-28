@@ -438,7 +438,7 @@ export const cs = {
   guideAddContactStep3Body:
     "Po naskenování se otevře kontakt. Doplňte jméno / skupinu a uložte.",
 
-  guideTopupStep1Title: "Peněženka1",
+  guideTopupStep1Title: "Peněženka",
   guideTopupStep1Body: "Klepněte na ikonu peněženky dole.",
   guideTopupStep2Title: "Přijmout",
   guideTopupStep2Body: "Klepněte na Přijmout.",
@@ -549,7 +549,7 @@ export const cs = {
     "Klíče byly ověřeny. Obnovujeme (dojde k vymazání aktuálních dat)…",
   errorPrefix: "Chyba",
 
-  wallet: "Peněženka2",
+  wallet: "Peněženka",
   walletOpen: "Otevřít peněženku",
   walletReceive: "Přijmout",
   walletSend: "Odeslat",

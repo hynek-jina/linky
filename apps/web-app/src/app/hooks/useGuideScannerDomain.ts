@@ -204,14 +204,18 @@ export const useGuideScannerDomain = ({
 
       const requestId = (scanOpenRequestIdRef.current += 1);
 
-      if (supportsNativeQrScan()) {
+      const openNativeScanFallback = () => {
+        if (!supportsNativeQrScan()) {
+          return false;
+        }
+
         const nativeScanHandle = startNativeQrScanStream((result) => {
           void handleNativeScanResult(requestId, result);
         });
 
         if (nativeScanHandle) {
           nativeScanHandleRef.current = nativeScanHandle;
-          return;
+          return true;
         }
 
         const nativeScan = startNativeQrScan();
@@ -219,9 +223,11 @@ export const useGuideScannerDomain = ({
           void nativeScan.then((result) => {
             void handleNativeScanResult(requestId, result);
           });
-          return;
+          return true;
         }
-      }
+
+        return false;
+      };
 
       const media = navigator.mediaDevices as
         | {
@@ -232,12 +238,20 @@ export const useGuideScannerDomain = ({
         | undefined;
 
       if (!media?.getUserMedia) {
+        if (openNativeScanFallback()) {
+          return;
+        }
+
         pushToast(t("scanCameraError"));
         stopScanStream();
         return;
       }
 
       if (typeof globalThis.isSecureContext === "boolean" && !isSecureContext) {
+        if (openNativeScanFallback()) {
+          return;
+        }
+
         pushToast(t("scanRequiresHttps"));
         stopScanStream();
         return;
@@ -308,6 +322,10 @@ export const useGuideScannerDomain = ({
             name === "NotAllowedError" ||
             /permission/i.test(message) ||
             /denied/i.test(message);
+
+          if (!isPermissionDenied && openNativeScanFallback()) {
+            return;
+          }
 
           pushToast(
             isPermissionDenied
