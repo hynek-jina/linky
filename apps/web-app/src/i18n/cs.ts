@@ -438,7 +438,7 @@ export const cs = {
   guideAddContactStep3Body:
     "Po naskenování se otevře kontakt. Doplňte jméno / skupinu a uložte.",
 
-  guideTopupStep1Title: "Peněženka",
+  guideTopupStep1Title: "Peněženka1",
   guideTopupStep1Body: "Klepněte na ikonu peněženky dole.",
   guideTopupStep2Title: "Přijmout",
   guideTopupStep2Body: "Klepněte na Přijmout.",
@@ -549,7 +549,7 @@ export const cs = {
     "Klíče byly ověřeny. Obnovujeme (dojde k vymazání aktuálních dat)…",
   errorPrefix: "Chyba",
 
-  wallet: "Peněženka",
+  wallet: "Peněženka2",
   walletOpen: "Otevřít peněženku",
   walletReceive: "Přijmout",
   walletSend: "Odeslat",
@@ -686,7 +686,7 @@ export const cs = {
   cashuShareMessage: "Posílám peníze {url}",
   cashuShareMessageWithAmount: "Posílám {amount} {url}",
   uploadToNfc: "Nahrát na NFC",
-  uploadProfileToNfc: "Nahrát npub na NFC",
+  uploadProfileToNfc: "Nahrát na tag",
   nfcWriteTapPrompt: "Přiložte NFC tag pro zápis.",
   nfcWriteUnsupported: "NFC zápis není na tomto zařízení dostupný.",
   nfcWriteDisabled: "NFC je v telefonu vypnuté.",

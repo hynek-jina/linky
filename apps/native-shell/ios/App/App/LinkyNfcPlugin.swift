@@ -8,19 +8,54 @@ final class LinkyNfcPlugin: CAPPlugin, CAPBridgedPlugin, NFCNDEFReaderSessionDel
     let jsName = "LinkyNfc"
     let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "areSupported", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "consumePendingDeepLinkUrl", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "writeUri", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelWrite", returnType: CAPPluginReturnPromise)
     ]
+
+    private static weak var activePlugin: LinkyNfcPlugin?
+    private static var pendingDeepLinkUrl: String?
 
     private var cancelledByApp = false
     private var pendingCall: CAPPluginCall?
     private var pendingUrl: URL?
     private var readerSession: NFCNDEFReaderSession?
 
+    override public func load() {
+        Self.activePlugin = self
+    }
+
+    static func acceptDeepLink(_ url: URL) -> Bool {
+        guard normalizedUrl(from: url.absoluteString) != nil else {
+            return false
+        }
+
+        let value = url.absoluteString
+        pendingDeepLinkUrl = value
+        activePlugin?.notifyListeners("deepLink", data: [
+            "url": value
+        ])
+        return true
+    }
+
     @objc func areSupported(_ call: CAPPluginCall) {
         call.resolve([
             "supported": NFCNDEFReaderSession.readingAvailable
         ])
+    }
+
+    @objc func consumePendingDeepLinkUrl(_ call: CAPPluginCall) {
+        let value = Self.pendingDeepLinkUrl
+        Self.pendingDeepLinkUrl = nil
+
+        if let value {
+            call.resolve([
+                "url": value
+            ])
+            return
+        }
+
+        call.resolve()
     }
 
     @objc func writeUri(_ call: CAPPluginCall) {
@@ -38,7 +73,7 @@ final class LinkyNfcPlugin: CAPPlugin, CAPBridgedPlugin, NFCNDEFReaderSessionDel
             return
         }
 
-        guard let normalized = normalizedUrl(from: call.getString("url")) else {
+        guard let normalized = Self.normalizedUrl(from: call.getString("url")) else {
             call.resolve([
                 "message": "Unsupported NFC payload.",
                 "status": "error"
@@ -62,7 +97,7 @@ final class LinkyNfcPlugin: CAPPlugin, CAPBridgedPlugin, NFCNDEFReaderSessionDel
     }
 
     func readerSessionDidBecomeActive(_ session: NFCNDEFReaderSession) {
-        // The web app already shows an armed state, so nothing needs to be emitted here.
+        // CoreNFC presents its own system sheet, so the web app stays on the current screen.
     }
 
     func readerSession(_ session: NFCNDEFReaderSession, didDetectNDEFs messages: [NFCNDEFMessage]) {
@@ -202,7 +237,7 @@ final class LinkyNfcPlugin: CAPPlugin, CAPBridgedPlugin, NFCNDEFReaderSessionDel
         readerSession = nil
     }
 
-    private func normalizedUrl(from rawValue: String?) -> URL? {
+    private static func normalizedUrl(from rawValue: String?) -> URL? {
         guard let rawValue else {
             return nil
         }

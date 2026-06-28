@@ -3,6 +3,7 @@ import {
   useAppShellActions,
   useAppShellCore,
 } from "../app/context/AppShellContexts";
+import { shouldRenderNativeNfcWritePrompt } from "../platform/nativeBridge";
 import { ContactsGuideOverlay } from "./ContactsGuideOverlay";
 import { LightningInvoiceConfirmModal } from "./LightningInvoiceConfirmModal";
 import { LnurlWithdrawConfirmModal } from "./LnurlWithdrawConfirmModal";
@@ -145,7 +146,7 @@ export function AuthenticatedLayout({
         <PaidOverlay paidOverlayTitle={state.paidOverlayTitle} t={state.t} />
       ) : null}
 
-      {state.nfcWritePromptKind ? (
+      {state.nfcWritePromptKind && shouldRenderNativeNfcWritePrompt() ? (
         <NfcWriteModal
           kind={state.nfcWritePromptKind}
           onCancel={actions.cancelPendingNfcWrite}

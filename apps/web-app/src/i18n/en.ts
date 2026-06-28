@@ -676,7 +676,7 @@ export const en = {
   cashuShareMessage: "Sending money {url}",
   cashuShareMessageWithAmount: "Sending {amount} {url}",
   uploadToNfc: "Write to NFC",
-  uploadProfileToNfc: "Write npub to NFC",
+  uploadProfileToNfc: "Write to tag",
   nfcWriteTapPrompt: "Tap an NFC tag to write.",
   nfcWriteUnsupported: "NFC writing is not available on this device.",
   nfcWriteDisabled: "NFC is turned off on this device.",
