@@ -17,6 +17,7 @@ import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
 } from "../../utils/lightningInvoice";
+import { isSpdPaymentPayload, parseSpdPayment } from "../../utils/spdPayment";
 import {
   parseCashuPaymentRequestMessage,
   type CashuPaymentRequestMessageInfo,
@@ -52,6 +53,7 @@ interface UseScannedTextHandlerParams<TContact extends ContactRowLike> {
     text: string,
     options?: { navigateToTokens?: boolean; navigateToWallet?: boolean },
   ) => Promise<void>;
+  scanAcceptsBankPayment: boolean;
   scanEntryPoint: "contacts" | "receive" | "send" | null;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
@@ -72,6 +74,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
   requestLightningInvoiceConfirmation,
   requestLnurlWithdrawConfirmation,
   saveCashuFromText,
+  scanAcceptsBankPayment,
   scanEntryPoint,
   setStatus,
   t,
@@ -99,6 +102,38 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
           return;
         }
         scanText = leg.value;
+      }
+
+      if (isSpdPaymentPayload(scanText)) {
+        if (scanEntryPoint === "receive") {
+          setStatus(t("scanReceiveUnsupportedPayment"));
+          closeScan();
+          return;
+        }
+
+        if (!scanAcceptsBankPayment) {
+          setStatus(`${t("errorPrefix")}: ${t("scanUnsupported")}`);
+          closeScan();
+          return;
+        }
+
+        try {
+          const payment = parseSpdPayment(scanText);
+          closeScan();
+          navigateTo({
+            route: "bankPayment",
+            spdPayload: payment.payload,
+          });
+          return;
+        } catch (error) {
+          const message =
+            error instanceof Error && error.message === "spd-missing-account"
+              ? t("spdPaymentMissingAccount")
+              : t("scanUnsupported");
+          setStatus(`${t("errorPrefix")}: ${message}`);
+          closeScan();
+          return;
+        }
       }
 
       const normalized = scanText
@@ -313,6 +348,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       requestLightningInvoiceConfirmation,
       requestLnurlWithdrawConfirmation,
       saveCashuFromText,
+      scanAcceptsBankPayment,
       scanEntryPoint,
       setStatus,
       t,

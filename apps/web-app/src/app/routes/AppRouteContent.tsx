@@ -28,6 +28,7 @@ import {
   ProfilePage,
   PushDebugPage,
   SettingsPage,
+  SpdPaymentPage,
   TopupInvoicePage,
   TopupNoAmountPage,
   TopupPage,
@@ -61,6 +62,7 @@ export interface MoneyRoutesProps {
   cashuTokensProps: React.ComponentProps<typeof CashuTokensPage>;
   lnAddressPayProps: React.ComponentProps<typeof LnAddressPayPage>;
   manualPayProps: React.ComponentProps<typeof ManualPayPage>;
+  spdPaymentProps: React.ComponentProps<typeof SpdPaymentPage>;
   topupInvoiceProps: React.ComponentProps<typeof TopupInvoicePage>;
   topupProps: React.ComponentProps<typeof TopupPage>;
 }
@@ -199,6 +201,10 @@ export const AppRouteContent = (): React.ReactElement => {
 
       {route.kind === "manualPay" && (
         <ManualPayPage {...moneyRoutes.manualPayProps} />
+      )}
+
+      {route.kind === "bankPayment" && (
+        <SpdPaymentPage {...moneyRoutes.spdPaymentProps} />
       )}
 
       {route.kind === "chat" && <ChatPage {...peopleRoutes.chatProps} />}

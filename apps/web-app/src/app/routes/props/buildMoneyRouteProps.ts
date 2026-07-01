@@ -250,6 +250,10 @@ export const buildMoneyRouteProps = ({
       onSubmitText: onSubmitManualPayText,
       t,
     },
+    spdPaymentProps: {
+      spdPayload: route.kind === "bankPayment" ? route.spdPayload : "",
+      t,
+    },
     topupInvoiceProps: {
       topupAmount,
       topupInvoiceCashuRequest,

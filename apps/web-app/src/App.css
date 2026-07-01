@@ -3522,6 +3522,63 @@ button.icon {
   box-shadow: none;
 }
 
+.bank-payment-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bank-payment-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bank-payment-amount {
+  color: #f8fafc;
+  font-size: 28px;
+  font-weight: 850;
+}
+
+.bank-payment-recipient,
+.bank-payment-hint {
+  margin: 0;
+}
+
+.bank-payment-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bank-payment-row {
+  align-items: flex-start;
+}
+
+.bank-payment-row strong,
+.bank-payment-value {
+  display: block;
+}
+
+.bank-payment-row strong {
+  margin-bottom: 4px;
+}
+
+.bank-payment-value {
+  color: #dbeafe;
+  overflow-wrap: anywhere;
+}
+
+.bank-payment-open {
+  margin-top: 2px;
+}
+
+.bank-payment-error {
+  color: #fecaca;
+  font-size: 13px;
+  margin: 0;
+}
+
 .contact-main {
   min-width: 0;
   flex: 1;

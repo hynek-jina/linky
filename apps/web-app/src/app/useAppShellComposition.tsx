@@ -8020,6 +8020,8 @@ export const useAppShellComposition = () => {
     requestLightningInvoiceConfirmation: setPendingLightningInvoiceConfirmation,
     requestLnurlWithdrawConfirmation: setPendingLnurlWithdrawConfirmation,
     saveCashuFromText,
+    scanAcceptsBankPayment:
+      scanEntryPoint === "send" || route.kind === "manualPay",
     scanEntryPoint,
     setStatus,
     t,

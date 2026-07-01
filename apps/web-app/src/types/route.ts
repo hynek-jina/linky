@@ -18,6 +18,7 @@ export type Route =
   | { kind: "topupNoAmount" }
   | { kind: "topupInvoice" }
   | { kind: "manualPay" }
+  | { kind: "bankPayment"; spdPayload: string }
   | { kind: "lnAddressPay"; lnAddress: string }
   | { kind: "cashuTokens" }
   | { kind: "cashuTokenNew" }
@@ -72,6 +73,14 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#wallet/topup/no-amount") return { kind: "topupNoAmount" };
   if (hash === "#wallet/topup/invoice") return { kind: "topupInvoice" };
   if (hash === "#wallet/pay") return { kind: "manualPay" };
+
+  const bankPaymentPrefix = "#wallet/bank-payment/";
+  if (hash.startsWith(bankPaymentPrefix)) {
+    const rest = hash.slice(bankPaymentPrefix.length);
+    const spdPayload = decodeURIComponent(String(rest ?? "")).trim();
+    if (spdPayload) return { kind: "bankPayment", spdPayload };
+  }
+
   if (hash === "#wallet/tokens") return { kind: "cashuTokens" };
 
   const payLnPrefix = "#payln/";

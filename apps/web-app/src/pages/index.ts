@@ -27,6 +27,7 @@ export { ProfileLightningAddressClaimPage } from "./ProfileLightningAddressClaim
 export { ProfilePage } from "./ProfilePage";
 export { PushDebugPage } from "./PushDebugPage";
 export { SettingsPage } from "./SettingsPage";
+export { SpdPaymentPage } from "./SpdPaymentPage";
 export { TopupInvoicePage } from "./TopupInvoicePage";
 export { TopupNoAmountPage } from "./TopupNoAmountPage";
 export { TopupPage } from "./TopupPage";

@@ -144,6 +144,32 @@ function truncateNotificationBody(value: string): string {
   return `${normalized.slice(0, 140)}…`;
 }
 
+function sanitizeSpaydFilename(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function createSpaydResponse(url: URL): Response {
+  const payload = url.searchParams.get("data") || "";
+  const type =
+    url.searchParams.get("type") || "application/x-shortpaymentdescriptor";
+  const filename = sanitizeSpaydFilename(
+    url.searchParams.get("filename") || "platba.spayd",
+  );
+  const disposition =
+    url.searchParams.get("disposition") === "attachment"
+      ? "attachment"
+      : "inline";
+
+  return new Response(payload, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Disposition": `${disposition}; filename="${filename}"`,
+      "Content-Type": `${type}; charset=utf-8`,
+    },
+  });
+}
+
 function normalizeRelayUrls(urls: readonly string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -406,6 +432,11 @@ registerRoute(
   new CacheFirst({
     cacheName: "linky-runtime-images-v1",
   }),
+);
+
+registerRoute(
+  ({ url }) => url.pathname.endsWith("/platba.spayd"),
+  async ({ url }) => createSpaydResponse(url),
 );
 
 registerRoute(new NavigationRoute(createHandlerBoundToURL("index.html")));
