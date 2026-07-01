@@ -63,6 +63,7 @@ import {
 } from "../platform/identitySecrets";
 import {
   cancelNativeNfcWrite,
+  consumePendingIosNativeDeepLinkUrl,
   consumePendingNativeDeepLinkUrl,
   NATIVE_DEEP_LINK_EVENT,
   startNativeNfcWrite,
@@ -5604,7 +5605,7 @@ export const useAppShellComposition = () => {
       nfcWriteCancelledByUserRef.current = false;
 
       const result = await startNativeNfcWrite(url, (progress) => {
-        if (progress.status === "armed") {
+        if (progress.status === "armed" && progress.prompt === "web") {
           setNfcWritePromptKind(promptKind);
         }
       });
@@ -8037,6 +8038,7 @@ export const useAppShellComposition = () => {
     };
 
     acceptDeepLinkUrl(consumePendingNativeDeepLinkUrl());
+    void consumePendingIosNativeDeepLinkUrl().then(acceptDeepLinkUrl);
 
     const onDeepLink: EventListener = (event) => {
       if (!(event instanceof CustomEvent)) {

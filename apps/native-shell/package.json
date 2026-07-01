@@ -2,6 +2,7 @@
   "name": "@linky/native-shell",
   "private": true,
   "version": "0.1.0",
+  "license": "0BSD",
   "type": "module",
   "scripts": {
     "build:web": "bun run --filter @linky/web-app build",

@@ -360,14 +360,16 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
       {canWriteToNfc ? (
         <div className="settings-row">
           <button
-            className="btn-wide secondary btn-inline-icon"
+            className="btn-wide secondary"
             onClick={() => void writeToNfc(routeId, tokenText)}
             disabled={!tokenText.trim()}
           >
-            <span className="btn-label-icon" aria-hidden="true">
-              <NfcIcon />
+            <span className="btn-label-with-icon">
+              <span className="btn-label-icon" aria-hidden="true">
+                <NfcIcon size={18} />
+              </span>
+              <span>{t("uploadToNfc")}</span>
             </span>
-            {t("uploadToNfc")}
           </button>
         </div>
       ) : null}

@@ -1,5 +1,13 @@
-import { Capacitor, registerPlugin } from "@capacitor/core";
-import { getPlatformTarget, isNativePlatform } from "./runtime";
+import {
+  Capacitor,
+  registerPlugin,
+  type PluginListenerHandle,
+} from "@capacitor/core";
+import {
+  getPlatformTarget,
+  getTelemetryDevicePlatform,
+  isNativePlatform,
+} from "./runtime";
 
 type NativeNotificationPermissionState =
   | "denied"
@@ -38,8 +46,21 @@ interface IosNfcPluginResult {
   status?: string | null;
 }
 
+interface IosNfcDeepLinkResult {
+  url?: string | null;
+}
+
+interface IosNfcDeepLinkEvent {
+  url?: string | null;
+}
+
 interface IosNfcPlugin {
+  addListener?(
+    eventName: "deepLink",
+    listenerFunc: (event: IosNfcDeepLinkEvent) => void,
+  ): Promise<PluginListenerHandle>;
   areSupported(): Promise<IosNfcSupportResult>;
+  consumePendingDeepLinkUrl(): Promise<IosNfcDeepLinkResult>;
   cancelWrite(): Promise<void>;
   writeUri(options: { url: string }): Promise<IosNfcPluginResult>;
 }
@@ -93,6 +114,7 @@ export type NativeNfcWriteStatus =
 
 export interface NativeNfcWriteResult {
   message: string | null;
+  prompt?: "web";
   status: NativeNfcWriteStatus;
 }
 
@@ -283,6 +305,19 @@ if (typeof window !== "undefined") {
   window.addEventListener("linky-native-window-insets", applyInsets);
   window.addEventListener("resize", applyInsets);
   window.addEventListener("orientationchange", applyInsets);
+
+  if (supportsIosNativeNfcWrite() && LinkyNfc.addListener) {
+    void LinkyNfc.addListener("deepLink", (event) => {
+      const url = normalizeString(event.url);
+      if (!url) return;
+
+      window.dispatchEvent(
+        new CustomEvent(NATIVE_DEEP_LINK_EVENT, {
+          detail: { url },
+        }),
+      );
+    }).catch(() => undefined);
+  }
 }
 
 export const startNativeQrScan = (): Promise<NativeScanResult> | null => {
@@ -521,6 +556,20 @@ export const supportsNativeNfcWrite = (): boolean => {
   }
 };
 
+export const shouldRenderNativeNfcWritePrompt = (): boolean => {
+  const devicePlatform = getTelemetryDevicePlatform();
+  if (
+    getPlatformTarget() === "ios" ||
+    devicePlatform === "iphone" ||
+    devicePlatform === "ipad"
+  ) {
+    return false;
+  }
+
+  const bridge = getAndroidNfcBridge();
+  return isNativePlatform() && Boolean(bridge?.writeUri);
+};
+
 export const startNativeNfcWrite = async (
   url: string,
   onProgress?: (result: NativeNfcWriteResult) => void,
@@ -531,11 +580,6 @@ export const startNativeNfcWrite = async (
       if (supportResult.supported !== true) {
         return null;
       }
-
-      onProgress?.({
-        message: null,
-        status: "armed",
-      });
 
       const result = await LinkyNfc.writeUri({ url });
       const status = normalizeString(result.status);
@@ -585,7 +629,14 @@ export const startNativeNfcWrite = async (
       };
 
       if (result.status === "armed") {
-        onProgress?.(result);
+        onProgress?.(
+          shouldRenderNativeNfcWritePrompt()
+            ? {
+                ...result,
+                prompt: "web",
+              }
+            : result,
+        );
         return;
       }
 
@@ -638,6 +689,21 @@ export const consumePendingNativeDeepLinkUrl = (): string | null => {
 
   try {
     return normalizeString(bridge.consumePendingUrl());
+  } catch {
+    return null;
+  }
+};
+
+export const consumePendingIosNativeDeepLinkUrl = async (): Promise<
+  string | null
+> => {
+  if (!supportsIosNativeNfcWrite()) {
+    return null;
+  }
+
+  try {
+    const result = await LinkyNfc.consumePendingDeepLinkUrl();
+    return normalizeString(result.url);
   } catch {
     return null;
   }

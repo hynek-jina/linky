@@ -1,3 +1,0 @@
-import{R as o,j as t}from"./react-BcRAECK_.js";import"./vendor-DEdAzf1R.js";import"./evolu-BjgloezC.js";class c extends o.Component{constructor(r){super(r),this.state={hasError:!1}}static getDerivedStateFromError(r){return{hasError:!0,error:r}}componentDidCatch(r,e){console.error("ErrorBoundary caught:",r,e)}render(){return this.state.hasError?t.jsxs("div",{style:{padding:"40px",color:"#ff6b6b",fontFamily:"monospace"},children:[t.jsx("h2",{children:"Aplikace se zhroutila"}),t.jsxs("pre",{style:{overflow:"auto",background:"#1a1a1a",padding:"10px"},children:[this.state.error?.message,`
-
-`,this.state.error?.stack]})]}):this.props.children}}export{c as ErrorBoundary};

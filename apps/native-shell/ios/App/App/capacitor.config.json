@@ -9,6 +9,8 @@
 		"backgroundColor": "#0b1222"
 	},
 	"packageClassList": [
-		"PushNotificationsPlugin"
+		"ClipboardPlugin",
+		"PushNotificationsPlugin",
+		"SharePlugin"
 	]
 }

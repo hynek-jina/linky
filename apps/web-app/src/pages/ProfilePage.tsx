@@ -253,13 +253,18 @@ export function ProfilePage({
                 {canWriteToNfc ? (
                   <button
                     type="button"
-                    className="icon-only-ghost"
+                    className="secondary btn-small profile-nfc-write-button"
                     onClick={() => void writeCurrentNpubToNfc()}
                     aria-label={t("uploadProfileToNfc")}
                     title={t("uploadProfileToNfc")}
                     disabled={!currentNpub}
                   >
-                    <Radio size={18} aria-hidden="true" />
+                    <span className="btn-label-with-icon">
+                      <span className="btn-label-icon" aria-hidden="true">
+                        <Radio size={16} />
+                      </span>
+                      <span>{t("uploadProfileToNfc")}</span>
+                    </span>
                   </button>
                 ) : null}
 

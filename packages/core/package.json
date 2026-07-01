@@ -2,6 +2,7 @@
   "name": "@linky/core",
   "private": true,
   "version": "0.1.0",
+  "license": "0BSD",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

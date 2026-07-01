@@ -166,3 +166,8 @@ Push service container artifacts live in `apps/push/`:
 - `Dockerfile` builds a production Bun image
 - `docker-compose.example.yml` shows a persistent SQLite `/data` volume for prod-style deployment
 - `.env.production.example` lists the runtime env vars expected by that compose setup
+
+## License
+
+Linky is released under the Zero-Clause BSD license (`0BSD`). See
+[`LICENSE`](./LICENSE).

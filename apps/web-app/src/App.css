@@ -1803,6 +1803,12 @@ button.settings-sensitive-action.is-armed {
   gap: 8px;
 }
 
+.profile-nfc-write-button {
+  margin-top: 2px;
+  min-height: 32px;
+  font-weight: 800;
+}
+
 .chat-messages {
   margin-top: 14px;
   padding: 18px 10px calc(12px + var(--chat-compose-height, 116px));

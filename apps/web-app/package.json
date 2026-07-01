@@ -1,7 +1,8 @@
 {
   "name": "@linky/web-app",
   "private": true,
-  "version": "26.6.9",
+  "version": "26.6.10",
+  "license": "0BSD",
   "type": "module",
   "scripts": {
     "dev": "vite",

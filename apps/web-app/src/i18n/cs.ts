@@ -686,7 +686,7 @@ export const cs = {
   cashuShareMessage: "Posílám peníze {url}",
   cashuShareMessageWithAmount: "Posílám {amount} {url}",
   uploadToNfc: "Nahrát na NFC",
-  uploadProfileToNfc: "Nahrát npub na NFC",
+  uploadProfileToNfc: "Nahrát na tag",
   nfcWriteTapPrompt: "Přiložte NFC tag pro zápis.",
   nfcWriteUnsupported: "NFC zápis není na tomto zařízení dostupný.",
   nfcWriteDisabled: "NFC je v telefonu vypnuté.",

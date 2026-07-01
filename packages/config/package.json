@@ -2,6 +2,7 @@
   "name": "@linky/config",
   "private": true,
   "version": "1.0.0",
+  "license": "0BSD",
   "type": "module",
   "exports": {
     "./eslint": "./eslint/index.js",
