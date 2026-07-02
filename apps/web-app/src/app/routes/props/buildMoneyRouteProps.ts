@@ -8,6 +8,7 @@ interface BuildMoneyRoutePropsParams {
   canSendCashuTokenToContact: boolean;
   canWriteNfc: boolean;
   canPayWithCashu: MoneyRoutesProps["lnAddressPayProps"]["canPayWithCashu"];
+  bankPaymentOfferContacts: MoneyRoutesProps["spdPaymentProps"]["offerContacts"];
   cashuBalance: MoneyRoutesProps["cashuTokensProps"]["cashuBalance"];
   cashuBalanceAfterMelt: MoneyRoutesProps["lnAddressPayProps"]["cashuBalanceAfterMelt"];
   cashuTotalBalance: MoneyRoutesProps["cashuTokensProps"]["cashuTotalBalance"];
@@ -49,6 +50,7 @@ interface BuildMoneyRoutePropsParams {
   lnAddressPayAmount: MoneyRoutesProps["lnAddressPayProps"]["lnAddressPayAmount"];
   manualPayContacts: MoneyRoutesProps["manualPayProps"]["contacts"];
   manualPayNostrPictureByNpub: MoneyRoutesProps["manualPayProps"]["nostrPictureByNpub"];
+  onRequestBankPaymentOffer: MoneyRoutesProps["spdPaymentProps"]["onRequestReimbursement"];
   onSubmitManualPayText: MoneyRoutesProps["manualPayProps"]["onSubmitText"];
   meltLargestForeignMintToMainMint: MoneyRoutesProps["cashuTokensProps"]["meltLargestForeignMintToMainMint"];
   payLightningAddressWithCashu: MoneyRoutesProps["lnAddressPayProps"]["payLightningAddressWithCashu"];
@@ -102,6 +104,7 @@ export const buildMoneyRouteProps = ({
   canSendCashuTokenToContact,
   canWriteNfc,
   canPayWithCashu,
+  bankPaymentOfferContacts,
   cashuBalance,
   cashuBalanceAfterMelt,
   cashuTotalBalance,
@@ -135,6 +138,7 @@ export const buildMoneyRouteProps = ({
   lnAddressPayAmount,
   manualPayContacts,
   manualPayNostrPictureByNpub,
+  onRequestBankPaymentOffer,
   onSubmitManualPayText,
   meltLargestForeignMintToMainMint,
   payLightningAddressWithCashu,
@@ -251,6 +255,8 @@ export const buildMoneyRouteProps = ({
       t,
     },
     spdPaymentProps: {
+      offerContacts: bankPaymentOfferContacts,
+      onRequestReimbursement: onRequestBankPaymentOffer,
       spdPayload: route.kind === "bankPayment" ? route.spdPayload : "",
       t,
     },

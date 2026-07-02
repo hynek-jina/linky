@@ -72,6 +72,7 @@ interface UseSystemRoutePropsParams {
   importDataFileInputRef: SystemRoutesProps["advancedProps"]["importDataFileInputRef"];
   isSeedLogin: SystemRoutesProps["advancedProps"]["isSeedLogin"];
   isEvoluServerOffline: SystemRoutesProps["evoluServerProps"]["isEvoluServerOffline"];
+  bankPaymentOfferRecipientCount: SystemRoutesProps["advancedProps"]["bankPaymentOfferRecipientCount"];
   lightningInvoiceAutoPayLimit: SystemRoutesProps["advancedProps"]["lightningInvoiceAutoPayLimit"];
   lang: SystemRoutesProps["mintDetailProps"]["lang"];
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX: SystemRoutesProps["mintDetailProps"]["LOCAL_MINT_INFO_STORAGE_KEY_PREFIX"];
@@ -109,6 +110,7 @@ interface UseSystemRoutePropsParams {
   seedMnemonic: SystemRoutesProps["advancedProps"]["seedMnemonic"];
   selectedEvoluServerUrl: SystemRoutesProps["evoluServerProps"]["selectedEvoluServerUrl"];
   selectedRelayUrl: SystemRoutesProps["nostrRelayProps"]["selectedRelayUrl"];
+  setBankPaymentOfferRecipientCount: SystemRoutesProps["advancedProps"]["setBankPaymentOfferRecipientCount"];
   setLightningInvoiceAutoPayLimit: SystemRoutesProps["advancedProps"]["setLightningInvoiceAutoPayLimit"];
   setDefaultMintUrlDraft: SystemRoutesProps["mintsProps"]["setDefaultMintUrlDraft"];
   setEvoluServerOffline: SystemRoutesProps["evoluServerProps"]["setEvoluServerOffline"];
@@ -192,6 +194,7 @@ export const useSystemRouteProps = ({
   importDataFileInputRef,
   isSeedLogin,
   isEvoluServerOffline,
+  bankPaymentOfferRecipientCount,
   lightningInvoiceAutoPayLimit,
   lang,
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
@@ -229,6 +232,7 @@ export const useSystemRouteProps = ({
   seedMnemonic,
   selectedEvoluServerUrl,
   selectedRelayUrl,
+  setBankPaymentOfferRecipientCount,
   setLightningInvoiceAutoPayLimit,
   setDefaultMintUrlDraft,
   setEvoluServerOffline,
@@ -291,11 +295,13 @@ export const useSystemRouteProps = ({
       logoutArmed,
       importDataFileInputRef,
       isSeedLogin,
+      bankPaymentOfferRecipientCount,
       lightningInvoiceAutoPayLimit,
       copyNostrKeys,
       copySeed,
       passwordManagerSeedUsername,
       saveSeedToPasswordManager,
+      setBankPaymentOfferRecipientCount,
       setLightningInvoiceAutoPayLimit,
       setPayWithCashuEnabled,
       setCashuAutoswapEnabled,

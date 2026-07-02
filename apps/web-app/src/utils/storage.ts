@@ -4,6 +4,7 @@ import {
 } from "./browserPreferences";
 import {
   ALLOW_PROMISES_STORAGE_KEY,
+  BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
   CASHU_AUTOSWAP_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
@@ -309,6 +310,23 @@ export const getInitialLightningInvoiceAutoPayLimit = (): number => {
     return LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT;
   } catch {
     return LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT;
+  }
+};
+
+export const getInitialBankPaymentOfferRecipientCount = (
+  fallback: number,
+): number => {
+  try {
+    const raw = localStorage.getItem(
+      BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
+    );
+    const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+    return fallback;
+  } catch {
+    return fallback;
   }
 };
 

@@ -68,6 +68,8 @@ export const SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY =
 export const ALLOW_PROMISES_STORAGE_KEY = "linky.allow_promises";
 export const LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY =
   "linky.lightning_invoice_auto_pay_limit";
+export const BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY =
+  "linky.bank_payment_offer_recipient_count.v1";
 export const FEEDBACK_CONTACT_NPUB =
   "npub1kkht6jvgr8mt4844saf80j5jjwyy6fdy90sxsuxt4hfv8pel499s96jvz8";
 export const PAYMENT_ANALYTICS_RECIPIENT_NPUB =

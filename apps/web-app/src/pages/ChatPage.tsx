@@ -3,6 +3,10 @@ import { useAppShellCore } from "../app/context/AppShellContexts";
 import { aggregateReactions } from "../app/hooks/messages/chatNostrProtocol";
 import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
 import type { ReplyContext } from "../app/hooks/messages/useSendChatMessage";
+import {
+  getLinkyBankPaymentOfferInfo,
+  type LinkyBankPaymentOfferStatus,
+} from "../app/lib/bankPaymentOffer";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
 import {
   parseCashuPaymentRequestMessage,
@@ -17,6 +21,7 @@ import type {
 } from "../app/types/appTypes";
 import {
   ChatMessage,
+  type BankPaymentOfferPeerNotice,
   type NpubMessageContactInfo,
 } from "../components/ChatMessage";
 import {
@@ -44,6 +49,7 @@ interface ChatPageProps {
   chatDraft: string;
   chatMessageElByIdRef: React.MutableRefObject<Map<string, HTMLDivElement>>;
   chatMessages: LocalNostrMessage[];
+  bankPaymentOfferMessages: LocalNostrMessage[];
   chatMessagesRef: React.RefObject<HTMLDivElement | null>;
   chatOwnPubkeyHex: string | null;
   chatSendIsBusy: boolean;
@@ -57,14 +63,22 @@ interface ChatPageProps {
     failed: boolean;
   };
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
+  isBankPaymentOfferCanceled: (offerId: string) => boolean;
   lang: string;
   onCancelEdit: () => void;
   onCancelReply: () => void;
   onAddUnknownContact: () => Promise<void>;
   onBlockUnknownContact: () => Promise<void>;
   onCopy: (message: LocalNostrMessage) => void;
+  onCopyText: (text: string) => void;
   onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
+  onRespondBankPaymentOffer: (
+    message: LocalNostrMessage,
+    nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
+  ) => Promise<boolean>;
+  onSettleBankPaymentOffer: (message: LocalNostrMessage) => Promise<void>;
   onEdit: (message: LocalNostrMessage) => void;
+  onOpenBankPayment: (spdPayload: string) => Promise<void>;
   onOpenNpubContact: (npub: string) => void;
   onPayPaymentRequest: (
     message: LocalNostrMessage,
@@ -96,6 +110,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   chatDraft,
   chatMessageElByIdRef,
   chatMessages,
+  bankPaymentOfferMessages,
   chatMessagesRef,
   chatOwnPubkeyHex,
   chatSendIsBusy,
@@ -104,14 +119,19 @@ export const ChatPage: FC<ChatPageProps> = ({
   getCashuTokenMessageInfo,
   getMintIconUrl,
   getNpubMessageContactInfo,
+  isBankPaymentOfferCanceled,
   lang,
   onCancelEdit,
   onCancelReply,
   onAddUnknownContact,
   onBlockUnknownContact,
   onCopy,
+  onCopyText,
   onDeclinePaymentRequest,
+  onRespondBankPaymentOffer,
+  onSettleBankPaymentOffer,
   onEdit,
+  onOpenBankPayment,
   onOpenNpubContact,
   onPayPaymentRequest,
   onReact,
@@ -139,6 +159,75 @@ export const ChatPage: FC<ChatPageProps> = ({
   const isDesktop =
     typeof window !== "undefined" &&
     window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+  const getBankPaymentOfferPeerNotice = useCallback(
+    (
+      message: LocalNostrMessage,
+      offerInfo: ReturnType<typeof getLinkyBankPaymentOfferInfo>,
+    ): BankPaymentOfferPeerNotice | null => {
+      if (!offerInfo) return null;
+      if (String(message.direction ?? "") !== "out") return null;
+      if (
+        offerInfo.status === "bank_details_sent" ||
+        offerInfo.status === "bank_paid" ||
+        offerInfo.status === "canceled" ||
+        offerInfo.status === "settled"
+      ) {
+        return null;
+      }
+
+      const contactId = String(message.contactId ?? "").trim();
+      const currentUpdatedAtSec =
+        offerInfo.statusUpdatedAtSec || Number(message.createdAtSec ?? 0) || 0;
+      let otherAccepted = false;
+      let otherHasPriority = false;
+
+      for (const candidate of bankPaymentOfferMessages) {
+        const candidateContactId = String(candidate.contactId ?? "").trim();
+        if (!candidateContactId || candidateContactId === contactId) {
+          continue;
+        }
+
+        const candidateInfo = getLinkyBankPaymentOfferInfo(
+          String(candidate.content ?? ""),
+        );
+        if (candidateInfo?.offerId !== offerInfo.offerId) continue;
+
+        if (
+          candidateInfo.status === "bank_details_sent" ||
+          candidateInfo.status === "bank_paid" ||
+          candidateInfo.status === "settled"
+        ) {
+          otherAccepted = true;
+          otherHasPriority = true;
+          break;
+        }
+
+        if (candidateInfo.status !== "accepted") continue;
+        otherAccepted = true;
+
+        const candidateUpdatedAtSec =
+          candidateInfo.statusUpdatedAtSec ||
+          Number(candidate.createdAtSec ?? 0) ||
+          0;
+        if (
+          offerInfo.status === "accepted" &&
+          (candidateUpdatedAtSec < currentUpdatedAtSec ||
+            (candidateUpdatedAtSec === currentUpdatedAtSec &&
+              candidateContactId.localeCompare(contactId) < 0))
+        ) {
+          otherHasPriority = true;
+        }
+      }
+
+      if (!otherAccepted) return null;
+      if (offerInfo.status === "accepted") {
+        return otherHasPriority ? "backup_recipient" : null;
+      }
+      return "accepted_by_other";
+    },
+    [bankPaymentOfferMessages],
+  );
 
   const focusComposeInput = useCallback(() => {
     const input = composeInputRef.current;
@@ -455,6 +544,9 @@ export const ChatPage: FC<ChatPageProps> = ({
             const paymentRequestInfo = parseCashuPaymentRequestMessage(
               String(message.content ?? ""),
             );
+            const bankPaymentOfferInfo = getLinkyBankPaymentOfferInfo(
+              String(message.content ?? ""),
+            );
             const paymentRequestStatus = rumorId
               ? (latestRequestResponseByRumorId.get(rumorId)?.status ??
                 "requested")
@@ -484,9 +576,29 @@ export const ChatPage: FC<ChatPageProps> = ({
               Boolean(String(message.rumorId ?? "").trim()) &&
               !getCashuTokenMessageInfo(String(message.content ?? "")) &&
               !paymentRequestInfo &&
+              !bankPaymentOfferInfo &&
               !parseLinkyPaymentRequestDeclineMessage(
                 String(message.content ?? ""),
               );
+            const canActOnBankPaymentOffer =
+              bankPaymentOfferInfo?.status === "offered";
+            const canCancelBankPaymentOffer =
+              canActOnBankPaymentOffer &&
+              String(message.direction ?? "") === "out";
+            const canRespondBankPaymentOffer =
+              canActOnBankPaymentOffer &&
+              String(message.direction ?? "") === "in";
+            const canConfirmBankPaymentPaid =
+              bankPaymentOfferInfo?.status === "bank_details_sent" &&
+              String(message.direction ?? "") === "in";
+            const canSettleBankPaymentOffer =
+              bankPaymentOfferInfo?.status === "bank_paid" &&
+              String(message.direction ?? "") === "out" &&
+              !isBankPaymentOfferCanceled(bankPaymentOfferInfo.offerId);
+            const bankPaymentOfferPeerNotice = getBankPaymentOfferPeerNotice(
+              message,
+              bankPaymentOfferInfo,
+            );
 
             return (
               <ChatMessage
@@ -528,6 +640,29 @@ export const ChatPage: FC<ChatPageProps> = ({
                 declineInfo={parseLinkyPaymentRequestDeclineMessage(
                   String(message.content ?? ""),
                 )}
+                bankPaymentOfferInfo={bankPaymentOfferInfo}
+                bankPaymentOfferPeerNotice={bankPaymentOfferPeerNotice}
+                canCancelBankPaymentOffer={canCancelBankPaymentOffer}
+                canConfirmBankPaymentPaid={canConfirmBankPaymentPaid}
+                canRespondBankPaymentOffer={canRespondBankPaymentOffer}
+                canSettleBankPaymentOffer={canSettleBankPaymentOffer}
+                onAcceptBankPaymentOffer={() => {
+                  void onRespondBankPaymentOffer(message, "accepted");
+                }}
+                onCancelBankPaymentOffer={() => {
+                  void onRespondBankPaymentOffer(message, "canceled");
+                }}
+                onCopyText={onCopyText}
+                onConfirmBankPaymentPaid={() => {
+                  void onRespondBankPaymentOffer(message, "bank_paid");
+                }}
+                onDeclineBankPaymentOffer={() => {
+                  void onRespondBankPaymentOffer(message, "declined");
+                }}
+                onSettleBankPaymentOffer={() => {
+                  void onSettleBankPaymentOffer(message);
+                }}
+                onOpenBankPayment={onOpenBankPayment}
                 onDeclinePaymentRequest={() => {
                   void onDeclinePaymentRequest(message);
                 }}

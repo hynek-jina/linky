@@ -173,6 +173,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       contact: TContact;
       amountSat: number;
       fromQueue?: boolean;
+      logCompletedOnly?: boolean;
       pendingMessageId?: string;
       paymentRequestId?: string | null;
       replyContext?: ReplyContext | null;
@@ -181,6 +182,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         contact,
         amountSat,
         fromQueue,
+        logCompletedOnly,
         pendingMessageId,
         paymentRequestId,
         replyContext,
@@ -513,18 +515,20 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         }
 
         if (sendBatches.length === 0) {
-          logPaymentEvent({
-            direction: "out",
-            status: "error",
-            amount: amountSat,
-            fee: null,
-            mint: lastMint,
-            unit: "sat",
-            error: getUnknownErrorMessage(lastError, "insufficient funds"),
-            contactId: contact.id as ContactId,
-            method: "cashu_chat",
-            phase: "swap",
-          });
+          if (!logCompletedOnly) {
+            logPaymentEvent({
+              direction: "out",
+              status: "error",
+              amount: amountSat,
+              fee: null,
+              mint: lastMint,
+              unit: "sat",
+              error: getUnknownErrorMessage(lastError, "insufficient funds"),
+              contactId: contact.id as ContactId,
+              method: "cashu_chat",
+              phase: "swap",
+            });
+          }
           if (notify) {
             setStatus(
               lastError
@@ -751,23 +755,25 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
 
         const usedMint = sendBatches[0]?.mint ?? null;
 
-        logPaymentEvent({
-          direction: "out",
-          status: "ok",
-          amount: sentAmountSat,
-          details: {
-            ...(gainedToken ? { gainedToken } : {}),
-            ...(paymentRequestId ? { requestId: paymentRequestId } : {}),
-            usedInputTokens,
-          },
-          fee: null,
-          mint: usedMint,
-          unit: "sat",
-          error: null,
-          contactId: contact.id as ContactId,
-          method: "cashu_chat",
-          phase: hasPendingMessages ? "publish" : "complete",
-        });
+        if (!logCompletedOnly || !hasPendingMessages) {
+          logPaymentEvent({
+            direction: "out",
+            status: "ok",
+            amount: sentAmountSat,
+            details: {
+              ...(gainedToken ? { gainedToken } : {}),
+              ...(paymentRequestId ? { requestId: paymentRequestId } : {}),
+              usedInputTokens,
+            },
+            fee: null,
+            mint: usedMint,
+            unit: "sat",
+            error: null,
+            contactId: contact.id as ContactId,
+            method: "cashu_chat",
+            phase: hasPendingMessages ? "publish" : "complete",
+          });
+        }
 
         if (notify) {
           const displayName =
@@ -793,18 +799,20 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
 
         return { ok: true, queued: hasPendingMessages };
       } catch (e) {
-        logPaymentEvent({
-          direction: "out",
-          status: "error",
-          amount: amountSat,
-          fee: null,
-          mint: lastMint,
-          unit: "sat",
-          error: getUnknownErrorMessage(e, "unknown"),
-          contactId: contact.id as ContactId,
-          method: "cashu_chat",
-          phase: "publish",
-        });
+        if (!logCompletedOnly) {
+          logPaymentEvent({
+            direction: "out",
+            status: "error",
+            amount: amountSat,
+            fee: null,
+            mint: lastMint,
+            unit: "sat",
+            error: getUnknownErrorMessage(e, "unknown"),
+            contactId: contact.id as ContactId,
+            method: "cashu_chat",
+            phase: "publish",
+          });
+        }
         if (notify) {
           setStatus(
             `${t("payFailed")}: ${getUnknownErrorMessage(e, "unknown")}`,

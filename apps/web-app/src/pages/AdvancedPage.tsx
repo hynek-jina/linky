@@ -12,6 +12,8 @@ import {
   Landmark,
   Languages,
   LogOut,
+  Minus,
+  Plus,
   RadioTower,
   RefreshCw,
   RotateCw,
@@ -24,6 +26,10 @@ import {
   useAppShellActions,
   useAppShellCore,
 } from "../app/context/AppShellContexts";
+import {
+  LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
+  LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
+} from "../app/lib/bankPaymentOffer";
 import {
   PasswordManagerSaveForm,
   type PasswordManagerSaveFormHandle,
@@ -52,6 +58,7 @@ interface AdvancedPageProps {
   handleImportAppDataFilePicked: (file: File | null) => Promise<void>;
   importDataFileInputRef: React.RefObject<HTMLInputElement | null>;
   isSeedLogin: boolean;
+  bankPaymentOfferRecipientCount: number;
   lightningInvoiceAutoPayLimit: number;
   logoutArmed: boolean;
   nostrRelayOverallStatus: "connected" | "checking" | "disconnected";
@@ -67,6 +74,7 @@ interface AdvancedPageProps {
   requestLogout: () => void;
   saveSeedToPasswordManager: () => Promise<PasswordManagerSaveResult>;
   seedMnemonic: string | null;
+  setBankPaymentOfferRecipientCount: (value: number) => void;
   setLightningInvoiceAutoPayLimit: (value: number) => void;
   setPayWithCashuEnabled: (value: boolean) => void;
   setCashuAutoswapEnabled: (value: boolean) => void;
@@ -89,6 +97,7 @@ export function AdvancedPage({
   exportAppData,
   handleImportAppDataFilePicked,
   importDataFileInputRef,
+  bankPaymentOfferRecipientCount,
   lightningInvoiceAutoPayLimit,
   logoutArmed,
   nostrRelayOverallStatus,
@@ -102,6 +111,7 @@ export function AdvancedPage({
   requestLogout,
   saveSeedToPasswordManager,
   seedMnemonic,
+  setBankPaymentOfferRecipientCount,
   setPayWithCashuEnabled,
   setCashuAutoswapEnabled,
   t,
@@ -443,6 +453,59 @@ export function AdvancedPage({
             </span>
           </span>
         </button>
+
+        <div className="settings-row">
+          <div className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              <UserRound size={18} />
+            </span>
+            <span className="settings-label">
+              {t("bankPaymentOfferRecipientCount")}
+            </span>
+          </div>
+          <div className="settings-right">
+            <div
+              className="settings-stepper"
+              aria-label={t("bankPaymentOfferRecipientCount")}
+            >
+              <button
+                type="button"
+                className="settings-stepper-button"
+                disabled={
+                  bankPaymentOfferRecipientCount <=
+                  LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT
+                }
+                onClick={() =>
+                  setBankPaymentOfferRecipientCount(
+                    bankPaymentOfferRecipientCount - 1,
+                  )
+                }
+                aria-label={t("bankPaymentOfferRecipientDecrease")}
+              >
+                <Minus size={16} />
+              </button>
+              <span className="settings-stepper-value">
+                {bankPaymentOfferRecipientCount}
+              </span>
+              <button
+                type="button"
+                className="settings-stepper-button"
+                disabled={
+                  bankPaymentOfferRecipientCount >=
+                  LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT
+                }
+                onClick={() =>
+                  setBankPaymentOfferRecipientCount(
+                    bankPaymentOfferRecipientCount + 1,
+                  )
+                }
+                aria-label={t("bankPaymentOfferRecipientIncrease")}
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="settings-section">

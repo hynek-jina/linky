@@ -1,4 +1,9 @@
 import React from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useFiatRates } from "../app/hooks/useFiatRates";
+import { navigateTo } from "../hooks/useRouting";
+import type { FiatRates } from "../utils/displayAmounts";
+import { formatInteger } from "../utils/formatting";
 import {
   openSpdPaymentInBank,
   tryParseSpdPayment,
@@ -6,6 +11,21 @@ import {
 } from "../utils/spdPayment";
 
 interface SpdPaymentPageProps {
+  offerContacts: {
+    id?: unknown;
+    name?: unknown;
+    npub?: unknown;
+  }[];
+  onRequestReimbursement: (args: {
+    amountSat: number | null;
+    amountText: string;
+    contacts: {
+      id?: unknown;
+      name?: unknown;
+      npub?: unknown;
+    }[];
+    spdPayload: string;
+  }) => Promise<boolean>;
   spdPayload: string;
   t: (key: string) => string;
 }
@@ -19,10 +39,54 @@ interface SpdPaymentFieldRow {
 const getSpdField = (payment: SpdPayment, key: string): string =>
   String(payment.fields[key] ?? "").trim();
 
-const getSpdAmountText = (payment: SpdPayment): string => {
-  const amount = getSpdField(payment, "AM");
-  const currency = getSpdField(payment, "CC");
-  return [amount, currency].filter(Boolean).join(" ");
+const SATS_PER_BTC = 100_000_000;
+
+const getRateForCurrency = (
+  currency: string,
+  fiatRates: FiatRates,
+): number | null => {
+  switch (currency.toUpperCase()) {
+    case "CHF":
+      return fiatRates.chfPerBtc;
+    case "CZK":
+      return fiatRates.czkPerBtc;
+    case "EUR":
+      return fiatRates.eurPerBtc;
+    case "USD":
+      return fiatRates.usdPerBtc;
+    default:
+      return null;
+  }
+};
+
+const parseSpdAmount = (value: string): number | null => {
+  const normalized = value.trim().replace(/\s/g, "").replace(",", ".");
+  if (!/^\d+(\.\d+)?$/.test(normalized)) return null;
+
+  const amount = Number.parseFloat(normalized);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return amount;
+};
+
+const getSpdAmountSat = (
+  payment: SpdPayment,
+  fiatRates: FiatRates | null,
+): number | null => {
+  const amount = parseSpdAmount(getSpdField(payment, "AM"));
+  if (amount === null) return null;
+
+  const currency = getSpdField(payment, "CC").toUpperCase();
+  if (currency === "SAT" || currency === "SATS") {
+    return Math.round(amount);
+  }
+
+  if (!fiatRates) return null;
+
+  const rate = getRateForCurrency(currency, fiatRates);
+  if (rate === null || rate <= 0) return null;
+
+  const amountSat = Math.round((amount / rate) * SATS_PER_BTC);
+  return Number.isFinite(amountSat) && amountSat > 0 ? amountSat : null;
 };
 
 const getOpenErrorText = (error: unknown, t: (key: string) => string) => {
@@ -53,8 +117,6 @@ const buildSpdRows = (
 
   addRow("RN", t("spdPaymentRecipient"));
   addRow("ACC", t("spdPaymentAccount"));
-  addRow("AM", t("spdPaymentAmount"));
-  addRow("CC", t("spdPaymentCurrency"));
   addRow("X-VS", t("spdPaymentVariableSymbol"));
   addRow("X-SS", t("spdPaymentSpecificSymbol"));
   addRow("X-KS", t("spdPaymentConstantSymbol"));
@@ -65,9 +127,16 @@ const buildSpdRows = (
 };
 
 export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
+  offerContacts,
+  onRequestReimbursement,
   spdPayload,
   t,
 }) => {
+  const { displayCurrency, displayUnit, formatDisplayedAmountText, lang } =
+    useAppShellCore();
+  const fiatRates = useFiatRates();
+  const [isRequestingOffer, setIsRequestingOffer] = React.useState(false);
+  const [offerStatus, setOfferStatus] = React.useState<string | null>(null);
   const [isOpening, setIsOpening] = React.useState(false);
   const [openError, setOpenError] = React.useState<string | null>(null);
   const payment = React.useMemo(
@@ -83,9 +152,29 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
     );
   }
 
-  const amountText = getSpdAmountText(payment);
+  const amount = parseSpdAmount(getSpdField(payment, "AM"));
+  const currency = getSpdField(payment, "CC").toLowerCase();
+  const amountSat = getSpdAmountSat(payment, fiatRates);
+  const amountText =
+    displayCurrency === "hidden" && amount !== null
+      ? "*****"
+      : amount !== null && currency === displayCurrency
+        ? `~${formatInteger(Math.round(amount), lang)} ${displayUnit}`
+        : amountSat === null
+          ? ""
+          : formatDisplayedAmountText(amountSat);
   const recipient = getSpdField(payment, "RN");
   const rows = buildSpdRows(payment, t);
+  const offerContactsCount = offerContacts.length;
+  const requestReimbursementLabel =
+    offerContactsCount === 0
+      ? t("spdPaymentNoOfferContact")
+      : offerContactsCount === 1
+        ? t("spdPaymentRequestReimbursementCountOne")
+        : t("spdPaymentRequestReimbursementCountOther").replace(
+            "{count}",
+            String(offerContactsCount),
+          );
 
   const openInBank = async () => {
     if (isOpening) return;
@@ -98,6 +187,28 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
       setOpenError(getOpenErrorText(error, t));
     } finally {
       setIsOpening(false);
+    }
+  };
+
+  const requestReimbursement = async () => {
+    if (offerContacts.length === 0 || !amountText || isRequestingOffer) return;
+
+    setIsRequestingOffer(true);
+    setOfferStatus(null);
+    try {
+      const sent = await onRequestReimbursement({
+        amountSat,
+        amountText,
+        contacts: offerContacts,
+        spdPayload: payment.payload,
+      });
+      if (sent) {
+        navigateTo({ route: "wallet" });
+        return;
+      }
+      setOfferStatus(t("spdPaymentOfferFailed"));
+    } finally {
+      setIsRequestingOffer(false);
     }
   };
 
@@ -125,7 +236,22 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
 
       <button
         type="button"
-        className="btn-wide bank-payment-open"
+        className="btn-wide bank-payment-request"
+        disabled={
+          offerContacts.length === 0 || !amountText || isRequestingOffer
+        }
+        onClick={() => {
+          void requestReimbursement();
+        }}
+      >
+        {isRequestingOffer
+          ? t("spdPaymentOfferSending")
+          : requestReimbursementLabel}
+      </button>
+
+      <button
+        type="button"
+        className="btn-wide secondary bank-payment-open"
         disabled={isOpening}
         onClick={() => {
           void openInBank();
@@ -135,6 +261,9 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
       </button>
 
       <p className="muted bank-payment-hint">{t("spdPaymentOpenHint")}</p>
+      {offerStatus ? (
+        <p className="muted bank-payment-offer-status">{offerStatus}</p>
+      ) : null}
       {openError ? <p className="bank-payment-error">{openError}</p> : null}
     </section>
   );

@@ -49,6 +49,10 @@ vi.mock("../src/app/lib/nostrPool", () => ({
 }));
 
 import { useInboxNotificationsSync } from "../src/app/hooks/messages/useInboxNotificationsSync";
+import {
+  createLinkyBankPaymentOfferEvent,
+  LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
+} from "../src/app/lib/bankPaymentOffer";
 import type {
   LocalNostrMessage,
   LocalNostrReaction,
@@ -306,7 +310,12 @@ describe("useInboxNotificationsSync", () => {
 
     const root = await renderHarness("contact-alice");
 
-    expect(pushToast).toHaveBeenCalledWith("Bob: hi from Bob");
+    expect(pushToast).toHaveBeenCalledWith(
+      "Bob: hi from Bob",
+      expect.objectContaining({
+        onClick: expect.any(Function),
+      }),
+    );
 
     await act(async () => {
       root.unmount();
@@ -336,6 +345,100 @@ describe("useInboxNotificationsSync", () => {
 
     await act(async () => {
       activeRoot.unmount();
+    });
+  });
+
+  it("ignores expired bank payment offer events during inbox bootstrap", async () => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+
+    const oldCreatedAtSec =
+      Math.floor(Date.now() / 1e3) -
+      LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC -
+      10;
+    const offerEvent = createLinkyBankPaymentOfferEvent({
+      amountSat: 80,
+      amountText: "80 sat",
+      clientId: "expired-offer-client",
+      createdAt: oldCreatedAtSec,
+      offerId: "expired-offer",
+      offererPublicKey: "known-contact-pubkey",
+      recipientPublicKey: "me-pubkey-hex",
+      senderPublicKey: "known-contact-pubkey",
+      status: "offered",
+    });
+    const wrapEvent = { id: "wrap-expired-offer-1" };
+    querySyncMock.mockResolvedValue([wrapEvent]);
+    subscribeMock.mockReturnValue({
+      close: vi.fn(async () => {}),
+    });
+    unwrapEventMock.mockReturnValue({
+      ...offerEvent,
+      id: "rumor-expired-offer-1",
+    });
+
+    const appendLocalNostrMessage = vi.fn(() => "message-1");
+    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
+    const maybeShowPwaNotification = vi.fn(async () => {});
+    const onBankPaymentOfferMessage = vi.fn();
+    const pushToast = vi.fn();
+    const updateLocalNostrMessage = vi.fn();
+    const updateLocalNostrReaction = vi.fn();
+    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
+    const setContactAttentionById: React.Dispatch<
+      React.SetStateAction<Record<string, number>>
+    > = vi.fn();
+
+    const Harness = () => {
+      useInboxNotificationsSync({
+        appendLocalNostrMessage,
+        appendLocalNostrReaction,
+        contacts: [
+          {
+            id: "known-contact",
+            name: "Bob",
+            npub: "npub-known",
+          },
+        ],
+        currentNsec: "nsec-test",
+        maybeShowPwaNotification,
+        nostrFetchRelays: [],
+        nostrMessageWrapIdsRef: { current: new Set<string>() },
+        nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
+        nostrMessagesRecent: [],
+        nostrReactionWrapIdsRef: { current: new Set<string>() },
+        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+        onBankPaymentOfferMessage,
+        pushToast,
+        route: { kind: "contacts" },
+        setContactAttentionById,
+        softDeleteLocalNostrReactionsByWrapIds,
+        t: (key: string) => key,
+        updateLocalNostrMessage,
+        updateLocalNostrReaction,
+      });
+
+      return null;
+    };
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<Harness />);
+    });
+    await flushEffects();
+    await flushEffects();
+
+    expect(onBankPaymentOfferMessage).not.toHaveBeenCalled();
+    expect(pushToast).not.toHaveBeenCalled();
+    expect(maybeShowPwaNotification).not.toHaveBeenCalled();
+    expect(setContactAttentionById).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
     });
   });
 
@@ -530,7 +633,12 @@ describe("useInboxNotificationsSync", () => {
         wrapId: "wrap-known-via-ptag-1",
       }),
     );
-    expect(pushToast).toHaveBeenCalledWith("Bob: hello from Bob");
+    expect(pushToast).toHaveBeenCalledWith(
+      "Bob: hello from Bob",
+      expect.objectContaining({
+        onClick: expect.any(Function),
+      }),
+    );
     expect(maybeShowPwaNotification).toHaveBeenCalledWith(
       "Bob",
       "hello from Bob",

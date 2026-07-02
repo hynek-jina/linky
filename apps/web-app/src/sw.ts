@@ -11,6 +11,10 @@ import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst } from "workbox-strategies";
 import {
+  getLinkyBankPaymentOfferText,
+  isLinkyBankPaymentOfferEvent,
+} from "./app/lib/bankPaymentOffer";
+import {
   isInvalidInnerRumorPubkey,
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./app/hooks/messages/chatNostrProtocol";
@@ -371,6 +375,24 @@ async function decryptIncomingMessageBody(
       body: getReceivedMoneyCopyForLanguage(self.navigator.language),
       isCashu: false,
       isPaymentNotice: true,
+      senderPub,
+    };
+  }
+
+  if (isLinkyBankPaymentOfferEvent(inner)) {
+    const offerText = getLinkyBankPaymentOfferText(content);
+    if (!offerText) return null;
+
+    await logSw("sw decrypt succeeded", {
+      contentLength: content.length,
+      data: readEnvelopeDebugMeta(envelope),
+      isBankPaymentOffer: true,
+      senderPub,
+    });
+    return {
+      body: offerText,
+      isCashu: false,
+      isPaymentNotice: false,
       senderPub,
     };
   }

@@ -1,6 +1,11 @@
 import React from "react";
-import { X } from "lucide-react";
+import { Check, Copy, Landmark, X } from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import {
+  LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
+  type LinkyBankPaymentOfferInfo,
+  type LinkyBankPaymentOfferStatus,
+} from "../app/lib/bankPaymentOffer";
 import { parseIdentityChangeMessageContent } from "../app/lib/identityChangeMessage";
 import {
   extractMessageLinks,
@@ -16,6 +21,7 @@ import type {
 import { deriveDefaultProfile } from "../derivedProfile";
 import { getNextMintIconUrl } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
+import { tryParseSpdPayment } from "../utils/spdPayment";
 import { EditIndicator } from "./EditIndicator";
 import { PayIcon } from "./icons";
 import { LinkPreviewCard } from "./LinkPreviewCard";
@@ -35,6 +41,10 @@ export interface NpubMessageContactInfo {
   pictureUrl: string | null;
 }
 
+export type BankPaymentOfferPeerNotice =
+  | "accepted_by_other"
+  | "backup_recipient";
+
 const MESSAGE_CASHU_PATTERN = /cashu[0-9A-Za-z_-]+={0,2}/gi;
 const MESSAGE_NPUB_PATTERN =
   /^(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?$/i;
@@ -49,6 +59,12 @@ interface ChatMessageProps {
     react: string;
     reply: string;
   };
+  bankPaymentOfferInfo: LinkyBankPaymentOfferInfo | null;
+  bankPaymentOfferPeerNotice: BankPaymentOfferPeerNotice | null;
+  canCancelBankPaymentOffer: boolean;
+  canConfirmBankPaymentPaid: boolean;
+  canRespondBankPaymentOffer: boolean;
+  canSettleBankPaymentOffer: boolean;
   canEdit: boolean;
   canActOnPaymentRequest: boolean;
   canReplyOrReact: boolean;
@@ -63,6 +79,13 @@ interface ChatMessageProps {
   messageElRef?: (el: HTMLDivElement | null, messageId: string) => void;
   nextMessage: LocalNostrMessage | null;
   onCopy: (message: LocalNostrMessage) => void;
+  onCopyText: (text: string) => void;
+  onAcceptBankPaymentOffer: () => void;
+  onCancelBankPaymentOffer: () => void;
+  onConfirmBankPaymentPaid: () => void;
+  onDeclineBankPaymentOffer: () => void;
+  onOpenBankPayment: (spdPayload: string) => Promise<void>;
+  onSettleBankPaymentOffer: () => void;
   onDeclinePaymentRequest: () => void;
   onEdit: (message: LocalNostrMessage) => void;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
@@ -83,9 +106,53 @@ interface ChatMessageProps {
 const SWIPE_REPLY_THRESHOLD = 48;
 const SWIPE_REPLY_VERTICAL_TOLERANCE = 24;
 const LONG_PRESS_MS = 450;
+const formatRemainingTime = (
+  remainingSec: number,
+  t: (key: string) => string,
+): string => {
+  if (remainingSec <= 0) return t("bankPaymentOfferExpired");
+
+  const minutes = Math.floor(remainingSec / 60);
+  const seconds = Math.max(0, remainingSec % 60);
+  return t("bankPaymentOfferTimeRemainingClock")
+    .replace("{minutes}", String(minutes))
+    .replace("{seconds}", String(seconds).padStart(2, "0"));
+};
+
+const getBankPaymentOfferDescription = (
+  status: LinkyBankPaymentOfferStatus,
+  amountText: string,
+  isOut: boolean,
+  t: (key: string) => string,
+): string => {
+  const key =
+    status === "accepted"
+      ? isOut
+        ? "bankPaymentOfferDescriptionAccepted"
+        : "bankPaymentOfferDescriptionAcceptedIncoming"
+      : status === "bank_details_sent"
+        ? ""
+        : status === "bank_paid"
+          ? "bankPaymentOfferDescriptionBankPaid"
+          : status === "canceled"
+            ? ""
+            : status === "declined"
+              ? "bankPaymentOfferDescriptionDeclined"
+              : status === "settled"
+                ? ""
+                : "bankPaymentOfferDescriptionOffered";
+
+  return key ? t(key).replace("{amount}", amountText) : "";
+};
 
 export function ChatMessage({
   actionLabels,
+  bankPaymentOfferInfo,
+  bankPaymentOfferPeerNotice,
+  canCancelBankPaymentOffer,
+  canConfirmBankPaymentPaid,
+  canRespondBankPaymentOffer,
+  canSettleBankPaymentOffer,
   canEdit,
   canActOnPaymentRequest,
   canReplyOrReact,
@@ -99,15 +166,22 @@ export function ChatMessage({
   message,
   messageElRef,
   nextMessage,
+  onAcceptBankPaymentOffer,
+  onCancelBankPaymentOffer,
+  onConfirmBankPaymentPaid,
   onCopy,
+  onCopyText,
+  onDeclineBankPaymentOffer,
   onDeclinePaymentRequest,
   onEdit,
   onMintIconError,
   onMintIconLoad,
+  onOpenBankPayment,
   onOpenNpubContact,
   onPayPaymentRequest,
   onReact,
   onReply,
+  onSettleBankPaymentOffer,
   payPaymentRequestBusy,
   payPaymentRequestDisabled,
   paymentRequestInfo,
@@ -119,6 +193,8 @@ export function ChatMessage({
   const { formatDisplayedAmountParts, formatDisplayedAmountText, t } =
     useAppShellCore();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [nowMs, setNowMs] = React.useState(() => Date.now());
+  const [bankOpenBusy, setBankOpenBusy] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
   const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
   const swipeTriggeredRef = React.useRef(false);
@@ -160,6 +236,62 @@ export function ChatMessage({
 
   const tokenInfo = getCashuTokenMessageInfo(content);
   const isDeclineMessage = Boolean(declineInfo);
+  const bankPayment = React.useMemo(
+    () =>
+      bankPaymentOfferInfo?.spdPayload
+        ? tryParseSpdPayment(bankPaymentOfferInfo.spdPayload)
+        : null,
+    [bankPaymentOfferInfo],
+  );
+  const bankOfferDisplayAmount = bankPaymentOfferInfo?.amountSat
+    ? formatDisplayedAmountText(bankPaymentOfferInfo.amountSat)
+    : (bankPaymentOfferInfo?.amountText ?? "");
+  const bankOfferDescription = bankPaymentOfferInfo
+    ? getBankPaymentOfferDescription(
+        bankPaymentOfferInfo.status,
+        bankOfferDisplayAmount,
+        isOut,
+        t,
+      )
+    : "";
+  const bankOfferPhaseTtlSec =
+    bankPaymentOfferInfo &&
+    (bankPaymentOfferInfo.status === "accepted" ||
+      bankPaymentOfferInfo.status === "bank_details_sent" ||
+      bankPaymentOfferInfo.status === "bank_paid" ||
+      bankPaymentOfferInfo.status === "offered")
+      ? LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC
+      : null;
+  const bankOfferPhaseStartedAtSec =
+    bankPaymentOfferInfo?.statusUpdatedAtSec ?? createdAtSec;
+  const bankOfferRemainingSec =
+    bankOfferPhaseTtlSec && bankOfferPhaseStartedAtSec > 0
+      ? bankOfferPhaseStartedAtSec +
+        bankOfferPhaseTtlSec -
+        Math.floor(nowMs / 1000)
+      : null;
+  const bankOfferTimeLabel =
+    bankOfferRemainingSec === null
+      ? null
+      : formatRemainingTime(bankOfferRemainingSec, t);
+  const showBankPaymentDetails = Boolean(bankPayment);
+  const bankOfferPeerNoticeText =
+    bankPaymentOfferPeerNotice === "accepted_by_other"
+      ? t("bankPaymentOfferAcceptedByOther")
+      : bankPaymentOfferPeerNotice === "backup_recipient"
+        ? t("bankPaymentOfferBackupRecipient")
+        : "";
+
+  React.useEffect(() => {
+    if (!bankPaymentOfferInfo) return;
+    if (!bankOfferPhaseTtlSec) return;
+
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [bankOfferPhaseTtlSec, bankPaymentOfferInfo]);
 
   const renderCashuTokenPill = React.useCallback(
     (info: CashuTokenMessageInfo, key?: string) => {
@@ -242,7 +374,9 @@ export function ChatMessage({
   );
 
   const inlineMessageContent = React.useMemo(() => {
-    if (paymentRequestInfo || isDeclineMessage) return null;
+    if (paymentRequestInfo || isDeclineMessage || bankPaymentOfferInfo) {
+      return null;
+    }
 
     const segments: React.ReactNode[] = [];
     const matches = Array.from(content.matchAll(MESSAGE_INLINE_ENTITY_PATTERN));
@@ -341,6 +475,7 @@ export function ChatMessage({
     content,
     getCashuTokenMessageInfo,
     getNpubMessageContactInfo,
+    bankPaymentOfferInfo,
     isDeclineMessage,
     messageId,
     onOpenNpubContact,
@@ -356,11 +491,22 @@ export function ChatMessage({
   }, [content, tokenInfo]);
 
   const previewUrl = React.useMemo(() => {
-    if (paymentRequestInfo || isDeclineMessage || isStandaloneTokenMessage) {
+    if (
+      paymentRequestInfo ||
+      bankPaymentOfferInfo ||
+      isDeclineMessage ||
+      isStandaloneTokenMessage
+    ) {
       return null;
     }
     return extractMessageLinks(content)[0]?.url ?? null;
-  }, [content, isDeclineMessage, isStandaloneTokenMessage, paymentRequestInfo]);
+  }, [
+    bankPaymentOfferInfo,
+    content,
+    isDeclineMessage,
+    isStandaloneTokenMessage,
+    paymentRequestInfo,
+  ]);
 
   const openMenu = React.useCallback(() => {
     setMenuOpen(true);
@@ -431,6 +577,18 @@ export function ChatMessage({
     resetSwipeTransform();
   };
 
+  const openBankPayment = React.useCallback(async () => {
+    const spdPayload = String(bankPaymentOfferInfo?.spdPayload ?? "").trim();
+    if (!spdPayload || bankOpenBusy) return;
+
+    setBankOpenBusy(true);
+    try {
+      await onOpenBankPayment(spdPayload);
+    } finally {
+      setBankOpenBusy(false);
+    }
+  }, [bankOpenBusy, bankPaymentOfferInfo, onOpenBankPayment]);
+
   return (
     <React.Fragment key={messageId}>
       {showDaySeparator ? (
@@ -496,7 +654,222 @@ export function ChatMessage({
                   <span>{replyQuoteText}</span>
                 </div>
               )}
-              {paymentRequestInfo ? (
+              {bankPaymentOfferInfo ? (
+                <div className="chat-payment-request-card chat-bank-payment-offer-card">
+                  <div className="chat-payment-request-header">
+                    <span className="chat-payment-request-title">
+                      {t("bankPaymentOfferTitle")}
+                    </span>
+                    <span
+                      className={`chat-payment-request-status is-${bankPaymentOfferInfo.status}`}
+                    >
+                      {bankPaymentOfferInfo.status === "accepted"
+                        ? t("bankPaymentOfferStatusAccepted")
+                        : bankPaymentOfferInfo.status === "bank_details_sent"
+                          ? isOut
+                            ? t("bankPaymentOfferStatusBankDetailsSent")
+                            : t("bankPaymentOfferStatusBankDetailsReceived")
+                          : bankPaymentOfferInfo.status === "bank_paid"
+                            ? t("bankPaymentOfferStatusBankPaid")
+                            : bankPaymentOfferInfo.status === "canceled"
+                              ? t("bankPaymentOfferStatusCanceled")
+                              : bankPaymentOfferInfo.status === "declined"
+                                ? t("bankPaymentOfferStatusDeclined")
+                                : bankPaymentOfferInfo.status === "settled"
+                                  ? t("bankPaymentOfferStatusSettled")
+                                  : t("bankPaymentOfferStatusOffered")}
+                    </span>
+                  </div>
+                  <div className="chat-bank-payment-amount-row">
+                    <div className="chat-payment-request-amount">
+                      {bankOfferDisplayAmount}
+                    </div>
+                    {showBankPaymentDetails && bankPayment ? (
+                      <button
+                        type="button"
+                        className="btn-small secondary chat-bank-payment-open-inline"
+                        disabled={bankOpenBusy}
+                        onClick={() => {
+                          void openBankPayment();
+                        }}
+                      >
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            {bankOpenBusy ? (
+                              <span className="btn-spinner" />
+                            ) : (
+                              <Landmark size={16} />
+                            )}
+                          </span>
+                          <span>
+                            {bankOpenBusy
+                              ? t("spdPaymentOpening")
+                              : t("spdPaymentOpenInBank")}
+                          </span>
+                        </span>
+                      </button>
+                    ) : null}
+                  </div>
+                  {bankOfferDescription ? (
+                    <div className="chat-payment-request-description">
+                      {bankOfferDescription}
+                    </div>
+                  ) : null}
+                  {bankOfferPeerNoticeText ? (
+                    <div className="chat-payment-request-description">
+                      {bankOfferPeerNoticeText}
+                    </div>
+                  ) : null}
+                  {bankOfferTimeLabel ? (
+                    <div className="chat-bank-payment-timer">
+                      {bankOfferTimeLabel}
+                    </div>
+                  ) : null}
+                  {showBankPaymentDetails && bankPayment ? (
+                    <div className="chat-bank-payment-details">
+                      {bankPayment.fields.RN ? (
+                        <div>
+                          <span>{t("spdPaymentRecipient")}</span>
+                          <strong>{bankPayment.fields.RN}</strong>
+                        </div>
+                      ) : null}
+                      {bankPayment.fields.ACC ? (
+                        <div>
+                          <span>{t("spdPaymentAccount")}</span>
+                          <div className="chat-bank-payment-copy-row">
+                            <button
+                              type="button"
+                              className="copyable transaction-detail-copy chat-bank-payment-copy"
+                              onClick={() => onCopyText(bankPayment.fields.ACC)}
+                              aria-label={t("copy")}
+                              title={t("copy")}
+                            >
+                              <span className="transaction-detail-copyText">
+                                {bankPayment.fields.ACC}
+                              </span>
+                              <span
+                                className="transaction-detail-copyIcon"
+                                aria-hidden="true"
+                              >
+                                <Copy size={14} />
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                      {bankPayment.fields["X-VS"] ? (
+                        <div>
+                          <span>{t("spdPaymentVariableSymbol")}</span>
+                          <strong>{bankPayment.fields["X-VS"]}</strong>
+                        </div>
+                      ) : null}
+                      {bankPayment.fields.MSG ? (
+                        <div>
+                          <span>{t("spdPaymentMessage")}</span>
+                          <strong>{bankPayment.fields.MSG}</strong>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {canRespondBankPaymentOffer ? (
+                    <div className="chat-payment-request-actions">
+                      <button
+                        type="button"
+                        className="btn-wide chat-payment-request-pay"
+                        onClick={onAcceptBankPaymentOffer}
+                      >
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            <Check size={18} />
+                          </span>
+                          <span>{t("bankPaymentOfferAccept")}</span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-wide secondary chat-payment-request-decline"
+                        onClick={onDeclineBankPaymentOffer}
+                      >
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            <X size={18} />
+                          </span>
+                          <span>{t("decline")}</span>
+                        </span>
+                      </button>
+                    </div>
+                  ) : canConfirmBankPaymentPaid ? (
+                    <div className="chat-payment-request-actions">
+                      <button
+                        type="button"
+                        className="btn-wide chat-payment-request-pay"
+                        onClick={onConfirmBankPaymentPaid}
+                      >
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            <Check size={18} />
+                          </span>
+                          <span>{t("bankPaymentOfferMarkPaid")}</span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-wide secondary chat-payment-request-decline"
+                        onClick={onDeclineBankPaymentOffer}
+                      >
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            <X size={18} />
+                          </span>
+                          <span>{t("decline")}</span>
+                        </span>
+                      </button>
+                    </div>
+                  ) : canSettleBankPaymentOffer ? (
+                    <div className="chat-payment-request-actions">
+                      <button
+                        type="button"
+                        className="btn-wide chat-payment-request-pay"
+                        onClick={onSettleBankPaymentOffer}
+                      >
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            <Check size={18} />
+                          </span>
+                          <span>{t("bankPaymentOfferSettle")}</span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-wide secondary chat-payment-request-decline"
+                        onClick={onCancelBankPaymentOffer}
+                      >
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            <X size={18} />
+                          </span>
+                          <span>{t("bankPaymentOfferCancel")}</span>
+                        </span>
+                      </button>
+                    </div>
+                  ) : canCancelBankPaymentOffer ? (
+                    <div className="chat-payment-request-actions">
+                      <button
+                        type="button"
+                        className="btn-wide secondary chat-payment-request-decline"
+                        onClick={onCancelBankPaymentOffer}
+                      >
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            <X size={18} />
+                          </span>
+                          <span>{t("bankPaymentOfferCancel")}</span>
+                        </span>
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : paymentRequestInfo ? (
                 <div className="chat-payment-request-card">
                   <div className="chat-payment-request-header">
                     <span className="chat-payment-request-title">
