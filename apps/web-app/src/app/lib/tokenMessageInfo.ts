@@ -1,6 +1,8 @@
 import { parseCashuToken } from "../../cashu";
 import type { CashuTokenRowLike, MintUrlInput } from "../types/appTypes";
+import { getLinkyBankPaymentOfferInfo } from "./bankPaymentOffer";
 import { createCashuTokenId } from "./cashuTokenIdentity";
+import { parsePrivateImageMessage } from "./privateImageMessage";
 import { extractCashuTokenFromText } from "./tokenText";
 
 export interface CashuTokenMessageInfo {
@@ -42,6 +44,9 @@ export const getCashuTokenMessageInfo = (
   text: string,
   cashuTokensAll: readonly CashuTokenRowLike[],
 ): CashuTokenMessageInfo | null => {
+  if (getLinkyBankPaymentOfferInfo(text)) return null;
+  if (parsePrivateImageMessage(text)) return null;
+
   const tokenRaw = extractCashuTokenFromText(text);
   if (!tokenRaw) return null;
 

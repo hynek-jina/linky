@@ -92,6 +92,7 @@ interface BuildPeopleRoutePropsParams {
   replyContext: PeopleRoutesProps["chatProps"]["replyContext"];
   selectedProfileStatusCurrencies: PeopleRoutesProps["profileProps"]["selectedProfileStatusCurrencies"];
   selectedContact: PeopleRoutesProps["contactProps"]["selectedContact"];
+  sendChatImage: PeopleRoutesProps["chatProps"]["sendChatImage"];
   sendChatMessage: PeopleRoutesProps["chatProps"]["sendChatMessage"];
   setChatDraft: PeopleRoutesProps["chatProps"]["setChatDraft"];
   setContactPayMethod: PeopleRoutesProps["contactPayProps"]["setContactPayMethod"];
@@ -198,6 +199,7 @@ export const buildPeopleRouteProps = ({
   replyContext,
   selectedProfileStatusCurrencies,
   selectedContact,
+  sendChatImage,
   sendChatMessage,
   setChatDraft,
   setContactPayMethod,
@@ -245,6 +247,7 @@ export const buildPeopleRouteProps = ({
       onCancelEdit,
       onAddUnknownContact,
       onBlockUnknownContact,
+      sendChatImage,
       sendChatMessage,
       openContactPay,
       onOpenBankPayment,

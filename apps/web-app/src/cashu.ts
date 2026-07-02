@@ -94,16 +94,19 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
     const entries = asJsonArray(rec.t);
 
     let total = 0;
+    let proofCount = 0;
     for (const entry of entries) {
       const entryRec = isJsonRecord(entry) ? entry : null;
       const proofs = asJsonArray(entryRec?.p);
       for (const proof of proofs) {
         const proofRec = isJsonRecord(proof) ? proof : null;
         const amt = asNumber(proofRec?.a);
+        if (amt !== null) proofCount += 1;
         if (amt !== null) total += amt;
       }
     }
 
+    if (proofCount === 0 || total <= 0) return null;
     return { amount: total, mint, unit };
   }
 
@@ -115,6 +118,7 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
   const mints = new Set<string>();
   const units = new Set<string>();
   let total = 0;
+  let proofCount = 0;
 
   if (entries.length > 0) {
     for (const entry of entries) {
@@ -127,6 +131,7 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
       for (const proof of proofs) {
         if (!isJsonRecord(proof)) continue;
         const amt = asNumber(proof.amount);
+        if (amt !== null) proofCount += 1;
         if (amt !== null) total += amt;
       }
     }
@@ -139,9 +144,12 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
     for (const proof of proofs) {
       if (!isJsonRecord(proof)) continue;
       const amt = asNumber(proof.amount);
+      if (amt !== null) proofCount += 1;
       if (amt !== null) total += amt;
     }
   }
+
+  if (proofCount === 0 || total <= 0) return null;
 
   const mint = mints.size === 1 ? Array.from(mints)[0] : null;
   const unit = units.size === 1 ? Array.from(units)[0] : null;

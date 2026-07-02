@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractCashuTokenMeta } from "./tokenText";
+import { extractCashuTokenFromText, extractCashuTokenMeta } from "./tokenText";
 
 const buildCashuToken = (): string => {
   const payload = JSON.stringify({
@@ -48,5 +48,31 @@ describe("extractCashuTokenMeta", () => {
       unit: "sat",
       amount: 21,
     });
+  });
+});
+
+describe("extractCashuTokenFromText", () => {
+  it("does not treat bank payment offers as Cashu tokens", () => {
+    const bankOffer = JSON.stringify({
+      amountSat: 76,
+      amountText: "76 sat",
+      offerId: "offer-1",
+      offererPublicKey: "pubkey",
+      status: "offered",
+      statusUpdatedAtSec: 1,
+      text: "Nabízím platbu za 76 sat",
+      type: "linky.bank_payment_offer",
+      version: 1,
+    });
+
+    expect(extractCashuTokenFromText(bankOffer)).toBeNull();
+  });
+
+  it("does not treat SPD bank payment payloads as Cashu tokens", () => {
+    expect(
+      extractCashuTokenFromText(
+        "SPD*1.0*ACC:CZ5855000000001265098001*AM:480.50*CC:CZK*MSG:Faktura",
+      ),
+    ).toBeNull();
   });
 });

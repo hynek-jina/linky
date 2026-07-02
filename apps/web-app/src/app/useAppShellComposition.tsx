@@ -289,6 +289,10 @@ import {
   type CashuPaymentRequestMessageInfo,
 } from "./lib/paymentRequestMessage";
 import {
+  parsePrivateImageMessage,
+  privateImagePreviewText,
+} from "./lib/privateImageMessage";
+import {
   wrapEventWithoutPushMarker,
   wrapEventWithPushMarker,
 } from "./lib/pushWrappedEvent";
@@ -2613,7 +2617,7 @@ export const useAppShellComposition = () => {
 
   const cashuTokensWithMeta = useMemo(
     () =>
-      cashuTokensFiltered.map((row) => {
+      cashuTokensFiltered.flatMap((row) => {
         const meta = extractCashuTokenMeta({
           amount: row.amount,
           mint: row.mint,
@@ -2621,13 +2625,18 @@ export const useAppShellComposition = () => {
           token: row.token,
           unit: row.unit,
         });
-        return {
-          ...row,
-          mint: meta.mint ?? null,
-          unit: meta.unit ?? null,
-          amount: meta.amount ?? null,
-          tokenText: meta.tokenText,
-        };
+        const amount = meta.amount ?? 0;
+        if (amount <= 0) return [];
+
+        return [
+          {
+            ...row,
+            mint: meta.mint ?? null,
+            unit: meta.unit ?? null,
+            amount,
+            tokenText: meta.tokenText,
+          },
+        ];
       }),
     [cashuTokensFiltered],
   );
@@ -7413,7 +7422,10 @@ export const useAppShellComposition = () => {
       const contactId = String(contact.id ?? "").trim();
       const last = contactId ? lastMessageByContactId.get(contactId) : null;
       const lastText = String(last?.content ?? "").trim();
-      const tokenInfo = lastText ? getCashuTokenMessageInfo(lastText) : null;
+      const tokenInfo =
+        lastText && !parsePrivateImageMessage(lastText)
+          ? getCashuTokenMessageInfo(lastText)
+          : null;
       const hasAttention = Boolean(
         contactAttentionById[String(contact.id ?? "")],
       );
@@ -8565,6 +8577,17 @@ export const useAppShellComposition = () => {
     await sendChatMessage();
   }, [editChatMessage, editContext, sendChatMessage]);
 
+  const sendChatImage = React.useCallback(
+    async (file: File) => {
+      if (editContext) return;
+      await sendChatMessage({
+        clearDraft: false,
+        imageFile: file,
+      });
+    },
+    [editContext, sendChatMessage],
+  );
+
   const requestSelectedContact = React.useCallback(async () => {
     if (route.kind !== "contactPay") return;
     if (!selectedContact) return;
@@ -8691,16 +8714,25 @@ export const useAppShellComposition = () => {
       const messageRumorId = String(message.rumorId ?? "").trim();
       const messageAuthorPubkey = String(message.pubkey ?? "").trim();
       if (!messageRumorId || !messageAuthorPubkey) return;
-      void sendReaction({ emoji, messageAuthorPubkey, messageRumorId });
+      void sendReaction({
+        emoji,
+        messageAuthorPubkey,
+        messageKind: parsePrivateImageMessage(message.content) ? 15 : 14,
+        messageRumorId,
+      });
     },
     [sendReaction],
   );
 
   const onCopyChatMessage = React.useCallback(
     (message: LocalNostrMessage) => {
-      void copyText(String(message.content ?? ""));
+      const content = String(message.content ?? "");
+      const copyContent = parsePrivateImageMessage(content)
+        ? privateImagePreviewText(t)
+        : content;
+      void copyText(copyContent);
     },
-    [copyText],
+    [copyText, t],
   );
 
   const onPayChatPaymentRequest = React.useCallback(
@@ -9345,6 +9377,7 @@ export const useAppShellComposition = () => {
       saveProfileEdits,
       scanIsOpen,
       selectedContact,
+      sendChatImage,
       sendChatMessage: sendChatOrEditMessage,
       setChatDraft,
       setContactPayMethod,

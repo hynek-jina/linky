@@ -2,6 +2,7 @@ import React from "react";
 import type { Route } from "../../../types/route";
 import { getLinkyBankPaymentOfferInfo } from "../../lib/bankPaymentOffer";
 import { parseCashuPaymentRequestMessage } from "../../lib/paymentRequestMessage";
+import { parsePrivateImageMessage } from "../../lib/privateImageMessage";
 import type { ContactRowLike, LocalNostrMessage } from "../../types/appTypes";
 
 interface UseChatMessageEffectsParams<TContact extends ContactRowLike> {
@@ -106,6 +107,7 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
 
       const content = String(message.content ?? "");
       if (getLinkyBankPaymentOfferInfo(content)) continue;
+      if (parsePrivateImageMessage(content)) continue;
 
       const info = getCashuTokenMessageInfo(content);
       if (!info) continue;
@@ -154,6 +156,7 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
 
       const content = String(message.content ?? "");
       if (getLinkyBankPaymentOfferInfo(content)) continue;
+      if (parsePrivateImageMessage(content)) continue;
 
       const info = getCashuTokenMessageInfo(content);
       if (!info) continue;

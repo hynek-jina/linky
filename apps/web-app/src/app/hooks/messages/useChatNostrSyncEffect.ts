@@ -25,6 +25,7 @@ import {
   isInvalidInnerRumorPubkey,
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./chatNostrProtocol";
+import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
 import { readUnknownPubkeyHex } from "./contactIdentity";
 import type { KnownNostrMessageIdentityIndex } from "./messageHelpers";
 import { hasKnownNostrMessageIdentity } from "./messageHelpers";
@@ -158,11 +159,14 @@ export const useChatNostrSyncEffect = ({
 
             if (cancelled) return;
 
-            if (inner.kind === 14) {
+            if (inner.kind === 14 || inner.kind === 15) {
               if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
               if (isInvalidInnerRumorPubkey(innerPub, wrap.pubkey)) return;
 
-              const content = String(inner.content ?? "");
+              const content =
+                inner.kind === 15
+                  ? (privateImageMessageFromEvent(inner) ?? "")
+                  : String(inner.content ?? "");
               if (!content.trim()) return;
               const pTags = tags
                 .filter((tag) => Array.isArray(tag) && tag[0] === "p")
@@ -170,6 +174,7 @@ export const useChatNostrSyncEffect = ({
               const taggedPeerPub =
                 pTags.find((tag) => tag && tag !== myPubHex) ?? "";
               if (
+                inner.kind === 14 &&
                 isNestedEncryptedNip44PayloadForAnyPubkey(
                   content,
                   [innerPub, taggedPeerPub, wrap.pubkey],
@@ -402,7 +407,12 @@ export const useChatNostrSyncEffect = ({
               const kindTag = tagsArray
                 .find((tag) => Array.isArray(tag) && tag[0] === "k")
                 ?.at(1);
-              if (kindTag && String(kindTag) !== "14") return;
+              if (
+                kindTag &&
+                String(kindTag) !== "14" &&
+                String(kindTag) !== "15"
+              )
+                return;
 
               const knownRumorIds = new Set(
                 chatMessagesLatestRef.current

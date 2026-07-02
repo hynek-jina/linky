@@ -21,6 +21,10 @@ import {
 } from "../../lib/bankPaymentOffer";
 import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
+import {
+  privateImageMessageFromEvent,
+  privateImagePreviewText,
+} from "../../lib/privateImageMessage";
 import { isLinkyPaymentNoticeEvent } from "../../lib/pushWrappedEvent";
 import type {
   ContactNameRowLike,
@@ -576,12 +580,17 @@ export const useInboxNotificationsSync = <
               return;
             }
 
-            if (inner.kind === 14) {
+            if (inner.kind === 14 || inner.kind === 15) {
               if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
               if (isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)) return;
-              if (!content.trim()) return;
 
               const tags = Array.isArray(inner.tags) ? inner.tags : [];
+              const content =
+                inner.kind === 15
+                  ? (privateImageMessageFromEvent(inner) ?? "")
+                  : String(inner.content ?? "");
+              if (!content.trim()) return;
+
               const pTags = tags
                 .filter((tag) => Array.isArray(tag) && tag[0] === "p")
                 .map((tag) => String(tag[1] ?? "").trim())
@@ -589,6 +598,7 @@ export const useInboxNotificationsSync = <
               const taggedPeerPub =
                 pTags.find((pub) => pub && pub !== myPubHex) ?? "";
               if (
+                inner.kind === 14 &&
                 isNestedEncryptedNip44PayloadForAnyPubkey(
                   content,
                   [senderPub, taggedPeerPub, wrap.pubkey],
@@ -667,6 +677,7 @@ export const useInboxNotificationsSync = <
                 Boolean(activeChatId) &&
                 String(contactId) === String(activeChatId);
               const isCashuMessage = isCashuNotificationMessage(content);
+              const isPrivateImageMessage = inner.kind === 15;
 
               const messageDirection = isOutgoing ? "out" : "in";
               const rumorKey = rumorId
@@ -835,7 +846,9 @@ export const useInboxNotificationsSync = <
                       contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
                     ) ??
                     t("unknownContactTitle");
-                  const trimmedContent = content.trim();
+                  const trimmedContent = isPrivateImageMessage
+                    ? privateImagePreviewText(t)
+                    : content.trim();
                   const preview =
                     trimmedContent.length > 80
                       ? `${trimmedContent.slice(0, 80)}…`
@@ -862,7 +875,9 @@ export const useInboxNotificationsSync = <
                   (contact ? t("appTitle") : t("unknownContactTitle"));
                 void maybeShowPwaNotification(
                   title,
-                  content.trim(),
+                  isPrivateImageMessage
+                    ? privateImagePreviewText(t)
+                    : content.trim(),
                   `msg_${resolvedPeerPub}`,
                 );
               }
