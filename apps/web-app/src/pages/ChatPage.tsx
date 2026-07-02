@@ -3,12 +3,17 @@ import { useAppShellCore } from "../app/context/AppShellContexts";
 import { aggregateReactions } from "../app/hooks/messages/chatNostrProtocol";
 import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
 import type { ReplyContext } from "../app/hooks/messages/useSendChatMessage";
+import {
+  getLinkyBankPaymentOfferInfo,
+  type LinkyBankPaymentOfferStatus,
+} from "../app/lib/bankPaymentOffer";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
 import {
   parseCashuPaymentRequestMessage,
   parseLinkyPaymentRequestDeclineMessage,
   type CashuPaymentRequestMessageInfo,
 } from "../app/lib/paymentRequestMessage";
+import { parsePrivateImageMessage } from "../app/lib/privateImageMessage";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   LocalNostrMessage,
@@ -17,10 +22,12 @@ import type {
 } from "../app/types/appTypes";
 import {
   ChatMessage,
+  type BankPaymentOfferPeerNotice,
   type NpubMessageContactInfo,
 } from "../components/ChatMessage";
 import {
   DonateIcon,
+  GalleryIcon,
   PayIcon,
   RequestIcon,
   SendIcon,
@@ -44,6 +51,7 @@ interface ChatPageProps {
   chatDraft: string;
   chatMessageElByIdRef: React.MutableRefObject<Map<string, HTMLDivElement>>;
   chatMessages: LocalNostrMessage[];
+  bankPaymentOfferMessages: LocalNostrMessage[];
   chatMessagesRef: React.RefObject<HTMLDivElement | null>;
   chatOwnPubkeyHex: string | null;
   chatSendIsBusy: boolean;
@@ -57,14 +65,22 @@ interface ChatPageProps {
     failed: boolean;
   };
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
+  isBankPaymentOfferCanceled: (offerId: string) => boolean;
   lang: string;
   onCancelEdit: () => void;
   onCancelReply: () => void;
   onAddUnknownContact: () => Promise<void>;
   onBlockUnknownContact: () => Promise<void>;
   onCopy: (message: LocalNostrMessage) => void;
+  onCopyText: (text: string) => void;
   onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
+  onRespondBankPaymentOffer: (
+    message: LocalNostrMessage,
+    nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
+  ) => Promise<boolean>;
+  onSettleBankPaymentOffer: (message: LocalNostrMessage) => Promise<void>;
   onEdit: (message: LocalNostrMessage) => void;
+  onOpenBankPayment: (spdPayload: string) => Promise<void>;
   onOpenNpubContact: (npub: string) => void;
   onPayPaymentRequest: (
     message: LocalNostrMessage,
@@ -81,6 +97,7 @@ interface ChatPageProps {
   reactionsByMessageId: Map<string, LocalNostrReaction[]>;
   replyContext: ReplyContext | null;
   selectedContact: Contact | null;
+  sendChatImage: (file: File) => Promise<void>;
   sendChatMessage: () => Promise<void>;
   setChatDraft: (value: string) => void;
   setMintIconUrlByMint: React.Dispatch<
@@ -96,6 +113,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   chatDraft,
   chatMessageElByIdRef,
   chatMessages,
+  bankPaymentOfferMessages,
   chatMessagesRef,
   chatOwnPubkeyHex,
   chatSendIsBusy,
@@ -104,14 +122,19 @@ export const ChatPage: FC<ChatPageProps> = ({
   getCashuTokenMessageInfo,
   getMintIconUrl,
   getNpubMessageContactInfo,
+  isBankPaymentOfferCanceled,
   lang,
   onCancelEdit,
   onCancelReply,
   onAddUnknownContact,
   onBlockUnknownContact,
   onCopy,
+  onCopyText,
   onDeclinePaymentRequest,
+  onRespondBankPaymentOffer,
+  onSettleBankPaymentOffer,
   onEdit,
+  onOpenBankPayment,
   onOpenNpubContact,
   onPayPaymentRequest,
   onReact,
@@ -121,12 +144,14 @@ export const ChatPage: FC<ChatPageProps> = ({
   reactionsByMessageId,
   replyContext,
   selectedContact,
+  sendChatImage,
   sendChatMessage,
   setChatDraft,
   setMintIconUrlByMint,
   t,
 }) => {
   const { formatDisplayedAmountText } = useAppShellCore();
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const composeInputRef = useRef<HTMLTextAreaElement | null>(null);
   const composeContainerRef = useRef<HTMLDivElement | null>(null);
   const npub = selectedContact
@@ -139,6 +164,75 @@ export const ChatPage: FC<ChatPageProps> = ({
   const isDesktop =
     typeof window !== "undefined" &&
     window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+  const getBankPaymentOfferPeerNotice = useCallback(
+    (
+      message: LocalNostrMessage,
+      offerInfo: ReturnType<typeof getLinkyBankPaymentOfferInfo>,
+    ): BankPaymentOfferPeerNotice | null => {
+      if (!offerInfo) return null;
+      if (String(message.direction ?? "") !== "out") return null;
+      if (
+        offerInfo.status === "bank_details_sent" ||
+        offerInfo.status === "bank_paid" ||
+        offerInfo.status === "canceled" ||
+        offerInfo.status === "settled"
+      ) {
+        return null;
+      }
+
+      const contactId = String(message.contactId ?? "").trim();
+      const currentUpdatedAtSec =
+        offerInfo.statusUpdatedAtSec || Number(message.createdAtSec ?? 0) || 0;
+      let otherAccepted = false;
+      let otherHasPriority = false;
+
+      for (const candidate of bankPaymentOfferMessages) {
+        const candidateContactId = String(candidate.contactId ?? "").trim();
+        if (!candidateContactId || candidateContactId === contactId) {
+          continue;
+        }
+
+        const candidateInfo = getLinkyBankPaymentOfferInfo(
+          String(candidate.content ?? ""),
+        );
+        if (candidateInfo?.offerId !== offerInfo.offerId) continue;
+
+        if (
+          candidateInfo.status === "bank_details_sent" ||
+          candidateInfo.status === "bank_paid" ||
+          candidateInfo.status === "settled"
+        ) {
+          otherAccepted = true;
+          otherHasPriority = true;
+          break;
+        }
+
+        if (candidateInfo.status !== "accepted") continue;
+        otherAccepted = true;
+
+        const candidateUpdatedAtSec =
+          candidateInfo.statusUpdatedAtSec ||
+          Number(candidate.createdAtSec ?? 0) ||
+          0;
+        if (
+          offerInfo.status === "accepted" &&
+          (candidateUpdatedAtSec < currentUpdatedAtSec ||
+            (candidateUpdatedAtSec === currentUpdatedAtSec &&
+              candidateContactId.localeCompare(contactId) < 0))
+        ) {
+          otherHasPriority = true;
+        }
+      }
+
+      if (!otherAccepted) return null;
+      if (offerInfo.status === "accepted") {
+        return otherHasPriority ? "backup_recipient" : null;
+      }
+      return "accepted_by_other";
+    },
+    [bankPaymentOfferMessages],
+  );
 
   const focusComposeInput = useCallback(() => {
     const input = composeInputRef.current;
@@ -396,6 +490,12 @@ export const ChatPage: FC<ChatPageProps> = ({
   const canSendChat = Boolean(
     !chatSendIsBusy && hasDraftText && (npub || hasUnknownPubkeyHex),
   );
+  const canSendImage = Boolean(
+    !chatSendIsBusy &&
+    !editContext &&
+    selectedContact &&
+    (npub || hasUnknownPubkeyHex),
+  );
 
   return (
     <section className="panel chat-panel">
@@ -455,6 +555,12 @@ export const ChatPage: FC<ChatPageProps> = ({
             const paymentRequestInfo = parseCashuPaymentRequestMessage(
               String(message.content ?? ""),
             );
+            const privateImageInfo = parsePrivateImageMessage(
+              String(message.content ?? ""),
+            );
+            const bankPaymentOfferInfo = getLinkyBankPaymentOfferInfo(
+              String(message.content ?? ""),
+            );
             const paymentRequestStatus = rumorId
               ? (latestRequestResponseByRumorId.get(rumorId)?.status ??
                 "requested")
@@ -484,9 +590,30 @@ export const ChatPage: FC<ChatPageProps> = ({
               Boolean(String(message.rumorId ?? "").trim()) &&
               !getCashuTokenMessageInfo(String(message.content ?? "")) &&
               !paymentRequestInfo &&
+              !privateImageInfo &&
+              !bankPaymentOfferInfo &&
               !parseLinkyPaymentRequestDeclineMessage(
                 String(message.content ?? ""),
               );
+            const canActOnBankPaymentOffer =
+              bankPaymentOfferInfo?.status === "offered";
+            const canCancelBankPaymentOffer =
+              canActOnBankPaymentOffer &&
+              String(message.direction ?? "") === "out";
+            const canRespondBankPaymentOffer =
+              canActOnBankPaymentOffer &&
+              String(message.direction ?? "") === "in";
+            const canConfirmBankPaymentPaid =
+              bankPaymentOfferInfo?.status === "bank_details_sent" &&
+              String(message.direction ?? "") === "in";
+            const canSettleBankPaymentOffer =
+              bankPaymentOfferInfo?.status === "bank_paid" &&
+              String(message.direction ?? "") === "out" &&
+              !isBankPaymentOfferCanceled(bankPaymentOfferInfo.offerId);
+            const bankPaymentOfferPeerNotice = getBankPaymentOfferPeerNotice(
+              message,
+              bankPaymentOfferInfo,
+            );
 
             return (
               <ChatMessage
@@ -528,6 +655,29 @@ export const ChatPage: FC<ChatPageProps> = ({
                 declineInfo={parseLinkyPaymentRequestDeclineMessage(
                   String(message.content ?? ""),
                 )}
+                bankPaymentOfferInfo={bankPaymentOfferInfo}
+                bankPaymentOfferPeerNotice={bankPaymentOfferPeerNotice}
+                canCancelBankPaymentOffer={canCancelBankPaymentOffer}
+                canConfirmBankPaymentPaid={canConfirmBankPaymentPaid}
+                canRespondBankPaymentOffer={canRespondBankPaymentOffer}
+                canSettleBankPaymentOffer={canSettleBankPaymentOffer}
+                onAcceptBankPaymentOffer={() => {
+                  void onRespondBankPaymentOffer(message, "accepted");
+                }}
+                onCancelBankPaymentOffer={() => {
+                  void onRespondBankPaymentOffer(message, "canceled");
+                }}
+                onCopyText={onCopyText}
+                onConfirmBankPaymentPaid={() => {
+                  void onRespondBankPaymentOffer(message, "bank_paid");
+                }}
+                onDeclineBankPaymentOffer={() => {
+                  void onRespondBankPaymentOffer(message, "declined");
+                }}
+                onSettleBankPaymentOffer={() => {
+                  void onSettleBankPaymentOffer(message);
+                }}
+                onOpenBankPayment={onOpenBankPayment}
                 onDeclinePaymentRequest={() => {
                   void onDeclinePaymentRequest(message);
                 }}
@@ -579,6 +729,19 @@ export const ChatPage: FC<ChatPageProps> = ({
           />
         )}
         <div className="chat-compose-input-wrap">
+          <input
+            ref={imageInputRef}
+            className="chat-image-input"
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              event.currentTarget.value = "";
+              if (!file) return;
+              void sendChatImage(file);
+            }}
+            tabIndex={-1}
+          />
           <textarea
             ref={composeInputRef}
             value={chatDraft}
@@ -594,6 +757,20 @@ export const ChatPage: FC<ChatPageProps> = ({
             disabled={!npub && !hasUnknownPubkeyHex}
             data-guide="chat-input"
           />
+          {!hasDraftText ? (
+            <button
+              type="button"
+              className="chat-compose-image-button"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={!canSendImage}
+              aria-label={t("chatImageAttach")}
+              title={t("chatImageAttach")}
+            >
+              <span className="chat-compose-send-icon" aria-hidden="true">
+                <GalleryIcon size={18} />
+              </span>
+            </button>
+          ) : null}
           {hasDraftText ? (
             <button
               type="button"

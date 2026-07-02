@@ -131,7 +131,7 @@ export const buildTopbar = ({
     };
   }
 
-  if (route.kind === "manualPay") {
+  if (route.kind === "manualPay" || route.kind === "bankPayment") {
     return {
       icon: "<",
       label: t("close"),
@@ -355,6 +355,7 @@ export const buildTopbarRight = ({
     route.kind === "topupNoAmount" ||
     route.kind === "topupInvoice" ||
     route.kind === "manualPay" ||
+    route.kind === "bankPayment" ||
     route.kind === "cashuTokens" ||
     route.kind === "cashuTokenEmit" ||
     route.kind === "cashuToken" ||
@@ -388,6 +389,7 @@ export const buildTopbarTitle = (
   if (route.kind === "topupNoAmount") return t("topupNoAmountTitle");
   if (route.kind === "topupInvoice") return t("topupInvoiceTitle");
   if (route.kind === "manualPay") return t("manualPayTitle");
+  if (route.kind === "bankPayment") return t("spdPaymentTitle");
   if (route.kind === "lnAddressPay") return t("pay");
   if (route.kind === "cashuTokens") return t("tokens");
   if (route.kind === "cashuTokenEmit") return t("cashuEmit");

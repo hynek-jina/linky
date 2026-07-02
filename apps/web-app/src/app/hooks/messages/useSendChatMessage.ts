@@ -6,6 +6,12 @@ import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import {
+  buildPrivateImageEventTags,
+  createPrivateImageSendPayload,
+  parsePrivateImageMessage,
+  privateImageUploadDebugPayload,
+} from "../../lib/privateImageMessage";
+import {
   wrapEventWithPushMarker,
   wrapEventWithoutPushMarker,
 } from "../../lib/pushWrappedEvent";
@@ -27,6 +33,7 @@ export interface ReplyContext {
 
 interface SendChatMessageOptions {
   clearDraft?: boolean;
+  imageFile?: File | null;
   replyContext?: ReplyContext | null;
   text?: string;
 }
@@ -88,8 +95,9 @@ export const useSendChatMessage = <
       if (route.kind !== "chat" && route.kind !== "contactPay") return;
       if (!selectedContact) return;
 
+      const imageFile = options?.imageFile ?? null;
       const text = String(options?.text ?? chatDraft).trim();
-      if (!text) return;
+      if (!text && !imageFile) return;
 
       const contactNpub = normalizeNpubIdentifier(selectedContact.npub);
       const unknownPubkeyHex = readUnknownPubkeyHex(selectedContact);
@@ -147,6 +155,14 @@ export const useSendChatMessage = <
         const clientId = makeLocalId();
         activeClientId = clientId;
         activePublishClientIdsRef.current.add(clientId);
+        const imagePayload = imageFile
+          ? await createPrivateImageSendPayload(imageFile, {
+              privateKey: privBytes,
+              pubkey: myPubHex,
+            })
+          : null;
+        const messageContent = imagePayload?.content ?? text;
+        const mediaInfo = parsePrivateImageMessage(messageContent);
         const activeReplyContext =
           options?.replyContext ??
           replyContextRef.current ??
@@ -167,6 +183,9 @@ export const useSendChatMessage = <
           ["p", myPubHex],
           ["client", clientId],
         ];
+        if (mediaInfo) {
+          tags.push(...buildPrivateImageEventTags(mediaInfo));
+        }
 
         if (activeReplyContext?.replyToId) {
           const rootId =
@@ -179,17 +198,17 @@ export const useSendChatMessage = <
 
         const baseEvent = {
           created_at: Math.ceil(Date.now() / 1e3),
-          kind: 14,
+          kind: mediaInfo ? 15 : 14,
           pubkey: myPubHex,
           tags,
-          content: text,
+          content: mediaInfo ? mediaInfo.url : text,
         } satisfies UnsignedEvent;
         const rumorId = getEventHash(baseEvent);
 
         const pendingId = appendLocalNostrMessage({
           contactId: String(selectedContact.id),
           direction: "out",
-          content: text,
+          content: messageContent,
           wrapId: `pending:${clientId}`,
           rumorId,
           pubkey: myPubHex,
@@ -233,6 +252,7 @@ export const useSendChatMessage = <
         await appendPushDebugLog("client", "chat send wraps created", {
           clientId,
           contactPubHex,
+          media: mediaInfo ? privateImageUploadDebugPayload(mediaInfo) : null,
           myPubHex,
           replyToId: activeReplyToId || null,
           rumorId,

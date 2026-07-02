@@ -6,6 +6,10 @@ import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import {
+  buildPrivateImageEventTags,
+  parsePrivateImageMessage,
+} from "../../lib/privateImageMessage";
+import {
   wrapEventWithPushMarker,
   wrapEventWithoutPushMarker,
 } from "../../lib/pushWrappedEvent";
@@ -123,13 +127,18 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
           const editedFromId = String(message.editedFromId ?? "").trim();
           if (editedFromId) tags.push(["edited_from", editedFromId]);
 
+          const mediaInfo = parsePrivateImageMessage(message.content);
+          if (mediaInfo) {
+            tags.push(...buildPrivateImageEventTags(mediaInfo));
+          }
+
           const createdAt = Number(message.createdAtSec ?? 0) || 0;
           const baseEvent = {
             created_at: createdAt > 0 ? createdAt : Math.ceil(Date.now() / 1e3),
-            kind: 14,
+            kind: mediaInfo ? 15 : 14,
             pubkey: myPubHex,
             tags,
-            content: String(message.content ?? ""),
+            content: mediaInfo ? mediaInfo.url : String(message.content ?? ""),
           } satisfies UnsignedEvent;
 
           const wrapForMe = wrapEventWithoutPushMarker(

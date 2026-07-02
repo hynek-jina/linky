@@ -11,8 +11,20 @@ import {
   safeLocalStorageGetJson,
   safeLocalStorageSetJson,
 } from "../../../utils/storage";
+import {
+  getLinkyBankPaymentOfferInfo,
+  getLinkyBankPaymentOfferText,
+  isLinkyBankPaymentOfferEvent,
+  isLinkyBankPaymentOfferTerminalStatus,
+  LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
+  type LinkyBankPaymentOfferInfo,
+} from "../../lib/bankPaymentOffer";
 import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
+import {
+  privateImageMessageFromEvent,
+  privateImagePreviewText,
+} from "../../lib/privateImageMessage";
 import { isLinkyPaymentNoticeEvent } from "../../lib/pushWrappedEvent";
 import type {
   ContactNameRowLike,
@@ -41,6 +53,24 @@ const PAYMENT_NOTICE_SEEN_WRAP_IDS_STORAGE_KEY_PREFIX =
   "linky.nostr.payment_notice_seen_wrap_ids.v1";
 const MAX_PERSISTED_PAYMENT_NOTICE_WRAP_IDS = 200;
 const PAYMENT_NOTICE_MATCH_WINDOW_SECONDS = 120;
+
+const isBankPaymentOfferExpired = (
+  offerInfo: LinkyBankPaymentOfferInfo,
+  createdAtSec: number,
+  nowSec: number,
+): boolean => {
+  const phaseStartedAtSecRaw =
+    offerInfo.statusUpdatedAtSec && offerInfo.statusUpdatedAtSec > 0
+      ? offerInfo.statusUpdatedAtSec
+      : createdAtSec;
+  const phaseStartedAtSec =
+    Number.isFinite(phaseStartedAtSecRaw) && phaseStartedAtSecRaw > 0
+      ? Math.trunc(phaseStartedAtSecRaw)
+      : null;
+  if (!phaseStartedAtSec) return false;
+
+  return nowSec - phaseStartedAtSec >= LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC;
+};
 
 const getPaymentNoticeSeenWrapIdsStorageKey = (pubkeyHex: string): string =>
   `${PAYMENT_NOTICE_SEEN_WRAP_IDS_STORAGE_KEY_PREFIX}.${pubkeyHex}`;
@@ -81,6 +111,7 @@ interface UseInboxNotificationsSyncParams<
 > {
   appendLocalNostrMessage: AppendLocalNostrMessage;
   appendLocalNostrReaction: AppendLocalNostrReaction;
+  bankPaymentOfferMessages?: readonly LocalNostrMessage[];
   contacts: readonly TContact[];
   currentNsec: string | null;
   maybeShowPwaNotification: (
@@ -89,13 +120,14 @@ interface UseInboxNotificationsSyncParams<
     tag?: string,
   ) => Promise<void>;
   nostrFetchRelays: string[];
-  knownNostrMessageIdentityIndex: KnownNostrMessageIdentityIndex;
+  knownNostrMessageIdentityIndex?: KnownNostrMessageIdentityIndex;
   nostrMessageWrapIdsRef: React.MutableRefObject<Set<string>>;
   nostrMessagesLatestRef: React.MutableRefObject<LocalNostrMessage[]>;
   nostrMessagesRecent: readonly NostrMessageSummaryRow[];
   nostrReactionWrapIdsRef: React.MutableRefObject<Set<string>>;
   nostrReactionsLatestRef: React.MutableRefObject<LocalNostrReaction[]>;
-  onOpenInboxMessageToast: (params: OpenInboxMessageToastParams) => void;
+  onBankPaymentOfferMessage?: (message: LocalNostrMessage) => void;
+  onOpenInboxMessageToast?: (params: OpenInboxMessageToastParams) => void;
   pushToast: (message: string, options?: PushToastOptions) => void;
   route: TRoute;
   setContactAttentionById: React.Dispatch<
@@ -113,17 +145,23 @@ export const useInboxNotificationsSync = <
 >({
   appendLocalNostrMessage,
   appendLocalNostrReaction,
+  bankPaymentOfferMessages = [],
   contacts,
   currentNsec,
   maybeShowPwaNotification,
   nostrFetchRelays,
-  knownNostrMessageIdentityIndex,
+  knownNostrMessageIdentityIndex = {
+    clientIds: new Set<string>(),
+    rumorKeys: new Set<string>(),
+    wrapIds: new Set<string>(),
+  },
   nostrMessageWrapIdsRef,
   nostrMessagesLatestRef,
   nostrMessagesRecent,
   nostrReactionWrapIdsRef,
   nostrReactionsLatestRef,
-  onOpenInboxMessageToast,
+  onBankPaymentOfferMessage = () => {},
+  onOpenInboxMessageToast = () => {},
   pushToast,
   route,
   setContactAttentionById,
@@ -133,6 +171,7 @@ export const useInboxNotificationsSync = <
   updateLocalNostrReaction,
 }: UseInboxNotificationsSyncParams<TContact, TRoute>) => {
   const paymentNoticeWrapIdsRef = React.useRef<Set<string>>(new Set());
+  const bankPaymentOfferWrapIdsRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     // Best-effort: keep syncing the NIP-17 inbox globally so messages from
@@ -154,6 +193,10 @@ export const useInboxNotificationsSync = <
       if (wrapId) seenWrapIds.add(wrapId);
     }
     for (const wrapId of paymentNoticeWrapIdsRef.current) {
+      const normalizedWrapId = String(wrapId ?? "").trim();
+      if (normalizedWrapId) seenWrapIds.add(normalizedWrapId);
+    }
+    for (const wrapId of bankPaymentOfferWrapIdsRef.current) {
       const normalizedWrapId = String(wrapId ?? "").trim();
       if (normalizedWrapId) seenWrapIds.add(normalizedWrapId);
     }
@@ -401,12 +444,153 @@ export const useInboxNotificationsSync = <
               return;
             }
 
-            if (inner.kind === 14) {
-              if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
-              if (isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)) return;
-              if (!content.trim()) return;
+            if (isLinkyBankPaymentOfferEvent(inner)) {
+              const offerInfo = getLinkyBankPaymentOfferInfo(content);
+              const offerText = getLinkyBankPaymentOfferText(content);
+              if (!offerText) return;
+              const offerId = String(offerInfo?.offerId ?? "").trim();
+              const isTerminalOffer = offerInfo
+                ? isLinkyBankPaymentOfferTerminalStatus(offerInfo.status)
+                : false;
+              let hasKnownOffer = false;
+              let hasTerminalKnownOffer = false;
+              if (offerId) {
+                for (const message of bankPaymentOfferMessages) {
+                  const knownInfo = getLinkyBankPaymentOfferInfo(
+                    String(message.content ?? ""),
+                  );
+                  if (knownInfo?.offerId !== offerId) continue;
+
+                  hasKnownOffer = true;
+                  if (isLinkyBankPaymentOfferTerminalStatus(knownInfo.status)) {
+                    hasTerminalKnownOffer = true;
+                    break;
+                  }
+                }
+              }
+              const isExpiredOffer =
+                offerInfo && !isTerminalOffer
+                  ? isBankPaymentOfferExpired(
+                      offerInfo,
+                      createdAtSec,
+                      Math.floor(Date.now() / 1e3),
+                    )
+                  : false;
 
               const tags = Array.isArray(inner.tags) ? inner.tags : [];
+              const pTags = tags
+                .filter((tag) => Array.isArray(tag) && tag[0] === "p")
+                .map((tag) => String(tag[1] ?? "").trim())
+                .filter(Boolean);
+              const tagClientId = extractClientTag(tags);
+              const taggedPeerPub =
+                pTags.find((pub) => pub && pub !== myPubHex) ?? "";
+              const addressesMe = pTags.includes(myPubHex);
+              if (!addressesMe) return;
+              const offererPub =
+                String(offerInfo?.offererPublicKey ?? "").trim() ||
+                (senderPub === myPubHex ? myPubHex : senderPub);
+              const isOutgoing = offererPub === myPubHex;
+              const isSelfAuthored = senderPub === myPubHex;
+              const resolvedPeerPub =
+                [taggedPeerPub, senderPub, offererPub].find(
+                  (pub) => pub && pub !== myPubHex,
+                ) ?? "";
+              if (!resolvedPeerPub || resolvedPeerPub === myPubHex) return;
+              if (isBlockedPubkey(resolvedPeerPub)) return;
+
+              const contact = findContactByPubkey(resolvedPeerPub);
+              const contactId = contact
+                ? String(contact.id ?? "").trim()
+                : String(buildUnknownContactId(resolvedPeerPub) ?? "").trim();
+              if (!contactId) return;
+
+              bankPaymentOfferWrapIdsRef.current.add(wrapId);
+              seenWrapIds.add(wrapId);
+
+              if (
+                isExpiredOffer ||
+                (!isTerminalOffer && hasTerminalKnownOffer)
+              ) {
+                return;
+              }
+
+              if (isTerminalOffer && !hasKnownOffer) {
+                return;
+              }
+
+              const offerMessage: LocalNostrMessage = {
+                contactId,
+                content,
+                createdAtSec,
+                direction: isOutgoing ? "out" : "in",
+                id: `bank-payment-offer:${wrapId}`,
+                localOnly: true,
+                pubkey: isOutgoing ? myPubHex : offererPub,
+                rumorId: null,
+                status: "sent",
+                wrapId,
+              };
+              if (tagClientId) {
+                offerMessage.clientId = tagClientId;
+              }
+              onBankPaymentOfferMessage(offerMessage);
+
+              if (isTerminalOffer) {
+                return;
+              }
+
+              const isActiveChatContact =
+                Boolean(activeChatId) &&
+                String(contactId) === String(activeChatId);
+              if (!isActiveChatContact && !isSelfAuthored) {
+                setContactAttentionById((prev) => ({
+                  ...prev,
+                  [contactId]: Date.now(),
+                }));
+
+                const shouldShowVisibleToast = (() => {
+                  try {
+                    return document.visibilityState === "visible";
+                  } catch {
+                    return false;
+                  }
+                })();
+                if (shouldShowVisibleToast) {
+                  const senderLabel =
+                    contact?.name ??
+                    formatShortNpub(
+                      contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
+                    ) ??
+                    t("unknownContactTitle");
+                  pushToast(
+                    t("chatIncomingMessageToast")
+                      .replace("{name}", senderLabel)
+                      .replace("{message}", offerText),
+                  );
+                }
+              }
+
+              if (!isSelfAuthored) {
+                const title =
+                  contact?.name ??
+                  (contact ? t("appTitle") : t("unknownContactTitle"));
+                void maybeShowPwaNotification(title, offerText, wrapId);
+              }
+              return;
+            }
+
+            if (inner.kind === 14 || inner.kind === 15) {
+              if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
+              if (isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)) return;
+
+              const tags = Array.isArray(inner.tags) ? inner.tags : [];
+              const content =
+                inner.kind === 15
+                  ? (privateImageMessageFromEvent(inner) ?? "")
+                  : String(inner.content ?? "");
+              if (!content.trim()) return;
+
               const pTags = tags
                 .filter((tag) => Array.isArray(tag) && tag[0] === "p")
                 .map((tag) => String(tag[1] ?? "").trim())
@@ -414,6 +598,7 @@ export const useInboxNotificationsSync = <
               const taggedPeerPub =
                 pTags.find((pub) => pub && pub !== myPubHex) ?? "";
               if (
+                inner.kind === 14 &&
                 isNestedEncryptedNip44PayloadForAnyPubkey(
                   content,
                   [senderPub, taggedPeerPub, wrap.pubkey],
@@ -492,6 +677,7 @@ export const useInboxNotificationsSync = <
                 Boolean(activeChatId) &&
                 String(contactId) === String(activeChatId);
               const isCashuMessage = isCashuNotificationMessage(content);
+              const isPrivateImageMessage = inner.kind === 15;
 
               const messageDirection = isOutgoing ? "out" : "in";
               const rumorKey = rumorId
@@ -660,7 +846,9 @@ export const useInboxNotificationsSync = <
                       contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
                     ) ??
                     t("unknownContactTitle");
-                  const trimmedContent = content.trim();
+                  const trimmedContent = isPrivateImageMessage
+                    ? privateImagePreviewText(t)
+                    : content.trim();
                   const preview =
                     trimmedContent.length > 80
                       ? `${trimmedContent.slice(0, 80)}…`
@@ -687,7 +875,9 @@ export const useInboxNotificationsSync = <
                   (contact ? t("appTitle") : t("unknownContactTitle"));
                 void maybeShowPwaNotification(
                   title,
-                  content.trim(),
+                  isPrivateImageMessage
+                    ? privateImagePreviewText(t)
+                    : content.trim(),
                   `msg_${resolvedPeerPub}`,
                 );
               }
@@ -826,6 +1016,7 @@ export const useInboxNotificationsSync = <
       cleanup = undefined;
     };
   }, [
+    bankPaymentOfferMessages,
     contacts,
     currentNsec,
     appendLocalNostrMessage,
@@ -840,6 +1031,7 @@ export const useInboxNotificationsSync = <
     nostrMessagesLatestRef,
     nostrReactionWrapIdsRef,
     nostrReactionsLatestRef,
+    onBankPaymentOfferMessage,
     onOpenInboxMessageToast,
     pushToast,
     route,

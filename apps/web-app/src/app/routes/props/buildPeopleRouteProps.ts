@@ -9,6 +9,7 @@ interface BuildPeopleRoutePropsParams {
   chatDraft: PeopleRoutesProps["chatProps"]["chatDraft"];
   chatMessageElByIdRef: PeopleRoutesProps["chatProps"]["chatMessageElByIdRef"];
   chatMessages: PeopleRoutesProps["chatProps"]["chatMessages"];
+  bankPaymentOfferMessages: PeopleRoutesProps["chatProps"]["bankPaymentOfferMessages"];
   chatMessagesRef: PeopleRoutesProps["chatProps"]["chatMessagesRef"];
   chatOwnPubkeyHex: PeopleRoutesProps["chatProps"]["chatOwnPubkeyHex"];
   chatSendIsBusy: PeopleRoutesProps["chatProps"]["chatSendIsBusy"];
@@ -34,6 +35,7 @@ interface BuildPeopleRoutePropsParams {
   groupNames: PeopleRoutesProps["contactEditProps"]["groupNames"];
   handleSaveContact: PeopleRoutesProps["contactEditProps"]["handleSaveContact"];
   isProfileEditing: PeopleRoutesProps["profileProps"]["isProfileEditing"];
+  isBankPaymentOfferCanceled: PeopleRoutesProps["chatProps"]["isBankPaymentOfferCanceled"];
   isSavingContact: PeopleRoutesProps["contactEditProps"]["isSavingContact"];
   blockArchivedContact: PeopleRoutesProps["contactEditProps"]["blockArchivedContact"];
   lang: PeopleRoutesProps["chatProps"]["lang"];
@@ -45,8 +47,12 @@ interface BuildPeopleRoutePropsParams {
   onCancelReply: PeopleRoutesProps["chatProps"]["onCancelReply"];
   onAddUnknownContact: PeopleRoutesProps["chatProps"]["onAddUnknownContact"];
   onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
+  onCopyText: PeopleRoutesProps["chatProps"]["onCopyText"];
   onDeclinePaymentRequest: PeopleRoutesProps["chatProps"]["onDeclinePaymentRequest"];
+  onRespondBankPaymentOffer: PeopleRoutesProps["chatProps"]["onRespondBankPaymentOffer"];
+  onSettleBankPaymentOffer: PeopleRoutesProps["chatProps"]["onSettleBankPaymentOffer"];
   onEdit: PeopleRoutesProps["chatProps"]["onEdit"];
+  onOpenBankPayment: PeopleRoutesProps["chatProps"]["onOpenBankPayment"];
   onOpenNpubContact: PeopleRoutesProps["chatProps"]["onOpenNpubContact"];
   onPayPaymentRequest: PeopleRoutesProps["chatProps"]["onPayPaymentRequest"];
   onPickProfilePhoto: PeopleRoutesProps["profileProps"]["onPickProfilePhoto"];
@@ -86,6 +92,7 @@ interface BuildPeopleRoutePropsParams {
   replyContext: PeopleRoutesProps["chatProps"]["replyContext"];
   selectedProfileStatusCurrencies: PeopleRoutesProps["profileProps"]["selectedProfileStatusCurrencies"];
   selectedContact: PeopleRoutesProps["contactProps"]["selectedContact"];
+  sendChatImage: PeopleRoutesProps["chatProps"]["sendChatImage"];
   sendChatMessage: PeopleRoutesProps["chatProps"]["sendChatMessage"];
   setChatDraft: PeopleRoutesProps["chatProps"]["setChatDraft"];
   setContactPayMethod: PeopleRoutesProps["contactPayProps"]["setContactPayMethod"];
@@ -109,6 +116,7 @@ export const buildPeopleRouteProps = ({
   chatDraft,
   chatMessageElByIdRef,
   chatMessages,
+  bankPaymentOfferMessages,
   chatMessagesRef,
   chatOwnPubkeyHex,
   chatSendIsBusy,
@@ -134,6 +142,7 @@ export const buildPeopleRouteProps = ({
   groupNames,
   handleSaveContact,
   isProfileEditing,
+  isBankPaymentOfferCanceled,
   isSavingContact,
   blockArchivedContact,
   lang,
@@ -145,8 +154,12 @@ export const buildPeopleRouteProps = ({
   onCancelReply,
   onAddUnknownContact,
   onCopy,
+  onCopyText,
   onDeclinePaymentRequest,
+  onRespondBankPaymentOffer,
+  onSettleBankPaymentOffer,
   onEdit,
+  onOpenBankPayment,
   onOpenNpubContact,
   onPayPaymentRequest,
   onPickProfilePhoto,
@@ -186,6 +199,7 @@ export const buildPeopleRouteProps = ({
   replyContext,
   selectedProfileStatusCurrencies,
   selectedContact,
+  sendChatImage,
   sendChatMessage,
   setChatDraft,
   setContactPayMethod,
@@ -203,6 +217,7 @@ export const buildPeopleRouteProps = ({
     chatProps: {
       selectedContact: chatSelectedContact,
       chatMessages,
+      bankPaymentOfferMessages,
       chatMessagesRef,
       chatOwnPubkeyHex,
       chatDraft,
@@ -222,19 +237,25 @@ export const buildPeopleRouteProps = ({
       getCashuTokenMessageInfo,
       getMintIconUrl,
       getNpubMessageContactInfo,
+      isBankPaymentOfferCanceled,
       onReply,
       onEdit,
       onReact,
       onCopy,
+      onCopyText,
       onCancelReply,
       onCancelEdit,
       onAddUnknownContact,
       onBlockUnknownContact,
+      sendChatImage,
       sendChatMessage,
       openContactPay,
+      onOpenBankPayment,
       onOpenNpubContact,
       onPayPaymentRequest,
       onDeclinePaymentRequest,
+      onRespondBankPaymentOffer,
+      onSettleBankPaymentOffer,
       t,
     },
     contactEditProps: {

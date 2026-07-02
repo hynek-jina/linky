@@ -1212,14 +1212,12 @@
   margin: 0;
   padding: 0;
   border-radius: 999px;
-  background: var(--app-flat-bg);
+  background: rgba(148, 163, 184, 0.18);
   border: none;
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.25);
+  box-shadow: none;
   position: relative;
   cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .switch-input::after {
@@ -1229,16 +1227,15 @@
   border-radius: 999px;
   background: #cbd5e1;
   position: absolute;
-  top: 1px;
-  left: 1px;
+  top: 2px;
+  left: 2px;
   transition:
     transform 0.15s ease,
     background 0.15s ease;
 }
 
 .switch-input:checked {
-  background: var(--app-flat-bg);
-  box-shadow: inset 0 0 0 1px rgba(20, 184, 166, 0.25);
+  background: rgba(20, 184, 166, 0.28);
 }
 
 .switch-input:checked::after {
@@ -1373,6 +1370,7 @@ button.settings-link:hover {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   color: #e2e8f0;
   font-weight: 500;
 }
@@ -1394,6 +1392,7 @@ button.settings-link:hover {
 
 .settings-label {
   font-size: 16px;
+  overflow-wrap: anywhere;
 }
 
 .settings-label-group {
@@ -1405,6 +1404,12 @@ button.settings-link:hover {
 .settings-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+button.settings-link .settings-right {
+  flex: 1 1 auto;
 }
 
 .settings-note {
@@ -1517,7 +1522,7 @@ button.settings-link:hover {
 }
 
 .settings-section-title {
-  margin: 6px 0 10px;
+  margin: 0 0 10px;
   color: #94a3b8;
   font-size: 12px;
   font-weight: 800;
@@ -1530,7 +1535,11 @@ button.settings-link:hover {
 }
 
 .settings-page {
-  padding-top: 4px;
+  padding-top: 0;
+}
+
+.panel.settings-page {
+  margin-top: 8px;
 }
 
 .settings-section {
@@ -1557,20 +1566,65 @@ button.settings-link:hover {
 }
 
 .settings-value-truncate {
-  max-width: 130px;
+  display: block;
+  max-width: min(56vw, 260px);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: right;
 }
 
 .settings-tail-content {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .settings-connection-state {
   gap: 8px;
+}
+
+.settings-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.settings-stepper-button {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.86);
+  color: #e2e8f0;
+}
+
+.settings-stepper-button:hover:not(:disabled) {
+  transform: none;
+  background: rgba(51, 65, 85, 0.96);
+  box-shadow: none;
+}
+
+.settings-stepper-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.settings-stepper-value {
+  min-width: 24px;
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
 }
 
 button.settings-danger-link.is-armed .settings-left,
@@ -1949,6 +2003,148 @@ button.settings-sensitive-action.is-armed {
   background: rgba(15, 23, 42, 0.7);
 }
 
+.chat-private-image {
+  display: block;
+  width: min(260px, 70vw);
+  max-height: 360px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: rgba(15, 23, 42, 0.7);
+  white-space: normal;
+}
+
+.chat-private-image-button {
+  display: block;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.chat-private-image-button:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.chat-private-image-placeholder {
+  width: min(260px, 70vw);
+  min-height: 150px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.5);
+  color: #cbd5e1;
+  font-size: 13px;
+  white-space: normal;
+}
+
+.chat-private-image-placeholder.is-error {
+  color: #fecaca;
+}
+
+.chat-image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+  padding: max(14px, var(--safe-area-top)) 14px
+    max(18px, var(--safe-area-bottom));
+  background: rgba(2, 6, 23, 0.94);
+  backdrop-filter: blur(18px);
+}
+
+.chat-image-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: min(920px, 100%);
+  margin: 0 auto;
+}
+
+.chat-image-viewer-back {
+  color: #f8fafc;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-image-viewer-footer {
+  display: grid;
+  gap: 10px;
+  width: min(520px, 100%);
+  margin: 0 auto;
+}
+
+.chat-image-viewer-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-image-viewer-action {
+  width: 100%;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.chat-image-viewer-action:hover {
+  transform: none;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+}
+
+.chat-image-viewer-stage {
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-image-viewer-image {
+  display: block;
+  max-width: min(100%, 920px);
+  max-height: 100%;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.42);
+}
+
+.chat-image-viewer-error {
+  width: min(920px, 100%);
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  color: #fecaca;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .chat-image-viewer-action {
+    padding: 0 10px;
+    font-size: 13px;
+  }
+}
+
 .chat-link-preview-body {
   display: flex;
   flex-direction: column;
@@ -2274,6 +2470,14 @@ button.settings-sensitive-action.is-armed {
   width: 100%;
 }
 
+.chat-image-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .chat-compose textarea {
   min-height: 64px;
   padding-right: 56px;
@@ -2321,6 +2525,31 @@ button.settings-sensitive-action.is-armed {
   justify-content: center;
   background: var(--app-primary-button-bg);
   color: var(--app-primary-button-fg);
+  box-shadow: none;
+}
+
+.chat-compose-image-button {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+  box-shadow: none;
+}
+
+.chat-compose-image-button:hover {
+  box-shadow: none;
+}
+
+.chat-compose-image-button:disabled {
+  opacity: 0.45;
   box-shadow: none;
 }
 
@@ -3325,7 +3554,27 @@ button.icon {
   color: #fde68a;
 }
 
+.chat-payment-request-status.is-offered {
+  background: rgba(250, 204, 21, 0.14);
+  color: #fde68a;
+}
+
 .chat-payment-request-status.is-paid {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+.chat-payment-request-status.is-accepted {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+.chat-payment-request-status.is-bank_details_sent {
+  background: rgba(56, 189, 248, 0.14);
+  color: #7dd3fc;
+}
+
+.chat-payment-request-status.is-bank_paid {
   background: rgba(34, 197, 94, 0.14);
   color: #86efac;
 }
@@ -3335,6 +3584,16 @@ button.icon {
   color: #cbd5e1;
 }
 
+.chat-payment-request-status.is-canceled {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+}
+
+.chat-payment-request-status.is-settled {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
 .chat-payment-request-amount {
   font-size: 28px;
   font-weight: 800;
@@ -3342,9 +3601,75 @@ button.icon {
   color: #f8fafc;
 }
 
+.chat-bank-payment-amount-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-bank-payment-open-inline {
+  flex: 0 0 auto;
+  border-radius: 8px;
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+
 .chat-payment-request-description {
   color: #94a3b8;
   font-size: 13px;
+}
+
+.chat-bank-payment-timer {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chat-bank-payment-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.chat-bank-payment-details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-bank-payment-details span {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.chat-bank-payment-details strong {
+  color: #f8fafc;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.chat-bank-payment-copy-row {
+  min-width: 0;
+}
+
+.chat-bank-payment-copy.transaction-detail-copy {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.chat-bank-payment-copy .transaction-detail-copyText {
+  color: #f8fafc;
+  font-size: 13px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.chat-bank-payment-copy .transaction-detail-copyIcon {
+  color: #94a3b8;
 }
 
 .chat-payment-request-actions {
@@ -3520,6 +3845,71 @@ button.icon {
 .manual-pay-contact:focus {
   transform: none;
   box-shadow: none;
+}
+
+.bank-payment-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bank-payment-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bank-payment-amount {
+  color: #f8fafc;
+  font-size: 28px;
+  font-weight: 850;
+}
+
+.bank-payment-recipient,
+.bank-payment-hint {
+  margin: 0;
+}
+
+.bank-payment-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bank-payment-row {
+  align-items: flex-start;
+}
+
+.bank-payment-row strong,
+.bank-payment-value {
+  display: block;
+}
+
+.bank-payment-row strong {
+  margin-bottom: 4px;
+}
+
+.bank-payment-value {
+  color: #dbeafe;
+  overflow-wrap: anywhere;
+}
+
+.bank-payment-open {
+  margin-top: 2px;
+}
+
+.bank-payment-request {
+  margin-top: 2px;
+}
+
+.bank-payment-offer-status {
+  margin: 0;
+}
+
+.bank-payment-error {
+  color: #fecaca;
+  font-size: 13px;
+  margin: 0;
 }
 
 .contact-main {

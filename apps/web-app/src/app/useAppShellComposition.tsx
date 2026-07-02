@@ -137,8 +137,10 @@ import {
   clearStoredPushNsec,
   setStoredPushNsec,
 } from "../utils/pushNsecStorage";
+import { openSpdPaymentInBank } from "../utils/spdPayment";
 import {
   getInitialAllowedDisplayCurrencies,
+  getInitialBankPaymentOfferRecipientCount,
   getInitialCashuAutoswapEnabled,
   getInitialDisplayCurrency,
   getInitialLightningInvoiceAutoPayLimit,
@@ -234,6 +236,18 @@ import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequest
 import { resolveCashuRowStoredOwnerLane } from "./lib/cashuOwnerLane";
 import { createCashuTokenId } from "./lib/cashuTokenIdentity";
 import {
+  createLinkyBankPaymentOfferEvent,
+  getLinkyBankPaymentOfferInfo,
+  getLinkyBankPaymentOfferStatusRank,
+  isLinkyBankPaymentOfferTerminalStatus,
+  LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT,
+  LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
+  LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
+  LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
+  LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY,
+  type LinkyBankPaymentOfferStatus,
+} from "./lib/bankPaymentOffer";
+import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_RESERVED,
   isCashuTokenAcceptedState,
@@ -274,6 +288,10 @@ import {
   parseCashuPaymentRequestMessage,
   type CashuPaymentRequestMessageInfo,
 } from "./lib/paymentRequestMessage";
+import {
+  parsePrivateImageMessage,
+  privateImagePreviewText,
+} from "./lib/privateImageMessage";
 import {
   wrapEventWithoutPushMarker,
   wrapEventWithPushMarker,
@@ -1079,6 +1097,17 @@ const logPayStep = (step: string, data?: PaymentLogData): void => {
   }
 };
 
+const clampBankPaymentOfferRecipientCount = (value: number): number => {
+  if (!Number.isFinite(value)) {
+    return LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT;
+  }
+
+  return Math.min(
+    LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
+    Math.max(LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT, Math.round(value)),
+  );
+};
+
 interface UnknownChatContact extends ContactRowLike {
   id: string;
   isUnknownContact: true;
@@ -1212,7 +1241,26 @@ export const useAppShellComposition = () => {
     useState<boolean>(() => getInitialShowProfileQrOnTiltEnabled());
   const [lightningInvoiceAutoPayLimit, setLightningInvoiceAutoPayLimit] =
     useState<number>(() => getInitialLightningInvoiceAutoPayLimit());
+  const [
+    bankPaymentOfferRecipientCount,
+    setBankPaymentOfferRecipientCountState,
+  ] = useState<number>(() =>
+    clampBankPaymentOfferRecipientCount(
+      getInitialBankPaymentOfferRecipientCount(
+        LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT,
+      ),
+    ),
+  );
   const [allowPromisesEnabled] = useState<boolean>(false);
+
+  const setBankPaymentOfferRecipientCount = React.useCallback(
+    (value: number) => {
+      setBankPaymentOfferRecipientCountState(
+        clampBankPaymentOfferRecipientCount(value),
+      );
+    },
+    [],
+  );
 
   React.useEffect(() => {
     if (allowedDisplayCurrencies.includes(displayCurrency)) return;
@@ -1659,6 +1707,14 @@ export const useAppShellComposition = () => {
   const chatMessageElByIdRef = React.useRef<Map<string, HTMLDivElement>>(
     new Map(),
   );
+  const [bankPaymentOfferMessages, setBankPaymentOfferMessages] = useState<
+    LocalNostrMessage[]
+  >([]);
+  const bankPaymentOfferSpdPayloadByOfferIdRef = React.useRef<
+    Map<string, string>
+  >(new Map());
+  const autoSentBankDetailsOfferIdsRef = React.useRef<Set<string>>(new Set());
+  const bankPaymentOfferExpiryInFlightRef = React.useRef(false);
   const chatDidInitialScrollForContactRef = React.useRef<string | null>(null);
   const chatForceScrollToBottomRef = React.useRef(false);
   const chatScrollTargetIdRef = React.useRef<string | null>(null);
@@ -1688,6 +1744,121 @@ export const useAppShellComposition = () => {
 
     requestAnimationFrame(() => tryScroll(0));
   }, []);
+
+  const upsertBankPaymentOfferMessage = React.useCallback(
+    (message: LocalNostrMessage) => {
+      const messageContactId = String(message.contactId ?? "").trim();
+      const messageWrapId = String(message.wrapId ?? "").trim();
+      const messageClientId = String(message.clientId ?? "").trim();
+      const messageId = String(message.id ?? "").trim();
+      const messageOfferId =
+        getLinkyBankPaymentOfferInfo(String(message.content ?? ""))?.offerId ??
+        "";
+      const messageOfferKey =
+        messageOfferId && messageContactId
+          ? `${messageContactId}:${messageOfferId}`
+          : "";
+
+      setBankPaymentOfferMessages((prev) => {
+        const existingOfferMessage = messageOfferKey
+          ? (prev.find((existing) => {
+              const existingContactId = String(existing.contactId ?? "").trim();
+              const existingOfferId = getLinkyBankPaymentOfferInfo(
+                String(existing.content ?? ""),
+              )?.offerId;
+              return (
+                `${existingContactId}:${existingOfferId ?? ""}` ===
+                messageOfferKey
+              );
+            }) ?? null)
+          : null;
+        const next = prev.filter((existing) => {
+          const existingContactId = String(existing.contactId ?? "").trim();
+          const existingOfferId = getLinkyBankPaymentOfferInfo(
+            String(existing.content ?? ""),
+          )?.offerId;
+          if (
+            messageOfferKey &&
+            `${existingContactId}:${existingOfferId ?? ""}` === messageOfferKey
+          ) {
+            return false;
+          }
+
+          const existingWrapId = String(existing.wrapId ?? "").trim();
+          const existingClientId = String(existing.clientId ?? "").trim();
+          const existingId = String(existing.id ?? "").trim();
+
+          if (messageWrapId && existingWrapId === messageWrapId) return false;
+          if (messageClientId && existingClientId === messageClientId) {
+            return false;
+          }
+          if (messageId && existingId === messageId) return false;
+          return true;
+        });
+
+        const mergedMessage = existingOfferMessage
+          ? (() => {
+              const existingInfo = getLinkyBankPaymentOfferInfo(
+                String(existingOfferMessage.content ?? ""),
+              );
+              const messageInfo = getLinkyBankPaymentOfferInfo(
+                String(message.content ?? ""),
+              );
+              const existingCreatedAt =
+                Number(existingOfferMessage.createdAtSec ?? 0) || 0;
+              const messageCreatedAt = Number(message.createdAtSec ?? 0) || 0;
+              const existingUpdatedAt =
+                existingInfo?.statusUpdatedAtSec ?? existingCreatedAt;
+              const messageUpdatedAt =
+                messageInfo?.statusUpdatedAtSec ?? messageCreatedAt;
+              const latest =
+                messageUpdatedAt > existingUpdatedAt
+                  ? message
+                  : messageUpdatedAt < existingUpdatedAt
+                    ? existingOfferMessage
+                    : messageInfo && existingInfo
+                      ? getLinkyBankPaymentOfferStatusRank(
+                          messageInfo.status,
+                        ) >=
+                        getLinkyBankPaymentOfferStatusRank(existingInfo.status)
+                        ? message
+                        : existingOfferMessage
+                      : messageCreatedAt >= existingCreatedAt
+                        ? message
+                        : existingOfferMessage;
+
+              return {
+                ...existingOfferMessage,
+                ...latest,
+                contactId: existingOfferMessage.contactId,
+                createdAtSec:
+                  existingCreatedAt && messageCreatedAt
+                    ? Math.min(existingCreatedAt, messageCreatedAt)
+                    : existingCreatedAt || messageCreatedAt,
+                direction: existingOfferMessage.direction,
+                id: messageOfferKey
+                  ? `bank-payment-offer:${messageOfferKey}`
+                  : latest.id,
+              };
+            })()
+          : messageOfferKey
+            ? {
+                ...message,
+                id: `bank-payment-offer:${messageOfferKey}`,
+              }
+            : message;
+
+        next.push(mergedMessage);
+        next.sort((a, b) => {
+          const createdA = Number(a.createdAtSec ?? 0);
+          const createdB = Number(b.createdAtSec ?? 0);
+          return createdA - createdB;
+        });
+        return next;
+      });
+    },
+    [],
+  );
 
   const [myProfileName, setMyProfileName] = useState<string | null>(null);
   const [myProfilePicture, setMyProfilePicture] = useState<string | null>(null);
@@ -2171,6 +2342,7 @@ export const useAppShellComposition = () => {
     allowedDisplayCurrencies,
     cashuAutoswapEnabled,
     displayCurrency,
+    bankPaymentOfferRecipientCount,
     lang,
     lightningInvoiceAutoPayLimit,
     payWithCashuEnabled,
@@ -2445,7 +2617,7 @@ export const useAppShellComposition = () => {
 
   const cashuTokensWithMeta = useMemo(
     () =>
-      cashuTokensFiltered.map((row) => {
+      cashuTokensFiltered.flatMap((row) => {
         const meta = extractCashuTokenMeta({
           amount: row.amount,
           mint: row.mint,
@@ -2453,13 +2625,18 @@ export const useAppShellComposition = () => {
           token: row.token,
           unit: row.unit,
         });
-        return {
-          ...row,
-          mint: meta.mint ?? null,
-          unit: meta.unit ?? null,
-          amount: meta.amount ?? null,
-          tokenText: meta.tokenText,
-        };
+        const amount = meta.amount ?? 0;
+        if (amount <= 0) return [];
+
+        return [
+          {
+            ...row,
+            mint: meta.mint ?? null,
+            unit: meta.unit ?? null,
+            amount,
+            tokenText: meta.tokenText,
+          },
+        ];
       }),
     [cashuTokensFiltered],
   );
@@ -4087,6 +4264,27 @@ export const useAppShellComposition = () => {
     lastMessageByContactId,
     noGroupFilterValue: NO_GROUP_FILTER,
   });
+  const bankPaymentOfferContacts = React.useMemo(() => {
+    const sortedContacts = [
+      ...visibleContacts.conversations,
+      ...visibleContacts.others,
+    ];
+    return sortedContacts
+      .filter((contact) => {
+        const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+        if (!normalizedNpub) return false;
+
+        return extractStatusFilterCurrencies(
+          nostrStatusByNpub[normalizedNpub],
+        ).includes(LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY);
+      })
+      .slice(0, bankPaymentOfferRecipientCount);
+  }, [
+    bankPaymentOfferRecipientCount,
+    nostrStatusByNpub,
+    visibleContacts.conversations,
+    visibleContacts.others,
+  ]);
 
   const {
     autofillNewContactFromIdentifier,
@@ -4232,6 +4430,582 @@ export const useAppShellComposition = () => {
     [],
   );
 
+  const requestBankPaymentOffer = React.useCallback(
+    async (args: {
+      amountSat?: unknown;
+      amountText: string;
+      contacts: readonly { id?: unknown; name?: unknown; npub?: unknown }[];
+      spdPayload?: unknown;
+    }): Promise<boolean> => {
+      const amountSatRaw = Number(args.amountSat ?? 0);
+      const amountSat =
+        Number.isFinite(amountSatRaw) && amountSatRaw > 0
+          ? Math.round(amountSatRaw)
+          : null;
+      const amountText = String(args.amountText ?? "").trim();
+      const spdPayload = String(args.spdPayload ?? "").trim();
+      if (!amountText) {
+        setStatus(t("spdPaymentOfferMissingAmount"));
+        return false;
+      }
+      if (args.contacts.length === 0) {
+        setStatus(t("spdPaymentOfferFailed"));
+        return false;
+      }
+      if (!currentNsec) {
+        setStatus(t("profileMissingNpub"));
+        return false;
+      }
+
+      try {
+        const { getPublicKey } = await import("nostr-tools");
+        const decodedMe = nip19.decode(currentNsec);
+        if (
+          decodedMe.type !== "nsec" ||
+          !(decodedMe.data instanceof Uint8Array)
+        ) {
+          throw new Error("invalid nsec");
+        }
+        const privBytes = decodedMe.data;
+        const myPubHex = getPublicKey(privBytes);
+
+        const recipients: {
+          contactId: string;
+          contactPubHex: string;
+        }[] = [];
+        for (const contact of args.contacts) {
+          const contactId = String(contact.id ?? "").trim();
+          const contactNpub = normalizeNpubIdentifier(contact.npub);
+          if (!contactId || !contactNpub) continue;
+
+          const decodedContact = nip19.decode(contactNpub);
+          if (
+            decodedContact.type !== "npub" ||
+            typeof decodedContact.data !== "string"
+          ) {
+            continue;
+          }
+          const contactPubHex = decodedContact.data.trim();
+          if (!contactPubHex) continue;
+          recipients.push({ contactId, contactPubHex });
+        }
+
+        if (recipients.length === 0) {
+          setStatus(t("chatMissingContactNpub"));
+          return false;
+        }
+
+        const offerId = makeLocalId();
+        if (spdPayload) {
+          bankPaymentOfferSpdPayloadByOfferIdRef.current.set(
+            offerId,
+            spdPayload,
+          );
+        }
+
+        const pool = await getSharedAppNostrPool();
+        let sentCount = 0;
+
+        for (const recipient of recipients) {
+          const clientId = makeLocalId();
+          const baseEvent = createLinkyBankPaymentOfferEvent({
+            amountSat,
+            amountText,
+            clientId,
+            createdAt: Math.ceil(Date.now() / 1e3),
+            offerId,
+            offererPublicKey: myPubHex,
+            recipientPublicKey: recipient.contactPubHex,
+            senderPublicKey: myPubHex,
+            status: "offered",
+          });
+
+          const wrapForMe = wrapEventWithoutPushMarker(
+            baseEvent,
+            privBytes,
+            myPubHex,
+          );
+          const wrapForContact = wrapEventWithPushMarker(
+            baseEvent,
+            privBytes,
+            recipient.contactPubHex,
+          );
+
+          const publishOutcome = await publishWrappedWithRetry(
+            pool,
+            NOSTR_RELAYS,
+            wrapForMe,
+            wrapForContact,
+          );
+
+          if (!publishOutcome.anySuccess) continue;
+          sentCount += 1;
+
+          const messageWrapId =
+            String(wrapForMe.id ?? "").trim() ||
+            String(wrapForContact.id ?? "").trim() ||
+            `bank-payment-offer:${clientId}`;
+          upsertBankPaymentOfferMessage({
+            clientId,
+            contactId: recipient.contactId,
+            content: baseEvent.content,
+            createdAtSec: baseEvent.created_at,
+            direction: "out",
+            id: `bank-payment-offer:${recipient.contactId}:${offerId}`,
+            localOnly: true,
+            pubkey: myPubHex,
+            rumorId: null,
+            status: "sent",
+            wrapId: messageWrapId,
+          });
+        }
+
+        if (sentCount === 0) {
+          setStatus(t("spdPaymentOfferFailed"));
+          return false;
+        }
+
+        return true;
+      } catch (error) {
+        setStatus(
+          `${t("errorPrefix")}: ${getUnknownErrorMessage(error, "publish failed")}`,
+        );
+        return false;
+      }
+    },
+    [
+      currentNsec,
+      publishWrappedWithRetry,
+      setStatus,
+      t,
+      upsertBankPaymentOfferMessage,
+    ],
+  );
+
+  const respondToBankPaymentOffer = React.useCallback(
+    async (
+      message: LocalNostrMessage,
+      nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
+      options?: { spdPayload?: string | null },
+    ): Promise<boolean> => {
+      const offerInfo = getLinkyBankPaymentOfferInfo(
+        String(message.content ?? ""),
+      );
+      if (!offerInfo) {
+        setStatus(t("spdPaymentOfferFailed"));
+        return false;
+      }
+      if (!currentNsec) {
+        setStatus(t("profileMissingNpub"));
+        return false;
+      }
+
+      try {
+        const { getPublicKey } = await import("nostr-tools");
+        const decodedMe = nip19.decode(currentNsec);
+        if (
+          decodedMe.type !== "nsec" ||
+          !(decodedMe.data instanceof Uint8Array)
+        ) {
+          throw new Error("invalid nsec");
+        }
+        const privBytes = decodedMe.data;
+        const myPubHex = getPublicKey(privBytes);
+        const messageDirection = String(message.direction ?? "").trim();
+        const offererPublicKey =
+          String(offerInfo.offererPublicKey ?? "").trim() ||
+          (messageDirection === "out"
+            ? myPubHex
+            : String(message.pubkey ?? "").trim());
+
+        if (!offererPublicKey) {
+          setStatus(t("spdPaymentOfferFailed"));
+          return false;
+        }
+
+        const messageContactId = String(message.contactId ?? "").trim();
+        const messageContact =
+          contacts.find(
+            (contact) => String(contact.id ?? "").trim() === messageContactId,
+          ) ?? null;
+        const contactNpub = normalizeNpubIdentifier(messageContact?.npub);
+        let contactPubkey: string | null = null;
+        if (contactNpub) {
+          const decodedContact = nip19.decode(contactNpub);
+          if (
+            decodedContact.type === "npub" &&
+            typeof decodedContact.data === "string"
+          ) {
+            contactPubkey = decodedContact.data.trim() || null;
+          }
+        }
+
+        const messagePubkey = String(message.pubkey ?? "").trim();
+        const recipientPublicKey =
+          offererPublicKey === myPubHex
+            ? (contactPubkey ??
+              (messagePubkey !== myPubHex ? messagePubkey : ""))
+            : offererPublicKey;
+        if (!recipientPublicKey || recipientPublicKey === myPubHex) {
+          setStatus(t("spdPaymentOfferFailed"));
+          return false;
+        }
+
+        const clientId = makeLocalId();
+        const baseEvent = createLinkyBankPaymentOfferEvent({
+          amountSat: offerInfo.amountSat,
+          amountText: offerInfo.amountText,
+          clientId,
+          createdAt: Math.ceil(Date.now() / 1e3),
+          offerId: offerInfo.offerId,
+          offererPublicKey,
+          recipientPublicKey,
+          senderPublicKey: myPubHex,
+          spdPayload: options?.spdPayload ?? offerInfo.spdPayload,
+          status: nextStatus,
+        });
+
+        const wrapForMe = wrapEventWithoutPushMarker(
+          baseEvent,
+          privBytes,
+          myPubHex,
+        );
+        const wrapForContact = wrapEventWithPushMarker(
+          baseEvent,
+          privBytes,
+          recipientPublicKey,
+        );
+
+        const pool = await getSharedAppNostrPool();
+        const publishOutcome = await publishWrappedWithRetry(
+          pool,
+          NOSTR_RELAYS,
+          wrapForMe,
+          wrapForContact,
+        );
+
+        if (!publishOutcome.anySuccess) {
+          setStatus(t("spdPaymentOfferFailed"));
+          return false;
+        }
+
+        const messageWrapId =
+          String(wrapForMe.id ?? "").trim() ||
+          String(wrapForContact.id ?? "").trim() ||
+          `bank-payment-offer:${clientId}`;
+        upsertBankPaymentOfferMessage({
+          clientId,
+          contactId: String(message.contactId ?? "").trim(),
+          content: baseEvent.content,
+          createdAtSec: baseEvent.created_at,
+          direction: offererPublicKey === myPubHex ? "out" : "in",
+          id: `bank-payment-offer:${offerInfo.offerId}`,
+          localOnly: true,
+          pubkey: offererPublicKey === myPubHex ? myPubHex : offererPublicKey,
+          rumorId: null,
+          status: "sent",
+          wrapId: messageWrapId,
+        });
+
+        return true;
+      } catch (error) {
+        setStatus(
+          `${t("errorPrefix")}: ${getUnknownErrorMessage(error, "publish failed")}`,
+        );
+        return false;
+      }
+    },
+    [
+      currentNsec,
+      contacts,
+      publishWrappedWithRetry,
+      setStatus,
+      t,
+      upsertBankPaymentOfferMessage,
+    ],
+  );
+
+  const getBankPaymentOfferGroupMessages = React.useCallback(
+    (message: LocalNostrMessage): LocalNostrMessage[] => {
+      const offerInfo = getLinkyBankPaymentOfferInfo(
+        String(message.content ?? ""),
+      );
+      if (!offerInfo) return [message];
+
+      const group = bankPaymentOfferMessages.filter((candidate) => {
+        const candidateInfo = getLinkyBankPaymentOfferInfo(
+          String(candidate.content ?? ""),
+        );
+        return candidateInfo?.offerId === offerInfo.offerId;
+      });
+
+      if (
+        !group.some(
+          (candidate) =>
+            String(candidate.contactId ?? "").trim() ===
+            String(message.contactId ?? "").trim(),
+        )
+      ) {
+        group.push(message);
+      }
+
+      return group;
+    },
+    [bankPaymentOfferMessages],
+  );
+
+  const isBankPaymentOfferCanceled = React.useCallback(
+    (offerId: string): boolean => {
+      const normalizedOfferId = String(offerId ?? "").trim();
+      if (!normalizedOfferId) return false;
+
+      return bankPaymentOfferMessages.some((message) => {
+        const info = getLinkyBankPaymentOfferInfo(
+          String(message.content ?? ""),
+        );
+        return (
+          info?.offerId === normalizedOfferId && info.status === "canceled"
+        );
+      });
+    },
+    [bankPaymentOfferMessages],
+  );
+
+  const respondToBankPaymentOfferWithGroupState = React.useCallback(
+    async (
+      message: LocalNostrMessage,
+      nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
+      options?: { spdPayload?: string | null },
+    ): Promise<boolean> => {
+      if (nextStatus !== "canceled" && nextStatus !== "settled") {
+        return await respondToBankPaymentOffer(message, nextStatus, options);
+      }
+
+      const group = getBankPaymentOfferGroupMessages(message);
+      let sentAny = false;
+
+      for (const groupMessage of group) {
+        const info = getLinkyBankPaymentOfferInfo(
+          String(groupMessage.content ?? ""),
+        );
+        if (!info) continue;
+        if (info.status === nextStatus) {
+          sentAny = true;
+          continue;
+        }
+        if (nextStatus === "canceled" && info.status === "settled") continue;
+
+        const sent = await respondToBankPaymentOffer(
+          groupMessage,
+          nextStatus,
+          options,
+        );
+        sentAny = sentAny || sent;
+      }
+
+      return sentAny;
+    },
+    [getBankPaymentOfferGroupMessages, respondToBankPaymentOffer],
+  );
+
+  React.useEffect(() => {
+    if (!currentNsec) return;
+    if (bankPaymentOfferMessages.length === 0) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const { getPublicKey } = await import("nostr-tools");
+        const decodedMe = nip19.decode(currentNsec);
+        if (
+          decodedMe.type !== "nsec" ||
+          !(decodedMe.data instanceof Uint8Array)
+        ) {
+          return;
+        }
+
+        const myPubHex = getPublicKey(decodedMe.data);
+        const groups = new Map<
+          string,
+          {
+            info: ReturnType<typeof getLinkyBankPaymentOfferInfo>;
+            message: LocalNostrMessage;
+          }[]
+        >();
+
+        for (const message of bankPaymentOfferMessages) {
+          const info = getLinkyBankPaymentOfferInfo(
+            String(message.content ?? ""),
+          );
+          if (!info) continue;
+          if (String(info.offererPublicKey ?? "").trim() !== myPubHex) {
+            continue;
+          }
+
+          const group = groups.get(info.offerId) ?? [];
+          group.push({ info, message });
+          groups.set(info.offerId, group);
+        }
+
+        for (const [offerId, group] of groups) {
+          if (cancelled) return;
+
+          const hasActiveBankDetails = group.some(
+            (entry) =>
+              entry.info?.status === "bank_details_sent" ||
+              entry.info?.status === "bank_paid",
+          );
+          if (hasActiveBankDetails) continue;
+
+          const accepted = group
+            .filter((entry) => entry.info?.status === "accepted")
+            .sort((a, b) => {
+              const aSec =
+                a.info?.statusUpdatedAtSec ??
+                Number(a.message.createdAtSec ?? 0);
+              const bSec =
+                b.info?.statusUpdatedAtSec ??
+                Number(b.message.createdAtSec ?? 0);
+              if (aSec !== bSec) return aSec - bSec;
+              return String(a.message.contactId ?? "").localeCompare(
+                String(b.message.contactId ?? ""),
+              );
+            });
+
+          const candidate = accepted[0] ?? null;
+          if (!candidate?.info) continue;
+
+          const spdPayload =
+            bankPaymentOfferSpdPayloadByOfferIdRef.current.get(offerId) ?? "";
+          if (!spdPayload) continue;
+
+          const candidateKey = `${offerId}:${String(candidate.message.contactId ?? "").trim()}`;
+          if (autoSentBankDetailsOfferIdsRef.current.has(candidateKey)) {
+            continue;
+          }
+
+          autoSentBankDetailsOfferIdsRef.current.add(candidateKey);
+          const sent = await respondToBankPaymentOffer(
+            candidate.message,
+            "bank_details_sent",
+            { spdPayload },
+          );
+          if (!sent) {
+            autoSentBankDetailsOfferIdsRef.current.delete(candidateKey);
+          }
+        }
+      } catch {
+        // Best effort; the sender can retry when the accepted event reappears.
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bankPaymentOfferMessages, currentNsec, respondToBankPaymentOffer]);
+
+  React.useEffect(() => {
+    if (!currentNsec) return;
+    if (bankPaymentOfferMessages.length === 0) return;
+
+    let cancelled = false;
+
+    const tick = async () => {
+      if (bankPaymentOfferExpiryInFlightRef.current) return;
+
+      bankPaymentOfferExpiryInFlightRef.current = true;
+      try {
+        const { getPublicKey } = await import("nostr-tools");
+        const decodedMe = nip19.decode(currentNsec);
+        if (
+          decodedMe.type !== "nsec" ||
+          !(decodedMe.data instanceof Uint8Array)
+        ) {
+          return;
+        }
+
+        const myPubHex = getPublicKey(decodedMe.data);
+        const nowSec = Math.floor(Date.now() / 1e3);
+        const groups = new Map<
+          string,
+          {
+            info: NonNullable<ReturnType<typeof getLinkyBankPaymentOfferInfo>>;
+            message: LocalNostrMessage;
+          }[]
+        >();
+
+        for (const message of bankPaymentOfferMessages) {
+          const info = getLinkyBankPaymentOfferInfo(
+            String(message.content ?? ""),
+          );
+          if (!info) continue;
+          if (String(info.offererPublicKey ?? "").trim() !== myPubHex) {
+            continue;
+          }
+          if (isLinkyBankPaymentOfferTerminalStatus(info.status)) continue;
+
+          const group = groups.get(info.offerId) ?? [];
+          group.push({ info, message });
+          groups.set(info.offerId, group);
+        }
+
+        const statusPriority: LinkyBankPaymentOfferStatus[] = [
+          "bank_paid",
+          "bank_details_sent",
+          "accepted",
+          "offered",
+        ];
+
+        for (const group of groups.values()) {
+          if (cancelled) return;
+
+          const activeStatus = statusPriority.find((status) =>
+            group.some((entry) => entry.info.status === status),
+          );
+          if (!activeStatus) continue;
+
+          const phaseEntries = group.filter(
+            (entry) => entry.info.status === activeStatus,
+          );
+          const phaseStartedAtSec = Math.min(
+            ...phaseEntries.map(
+              (entry) =>
+                entry.info.statusUpdatedAtSec ||
+                Number(entry.message.createdAtSec ?? 0) ||
+                nowSec,
+            ),
+          );
+          if (
+            nowSec - phaseStartedAtSec <
+            LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC
+          ) {
+            continue;
+          }
+
+          for (const entry of group) {
+            if (cancelled) return;
+            await respondToBankPaymentOffer(entry.message, "canceled");
+          }
+        }
+      } finally {
+        bankPaymentOfferExpiryInFlightRef.current = false;
+      }
+    };
+
+    void tick();
+    const intervalId = window.setInterval(() => {
+      void tick();
+    }, 1_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [bankPaymentOfferMessages, currentNsec, respondToBankPaymentOffer]);
+
   const payContactWithCashuMessage =
     usePayContactWithCashuMessage<ContactRowLike>({
       activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
@@ -4262,6 +5036,62 @@ export const useAppShellComposition = () => {
       update,
       updateLocalNostrMessage,
     });
+
+  const settleBankPaymentOffer = React.useCallback(
+    async (message: LocalNostrMessage) => {
+      if (cashuIsBusy) return;
+
+      const offerInfo = getLinkyBankPaymentOfferInfo(
+        String(message.content ?? ""),
+      );
+      if (!offerInfo || offerInfo.status !== "bank_paid") {
+        setStatus(t("spdPaymentOfferFailed"));
+        return;
+      }
+      if (isBankPaymentOfferCanceled(offerInfo.offerId)) {
+        setStatus(t("bankPaymentOfferStatusCanceled"));
+        return;
+      }
+      if (!offerInfo.amountSat) {
+        setStatus(t("payInvalidAmount"));
+        return;
+      }
+
+      const contactId = String(message.contactId ?? "").trim();
+      const contact =
+        contacts.find(
+          (candidate) => String(candidate.id ?? "").trim() === contactId,
+        ) ?? null;
+      if (!contact) {
+        setStatus(t("contactNotFound"));
+        return;
+      }
+
+      setCashuIsBusy(true);
+      try {
+        const result = await payContactWithCashuMessage({
+          contact,
+          amountSat: offerInfo.amountSat,
+          logCompletedOnly: true,
+        });
+        if (!result.ok) return;
+
+        await respondToBankPaymentOfferWithGroupState(message, "settled");
+      } finally {
+        setCashuIsBusy(false);
+      }
+    },
+    [
+      cashuIsBusy,
+      contacts,
+      isBankPaymentOfferCanceled,
+      payContactWithCashuMessage,
+      respondToBankPaymentOfferWithGroupState,
+      setCashuIsBusy,
+      setStatus,
+      t,
+    ],
+  );
 
   useNostrPendingFlush({
     activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
@@ -5494,6 +6324,29 @@ export const useAppShellComposition = () => {
     [pushToast, t],
   );
 
+  const openBankPaymentFromOffer = React.useCallback(
+    async (spdPayload: string) => {
+      try {
+        await openSpdPaymentInBank(spdPayload);
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
+
+        const message = error instanceof Error ? error.message : "";
+        if (message === "spd-share-unavailable") {
+          setStatus(t("spdPaymentShareUnavailable"));
+          return;
+        }
+        if (message === "spd-service-worker-unavailable") {
+          setStatus(t("spdPaymentServiceWorkerUnavailable"));
+          return;
+        }
+
+        setStatus(t("spdPaymentOpenFailed"));
+      }
+    },
+    [setStatus, t],
+  );
+
   const closeShareOptions = React.useCallback(() => {
     setShareOptionsText(null);
   }, []);
@@ -6569,7 +7422,10 @@ export const useAppShellComposition = () => {
       const contactId = String(contact.id ?? "").trim();
       const last = contactId ? lastMessageByContactId.get(contactId) : null;
       const lastText = String(last?.content ?? "").trim();
-      const tokenInfo = lastText ? getCashuTokenMessageInfo(lastText) : null;
+      const tokenInfo =
+        lastText && !parsePrivateImageMessage(lastText)
+          ? getCashuTokenMessageInfo(lastText)
+          : null;
       const hasAttention = Boolean(
         contactAttentionById[String(contact.id ?? "")],
       );
@@ -7721,6 +8577,17 @@ export const useAppShellComposition = () => {
     await sendChatMessage();
   }, [editChatMessage, editContext, sendChatMessage]);
 
+  const sendChatImage = React.useCallback(
+    async (file: File) => {
+      if (editContext) return;
+      await sendChatMessage({
+        clearDraft: false,
+        imageFile: file,
+      });
+    },
+    [editContext, sendChatMessage],
+  );
+
   const requestSelectedContact = React.useCallback(async () => {
     if (route.kind !== "contactPay") return;
     if (!selectedContact) return;
@@ -7847,16 +8714,25 @@ export const useAppShellComposition = () => {
       const messageRumorId = String(message.rumorId ?? "").trim();
       const messageAuthorPubkey = String(message.pubkey ?? "").trim();
       if (!messageRumorId || !messageAuthorPubkey) return;
-      void sendReaction({ emoji, messageAuthorPubkey, messageRumorId });
+      void sendReaction({
+        emoji,
+        messageAuthorPubkey,
+        messageKind: parsePrivateImageMessage(message.content) ? 15 : 14,
+        messageRumorId,
+      });
     },
     [sendReaction],
   );
 
   const onCopyChatMessage = React.useCallback(
     (message: LocalNostrMessage) => {
-      void copyText(String(message.content ?? ""));
+      const content = String(message.content ?? "");
+      const copyContent = parsePrivateImageMessage(content)
+        ? privateImagePreviewText(t)
+        : content;
+      void copyText(copyContent);
     },
-    [copyText],
+    [copyText, t],
   );
 
   const onPayChatPaymentRequest = React.useCallback(
@@ -7979,6 +8855,7 @@ export const useAppShellComposition = () => {
   useInboxNotificationsSync({
     appendLocalNostrMessage,
     appendLocalNostrReaction,
+    bankPaymentOfferMessages,
     contacts,
     currentNsec,
     maybeShowPwaNotification,
@@ -7989,6 +8866,7 @@ export const useAppShellComposition = () => {
     nostrMessagesRecent,
     nostrReactionWrapIdsRef,
     nostrReactionsLatestRef,
+    onBankPaymentOfferMessage: upsertBankPaymentOfferMessage,
     onOpenInboxMessageToast: openInboxMessageToast,
     pushToast,
     route,
@@ -8020,6 +8898,8 @@ export const useAppShellComposition = () => {
     requestLightningInvoiceConfirmation: setPendingLightningInvoiceConfirmation,
     requestLnurlWithdrawConfirmation: setPendingLnurlWithdrawConfirmation,
     saveCashuFromText,
+    scanAcceptsBankPayment:
+      scanEntryPoint === "send" || route.kind === "manualPay",
     scanEntryPoint,
     setStatus,
     t,
@@ -8227,6 +9107,61 @@ export const useAppShellComposition = () => {
     scannedTextHandlerRef,
   });
 
+  const chatMessagesWithBankPaymentOffers = React.useMemo(() => {
+    if (route.kind !== "chat") return chatMessages;
+
+    const activeContactId = String(route.id ?? "").trim();
+    if (!activeContactId) return chatMessages;
+
+    const offerMessages = bankPaymentOfferMessages.filter(
+      (message) => String(message.contactId ?? "").trim() === activeContactId,
+    );
+    if (offerMessages.length === 0) return chatMessages;
+
+    const seenKeys = new Set<string>();
+    for (const message of chatMessages) {
+      const offerId = getLinkyBankPaymentOfferInfo(
+        String(message.content ?? ""),
+      )?.offerId;
+      if (offerId) seenKeys.add(`offer:${offerId}`);
+      const wrapId = String(message.wrapId ?? "").trim();
+      if (wrapId) seenKeys.add(`wrap:${wrapId}`);
+      const clientId = String(message.clientId ?? "").trim();
+      if (clientId) seenKeys.add(`client:${clientId}`);
+      const id = String(message.id ?? "").trim();
+      if (id) seenKeys.add(`id:${id}`);
+    }
+
+    const merged = [...chatMessages];
+    for (const message of offerMessages) {
+      const offerId = getLinkyBankPaymentOfferInfo(
+        String(message.content ?? ""),
+      )?.offerId;
+      const wrapId = String(message.wrapId ?? "").trim();
+      const clientId = String(message.clientId ?? "").trim();
+      const id = String(message.id ?? "").trim();
+      if (offerId && seenKeys.has(`offer:${offerId}`)) continue;
+      if (wrapId && seenKeys.has(`wrap:${wrapId}`)) continue;
+      if (clientId && seenKeys.has(`client:${clientId}`)) continue;
+      if (id && seenKeys.has(`id:${id}`)) continue;
+
+      merged.push(message);
+      if (offerId) seenKeys.add(`offer:${offerId}`);
+      if (wrapId) seenKeys.add(`wrap:${wrapId}`);
+      if (clientId) seenKeys.add(`client:${clientId}`);
+      if (id) seenKeys.add(`id:${id}`);
+    }
+
+    merged.sort((a, b) => {
+      const createdA = Number(a.createdAtSec ?? 0);
+      const createdB = Number(b.createdAtSec ?? 0);
+      if (createdA !== createdB) return createdA - createdB;
+      return String(a.id ?? "").localeCompare(String(b.id ?? ""));
+    });
+
+    return merged;
+  }, [bankPaymentOfferMessages, chatMessages, route]);
+
   useChatMessageEffects({
     autoAcceptedChatMessageIdsRef,
     cashuIsBusy,
@@ -8235,7 +9170,7 @@ export const useAppShellComposition = () => {
     chatForceScrollToBottomRef,
     chatLastMessageCountRef,
     chatMessageElByIdRef,
-    chatMessages,
+    chatMessages: chatMessagesWithBankPaymentOffers,
     chatMessagesRef,
     chatScrollTargetIdRef,
     getCashuTokenMessageInfo,
@@ -8288,6 +9223,7 @@ export const useAppShellComposition = () => {
       cashuTokensAll: cashuTokensAllFiltered,
       cashuOwnTokens,
       cashuOwnSpentTokensCount: cashuOwnSpentTokens.length,
+      bankPaymentOfferContacts,
       deleteSpentCashuTokens,
       deleteSpentCashuTokensIsBusy,
       checkAllCashuTokensAndDeleteInvalid,
@@ -8307,6 +9243,7 @@ export const useAppShellComposition = () => {
       lnAddressPayAmount,
       manualPayContacts: contacts,
       manualPayNostrPictureByNpub: nostrPictureByNpub,
+      onRequestBankPaymentOffer: requestBankPaymentOffer,
       onSubmitManualPayText,
       meltLargestForeignMintToMainMint,
       payLightningAddressWithCashu,
@@ -8349,7 +9286,8 @@ export const useAppShellComposition = () => {
       chatSelectedContact: selectedChatContact,
       chatDraft,
       chatMessageElByIdRef,
-      chatMessages,
+      chatMessages: chatMessagesWithBankPaymentOffers,
+      bankPaymentOfferMessages,
       chatMessagesRef,
       chatOwnPubkeyHex,
       chatSendIsBusy,
@@ -8375,6 +9313,7 @@ export const useAppShellComposition = () => {
       groupNames,
       handleSaveContact,
       isProfileEditing,
+      isBankPaymentOfferCanceled,
       isSavingContact,
       lang,
       makeNip98AuthHeader,
@@ -8387,10 +9326,14 @@ export const useAppShellComposition = () => {
       onAddUnknownContact: addUnknownContactFromChat,
       onBlockUnknownContact: blockUnknownContactFromChat,
       onCopy: onCopyChatMessage,
+      onCopyText: copyText,
       onDeclinePaymentRequest: onDeclineChatPaymentRequest,
       onEdit: onEditChatMessage,
+      onOpenBankPayment: openBankPaymentFromOffer,
       onOpenNpubContact: openNpubMessageContact,
       onPayPaymentRequest: onPayChatPaymentRequest,
+      onRespondBankPaymentOffer: respondToBankPaymentOfferWithGroupState,
+      onSettleBankPaymentOffer: settleBankPaymentOffer,
       cycleProfileAvatarControl,
       onPickProfilePhoto,
       onProfilePhotoSelected,
@@ -8434,6 +9377,7 @@ export const useAppShellComposition = () => {
       saveProfileEdits,
       scanIsOpen,
       selectedContact,
+      sendChatImage,
       sendChatMessage: sendChatOrEditMessage,
       setChatDraft,
       setContactPayMethod,
@@ -8572,6 +9516,7 @@ export const useAppShellComposition = () => {
       importDataFileInputRef,
       isSeedLogin,
       isEvoluServerOffline,
+      bankPaymentOfferRecipientCount,
       lightningInvoiceAutoPayLimit,
       lang,
       LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
@@ -8608,6 +9553,7 @@ export const useAppShellComposition = () => {
       seedMnemonic,
       selectedEvoluServerUrl,
       selectedRelayUrl,
+      setBankPaymentOfferRecipientCount,
       setDefaultMintUrlDraft,
       setEvoluServerOffline,
       setLightningInvoiceAutoPayLimit,

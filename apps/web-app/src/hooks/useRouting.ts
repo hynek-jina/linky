@@ -37,6 +37,7 @@ type NavigationAction =
   | { route: "evoluServers" }
   | { route: "lnAddressPay"; lnAddress: string }
   | { route: "manualPay" }
+  | { route: "bankPayment"; spdPayload: string }
   | { route: "mint"; mintUrl: string }
   | { route: "mints" }
   | { route: "nostrRelay"; id: string }
@@ -127,6 +128,11 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "manualPay":
       window.location.assign("#wallet/pay");
+      break;
+    case "bankPayment":
+      window.location.assign(
+        `#wallet/bank-payment/${encodeURIComponent(String(action.spdPayload ?? "").trim())}`,
+      );
       break;
     case "cashuTokenNew":
       window.location.assign("#wallet/token/new");

@@ -38,6 +38,7 @@ interface UseSendReactionParams<
 interface SendReactionArgs {
   emoji: string;
   messageAuthorPubkey: string;
+  messageKind?: 14 | 15;
   messageRumorId: string;
 }
 
@@ -70,6 +71,7 @@ export const useSendReaction = <
       const messageRumorId = toTrimmedText(args.messageRumorId);
       const emoji = String(args.emoji ?? "").trim();
       const messageAuthorPubkey = toTrimmedText(args.messageAuthorPubkey);
+      const messageKind = args.messageKind === 15 ? 15 : 14;
       if (!messageRumorId || !emoji || !messageAuthorPubkey) return;
 
       const contactNpub = normalizeNpubIdentifier(selectedContact.npub);
@@ -189,7 +191,7 @@ export const useSendReaction = <
             ["p", contactPubHex],
             ["p", myPubHex],
             ["e", messageRumorId],
-            ["k", "14"],
+            ["k", String(messageKind)],
             ["client", clientId],
           ],
           content: emoji,

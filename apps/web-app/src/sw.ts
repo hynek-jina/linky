@@ -11,6 +11,10 @@ import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst } from "workbox-strategies";
 import {
+  getLinkyBankPaymentOfferText,
+  isLinkyBankPaymentOfferEvent,
+} from "./app/lib/bankPaymentOffer";
+import {
   isInvalidInnerRumorPubkey,
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./app/hooks/messages/chatNostrProtocol";
@@ -142,6 +146,32 @@ function truncateNotificationBody(value: string): string {
     return normalized;
   }
   return `${normalized.slice(0, 140)}…`;
+}
+
+function sanitizeSpaydFilename(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function createSpaydResponse(url: URL): Response {
+  const payload = url.searchParams.get("data") || "";
+  const type =
+    url.searchParams.get("type") || "application/x-shortpaymentdescriptor";
+  const filename = sanitizeSpaydFilename(
+    url.searchParams.get("filename") || "platba.spayd",
+  );
+  const disposition =
+    url.searchParams.get("disposition") === "attachment"
+      ? "attachment"
+      : "inline";
+
+  return new Response(payload, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Disposition": `${disposition}; filename="${filename}"`,
+      "Content-Type": `${type}; charset=utf-8`,
+    },
+  });
 }
 
 function normalizeRelayUrls(urls: readonly string[]): string[] {
@@ -349,6 +379,24 @@ async function decryptIncomingMessageBody(
     };
   }
 
+  if (isLinkyBankPaymentOfferEvent(inner)) {
+    const offerText = getLinkyBankPaymentOfferText(content);
+    if (!offerText) return null;
+
+    await logSw("sw decrypt succeeded", {
+      contentLength: content.length,
+      data: readEnvelopeDebugMeta(envelope),
+      isBankPaymentOffer: true,
+      senderPub,
+    });
+    return {
+      body: offerText,
+      isCashu: false,
+      isPaymentNotice: false,
+      senderPub,
+    };
+  }
+
   if (inner.kind !== 14 || !content) {
     await logSw(
       "sw decrypt failed because inner rumor was missing or invalid",
@@ -406,6 +454,11 @@ registerRoute(
   new CacheFirst({
     cacheName: "linky-runtime-images-v1",
   }),
+);
+
+registerRoute(
+  ({ url }) => url.pathname.endsWith("/platba.spayd"),
+  async ({ url }) => createSpaydResponse(url),
 );
 
 registerRoute(new NavigationRoute(createHandlerBoundToURL("index.html")));

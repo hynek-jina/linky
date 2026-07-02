@@ -4,6 +4,10 @@ import {
   parseCashuPaymentRequestMessage,
   parseLinkyPaymentRequestDeclineMessage,
 } from "./paymentRequestMessage";
+import {
+  parsePrivateImageMessage,
+  privateImagePreviewText,
+} from "./privateImageMessage";
 import { extractCashuTokenFromText } from "./tokenText";
 
 const PREVIEW_NPUB_PATTERN =
@@ -35,6 +39,10 @@ export const formatChatMessagePreviewText = ({
   formatDisplayedAmountText,
   t,
 }: FormatChatMessagePreviewArgs): string => {
+  if (parsePrivateImageMessage(content)) {
+    return privateImagePreviewText(t);
+  }
+
   const paymentRequest = parseCashuPaymentRequestMessage(content);
   if (paymentRequest) {
     const amountText = formatDisplayedAmountText(paymentRequest.amount);

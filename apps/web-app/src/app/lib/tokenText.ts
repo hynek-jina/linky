@@ -1,5 +1,7 @@
 import { parseCashuToken } from "../../cashu";
+import { isSpdPaymentPayload } from "../../utils/spdPayment";
 import type { CashuTokenMeta, CashuTokenRowLike } from "../types/appTypes";
+import { getLinkyBankPaymentOfferInfo } from "./bankPaymentOffer";
 
 export const extractCashuTokenMeta = (
   row: Pick<
@@ -48,6 +50,10 @@ export const extractCashuTokenMeta = (
 export const extractCashuTokenFromText = (text: string): string | null => {
   const raw0 = String(text ?? "").trim();
   if (!raw0) return null;
+  if (isSpdPaymentPayload(raw0) || getLinkyBankPaymentOfferInfo(raw0)) {
+    return null;
+  }
+
   const queryKeys = ["token", "cashu", "cashutoken", "cashu_token", "t"];
   const cashuSchemePrefix = /^(web\+)?cashu:(\/\/)?/i;
 
