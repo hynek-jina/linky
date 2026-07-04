@@ -457,14 +457,7 @@ export const useLightningPaymentsDomain = ({
                   : {}),
                 usedInputTokens: candidate.tokens,
               },
-              fee: (() => {
-                const feePaid = Number(
-                  (result as { feePaid?: unknown }).feePaid ?? 0,
-                );
-                return Number.isFinite(feePaid) && feePaid >= 0
-                  ? Math.trunc(feePaid)
-                  : null;
-              })(),
+              fee: null,
               mint: result.mint,
               unit: result.unit,
               error: null,
@@ -758,10 +751,6 @@ export const useLightningPaymentsDomain = ({
                 );
               }
 
-              const feePaid = Number(
-                (result as { feePaid?: unknown }).feePaid ?? 0,
-              );
-
               const successActionMessage =
                 attemptSuccessAction?.tag === "message"
                   ? attemptSuccessAction.message
@@ -812,10 +801,7 @@ export const useLightningPaymentsDomain = ({
                     : {}),
                   usedInputTokens: candidate.tokens,
                 },
-                fee:
-                  Number.isFinite(feePaid) && feePaid >= 0
-                    ? Math.trunc(feePaid)
-                    : null,
+                fee: null,
                 mint: result.mint,
                 unit: result.unit,
                 error: null,
