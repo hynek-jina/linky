@@ -23,6 +23,8 @@ const REGISTERED_PUSH_ENDPOINT_STORAGE_KEY = "linky.push_subscription_endpoint";
 const REGISTERED_PUSH_PUBKEY_STORAGE_KEY = "linky.push_subscription_pubkey";
 const REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY = "linky.push_native_token";
 const REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY = "linky.push_native_pubkey";
+const PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY =
+  "linky.push_notifications_disabled";
 
 let nativePushListenersPromise: Promise<void> | null = null;
 interface NativePluginListenerHandle {
@@ -36,13 +38,25 @@ const pendingNativePushTokenWaiters = new Set<{
 }>();
 
 async function fetchVapidPublicKey(): Promise<string> {
-  const response = await fetch(`${PUSH_SERVER_URL}/vapid-public-key`);
+  let response: Response;
+  try {
+    response = await fetch(`${PUSH_SERVER_URL}/vapid-public-key`);
+  } catch (error) {
+    await appendPushDebugLog("client", "push vapid key fetch failed", {
+      error,
+      pushServerUrl: PUSH_SERVER_URL,
+    });
+    throw new Error(
+      "Push server je nedostupný. Zkontroluj připojení nebo zkus notifikace zapnout později.",
+    );
+  }
+
   if (!response.ok) {
-    throw new Error(`Failed to fetch VAPID key: HTTP ${response.status}`);
+    throw new Error(`Push server vrátil HTTP ${response.status}`);
   }
   const data: unknown = await response.json();
   if (!isRecord(data) || typeof data.vapidPublicKey !== "string") {
-    throw new Error("Invalid VAPID key response");
+    throw new Error("Push server vrátil neplatný VAPID klíč");
   }
   return data.vapidPublicKey;
 }
@@ -115,6 +129,19 @@ function storeRegisteredNativePushPubkey(pubkey: string): void {
 
 function clearStoredRegisteredNativePushPubkey(): void {
   localStorage.removeItem(REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY);
+}
+
+export function arePushNotificationsDisabledByUser(): boolean {
+  return localStorage.getItem(PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY) === "1";
+}
+
+export function setPushNotificationsDisabledByUser(disabled: boolean): void {
+  if (disabled) {
+    localStorage.setItem(PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY, "1");
+    return;
+  }
+
+  localStorage.removeItem(PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY);
 }
 
 type PushSubscriptionData = {
@@ -877,6 +904,8 @@ export async function registerPushNotifications(
 export async function unregisterPushNotifications(
   currentNsec: string,
 ): Promise<boolean> {
+  setPushNotificationsDisabledByUser(true);
+
   if (isNativePlatform()) {
     try {
       const storedToken = readStoredRegisteredNativePushToken();
@@ -910,53 +939,62 @@ export async function unregisterPushNotifications(
 
   try {
     if (!("serviceWorker" in navigator)) {
+      clearStoredRegisteredPushEndpoint();
+      clearStoredRegisteredPushPubkey();
       await appendPushDebugLog("client", "push unregister failed", {
         reason: "service_worker_unsupported",
       });
-      return false;
+      return true;
     }
 
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = registration
+      ? await registration.pushManager.getSubscription()
+      : null;
     const storedEndpoint = readStoredRegisteredPushEndpoint();
 
     if (!subscription) {
+      const responseOk = storedEndpoint
+        ? await unregisterEndpointOnServer({
+            currentNsec,
+            endpoint: storedEndpoint,
+          }).catch(() => false)
+        : false;
+      clearStoredRegisteredPushEndpoint();
+      clearStoredRegisteredPushPubkey();
       if (storedEndpoint) {
-        const responseOk = await unregisterEndpointOnServer({
-          currentNsec,
-          endpoint: storedEndpoint,
-        }).catch(() => false);
-        if (responseOk) {
-          clearStoredRegisteredPushEndpoint();
-          clearStoredRegisteredPushPubkey();
-        }
+        await appendPushDebugLog("client", "push unregister stale endpoint", {
+          responseOk,
+          storedEndpointHash: storedEndpoint.slice(-24),
+        });
       }
       await appendPushDebugLog("client", "push unregister noop", {
         reason: "missing_subscription",
         storedEndpointHash:
           storedEndpoint === null ? null : storedEndpoint.slice(-24),
       });
-      return false;
+      return true;
     }
 
     const responseOk = await unregisterEndpointOnServer({
       currentNsec,
       endpoint: subscription.endpoint,
-    });
+    }).catch(() => false);
     const unsubscribed = await subscription.unsubscribe().catch(() => false);
-    if (responseOk) {
+    const isDisabled = responseOk || unsubscribed;
+    if (isDisabled) {
       clearStoredRegisteredPushEndpoint();
       clearStoredRegisteredPushPubkey();
     }
     await appendPushDebugLog("client", "push unregister result", {
-      ok: responseOk && unsubscribed,
+      ok: isDisabled,
       responseOk,
       storedEndpointHash:
         storedEndpoint === null ? null : storedEndpoint.slice(-24),
       subscription: describeSubscription(subscription),
       unsubscribed,
     });
-    return responseOk && unsubscribed;
+    return isDisabled;
   } catch (error) {
     await appendPushDebugLog("client", "push unregister exception", { error });
     return false;

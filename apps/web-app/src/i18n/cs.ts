@@ -401,7 +401,7 @@ export const cs = {
   profile: "Profil",
   status: "Status",
   profileNoName: "Nostr profil",
-  profileExchangeStatusLabel: "Známým směním malé částky:",
+  profileExchangeStatusLabel: "Známým poskytnu:",
   contactStatusProvides: "Poskytne",
   myNpubQr: "Tvůj kontakt",
   profileMissingNpub: "Chybí Nostr klíče.",

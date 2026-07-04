@@ -68,7 +68,7 @@
     },
     "apps/web-app": {
       "name": "@linky/web-app",
-      "version": "26.7.1",
+      "version": "26.7.2",
       "dependencies": {
         "@capacitor/clipboard": "^7.0.0",
         "@capacitor/core": "^7.4.3",
@@ -5709,7 +5709,11 @@
     "lucide-react": [
       "lucide-react@1.21.0",
       "",
-      { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } },
+      {
+        "peerDependencies": {
+          "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+        },
+      },
       "sha512-reEZMXq8Qdd5jg5XYkQ5TR1fB/GiQ7ih4vcrthYDtgjSDwh0i6/YLiGjsWsIwgN49gpAnd4J2elSNzncMEEUUQ==",
     ],
 

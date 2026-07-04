@@ -199,25 +199,34 @@ export function AdvancedPage({
   }, [clearArmTimeout]);
 
   useEffect(() => {
-    if (isNativePlatform()) {
-      setNotificationsEnabled(
-        getNativeNotificationPermissionState() === "granted",
-      );
-      return;
-    }
-
-    if (
-      !("Notification" in window) ||
-      Notification.permission !== "granted" ||
-      !("serviceWorker" in navigator)
-    ) {
-      setNotificationsEnabled(false);
-      return;
-    }
-
     let isActive = true;
     void (async () => {
       try {
+        const { arePushNotificationsDisabledByUser } =
+          await import("../utils/pushNotifications");
+        if (arePushNotificationsDisabledByUser()) {
+          if (isActive) setNotificationsEnabled(false);
+          return;
+        }
+
+        if (isNativePlatform()) {
+          if (isActive) {
+            setNotificationsEnabled(
+              getNativeNotificationPermissionState() === "granted",
+            );
+          }
+          return;
+        }
+
+        if (
+          !("Notification" in window) ||
+          Notification.permission !== "granted" ||
+          !("serviceWorker" in navigator)
+        ) {
+          if (isActive) setNotificationsEnabled(false);
+          return;
+        }
+
         const registration = await navigator.serviceWorker.getRegistration();
         const subscription = registration
           ? await registration.pushManager.getSubscription()
@@ -244,6 +253,7 @@ export function AdvancedPage({
       const {
         registerPushNotifications,
         requestNotificationPermission,
+        setPushNotificationsDisabledByUser,
         unregisterPushNotifications,
       } = await import("../utils/pushNotifications");
 
@@ -251,15 +261,18 @@ export function AdvancedPage({
         pushToast(t("notificationsRegistering"));
         const permissionGranted = await requestNotificationPermission();
         if (!permissionGranted) {
+          setPushNotificationsDisabledByUser(true);
           pushToast(t("notificationsDenied"));
           return;
         }
 
         const result = await registerPushNotifications(currentNsec);
         if (result.success) {
+          setPushNotificationsDisabledByUser(false);
           setNotificationsEnabled(true);
           pushToast(t("notificationsRegistered"));
         } else {
+          setPushNotificationsDisabledByUser(true);
           pushToast(String(result.error ?? t("notificationsError")));
         }
         return;

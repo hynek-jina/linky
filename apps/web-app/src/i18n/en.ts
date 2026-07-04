@@ -398,7 +398,7 @@ export const en = {
   profile: "Profile",
   status: "Status",
   profileNoName: "Nostr profile",
-  profileExchangeStatusLabel: "I exchange small amounts with people I know:",
+  profileExchangeStatusLabel: "I provide to people I know:",
   contactStatusProvides: "Provides",
   myNpubQr: "Your contact",
   profileMissingNpub: "Missing Nostr keys.",
