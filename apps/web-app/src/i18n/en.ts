@@ -103,6 +103,9 @@ export const en = {
 
   nostrKeys: "Nostr keys",
   nostrIdentity: "Nostr identity",
+  masterKeys: "Master keys",
+  masterKeysShow: "Show",
+  masterKeysHide: "Hide",
   copyKeys: "Copy master keys",
   saveKeysToPasswords: "Save master keys to passwords",
   pasteCustomNostrKeys: "Paste custom nostr keys",

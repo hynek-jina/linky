@@ -19,6 +19,7 @@ import {
   EvoluServersPage,
   LnAddressPayPage,
   ManualPayPage,
+  MasterKeysPage,
   MintDetailPage,
   MintsPage,
   NostrRelayNewPage,
@@ -80,6 +81,7 @@ export interface SystemRoutesProps {
   evoluServerProps: React.ComponentProps<typeof EvoluServerPage>;
   evoluServersProps: React.ComponentProps<typeof EvoluServersPage>;
   mintDetailProps: React.ComponentProps<typeof MintDetailPage>;
+  masterKeysProps: React.ComponentProps<typeof MasterKeysPage>;
   mintsProps: React.ComponentProps<typeof MintsPage>;
   nostrRelayNewProps: React.ComponentProps<typeof NostrRelayNewPage>;
   nostrRelayProps: React.ComponentProps<typeof NostrRelayPage>;
@@ -104,6 +106,10 @@ export const AppRouteContent = (): React.ReactElement => {
       )}
 
       {route.kind === "settingsUnits" && <SettingsPage />}
+
+      {route.kind === "settingsMasterKeys" && (
+        <MasterKeysPage {...systemRoutes.masterKeysProps} />
+      )}
 
       {route.kind === "advanced" && (
         <AdvancedPage {...systemRoutes.advancedProps} />

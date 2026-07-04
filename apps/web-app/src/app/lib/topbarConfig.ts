@@ -42,6 +42,14 @@ export const buildTopbar = ({
     };
   }
 
+  if (route.kind === "settingsMasterKeys") {
+    return {
+      icon: "<",
+      label: t("close"),
+      onClick: () => navigateTo({ route: "settings" }),
+    };
+  }
+
   if (route.kind === "advanced") {
     return {
       icon: "<",
@@ -347,6 +355,7 @@ export const buildTopbarRight = ({
   if (
     route.kind === "settings" ||
     route.kind === "settingsUnits" ||
+    route.kind === "settingsMasterKeys" ||
     route.kind === "advanced" ||
     route.kind === "advancedAutoPayLimit" ||
     route.kind === "advancedPushDebug" ||
@@ -383,6 +392,7 @@ export const buildTopbarTitle = (
   if (route.kind === "contacts") return t("contactsTitle");
   if (route.kind === "settings") return t("settings");
   if (route.kind === "settingsUnits") return t("unit");
+  if (route.kind === "settingsMasterKeys") return t("masterKeys");
   if (route.kind === "wallet") return t("wallet");
   if (route.kind === "transactions") return t("transactionsTitle");
   if (route.kind === "topup") return t("topupTitle");

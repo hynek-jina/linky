@@ -15,7 +15,7 @@ interface UseSystemRoutePropsParams {
   cashuIsBusy: SystemRoutesProps["mintsProps"]["cashuIsBusy"];
   connectedRelayCount: SystemRoutesProps["advancedProps"]["connectedRelayCount"];
   copyNostrKeys: SystemRoutesProps["advancedProps"]["copyNostrKeys"];
-  copySeed: SystemRoutesProps["advancedProps"]["copySeed"];
+  copySeed: SystemRoutesProps["masterKeysProps"]["copySeed"];
   activeNostrIdentitySource: SystemRoutesProps["advancedProps"]["activeNostrIdentitySource"];
   currentNpub: SystemRoutesProps["advancedProps"]["currentNpub"];
   currentNsec: SystemRoutesProps["advancedProps"]["currentNsec"];
@@ -85,7 +85,7 @@ interface UseSystemRoutePropsParams {
   normalizeEvoluServerUrl: SystemRoutesProps["evoluServerNewProps"]["normalizeEvoluServerUrl"];
   normalizeMintUrl: SystemRoutesProps["mintsProps"]["normalizeMintUrl"];
   nostrRelayOverallStatus: SystemRoutesProps["advancedProps"]["nostrRelayOverallStatus"];
-  passwordManagerSeedUsername: SystemRoutesProps["advancedProps"]["passwordManagerSeedUsername"];
+  passwordManagerSeedUsername: SystemRoutesProps["masterKeysProps"]["passwordManagerSeedUsername"];
   pendingEvoluServerDeleteUrl: SystemRoutesProps["evoluServerProps"]["pendingEvoluServerDeleteUrl"];
   pendingMintDeleteUrl: SystemRoutesProps["mintDetailProps"]["pendingMintDeleteUrl"];
   pendingRelayDeleteUrl: SystemRoutesProps["nostrRelayProps"]["pendingRelayDeleteUrl"];
@@ -102,7 +102,7 @@ interface UseSystemRoutePropsParams {
   requestPasteNostrKeys: SystemRoutesProps["advancedProps"]["requestPasteNostrKeys"];
   requestImportAppData: SystemRoutesProps["advancedProps"]["requestImportAppData"];
   requestLogout: SystemRoutesProps["advancedProps"]["requestLogout"];
-  saveSeedToPasswordManager: SystemRoutesProps["advancedProps"]["saveSeedToPasswordManager"];
+  saveSeedToPasswordManager: SystemRoutesProps["masterKeysProps"]["saveSeedToPasswordManager"];
   route: Route;
   safeLocalStorageSetJson: SystemRoutesProps["mintDetailProps"]["safeLocalStorageSetJson"];
   saveEvoluServerUrls: SystemRoutesProps["evoluServerNewProps"]["saveEvoluServerUrls"];
@@ -298,9 +298,6 @@ export const useSystemRouteProps = ({
       bankPaymentOfferRecipientCount,
       lightningInvoiceAutoPayLimit,
       copyNostrKeys,
-      copySeed,
-      passwordManagerSeedUsername,
-      saveSeedToPasswordManager,
       setBankPaymentOfferRecipientCount,
       setLightningInvoiceAutoPayLimit,
       setPayWithCashuEnabled,
@@ -315,6 +312,14 @@ export const useSystemRouteProps = ({
       requestLogout,
       t,
       __APP_VERSION__: appVersion,
+    },
+    masterKeysProps: {
+      copySeed,
+      passwordManagerSeedUsername,
+      pushToast,
+      saveSeedToPasswordManager,
+      seedMnemonic,
+      t,
     },
     advancedAutoPayLimitProps: {
       lightningInvoiceAutoPayLimit,

@@ -104,6 +104,9 @@ export const cs = {
 
   nostrKeys: "Nostr klíče",
   nostrIdentity: "Nostr identita",
+  masterKeys: "Hlavní klíče",
+  masterKeysShow: "Zobrazit",
+  masterKeysHide: "Skrýt",
   copyKeys: "Zkopírovat hlavní klíče",
   saveKeysToPasswords: "Uložit hlavní klíče do hesel",
   pasteCustomNostrKeys: "Vložit vlastní nostr klíče",
