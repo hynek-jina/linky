@@ -5409,6 +5409,7 @@ export const useAppShellComposition = () => {
       let sendTokenAmount = 0;
       let sendProofs: Proof[] = [];
       let sendTokenUnit: string | null = null;
+      let gainedToken: string | null = null;
       let lastError: unknown = null;
 
       try {
@@ -5501,6 +5502,7 @@ export const useAppShellComposition = () => {
             }
 
             if (split.remainingToken && split.remainingAmount > 0) {
+              gainedToken = split.remainingToken;
               const inserted = insertCashuToken({
                 token: split.remainingToken,
                 mint: split.mint,
@@ -5588,6 +5590,7 @@ export const useAppShellComposition = () => {
           status: "ok",
           amount: sentAmountSat,
           details: {
+            ...(gainedToken ? { gainedToken } : {}),
             ...(requestInfo.requestId
               ? { requestId: requestInfo.requestId }
               : {}),
@@ -7828,9 +7831,13 @@ export const useAppShellComposition = () => {
           status: "ok",
           amount: split.sendAmount,
           details: {
+            ...(split.remainingToken
+              ? { gainedToken: split.remainingToken }
+              : {}),
             issuedToken: split.sendToken,
+            usedInputTokens: candidate.tokens,
           },
-          fee: amountSat - split.sendAmount,
+          fee: null,
           mint: split.mint,
           unit: split.unit,
           error: null,

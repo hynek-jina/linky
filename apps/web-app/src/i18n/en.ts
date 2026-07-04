@@ -103,6 +103,9 @@ export const en = {
 
   nostrKeys: "Nostr keys",
   nostrIdentity: "Nostr identity",
+  masterKeys: "Master keys",
+  masterKeysShow: "Show",
+  masterKeysHide: "Hide",
   copyKeys: "Copy master keys",
   saveKeysToPasswords: "Save master keys to passwords",
   pasteCustomNostrKeys: "Paste custom nostr keys",
@@ -398,7 +401,7 @@ export const en = {
   profile: "Profile",
   status: "Status",
   profileNoName: "Nostr profile",
-  profileExchangeStatusLabel: "I exchange small amounts with people I know:",
+  profileExchangeStatusLabel: "I provide to people I know:",
   contactStatusProvides: "Provides",
   myNpubQr: "Your contact",
   profileMissingNpub: "Missing Nostr keys.",

@@ -47,6 +47,7 @@ type NavigationAction =
   | { route: "profileClaimLightningAddress" }
   | { route: "profileEdit" }
   | { route: "settings" }
+  | { route: "settingsMasterKeys" }
   | { route: "settingsUnits" }
   | { route: "transactions" }
   | { route: "topup" }
@@ -64,6 +65,9 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "settingsUnits":
       window.location.assign("#settings/units");
+      break;
+    case "settingsMasterKeys":
+      window.location.assign("#settings/master-keys");
       break;
     case "advanced":
       window.location.assign("#advanced");

@@ -39,6 +39,9 @@ describe("parseRouteFromHash", () => {
 
     replaceHash("#settings/units");
     expect(parseRouteFromHash()).toEqual({ kind: "settingsUnits" });
+
+    replaceHash("#settings/master-keys");
+    expect(parseRouteFromHash()).toEqual({ kind: "settingsMasterKeys" });
   });
 
   it("falls back to wallet for unknown hashes", () => {

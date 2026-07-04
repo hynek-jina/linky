@@ -1644,6 +1644,63 @@ button.settings-sensitive-action.is-armed {
   font-size: 13px;
 }
 
+.master-keys-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.master-keys-word-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.master-keys-word {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.58);
+  color: #e2e8f0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.master-keys-word-hidden {
+  color: #94a3b8;
+}
+
+.master-keys-word-index {
+  min-width: 18px;
+  color: #64748b;
+  font-size: 11px;
+  text-align: right;
+}
+
+.master-keys-word-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.master-keys-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.master-keys-actions button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-inline: 10px;
+}
+
 .qr {
   width: 240px;
   max-width: 100%;

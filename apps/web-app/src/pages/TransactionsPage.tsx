@@ -14,6 +14,7 @@ import { createCashuTokenId } from "../app/lib/cashuTokenIdentity";
 import { deriveDefaultProfile } from "../derivedProfile";
 import { evolu } from "../evolu";
 import { getLightningInvoicePreview } from "../utils/lightningInvoice";
+import { calculateTransactionHistoryFee } from "../app/lib/transactionHistoryFee";
 import type { JsonValue } from "../types/json";
 import {
   formatInteger,
@@ -660,11 +661,6 @@ export function TransactionsPage(): React.ReactElement {
   const buildDetailEntries = React.useCallback(
     (item: TransactionItem): TransactionDetailEntry[] => {
       const details = readJsonRecord(item.details);
-      const feeText =
-        item.direction === "out"
-          ? formatAmountText(item.fee ?? 0, item.unit)
-          : "";
-
       const legacyUsedTokens = readStringArrayFromJson(
         details?.usedInputTokens,
       );
@@ -690,6 +686,16 @@ export function TransactionsPage(): React.ReactElement {
           }),
         ]),
       );
+      const fee =
+        item.direction === "out"
+          ? calculateTransactionHistoryFee({
+              amount: item.amount,
+              fallbackFee: item.fee,
+              gainedTokens,
+              usedTokens,
+            })
+          : null;
+      const feeText = fee !== null ? formatAmountText(fee, item.unit) : "";
       const lightningInvoice = readStringFromJson(details?.lightningInvoice);
       const lightningMemo =
         readStringFromJson(details?.lightningMemo) ??

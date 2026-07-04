@@ -87,6 +87,12 @@ async function getWindowClients(): Promise<readonly WindowClient[]> {
   });
 }
 
+function hasVisibleWindowClient(clientList: readonly WindowClient[]): boolean {
+  return clientList.some(
+    (client) => client.focused || client.visibilityState === "visible",
+  );
+}
+
 async function logSw(message: string, details?: unknown): Promise<void> {
   await appendPushDebugLog("sw", message, details);
 }
@@ -537,7 +543,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     (async () => {
       const clientList = await getWindowClients();
-      const hasWindowClient = clientList.length > 0;
+      const shouldSuppressNotification = hasVisibleWindowClient(clientList);
       const decryptedMessage = await decryptIncomingMessageBody(envelope).catch(
         () => null,
       );
@@ -558,10 +564,11 @@ self.addEventListener("push", (event) => {
       await Promise.all([
         logSw("push received", {
           data,
-          hasWindowClient,
           hasDecryptedBody: Boolean(decryptedMessage),
+          hasWindowClient: clientList.length > 0,
           isCashuMessage: decryptedMessage?.isCashu ?? false,
           isPaymentNotice: decryptedMessage?.isPaymentNotice ?? false,
+          shouldSuppressNotification,
           usedFallbackBody:
             decryptedMessage === null && fallbackBody.length > 0,
           tag: options.tag ?? null,
@@ -571,8 +578,8 @@ self.addEventListener("push", (event) => {
           data,
           type: "push-received",
         }),
-        hasWindowClient
-          ? logSw("notification suppressed because app client is open", {
+        shouldSuppressNotification
+          ? logSw("notification suppressed because app client is visible", {
               data,
               tag: options.tag ?? null,
             })

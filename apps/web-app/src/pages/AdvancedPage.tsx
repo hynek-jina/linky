@@ -30,14 +30,9 @@ import {
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
 } from "../app/lib/bankPaymentOffer";
-import {
-  PasswordManagerSaveForm,
-  type PasswordManagerSaveFormHandle,
-} from "../components/PasswordManagerSaveForm";
 import { FeedbackIcon } from "../components/icons";
 import { useNavigation } from "../hooks/useRouting";
 import { getNativeNotificationPermissionState } from "../platform/nativeBridge";
-import type { PasswordManagerSaveResult } from "../platform/passwordManager";
 import { isNativePlatform } from "../platform/runtime";
 
 interface AdvancedPageProps {
@@ -45,7 +40,6 @@ interface AdvancedPageProps {
   activeNostrIdentitySource: "custom" | "derived";
   connectedRelayCount: number;
   copyNostrKeys: () => void;
-  copySeed: () => void;
   currentNpub: string | null;
   currentNsec: string | null;
   dedupeContacts: () => Promise<void>;
@@ -62,7 +56,6 @@ interface AdvancedPageProps {
   lightningInvoiceAutoPayLimit: number;
   logoutArmed: boolean;
   nostrRelayOverallStatus: "connected" | "checking" | "disconnected";
-  passwordManagerSeedUsername: string;
   payWithCashuEnabled: boolean;
   cashuAutoswapEnabled: boolean;
   showProfileQrOnTiltEnabled: boolean;
@@ -72,7 +65,6 @@ interface AdvancedPageProps {
   requestDeriveNostrKeys: () => Promise<void>;
   requestPasteNostrKeys: () => Promise<void>;
   requestLogout: () => void;
-  saveSeedToPasswordManager: () => Promise<PasswordManagerSaveResult>;
   seedMnemonic: string | null;
   setBankPaymentOfferRecipientCount: (value: number) => void;
   setLightningInvoiceAutoPayLimit: (value: number) => void;
@@ -86,7 +78,6 @@ export function AdvancedPage({
   __APP_VERSION__,
   connectedRelayCount,
   copyNostrKeys,
-  copySeed,
   currentNsec,
   dedupeContacts,
   dedupeContactsIsBusy,
@@ -101,7 +92,6 @@ export function AdvancedPage({
   lightningInvoiceAutoPayLimit,
   logoutArmed,
   nostrRelayOverallStatus,
-  passwordManagerSeedUsername,
   payWithCashuEnabled,
   cashuAutoswapEnabled,
   pushToast,
@@ -109,7 +99,6 @@ export function AdvancedPage({
   requestImportAppData,
   requestPasteNostrKeys,
   requestLogout,
-  saveSeedToPasswordManager,
   seedMnemonic,
   setBankPaymentOfferRecipientCount,
   setPayWithCashuEnabled,
@@ -122,11 +111,9 @@ export function AdvancedPage({
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationsIsBusy, setNotificationsIsBusy] = useState(false);
   const [armedSecurityAction, setArmedSecurityAction] = useState<
-    "copyNostr" | "copySeed" | "pasteNostr" | "saveSeed" | null
+    "copyNostr" | "pasteNostr" | null
   >(null);
   const armTimeoutRef = useRef<number | null>(null);
-  const passwordManagerSaveFormRef =
-    useRef<PasswordManagerSaveFormHandle | null>(null);
   const hasSeedMnemonic = String(seedMnemonic ?? "").trim().length > 0;
   const hasCurrentNsec = String(currentNsec ?? "").trim().length > 0;
   const appVersionLabel = __APP_COMMIT_SHA__
@@ -165,7 +152,7 @@ export function AdvancedPage({
 
   const requestSecurityAction = useCallback(
     (
-      action: "copyNostr" | "copySeed" | "pasteNostr" | "saveSeed",
+      action: "copyNostr" | "pasteNostr",
       run: () => void | Promise<void>,
       hintKey = "sensitiveActionArmedHint",
     ) => {
@@ -199,25 +186,34 @@ export function AdvancedPage({
   }, [clearArmTimeout]);
 
   useEffect(() => {
-    if (isNativePlatform()) {
-      setNotificationsEnabled(
-        getNativeNotificationPermissionState() === "granted",
-      );
-      return;
-    }
-
-    if (
-      !("Notification" in window) ||
-      Notification.permission !== "granted" ||
-      !("serviceWorker" in navigator)
-    ) {
-      setNotificationsEnabled(false);
-      return;
-    }
-
     let isActive = true;
     void (async () => {
       try {
+        const { arePushNotificationsDisabledByUser } =
+          await import("../utils/pushNotifications");
+        if (arePushNotificationsDisabledByUser()) {
+          if (isActive) setNotificationsEnabled(false);
+          return;
+        }
+
+        if (isNativePlatform()) {
+          if (isActive) {
+            setNotificationsEnabled(
+              getNativeNotificationPermissionState() === "granted",
+            );
+          }
+          return;
+        }
+
+        if (
+          !("Notification" in window) ||
+          Notification.permission !== "granted" ||
+          !("serviceWorker" in navigator)
+        ) {
+          if (isActive) setNotificationsEnabled(false);
+          return;
+        }
+
         const registration = await navigator.serviceWorker.getRegistration();
         const subscription = registration
           ? await registration.pushManager.getSubscription()
@@ -244,6 +240,7 @@ export function AdvancedPage({
       const {
         registerPushNotifications,
         requestNotificationPermission,
+        setPushNotificationsDisabledByUser,
         unregisterPushNotifications,
       } = await import("../utils/pushNotifications");
 
@@ -251,15 +248,18 @@ export function AdvancedPage({
         pushToast(t("notificationsRegistering"));
         const permissionGranted = await requestNotificationPermission();
         if (!permissionGranted) {
+          setPushNotificationsDisabledByUser(true);
           pushToast(t("notificationsDenied"));
           return;
         }
 
         const result = await registerPushNotifications(currentNsec);
         if (result.success) {
+          setPushNotificationsDisabledByUser(false);
           setNotificationsEnabled(true);
           pushToast(t("notificationsRegistered"));
         } else {
+          setPushNotificationsDisabledByUser(true);
           pushToast(String(result.error ?? t("notificationsError")));
         }
         return;
@@ -279,38 +279,8 @@ export function AdvancedPage({
     }
   };
 
-  const handleSaveSeed = useCallback(async () => {
-    if (!hasSeedMnemonic) {
-      pushToast(t("seedMissing"));
-      return;
-    }
-
-    passwordManagerSaveFormRef.current?.requestSave();
-
-    const result = await saveSeedToPasswordManager();
-    if (result === "failed") {
-      pushToast(t("onboardingBackupSaveFailed"));
-      return;
-    }
-
-    if (result === "unsupported") {
-      pushToast(t("onboardingBackupSaveUnavailable"));
-      return;
-    }
-
-    if (result === "saved") {
-      pushToast(t("onboardingBackupSaveRequested"));
-    }
-  }, [hasSeedMnemonic, pushToast, saveSeedToPasswordManager, t]);
-
   return (
     <section className="panel settings-page">
-      <PasswordManagerSaveForm
-        ref={passwordManagerSaveFormRef}
-        username={passwordManagerSeedUsername}
-        password={String(seedMnemonic ?? "")}
-      />
-
       <div className="settings-section">
         <h2 className="settings-section-title">{t("settingsGeneral")}</h2>
 
@@ -701,41 +671,15 @@ export function AdvancedPage({
 
         <button
           type="button"
-          className={
-            armedSecurityAction === "copySeed"
-              ? "settings-row settings-link settings-sensitive-action is-armed"
-              : "settings-row settings-link settings-sensitive-action"
-          }
-          onClick={() => requestSecurityAction("copySeed", copySeed)}
-          disabled={!hasSeedMnemonic}
-          data-guide="copy-seed"
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Copy size={18} />
-            </span>
-            <span className="settings-label">{t("copyKeys")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
-
-        <button
-          type="button"
-          className={
-            armedSecurityAction === "saveSeed"
-              ? "settings-row settings-link settings-sensitive-action is-armed"
-              : "settings-row settings-link settings-sensitive-action"
-          }
-          onClick={() => requestSecurityAction("saveSeed", handleSaveSeed)}
+          className="settings-row settings-link"
+          onClick={() => navigateTo({ route: "settingsMasterKeys" })}
           disabled={!hasSeedMnemonic}
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">
               <ShieldCheck size={18} />
             </span>
-            <span className="settings-label">{t("saveKeysToPasswords")}</span>
+            <span className="settings-label">{t("masterKeys")}</span>
           </span>
           <span className="settings-chevron" aria-hidden="true">
             &gt;

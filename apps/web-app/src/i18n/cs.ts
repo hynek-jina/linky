@@ -104,6 +104,9 @@ export const cs = {
 
   nostrKeys: "Nostr klíče",
   nostrIdentity: "Nostr identita",
+  masterKeys: "Hlavní klíče",
+  masterKeysShow: "Zobrazit",
+  masterKeysHide: "Skrýt",
   copyKeys: "Zkopírovat hlavní klíče",
   saveKeysToPasswords: "Uložit hlavní klíče do hesel",
   pasteCustomNostrKeys: "Vložit vlastní nostr klíče",
@@ -401,7 +404,7 @@ export const cs = {
   profile: "Profil",
   status: "Status",
   profileNoName: "Nostr profil",
-  profileExchangeStatusLabel: "Známým směním malé částky:",
+  profileExchangeStatusLabel: "Známým poskytnu:",
   contactStatusProvides: "Poskytne",
   myNpubQr: "Tvůj kontakt",
   profileMissingNpub: "Chybí Nostr klíče.",

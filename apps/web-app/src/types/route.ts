@@ -4,6 +4,7 @@ export type Route =
   | { kind: "contacts" }
   | { kind: "settings" }
   | { kind: "settingsUnits" }
+  | { kind: "settingsMasterKeys" }
   | { kind: "advanced" }
   | { kind: "advancedAutoPayLimit" }
   | { kind: "advancedPushDebug" }
@@ -41,12 +42,17 @@ export type Route =
 
 export const parseRouteFromHash = (): Route => {
   const rawHash = globalThis.location?.hash ?? "";
+  const hasExplicitEmptyHash = String(globalThis.location?.href ?? "").endsWith(
+    "#",
+  );
   const hash = rawHash.split("?")[0] ?? rawHash;
+  if (hash === "" && hasExplicitEmptyHash) return { kind: "contacts" };
   if (hash === "") return { kind: "wallet" };
   if (hash === "#") return { kind: "contacts" };
   if (hash === "#contacts") return { kind: "contacts" };
   if (hash === "#settings") return { kind: "settings" };
   if (hash === "#settings/units") return { kind: "settingsUnits" };
+  if (hash === "#settings/master-keys") return { kind: "settingsMasterKeys" };
   if (hash === "#advanced") return { kind: "advanced" };
   if (hash === "#advanced/auto-pay-limit") {
     return { kind: "advancedAutoPayLimit" };
