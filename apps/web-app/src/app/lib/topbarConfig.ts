@@ -14,6 +14,7 @@ interface BuildTopbarArgs {
 interface BuildTopbarRightArgs {
   chatEditContactId: ContactId | null;
   isProfileEditing: boolean;
+  openScan: () => void;
   route: Route;
   t: (key: string) => string;
   toggleMenu: () => void;
@@ -306,6 +307,7 @@ export const buildTopbar = ({
 export const buildTopbarRight = ({
   chatEditContactId,
   isProfileEditing,
+  openScan,
   route,
   t,
   toggleMenu,
@@ -349,6 +351,14 @@ export const buildTopbarRight = ({
       icon: "edit",
       label: t("editContact"),
       onClick: () => navigateTo({ route: "contactEdit", id: route.id }),
+    };
+  }
+
+  if (route.kind === "contactNew") {
+    return {
+      icon: "scan",
+      label: t("contactLoadQr"),
+      onClick: openScan,
     };
   }
 

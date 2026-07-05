@@ -16,7 +16,7 @@ interface BuildPeopleRoutePropsParams {
   contactEditsSavable: PeopleRoutesProps["contactEditProps"]["contactEditsSavable"];
   contactPaymentIntent: PeopleRoutesProps["contactPayProps"]["contactPaymentIntent"];
   contactPayMethod: PeopleRoutesProps["contactPayProps"]["contactPayMethod"];
-  autofillNewContactFromIdentifier: PeopleRoutesProps["contactNewProps"]["autofillNewContactFromIdentifier"];
+  addNewContactFromSearchResult: PeopleRoutesProps["contactNewProps"]["addNewContactFromSearchResult"];
   copyText: PeopleRoutesProps["profileProps"]["copyText"];
   currentNpub: PeopleRoutesProps["profileProps"]["currentNpub"];
   cycleProfileAvatarControl: PeopleRoutesProps["profileProps"]["cycleProfileAvatarControl"];
@@ -60,7 +60,6 @@ interface BuildPeopleRoutePropsParams {
   onReact: PeopleRoutesProps["chatProps"]["onReact"];
   onReply: PeopleRoutesProps["chatProps"]["onReply"];
   openContactPay: PeopleRoutesProps["chatProps"]["openContactPay"];
-  openScan: PeopleRoutesProps["contactNewProps"]["openScan"];
   ownedLightningAddresses: PeopleRoutesProps["profileProps"]["ownedLightningAddresses"];
   ownedLightningAddressesLoading: PeopleRoutesProps["profileClaimLightningAddressProps"]["ownedLightningAddressesLoading"];
   payAmount: PeopleRoutesProps["contactPayProps"]["payAmount"];
@@ -88,7 +87,7 @@ interface BuildPeopleRoutePropsParams {
   resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
   saveClaimedLightningAddress: PeopleRoutesProps["profileClaimLightningAddressProps"]["saveClaimedLightningAddress"];
   saveProfileEdits: PeopleRoutesProps["profileProps"]["saveProfileEdits"];
-  scanIsOpen: PeopleRoutesProps["contactNewProps"]["scanIsOpen"];
+  searchNewContact: PeopleRoutesProps["contactNewProps"]["searchNewContact"];
   replyContext: PeopleRoutesProps["chatProps"]["replyContext"];
   selectedProfileStatusCurrencies: PeopleRoutesProps["profileProps"]["selectedProfileStatusCurrencies"];
   selectedContact: PeopleRoutesProps["contactProps"]["selectedContact"];
@@ -123,7 +122,7 @@ export const buildPeopleRouteProps = ({
   contactEditsSavable,
   contactPaymentIntent,
   contactPayMethod,
-  autofillNewContactFromIdentifier,
+  addNewContactFromSearchResult,
   copyText,
   currentNpub,
   cycleProfileAvatarControl,
@@ -167,7 +166,6 @@ export const buildPeopleRouteProps = ({
   onReact,
   onReply,
   openContactPay,
-  openScan,
   ownedLightningAddresses,
   ownedLightningAddressesLoading,
   payAmount,
@@ -195,7 +193,7 @@ export const buildPeopleRouteProps = ({
   resetEditedContactFieldFromNostr,
   saveClaimedLightningAddress,
   saveProfileEdits,
-  scanIsOpen,
+  searchNewContact,
   replyContext,
   selectedProfileStatusCurrencies,
   selectedContact,
@@ -275,14 +273,13 @@ export const buildPeopleRouteProps = ({
       t,
     },
     contactNewProps: {
-      autofillNewContactFromIdentifier,
+      addNewContactFromSearchResult,
       form,
       setForm,
       groupNames,
-      scanIsOpen,
       handleSaveContact,
       isSavingContact,
-      openScan,
+      searchNewContact,
       t,
     },
     contactPayProps: {
