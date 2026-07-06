@@ -3457,15 +3457,19 @@ export const useAppShellComposition = () => {
     setProfileEditName,
     setProfileEditStatus,
     toggleProfileEditing,
+    unregisteredOwnLightningAddress,
   } = useProfileEditor({
     currentNpub,
     currentNsec,
+    defaultLightningAddress,
     effectiveMyLightningAddress,
     effectiveProfileName,
     effectiveProfilePicture,
     myProfileMetadata,
     myProfileStatus,
     nostrFetchRelays,
+    ownedLightningAddresses: ownedProfileLightningAddresses,
+    ownedLightningAddressesLoading: ownedProfileLightningAddressesLoading,
     setMyProfileLnAddress,
     setMyProfileMetadata,
     setMyProfileName,
@@ -9372,7 +9376,6 @@ export const useAppShellComposition = () => {
       requestSelectedContact,
       payWithCashuEnabled,
       ownedLightningAddresses: ownedProfileLightningAddresses,
-      ownedLightningAddressesLoading: ownedProfileLightningAddressesLoading,
       selectedContactStatusText: (() => {
         const npub = normalizeNpubIdentifier(selectedContact?.npub);
         return npub ? (nostrStatusByNpub[npub] ?? null) : null;
@@ -9386,6 +9389,7 @@ export const useAppShellComposition = () => {
       profileEditPicture,
       profileEditStatus,
       profileEditsSavable,
+      unregisteredOwnLightningAddress,
       profileStatus: myProfileStatus,
       profilePhotoInputRef,
       profileSelectedPictureKind,

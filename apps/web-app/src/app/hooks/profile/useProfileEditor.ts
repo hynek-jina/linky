@@ -27,6 +27,10 @@ import type { JsonRecord } from "../../../types/json";
 import { getBestNostrName } from "../../../utils/formatting";
 import { createSquareAvatarDataUrl } from "../../../utils/image";
 import { getDefaultNip05IdentifierFromAddress } from "../../../utils/nostrNip05";
+import {
+  getOwnLightningAddressInputCandidate,
+  type OwnLightningAddressInputCandidate,
+} from "../../../utils/npubCashUsernameClaim";
 import { isHttpUrl } from "../../../utils/validation";
 import {
   applyLightningAddressToProfileMetadata,
@@ -36,12 +40,15 @@ import {
 interface UseProfileEditorParams {
   currentNpub: string | null;
   currentNsec: string | null;
+  defaultLightningAddress: string | null;
   effectiveMyLightningAddress: string | null;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
   myProfileMetadata: NostrProfileMetadata | null;
   myProfileStatus: string | null;
   nostrFetchRelays: string[];
+  ownedLightningAddresses: readonly string[];
+  ownedLightningAddressesLoading: boolean;
   setMyProfileLnAddress: React.Dispatch<React.SetStateAction<string | null>>;
   setMyProfileMetadata: React.Dispatch<
     React.SetStateAction<NostrProfileMetadata | null>
@@ -64,12 +71,15 @@ interface PersistProfileValuesArgs {
 export const useProfileEditor = ({
   currentNpub,
   currentNsec,
+  defaultLightningAddress,
   effectiveMyLightningAddress,
   effectiveProfileName,
   effectiveProfilePicture,
   myProfileMetadata,
   myProfileStatus,
   nostrFetchRelays,
+  ownedLightningAddresses,
+  ownedLightningAddressesLoading,
   setMyProfileLnAddress,
   setMyProfileMetadata,
   setMyProfileName,
@@ -177,6 +187,69 @@ export const useProfileEditor = ({
 
   const profileEditsSavable =
     profileEditsDirty && Boolean(currentNpub && currentNsec);
+
+  const ownLightningAddressInputCandidate = React.useMemo(() => {
+    if (ownedLightningAddressesLoading) return null;
+    return getOwnLightningAddressInputCandidate(profileEditLnAddress);
+  }, [ownedLightningAddressesLoading, profileEditLnAddress]);
+
+  const ownLightningAddressMatchesCurrentIdentity = React.useCallback(
+    (candidate: OwnLightningAddressInputCandidate): boolean => {
+      const normalizedDefault = String(defaultLightningAddress ?? "")
+        .trim()
+        .toLowerCase();
+      if (
+        normalizedDefault &&
+        candidate.lightningAddress === normalizedDefault
+      ) {
+        return true;
+      }
+
+      for (const lightningAddress of ownedLightningAddresses) {
+        const normalizedOwned = String(lightningAddress ?? "")
+          .trim()
+          .toLowerCase();
+        if (normalizedOwned && candidate.lightningAddress === normalizedOwned) {
+          return true;
+        }
+      }
+
+      return false;
+    },
+    [defaultLightningAddress, ownedLightningAddresses],
+  );
+
+  const unregisteredOwnLightningAddress = React.useMemo(() => {
+    if (!ownLightningAddressInputCandidate) return null;
+    if (
+      ownLightningAddressMatchesCurrentIdentity(
+        ownLightningAddressInputCandidate,
+      )
+    ) {
+      return null;
+    }
+    return ownLightningAddressInputCandidate;
+  }, [
+    ownLightningAddressInputCandidate,
+    ownLightningAddressMatchesCurrentIdentity,
+  ]);
+
+  const profileLightningAddressToPersist = React.useMemo(() => {
+    if (
+      ownLightningAddressInputCandidate &&
+      ownLightningAddressMatchesCurrentIdentity(
+        ownLightningAddressInputCandidate,
+      )
+    ) {
+      return ownLightningAddressInputCandidate.lightningAddress;
+    }
+
+    return profileEditLnAddress;
+  }, [
+    ownLightningAddressInputCandidate,
+    ownLightningAddressMatchesCurrentIdentity,
+    profileEditLnAddress,
+  ]);
 
   const persistProfileValues = React.useCallback(
     async ({
@@ -366,19 +439,24 @@ export const useProfileEditor = ({
   );
 
   const saveProfileEdits = React.useCallback(async () => {
+    if (unregisteredOwnLightningAddress) {
+      return;
+    }
+
     await persistProfileValues({
-      lightningAddress: profileEditLnAddress,
+      lightningAddress: profileLightningAddressToPersist,
       name: profileEditName,
       navigateToProfile: true,
       picture: profileEditPicture,
       status: profileEditStatus,
     });
   }, [
-    profileEditLnAddress,
+    profileLightningAddressToPersist,
     profileEditName,
     profileEditPicture,
     profileEditStatus,
     persistProfileValues,
+    unregisteredOwnLightningAddress,
   ]);
 
   const saveClaimedLightningAddress = React.useCallback(
@@ -519,6 +597,7 @@ export const useProfileEditor = ({
     profileEditPicture,
     profileEditStatus,
     profileEditsSavable,
+    unregisteredOwnLightningAddress,
     profilePhotoInputRef,
     profileSelectedPictureKind,
     saveClaimedLightningAddress,

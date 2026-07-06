@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   finalizeOwnLightningAddressClaim,
+  getOwnLightningAddressInputCandidate,
   getOwnLightningAddressFromUsername,
   getOwnLightningUsernameValidationIssue,
   normalizeOwnLightningUsername,
@@ -23,6 +24,22 @@ describe("npubCashUsernameClaim", () => {
       "invalid_format",
     );
     expect(getOwnLightningUsernameValidationIssue("alice42")).toBeNull();
+  });
+
+  it("treats bare names as linky.fit lightning address candidates", () => {
+    expect(getOwnLightningAddressInputCandidate(" Alice42 ")).toEqual({
+      issue: null,
+      lightningAddress: "alice42@linky.fit",
+      username: "alice42",
+    });
+    expect(getOwnLightningAddressInputCandidate("Alice42@Linky.Fit")).toEqual({
+      issue: null,
+      lightningAddress: "alice42@linky.fit",
+      username: "alice42",
+    });
+    expect(
+      getOwnLightningAddressInputCandidate("alice@example.com"),
+    ).toBeNull();
   });
 
   it("parses payment-required username previews", async () => {

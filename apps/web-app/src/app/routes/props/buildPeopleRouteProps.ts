@@ -39,7 +39,7 @@ interface BuildPeopleRoutePropsParams {
   isSavingContact: PeopleRoutesProps["contactEditProps"]["isSavingContact"];
   blockArchivedContact: PeopleRoutesProps["contactEditProps"]["blockArchivedContact"];
   lang: PeopleRoutesProps["chatProps"]["lang"];
-  makeNip98AuthHeader: PeopleRoutesProps["profileClaimLightningAddressProps"]["makeNip98AuthHeader"];
+  makeNip98AuthHeader: PeopleRoutesProps["profileProps"]["makeNip98AuthHeader"];
   myProfileQr: PeopleRoutesProps["profileProps"]["myProfileQr"];
   nostrPictureByNpub: PeopleRoutesProps["contactProps"]["nostrPictureByNpub"];
   onBlockUnknownContact: PeopleRoutesProps["chatProps"]["onBlockUnknownContact"];
@@ -61,21 +61,21 @@ interface BuildPeopleRoutePropsParams {
   onReply: PeopleRoutesProps["chatProps"]["onReply"];
   openContactPay: PeopleRoutesProps["chatProps"]["openContactPay"];
   ownedLightningAddresses: PeopleRoutesProps["profileProps"]["ownedLightningAddresses"];
-  ownedLightningAddressesLoading: PeopleRoutesProps["profileClaimLightningAddressProps"]["ownedLightningAddressesLoading"];
   payAmount: PeopleRoutesProps["contactPayProps"]["payAmount"];
-  payLightningInvoiceWithCashu: PeopleRoutesProps["profileClaimLightningAddressProps"]["payLightningInvoiceWithCashu"];
+  payLightningInvoiceWithCashu: PeopleRoutesProps["profileProps"]["payLightningInvoiceWithCashu"];
   paySelectedContact: PeopleRoutesProps["contactPayProps"]["paySelectedContact"];
   payWithCashuEnabled: PeopleRoutesProps["chatProps"]["payWithCashuEnabled"];
   reactionsByMessageId: PeopleRoutesProps["chatProps"]["reactionsByMessageId"];
   selectedContactStatusText: PeopleRoutesProps["contactProps"]["statusText"];
   pendingDeleteId: PeopleRoutesProps["contactEditProps"]["pendingDeleteId"];
-  profileClaimLightningAddressServerBaseUrl: PeopleRoutesProps["profileClaimLightningAddressProps"]["serverBaseUrl"];
+  profileClaimLightningAddressServerBaseUrl: PeopleRoutesProps["profileProps"]["serverBaseUrl"];
   profileCustomPictureUrl: PeopleRoutesProps["profileProps"]["profileCustomPictureUrl"];
   profileEditLnAddress: PeopleRoutesProps["profileProps"]["profileEditLnAddress"];
   profileEditName: PeopleRoutesProps["profileProps"]["profileEditName"];
   profileEditPicture: PeopleRoutesProps["profileProps"]["profileEditPicture"];
   profileEditStatus: PeopleRoutesProps["profileProps"]["profileEditStatus"];
   profileEditsSavable: PeopleRoutesProps["profileProps"]["profileEditsSavable"];
+  unregisteredOwnLightningAddress: PeopleRoutesProps["profileProps"]["unregisteredOwnLightningAddress"];
   profileStatus: PeopleRoutesProps["profileProps"]["profileStatus"];
   profileStatusCurrencies: PeopleRoutesProps["profileProps"]["profileStatusCurrencies"];
   profileStatusIsSaving: PeopleRoutesProps["profileProps"]["profileStatusIsSaving"];
@@ -85,7 +85,7 @@ interface BuildPeopleRoutePropsParams {
   requestDeleteCurrentContact: PeopleRoutesProps["contactEditProps"]["requestDeleteCurrentContact"];
   requestSelectedContact: PeopleRoutesProps["contactPayProps"]["requestSelectedContact"];
   resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
-  saveClaimedLightningAddress: PeopleRoutesProps["profileClaimLightningAddressProps"]["saveClaimedLightningAddress"];
+  saveClaimedLightningAddress: PeopleRoutesProps["profileProps"]["saveClaimedLightningAddress"];
   saveProfileEdits: PeopleRoutesProps["profileProps"]["saveProfileEdits"];
   searchNewContact: PeopleRoutesProps["contactNewProps"]["searchNewContact"];
   replyContext: PeopleRoutesProps["chatProps"]["replyContext"];
@@ -167,7 +167,6 @@ export const buildPeopleRouteProps = ({
   onReply,
   openContactPay,
   ownedLightningAddresses,
-  ownedLightningAddressesLoading,
   payAmount,
   payLightningInvoiceWithCashu,
   paySelectedContact,
@@ -182,6 +181,7 @@ export const buildPeopleRouteProps = ({
   profileEditPicture,
   profileEditStatus,
   profileEditsSavable,
+  unregisteredOwnLightningAddress,
   profileStatus,
   profileStatusCurrencies,
   profileStatusIsSaving,
@@ -311,20 +311,10 @@ export const buildPeopleRouteProps = ({
       statusText: selectedContactStatusText,
       t,
     },
-    profileClaimLightningAddressProps: {
+    profileProps: {
       cashuBalance,
       cashuBalanceAfterMelt,
       cashuIsBusy,
-      effectiveMyLightningAddress,
-      makeNip98AuthHeader,
-      ownedLightningAddresses,
-      ownedLightningAddressesLoading,
-      payLightningInvoiceWithCashu,
-      saveClaimedLightningAddress,
-      serverBaseUrl: profileClaimLightningAddressServerBaseUrl,
-      t,
-    },
-    profileProps: {
       canWriteToNfc: canWriteNfc,
       currentNpub,
       cycleProfileAvatarControl,
@@ -338,14 +328,19 @@ export const buildPeopleRouteProps = ({
       profileEditStatus,
       derivedProfile,
       profileEditsSavable,
+      unregisteredOwnLightningAddress,
       profileStatus,
       profileStatusCurrencies,
       profileStatusIsSaving,
       myProfileQr,
       effectiveMyLightningAddress,
+      makeNip98AuthHeader,
       profilePhotoInputRef,
       profileSelectedPictureKind,
+      payLightningInvoiceWithCashu,
+      saveClaimedLightningAddress,
       selectedProfileStatusCurrencies,
+      serverBaseUrl: profileClaimLightningAddressServerBaseUrl,
       setProfileEditName,
       setProfileEditLnAddress,
       setProfileEditStatus,

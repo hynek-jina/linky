@@ -11,7 +11,6 @@ export type Route =
   | { kind: "mints" }
   | { kind: "mint"; mintUrl: string }
   | { kind: "profile" }
-  | { kind: "profileClaimLightningAddress" }
   | { kind: "profileEdit" }
   | { kind: "wallet" }
   | { kind: "transactions" }
@@ -69,7 +68,7 @@ export const parseRouteFromHash = (): Route => {
     if (mintUrl) return { kind: "mint", mintUrl };
   }
   if (hash === "#profile/claim-lightning") {
-    return { kind: "profileClaimLightningAddress" };
+    return { kind: "profileEdit" };
   }
   if (hash === "#profile/edit") return { kind: "profileEdit" };
   if (hash === "#profile") return { kind: "profile" };
