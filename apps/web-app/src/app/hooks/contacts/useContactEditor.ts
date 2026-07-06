@@ -16,6 +16,7 @@ import { MAX_CONTACTS_PER_OWNER } from "../../../utils/constants";
 import { getBestNostrName } from "../../../utils/formatting";
 import {
   DEFAULT_NIP05_DOMAIN,
+  parseNip05IdentifierInput,
   resolveNip05Input,
 } from "../../../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
@@ -28,6 +29,20 @@ export interface ContactNewPrefill {
   npub: string | null;
   suggestedName: string | null;
 }
+
+export interface ContactSearchCandidate {
+  lnAddress: string;
+  name: string;
+  npub: string;
+  pictureUrl: string | null;
+  query: string;
+}
+
+export type ContactSearchResult =
+  | { kind: "empty" }
+  | { kind: "error"; identifier: string }
+  | { kind: "found"; contact: ContactSearchCandidate }
+  | { kind: "not_found"; query: string };
 
 type ContactRow = ContactRowLike;
 type SelectedContactRow = ContactRowLike & { id: ContactId };
@@ -47,6 +62,9 @@ interface UseContactEditorParams {
     React.SetStateAction<ContactNewPrefill | null>
   >;
   setPendingDeleteId: React.Dispatch<React.SetStateAction<ContactId | null>>;
+  setRecentlyAddedContactId: React.Dispatch<
+    React.SetStateAction<ContactId | null>
+  >;
   recordContactsOwnerWrite: (count?: number) => void;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
@@ -83,6 +101,22 @@ const readLightningAddressFromDetailsJson = (value: unknown): string | null => {
   }
 };
 
+const decodeDirectNpubIdentifier = async (
+  value: string,
+): Promise<string | null> => {
+  const normalized = normalizeNpubIdentifier(value);
+  if (!normalized || !/^npub1/i.test(normalized)) return null;
+
+  try {
+    const { nip19 } = await import("nostr-tools");
+    const decoded = nip19.decode(normalized);
+    if (decoded.type !== "npub") return null;
+    return normalized;
+  } catch {
+    return null;
+  }
+};
+
 export const makeEmptyContactForm = (): ContactFormState => ({
   name: "",
   npub: "",
@@ -103,6 +137,7 @@ export const useContactEditor = ({
   selectedContact,
   setContactNewPrefill,
   setPendingDeleteId,
+  setRecentlyAddedContactId,
   recordContactsOwnerWrite,
   setStatus,
   t,
@@ -525,6 +560,7 @@ export const useContactEditor = ({
         : insert("contact", createPayload);
       if (result.ok) {
         savedContactId = result.value.id;
+        setRecentlyAddedContactId(result.value.id);
         recordContactsOwnerWrite();
         setStatus(t("contactSaved"));
       } else {
@@ -570,6 +606,7 @@ export const useContactEditor = ({
     route.kind,
     recordContactsOwnerWrite,
     setPendingDeleteId,
+    setRecentlyAddedContactId,
     setStatus,
     t,
     updateContactFields,
@@ -622,25 +659,39 @@ export const useContactEditor = ({
     [nostrFetchRelays, updateContactFields],
   );
 
-  const autofillNewContactFromIdentifier = React.useCallback(
-    async (identifier?: string) => {
-      if (route.kind !== "contactNew") return;
+  const searchNewContact = React.useCallback(
+    async (query?: string): Promise<ContactSearchResult> => {
+      if (route.kind !== "contactNew") return { kind: "empty" };
 
-      const rawIdentifier = String(identifier ?? form.npub ?? "").trim();
-      if (!rawIdentifier) return;
+      const rawQuery = String(query ?? form.npub ?? "").trim();
+      if (!rawQuery) return { kind: "empty" };
 
-      let resolvedNpub = normalizeNpubIdentifier(rawIdentifier);
+      let resolvedNpub = await decodeDirectNpubIdentifier(rawQuery);
+      let fallbackName = "";
       let fallbackLnAddress = "";
 
-      const nip05Result = await resolveNip05Input(rawIdentifier);
-      if (nip05Result.kind === "resolved") {
-        resolvedNpub = nip05Result.npub;
-        if (nip05Result.identifier.domain === DEFAULT_NIP05_DOMAIN) {
-          fallbackLnAddress = nip05Result.identifier.identifier;
+      if (!resolvedNpub) {
+        const nip05Identifier = parseNip05IdentifierInput(rawQuery);
+        if (!nip05Identifier) return { kind: "not_found", query: rawQuery };
+
+        const nip05Result = await resolveNip05Input(rawQuery);
+        if (nip05Result.kind === "resolved") {
+          resolvedNpub = nip05Result.npub;
+          fallbackName = nip05Result.identifier.localPart;
+          if (nip05Result.identifier.domain === DEFAULT_NIP05_DOMAIN) {
+            fallbackLnAddress = nip05Result.identifier.identifier;
+          }
+        } else if (nip05Result.kind === "not_found") {
+          return { kind: "not_found", query: rawQuery };
+        } else if (nip05Result.kind === "error") {
+          return {
+            identifier: nip05Result.identifier.identifier,
+            kind: "error",
+          };
         }
       }
 
-      if (!resolvedNpub) return;
+      if (!resolvedNpub) return { kind: "not_found", query: rawQuery };
 
       try {
         const metadata = await fetchNostrProfileMetadata(resolvedNpub, {
@@ -653,34 +704,153 @@ export const useContactEditor = ({
           ? String(metadata.lud16 ?? "").trim() ||
             String(metadata.lud06 ?? "").trim()
           : "";
-        const nextLnAddress = metadataLn || fallbackLnAddress;
+        const pictureUrl = metadata
+          ? getNostrProfilePictureUrl(metadata)
+          : null;
+        saveCachedProfilePicture(resolvedNpub, pictureUrl);
 
-        setForm((prev) => {
-          if (String(prev.npub ?? "").trim() !== rawIdentifier) return prev;
-
-          return {
-            ...prev,
-            name: String(prev.name ?? "").trim() ? prev.name : bestName,
-            lnAddress: String(prev.lnAddress ?? "").trim()
-              ? prev.lnAddress
-              : nextLnAddress,
-          };
-        });
+        return {
+          contact: {
+            lnAddress: metadataLn || fallbackLnAddress,
+            name: bestName || fallbackName,
+            npub: resolvedNpub,
+            pictureUrl,
+            query: rawQuery,
+          },
+          kind: "found",
+        };
       } catch {
-        if (!fallbackLnAddress) return;
-
-        setForm((prev) => {
-          if (String(prev.npub ?? "").trim() !== rawIdentifier) return prev;
-          if (String(prev.lnAddress ?? "").trim()) return prev;
-
-          return {
-            ...prev,
+        return {
+          contact: {
             lnAddress: fallbackLnAddress,
-          };
-        });
+            name: fallbackName,
+            npub: resolvedNpub,
+            pictureUrl: null,
+            query: rawQuery,
+          },
+          kind: "found",
+        };
       }
     },
     [form.npub, nostrFetchRelays, route.kind],
+  );
+
+  const addNewContactFromSearchResult = React.useCallback(
+    async (candidate: ContactSearchCandidate) => {
+      if (isSavingContact) return;
+
+      if (activeOwnerContactsCount >= MAX_CONTACTS_PER_OWNER) {
+        setStatus(
+          t("contactsLimitReached").replace(
+            "{max}",
+            String(MAX_CONTACTS_PER_OWNER),
+          ),
+        );
+        return;
+      }
+
+      const npub = normalizeNpubIdentifier(candidate.npub);
+      if (!npub) {
+        setStatus(t("contactIdentifierInvalid"));
+        return;
+      }
+
+      const currentProfileNpub = normalizeNpubIdentifier(currentNpub);
+      if (currentProfileNpub && npub === currentProfileNpub) {
+        setStatus(t("contactIsYou"));
+        navigateTo({ route: "profile" });
+        return;
+      }
+
+      const duplicate = contacts.find(
+        (contact) => normalizeNpubIdentifier(contact.npub) === npub,
+      );
+      if (duplicate?.id) {
+        setStatus(t("contactExists"));
+        navigateTo({ route: "contact", id: duplicate.id as ContactId });
+        return;
+      }
+
+      const name = candidate.name.trim();
+      const lnAddress = candidate.lnAddress.trim();
+      const createPayload: Partial<{
+        lnAddress: typeof Evolu.NonEmptyString1000.Type;
+        name: typeof Evolu.NonEmptyString1000.Type;
+        npub: typeof Evolu.NonEmptyString1000.Type;
+      }> = {
+        npub: npub as typeof Evolu.NonEmptyString1000.Type,
+      };
+      if (name)
+        createPayload.name = name as typeof Evolu.NonEmptyString1000.Type;
+      if (lnAddress) {
+        createPayload.lnAddress =
+          lnAddress as typeof Evolu.NonEmptyString1000.Type;
+      }
+
+      setIsSavingContact(true);
+      const result = appOwnerId
+        ? insert("contact", createPayload, { ownerId: appOwnerId })
+        : insert("contact", createPayload);
+
+      if (!result.ok) {
+        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+        setIsSavingContact(false);
+        return;
+      }
+
+      recordContactsOwnerWrite();
+      setRecentlyAddedContactId(result.value.id);
+      setStatus(t("contactSaved"));
+      if (lnAddress) {
+        backfillLightningAddressTransactions(result.value.id, lnAddress);
+      }
+      if (candidate.pictureUrl) {
+        saveCachedProfilePicture(npub, candidate.pictureUrl);
+      }
+      void refreshContactAvatarFromNostr(npub);
+      clearContactForm();
+      setPendingDeleteId(null);
+      navigateTo({ route: "contacts" });
+      setIsSavingContact(false);
+    },
+    [
+      activeOwnerContactsCount,
+      appOwnerId,
+      backfillLightningAddressTransactions,
+      clearContactForm,
+      contacts,
+      currentNpub,
+      insert,
+      isSavingContact,
+      recordContactsOwnerWrite,
+      refreshContactAvatarFromNostr,
+      setPendingDeleteId,
+      setRecentlyAddedContactId,
+      setStatus,
+      t,
+    ],
+  );
+
+  const addNewContactFromIdentifier = React.useCallback(
+    async (identifier: string) => {
+      const result = await searchNewContact(identifier);
+      if (result.kind === "found") {
+        await addNewContactFromSearchResult(result.contact);
+        return;
+      }
+
+      if (result.kind === "error") {
+        setStatus(
+          t("nip05ResolveFailed").replace("{identifier}", result.identifier),
+        );
+        return;
+      }
+
+      if (result.kind === "not_found") {
+        setStatus(t("contactSearchNoResult"));
+      }
+    },
+    [addNewContactFromSearchResult, searchNewContact, setStatus, t],
   );
 
   React.useEffect(() => {
@@ -792,7 +962,8 @@ export const useContactEditor = ({
   ]);
 
   return {
-    autofillNewContactFromIdentifier,
+    addNewContactFromIdentifier,
+    addNewContactFromSearchResult,
     clearContactForm,
     contactEditsSavable,
     editingId,
@@ -802,6 +973,7 @@ export const useContactEditor = ({
     openScannedContactPendingNpubRef,
     refreshContactFromNostr,
     resetEditedContactFieldFromNostr,
+    searchNewContact,
     setEditingId,
     setForm,
   };

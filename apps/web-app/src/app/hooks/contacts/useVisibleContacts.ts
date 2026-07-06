@@ -1,7 +1,11 @@
 import React from "react";
 import { parseStatusFilterValue } from "../../../nostrStatus";
 import { ARCHIVED_CONTACTS_FILTER } from "../../../utils/constants";
-import type { ContactNameRowLike, OptionalNumber } from "../../types/appTypes";
+import type {
+  ContactIdLike,
+  ContactNameRowLike,
+  OptionalNumber,
+} from "../../types/appTypes";
 
 type ContactRow = ContactNameRowLike;
 
@@ -25,11 +29,13 @@ interface UseVisibleContactsParams<TContact extends ContactRow> {
   contactsSearchParts: readonly string[];
   lastMessageByContactId: ReadonlyMap<string, LastMessageRow>;
   noGroupFilterValue: string;
+  pinnedContactId: ContactIdLike;
 }
 
 interface VisibleContactsResult<TContact extends ContactRow> {
   conversations: TContact[];
   others: TContact[];
+  pinned: TContact[];
 }
 
 export const useVisibleContacts = <TContact extends ContactRow>({
@@ -40,6 +46,7 @@ export const useVisibleContacts = <TContact extends ContactRow>({
   contactsSearchParts,
   lastMessageByContactId,
   noGroupFilterValue,
+  pinnedContactId,
 }: UseVisibleContactsParams<TContact>): VisibleContactsResult<TContact> => {
   return React.useMemo(() => {
     const isArchivedContact = (contact: TContact): boolean => {
@@ -91,12 +98,18 @@ export const useVisibleContacts = <TContact extends ContactRow>({
       ? filtered.filter(matchesSearch)
       : filtered;
 
+    const pinnedIdKey = String(pinnedContactId ?? "");
+    const pinned: TContact[] = [];
     const withConversation: TContact[] = [];
     const withoutConversation: TContact[] = [];
 
     for (const item of searchFiltered) {
       const key = item.idKey;
       const contact = item.contact;
+      if (pinnedIdKey && key === pinnedIdKey) {
+        pinned.push(contact);
+        continue;
+      }
       if (key && lastMessageByContactId.has(key)) {
         withConversation.push(contact);
       } else {
@@ -130,6 +143,10 @@ export const useVisibleContacts = <TContact extends ContactRow>({
       const bAttention = bKey ? (contactAttentionById[bKey] ?? 0) : 0;
       if (aAttention !== bAttention) return bAttention - aAttention;
 
+      const aCreatedAt = Number(a.createdAt ?? 0) || 0;
+      const bCreatedAt = Number(b.createdAt ?? 0) || 0;
+      if (aCreatedAt !== bCreatedAt) return bCreatedAt - aCreatedAt;
+
       return contactNameCollator.compare(
         String(a.name ?? ""),
         String(b.name ?? ""),
@@ -139,6 +156,7 @@ export const useVisibleContacts = <TContact extends ContactRow>({
     return {
       conversations: [...withConversation].sort(sortWithConversation),
       others: [...withoutConversation].sort(sortWithoutConversation),
+      pinned,
     };
   }, [
     activeGroup,
@@ -148,5 +166,6 @@ export const useVisibleContacts = <TContact extends ContactRow>({
     contactsSearchParts,
     lastMessageByContactId,
     noGroupFilterValue,
+    pinnedContactId,
   ]);
 };

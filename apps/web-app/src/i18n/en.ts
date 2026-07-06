@@ -433,19 +433,17 @@ export const en = {
   guideNext: "Next",
   guideDone: "Done",
 
-  contactsShowProfileQr: "Show profile",
+  contactsShowProfileQr: "Add contact",
   contactsScanContactQr: "Add contact",
 
-  guideAddContactStep1Title: "Show your QR",
-  guideAddContactStep1Body:
-    "Tap Show profile QR and show your QR code (npub) to the other person.",
-  guideAddContactStep2Title: "Add their QR",
+  guideAddContactStep1Title: "Add contact",
+  guideAddContactStep1Body: "Tap the Add contact button.",
+  guideAddContactStep2Title: "Find or create",
   guideAddContactStep2Body:
-    "Tap Add contact and scan the other person’s QR code (npub).",
+    "Enter a name, npub, or NIP-05. Linky will find the contact, or you can create your own contact.",
 
-  guideAddContactStep3Title: "Save contact",
-  guideAddContactStep3Body:
-    "After scanning, the contact screen will open. Add a name / group and save.",
+  guideAddContactStep3Title: "Add contact",
+  guideAddContactStep3Body: "Tap the Add contact button.",
 
   guideTopupStep1Title: "Wallet",
   guideTopupStep1Body: "Tap the wallet button below.",
@@ -485,6 +483,16 @@ export const en = {
   contactsOnboardingTaskMessage: "Send a message",
   addContact: "Add contact",
   contactLoadQr: "Load QR",
+  search: "Search",
+  contactSearching: "Searching...",
+  contactSearchLabel: "Contact",
+  contactSearchPlaceholder: "npub, NIP-05, or reserved name",
+  contactSearchHint:
+    "Enter an npub, NIP-05, or reserved name, for example alice.",
+  contactSearchEmpty: "Enter who to search for.",
+  contactSearchNoResult: "Nothing found.",
+  contactSearchCreateFromQuery: "Create contact",
+  contactIdentifierInvalid: "Enter a valid npub or reserved name.",
   noContactsYet: "No contacts yet.",
 
   edit: "Edit",
@@ -505,6 +513,7 @@ export const en = {
   reactionsTitle: "Reactions",
   newContact: "Add new contact",
   close: "Close",
+  continue: "Continue",
 
   contactNotFound: "Contact not found.",
   name: "Name",
@@ -521,7 +530,7 @@ export const en = {
   noGroup: "No group",
 
   saveChanges: "Save changes",
-  saveContact: "Save contact",
+  saveContact: "Add",
   saving: "Saving...",
   clearForm: "Clear form",
 

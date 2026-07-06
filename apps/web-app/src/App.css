@@ -658,8 +658,11 @@
 }
 
 .onboarding-avatar-editEmoji {
-  font-size: 30px;
   background: rgba(148, 163, 184, 0.12);
+}
+
+.onboarding-avatar-editEmoji svg {
+  display: block;
 }
 
 .onboarding-avatar-choiceLabel {
@@ -3816,15 +3819,86 @@ button.icon {
   box-shadow: none;
 }
 
-.contact-new-identifier-row {
+.contact-new-identifier-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.contact-new-identifier-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-new-step-hint {
+  color: #94a3b8;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+
+.contact-new-validation {
+  color: #fca5a5;
+  font-size: 0.9rem;
+  margin: 8px 0 0;
+}
+
+.contact-new-search-result {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 2px;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 14px;
+  padding: 12px 0;
 }
 
-.contact-new-identifier-row label {
-  margin-top: 0;
+.contact-new-search-result-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 12px;
+  min-width: 0;
+}
+
+.contact-new-search-result-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.contact-new-search-result-body strong {
+  color: #e2e8f0;
+  font-size: 1rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-new-search-result-body span,
+.contact-new-search-result-body small {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+
+.contact-new-search-result-action {
+  flex-shrink: 0;
+}
+
+.contact-new-search-result-action button {
+  white-space: nowrap;
+}
+
+.contact-new-search-empty {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .contact-card {

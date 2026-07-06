@@ -4,6 +4,7 @@ import {
   type AvatarEditorControlId,
 } from "../derivedProfile";
 import { formatShortNpub, getInitials } from "../utils/formatting";
+import { AvatarEditorIcon } from "./AvatarEditorIcon";
 
 interface ProfileAvatarEditorProps {
   currentNpub: string;
@@ -88,7 +89,7 @@ export function ProfileAvatarEditor({
               className="onboarding-avatar-choicePlus onboarding-avatar-editEmoji"
               aria-hidden="true"
             >
-              {control.icon}
+              <AvatarEditorIcon controlId={control.id} />
             </span>
           </button>
         ))}

@@ -1185,6 +1185,8 @@ export const useAppShellComposition = () => {
   const [pendingDeleteId, setPendingDeleteId] = useState<ContactId | null>(
     null,
   );
+  const [recentlyAddedContactId, setRecentlyAddedContactId] =
+    useState<ContactId | null>(null);
   const [pendingCashuDeleteId, setPendingCashuDeleteId] =
     useState<CashuTokenId | null>(null);
   const [pendingMintDeleteUrl, setPendingMintDeleteUrl] = useState<
@@ -4263,9 +4265,11 @@ export const useAppShellComposition = () => {
     contactsSearchParts,
     lastMessageByContactId,
     noGroupFilterValue: NO_GROUP_FILTER,
+    pinnedContactId: recentlyAddedContactId,
   });
   const bankPaymentOfferContacts = React.useMemo(() => {
     const sortedContacts = [
+      ...visibleContacts.pinned,
       ...visibleContacts.conversations,
       ...visibleContacts.others,
     ];
@@ -4282,12 +4286,14 @@ export const useAppShellComposition = () => {
   }, [
     bankPaymentOfferRecipientCount,
     nostrStatusByNpub,
+    visibleContacts.pinned,
     visibleContacts.conversations,
     visibleContacts.others,
   ]);
 
   const {
-    autofillNewContactFromIdentifier,
+    addNewContactFromIdentifier,
+    addNewContactFromSearchResult,
     clearContactForm,
     contactEditsSavable,
     editingId,
@@ -4297,6 +4303,7 @@ export const useAppShellComposition = () => {
     openScannedContactPendingNpubRef,
     refreshContactFromNostr,
     resetEditedContactFieldFromNostr,
+    searchNewContact,
     setForm,
   } = useContactEditor({
     activeOwnerContactsCount: activeContactsOwnerContactCount,
@@ -4311,6 +4318,7 @@ export const useAppShellComposition = () => {
     selectedContact,
     setContactNewPrefill,
     setPendingDeleteId,
+    setRecentlyAddedContactId,
     recordContactsOwnerWrite,
     setStatus,
     t,
@@ -8822,6 +8830,7 @@ export const useAppShellComposition = () => {
         ? (selectedContact?.id ?? null)
         : null,
     isProfileEditing,
+    openScan,
     route,
     t,
     toggleMenu,
@@ -8890,6 +8899,13 @@ export const useAppShellComposition = () => {
 
   const closeProfileQr = React.useCallback(() => {}, []);
 
+  const handleContactIdentifierScanned = React.useCallback(
+    async (identifier: string) => {
+      await addNewContactFromIdentifier(identifier);
+    },
+    [addNewContactFromIdentifier],
+  );
+
   const handleScannedText = useScannedTextHandler<(typeof contacts)[number]>({
     appOwnerId: contactsOwnerId,
     closeScan,
@@ -8898,6 +8914,8 @@ export const useAppShellComposition = () => {
     extractCashuTokenFromText,
     insert,
     lightningInvoiceAutoPayLimit,
+    onContactIdentifierScanned:
+      route.kind === "contactNew" ? handleContactIdentifierScanned : null,
     openScannedContactPendingNpubRef,
     payCashuPaymentRequest,
     payLightningInvoiceWithCashu,
@@ -9302,7 +9320,7 @@ export const useAppShellComposition = () => {
       contactEditsSavable,
       contactPaymentIntent,
       contactPayMethod,
-      autofillNewContactFromIdentifier,
+      addNewContactFromSearchResult,
       copyText,
       currentNpub,
       derivedProfile,
@@ -9347,7 +9365,7 @@ export const useAppShellComposition = () => {
       onReact: onReactToChatMessage,
       onReply: onReplyToChatMessage,
       openContactPay,
-      openScan,
+      searchNewContact,
       payAmount,
       payLightningInvoiceWithCashu,
       paySelectedContact,
@@ -9382,7 +9400,6 @@ export const useAppShellComposition = () => {
       replyContext,
       saveClaimedLightningAddress,
       saveProfileEdits,
-      scanIsOpen,
       selectedContact,
       sendChatImage,
       sendChatMessage: sendChatOrEditMessage,
@@ -9432,7 +9449,6 @@ export const useAppShellComposition = () => {
       closeProfileQr,
       openNewContactPage,
       openProfileQr,
-      openScan,
       openWalletScan,
       otherContactsLabel,
       renderContactCard: renderMainSwipeContactCard,

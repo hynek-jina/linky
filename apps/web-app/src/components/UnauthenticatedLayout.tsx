@@ -16,6 +16,7 @@ import {
   PasswordManagerSaveForm,
   type PasswordManagerSaveFormHandle,
 } from "./PasswordManagerSaveForm";
+import { AvatarEditorIcon } from "./AvatarEditorIcon";
 import { PasteIcon } from "./icons";
 
 type UnauthenticatedLayoutProps = {
@@ -478,7 +479,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
                   className="onboarding-avatar-choicePlus onboarding-avatar-editEmoji"
                   aria-hidden="true"
                 >
-                  {control.icon}
+                  <AvatarEditorIcon controlId={control.id} />
                 </span>
               </button>
             ))}

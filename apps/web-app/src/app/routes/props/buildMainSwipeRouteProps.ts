@@ -25,7 +25,6 @@ interface BuildMainSwipeRoutePropsParams {
   closeProfileQr: MainSwipeRoutesProps["mainSwipeProps"]["closeProfileQr"];
   openNewContactPage: MainSwipeRoutesProps["mainSwipeProps"]["openNewContactPage"];
   openProfileQr: MainSwipeRoutesProps["mainSwipeProps"]["openProfileQr"];
-  openScan: MainSwipeRoutesProps["mainSwipeProps"]["openScan"];
   openWalletScan: MainSwipeRoutesProps["mainSwipeProps"]["openWalletScan"];
   otherContactsLabel: MainSwipeRoutesProps["mainSwipeProps"]["otherContactsLabel"];
   renderContactCard: MainSwipeRoutesProps["mainSwipeProps"]["renderContactCard"];
@@ -69,7 +68,6 @@ export const buildMainSwipeRouteProps = ({
   closeProfileQr,
   openNewContactPage,
   openProfileQr,
-  openScan,
   openWalletScan,
   otherContactsLabel,
   renderContactCard,
@@ -113,7 +111,6 @@ export const buildMainSwipeRouteProps = ({
       closeProfileQr,
       openNewContactPage,
       openProfileQr,
-      openScan,
       openWalletScan,
       otherContactsLabel,
       renderContactCard,

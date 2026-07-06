@@ -1,5 +1,5 @@
 import React from "react";
-import { Settings } from "lucide-react";
+import { ScanLine, Settings } from "lucide-react";
 import type { ContactId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import type { Route } from "../types/route";
@@ -141,13 +141,17 @@ export function Topbar({
           title={topbarRight.label}
           {...(topbarRight.label === t("menu")
             ? { "data-guide": "open-menu" }
-            : {})}
+            : topbarRight.icon === "scan"
+              ? { "data-guide": "scan-contact-button" }
+              : {})}
         >
           <span aria-hidden="true">
             {topbarRight.label === t("menu") ? (
               <Settings size={20} />
             ) : topbarRight.icon === "edit" ? (
               <EditIcon size={18} />
+            ) : topbarRight.icon === "scan" ? (
+              <ScanLine size={20} />
             ) : (
               topbarRight.icon
             )}

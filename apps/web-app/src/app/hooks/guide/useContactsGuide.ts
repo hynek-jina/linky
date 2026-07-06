@@ -108,23 +108,16 @@ export const useContactsGuide = ({
       add_contact: [
         {
           id: "add_contact_1",
-          selector: '[data-guide="profile-qr-button"]',
+          selector: '[data-guide="contact-add-button"]',
           titleKey: "guideAddContactStep1Title",
           bodyKey: "guideAddContactStep1Body",
           ensure: () => ensureRoute("contacts"),
         },
         {
           id: "add_contact_2",
-          selector: '[data-guide="contact-add-button"]',
+          selector: '[data-guide="contact-search-input"]',
           titleKey: "guideAddContactStep2Title",
           bodyKey: "guideAddContactStep2Body",
-          ensure: () => ensureRoute("contacts"),
-        },
-        {
-          id: "add_contact_3",
-          selector: '[data-guide="contact-save"]',
-          titleKey: "guideAddContactStep3Title",
-          bodyKey: "guideAddContactStep3Body",
           ensure: () => ensureRoute("contactNew"),
         },
       ],
@@ -311,7 +304,7 @@ export const useContactsGuide = ({
       prev.kind === "contactNew" &&
       current.kind !== "contactNew"
     ) {
-      goToStep(2);
+      stopContactsGuide();
     }
 
     if (id === "topup_1" && transition("contacts", "wallet")) goToStep(1);

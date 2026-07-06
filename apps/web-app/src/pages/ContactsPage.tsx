@@ -17,7 +17,6 @@ interface ContactsPageProps {
   groupNames: string[];
   noGroupFilterValue: string;
   openNewContactPage: () => void;
-  openScan?: () => void;
   onboardingContent?: React.ReactNode;
   otherContactsLabel: string;
   renderContactCard: (contact: ContactRowLike) => React.ReactNode;
@@ -32,6 +31,7 @@ interface ContactsPageProps {
   visibleContacts: {
     conversations: ContactRowLike[];
     others: ContactRowLike[];
+    pinned: ContactRowLike[];
   };
 }
 
@@ -47,7 +47,6 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
     groupNames,
     noGroupFilterValue,
     openNewContactPage,
-    openScan,
     onboardingContent,
     otherContactsLabel,
     renderContactCard,
@@ -62,7 +61,9 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
     visibleContacts,
   }) => {
     const totalVisible =
-      visibleContacts.conversations.length + visibleContacts.others.length;
+      visibleContacts.pinned.length +
+      visibleContacts.conversations.length +
+      visibleContacts.others.length;
     const hasAnyContacts = totalVisible > 0;
 
     return (
@@ -178,6 +179,8 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
               <p className="muted">{t("noContactsYet")}</p>
             ) : (
               <>
+                {visibleContacts.pinned.map(renderContactCard)}
+
                 {visibleContacts.conversations.length > 0 && (
                   <React.Fragment key="conversations">
                     <div className="settings-section-title contact-list-section-title">
@@ -213,7 +216,7 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
           <button
             type="button"
             className={`contacts-fab${canAddContact ? "" : " is-disabled"}`}
-            onClick={openScan ?? openNewContactPage}
+            onClick={openNewContactPage}
             aria-disabled={!canAddContact}
             aria-label={t("addContact")}
             title={t("addContact")}

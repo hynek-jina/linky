@@ -20,7 +20,6 @@ export type AvatarEditorControlId =
   | "clothing";
 
 export interface AvatarEditorControl {
-  icon: string;
   id: AvatarEditorControlId;
   label: string;
 }
@@ -306,14 +305,14 @@ const CLOTHING_GRAPHIC_VALUES: readonly string[] = [
 ];
 
 export const AVATAR_EDITOR_CONTROLS: readonly AvatarEditorControl[] = [
-  { id: "top", icon: "💇", label: "Top" },
-  { id: "hairColor", icon: "🎨", label: "Hair color" },
-  { id: "accessories", icon: "🕶️", label: "Accessories" },
-  { id: "face", icon: "👀", label: "Eyes" },
-  { id: "mouth", icon: "👄", label: "Mouth" },
-  { id: "facialHair", icon: "🧔", label: "Beard" },
-  { id: "skin", icon: "🟤", label: "Skin" },
-  { id: "clothing", icon: "👕", label: "Clothes" },
+  { id: "top", label: "Top" },
+  { id: "hairColor", label: "Hair color" },
+  { id: "accessories", label: "Accessories" },
+  { id: "face", label: "Eyes" },
+  { id: "mouth", label: "Mouth" },
+  { id: "facialHair", label: "Beard" },
+  { id: "skin", label: "Skin" },
+  { id: "clothing", label: "Clothes" },
 ];
 
 const normalizeIndex = (value: number, max: number): number => {

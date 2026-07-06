@@ -40,7 +40,6 @@ export interface MainSwipeRouteProps {
   closeProfileQr: () => void;
   openNewContactPage: () => void;
   openProfileQr: () => void;
-  openScan: () => void;
   openWalletScan: () => void;
   otherContactsLabel: string;
   renderContactCard: (contact: ContactRowLike) => React.ReactNode;
@@ -59,6 +58,7 @@ export interface MainSwipeRouteProps {
   visibleContacts: {
     conversations: ContactRowLike[];
     others: ContactRowLike[];
+    pinned: ContactRowLike[];
   };
   dismissWalletWarning: () => void;
 }
@@ -96,7 +96,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     closeProfileQr,
     openNewContactPage,
     openProfileQr,
-    openScan,
     openWalletScan,
     otherContactsLabel,
     renderContactCard,
@@ -171,7 +170,6 @@ export const MainSwipeContent = (): React.ReactElement => {
             bottomTabActive={bottomTabActive}
             canAddContact={canAddContact}
             openNewContactPage={openNewContactPage}
-            openScan={openScan}
             showBottomTabBar={false}
             showFab={false}
             t={t}
@@ -203,7 +201,7 @@ export const MainSwipeContent = (): React.ReactElement => {
       <button
         type="button"
         className={`contacts-fab main-swipe-fab${canAddContact ? "" : " is-disabled"}${isMainSwipeDragging ? " is-interactive" : ""}`}
-        onClick={openScan}
+        onClick={openNewContactPage}
         aria-disabled={!canAddContact}
         aria-label={t("addContact")}
         title={t("addContact")}

@@ -159,6 +159,7 @@ export type PublishWrappedResult = {
 
 export type ContactRowLike = {
   archivedAtSec?: OptionalNumber;
+  createdAt?: OptionalNumber;
   groupName?: OptionalText;
   id?: ContactIdLike;
   isUnknownContact?: boolean;
@@ -176,6 +177,7 @@ export type ContactIdentityRowLike = {
 
 export type ContactNameRowLike = {
   archivedAtSec?: OptionalNumber;
+  createdAt?: OptionalNumber;
   id?: ContactIdLike;
   isUnknownContact?: boolean;
   name?: OptionalText;

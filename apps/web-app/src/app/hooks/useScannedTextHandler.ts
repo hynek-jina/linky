@@ -34,6 +34,7 @@ interface UseScannedTextHandlerParams<TContact extends ContactRowLike> {
   extractCashuTokenFromText: (text: string) => string | null;
   insert: EvoluMutations["insert"];
   lightningInvoiceAutoPayLimit: number;
+  onContactIdentifierScanned: ((identifier: string) => Promise<void>) | null;
   openScannedContactPendingNpubRef: React.MutableRefObject<string | null>;
   payCashuPaymentRequest: (
     requestInfo: CashuPaymentRequestMessageInfo,
@@ -67,6 +68,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
   extractCashuTokenFromText,
   insert,
   lightningInvoiceAutoPayLimit,
+  onContactIdentifierScanned,
   openScannedContactPendingNpubRef,
   payCashuPaymentRequest,
   payLightningInvoiceWithCashu,
@@ -196,6 +198,12 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
                 normalized,
               );
             }
+            return;
+          }
+
+          if (scanEntryPoint === "contacts" && onContactIdentifierScanned) {
+            await onContactIdentifierScanned(normalized);
+            closeScan();
             return;
           }
 
@@ -343,6 +351,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       extractCashuTokenFromText,
       insert,
       lightningInvoiceAutoPayLimit,
+      onContactIdentifierScanned,
       payLightningInvoiceWithCashu,
       refreshContactFromNostr,
       requestLightningInvoiceConfirmation,

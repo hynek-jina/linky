@@ -437,19 +437,17 @@ export const cs = {
   guideNext: "Další",
   guideDone: "Hotovo",
 
-  contactsShowProfileQr: "Ukázat profil",
+  contactsShowProfileQr: "Přidat kontakt",
   contactsScanContactQr: "Přidat kontakt",
 
-  guideAddContactStep1Title: "Ukázat svůj QR",
-  guideAddContactStep1Body:
-    "Klepněte na Ukázat QR profilu a ukažte svůj QR kód (npub) druhému uživateli.",
-  guideAddContactStep2Title: "Naskenovat QR kontaktu",
+  guideAddContactStep1Title: "Přidat kontakt",
+  guideAddContactStep1Body: "Klepněte na tlačítko Přidat kontakt.",
+  guideAddContactStep2Title: "Najít nebo vytvořit",
   guideAddContactStep2Body:
-    "Klepněte na Přidat kontakt a naskenujte QR kód (npub) od druhého uživatele.",
+    "Zadejte jméno, npub nebo NIP-05. Linky kontakt najde, nebo můžete vytvořit vlastní kontakt.",
 
-  guideAddContactStep3Title: "Uložit kontakt",
-  guideAddContactStep3Body:
-    "Po naskenování se otevře kontakt. Doplňte jméno / skupinu a uložte.",
+  guideAddContactStep3Title: "Přidat kontakt",
+  guideAddContactStep3Body: "Klepněte na tlačítko Přidat kontakt.",
 
   guideTopupStep1Title: "Peněženka",
   guideTopupStep1Body: "Klepněte na ikonu peněženky dole.",
@@ -489,6 +487,16 @@ export const cs = {
   contactsOnboardingTaskMessage: "Poslat zprávu",
   addContact: "Přidat kontakt",
   contactLoadQr: "Načíst QR",
+  search: "Vyhledat",
+  contactSearching: "Hledám...",
+  contactSearchLabel: "Vyhledat kontakt",
+  contactSearchPlaceholder: "npub, NIP-05 nebo rezervované jméno",
+  contactSearchHint:
+    "Zadejte npub, NIP-05 nebo rezervované jméno, třeba alice.",
+  contactSearchEmpty: "Zadejte, koho hledat.",
+  contactSearchNoResult: "Nic jsem nenašel.",
+  contactSearchCreateFromQuery: "Vytvořit kontakt",
+  contactIdentifierInvalid: "Zadejte platný npub nebo rezervované jméno.",
   noContactsYet: "Zatím žádné kontakty.",
 
   edit: "Upravit",
@@ -509,6 +517,7 @@ export const cs = {
   reactionsTitle: "Reakce",
   newContact: "Přidat nový kontakt",
   close: "Zavřít",
+  continue: "Pokračovat",
 
   contactNotFound: "Kontakt nenalezen.",
   name: "Jméno",
@@ -525,7 +534,7 @@ export const cs = {
   noGroup: "Bez skupiny",
 
   saveChanges: "Uložit změny",
-  saveContact: "Uložit kontakt",
+  saveContact: "Přidat",
   saving: "Ukládání...",
   clearForm: "Vyčistit formulář",
 
