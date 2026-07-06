@@ -44,7 +44,6 @@ type NavigationAction =
   | { route: "nostrRelayNew" }
   | { route: "nostrRelays" }
   | { route: "profile" }
-  | { route: "profileClaimLightningAddress" }
   | { route: "profileEdit" }
   | { route: "settings" }
   | { route: "settingsMasterKeys" }
@@ -151,9 +150,6 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "profile":
       window.location.assign("#profile");
-      break;
-    case "profileClaimLightningAddress":
-      window.location.assign("#profile/claim-lightning");
       break;
     case "profileEdit":
       window.location.assign("#profile/edit");

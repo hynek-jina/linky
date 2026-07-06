@@ -374,6 +374,7 @@ const FACIAL_HAIR_DIMENSIONS = [
   FACIAL_HAIR_PROBABILITY_VALUES.length,
   FACIAL_HAIR_VALUES.length,
 ] as const;
+const FACIAL_HAIR_VISIBLE_OFFSET = FACIAL_HAIR_VALUES.length;
 
 const CLOTHING_DIMENSIONS = [
   CLOTHING_VALUES.length,
@@ -506,6 +507,8 @@ export const deriveInitialAvatarSelection = (
   seedSource: string,
 ): DerivedAvatarSelection => {
   const seed = normalizeSeed(seedSource);
+  const initialFacialHairIndex =
+    hash32(`${seed}:facialHair`) % FACIAL_HAIR_VALUES.length;
 
   return {
     accessoriesIndex:
@@ -514,8 +517,7 @@ export const deriveInitialAvatarSelection = (
     clothingIndex:
       hash32(`${seed}:clothing`) % getCombinationSize(CLOTHING_DIMENSIONS),
     faceIndex: hash32(`${seed}:face`) % getCombinationSize(FACE_DIMENSIONS),
-    facialHairIndex:
-      hash32(`${seed}:facialHair`) % getCombinationSize(FACIAL_HAIR_DIMENSIONS),
+    facialHairIndex: initialFacialHairIndex,
     hairColorIndex: hash32(`${seed}:hairColor`) % HAIR_COLOR_VALUES.length,
     mouthIndex: hash32(`${seed}:mouth`) % MOUTH_VALUES.length,
     seed,
@@ -565,6 +567,19 @@ export const cycleGeneratedAvatar = (
   current: DerivedAvatarSelection,
   controlId: AvatarEditorControlId,
 ): DerivedGeneratedAvatar => {
+  const [facialHairProbabilityIndex, facialHairIndex] = splitCombinationIndex(
+    current.facialHairIndex,
+    FACIAL_HAIR_DIMENSIONS,
+  );
+  const nextFacialHairIndex =
+    pickIndexedValue(
+      FACIAL_HAIR_PROBABILITY_VALUES,
+      facialHairProbabilityIndex ?? 0,
+    ) === 0
+      ? FACIAL_HAIR_VISIBLE_OFFSET +
+        normalizeIndex(facialHairIndex ?? 0, FACIAL_HAIR_VALUES.length)
+      : current.facialHairIndex + 1;
+
   const nextSelection: DerivedAvatarSelection = {
     ...current,
     accessoriesIndex:
@@ -583,7 +598,7 @@ export const cycleGeneratedAvatar = (
     faceIndex: controlId === "face" ? current.faceIndex + 1 : current.faceIndex,
     facialHairIndex:
       controlId === "facialHair"
-        ? current.facialHairIndex + 1
+        ? nextFacialHairIndex
         : current.facialHairIndex,
     hairColorIndex:
       controlId === "hairColor"

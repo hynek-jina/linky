@@ -25,7 +25,6 @@ import {
   NostrRelayNewPage,
   NostrRelayPage,
   NostrRelaysPage,
-  ProfileLightningAddressClaimPage,
   ProfilePage,
   PushDebugPage,
   SettingsPage,
@@ -50,9 +49,6 @@ export interface PeopleRoutesProps {
   contactNewProps: React.ComponentProps<typeof ContactNewPage>;
   contactPayProps: React.ComponentProps<typeof ContactPayPage>;
   contactProps: React.ComponentProps<typeof ContactPage>;
-  profileClaimLightningAddressProps: React.ComponentProps<
-    typeof ProfileLightningAddressClaimPage
-  >;
   profileProps: React.ComponentProps<typeof ProfilePage>;
 }
 
@@ -221,12 +217,6 @@ export const AppRouteContent = (): React.ReactElement => {
 
       {route.kind === "contactNew" && (
         <ContactNewPage {...peopleRoutes.contactNewProps} />
-      )}
-
-      {route.kind === "profileClaimLightningAddress" && (
-        <ProfileLightningAddressClaimPage
-          {...peopleRoutes.profileClaimLightningAddressProps}
-        />
       )}
 
       {(route.kind === "profile" || route.kind === "profileEdit") && (

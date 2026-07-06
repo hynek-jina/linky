@@ -27,6 +27,12 @@ export interface OwnLightningClaimAvailableResult {
   username: string;
 }
 
+export interface OwnLightningAddressInputCandidate {
+  issue: OwnLightningUsernameValidationIssue | null;
+  lightningAddress: string;
+  username: string;
+}
+
 export type OwnLightningClaimPreviewResult =
   | OwnLightningClaimAvailableResult
   | { kind: "already_set"; message: string }
@@ -90,6 +96,38 @@ export const getOwnLightningUsernameValidationIssue = (
 export const getOwnLightningAddressFromUsername = (value: string): string => {
   const username = normalizeOwnLightningUsername(value);
   return username ? `${username}@${OWN_LIGHTNING_ADDRESS_DOMAIN}` : "";
+};
+
+export const getOwnLightningAddressInputCandidate = (
+  value: string,
+): OwnLightningAddressInputCandidate | null => {
+  const input = String(value ?? "").trim();
+  if (!input) return null;
+
+  const atIndex = input.indexOf("@");
+  if (atIndex < 0) {
+    const username = normalizeOwnLightningUsername(input);
+    return {
+      issue: getOwnLightningUsernameValidationIssue(username),
+      lightningAddress: getOwnLightningAddressFromUsername(username),
+      username,
+    };
+  }
+
+  if (atIndex !== input.lastIndexOf("@")) return null;
+
+  const domain = input
+    .slice(atIndex + 1)
+    .trim()
+    .toLowerCase();
+  if (domain !== OWN_LIGHTNING_ADDRESS_DOMAIN) return null;
+
+  const username = normalizeOwnLightningUsername(input.slice(0, atIndex));
+  return {
+    issue: getOwnLightningUsernameValidationIssue(username),
+    lightningAddress: getOwnLightningAddressFromUsername(username),
+    username,
+  };
 };
 
 export const requestOwnLightningAddressClaimPreview = async (args: {
@@ -214,4 +252,53 @@ export const finalizeOwnLightningAddressClaim = async (args: {
       message: getUnknownErrorMessage(error, "Username claim failed"),
     };
   }
+};
+
+const CLAIM_CONFIRM_RETRY_DELAY_MS = 1_000;
+const CLAIM_CONFIRM_RETRY_LIMIT = 5;
+
+const wait = (ms: number): Promise<void> => {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+};
+
+export const purchaseOwnLightningAddressClaim = async (args: {
+  makeNip98AuthHeader: Nip98AuthHeaderFactory;
+  payLightningInvoiceWithCashu: (invoice: string) => Promise<boolean>;
+  preview: OwnLightningClaimAvailableResult;
+  saveClaimedLightningAddress: (lightningAddress: string) => Promise<boolean>;
+  serverBaseUrl: string;
+}): Promise<
+  { kind: "cancelled" | "success" } | { kind: "error"; message: string }
+> => {
+  const paid = await args.payLightningInvoiceWithCashu(
+    args.preview.invoice.invoice,
+  );
+  if (!paid) return { kind: "cancelled" };
+
+  for (let attempt = 0; attempt < CLAIM_CONFIRM_RETRY_LIMIT; attempt += 1) {
+    const result = await finalizeOwnLightningAddressClaim({
+      makeNip98AuthHeader: args.makeNip98AuthHeader,
+      paymentToken: args.preview.paymentToken,
+      serverBaseUrl: args.serverBaseUrl,
+      username: args.preview.username,
+    });
+
+    if (result.kind === "success" || result.kind === "already_set") {
+      const saved = await args.saveClaimedLightningAddress(
+        args.preview.lightningAddress,
+      );
+      return saved ? { kind: "success" } : { kind: "cancelled" };
+    }
+
+    if (result.kind === "unpaid" && attempt + 1 < CLAIM_CONFIRM_RETRY_LIMIT) {
+      await wait(CLAIM_CONFIRM_RETRY_DELAY_MS);
+      continue;
+    }
+
+    return { kind: "error", message: result.message };
+  }
+
+  return { kind: "error", message: INVOICE_UNPAID_MESSAGE };
 };

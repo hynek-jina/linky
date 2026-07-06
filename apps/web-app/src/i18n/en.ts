@@ -130,7 +130,6 @@ export const en = {
   bankPaymentOfferRecipientIncrease: "Increase contact count",
   custom: "Custom",
   restore: "Restore",
-  claimOwnLightningAddressAction: "Claim own",
   claimOwnLightningAddressTitle: "Own lightning address",
   claimOwnLightningAddressHint:
     "Enter a custom name for an address in the form name@linky.fit.",
@@ -142,6 +141,9 @@ export const en = {
   claimOwnLightningAddressAvailable: "Address is available.",
   claimOwnLightningAddressPrice: "Price",
   claimOwnLightningAddressConfirm: "Pay and use",
+  claimOwnLightningAddressPurchase: "Purchase",
+  claimOwnLightningAddressPurchaseFor: "Purchase for {amount}",
+  claimOwnLightningAddressPurchasing: "Purchasing...",
   claimOwnLightningAddressOwned: "Paid Linky addresses",
   claimOwnLightningAddressOwnedHint:
     "A custom lightning address has already been purchased for this account. You can only reactivate it here.",

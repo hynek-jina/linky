@@ -132,7 +132,6 @@ export const cs = {
   bankPaymentOfferRecipientIncrease: "Zvýšit počet kontaktů",
   custom: "Vlastní",
   restore: "Obnovit",
-  claimOwnLightningAddressAction: "Získat vlastní",
   claimOwnLightningAddressTitle: "Vlastní lightning adresa",
   claimOwnLightningAddressHint:
     "Zadejte vlastní jméno pro adresu ve tvaru name@linky.fit.",
@@ -144,6 +143,9 @@ export const cs = {
   claimOwnLightningAddressAvailable: "Adresa je dostupná.",
   claimOwnLightningAddressPrice: "Cena",
   claimOwnLightningAddressConfirm: "Zaplatit a použít",
+  claimOwnLightningAddressPurchase: "Koupit",
+  claimOwnLightningAddressPurchaseFor: "Koupit za {amount}",
+  claimOwnLightningAddressPurchasing: "Kupuji...",
   claimOwnLightningAddressOwned: "Zaplacené Linky adresy",
   claimOwnLightningAddressOwnedHint:
     "Vlastní lightning adresa už byla pro tento účet pořízena. Tady ji můžete jen znovu aktivovat.",

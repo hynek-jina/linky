@@ -1,9 +1,9 @@
 import React from "react";
-import { BadgePlus, Copy, Radio, RefreshCcw, Save } from "lucide-react";
+import { Copy, Radio, RefreshCcw, Save } from "lucide-react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import { ProfileAvatarEditor } from "../components/ProfileAvatarEditor";
 import { ProfileQrButton } from "../components/ProfileQrButton";
 import type { AvatarEditorControlId } from "../derivedProfile";
-import { useNavigation } from "../hooks/useRouting";
 import {
   parseProfileGeneralStatusText,
   type ProfileStatusCurrency,
@@ -13,6 +13,13 @@ import {
   formatShortNpub,
   getInitials,
 } from "../utils/formatting";
+import {
+  type Nip98AuthHeaderFactory,
+  type OwnLightningAddressInputCandidate,
+  type OwnLightningClaimAvailableResult,
+  purchaseOwnLightningAddressClaim,
+  requestOwnLightningAddressClaimPreview,
+} from "../utils/npubCashUsernameClaim";
 
 interface DerivedProfile {
   lnAddress: string;
@@ -21,6 +28,9 @@ interface DerivedProfile {
 }
 
 interface ProfilePageProps {
+  cashuBalance: number;
+  cashuBalanceAfterMelt: number;
+  cashuIsBusy: boolean;
   canWriteToNfc: boolean;
   copyText: (text: string) => Promise<void>;
   currentNpub: string | null;
@@ -42,13 +52,18 @@ interface ProfilePageProps {
   profileEditPicture: string;
   profileEditStatus: string;
   profileEditsSavable: boolean;
+  unregisteredOwnLightningAddress: OwnLightningAddressInputCandidate | null;
   profileStatus: string | null;
   profileStatusCurrencies: readonly ProfileStatusCurrency[];
   profileStatusIsSaving: boolean;
   profilePhotoInputRef: React.RefObject<HTMLInputElement | null>;
   profileSelectedPictureKind: "custom" | "generated";
+  makeNip98AuthHeader: Nip98AuthHeaderFactory;
+  payLightningInvoiceWithCashu: (invoice: string) => Promise<boolean>;
+  saveClaimedLightningAddress: (lightningAddress: string) => Promise<boolean>;
   saveProfileEdits: () => Promise<void>;
   selectedProfileStatusCurrencies: readonly ProfileStatusCurrency[];
+  serverBaseUrl: string;
   setProfileEditLnAddress: (value: string) => void;
   setProfileEditName: (value: string) => void;
   setProfileEditStatus: (value: string) => void;
@@ -60,6 +75,9 @@ interface ProfilePageProps {
 }
 
 export function ProfilePage({
+  cashuBalance,
+  cashuBalanceAfterMelt,
+  cashuIsBusy,
   canWriteToNfc,
   copyText,
   currentNpub,
@@ -79,13 +97,18 @@ export function ProfilePage({
   profileEditPicture,
   profileEditStatus,
   profileEditsSavable,
+  unregisteredOwnLightningAddress,
   profileStatus,
   profileStatusCurrencies,
   profileStatusIsSaving,
   profilePhotoInputRef,
   profileSelectedPictureKind,
+  makeNip98AuthHeader,
+  payLightningInvoiceWithCashu,
+  saveClaimedLightningAddress,
   saveProfileEdits,
   selectedProfileStatusCurrencies,
+  serverBaseUrl,
   setProfileEditLnAddress,
   setProfileEditName,
   setProfileEditStatus,
@@ -93,9 +116,147 @@ export function ProfilePage({
   toggleProfileStatusCurrency,
   writeCurrentNpubToNfc,
 }: ProfilePageProps): React.ReactElement {
-  const navigateTo = useNavigation();
+  const { formatDisplayedAmountParts } = useAppShellCore();
+  const [inlineClaimError, setInlineClaimError] = React.useState<string | null>(
+    null,
+  );
+  const [inlineClaimIsChecking, setInlineClaimIsChecking] =
+    React.useState(false);
+  const [inlineClaimIsConfirming, setInlineClaimIsConfirming] =
+    React.useState(false);
+  const [inlineClaimPreview, setInlineClaimPreview] =
+    React.useState<OwnLightningClaimAvailableResult | null>(null);
+  const inlineClaimRequestSeqRef = React.useRef(0);
   const profileStatusText = parseProfileGeneralStatusText(profileStatus);
-  const hasOwnedLightningAddress = ownedLightningAddresses.length > 0;
+  const restoreLightningAddress = React.useMemo(() => {
+    for (const lightningAddress of ownedLightningAddresses) {
+      const normalized = String(lightningAddress ?? "")
+        .trim()
+        .toLowerCase();
+      if (normalized) return normalized;
+    }
+
+    return derivedProfile?.lnAddress ?? null;
+  }, [derivedProfile?.lnAddress, ownedLightningAddresses]);
+  const canRestoreDefaultLightningAddress =
+    Boolean(restoreLightningAddress) &&
+    profileEditLnAddress.trim().toLowerCase() !== restoreLightningAddress;
+  const canCheckInlineClaim =
+    isProfileEditing &&
+    Boolean(unregisteredOwnLightningAddress) &&
+    !unregisteredOwnLightningAddress?.issue;
+  const inlineClaimQuotedAmount = inlineClaimPreview?.invoice.amountSat ?? null;
+  const inlineClaimInsufficientBalance =
+    inlineClaimQuotedAmount !== null &&
+    Number.isFinite(inlineClaimQuotedAmount) &&
+    inlineClaimQuotedAmount > Math.max(cashuBalance, cashuBalanceAfterMelt);
+  const inlineClaimButtonLabel =
+    inlineClaimQuotedAmount === null
+      ? t("claimOwnLightningAddressPurchase")
+      : (() => {
+          const displayAmount = formatDisplayedAmountParts(
+            inlineClaimQuotedAmount,
+          );
+          return t("claimOwnLightningAddressPurchaseFor").replace(
+            "{amount}",
+            `${displayAmount.approxPrefix}${displayAmount.amountText} ${displayAmount.unitLabel}`,
+          );
+        })();
+  const canSaveProfileEdits =
+    profileEditsSavable && !unregisteredOwnLightningAddress;
+
+  React.useEffect(() => {
+    const requestSeq = inlineClaimRequestSeqRef.current + 1;
+    inlineClaimRequestSeqRef.current = requestSeq;
+
+    setInlineClaimError(null);
+    setInlineClaimPreview(null);
+    setInlineClaimIsChecking(false);
+
+    if (!canCheckInlineClaim || !unregisteredOwnLightningAddress) return;
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      setInlineClaimIsChecking(true);
+      void requestOwnLightningAddressClaimPreview({
+        makeNip98AuthHeader,
+        serverBaseUrl,
+        signal: controller.signal,
+        username: unregisteredOwnLightningAddress.username,
+      })
+        .then((result) => {
+          if (requestSeq !== inlineClaimRequestSeqRef.current) return;
+          if (result.kind === "available") {
+            setInlineClaimPreview(result);
+            return;
+          }
+          if (result.kind === "taken") {
+            setInlineClaimError(t("claimOwnLightningAddressTaken"));
+            return;
+          }
+          if (result.kind === "already_set") {
+            setInlineClaimError(t("claimOwnLightningAddressAlreadySet"));
+            return;
+          }
+          if (result.kind === "error") {
+            setInlineClaimError(
+              result.message ?? t("claimOwnLightningAddressCheckFailed"),
+            );
+          }
+        })
+        .finally(() => {
+          if (requestSeq !== inlineClaimRequestSeqRef.current) return;
+          setInlineClaimIsChecking(false);
+        });
+    }, 1_000);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    canCheckInlineClaim,
+    makeNip98AuthHeader,
+    serverBaseUrl,
+    t,
+    unregisteredOwnLightningAddress,
+  ]);
+
+  const purchaseInlineLightningAddress = React.useCallback(async () => {
+    if (!inlineClaimPreview) return;
+    if (cashuIsBusy || inlineClaimIsConfirming) return;
+
+    setInlineClaimError(null);
+    setInlineClaimIsConfirming(true);
+    try {
+      const result = await purchaseOwnLightningAddressClaim({
+        makeNip98AuthHeader,
+        payLightningInvoiceWithCashu,
+        preview: inlineClaimPreview,
+        saveClaimedLightningAddress,
+        serverBaseUrl,
+      });
+      if (result.kind === "cancelled") return;
+      if (result.kind === "error") {
+        setInlineClaimError(
+          result.message === "Invoice unpaid..."
+            ? t("claimOwnLightningAddressUnpaid")
+            : result.message,
+        );
+      }
+    } finally {
+      setInlineClaimIsConfirming(false);
+    }
+  }, [
+    cashuIsBusy,
+    inlineClaimIsConfirming,
+    inlineClaimPreview,
+    makeNip98AuthHeader,
+    payLightningInvoiceWithCashu,
+    saveClaimedLightningAddress,
+    serverBaseUrl,
+    t,
+  ]);
 
   return (
     <section className="panel">
@@ -145,25 +306,13 @@ export function ProfilePage({
               >
                 <label htmlFor="profileLn">{t("lightningAddress")}</label>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    className="icon-only-ghost"
-                    onClick={() =>
-                      navigateTo({ route: "profileClaimLightningAddress" })
-                    }
-                    title={t("claimOwnLightningAddressAction")}
-                    aria-label={t("claimOwnLightningAddressAction")}
-                  >
-                    <BadgePlus size={18} aria-hidden="true" />
-                  </button>
-                  {!hasOwnedLightningAddress &&
-                  derivedProfile &&
-                  profileEditLnAddress.trim() !== derivedProfile.lnAddress ? (
+                  {canRestoreDefaultLightningAddress &&
+                  restoreLightningAddress ? (
                     <button
                       type="button"
                       className="icon-only-ghost"
                       onClick={() =>
-                        setProfileEditLnAddress(derivedProfile.lnAddress)
+                        setProfileEditLnAddress(restoreLightningAddress)
                       }
                       title={t("restore")}
                       aria-label={t("restore")}
@@ -173,15 +322,53 @@ export function ProfilePage({
                   ) : null}
                 </div>
               </div>
-              <input
-                id="profileLn"
-                value={profileEditLnAddress}
-                onChange={(e) => setProfileEditLnAddress(e.target.value)}
-                placeholder={t("lightningAddress")}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-              />
+              <div className="profile-lightning-input-row">
+                <input
+                  id="profileLn"
+                  value={profileEditLnAddress}
+                  onChange={(e) => setProfileEditLnAddress(e.target.value)}
+                  placeholder={t("lightningAddress")}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+                {inlineClaimPreview ? (
+                  <button
+                    type="button"
+                    className="profile-lightning-purchase-button"
+                    disabled={
+                      cashuIsBusy ||
+                      inlineClaimInsufficientBalance ||
+                      inlineClaimIsChecking ||
+                      inlineClaimIsConfirming
+                    }
+                    onClick={() => {
+                      void purchaseInlineLightningAddress();
+                    }}
+                    title={
+                      inlineClaimInsufficientBalance
+                        ? t("payInsufficient")
+                        : undefined
+                    }
+                  >
+                    <span className="btn-label-with-icon">
+                      {inlineClaimIsConfirming ? (
+                        <span className="btn-spinner" aria-hidden="true" />
+                      ) : null}
+                      <span>
+                        {inlineClaimIsConfirming
+                          ? t("claimOwnLightningAddressPurchasing")
+                          : inlineClaimButtonLabel}
+                      </span>
+                    </span>
+                  </button>
+                ) : null}
+              </div>
+              {inlineClaimError ? (
+                <p className="muted" style={{ marginTop: 8 }}>
+                  {inlineClaimError}
+                </p>
+              ) : null}
 
               <div
                 style={{
@@ -200,7 +387,7 @@ export function ProfilePage({
               />
 
               <div className="panel-header" style={{ marginTop: 14 }}>
-                {profileEditsSavable ? (
+                {canSaveProfileEdits ? (
                   <button onClick={() => void saveProfileEdits()}>
                     <span className="btn-label-with-icon">
                       <span className="btn-label-icon" aria-hidden="true">

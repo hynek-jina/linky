@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  cycleGeneratedAvatar,
   deriveDefaultLightningAddress,
   deriveDefaultProfile,
+  deriveGeneratedAvatar,
   parseDefaultLightningAddressNpub,
 } from "./derivedProfile";
 
@@ -29,5 +31,22 @@ describe("derivedProfile lightning address defaults", () => {
     expect(
       parseDefaultLightningAddressNpub("npub1alice@example.com"),
     ).toBeNull();
+  });
+});
+
+describe("derivedProfile avatar defaults", () => {
+  it("starts generated avatars without facial hair", () => {
+    const generated = deriveGeneratedAvatar("npub1alice");
+    const url = new URL(generated.pictureUrl);
+
+    expect(url.searchParams.get("facialHairProbability")).toBe("0");
+  });
+
+  it("shows facial hair on the first beard edit", () => {
+    const generated = deriveGeneratedAvatar("npub1alice");
+    const edited = cycleGeneratedAvatar(generated.selection, "facialHair");
+    const url = new URL(edited.pictureUrl);
+
+    expect(url.searchParams.get("facialHairProbability")).toBe("100");
   });
 });
