@@ -485,10 +485,10 @@ export const en = {
   contactLoadQr: "Load QR",
   search: "Search",
   contactSearching: "Searching...",
-  contactSearchLabel: "Search contact",
+  contactSearchLabel: "Contact",
   contactSearchPlaceholder: "npub, NIP-05, or reserved name",
   contactSearchHint:
-    "Enter an npub, NIP-05, or reserved name, for example alice. If Linky finds the contact, you can add it right away.",
+    "Enter an npub, NIP-05, or reserved name, for example alice.",
   contactSearchEmpty: "Enter who to search for.",
   contactSearchNoResult: "Nothing found.",
   contactSearchCreateFromQuery: "Create contact",
@@ -530,7 +530,7 @@ export const en = {
   noGroup: "No group",
 
   saveChanges: "Save changes",
-  saveContact: "Save contact",
+  saveContact: "Add",
   saving: "Saving...",
   clearForm: "Clear form",
 

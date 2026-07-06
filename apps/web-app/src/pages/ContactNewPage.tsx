@@ -157,7 +157,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
 
     const timer = window.setTimeout(() => {
       void runSearch(searchQuery, { silentEmpty: true });
-    }, 1800);
+    }, 900);
 
     return () => window.clearTimeout(timer);
   }, [runSearch, searchQuery, searchResult?.query, step]);

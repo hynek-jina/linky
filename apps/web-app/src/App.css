@@ -658,8 +658,11 @@
 }
 
 .onboarding-avatar-editEmoji {
-  font-size: 30px;
   background: rgba(148, 163, 184, 0.12);
+}
+
+.onboarding-avatar-editEmoji svg {
+  display: block;
 }
 
 .onboarding-avatar-choiceLabel {

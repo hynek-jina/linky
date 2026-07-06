@@ -492,7 +492,7 @@ export const cs = {
   contactSearchLabel: "Vyhledat kontakt",
   contactSearchPlaceholder: "npub, NIP-05 nebo rezervované jméno",
   contactSearchHint:
-    "Zadejte npub, NIP-05 nebo rezervované jméno, třeba alice. Pokud kontakt najdu, můžete ho rovnou přidat.",
+    "Zadejte npub, NIP-05 nebo rezervované jméno, třeba alice.",
   contactSearchEmpty: "Zadejte, koho hledat.",
   contactSearchNoResult: "Nic jsem nenašel.",
   contactSearchCreateFromQuery: "Vytvořit kontakt",
@@ -534,7 +534,7 @@ export const cs = {
   noGroup: "Bez skupiny",
 
   saveChanges: "Uložit změny",
-  saveContact: "Uložit kontakt",
+  saveContact: "Přidat",
   saving: "Ukládání...",
   clearForm: "Vyčistit formulář",
 
