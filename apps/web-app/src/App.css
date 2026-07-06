@@ -3867,6 +3867,15 @@ button.icon {
   white-space: nowrap;
 }
 
+.contact-new-search-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-top: 12px;
+}
+
 .contact-new-search-empty {
   display: grid;
   justify-items: start;
