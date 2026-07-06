@@ -3668,13 +3668,6 @@ button.icon {
   gap: 10px;
 }
 
-.chat-bank-payment-open-inline {
-  flex: 0 0 auto;
-  border-radius: 8px;
-  padding-inline: 10px;
-  white-space: nowrap;
-}
-
 .chat-payment-request-description {
   color: #94a3b8;
   font-size: 13px;
@@ -3684,52 +3677,6 @@ button.icon {
   color: #cbd5e1;
   font-size: 12px;
   font-weight: 700;
-}
-
-.chat-bank-payment-details {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.chat-bank-payment-details > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.chat-bank-payment-details span {
-  color: #94a3b8;
-  font-size: 11px;
-}
-
-.chat-bank-payment-details strong {
-  color: #f8fafc;
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-
-.chat-bank-payment-copy-row {
-  min-width: 0;
-}
-
-.chat-bank-payment-copy.transaction-detail-copy {
-  color: #f8fafc;
-  font-size: 13px;
-}
-
-.chat-bank-payment-copy .transaction-detail-copyText {
-  color: #f8fafc;
-  font-size: 13px;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.chat-bank-payment-copy .transaction-detail-copyIcon {
-  color: #94a3b8;
 }
 
 .chat-payment-request-actions {
@@ -3920,6 +3867,15 @@ button.icon {
   white-space: nowrap;
 }
 
+.contact-new-search-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin-top: 12px;
+}
+
 .contact-new-search-empty {
   display: grid;
   justify-items: start;
@@ -4033,8 +3989,55 @@ button.icon {
   gap: 8px;
 }
 
+.bank-payment-offer-detail-page {
+  padding-bottom: calc(24px + var(--safe-area-bottom, 0px));
+}
+
+.bank-payment-offer-detail-page .bank-payment-summary {
+  align-items: center;
+  text-align: center;
+}
+
+.bank-payment-offer-detail-page .bank-payment-amount {
+  text-align: center;
+}
+
+.bank-payment-offer-timer {
+  color: #cbd5e1;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.bank-payment-offer-qr-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.bank-payment-offer-qr {
+  width: min(72vw, 280px);
+  height: min(72vw, 280px);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.bank-payment-offer-qr-placeholder {
+  display: grid;
+  place-items: center;
+  width: min(72vw, 280px);
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.14);
+  color: #94a3b8;
+  font-weight: 800;
+}
+
 .bank-payment-row {
   align-items: flex-start;
+}
+
+.bank-payment-row > div {
+  min-width: 0;
+  width: 100%;
 }
 
 .bank-payment-row strong,
@@ -4051,8 +4054,47 @@ button.icon {
   overflow-wrap: anywhere;
 }
 
+.bank-payment-copy.transaction-detail-copy {
+  color: #dbeafe;
+  font-size: 15px;
+  width: 100%;
+}
+
+.bank-payment-copy .transaction-detail-copyText {
+  color: #dbeafe;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.bank-payment-copy .transaction-detail-copyIcon {
+  color: #94a3b8;
+}
+
 .bank-payment-open {
   margin-top: 2px;
+}
+
+.bank-payment-open-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bank-payment-open-actions > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-inline: 10px;
+}
+
+.bank-payment-open-actions .btn-label-with-icon {
+  justify-content: center;
+  min-width: 0;
+}
+
+.bank-payment-open-actions .btn-label-with-icon > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bank-payment-request {

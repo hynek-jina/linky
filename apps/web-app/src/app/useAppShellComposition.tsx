@@ -137,7 +137,6 @@ import {
   clearStoredPushNsec,
   setStoredPushNsec,
 } from "../utils/pushNsecStorage";
-import { openSpdPaymentInBank } from "../utils/spdPayment";
 import {
   getInitialAllowedDisplayCurrencies,
   getInitialBankPaymentOfferRecipientCount,
@@ -6339,29 +6338,6 @@ export const useAppShellComposition = () => {
     [pushToast, t],
   );
 
-  const openBankPaymentFromOffer = React.useCallback(
-    async (spdPayload: string) => {
-      try {
-        await openSpdPaymentInBank(spdPayload);
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") return;
-
-        const message = error instanceof Error ? error.message : "";
-        if (message === "spd-share-unavailable") {
-          setStatus(t("spdPaymentShareUnavailable"));
-          return;
-        }
-        if (message === "spd-service-worker-unavailable") {
-          setStatus(t("spdPaymentServiceWorkerUnavailable"));
-          return;
-        }
-
-        setStatus(t("spdPaymentOpenFailed"));
-      }
-    },
-    [setStatus, t],
-  );
-
   const closeShareOptions = React.useCallback(() => {
     setShareOptionsText(null);
   }, []);
@@ -9355,10 +9331,8 @@ export const useAppShellComposition = () => {
       onAddUnknownContact: addUnknownContactFromChat,
       onBlockUnknownContact: blockUnknownContactFromChat,
       onCopy: onCopyChatMessage,
-      onCopyText: copyText,
       onDeclinePaymentRequest: onDeclineChatPaymentRequest,
       onEdit: onEditChatMessage,
-      onOpenBankPayment: openBankPaymentFromOffer,
       onOpenNpubContact: openNpubMessageContact,
       onPayPaymentRequest: onPayChatPaymentRequest,
       onRespondBankPaymentOffer: respondToBankPaymentOfferWithGroupState,
@@ -9376,6 +9350,7 @@ export const useAppShellComposition = () => {
       requestSelectedContact,
       payWithCashuEnabled,
       ownedLightningAddresses: ownedProfileLightningAddresses,
+      route,
       selectedContactStatusText: (() => {
         const npub = normalizeNpubIdentifier(selectedContact?.npub);
         return npub ? (nostrStatusByNpub[npub] ?? null) : null;

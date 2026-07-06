@@ -37,6 +37,7 @@ export type Route =
   | { kind: "contact"; id: ContactId }
   | { kind: "contactEdit"; id: ContactId }
   | { kind: "contactPay"; id: ContactId }
+  | { kind: "bankPaymentOffer"; chatId: string; offerId: string }
   | { kind: "chat"; id: string };
 
 export const parseRouteFromHash = (): Route => {
@@ -131,7 +132,13 @@ export const parseRouteFromHash = (): Route => {
   const chatPrefix = "#chat/";
   if (hash.startsWith(chatPrefix)) {
     const rest = hash.slice(chatPrefix.length);
-    const id = decodeURIComponent(String(rest ?? "")).trim();
+    const [rawId, rawSub, rawOfferId] = rest.split("/");
+    const id = decodeURIComponent(String(rawId ?? "")).trim();
+    const sub = String(rawSub ?? "").trim();
+    const offerId = decodeURIComponent(String(rawOfferId ?? "")).trim();
+    if (id && sub === "bank-payment-offer" && offerId) {
+      return { kind: "bankPaymentOffer", chatId: id, offerId };
+    }
     if (id) return { kind: "chat", id };
   }
 

@@ -38,6 +38,7 @@ type NavigationAction =
   | { route: "lnAddressPay"; lnAddress: string }
   | { route: "manualPay" }
   | { route: "bankPayment"; spdPayload: string }
+  | { route: "bankPaymentOffer"; chatId: string; offerId: string }
   | { route: "mint"; mintUrl: string }
   | { route: "mints" }
   | { route: "nostrRelay"; id: string }
@@ -135,6 +136,11 @@ export const navigateTo = (action: NavigationAction): void => {
     case "bankPayment":
       window.location.assign(
         `#wallet/bank-payment/${encodeURIComponent(String(action.spdPayload ?? "").trim())}`,
+      );
+      break;
+    case "bankPaymentOffer":
+      window.location.assign(
+        `#chat/${encodeURIComponent(String(action.chatId ?? "").trim())}/bank-payment-offer/${encodeURIComponent(String(action.offerId ?? "").trim())}`,
       );
       break;
     case "cashuTokenNew":

@@ -26,6 +26,8 @@ export const formatShortLightningAddress = (value: string): string => {
 
   const localPart = trimmed.slice(0, atIndex);
   const domainPart = trimmed.slice(atIndex);
+  if (/^npub1/i.test(localPart))
+    return `${formatShortNpub(localPart)}${domainPart}`;
   if (localPart.length <= 10) return trimmed;
 
   return `${localPart.slice(0, 10)}...${domainPart}`;

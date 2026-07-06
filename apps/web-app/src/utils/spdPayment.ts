@@ -4,7 +4,9 @@ export interface SpdPayment {
 }
 
 const SPAYD_FILENAME = "platba.spayd";
+const SPD_QR_JPEG_FILENAME = "platba.jpg";
 const SPAYD_MIME_TYPE = "application/x-shortpaymentdescriptor";
+const SPD_QR_JPEG_MIME_TYPE = "image/jpeg";
 
 const safeDecodeURIComponent = (value: string): string => {
   try {
@@ -96,4 +98,54 @@ export const openSpdPaymentInBank = async (
   }
 
   await openSpdPaymentOniOS(spdPayload);
+};
+
+const canvasToJpegBlob = async (canvas: HTMLCanvasElement): Promise<Blob> => {
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, SPD_QR_JPEG_MIME_TYPE, 0.95);
+  });
+
+  if (!blob) {
+    throw new Error("spd-qr-share-failed");
+  }
+
+  return blob;
+};
+
+export const shareSpdPaymentQrJpeg = async (
+  spdPayload: string,
+): Promise<void> => {
+  if (typeof navigator.share !== "function") {
+    throw new Error("spd-share-unavailable");
+  }
+
+  const QRCode = await import("qrcode");
+  const canvas = document.createElement("canvas");
+  await QRCode.toCanvas(canvas, spdPayload, {
+    color: {
+      dark: "#000000",
+      light: "#ffffff",
+    },
+    errorCorrectionLevel: "M",
+    margin: 2,
+    width: 1024,
+  });
+
+  const blob = await canvasToJpegBlob(canvas);
+  const file = new File([blob], SPD_QR_JPEG_FILENAME, {
+    type: SPD_QR_JPEG_MIME_TYPE,
+  });
+  const shareData: ShareData = {
+    files: [file],
+    title: "QR platba",
+  };
+
+  if (
+    typeof navigator.canShare === "function" &&
+    !navigator.canShare(shareData)
+  ) {
+    throw new Error("spd-share-unavailable");
+  }
+
+  await navigator.share(shareData);
 };

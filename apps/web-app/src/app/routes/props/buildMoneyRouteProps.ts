@@ -255,6 +255,7 @@ export const buildMoneyRouteProps = ({
       t,
     },
     spdPaymentProps: {
+      cashuBalanceAfterMelt,
       offerContacts: bankPaymentOfferContacts,
       onRequestReimbursement: onRequestBankPaymentOffer,
       spdPayload: route.kind === "bankPayment" ? route.spdPayload : "",

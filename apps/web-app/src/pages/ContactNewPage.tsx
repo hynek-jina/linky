@@ -3,7 +3,11 @@ import React from "react";
 import { ArrowLeft, Save, UserPlus } from "lucide-react";
 import { PasteIcon } from "../components/icons";
 import { readClipboardText } from "../platform/clipboard";
-import { formatShortNpub, getInitials } from "../utils/formatting";
+import {
+  formatShortLightningAddress,
+  formatShortNpub,
+  getInitials,
+} from "../utils/formatting";
 
 interface ContactFormData {
   name: string;
@@ -87,14 +91,6 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
     setManualCreateQuery(null);
   }, []);
 
-  const pasteSearch = async () => {
-    const text = await readClipboardText();
-    if (!text) return;
-    setForm({ ...form, npub: text.trim() });
-    lastSearchedQueryRef.current = "";
-    clearSearchFeedback();
-  };
-
   const runSearch = React.useCallback(
     async (query = searchQuery, options?: { silentEmpty?: boolean }) => {
       const queryText = query.trim();
@@ -144,6 +140,15 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
     [clearSearchFeedback, searchNewContact, searchQuery, t],
   );
 
+  const pasteSearch = async () => {
+    const text = await readClipboardText();
+    const queryText = String(text ?? "").trim();
+    if (!queryText) return;
+    searchQueryRef.current = queryText;
+    setForm({ ...form, npub: queryText });
+    await runSearch(queryText);
+  };
+
   React.useEffect(() => {
     if (step !== "search") return;
     if (!searchQuery) {
@@ -182,6 +187,11 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
     Boolean(searchQuery) &&
     manualCreateQuery === searchQuery &&
     !searchIsBusy;
+  const showSearchLoader =
+    Boolean(searchQuery) &&
+    !searchResult &&
+    !searchError &&
+    manualCreateQuery !== searchQuery;
 
   return (
     <section className="panel panel-plain">
@@ -204,6 +214,15 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                     if (event.key !== "Enter") return;
                     event.preventDefault();
                     void runSearch();
+                  }}
+                  onPaste={(event) => {
+                    const pastedText = event.clipboardData.getData("text");
+                    const queryText = pastedText.trim();
+                    if (!queryText) return;
+                    event.preventDefault();
+                    searchQueryRef.current = queryText;
+                    setForm({ ...form, npub: queryText });
+                    void runSearch(queryText);
                   }}
                   placeholder={t("contactSearchPlaceholder")}
                   autoComplete="off"
@@ -241,7 +260,9 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                     <div className="contact-new-search-result-body">
                       <strong>{resultDisplayName || t("contact")}</strong>
                       {searchResult.lnAddress ? (
-                        <span>{searchResult.lnAddress}</span>
+                        <span title={searchResult.lnAddress}>
+                          {formatShortLightningAddress(searchResult.lnAddress)}
+                        </span>
                       ) : null}
                       <small title={searchResult.npub}>
                         {formatShortNpub(searchResult.npub)}
@@ -270,6 +291,13 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
               {searchError ? (
                 <div className="contact-new-search-empty">
                   <p className="contact-new-validation">{searchError}</p>
+                </div>
+              ) : null}
+
+              {showSearchLoader ? (
+                <div className="contact-new-search-loading" role="status">
+                  <span className="btn-spinner" aria-hidden="true" />
+                  <span>{t("contactSearching")}</span>
                 </div>
               ) : null}
 

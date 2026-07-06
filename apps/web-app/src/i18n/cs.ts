@@ -503,6 +503,7 @@ export const cs = {
 
   edit: "Upravit",
   delete: "Smazat",
+  details: "Detail",
   deleteArmedHint: "Pro smazání klikněte ještě jednou.",
   archive: "Archiv",
   archiveFilter: "Archiv",
@@ -627,7 +628,8 @@ export const cs = {
   bankPaymentOfferStatusSettled: "Dokončeno",
   bankPaymentOfferAccept: "Přijmout",
   bankPaymentOfferCancel: "Zrušit nabídku",
-  bankPaymentOfferMarkPaid: "Mám zaplaceno",
+  bankPaymentOfferDetails: "Platební údaje",
+  bankPaymentOfferMarkPaid: "Zaplatil jsem",
   bankPaymentOfferSettle: "Potvrdit odeslání satů",
   bankPaymentOfferAcceptedByOther: "Nabídku přijal někdo jiný.",
   bankPaymentOfferBackupRecipient: "Tento kontakt je vedený jako náhradník.",
@@ -643,16 +645,16 @@ export const cs = {
   bankPaymentOfferDescriptionBankDetailsSent:
     "Údaje k bankovní platbě za {amount} jsou připravené",
   bankPaymentOfferDescriptionBankPaid:
-    "Příjemce označil bankovní platbu za {amount} jako zaplacenou",
+    "Bankovní platba byla označená jako zaplacená",
+  bankPaymentOfferDescriptionBankPaidIncoming: "Čekáme na ověření zadavatelem",
   bankPaymentOfferDescriptionCanceled:
     "Nabídka platby za {amount} byla zrušena",
   bankPaymentOfferDescriptionDeclined:
     "Nabídka platby za {amount} byla odmítnuta",
   bankPaymentOfferDescriptionSettled: "Platba za {amount} byla dokončena",
   spdPaymentOpenInBank: "Otevřít v bance",
+  spdPaymentOpenWithJpg: "Otevřít přes .jpg",
   spdPaymentOpening: "Otevírám…",
-  spdPaymentOpenHint:
-    "Na iPhonu se otevře sdílení do banky. Na Androidu se může nejdřív stáhnout soubor platba.spayd; po jeho otevření systém nabídne podporované bankovní aplikace.",
   spdPaymentInvalid: "QR platbu se nepodařilo načíst.",
   spdPaymentMissingAccount: "Chybí účet příjemce.",
   spdPaymentShareUnavailable:
