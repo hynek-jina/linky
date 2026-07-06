@@ -1,4 +1,5 @@
 import React from "react";
+import { Landmark, Share2 } from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useFiatRates } from "../app/hooks/useFiatRates";
 import { navigateTo } from "../hooks/useRouting";
@@ -6,11 +7,13 @@ import type { FiatRates } from "../utils/displayAmounts";
 import { formatInteger } from "../utils/formatting";
 import {
   openSpdPaymentInBank,
+  shareSpdPaymentQrJpeg,
   tryParseSpdPayment,
   type SpdPayment,
 } from "../utils/spdPayment";
 
 interface SpdPaymentPageProps {
+  cashuBalanceAfterMelt: number;
   offerContacts: {
     id?: unknown;
     name?: unknown;
@@ -127,6 +130,7 @@ const buildSpdRows = (
 };
 
 export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
+  cashuBalanceAfterMelt,
   offerContacts,
   onRequestReimbursement,
   spdPayload,
@@ -138,6 +142,7 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
   const [isRequestingOffer, setIsRequestingOffer] = React.useState(false);
   const [offerStatus, setOfferStatus] = React.useState<string | null>(null);
   const [isOpening, setIsOpening] = React.useState(false);
+  const [isSharingJpeg, setIsSharingJpeg] = React.useState(false);
   const [openError, setOpenError] = React.useState<string | null>(null);
   const payment = React.useMemo(
     () => tryParseSpdPayment(spdPayload),
@@ -166,8 +171,11 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
   const recipient = getSpdField(payment, "RN");
   const rows = buildSpdRows(payment, t);
   const offerContactsCount = offerContacts.length;
-  const requestReimbursementLabel =
-    offerContactsCount === 0
+  const hasEnoughCashuForProxy =
+    amountSat !== null && amountSat <= cashuBalanceAfterMelt;
+  const requestReimbursementLabel = !hasEnoughCashuForProxy
+    ? t("payInsufficient")
+    : offerContactsCount === 0
       ? t("spdPaymentNoOfferContact")
       : offerContactsCount === 1
         ? t("spdPaymentRequestReimbursementCountOne")
@@ -190,8 +198,29 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
     }
   };
 
+  const openWithJpeg = async () => {
+    if (isSharingJpeg) return;
+
+    setIsSharingJpeg(true);
+    setOpenError(null);
+    try {
+      await shareSpdPaymentQrJpeg(payment.payload);
+    } catch (error) {
+      setOpenError(getOpenErrorText(error, t));
+    } finally {
+      setIsSharingJpeg(false);
+    }
+  };
+
   const requestReimbursement = async () => {
-    if (offerContacts.length === 0 || !amountText || isRequestingOffer) return;
+    if (
+      offerContacts.length === 0 ||
+      !amountText ||
+      !hasEnoughCashuForProxy ||
+      isRequestingOffer
+    ) {
+      return;
+    }
 
     setIsRequestingOffer(true);
     setOfferStatus(null);
@@ -238,8 +267,12 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
         type="button"
         className="btn-wide bank-payment-request"
         disabled={
-          offerContacts.length === 0 || !amountText || isRequestingOffer
+          offerContacts.length === 0 ||
+          !amountText ||
+          !hasEnoughCashuForProxy ||
+          isRequestingOffer
         }
+        title={!hasEnoughCashuForProxy ? t("payInsufficient") : undefined}
         onClick={() => {
           void requestReimbursement();
         }}
@@ -249,18 +282,46 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
           : requestReimbursementLabel}
       </button>
 
-      <button
-        type="button"
-        className="btn-wide secondary bank-payment-open"
-        disabled={isOpening}
-        onClick={() => {
-          void openInBank();
-        }}
-      >
-        {isOpening ? t("spdPaymentOpening") : t("spdPaymentOpenInBank")}
-      </button>
+      <div className="bank-payment-open-actions">
+        <button
+          type="button"
+          className="btn-wide secondary bank-payment-open"
+          disabled={isOpening}
+          onClick={() => {
+            void openInBank();
+          }}
+        >
+          <span className="btn-label-with-icon">
+            <span className="btn-label-icon" aria-hidden="true">
+              {isOpening ? <span className="btn-spinner" /> : <Landmark />}
+            </span>
+            <span>
+              {isOpening ? t("spdPaymentOpening") : t("spdPaymentOpenInBank")}
+            </span>
+          </span>
+        </button>
 
-      <p className="muted bank-payment-hint">{t("spdPaymentOpenHint")}</p>
+        <button
+          type="button"
+          className="btn-wide secondary bank-payment-open"
+          disabled={isSharingJpeg}
+          onClick={() => {
+            void openWithJpeg();
+          }}
+        >
+          <span className="btn-label-with-icon">
+            <span className="btn-label-icon" aria-hidden="true">
+              {isSharingJpeg ? <span className="btn-spinner" /> : <Share2 />}
+            </span>
+            <span>
+              {isSharingJpeg
+                ? t("spdPaymentOpening")
+                : t("spdPaymentOpenWithJpg")}
+            </span>
+          </span>
+        </button>
+      </div>
+
       {offerStatus ? (
         <p className="muted bank-payment-offer-status">{offerStatus}</p>
       ) : null}

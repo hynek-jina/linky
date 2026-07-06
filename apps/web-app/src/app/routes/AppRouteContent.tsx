@@ -1,6 +1,7 @@
 import React from "react";
 import {
   AdvancedAutoPayLimitPage,
+  BankPaymentOfferDetailPage,
   AdvancedPage,
   CashuTokenEmitPage,
   CashuTokenNewPage,
@@ -44,6 +45,9 @@ import {
 import { MainSwipeContent, type MainSwipeRouteProps } from "./MainSwipeContent";
 
 export interface PeopleRoutesProps {
+  bankPaymentOfferDetailProps: () => React.ComponentProps<
+    typeof BankPaymentOfferDetailPage
+  >;
   chatProps: React.ComponentProps<typeof ChatPage>;
   contactEditProps: React.ComponentProps<typeof ContactEditPage>;
   contactNewProps: React.ComponentProps<typeof ContactNewPage>;
@@ -207,6 +211,12 @@ export const AppRouteContent = (): React.ReactElement => {
 
       {route.kind === "bankPayment" && (
         <SpdPaymentPage {...moneyRoutes.spdPaymentProps} />
+      )}
+
+      {route.kind === "bankPaymentOffer" && (
+        <BankPaymentOfferDetailPage
+          {...peopleRoutes.bankPaymentOfferDetailProps()}
+        />
       )}
 
       {route.kind === "chat" && <ChatPage {...peopleRoutes.chatProps} />}

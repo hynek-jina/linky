@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Copy, Download, Landmark, X } from "lucide-react";
+import { Check, Download, Info, X } from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
@@ -26,7 +26,6 @@ import type {
 import { deriveDefaultProfile } from "../derivedProfile";
 import { getNextMintIconUrl } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
-import { tryParseSpdPayment } from "../utils/spdPayment";
 import { EditIndicator } from "./EditIndicator";
 import { PayIcon, ShareIcon } from "./icons";
 import { LinkPreviewCard } from "./LinkPreviewCard";
@@ -84,12 +83,10 @@ interface ChatMessageProps {
   messageElRef?: (el: HTMLDivElement | null, messageId: string) => void;
   nextMessage: LocalNostrMessage | null;
   onCopy: (message: LocalNostrMessage) => void;
-  onCopyText: (text: string) => void;
   onAcceptBankPaymentOffer: () => void;
   onCancelBankPaymentOffer: () => void;
-  onConfirmBankPaymentPaid: () => void;
   onDeclineBankPaymentOffer: () => void;
-  onOpenBankPayment: (spdPayload: string) => Promise<void>;
+  onOpenBankPaymentOfferDetails: () => void;
   onSettleBankPaymentOffer: () => void;
   onDeclinePaymentRequest: () => void;
   onEdit: (message: LocalNostrMessage) => void;
@@ -193,7 +190,9 @@ const getBankPaymentOfferDescription = (
       : status === "bank_details_sent"
         ? ""
         : status === "bank_paid"
-          ? "bankPaymentOfferDescriptionBankPaid"
+          ? isOut
+            ? "bankPaymentOfferDescriptionBankPaid"
+            : "bankPaymentOfferDescriptionBankPaidIncoming"
           : status === "canceled"
             ? ""
             : status === "declined"
@@ -435,15 +434,13 @@ export function ChatMessage({
   nextMessage,
   onAcceptBankPaymentOffer,
   onCancelBankPaymentOffer,
-  onConfirmBankPaymentPaid,
   onCopy,
-  onCopyText,
   onDeclineBankPaymentOffer,
   onDeclinePaymentRequest,
   onEdit,
   onMintIconError,
   onMintIconLoad,
-  onOpenBankPayment,
+  onOpenBankPaymentOfferDetails,
   onOpenNpubContact,
   onPayPaymentRequest,
   onReact,
@@ -461,7 +458,6 @@ export function ChatMessage({
     useAppShellCore();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [nowMs, setNowMs] = React.useState(() => Date.now());
-  const [bankOpenBusy, setBankOpenBusy] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
   const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
   const swipeTriggeredRef = React.useRef(false);
@@ -507,13 +503,6 @@ export function ChatMessage({
 
   const tokenInfo = privateImageInfo ? null : getCashuTokenMessageInfo(content);
   const isDeclineMessage = Boolean(declineInfo);
-  const bankPayment = React.useMemo(
-    () =>
-      bankPaymentOfferInfo?.spdPayload
-        ? tryParseSpdPayment(bankPaymentOfferInfo.spdPayload)
-        : null,
-    [bankPaymentOfferInfo],
-  );
   const bankOfferDisplayAmount = bankPaymentOfferInfo?.amountSat
     ? formatDisplayedAmountText(bankPaymentOfferInfo.amountSat)
     : (bankPaymentOfferInfo?.amountText ?? "");
@@ -545,7 +534,6 @@ export function ChatMessage({
     bankOfferRemainingSec === null
       ? null
       : formatRemainingTime(bankOfferRemainingSec, t);
-  const showBankPaymentDetails = Boolean(bankPayment);
   const bankOfferPeerNoticeText =
     bankPaymentOfferPeerNotice === "accepted_by_other"
       ? t("bankPaymentOfferAcceptedByOther")
@@ -856,18 +844,6 @@ export function ChatMessage({
     resetSwipeTransform();
   };
 
-  const openBankPayment = React.useCallback(async () => {
-    const spdPayload = String(bankPaymentOfferInfo?.spdPayload ?? "").trim();
-    if (!spdPayload || bankOpenBusy) return;
-
-    setBankOpenBusy(true);
-    try {
-      await onOpenBankPayment(spdPayload);
-    } finally {
-      setBankOpenBusy(false);
-    }
-  }, [bankOpenBusy, bankPaymentOfferInfo, onOpenBankPayment]);
-
   return (
     <React.Fragment key={messageId}>
       {showDaySeparator ? (
@@ -963,31 +939,6 @@ export function ChatMessage({
                     <div className="chat-payment-request-amount">
                       {bankOfferDisplayAmount}
                     </div>
-                    {showBankPaymentDetails && bankPayment ? (
-                      <button
-                        type="button"
-                        className="btn-small secondary chat-bank-payment-open-inline"
-                        disabled={bankOpenBusy}
-                        onClick={() => {
-                          void openBankPayment();
-                        }}
-                      >
-                        <span className="btn-label-with-icon">
-                          <span className="btn-label-icon" aria-hidden="true">
-                            {bankOpenBusy ? (
-                              <span className="btn-spinner" />
-                            ) : (
-                              <Landmark size={16} />
-                            )}
-                          </span>
-                          <span>
-                            {bankOpenBusy
-                              ? t("spdPaymentOpening")
-                              : t("spdPaymentOpenInBank")}
-                          </span>
-                        </span>
-                      </button>
-                    ) : null}
                   </div>
                   {bankOfferDescription ? (
                     <div className="chat-payment-request-description">
@@ -1002,52 +953,6 @@ export function ChatMessage({
                   {bankOfferTimeLabel ? (
                     <div className="chat-bank-payment-timer">
                       {bankOfferTimeLabel}
-                    </div>
-                  ) : null}
-                  {showBankPaymentDetails && bankPayment ? (
-                    <div className="chat-bank-payment-details">
-                      {bankPayment.fields.RN ? (
-                        <div>
-                          <span>{t("spdPaymentRecipient")}</span>
-                          <strong>{bankPayment.fields.RN}</strong>
-                        </div>
-                      ) : null}
-                      {bankPayment.fields.ACC ? (
-                        <div>
-                          <span>{t("spdPaymentAccount")}</span>
-                          <div className="chat-bank-payment-copy-row">
-                            <button
-                              type="button"
-                              className="copyable transaction-detail-copy chat-bank-payment-copy"
-                              onClick={() => onCopyText(bankPayment.fields.ACC)}
-                              aria-label={t("copy")}
-                              title={t("copy")}
-                            >
-                              <span className="transaction-detail-copyText">
-                                {bankPayment.fields.ACC}
-                              </span>
-                              <span
-                                className="transaction-detail-copyIcon"
-                                aria-hidden="true"
-                              >
-                                <Copy size={14} />
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                      {bankPayment.fields["X-VS"] ? (
-                        <div>
-                          <span>{t("spdPaymentVariableSymbol")}</span>
-                          <strong>{bankPayment.fields["X-VS"]}</strong>
-                        </div>
-                      ) : null}
-                      {bankPayment.fields.MSG ? (
-                        <div>
-                          <span>{t("spdPaymentMessage")}</span>
-                          <strong>{bankPayment.fields.MSG}</strong>
-                        </div>
-                      ) : null}
                     </div>
                   ) : null}
                   {canRespondBankPaymentOffer ? (
@@ -1082,13 +987,13 @@ export function ChatMessage({
                       <button
                         type="button"
                         className="btn-wide chat-payment-request-pay"
-                        onClick={onConfirmBankPaymentPaid}
+                        onClick={onOpenBankPaymentOfferDetails}
                       >
                         <span className="btn-label-with-icon">
                           <span className="btn-label-icon" aria-hidden="true">
-                            <Check size={18} />
+                            <Info size={18} />
                           </span>
-                          <span>{t("bankPaymentOfferMarkPaid")}</span>
+                          <span>{t("details")}</span>
                         </span>
                       </button>
                       <button

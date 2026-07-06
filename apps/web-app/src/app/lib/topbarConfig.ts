@@ -140,6 +140,14 @@ export const buildTopbar = ({
     };
   }
 
+  if (route.kind === "bankPaymentOffer") {
+    return {
+      icon: "<",
+      label: t("close"),
+      onClick: () => navigateTo({ route: "chat", id: route.chatId }),
+    };
+  }
+
   if (
     route.kind === "cashuTokens" ||
     route.kind === "cashuTokenNew" ||
@@ -367,6 +375,7 @@ export const buildTopbarRight = ({
     route.kind === "topupInvoice" ||
     route.kind === "manualPay" ||
     route.kind === "bankPayment" ||
+    route.kind === "bankPaymentOffer" ||
     route.kind === "cashuTokens" ||
     route.kind === "cashuTokenEmit" ||
     route.kind === "cashuToken" ||
@@ -401,6 +410,7 @@ export const buildTopbarTitle = (
   if (route.kind === "topupInvoice") return t("topupInvoiceTitle");
   if (route.kind === "manualPay") return t("manualPayTitle");
   if (route.kind === "bankPayment") return t("spdPaymentTitle");
+  if (route.kind === "bankPaymentOffer") return t("bankPaymentOfferDetails");
   if (route.kind === "lnAddressPay") return t("pay");
   if (route.kind === "cashuTokens") return t("tokens");
   if (route.kind === "cashuTokenEmit") return t("cashuEmit");

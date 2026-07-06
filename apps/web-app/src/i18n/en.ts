@@ -499,6 +499,7 @@ export const en = {
 
   edit: "Edit",
   delete: "Delete",
+  details: "Details",
   deleteArmedHint: "Click once more to delete.",
   archive: "Archive",
   archiveFilter: "Archive",
@@ -618,6 +619,7 @@ export const en = {
   bankPaymentOfferStatusSettled: "Done",
   bankPaymentOfferAccept: "Accept",
   bankPaymentOfferCancel: "Cancel offer",
+  bankPaymentOfferDetails: "Payment details",
   bankPaymentOfferMarkPaid: "I paid",
   bankPaymentOfferSettle: "Confirm sats sent",
   bankPaymentOfferAcceptedByOther: "Someone else accepted this offer.",
@@ -635,17 +637,17 @@ export const en = {
     "You are interested in payment for {amount}. Waiting for bank details.",
   bankPaymentOfferDescriptionBankDetailsSent:
     "Bank payment details for {amount} are ready",
-  bankPaymentOfferDescriptionBankPaid:
-    "The recipient marked the bank payment for {amount} as paid",
+  bankPaymentOfferDescriptionBankPaid: "Bank payment was marked as paid",
+  bankPaymentOfferDescriptionBankPaidIncoming:
+    "Waiting for the requester to verify the payment",
   bankPaymentOfferDescriptionCanceled:
     "Payment offer for {amount} was canceled",
   bankPaymentOfferDescriptionDeclined:
     "Payment offer for {amount} was declined",
   bankPaymentOfferDescriptionSettled: "Payment for {amount} is complete",
   spdPaymentOpenInBank: "Open in bank",
+  spdPaymentOpenWithJpg: "Open with .jpg",
   spdPaymentOpening: "Opening…",
-  spdPaymentOpenHint:
-    "On iPhone this opens sharing into a bank app. On Android it may first download platba.spayd; after opening it, the system offers supported banking apps.",
   spdPaymentInvalid: "The QR payment could not be loaded.",
   spdPaymentMissingAccount: "Recipient account is missing.",
   spdPaymentShareUnavailable: "File sharing is not available on this device.",

@@ -1,3 +1,4 @@
+import type { Route } from "../../../types/route";
 import type { PeopleRoutesProps } from "../AppRouteContent";
 
 interface BuildPeopleRoutePropsParams {
@@ -47,12 +48,10 @@ interface BuildPeopleRoutePropsParams {
   onCancelReply: PeopleRoutesProps["chatProps"]["onCancelReply"];
   onAddUnknownContact: PeopleRoutesProps["chatProps"]["onAddUnknownContact"];
   onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
-  onCopyText: PeopleRoutesProps["chatProps"]["onCopyText"];
   onDeclinePaymentRequest: PeopleRoutesProps["chatProps"]["onDeclinePaymentRequest"];
   onRespondBankPaymentOffer: PeopleRoutesProps["chatProps"]["onRespondBankPaymentOffer"];
   onSettleBankPaymentOffer: PeopleRoutesProps["chatProps"]["onSettleBankPaymentOffer"];
   onEdit: PeopleRoutesProps["chatProps"]["onEdit"];
-  onOpenBankPayment: PeopleRoutesProps["chatProps"]["onOpenBankPayment"];
   onOpenNpubContact: PeopleRoutesProps["chatProps"]["onOpenNpubContact"];
   onPayPaymentRequest: PeopleRoutesProps["chatProps"]["onPayPaymentRequest"];
   onPickProfilePhoto: PeopleRoutesProps["profileProps"]["onPickProfilePhoto"];
@@ -66,6 +65,7 @@ interface BuildPeopleRoutePropsParams {
   paySelectedContact: PeopleRoutesProps["contactPayProps"]["paySelectedContact"];
   payWithCashuEnabled: PeopleRoutesProps["chatProps"]["payWithCashuEnabled"];
   reactionsByMessageId: PeopleRoutesProps["chatProps"]["reactionsByMessageId"];
+  route: Route;
   selectedContactStatusText: PeopleRoutesProps["contactProps"]["statusText"];
   pendingDeleteId: PeopleRoutesProps["contactEditProps"]["pendingDeleteId"];
   profileClaimLightningAddressServerBaseUrl: PeopleRoutesProps["profileProps"]["serverBaseUrl"];
@@ -153,12 +153,10 @@ export const buildPeopleRouteProps = ({
   onCancelReply,
   onAddUnknownContact,
   onCopy,
-  onCopyText,
   onDeclinePaymentRequest,
   onRespondBankPaymentOffer,
   onSettleBankPaymentOffer,
   onEdit,
-  onOpenBankPayment,
   onOpenNpubContact,
   onPayPaymentRequest,
   onPickProfilePhoto,
@@ -172,6 +170,7 @@ export const buildPeopleRouteProps = ({
   paySelectedContact,
   payWithCashuEnabled,
   reactionsByMessageId,
+  route,
   selectedContactStatusText,
   pendingDeleteId,
   profileClaimLightningAddressServerBaseUrl,
@@ -212,6 +211,20 @@ export const buildPeopleRouteProps = ({
   writeCurrentNpubToNfc,
 }: BuildPeopleRoutePropsParams): PeopleRoutesProps => {
   return {
+    bankPaymentOfferDetailProps: () => {
+      if (route.kind !== "bankPaymentOffer") {
+        throw new Error("invalid route for bank payment offer");
+      }
+
+      return {
+        bankPaymentOfferMessages,
+        chatId: route.chatId,
+        offerId: route.offerId,
+        onCopyText: copyText,
+        onRespondBankPaymentOffer,
+        t,
+      };
+    },
     chatProps: {
       selectedContact: chatSelectedContact,
       chatMessages,
@@ -240,7 +253,6 @@ export const buildPeopleRouteProps = ({
       onEdit,
       onReact,
       onCopy,
-      onCopyText,
       onCancelReply,
       onCancelEdit,
       onAddUnknownContact,
@@ -248,7 +260,6 @@ export const buildPeopleRouteProps = ({
       sendChatImage,
       sendChatMessage,
       openContactPay,
-      onOpenBankPayment,
       onOpenNpubContact,
       onPayPaymentRequest,
       onDeclinePaymentRequest,

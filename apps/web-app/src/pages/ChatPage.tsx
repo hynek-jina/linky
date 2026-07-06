@@ -33,6 +33,7 @@ import {
   SendIcon,
 } from "../components/icons";
 import { ReplyPreview } from "../components/ReplyPreview";
+import { navigateTo } from "../hooks/useRouting";
 import { formatChatDayLabel } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
@@ -72,7 +73,6 @@ interface ChatPageProps {
   onAddUnknownContact: () => Promise<void>;
   onBlockUnknownContact: () => Promise<void>;
   onCopy: (message: LocalNostrMessage) => void;
-  onCopyText: (text: string) => void;
   onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
   onRespondBankPaymentOffer: (
     message: LocalNostrMessage,
@@ -80,7 +80,6 @@ interface ChatPageProps {
   ) => Promise<boolean>;
   onSettleBankPaymentOffer: (message: LocalNostrMessage) => Promise<void>;
   onEdit: (message: LocalNostrMessage) => void;
-  onOpenBankPayment: (spdPayload: string) => Promise<void>;
   onOpenNpubContact: (npub: string) => void;
   onPayPaymentRequest: (
     message: LocalNostrMessage,
@@ -129,12 +128,10 @@ export const ChatPage: FC<ChatPageProps> = ({
   onAddUnknownContact,
   onBlockUnknownContact,
   onCopy,
-  onCopyText,
   onDeclinePaymentRequest,
   onRespondBankPaymentOffer,
   onSettleBankPaymentOffer,
   onEdit,
-  onOpenBankPayment,
   onOpenNpubContact,
   onPayPaymentRequest,
   onReact,
@@ -667,9 +664,15 @@ export const ChatPage: FC<ChatPageProps> = ({
                 onCancelBankPaymentOffer={() => {
                   void onRespondBankPaymentOffer(message, "canceled");
                 }}
-                onCopyText={onCopyText}
-                onConfirmBankPaymentPaid={() => {
-                  void onRespondBankPaymentOffer(message, "bank_paid");
+                onOpenBankPaymentOfferDetails={() => {
+                  const offerId = String(
+                    bankPaymentOfferInfo?.offerId ?? "",
+                  ).trim();
+                  const chatId = String(
+                    message.contactId ?? selectedContact?.id ?? "",
+                  ).trim();
+                  if (!offerId || !chatId) return;
+                  navigateTo({ route: "bankPaymentOffer", chatId, offerId });
                 }}
                 onDeclineBankPaymentOffer={() => {
                   void onRespondBankPaymentOffer(message, "declined");
@@ -677,7 +680,6 @@ export const ChatPage: FC<ChatPageProps> = ({
                 onSettleBankPaymentOffer={() => {
                   void onSettleBankPaymentOffer(message);
                 }}
-                onOpenBankPayment={onOpenBankPayment}
                 onDeclinePaymentRequest={() => {
                   void onDeclinePaymentRequest(message);
                 }}
