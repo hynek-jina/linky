@@ -1,5 +1,6 @@
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
+import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
 import { evolu, type ContactId, type TransactionId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
@@ -8,6 +9,7 @@ import {
   deleteCachedProfileAvatar,
   fetchNostrProfileMetadata,
   getNostrProfilePictureUrl,
+  type NostrProfileMetadata,
   saveCachedProfileMetadata,
   saveCachedProfilePicture,
 } from "../../../nostrProfile";
@@ -20,6 +22,7 @@ import {
   resolveNip05Input,
 } from "../../../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
@@ -37,6 +40,10 @@ export interface ContactSearchCandidate {
   npub: string;
   pictureUrl: string | null;
   query: string;
+}
+
+export interface ContactSuggestionCandidate extends ContactSearchCandidate {
+  lastSeenAtSec: number;
 }
 
 export type ContactSearchResult =
@@ -118,6 +125,95 @@ const decodeDirectNpubIdentifier = async (
   }
 };
 
+const CONTACT_SUGGESTION_LIMIT = 3;
+const CONTACT_SUGGESTION_AUTHOR_SCAN_LIMIT = 64;
+const CONTACT_SUGGESTION_ACTIVE_WINDOW_SEC = 45 * 24 * 60 * 60;
+const CONTACT_SUGGESTION_RECENT_EVENT_KINDS = [0, 1, 6, 7, 9735, 30315];
+const LINKY_LIGHTNING_ADDRESS_SUFFIX = "@linky.fit";
+
+const isHexPubkey = (value: string): boolean => /^[0-9a-f]{64}$/i.test(value);
+
+const readProfileText = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const parseProfileMetadataEvent = (
+  event: NostrToolsEvent,
+): NostrProfileMetadata | null => {
+  if (!event.content) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(event.content);
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return null;
+  }
+
+  const metadata: NostrProfileMetadata = {};
+
+  if ("name" in parsed) {
+    const name = readProfileText(parsed.name);
+    if (name) metadata.name = name;
+  }
+  if ("display_name" in parsed) {
+    const displayName = readProfileText(parsed.display_name);
+    if (displayName) metadata.displayName = displayName;
+  }
+  if ("displayName" in parsed && !metadata.displayName) {
+    const displayName = readProfileText(parsed.displayName);
+    if (displayName) metadata.displayName = displayName;
+  }
+  if ("lud16" in parsed) {
+    const lud16 = readProfileText(parsed.lud16);
+    if (lud16) metadata.lud16 = lud16;
+  }
+  if ("lud06" in parsed) {
+    const lud06 = readProfileText(parsed.lud06);
+    if (lud06) metadata.lud06 = lud06;
+  }
+  if ("nip05" in parsed) {
+    const nip05 = readProfileText(parsed.nip05);
+    if (nip05) metadata.nip05 = nip05;
+  }
+  if ("picture" in parsed) {
+    const picture = readProfileText(parsed.picture);
+    if (picture) metadata.picture = picture;
+  }
+  if ("image" in parsed) {
+    const image = readProfileText(parsed.image);
+    if (image) metadata.image = image;
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : null;
+};
+
+const isLinkyLightningAddress = (value: string): boolean =>
+  value.trim().toLowerCase().endsWith(LINKY_LIGHTNING_ADDRESS_SUFFIX);
+
+const getNewestEventByPubkey = (
+  events: readonly NostrToolsEvent[],
+): Map<string, NostrToolsEvent> => {
+  const newestByPubkey = new Map<string, NostrToolsEvent>();
+
+  for (const event of events) {
+    const pubkey = String(event.pubkey ?? "").trim();
+    if (!isHexPubkey(pubkey)) continue;
+
+    const existing = newestByPubkey.get(pubkey);
+    if (!existing || event.created_at > existing.created_at) {
+      newestByPubkey.set(pubkey, event);
+    }
+  }
+
+  return newestByPubkey;
+};
+
 export const makeEmptyContactForm = (): ContactFormState => ({
   name: "",
   npub: "",
@@ -151,6 +247,9 @@ export const useContactEditor = ({
   );
   const [editingId, setEditingId] = React.useState<ContactId | null>(null);
   const [isSavingContact, setIsSavingContact] = React.useState(false);
+  const [contactSuggestions, setContactSuggestions] = React.useState<
+    ContactSuggestionCandidate[]
+  >([]);
   const [contactEditInitial, setContactEditInitial] = React.useState<{
     group: string;
     id: ContactId;
@@ -179,6 +278,127 @@ export const useContactEditor = ({
     setEditingId(null);
     setContactEditInitial(null);
   }, []);
+
+  React.useEffect(() => {
+    if (route.kind !== "contactNew") {
+      setContactSuggestions([]);
+      return;
+    }
+
+    if (form.npub.trim()) {
+      setContactSuggestions([]);
+      return;
+    }
+
+    const relays = nostrFetchRelays
+      .map((relay) => relay.trim())
+      .filter(Boolean);
+    if (relays.length === 0) {
+      setContactSuggestions([]);
+      return;
+    }
+
+    const knownNpubs = new Set<string>();
+    for (const contact of contacts) {
+      const normalized = normalizeNpubIdentifier(contact.npub);
+      if (normalized) knownNpubs.add(normalized);
+    }
+
+    const ownNpub = normalizeNpubIdentifier(currentNpub);
+    if (ownNpub) knownNpubs.add(ownNpub);
+
+    let cancelled = false;
+
+    const loadSuggestions = async () => {
+      try {
+        const since =
+          Math.floor(Date.now() / 1000) - CONTACT_SUGGESTION_ACTIVE_WINDOW_SEC;
+        const pool = await getSharedAppNostrPool();
+        const recentEvents = await pool.querySync(
+          relays,
+          {
+            kinds: CONTACT_SUGGESTION_RECENT_EVENT_KINDS,
+            limit: CONTACT_SUGGESTION_AUTHOR_SCAN_LIMIT,
+            since,
+          },
+          { maxWait: 3500 },
+        );
+        if (cancelled) return;
+
+        const activityByPubkey = getNewestEventByPubkey(recentEvents);
+        const authors = Array.from(activityByPubkey.entries())
+          .sort((a, b) => b[1].created_at - a[1].created_at)
+          .map((entry) => entry[0]);
+
+        if (authors.length === 0) {
+          setContactSuggestions([]);
+          return;
+        }
+
+        const profileEvents = await pool.querySync(
+          relays,
+          {
+            authors,
+            kinds: [0],
+            limit: authors.length * 2,
+          },
+          { maxWait: 4500 },
+        );
+        if (cancelled) return;
+
+        const newestProfileByPubkey = getNewestEventByPubkey(profileEvents);
+        const { nip19 } = await import("nostr-tools");
+        const nextSuggestions: ContactSuggestionCandidate[] = [];
+
+        for (const pubkey of authors) {
+          if (nextSuggestions.length >= CONTACT_SUGGESTION_LIMIT) break;
+
+          let npub = "";
+          try {
+            npub = nip19.npubEncode(pubkey);
+          } catch {
+            continue;
+          }
+
+          if (knownNpubs.has(npub)) continue;
+
+          const profileEvent = newestProfileByPubkey.get(pubkey);
+          if (!profileEvent) continue;
+
+          const metadata = parseProfileMetadataEvent(profileEvent);
+          if (!metadata) continue;
+
+          const lnAddress =
+            String(metadata.lud16 ?? "").trim() ||
+            String(metadata.lud06 ?? "").trim();
+          if (!isLinkyLightningAddress(lnAddress)) continue;
+
+          const pictureUrl = getNostrProfilePictureUrl(metadata);
+          saveCachedProfileMetadata(npub, metadata);
+          saveCachedProfilePicture(npub, pictureUrl);
+
+          nextSuggestions.push({
+            lastSeenAtSec: activityByPubkey.get(pubkey)?.created_at ?? since,
+            lnAddress,
+            name: getBestNostrName(metadata) ?? lnAddress,
+            npub,
+            pictureUrl,
+            query: lnAddress,
+          });
+        }
+
+        setContactSuggestions(nextSuggestions);
+      } catch {
+        if (!cancelled) setContactSuggestions([]);
+      }
+    };
+
+    void loadSuggestions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contacts, currentNpub, form.npub, nostrFetchRelays, route.kind]);
 
   const buildFullContactOverridePayload = React.useCallback(
     (
@@ -976,6 +1196,7 @@ export const useContactEditor = ({
     addNewContactFromSearchResult,
     clearContactForm,
     contactEditsSavable,
+    contactSuggestions,
     editingId,
     form,
     handleSaveContact,

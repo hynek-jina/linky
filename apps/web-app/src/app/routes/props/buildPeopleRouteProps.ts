@@ -18,6 +18,7 @@ interface BuildPeopleRoutePropsParams {
   contactPaymentIntent: PeopleRoutesProps["contactPayProps"]["contactPaymentIntent"];
   contactPayMethod: PeopleRoutesProps["contactPayProps"]["contactPayMethod"];
   addNewContactFromSearchResult: PeopleRoutesProps["contactNewProps"]["addNewContactFromSearchResult"];
+  contactSuggestions: PeopleRoutesProps["contactNewProps"]["contactSuggestions"];
   copyText: PeopleRoutesProps["profileProps"]["copyText"];
   currentNpub: PeopleRoutesProps["profileProps"]["currentNpub"];
   cycleProfileAvatarControl: PeopleRoutesProps["profileProps"]["cycleProfileAvatarControl"];
@@ -123,6 +124,7 @@ export const buildPeopleRouteProps = ({
   contactPaymentIntent,
   contactPayMethod,
   addNewContactFromSearchResult,
+  contactSuggestions,
   copyText,
   currentNpub,
   cycleProfileAvatarControl,
@@ -285,11 +287,13 @@ export const buildPeopleRouteProps = ({
     },
     contactNewProps: {
       addNewContactFromSearchResult,
+      contactSuggestions,
       form,
       setForm,
       groupNames,
       handleSaveContact,
       isSavingContact,
+      lang,
       searchNewContact,
       t,
     },

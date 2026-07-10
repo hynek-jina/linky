@@ -494,6 +494,9 @@ export const en = {
   contactSearchEmpty: "Enter who to search for.",
   contactSearchNoResult: "Nothing found.",
   contactSearchCreateFromQuery: "Create contact",
+  contactSuggestionsTitle: "You might know",
+  contactSuggestionLastSeen: "Last seen",
+  contactSuggestionActiveRecently: "Active recently",
   contactIdentifierInvalid: "Enter a valid npub or reserved name.",
   noContactsYet: "No contacts yet.",
 
