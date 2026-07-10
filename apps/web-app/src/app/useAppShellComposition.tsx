@@ -8882,6 +8882,7 @@ export const useAppShellComposition = () => {
     bankPaymentOfferMessages,
     contacts,
     currentNsec,
+    formatDisplayedAmountText,
     maybeShowPwaNotification,
     nostrFetchRelays,
     knownNostrMessageIdentityIndex,

@@ -17,6 +17,7 @@ interface ContactFormData {
 }
 
 interface ContactSearchCandidate {
+  existingContactId?: string;
   lnAddress: string;
   name: string;
   npub: string;
@@ -280,7 +281,11 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                           <UserPlus size={18} />
                         </span>
                         <span>
-                          {isSavingContact ? t("saving") : t("saveContact")}
+                          {isSavingContact
+                            ? t("saving")
+                            : searchResult.existingContactId
+                              ? t("openContact")
+                              : t("saveContact")}
                         </span>
                       </span>
                     </button>

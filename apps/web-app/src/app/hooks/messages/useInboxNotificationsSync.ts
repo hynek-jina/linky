@@ -20,11 +20,9 @@ import {
   type LinkyBankPaymentOfferInfo,
 } from "../../lib/bankPaymentOffer";
 import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
+import { formatChatMessagePreviewText } from "../../lib/chatMessageDisplay";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
-import {
-  privateImageMessageFromEvent,
-  privateImagePreviewText,
-} from "../../lib/privateImageMessage";
+import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
 import { isLinkyPaymentNoticeEvent } from "../../lib/pushWrappedEvent";
 import type {
   ContactNameRowLike,
@@ -114,6 +112,7 @@ interface UseInboxNotificationsSyncParams<
   bankPaymentOfferMessages?: readonly LocalNostrMessage[];
   contacts: readonly TContact[];
   currentNsec: string | null;
+  formatDisplayedAmountText?: (amountSat: number) => string;
   maybeShowPwaNotification: (
     title: string,
     body: string,
@@ -148,6 +147,7 @@ export const useInboxNotificationsSync = <
   bankPaymentOfferMessages = [],
   contacts,
   currentNsec,
+  formatDisplayedAmountText = (amountSat: number) => `${amountSat} sat`,
   maybeShowPwaNotification,
   nostrFetchRelays,
   knownNostrMessageIdentityIndex = {
@@ -686,7 +686,6 @@ export const useInboxNotificationsSync = <
                 Boolean(activeChatId) &&
                 String(contactId) === String(activeChatId);
               const isCashuMessage = isCashuNotificationMessage(content);
-              const isPrivateImageMessage = inner.kind === 15;
 
               const messageDirection = isOutgoing ? "out" : "in";
               const rumorKey = rumorId
@@ -855,13 +854,16 @@ export const useInboxNotificationsSync = <
                       contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
                     ) ??
                     t("unknownContactTitle");
-                  const trimmedContent = isPrivateImageMessage
-                    ? privateImagePreviewText(t)
-                    : content.trim();
+                  const formattedPreview = formatChatMessagePreviewText({
+                    content,
+                    direction: messageDirection,
+                    formatDisplayedAmountText,
+                    t,
+                  });
                   const preview =
-                    trimmedContent.length > 80
-                      ? `${trimmedContent.slice(0, 80)}…`
-                      : trimmedContent;
+                    formattedPreview.length > 80
+                      ? `${formattedPreview.slice(0, 80)}…`
+                      : formattedPreview;
                   pushToast(
                     t("chatIncomingMessageToast")
                       .replace("{name}", senderLabel)
@@ -882,11 +884,15 @@ export const useInboxNotificationsSync = <
                 const title =
                   contact?.name ??
                   (contact ? t("appTitle") : t("unknownContactTitle"));
+                const notificationBody = formatChatMessagePreviewText({
+                  content,
+                  direction: messageDirection,
+                  formatDisplayedAmountText,
+                  t,
+                });
                 void maybeShowPwaNotification(
                   title,
-                  isPrivateImageMessage
-                    ? privateImagePreviewText(t)
-                    : content.trim(),
+                  notificationBody,
                   `msg_${resolvedPeerPub}`,
                 );
               }
@@ -1028,6 +1034,7 @@ export const useInboxNotificationsSync = <
     bankPaymentOfferMessages,
     contacts,
     currentNsec,
+    formatDisplayedAmountText,
     appendLocalNostrMessage,
     appendLocalNostrReaction,
     updateLocalNostrMessage,

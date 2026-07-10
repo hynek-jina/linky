@@ -538,6 +538,7 @@ export const cs = {
 
   saveChanges: "Uložit změny",
   saveContact: "Přidat",
+  openContact: "Otevřít",
   saving: "Ukládání...",
   clearForm: "Vyčistit formulář",
 

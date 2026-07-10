@@ -31,6 +31,7 @@ export interface ContactNewPrefill {
 }
 
 export interface ContactSearchCandidate {
+  existingContactId?: string;
   lnAddress: string;
   name: string;
   npub: string;
@@ -693,6 +694,13 @@ export const useContactEditor = ({
 
       if (!resolvedNpub) return { kind: "not_found", query: rawQuery };
 
+      const existingContact = contacts.find(
+        (contact) => normalizeNpubIdentifier(contact.npub) === resolvedNpub,
+      );
+      const existingContactId = existingContact?.id
+        ? String(existingContact.id)
+        : "";
+
       try {
         const metadata = await fetchNostrProfileMetadata(resolvedNpub, {
           relays: nostrFetchRelays,
@@ -711,6 +719,7 @@ export const useContactEditor = ({
 
         return {
           contact: {
+            ...(existingContactId ? { existingContactId } : {}),
             lnAddress: metadataLn || fallbackLnAddress,
             name: bestName || fallbackName,
             npub: resolvedNpub,
@@ -722,6 +731,7 @@ export const useContactEditor = ({
       } catch {
         return {
           contact: {
+            ...(existingContactId ? { existingContactId } : {}),
             lnAddress: fallbackLnAddress,
             name: fallbackName,
             npub: resolvedNpub,
@@ -732,7 +742,7 @@ export const useContactEditor = ({
         };
       }
     },
-    [form.npub, nostrFetchRelays, route.kind],
+    [contacts, form.npub, nostrFetchRelays, route.kind],
   );
 
   const addNewContactFromSearchResult = React.useCallback(

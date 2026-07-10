@@ -534,6 +534,7 @@ export const en = {
 
   saveChanges: "Save changes",
   saveContact: "Add",
+  openContact: "Open",
   saving: "Saving...",
   clearForm: "Clear form",
 
