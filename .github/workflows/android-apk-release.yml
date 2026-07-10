@@ -135,3 +135,30 @@ jobs:
               --notes "Signed Android APK release for Linky." \
               --target "$GITHUB_SHA"
           fi
+
+      - name: Detect Zapstore signer
+        env:
+          ZAPSTORE_SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+        run: |
+          if [[ -n "${ZAPSTORE_SIGN_WITH}" ]]; then
+            echo "ZAPSTORE_PUBLISH_ENABLED=true" >> "$GITHUB_ENV"
+          else
+            echo "ZAPSTORE_PUBLISH_ENABLED=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up Go for Zapstore publisher
+        if: env.ZAPSTORE_PUBLISH_ENABLED == 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+
+      - name: Install Zapstore publisher
+        if: env.ZAPSTORE_PUBLISH_ENABLED == 'true'
+        run: go install github.com/zapstore/zsp@v0.4.11
+
+      - name: Publish to Zapstore
+        if: env.ZAPSTORE_PUBLISH_ENABLED == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
+        run: zsp publish zapstore.yaml --quiet --skip-preview --commit "$GITHUB_SHA"
