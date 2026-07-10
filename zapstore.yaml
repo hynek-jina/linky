@@ -1,0 +1,35 @@
+repository: https://github.com/hynek-jina/linky
+release_source: ./apps/native-shell/android/app/build/outputs/apk/release/app-release.apk
+pubkey: npub1kkht6jvgr8mt4844saf80j5jjwyy6fdy90sxsuxt4hfv8pel499s96jvz8
+
+name: Linky
+summary: Contacts, private Nostr messaging, and Lightning/Cashu payments.
+description: |
+  Linky is a mobile-first app for contacts, private Nostr messaging, and
+  Lightning/Cashu payments.
+
+  It keeps core data local-first, supports encrypted Nostr chat, and lets users
+  receive, store, and send Cashu tokens from an Android app or PWA.
+tags:
+  - nostr
+  - lightning
+  - cashu
+  - wallet
+  - contacts
+license: 0BSD
+website: https://linky.fit
+icon: ./apps/web-app/public/pwa-512x512.png
+images:
+  - ./apps/site/public/contacts_mock.png
+  - ./apps/site/public/request_mock.png
+  - ./apps/site/public/issue_mock.png
+supported_nips:
+  - "01"
+  - "05"
+  - "17"
+  - "38"
+  - "44"
+  - "59"
+  - "65"
+metadata_sources:
+  - github
