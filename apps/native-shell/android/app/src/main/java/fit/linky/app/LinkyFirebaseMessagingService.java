@@ -17,6 +17,9 @@ import com.google.firebase.messaging.RemoteMessage;
 import java.util.Map;
 
 public final class LinkyFirebaseMessagingService extends MessagingService {
+    private static final String EXTRA_NOTIFICATION_ROUTE = "linky_notification_route";
+    private static final String NOTIFICATION_ROUTE_CONTACTS = "#contacts";
+
     @Override
     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
         super.onMessageReceived(remoteMessage);
@@ -50,6 +53,7 @@ public final class LinkyFirebaseMessagingService extends MessagingService {
         for (Map.Entry<String, String> entry : data.entrySet()) {
             launchIntent.putExtra(entry.getKey(), entry.getValue());
         }
+        launchIntent.putExtra(EXTRA_NOTIFICATION_ROUTE, NOTIFICATION_ROUTE_CONTACTS);
         launchIntent.putExtra(
             "google.message_id",
             normalizeText(remoteMessage.getMessageId(), "linky-native-message")

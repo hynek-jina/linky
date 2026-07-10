@@ -27,6 +27,20 @@ interface PushDeliveryServiceOptions {
 
 const DELIVERY_TTL_SECONDS = 24 * 60 * 60;
 
+function formatShortNpub(value: string): string {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return "";
+  if (trimmed.length <= 18) return trimmed;
+  return `${trimmed.slice(0, 10)}...${trimmed.slice(-6)}`;
+}
+
+function buildNotificationTitle(payloadData: PushNotificationData): string {
+  const recipientLabel = formatShortNpub(
+    payloadData.recipientNpub || payloadData.recipientPubkey,
+  );
+  return recipientLabel ? `Linky - ${recipientLabel}` : "Linky";
+}
+
 function isVapidKeyMismatchBody(errorBody: string | null): boolean {
   if (errorBody === null) {
     return false;
@@ -154,7 +168,7 @@ export class PushDeliveryService {
   ): Promise<void> {
     const endpointHash = hashEndpoint(subscription.endpoint);
     const payload: PushNotificationEnvelope = {
-      title: "Linky",
+      title: buildNotificationTitle(payloadData),
       body: "New message",
       data: payloadData,
     };
@@ -207,9 +221,10 @@ export class PushDeliveryService {
         body: "New message",
         createdAt: String(payloadData.createdAt),
         outerEventId: payloadData.outerEventId,
+        recipientNpub: payloadData.recipientNpub,
         recipientPubkey: payloadData.recipientPubkey,
         relayHints: JSON.stringify(payloadData.relayHints),
-        title: "Linky",
+        title: buildNotificationTitle(payloadData),
         type: payloadData.type,
       },
       android: {

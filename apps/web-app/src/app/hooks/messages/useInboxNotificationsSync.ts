@@ -339,7 +339,10 @@ export const useInboxNotificationsSync = <
 
         const pool = await getSharedAppNostrPool();
 
-        const processWrap = (wrap: NostrToolsEvent) => {
+        const processWrap = (
+          wrap: NostrToolsEvent,
+          shouldSurfaceNotification: boolean,
+        ) => {
           try {
             const wrapId = String(wrap?.id ?? "");
             if (!wrapId) return;
@@ -405,7 +408,7 @@ export const useInboxNotificationsSync = <
 
               rememberSeenPaymentNoticeWrapId(wrapId);
 
-              if (!isActiveChatContact) {
+              if (shouldSurfaceNotification && !isActiveChatContact) {
                 setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),
@@ -433,14 +436,16 @@ export const useInboxNotificationsSync = <
                 }
               }
 
-              const title =
-                contact?.name ??
-                (contact ? t("appTitle") : t("unknownContactTitle"));
-              void maybeShowPwaNotification(
-                title,
-                t("notificationReceivedMoney"),
-                wrapId,
-              );
+              if (shouldSurfaceNotification) {
+                const title =
+                  contact?.name ??
+                  (contact ? t("appTitle") : t("unknownContactTitle"));
+                void maybeShowPwaNotification(
+                  title,
+                  t("notificationReceivedMoney"),
+                  wrapId,
+                );
+              }
               return;
             }
 
@@ -543,7 +548,11 @@ export const useInboxNotificationsSync = <
               const isActiveChatContact =
                 Boolean(activeChatId) &&
                 String(contactId) === String(activeChatId);
-              if (!isActiveChatContact && !isSelfAuthored) {
+              if (
+                shouldSurfaceNotification &&
+                !isActiveChatContact &&
+                !isSelfAuthored
+              ) {
                 setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),
@@ -571,7 +580,7 @@ export const useInboxNotificationsSync = <
                 }
               }
 
-              if (!isSelfAuthored) {
+              if (shouldSurfaceNotification && !isSelfAuthored) {
                 const title =
                   contact?.name ??
                   (contact ? t("appTitle") : t("unknownContactTitle"));
@@ -826,7 +835,7 @@ export const useInboxNotificationsSync = <
                   : {}),
               });
 
-              if (!isOutgoing && !isCashuMessage) {
+              if (shouldSurfaceNotification && !isOutgoing && !isCashuMessage) {
                 setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),
@@ -978,7 +987,7 @@ export const useInboxNotificationsSync = <
           for (const event of Array.isArray(existing)
             ? (existing as NostrToolsEvent[])
             : []) {
-            processWrap(event);
+            processWrap(event, false);
           }
         }
 
@@ -988,7 +997,7 @@ export const useInboxNotificationsSync = <
           {
             onevent: (event: NostrToolsEvent) => {
               if (cancelled) return;
-              processWrap(event);
+              processWrap(event, true);
             },
           },
         );

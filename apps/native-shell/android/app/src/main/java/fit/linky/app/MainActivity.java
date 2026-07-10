@@ -54,12 +54,15 @@ public class MainActivity extends BridgeActivity {
 	private static volatile WeakReference<MainActivity> activeInstanceRef = new WeakReference<>(null);
 	private static volatile boolean appInForeground = false;
 	private static final String EVENT_DEEP_LINK = "linky-native-deep-link";
+	private static final String EVENT_NOTIFICATION_OPEN = "linky-native-notification-open";
 	private static final String EVENT_NFC_WRITE = "linky-native-nfc-write";
 	private static final String EVENT_NOTIFICATION_PERMISSION = "linky-native-notification-permission";
 	private static final String EVENT_SCAN_RESULT = "linky-native-scan-result";
+	private static final String EXTRA_NOTIFICATION_ROUTE = "linky_notification_route";
 	private static final long NFC_READ_SUPPRESS_AFTER_WRITE_MS = 4000L;
 	private static final String PREFS_NAME = "linky.native.bridge";
 	private static final String PREF_PENDING_DEEP_LINK_URL = "pending_deep_link_url";
+	private static final String PREF_PENDING_NOTIFICATION_ROUTE = "pending_notification_route";
 	private static final String PREF_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested";
 	private static final String FIREBASE_GOOGLE_APP_ID_RESOURCE = "google_app_id";
 	private long lastNativeQrScanAtMs = 0L;
@@ -120,6 +123,7 @@ public class MainActivity extends BridgeActivity {
 		bridgePreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 		nfcAdapter = NfcAdapter.getDefaultAdapter(this);
 		cacheIntentDeepLinkUrl(getIntent());
+		cacheIntentNotificationRoute(getIntent());
 
 		notificationPermissionLauncher = registerForActivityResult(
 			new ActivityResultContracts.RequestPermission(),
@@ -245,12 +249,16 @@ public class MainActivity extends BridgeActivity {
 		setIntent(intent);
 
 		String deepLinkUrl = extractDeepLinkUrl(intent);
-		if (deepLinkUrl == null) {
-			return;
+		if (deepLinkUrl != null) {
+			cachePendingDeepLinkUrl(deepLinkUrl);
+			dispatchDeepLinkUrl(deepLinkUrl);
 		}
 
-		cachePendingDeepLinkUrl(deepLinkUrl);
-		dispatchDeepLinkUrl(deepLinkUrl);
+		String notificationRoute = extractNotificationRoute(intent);
+		if (notificationRoute != null) {
+			cachePendingNotificationRoute(notificationRoute);
+			dispatchNotificationOpen(notificationRoute);
+		}
 	}
 
 	static void dispatchScanResult(String status, String value, String message) {
@@ -463,6 +471,23 @@ public class MainActivity extends BridgeActivity {
 		}
 
 		dispatchWindowEvent(EVENT_DEEP_LINK, detail);
+	}
+
+	private void dispatchNotificationOpen(String route) {
+		String normalized = normalizeNotificationRoute(route);
+		if (normalized == null) {
+			return;
+		}
+
+		JSONObject detail = new JSONObject();
+
+		try {
+			detail.put("route", normalized);
+		} catch (Exception ignored) {
+			// ignore JSON bridge payload failures
+		}
+
+		dispatchWindowEvent(EVENT_NOTIFICATION_OPEN, detail);
 	}
 
 	private void dispatchNfcWriteEvent(String status, String message) {
@@ -777,6 +802,15 @@ public class MainActivity extends BridgeActivity {
 		cachePendingDeepLinkUrl(deepLinkUrl);
 	}
 
+	private void cacheIntentNotificationRoute(Intent intent) {
+		String notificationRoute = extractNotificationRoute(intent);
+		if (notificationRoute == null) {
+			return;
+		}
+
+		cachePendingNotificationRoute(notificationRoute);
+	}
+
 	private void cachePendingDeepLinkUrl(String url) {
 		String normalized = url == null ? "" : url.trim();
 		if (normalized.isEmpty()) {
@@ -795,6 +829,42 @@ public class MainActivity extends BridgeActivity {
 		String normalized = pendingUrl.trim();
 		bridgePreferences.edit().remove(PREF_PENDING_DEEP_LINK_URL).apply();
 		return normalized.isEmpty() ? null : normalized;
+	}
+
+	private void cachePendingNotificationRoute(String route) {
+		String normalized = normalizeNotificationRoute(route);
+		if (normalized == null) {
+			return;
+		}
+
+		bridgePreferences.edit().putString(PREF_PENDING_NOTIFICATION_ROUTE, normalized).apply();
+	}
+
+	private String consumePendingNotificationRoute() {
+		String pendingRoute = bridgePreferences.getString(PREF_PENDING_NOTIFICATION_ROUTE, null);
+		if (pendingRoute == null) {
+			return null;
+		}
+
+		bridgePreferences.edit().remove(PREF_PENDING_NOTIFICATION_ROUTE).apply();
+		return normalizeNotificationRoute(pendingRoute);
+	}
+
+	private String extractNotificationRoute(Intent intent) {
+		if (intent == null) {
+			return null;
+		}
+
+		return normalizeNotificationRoute(intent.getStringExtra(EXTRA_NOTIFICATION_ROUTE));
+	}
+
+	private String normalizeNotificationRoute(String route) {
+		String normalized = route == null ? "" : route.trim();
+		if ("#contacts".equals(normalized) || "#wallet".equals(normalized)) {
+			return normalized;
+		}
+
+		return null;
 	}
 
 	private String getNotificationPermissionState() {
@@ -891,6 +961,11 @@ public class MainActivity extends BridgeActivity {
 		@JavascriptInterface
 		public String consumePendingUrl() {
 			return consumePendingDeepLinkUrl();
+		}
+
+		@JavascriptInterface
+		public String consumePendingNotificationRoute() {
+			return MainActivity.this.consumePendingNotificationRoute();
 		}
 	}
 

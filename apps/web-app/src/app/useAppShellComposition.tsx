@@ -65,7 +65,9 @@ import {
   cancelNativeNfcWrite,
   consumePendingIosNativeDeepLinkUrl,
   consumePendingNativeDeepLinkUrl,
+  consumePendingNativeNotificationRoute,
   NATIVE_DEEP_LINK_EVENT,
+  NATIVE_NOTIFICATION_OPEN_EVENT,
   startNativeNfcWrite,
   supportsNativeNfcWrite,
 } from "../platform/nativeBridge";
@@ -133,6 +135,7 @@ import {
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { parseNpubCashProfileInfo } from "../utils/npubCashInfo";
 import { resolveNpubCashServerBaseUrl } from "../utils/npubCashServer";
+import { setStoredPushContactNames } from "../utils/pushContactNamesStorage";
 import {
   clearStoredPushNsec,
   setStoredPushNsec,
@@ -2394,6 +2397,31 @@ export const useAppShellComposition = () => {
     upsert,
     visibleOwnerIds: contactsVisibleOwnerIds,
   });
+
+  React.useEffect(() => {
+    const records = [];
+
+    for (const contact of contacts) {
+      const name = String(contact.name ?? "").trim();
+      const npub = normalizeNpubIdentifier(contact.npub);
+      if (!name || !npub) continue;
+
+      try {
+        const decoded = nip19.decode(npub);
+        if (decoded.type !== "npub" || typeof decoded.data !== "string") {
+          continue;
+        }
+
+        const pubkey = decoded.data.trim();
+        if (!pubkey) continue;
+        records.push({ name, npub, pubkey });
+      } catch {
+        // ignore invalid contact npubs
+      }
+    }
+
+    void setStoredPushContactNames(records);
+  }, [contacts]);
 
   const activeContactsOwnerContactCount = contactsOwnerNewContactsCount;
 
@@ -8941,6 +8969,41 @@ export const useAppShellComposition = () => {
     window.addEventListener(NATIVE_DEEP_LINK_EVENT, onDeepLink);
     return () => window.removeEventListener(NATIVE_DEEP_LINK_EVENT, onDeepLink);
   }, [setPendingDeleteId, updatePendingDeepLinkText]);
+
+  React.useEffect(() => {
+    const openNotificationRoute = (rawRoute: unknown) => {
+      const routeValue = String(rawRoute ?? "").trim();
+      if (routeValue === "#contacts") {
+        navigateTo({ route: "contacts" });
+        return;
+      }
+      if (routeValue === "#wallet") {
+        navigateTo({ route: "wallet" });
+      }
+    };
+
+    openNotificationRoute(consumePendingNativeNotificationRoute());
+
+    const onNotificationOpen: EventListener = (event) => {
+      if (!(event instanceof CustomEvent)) {
+        return;
+      }
+
+      const detail = event.detail;
+      if (typeof detail !== "object" || detail === null) {
+        return;
+      }
+
+      openNotificationRoute(Reflect.get(detail, "route"));
+    };
+
+    window.addEventListener(NATIVE_NOTIFICATION_OPEN_EVENT, onNotificationOpen);
+    return () =>
+      window.removeEventListener(
+        NATIVE_NOTIFICATION_OPEN_EVENT,
+        onNotificationOpen,
+      );
+  }, []);
 
   React.useEffect(() => {
     if (typeof window === "undefined") {

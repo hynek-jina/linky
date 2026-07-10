@@ -91,6 +91,7 @@ interface AndroidWindowInsetsBridge {
 }
 
 interface AndroidDeepLinksBridge {
+  consumePendingNotificationRoute?: () => string | null;
   consumePendingUrl?: () => string | null;
 }
 
@@ -102,6 +103,7 @@ interface AndroidNfcBridge {
 
 export const NATIVE_DEEP_LINK_EVENT = "linky-native-deep-link";
 export const NATIVE_NFC_WRITE_EVENT = "linky-native-nfc-write";
+export const NATIVE_NOTIFICATION_OPEN_EVENT = "linky-native-notification-open";
 
 export type NativeNfcWriteStatus =
   | "armed"
@@ -689,6 +691,19 @@ export const consumePendingNativeDeepLinkUrl = (): string | null => {
 
   try {
     return normalizeString(bridge.consumePendingUrl());
+  } catch {
+    return null;
+  }
+};
+
+export const consumePendingNativeNotificationRoute = (): string | null => {
+  const bridge = getAndroidDeepLinksBridge();
+  if (!isNativePlatform() || !bridge?.consumePendingNotificationRoute) {
+    return null;
+  }
+
+  try {
+    return normalizeString(bridge.consumePendingNotificationRoute());
   } catch {
     return null;
   }
