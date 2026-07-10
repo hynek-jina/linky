@@ -3,11 +3,19 @@ import React from "react";
 import { parseCashuToken } from "../../../cashu";
 import { acceptCashuToken } from "../../../cashuAccept";
 import type { JsonValue } from "../../../types/json";
-import type { Route } from "../../../types/route";
-import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
+import {
+  LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
+  LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX,
+  LOCAL_NPUB_CASH_CLAIM_LOCK_STORAGE_KEY_PREFIX,
+} from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { extractUniqueClaimTokens } from "../../../utils/npubCashClaimResponse";
-import { safeLocalStorageSet } from "../../../utils/storage";
+import type { Route } from "../../../types/route";
+import {
+  safeLocalStorageGet,
+  safeLocalStorageSet,
+  withLocalStorageLeaseLock,
+} from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import type {
   CashuTokenRowLike,
@@ -32,6 +40,7 @@ interface UseNpubCashClaimParams {
   upsert: EvoluMutations["upsert"];
   isMintDeleted: (mintUrl: string) => boolean;
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
+  makeLocalStorageKey: (prefix: string) => string;
   makeNip98AuthHeader: (
     url: string,
     method: string,
@@ -56,6 +65,27 @@ interface UseNpubCashClaimParams {
   touchMintInfo: (mintUrl: string, nowSec: number) => void;
 }
 
+const NPUB_CASH_CLAIM_IDLE_MIN_INTERVAL_MS = 25_000;
+const NPUB_CASH_CLAIM_TOPUP_MIN_INTERVAL_MS = 5_000;
+const NPUB_CASH_CLAIM_LOCK_TTL_MS = 20_000;
+
+const makeNpubCashClaimScopedStorageKey = (
+  makeLocalStorageKey: (prefix: string) => string,
+  prefix: string,
+  serverBaseUrl: string,
+): string => {
+  const serverKey = encodeURIComponent(serverBaseUrl.replace(/\/+$/, ""));
+  return makeLocalStorageKey(`${prefix}.${serverKey}`);
+};
+
+const readLastClaimAttemptMs = (key: string): number => {
+  const raw = safeLocalStorageGet(key);
+  if (!raw) return 0;
+
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
+
 export const useNpubCashClaim = ({
   cashuIsBusy,
   cashuTokensAll,
@@ -67,6 +97,7 @@ export const useNpubCashClaim = ({
   upsert,
   isMintDeleted,
   logPaymentEvent,
+  makeLocalStorageKey,
   makeNip98AuthHeader,
   maybeShowPwaNotification,
   mintInfoByUrl,
@@ -310,36 +341,69 @@ export const useNpubCashClaim = ({
     if (npubCashClaimInFlightRef.current) return;
     if (!(await resolveOwnerIdForWrite())) return;
 
-    npubCashClaimInFlightRef.current = true;
     try {
-      const url = `${npubCashServerBaseUrl}/api/v1/claim`;
-      const auth = await makeNip98AuthHeader(url, "GET");
-      const res = await fetch(url, {
-        method: "GET",
-        headers: { Authorization: auth },
-      });
-      if (!res.ok) return;
-      const json = (await res.json()) as JsonValue;
-      const tokens = extractUniqueClaimTokens(json);
-      if (tokens.length === 0) return;
+      const lockKey = makeNpubCashClaimScopedStorageKey(
+        makeLocalStorageKey,
+        LOCAL_NPUB_CASH_CLAIM_LOCK_STORAGE_KEY_PREFIX,
+        npubCashServerBaseUrl,
+      );
+      const lastAttemptKey = makeNpubCashClaimScopedStorageKey(
+        makeLocalStorageKey,
+        LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX,
+        npubCashServerBaseUrl,
+      );
 
-      for (const tokenText of tokens) {
-        await acceptAndStoreCashuToken(tokenText);
-      }
+      await withLocalStorageLeaseLock({
+        key: lockKey,
+        timeoutMs: 0,
+        ttlMs: NPUB_CASH_CLAIM_LOCK_TTL_MS,
+        fn: async () => {
+          if (npubCashClaimInFlightRef.current) return;
+
+          const nowMs = Date.now();
+          const minIntervalMs =
+            routeKind === "topupInvoice"
+              ? NPUB_CASH_CLAIM_TOPUP_MIN_INTERVAL_MS
+              : NPUB_CASH_CLAIM_IDLE_MIN_INTERVAL_MS;
+          const lastAttemptMs = readLastClaimAttemptMs(lastAttemptKey);
+          if (nowMs - lastAttemptMs < minIntervalMs) return;
+          safeLocalStorageSet(lastAttemptKey, String(nowMs));
+
+          npubCashClaimInFlightRef.current = true;
+          try {
+            const url = `${npubCashServerBaseUrl}/api/v1/claim`;
+            const auth = await makeNip98AuthHeader(url, "GET");
+            const res = await fetch(url, {
+              method: "GET",
+              headers: { Authorization: auth },
+            });
+            if (!res.ok) return;
+            const json = (await res.json()) as JsonValue;
+            const tokens = extractUniqueClaimTokens(json);
+            if (tokens.length === 0) return;
+
+            for (const tokenText of tokens) {
+              await acceptAndStoreCashuToken(tokenText);
+            }
+          } finally {
+            npubCashClaimInFlightRef.current = false;
+          }
+        },
+      });
     } catch {
       // ignore
-    } finally {
-      npubCashClaimInFlightRef.current = false;
     }
   }, [
     acceptAndStoreCashuToken,
     cashuIsBusy,
     currentNpub,
     currentNsec,
+    makeLocalStorageKey,
     makeNip98AuthHeader,
     npubCashServerBaseUrl,
     npubCashClaimInFlightRef,
     resolveOwnerIdForWrite,
+    routeKind,
   ]);
 
   const claimNpubCashOnceLatestRef = React.useRef(claimNpubCashOnce);

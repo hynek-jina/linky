@@ -102,6 +102,10 @@ export const LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX =
   "linky.local.pendingPaymentTelemetry.v1";
 export const LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY_PREFIX =
   "linky.local.pendingPaymentTelemetryLock.v1";
+export const LOCAL_NPUB_CASH_CLAIM_LOCK_STORAGE_KEY_PREFIX =
+  "linky.local.npubCashClaimLock.v1";
+export const LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX =
+  "linky.local.npubCashClaimLastAttempt.v1";
 export const LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX =
   "linky.local.pendingTopupQuote.v1";
 export const LOCAL_PENDING_AUTOSWAP_CLAIM_STORAGE_KEY_PREFIX =

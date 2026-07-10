@@ -3680,6 +3680,7 @@ export const useAppShellComposition = () => {
     upsert,
     isMintDeleted,
     logPaymentEvent,
+    makeLocalStorageKey,
     makeNip98AuthHeader,
     maybeShowPwaNotification,
     mintInfoByUrl,
