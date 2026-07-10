@@ -3883,6 +3883,72 @@ button.icon {
   margin-top: 10px;
 }
 
+.contact-new-suggestions {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.contact-new-suggestions-title {
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.contact-new-suggestion-list {
+  display: grid;
+  gap: 4px;
+}
+
+.contact-new-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 0;
+}
+
+.contact-new-suggestion-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
+}
+
+.contact-new-suggestion-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.contact-new-suggestion-body strong {
+  color: #e2e8f0;
+  font-size: 0.96rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-new-suggestion-body span,
+.contact-new-suggestion-body small {
+  color: #94a3b8;
+  font-size: 0.84rem;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+
+.contact-new-suggestion-action {
+  flex-shrink: 0;
+}
+
+.contact-new-suggestion-action button {
+  white-space: nowrap;
+}
+
 .contact-card {
   border: none;
   background: transparent;

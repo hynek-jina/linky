@@ -52,6 +52,7 @@ export interface PushNotificationData {
   type: "nostr_inbox";
   outerEventId: string;
   recipientPubkey: string;
+  recipientNpub: string;
   createdAt: number;
   relayHints: string[];
 }

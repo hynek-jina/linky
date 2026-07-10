@@ -498,6 +498,9 @@ export const cs = {
   contactSearchEmpty: "Zadejte, koho hledat.",
   contactSearchNoResult: "Nic jsem nenašel.",
   contactSearchCreateFromQuery: "Vytvořit kontakt",
+  contactSuggestionsTitle: "Možná znáte",
+  contactSuggestionLastSeen: "Naposledy",
+  contactSuggestionActiveRecently: "Aktivní nedávno",
   contactIdentifierInvalid: "Zadejte platný npub nebo rezervované jméno.",
   noContactsYet: "Zatím žádné kontakty.",
 
@@ -538,6 +541,7 @@ export const cs = {
 
   saveChanges: "Uložit změny",
   saveContact: "Přidat",
+  openContact: "Otevřít",
   saving: "Ukládání...",
   clearForm: "Vyčistit formulář",
 

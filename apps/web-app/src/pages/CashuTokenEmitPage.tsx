@@ -5,6 +5,7 @@ import { Keypad } from "../components/Keypad";
 
 interface CashuTokenEmitPageProps {
   cashuBalance: number;
+  cashuBalanceAfterMelt: number;
   cashuEmitAmount: string;
   cashuIsBusy: boolean;
   cashuMeltToMainMintButtonLabel: string | null;
@@ -18,6 +19,7 @@ interface CashuTokenEmitPageProps {
 
 export const CashuTokenEmitPage: FC<CashuTokenEmitPageProps> = ({
   cashuBalance,
+  cashuBalanceAfterMelt,
   cashuEmitAmount,
   cashuIsBusy,
   cashuHasMultipleAcceptedMints,
@@ -43,6 +45,9 @@ export const CashuTokenEmitPage: FC<CashuTokenEmitPageProps> = ({
   const showMintWarning =
     cashuHasMultipleAcceptedMints &&
     Boolean(cashuMeltToMainMintButtonLabel) &&
+    Number.isFinite(amountSat) &&
+    amountSat > cashuBalance &&
+    amountSat <= cashuBalanceAfterMelt &&
     !mintWarningDismissed;
 
   return (

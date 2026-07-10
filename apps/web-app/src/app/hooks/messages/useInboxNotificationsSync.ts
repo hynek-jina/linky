@@ -20,11 +20,9 @@ import {
   type LinkyBankPaymentOfferInfo,
 } from "../../lib/bankPaymentOffer";
 import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
+import { formatChatMessagePreviewText } from "../../lib/chatMessageDisplay";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
-import {
-  privateImageMessageFromEvent,
-  privateImagePreviewText,
-} from "../../lib/privateImageMessage";
+import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
 import { isLinkyPaymentNoticeEvent } from "../../lib/pushWrappedEvent";
 import type {
   ContactNameRowLike,
@@ -114,6 +112,7 @@ interface UseInboxNotificationsSyncParams<
   bankPaymentOfferMessages?: readonly LocalNostrMessage[];
   contacts: readonly TContact[];
   currentNsec: string | null;
+  formatDisplayedAmountText?: (amountSat: number) => string;
   maybeShowPwaNotification: (
     title: string,
     body: string,
@@ -148,6 +147,7 @@ export const useInboxNotificationsSync = <
   bankPaymentOfferMessages = [],
   contacts,
   currentNsec,
+  formatDisplayedAmountText = (amountSat: number) => `${amountSat} sat`,
   maybeShowPwaNotification,
   nostrFetchRelays,
   knownNostrMessageIdentityIndex = {
@@ -339,7 +339,10 @@ export const useInboxNotificationsSync = <
 
         const pool = await getSharedAppNostrPool();
 
-        const processWrap = (wrap: NostrToolsEvent) => {
+        const processWrap = (
+          wrap: NostrToolsEvent,
+          shouldSurfaceNotification: boolean,
+        ) => {
           try {
             const wrapId = String(wrap?.id ?? "");
             if (!wrapId) return;
@@ -405,7 +408,7 @@ export const useInboxNotificationsSync = <
 
               rememberSeenPaymentNoticeWrapId(wrapId);
 
-              if (!isActiveChatContact) {
+              if (shouldSurfaceNotification && !isActiveChatContact) {
                 setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),
@@ -433,14 +436,16 @@ export const useInboxNotificationsSync = <
                 }
               }
 
-              const title =
-                contact?.name ??
-                (contact ? t("appTitle") : t("unknownContactTitle"));
-              void maybeShowPwaNotification(
-                title,
-                t("notificationReceivedMoney"),
-                wrapId,
-              );
+              if (shouldSurfaceNotification) {
+                const title =
+                  contact?.name ??
+                  (contact ? t("appTitle") : t("unknownContactTitle"));
+                void maybeShowPwaNotification(
+                  title,
+                  t("notificationReceivedMoney"),
+                  wrapId,
+                );
+              }
               return;
             }
 
@@ -543,7 +548,11 @@ export const useInboxNotificationsSync = <
               const isActiveChatContact =
                 Boolean(activeChatId) &&
                 String(contactId) === String(activeChatId);
-              if (!isActiveChatContact && !isSelfAuthored) {
+              if (
+                shouldSurfaceNotification &&
+                !isActiveChatContact &&
+                !isSelfAuthored
+              ) {
                 setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),
@@ -571,7 +580,7 @@ export const useInboxNotificationsSync = <
                 }
               }
 
-              if (!isSelfAuthored) {
+              if (shouldSurfaceNotification && !isSelfAuthored) {
                 const title =
                   contact?.name ??
                   (contact ? t("appTitle") : t("unknownContactTitle"));
@@ -677,7 +686,6 @@ export const useInboxNotificationsSync = <
                 Boolean(activeChatId) &&
                 String(contactId) === String(activeChatId);
               const isCashuMessage = isCashuNotificationMessage(content);
-              const isPrivateImageMessage = inner.kind === 15;
 
               const messageDirection = isOutgoing ? "out" : "in";
               const rumorKey = rumorId
@@ -826,7 +834,7 @@ export const useInboxNotificationsSync = <
                   : {}),
               });
 
-              if (!isOutgoing && !isCashuMessage) {
+              if (shouldSurfaceNotification && !isOutgoing && !isCashuMessage) {
                 setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),
@@ -846,13 +854,16 @@ export const useInboxNotificationsSync = <
                       contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
                     ) ??
                     t("unknownContactTitle");
-                  const trimmedContent = isPrivateImageMessage
-                    ? privateImagePreviewText(t)
-                    : content.trim();
+                  const formattedPreview = formatChatMessagePreviewText({
+                    content,
+                    direction: messageDirection,
+                    formatDisplayedAmountText,
+                    t,
+                  });
                   const preview =
-                    trimmedContent.length > 80
-                      ? `${trimmedContent.slice(0, 80)}…`
-                      : trimmedContent;
+                    formattedPreview.length > 80
+                      ? `${formattedPreview.slice(0, 80)}…`
+                      : formattedPreview;
                   pushToast(
                     t("chatIncomingMessageToast")
                       .replace("{name}", senderLabel)
@@ -873,11 +884,15 @@ export const useInboxNotificationsSync = <
                 const title =
                   contact?.name ??
                   (contact ? t("appTitle") : t("unknownContactTitle"));
+                const notificationBody = formatChatMessagePreviewText({
+                  content,
+                  direction: messageDirection,
+                  formatDisplayedAmountText,
+                  t,
+                });
                 void maybeShowPwaNotification(
                   title,
-                  isPrivateImageMessage
-                    ? privateImagePreviewText(t)
-                    : content.trim(),
+                  notificationBody,
                   `msg_${resolvedPeerPub}`,
                 );
               }
@@ -978,7 +993,7 @@ export const useInboxNotificationsSync = <
           for (const event of Array.isArray(existing)
             ? (existing as NostrToolsEvent[])
             : []) {
-            processWrap(event);
+            processWrap(event, false);
           }
         }
 
@@ -988,7 +1003,7 @@ export const useInboxNotificationsSync = <
           {
             onevent: (event: NostrToolsEvent) => {
               if (cancelled) return;
-              processWrap(event);
+              processWrap(event, true);
             },
           },
         );
@@ -1019,6 +1034,7 @@ export const useInboxNotificationsSync = <
     bankPaymentOfferMessages,
     contacts,
     currentNsec,
+    formatDisplayedAmountText,
     appendLocalNostrMessage,
     appendLocalNostrReaction,
     updateLocalNostrMessage,

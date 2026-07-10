@@ -3,6 +3,7 @@
 /// <reference lib="webworker" />
 
 const SW_BUILD_TAG = "linky-sw-2026-04-29T11:50-bump-2";
+const NOTIFICATION_OPEN_URL = "/#contacts";
 
 import type { Event as NostrEvent } from "nostr-tools";
 import { getPublicKey, nip19, SimplePool } from "nostr-tools";
@@ -25,6 +26,7 @@ import {
 import { isLinkyPaymentNoticeEvent } from "./app/lib/pushWrappedEvent";
 import { normalizePubkeyHex } from "./app/hooks/messages/contactIdentity";
 import { NOSTR_RELAYS } from "./utils/nostrRelays";
+import { getStoredPushContactName } from "./utils/pushContactNamesStorage";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
 import { getStoredPushNsec } from "./utils/pushNsecStorage";
 
@@ -33,6 +35,7 @@ declare const self: ServiceWorkerGlobalScope;
 type PushNotificationData = {
   createdAt?: number;
   outerEventId?: string;
+  recipientNpub?: string;
   recipientPubkey?: string;
   relayHints?: string[];
   type?: string;
@@ -62,6 +65,7 @@ function readEnvelopeDebugMeta(
   return {
     ...(data.createdAt === undefined ? {} : { createdAt: data.createdAt }),
     ...(data.outerEventId ? { outerEventId: data.outerEventId } : {}),
+    ...(data.recipientNpub ? { recipientNpub: data.recipientNpub } : {}),
     ...(data.recipientPubkey ? { recipientPubkey: data.recipientPubkey } : {}),
     ...(data.relayHints ? { relayHints: data.relayHints } : {}),
     ...(data.type ? { type: data.type } : {}),
@@ -117,6 +121,10 @@ function readPushEnvelope(value: unknown): PushNotificationEnvelope | null {
         rawData.outerEventId.trim().length > 0
           ? { outerEventId: rawData.outerEventId }
           : {}),
+        ...(typeof rawData.recipientNpub === "string" &&
+        rawData.recipientNpub.trim().length > 0
+          ? { recipientNpub: rawData.recipientNpub }
+          : {}),
         ...(typeof rawData.recipientPubkey === "string" &&
         rawData.recipientPubkey.trim().length > 0
           ? { recipientPubkey: rawData.recipientPubkey }
@@ -152,6 +160,45 @@ function truncateNotificationBody(value: string): string {
     return normalized;
   }
   return `${normalized.slice(0, 140)}…`;
+}
+
+function formatShortNpub(value: string): string {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return "";
+  if (trimmed.length <= 18) return trimmed;
+  return `${trimmed.slice(0, 10)}...${trimmed.slice(-6)}`;
+}
+
+function formatNotificationPeerLabel(pubkeyHex: string): string {
+  const normalized = String(pubkeyHex ?? "").trim();
+  if (!normalized) return "";
+
+  try {
+    return formatShortNpub(nip19.npubEncode(normalized));
+  } catch {
+    return formatShortNpub(normalized);
+  }
+}
+
+function buildNotificationTitle(
+  envelope: PushNotificationEnvelope,
+  decryptedMessage: DecryptedPushMessage | null,
+  senderContactName: string | null,
+): string {
+  const contactName = String(senderContactName ?? "").trim();
+  if (contactName) return `Linky - ${contactName}`;
+
+  const senderLabel = decryptedMessage
+    ? formatNotificationPeerLabel(decryptedMessage.senderPub)
+    : "";
+  if (senderLabel) return `Linky - ${senderLabel}`;
+
+  const recipientLabel = formatShortNpub(
+    envelope.data?.recipientNpub ?? envelope.data?.recipientPubkey ?? "",
+  );
+  return recipientLabel
+    ? `Linky - ${recipientLabel}`
+    : (envelope.title ?? "Linky");
 }
 
 function sanitizeSpaydFilename(value: string): string {
@@ -552,6 +599,16 @@ self.addEventListener("push", (event) => {
           ? truncateNotificationBody(envelope.body)
           : "";
       const notificationBody = decryptedMessage?.body ?? fallbackBody;
+      const senderContactName = decryptedMessage
+        ? await getStoredPushContactName(decryptedMessage.senderPub).catch(
+            () => null,
+          )
+        : null;
+      const notificationTitle = buildNotificationTitle(
+        envelope,
+        decryptedMessage,
+        senderContactName,
+      );
       const options: NotificationOptions = {
         badge: "/pwa-192x192.png",
         body: notificationBody,
@@ -565,6 +622,7 @@ self.addEventListener("push", (event) => {
         logSw("push received", {
           data,
           hasDecryptedBody: Boolean(decryptedMessage),
+          hasSenderContactName: Boolean(senderContactName),
           hasWindowClient: clientList.length > 0,
           isCashuMessage: decryptedMessage?.isCashu ?? false,
           isPaymentNotice: decryptedMessage?.isPaymentNotice ?? false,
@@ -572,7 +630,7 @@ self.addEventListener("push", (event) => {
           usedFallbackBody:
             decryptedMessage === null && fallbackBody.length > 0,
           tag: options.tag ?? null,
-          title: envelope.title ?? "Linky",
+          title: notificationTitle,
         }),
         postClientMessage({
           data,
@@ -584,7 +642,7 @@ self.addEventListener("push", (event) => {
               tag: options.tag ?? null,
             })
           : self.registration
-              .showNotification(envelope.title ?? "Linky", options)
+              .showNotification(notificationTitle, options)
               .then(() =>
                 logSw("notification displayed", {
                   data,
@@ -636,11 +694,13 @@ self.addEventListener("notificationclick", (event) => {
         .then((clientList) => {
           for (const client of clientList) {
             if (client.url && "focus" in client) {
-              return client.navigate("/").then(() => client.focus());
+              return client
+                .navigate(NOTIFICATION_OPEN_URL)
+                .then(() => client.focus());
             }
           }
           if (self.clients.openWindow) {
-            return self.clients.openWindow("/");
+            return self.clients.openWindow(NOTIFICATION_OPEN_URL);
           }
         }),
     ]),

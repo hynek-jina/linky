@@ -171,6 +171,7 @@ export const buildMoneyRouteProps = ({
   return {
     cashuTokenEmitProps: {
       cashuBalance,
+      cashuBalanceAfterMelt,
       cashuEmitAmount,
       cashuHasMultipleAcceptedMints,
       cashuIsBusy,

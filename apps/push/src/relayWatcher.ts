@@ -1,5 +1,5 @@
 import type { Event as NostrEvent } from "nostr-tools";
-import { SimplePool, verifyEvent } from "nostr-tools";
+import { nip19, SimplePool, verifyEvent } from "nostr-tools";
 
 import { isHexString } from "./guards";
 import { PushDeliveryService } from "./push";
@@ -69,6 +69,17 @@ function extractRelayHints(
   }
 
   return uniqueStrings(out);
+}
+
+function encodeRecipientNpub(pubkey: string): string {
+  const normalized = String(pubkey ?? "").trim();
+  if (!normalized) return "";
+
+  try {
+    return nip19.npubEncode(normalized);
+  } catch {
+    return normalized;
+  }
 }
 
 function hasSingleRecipientTag(event: NostrEvent): boolean {
@@ -345,6 +356,7 @@ export class RelayWatcher {
         type: "nostr_inbox",
         outerEventId: event.id,
         recipientPubkey,
+        recipientNpub: encodeRecipientNpub(recipientPubkey),
         createdAt: event.created_at,
         relayHints: extractRelayHints(event, recipientPubkey),
       };

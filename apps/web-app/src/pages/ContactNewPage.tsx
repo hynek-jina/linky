@@ -1,6 +1,6 @@
 import type { FC } from "react";
 import React from "react";
-import { ArrowLeft, Save, UserPlus } from "lucide-react";
+import { ArrowLeft, Save, User, UserPlus } from "lucide-react";
 import { PasteIcon } from "../components/icons";
 import { readClipboardText } from "../platform/clipboard";
 import {
@@ -17,11 +17,16 @@ interface ContactFormData {
 }
 
 interface ContactSearchCandidate {
+  existingContactId?: string;
   lnAddress: string;
   name: string;
   npub: string;
   pictureUrl: string | null;
   query: string;
+}
+
+interface ContactSuggestionCandidate extends ContactSearchCandidate {
+  lastSeenAtSec: number;
 }
 
 type ContactSearchResult =
@@ -34,10 +39,12 @@ interface ContactNewPageProps {
   addNewContactFromSearchResult: (
     candidate: ContactSearchCandidate,
   ) => Promise<void>;
+  contactSuggestions: readonly ContactSuggestionCandidate[];
   form: ContactFormData;
   groupNames: string[];
   handleSaveContact: () => void;
   isSavingContact: boolean;
+  lang: string;
   searchNewContact: (query?: string) => Promise<ContactSearchResult>;
   setForm: (value: ContactFormData) => void;
   t: (key: string) => string;
@@ -45,10 +52,12 @@ interface ContactNewPageProps {
 
 export const ContactNewPage: FC<ContactNewPageProps> = ({
   addNewContactFromSearchResult,
+  contactSuggestions,
   form,
   groupNames,
   handleSaveContact,
   isSavingContact,
+  lang,
   searchNewContact,
   setForm,
   t,
@@ -71,6 +80,12 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   const resultDisplayName = String(
     searchResult?.name || searchResult?.query || "",
   ).trim();
+  const showSuggestions =
+    step === "search" &&
+    !searchQuery &&
+    !searchResult &&
+    !searchError &&
+    contactSuggestions.length > 0;
 
   React.useEffect(() => {
     searchQueryRef.current = searchQuery;
@@ -182,6 +197,49 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
     if (!searchResult) return;
     await addNewContactFromSearchResult(searchResult);
   };
+  const addSuggestion = async (suggestion: ContactSuggestionCandidate) => {
+    await addNewContactFromSearchResult(suggestion);
+  };
+  const formatSuggestionLastSeen = (lastSeenAtSec: number): string => {
+    if (!Number.isFinite(lastSeenAtSec) || lastSeenAtSec <= 0) {
+      return t("contactSuggestionActiveRecently");
+    }
+
+    const date = new Date(lastSeenAtSec * 1000);
+    const today = new Date();
+    const todayStartMs = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    ).getTime();
+    const dateStartMs = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+    ).getTime();
+    const dayDiff = Math.round(
+      (todayStartMs - dateStartMs) / (24 * 60 * 60 * 1000),
+    );
+
+    const lowerLocale = lang === "cs" ? "cs-CZ" : "en-US";
+    if (dayDiff === 0) {
+      return `${t("contactSuggestionLastSeen")} ${t("today").toLocaleLowerCase(lowerLocale)}`;
+    }
+    if (dayDiff === 1) {
+      return `${t("contactSuggestionLastSeen")} ${t("yesterday").toLocaleLowerCase(lowerLocale)}`;
+    }
+
+    const locale = lang === "cs" ? "cs-CZ" : "en-US";
+    const formatted = new Intl.DateTimeFormat(locale, {
+      day: "numeric",
+      month: "long",
+      ...(date.getFullYear() === today.getFullYear()
+        ? {}
+        : { year: "numeric" }),
+    }).format(date);
+
+    return `${t("contactSuggestionLastSeen")} ${formatted}`;
+  };
   const canCreateContactFromSearch =
     !searchResult &&
     Boolean(searchQuery) &&
@@ -240,6 +298,80 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                 </button>
               </div>
 
+              {showSuggestions ? (
+                <div className="contact-new-suggestions">
+                  <div className="contact-new-suggestions-title">
+                    {t("contactSuggestionsTitle")}
+                  </div>
+                  <div className="contact-new-suggestion-list">
+                    {contactSuggestions.map((suggestion) => {
+                      const displayName = String(
+                        suggestion.name || suggestion.query || "",
+                      ).trim();
+                      const avatarUrl = suggestion.pictureUrl ?? null;
+
+                      return (
+                        <div
+                          className="contact-new-suggestion"
+                          key={suggestion.npub}
+                        >
+                          <div className="contact-new-suggestion-main">
+                            <span className="contact-avatar" aria-hidden="true">
+                              {avatarUrl ? (
+                                <img
+                                  src={avatarUrl}
+                                  alt=""
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <span className="contact-avatar-fallback">
+                                  {getInitials(displayName)}
+                                </span>
+                              )}
+                            </span>
+                            <span className="contact-new-suggestion-body">
+                              <strong>{displayName || t("contact")}</strong>
+                              <span title={suggestion.lnAddress}>
+                                {formatShortLightningAddress(
+                                  suggestion.lnAddress,
+                                )}
+                              </span>
+                              <small>
+                                {formatSuggestionLastSeen(
+                                  suggestion.lastSeenAtSec,
+                                )}
+                              </small>
+                            </span>
+                          </div>
+                          <div className="contact-new-suggestion-action">
+                            <button
+                              type="button"
+                              onClick={() => void addSuggestion(suggestion)}
+                              disabled={isSavingContact}
+                            >
+                              <span className="btn-label-with-icon">
+                                <span
+                                  className="btn-label-icon"
+                                  aria-hidden="true"
+                                >
+                                  <UserPlus size={18} />
+                                </span>
+                                <span>
+                                  {isSavingContact
+                                    ? t("saving")
+                                    : t("saveContact")}
+                                </span>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               {searchResult ? (
                 <div className="contact-new-search-result">
                   <div className="contact-new-search-result-main">
@@ -277,10 +409,18 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                     >
                       <span className="btn-label-with-icon">
                         <span className="btn-label-icon" aria-hidden="true">
-                          <UserPlus size={18} />
+                          {searchResult.existingContactId ? (
+                            <User size={18} />
+                          ) : (
+                            <UserPlus size={18} />
+                          )}
                         </span>
                         <span>
-                          {isSavingContact ? t("saving") : t("saveContact")}
+                          {isSavingContact
+                            ? t("saving")
+                            : searchResult.existingContactId
+                              ? t("openContact")
+                              : t("saveContact")}
                         </span>
                       </span>
                     </button>

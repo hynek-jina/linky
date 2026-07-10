@@ -222,7 +222,7 @@ export const useChatNostrSyncEffect = ({
                 : taggedPeerPub === contactPubHex
                   ? contactPubHex
                   : innerPub;
-              const messageDirection = isIncoming ? "in" : "out";
+              const messageDirection = isOutgoing ? "out" : "in";
 
               if (
                 hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
@@ -376,7 +376,7 @@ export const useChatNostrSyncEffect = ({
 
               appendLocalNostrMessage({
                 contactId: String(selectedContact.id),
-                direction: isIncoming ? "in" : "out",
+                direction: messageDirection,
                 content,
                 wrapId,
                 rumorId: stableRumorId,
