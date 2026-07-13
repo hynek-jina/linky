@@ -1,12 +1,15 @@
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
+import { hasMessageEntityPreview } from "../app/lib/messageEntityPreview";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
   ContactRowLike,
   LocalNostrMessage,
   MintUrlInput,
 } from "../app/types/appTypes";
+import type { NpubMessageContactInfo } from "./ChatMessage";
+import { MessageEntityPreview } from "./MessageEntityPreview";
 import { formatDisplayGeneralStatus } from "../nostrStatus";
 import {
   formatContactMessageTimestamp,
@@ -23,6 +26,7 @@ interface ContactCardProps {
     host?: string | null;
     failed?: boolean;
   };
+  getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
   hasAttention: boolean;
   lastMessage?: LocalNostrMessage | null;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
@@ -38,6 +42,7 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
     avatarUrl,
     contact,
     getMintIconUrl,
+    getNpubMessageContactInfo,
     hasAttention,
     lastMessage,
     onMintIconError,
@@ -163,7 +168,16 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
               ) : null}
             </div>
 
-            {tokenInfo ? (
+            {hasMessageEntityPreview(lastText) ? (
+              <MessageEntityPreview
+                className="muted contact-message-entity-preview"
+                content={lastText}
+                directionSymbol={directionSymbol}
+                getCashuTokenMessageInfo={() => tokenInfo}
+                getMintIconUrl={getMintIconUrl}
+                getNpubMessageContactInfo={getNpubMessageContactInfo}
+              />
+            ) : tokenInfo ? (
               <TokenPreview
                 tokenInfo={tokenInfo}
                 directionSymbol={directionSymbol}

@@ -3,8 +3,6 @@ import React from "react";
 import type { ContactRowLike } from "../app/types/appTypes";
 import { BottomTabBar } from "../components/BottomTabBar";
 import { ContactAddIcon } from "../components/icons";
-import { buildStatusFilterValue } from "../nostrStatus";
-import { ARCHIVED_CONTACTS_FILTER } from "../utils/constants";
 
 interface ContactsPageProps {
   activeGroup: string | null;
@@ -14,8 +12,7 @@ interface ContactsPageProps {
   contactsSearchInputRef: React.RefObject<HTMLInputElement | null>;
   contactsToolbarStyle: React.CSSProperties;
   conversationsLabel: string;
-  groupNames: string[];
-  noGroupFilterValue: string;
+  filterOptions: Array<{ count: number; label: string; value: string }>;
   openNewContactPage: () => void;
   onboardingContent?: React.ReactNode;
   otherContactsLabel: string;
@@ -23,8 +20,6 @@ interface ContactsPageProps {
   setActiveGroup: (value: string | null) => void;
   setContactsSearch: (value: string) => void;
   showGroupFilter: boolean;
-  showNoGroupFilter: boolean;
-  statusFilterCurrencies: string[];
   showBottomTabBar?: boolean;
   showFab?: boolean;
   t: (key: string) => string;
@@ -44,8 +39,7 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
     contactsSearchInputRef,
     contactsToolbarStyle,
     conversationsLabel,
-    groupNames,
-    noGroupFilterValue,
+    filterOptions,
     openNewContactPage,
     onboardingContent,
     otherContactsLabel,
@@ -53,8 +47,6 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
     setActiveGroup,
     setContactsSearch,
     showGroupFilter,
-    showNoGroupFilter,
-    statusFilterCurrencies,
     showBottomTabBar = true,
     showFab = true,
     t,
@@ -99,73 +91,23 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
           {showGroupFilter && (
             <nav className="group-filter-bar" aria-label={t("group")}>
               <div className="group-filter-inner">
-                <button
-                  type="button"
-                  className={
-                    activeGroup === null
-                      ? "group-filter-btn is-active"
-                      : "group-filter-btn"
-                  }
-                  onClick={() => setActiveGroup(null)}
-                >
-                  {t("all")}
-                </button>
-                {showNoGroupFilter && (
+                {filterOptions.map((option) => (
                   <button
+                    key={option.value}
                     type="button"
                     className={
-                      activeGroup === noGroupFilterValue
+                      activeGroup === option.value
                         ? "group-filter-btn is-active"
                         : "group-filter-btn"
                     }
-                    onClick={() => setActiveGroup(noGroupFilterValue)}
-                  >
-                    {t("noGroup")}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className={
-                    activeGroup === ARCHIVED_CONTACTS_FILTER
-                      ? "group-filter-btn is-active"
-                      : "group-filter-btn"
-                  }
-                  onClick={() => setActiveGroup(ARCHIVED_CONTACTS_FILTER)}
-                >
-                  {t("archiveFilter")}
-                </button>
-                {statusFilterCurrencies.map((currency) => {
-                  const filterValue = buildStatusFilterValue(currency);
-
-                  return (
-                    <button
-                      key={filterValue}
-                      type="button"
-                      className={
-                        activeGroup === filterValue
-                          ? "group-filter-btn is-active"
-                          : "group-filter-btn"
-                      }
-                      onClick={() => setActiveGroup(filterValue)}
-                      title={currency}
-                    >
-                      {currency}
-                    </button>
-                  );
-                })}
-                {groupNames.map((group) => (
-                  <button
-                    key={group}
-                    type="button"
-                    className={
-                      activeGroup === group
-                        ? "group-filter-btn is-active"
-                        : "group-filter-btn"
+                    onClick={() =>
+                      setActiveGroup(
+                        activeGroup === option.value ? null : option.value,
+                      )
                     }
-                    onClick={() => setActiveGroup(group)}
-                    title={group}
+                    title={option.label}
                   >
-                    {group}
+                    {option.label}
                   </button>
                 ))}
               </div>

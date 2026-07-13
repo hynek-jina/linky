@@ -7,7 +7,7 @@ import {
 import { SiteHeaderMenu } from "./SiteHeaderMenu";
 import { getDefaultSiteLocale } from "./sitePreferences";
 
-type CtaMode = "android-apk" | "google-play" | "web";
+type CtaMode = "android-apk" | "google-play" | "web" | "zapstore";
 
 type Locale = "cs" | "en";
 
@@ -31,6 +31,7 @@ interface LocaleCopy {
   webCta: string;
   googlePlayCta: string;
   androidApkCta: string;
+  zapstoreCta: string;
   ctaMenuLabel: string;
   privacyLabel: string;
   imageTitle: string;
@@ -47,6 +48,7 @@ const latestAndroidApkUrl =
   "https://github.com/hynek-jina/linky/releases/latest/download/linky.apk";
 const googlePlayUrl =
   "https://play.google.com/store/apps/details?id=fit.linky.app&pli=1";
+const zapstoreUrl = "https://zapstore.dev/apps/fit.linky.app";
 
 const copy: Record<Locale, LocaleCopy> = {
   cs: {
@@ -63,6 +65,7 @@ const copy: Record<Locale, LocaleCopy> = {
     webCta: "Webová aplikace",
     googlePlayCta: "Google Play",
     androidApkCta: "Android APK",
+    zapstoreCta: "Zapstore",
     ctaMenuLabel: "Možnosti otevření aplikace",
     privacyLabel: "Ochrana soukromí",
     imageTitle: "Fotorealistické setkání lidí s aplikací Linky",
@@ -113,6 +116,7 @@ const copy: Record<Locale, LocaleCopy> = {
     webCta: "Web app",
     googlePlayCta: "Google Play",
     androidApkCta: "Android APK",
+    zapstoreCta: "Zapstore",
     ctaMenuLabel: "App launch options",
     privacyLabel: "Privacy Policy",
     imageTitle: "Photorealistic meeting of people with the Linky app",
@@ -188,6 +192,7 @@ interface AppCtaProps {
   onPrimaryAction: () => void;
   onSelectMode: (mode: CtaMode) => void;
   webCta: string;
+  zapstoreCta: string;
 }
 
 function AppCta({
@@ -198,6 +203,7 @@ function AppCta({
   onPrimaryAction,
   onSelectMode,
   webCta,
+  zapstoreCta,
 }: AppCtaProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const ctaMenuRef = useRef<HTMLDivElement | null>(null);
@@ -206,7 +212,9 @@ function AppCta({
       ? googlePlayCta
       : ctaMode === "android-apk"
         ? androidApkCta
-        : webCta;
+        : ctaMode === "zapstore"
+          ? zapstoreCta
+          : webCta;
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -295,6 +303,22 @@ function AppCta({
               >
                 <span className="cta-option-label">{androidApkCta}</span>
               </button>
+              <button
+                className={
+                  ctaMode === "zapstore"
+                    ? "cta-option is-selected"
+                    : "cta-option"
+                }
+                type="button"
+                role="menuitemradio"
+                aria-checked={ctaMode === "zapstore"}
+                onClick={() => {
+                  onSelectMode("zapstore");
+                  setMenuOpen(false);
+                }}
+              >
+                <span className="cta-option-label">{zapstoreCta}</span>
+              </button>
             </div>
           ) : null}
         </>
@@ -337,6 +361,10 @@ function App() {
     window.open(googlePlayUrl, "_blank", "noopener,noreferrer");
   };
 
+  const openZapstore = () => {
+    window.open(zapstoreUrl, "_blank", "noopener,noreferrer");
+  };
+
   const handlePrimaryAction = () => {
     if (ctaMode === "google-play") {
       openGooglePlay();
@@ -345,6 +373,11 @@ function App() {
 
     if (ctaMode === "android-apk") {
       openAndroidApk();
+      return;
+    }
+
+    if (ctaMode === "zapstore") {
+      openZapstore();
       return;
     }
 
@@ -395,6 +428,7 @@ function App() {
               onPrimaryAction={handlePrimaryAction}
               onSelectMode={setPreferredCtaMode}
               webCta={activeCopy.webCta}
+              zapstoreCta={activeCopy.zapstoreCta}
             />
           </div>
 
@@ -438,6 +472,7 @@ function App() {
             onPrimaryAction={handlePrimaryAction}
             onSelectMode={setPreferredCtaMode}
             webCta={activeCopy.webCta}
+            zapstoreCta={activeCopy.zapstoreCta}
           />
         </div>
 

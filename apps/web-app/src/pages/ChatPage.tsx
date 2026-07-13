@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, type FC } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FC,
+} from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { aggregateReactions } from "../app/hooks/messages/chatNostrProtocol";
 import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
@@ -8,6 +15,17 @@ import {
   type LinkyBankPaymentOfferStatus,
 } from "../app/lib/bankPaymentOffer";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
+import {
+  getMessageEditorValue,
+  setMessageEditorCaret,
+} from "../app/lib/messageEditorDom";
+import {
+  applyMessageMentionSuggestion,
+  getMessageMentionQuery,
+  getMessageMentionSuggestions,
+  type MessageMentionContact,
+  type MessageMentionSuggestion,
+} from "../app/lib/messageMentions";
 import {
   parseCashuPaymentRequestMessage,
   parseLinkyPaymentRequestDeclineMessage,
@@ -25,6 +43,7 @@ import {
   type BankPaymentOfferPeerNotice,
   type NpubMessageContactInfo,
 } from "../components/ChatMessage";
+import { ChatMessageEditor } from "../components/ChatMessageEditor";
 import {
   DonateIcon,
   GalleryIcon,
@@ -68,6 +87,7 @@ interface ChatPageProps {
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
   isBankPaymentOfferCanceled: (offerId: string) => boolean;
   lang: string;
+  mentionContacts: MessageMentionContact[];
   onCancelEdit: () => void;
   onCancelReply: () => void;
   onAddUnknownContact: () => Promise<void>;
@@ -123,6 +143,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   getNpubMessageContactInfo,
   isBankPaymentOfferCanceled,
   lang,
+  mentionContacts,
   onCancelEdit,
   onCancelReply,
   onAddUnknownContact,
@@ -149,8 +170,9 @@ export const ChatPage: FC<ChatPageProps> = ({
 }) => {
   const { formatDisplayedAmountText } = useAppShellCore();
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const composeInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const composeInputRef = useRef<HTMLDivElement | null>(null);
   const composeContainerRef = useRef<HTMLDivElement | null>(null);
+  const [composeCaret, setComposeCaret] = useState(chatDraft.length);
   const npub = selectedContact
     ? normalizeNpubIdentifier(selectedContact.npub)
     : null;
@@ -161,6 +183,37 @@ export const ChatPage: FC<ChatPageProps> = ({
   const isDesktop =
     typeof window !== "undefined" &&
     window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const mentionQuery = useMemo(
+    () => getMessageMentionQuery(chatDraft, composeCaret),
+    [chatDraft, composeCaret],
+  );
+  const mentionSuggestions = useMemo(
+    () =>
+      mentionQuery
+        ? getMessageMentionSuggestions(mentionContacts, mentionQuery.query)
+        : [],
+    [mentionContacts, mentionQuery],
+  );
+
+  const selectMentionSuggestion = useCallback(
+    (suggestion: MessageMentionSuggestion) => {
+      if (!mentionQuery) return;
+      const next = applyMessageMentionSuggestion(
+        chatDraft,
+        mentionQuery,
+        suggestion,
+      );
+      setChatDraft(next.value);
+      setComposeCaret(next.caret);
+      window.requestAnimationFrame(() => {
+        const input = composeInputRef.current;
+        if (!input) return;
+        input.focus();
+        setMessageEditorCaret(input, next.caret);
+      });
+    },
+    [chatDraft, mentionQuery, setChatDraft],
+  );
 
   const getBankPaymentOfferPeerNotice = useCallback(
     (
@@ -233,7 +286,7 @@ export const ChatPage: FC<ChatPageProps> = ({
 
   const focusComposeInput = useCallback(() => {
     const input = composeInputRef.current;
-    if (!input || input.disabled) return false;
+    if (!input || input.getAttribute("aria-disabled") === "true") return false;
 
     try {
       input.focus({ preventScroll: true });
@@ -241,8 +294,7 @@ export const ChatPage: FC<ChatPageProps> = ({
       input.focus();
     }
 
-    const length = input.value.length;
-    input.setSelectionRange(length, length);
+    setMessageEditorCaret(input, getMessageEditorValue(input).length);
     return document.activeElement === input;
   }, []);
 
@@ -730,6 +782,67 @@ export const ChatPage: FC<ChatPageProps> = ({
             onCancel={onCancelEdit}
           />
         )}
+        {mentionSuggestions.length > 0 ? (
+          <div className="chat-mention-suggestions" role="listbox">
+            {mentionSuggestions.map((suggestion) => {
+              if (suggestion.kind === "group") {
+                return (
+                  <button
+                    key={`group-${suggestion.groupName}`}
+                    type="button"
+                    className="chat-mention-suggestion"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => selectMentionSuggestion(suggestion)}
+                  >
+                    <span className="chat-mention-suggestion-label">
+                      @{suggestion.groupName}
+                    </span>
+                    <span className="muted">
+                      {t("chatMentionGroupCount").replace(
+                        "{count}",
+                        String(suggestion.contacts.length),
+                      )}
+                    </span>
+                  </button>
+                );
+              }
+
+              const info = getNpubMessageContactInfo(suggestion.contact.npub);
+              return (
+                <button
+                  key={`contact-${suggestion.contact.npub}`}
+                  type="button"
+                  className="chat-mention-suggestion"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectMentionSuggestion(suggestion)}
+                >
+                  <span className="chat-contact-pill-avatar" aria-hidden="true">
+                    {info?.pictureUrl ? (
+                      <img
+                        src={info.pictureUrl}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="chat-contact-pill-avatar-fallback">
+                        {suggestion.contact.name.charAt(0)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="chat-mention-suggestion-label">
+                    {suggestion.contact.name}
+                  </span>
+                  {suggestion.contact.groupName ? (
+                    <span className="muted">
+                      {suggestion.contact.groupName}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
         <div className="chat-compose-input-wrap">
           <input
             ref={imageInputRef}
@@ -744,20 +857,20 @@ export const ChatPage: FC<ChatPageProps> = ({
             }}
             tabIndex={-1}
           />
-          <textarea
+          <ChatMessageEditor
             ref={composeInputRef}
             value={chatDraft}
-            onChange={(e) => setChatDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (!isDesktop) return;
-              if (e.key !== "Enter" || !e.metaKey) return;
-              if (!canSendChat) return;
-              e.preventDefault();
+            onChange={setChatDraft}
+            onCaretChange={setComposeCaret}
+            onSendShortcut={() => {
+              if (!isDesktop || !canSendChat) return;
               void sendChatMessage();
             }}
             placeholder={t("chatPlaceholder")}
             disabled={!npub && !hasUnknownPubkeyHex}
-            data-guide="chat-input"
+            getCashuTokenMessageInfo={getCashuTokenMessageInfo}
+            getMintIconUrl={getMintIconUrl}
+            getNpubMessageContactInfo={getNpubMessageContactInfo}
           />
           {!hasDraftText ? (
             <button

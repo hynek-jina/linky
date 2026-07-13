@@ -25,10 +25,10 @@ export interface MainSwipeRouteProps {
   };
   contactsSearch: string;
   contactsSearchInputRef: React.RefObject<HTMLInputElement | null>;
+  contactFilterOptions: Array<{ count: number; label: string; value: string }>;
   contactsToolbarStyle: React.CSSProperties;
   conversationsLabel: string;
   dismissContactsOnboarding: () => void;
-  groupNames: string[];
   handleMainSwipeScroll:
     | ((event: React.UIEvent<HTMLDivElement>) => void)
     | undefined;
@@ -36,7 +36,6 @@ export interface MainSwipeRouteProps {
   isMainSwipeDragging: boolean;
   mainSwipeProgress: number;
   mainSwipeRef: React.RefObject<HTMLDivElement | null>;
-  NO_GROUP_FILTER: string;
   closeProfileQr: () => void;
   openNewContactPage: () => void;
   openProfileQr: () => void;
@@ -50,9 +49,7 @@ export interface MainSwipeRouteProps {
   showContactsOnboarding: boolean;
   showWalletWarning: boolean;
   showGroupFilter: boolean;
-  showNoGroupFilter: boolean;
   showProfileQrOnTiltEnabled: boolean;
-  statusFilterCurrencies: string[];
   startContactsGuide: (task: ContactsGuideKey) => void;
   t: (key: string) => string;
   visibleContacts: {
@@ -82,17 +79,16 @@ export const MainSwipeContent = (): React.ReactElement => {
     contactsOnboardingTasks,
     contactsSearch,
     contactsSearchInputRef,
+    contactFilterOptions,
     contactsToolbarStyle,
     conversationsLabel,
     dismissContactsOnboarding,
     dismissWalletWarning,
-    groupNames,
     handleMainSwipeScroll,
     handleMainSwipeTabChange,
     isMainSwipeDragging,
     mainSwipeProgress,
     mainSwipeRef,
-    NO_GROUP_FILTER,
     closeProfileQr,
     openNewContactPage,
     openProfileQr,
@@ -106,9 +102,7 @@ export const MainSwipeContent = (): React.ReactElement => {
     showContactsOnboarding,
     showWalletWarning,
     showGroupFilter,
-    showNoGroupFilter,
     showProfileQrOnTiltEnabled,
-    statusFilterCurrencies,
     startContactsGuide,
     t,
     visibleContacts,
@@ -159,10 +153,7 @@ export const MainSwipeContent = (): React.ReactElement => {
             showGroupFilter={showGroupFilter}
             activeGroup={activeGroup}
             setActiveGroup={setActiveGroup}
-            showNoGroupFilter={showNoGroupFilter}
-            noGroupFilterValue={NO_GROUP_FILTER}
-            groupNames={groupNames}
-            statusFilterCurrencies={statusFilterCurrencies}
+            filterOptions={contactFilterOptions}
             visibleContacts={visibleContacts}
             conversationsLabel={conversationsLabel}
             otherContactsLabel={otherContactsLabel}

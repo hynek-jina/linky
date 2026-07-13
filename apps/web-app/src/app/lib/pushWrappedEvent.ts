@@ -10,6 +10,8 @@ export const LINKY_PUSH_MARKER_TAG = "linky";
 export const LINKY_PUSH_MARKER_VALUE = "push";
 export const LINKY_PAYMENT_NOTICE_KIND = 24133;
 export const LINKY_PAYMENT_NOTICE_VALUE = "payment_notice";
+export const LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER =
+  "bank_payment_offer";
 export const LINKY_PAYMENT_TELEMETRY_KIND = 24134;
 export const LINKY_PAYMENT_TELEMETRY_VALUE = "payment_telemetry";
 
@@ -81,6 +83,7 @@ export function hasLinkyPushMarker(event: { tags: string[][] }): boolean {
 
 export function createLinkyPaymentNoticeEvent(args: {
   clientId: string;
+  context?: typeof LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER;
   createdAt: number;
   recipientPublicKey: string;
   senderPublicKey: string;
@@ -94,9 +97,25 @@ export function createLinkyPaymentNoticeEvent(args: {
       ["p", args.senderPublicKey],
       ["client", args.clientId],
       [LINKY_PUSH_MARKER_TAG, LINKY_PAYMENT_NOTICE_VALUE],
+      ...(args.context ? [["context", args.context]] : []),
     ],
     content: LINKY_PAYMENT_NOTICE_VALUE,
   };
+}
+
+export function isLinkyBankPaymentOfferPaymentNoticeEvent(event: {
+  kind: number;
+  tags: string[][];
+}): boolean {
+  return (
+    isLinkyPaymentNoticeEvent(event) &&
+    event.tags.some(
+      (tag) =>
+        Array.isArray(tag) &&
+        tag[0] === "context" &&
+        tag[1] === LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
+    )
+  );
 }
 
 export function isLinkyPaymentNoticeEvent(event: {

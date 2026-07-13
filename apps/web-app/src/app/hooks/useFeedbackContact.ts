@@ -42,7 +42,7 @@ export const useFeedbackContact = <
         update("contact", { id: existing.id as ContactId, name: null });
       }
       openFeedbackContactPendingRef.current = false;
-      navigateTo({ route: "contact", id: existing.id as ContactId });
+      navigateTo({ route: "chat", id: existing.id as ContactId });
       return;
     }
 
@@ -75,7 +75,7 @@ export const useFeedbackContact = <
     if (!existing?.id) return;
 
     openFeedbackContactPendingRef.current = false;
-    navigateTo({ route: "contact", id: existing.id as ContactId });
+    navigateTo({ route: "chat", id: existing.id as ContactId });
   }, [contacts]);
 
   return {

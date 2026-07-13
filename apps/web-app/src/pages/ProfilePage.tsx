@@ -42,9 +42,8 @@ interface ProfilePageProps {
   isProfileEditing: boolean;
   myProfileQr: string | null;
   onPickProfilePhoto: () => Promise<void>;
-  onProfilePhotoSelected: (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => Promise<void>;
+  onProfilePhotoError: (error: unknown) => void;
+  onProfilePhotoSelected: (dataUrl: string) => void;
   ownedLightningAddresses: readonly string[];
   profileCustomPictureUrl: string;
   profileEditLnAddress: string;
@@ -89,6 +88,7 @@ export function ProfilePage({
   isProfileEditing,
   myProfileQr,
   onPickProfilePhoto,
+  onProfilePhotoError,
   onProfilePhotoSelected,
   ownedLightningAddresses,
   profileCustomPictureUrl,
@@ -272,6 +272,7 @@ export function ProfilePage({
                 effectiveProfileName={effectiveProfileName}
                 effectiveProfilePicture={effectiveProfilePicture}
                 onPickProfilePhoto={onPickProfilePhoto}
+                onProfilePhotoError={onProfilePhotoError}
                 onProfilePhotoSelected={onProfilePhotoSelected}
                 profileCustomPictureUrl={profileCustomPictureUrl}
                 profileEditName={profileEditName}

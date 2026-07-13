@@ -20,10 +20,14 @@ import {
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./app/hooks/messages/chatNostrProtocol";
 import {
+  getBankPaymentReimbursementCopyForLanguage,
   getReceivedMoneyCopyForLanguage,
   isCashuNotificationMessage,
 } from "./app/lib/cashuNotificationCopy";
-import { isLinkyPaymentNoticeEvent } from "./app/lib/pushWrappedEvent";
+import {
+  isLinkyBankPaymentOfferPaymentNoticeEvent,
+  isLinkyPaymentNoticeEvent,
+} from "./app/lib/pushWrappedEvent";
 import { normalizePubkeyHex } from "./app/hooks/messages/contactIdentity";
 import { NOSTR_RELAYS } from "./utils/nostrRelays";
 import { getStoredPushContactName } from "./utils/pushContactNamesStorage";
@@ -418,6 +422,8 @@ async function decryptIncomingMessageBody(
   }
 
   if (isLinkyPaymentNoticeEvent(inner)) {
+    const isBankPaymentReimbursement =
+      isLinkyBankPaymentOfferPaymentNoticeEvent(inner);
     await logSw("sw decrypt succeeded", {
       contentLength: content.length,
       data: readEnvelopeDebugMeta(envelope),
@@ -425,7 +431,9 @@ async function decryptIncomingMessageBody(
       senderPub,
     });
     return {
-      body: getReceivedMoneyCopyForLanguage(self.navigator.language),
+      body: isBankPaymentReimbursement
+        ? getBankPaymentReimbursementCopyForLanguage(self.navigator.language)
+        : getReceivedMoneyCopyForLanguage(self.navigator.language),
       isCashu: false,
       isPaymentNotice: true,
       senderPub,

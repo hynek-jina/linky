@@ -169,7 +169,7 @@ export class PushDeliveryService {
     const endpointHash = hashEndpoint(subscription.endpoint);
     const payload: PushNotificationEnvelope = {
       title: buildNotificationTitle(payloadData),
-      body: "New message",
+      body: "Nová aktivita v Linky",
       data: payloadData,
     };
 
@@ -218,7 +218,7 @@ export class PushDeliveryService {
     const message: Message = {
       token: subscription.token,
       data: {
-        body: "New message",
+        body: "Nová aktivita v Linky",
         createdAt: String(payloadData.createdAt),
         outerEventId: payloadData.outerEventId,
         recipientNpub: payloadData.recipientNpub,

@@ -51,10 +51,10 @@ import {
   type NostrProfileMetadata,
 } from "../nostrProfile";
 import {
+  buildStatusFilterValue,
   extractStatusFilterCurrencies,
   isStatusFilterValue,
   parseStatusFilterValue,
-  PROFILE_STATUS_CURRENCIES,
 } from "../nostrStatus";
 import { writeClipboardText } from "../platform/clipboard";
 import {
@@ -108,6 +108,7 @@ import {
   NO_GROUP_FILTER,
   PENDING_DEEP_LINK_TEXT_STORAGE_KEY,
   WALLET_WARNING_BALANCE_THRESHOLD_SAT,
+  WALLET_WARNING_DISMISSED_STORAGE_KEY,
 } from "../utils/constants";
 import { buildCashuDeepLink, parseNativeDeepLinkUrl } from "../utils/deepLinks";
 import {
@@ -247,6 +248,7 @@ import {
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
   LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY,
+  shouldPushLinkyBankPaymentOfferStatus,
   type LinkyBankPaymentOfferStatus,
 } from "./lib/bankPaymentOffer";
 import {
@@ -295,6 +297,7 @@ import {
   privateImagePreviewText,
 } from "./lib/privateImageMessage";
 import {
+  LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
   wrapEventWithoutPushMarker,
   wrapEventWithPushMarker,
 } from "./lib/pushWrappedEvent";
@@ -1995,6 +1998,7 @@ export const useAppShellComposition = () => {
     onboardingPhotoInputRef,
     onboardingStep,
     openReturningOnboarding,
+    onPendingOnboardingPhotoError,
     onPendingOnboardingPhotoSelected,
     pasteReturningSlip39FromClipboard,
     pickPendingOnboardingPhoto,
@@ -2380,6 +2384,7 @@ export const useAppShellComposition = () => {
     contactsSearchParts,
     dedupeContacts,
     dedupeContactsIsBusy,
+    groupCounts,
     groupNames,
     selectedContact,
     setActiveGroup,
@@ -3467,6 +3472,7 @@ export const useAppShellComposition = () => {
     cycleProfileAvatarControl,
     isProfileEditing,
     onPickProfilePhoto,
+    onProfilePhotoError,
     onProfilePhotoSelected,
     profileCustomPictureUrl,
     profileEditInitialRef,
@@ -4243,8 +4249,8 @@ export const useAppShellComposition = () => {
     });
   }, [displayContacts, nostrStatusByNpub]);
 
-  const statusFilterCurrencies = React.useMemo(() => {
-    const uniqueCurrencies = new Set<string>();
+  const { statusFilterCounts, statusFilterCurrencies } = React.useMemo(() => {
+    const currencyCounts = new Map<string, number>();
 
     for (const contact of displayContacts) {
       const normalizedNpub = normalizeNpubIdentifier(contact.npub);
@@ -4253,26 +4259,66 @@ export const useAppShellComposition = () => {
       for (const currency of extractStatusFilterCurrencies(
         nostrStatusByNpub[normalizedNpub],
       )) {
-        uniqueCurrencies.add(currency);
+        currencyCounts.set(currency, (currencyCounts.get(currency) ?? 0) + 1);
       }
     }
 
-    return [...uniqueCurrencies].sort((left, right) => {
-      const leftKnownIndex = PROFILE_STATUS_CURRENCIES.indexOf(
-        left as (typeof PROFILE_STATUS_CURRENCIES)[number],
-      );
-      const rightKnownIndex = PROFILE_STATUS_CURRENCIES.indexOf(
-        right as (typeof PROFILE_STATUS_CURRENCIES)[number],
-      );
-
-      if (leftKnownIndex >= 0 && rightKnownIndex >= 0) {
-        return leftKnownIndex - rightKnownIndex;
-      }
-      if (leftKnownIndex >= 0) return -1;
-      if (rightKnownIndex >= 0) return 1;
-      return left.localeCompare(right);
-    });
+    const currencies = [...currencyCounts.entries()]
+      .sort((left, right) => {
+        if (right[1] !== left[1]) return right[1] - left[1];
+        return left[0].localeCompare(right[0]);
+      })
+      .map(([currency]) => currency);
+    return {
+      statusFilterCounts: currencyCounts,
+      statusFilterCurrencies: currencies,
+    };
   }, [displayContacts, nostrStatusByNpub]);
+
+  const contactFilterOptions = React.useMemo(() => {
+    const options: Array<{ count: number; label: string; value: string }> = [];
+    if (ungroupedCount > 0) {
+      options.push({
+        count: ungroupedCount,
+        label: t("noGroup"),
+        value: NO_GROUP_FILTER,
+      });
+    }
+    const archivedCount = displayContacts.filter(
+      (contact) => Number(contact.archivedAtSec ?? 0) > 0,
+    ).length;
+    options.push({
+      count: archivedCount,
+      label: t("archiveFilter"),
+      value: ARCHIVED_CONTACTS_FILTER,
+    });
+    for (const groupName of groupNames) {
+      options.push({
+        count: groupCounts.get(groupName) ?? 0,
+        label: groupName,
+        value: groupName,
+      });
+    }
+    for (const currency of statusFilterCurrencies) {
+      options.push({
+        count: statusFilterCounts.get(currency) ?? 0,
+        label: currency,
+        value: buildStatusFilterValue(currency),
+      });
+    }
+    return options.sort((left, right) => {
+      if (right.count !== left.count) return right.count - left.count;
+      return left.label.localeCompare(right.label);
+    });
+  }, [
+    displayContacts,
+    groupCounts,
+    groupNames,
+    statusFilterCounts,
+    statusFilterCurrencies,
+    t,
+    ungroupedCount,
+  ]);
 
   React.useEffect(() => {
     if (activeGroup === ARCHIVED_CONTACTS_FILTER) return;
@@ -4627,7 +4673,7 @@ export const useAppShellComposition = () => {
     async (
       message: LocalNostrMessage,
       nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
-      options?: { spdPayload?: string | null },
+      options?: { spdPayload?: string | null; withPush?: boolean },
     ): Promise<boolean> => {
       const offerInfo = getLinkyBankPaymentOfferInfo(
         String(message.content ?? ""),
@@ -4711,11 +4757,16 @@ export const useAppShellComposition = () => {
           privBytes,
           myPubHex,
         );
-        const wrapForContact = wrapEventWithPushMarker(
-          baseEvent,
-          privBytes,
-          recipientPublicKey,
-        );
+        const withPush =
+          options?.withPush ??
+          shouldPushLinkyBankPaymentOfferStatus(nextStatus);
+        const wrapForContact = withPush
+          ? wrapEventWithPushMarker(baseEvent, privBytes, recipientPublicKey)
+          : wrapEventWithoutPushMarker(
+              baseEvent,
+              privBytes,
+              recipientPublicKey,
+            );
 
         const pool = await getSharedAppNostrPool();
         const publishOutcome = await publishWrappedWithRetry(
@@ -4816,13 +4867,49 @@ export const useAppShellComposition = () => {
     async (
       message: LocalNostrMessage,
       nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
-      options?: { spdPayload?: string | null },
+      options?: { spdPayload?: string | null; withPush?: boolean },
     ): Promise<boolean> => {
       if (nextStatus !== "canceled" && nextStatus !== "settled") {
         return await respondToBankPaymentOffer(message, nextStatus, options);
       }
 
       const group = getBankPaymentOfferGroupMessages(message);
+      const cancellationPushContactId =
+        nextStatus === "canceled"
+          ? (group
+              .filter((candidate) => {
+                const info = getLinkyBankPaymentOfferInfo(
+                  String(candidate.content ?? ""),
+                );
+                return (
+                  info?.status === "accepted" ||
+                  info?.status === "bank_details_sent" ||
+                  info?.status === "bank_paid"
+                );
+              })
+              .sort((left, right) => {
+                const leftInfo = getLinkyBankPaymentOfferInfo(
+                  String(left.content ?? ""),
+                );
+                const rightInfo = getLinkyBankPaymentOfferInfo(
+                  String(right.content ?? ""),
+                );
+                const rank = (status: LinkyBankPaymentOfferStatus): number =>
+                  status === "bank_paid"
+                    ? 0
+                    : status === "bank_details_sent"
+                      ? 1
+                      : 2;
+                const rankDifference =
+                  rank(leftInfo?.status ?? "accepted") -
+                  rank(rightInfo?.status ?? "accepted");
+                if (rankDifference !== 0) return rankDifference;
+                return (
+                  Number(leftInfo?.statusUpdatedAtSec ?? left.createdAtSec) -
+                  Number(rightInfo?.statusUpdatedAtSec ?? right.createdAtSec)
+                );
+              })[0]?.contactId ?? null)
+          : null;
       let sentAny = false;
 
       for (const groupMessage of group) {
@@ -4836,11 +4923,15 @@ export const useAppShellComposition = () => {
         }
         if (nextStatus === "canceled" && info.status === "settled") continue;
 
-        const sent = await respondToBankPaymentOffer(
-          groupMessage,
-          nextStatus,
-          options,
-        );
+        const sent = await respondToBankPaymentOffer(groupMessage, nextStatus, {
+          ...(options?.spdPayload !== undefined
+            ? { spdPayload: options.spdPayload }
+            : {}),
+          withPush:
+            nextStatus === "canceled" &&
+            String(groupMessage.contactId ?? "").trim() ===
+              String(cancellationPushContactId ?? "").trim(),
+        });
         sentAny = sentAny || sent;
       }
 
@@ -5114,6 +5205,7 @@ export const useAppShellComposition = () => {
           contact,
           amountSat: offerInfo.amountSat,
           logCompletedOnly: true,
+          paymentNoticeContext: LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
         });
         if (!result.ok) return;
 
@@ -6002,19 +6094,15 @@ export const useAppShellComposition = () => {
     t,
   });
 
-  const [walletWarningDismissed, setWalletWarningDismissed] =
-    React.useState(false);
+  const [walletWarningDismissed, setWalletWarningDismissed] = React.useState(
+    () => safeLocalStorageGet(WALLET_WARNING_DISMISSED_STORAGE_KEY) === "1",
+  );
 
   const walletWarningApplies =
     cashuBalance > WALLET_WARNING_BALANCE_THRESHOLD_SAT;
 
-  React.useEffect(() => {
-    if (!walletWarningApplies) {
-      setWalletWarningDismissed(false);
-    }
-  }, [walletWarningApplies]);
-
   const dismissWalletWarning = React.useCallback(() => {
+    safeLocalStorageSet(WALLET_WARNING_DISMISSED_STORAGE_KEY, "1");
     setWalletWarningDismissed(true);
   }, []);
 
@@ -7287,6 +7375,9 @@ export const useAppShellComposition = () => {
 
       return {
         displayName,
+        isSaved:
+          Boolean(knownContact) ||
+          normalizeNpubIdentifier(currentNpub) === npub,
         npub,
         pictureUrl,
       };
@@ -7294,10 +7385,30 @@ export const useAppShellComposition = () => {
     [
       buildSavedContactName,
       contacts,
+      currentNpub,
       lang,
       nostrPictureByNpub,
       unknownNameByNpub,
     ],
+  );
+
+  const mentionContacts = React.useMemo(
+    () =>
+      contacts.flatMap((contact) => {
+        const name = String(contact.name ?? "").trim();
+        const npub = normalizeNpubIdentifier(contact.npub);
+        if (!name || !npub) return [];
+        const groupName = String(contact.groupName ?? "").trim();
+        return [
+          {
+            name,
+            npub,
+            groupName: groupName || null,
+            statusNames: extractStatusFilterCurrencies(nostrStatusByNpub[npub]),
+          },
+        ];
+      }),
+    [contacts, nostrStatusByNpub],
   );
 
   const openNpubMessageContact = React.useCallback(
@@ -7462,6 +7573,7 @@ export const useAppShellComposition = () => {
           statusText={statusText}
           tokenInfo={tokenInfo}
           getMintIconUrl={getMintIconUrl}
+          getNpubMessageContactInfo={getNpubMessageContactInfo}
           onSelect={handleSelectContact}
           onMintIconLoad={handleMintIconLoad}
           onMintIconError={handleMintIconError}
@@ -7471,6 +7583,7 @@ export const useAppShellComposition = () => {
     [
       contactAttentionById,
       getMintIconUrl,
+      getNpubMessageContactInfo,
       handleMintIconError,
       handleMintIconLoad,
       handleSelectContact,
@@ -9388,6 +9501,7 @@ export const useAppShellComposition = () => {
       isBankPaymentOfferCanceled,
       isSavingContact,
       lang,
+      mentionContacts,
       makeNip98AuthHeader,
       myProfileQr,
       profileStatusCurrencies,
@@ -9406,6 +9520,7 @@ export const useAppShellComposition = () => {
       onSettleBankPaymentOffer: settleBankPaymentOffer,
       cycleProfileAvatarControl,
       onPickProfilePhoto,
+      onProfilePhotoError,
       onProfilePhotoSelected,
       onReact: onReactToChatMessage,
       onReply: onReplyToChatMessage,
@@ -9440,6 +9555,10 @@ export const useAppShellComposition = () => {
       restoreArchivedContact: () => {
         if (!editingId) return;
         restoreArchivedContact(editingId);
+      },
+      restoreSelectedContact: () => {
+        if (!selectedContact) return;
+        restoreArchivedContact(selectedContact.id);
       },
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
@@ -9481,16 +9600,15 @@ export const useAppShellComposition = () => {
       contactsOnboardingTasks,
       contactsSearch,
       contactsSearchInputRef,
+      contactFilterOptions,
       conversationsLabel,
       dismissContactsOnboarding,
       dismissWalletWarning,
-      groupNames,
       handleMainSwipeScroll,
       handleMainSwipeTabChange: commitMainSwipe,
       isMainSwipeDragging,
       mainSwipeProgress,
       mainSwipeRef,
-      NO_GROUP_FILTER,
       canAddContact,
       closeProfileQr,
       openNewContactPage,
@@ -9505,7 +9623,6 @@ export const useAppShellComposition = () => {
       setContactsSearch,
       showContactsOnboarding,
       showWalletWarning: walletWarningApplies && !walletWarningDismissed,
-      statusFilterCurrencies,
       startContactsGuide,
       t,
       visibleContacts,
@@ -9727,6 +9844,7 @@ export const useAppShellComposition = () => {
     cycleProfileAvatarControl,
     onPickProfilePhoto,
     onPickScanImage,
+    onProfilePhotoError,
     onProfilePhotoSelected,
     onScanImageSelected,
     openFeedbackContact,
@@ -9776,6 +9894,7 @@ export const useAppShellComposition = () => {
     onboardingPhotoInputRef,
     onboardingStep,
     openReturningOnboarding,
+    onPendingOnboardingPhotoError,
     onPendingOnboardingPhotoSelected,
     pageClassNameWithSwipe,
     pasteReturningSlip39FromClipboard,

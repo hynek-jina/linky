@@ -46,6 +46,8 @@ export const cs = {
   notificationsDenied: "Zamítnuto",
   notificationsError: "Chyba",
   notificationReceivedMoney: "Přijali jste peníze",
+  notificationReceivedBankPaymentReimbursement:
+    "Dorazily ti saty za bankovní platbu",
 
   onboardingTitle: "Linky",
   onboardingSubtitle: "Lightning kontakty pro platby a zprávy.",
@@ -513,6 +515,11 @@ export const cs = {
   archiveContact: "Archivovat",
   archiveArmedHint: "Pro archivaci klikněte ještě jednou.",
   restoreArchivedContact: "Vrátit mezi kontakty",
+  archivedContactBadge: "Archivovaný kontakt",
+  avatarCropTitle: "Oříznout profilovou fotku",
+  avatarCropHelp: "Posunutím a přiblížením vyberte čtvercový výřez.",
+  avatarCropZoom: "Přiblížení",
+  avatarCropConfirm: "Použít výřez",
 
   contact: "Kontakt",
   editContact: "Upravit kontakt",
@@ -535,6 +542,7 @@ export const cs = {
   npubPlaceholder: "npub nebo ověřené jméno (NIP-05)",
   lightningAddressPlaceholder: "např. alice@zapsat.cz",
   groupPlaceholder: "např. Friends",
+  chatMentionGroupCount: "{count} kontaktů",
 
   all: "Vše",
   noGroup: "Bez skupiny",
@@ -582,9 +590,10 @@ export const cs = {
   walletOpen: "Otevřít peněženku",
   walletReceive: "Přijmout",
   walletSend: "Odeslat",
-  walletEarlyWarningTitle: "Upozornění",
+  walletEarlyWarningTitle: "Gratulujeme",
   walletEarlyWarningBody:
-    "Linky je ve velmi rané fázi. Můžete ztratit přístup k prostředkům, které sem nahrajete. Používejte jen malé částky.",
+    "Nastřádali jste větší množství bitcoinu a mohla by se vám hodit podpora hardwarové peněženky. Dejte nám vědět, pokud o ni máte zájem.",
+  walletHardwareSupportAction: "Napsat nám",
   storageNotPersistent:
     "Úložiště není perzistentní (anonymní okno?). Peněženka může po obnovení zmizet. Pro nejlepší spolehlivost použijte běžné okno.",
 
@@ -637,6 +646,7 @@ export const cs = {
   bankPaymentOfferSettle: "Potvrdit odeslání satů",
   bankPaymentOfferAcceptedByOther: "Nabídku přijal někdo jiný.",
   bankPaymentOfferBackupRecipient: "Tento kontakt je vedený jako náhradník.",
+  bankPaymentOfferAllDeclined: "Nikdo nabídku nepřijal.",
   bankPaymentOfferExpired: "Čas v této fázi vypršel",
   bankPaymentOfferTimeRemainingClock: "Zbývá {minutes}:{seconds}",
   bankPaymentOfferTimeRemainingHoursMinutes: "Zbývá {hours} h {minutes} min",

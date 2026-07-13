@@ -46,6 +46,8 @@ export const en = {
   notificationsDenied: "Denied",
   notificationsError: "Error",
   notificationReceivedMoney: "You received money",
+  notificationReceivedBankPaymentReimbursement:
+    "Your sats for the bank payment have arrived",
 
   onboardingTitle: "Linky",
   onboardingSubtitle: "Lightning contacts for payments and messages.",
@@ -509,6 +511,11 @@ export const en = {
   archiveContact: "Archive contact",
   archiveArmedHint: "Click once more to archive.",
   restoreArchivedContact: "Restore contact",
+  archivedContactBadge: "Archived contact",
+  avatarCropTitle: "Crop profile photo",
+  avatarCropHelp: "Move and zoom the photo to choose a square crop.",
+  avatarCropZoom: "Zoom",
+  avatarCropConfirm: "Use crop",
 
   contact: "Contact",
   editContact: "Edit contact",
@@ -531,6 +538,7 @@ export const en = {
   npubPlaceholder: "npub or verified name (NIP-05)",
   lightningAddressPlaceholder: "e.g. linky@linky.fit",
   groupPlaceholder: "e.g. Friends",
+  chatMentionGroupCount: "{count} contacts",
 
   all: "All",
   noGroup: "No group",
@@ -573,9 +581,10 @@ export const en = {
   errorPrefix: "Error",
 
   wallet: "Wallet",
-  walletEarlyWarningTitle: "Warning",
+  walletEarlyWarningTitle: "Congratulations",
   walletEarlyWarningBody:
-    "Linky is in a very early stage. You may lose access to funds you load here. Only use small amounts.",
+    "You have stacked big amount of bitcoin and might benefit from hardware wallet support. Give us feedback if you are interested.",
+  walletHardwareSupportAction: "Give feedback",
   storageNotPersistent:
     "Storage is not persistent (private browsing?). Your wallet may disappear after reloads. Use a normal window for best reliability.",
   topup: "Top-up",
@@ -628,6 +637,7 @@ export const en = {
   bankPaymentOfferSettle: "Confirm sats sent",
   bankPaymentOfferAcceptedByOther: "Someone else accepted this offer.",
   bankPaymentOfferBackupRecipient: "This contact is kept as a backup.",
+  bankPaymentOfferAllDeclined: "Nobody accepted the offer.",
   bankPaymentOfferExpired: "This phase has expired",
   bankPaymentOfferTimeRemainingClock: "{minutes}:{seconds} remaining",
   bankPaymentOfferTimeRemainingHoursMinutes:

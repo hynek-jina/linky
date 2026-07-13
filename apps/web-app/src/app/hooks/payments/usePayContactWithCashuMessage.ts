@@ -27,6 +27,7 @@ import {
 import { selectSingleMintCandidateForAmount } from "../../lib/paymentMintSelection";
 import {
   createLinkyPaymentNoticeEvent,
+  LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
   wrapEventWithPushMarker,
   wrapEventWithoutPushMarker,
 } from "../../lib/pushWrappedEvent";
@@ -175,6 +176,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       fromQueue?: boolean;
       logCompletedOnly?: boolean;
       pendingMessageId?: string;
+      paymentNoticeContext?: typeof LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER;
       paymentRequestId?: string | null;
       replyContext?: ReplyContext | null;
     }): Promise<{ ok: boolean; queued: boolean; error?: string }> => {
@@ -184,6 +186,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         fromQueue,
         logCompletedOnly,
         pendingMessageId,
+        paymentNoticeContext,
         paymentRequestId,
         replyContext,
       } = args;
@@ -712,6 +715,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           const paymentNoticeClientId = makeLocalId();
           const paymentNoticeEvent = createLinkyPaymentNoticeEvent({
             clientId: paymentNoticeClientId,
+            ...(paymentNoticeContext ? { context: paymentNoticeContext } : {}),
             createdAt: Math.ceil(Date.now() / 1e3),
             recipientPublicKey: contactPubHex,
             senderPublicKey: myPubHex,

@@ -11,17 +11,16 @@ interface BuildMainSwipeRoutePropsParams {
   contactsOnboardingTasks: MainSwipeRoutesProps["mainSwipeProps"]["contactsOnboardingTasks"];
   contactsSearch: MainSwipeRoutesProps["mainSwipeProps"]["contactsSearch"];
   contactsSearchInputRef: MainSwipeRoutesProps["mainSwipeProps"]["contactsSearchInputRef"];
+  contactFilterOptions: MainSwipeRoutesProps["mainSwipeProps"]["contactFilterOptions"];
   contactsToolbarStyle: MainSwipeRoutesProps["mainSwipeProps"]["contactsToolbarStyle"];
   conversationsLabel: MainSwipeRoutesProps["mainSwipeProps"]["conversationsLabel"];
   dismissContactsOnboarding: MainSwipeRoutesProps["mainSwipeProps"]["dismissContactsOnboarding"];
   dismissWalletWarning: MainSwipeRoutesProps["mainSwipeProps"]["dismissWalletWarning"];
-  groupNames: MainSwipeRoutesProps["mainSwipeProps"]["groupNames"];
   handleMainSwipeScroll: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeScroll"];
   handleMainSwipeTabChange: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeTabChange"];
   isMainSwipeDragging: MainSwipeRoutesProps["mainSwipeProps"]["isMainSwipeDragging"];
   mainSwipeProgress: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeProgress"];
   mainSwipeRef: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeRef"];
-  NO_GROUP_FILTER: MainSwipeRoutesProps["mainSwipeProps"]["NO_GROUP_FILTER"];
   closeProfileQr: MainSwipeRoutesProps["mainSwipeProps"]["closeProfileQr"];
   openNewContactPage: MainSwipeRoutesProps["mainSwipeProps"]["openNewContactPage"];
   openProfileQr: MainSwipeRoutesProps["mainSwipeProps"]["openProfileQr"];
@@ -35,9 +34,7 @@ interface BuildMainSwipeRoutePropsParams {
   showContactsOnboarding: MainSwipeRoutesProps["mainSwipeProps"]["showContactsOnboarding"];
   showWalletWarning: MainSwipeRoutesProps["mainSwipeProps"]["showWalletWarning"];
   showGroupFilter: MainSwipeRoutesProps["mainSwipeProps"]["showGroupFilter"];
-  showNoGroupFilter: MainSwipeRoutesProps["mainSwipeProps"]["showNoGroupFilter"];
   showProfileQrOnTiltEnabled: MainSwipeRoutesProps["mainSwipeProps"]["showProfileQrOnTiltEnabled"];
-  statusFilterCurrencies: MainSwipeRoutesProps["mainSwipeProps"]["statusFilterCurrencies"];
   startContactsGuide: MainSwipeRoutesProps["mainSwipeProps"]["startContactsGuide"];
   t: MainSwipeRoutesProps["mainSwipeProps"]["t"];
   visibleContacts: MainSwipeRoutesProps["mainSwipeProps"]["visibleContacts"];
@@ -54,17 +51,16 @@ export const buildMainSwipeRouteProps = ({
   contactsOnboardingTasks,
   contactsSearch,
   contactsSearchInputRef,
+  contactFilterOptions,
   contactsToolbarStyle,
   conversationsLabel,
   dismissContactsOnboarding,
   dismissWalletWarning,
-  groupNames,
   handleMainSwipeScroll,
   handleMainSwipeTabChange,
   isMainSwipeDragging,
   mainSwipeProgress,
   mainSwipeRef,
-  NO_GROUP_FILTER,
   closeProfileQr,
   openNewContactPage,
   openProfileQr,
@@ -78,9 +74,7 @@ export const buildMainSwipeRouteProps = ({
   showContactsOnboarding,
   showWalletWarning,
   showGroupFilter,
-  showNoGroupFilter,
   showProfileQrOnTiltEnabled,
-  statusFilterCurrencies,
   startContactsGuide,
   t,
   visibleContacts,
@@ -97,17 +91,16 @@ export const buildMainSwipeRouteProps = ({
       contactsOnboardingTasks,
       contactsSearch,
       contactsSearchInputRef,
+      contactFilterOptions,
       contactsToolbarStyle,
       conversationsLabel,
       dismissContactsOnboarding,
       dismissWalletWarning,
-      groupNames,
       handleMainSwipeScroll,
       handleMainSwipeTabChange,
       isMainSwipeDragging,
       mainSwipeProgress,
       mainSwipeRef,
-      NO_GROUP_FILTER,
       closeProfileQr,
       openNewContactPage,
       openProfileQr,
@@ -121,9 +114,7 @@ export const buildMainSwipeRouteProps = ({
       showContactsOnboarding,
       showWalletWarning,
       showGroupFilter,
-      showNoGroupFilter,
       showProfileQrOnTiltEnabled,
-      statusFilterCurrencies,
       startContactsGuide,
       t,
       visibleContacts,
