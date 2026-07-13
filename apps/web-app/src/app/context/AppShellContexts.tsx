@@ -136,7 +136,8 @@ export interface AppShellActionsContextValue {
   cycleDisplayCurrency: () => void;
   cycleProfileAvatarControl: (controlId: AvatarEditorControlId) => void;
   onPickProfilePhoto: () => void;
-  onProfilePhotoSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onProfilePhotoError: (error: unknown) => void;
+  onProfilePhotoSelected: (dataUrl: string) => void;
   onPickScanImage: () => void;
   onScanImageSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
   openFeedbackContact: () => void;

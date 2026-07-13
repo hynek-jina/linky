@@ -41,6 +41,7 @@ interface BuildPeopleRoutePropsParams {
   isSavingContact: PeopleRoutesProps["contactEditProps"]["isSavingContact"];
   blockArchivedContact: PeopleRoutesProps["contactEditProps"]["blockArchivedContact"];
   lang: PeopleRoutesProps["chatProps"]["lang"];
+  mentionContacts: PeopleRoutesProps["chatProps"]["mentionContacts"];
   makeNip98AuthHeader: PeopleRoutesProps["profileProps"]["makeNip98AuthHeader"];
   myProfileQr: PeopleRoutesProps["profileProps"]["myProfileQr"];
   nostrPictureByNpub: PeopleRoutesProps["contactProps"]["nostrPictureByNpub"];
@@ -56,6 +57,7 @@ interface BuildPeopleRoutePropsParams {
   onOpenNpubContact: PeopleRoutesProps["chatProps"]["onOpenNpubContact"];
   onPayPaymentRequest: PeopleRoutesProps["chatProps"]["onPayPaymentRequest"];
   onPickProfilePhoto: PeopleRoutesProps["profileProps"]["onPickProfilePhoto"];
+  onProfilePhotoError: PeopleRoutesProps["profileProps"]["onProfilePhotoError"];
   onProfilePhotoSelected: PeopleRoutesProps["profileProps"]["onProfilePhotoSelected"];
   onReact: PeopleRoutesProps["chatProps"]["onReact"];
   onReply: PeopleRoutesProps["chatProps"]["onReply"];
@@ -83,6 +85,7 @@ interface BuildPeopleRoutePropsParams {
   profilePhotoInputRef: PeopleRoutesProps["profileProps"]["profilePhotoInputRef"];
   profileSelectedPictureKind: PeopleRoutesProps["profileProps"]["profileSelectedPictureKind"];
   restoreArchivedContact: PeopleRoutesProps["contactEditProps"]["restoreArchivedContact"];
+  restoreSelectedContact: PeopleRoutesProps["contactProps"]["restoreArchivedContact"];
   requestDeleteCurrentContact: PeopleRoutesProps["contactEditProps"]["requestDeleteCurrentContact"];
   requestSelectedContact: PeopleRoutesProps["contactPayProps"]["requestSelectedContact"];
   resetEditedContactFieldFromNostr: PeopleRoutesProps["contactEditProps"]["resetEditedContactFieldFromNostr"];
@@ -147,6 +150,7 @@ export const buildPeopleRouteProps = ({
   isSavingContact,
   blockArchivedContact,
   lang,
+  mentionContacts,
   makeNip98AuthHeader,
   myProfileQr,
   nostrPictureByNpub,
@@ -162,6 +166,7 @@ export const buildPeopleRouteProps = ({
   onOpenNpubContact,
   onPayPaymentRequest,
   onPickProfilePhoto,
+  onProfilePhotoError,
   onProfilePhotoSelected,
   onReact,
   onReply,
@@ -189,6 +194,7 @@ export const buildPeopleRouteProps = ({
   profilePhotoInputRef,
   profileSelectedPictureKind,
   restoreArchivedContact,
+  restoreSelectedContact,
   requestDeleteCurrentContact,
   requestSelectedContact,
   resetEditedContactFieldFromNostr,
@@ -244,6 +250,7 @@ export const buildPeopleRouteProps = ({
       payWithCashuEnabled,
       feedbackContactNpub,
       lang,
+      mentionContacts,
       reactionsByMessageId,
       setMintIconUrlByMint,
       chatMessageElByIdRef,
@@ -323,6 +330,7 @@ export const buildPeopleRouteProps = ({
       payWithCashuEnabled,
       feedbackContactNpub,
       openContactPay,
+      restoreArchivedContact: restoreSelectedContact,
       statusText: selectedContactStatusText,
       t,
     },
@@ -360,6 +368,7 @@ export const buildPeopleRouteProps = ({
       setProfileEditLnAddress,
       setProfileEditStatus,
       onProfilePhotoSelected,
+      onProfilePhotoError,
       onPickProfilePhoto,
       ownedLightningAddresses,
       saveProfileEdits,

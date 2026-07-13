@@ -1,4 +1,5 @@
 import { useEffect, useState, type FC } from "react";
+import { ArchiveRestore } from "lucide-react";
 import {
   DonateIcon,
   FeedbackIcon,
@@ -17,6 +18,7 @@ import { resolveVerifiedNip05Identifier } from "../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
 interface Contact {
+  archivedAtSec?: number | string | null;
   id: ContactId;
   name?: string | null;
   groupName?: string | null;
@@ -32,6 +34,7 @@ interface ContactPageProps {
   nostrPictureByNpub: Record<string, string | null>;
   openContactPay: (id: ContactId) => void;
   payWithCashuEnabled: boolean;
+  restoreArchivedContact: () => void;
   selectedContact: Contact | null;
   statusText: string | null;
   t: (key: string) => string;
@@ -127,6 +130,7 @@ export const ContactPage: FC<ContactPageProps> = ({
   nostrPictureByNpub,
   openContactPay,
   payWithCashuEnabled,
+  restoreArchivedContact,
   selectedContact,
   statusText,
   t,
@@ -157,6 +161,7 @@ export const ContactPage: FC<ContactPageProps> = ({
     hasLightningAddress || (payWithCashuEnabled && canMessage);
   const canStartPay = cashuBalance > 0 && canPayThisContact;
   const isFeedbackContact = npub === feedbackContactNpub;
+  const isArchivedContact = Number(selectedContact.archivedAtSec ?? 0) > 0;
   const payLabel = isFeedbackContact ? t("donate") : t("pay");
   const messageLabel = isFeedbackContact ? t("feedback") : t("sendMessage");
   const contactStatus = formatDisplayGeneralStatus({
@@ -203,6 +208,11 @@ export const ContactPage: FC<ContactPageProps> = ({
               {contactStatus}
             </p>
           ) : null}
+          {isArchivedContact ? (
+            <span className="contact-detail-archived-badge">
+              {t("archivedContactBadge")}
+            </span>
+          ) : null}
           {group ? <p className="contact-detail-group">{group}</p> : null}
         </div>
 
@@ -229,6 +239,16 @@ export const ContactPage: FC<ContactPageProps> = ({
             ) : null}
             {formatShortLightningAddress(ln)}
           </button>
+        ) : null}
+
+        {isArchivedContact ? (
+          <ContactActionButton
+            className="btn-wide secondary"
+            icon={<ArchiveRestore size={18} />}
+            onClick={restoreArchivedContact}
+          >
+            {t("restoreArchivedContact")}
+          </ContactActionButton>
         ) : null}
 
         {canPayThisContact && (

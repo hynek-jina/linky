@@ -17,6 +17,7 @@ import {
   type PasswordManagerSaveFormHandle,
 } from "./PasswordManagerSaveForm";
 import { AvatarEditorIcon } from "./AvatarEditorIcon";
+import { AvatarPhotoInput } from "./AvatarPhotoInput";
 import { PasteIcon } from "./icons";
 
 type UnauthenticatedLayoutProps = {
@@ -30,9 +31,8 @@ type UnauthenticatedLayoutProps = {
   onboardingPhotoInputRef: React.RefObject<HTMLInputElement | null>;
   onboardingStep: OnboardingStep;
   openReturningOnboarding: () => void;
-  onPendingOnboardingPhotoSelected: (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => Promise<void>;
+  onPendingOnboardingPhotoError: (error: unknown) => void;
+  onPendingOnboardingPhotoSelected: (dataUrl: string) => void;
   pasteReturningSlip39FromClipboard: () => Promise<void>;
   pickPendingOnboardingPhoto: () => Promise<void>;
   savePendingOnboardingBackupToPasswordManager: (
@@ -62,6 +62,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   onboardingPhotoInputRef,
   onboardingStep,
   openReturningOnboarding,
+  onPendingOnboardingPhotoError,
   onPendingOnboardingPhotoSelected,
   pasteReturningSlip39FromClipboard,
   pickPendingOnboardingPhoto,
@@ -452,12 +453,11 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             </div>
           </div>
 
-          <input
-            ref={onboardingPhotoInputRef}
-            type="file"
-            accept="image/*"
-            onChange={(event) => void onPendingOnboardingPhotoSelected(event)}
-            style={{ display: "none" }}
+          <AvatarPhotoInput
+            inputRef={onboardingPhotoInputRef}
+            onError={onPendingOnboardingPhotoError}
+            onSelected={onPendingOnboardingPhotoSelected}
+            t={t}
           />
 
           <div

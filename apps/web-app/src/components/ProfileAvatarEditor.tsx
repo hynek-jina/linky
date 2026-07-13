@@ -5,14 +5,16 @@ import {
 } from "../derivedProfile";
 import { formatShortNpub, getInitials } from "../utils/formatting";
 import { AvatarEditorIcon } from "./AvatarEditorIcon";
+import { AvatarPhotoInput } from "./AvatarPhotoInput";
 
 interface ProfileAvatarEditorProps {
   currentNpub: string;
   cycleProfileAvatarControl: (controlId: AvatarEditorControlId) => void;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
+  onProfilePhotoError: (error: unknown) => void;
   onPickProfilePhoto: () => void;
-  onProfilePhotoSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onProfilePhotoSelected: (dataUrl: string) => void;
   profileCustomPictureUrl: string;
   profileEditName: string;
   profileEditPicture: string;
@@ -26,6 +28,7 @@ export function ProfileAvatarEditor({
   cycleProfileAvatarControl,
   effectiveProfileName,
   effectiveProfilePicture,
+  onProfilePhotoError,
   onPickProfilePhoto,
   onProfilePhotoSelected,
   profileCustomPictureUrl,
@@ -63,12 +66,11 @@ export function ProfileAvatarEditor({
         </div>
       </div>
 
-      <input
-        ref={profilePhotoInputRef}
-        type="file"
-        accept="image/*"
-        onChange={(e) => void onProfilePhotoSelected(e)}
-        style={{ display: "none" }}
+      <AvatarPhotoInput
+        inputRef={profilePhotoInputRef}
+        onError={onProfilePhotoError}
+        onSelected={onProfilePhotoSelected}
+        t={t}
       />
 
       <div

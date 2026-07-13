@@ -23,7 +23,10 @@ import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
 import { formatChatMessagePreviewText } from "../../lib/chatMessageDisplay";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
-import { isLinkyPaymentNoticeEvent } from "../../lib/pushWrappedEvent";
+import {
+  isLinkyBankPaymentOfferPaymentNoticeEvent,
+  isLinkyPaymentNoticeEvent,
+} from "../../lib/pushWrappedEvent";
 import type {
   ContactNameRowLike,
   LocalNostrMessage,
@@ -375,6 +378,10 @@ export const useInboxNotificationsSync = <
             if (cancelled) return;
 
             if (isLinkyPaymentNoticeEvent(inner)) {
+              const paymentNoticeText =
+                isLinkyBankPaymentOfferPaymentNoticeEvent(inner)
+                  ? t("notificationReceivedBankPaymentReimbursement")
+                  : t("notificationReceivedMoney");
               const tags = Array.isArray(inner.tags) ? inner.tags : [];
               const pTags = tags
                 .filter((tag) => Array.isArray(tag) && tag[0] === "p")
@@ -431,7 +438,7 @@ export const useInboxNotificationsSync = <
                   pushToast(
                     t("chatIncomingMessageToast")
                       .replace("{name}", senderLabel)
-                      .replace("{message}", t("notificationReceivedMoney")),
+                      .replace("{message}", paymentNoticeText),
                   );
                 }
               }
@@ -440,11 +447,7 @@ export const useInboxNotificationsSync = <
                 const title =
                   contact?.name ??
                   (contact ? t("appTitle") : t("unknownContactTitle"));
-                void maybeShowPwaNotification(
-                  title,
-                  t("notificationReceivedMoney"),
-                  wrapId,
-                );
+                void maybeShowPwaNotification(title, paymentNoticeText, wrapId);
               }
               return;
             }
@@ -541,13 +544,70 @@ export const useInboxNotificationsSync = <
               }
               onBankPaymentOfferMessage(offerMessage);
 
-              if (isTerminalOffer) {
-                return;
-              }
-
               const isActiveChatContact =
                 Boolean(activeChatId) &&
                 String(contactId) === String(activeChatId);
+
+              if (isTerminalOffer) {
+                const isFinalDecline = (() => {
+                  if (
+                    offerInfo?.status !== "declined" ||
+                    !isOutgoing ||
+                    isSelfAuthored
+                  ) {
+                    return false;
+                  }
+
+                  const statusByContactId = new Map<
+                    string,
+                    LinkyBankPaymentOfferInfo["status"]
+                  >();
+                  for (const knownMessage of bankPaymentOfferMessages) {
+                    const knownInfo = getLinkyBankPaymentOfferInfo(
+                      String(knownMessage.content ?? ""),
+                    );
+                    if (knownInfo?.offerId !== offerInfo.offerId) continue;
+                    const knownContactId = String(
+                      knownMessage.contactId ?? "",
+                    ).trim();
+                    if (!knownContactId) continue;
+                    statusByContactId.set(knownContactId, knownInfo.status);
+                  }
+                  statusByContactId.set(contactId, "declined");
+                  return (
+                    statusByContactId.size > 0 &&
+                    [...statusByContactId.values()].every(
+                      (status) => status === "declined",
+                    )
+                  );
+                })();
+
+                if (
+                  isFinalDecline &&
+                  shouldSurfaceNotification &&
+                  !isActiveChatContact
+                ) {
+                  setContactAttentionById((prev) => ({
+                    ...prev,
+                    [contactId]: Date.now(),
+                  }));
+                  const allDeclinedText = t("bankPaymentOfferAllDeclined");
+                  try {
+                    if (document.visibilityState === "visible") {
+                      pushToast(allDeclinedText);
+                    }
+                  } catch {
+                    // No document in non-browser environments.
+                  }
+                  void maybeShowPwaNotification(
+                    t("appTitle"),
+                    allDeclinedText,
+                    wrapId,
+                  );
+                }
+                return;
+              }
+
               if (
                 shouldSurfaceNotification &&
                 !isActiveChatContact &&

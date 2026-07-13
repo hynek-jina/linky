@@ -25,7 +25,6 @@ import {
 } from "../../../nostrStatus";
 import type { JsonRecord } from "../../../types/json";
 import { getBestNostrName } from "../../../utils/formatting";
-import { createSquareAvatarDataUrl } from "../../../utils/image";
 import { getDefaultNip05IdentifierFromAddress } from "../../../utils/nostrNip05";
 import {
   getOwnLightningAddressInputCandidate,
@@ -567,20 +566,15 @@ export const useProfileEditor = ({
     [],
   );
 
-  const onProfilePhotoSelected = React.useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0] ?? null;
-      event.target.value = "";
-      if (!file) return;
+  const onProfilePhotoSelected = React.useCallback((dataUrl: string) => {
+    setProfileCustomPictureUrl(dataUrl);
+    setProfileSelectedPictureKind("custom");
+    setProfileEditPicture(dataUrl);
+  }, []);
 
-      try {
-        const dataUrl = await createSquareAvatarDataUrl(file, 160);
-        setProfileCustomPictureUrl(dataUrl);
-        setProfileSelectedPictureKind("custom");
-        setProfileEditPicture(dataUrl);
-      } catch (error) {
-        setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
-      }
+  const onProfilePhotoError = React.useCallback(
+    (error: unknown) => {
+      setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
     },
     [setStatus, t],
   );
@@ -589,6 +583,7 @@ export const useProfileEditor = ({
     cycleProfileAvatarControl,
     isProfileEditing,
     onPickProfilePhoto,
+    onProfilePhotoError,
     onProfilePhotoSelected,
     profileCustomPictureUrl,
     profileEditInitialRef,

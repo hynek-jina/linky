@@ -42,7 +42,6 @@ import {
   EVOLU_TRANSACTIONS_OWNER_INDEX_STORAGE_KEY,
   EVOLU_TRANSACTIONS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
 } from "../../utils/constants";
-import { createSquareAvatarDataUrl } from "../../utils/image";
 import { getDefaultNip05IdentifierFromAddress } from "../../utils/nostrNip05";
 import {
   applySlip39Suggestion,
@@ -131,9 +130,8 @@ interface UseProfileAuthDomainResult {
   onboardingPhotoInputRef: React.RefObject<HTMLInputElement | null>;
   onboardingStep: OnboardingStep;
   openReturningOnboarding: () => void;
-  onPendingOnboardingPhotoSelected: (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => Promise<void>;
+  onPendingOnboardingPhotoError: (error: unknown) => void;
+  onPendingOnboardingPhotoSelected: (dataUrl: string) => void;
   pasteReturningSlip39FromClipboard: () => Promise<void>;
   pickPendingOnboardingPhoto: () => Promise<void>;
   requestDeriveNostrKeys: () => Promise<void>;
@@ -713,27 +711,25 @@ export const useProfileAuthDomain = ({
   }, []);
 
   const onPendingOnboardingPhotoSelected = React.useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0] ?? null;
-      event.target.value = "";
-      if (!file) return;
+    (pictureUrl: string) => {
+      updatePendingOnboardingProfile((current) => ({
+        ...current,
+        customPictureUrl: pictureUrl,
+        error: null,
+        pictureUrl,
+        selectedPictureKind: "custom",
+      }));
+    },
+    [updatePendingOnboardingProfile],
+  );
 
-      try {
-        const pictureUrl = await createSquareAvatarDataUrl(file, 160);
-        updatePendingOnboardingProfile((current) => ({
-          ...current,
-          customPictureUrl: pictureUrl,
-          error: null,
-          pictureUrl,
-          selectedPictureKind: "custom",
-        }));
-      } catch (error) {
-        const message = `${t("errorPrefix")}: ${String(error ?? "unknown")}`;
-        updatePendingOnboardingProfile((current) => ({
-          ...current,
-          error: message,
-        }));
-      }
+  const onPendingOnboardingPhotoError = React.useCallback(
+    (error: unknown) => {
+      const message = `${t("errorPrefix")}: ${String(error ?? "unknown")}`;
+      updatePendingOnboardingProfile((current) => ({
+        ...current,
+        error: message,
+      }));
     },
     [t, updatePendingOnboardingProfile],
   );
@@ -1100,6 +1096,7 @@ export const useProfileAuthDomain = ({
     onboardingStep,
     openReturningOnboarding,
     onPendingOnboardingPhotoSelected,
+    onPendingOnboardingPhotoError,
     pasteReturningSlip39FromClipboard,
     pickPendingOnboardingPhoto,
     requestDeriveNostrKeys,

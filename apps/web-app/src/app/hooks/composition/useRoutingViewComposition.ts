@@ -45,8 +45,8 @@ export const useRoutingViewComposition = ({
 
   const showContactsToolbar = contactsToolbarProgress > 0;
   const showGroupFilter =
-    showContactsToolbar && groupNamesCount + statusFilterCount > 0;
-  const showNoGroupFilter = ungroupedCount > 0;
+    showContactsToolbar &&
+    (groupNamesCount + statusFilterCount > 0 || ungroupedCount > 0);
 
   const contactsToolbarStyle = {
     opacity: contactsToolbarProgress,
@@ -68,7 +68,6 @@ export const useRoutingViewComposition = ({
       bottomTabActive,
       contactsToolbarStyle,
       showGroupFilter,
-      showNoGroupFilter,
     }),
     pageClassNameWithSwipe,
     selectedEvoluServerUrl,

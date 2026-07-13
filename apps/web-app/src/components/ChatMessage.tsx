@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Download, Info, X } from "lucide-react";
+import { Check, Download, Info, Plus, X } from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
@@ -41,6 +41,7 @@ interface MintIcon {
 
 export interface NpubMessageContactInfo {
   displayName: string;
+  isSaved: boolean;
   npub: string;
   pictureUrl: string | null;
 }
@@ -692,6 +693,11 @@ export function ChatMessage({
               onClick={() => onOpenNpubContact(npubContactInfo.npub)}
               aria-label={npubContactInfo.displayName}
             >
+              {!npubContactInfo.isSaved ? (
+                <span className="chat-contact-pill-add" aria-hidden="true">
+                  <Plus size={12} strokeWidth={2.5} />
+                </span>
+              ) : null}
               <span className="chat-contact-pill-avatar" aria-hidden="true">
                 {npubContactInfo.pictureUrl ? (
                   <img

@@ -15,3 +15,15 @@ export const getReceivedMoneyCopyForLanguage = (
   }
   return "You received money";
 };
+
+export const getBankPaymentReimbursementCopyForLanguage = (
+  language: string | null | undefined,
+): string => {
+  const normalized = String(language ?? "")
+    .trim()
+    .toLowerCase();
+  if (normalized.startsWith("cs")) {
+    return "Dorazily ti saty za bankovní platbu";
+  }
+  return "Your sats for the bank payment have arrived";
+};

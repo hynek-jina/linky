@@ -1,6 +1,11 @@
 export const createSquareAvatarDataUrl = async (
   file: File,
   sizePx: number,
+  crop?: {
+    centerX: number;
+    centerY: number;
+    zoom: number;
+  },
 ): Promise<string> => {
   if (!file.type.startsWith("image/")) {
     throw new Error("Unsupported file");
@@ -19,9 +24,19 @@ export const createSquareAvatarDataUrl = async (
     const sh = img.naturalHeight || img.height;
     if (!sw || !sh) throw new Error("Invalid image");
 
-    const side = Math.min(sw, sh);
-    const sx = Math.floor((sw - side) / 2);
-    const sy = Math.floor((sh - side) / 2);
+    const zoom = Math.max(1, crop?.zoom ?? 1);
+    const side = Math.min(sw, sh) / zoom;
+    const halfSide = side / 2;
+    const centerX = Math.min(
+      sw - halfSide,
+      Math.max(halfSide, crop?.centerX ?? sw / 2),
+    );
+    const centerY = Math.min(
+      sh - halfSide,
+      Math.max(halfSide, crop?.centerY ?? sh / 2),
+    );
+    const sx = centerX - halfSide;
+    const sy = centerY - halfSide;
 
     const canvas = document.createElement("canvas");
     canvas.width = sizePx;

@@ -449,7 +449,7 @@ export const useContactsDomain = ({
     });
   }, [appOwnerId, contacts, currentNsec, isSeedLogin, upsert]);
 
-  const { groupNames, ungroupedCount } = React.useMemo(() => {
+  const { groupCounts, groupNames, ungroupedCount } = React.useMemo(() => {
     const counts = new Map<string, number>();
     let ungrouped = 0;
 
@@ -474,7 +474,11 @@ export const useContactsDomain = ({
       })
       .map(([name]) => name);
 
-    return { groupNames: names, ungroupedCount: ungrouped };
+    return {
+      groupCounts: counts,
+      groupNames: names,
+      ungroupedCount: ungrouped,
+    };
   }, [contacts]);
 
   React.useEffect(() => {
@@ -540,6 +544,7 @@ export const useContactsDomain = ({
     contactsSearchParts,
     dedupeContacts,
     dedupeContactsIsBusy,
+    groupCounts,
     groupNames,
     selectedContact,
     setActiveGroup,

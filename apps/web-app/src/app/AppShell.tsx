@@ -34,6 +34,7 @@ const AppShell = () => {
     onboardingPhotoInputRef,
     onboardingStep,
     openReturningOnboarding,
+    onPendingOnboardingPhotoError,
     onPendingOnboardingPhotoSelected,
     pageClassNameWithSwipe,
     pasteReturningSlip39FromClipboard,
@@ -101,6 +102,7 @@ const AppShell = () => {
           lang={lang}
           onboardingPhotoInputRef={onboardingPhotoInputRef}
           openReturningOnboarding={openReturningOnboarding}
+          onPendingOnboardingPhotoError={onPendingOnboardingPhotoError}
           onPendingOnboardingPhotoSelected={onPendingOnboardingPhotoSelected}
           setOnboardingStep={setOnboardingStep}
           createNewAccount={createNewAccount}

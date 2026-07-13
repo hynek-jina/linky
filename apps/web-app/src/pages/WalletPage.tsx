@@ -3,6 +3,7 @@ import { BottomTabBar } from "../components/BottomTabBar";
 import { WalletActionButton } from "../components/WalletActionButton";
 import { WalletBalance } from "../components/WalletBalance";
 import { WalletWarning } from "../components/WalletWarning";
+import { useAppShellActions } from "../app/context/AppShellContexts";
 import { useNavigation } from "../hooks/useRouting";
 
 interface WalletPageProps {
@@ -29,10 +30,12 @@ export const WalletPage: React.FC<WalletPageProps> = React.memo(
     t,
   }) => {
     const navigateTo = useNavigation();
+    const { openFeedbackContact } = useAppShellActions();
     return (
       <section className="panel panel-plain wallet-panel">
         <WalletWarning
           dismissed={!showWalletWarning}
+          onContactSupport={openFeedbackContact}
           onDismiss={dismissWalletWarning}
           t={t}
         />

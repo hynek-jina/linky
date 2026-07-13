@@ -76,21 +76,29 @@ const getOfferText = (
 ): string => {
   switch (status) {
     case "accepted":
-      return `Mám zájem o platbu za ${amountText}`;
+      return "Nabídka byla přijata. Platební údaje se odesílají.";
     case "bank_details_sent":
-      return `Údaje k bankovní platbě byly odeslány`;
+      return `Platební údaje jsou připravené. Zaplať ${amountText} do 5 minut.`;
     case "bank_paid":
-      return `Platba za ${amountText} byla označena jako zaplacená bankou`;
+      return `Bankovní platba za ${amountText} byla označena jako zaplacená. Zkontroluj ji a odešli saty.`;
     case "canceled":
-      return `Nabídka platby za ${amountText} byla zrušena`;
+      return "Nabídka byla zrušena. Bankovní platbu už neposílej.";
     case "declined":
       return `Nabídka platby za ${amountText} byla odmítnuta`;
     case "offered":
-      return `Nabízím platbu za ${amountText}`;
+      return `Zaplatíš za mě bankovní platbu ve výši ${amountText}?`;
     case "settled":
       return `Platba za ${amountText} byla dokončena`;
   }
 };
+
+export const shouldPushLinkyBankPaymentOfferStatus = (
+  status: LinkyBankPaymentOfferStatus,
+): boolean =>
+  status === "accepted" ||
+  status === "bank_details_sent" ||
+  status === "bank_paid" ||
+  status === "offered";
 
 export const createLinkyBankPaymentOfferEvent = (args: {
   amountText: string;
