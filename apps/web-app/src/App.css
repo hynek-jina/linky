@@ -3397,6 +3397,13 @@ button.danger {
   pointer-events: none;
 }
 
+@media (max-width: 520px) {
+  .wallet-warning.is-hidden {
+    height: 96px;
+    overflow: hidden;
+  }
+}
+
 .wallet-warning-close {
   position: absolute;
   top: 8px;
