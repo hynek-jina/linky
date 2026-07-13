@@ -42,9 +42,10 @@ export const MessageEntityPreview: React.FC<MessageEntityPreviewProps> = ({
     const start = match.index ?? 0;
     if (start > cursor) segments.push(content.slice(cursor, start));
 
-    const npub = normalizeNpubIdentifier(text);
+    const isCashuToken = text.toLowerCase().startsWith("cashu");
+    const npub = isCashuToken ? null : normalizeNpubIdentifier(text);
     const contactInfo = npub ? getNpubMessageContactInfo(npub) : null;
-    const tokenInfo = npub ? null : getCashuTokenMessageInfo(text);
+    const tokenInfo = isCashuToken ? getCashuTokenMessageInfo(text) : null;
 
     if (contactInfo) {
       const avatar = contactInfo.pictureUrl;
