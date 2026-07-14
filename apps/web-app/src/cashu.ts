@@ -47,6 +47,68 @@ const asNumber = (value: JsonValue | null | undefined): number | null => {
   return value;
 };
 
+const stringToBase64Url = (value: string): string => {
+  return btoa(value)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+};
+
+const isCashuProof = (value: JsonValue): value is JsonRecord => {
+  if (!isJsonRecord(value)) return false;
+  return (
+    asString(value.secret) !== null &&
+    asString(value.C) !== null &&
+    asString(value.id) !== null &&
+    asNumber(value.amount) !== null
+  );
+};
+
+const flattenCashuProofs = (
+  values: readonly JsonValue[],
+): JsonRecord[] | null => {
+  const proofs: JsonRecord[] = [];
+
+  const collect = (value: JsonValue): boolean => {
+    if (isCashuProof(value)) {
+      proofs.push(value);
+      return true;
+    }
+    if (!Array.isArray(value)) return false;
+    return value.every(collect);
+  };
+
+  return values.length > 0 && values.every(collect) ? proofs : null;
+};
+
+/**
+ * cashu.me may send a legacy proof bundle as plain JSON rather than an
+ * encoded Cashu token. Convert the single-mint shape to the standard v3
+ * token text understood by cashu-ts and the rest of the app.
+ */
+export const normalizeCashuToken = (rawToken: string): string | null => {
+  const raw = rawToken.trim();
+  if (!raw) return null;
+  if (raw.startsWith("cashu")) return raw;
+
+  const decoded = raw.startsWith("{") ? safeParseJson(raw) : null;
+  if (!isJsonRecord(decoded)) return null;
+
+  const mint = asString(decoded.mint);
+  const unit = asString(decoded.unit);
+  const proofs = flattenCashuProofs(asJsonArray(decoded.proofs));
+  if (!mint || !proofs?.length) {
+    return null;
+  }
+
+  return `cashuA${stringToBase64Url(
+    JSON.stringify({
+      token: [{ mint, proofs }],
+      ...(unit ? { unit } : {}),
+    }),
+  )}`;
+};
+
 export type ParsedCashuToken = {
   amount: number;
   mint: string | null;
@@ -114,6 +176,7 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
 
   const token = decoded;
   const entries = asJsonArray(token.token);
+  const tokenUnit = asString(token.unit);
 
   const mints = new Set<string>();
   const units = new Set<string>();
@@ -135,6 +198,7 @@ export const parseCashuToken = (rawToken: string): ParsedCashuToken | null => {
         if (amt !== null) total += amt;
       }
     }
+    if (units.size === 0 && tokenUnit) units.add(tokenUnit);
   } else {
     const mint = asString(token.mint);
     const unit = asString(token.unit);

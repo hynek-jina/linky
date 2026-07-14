@@ -1,4 +1,4 @@
-import { parseCashuToken } from "../../cashu";
+import { normalizeCashuToken, parseCashuToken } from "../../cashu";
 import { isSpdPaymentPayload } from "../../utils/spdPayment";
 import type { CashuTokenMeta, CashuTokenRowLike } from "../types/appTypes";
 import { getLinkyBankPaymentOfferInfo } from "./bankPaymentOffer";
@@ -71,7 +71,8 @@ export const extractCashuTokenFromText = (text: string): string | null => {
   const tryToken = (value: string): string | null => {
     const trimmed = String(value ?? "").trim();
     if (!trimmed) return null;
-    const normalized = normalizeCandidate(trimmed);
+    const normalized = normalizeCashuToken(normalizeCandidate(trimmed));
+    if (!normalized) return null;
     return parseCashuToken(normalized) ? normalized : null;
   };
 
@@ -196,4 +197,12 @@ export const extractCashuTokenFromText = (text: string): string | null => {
   }
 
   return null;
+};
+
+export const isStandaloneCashuTokenMessage = (text: string): boolean => {
+  const raw = String(text ?? "").trim();
+  if (!raw) return false;
+
+  const normalized = normalizeCashuToken(raw);
+  return normalized !== null && parseCashuToken(normalized) !== null;
 };

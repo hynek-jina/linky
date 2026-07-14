@@ -55,4 +55,38 @@ describe("MessageEntityPreview", () => {
     expect(container.querySelector(".chat-contact-pill")).toBeNull();
     expect(getNpubMessageContactInfo).not.toHaveBeenCalled();
   });
+
+  it("renders a standalone legacy proof bundle as a token", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const content = JSON.stringify({
+      mint: "https://cashu.cz",
+      proofs: [{ amount: 2, C: "point-a", id: "keyset", secret: "secret-a" }],
+      unit: "sat",
+    });
+
+    await act(async () => {
+      root.render(
+        <MessageEntityPreview
+          content={content}
+          getCashuTokenMessageInfo={() => ({
+            amount: 2,
+            isValid: false,
+            mintDisplay: "cashu.cz",
+            mintUrl: "https://cashu.cz",
+            tokenRaw: "cashuAexample",
+            unit: "sat",
+          })}
+          getMintIconUrl={() => ({ url: null })}
+          getNpubMessageContactInfo={() => null}
+        />,
+      );
+    });
+
+    expect(container.querySelector(".chat-token-pill")?.textContent).toBe(
+      "2 sat",
+    );
+    expect(container.textContent).not.toContain("proofs");
+  });
 });

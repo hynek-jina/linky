@@ -1,6 +1,6 @@
 import { sha256 } from "@noble/hashes/sha2.js";
-import { finalizeEvent } from "nostr-tools";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import { finalizeEvent } from "nostr-tools";
 
 const PRIVATE_IMAGE_MESSAGE_TYPE = "linky.private_image.v1";
 const PRIVATE_IMAGE_COMPACT_PREFIX = "linky:image:v1:";
@@ -474,7 +474,7 @@ export const parsePrivateImageMessage = (
 };
 
 export const privateImageMessageFromEvent = (
-  event: NostrToolsEvent,
+  event: Pick<NostrToolsEvent, "content" | "kind" | "tags">,
 ): string | null => {
   if (event.kind !== 15) return null;
   const tags = Array.isArray(event.tags) ? event.tags : [];

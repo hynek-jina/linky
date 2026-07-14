@@ -59,9 +59,13 @@ public class MainActivity extends BridgeActivity {
 	private static final String EVENT_NOTIFICATION_PERMISSION = "linky-native-notification-permission";
 	private static final String EVENT_SCAN_RESULT = "linky-native-scan-result";
 	private static final String EXTRA_NOTIFICATION_ROUTE = "linky_notification_route";
+	private static final String EXTRA_NOTIFICATION_OUTER_EVENT_ID = "outerEventId";
+	private static final String EXTRA_NOTIFICATION_RECIPIENT_PUBKEY = "recipientPubkey";
+	private static final String EXTRA_NOTIFICATION_RELAY_HINTS = "relayHints";
 	private static final long NFC_READ_SUPPRESS_AFTER_WRITE_MS = 4000L;
 	private static final String PREFS_NAME = "linky.native.bridge";
 	private static final String PREF_PENDING_DEEP_LINK_URL = "pending_deep_link_url";
+	private static final String PREF_PENDING_NOTIFICATION_OPEN_DETAIL = "pending_notification_open_detail";
 	private static final String PREF_PENDING_NOTIFICATION_ROUTE = "pending_notification_route";
 	private static final String PREF_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested";
 	private static final String FIREBASE_GOOGLE_APP_ID_RESOURCE = "google_app_id";
@@ -257,7 +261,7 @@ public class MainActivity extends BridgeActivity {
 		String notificationRoute = extractNotificationRoute(intent);
 		if (notificationRoute != null) {
 			cachePendingNotificationRoute(notificationRoute);
-			dispatchNotificationOpen(notificationRoute);
+			dispatchNotificationOpen(intent);
 		}
 	}
 
@@ -473,21 +477,60 @@ public class MainActivity extends BridgeActivity {
 		dispatchWindowEvent(EVENT_DEEP_LINK, detail);
 	}
 
-	private void dispatchNotificationOpen(String route) {
+	private void dispatchNotificationOpen(Intent intent) {
+		JSONObject detail = buildNotificationOpenDetail(intent);
+		if (detail == null) {
+			return;
+		}
+
+		dispatchWindowEvent(EVENT_NOTIFICATION_OPEN, detail);
+	}
+
+	private JSONObject buildNotificationOpenDetail(Intent intent) {
+		String route = extractNotificationRoute(intent);
 		String normalized = normalizeNotificationRoute(route);
 		if (normalized == null) {
-			return;
+			return null;
 		}
 
 		JSONObject detail = new JSONObject();
 
 		try {
 			detail.put("route", normalized);
+
+			String outerEventId = normalizeIntentStringExtra(intent, EXTRA_NOTIFICATION_OUTER_EVENT_ID);
+			if (outerEventId != null) {
+				detail.put("outerEventId", outerEventId);
+			}
+
+			String recipientPubkey = normalizeIntentStringExtra(intent, EXTRA_NOTIFICATION_RECIPIENT_PUBKEY);
+			if (recipientPubkey != null) {
+				detail.put("recipientPubkey", recipientPubkey);
+			}
+
+			String relayHints = normalizeIntentStringExtra(intent, EXTRA_NOTIFICATION_RELAY_HINTS);
+			if (relayHints != null) {
+				detail.put("relayHints", relayHints);
+			}
 		} catch (Exception ignored) {
-			// ignore JSON bridge payload failures
+			return null;
 		}
 
-		dispatchWindowEvent(EVENT_NOTIFICATION_OPEN, detail);
+		return detail;
+	}
+
+	private String normalizeIntentStringExtra(Intent intent, String key) {
+		if (intent == null || key == null) {
+			return null;
+		}
+
+		String value = intent.getStringExtra(key);
+		if (value == null) {
+			return null;
+		}
+
+		String normalized = value.trim();
+		return normalized.isEmpty() ? null : normalized;
 	}
 
 	private void dispatchNfcWriteEvent(String status, String message) {
@@ -809,6 +852,7 @@ public class MainActivity extends BridgeActivity {
 		}
 
 		cachePendingNotificationRoute(notificationRoute);
+		cachePendingNotificationOpenDetail(intent);
 	}
 
 	private void cachePendingDeepLinkUrl(String url) {
@@ -840,6 +884,17 @@ public class MainActivity extends BridgeActivity {
 		bridgePreferences.edit().putString(PREF_PENDING_NOTIFICATION_ROUTE, normalized).apply();
 	}
 
+	private void cachePendingNotificationOpenDetail(Intent intent) {
+		JSONObject detail = buildNotificationOpenDetail(intent);
+		if (detail == null) {
+			return;
+		}
+
+		bridgePreferences.edit()
+			.putString(PREF_PENDING_NOTIFICATION_OPEN_DETAIL, detail.toString())
+			.apply();
+	}
+
 	private String consumePendingNotificationRoute() {
 		String pendingRoute = bridgePreferences.getString(PREF_PENDING_NOTIFICATION_ROUTE, null);
 		if (pendingRoute == null) {
@@ -848,6 +903,17 @@ public class MainActivity extends BridgeActivity {
 
 		bridgePreferences.edit().remove(PREF_PENDING_NOTIFICATION_ROUTE).apply();
 		return normalizeNotificationRoute(pendingRoute);
+	}
+
+	private String consumePendingNotificationOpenDetail() {
+		String pendingDetail = bridgePreferences.getString(PREF_PENDING_NOTIFICATION_OPEN_DETAIL, null);
+		if (pendingDetail == null) {
+			return null;
+		}
+
+		String normalized = pendingDetail.trim();
+		bridgePreferences.edit().remove(PREF_PENDING_NOTIFICATION_OPEN_DETAIL).apply();
+		return normalized.isEmpty() ? null : normalized;
 	}
 
 	private String extractNotificationRoute(Intent intent) {
@@ -966,6 +1032,11 @@ public class MainActivity extends BridgeActivity {
 		@JavascriptInterface
 		public String consumePendingNotificationRoute() {
 			return MainActivity.this.consumePendingNotificationRoute();
+		}
+
+		@JavascriptInterface
+		public String consumePendingNotificationOpenDetail() {
+			return MainActivity.this.consumePendingNotificationOpenDetail();
 		}
 	}
 

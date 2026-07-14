@@ -4,6 +4,7 @@
 
 const SW_BUILD_TAG = "linky-sw-2026-04-29T11:50-bump-2";
 const NOTIFICATION_OPEN_URL = "/#contacts";
+const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
 
 import type { Event as NostrEvent } from "nostr-tools";
 import { getPublicKey, nip19, SimplePool } from "nostr-tools";
@@ -12,13 +13,14 @@ import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst } from "workbox-strategies";
 import {
-  getLinkyBankPaymentOfferText,
-  isLinkyBankPaymentOfferEvent,
-} from "./app/lib/bankPaymentOffer";
-import {
   isInvalidInnerRumorPubkey,
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./app/hooks/messages/chatNostrProtocol";
+import { normalizePubkeyHex } from "./app/hooks/messages/contactIdentity";
+import {
+  getLinkyBankPaymentOfferText,
+  isLinkyBankPaymentOfferEvent,
+} from "./app/lib/bankPaymentOffer";
 import {
   getBankPaymentReimbursementCopyForLanguage,
   getReceivedMoneyCopyForLanguage,
@@ -28,7 +30,6 @@ import {
   isLinkyBankPaymentOfferPaymentNoticeEvent,
   isLinkyPaymentNoticeEvent,
 } from "./app/lib/pushWrappedEvent";
-import { normalizePubkeyHex } from "./app/hooks/messages/contactIdentity";
 import { NOSTR_RELAYS } from "./utils/nostrRelays";
 import { getStoredPushContactName } from "./utils/pushContactNamesStorage";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
@@ -74,6 +75,62 @@ function readEnvelopeDebugMeta(
     ...(data.relayHints ? { relayHints: data.relayHints } : {}),
     ...(data.type ? { type: data.type } : {}),
   };
+}
+
+function readPushNotificationData(value: unknown): PushNotificationData {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return {
+    ...(typeof value.createdAt === "number" && Number.isFinite(value.createdAt)
+      ? { createdAt: value.createdAt }
+      : {}),
+    ...(typeof value.outerEventId === "string" && value.outerEventId.trim()
+      ? { outerEventId: value.outerEventId }
+      : {}),
+    ...(typeof value.recipientNpub === "string" && value.recipientNpub.trim()
+      ? { recipientNpub: value.recipientNpub }
+      : {}),
+    ...(typeof value.recipientPubkey === "string" &&
+    value.recipientPubkey.trim()
+      ? { recipientPubkey: value.recipientPubkey }
+      : {}),
+    ...(Array.isArray(value.relayHints)
+      ? {
+          relayHints: value.relayHints.filter(
+            (entry): entry is string =>
+              typeof entry === "string" && entry.trim().length > 0,
+          ),
+        }
+      : {}),
+    ...(typeof value.type === "string" && value.type.trim().length > 0
+      ? { type: value.type }
+      : {}),
+  };
+}
+
+function buildNotificationOpenDetail(
+  data: PushNotificationData,
+): Record<string, unknown> {
+  return {
+    route: "#contacts",
+    ...(data.createdAt === undefined ? {} : { createdAt: data.createdAt }),
+    ...(data.outerEventId ? { outerEventId: data.outerEventId } : {}),
+    ...(data.recipientNpub ? { recipientNpub: data.recipientNpub } : {}),
+    ...(data.recipientPubkey ? { recipientPubkey: data.recipientPubkey } : {}),
+    ...(data.relayHints ? { relayHints: data.relayHints } : {}),
+    ...(data.type ? { type: data.type } : {}),
+  };
+}
+
+function buildNotificationOpenUrl(data: PushNotificationData): string {
+  const params = new URLSearchParams({
+    [NOTIFICATION_OPEN_HASH_PARAM]: JSON.stringify(
+      buildNotificationOpenDetail(data),
+    ),
+  });
+  return `${NOTIFICATION_OPEN_URL}?${params.toString()}`;
 }
 
 async function postClientMessage(
@@ -691,11 +748,19 @@ self.addEventListener("notificationclick", (event) => {
   }
 
   console.info("[linky][sw] notification click");
+  const notificationData = readPushNotificationData(event.notification.data);
+  const notificationOpenDetail = buildNotificationOpenDetail(notificationData);
+  const notificationOpenUrl = buildNotificationOpenUrl(notificationData);
+
   event.waitUntil(
     Promise.all([
       logSw("notification click", {
         data: event.notification.data ?? null,
         tag: event.notification.tag,
+      }),
+      postClientMessage({
+        detail: notificationOpenDetail,
+        type: "notification-open",
       }),
       self.clients
         .matchAll({ type: "window", includeUncontrolled: true })
@@ -703,12 +768,12 @@ self.addEventListener("notificationclick", (event) => {
           for (const client of clientList) {
             if (client.url && "focus" in client) {
               return client
-                .navigate(NOTIFICATION_OPEN_URL)
+                .navigate(notificationOpenUrl)
                 .then(() => client.focus());
             }
           }
           if (self.clients.openWindow) {
-            return self.clients.openWindow(NOTIFICATION_OPEN_URL);
+            return self.clients.openWindow(notificationOpenUrl);
           }
         }),
     ]),
