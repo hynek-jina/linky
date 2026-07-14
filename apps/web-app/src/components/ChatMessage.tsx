@@ -1,5 +1,5 @@
-import React from "react";
 import { Check, Download, Info, Plus, X } from "lucide-react";
+import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
@@ -18,6 +18,7 @@ import {
   type PrivateImageMessagePayload,
 } from "../app/lib/privateImageMessage";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
+import { isStandaloneCashuTokenMessage } from "../app/lib/tokenText";
 import type {
   ChatReactionChip,
   LocalNostrMessage,
@@ -50,7 +51,6 @@ export type BankPaymentOfferPeerNotice =
   | "accepted_by_other"
   | "backup_recipient";
 
-const MESSAGE_CASHU_PATTERN = /cashu[0-9A-Za-z_-]+={0,2}/gi;
 const MESSAGE_NPUB_PATTERN =
   /^(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?$/i;
 const MESSAGE_INLINE_ENTITY_PATTERN =
@@ -756,9 +756,7 @@ export function ChatMessage({
 
   const isStandaloneTokenMessage = React.useMemo(() => {
     if (!tokenInfo) return false;
-    const trimmed = content.trim();
-    const tokenMatch = trimmed.match(MESSAGE_CASHU_PATTERN);
-    return tokenMatch?.[0] === trimmed;
+    return isStandaloneCashuTokenMessage(content);
   }, [content, tokenInfo]);
 
   const previewUrl = React.useMemo(() => {
@@ -1125,10 +1123,10 @@ export function ChatMessage({
                 </span>
               ) : privateImageInfo ? (
                 <PrivateImageBubble payload={privateImageInfo} t={t} />
-              ) : inlineMessageContent ? (
-                inlineMessageContent
               ) : tokenInfo && isStandaloneTokenMessage ? (
                 renderCashuTokenPill(tokenInfo)
+              ) : inlineMessageContent ? (
+                inlineMessageContent
               ) : (
                 content
               )}

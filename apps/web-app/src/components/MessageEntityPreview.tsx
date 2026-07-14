@@ -1,6 +1,7 @@
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
+import { isStandaloneCashuTokenMessage } from "../app/lib/tokenText";
 import type { MintUrlInput } from "../app/types/appTypes";
 import { deriveDefaultProfile } from "../derivedProfile";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
@@ -31,13 +32,44 @@ export const MessageEntityPreview: React.FC<MessageEntityPreviewProps> = ({
   onOpenNpubContact,
 }) => {
   const { formatDisplayedAmountText } = useAppShellCore();
+  const standaloneTokenInfo = isStandaloneCashuTokenMessage(content)
+    ? getCashuTokenMessageInfo(content)
+    : null;
   const matches = Array.from(content.matchAll(ENTITY_PATTERN));
   const segments: React.ReactNode[] = [];
   let cursor = 0;
 
   if (directionSymbol) segments.push(`${directionSymbol} `);
 
-  for (const match of matches) {
+  if (standaloneTokenInfo) {
+    const icon = getMintIconUrl(standaloneTokenInfo.mintUrl);
+    segments.push(
+      <span
+        key="standalone-cashu"
+        className={
+          standaloneTokenInfo.isValid
+            ? "pill chat-token-pill"
+            : "pill pill-muted chat-token-pill"
+        }
+      >
+        {icon.url ? (
+          <img
+            src={icon.url}
+            alt=""
+            width={14}
+            height={14}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        ) : null}
+        <span>
+          {formatDisplayedAmountText(standaloneTokenInfo.amount ?? 0)}
+        </span>
+      </span>,
+    );
+  }
+
+  for (const match of standaloneTokenInfo ? [] : matches) {
     const text = String(match[0] ?? "");
     const start = match.index ?? 0;
     if (start > cursor) segments.push(content.slice(cursor, start));
@@ -115,7 +147,9 @@ export const MessageEntityPreview: React.FC<MessageEntityPreviewProps> = ({
     cursor = start + text.length;
   }
 
-  if (cursor < content.length) segments.push(content.slice(cursor));
+  if (!standaloneTokenInfo && cursor < content.length) {
+    segments.push(content.slice(cursor));
+  }
 
   return <div className={className}>{segments}</div>;
 };

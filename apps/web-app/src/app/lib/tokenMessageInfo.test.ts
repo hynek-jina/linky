@@ -43,6 +43,24 @@ const buildEmptyCashuToken = (): string => {
 };
 
 describe("getCashuTokenMessageInfo", () => {
+  it("renders cashu.me legacy proof bundles as claimable tokens", () => {
+    const bundle = JSON.stringify({
+      mint: "https://cashu.cz",
+      unit: "sat",
+      proofs: [
+        { amount: 2, C: "point-a", id: "keyset", secret: "secret-a" },
+        { amount: 3, C: "point-b", id: "keyset", secret: "secret-b" },
+      ],
+    });
+
+    expect(getCashuTokenMessageInfo(bundle, [])).toMatchObject({
+      amount: 5,
+      isValid: true,
+      mintUrl: "https://cashu.cz",
+      unit: "sat",
+    });
+  });
+
   it("ignores bank payment offer messages", () => {
     const bankOffer = JSON.stringify({
       amountSat: 76,
