@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createLoadedCashuWallet,
   decodeCashuTokenForMint,
   isCashuKeysetVerificationError,
 } from "./cashuWallet";
@@ -88,5 +89,123 @@ describe("decodeCashuTokenForMint", () => {
     ).toThrow("Mixed mints not supported");
 
     expect(wallet.decodeToken).not.toHaveBeenCalled();
+  });
+});
+
+describe("createLoadedCashuWallet", () => {
+  it("loads fallback keys for all compatible keysets", async () => {
+    const mintInfo = { name: "Test mint" };
+    const activeKeys = { "1": "02aa", "2": "02bb" };
+    const legacyKeys = { "128": "03cc" };
+    const mintGetKeys = vi.fn(async (id?: string) => {
+      if (id === "01active") {
+        return {
+          keysets: [
+            {
+              active: true,
+              id: "01active",
+              keys: activeKeys,
+              unit: "sat",
+            },
+          ],
+        };
+      }
+      if (id === "01legacy") {
+        return {
+          keysets: [
+            {
+              active: false,
+              id: "01legacy",
+              keys: legacyKeys,
+              unit: "sat",
+            },
+          ],
+        };
+      }
+      return { keysets: [] };
+    });
+
+    class FakeMint {
+      readonly mintUrl: string;
+
+      constructor(mintUrl: string) {
+        this.mintUrl = mintUrl;
+      }
+
+      getInfo = vi.fn(async () => mintInfo);
+
+      getKeySets = vi.fn(async () => ({
+        keysets: [
+          {
+            active: true,
+            id: "01active",
+            input_fee_ppk: 10,
+            unit: "sat",
+          },
+          {
+            active: false,
+            id: "01legacy",
+            input_fee_ppk: 10,
+            unit: "sat",
+          },
+        ],
+      }));
+
+      getKeys = mintGetKeys;
+    }
+
+    const loadMintFromCache = vi.fn();
+    const bindKeyset = vi.fn();
+
+    class FakeWallet {
+      readonly mint: FakeMint;
+      readonly options: { bip39seed?: Uint8Array; unit?: string };
+
+      constructor(
+        mint: FakeMint,
+        options: { bip39seed?: Uint8Array; unit?: string },
+      ) {
+        this.mint = mint;
+        this.options = options;
+      }
+
+      loadMint = vi.fn(async () => {
+        throw new Error("Couldn't verify keyset ID 01884a74bb2fc5ee");
+      });
+
+      loadMintFromCache = loadMintFromCache;
+
+      bindKeyset = bindKeyset;
+    }
+
+    await createLoadedCashuWallet({
+      Mint: FakeMint as unknown as typeof import("@cashu/cashu-ts").Mint,
+      Wallet: FakeWallet as unknown as typeof import("@cashu/cashu-ts").Wallet,
+      mintUrl: "https://mint.example",
+      unit: "sat",
+    });
+
+    expect(mintGetKeys).toHaveBeenCalledWith("01active");
+    expect(mintGetKeys).toHaveBeenCalledWith("01legacy");
+    expect(loadMintFromCache).toHaveBeenCalledWith(mintInfo, {
+      mintUrl: "https://mint.example",
+      keysets: [
+        {
+          active: true,
+          id: "01active",
+          input_fee_ppk: 10,
+          keys: activeKeys,
+          unit: "sat",
+        },
+        {
+          active: false,
+          id: "01legacy",
+          input_fee_ppk: 10,
+          keys: legacyKeys,
+          unit: "sat",
+        },
+      ],
+    });
+    expect(bindKeyset).toHaveBeenCalledWith("01active");
   });
 });

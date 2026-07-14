@@ -1,7 +1,8 @@
 import type {
+  Wallet as CashuWalletClass,
+  MintKeys,
   MintKeyset,
   Token,
-  Wallet as CashuWalletClass,
 } from "@cashu/cashu-ts";
 import { getUnknownErrorMessage } from "./unknown";
 
@@ -121,19 +122,51 @@ const createWalletFromFallbackMintData = async (
     throw new Error(`No active ${unit} keyset found for ${args.mintUrl}`);
   }
 
-  const keysResponse = await mint.getKeys(keyset.id);
-  const keys =
-    keysResponse.keysets.find((candidate) => {
-      return candidate.id === keyset.id && candidate.unit === keyset.unit;
-    }) ?? null;
-  if (!keys) {
+  const fallbackKeysets = keysetsResponse.keysets.filter((candidate) => {
+    return candidate.unit === unit && isHexString(String(candidate.id ?? ""));
+  });
+
+  const keysById = new Map<string, MintKeys>();
+  await Promise.all(
+    fallbackKeysets.map(async (candidate) => {
+      try {
+        const keysResponse = await mint.getKeys(candidate.id);
+        const keys =
+          keysResponse.keysets.find((keysCandidate) => {
+            return (
+              keysCandidate.id === candidate.id &&
+              keysCandidate.unit === candidate.unit
+            );
+          }) ?? null;
+        if (keys) {
+          keysById.set(candidate.id, keys);
+        }
+      } catch (error) {
+        if (candidate.id !== keyset.id) {
+          console.warn(
+            "[linky][cashu] fallback keyset keys unavailable, continuing",
+            {
+              error: getUnknownErrorMessage(error, ""),
+              keysetId: candidate.id,
+              mintUrl: args.mintUrl,
+              unit,
+            },
+          );
+        }
+      }
+    }),
+  );
+
+  const preferredKeys = keysById.get(keyset.id) ?? null;
+  if (!preferredKeys) {
     throw new Error(`Mint keys for keyset ${keyset.id} are unavailable`);
   }
 
   const cache = {
     mintUrl: args.mintUrl,
     keysets: keysetsResponse.keysets.map((candidate) => {
-      if (candidate.id !== keyset.id) return candidate;
+      const keys = keysById.get(candidate.id);
+      if (!keys) return candidate;
       return { ...candidate, keys: keys.keys };
     }),
   };
