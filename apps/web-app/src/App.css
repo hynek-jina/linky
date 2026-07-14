@@ -2584,6 +2584,7 @@ button.settings-sensitive-action.is-armed {
 
 .contact-message-entity-preview .pill {
   flex: 0 0 auto;
+  gap: 6px;
   padding: 1px 4px;
   font-size: 10px;
 }

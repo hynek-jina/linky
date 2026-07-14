@@ -8,14 +8,14 @@ import type {
   LocalNostrMessage,
   MintUrlInput,
 } from "../app/types/appTypes";
-import type { NpubMessageContactInfo } from "./ChatMessage";
-import { MessageEntityPreview } from "./MessageEntityPreview";
 import { formatDisplayGeneralStatus } from "../nostrStatus";
 import {
   formatContactMessageTimestamp,
   getInitials,
 } from "../utils/formatting";
 import { getNextMintIconUrl } from "../utils/mint";
+import type { NpubMessageContactInfo } from "./ChatMessage";
+import { MessageEntityPreview } from "./MessageEntityPreview";
 
 interface ContactCardProps {
   avatarUrl: string | null;
@@ -248,11 +248,15 @@ const TokenPreview: React.FC<TokenPreviewProps> = ({
     >
       {directionSymbol ? <span>{directionSymbol}</span> : null}
       <span
-        className={tokenInfo.isValid ? "pill" : "pill pill-muted"}
+        className={
+          tokenInfo.isValid
+            ? "pill chat-token-pill"
+            : "pill pill-muted chat-token-pill"
+        }
         style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: 4,
+          gap: 6,
           padding: "1px 4px",
           fontSize: 10,
           lineHeight: "10px",

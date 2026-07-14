@@ -642,6 +642,28 @@ export const parseDefaultLightningAddressNpub = (
   return npub || null;
 };
 
+export const omitSyntheticContactLightningAddress = (
+  lightningAddress: string,
+  npub: string,
+): string => {
+  const normalizedLightningAddress = String(lightningAddress ?? "").trim();
+  if (!normalizedLightningAddress) return "";
+
+  const normalizedNpub = String(npub ?? "")
+    .trim()
+    .toLowerCase();
+  if (!normalizedNpub) return normalizedLightningAddress;
+
+  const defaultLightningAddressNpub = parseDefaultLightningAddressNpub(
+    normalizedLightningAddress,
+  );
+  if (!defaultLightningAddressNpub) return normalizedLightningAddress;
+
+  return defaultLightningAddressNpub.trim().toLowerCase() === normalizedNpub
+    ? ""
+    : normalizedLightningAddress;
+};
+
 export const deriveDefaultProfile = (
   npub: string,
   lang: Lang = "en",

@@ -2,6 +2,7 @@ import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
+import { omitSyntheticContactLightningAddress } from "../../../derivedProfile";
 import { evolu, type ContactId, type TransactionId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import {
@@ -9,9 +10,9 @@ import {
   deleteCachedProfileAvatar,
   fetchNostrProfileMetadata,
   getNostrProfilePictureUrl,
-  type NostrProfileMetadata,
   saveCachedProfileMetadata,
   saveCachedProfilePicture,
+  type NostrProfileMetadata,
 } from "../../../nostrProfile";
 import type { Route } from "../../../types/route";
 import { MAX_CONTACTS_PER_OWNER } from "../../../utils/constants";
@@ -368,9 +369,11 @@ export const useContactEditor = ({
           const metadata = parseProfileMetadataEvent(profileEvent);
           if (!metadata) continue;
 
-          const lnAddress =
+          const lnAddress = omitSyntheticContactLightningAddress(
             String(metadata.lud16 ?? "").trim() ||
-            String(metadata.lud06 ?? "").trim();
+              String(metadata.lud06 ?? "").trim(),
+            npub,
+          );
           if (!isLinkyLightningAddress(lnAddress)) continue;
 
           const pictureUrl = getNostrProfilePictureUrl(metadata);
@@ -850,9 +853,11 @@ export const useContactEditor = ({
         if (!metadata) return;
 
         const bestName = getBestNostrName(metadata);
-        const ln =
+        const ln = omitSyntheticContactLightningAddress(
           String(metadata.lud16 ?? "").trim() ||
-          String(metadata.lud06 ?? "").trim();
+            String(metadata.lud06 ?? "").trim(),
+          normalized,
+        );
 
         const patch: Partial<{
           name: typeof Evolu.NonEmptyString1000.Type;
@@ -929,8 +934,11 @@ export const useContactEditor = ({
 
         const bestName = metadata ? (getBestNostrName(metadata) ?? "") : "";
         const metadataLn = metadata
-          ? String(metadata.lud16 ?? "").trim() ||
-            String(metadata.lud06 ?? "").trim()
+          ? omitSyntheticContactLightningAddress(
+              String(metadata.lud16 ?? "").trim() ||
+                String(metadata.lud06 ?? "").trim(),
+              resolvedNpub,
+            )
           : "";
         const pictureUrl = metadata
           ? getNostrProfilePictureUrl(metadata)
@@ -1125,9 +1133,11 @@ export const useContactEditor = ({
         if (!metadata) return;
 
         const bestName = getBestNostrName(metadata);
-        const ln =
+        const ln = omitSyntheticContactLightningAddress(
           String(metadata.lud16 ?? "").trim() ||
-          String(metadata.lud06 ?? "").trim();
+            String(metadata.lud06 ?? "").trim(),
+          npub,
+        );
 
         if (bestName) {
           setForm((prev) => ({ ...prev, name: bestName }));

@@ -18,14 +18,14 @@ import {
 import {
   evolu,
   normalizeEvoluServerUrl,
-  type CashuTokenId,
-  type ContactId,
   useEvolu,
   useEvoluDatabaseInfoState,
   useEvoluLastError,
   useEvoluServersManager,
   useEvoluSyncOwner,
   wipeEvoluStorage as wipeEvoluStorageImpl,
+  type CashuTokenId,
+  type ContactId,
 } from "../evolu";
 import { navigateTo, useRouting } from "../hooks/useRouting";
 import { useToasts } from "../hooks/useToasts";
@@ -65,6 +65,7 @@ import {
   cancelNativeNfcWrite,
   consumePendingIosNativeDeepLinkUrl,
   consumePendingNativeDeepLinkUrl,
+  consumePendingNativeNotificationOpenDetail,
   consumePendingNativeNotificationRoute,
   NATIVE_DEEP_LINK_EVENT,
   NATIVE_NOTIFICATION_OPEN_EVENT,
@@ -176,10 +177,18 @@ import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardi
 import { useMainMenuState } from "./hooks/layout/useMainMenuState";
 import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
 import {
+  extractClientTag,
+  extractEditedFromTag,
+  extractReplyContextFromTags,
+  isInvalidInnerRumorPubkey,
+  isNestedEncryptedNip44PayloadForAnyPubkey,
+} from "./hooks/messages/chatNostrProtocol";
+import {
   buildUnknownContactId,
   isUnknownContactId,
   normalizePubkeyHex,
 } from "./hooks/messages/contactIdentity";
+import { hasKnownNostrMessageIdentity } from "./hooks/messages/messageHelpers";
 import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
 import { useChatNostrSyncEffect } from "./hooks/messages/useChatNostrSyncEffect";
 import {
@@ -229,15 +238,13 @@ import { useMintDomain } from "./hooks/useMintDomain";
 import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
 import { usePaidOverlayState } from "./hooks/usePaidOverlayState";
 import { usePaymentsDomain } from "./hooks/usePaymentsDomain";
-import { useProfileNpubCashEffects } from "./hooks/useProfileNpubCashEffects";
 import { usePortraitOrientationLock } from "./hooks/usePortraitOrientationLock";
+import { useProfileNpubCashEffects } from "./hooks/useProfileNpubCashEffects";
 import { useRelayDomain } from "./hooks/useRelayDomain";
 import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
-import { resolveCashuRowStoredOwnerLane } from "./lib/cashuOwnerLane";
-import { createCashuTokenId } from "./lib/cashuTokenIdentity";
 import {
   createLinkyBankPaymentOfferEvent,
   getLinkyBankPaymentOfferInfo,
@@ -251,6 +258,9 @@ import {
   shouldPushLinkyBankPaymentOfferStatus,
   type LinkyBankPaymentOfferStatus,
 } from "./lib/bankPaymentOffer";
+import { resolveCashuRowStoredOwnerLane } from "./lib/cashuOwnerLane";
+import { isCashuRowCandidateBetter } from "./lib/cashuRowPreference";
+import { createCashuTokenId } from "./lib/cashuTokenIdentity";
 import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_RESERVED,
@@ -260,7 +270,6 @@ import {
   isCashuTokenIssuedState,
   isCashuTokenReservedState,
 } from "./lib/cashuTokenState";
-import { isCashuRowCandidateBetter } from "./lib/cashuRowPreference";
 import {
   buildIdentityChangeMessageContent,
   buildIdentityChangeMessageWrapId,
@@ -279,13 +288,13 @@ import {
   isRetryablePaymentAmountFailure,
 } from "./lib/paymentAmountFallback";
 import {
-  buildCashuMintCandidates as buildCashuMintCandidatesBase,
-  selectSingleMintCandidateForAmount,
-} from "./lib/paymentMintSelection";
-import {
   canOfferPaymentMintMelt,
   getPaymentMintMeltPlan,
 } from "./lib/paymentMintMelt";
+import {
+  buildCashuMintCandidates as buildCashuMintCandidatesBase,
+  selectSingleMintCandidateForAmount,
+} from "./lib/paymentMintSelection";
 import {
   buildCashuPaymentRequestMessage,
   buildLinkyPaymentRequestDeclineMessage,
@@ -294,6 +303,7 @@ import {
 } from "./lib/paymentRequestMessage";
 import {
   parsePrivateImageMessage,
+  privateImageMessageFromEvent,
   privateImagePreviewText,
 } from "./lib/privateImageMessage";
 import {
@@ -333,6 +343,127 @@ const hasTranslationKey = (key: string): key is TranslationKey =>
 const readObjectField = (value: unknown, field: string): unknown => {
   if (typeof value !== "object" || value === null) return undefined;
   return Reflect.get(value, field);
+};
+
+interface NotificationOpenTarget {
+  outerEventId: string;
+  recipientPubkey: string;
+  relayHints: string[];
+}
+
+const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
+
+const unwrapNotificationOpenValue = (value: unknown): unknown => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (!(normalized.startsWith("{") && normalized.endsWith("}"))) {
+    return normalized;
+  }
+
+  try {
+    return JSON.parse(normalized);
+  } catch {
+    return normalized;
+  }
+};
+
+const readNotificationOpenRoute = (value: unknown): string | null => {
+  const source = unwrapNotificationOpenValue(value);
+  if (typeof source === "string") {
+    const normalized = source.trim();
+    return normalized || null;
+  }
+
+  const normalized = String(readObjectField(source, "route") ?? "").trim();
+  return normalized || null;
+};
+
+const readNotificationRelayHints = (value: unknown): string[] => {
+  const source = unwrapNotificationOpenValue(value);
+  if (!Array.isArray(source)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const relayHints: string[] = [];
+  for (const entry of source) {
+    const relay = String(entry ?? "").trim();
+    if (!relay) continue;
+    if (!(relay.startsWith("wss://") || relay.startsWith("ws://"))) {
+      continue;
+    }
+    if (seen.has(relay)) continue;
+    seen.add(relay);
+    relayHints.push(relay);
+  }
+  return relayHints;
+};
+
+const readNotificationOpenTarget = (
+  value: unknown,
+): NotificationOpenTarget | null => {
+  const source = unwrapNotificationOpenValue(value);
+  if (typeof source !== "object" || source === null) {
+    return null;
+  }
+
+  const outerEventId = String(
+    readObjectField(source, "outerEventId") ?? "",
+  ).trim();
+  const recipientPubkey = normalizePubkeyHex(
+    readObjectField(source, "recipientPubkey"),
+  );
+  const relayHints = readNotificationRelayHints(
+    readObjectField(source, "relayHints"),
+  );
+
+  if (!outerEventId || !recipientPubkey) {
+    return null;
+  }
+
+  return {
+    outerEventId,
+    recipientPubkey,
+    relayHints,
+  };
+};
+
+const consumeNotificationOpenDetailFromHash = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const rawHash = String(window.location.hash ?? "");
+  const queryIndex = rawHash.indexOf("?");
+  if (queryIndex < 0) {
+    return null;
+  }
+
+  const baseHash = rawHash.slice(0, queryIndex) || "#contacts";
+  const search = rawHash.slice(queryIndex + 1);
+  const params = new URLSearchParams(search);
+  const detail = params.get(NOTIFICATION_OPEN_HASH_PARAM);
+  if (!detail) {
+    return null;
+  }
+
+  params.delete(NOTIFICATION_OPEN_HASH_PARAM);
+  const nextQuery = params.toString();
+  const nextHash = nextQuery ? `${baseHash}?${nextQuery}` : baseHash;
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${window.location.search}${nextHash}`,
+  );
+
+  return detail;
 };
 
 type CashuProofPayload = Record<string, unknown> & {
@@ -8991,6 +9122,354 @@ export const useAppShellComposition = () => {
     [triggerChatScrollToBottom],
   );
 
+  const openNotificationChat = React.useCallback(
+    async (rawDetail: unknown): Promise<boolean> => {
+      const target = readNotificationOpenTarget(rawDetail);
+      if (!target || !currentNsec) {
+        return false;
+      }
+
+      try {
+        const decoded = nip19.decode(currentNsec);
+        if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
+          return false;
+        }
+
+        const { getPublicKey } = await import("nostr-tools");
+        const { unwrapEvent } = await import("nostr-tools/nip17");
+
+        const privBytes = decoded.data;
+        const myPubHex = getPublicKey(privBytes);
+        if (target.recipientPubkey !== myPubHex) {
+          return false;
+        }
+
+        const relays = Array.from(
+          new Set([...target.relayHints, ...nostrFetchRelays, ...NOSTR_RELAYS]),
+        );
+        const pool = await getSharedAppNostrPool();
+        const wraps = await pool.querySync(
+          relays,
+          {
+            ids: [target.outerEventId],
+            kinds: [1059],
+            "#p": [myPubHex],
+            limit: 1,
+          },
+          { maxWait: 2500 },
+        );
+        const wrap = wraps[0] ?? null;
+        if (!wrap) {
+          return false;
+        }
+
+        const wrapId = String(wrap.id ?? "").trim();
+        if (!wrapId) {
+          return false;
+        }
+
+        const inner = unwrapEvent(wrap, privBytes);
+        if (!inner) {
+          return false;
+        }
+
+        const senderPub = normalizePubkeyHex(inner.pubkey);
+        const tags = Array.isArray(inner.tags) ? inner.tags : [];
+        const pTags = tags
+          .filter((tag) => Array.isArray(tag) && tag[0] === "p")
+          .map((tag) => normalizePubkeyHex(tag[1]))
+          .filter((pubkey): pubkey is string => Boolean(pubkey));
+
+        const peerPubkey =
+          senderPub && senderPub !== myPubHex
+            ? senderPub
+            : (pTags.find((pubkey) => pubkey !== myPubHex) ?? null);
+        if (!peerPubkey) {
+          return false;
+        }
+
+        const knownContact = contacts.find((contact) => {
+          const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+          if (!normalizedNpub) {
+            return false;
+          }
+
+          try {
+            const decodedContact = nip19.decode(normalizedNpub);
+            return (
+              decodedContact.type === "npub" &&
+              typeof decodedContact.data === "string" &&
+              normalizePubkeyHex(decodedContact.data) === peerPubkey
+            );
+          } catch {
+            return false;
+          }
+        });
+
+        const contactId = knownContact
+          ? String(knownContact.id ?? "").trim()
+          : String(buildUnknownContactId(peerPubkey) ?? "").trim();
+        if (!contactId) {
+          return false;
+        }
+
+        let insertedMessageId: string | null = null;
+
+        if (inner.kind === 14 || inner.kind === 15) {
+          const existingByWrap = nostrMessagesLatestRef.current.find(
+            (message) => String(message.wrapId ?? "").trim() === wrapId,
+          );
+          if (existingByWrap) {
+            insertedMessageId = String(existingByWrap.id ?? "").trim() || null;
+          } else if (
+            !hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
+              wrapId,
+            }) &&
+            !isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)
+          ) {
+            const content =
+              inner.kind === 15
+                ? (privateImageMessageFromEvent(inner) ?? "")
+                : String(inner.content ?? "");
+
+            if (content.trim()) {
+              const taggedPeerPub =
+                pTags.find((pubkey) => pubkey !== myPubHex) ?? "";
+              const nestedEncryptedPayload =
+                inner.kind === 14 &&
+                isNestedEncryptedNip44PayloadForAnyPubkey(
+                  content,
+                  [senderPub, taggedPeerPub, wrap.pubkey],
+                  privBytes,
+                );
+
+              if (!nestedEncryptedPayload) {
+                const tagClientId = extractClientTag(tags);
+                const rumorId = inner.id ? String(inner.id).trim() : "";
+                const matchedOutgoingMessage =
+                  senderPub === myPubHex
+                    ? null
+                    : (nostrMessagesLatestRef.current.find((message) => {
+                        if (String(message.direction ?? "").trim() !== "out") {
+                          return false;
+                        }
+                        if (
+                          tagClientId &&
+                          String(message.clientId ?? "").trim() ===
+                            String(tagClientId).trim()
+                        ) {
+                          return true;
+                        }
+                        return (
+                          rumorId &&
+                          String(message.rumorId ?? "").trim() === rumorId
+                        );
+                      }) ?? null);
+
+                const addressesMe = pTags.includes(myPubHex);
+                const isOutgoing =
+                  senderPub === myPubHex ||
+                  (addressesMe && Boolean(matchedOutgoingMessage));
+
+                if (addressesMe || isOutgoing) {
+                  const messageDirection = isOutgoing ? "out" : "in";
+                  const { replyToId, rootMessageId } =
+                    extractReplyContextFromTags(tags);
+                  const editedFromId = extractEditedFromTag(tags);
+                  const effectivePubkey = isOutgoing ? myPubHex : peerPubkey;
+                  const normalizedIncomingPeerPubkey = isOutgoing
+                    ? null
+                    : normalizePubkeyHex(effectivePubkey);
+                  const createdAtSecRaw = Number(inner.created_at ?? 0);
+                  const createdAtSec =
+                    Number.isFinite(createdAtSecRaw) && createdAtSecRaw > 0
+                      ? Math.trunc(createdAtSecRaw)
+                      : Math.ceil(Date.now() / 1e3);
+
+                  const matchesStoredIncomingPeer = (
+                    message: LocalNostrMessage,
+                  ): boolean => {
+                    if (isOutgoing || !normalizedIncomingPeerPubkey) {
+                      return false;
+                    }
+
+                    return (
+                      normalizePubkeyHex(message.pubkey) ===
+                      normalizedIncomingPeerPubkey
+                    );
+                  };
+
+                  if (
+                    !hasKnownNostrMessageIdentity(
+                      knownNostrMessageIdentityIndex,
+                      {
+                        contactId,
+                        direction: messageDirection,
+                        ...(tagClientId ? { clientId: tagClientId } : {}),
+                        ...(rumorId ? { rumorId } : {}),
+                        wrapId,
+                      },
+                    )
+                  ) {
+                    if (editedFromId) {
+                      const targetMessage = nostrMessagesLatestRef.current.find(
+                        (message) => {
+                          const matchesContactId =
+                            String(message.contactId ?? "") ===
+                            String(contactId);
+                          if (
+                            !matchesContactId &&
+                            !matchesStoredIncomingPeer(message)
+                          ) {
+                            return false;
+                          }
+                          if (
+                            String(message.direction ?? "") !== messageDirection
+                          ) {
+                            return false;
+                          }
+                          return (
+                            String(message.rumorId ?? "").trim() ===
+                              editedFromId ||
+                            String(message.editedFromId ?? "").trim() ===
+                              editedFromId
+                          );
+                        },
+                      );
+
+                      if (targetMessage) {
+                        const targetMessageId = String(
+                          targetMessage.id ?? "",
+                        ).trim();
+                        if (targetMessageId) {
+                          const existingOriginal =
+                            String(
+                              targetMessage.originalContent ?? "",
+                            ).trim() || String(targetMessage.content ?? "");
+                          updateLocalNostrMessage(targetMessageId, {
+                            content,
+                            status: "sent",
+                            wrapId,
+                            pubkey: effectivePubkey,
+                            ...(tagClientId ? { clientId: tagClientId } : {}),
+                            ...(rumorId ? { rumorId } : {}),
+                            editedAtSec: createdAtSec,
+                            editedFromId,
+                            isEdited: true,
+                            originalContent: existingOriginal || null,
+                          });
+                          insertedMessageId = targetMessageId;
+                        }
+                      }
+                    }
+
+                    if (!insertedMessageId) {
+                      const existingMessage =
+                        nostrMessagesLatestRef.current.find((message) => {
+                          const matchesContactId =
+                            String(message.contactId ?? "") ===
+                            String(contactId);
+                          if (
+                            !matchesContactId &&
+                            !matchesStoredIncomingPeer(message)
+                          ) {
+                            return false;
+                          }
+                          if (
+                            String(message.direction ?? "") !== messageDirection
+                          ) {
+                            return false;
+                          }
+                          if (
+                            rumorId &&
+                            String(message.rumorId ?? "").trim() === rumorId
+                          ) {
+                            return true;
+                          }
+                          if (tagClientId) {
+                            return (
+                              String(message.clientId ?? "").trim() ===
+                              String(tagClientId).trim()
+                            );
+                          }
+                          return (
+                            String(message.content ?? "").trim() ===
+                            content.trim()
+                          );
+                        });
+
+                      if (existingMessage) {
+                        const existingMessageId = String(
+                          existingMessage.id ?? "",
+                        ).trim();
+                        if (existingMessageId) {
+                          updateLocalNostrMessage(existingMessageId, {
+                            status: "sent",
+                            wrapId,
+                            pubkey: effectivePubkey,
+                            ...(tagClientId ? { clientId: tagClientId } : {}),
+                            ...(rumorId ? { rumorId } : {}),
+                            ...(replyToId ? { replyToId } : {}),
+                            ...(rootMessageId ? { rootMessageId } : {}),
+                            ...(editedFromId ? { editedFromId } : {}),
+                          });
+                          insertedMessageId = existingMessageId;
+                        }
+                      } else {
+                        insertedMessageId = appendLocalNostrMessage({
+                          contactId,
+                          content,
+                          createdAtSec,
+                          direction: messageDirection,
+                          pubkey: effectivePubkey,
+                          rumorId: rumorId || null,
+                          wrapId,
+                          ...(tagClientId ? { clientId: tagClientId } : {}),
+                          ...(replyToId ? { replyToId } : {}),
+                          ...(rootMessageId ? { rootMessageId } : {}),
+                          ...(editedFromId
+                            ? {
+                                editedAtSec: createdAtSec,
+                                editedFromId,
+                                isEdited: true,
+                              }
+                            : {}),
+                        });
+                      }
+
+                      nostrMessageWrapIdsRef.current.add(wrapId);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        setPendingDeleteId(null);
+        navigateTo({ route: "chat", id: contactId });
+        if (insertedMessageId) {
+          triggerChatScrollToBottom(insertedMessageId);
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [
+      appendLocalNostrMessage,
+      contacts,
+      currentNsec,
+      knownNostrMessageIdentityIndex,
+      nostrFetchRelays,
+      nostrMessagesLatestRef,
+      nostrMessageWrapIdsRef,
+      setPendingDeleteId,
+      triggerChatScrollToBottom,
+      updateLocalNostrMessage,
+    ],
+  );
+
   useInboxNotificationsSync({
     appendLocalNostrMessage,
     appendLocalNostrReaction,
@@ -9088,7 +9567,7 @@ export const useAppShellComposition = () => {
 
   React.useEffect(() => {
     const openNotificationRoute = (rawRoute: unknown) => {
-      const routeValue = String(rawRoute ?? "").trim();
+      const routeValue = readNotificationOpenRoute(rawRoute);
       if (routeValue === "#contacts") {
         navigateTo({ route: "contacts" });
         return;
@@ -9098,7 +9577,27 @@ export const useAppShellComposition = () => {
       }
     };
 
-    openNotificationRoute(consumePendingNativeNotificationRoute());
+    const openNotification = (rawDetail: unknown) => {
+      void openNotificationChat(rawDetail).then((opened) => {
+        if (opened) {
+          return;
+        }
+
+        openNotificationRoute(rawDetail);
+      });
+    };
+
+    const pendingNotificationDetail =
+      consumePendingNativeNotificationOpenDetail();
+    const pendingHashNotificationDetail =
+      consumeNotificationOpenDetailFromHash();
+    if (pendingNotificationDetail) {
+      openNotification(pendingNotificationDetail);
+    } else if (pendingHashNotificationDetail) {
+      openNotification(pendingHashNotificationDetail);
+    } else {
+      openNotificationRoute(consumePendingNativeNotificationRoute());
+    }
 
     const onNotificationOpen: EventListener = (event) => {
       if (!(event instanceof CustomEvent)) {
@@ -9110,16 +9609,43 @@ export const useAppShellComposition = () => {
         return;
       }
 
-      openNotificationRoute(Reflect.get(detail, "route"));
+      openNotification(detail);
     };
 
     window.addEventListener(NATIVE_NOTIFICATION_OPEN_EVENT, onNotificationOpen);
-    return () =>
+    const onServiceWorkerMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (typeof data !== "object" || data === null) {
+        return;
+      }
+      if (Reflect.get(data, "type") !== "notification-open") {
+        return;
+      }
+
+      openNotification(Reflect.get(data, "detail"));
+    };
+
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener(
+        "message",
+        onServiceWorkerMessage,
+      );
+    }
+
+    return () => {
+      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        navigator.serviceWorker.removeEventListener(
+          "message",
+          onServiceWorkerMessage,
+        );
+      }
+
       window.removeEventListener(
         NATIVE_NOTIFICATION_OPEN_EVENT,
         onNotificationOpen,
       );
-  }, []);
+    };
+  }, [openNotificationChat]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") {

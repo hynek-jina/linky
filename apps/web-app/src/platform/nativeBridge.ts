@@ -91,6 +91,7 @@ interface AndroidWindowInsetsBridge {
 }
 
 interface AndroidDeepLinksBridge {
+  consumePendingNotificationOpenDetail?: () => string | null;
   consumePendingNotificationRoute?: () => string | null;
   consumePendingUrl?: () => string | null;
 }
@@ -704,6 +705,19 @@ export const consumePendingNativeNotificationRoute = (): string | null => {
 
   try {
     return normalizeString(bridge.consumePendingNotificationRoute());
+  } catch {
+    return null;
+  }
+};
+
+export const consumePendingNativeNotificationOpenDetail = (): string | null => {
+  const bridge = getAndroidDeepLinksBridge();
+  if (!isNativePlatform() || !bridge?.consumePendingNotificationOpenDetail) {
+    return null;
+  }
+
+  try {
+    return normalizeString(bridge.consumePendingNotificationOpenDetail());
   } catch {
     return null;
   }

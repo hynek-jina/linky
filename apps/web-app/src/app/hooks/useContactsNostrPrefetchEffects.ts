@@ -1,5 +1,6 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
+import { omitSyntheticContactLightningAddress } from "../../derivedProfile";
 import {
   cacheProfileAvatarFromUrl,
   deleteCachedProfileAvatar,
@@ -103,8 +104,11 @@ export const useContactsNostrPrefetchEffects = <
         if (!needsName && !shouldNormalizeNpub && currentLnNormalized) {
           const cached = loadCachedProfileMetadata(npub);
           const cachedLn = cached?.metadata
-            ? String(cached.metadata.lud16 ?? "").trim() ||
-              String(cached.metadata.lud06 ?? "").trim()
+            ? omitSyntheticContactLightningAddress(
+                String(cached.metadata.lud16 ?? "").trim() ||
+                  String(cached.metadata.lud06 ?? "").trim(),
+                npub,
+              )
             : "";
           if (cachedLn && cachedLn.toLowerCase() !== currentLnNormalized) {
             updateContactFromNostr({
@@ -122,9 +126,11 @@ export const useContactsNostrPrefetchEffects = <
         const cached = loadCachedProfileMetadata(npub);
         if (cached?.metadata) {
           const bestName = getBestNostrName(cached.metadata);
-          const ln =
+          const ln = omitSyntheticContactLightningAddress(
             String(cached.metadata.lud16 ?? "").trim() ||
-            String(cached.metadata.lud06 ?? "").trim();
+              String(cached.metadata.lud06 ?? "").trim(),
+            npub,
+          );
           const shouldSyncLn =
             Boolean(ln) && ln.toLowerCase() !== currentLnNormalized;
           const patch: Partial<{
@@ -163,9 +169,11 @@ export const useContactsNostrPrefetchEffects = <
           if (!metadata) continue;
 
           const bestName = getBestNostrName(metadata);
-          const ln =
+          const ln = omitSyntheticContactLightningAddress(
             String(metadata.lud16 ?? "").trim() ||
-            String(metadata.lud06 ?? "").trim();
+              String(metadata.lud06 ?? "").trim(),
+            npub,
+          );
           const shouldSyncLn =
             Boolean(ln) && ln.toLowerCase() !== currentLnNormalized;
 

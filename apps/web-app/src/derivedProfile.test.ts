@@ -4,6 +4,7 @@ import {
   deriveDefaultLightningAddress,
   deriveDefaultProfile,
   deriveGeneratedAvatar,
+  omitSyntheticContactLightningAddress,
   parseDefaultLightningAddressNpub,
 } from "./derivedProfile";
 
@@ -31,6 +32,33 @@ describe("derivedProfile lightning address defaults", () => {
     expect(
       parseDefaultLightningAddressNpub("npub1alice@example.com"),
     ).toBeNull();
+  });
+
+  it("omits synthetic default linky.fit addresses for the same npub", () => {
+    expect(
+      omitSyntheticContactLightningAddress(
+        "npub1alice@linky.fit",
+        "npub1alice",
+      ),
+    ).toBe("");
+    expect(
+      omitSyntheticContactLightningAddress(
+        "Npub1Alice@Linky.Fit",
+        "npub1alice",
+      ),
+    ).toBe("");
+  });
+
+  it("keeps real or unrelated lightning addresses intact", () => {
+    expect(
+      omitSyntheticContactLightningAddress("alice@linky.fit", "npub1alice"),
+    ).toBe("alice@linky.fit");
+    expect(
+      omitSyntheticContactLightningAddress(
+        "npub1alice@example.com",
+        "npub1alice",
+      ),
+    ).toBe("npub1alice@example.com");
   });
 });
 
