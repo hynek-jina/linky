@@ -10,6 +10,7 @@ import {
   CASHU_SEED_PATH,
   cashuOwnerPath,
   contactsOwnerPath,
+  IDENTITY_OWNER_PATH,
   messagesOwnerPath,
   META_OWNER_PATH,
   transactionsOwnerPath,
@@ -93,6 +94,7 @@ const deriveOwnerPath = (
   index: OwnerLaneIndex = ZERO_OWNER_LANE_INDEX,
 ): string => {
   if (role === "meta") return META_OWNER_PATH;
+  if (role === "identity") return IDENTITY_OWNER_PATH;
   if (role === "contacts") return contactsOwnerPath(index);
   if (role === "cashu") return cashuOwnerPath(index);
   if (role === "transactions") return transactionsOwnerPath(index);
