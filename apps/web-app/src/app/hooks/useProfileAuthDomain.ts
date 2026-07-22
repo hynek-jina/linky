@@ -8,7 +8,6 @@ import {
   type AvatarEditorControlId,
   type DerivedGeneratedAvatar,
 } from "../../derivedProfile";
-import { evolu } from "../../evolu";
 import type { Lang } from "../../i18n";
 import {
   NOSTR_RELAYS,
@@ -527,20 +526,14 @@ export const useProfileAuthDomain = ({
       setCashuSeedMnemonic(derivedCashuMnemonic);
 
       try {
-        await evolu.restoreAppOwner(appMnemonic, {
-          reload: false,
-        });
-      } catch (e) {
-        console.log("[linky][evolu] restoreAppOwner failed", {
-          error: String(e ?? "unknown"),
-        });
-      }
-
-      try {
         window.location.hash = "#";
       } catch {
         // ignore
       }
+      // The next boot creates the Evolu instance from the app mnemonic saved
+      // above. Resetting the currently open instance here is both unnecessary
+      // and unsafe: Evolu's restore promise stays pending when its DB reset
+      // fails, which would leave onboarding busy forever and skip this reload.
       globalThis.location.reload();
     },
     [
