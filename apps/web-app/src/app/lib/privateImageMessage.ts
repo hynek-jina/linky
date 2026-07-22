@@ -5,9 +5,15 @@ import { finalizeEvent } from "nostr-tools";
 const PRIVATE_IMAGE_MESSAGE_TYPE = "linky.private_image.v1";
 const PRIVATE_IMAGE_COMPACT_PREFIX = "linky:image:v1:";
 const BLOSSOM_UPLOAD_SERVERS = ["https://blossom.primal.net"];
+const LINKY_WEB_APP_ORIGIN = "https://app.linky.fit";
 const MAX_IMAGE_SOURCE_BYTES = 20 * 1024 * 1024;
-const MAX_IMAGE_SIDE_PX = 1600;
-const IMAGE_JPEG_QUALITY = 0.84;
+const MAX_IMAGE_OUTPUT_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_SIDE_PX = 1280;
+const MIN_IMAGE_SIDE_PX = 480;
+const IMAGE_JPEG_QUALITY = 0.8;
+const IMAGE_RESIZE_FACTOR = 0.8;
+const IMAGE_QUALITY_STEP = 0.06;
+const MIN_IMAGE_JPEG_QUALITY = 0.62;
 
 export interface PrivateImageMessagePayload {
   encryptedSha256: string;
@@ -127,6 +133,23 @@ const copyToArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   return buffer;
 };
 
+const getBlossomUploadProxyUrl = (): string => {
+  if (typeof window === "undefined") {
+    return `${LINKY_WEB_APP_ORIGIN}/api/blossom-upload`;
+  }
+
+  const { hostname, origin, protocol } = window.location;
+  const isLocalDevelopment =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]";
+  if ((protocol === "https:" || protocol === "http:") && !isLocalDevelopment) {
+    return `${origin}/api/blossom-upload`;
+  }
+
+  return `${LINKY_WEB_APP_ORIGIN}/api/blossom-upload`;
+};
+
 const readTagValue = (
   tags: readonly string[][],
   tagName: string,
@@ -200,29 +223,36 @@ const resizeImageToJpegBytes = async (
   const sourceHeight = image.naturalHeight || image.height;
   if (!sourceWidth || !sourceHeight) throw new Error("chat-image-invalid");
 
-  const scale = Math.min(
-    1,
-    MAX_IMAGE_SIDE_PX / Math.max(sourceWidth, sourceHeight),
-  );
-  const width = Math.max(1, Math.round(sourceWidth * scale));
-  const height = Math.max(1, Math.round(sourceHeight * scale));
-
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("chat-image-canvas-unavailable");
 
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(image, 0, 0, width, height);
+  let maxSide = MAX_IMAGE_SIDE_PX;
+  let quality = IMAGE_JPEG_QUALITY;
+  while (maxSide >= MIN_IMAGE_SIDE_PX) {
+    const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    canvas.width = width;
+    canvas.height = height;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(image, 0, 0, width, height);
 
-  const blob = await canvasToBlob(canvas, "image/jpeg", IMAGE_JPEG_QUALITY);
-  return {
-    bytes: new Uint8Array(await blob.arrayBuffer()),
-    height,
-    width,
-  };
+    const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+    if (blob.size <= MAX_IMAGE_OUTPUT_BYTES) {
+      return {
+        bytes: new Uint8Array(await blob.arrayBuffer()),
+        height,
+        width,
+      };
+    }
+
+    maxSide = Math.floor(maxSide * IMAGE_RESIZE_FACTOR);
+    quality = Math.max(MIN_IMAGE_JPEG_QUALITY, quality - IMAGE_QUALITY_STEP);
+  }
+
+  throw new Error("chat-image-too-large");
 };
 
 const encryptImageBytes = async (file: File): Promise<PreparedPrivateImage> => {
@@ -286,17 +316,27 @@ const uploadToBlossom = async (
       const authHeader = `Nostr ${bytesToBase64Url(
         textEncoder.encode(JSON.stringify(signedAuthEvent)),
       )}`;
-
-      const response = await fetch(`${baseUrl}/upload`, {
-        method: "PUT",
-        headers: {
-          Authorization: authHeader,
-        },
-        // The signed Blossom authorization already scopes the upload to this
-        // hash. Keeping the body untyped also keeps mobile Safari/WebView's
-        // CORS preflight to the explicitly allowed Authorization header.
-        body: copyToArrayBuffer(prepared.encryptedBytes),
-      });
+      const uploadBody = copyToArrayBuffer(prepared.encryptedBytes);
+      let response: Response;
+      try {
+        response = await fetch(`${baseUrl}/upload`, {
+          method: "PUT",
+          headers: {
+            Authorization: authHeader,
+          },
+          body: uploadBody,
+        });
+      } catch {
+        response = await fetch(getBlossomUploadProxyUrl(), {
+          method: "PUT",
+          headers: {
+            Authorization: authHeader,
+            "Content-Type": "application/octet-stream",
+            "X-SHA-256": prepared.encryptedSha256,
+          },
+          body: uploadBody,
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`upload-failed:${response.status}`);
