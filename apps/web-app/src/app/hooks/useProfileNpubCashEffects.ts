@@ -10,6 +10,7 @@ interface UseProfileNpubCashEffectsParams {
   currentNsec: string | null;
   hasMintOverrideRef: React.MutableRefObject<boolean>;
   makeNip98AuthHeader: (url: string, method: "GET" | "POST") => Promise<string>;
+  networkEnabled?: boolean;
   npubCashServerBaseUrl: string;
   npubCashInfoInFlightRef: React.MutableRefObject<boolean>;
   npubCashInfoLoadedAtMsRef: React.MutableRefObject<number>;
@@ -28,6 +29,7 @@ export const useProfileNpubCashEffects = ({
   currentNsec,
   hasMintOverrideRef,
   makeNip98AuthHeader,
+  networkEnabled = true,
   npubCashServerBaseUrl,
   npubCashInfoInFlightRef,
   npubCashInfoLoadedAtMsRef,
@@ -113,6 +115,7 @@ export const useProfileNpubCashEffects = ({
     // - read default mint (preferred mint) for the user
     // - auto-claim pending payments and store them as Cashu tokens
     // Uses the server bound to the current lightning-address domain.
+    if (!networkEnabled) return;
     if (!currentNpub) return;
     if (!currentNsec) return;
 
@@ -193,6 +196,7 @@ export const useProfileNpubCashEffects = ({
     currentNsec,
     hasMintOverrideRef,
     makeNip98AuthHeader,
+    networkEnabled,
     npubCashServerBaseUrl,
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
@@ -204,6 +208,7 @@ export const useProfileNpubCashEffects = ({
   React.useEffect(() => {
     // While user is looking at the top-up invoice, poll more frequently so we
     // detect the paid invoice quickly.
+    if (!networkEnabled) return;
     if (routeKind !== "topupInvoice") return;
 
     void claimNpubCashOnce();
@@ -214,7 +219,7 @@ export const useProfileNpubCashEffects = ({
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [claimNpubCashOnce, routeKind]);
+  }, [claimNpubCashOnce, networkEnabled, routeKind]);
 
   return {
     showProfileQr,

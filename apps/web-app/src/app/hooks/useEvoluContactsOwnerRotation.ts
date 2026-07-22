@@ -53,7 +53,14 @@ interface OwnerSyncData {
 
 interface FixedOwnerSyncData {
   identityOwner: Evolu.AppOwner;
+  legacyIdentitiesOwner: Evolu.AppOwner;
+  legacyMessagesIdentityOwner: Evolu.AppOwner;
   metaOwner: Evolu.AppOwner;
+}
+
+interface VisibleOwnerSyncData {
+  ownerIds: Evolu.OwnerId[];
+  syncOwners: Evolu.SyncOwner[];
 }
 
 interface UseEvoluContactsOwnerRotationParams {
@@ -84,6 +91,9 @@ interface UseEvoluContactsOwnerRotationResult {
   contactsVisibleOwnerIds: Evolu.OwnerId[];
   identityOwnerId: Evolu.OwnerId | null;
   identitySyncOwner: Evolu.SyncOwner | null;
+  historicalBootstrapSyncOwners: Evolu.SyncOwner[];
+  legacyIdentitiesOwnerId: Evolu.OwnerId | null;
+  legacyMessagesIdentityOwnerId: Evolu.OwnerId | null;
   metaOwnerId: Evolu.OwnerId | null;
   metaSyncOwner: Evolu.SyncOwner | null;
   messagesBackupOwnerId: Evolu.OwnerId | null;
@@ -110,6 +120,7 @@ interface UseEvoluContactsOwnerRotationResult {
   transactionsOwnerIndex: number;
   transactionsOwnerPointer: string;
   transactionsSyncOwner: Evolu.SyncOwner | null;
+  transactionsBootstrapSnapshot: ReadonlyArray<object>;
   transactionsVisibleOwnerIds: Evolu.OwnerId[];
 }
 
@@ -335,20 +346,50 @@ const toAppOwnerFromMnemonic = (mnemonic: string): Evolu.AppOwner | null => {
 const deriveFixedOwnerSyncDataFromSeed = async (
   slip39Seed: string,
 ): Promise<FixedOwnerSyncData | null> => {
-  const [metaMnemonic, identityMnemonic] = await Promise.all([
+  const [
+    metaMnemonic,
+    identityMnemonic,
+    legacyIdentitiesMnemonic,
+    legacyMessagesIdentityMnemonic,
+  ] = await Promise.all([
     deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "meta", 0),
     deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "identity", 0),
+    // Historical `identities-0` used path family 5, which is now the
+    // transactions-0 path family.
+    deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "transactions", 0),
+    // Before PR #165, the identity role accidentally fell through here.
+    deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "messages", 0),
   ]);
 
-  if (!metaMnemonic || !identityMnemonic) return null;
+  if (
+    !metaMnemonic ||
+    !identityMnemonic ||
+    !legacyIdentitiesMnemonic ||
+    !legacyMessagesIdentityMnemonic
+  )
+    return null;
 
   const metaOwner = toAppOwnerFromMnemonic(metaMnemonic);
   const identityOwner = toAppOwnerFromMnemonic(identityMnemonic);
+  const legacyIdentitiesOwner = toAppOwnerFromMnemonic(
+    legacyIdentitiesMnemonic,
+  );
+  const legacyMessagesIdentityOwner = toAppOwnerFromMnemonic(
+    legacyMessagesIdentityMnemonic,
+  );
 
-  if (!metaOwner || !identityOwner) return null;
+  if (
+    !metaOwner ||
+    !identityOwner ||
+    !legacyIdentitiesOwner ||
+    !legacyMessagesIdentityOwner
+  )
+    return null;
 
   return {
     identityOwner,
+    legacyIdentitiesOwner,
+    legacyMessagesIdentityOwner,
     metaOwner,
   };
 };
@@ -424,92 +465,31 @@ const deriveOwnerSyncDataFromSeed = async (
   };
 };
 
-const deriveContactsOwnerIdsFromSeed = async (
+type RotatingOwnerRole = "contacts" | "cashu" | "messages" | "transactions";
+
+const deriveVisibleOwnerSyncDataFromSeed = async (
   slip39Seed: string,
-  contactsOwnerIndex: number,
-): Promise<Evolu.OwnerId[]> => {
+  role: RotatingOwnerRole,
+  activeOwnerIndex: number,
+): Promise<VisibleOwnerSyncData> => {
   const mnemonics = await Promise.all(
-    Array.from({ length: contactsOwnerIndex + 1 }, (_value, index) =>
-      deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "contacts", index),
+    Array.from({ length: activeOwnerIndex + 1 }, (_value, index) =>
+      deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, role, index),
     ),
   );
 
   const ownerIds: Evolu.OwnerId[] = [];
+  const syncOwners: Evolu.SyncOwner[] = [];
 
   for (const mnemonic of mnemonics) {
     if (!mnemonic) continue;
     const owner = toAppOwnerFromMnemonic(mnemonic);
     if (!owner) continue;
     ownerIds.push(owner.id);
+    syncOwners.push(owner);
   }
 
-  return ownerIds;
-};
-
-const deriveCashuOwnerIdsFromSeed = async (
-  slip39Seed: string,
-  cashuOwnerIndex: number,
-): Promise<Evolu.OwnerId[]> => {
-  const mnemonics = await Promise.all(
-    Array.from({ length: cashuOwnerIndex + 1 }, (_value, index) =>
-      deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "cashu", index),
-    ),
-  );
-
-  const ownerIds: Evolu.OwnerId[] = [];
-
-  for (const mnemonic of mnemonics) {
-    if (!mnemonic) continue;
-    const owner = toAppOwnerFromMnemonic(mnemonic);
-    if (!owner) continue;
-    ownerIds.push(owner.id);
-  }
-
-  return ownerIds;
-};
-
-const deriveMessagesOwnerIdsFromSeed = async (
-  slip39Seed: string,
-  messagesOwnerIndex: number,
-): Promise<Evolu.OwnerId[]> => {
-  const mnemonics = await Promise.all(
-    Array.from({ length: messagesOwnerIndex + 1 }, (_value, index) =>
-      deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "messages", index),
-    ),
-  );
-
-  const ownerIds: Evolu.OwnerId[] = [];
-
-  for (const mnemonic of mnemonics) {
-    if (!mnemonic) continue;
-    const owner = toAppOwnerFromMnemonic(mnemonic);
-    if (!owner) continue;
-    ownerIds.push(owner.id);
-  }
-
-  return ownerIds;
-};
-
-const deriveTransactionsOwnerIdsFromSeed = async (
-  slip39Seed: string,
-  transactionsOwnerIndex: number,
-): Promise<Evolu.OwnerId[]> => {
-  const mnemonics = await Promise.all(
-    Array.from({ length: transactionsOwnerIndex + 1 }, (_value, index) =>
-      deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "transactions", index),
-    ),
-  );
-
-  const ownerIds: Evolu.OwnerId[] = [];
-
-  for (const mnemonic of mnemonics) {
-    if (!mnemonic) continue;
-    const owner = toAppOwnerFromMnemonic(mnemonic);
-    if (!owner) continue;
-    ownerIds.push(owner.id);
-  }
-
-  return ownerIds;
+  return { ownerIds, syncOwners };
 };
 
 export const useEvoluContactsOwnerRotation = ({
@@ -555,6 +535,8 @@ export const useEvoluContactsOwnerRotation = ({
   >([]);
   const [transactionsVisibleOwnerIds, setTransactionsVisibleOwnerIds] =
     React.useState<Evolu.OwnerId[]>([]);
+  const [historicalBootstrapSyncOwners, setHistoricalBootstrapSyncOwners] =
+    React.useState<Evolu.SyncOwner[]>([]);
   const [contactsBackupOwnerId, setContactsBackupOwnerId] =
     React.useState<Evolu.OwnerId | null>(null);
   const [messagesBackupOwnerId, setMessagesBackupOwnerId] =
@@ -1004,6 +986,7 @@ export const useEvoluContactsOwnerRotation = ({
       setContactsVisibleOwnerIds([]);
       setMessagesVisibleOwnerIds([]);
       setTransactionsVisibleOwnerIds([]);
+      setHistoricalBootstrapSyncOwners([]);
       setContactsBackupOwnerId(null);
       setMessagesBackupOwnerId(null);
       setTransactionsBackupOwnerId(null);
@@ -1017,6 +1000,7 @@ export const useEvoluContactsOwnerRotation = ({
       setContactsVisibleOwnerIds([]);
       setMessagesVisibleOwnerIds([]);
       setTransactionsVisibleOwnerIds([]);
+      setHistoricalBootstrapSyncOwners([]);
       setContactsBackupOwnerId(null);
       setMessagesBackupOwnerId(null);
       setTransactionsBackupOwnerId(null);
@@ -1032,17 +1016,24 @@ export const useEvoluContactsOwnerRotation = ({
         resolvedMessagesOwnerIndex,
         resolvedTransactionsOwnerIndex,
       ),
-      deriveCashuOwnerIdsFromSeed(normalizedSeed, resolvedCashuOwnerIndex),
-      deriveContactsOwnerIdsFromSeed(
+      deriveVisibleOwnerSyncDataFromSeed(
         normalizedSeed,
+        "cashu",
+        resolvedCashuOwnerIndex,
+      ),
+      deriveVisibleOwnerSyncDataFromSeed(
+        normalizedSeed,
+        "contacts",
         resolvedContactsOwnerIndex,
       ),
-      deriveMessagesOwnerIdsFromSeed(
+      deriveVisibleOwnerSyncDataFromSeed(
         normalizedSeed,
+        "messages",
         resolvedMessagesOwnerIndex,
       ),
-      deriveTransactionsOwnerIdsFromSeed(
+      deriveVisibleOwnerSyncDataFromSeed(
         normalizedSeed,
+        "transactions",
         resolvedTransactionsOwnerIndex,
       ),
       resolvedContactsOwnerIndex > 0
@@ -1075,20 +1066,33 @@ export const useEvoluContactsOwnerRotation = ({
     ]).then(
       ([
         derived,
-        visibleCashuOwnerIds,
-        visibleContactOwnerIds,
-        visibleMessagesOwnerIds,
-        visibleTransactionsOwnerIds,
+        visibleCashuOwners,
+        visibleContactOwners,
+        visibleMessagesOwners,
+        visibleTransactionsOwners,
         contactsBackup,
         messagesBackup,
         transactionsBackup,
       ]) => {
         if (cancelled) return;
         setOwnerSyncData(derived);
-        setCashuVisibleOwnerIds(visibleCashuOwnerIds);
-        setContactsVisibleOwnerIds(visibleContactOwnerIds);
-        setMessagesVisibleOwnerIds(visibleMessagesOwnerIds);
-        setTransactionsVisibleOwnerIds(visibleTransactionsOwnerIds);
+        setCashuVisibleOwnerIds(visibleCashuOwners.ownerIds);
+        setContactsVisibleOwnerIds(visibleContactOwners.ownerIds);
+        setMessagesVisibleOwnerIds(visibleMessagesOwners.ownerIds);
+        setTransactionsVisibleOwnerIds(visibleTransactionsOwners.ownerIds);
+        const historicalOwners = [
+          ...visibleCashuOwners.syncOwners.slice(0, -1),
+          ...visibleContactOwners.syncOwners.slice(0, -1),
+          ...visibleMessagesOwners.syncOwners.slice(0, -1),
+          ...visibleTransactionsOwners.syncOwners.slice(0, -1),
+        ];
+        const uniqueHistoricalOwners = historicalOwners.filter(
+          (owner, index) =>
+            historicalOwners.findIndex(
+              (candidate) => candidate.id === owner.id,
+            ) === index,
+        );
+        setHistoricalBootstrapSyncOwners(uniqueHistoricalOwners);
         setContactsBackupOwnerId(contactsBackup?.contactsOwner.id ?? null);
         setMessagesBackupOwnerId(messagesBackup?.messagesOwner.id ?? null);
         setTransactionsBackupOwnerId(
@@ -2063,6 +2067,15 @@ export const useEvoluContactsOwnerRotation = ({
     identitySyncOwner: isSeedLogin
       ? (fixedOwnerSyncData?.identityOwner ?? null)
       : null,
+    historicalBootstrapSyncOwners: isSeedLogin
+      ? historicalBootstrapSyncOwners
+      : [],
+    legacyIdentitiesOwnerId: isSeedLogin
+      ? (fixedOwnerSyncData?.legacyIdentitiesOwner.id ?? null)
+      : null,
+    legacyMessagesIdentityOwnerId: isSeedLogin
+      ? (fixedOwnerSyncData?.legacyMessagesIdentityOwner.id ?? null)
+      : null,
     metaOwnerId: isSeedLogin
       ? (fixedOwnerSyncData?.metaOwner.id ?? null)
       : null,
@@ -2103,6 +2116,7 @@ export const useEvoluContactsOwnerRotation = ({
     transactionsSyncOwner: isSeedLogin
       ? (ownerSyncData?.transactionsOwner ?? null)
       : null,
+    transactionsBootstrapSnapshot: allTransactionsRows,
     transactionsVisibleOwnerIds: isSeedLogin
       ? transactionsVisibleOwnerIds
       : appOwnerId

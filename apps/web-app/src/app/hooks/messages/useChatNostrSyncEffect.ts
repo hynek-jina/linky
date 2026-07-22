@@ -39,6 +39,7 @@ interface UseChatNostrSyncEffectParams {
   chatMessagesLatestRef: React.MutableRefObject<readonly ChatMessageRowLike[]>;
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   currentNsec: string | null;
+  enabled?: boolean;
   knownNostrMessageIdentityIndex: KnownNostrMessageIdentityIndex;
   logPayStep: (step: string, data?: PaymentLogData) => void;
   nostrMessageWrapIdsRef: React.MutableRefObject<Set<string>>;
@@ -58,6 +59,7 @@ export const useChatNostrSyncEffect = ({
   chatMessagesLatestRef,
   chatSeenWrapIdsRef,
   currentNsec,
+  enabled = true,
   knownNostrMessageIdentityIndex,
   logPayStep,
   nostrMessageWrapIdsRef,
@@ -71,6 +73,7 @@ export const useChatNostrSyncEffect = ({
 }: UseChatNostrSyncEffectParams) => {
   React.useEffect(() => {
     // NIP-17 inbox sync + subscription while a chat is open.
+    if (!enabled) return;
     if (route.kind !== "chat") return;
     if (!selectedContact) return;
 
@@ -545,6 +548,7 @@ export const useChatNostrSyncEffect = ({
     chatMessagesLatestRef,
     chatSeenWrapIdsRef,
     currentNsec,
+    enabled,
     knownNostrMessageIdentityIndex,
     logPayStep,
     nostrMessageWrapIdsRef,

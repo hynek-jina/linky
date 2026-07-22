@@ -5,9 +5,15 @@ import { finalizeEvent } from "nostr-tools";
 const PRIVATE_IMAGE_MESSAGE_TYPE = "linky.private_image.v1";
 const PRIVATE_IMAGE_COMPACT_PREFIX = "linky:image:v1:";
 const BLOSSOM_UPLOAD_SERVERS = ["https://blossom.primal.net"];
+const LINKY_WEB_APP_ORIGIN = "https://app.linky.fit";
 const MAX_IMAGE_SOURCE_BYTES = 20 * 1024 * 1024;
-const MAX_IMAGE_SIDE_PX = 1600;
-const IMAGE_JPEG_QUALITY = 0.84;
+const MAX_IMAGE_OUTPUT_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_SIDE_PX = 1280;
+const MIN_IMAGE_SIDE_PX = 480;
+const IMAGE_JPEG_QUALITY = 0.8;
+const IMAGE_RESIZE_FACTOR = 0.8;
+const IMAGE_QUALITY_STEP = 0.06;
+const MIN_IMAGE_JPEG_QUALITY = 0.62;
 
 export interface PrivateImageMessagePayload {
   encryptedSha256: string;
@@ -18,6 +24,7 @@ export interface PrivateImageMessagePayload {
   key: string;
   nonce: string;
   originalSha256: string;
+  storageEncoding: "base64" | "raw";
   type: "linky.private_image.v1";
   url: string;
   width: number;
@@ -25,6 +32,7 @@ export interface PrivateImageMessagePayload {
 
 interface CompactPrivateImageMessagePayload {
   a: "g";
+  e?: "b";
   h: number;
   k: string;
   m: string;
@@ -66,6 +74,7 @@ export interface PrivateImageSendResult {
 }
 
 const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 
 const bytesToHex = (bytes: Uint8Array): string =>
   Array.from(bytes)
@@ -102,14 +111,20 @@ const bytesToBase64Url = (bytes: Uint8Array): string => {
     .replace(/=+$/g, "");
 };
 
-const base64UrlToText = (value: string): string | null => {
+const base64UrlToBytes = (value: string): Uint8Array | null => {
   const normalized = value.trim().replace(/-/g, "+").replace(/_/g, "/");
   const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
   try {
-    return atob(`${normalized}${padding}`);
+    const binary = atob(`${normalized}${padding}`);
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
   } catch {
     return null;
   }
+};
+
+const base64UrlToText = (value: string): string | null => {
+  const bytes = base64UrlToBytes(value);
+  return bytes ? textDecoder.decode(bytes) : null;
 };
 
 const textToBase64Url = (value: string): string =>
@@ -125,6 +140,23 @@ const copyToArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const buffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buffer).set(bytes);
   return buffer;
+};
+
+const getBlossomUploadProxyUrl = (): string => {
+  if (typeof window === "undefined") {
+    return `${LINKY_WEB_APP_ORIGIN}/api/blossom-upload`;
+  }
+
+  const { hostname, origin, protocol } = window.location;
+  const isLocalDevelopment =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]";
+  if ((protocol === "https:" || protocol === "http:") && !isLocalDevelopment) {
+    return `${origin}/api/blossom-upload`;
+  }
+
+  return `${LINKY_WEB_APP_ORIGIN}/api/blossom-upload`;
 };
 
 const readTagValue = (
@@ -200,29 +232,36 @@ const resizeImageToJpegBytes = async (
   const sourceHeight = image.naturalHeight || image.height;
   if (!sourceWidth || !sourceHeight) throw new Error("chat-image-invalid");
 
-  const scale = Math.min(
-    1,
-    MAX_IMAGE_SIDE_PX / Math.max(sourceWidth, sourceHeight),
-  );
-  const width = Math.max(1, Math.round(sourceWidth * scale));
-  const height = Math.max(1, Math.round(sourceHeight * scale));
-
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("chat-image-canvas-unavailable");
 
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(image, 0, 0, width, height);
+  let maxSide = MAX_IMAGE_SIDE_PX;
+  let quality = IMAGE_JPEG_QUALITY;
+  while (maxSide >= MIN_IMAGE_SIDE_PX) {
+    const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    canvas.width = width;
+    canvas.height = height;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(image, 0, 0, width, height);
 
-  const blob = await canvasToBlob(canvas, "image/jpeg", IMAGE_JPEG_QUALITY);
-  return {
-    bytes: new Uint8Array(await blob.arrayBuffer()),
-    height,
-    width,
-  };
+    const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+    if (blob.size <= MAX_IMAGE_OUTPUT_BYTES) {
+      return {
+        bytes: new Uint8Array(await blob.arrayBuffer()),
+        height,
+        width,
+      };
+    }
+
+    maxSide = Math.floor(maxSide * IMAGE_RESIZE_FACTOR);
+    quality = Math.max(MIN_IMAGE_JPEG_QUALITY, quality - IMAGE_QUALITY_STEP);
+  }
+
+  throw new Error("chat-image-too-large");
 };
 
 const encryptImageBytes = async (file: File): Promise<PreparedPrivateImage> => {
@@ -246,11 +285,12 @@ const encryptImageBytes = async (file: File): Promise<PreparedPrivateImage> => {
     copyToArrayBuffer(resized.bytes),
   );
   const encryptedBytes = new Uint8Array(encryptedBuffer);
+  const storedBytes = textEncoder.encode(bytesToBase64Url(encryptedBytes));
 
   return {
-    encryptedBytes,
-    encryptedSha256: sha256Hex(encryptedBytes),
-    encryptedSize: encryptedBytes.byteLength,
+    encryptedBytes: storedBytes,
+    encryptedSha256: sha256Hex(storedBytes),
+    encryptedSize: storedBytes.byteLength,
     fileType: "image/jpeg",
     height: resized.height,
     key,
@@ -286,18 +326,28 @@ const uploadToBlossom = async (
       const authHeader = `Nostr ${bytesToBase64Url(
         textEncoder.encode(JSON.stringify(signedAuthEvent)),
       )}`;
-
-      const response = await fetch(`${baseUrl}/upload`, {
-        method: "PUT",
-        headers: {
-          Authorization: authHeader,
-          "Content-Type": "application/octet-stream",
-          "X-SHA-256": prepared.encryptedSha256,
-        },
-        body: new Blob([copyToArrayBuffer(prepared.encryptedBytes)], {
-          type: "application/octet-stream",
-        }),
-      });
+      const uploadBody = copyToArrayBuffer(prepared.encryptedBytes);
+      let response: Response;
+      try {
+        response = await fetch(`${baseUrl}/upload`, {
+          method: "PUT",
+          headers: {
+            Authorization: authHeader,
+            "Content-Type": "text/plain;charset=UTF-8",
+          },
+          body: uploadBody,
+        });
+      } catch {
+        response = await fetch(getBlossomUploadProxyUrl(), {
+          method: "PUT",
+          headers: {
+            Authorization: authHeader,
+            "Content-Type": "text/plain;charset=UTF-8",
+            "X-SHA-256": prepared.encryptedSha256,
+          },
+          body: uploadBody,
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`upload-failed:${response.status}`);
@@ -323,22 +373,29 @@ const uploadToBlossom = async (
 
 export const buildPrivateImageEventTags = (
   payload: PrivateImageMessagePayload,
-): string[][] => [
-  ["file-type", payload.fileType],
-  ["encryption-algorithm", payload.encryptionAlgorithm],
-  ["decryption-key", payload.key],
-  ["decryption-nonce", payload.nonce],
-  ["x", payload.encryptedSha256],
-  ["ox", payload.originalSha256],
-  ["size", String(payload.encryptedSize)],
-  ["dim", `${payload.width}x${payload.height}`],
-];
+): string[][] => {
+  const tags = [
+    ["file-type", payload.fileType],
+    ["encryption-algorithm", payload.encryptionAlgorithm],
+    ["decryption-key", payload.key],
+    ["decryption-nonce", payload.nonce],
+    ["x", payload.encryptedSha256],
+    ["ox", payload.originalSha256],
+    ["size", String(payload.encryptedSize)],
+    ["dim", `${payload.width}x${payload.height}`],
+  ];
+  if (payload.storageEncoding === "base64") {
+    tags.push(["encoding", "base64"]);
+  }
+  return tags;
+};
 
 export const serializePrivateImageMessage = (
   payload: PrivateImageMessagePayload,
 ): string => {
   const compact: CompactPrivateImageMessagePayload = {
     a: "g",
+    ...(payload.storageEncoding === "base64" ? { e: "b" } : {}),
     h: payload.height,
     k: payload.key,
     m: payload.fileType,
@@ -374,6 +431,7 @@ export const createPrivateImageSendPayload = async (
     key: prepared.key,
     nonce: prepared.nonce,
     originalSha256: prepared.originalSha256,
+    storageEncoding: "base64",
     type: PRIVATE_IMAGE_MESSAGE_TYPE,
     url: upload.url,
     width: prepared.width,
@@ -407,6 +465,13 @@ const parsePrivateImageRecord = (
   const originalSha256 = readString(
     isCompact ? parsed.o : parsed.originalSha256,
   );
+  const storageEncodingValue = isCompact ? parsed.e : parsed.storageEncoding;
+  const storageEncoding =
+    storageEncodingValue === "b" || storageEncodingValue === "base64"
+      ? "base64"
+      : storageEncodingValue === undefined || storageEncodingValue === "raw"
+        ? "raw"
+        : null;
   const encryptedSize = readPositiveInteger(
     isCompact ? parsed.s : parsed.encryptedSize,
   );
@@ -421,6 +486,7 @@ const parsePrivateImageRecord = (
     !nonce ||
     !encryptedSha256 ||
     !originalSha256 ||
+    !storageEncoding ||
     !encryptedSize ||
     !width ||
     !height
@@ -437,6 +503,7 @@ const parsePrivateImageRecord = (
     key: key.toLowerCase(),
     nonce: nonce.toLowerCase(),
     originalSha256: originalSha256.toLowerCase(),
+    storageEncoding,
     type: PRIVATE_IMAGE_MESSAGE_TYPE,
     url,
     width,
@@ -485,6 +552,9 @@ export const privateImageMessageFromEvent = (
   const nonce = readTagValue(tags, "decryption-nonce");
   const encryptedSha256 = readTagValue(tags, "x");
   const originalSha256 = readTagValue(tags, "ox");
+  const encoding = readTagValue(tags, "encoding");
+  const storageEncoding =
+    encoding === "base64" ? "base64" : encoding === null ? "raw" : null;
   const sizeText = readTagValue(tags, "size");
   const dimText = readTagValue(tags, "dim");
   const size = Number.parseInt(String(sizeText ?? ""), 10);
@@ -500,6 +570,7 @@ export const privateImageMessageFromEvent = (
     !nonce ||
     !encryptedSha256 ||
     !originalSha256 ||
+    !storageEncoding ||
     !Number.isFinite(size) ||
     size <= 0 ||
     !Number.isFinite(width) ||
@@ -519,6 +590,7 @@ export const privateImageMessageFromEvent = (
     key: key.toLowerCase(),
     nonce: nonce.toLowerCase(),
     originalSha256: originalSha256.toLowerCase(),
+    storageEncoding,
     type: PRIVATE_IMAGE_MESSAGE_TYPE,
     url,
     width: Math.trunc(width),
@@ -531,13 +603,18 @@ export const decryptPrivateImageMessage = async (
   const response = await fetch(payload.url);
   if (!response.ok) throw new Error("chat-image-download-failed");
 
-  const encryptedBytes = new Uint8Array(await response.arrayBuffer());
-  if (encryptedBytes.byteLength !== payload.encryptedSize) {
+  const storedBytes = new Uint8Array(await response.arrayBuffer());
+  if (storedBytes.byteLength !== payload.encryptedSize) {
     throw new Error("chat-image-size-mismatch");
   }
-  if (sha256Hex(encryptedBytes) !== payload.encryptedSha256) {
+  if (sha256Hex(storedBytes) !== payload.encryptedSha256) {
     throw new Error("chat-image-hash-mismatch");
   }
+  const encryptedBytes =
+    payload.storageEncoding === "base64"
+      ? base64UrlToBytes(textDecoder.decode(storedBytes))
+      : storedBytes;
+  if (!encryptedBytes) throw new Error("chat-image-invalid-encoding");
 
   const keyBytes = hexToBytes(payload.key);
   const nonceBytes = hexToBytes(payload.nonce);

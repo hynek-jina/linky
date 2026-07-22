@@ -80,6 +80,42 @@ describe("useInboxNotificationsSync", () => {
     });
   });
 
+  it("does not open the Nostr inbox before Evolu bootstrap is ready", async () => {
+    const Harness = () => {
+      useInboxNotificationsSync({
+        appendLocalNostrMessage: vi.fn(() => "message-1"),
+        appendLocalNostrReaction: vi.fn(() => "reaction-1"),
+        contacts: [],
+        currentNsec: "nsec-test",
+        enabled: false,
+        maybeShowPwaNotification: vi.fn(async () => {}),
+        nostrFetchRelays: [],
+        nostrMessageWrapIdsRef: { current: new Set<string>() },
+        nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
+        nostrMessagesRecent: [],
+        nostrReactionWrapIdsRef: { current: new Set<string>() },
+        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+        pushToast: vi.fn(),
+        route: { kind: "contacts" },
+        setContactAttentionById: vi.fn(),
+        softDeleteLocalNostrReactionsByWrapIds: vi.fn(),
+        t: (key: string) => key,
+        updateLocalNostrMessage: vi.fn(),
+        updateLocalNostrReaction: vi.fn(),
+      });
+      return null;
+    };
+
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(<Harness />));
+    await flushEffects();
+
+    expect(querySyncMock).not.toHaveBeenCalled();
+    expect(subscribeMock).not.toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+  });
+
   it("stores an incoming message under a local unknown-thread id for unknown pubkeys", async () => {
     const wrapEvent = { id: "wrap-unknown-1" };
     querySyncMock.mockResolvedValue([wrapEvent]);

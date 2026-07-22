@@ -1,7 +1,10 @@
 import { bech32 } from "@scure/base";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchLnurlInvoiceForTarget,
+  fetchLnurlPayPreview,
   fetchLnurlWithdrawPreview,
+  inferLightningAddressFromLnurlTarget,
   LnurlTagMismatchError,
   redeemLnurlWithdraw,
 } from "./lnurlPay";
@@ -10,6 +13,91 @@ const encodeLnurl = (url: string): string => {
   const bytes = new TextEncoder().encode(url);
   return bech32.encode("lnurl", bech32.toWords(bytes), 2000).toUpperCase();
 };
+
+describe("LNURL-pay lightning address metadata", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("does not treat an LNbits pay-link ID as a lightning address", async () => {
+    const target = encodeLnurl("https://lnbits.cz/lnurlp//KfCp5v");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          callback: "https://lnbits.cz/lnurlp/api/v1/lnurl/cb/KfCp5v",
+          maxSendable: 3000,
+          metadata: '[["text/plain", "testík"]]',
+          minSendable: 3000,
+          tag: "payRequest",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    expect(inferLightningAddressFromLnurlTarget(target)).toBeNull();
+    await expect(fetchLnurlPayPreview(target)).resolves.toMatchObject({
+      lightningAddress: null,
+    });
+  });
+
+  it("uses a text/identifier lightning address from LNURL metadata", async () => {
+    const target = encodeLnurl("https://lnbits.cz/lnurlp//jn32N6");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          callback: "https://lnbits.cz/lnurlp/api/v1/lnurl/cb/jn32N6",
+          maxSendable: 5000,
+          metadata:
+            '[["text/plain", "Payment to testik"], ["text/identifier", "testik@lnbits.cz"]]',
+          minSendable: 5000,
+          tag: "payRequest",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await expect(fetchLnurlPayPreview(target)).resolves.toMatchObject({
+      lightningAddress: "testik@lnbits.cz",
+    });
+  });
+
+  it("returns the metadata address with the invoice used for payment", async () => {
+    const target = encodeLnurl("https://lnbits.cz/lnurlp//jn32N6");
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          callback: "https://lnbits.cz/lnurlp/api/v1/lnurl/cb/jn32N6",
+          maxSendable: 5000,
+          metadata:
+            '[["text/plain", "Payment to testik"], ["text/identifier", "testik@lnbits.cz"]]',
+          minSendable: 5000,
+          tag: "payRequest",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ pr: "lnbc1testinvoice" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(fetchLnurlInvoiceForTarget(target, 5)).resolves.toMatchObject({
+      lightningAddress: "testik@lnbits.cz",
+    });
+  });
+});
 
 describe("fetchLnurlWithdrawPreview", () => {
   afterEach(() => {

@@ -1,6 +1,8 @@
+import { createSlip39Share } from "@linky/core/identity";
 import { generateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { expect, test, type Page } from "@playwright/test";
+import { Effect } from "effect";
 import { generateSecretKey, nip19 } from "nostr-tools";
 
 const CONTACT_NPUB =
@@ -9,8 +11,12 @@ const CONTACT_NPUB =
 const setBaseStorage = async (page: Page) => {
   await page.addInitScript(() => {
     try {
-      localStorage.clear();
-      sessionStorage.clear();
+      const initializedKey = "linky.test.base-storage-initialized";
+      if (sessionStorage.getItem(initializedKey) !== "1") {
+        localStorage.clear();
+        sessionStorage.clear();
+        sessionStorage.setItem(initializedKey, "1");
+      }
       localStorage.setItem("linky.lang", "en");
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
@@ -77,6 +83,23 @@ test("keeps unauthenticated auth gating", async ({ page }) => {
   await expect(page.locator("[data-guide='contact-add-button']")).toHaveCount(
     0,
   );
+});
+
+test("restores an account from SLIP-39 without getting stuck", async ({
+  page,
+}) => {
+  const slip39Share = await Effect.runPromise(createSlip39Share());
+  await setBaseStorage(page);
+
+  await page.goto("/#wallet");
+  await page.getByRole("button", { name: "I'm returning" }).click();
+  await page.getByLabel("Keys").fill(slip39Share);
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.waitForURL(/#$/, { timeout: 30_000 });
+  await expect(page.getByLabel("Available balance")).toBeVisible({
+    timeout: 30_000,
+  });
 });
 
 test("preserves route parity and critical handlers", async ({ page }) => {

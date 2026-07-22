@@ -99,7 +99,10 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
     inferLightningAddressFromLnurlTarget(lnAddress);
   const displayAddress = formatMiddleDots(
     String(
-      knownContact?.lnAddress ?? inferredLightningAddress ?? displayTarget,
+      knownContact?.lnAddress ??
+        preview?.lightningAddress ??
+        inferredLightningAddress ??
+        displayTarget,
     ),
     36,
   );

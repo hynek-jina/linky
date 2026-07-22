@@ -1,5 +1,6 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
+import { ACTIVE_NOSTR_IDENTITY_ROW_ID } from "../lib/nostrIdentitySync";
 import {
   cycleGeneratedAvatar,
   deriveDefaultProfile,
@@ -7,7 +8,6 @@ import {
   type AvatarEditorControlId,
   type DerivedGeneratedAvatar,
 } from "../../derivedProfile";
-import { evolu } from "../../evolu";
 import type { Lang } from "../../i18n";
 import {
   NOSTR_RELAYS,
@@ -180,10 +180,6 @@ const resetStoredOwnerRotationState = (): void => {
     // ignore storage unavailability
   }
 };
-
-const ACTIVE_NOSTR_IDENTITY_ROW_ID = Evolu.createIdFromString<"NostrIdentity">(
-  "active-nostr-identity",
-);
 
 export const useProfileAuthDomain = ({
   appendIdentityChangeNoticesRef,
@@ -453,6 +449,7 @@ export const useProfileAuthDomain = ({
       options?: {
         identitySource?: NostrIdentitySource;
         invalidMessageKey?: string;
+        persistSyncedIdentity?: boolean;
         recordChatNotice?: boolean;
         switchedAtSec?: number | null;
       },
@@ -505,12 +502,14 @@ export const useProfileAuthDomain = ({
         switchedAtSec,
       });
 
-      await upsertActiveNostrIdentity(
-        raw,
-        normalizedSlip39,
-        identitySource,
-        switchedAtSec,
-      );
+      if (options?.persistSyncedIdentity !== false) {
+        await upsertActiveNostrIdentity(
+          raw,
+          normalizedSlip39,
+          identitySource,
+          switchedAtSec,
+        );
+      }
 
       if (shouldRecordChatNotice) {
         appendIdentityChangeNoticesRef.current?.({
@@ -527,20 +526,14 @@ export const useProfileAuthDomain = ({
       setCashuSeedMnemonic(derivedCashuMnemonic);
 
       try {
-        await evolu.restoreAppOwner(appMnemonic, {
-          reload: false,
-        });
-      } catch (e) {
-        console.log("[linky][evolu] restoreAppOwner failed", {
-          error: String(e ?? "unknown"),
-        });
-      }
-
-      try {
         window.location.hash = "#";
       } catch {
         // ignore
       }
+      // The next boot creates the Evolu instance from the app mnemonic saved
+      // above. Resetting the currently open instance here is both unnecessary
+      // and unsafe: Evolu's restore promise stays pending when its DB reset
+      // fails, which would leave onboarding busy forever and skip this reload.
       globalThis.location.reload();
     },
     [
@@ -916,6 +909,9 @@ export const useProfileAuthDomain = ({
         await setIdentityFromNsecAndReload(derived.nsec, normalizedSlip39, {
           identitySource: "derived",
           invalidMessageKey: "onboardingInvalidSeed",
+          // Do not overwrite a custom identity that may still be syncing from
+          // the legacy messages owner lane on this newly restored device.
+          persistSyncedIdentity: false,
           switchedAtSec: null,
         });
       } finally {

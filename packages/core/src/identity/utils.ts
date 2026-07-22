@@ -3,13 +3,14 @@ import { sha512 } from "@noble/hashes/sha2.js";
 import { HDKey } from "@scure/bip32";
 import { entropyToMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
-import { Effect, Schema } from "effect";
+import { Effect, Schema, Match } from "effect";
 import { nip19 } from "nostr-tools";
 import { Slip39 } from "slip39-ts";
 import {
   CASHU_SEED_PATH,
   cashuOwnerPath,
   contactsOwnerPath,
+  IDENTITY_OWNER_PATH,
   messagesOwnerPath,
   META_OWNER_PATH,
   transactionsOwnerPath,
@@ -91,13 +92,16 @@ const bip85Entropy = (
 const deriveOwnerPath = (
   role: OwnerRole,
   index: OwnerLaneIndex = ZERO_OWNER_LANE_INDEX,
-): string => {
-  if (role === "meta") return META_OWNER_PATH;
-  if (role === "contacts") return contactsOwnerPath(index);
-  if (role === "cashu") return cashuOwnerPath(index);
-  if (role === "transactions") return transactionsOwnerPath(index);
-  return messagesOwnerPath(index);
-};
+): string =>
+  Match.value(role).pipe(
+    Match.when("meta", () => META_OWNER_PATH),
+    Match.when("identity", () => IDENTITY_OWNER_PATH),
+    Match.when("contacts", () => contactsOwnerPath(index)),
+    Match.when("cashu", () => cashuOwnerPath(index)),
+    Match.when("transactions", () => transactionsOwnerPath(index)),
+    Match.when("messages", () => messagesOwnerPath(index)),
+    Match.exhaustive,
+  );
 
 const deriveOwnerKeyFromPath = (
   root: HDKey,

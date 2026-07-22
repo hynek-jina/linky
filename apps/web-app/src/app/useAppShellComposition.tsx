@@ -14,6 +14,7 @@ import {
   DEFAULT_LIGHTNING_ADDRESS_DOMAIN,
   deriveDefaultLightningAddress,
   deriveDefaultProfile,
+  omitSyntheticContactLightningAddress,
 } from "../derivedProfile";
 import {
   evolu,
@@ -69,6 +70,7 @@ import {
   consumePendingNativeNotificationRoute,
   NATIVE_DEEP_LINK_EVENT,
   NATIVE_NOTIFICATION_OPEN_EVENT,
+  NATIVE_PUSH_ACTION_EVENT,
   startNativeNfcWrite,
   supportsNativeNfcWrite,
 } from "../platform/nativeBridge";
@@ -173,6 +175,10 @@ import { useRoutingViewComposition } from "./hooks/composition/useRoutingViewCom
 import { useSystemSettingsComposition } from "./hooks/composition/useSystemSettingsComposition";
 import { useContactEditor } from "./hooks/contacts/useContactEditor";
 import { useVisibleContacts } from "./hooks/contacts/useVisibleContacts";
+import {
+  ACTIVE_NOSTR_IDENTITY_ROW_ID,
+  resolveSyncedNostrIdentity,
+} from "./lib/nostrIdentitySync";
 import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardingProgress";
 import { useMainMenuState } from "./hooks/layout/useMainMenuState";
 import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
@@ -227,6 +233,7 @@ import { useArmedDeleteTimeouts } from "./hooks/useArmedDeleteTimeouts";
 import { useCashuDomain } from "./hooks/useCashuDomain";
 import { useContactsDomain } from "./hooks/useContactsDomain";
 import { useContactsNostrPrefetchEffects } from "./hooks/useContactsNostrPrefetchEffects";
+import { useEvoluNostrBootstrapReady } from "./hooks/useEvoluNostrBootstrapReady";
 import { useEvoluContactsOwnerRotation } from "./hooks/useEvoluContactsOwnerRotation";
 import { useFeedbackContact } from "./hooks/useFeedbackContact";
 import { useFiatRates } from "./hooks/useFiatRates";
@@ -245,6 +252,8 @@ import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
+import { findUniqueContactByLightningAddress } from "./lib/contactIdentity";
+import { resolveContactRowOwnerLane } from "./lib/contactOwnerLane";
 import {
   createLinkyBankPaymentOfferEvent,
   getLinkyBankPaymentOfferInfo,
@@ -323,6 +332,10 @@ import {
   buildTopbarRight,
   buildTopbarTitle,
 } from "./lib/topbarConfig";
+import {
+  readNotificationOpenData,
+  unwrapNotificationOpenValue,
+} from "./lib/notificationOpen";
 import type {
   ContactRowLike,
   LocalNostrMessage,
@@ -349,30 +362,10 @@ interface NotificationOpenTarget {
   outerEventId: string;
   recipientPubkey: string;
   relayHints: string[];
+  senderPubkey: string | null;
 }
 
 const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
-
-const unwrapNotificationOpenValue = (value: unknown): unknown => {
-  if (typeof value !== "string") {
-    return value;
-  }
-
-  const normalized = value.trim();
-  if (!normalized) {
-    return null;
-  }
-
-  if (!(normalized.startsWith("{") && normalized.endsWith("}"))) {
-    return normalized;
-  }
-
-  try {
-    return JSON.parse(normalized);
-  } catch {
-    return normalized;
-  }
-};
 
 const readNotificationOpenRoute = (value: unknown): string | null => {
   const source = unwrapNotificationOpenValue(value);
@@ -381,12 +374,20 @@ const readNotificationOpenRoute = (value: unknown): string | null => {
     return normalized || null;
   }
 
-  const normalized = String(readObjectField(source, "route") ?? "").trim();
+  const notification = unwrapNotificationOpenValue(
+    readObjectField(source, "notification"),
+  );
+  const data = unwrapNotificationOpenValue(
+    readObjectField(notification, "data") ?? readObjectField(source, "data"),
+  );
+  const normalized = String(
+    readObjectField(source, "route") ?? readObjectField(data, "route") ?? "",
+  ).trim();
   return normalized || null;
 };
 
 const readNotificationRelayHints = (value: unknown): string[] => {
-  const source = unwrapNotificationOpenValue(value);
+  const source = readNotificationOpenData(value);
   if (!Array.isArray(source)) {
     return [];
   }
@@ -423,6 +424,9 @@ const readNotificationOpenTarget = (
   const relayHints = readNotificationRelayHints(
     readObjectField(source, "relayHints"),
   );
+  const senderPubkey = normalizePubkeyHex(
+    readObjectField(source, "senderPubkey"),
+  );
 
   if (!outerEventId || !recipientPubkey) {
     return null;
@@ -432,6 +436,7 @@ const readNotificationOpenTarget = (
     outerEventId,
     recipientPubkey,
     relayHints,
+    senderPubkey,
   };
 };
 
@@ -1265,6 +1270,10 @@ interface ChatSelectedContact {
   unknownPubkeyHex?: string | null;
 }
 
+interface QueuedNotificationOpenDetail {
+  value: unknown;
+}
+
 const encodeUnknownNpub = (pubkeyHex: string | null): string | null => {
   if (!pubkeyHex) return null;
   try {
@@ -1399,6 +1408,10 @@ export const useAppShellComposition = () => {
     },
     [],
   );
+
+  const pendingNotificationOpenDetailsRef = React.useRef<
+    QueuedNotificationOpenDetail[]
+  >([]);
 
   React.useEffect(() => {
     if (allowedDisplayCurrencies.includes(displayCurrency)) return;
@@ -2170,6 +2183,9 @@ export const useAppShellComposition = () => {
     contactsVisibleOwnerIds,
     identityOwnerId,
     identitySyncOwner,
+    historicalBootstrapSyncOwners,
+    legacyIdentitiesOwnerId,
+    legacyMessagesIdentityOwnerId,
     metaOwnerId,
     metaSyncOwner,
     messagesBackupOwnerId,
@@ -2190,6 +2206,7 @@ export const useAppShellComposition = () => {
     rotateMessagesOwnerIsBusy,
     rotateTransactionsOwnerIsBusy,
     transactionsBackupOwnerId,
+    transactionsBootstrapSnapshot,
     transactionsOwnerEditsUntilRotation,
     transactionsOwnerId,
     transactionsOwnerIndex,
@@ -2212,6 +2229,27 @@ export const useAppShellComposition = () => {
   useOwner(transactionsSyncOwner);
   useOwner(metaSyncOwner);
   useOwner(identitySyncOwner);
+
+  const historicalOwnerSetsReady = isSeedLogin
+    ? cashuVisibleOwnerIds.length === cashuOwnerIndex + 1 &&
+      contactsVisibleOwnerIds.length === contactsOwnerIndex + 1 &&
+      messagesVisibleOwnerIds.length === messagesOwnerIndex + 1 &&
+      transactionsVisibleOwnerIds.length === transactionsOwnerIndex + 1
+    : true;
+  React.useEffect(() => {
+    if (!isSeedLogin || !historicalOwnerSetsReady) return;
+
+    // Evolu does not expose an initial-sync-complete signal. Keep historical
+    // lanes subscribed for the whole authenticated session instead of
+    // guessing completion from a quiet timer and disconnecting them while
+    // their stored messages may still be arriving.
+    const stopUsingOwners = historicalBootstrapSyncOwners.map((owner) =>
+      evolu.useOwner(owner),
+    );
+    return () => {
+      for (const stopUsingOwner of stopUsingOwners) stopUsingOwner();
+    };
+  }, [historicalBootstrapSyncOwners, historicalOwnerSetsReady, isSeedLogin]);
 
   // Default mint cross-tab + cross-device sync via Evolu `ownerMeta`.
   //
@@ -2375,27 +2413,6 @@ export const useAppShellComposition = () => {
     return Array.from(new Set(ids));
   }, [appOwnerId, messagesVisibleOwnerIds]);
 
-  const {
-    canSaveNewRelay,
-    connectedRelayCount,
-    newRelayUrl,
-    nostrFetchRelays,
-    nostrRelayOverallStatus,
-    pendingRelayDeleteUrl,
-    relayStatusByUrl,
-    relayUrls,
-    requestDeleteSelectedRelay,
-    saveNewRelay,
-    selectedRelayUrl,
-    setNewRelayUrl,
-  } = useRelayDomain({
-    currentNpub,
-    currentNsec,
-    route,
-    setStatus,
-    t,
-  });
-
   useStoragePersistRequestEffect({ refreshKey: t });
 
   const maybeShowPwaNotification = React.useCallback(
@@ -2507,6 +2524,15 @@ export const useAppShellComposition = () => {
     status,
   });
 
+  const reassignContactMessagesRef = React.useRef<
+    (fromContactId: string, toContactId: string) => number
+  >(() => 0);
+  const reassignContactMessages = React.useCallback(
+    (fromContactId: string, toContactId: string) =>
+      reassignContactMessagesRef.current(fromContactId, toContactId),
+    [],
+  );
+
   const {
     activeGroup,
     contacts,
@@ -2527,12 +2553,16 @@ export const useAppShellComposition = () => {
     isSeedLogin,
     noGroupFilterValue: NO_GROUP_FILTER,
     pushToast,
+    reassignContactMessages,
     route,
     t,
     update,
     upsert,
     visibleOwnerIds: contactsVisibleOwnerIds,
   });
+
+  const contactsLatestRef = React.useRef(contacts);
+  contactsLatestRef.current = contacts;
 
   React.useEffect(() => {
     const records = [];
@@ -2584,57 +2614,37 @@ export const useAppShellComposition = () => {
   const nostrIdentityRows = useQuery(nostrIdentityQuery);
 
   const activeIdentityOwnerId = String(identityOwnerId ?? "").trim();
-  const readOwnerId = React.useCallback((row: unknown): string => {
-    if (typeof row !== "object" || row === null) return "";
-    if (!("ownerId" in row)) return "";
-    const ownerId = row.ownerId;
-    return typeof ownerId === "string" ? ownerId.trim() : "";
-  }, []);
-  const readIdentityText = React.useCallback(
-    (row: unknown, key: "nsec" | "npub" | "source"): string => {
-      if (typeof row !== "object" || row === null) return "";
-      const value = Reflect.get(row, key);
-      return typeof value === "string" ? value.trim() : "";
-    },
-    [],
+  const legacyNostrIdentityOwnerIds = React.useMemo(
+    () =>
+      new Set(
+        [
+          ...messagesVisibleOwnerIds,
+          legacyIdentitiesOwnerId,
+          legacyMessagesIdentityOwnerId,
+          metaOwnerId,
+        ]
+          .map((ownerId) => String(ownerId ?? "").trim())
+          .filter(Boolean),
+      ),
+    [
+      legacyIdentitiesOwnerId,
+      legacyMessagesIdentityOwnerId,
+      messagesVisibleOwnerIds,
+      metaOwnerId,
+    ],
   );
-  const readIdentitySwitchedAtSec = React.useCallback((row: unknown) => {
-    if (typeof row !== "object" || row === null) return null;
-    const value = Number(Reflect.get(row, "switchedAtSec"));
-    if (!Number.isFinite(value) || value <= 0) return null;
-    return Math.trunc(value);
-  }, []);
-
-  const activeSyncedNostrIdentity = React.useMemo(() => {
-    if (!activeIdentityOwnerId) return null;
-
-    const row = nostrIdentityRows.find(
-      (candidate) => readOwnerId(candidate) === activeIdentityOwnerId,
-    );
-    if (!row) return null;
-
-    const nsec = readIdentityText(row, "nsec");
-    if (!nsec) return null;
-
-    const source: "custom" | "derived" =
-      readIdentityText(row, "source") === "custom" ? "custom" : "derived";
-
-    return {
-      nsec,
-      npub: readIdentityText(row, "npub") || null,
-      source,
-      switchedAtSec: readIdentitySwitchedAtSec(row),
-    };
-  }, [
-    activeIdentityOwnerId,
-    nostrIdentityRows,
-    readIdentitySwitchedAtSec,
-    readIdentityText,
-    readOwnerId,
-  ]);
-
-  React.useEffect(() => {
-    if (!activeSyncedNostrIdentity) return;
+  const syncedNostrIdentityResolution = React.useMemo(
+    () =>
+      resolveSyncedNostrIdentity(
+        nostrIdentityRows,
+        activeIdentityOwnerId,
+        legacyNostrIdentityOwnerIds,
+      ),
+    [activeIdentityOwnerId, legacyNostrIdentityOwnerIds, nostrIdentityRows],
+  );
+  const activeSyncedNostrIdentity = syncedNostrIdentityResolution.identity;
+  const syncedNostrIdentityMatchesLocal = React.useMemo(() => {
+    if (!activeSyncedNostrIdentity) return true;
 
     const localSource = getInitialNostrIdentitySource();
     const localSwitchedAtSec = getInitialNostrIdentitySwitchedAtSec();
@@ -2643,12 +2653,43 @@ export const useAppShellComposition = () => {
     const switchedAtMatches =
       localSwitchedAtSec === syncedSwitchedAtSec ||
       (!localSwitchedAtSec && !syncedSwitchedAtSec);
-    const alreadyApplied =
+
+    return (
       localNsec === activeSyncedNostrIdentity.nsec &&
       localSource === activeSyncedNostrIdentity.source &&
-      switchedAtMatches;
+      switchedAtMatches
+    );
+  }, [activeSyncedNostrIdentity, currentNsec]);
 
-    if (alreadyApplied) return;
+  React.useEffect(() => {
+    if (!syncedNostrIdentityResolution.shouldMigrateLegacyIdentity) return;
+    if (!activeSyncedNostrIdentity || !identityOwnerId) return;
+
+    upsert(
+      "nostrIdentity",
+      {
+        id: ACTIVE_NOSTR_IDENTITY_ROW_ID,
+        nsec: activeSyncedNostrIdentity.nsec,
+        source: activeSyncedNostrIdentity.source,
+        ...(activeSyncedNostrIdentity.npub
+          ? { npub: activeSyncedNostrIdentity.npub }
+          : {}),
+        ...(activeSyncedNostrIdentity.switchedAtSec
+          ? { switchedAtSec: activeSyncedNostrIdentity.switchedAtSec }
+          : {}),
+      },
+      { ownerId: identityOwnerId },
+    );
+  }, [
+    activeSyncedNostrIdentity,
+    identityOwnerId,
+    syncedNostrIdentityResolution.shouldMigrateLegacyIdentity,
+    upsert,
+  ]);
+
+  React.useEffect(() => {
+    if (!activeSyncedNostrIdentity) return;
+    if (syncedNostrIdentityMatchesLocal) return;
 
     void persistSyncedActiveNostrIdentity({
       identitySource: activeSyncedNostrIdentity.source,
@@ -2662,7 +2703,11 @@ export const useAppShellComposition = () => {
       );
       globalThis.location.reload();
     });
-  }, [activeSyncedNostrIdentity, currentNsec]);
+  }, [
+    activeSyncedNostrIdentity,
+    syncedNostrIdentityMatchesLocal,
+    setCurrentNsec,
+  ]);
 
   const activeCashuOwnerId = String(cashuOwnerId ?? "").trim();
   const visibleCashuOwnerIds = React.useMemo(
@@ -3282,6 +3327,109 @@ export const useAppShellComposition = () => {
     route,
     visibleMessageOwnerIds,
   });
+  reassignContactMessagesRef.current = reassignLocalNostrMessagesContactId;
+
+  const evoluOwnersReadyForNostr = isSeedLogin
+    ? Boolean(
+        cashuOwnerId &&
+        contactsOwnerId &&
+        identityOwnerId &&
+        legacyIdentitiesOwnerId &&
+        legacyMessagesIdentityOwnerId &&
+        messagesOwnerId &&
+        metaOwnerId &&
+        transactionsOwnerId,
+      ) && historicalOwnerSetsReady
+    : Boolean(appOwnerId);
+  const evoluNostrOwnerKey = React.useMemo(() => {
+    if (!currentNpub || !evoluOwnersReadyForNostr) return "";
+
+    return [
+      currentNpub,
+      appOwnerId,
+      cashuOwnerId,
+      contactsOwnerId,
+      identityOwnerId,
+      legacyIdentitiesOwnerId,
+      legacyMessagesIdentityOwnerId,
+      messagesOwnerId,
+      metaOwnerId,
+      transactionsOwnerId,
+    ]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean)
+      .join("|");
+  }, [
+    appOwnerId,
+    cashuOwnerId,
+    contactsOwnerId,
+    currentNpub,
+    evoluOwnersReadyForNostr,
+    identityOwnerId,
+    legacyIdentitiesOwnerId,
+    legacyMessagesIdentityOwnerId,
+    messagesOwnerId,
+    metaOwnerId,
+    transactionsOwnerId,
+  ]);
+  const nostrIdentityBootstrapReady =
+    Boolean(activeSyncedNostrIdentity) &&
+    !syncedNostrIdentityResolution.shouldMigrateLegacyIdentity &&
+    syncedNostrIdentityMatchesLocal;
+  const [
+    missingSyncedIdentityFallbackKey,
+    setMissingSyncedIdentityFallbackKey,
+  ] = React.useState("");
+  React.useEffect(() => {
+    if (!isSeedLogin || !evoluNostrOwnerKey || activeSyncedNostrIdentity) {
+      setMissingSyncedIdentityFallbackKey("");
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setMissingSyncedIdentityFallbackKey(evoluNostrOwnerKey);
+    }, 8_000);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeSyncedNostrIdentity, evoluNostrOwnerKey, isSeedLogin]);
+  const identityBootstrapReady = isSeedLogin
+    ? nostrIdentityBootstrapReady ||
+      missingSyncedIdentityFallbackKey === evoluNostrOwnerKey
+    : true;
+  const nostrBootstrapReady = useEvoluNostrBootstrapReady({
+    contactsSnapshot: contacts,
+    enabled: Boolean(currentNsec),
+    identitiesSnapshot: nostrIdentityRows,
+    identityReady: identityBootstrapReady,
+    messagesSnapshot: nostrMessagesLocal,
+    ownerKey: evoluNostrOwnerKey,
+    reactionsSnapshot: nostrReactionsLocal,
+    tokensSnapshot: cashuTokensAll,
+    transactionsSnapshot: transactionsBootstrapSnapshot,
+  });
+
+  const {
+    canSaveNewRelay,
+    connectedRelayCount,
+    newRelayUrl,
+    nostrFetchRelays,
+    nostrRelayOverallStatus,
+    pendingRelayDeleteUrl,
+    relayStatusByUrl,
+    relayUrls,
+    requestDeleteSelectedRelay,
+    saveNewRelay,
+    selectedRelayUrl,
+    setNewRelayUrl,
+  } = useRelayDomain({
+    currentNpub,
+    currentNsec,
+    networkEnabled: nostrBootstrapReady,
+    route,
+    setStatus,
+    t,
+  });
 
   React.useEffect(() => {
     appendIdentityChangeNoticesRef.current = ({
@@ -3809,8 +3957,8 @@ export const useAppShellComposition = () => {
   const { claimNpubCashOnce, claimNpubCashOnceLatestRef } = useNpubCashClaim({
     cashuIsBusy,
     cashuTokensAll,
-    currentNpub,
-    currentNsec,
+    currentNpub: nostrBootstrapReady ? currentNpub : null,
+    currentNsec: nostrBootstrapReady ? currentNsec : null,
     enqueueCashuOp,
     ensureCashuTokenPersisted,
     formatDisplayedAmountParts,
@@ -3835,6 +3983,7 @@ export const useAppShellComposition = () => {
   });
 
   useProfileMetadataSyncEffect({
+    canFetchFromNostr: nostrBootstrapReady,
     currentNpub,
     nostrFetchRelays,
     rememberBlobAvatarUrl,
@@ -3845,6 +3994,7 @@ export const useAppShellComposition = () => {
   });
 
   useProfileStatusSyncEffect({
+    canFetchFromNostr: nostrBootstrapReady,
     currentNpub,
     nostrFetchRelays,
     setMyProfileStatus,
@@ -3872,6 +4022,7 @@ export const useAppShellComposition = () => {
     currentNsec,
     hasMintOverrideRef,
     makeNip98AuthHeader,
+    networkEnabled: nostrBootstrapReady,
     npubCashServerBaseUrl,
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
@@ -3898,6 +4049,7 @@ export const useAppShellComposition = () => {
 
   useContactsNostrPrefetchEffects({
     appOwnerId: contactsOwnerId,
+    canFetchFromNostr: nostrBootstrapReady,
     contacts,
     nostrFetchRelays,
     nostrInFlight,
@@ -3909,6 +4061,7 @@ export const useAppShellComposition = () => {
     setNostrPictureByNpub,
     setNostrStatusByNpub,
     update,
+    visibleOwnerIds: contactsVisibleOwnerIds,
   });
 
   const [unknownNameByNpub, setUnknownNameByNpub] = useState<
@@ -4018,12 +4171,17 @@ export const useAppShellComposition = () => {
   ]);
 
   React.useEffect(() => {
+    const activeContacts = contacts.filter((contact) => {
+      const archivedAtSec = Number(contact.archivedAtSec ?? 0);
+      return !Number.isFinite(archivedAtSec) || archivedAtSec <= 0;
+    });
+
     for (const unknownContact of unknownContacts) {
       const unknownContactId = String(unknownContact.id ?? "").trim();
       const unknownNpub = normalizeNpubIdentifier(unknownContact.npub);
       if (!unknownContactId || !unknownNpub) continue;
 
-      const knownContact = contacts.find((contact) => {
+      let knownContact = activeContacts.find((contact) => {
         const knownContactId = String(contact.id ?? "").trim();
         if (!knownContactId || knownContactId === unknownContactId) {
           return false;
@@ -4031,8 +4189,55 @@ export const useAppShellComposition = () => {
         return normalizeNpubIdentifier(contact.npub) === unknownNpub;
       });
 
+      let matchedByLightningAddress = false;
+      let matchedMetadata: NostrProfileMetadata | null = null;
+      if (!knownContact) {
+        matchedMetadata =
+          loadCachedProfileMetadata(unknownNpub)?.metadata ?? null;
+        const profileLightningAddress = matchedMetadata
+          ? omitSyntheticContactLightningAddress(
+              String(matchedMetadata.lud16 ?? "").trim() ||
+                String(matchedMetadata.lud06 ?? "").trim(),
+              unknownNpub,
+            )
+          : "";
+        const lightningContact = findUniqueContactByLightningAddress(
+          activeContacts,
+          profileLightningAddress,
+        );
+        if (lightningContact) {
+          knownContact = lightningContact;
+          matchedByLightningAddress = true;
+        }
+      }
+
       const knownContactId = String(knownContact?.id ?? "").trim();
       if (!knownContactId) continue;
+
+      if (matchedByLightningAddress && knownContact) {
+        const bestName = matchedMetadata
+          ? getBestNostrName(matchedMetadata)
+          : null;
+        const parsedNpub = Evolu.NonEmptyString1000.fromUnknown(unknownNpub);
+        if (!parsedNpub.ok) continue;
+        const parsedName = bestName
+          ? Evolu.NonEmptyString1000.fromUnknown(bestName)
+          : null;
+        const ownerId =
+          resolveContactRowOwnerLane(knownContact, contactsVisibleOwnerIds) ??
+          contactsOwnerId;
+        const payload = {
+          id: knownContact.id,
+          npub: parsedNpub.value,
+          ...(!String(knownContact.name ?? "").trim() && parsedName?.ok
+            ? { name: parsedName.value }
+            : {}),
+        };
+        const result = ownerId
+          ? update("contact", payload, { ownerId })
+          : update("contact", payload);
+        if (!result.ok) continue;
+      }
 
       reassignLocalNostrMessagesContactId(unknownContactId, knownContactId);
       setContactAttentionById((prev) => {
@@ -4044,9 +4249,12 @@ export const useAppShellComposition = () => {
     }
   }, [
     contacts,
+    contactsOwnerId,
+    contactsVisibleOwnerIds,
     reassignLocalNostrMessagesContactId,
     setContactAttentionById,
     unknownContacts,
+    update,
   ]);
 
   const unknownContactNpubs = React.useMemo(() => {
@@ -4119,6 +4327,8 @@ export const useAppShellComposition = () => {
           continue;
         }
 
+        if (!nostrBootstrapReady) continue;
+
         if (nostrMetadataInFlight.current.has(npub)) continue;
         nostrMetadataInFlight.current.add(npub);
 
@@ -4153,6 +4363,7 @@ export const useAppShellComposition = () => {
       controller.abort();
     };
   }, [
+    nostrBootstrapReady,
     nostrFetchRelays,
     nostrMetadataInFlight,
     prefetchedMessageNpubs,
@@ -4189,6 +4400,8 @@ export const useAppShellComposition = () => {
         }
 
         if (cached && !shouldRefreshCachedPicture) continue;
+
+        if (!nostrBootstrapReady) continue;
 
         if (nostrInFlight.current.has(npub)) continue;
         nostrInFlight.current.add(npub);
@@ -4278,6 +4491,7 @@ export const useAppShellComposition = () => {
       controller.abort();
     };
   }, [
+    nostrBootstrapReady,
     nostrFetchRelays,
     nostrInFlight,
     prefetchedMessageNpubs,
@@ -5362,6 +5576,7 @@ export const useAppShellComposition = () => {
     chatSeenWrapIdsRef,
     contacts,
     currentNsec,
+    enabled: nostrBootstrapReady,
     nostrMessagesLocal,
     nostrReactionsLocal,
     publishWrappedWithRetry,
@@ -8775,6 +8990,7 @@ export const useAppShellComposition = () => {
     chatMessagesLatestRef,
     chatSeenWrapIdsRef,
     currentNsec,
+    enabled: nostrBootstrapReady,
     knownNostrMessageIdentityIndex,
     logPayStep,
     nostrMessageWrapIdsRef,
@@ -9129,6 +9345,7 @@ export const useAppShellComposition = () => {
         return false;
       }
 
+      let openedFromNotificationData = false;
       try {
         const decoded = nip19.decode(currentNsec);
         if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
@@ -9143,6 +9360,41 @@ export const useAppShellComposition = () => {
         if (target.recipientPubkey !== myPubHex) {
           return false;
         }
+
+        const findKnownContact = (peerPubkey: string) =>
+          contactsLatestRef.current.find((contact) => {
+            const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+            if (!normalizedNpub) {
+              return false;
+            }
+
+            try {
+              const decodedContact = nip19.decode(normalizedNpub);
+              return (
+                decodedContact.type === "npub" &&
+                typeof decodedContact.data === "string" &&
+                normalizePubkeyHex(decodedContact.data) === peerPubkey
+              );
+            } catch {
+              return false;
+            }
+          }) ?? null;
+
+        const openKnownNotificationContact = (peerPubkey: string): boolean => {
+          const knownContact = findKnownContact(peerPubkey);
+          const knownContactId = String(knownContact?.id ?? "").trim();
+          if (!knownContactId) {
+            return false;
+          }
+
+          setPendingDeleteId(null);
+          navigateTo({ route: "chat", id: knownContactId });
+          return true;
+        };
+
+        openedFromNotificationData = target.senderPubkey
+          ? openKnownNotificationContact(target.senderPubkey)
+          : false;
 
         const relays = Array.from(
           new Set([...target.relayHints, ...nostrFetchRelays, ...NOSTR_RELAYS]),
@@ -9160,17 +9412,22 @@ export const useAppShellComposition = () => {
         );
         const wrap = wraps[0] ?? null;
         if (!wrap) {
-          return false;
+          return (
+            openedFromNotificationData ||
+            (target.senderPubkey
+              ? openKnownNotificationContact(target.senderPubkey)
+              : false)
+          );
         }
 
         const wrapId = String(wrap.id ?? "").trim();
         if (!wrapId) {
-          return false;
+          return openedFromNotificationData;
         }
 
         const inner = unwrapEvent(wrap, privBytes);
         if (!inner) {
-          return false;
+          return openedFromNotificationData;
         }
 
         const senderPub = normalizePubkeyHex(inner.pubkey);
@@ -9185,26 +9442,10 @@ export const useAppShellComposition = () => {
             ? senderPub
             : (pTags.find((pubkey) => pubkey !== myPubHex) ?? null);
         if (!peerPubkey) {
-          return false;
+          return openedFromNotificationData;
         }
 
-        const knownContact = contacts.find((contact) => {
-          const normalizedNpub = normalizeNpubIdentifier(contact.npub);
-          if (!normalizedNpub) {
-            return false;
-          }
-
-          try {
-            const decodedContact = nip19.decode(normalizedNpub);
-            return (
-              decodedContact.type === "npub" &&
-              typeof decodedContact.data === "string" &&
-              normalizePubkeyHex(decodedContact.data) === peerPubkey
-            );
-          } catch {
-            return false;
-          }
-        });
+        const knownContact = findKnownContact(peerPubkey);
 
         const contactId = knownContact
           ? String(knownContact.id ?? "").trim()
@@ -9453,12 +9694,11 @@ export const useAppShellComposition = () => {
         }
         return true;
       } catch {
-        return false;
+        return openedFromNotificationData;
       }
     },
     [
       appendLocalNostrMessage,
-      contacts,
       currentNsec,
       knownNostrMessageIdentityIndex,
       nostrFetchRelays,
@@ -9476,6 +9716,7 @@ export const useAppShellComposition = () => {
     bankPaymentOfferMessages,
     contacts,
     currentNsec,
+    enabled: nostrBootstrapReady,
     formatDisplayedAmountText,
     maybeShowPwaNotification,
     nostrFetchRelays,
@@ -9578,6 +9819,11 @@ export const useAppShellComposition = () => {
     };
 
     const openNotification = (rawDetail: unknown) => {
+      if (!nostrBootstrapReady) {
+        pendingNotificationOpenDetailsRef.current.push({ value: rawDetail });
+        return;
+      }
+
       void openNotificationChat(rawDetail).then((opened) => {
         if (opened) {
           return;
@@ -9599,6 +9845,13 @@ export const useAppShellComposition = () => {
       openNotificationRoute(consumePendingNativeNotificationRoute());
     }
 
+    if (nostrBootstrapReady) {
+      const queuedDetails = pendingNotificationOpenDetailsRef.current.splice(0);
+      for (const detail of queuedDetails) {
+        openNotification(detail.value);
+      }
+    }
+
     const onNotificationOpen: EventListener = (event) => {
       if (!(event instanceof CustomEvent)) {
         return;
@@ -9613,6 +9866,7 @@ export const useAppShellComposition = () => {
     };
 
     window.addEventListener(NATIVE_NOTIFICATION_OPEN_EVENT, onNotificationOpen);
+    window.addEventListener(NATIVE_PUSH_ACTION_EVENT, onNotificationOpen);
     const onServiceWorkerMessage = (event: MessageEvent) => {
       const data = event.data;
       if (typeof data !== "object" || data === null) {
@@ -9644,8 +9898,9 @@ export const useAppShellComposition = () => {
         NATIVE_NOTIFICATION_OPEN_EVENT,
         onNotificationOpen,
       );
+      window.removeEventListener(NATIVE_PUSH_ACTION_EVENT, onNotificationOpen);
     };
-  }, [openNotificationChat]);
+  }, [nostrBootstrapReady, openNotificationChat]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") {

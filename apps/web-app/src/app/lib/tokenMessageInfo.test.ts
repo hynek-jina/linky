@@ -87,6 +87,7 @@ describe("getCashuTokenMessageInfo", () => {
       key: "b".repeat(64),
       nonce: "c".repeat(24),
       originalSha256: "d".repeat(64),
+      storageEncoding: "raw",
       type: "linky.private_image.v1",
       url: "https://blossom.example/blob",
       width: 800,
