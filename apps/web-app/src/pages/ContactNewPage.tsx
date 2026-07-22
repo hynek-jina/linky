@@ -93,6 +93,12 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   }, [searchQuery]);
 
   React.useEffect(() => {
+    if (form.lnAddress.trim()) {
+      setStep("details");
+    }
+  }, [form.lnAddress]);
+
+  React.useEffect(() => {
     if (step !== "search") return;
     const timer = window.setTimeout(() => {
       searchInputRef.current?.focus({ preventScroll: true });
