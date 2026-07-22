@@ -625,6 +625,7 @@ const bootstrap = async () => {
     console.log("[linky][boot] rendered");
     window.clearTimeout(stuckTimer);
     appHasMounted = true;
+    window.dispatchEvent(new Event("linky-app-mounted"));
     clearDynamicImportFetchRetry();
   } catch (error) {
     window.clearTimeout(stuckTimer);
