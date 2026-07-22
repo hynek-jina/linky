@@ -19,12 +19,11 @@ concurrency:
   group: android-apk-release-${{ github.event.inputs.tag_name || github.ref_name }}
   cancel-in-progress: true
 
-permissions:
-  contents: write
-
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -118,10 +117,12 @@ jobs:
         run: cp "$APK_PATH" "$APK_UPLOAD_PATH"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: android-release-apk
           path: ${{ env.APK_PATH }}
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Create or update GitHub release
         env:
@@ -136,29 +137,48 @@ jobs:
               --target "$GITHUB_SHA"
           fi
 
-      - name: Detect Zapstore signer
-        env:
-          ZAPSTORE_SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
-        run: |
-          if [[ -n "${ZAPSTORE_SIGN_WITH}" ]]; then
-            echo "ZAPSTORE_PUBLISH_ENABLED=true" >> "$GITHUB_ENV"
-          else
-            echo "ZAPSTORE_PUBLISH_ENABLED=false" >> "$GITHUB_ENV"
-          fi
+  zapstore:
+    name: Publish to Zapstore
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: zapstore
+    permissions:
+      contents: read
+    env:
+      ZSP_VERSION: 0.4.14
+      ZSP_LINUX_AMD64_SHA256: f655a6c253a0aff6c6768dd24c65fb12aafe9cd2e48d35605e623adf54aaddb2
 
-      - name: Set up Go for Zapstore publisher
-        if: env.ZAPSTORE_PUBLISH_ENABLED == 'true'
-        uses: actions/setup-go@v6
+    steps:
+      - name: Checkout Zapstore metadata
+        uses: actions/checkout@v5
+
+      - name: Download signed APK
+        uses: actions/download-artifact@v8
         with:
-          go-version: "1.24"
+          name: android-release-apk
+          path: apps/native-shell/android/app/build/outputs/apk/release
 
-      - name: Install Zapstore publisher
-        if: env.ZAPSTORE_PUBLISH_ENABLED == 'true'
-        run: go install github.com/zapstore/zsp@v0.4.11
+      - name: Install verified Zapstore publisher
+        run: |
+          zsp_path="$RUNNER_TEMP/zsp"
+          curl --fail --location --silent --show-error \
+            --output "$zsp_path" \
+            "https://github.com/zapstore/zsp/releases/download/v${ZSP_VERSION}/zsp-${ZSP_VERSION}-linux-amd64"
+          echo "${ZSP_LINUX_AMD64_SHA256}  ${zsp_path}" | sha256sum --check --status
+          chmod 700 "$zsp_path"
 
-      - name: Publish to Zapstore
-        if: env.ZAPSTORE_PUBLISH_ENABLED == 'true'
+      - name: Publish signed APK to Zapstore
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          SIGN_WITH: ${{ secrets.ZAPSTORE_SIGN_WITH }}
-        run: zsp publish zapstore.yaml --quiet --skip-preview --commit "$GITHUB_SHA"
+          SIGN_WITH: ${{ secrets.ZAPSTORE_NSEC }}
+        run: |
+          if [[ "${SIGN_WITH}" != nsec1* ]]; then
+            echo "Missing or invalid ZAPSTORE_NSEC environment secret" >&2
+            exit 1
+          fi
+
+          "$RUNNER_TEMP/zsp" publish zapstore.yaml \
+            --quiet \
+            --skip-preview \
+            --commit "$GITHUB_SHA"
