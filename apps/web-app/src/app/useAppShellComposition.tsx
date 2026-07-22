@@ -14,6 +14,7 @@ import {
   DEFAULT_LIGHTNING_ADDRESS_DOMAIN,
   deriveDefaultLightningAddress,
   deriveDefaultProfile,
+  omitSyntheticContactLightningAddress,
 } from "../derivedProfile";
 import {
   evolu,
@@ -251,6 +252,8 @@ import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRefBridge";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
+import { findUniqueContactByLightningAddress } from "./lib/contactIdentity";
+import { resolveContactRowOwnerLane } from "./lib/contactOwnerLane";
 import {
   createLinkyBankPaymentOfferEvent,
   getLinkyBankPaymentOfferInfo,
@@ -283,11 +286,6 @@ import {
 } from "./lib/identityChangeMessage";
 import type { AppNostrPool } from "./lib/nostrPool";
 import { getSharedAppNostrPool } from "./lib/nostrPool";
-import {
-  advanceHistoricalOwnerBootstrapState,
-  getPendingHistoricalOwnerIds,
-  type HistoricalOwnerBootstrapState,
-} from "./lib/historicalOwnerBootstrap";
 import {
   publishSingleWrappedWithRetry as publishSingleWrappedWithRetryBase,
   publishWrappedWithRetry as publishWrappedWithRetryBase,
@@ -2238,68 +2236,20 @@ export const useAppShellComposition = () => {
       messagesVisibleOwnerIds.length === messagesOwnerIndex + 1 &&
       transactionsVisibleOwnerIds.length === transactionsOwnerIndex + 1
     : true;
-  const historicalOwnerBootstrapLoginKey = isSeedLogin
-    ? String(metaOwnerId ?? "").trim()
-    : "";
-  const activeRotatingOwnerIds = React.useMemo(
-    () =>
-      [cashuOwnerId, contactsOwnerId, messagesOwnerId, transactionsOwnerId]
-        .map((ownerId) => String(ownerId ?? "").trim())
-        .filter(Boolean),
-    [cashuOwnerId, contactsOwnerId, messagesOwnerId, transactionsOwnerId],
-  );
-  const [historicalOwnerBootstrapState, setHistoricalOwnerBootstrapState] =
-    React.useState<HistoricalOwnerBootstrapState>({
-      loginKey: "",
-      ownerIds: [],
-    });
-
   React.useEffect(() => {
-    setHistoricalOwnerBootstrapState((previous) =>
-      advanceHistoricalOwnerBootstrapState(
-        previous,
-        historicalOwnerBootstrapLoginKey,
-        activeRotatingOwnerIds,
-      ),
-    );
-  }, [activeRotatingOwnerIds, historicalOwnerBootstrapLoginKey]);
+    if (!isSeedLogin || !historicalOwnerSetsReady) return;
 
-  const historicalPendingSyncOwners = React.useMemo(() => {
-    const pendingOwnerIds = new Set(
-      getPendingHistoricalOwnerIds(
-        historicalBootstrapSyncOwners.map((owner) => String(owner.id)),
-        historicalOwnerBootstrapState,
-        historicalOwnerBootstrapLoginKey,
-      ),
-    );
-    return historicalBootstrapSyncOwners.filter((owner) =>
-      pendingOwnerIds.has(String(owner.id)),
-    );
-  }, [
-    historicalBootstrapSyncOwners,
-    historicalOwnerBootstrapLoginKey,
-    historicalOwnerBootstrapState,
-  ]);
-
-  React.useEffect(() => {
-    if (
-      !historicalOwnerBootstrapLoginKey ||
-      !historicalOwnerSetsReady ||
-      historicalPendingSyncOwners.length === 0
-    )
-      return;
-
-    const stopUsingOwners = historicalPendingSyncOwners.map((owner) =>
+    // Evolu does not expose an initial-sync-complete signal. Keep historical
+    // lanes subscribed for the whole authenticated session instead of
+    // guessing completion from a quiet timer and disconnecting them while
+    // their stored messages may still be arriving.
+    const stopUsingOwners = historicalBootstrapSyncOwners.map((owner) =>
       evolu.useOwner(owner),
     );
     return () => {
       for (const stopUsingOwner of stopUsingOwners) stopUsingOwner();
     };
-  }, [
-    historicalOwnerBootstrapLoginKey,
-    historicalOwnerSetsReady,
-    historicalPendingSyncOwners,
-  ]);
+  }, [historicalBootstrapSyncOwners, historicalOwnerSetsReady, isSeedLogin]);
 
   // Default mint cross-tab + cross-device sync via Evolu `ownerMeta`.
   //
@@ -2574,6 +2524,15 @@ export const useAppShellComposition = () => {
     status,
   });
 
+  const reassignContactMessagesRef = React.useRef<
+    (fromContactId: string, toContactId: string) => number
+  >(() => 0);
+  const reassignContactMessages = React.useCallback(
+    (fromContactId: string, toContactId: string) =>
+      reassignContactMessagesRef.current(fromContactId, toContactId),
+    [],
+  );
+
   const {
     activeGroup,
     contacts,
@@ -2594,6 +2553,7 @@ export const useAppShellComposition = () => {
     isSeedLogin,
     noGroupFilterValue: NO_GROUP_FILTER,
     pushToast,
+    reassignContactMessages,
     route,
     t,
     update,
@@ -3367,6 +3327,7 @@ export const useAppShellComposition = () => {
     route,
     visibleMessageOwnerIds,
   });
+  reassignContactMessagesRef.current = reassignLocalNostrMessagesContactId;
 
   const evoluOwnersReadyForNostr = isSeedLogin
     ? Boolean(
@@ -3412,43 +3373,41 @@ export const useAppShellComposition = () => {
     transactionsOwnerId,
   ]);
   const nostrIdentityBootstrapReady =
+    Boolean(activeSyncedNostrIdentity) &&
     !syncedNostrIdentityResolution.shouldMigrateLegacyIdentity &&
     syncedNostrIdentityMatchesLocal;
+  const [
+    missingSyncedIdentityFallbackKey,
+    setMissingSyncedIdentityFallbackKey,
+  ] = React.useState("");
+  React.useEffect(() => {
+    if (!isSeedLogin || !evoluNostrOwnerKey || activeSyncedNostrIdentity) {
+      setMissingSyncedIdentityFallbackKey("");
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setMissingSyncedIdentityFallbackKey(evoluNostrOwnerKey);
+    }, 8_000);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeSyncedNostrIdentity, evoluNostrOwnerKey, isSeedLogin]);
+  const identityBootstrapReady = isSeedLogin
+    ? nostrIdentityBootstrapReady ||
+      missingSyncedIdentityFallbackKey === evoluNostrOwnerKey
+    : true;
   const nostrBootstrapReady = useEvoluNostrBootstrapReady({
     contactsSnapshot: contacts,
     enabled: Boolean(currentNsec),
     identitiesSnapshot: nostrIdentityRows,
-    identityReady: nostrIdentityBootstrapReady,
+    identityReady: identityBootstrapReady,
     messagesSnapshot: nostrMessagesLocal,
     ownerKey: evoluNostrOwnerKey,
     reactionsSnapshot: nostrReactionsLocal,
     tokensSnapshot: cashuTokensAll,
     transactionsSnapshot: transactionsBootstrapSnapshot,
   });
-
-  React.useEffect(() => {
-    if (
-      !nostrBootstrapReady ||
-      !historicalOwnerBootstrapLoginKey ||
-      historicalPendingSyncOwners.length === 0
-    )
-      return;
-
-    const completedOwnerIds = historicalPendingSyncOwners.map((owner) =>
-      String(owner.id),
-    );
-    setHistoricalOwnerBootstrapState((previous) => {
-      return advanceHistoricalOwnerBootstrapState(
-        previous,
-        historicalOwnerBootstrapLoginKey,
-        completedOwnerIds,
-      );
-    });
-  }, [
-    historicalOwnerBootstrapLoginKey,
-    historicalPendingSyncOwners,
-    nostrBootstrapReady,
-  ]);
 
   const {
     canSaveNewRelay,
@@ -4102,6 +4061,7 @@ export const useAppShellComposition = () => {
     setNostrPictureByNpub,
     setNostrStatusByNpub,
     update,
+    visibleOwnerIds: contactsVisibleOwnerIds,
   });
 
   const [unknownNameByNpub, setUnknownNameByNpub] = useState<
@@ -4211,12 +4171,17 @@ export const useAppShellComposition = () => {
   ]);
 
   React.useEffect(() => {
+    const activeContacts = contacts.filter((contact) => {
+      const archivedAtSec = Number(contact.archivedAtSec ?? 0);
+      return !Number.isFinite(archivedAtSec) || archivedAtSec <= 0;
+    });
+
     for (const unknownContact of unknownContacts) {
       const unknownContactId = String(unknownContact.id ?? "").trim();
       const unknownNpub = normalizeNpubIdentifier(unknownContact.npub);
       if (!unknownContactId || !unknownNpub) continue;
 
-      const knownContact = contacts.find((contact) => {
+      let knownContact = activeContacts.find((contact) => {
         const knownContactId = String(contact.id ?? "").trim();
         if (!knownContactId || knownContactId === unknownContactId) {
           return false;
@@ -4224,8 +4189,55 @@ export const useAppShellComposition = () => {
         return normalizeNpubIdentifier(contact.npub) === unknownNpub;
       });
 
+      let matchedByLightningAddress = false;
+      let matchedMetadata: NostrProfileMetadata | null = null;
+      if (!knownContact) {
+        matchedMetadata =
+          loadCachedProfileMetadata(unknownNpub)?.metadata ?? null;
+        const profileLightningAddress = matchedMetadata
+          ? omitSyntheticContactLightningAddress(
+              String(matchedMetadata.lud16 ?? "").trim() ||
+                String(matchedMetadata.lud06 ?? "").trim(),
+              unknownNpub,
+            )
+          : "";
+        const lightningContact = findUniqueContactByLightningAddress(
+          activeContacts,
+          profileLightningAddress,
+        );
+        if (lightningContact) {
+          knownContact = lightningContact;
+          matchedByLightningAddress = true;
+        }
+      }
+
       const knownContactId = String(knownContact?.id ?? "").trim();
       if (!knownContactId) continue;
+
+      if (matchedByLightningAddress && knownContact) {
+        const bestName = matchedMetadata
+          ? getBestNostrName(matchedMetadata)
+          : null;
+        const parsedNpub = Evolu.NonEmptyString1000.fromUnknown(unknownNpub);
+        if (!parsedNpub.ok) continue;
+        const parsedName = bestName
+          ? Evolu.NonEmptyString1000.fromUnknown(bestName)
+          : null;
+        const ownerId =
+          resolveContactRowOwnerLane(knownContact, contactsVisibleOwnerIds) ??
+          contactsOwnerId;
+        const payload = {
+          id: knownContact.id,
+          npub: parsedNpub.value,
+          ...(!String(knownContact.name ?? "").trim() && parsedName?.ok
+            ? { name: parsedName.value }
+            : {}),
+        };
+        const result = ownerId
+          ? update("contact", payload, { ownerId })
+          : update("contact", payload);
+        if (!result.ok) continue;
+      }
 
       reassignLocalNostrMessagesContactId(unknownContactId, knownContactId);
       setContactAttentionById((prev) => {
@@ -4237,9 +4249,12 @@ export const useAppShellComposition = () => {
     }
   }, [
     contacts,
+    contactsOwnerId,
+    contactsVisibleOwnerIds,
     reassignLocalNostrMessagesContactId,
     setContactAttentionById,
     unknownContacts,
+    update,
   ]);
 
   const unknownContactNpubs = React.useMemo(() => {

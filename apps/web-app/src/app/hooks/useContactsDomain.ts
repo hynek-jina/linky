@@ -11,6 +11,7 @@ import type {
   OptionalNumber,
   OptionalText,
 } from "../types/appTypes";
+import { resolveContactRowOwnerLane } from "../lib/contactOwnerLane";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -28,6 +29,10 @@ interface UseContactsDomainParams {
   isSeedLogin: boolean;
   noGroupFilterValue: string;
   pushToast: (message: string) => void;
+  reassignContactMessages: (
+    fromContactId: string,
+    toContactId: string,
+  ) => number;
   route: Route;
   t: (key: string) => string;
   update: EvoluMutations["update"];
@@ -76,6 +81,7 @@ export const useContactsDomain = ({
   isSeedLogin,
   noGroupFilterValue,
   pushToast,
+  reassignContactMessages,
   route,
   t,
   update,
@@ -216,17 +222,22 @@ export const useContactsDomain = ({
           typeof Evolu.NonEmptyString1000.Type | null
         >
       >,
+      row: unknown,
     ) => {
-      if (!appOwnerId) return update("contact", payload);
-      const scoped = update("contact", payload, { ownerId: appOwnerId });
+      const ownerId =
+        resolveContactRowOwnerLane(row, visibleOwnerIds) ?? appOwnerId;
+      if (!ownerId) return update("contact", payload);
+      const scoped = update("contact", payload, { ownerId });
       if (scoped.ok) return scoped;
       return update("contact", payload);
     };
 
-    const writeContactDelete = (id: ContactId) => {
+    const writeContactDelete = (id: ContactId, row: unknown) => {
       const payload = { id, isDeleted: Evolu.sqliteTrue };
-      if (!appOwnerId) return update("contact", payload);
-      const scoped = update("contact", payload, { ownerId: appOwnerId });
+      const ownerId =
+        resolveContactRowOwnerLane(row, visibleOwnerIds) ?? appOwnerId;
+      if (!ownerId) return update("contact", payload);
+      const scoped = update("contact", payload, { ownerId });
       if (scoped.ok) return scoped;
       return update("contact", payload);
     };
@@ -285,7 +296,7 @@ export const useContactsDomain = ({
       }
 
       let removedContacts = 0;
-      const movedMessages = 0;
+      let movedMessages = 0;
 
       for (const idxs of dupGroups) {
         const group = idxs.map((i) => contacts[i]);
@@ -340,15 +351,20 @@ export const useContactsDomain = ({
           (keep.groupName ?? null) !== (mergedGroup ?? null);
 
         if (keepNeedsUpdate) {
-          const result = writeContactProfileUpdate({
-            id: keepId,
-            name: mergedName as typeof Evolu.NonEmptyString1000.Type | null,
-            npub: mergedNpub as typeof Evolu.NonEmptyString1000.Type | null,
-            lnAddress: mergedLn as typeof Evolu.NonEmptyString1000.Type | null,
-            groupName: mergedGroup as
-              | typeof Evolu.NonEmptyString1000.Type
-              | null,
-          });
+          const result = writeContactProfileUpdate(
+            {
+              id: keepId,
+              name: mergedName as typeof Evolu.NonEmptyString1000.Type | null,
+              npub: mergedNpub as typeof Evolu.NonEmptyString1000.Type | null,
+              lnAddress: mergedLn as
+                | typeof Evolu.NonEmptyString1000.Type
+                | null,
+              groupName: mergedGroup as
+                | typeof Evolu.NonEmptyString1000.Type
+                | null,
+            },
+            keep,
+          );
 
           if (!result.ok) {
             throw new Error(String(result.error ?? "contact update failed"));
@@ -359,7 +375,8 @@ export const useContactsDomain = ({
           const duplicateId = contact.id as ContactId;
           if (duplicateId === keepId) continue;
 
-          const del = writeContactDelete(duplicateId);
+          movedMessages += reassignContactMessages(duplicateId, keepId);
+          const del = writeContactDelete(duplicateId, contact);
 
           if (del.ok) removedContacts += 1;
         }
@@ -378,7 +395,16 @@ export const useContactsDomain = ({
     } finally {
       setDedupeContactsIsBusy(false);
     }
-  }, [appOwnerId, contacts, dedupeContactsIsBusy, pushToast, t, update]);
+  }, [
+    appOwnerId,
+    contacts,
+    dedupeContactsIsBusy,
+    pushToast,
+    reassignContactMessages,
+    t,
+    update,
+    visibleOwnerIds,
+  ]);
 
   React.useEffect(() => {
     if (isSeedLogin) return;

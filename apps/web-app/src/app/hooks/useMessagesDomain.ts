@@ -1418,13 +1418,15 @@ export const useMessagesDomain = ({
     (fromContactId: string, toContactId: string) => {
       const normalizedFrom = toTrimmedText(fromContactId);
       const normalizedTo = toTrimmedText(toContactId);
-      if (!normalizedFrom || !normalizedTo) return;
+      if (!normalizedFrom || !normalizedTo) return 0;
 
-      const nextOverlayMessages = overlayMessagesRef.current.map((message) =>
-        toTrimmedText(message.contactId) === normalizedFrom
-          ? { ...message, contactId: normalizedTo }
-          : message,
-      );
+      const movedMessageIds = new Set<string>();
+
+      const nextOverlayMessages = overlayMessagesRef.current.map((message) => {
+        if (toTrimmedText(message.contactId) !== normalizedFrom) return message;
+        movedMessageIds.add(toTrimmedText(message.id));
+        return { ...message, contactId: normalizedTo };
+      });
       persistOverlayMessages(nextOverlayMessages);
 
       for (const row of nostrMessageRows) {
@@ -1432,8 +1434,11 @@ export const useMessagesDomain = ({
         if (toTrimmedText(row.contactId) !== normalizedFrom) continue;
         const id = toTrimmedText(row.id);
         if (!id) continue;
+        movedMessageIds.add(id);
         updateNostrMessage({ id, contactId: normalizedTo });
       }
+
+      return movedMessageIds.size;
     },
     [
       isVisibleMessageOwner,

@@ -22,6 +22,7 @@ import {
 import { getBestNostrName } from "../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../utils/nostrNpub";
 import { isHttpUrl } from "../../utils/validation";
+import { resolveContactRowOwnerLane } from "../lib/contactOwnerLane";
 import type { ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
@@ -46,6 +47,7 @@ interface UseContactsNostrPrefetchEffectsParams<
     React.SetStateAction<Record<string, string | null>>
   >;
   update: EvoluMutations["update"];
+  visibleOwnerIds: readonly Evolu.OwnerId[];
 }
 
 export const useContactsNostrPrefetchEffects = <
@@ -64,9 +66,11 @@ export const useContactsNostrPrefetchEffects = <
   setNostrPictureByNpub,
   setNostrStatusByNpub,
   update,
+  visibleOwnerIds,
 }: UseContactsNostrPrefetchEffectsParams<TContact>) => {
   const updateContactFromNostr = React.useCallback(
     (
+      contact: TContact,
       payload: {
         id: string;
       } & Partial<
@@ -76,11 +80,13 @@ export const useContactsNostrPrefetchEffects = <
         >
       >,
     ) => {
-      return appOwnerId
-        ? update("contact", payload, { ownerId: appOwnerId })
+      const ownerId =
+        resolveContactRowOwnerLane(contact, visibleOwnerIds) ?? appOwnerId;
+      return ownerId
+        ? update("contact", payload, { ownerId })
         : update("contact", payload);
     },
-    [appOwnerId, update],
+    [appOwnerId, update, visibleOwnerIds],
   );
 
   React.useEffect(() => {
@@ -113,7 +119,7 @@ export const useContactsNostrPrefetchEffects = <
               )
             : "";
           if (cachedLn && cachedLn.toLowerCase() !== currentLnNormalized) {
-            updateContactFromNostr({
+            updateContactFromNostr(contact, {
               id: contact.id,
               lnAddress: cachedLn as typeof Evolu.NonEmptyString1000.Type,
               ...(shouldNormalizeNpub
@@ -152,7 +158,7 @@ export const useContactsNostrPrefetchEffects = <
           }
 
           if (Object.keys(patch).length > 0) {
-            updateContactFromNostr({ id: contact.id, ...patch });
+            updateContactFromNostr(contact, { id: contact.id, ...patch });
           }
           continue;
         }
@@ -198,7 +204,7 @@ export const useContactsNostrPrefetchEffects = <
           }
 
           if (Object.keys(patch).length > 0) {
-            updateContactFromNostr({ id: contact.id, ...patch });
+            updateContactFromNostr(contact, { id: contact.id, ...patch });
           }
         } catch {
           saveCachedProfileMetadata(npub, null);

@@ -17,6 +17,25 @@ import {
   writeStoredSecret,
 } from "./secretStorage";
 
+const PUSH_SECRET_MIRROR_TIMEOUT_MS = 1_500;
+
+const mirrorPushNsecBestEffort = async (nsec: string): Promise<void> => {
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+  try {
+    await Promise.race([
+      setStoredPushNsec(nsec).catch(() => undefined),
+      new Promise<void>((resolve) => {
+        timeoutId = globalThis.setTimeout(
+          resolve,
+          PUSH_SECRET_MIRROR_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== null) globalThis.clearTimeout(timeoutId);
+  }
+};
+
 // Per-mint/keyset deterministic counters live in localStorage under
 // `linky.cashu.detCounter.v1:*` and are bound to whichever cashu BIP-85
 // mnemonic was active when they were last bumped. When the mnemonic itself
@@ -103,7 +122,10 @@ export const persistIdentitySecrets = async ({
     // ignore storage unavailability
   }
 
-  await setStoredPushNsec(nsec);
+  // The push-service mirror is auxiliary. IndexedDB can remain blocked by a
+  // suspended tab or service worker, so it must never hold account restore on
+  // the loading screen after the primary identity secrets are already saved.
+  await mirrorPushNsecBestEffort(nsec);
 };
 
 export const persistSyncedActiveNostrIdentity = async ({
@@ -127,7 +149,7 @@ export const persistSyncedActiveNostrIdentity = async ({
     // ignore storage unavailability
   }
 
-  await setStoredPushNsec(nsec);
+  await mirrorPushNsecBestEffort(nsec);
 };
 
 export const clearIdentitySecrets = async (): Promise<void> => {
