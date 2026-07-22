@@ -2171,6 +2171,10 @@ export const useAppShellComposition = () => {
     contactsVisibleOwnerIds,
     identityOwnerId,
     identitySyncOwner,
+    legacyIdentitiesOwnerId,
+    legacyIdentitiesSyncOwner,
+    legacyMessagesIdentityOwnerId,
+    legacyMessagesIdentitySyncOwner,
     metaOwnerId,
     metaSyncOwner,
     messagesBackupOwnerId,
@@ -2213,6 +2217,16 @@ export const useAppShellComposition = () => {
   useOwner(transactionsSyncOwner);
   useOwner(metaSyncOwner);
   useOwner(identitySyncOwner);
+  useOwner(
+    legacyIdentitiesSyncOwner?.id === transactionsSyncOwner?.id
+      ? null
+      : legacyIdentitiesSyncOwner,
+  );
+  useOwner(
+    legacyMessagesIdentitySyncOwner?.id === messagesSyncOwner?.id
+      ? null
+      : legacyMessagesIdentitySyncOwner,
+  );
 
   // Default mint cross-tab + cross-device sync via Evolu `ownerMeta`.
   //
@@ -2588,23 +2602,33 @@ export const useAppShellComposition = () => {
   const nostrIdentityRows = useQuery(nostrIdentityQuery);
 
   const activeIdentityOwnerId = String(identityOwnerId ?? "").trim();
-  const legacyMessagesOwnerIds = React.useMemo(
+  const legacyNostrIdentityOwnerIds = React.useMemo(
     () =>
       new Set(
-        messagesVisibleOwnerIds
+        [
+          ...messagesVisibleOwnerIds,
+          legacyIdentitiesOwnerId,
+          legacyMessagesIdentityOwnerId,
+          metaOwnerId,
+        ]
           .map((ownerId) => String(ownerId ?? "").trim())
           .filter(Boolean),
       ),
-    [messagesVisibleOwnerIds],
+    [
+      legacyIdentitiesOwnerId,
+      legacyMessagesIdentityOwnerId,
+      messagesVisibleOwnerIds,
+      metaOwnerId,
+    ],
   );
   const syncedNostrIdentityResolution = React.useMemo(
     () =>
       resolveSyncedNostrIdentity(
         nostrIdentityRows,
         activeIdentityOwnerId,
-        legacyMessagesOwnerIds,
+        legacyNostrIdentityOwnerIds,
       ),
-    [activeIdentityOwnerId, legacyMessagesOwnerIds, nostrIdentityRows],
+    [activeIdentityOwnerId, legacyNostrIdentityOwnerIds, nostrIdentityRows],
   );
   const activeSyncedNostrIdentity = syncedNostrIdentityResolution.identity;
 

@@ -48,6 +48,26 @@ describe("resolveSyncedNostrIdentity", () => {
     expect(resolution.shouldMigrateLegacyIdentity).toBe(true);
   });
 
+  it("treats legacy rows without a source as custom identities", () => {
+    const resolution = resolveSyncedNostrIdentity(
+      [
+        {
+          id: ACTIVE_NOSTR_IDENTITY_ROW_ID,
+          nsec: "old-custom-nsec",
+          ownerId: "legacy-meta-owner",
+        },
+      ],
+      "identity-owner",
+      new Set(["legacy-meta-owner"]),
+    );
+
+    expect(resolution.identity).toMatchObject({
+      nsec: "old-custom-nsec",
+      source: "custom",
+    });
+    expect(resolution.shouldMigrateLegacyIdentity).toBe(true);
+  });
+
   it("ignores identities outside the dedicated and visible legacy owners", () => {
     const resolution = resolveSyncedNostrIdentity(
       [makeIdentityRow("unrelated-owner", "other-nsec")],

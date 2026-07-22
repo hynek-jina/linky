@@ -53,6 +53,8 @@ interface OwnerSyncData {
 
 interface FixedOwnerSyncData {
   identityOwner: Evolu.AppOwner;
+  legacyIdentitiesOwner: Evolu.AppOwner;
+  legacyMessagesIdentityOwner: Evolu.AppOwner;
   metaOwner: Evolu.AppOwner;
 }
 
@@ -84,6 +86,10 @@ interface UseEvoluContactsOwnerRotationResult {
   contactsVisibleOwnerIds: Evolu.OwnerId[];
   identityOwnerId: Evolu.OwnerId | null;
   identitySyncOwner: Evolu.SyncOwner | null;
+  legacyIdentitiesOwnerId: Evolu.OwnerId | null;
+  legacyIdentitiesSyncOwner: Evolu.SyncOwner | null;
+  legacyMessagesIdentityOwnerId: Evolu.OwnerId | null;
+  legacyMessagesIdentitySyncOwner: Evolu.SyncOwner | null;
   metaOwnerId: Evolu.OwnerId | null;
   metaSyncOwner: Evolu.SyncOwner | null;
   messagesBackupOwnerId: Evolu.OwnerId | null;
@@ -335,20 +341,50 @@ const toAppOwnerFromMnemonic = (mnemonic: string): Evolu.AppOwner | null => {
 const deriveFixedOwnerSyncDataFromSeed = async (
   slip39Seed: string,
 ): Promise<FixedOwnerSyncData | null> => {
-  const [metaMnemonic, identityMnemonic] = await Promise.all([
+  const [
+    metaMnemonic,
+    identityMnemonic,
+    legacyIdentitiesMnemonic,
+    legacyMessagesIdentityMnemonic,
+  ] = await Promise.all([
     deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "meta", 0),
     deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "identity", 0),
+    // Historical `identities-0` used path family 5, which is now the
+    // transactions-0 path family.
+    deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "transactions", 0),
+    // Before PR #165, the identity role accidentally fell through here.
+    deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "messages", 0),
   ]);
 
-  if (!metaMnemonic || !identityMnemonic) return null;
+  if (
+    !metaMnemonic ||
+    !identityMnemonic ||
+    !legacyIdentitiesMnemonic ||
+    !legacyMessagesIdentityMnemonic
+  )
+    return null;
 
   const metaOwner = toAppOwnerFromMnemonic(metaMnemonic);
   const identityOwner = toAppOwnerFromMnemonic(identityMnemonic);
+  const legacyIdentitiesOwner = toAppOwnerFromMnemonic(
+    legacyIdentitiesMnemonic,
+  );
+  const legacyMessagesIdentityOwner = toAppOwnerFromMnemonic(
+    legacyMessagesIdentityMnemonic,
+  );
 
-  if (!metaOwner || !identityOwner) return null;
+  if (
+    !metaOwner ||
+    !identityOwner ||
+    !legacyIdentitiesOwner ||
+    !legacyMessagesIdentityOwner
+  )
+    return null;
 
   return {
     identityOwner,
+    legacyIdentitiesOwner,
+    legacyMessagesIdentityOwner,
     metaOwner,
   };
 };
@@ -2062,6 +2098,18 @@ export const useEvoluContactsOwnerRotation = ({
       : appOwnerId,
     identitySyncOwner: isSeedLogin
       ? (fixedOwnerSyncData?.identityOwner ?? null)
+      : null,
+    legacyIdentitiesOwnerId: isSeedLogin
+      ? (fixedOwnerSyncData?.legacyIdentitiesOwner.id ?? null)
+      : null,
+    legacyIdentitiesSyncOwner: isSeedLogin
+      ? (fixedOwnerSyncData?.legacyIdentitiesOwner ?? null)
+      : null,
+    legacyMessagesIdentityOwnerId: isSeedLogin
+      ? (fixedOwnerSyncData?.legacyMessagesIdentityOwner.id ?? null)
+      : null,
+    legacyMessagesIdentitySyncOwner: isSeedLogin
+      ? (fixedOwnerSyncData?.legacyMessagesIdentityOwner ?? null)
       : null,
     metaOwnerId: isSeedLogin
       ? (fixedOwnerSyncData?.metaOwner.id ?? null)

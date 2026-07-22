@@ -38,7 +38,9 @@ const parseSyncedNostrIdentity = (row: object): SyncedNostrIdentity | null => {
     nsec,
     npub: readText(row, "npub") || null,
     ownerId,
-    source: readText(row, "source") === "custom" ? "custom" : "derived",
+    // The first synced custom-identity rows predate the `source` column.
+    // A missing value therefore means custom, not derived.
+    source: readText(row, "source") === "derived" ? "derived" : "custom",
     switchedAtSec: readSwitchedAtSec(row),
   };
 };
@@ -46,7 +48,7 @@ const parseSyncedNostrIdentity = (row: object): SyncedNostrIdentity | null => {
 export const resolveSyncedNostrIdentity = (
   rows: ReadonlyArray<object>,
   identityOwnerId: string,
-  legacyMessagesOwnerIds: ReadonlySet<string>,
+  legacyOwnerIds: ReadonlySet<string>,
 ): SyncedNostrIdentityResolution => {
   if (!identityOwnerId) {
     return { identity: null, shouldMigrateLegacyIdentity: false };
@@ -61,7 +63,7 @@ export const resolveSyncedNostrIdentity = (
   }
 
   const legacyIdentity = identities.find((row) =>
-    legacyMessagesOwnerIds.has(row.ownerId),
+    legacyOwnerIds.has(row.ownerId),
   );
   return {
     identity: legacyIdentity ?? null,
