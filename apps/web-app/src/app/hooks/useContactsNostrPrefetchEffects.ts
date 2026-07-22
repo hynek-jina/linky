@@ -30,6 +30,7 @@ interface UseContactsNostrPrefetchEffectsParams<
   TContact extends ContactRowLike & { id: string },
 > {
   appOwnerId: Evolu.OwnerId | null;
+  canFetchFromNostr?: boolean;
   contacts: readonly TContact[];
   nostrFetchRelays: string[];
   nostrInFlight: React.MutableRefObject<Set<string>>;
@@ -51,6 +52,7 @@ export const useContactsNostrPrefetchEffects = <
   TContact extends ContactRowLike & { id: string },
 >({
   appOwnerId,
+  canFetchFromNostr = true,
   contacts,
   nostrFetchRelays,
   nostrInFlight,
@@ -155,6 +157,8 @@ export const useContactsNostrPrefetchEffects = <
           continue;
         }
 
+        if (!canFetchFromNostr) continue;
+
         if (nostrMetadataInFlight.current.has(npub)) continue;
         nostrMetadataInFlight.current.add(npub);
 
@@ -212,6 +216,7 @@ export const useContactsNostrPrefetchEffects = <
       controller.abort();
     };
   }, [
+    canFetchFromNostr,
     contacts,
     routeKind,
     updateContactFromNostr,
@@ -262,6 +267,8 @@ export const useContactsNostrPrefetchEffects = <
         }
 
         if (cached && !shouldRefreshCachedPicture) continue;
+
+        if (!canFetchFromNostr) continue;
 
         if (nostrInFlight.current.has(npub)) continue;
         nostrInFlight.current.add(npub);
@@ -351,6 +358,7 @@ export const useContactsNostrPrefetchEffects = <
       controller.abort();
     };
   }, [
+    canFetchFromNostr,
     contacts,
     nostrInFlight,
     rememberBlobAvatarUrl,
@@ -386,6 +394,8 @@ export const useContactsNostrPrefetchEffects = <
           continue;
         }
 
+        if (!canFetchFromNostr) continue;
+
         if (nostrStatusInFlight.current.has(npub)) continue;
         nostrStatusInFlight.current.add(npub);
 
@@ -412,6 +422,7 @@ export const useContactsNostrPrefetchEffects = <
       controller.abort();
     };
   }, [
+    canFetchFromNostr,
     contacts,
     nostrFetchRelays,
     nostrStatusByNpub,

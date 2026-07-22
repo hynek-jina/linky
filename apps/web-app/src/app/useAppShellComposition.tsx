@@ -232,6 +232,7 @@ import { useArmedDeleteTimeouts } from "./hooks/useArmedDeleteTimeouts";
 import { useCashuDomain } from "./hooks/useCashuDomain";
 import { useContactsDomain } from "./hooks/useContactsDomain";
 import { useContactsNostrPrefetchEffects } from "./hooks/useContactsNostrPrefetchEffects";
+import { useEvoluNostrBootstrapReady } from "./hooks/useEvoluNostrBootstrapReady";
 import { useEvoluContactsOwnerRotation } from "./hooks/useEvoluContactsOwnerRotation";
 import { useFeedbackContact } from "./hooks/useFeedbackContact";
 import { useFiatRates } from "./hooks/useFiatRates";
@@ -1266,6 +1267,10 @@ interface ChatSelectedContact {
   unknownPubkeyHex?: string | null;
 }
 
+interface QueuedNotificationOpenDetail {
+  value: unknown;
+}
+
 const encodeUnknownNpub = (pubkeyHex: string | null): string | null => {
   if (!pubkeyHex) return null;
   try {
@@ -1400,6 +1405,10 @@ export const useAppShellComposition = () => {
     },
     [],
   );
+
+  const pendingNotificationOpenDetailsRef = React.useRef<
+    QueuedNotificationOpenDetail[]
+  >([]);
 
   React.useEffect(() => {
     if (allowedDisplayCurrencies.includes(displayCurrency)) return;
@@ -2390,27 +2399,6 @@ export const useAppShellComposition = () => {
     return Array.from(new Set(ids));
   }, [appOwnerId, messagesVisibleOwnerIds]);
 
-  const {
-    canSaveNewRelay,
-    connectedRelayCount,
-    newRelayUrl,
-    nostrFetchRelays,
-    nostrRelayOverallStatus,
-    pendingRelayDeleteUrl,
-    relayStatusByUrl,
-    relayUrls,
-    requestDeleteSelectedRelay,
-    saveNewRelay,
-    selectedRelayUrl,
-    setNewRelayUrl,
-  } = useRelayDomain({
-    currentNpub,
-    currentNsec,
-    route,
-    setStatus,
-    t,
-  });
-
   useStoragePersistRequestEffect({ refreshKey: t });
 
   const maybeShowPwaNotification = React.useCallback(
@@ -2631,6 +2619,23 @@ export const useAppShellComposition = () => {
     [activeIdentityOwnerId, legacyNostrIdentityOwnerIds, nostrIdentityRows],
   );
   const activeSyncedNostrIdentity = syncedNostrIdentityResolution.identity;
+  const syncedNostrIdentityMatchesLocal = React.useMemo(() => {
+    if (!activeSyncedNostrIdentity) return true;
+
+    const localSource = getInitialNostrIdentitySource();
+    const localSwitchedAtSec = getInitialNostrIdentitySwitchedAtSec();
+    const localNsec = String(currentNsec ?? "").trim();
+    const syncedSwitchedAtSec = activeSyncedNostrIdentity.switchedAtSec;
+    const switchedAtMatches =
+      localSwitchedAtSec === syncedSwitchedAtSec ||
+      (!localSwitchedAtSec && !syncedSwitchedAtSec);
+
+    return (
+      localNsec === activeSyncedNostrIdentity.nsec &&
+      localSource === activeSyncedNostrIdentity.source &&
+      switchedAtMatches
+    );
+  }, [activeSyncedNostrIdentity, currentNsec]);
 
   React.useEffect(() => {
     if (!syncedNostrIdentityResolution.shouldMigrateLegacyIdentity) return;
@@ -2660,20 +2665,7 @@ export const useAppShellComposition = () => {
 
   React.useEffect(() => {
     if (!activeSyncedNostrIdentity) return;
-
-    const localSource = getInitialNostrIdentitySource();
-    const localSwitchedAtSec = getInitialNostrIdentitySwitchedAtSec();
-    const localNsec = String(currentNsec ?? "").trim();
-    const syncedSwitchedAtSec = activeSyncedNostrIdentity.switchedAtSec;
-    const switchedAtMatches =
-      localSwitchedAtSec === syncedSwitchedAtSec ||
-      (!localSwitchedAtSec && !syncedSwitchedAtSec);
-    const alreadyApplied =
-      localNsec === activeSyncedNostrIdentity.nsec &&
-      localSource === activeSyncedNostrIdentity.source &&
-      switchedAtMatches;
-
-    if (alreadyApplied) return;
+    if (syncedNostrIdentityMatchesLocal) return;
 
     void persistSyncedActiveNostrIdentity({
       identitySource: activeSyncedNostrIdentity.source,
@@ -2687,7 +2679,11 @@ export const useAppShellComposition = () => {
       );
       globalThis.location.reload();
     });
-  }, [activeSyncedNostrIdentity, currentNsec]);
+  }, [
+    activeSyncedNostrIdentity,
+    syncedNostrIdentityMatchesLocal,
+    setCurrentNsec,
+  ]);
 
   const activeCashuOwnerId = String(cashuOwnerId ?? "").trim();
   const visibleCashuOwnerIds = React.useMemo(
@@ -3308,6 +3304,85 @@ export const useAppShellComposition = () => {
     visibleMessageOwnerIds,
   });
 
+  const evoluOwnersReadyForNostr = isSeedLogin
+    ? Boolean(
+        cashuOwnerId &&
+        contactsOwnerId &&
+        identityOwnerId &&
+        legacyIdentitiesOwnerId &&
+        legacyMessagesIdentityOwnerId &&
+        messagesOwnerId &&
+        metaOwnerId &&
+        transactionsOwnerId,
+      )
+    : Boolean(appOwnerId);
+  const evoluNostrOwnerKey = React.useMemo(() => {
+    if (!currentNpub || !evoluOwnersReadyForNostr) return "";
+
+    return [
+      currentNpub,
+      appOwnerId,
+      cashuOwnerId,
+      contactsOwnerId,
+      identityOwnerId,
+      legacyIdentitiesOwnerId,
+      legacyMessagesIdentityOwnerId,
+      messagesOwnerId,
+      metaOwnerId,
+      transactionsOwnerId,
+    ]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean)
+      .join("|");
+  }, [
+    appOwnerId,
+    cashuOwnerId,
+    contactsOwnerId,
+    currentNpub,
+    evoluOwnersReadyForNostr,
+    identityOwnerId,
+    legacyIdentitiesOwnerId,
+    legacyMessagesIdentityOwnerId,
+    messagesOwnerId,
+    metaOwnerId,
+    transactionsOwnerId,
+  ]);
+  const nostrIdentityBootstrapReady =
+    !syncedNostrIdentityResolution.shouldMigrateLegacyIdentity &&
+    syncedNostrIdentityMatchesLocal;
+  const nostrBootstrapReady = useEvoluNostrBootstrapReady({
+    contactsSnapshot: contacts,
+    enabled: Boolean(currentNsec),
+    identitiesSnapshot: nostrIdentityRows,
+    identityReady: nostrIdentityBootstrapReady,
+    messagesSnapshot: nostrMessagesLocal,
+    ownerKey: evoluNostrOwnerKey,
+    reactionsSnapshot: nostrReactionsLocal,
+    tokensSnapshot: cashuTokensAll,
+  });
+
+  const {
+    canSaveNewRelay,
+    connectedRelayCount,
+    newRelayUrl,
+    nostrFetchRelays,
+    nostrRelayOverallStatus,
+    pendingRelayDeleteUrl,
+    relayStatusByUrl,
+    relayUrls,
+    requestDeleteSelectedRelay,
+    saveNewRelay,
+    selectedRelayUrl,
+    setNewRelayUrl,
+  } = useRelayDomain({
+    currentNpub,
+    currentNsec,
+    networkEnabled: nostrBootstrapReady,
+    route,
+    setStatus,
+    t,
+  });
+
   React.useEffect(() => {
     appendIdentityChangeNoticesRef.current = ({
       changedAtSec,
@@ -3834,8 +3909,8 @@ export const useAppShellComposition = () => {
   const { claimNpubCashOnce, claimNpubCashOnceLatestRef } = useNpubCashClaim({
     cashuIsBusy,
     cashuTokensAll,
-    currentNpub,
-    currentNsec,
+    currentNpub: nostrBootstrapReady ? currentNpub : null,
+    currentNsec: nostrBootstrapReady ? currentNsec : null,
     enqueueCashuOp,
     ensureCashuTokenPersisted,
     formatDisplayedAmountParts,
@@ -3860,6 +3935,7 @@ export const useAppShellComposition = () => {
   });
 
   useProfileMetadataSyncEffect({
+    canFetchFromNostr: nostrBootstrapReady,
     currentNpub,
     nostrFetchRelays,
     rememberBlobAvatarUrl,
@@ -3870,6 +3946,7 @@ export const useAppShellComposition = () => {
   });
 
   useProfileStatusSyncEffect({
+    canFetchFromNostr: nostrBootstrapReady,
     currentNpub,
     nostrFetchRelays,
     setMyProfileStatus,
@@ -3897,6 +3974,7 @@ export const useAppShellComposition = () => {
     currentNsec,
     hasMintOverrideRef,
     makeNip98AuthHeader,
+    networkEnabled: nostrBootstrapReady,
     npubCashServerBaseUrl,
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
@@ -3923,6 +4001,7 @@ export const useAppShellComposition = () => {
 
   useContactsNostrPrefetchEffects({
     appOwnerId: contactsOwnerId,
+    canFetchFromNostr: nostrBootstrapReady,
     contacts,
     nostrFetchRelays,
     nostrInFlight,
@@ -4144,6 +4223,8 @@ export const useAppShellComposition = () => {
           continue;
         }
 
+        if (!nostrBootstrapReady) continue;
+
         if (nostrMetadataInFlight.current.has(npub)) continue;
         nostrMetadataInFlight.current.add(npub);
 
@@ -4178,6 +4259,7 @@ export const useAppShellComposition = () => {
       controller.abort();
     };
   }, [
+    nostrBootstrapReady,
     nostrFetchRelays,
     nostrMetadataInFlight,
     prefetchedMessageNpubs,
@@ -4214,6 +4296,8 @@ export const useAppShellComposition = () => {
         }
 
         if (cached && !shouldRefreshCachedPicture) continue;
+
+        if (!nostrBootstrapReady) continue;
 
         if (nostrInFlight.current.has(npub)) continue;
         nostrInFlight.current.add(npub);
@@ -4303,6 +4387,7 @@ export const useAppShellComposition = () => {
       controller.abort();
     };
   }, [
+    nostrBootstrapReady,
     nostrFetchRelays,
     nostrInFlight,
     prefetchedMessageNpubs,
@@ -5387,6 +5472,7 @@ export const useAppShellComposition = () => {
     chatSeenWrapIdsRef,
     contacts,
     currentNsec,
+    enabled: nostrBootstrapReady,
     nostrMessagesLocal,
     nostrReactionsLocal,
     publishWrappedWithRetry,
@@ -8800,6 +8886,7 @@ export const useAppShellComposition = () => {
     chatMessagesLatestRef,
     chatSeenWrapIdsRef,
     currentNsec,
+    enabled: nostrBootstrapReady,
     knownNostrMessageIdentityIndex,
     logPayStep,
     nostrMessageWrapIdsRef,
@@ -9525,6 +9612,7 @@ export const useAppShellComposition = () => {
     bankPaymentOfferMessages,
     contacts,
     currentNsec,
+    enabled: nostrBootstrapReady,
     formatDisplayedAmountText,
     maybeShowPwaNotification,
     nostrFetchRelays,
@@ -9627,6 +9715,11 @@ export const useAppShellComposition = () => {
     };
 
     const openNotification = (rawDetail: unknown) => {
+      if (!nostrBootstrapReady) {
+        pendingNotificationOpenDetailsRef.current.push({ value: rawDetail });
+        return;
+      }
+
       void openNotificationChat(rawDetail).then((opened) => {
         if (opened) {
           return;
@@ -9646,6 +9739,13 @@ export const useAppShellComposition = () => {
       openNotification(pendingHashNotificationDetail);
     } else {
       openNotificationRoute(consumePendingNativeNotificationRoute());
+    }
+
+    if (nostrBootstrapReady) {
+      const queuedDetails = pendingNotificationOpenDetailsRef.current.splice(0);
+      for (const detail of queuedDetails) {
+        openNotification(detail.value);
+      }
     }
 
     const onNotificationOpen: EventListener = (event) => {
@@ -9696,7 +9796,7 @@ export const useAppShellComposition = () => {
       );
       window.removeEventListener(NATIVE_PUSH_ACTION_EVENT, onNotificationOpen);
     };
-  }, [openNotificationChat]);
+  }, [nostrBootstrapReady, openNotificationChat]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") {

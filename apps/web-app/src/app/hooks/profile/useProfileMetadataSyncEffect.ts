@@ -19,6 +19,7 @@ import {
 import { isHttpUrl } from "../../../utils/validation";
 
 interface UseProfileMetadataSyncEffectParams {
+  canFetchFromNostr?: boolean;
   currentNpub: string | null;
   nostrFetchRelays: string[];
   rememberBlobAvatarUrl: (npub: string, url: string | null) => string | null;
@@ -31,6 +32,7 @@ interface UseProfileMetadataSyncEffectParams {
 }
 
 export const useProfileMetadataSyncEffect = ({
+  canFetchFromNostr = true,
   currentNpub,
   nostrFetchRelays,
   rememberBlobAvatarUrl,
@@ -73,6 +75,12 @@ export const useProfileMetadataSyncEffect = ({
       const lud06 = String(cachedMeta.metadata.lud06 ?? "").trim();
       const ln = lud16 || lud06;
       if (ln) setMyProfileLnAddress(ln);
+    }
+
+    if (!canFetchFromNostr) {
+      return () => {
+        cancelledBlob = true;
+      };
     }
 
     const controller = new AbortController();
@@ -163,6 +171,7 @@ export const useProfileMetadataSyncEffect = ({
       cancelledBlob = true;
     };
   }, [
+    canFetchFromNostr,
     currentNpub,
     nostrFetchRelays,
     rememberBlobAvatarUrl,

@@ -115,6 +115,7 @@ interface UseInboxNotificationsSyncParams<
   bankPaymentOfferMessages?: readonly LocalNostrMessage[];
   contacts: readonly TContact[];
   currentNsec: string | null;
+  enabled?: boolean;
   formatDisplayedAmountText?: (amountSat: number) => string;
   maybeShowPwaNotification: (
     title: string,
@@ -150,6 +151,7 @@ export const useInboxNotificationsSync = <
   bankPaymentOfferMessages = [],
   contacts,
   currentNsec,
+  enabled = true,
   formatDisplayedAmountText = (amountSat: number) => `${amountSat} sat`,
   maybeShowPwaNotification,
   nostrFetchRelays,
@@ -180,7 +182,7 @@ export const useInboxNotificationsSync = <
     // Best-effort: keep syncing the NIP-17 inbox globally so messages from
     // other contacts still arrive while a chat is open. The currently opened
     // chat contact is deduplicated below to avoid duplicate inserts.
-    if (!currentNsec) return;
+    if (!enabled || !currentNsec) return;
 
     const activeChatId = route.kind === "chat" ? String(route.id ?? "") : null;
 
@@ -1094,6 +1096,7 @@ export const useInboxNotificationsSync = <
     bankPaymentOfferMessages,
     contacts,
     currentNsec,
+    enabled,
     formatDisplayedAmountText,
     appendLocalNostrMessage,
     appendLocalNostrReaction,

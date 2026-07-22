@@ -10,6 +10,7 @@ import { getSharedAppNostrPool } from "../lib/nostrPool";
 interface UseRelayDomainParams {
   currentNpub: string | null;
   currentNsec: string | null;
+  networkEnabled?: boolean;
   route: Route;
   setStatus: (value: string | null) => void;
   t: (key: string) => string;
@@ -77,11 +78,12 @@ function haveSameRelayUrls(left: string[], right: string[]): boolean {
 export const useRelayDomain = ({
   currentNpub,
   currentNsec,
+  networkEnabled = true,
   route,
   setStatus,
   t,
 }: UseRelayDomainParams): UseRelayDomainResult => {
-  const canRunNetworkWork = useDeferredOnlineReady();
+  const canRunNetworkWork = useDeferredOnlineReady() && networkEnabled;
   const [newRelayUrl, setNewRelayUrl] = React.useState<string>("");
   const [relayStatusByUrl, setRelayStatusByUrl] = React.useState<
     Record<string, "checking" | "connected" | "disconnected">

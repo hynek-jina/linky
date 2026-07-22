@@ -6,12 +6,14 @@ import {
 } from "../../../nostrStatus";
 
 interface UseProfileStatusSyncEffectParams {
+  canFetchFromNostr?: boolean;
   currentNpub: string | null;
   nostrFetchRelays: string[];
   setMyProfileStatus: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 export const useProfileStatusSyncEffect = ({
+  canFetchFromNostr = true,
   currentNpub,
   nostrFetchRelays,
   setMyProfileStatus,
@@ -23,6 +25,8 @@ export const useProfileStatusSyncEffect = ({
     if (cached) {
       setMyProfileStatus(cached.status);
     }
+
+    if (!canFetchFromNostr) return;
 
     const controller = new AbortController();
     let cancelled = false;
@@ -47,5 +51,5 @@ export const useProfileStatusSyncEffect = ({
       cancelled = true;
       controller.abort();
     };
-  }, [currentNpub, nostrFetchRelays, setMyProfileStatus]);
+  }, [canFetchFromNostr, currentNpub, nostrFetchRelays, setMyProfileStatus]);
 };

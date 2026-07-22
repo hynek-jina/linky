@@ -27,6 +27,7 @@ interface UseNostrPendingFlushParams<TContact extends ContactIdentityRowLike> {
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   contacts: readonly TContact[];
   currentNsec: string | null;
+  enabled?: boolean;
   nostrMessagesLocal: LocalNostrMessage[];
   nostrReactionsLocal: LocalNostrReaction[];
   publishWrappedWithRetry: (
@@ -44,6 +45,7 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
   chatSeenWrapIdsRef,
   contacts,
   currentNsec,
+  enabled = true,
   nostrMessagesLocal,
   nostrReactionsLocal,
   publishWrappedWithRetry,
@@ -53,6 +55,7 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
   const nostrPendingFlushRef = React.useRef<Promise<void> | null>(null);
 
   const flushPendingNostrMessages = React.useCallback(async () => {
+    if (!enabled) return;
     if (!currentNsec) return;
     if (nostrPendingFlushRef.current) return;
 
@@ -299,6 +302,7 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
     chatSeenWrapIdsRef,
     contacts,
     currentNsec,
+    enabled,
     nostrMessagesLocal,
     nostrReactionsLocal,
     publishWrappedWithRetry,
