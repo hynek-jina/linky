@@ -24,6 +24,7 @@ export interface PrivateImageMessagePayload {
   key: string;
   nonce: string;
   originalSha256: string;
+  storageEncoding: "base64" | "raw";
   type: "linky.private_image.v1";
   url: string;
   width: number;
@@ -31,6 +32,7 @@ export interface PrivateImageMessagePayload {
 
 interface CompactPrivateImageMessagePayload {
   a: "g";
+  e?: "b";
   h: number;
   k: string;
   m: string;
@@ -72,6 +74,7 @@ export interface PrivateImageSendResult {
 }
 
 const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 
 const bytesToHex = (bytes: Uint8Array): string =>
   Array.from(bytes)
@@ -108,14 +111,20 @@ const bytesToBase64Url = (bytes: Uint8Array): string => {
     .replace(/=+$/g, "");
 };
 
-const base64UrlToText = (value: string): string | null => {
+const base64UrlToBytes = (value: string): Uint8Array | null => {
   const normalized = value.trim().replace(/-/g, "+").replace(/_/g, "/");
   const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
   try {
-    return atob(`${normalized}${padding}`);
+    const binary = atob(`${normalized}${padding}`);
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
   } catch {
     return null;
   }
+};
+
+const base64UrlToText = (value: string): string | null => {
+  const bytes = base64UrlToBytes(value);
+  return bytes ? textDecoder.decode(bytes) : null;
 };
 
 const textToBase64Url = (value: string): string =>
@@ -276,11 +285,12 @@ const encryptImageBytes = async (file: File): Promise<PreparedPrivateImage> => {
     copyToArrayBuffer(resized.bytes),
   );
   const encryptedBytes = new Uint8Array(encryptedBuffer);
+  const storedBytes = textEncoder.encode(bytesToBase64Url(encryptedBytes));
 
   return {
-    encryptedBytes,
-    encryptedSha256: sha256Hex(encryptedBytes),
-    encryptedSize: encryptedBytes.byteLength,
+    encryptedBytes: storedBytes,
+    encryptedSha256: sha256Hex(storedBytes),
+    encryptedSize: storedBytes.byteLength,
     fileType: "image/jpeg",
     height: resized.height,
     key,
@@ -323,6 +333,7 @@ const uploadToBlossom = async (
           method: "PUT",
           headers: {
             Authorization: authHeader,
+            "Content-Type": "text/plain;charset=UTF-8",
           },
           body: uploadBody,
         });
@@ -331,7 +342,7 @@ const uploadToBlossom = async (
           method: "PUT",
           headers: {
             Authorization: authHeader,
-            "Content-Type": "application/octet-stream",
+            "Content-Type": "text/plain;charset=UTF-8",
             "X-SHA-256": prepared.encryptedSha256,
           },
           body: uploadBody,
@@ -362,22 +373,29 @@ const uploadToBlossom = async (
 
 export const buildPrivateImageEventTags = (
   payload: PrivateImageMessagePayload,
-): string[][] => [
-  ["file-type", payload.fileType],
-  ["encryption-algorithm", payload.encryptionAlgorithm],
-  ["decryption-key", payload.key],
-  ["decryption-nonce", payload.nonce],
-  ["x", payload.encryptedSha256],
-  ["ox", payload.originalSha256],
-  ["size", String(payload.encryptedSize)],
-  ["dim", `${payload.width}x${payload.height}`],
-];
+): string[][] => {
+  const tags = [
+    ["file-type", payload.fileType],
+    ["encryption-algorithm", payload.encryptionAlgorithm],
+    ["decryption-key", payload.key],
+    ["decryption-nonce", payload.nonce],
+    ["x", payload.encryptedSha256],
+    ["ox", payload.originalSha256],
+    ["size", String(payload.encryptedSize)],
+    ["dim", `${payload.width}x${payload.height}`],
+  ];
+  if (payload.storageEncoding === "base64") {
+    tags.push(["encoding", "base64"]);
+  }
+  return tags;
+};
 
 export const serializePrivateImageMessage = (
   payload: PrivateImageMessagePayload,
 ): string => {
   const compact: CompactPrivateImageMessagePayload = {
     a: "g",
+    ...(payload.storageEncoding === "base64" ? { e: "b" } : {}),
     h: payload.height,
     k: payload.key,
     m: payload.fileType,
@@ -413,6 +431,7 @@ export const createPrivateImageSendPayload = async (
     key: prepared.key,
     nonce: prepared.nonce,
     originalSha256: prepared.originalSha256,
+    storageEncoding: "base64",
     type: PRIVATE_IMAGE_MESSAGE_TYPE,
     url: upload.url,
     width: prepared.width,
@@ -446,6 +465,13 @@ const parsePrivateImageRecord = (
   const originalSha256 = readString(
     isCompact ? parsed.o : parsed.originalSha256,
   );
+  const storageEncodingValue = isCompact ? parsed.e : parsed.storageEncoding;
+  const storageEncoding =
+    storageEncodingValue === "b" || storageEncodingValue === "base64"
+      ? "base64"
+      : storageEncodingValue === undefined || storageEncodingValue === "raw"
+        ? "raw"
+        : null;
   const encryptedSize = readPositiveInteger(
     isCompact ? parsed.s : parsed.encryptedSize,
   );
@@ -460,6 +486,7 @@ const parsePrivateImageRecord = (
     !nonce ||
     !encryptedSha256 ||
     !originalSha256 ||
+    !storageEncoding ||
     !encryptedSize ||
     !width ||
     !height
@@ -476,6 +503,7 @@ const parsePrivateImageRecord = (
     key: key.toLowerCase(),
     nonce: nonce.toLowerCase(),
     originalSha256: originalSha256.toLowerCase(),
+    storageEncoding,
     type: PRIVATE_IMAGE_MESSAGE_TYPE,
     url,
     width,
@@ -524,6 +552,9 @@ export const privateImageMessageFromEvent = (
   const nonce = readTagValue(tags, "decryption-nonce");
   const encryptedSha256 = readTagValue(tags, "x");
   const originalSha256 = readTagValue(tags, "ox");
+  const encoding = readTagValue(tags, "encoding");
+  const storageEncoding =
+    encoding === "base64" ? "base64" : encoding === null ? "raw" : null;
   const sizeText = readTagValue(tags, "size");
   const dimText = readTagValue(tags, "dim");
   const size = Number.parseInt(String(sizeText ?? ""), 10);
@@ -539,6 +570,7 @@ export const privateImageMessageFromEvent = (
     !nonce ||
     !encryptedSha256 ||
     !originalSha256 ||
+    !storageEncoding ||
     !Number.isFinite(size) ||
     size <= 0 ||
     !Number.isFinite(width) ||
@@ -558,6 +590,7 @@ export const privateImageMessageFromEvent = (
     key: key.toLowerCase(),
     nonce: nonce.toLowerCase(),
     originalSha256: originalSha256.toLowerCase(),
+    storageEncoding,
     type: PRIVATE_IMAGE_MESSAGE_TYPE,
     url,
     width: Math.trunc(width),
@@ -570,13 +603,18 @@ export const decryptPrivateImageMessage = async (
   const response = await fetch(payload.url);
   if (!response.ok) throw new Error("chat-image-download-failed");
 
-  const encryptedBytes = new Uint8Array(await response.arrayBuffer());
-  if (encryptedBytes.byteLength !== payload.encryptedSize) {
+  const storedBytes = new Uint8Array(await response.arrayBuffer());
+  if (storedBytes.byteLength !== payload.encryptedSize) {
     throw new Error("chat-image-size-mismatch");
   }
-  if (sha256Hex(encryptedBytes) !== payload.encryptedSha256) {
+  if (sha256Hex(storedBytes) !== payload.encryptedSha256) {
     throw new Error("chat-image-hash-mismatch");
   }
+  const encryptedBytes =
+    payload.storageEncoding === "base64"
+      ? base64UrlToBytes(textDecoder.decode(storedBytes))
+      : storedBytes;
+  if (!encryptedBytes) throw new Error("chat-image-invalid-encoding");
 
   const keyBytes = hexToBytes(payload.key);
   const nonceBytes = hexToBytes(payload.nonce);

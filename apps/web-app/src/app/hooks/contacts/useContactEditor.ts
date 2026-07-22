@@ -23,6 +23,7 @@ import {
   resolveNip05Input,
 } from "../../../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import { getContactQueryPrefill } from "../../lib/contactQueryPrefill";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
 
@@ -892,6 +893,7 @@ export const useContactEditor = ({
       const rawQuery = String(query ?? form.npub ?? "").trim();
       if (!rawQuery) return { kind: "empty" };
 
+      const queryPrefill = getContactQueryPrefill(rawQuery);
       let resolvedNpub = await decodeDirectNpubIdentifier(rawQuery);
       let fallbackName = "";
       let fallbackLnAddress = "";
@@ -903,13 +905,20 @@ export const useContactEditor = ({
         const nip05Result = await resolveNip05Input(rawQuery);
         if (nip05Result.kind === "resolved") {
           resolvedNpub = nip05Result.npub;
-          fallbackName = nip05Result.identifier.localPart;
-          if (nip05Result.identifier.domain === DEFAULT_NIP05_DOMAIN) {
+          fallbackName = queryPrefill.name
+            ? nip05Result.identifier.localPart
+            : "";
+          if (queryPrefill.lnAddress) {
+            fallbackLnAddress = queryPrefill.lnAddress;
+          } else if (nip05Result.identifier.domain === DEFAULT_NIP05_DOMAIN) {
             fallbackLnAddress = nip05Result.identifier.identifier;
           }
         } else if (nip05Result.kind === "not_found") {
           return { kind: "not_found", query: rawQuery };
         } else if (nip05Result.kind === "error") {
+          if (queryPrefill.lnAddress) {
+            return { kind: "not_found", query: rawQuery };
+          }
           return {
             identifier: nip05Result.identifier.identifier,
             kind: "error",

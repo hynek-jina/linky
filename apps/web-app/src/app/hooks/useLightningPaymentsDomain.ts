@@ -5,7 +5,6 @@ import {
   fetchLnurlInvoiceForTarget,
   getLnurlPayDisplayText,
   inferLightningAddressFromLnurlTarget,
-  isLightningAddress,
   type LnurlPaySuccessAction,
 } from "../../lnurlPay";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../utils/constants";
@@ -543,18 +542,8 @@ export const useLightningPaymentsDomain = ({
       setCashuIsBusy(true);
 
       const displayTarget = getLnurlPayDisplayText(paymentTarget);
-      const inferredLightningAddress =
-        inferLightningAddressFromLnurlTarget(paymentTarget) ?? paymentTarget;
-      const canOfferSave = isLightningAddress(inferredLightningAddress);
-
-      const knownContact = contacts.find(
-        (c) =>
-          String(c.lnAddress ?? "")
-            .trim()
-            .toLowerCase() === inferredLightningAddress.toLowerCase(),
-      );
-      const knownContactId = knownContact?.id ?? null;
-      const shouldOfferSave = canOfferSave && !knownContact?.id;
+      let resolvedLightningAddress =
+        inferLightningAddressFromLnurlTarget(paymentTarget);
 
       try {
         const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
@@ -631,6 +620,9 @@ export const useLightningPaymentsDomain = ({
               paymentTarget,
               attemptedAmountSat,
             );
+            if (invoiceResult.lightningAddress) {
+              resolvedLightningAddress = invoiceResult.lightningAddress;
+            }
             attemptInvoice = invoiceResult.pr;
             attemptSuccessAction = invoiceResult.successAction;
             attemptInvoicePreview = getLightningInvoicePreview(attemptInvoice);
@@ -763,13 +755,23 @@ export const useLightningPaymentsDomain = ({
                 attemptSuccessAction?.tag === "url"
                   ? attemptSuccessAction.description
                   : null;
+              const paidLightningAddress = resolvedLightningAddress;
+              const knownContact = paidLightningAddress
+                ? contacts.find(
+                    (contact) =>
+                      String(contact.lnAddress ?? "")
+                        .trim()
+                        .toLowerCase() === paidLightningAddress.toLowerCase(),
+                  )
+                : null;
+              const knownContactId = knownContact?.id ?? null;
 
               logPaymentEvent({
                 direction: "out",
                 status: "ok",
                 amount: result.paidAmount,
                 details: {
-                  lightningAddress: inferredLightningAddress,
+                  lightningAddress: paidLightningAddress,
                   ...(result.remainingToken
                     ? { gainedToken: result.remainingToken }
                     : {}),
@@ -847,9 +849,9 @@ export const useLightningPaymentsDomain = ({
               );
               setContactsOnboardingHasPaid(true);
 
-              if (shouldOfferSave) {
+              if (paidLightningAddress && !knownContact?.id) {
                 setPostPaySaveContact({
-                  lnAddress: inferredLightningAddress,
+                  lnAddress: paidLightningAddress,
                   amountSat: result.paidAmount,
                 });
               }
@@ -886,7 +888,7 @@ export const useLightningPaymentsDomain = ({
           status: "error",
           amount: amountSat,
           details: {
-            lightningAddress: inferredLightningAddress,
+            lightningAddress: resolvedLightningAddress,
             ...(lastAttemptInvoice
               ? { lightningInvoice: lastAttemptInvoice }
               : {}),
@@ -898,7 +900,14 @@ export const useLightningPaymentsDomain = ({
           mint: finalErrorMint,
           unit: "sat",
           error: finalErrorMessage,
-          contactId: knownContactId,
+          contactId:
+            contacts.find(
+              (contact) =>
+                resolvedLightningAddress !== null &&
+                String(contact.lnAddress ?? "")
+                  .trim()
+                  .toLowerCase() === resolvedLightningAddress.toLowerCase(),
+            )?.id ?? null,
           method: "lightning_address",
           phase: finalErrorMint ? "melt" : "invoice_fetch",
         });

@@ -28,6 +28,7 @@ const readHeader = (headers: RequestLike["headers"], name: string): string => {
 const readBodyBytes = (body: unknown): Uint8Array | null => {
   if (body instanceof Uint8Array) return body;
   if (body instanceof ArrayBuffer) return new Uint8Array(body);
+  if (typeof body === "string") return new TextEncoder().encode(body);
   return null;
 };
 
@@ -83,7 +84,7 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
       method: "PUT",
       headers: {
         Authorization: authorization,
-        "Content-Type": "application/octet-stream",
+        "Content-Type": "text/plain;charset=UTF-8",
         "X-SHA-256": expectedSha256,
       },
       body: copyToArrayBuffer(bytes),

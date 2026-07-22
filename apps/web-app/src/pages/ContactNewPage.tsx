@@ -1,6 +1,7 @@
 import type { FC } from "react";
 import React from "react";
 import { ArrowLeft, Save, User, UserPlus } from "lucide-react";
+import { getContactQueryPrefill } from "../app/lib/contactQueryPrefill";
 import { PasteIcon } from "../components/icons";
 import { readClipboardText } from "../platform/clipboard";
 import {
@@ -183,10 +184,11 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   }, [runSearch, searchQuery, searchResult?.query, step]);
 
   const createManualFromSearch = () => {
+    const prefill = getContactQueryPrefill(searchQuery);
     setForm({
       group: "",
-      lnAddress: "",
-      name: searchQuery,
+      lnAddress: prefill.lnAddress,
+      name: prefill.name,
       npub: "",
     });
     clearSearchFeedback();

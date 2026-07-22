@@ -46,6 +46,7 @@ export type LnurlPaySuccessAction =
   | LnurlPaySuccessActionUrl;
 
 export interface LnurlPayInvoiceResult {
+  lightningAddress: string | null;
   pr: string;
   successAction: LnurlPaySuccessAction | null;
 }
@@ -80,6 +81,7 @@ export interface LnurlPayPreview {
   callback: string;
   commentAllowed: number;
   description: string | null;
+  lightningAddress: string | null;
   maxSendableMsat: number;
   maxSendableSat: number;
   metadataRaw: string | null;
@@ -125,7 +127,7 @@ const isKnownLnurlTag = (
   );
 };
 
-const LIGHTNING_ADDRESS_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const LIGHTNING_ADDRESS_PATTERN = /^[^@\s/:]+@[^@\s/:]+\.[^@\s/:]+$/;
 
 const stripLightningPrefix = (value: string): string => {
   return value.replace(/^lightning:/i, "").trim();
@@ -248,13 +250,6 @@ const inferLightningAddressFromRequestUrl = (
       pathSegments[1].toLowerCase() === "lnurlp"
     ) {
       return `${pathSegments[2]}@${url.host}`;
-    }
-
-    if (
-      pathSegments.length >= 2 &&
-      pathSegments[0].toLowerCase() === "lnurlp"
-    ) {
-      return `${pathSegments[1]}@${url.host}`;
     }
 
     return null;
@@ -426,6 +421,7 @@ const fetchLnurlJson = async (url: string): Promise<JsonValue> => {
 
 interface ParsedLnurlPayMetadata {
   description: string | null;
+  lightningAddress: string | null;
 }
 
 const parseLnurlPayMetadata = (
@@ -437,17 +433,24 @@ const parseLnurlPayMetadata = (
     if (!Array.isArray(parsed)) return null;
     let hasTextPlain = false;
     let description: string | null = null;
+    let lightningAddress: string | null = null;
     for (const entry of parsed) {
       if (!Array.isArray(entry) || entry.length < 2) continue;
       const [mime, value] = entry;
       if (typeof mime !== "string" || typeof value !== "string") continue;
-      if (mime.trim().toLowerCase() === "text/plain") {
+      const normalizedMime = mime.trim().toLowerCase();
+      if (normalizedMime === "text/plain") {
         hasTextPlain = true;
         const trimmed = value.trim();
         if (trimmed && description === null) description = trimmed;
+      } else if (normalizedMime === "text/identifier") {
+        const trimmed = value.trim();
+        if (lightningAddress === null && isLightningAddress(trimmed)) {
+          lightningAddress = trimmed;
+        }
       }
     }
-    return hasTextPlain ? { description } : null;
+    return hasTextPlain ? { description, lightningAddress } : null;
   } catch {
     return null;
   }
@@ -521,6 +524,7 @@ export const fetchLnurlPayPreview = async (
     callback,
     commentAllowed,
     description: parsedMetadata.description,
+    lightningAddress: parsedMetadata.lightningAddress,
     maxSendableMsat,
     maxSendableSat,
     metadataRaw,
@@ -635,6 +639,8 @@ export const fetchLnurlInvoiceForTarget = async (
   }
 
   return {
+    lightningAddress:
+      parseLnurlPayMetadata(metadataRaw)?.lightningAddress ?? null,
     pr,
     successAction: parseLnurlPaySuccessAction(invoiceJson.successAction),
   };
