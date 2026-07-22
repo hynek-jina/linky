@@ -69,6 +69,7 @@ import {
   consumePendingNativeNotificationRoute,
   NATIVE_DEEP_LINK_EVENT,
   NATIVE_NOTIFICATION_OPEN_EVENT,
+  NATIVE_PUSH_ACTION_EVENT,
   startNativeNfcWrite,
   supportsNativeNfcWrite,
 } from "../platform/nativeBridge";
@@ -323,6 +324,10 @@ import {
   buildTopbarRight,
   buildTopbarTitle,
 } from "./lib/topbarConfig";
+import {
+  readNotificationOpenData,
+  unwrapNotificationOpenValue,
+} from "./lib/notificationOpen";
 import type {
   ContactRowLike,
   LocalNostrMessage,
@@ -349,30 +354,10 @@ interface NotificationOpenTarget {
   outerEventId: string;
   recipientPubkey: string;
   relayHints: string[];
+  senderPubkey: string | null;
 }
 
 const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
-
-const unwrapNotificationOpenValue = (value: unknown): unknown => {
-  if (typeof value !== "string") {
-    return value;
-  }
-
-  const normalized = value.trim();
-  if (!normalized) {
-    return null;
-  }
-
-  if (!(normalized.startsWith("{") && normalized.endsWith("}"))) {
-    return normalized;
-  }
-
-  try {
-    return JSON.parse(normalized);
-  } catch {
-    return normalized;
-  }
-};
 
 const readNotificationOpenRoute = (value: unknown): string | null => {
   const source = unwrapNotificationOpenValue(value);
@@ -381,12 +366,20 @@ const readNotificationOpenRoute = (value: unknown): string | null => {
     return normalized || null;
   }
 
-  const normalized = String(readObjectField(source, "route") ?? "").trim();
+  const notification = unwrapNotificationOpenValue(
+    readObjectField(source, "notification"),
+  );
+  const data = unwrapNotificationOpenValue(
+    readObjectField(notification, "data") ?? readObjectField(source, "data"),
+  );
+  const normalized = String(
+    readObjectField(source, "route") ?? readObjectField(data, "route") ?? "",
+  ).trim();
   return normalized || null;
 };
 
 const readNotificationRelayHints = (value: unknown): string[] => {
-  const source = unwrapNotificationOpenValue(value);
+  const source = readNotificationOpenData(value);
   if (!Array.isArray(source)) {
     return [];
   }
@@ -423,6 +416,9 @@ const readNotificationOpenTarget = (
   const relayHints = readNotificationRelayHints(
     readObjectField(source, "relayHints"),
   );
+  const senderPubkey = normalizePubkeyHex(
+    readObjectField(source, "senderPubkey"),
+  );
 
   if (!outerEventId || !recipientPubkey) {
     return null;
@@ -432,6 +428,7 @@ const readNotificationOpenTarget = (
     outerEventId,
     recipientPubkey,
     relayHints,
+    senderPubkey,
   };
 };
 
@@ -2533,6 +2530,9 @@ export const useAppShellComposition = () => {
     upsert,
     visibleOwnerIds: contactsVisibleOwnerIds,
   });
+
+  const contactsLatestRef = React.useRef(contacts);
+  contactsLatestRef.current = contacts;
 
   React.useEffect(() => {
     const records = [];
@@ -9129,6 +9129,7 @@ export const useAppShellComposition = () => {
         return false;
       }
 
+      let openedFromNotificationData = false;
       try {
         const decoded = nip19.decode(currentNsec);
         if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
@@ -9143,6 +9144,41 @@ export const useAppShellComposition = () => {
         if (target.recipientPubkey !== myPubHex) {
           return false;
         }
+
+        const findKnownContact = (peerPubkey: string) =>
+          contactsLatestRef.current.find((contact) => {
+            const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+            if (!normalizedNpub) {
+              return false;
+            }
+
+            try {
+              const decodedContact = nip19.decode(normalizedNpub);
+              return (
+                decodedContact.type === "npub" &&
+                typeof decodedContact.data === "string" &&
+                normalizePubkeyHex(decodedContact.data) === peerPubkey
+              );
+            } catch {
+              return false;
+            }
+          }) ?? null;
+
+        const openKnownNotificationContact = (peerPubkey: string): boolean => {
+          const knownContact = findKnownContact(peerPubkey);
+          const knownContactId = String(knownContact?.id ?? "").trim();
+          if (!knownContactId) {
+            return false;
+          }
+
+          setPendingDeleteId(null);
+          navigateTo({ route: "chat", id: knownContactId });
+          return true;
+        };
+
+        openedFromNotificationData = target.senderPubkey
+          ? openKnownNotificationContact(target.senderPubkey)
+          : false;
 
         const relays = Array.from(
           new Set([...target.relayHints, ...nostrFetchRelays, ...NOSTR_RELAYS]),
@@ -9160,17 +9196,22 @@ export const useAppShellComposition = () => {
         );
         const wrap = wraps[0] ?? null;
         if (!wrap) {
-          return false;
+          return (
+            openedFromNotificationData ||
+            (target.senderPubkey
+              ? openKnownNotificationContact(target.senderPubkey)
+              : false)
+          );
         }
 
         const wrapId = String(wrap.id ?? "").trim();
         if (!wrapId) {
-          return false;
+          return openedFromNotificationData;
         }
 
         const inner = unwrapEvent(wrap, privBytes);
         if (!inner) {
-          return false;
+          return openedFromNotificationData;
         }
 
         const senderPub = normalizePubkeyHex(inner.pubkey);
@@ -9185,26 +9226,10 @@ export const useAppShellComposition = () => {
             ? senderPub
             : (pTags.find((pubkey) => pubkey !== myPubHex) ?? null);
         if (!peerPubkey) {
-          return false;
+          return openedFromNotificationData;
         }
 
-        const knownContact = contacts.find((contact) => {
-          const normalizedNpub = normalizeNpubIdentifier(contact.npub);
-          if (!normalizedNpub) {
-            return false;
-          }
-
-          try {
-            const decodedContact = nip19.decode(normalizedNpub);
-            return (
-              decodedContact.type === "npub" &&
-              typeof decodedContact.data === "string" &&
-              normalizePubkeyHex(decodedContact.data) === peerPubkey
-            );
-          } catch {
-            return false;
-          }
-        });
+        const knownContact = findKnownContact(peerPubkey);
 
         const contactId = knownContact
           ? String(knownContact.id ?? "").trim()
@@ -9453,12 +9478,11 @@ export const useAppShellComposition = () => {
         }
         return true;
       } catch {
-        return false;
+        return openedFromNotificationData;
       }
     },
     [
       appendLocalNostrMessage,
-      contacts,
       currentNsec,
       knownNostrMessageIdentityIndex,
       nostrFetchRelays,
@@ -9613,6 +9637,7 @@ export const useAppShellComposition = () => {
     };
 
     window.addEventListener(NATIVE_NOTIFICATION_OPEN_EVENT, onNotificationOpen);
+    window.addEventListener(NATIVE_PUSH_ACTION_EVENT, onNotificationOpen);
     const onServiceWorkerMessage = (event: MessageEvent) => {
       const data = event.data;
       if (typeof data !== "object" || data === null) {
@@ -9644,6 +9669,7 @@ export const useAppShellComposition = () => {
         NATIVE_NOTIFICATION_OPEN_EVENT,
         onNotificationOpen,
       );
+      window.removeEventListener(NATIVE_PUSH_ACTION_EVENT, onNotificationOpen);
     };
   }, [openNotificationChat]);
 

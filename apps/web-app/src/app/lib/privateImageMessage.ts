@@ -291,12 +291,11 @@ const uploadToBlossom = async (
         method: "PUT",
         headers: {
           Authorization: authHeader,
-          "Content-Type": "application/octet-stream",
-          "X-SHA-256": prepared.encryptedSha256,
         },
-        body: new Blob([copyToArrayBuffer(prepared.encryptedBytes)], {
-          type: "application/octet-stream",
-        }),
+        // The signed Blossom authorization already scopes the upload to this
+        // hash. Keeping the body untyped also keeps mobile Safari/WebView's
+        // CORS preflight to the explicitly allowed Authorization header.
+        body: copyToArrayBuffer(prepared.encryptedBytes),
       });
 
       if (!response.ok) {

@@ -7,6 +7,7 @@ import {
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import {
   getNativeNotificationPermissionState,
+  NATIVE_PUSH_ACTION_EVENT,
   requestNativeNotificationPermission,
 } from "../platform/nativeBridge";
 import { isNativePlatform } from "../platform/runtime";
@@ -483,7 +484,7 @@ async function ensureNativePushListeners(): Promise<void> {
             notification,
           );
           window.dispatchEvent(
-            new CustomEvent("linky-native-push-action", {
+            new CustomEvent(NATIVE_PUSH_ACTION_EVENT, {
               detail: notification,
             }),
           );

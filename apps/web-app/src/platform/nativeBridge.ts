@@ -105,6 +105,7 @@ interface AndroidNfcBridge {
 export const NATIVE_DEEP_LINK_EVENT = "linky-native-deep-link";
 export const NATIVE_NFC_WRITE_EVENT = "linky-native-nfc-write";
 export const NATIVE_NOTIFICATION_OPEN_EVENT = "linky-native-notification-open";
+export const NATIVE_PUSH_ACTION_EVENT = "linky-native-push-action";
 
 export type NativeNfcWriteStatus =
   | "armed"

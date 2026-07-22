@@ -43,6 +43,7 @@ type PushNotificationData = {
   recipientNpub?: string;
   recipientPubkey?: string;
   relayHints?: string[];
+  senderPubkey?: string;
   type?: string;
 };
 
@@ -73,6 +74,7 @@ function readEnvelopeDebugMeta(
     ...(data.recipientNpub ? { recipientNpub: data.recipientNpub } : {}),
     ...(data.recipientPubkey ? { recipientPubkey: data.recipientPubkey } : {}),
     ...(data.relayHints ? { relayHints: data.relayHints } : {}),
+    ...(data.senderPubkey ? { senderPubkey: data.senderPubkey } : {}),
     ...(data.type ? { type: data.type } : {}),
   };
 }
@@ -104,6 +106,9 @@ function readPushNotificationData(value: unknown): PushNotificationData {
           ),
         }
       : {}),
+    ...(typeof value.senderPubkey === "string" && value.senderPubkey.trim()
+      ? { senderPubkey: value.senderPubkey }
+      : {}),
     ...(typeof value.type === "string" && value.type.trim().length > 0
       ? { type: value.type }
       : {}),
@@ -120,6 +125,7 @@ function buildNotificationOpenDetail(
     ...(data.recipientNpub ? { recipientNpub: data.recipientNpub } : {}),
     ...(data.recipientPubkey ? { recipientPubkey: data.recipientPubkey } : {}),
     ...(data.relayHints ? { relayHints: data.relayHints } : {}),
+    ...(data.senderPubkey ? { senderPubkey: data.senderPubkey } : {}),
     ...(data.type ? { type: data.type } : {}),
   };
 }
@@ -677,7 +683,12 @@ self.addEventListener("push", (event) => {
       const options: NotificationOptions = {
         badge: "/pwa-192x192.png",
         body: notificationBody,
-        data,
+        data: {
+          ...data,
+          ...(decryptedMessage
+            ? { senderPubkey: decryptedMessage.senderPub }
+            : {}),
+        },
         icon: "/pwa-192x192.png",
         requireInteraction: false,
         tag: data.outerEventId ?? "linky-inbox",
