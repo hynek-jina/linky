@@ -21,6 +21,7 @@ import android.util.Log;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.activity.OnBackPressedCallback;
 import androidx.core.app.ActivityCompat;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
@@ -74,6 +75,12 @@ public class MainActivity extends BridgeActivity {
 	private DecoratedBarcodeView nativeQrScannerView;
 	private View nativeQrScannerOverlay;
 	private boolean nativeQrScannerOpen = false;
+	private final OnBackPressedCallback nativeQrScannerBackCallback = new OnBackPressedCallback(false) {
+		@Override
+		public void handleOnBackPressed() {
+			stopNativeQrScanner(true);
+		}
+	};
 	private final BarcodeCallback nativeQrBarcodeCallback = new BarcodeCallback() {
 		@Override
 		public void barcodeResult(BarcodeResult result) {
@@ -123,6 +130,7 @@ public class MainActivity extends BridgeActivity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		activeInstanceRef = new WeakReference<>(this);
+		getOnBackPressedDispatcher().addCallback(this, nativeQrScannerBackCallback);
 
 		bridgePreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 		nfcAdapter = NfcAdapter.getDefaultAdapter(this);
@@ -314,16 +322,6 @@ public class MainActivity extends BridgeActivity {
 	}
 
 	@Override
-	public void onBackPressed() {
-		if (nativeQrScannerOpen) {
-			stopNativeQrScanner(true);
-			return;
-		}
-
-		super.onBackPressed();
-	}
-
-	@Override
 	public void onRequestPermissionsResult(
 		int requestCode,
 		@NonNull String[] permissions,
@@ -374,6 +372,7 @@ public class MainActivity extends BridgeActivity {
 		}
 
 		nativeQrScannerOpen = true;
+		nativeQrScannerBackCallback.setEnabled(true);
 		lastNativeQrValue = null;
 		lastNativeQrScanAtMs = 0L;
 		nativeQrScannerOverlay.setVisibility(View.VISIBLE);
@@ -416,6 +415,7 @@ public class MainActivity extends BridgeActivity {
 		}
 
 		nativeQrScannerOpen = false;
+		nativeQrScannerBackCallback.setEnabled(false);
 		lastNativeQrValue = null;
 		lastNativeQrScanAtMs = 0L;
 
