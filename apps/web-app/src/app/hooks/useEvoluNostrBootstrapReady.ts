@@ -16,6 +16,7 @@ interface UseEvoluNostrBootstrapReadyParams {
   quietWindowMs?: number;
   reactionsSnapshot: ReadonlyArray<object>;
   tokensSnapshot: ReadonlyArray<object>;
+  transactionsSnapshot: ReadonlyArray<object>;
 }
 
 /**
@@ -37,6 +38,7 @@ export const useEvoluNostrBootstrapReady = ({
   quietWindowMs = DEFAULT_QUIET_WINDOW_MS,
   reactionsSnapshot,
   tokensSnapshot,
+  transactionsSnapshot,
 }: UseEvoluNostrBootstrapReadyParams): boolean => {
   const [isOnline, setIsOnline] = React.useState(
     () => typeof navigator === "undefined" || navigator.onLine !== false,
@@ -111,6 +113,7 @@ export const useEvoluNostrBootstrapReady = ({
     reactionsSnapshot,
     releasedOwnerKey,
     tokensSnapshot,
+    transactionsSnapshot,
   ]);
 
   return (

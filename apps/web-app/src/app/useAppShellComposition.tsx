@@ -284,6 +284,11 @@ import {
 import type { AppNostrPool } from "./lib/nostrPool";
 import { getSharedAppNostrPool } from "./lib/nostrPool";
 import {
+  advanceHistoricalOwnerBootstrapState,
+  getPendingHistoricalOwnerIds,
+  type HistoricalOwnerBootstrapState,
+} from "./lib/historicalOwnerBootstrap";
+import {
   publishSingleWrappedWithRetry as publishSingleWrappedWithRetryBase,
   publishWrappedWithRetry as publishWrappedWithRetryBase,
 } from "./lib/nostrPublishRetry";
@@ -2180,10 +2185,9 @@ export const useAppShellComposition = () => {
     contactsVisibleOwnerIds,
     identityOwnerId,
     identitySyncOwner,
+    historicalBootstrapSyncOwners,
     legacyIdentitiesOwnerId,
-    legacyIdentitiesSyncOwner,
     legacyMessagesIdentityOwnerId,
-    legacyMessagesIdentitySyncOwner,
     metaOwnerId,
     metaSyncOwner,
     messagesBackupOwnerId,
@@ -2204,6 +2208,7 @@ export const useAppShellComposition = () => {
     rotateMessagesOwnerIsBusy,
     rotateTransactionsOwnerIsBusy,
     transactionsBackupOwnerId,
+    transactionsBootstrapSnapshot,
     transactionsOwnerEditsUntilRotation,
     transactionsOwnerId,
     transactionsOwnerIndex,
@@ -2226,16 +2231,75 @@ export const useAppShellComposition = () => {
   useOwner(transactionsSyncOwner);
   useOwner(metaSyncOwner);
   useOwner(identitySyncOwner);
-  useOwner(
-    legacyIdentitiesSyncOwner?.id === transactionsSyncOwner?.id
-      ? null
-      : legacyIdentitiesSyncOwner,
+
+  const historicalOwnerSetsReady = isSeedLogin
+    ? cashuVisibleOwnerIds.length === cashuOwnerIndex + 1 &&
+      contactsVisibleOwnerIds.length === contactsOwnerIndex + 1 &&
+      messagesVisibleOwnerIds.length === messagesOwnerIndex + 1 &&
+      transactionsVisibleOwnerIds.length === transactionsOwnerIndex + 1
+    : true;
+  const historicalOwnerBootstrapLoginKey = isSeedLogin
+    ? String(metaOwnerId ?? "").trim()
+    : "";
+  const activeRotatingOwnerIds = React.useMemo(
+    () =>
+      [cashuOwnerId, contactsOwnerId, messagesOwnerId, transactionsOwnerId]
+        .map((ownerId) => String(ownerId ?? "").trim())
+        .filter(Boolean),
+    [cashuOwnerId, contactsOwnerId, messagesOwnerId, transactionsOwnerId],
   );
-  useOwner(
-    legacyMessagesIdentitySyncOwner?.id === messagesSyncOwner?.id
-      ? null
-      : legacyMessagesIdentitySyncOwner,
-  );
+  const [historicalOwnerBootstrapState, setHistoricalOwnerBootstrapState] =
+    React.useState<HistoricalOwnerBootstrapState>({
+      loginKey: "",
+      ownerIds: [],
+    });
+
+  React.useEffect(() => {
+    setHistoricalOwnerBootstrapState((previous) =>
+      advanceHistoricalOwnerBootstrapState(
+        previous,
+        historicalOwnerBootstrapLoginKey,
+        activeRotatingOwnerIds,
+      ),
+    );
+  }, [activeRotatingOwnerIds, historicalOwnerBootstrapLoginKey]);
+
+  const historicalPendingSyncOwners = React.useMemo(() => {
+    const pendingOwnerIds = new Set(
+      getPendingHistoricalOwnerIds(
+        historicalBootstrapSyncOwners.map((owner) => String(owner.id)),
+        historicalOwnerBootstrapState,
+        historicalOwnerBootstrapLoginKey,
+      ),
+    );
+    return historicalBootstrapSyncOwners.filter((owner) =>
+      pendingOwnerIds.has(String(owner.id)),
+    );
+  }, [
+    historicalBootstrapSyncOwners,
+    historicalOwnerBootstrapLoginKey,
+    historicalOwnerBootstrapState,
+  ]);
+
+  React.useEffect(() => {
+    if (
+      !historicalOwnerBootstrapLoginKey ||
+      !historicalOwnerSetsReady ||
+      historicalPendingSyncOwners.length === 0
+    )
+      return;
+
+    const stopUsingOwners = historicalPendingSyncOwners.map((owner) =>
+      evolu.useOwner(owner),
+    );
+    return () => {
+      for (const stopUsingOwner of stopUsingOwners) stopUsingOwner();
+    };
+  }, [
+    historicalOwnerBootstrapLoginKey,
+    historicalOwnerSetsReady,
+    historicalPendingSyncOwners,
+  ]);
 
   // Default mint cross-tab + cross-device sync via Evolu `ownerMeta`.
   //
@@ -3314,7 +3378,7 @@ export const useAppShellComposition = () => {
         messagesOwnerId &&
         metaOwnerId &&
         transactionsOwnerId,
-      )
+      ) && historicalOwnerSetsReady
     : Boolean(appOwnerId);
   const evoluNostrOwnerKey = React.useMemo(() => {
     if (!currentNpub || !evoluOwnersReadyForNostr) return "";
@@ -3359,7 +3423,32 @@ export const useAppShellComposition = () => {
     ownerKey: evoluNostrOwnerKey,
     reactionsSnapshot: nostrReactionsLocal,
     tokensSnapshot: cashuTokensAll,
+    transactionsSnapshot: transactionsBootstrapSnapshot,
   });
+
+  React.useEffect(() => {
+    if (
+      !nostrBootstrapReady ||
+      !historicalOwnerBootstrapLoginKey ||
+      historicalPendingSyncOwners.length === 0
+    )
+      return;
+
+    const completedOwnerIds = historicalPendingSyncOwners.map((owner) =>
+      String(owner.id),
+    );
+    setHistoricalOwnerBootstrapState((previous) => {
+      return advanceHistoricalOwnerBootstrapState(
+        previous,
+        historicalOwnerBootstrapLoginKey,
+        completedOwnerIds,
+      );
+    });
+  }, [
+    historicalOwnerBootstrapLoginKey,
+    historicalPendingSyncOwners,
+    nostrBootstrapReady,
+  ]);
 
   const {
     canSaveNewRelay,

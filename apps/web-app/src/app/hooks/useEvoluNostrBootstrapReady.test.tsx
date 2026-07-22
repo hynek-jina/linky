@@ -33,6 +33,7 @@ const Harness = ({
     quietWindowMs: 50,
     reactionsSnapshot: EMPTY_SNAPSHOT,
     tokensSnapshot: EMPTY_SNAPSHOT,
+    transactionsSnapshot: EMPTY_SNAPSHOT,
   });
   onReady(ready);
   return null;
