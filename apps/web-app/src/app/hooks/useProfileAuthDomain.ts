@@ -1,5 +1,6 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
+import { ACTIVE_NOSTR_IDENTITY_ROW_ID } from "../lib/nostrIdentitySync";
 import {
   cycleGeneratedAvatar,
   deriveDefaultProfile,
@@ -180,10 +181,6 @@ const resetStoredOwnerRotationState = (): void => {
     // ignore storage unavailability
   }
 };
-
-const ACTIVE_NOSTR_IDENTITY_ROW_ID = Evolu.createIdFromString<"NostrIdentity">(
-  "active-nostr-identity",
-);
 
 export const useProfileAuthDomain = ({
   appendIdentityChangeNoticesRef,
@@ -453,6 +450,7 @@ export const useProfileAuthDomain = ({
       options?: {
         identitySource?: NostrIdentitySource;
         invalidMessageKey?: string;
+        persistSyncedIdentity?: boolean;
         recordChatNotice?: boolean;
         switchedAtSec?: number | null;
       },
@@ -505,12 +503,14 @@ export const useProfileAuthDomain = ({
         switchedAtSec,
       });
 
-      await upsertActiveNostrIdentity(
-        raw,
-        normalizedSlip39,
-        identitySource,
-        switchedAtSec,
-      );
+      if (options?.persistSyncedIdentity !== false) {
+        await upsertActiveNostrIdentity(
+          raw,
+          normalizedSlip39,
+          identitySource,
+          switchedAtSec,
+        );
+      }
 
       if (shouldRecordChatNotice) {
         appendIdentityChangeNoticesRef.current?.({
@@ -916,6 +916,9 @@ export const useProfileAuthDomain = ({
         await setIdentityFromNsecAndReload(derived.nsec, normalizedSlip39, {
           identitySource: "derived",
           invalidMessageKey: "onboardingInvalidSeed",
+          // Do not overwrite a custom identity that may still be syncing from
+          // the legacy messages owner lane on this newly restored device.
+          persistSyncedIdentity: false,
           switchedAtSec: null,
         });
       } finally {

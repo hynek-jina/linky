@@ -174,6 +174,10 @@ import { useRoutingViewComposition } from "./hooks/composition/useRoutingViewCom
 import { useSystemSettingsComposition } from "./hooks/composition/useSystemSettingsComposition";
 import { useContactEditor } from "./hooks/contacts/useContactEditor";
 import { useVisibleContacts } from "./hooks/contacts/useVisibleContacts";
+import {
+  ACTIVE_NOSTR_IDENTITY_ROW_ID,
+  resolveSyncedNostrIdentity,
+} from "./lib/nostrIdentitySync";
 import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardingProgress";
 import { useMainMenuState } from "./hooks/layout/useMainMenuState";
 import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
@@ -2584,53 +2588,50 @@ export const useAppShellComposition = () => {
   const nostrIdentityRows = useQuery(nostrIdentityQuery);
 
   const activeIdentityOwnerId = String(identityOwnerId ?? "").trim();
-  const readOwnerId = React.useCallback((row: unknown): string => {
-    if (typeof row !== "object" || row === null) return "";
-    if (!("ownerId" in row)) return "";
-    const ownerId = row.ownerId;
-    return typeof ownerId === "string" ? ownerId.trim() : "";
-  }, []);
-  const readIdentityText = React.useCallback(
-    (row: unknown, key: "nsec" | "npub" | "source"): string => {
-      if (typeof row !== "object" || row === null) return "";
-      const value = Reflect.get(row, key);
-      return typeof value === "string" ? value.trim() : "";
-    },
-    [],
+  const legacyMessagesOwnerIds = React.useMemo(
+    () =>
+      new Set(
+        messagesVisibleOwnerIds
+          .map((ownerId) => String(ownerId ?? "").trim())
+          .filter(Boolean),
+      ),
+    [messagesVisibleOwnerIds],
   );
-  const readIdentitySwitchedAtSec = React.useCallback((row: unknown) => {
-    if (typeof row !== "object" || row === null) return null;
-    const value = Number(Reflect.get(row, "switchedAtSec"));
-    if (!Number.isFinite(value) || value <= 0) return null;
-    return Math.trunc(value);
-  }, []);
+  const syncedNostrIdentityResolution = React.useMemo(
+    () =>
+      resolveSyncedNostrIdentity(
+        nostrIdentityRows,
+        activeIdentityOwnerId,
+        legacyMessagesOwnerIds,
+      ),
+    [activeIdentityOwnerId, legacyMessagesOwnerIds, nostrIdentityRows],
+  );
+  const activeSyncedNostrIdentity = syncedNostrIdentityResolution.identity;
 
-  const activeSyncedNostrIdentity = React.useMemo(() => {
-    if (!activeIdentityOwnerId) return null;
+  React.useEffect(() => {
+    if (!syncedNostrIdentityResolution.shouldMigrateLegacyIdentity) return;
+    if (!activeSyncedNostrIdentity || !identityOwnerId) return;
 
-    const row = nostrIdentityRows.find(
-      (candidate) => readOwnerId(candidate) === activeIdentityOwnerId,
+    upsert(
+      "nostrIdentity",
+      {
+        id: ACTIVE_NOSTR_IDENTITY_ROW_ID,
+        nsec: activeSyncedNostrIdentity.nsec,
+        source: activeSyncedNostrIdentity.source,
+        ...(activeSyncedNostrIdentity.npub
+          ? { npub: activeSyncedNostrIdentity.npub }
+          : {}),
+        ...(activeSyncedNostrIdentity.switchedAtSec
+          ? { switchedAtSec: activeSyncedNostrIdentity.switchedAtSec }
+          : {}),
+      },
+      { ownerId: identityOwnerId },
     );
-    if (!row) return null;
-
-    const nsec = readIdentityText(row, "nsec");
-    if (!nsec) return null;
-
-    const source: "custom" | "derived" =
-      readIdentityText(row, "source") === "custom" ? "custom" : "derived";
-
-    return {
-      nsec,
-      npub: readIdentityText(row, "npub") || null,
-      source,
-      switchedAtSec: readIdentitySwitchedAtSec(row),
-    };
   }, [
-    activeIdentityOwnerId,
-    nostrIdentityRows,
-    readIdentitySwitchedAtSec,
-    readIdentityText,
-    readOwnerId,
+    activeSyncedNostrIdentity,
+    identityOwnerId,
+    syncedNostrIdentityResolution.shouldMigrateLegacyIdentity,
+    upsert,
   ]);
 
   React.useEffect(() => {

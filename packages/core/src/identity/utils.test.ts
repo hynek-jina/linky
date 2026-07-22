@@ -102,6 +102,9 @@ describe("identity utils", () => {
     const cashu = await Effect.runPromise(
       deriveOwnerKeyFromMasterSecret(TEST_SEED, "cashu"),
     );
+    const identity = await Effect.runPromise(
+      deriveOwnerKeyFromMasterSecret(TEST_SEED, "identity"),
+    );
     const messages = await Effect.runPromise(
       deriveOwnerKeyFromMasterSecret(TEST_SEED, "messages"),
     );
@@ -110,6 +113,7 @@ describe("identity utils", () => {
     expect(hex(contacts)).toBe(EXPECTED.storageContactsOwnerKey0);
     expect(hex(cashu)).toBe(EXPECTED.storageCashuOwnerKey0);
     expect(hex(messages)).toBe(EXPECTED.storageMessagesOwnerKey0);
+    expect(identity).not.toEqual(messages);
   });
 
   it("encodes valid bech32 nsec/npub", async () => {
