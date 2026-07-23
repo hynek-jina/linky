@@ -11,6 +11,7 @@ import type {
 interface UseContactsGuideParams {
   cashuBalance: number;
   contacts: readonly ContactRowLike[];
+  contactsOnboardingHasBackedUpKeys: boolean;
   contactsOnboardingHasPaid: boolean;
   contactsOnboardingHasSentMessage: boolean;
   openNewContactPage: () => void;
@@ -33,6 +34,7 @@ const getRouteContactId = (route: Route): ContactId | null => {
 export const useContactsGuide = ({
   cashuBalance,
   contacts,
+  contactsOnboardingHasBackedUpKeys,
   contactsOnboardingHasPaid,
   contactsOnboardingHasSentMessage,
   openNewContactPage,
@@ -90,6 +92,10 @@ export const useContactsGuide = ({
 
       if (kind === "contacts") navigateTo({ route: "contacts" });
       if (kind === "wallet") navigateTo({ route: "wallet" });
+      if (kind === "settings") navigateTo({ route: "settings" });
+      if (kind === "settingsMasterKeys") {
+        navigateTo({ route: "settingsMasterKeys" });
+      }
       if (kind === "advanced") navigateTo({ route: "advanced" });
       if (kind === "topup") navigateTo({ route: "topup" });
       if (kind === "topupInvoice") navigateTo({ route: "topupInvoice" });
@@ -207,10 +213,17 @@ export const useContactsGuide = ({
         },
         {
           id: "backup_keys_2",
+          selector: '[data-guide="open-master-keys"]',
+          titleKey: "guideBackupKeysStep2Title",
+          bodyKey: "guideBackupKeysStep2Body",
+          ensure: () => ensureRoute("settings"),
+        },
+        {
+          id: "backup_keys_3",
           selector: '[data-guide="copy-seed"]',
           titleKey: "guideBackupKeysStep3Title",
           bodyKey: "guideBackupKeysStep3Body",
-          ensure: () => ensureRoute("settings"),
+          ensure: () => ensureRoute("settingsMasterKeys"),
         },
       ],
     };
@@ -239,9 +252,21 @@ export const useContactsGuide = ({
     };
   }, [contactsGuide, contactsGuideSteps]);
 
+  // Ensure the step's route only when the step becomes active. Re-running
+  // ensure on every route change would fight user navigation: following the
+  // step instruction (or pressing the system Back button) would immediately
+  // navigate back to the previous step's route before the step advances.
+  const contactsGuideLastEnsuredStepIdRef = React.useRef<string | null>(null);
+
   React.useEffect(() => {
     const active = contactsGuideActiveStep?.step ?? null;
-    if (!contactsGuide || !active) return;
+    if (!contactsGuide || !active) {
+      contactsGuideLastEnsuredStepIdRef.current = null;
+      return;
+    }
+
+    if (contactsGuideLastEnsuredStepIdRef.current === active.id) return;
+    contactsGuideLastEnsuredStepIdRef.current = active.id;
 
     try {
       active.ensure?.();
@@ -321,6 +346,23 @@ export const useContactsGuide = ({
     }
     if (id === "message_2" && transition("contact", "chat")) goToStep(2);
 
+    if (id === "backup_keys_1" && transition("contacts", "settings")) {
+      goToStep(1);
+    }
+    if (
+      id === "backup_keys_2" &&
+      transition("settings", "settingsMasterKeys")
+    ) {
+      goToStep(2);
+    }
+
+    if (
+      contactsGuide.task === "backup_keys" &&
+      contactsOnboardingHasBackedUpKeys
+    ) {
+      stopContactsGuide();
+    }
+
     if (contactsGuide.task === "topup" && cashuBalance > 0) stopContactsGuide();
     if (contactsGuide.task === "pay" && contactsOnboardingHasPaid) {
       stopContactsGuide();
@@ -332,6 +374,7 @@ export const useContactsGuide = ({
     cashuBalance,
     contactsGuide,
     contactsGuideActiveStep?.step,
+    contactsOnboardingHasBackedUpKeys,
     contactsOnboardingHasPaid,
     contactsOnboardingHasSentMessage,
     route,
