@@ -479,7 +479,7 @@ export const en = {
   guideBackupKeysStep2Body: "Open Advanced settings.",
   guideBackupKeysStep3Title: "Backup keys",
   guideBackupKeysStep3Body:
-    "Copy your Nostr private key and save it somewhere safe, like your notes.",
+    "Copy your masterkeys and save them somewhere safe.",
   contactsOnboardingTaskAddContact: "Add  contact",
   contactsOnboardingTaskBackupKeys: "Back up keys",
   contactsOnboardingTaskTopup: "Receive bitcoin",
