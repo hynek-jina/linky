@@ -14,6 +14,7 @@ import { useContactsGuide } from "./guide/useContactsGuide";
 interface UseGuideScannerDomainParams {
   cashuBalance: number;
   contacts: readonly ContactRowLike[];
+  contactsOnboardingHasBackedUpKeys: boolean;
   contactsOnboardingHasPaid: boolean;
   contactsOnboardingHasSentMessage: boolean;
   openNewContactPage: () => void;
@@ -51,6 +52,7 @@ const formatScanDebugDetails = (details?: Record<string, unknown>) => {
 export const useGuideScannerDomain = ({
   cashuBalance,
   contacts,
+  contactsOnboardingHasBackedUpKeys,
   contactsOnboardingHasPaid,
   contactsOnboardingHasSentMessage,
   openNewContactPage,
@@ -62,6 +64,7 @@ export const useGuideScannerDomain = ({
   const contactsGuideDomain = useContactsGuide({
     cashuBalance,
     contacts,
+    contactsOnboardingHasBackedUpKeys,
     contactsOnboardingHasPaid,
     contactsOnboardingHasSentMessage,
     openNewContactPage,

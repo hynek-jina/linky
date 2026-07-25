@@ -6390,6 +6390,7 @@ export const useAppShellComposition = () => {
   } = useGuideScannerDomain({
     cashuBalance,
     contacts,
+    contactsOnboardingHasBackedUpKeys,
     contactsOnboardingHasPaid,
     contactsOnboardingHasSentMessage,
     openNewContactPage,

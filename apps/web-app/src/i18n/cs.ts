@@ -482,8 +482,7 @@ export const cs = {
   guideBackupKeysStep2Title: "Pokročilé",
   guideBackupKeysStep2Body: "Otevřete Pokročilé nastavení.",
   guideBackupKeysStep3Title: "Záloha klíče",
-  guideBackupKeysStep3Body:
-    "Zkopírujte svůj Nostr privátní klíč a uložte ho někam bezpečně, třeba do poznámek.",
+  guideBackupKeysStep3Body: "Zkopírujte své hlavní klíče a bezpečně je uložte.",
   contactsOnboardingTaskAddContact: "Přidat kontakt",
   contactsOnboardingTaskBackupKeys: "Zálohovat klíče",
   contactsOnboardingTaskTopup: "Přijmout bitcoin",

@@ -674,6 +674,7 @@ export function AdvancedPage({
           className="settings-row settings-link"
           onClick={() => navigateTo({ route: "settingsMasterKeys" })}
           disabled={!hasSeedMnemonic}
+          data-guide="open-master-keys"
         >
           <span className="settings-left">
             <span className="settings-icon" aria-hidden="true">

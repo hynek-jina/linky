@@ -101,7 +101,12 @@ export function MasterKeysPage({
           <span>{isVisible ? t("masterKeysHide") : t("masterKeysShow")}</span>
         </button>
 
-        <button type="button" onClick={copySeed} disabled={!hasSeedMnemonic}>
+        <button
+          type="button"
+          onClick={copySeed}
+          disabled={!hasSeedMnemonic}
+          data-guide="copy-seed"
+        >
           <Copy size={18} />
           <span>{t("copy")}</span>
         </button>
