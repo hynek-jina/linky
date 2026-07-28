@@ -478,6 +478,77 @@ describe("useInboxNotificationsSync", () => {
     });
   });
 
+  it("restores a terminal proxy-payment state even when bootstrap has not seen the offer yet", async () => {
+    const createdAt = Math.floor(Date.now() / 1e3);
+    const settledEvent = createLinkyBankPaymentOfferEvent({
+      amountSat: 80,
+      amountText: "80 sat",
+      clientId: "settled-client",
+      createdAt,
+      offerId: "offer-settled",
+      offererPublicKey: "me-pubkey-hex",
+      recipientPublicKey: "me-pubkey-hex",
+      senderPublicKey: "known-contact-pubkey",
+      status: "settled",
+    });
+    const wrapEvent = { id: "wrap-settled-offer" };
+    querySyncMock.mockResolvedValue([wrapEvent]);
+    subscribeMock.mockReturnValue({
+      close: vi.fn(async () => {}),
+    });
+    unwrapEventMock.mockReturnValue({
+      ...settledEvent,
+      id: "rumor-settled-offer",
+    });
+
+    const onBankPaymentOfferMessage = vi.fn();
+    const Harness = () => {
+      useInboxNotificationsSync({
+        appendLocalNostrMessage: vi.fn(() => "message-1"),
+        appendLocalNostrReaction: vi.fn(() => "reaction-1"),
+        contacts: [
+          {
+            id: "contact-bob",
+            name: "Bob",
+            npub: "npub-known",
+          },
+        ],
+        currentNsec: "nsec-test",
+        maybeShowPwaNotification: vi.fn(async () => {}),
+        nostrFetchRelays: [],
+        nostrMessageWrapIdsRef: { current: new Set<string>() },
+        nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
+        nostrMessagesRecent: [],
+        nostrReactionWrapIdsRef: { current: new Set<string>() },
+        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+        onBankPaymentOfferMessage,
+        pushToast: vi.fn(),
+        route: { kind: "contacts" },
+        setContactAttentionById: vi.fn(),
+        softDeleteLocalNostrReactionsByWrapIds: vi.fn(),
+        t: (key: string) => key,
+        updateLocalNostrMessage: vi.fn(),
+        updateLocalNostrReaction: vi.fn(),
+      });
+      return null;
+    };
+
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(<Harness />));
+    await flushEffects();
+    await flushEffects();
+
+    expect(onBankPaymentOfferMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contactId: "contact-bob",
+        content: settledEvent.content,
+        direction: "out",
+      }),
+    );
+
+    await act(async () => root.unmount());
+  });
+
   it("surfaces a declined proxy payment and opens the contact chat from the toast", async () => {
     const createdAt = Math.floor(Date.now() / 1e3);
     const originalOffer = createLinkyBankPaymentOfferEvent({

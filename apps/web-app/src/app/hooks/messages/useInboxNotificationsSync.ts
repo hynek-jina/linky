@@ -457,7 +457,6 @@ export const useInboxNotificationsSync = <
               const isTerminalOffer = offerInfo
                 ? isLinkyBankPaymentOfferTerminalStatus(offerInfo.status)
                 : false;
-              let hasKnownOffer = false;
               let hasTerminalKnownOffer = false;
               if (offerId) {
                 for (const message of bankPaymentOfferMessages) {
@@ -466,7 +465,6 @@ export const useInboxNotificationsSync = <
                   );
                   if (knownInfo?.offerId !== offerId) continue;
 
-                  hasKnownOffer = true;
                   if (isLinkyBankPaymentOfferTerminalStatus(knownInfo.status)) {
                     hasTerminalKnownOffer = true;
                     break;
@@ -517,10 +515,6 @@ export const useInboxNotificationsSync = <
                 isExpiredOffer ||
                 (!isTerminalOffer && hasTerminalKnownOffer)
               ) {
-                return;
-              }
-
-              if (isTerminalOffer && !hasKnownOffer) {
                 return;
               }
 
