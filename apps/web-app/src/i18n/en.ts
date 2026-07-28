@@ -634,11 +634,36 @@ export const en = {
   bankPaymentOfferCancel: "Cancel offer",
   bankPaymentOfferDetails: "Payment details",
   bankPaymentOfferMarkPaid: "I paid",
-  bankPaymentOfferSettle: "Confirm sats sent",
+  bankPaymentOfferSettle: "Confirm settlement",
+  bankPaymentOfferNotPaid: "Not paid",
   bankPaymentOfferAcceptedByOther: "Someone else accepted this offer.",
   bankPaymentOfferBackupRecipient: "This contact is kept as a backup.",
   bankPaymentOfferAllDeclined: "Nobody accepted the offer.",
+  bankPaymentOfferDeclinedNotification: "Payment was declined.",
   bankPaymentOfferExpired: "This phase has expired",
+  bankPaymentOfferExpiredTitle: "This offer has expired",
+  bankPaymentOfferExpiredDescription:
+    "This proxy payment offer is no longer valid.",
+  bankPaymentOfferIncomingTitle: "Proxy payment",
+  bankPaymentOfferIncomingDescription:
+    "Accept if you want to make a bank payment of {amount} for this contact.",
+  bankPaymentOfferRequestedBy: "{name} is requesting a payment",
+  bankPaymentOfferWaitingForSatsTitle: "Waiting for your sats",
+  bankPaymentOfferWaitingForSatsDescription:
+    "{name} will verify the bank payment and send you the sats.",
+  bankPaymentOfferAttachConfirmation: "Attach confirmation",
+  bankPaymentOfferBannerIncoming: "{name} requests a proxy payment {amount}",
+  bankPaymentOfferBannerOutgoing: "You requested a proxy payment {amount}",
+  bankPaymentOfferBannerAcceptedBy:
+    "{name} accepted the proxy payment {amount}",
+  bankPaymentOfferProgressTitle: "Proxy payment progress",
+  bankPaymentOfferProgressAcceptedInfo:
+    "Someone has already accepted the offer.",
+  bankPaymentOfferProgressAccept: "Offer accepted",
+  bankPaymentOfferProgressBankDetails: "Details",
+  bankPaymentOfferProgressBankPayment: "Fiat payment",
+  bankPaymentOfferProgressSats: "Bitcoin settlement",
+  bankPaymentOfferSendFunds: "Send funds",
   bankPaymentOfferTimeRemainingClock: "{minutes}:{seconds} remaining",
   bankPaymentOfferTimeRemainingHoursMinutes:
     "{hours} h {minutes} min remaining",

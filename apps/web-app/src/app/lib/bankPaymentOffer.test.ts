@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createLinkyBankPaymentOfferEvent,
   getLinkyBankPaymentOfferInfo,
+  isLinkyBankPaymentOfferExpired,
   shouldPushLinkyBankPaymentOfferStatus,
   type LinkyBankPaymentOfferStatus,
 } from "./bankPaymentOffer";
@@ -38,15 +39,38 @@ describe("bank payment offer notifications", () => {
     ).toBe(expectedText);
   });
 
-  it("only pushes actionable non-terminal offer states by default", () => {
+  it("pushes offer states that require the other party's attention", () => {
     expect(shouldPushLinkyBankPaymentOfferStatus("offered")).toBe(true);
     expect(shouldPushLinkyBankPaymentOfferStatus("accepted")).toBe(true);
     expect(shouldPushLinkyBankPaymentOfferStatus("bank_details_sent")).toBe(
       true,
     );
     expect(shouldPushLinkyBankPaymentOfferStatus("bank_paid")).toBe(true);
-    expect(shouldPushLinkyBankPaymentOfferStatus("declined")).toBe(false);
+    expect(shouldPushLinkyBankPaymentOfferStatus("declined")).toBe(true);
     expect(shouldPushLinkyBankPaymentOfferStatus("canceled")).toBe(false);
     expect(shouldPushLinkyBankPaymentOfferStatus("settled")).toBe(false);
+  });
+
+  it("recognizes an offer whose active phase has expired", () => {
+    const info = getLinkyBankPaymentOfferInfo(createOffer("offered").content);
+    expect(info).not.toBeNull();
+    if (!info) return;
+
+    expect(
+      isLinkyBankPaymentOfferExpired(info, 1_700_000_000, 1_700_000_299),
+    ).toBe(false);
+    expect(
+      isLinkyBankPaymentOfferExpired(info, 1_700_000_000, 1_700_000_300),
+    ).toBe(true);
+  });
+
+  it("does not label terminal offer states as expired", () => {
+    const info = getLinkyBankPaymentOfferInfo(createOffer("canceled").content);
+    expect(info).not.toBeNull();
+    if (!info) return;
+
+    expect(
+      isLinkyBankPaymentOfferExpired(info, 1_700_000_000, 1_800_000_000),
+    ).toBe(false);
   });
 });

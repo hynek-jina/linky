@@ -1,23 +1,19 @@
 import React from "react";
-import { Landmark, Share2 } from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useFiatRates } from "../app/hooks/useFiatRates";
 import { navigateTo } from "../hooks/useRouting";
 import type { FiatRates } from "../utils/displayAmounts";
-import { formatInteger } from "../utils/formatting";
-import {
-  openSpdPaymentInBank,
-  shareSpdPaymentQrJpeg,
-  tryParseSpdPayment,
-  type SpdPayment,
-} from "../utils/spdPayment";
+import { formatInteger, getInitials } from "../utils/formatting";
+import { tryParseSpdPayment, type SpdPayment } from "../utils/spdPayment";
 
 interface SpdPaymentPageProps {
   cashuBalanceAfterMelt: number;
+  initialOfferContactCount: number;
   offerContacts: {
     id?: unknown;
     name?: unknown;
     npub?: unknown;
+    pictureUrl?: unknown;
   }[];
   onRequestReimbursement: (args: {
     amountSat: number | null;
@@ -43,6 +39,26 @@ const getSpdField = (payment: SpdPayment, key: string): string =>
   String(payment.fields[key] ?? "").trim();
 
 const SATS_PER_BTC = 100_000_000;
+
+const getOfferContactKey = (contact: {
+  id?: unknown;
+  npub?: unknown;
+}): string => {
+  const id = String(contact.id ?? "").trim();
+  if (id) return `id:${id}`;
+  return `npub:${String(contact.npub ?? "").trim()}`;
+};
+
+const getInitialOfferContactKeys = (
+  contacts: SpdPaymentPageProps["offerContacts"],
+  count: number,
+): Set<string> =>
+  new Set(
+    contacts
+      .slice(0, Math.max(0, count))
+      .map(getOfferContactKey)
+      .filter(Boolean),
+  );
 
 const getRateForCurrency = (
   currency: string,
@@ -92,21 +108,6 @@ const getSpdAmountSat = (
   return Number.isFinite(amountSat) && amountSat > 0 ? amountSat : null;
 };
 
-const getOpenErrorText = (error: unknown, t: (key: string) => string) => {
-  if (error instanceof Error && error.name === "AbortError") {
-    return null;
-  }
-
-  const message = error instanceof Error ? error.message : "";
-  if (message === "spd-share-unavailable") {
-    return t("spdPaymentShareUnavailable");
-  }
-  if (message === "spd-service-worker-unavailable") {
-    return t("spdPaymentServiceWorkerUnavailable");
-  }
-  return t("spdPaymentOpenFailed");
-};
-
 const buildSpdRows = (
   payment: SpdPayment,
   t: (key: string) => string,
@@ -131,6 +132,7 @@ const buildSpdRows = (
 
 export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
   cashuBalanceAfterMelt,
+  initialOfferContactCount,
   offerContacts,
   onRequestReimbursement,
   spdPayload,
@@ -141,13 +143,39 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
   const fiatRates = useFiatRates();
   const [isRequestingOffer, setIsRequestingOffer] = React.useState(false);
   const [offerStatus, setOfferStatus] = React.useState<string | null>(null);
-  const [isOpening, setIsOpening] = React.useState(false);
-  const [isSharingJpeg, setIsSharingJpeg] = React.useState(false);
-  const [openError, setOpenError] = React.useState<string | null>(null);
+  const [hasEditedOfferContacts, setHasEditedOfferContacts] =
+    React.useState(false);
+  const previousSpdPayloadRef = React.useRef(spdPayload);
+  const [selectedOfferContactKeys, setSelectedOfferContactKeys] =
+    React.useState<Set<string>>(() =>
+      getInitialOfferContactKeys(offerContacts, initialOfferContactCount),
+    );
   const payment = React.useMemo(
     () => tryParseSpdPayment(spdPayload),
     [spdPayload],
   );
+  const selectedOfferContacts = React.useMemo(
+    () =>
+      offerContacts.filter((contact) =>
+        selectedOfferContactKeys.has(getOfferContactKey(contact)),
+      ),
+    [offerContacts, selectedOfferContactKeys],
+  );
+
+  React.useEffect(() => {
+    const paymentChanged = previousSpdPayloadRef.current !== spdPayload;
+    if (!paymentChanged && hasEditedOfferContacts) return;
+    previousSpdPayloadRef.current = spdPayload;
+    if (paymentChanged) setHasEditedOfferContacts(false);
+    setSelectedOfferContactKeys(
+      getInitialOfferContactKeys(offerContacts, initialOfferContactCount),
+    );
+  }, [
+    hasEditedOfferContacts,
+    initialOfferContactCount,
+    offerContacts,
+    spdPayload,
+  ]);
 
   if (!payment) {
     return (
@@ -170,7 +198,7 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
           : formatDisplayedAmountText(amountSat);
   const recipient = getSpdField(payment, "RN");
   const rows = buildSpdRows(payment, t);
-  const offerContactsCount = offerContacts.length;
+  const offerContactsCount = selectedOfferContacts.length;
   const hasEnoughCashuForProxy =
     amountSat !== null && amountSat <= cashuBalanceAfterMelt;
   const requestReimbursementLabel = !hasEnoughCashuForProxy
@@ -184,37 +212,9 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
             String(offerContactsCount),
           );
 
-  const openInBank = async () => {
-    if (isOpening) return;
-
-    setIsOpening(true);
-    setOpenError(null);
-    try {
-      await openSpdPaymentInBank(payment.payload);
-    } catch (error) {
-      setOpenError(getOpenErrorText(error, t));
-    } finally {
-      setIsOpening(false);
-    }
-  };
-
-  const openWithJpeg = async () => {
-    if (isSharingJpeg) return;
-
-    setIsSharingJpeg(true);
-    setOpenError(null);
-    try {
-      await shareSpdPaymentQrJpeg(payment.payload);
-    } catch (error) {
-      setOpenError(getOpenErrorText(error, t));
-    } finally {
-      setIsSharingJpeg(false);
-    }
-  };
-
   const requestReimbursement = async () => {
     if (
-      offerContacts.length === 0 ||
+      selectedOfferContacts.length === 0 ||
       !amountText ||
       !hasEnoughCashuForProxy ||
       isRequestingOffer
@@ -228,7 +228,7 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
       const sent = await onRequestReimbursement({
         amountSat,
         amountText,
-        contacts: offerContacts,
+        contacts: selectedOfferContacts,
         spdPayload: payment.payload,
       });
       if (sent) {
@@ -267,7 +267,7 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
         type="button"
         className="btn-wide bank-payment-request"
         disabled={
-          offerContacts.length === 0 ||
+          selectedOfferContacts.length === 0 ||
           !amountText ||
           !hasEnoughCashuForProxy ||
           isRequestingOffer
@@ -282,50 +282,60 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
           : requestReimbursementLabel}
       </button>
 
-      <div className="bank-payment-open-actions">
-        <button
-          type="button"
-          className="btn-wide secondary bank-payment-open"
-          disabled={isOpening}
-          onClick={() => {
-            void openInBank();
-          }}
-        >
-          <span className="btn-label-with-icon">
-            <span className="btn-label-icon" aria-hidden="true">
-              {isOpening ? <span className="btn-spinner" /> : <Landmark />}
-            </span>
-            <span>
-              {isOpening ? t("spdPaymentOpening") : t("spdPaymentOpenInBank")}
-            </span>
-          </span>
-        </button>
+      {offerContacts.length > 0 ? (
+        <div className="bank-payment-offer-contact-list">
+          {offerContacts.map((contact) => {
+            const key = getOfferContactKey(contact);
+            const name = String(contact.name ?? "").trim();
+            const npub = String(contact.npub ?? "").trim();
+            const pictureUrl = String(contact.pictureUrl ?? "").trim();
+            const isSelected = selectedOfferContactKeys.has(key);
 
-        <button
-          type="button"
-          className="btn-wide secondary bank-payment-open"
-          disabled={isSharingJpeg}
-          onClick={() => {
-            void openWithJpeg();
-          }}
-        >
-          <span className="btn-label-with-icon">
-            <span className="btn-label-icon" aria-hidden="true">
-              {isSharingJpeg ? <span className="btn-spinner" /> : <Share2 />}
-            </span>
-            <span>
-              {isSharingJpeg
-                ? t("spdPaymentOpening")
-                : t("spdPaymentOpenWithJpg")}
-            </span>
-          </span>
-        </button>
-      </div>
+            return (
+              <button
+                type="button"
+                className={
+                  isSelected
+                    ? "bank-payment-offer-contact is-selected"
+                    : "bank-payment-offer-contact"
+                }
+                key={key}
+                aria-label={name || npub || t("contact")}
+                aria-pressed={isSelected}
+                onClick={() => {
+                  setHasEditedOfferContacts(true);
+                  setSelectedOfferContactKeys((current) => {
+                    const next = new Set(current);
+                    if (next.has(key)) next.delete(key);
+                    else next.add(key);
+                    return next;
+                  });
+                }}
+              >
+                <span className="contact-avatar" aria-hidden="true">
+                  {pictureUrl ? (
+                    <img
+                      src={pictureUrl}
+                      alt=""
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="contact-avatar-fallback">
+                      {getInitials(name)}
+                    </span>
+                  )}
+                </span>
+                <span className="contact-name">{name || t("contact")}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       {offerStatus ? (
         <p className="muted bank-payment-offer-status">{offerStatus}</p>
       ) : null}
-      {openError ? <p className="bank-payment-error">{openError}</p> : null}
     </section>
   );
 };

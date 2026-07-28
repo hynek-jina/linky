@@ -218,6 +218,7 @@ export type NostrMessageSummaryRow = {
 export type RouteWithOptionalId = {
   id?: ContactIdLike;
   kind: string;
+  offerId?: string;
 };
 
 export type MintUrlInput =

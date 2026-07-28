@@ -19,6 +19,9 @@ interface BuildPeopleRoutePropsParams {
   contactPayMethod: PeopleRoutesProps["contactPayProps"]["contactPayMethod"];
   addNewContactFromSearchResult: PeopleRoutesProps["contactNewProps"]["addNewContactFromSearchResult"];
   contactSuggestions: PeopleRoutesProps["contactNewProps"]["contactSuggestions"];
+  contacts: ReturnType<
+    PeopleRoutesProps["bankPaymentOfferDetailProps"]
+  >["contacts"];
   copyText: PeopleRoutesProps["profileProps"]["copyText"];
   currentNpub: PeopleRoutesProps["profileProps"]["currentNpub"];
   cycleProfileAvatarControl: PeopleRoutesProps["profileProps"]["cycleProfileAvatarControl"];
@@ -128,6 +131,7 @@ export const buildPeopleRouteProps = ({
   contactPayMethod,
   addNewContactFromSearchResult,
   contactSuggestions,
+  contacts,
   copyText,
   currentNpub,
   cycleProfileAvatarControl,
@@ -227,9 +231,13 @@ export const buildPeopleRouteProps = ({
       return {
         bankPaymentOfferMessages,
         chatId: route.chatId,
+        chatOwnPubkeyHex,
+        contacts,
         offerId: route.offerId,
         onCopyText: copyText,
         onRespondBankPaymentOffer,
+        onSendChatImage: sendChatImage,
+        onSettleBankPaymentOffer,
         t,
       };
     },

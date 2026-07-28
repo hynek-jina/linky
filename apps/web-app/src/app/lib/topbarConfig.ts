@@ -1,6 +1,7 @@
 import type { ContactId } from "../../evolu";
-import { navigateTo } from "../../hooks/useRouting";
+import { navigateTo, returnFromBankPaymentOffer } from "../../hooks/useRouting";
 import type { Route } from "../../types/route";
+import { setLinkyBankPaymentOfferMinimized } from "./bankPaymentOffer";
 import type { TopbarButton } from "../types/appTypes";
 
 interface BuildTopbarArgs {
@@ -142,9 +143,12 @@ export const buildTopbar = ({
 
   if (route.kind === "bankPaymentOffer") {
     return {
-      icon: "<",
+      icon: "×",
       label: t("close"),
-      onClick: () => navigateTo({ route: "chat", id: route.chatId }),
+      onClick: () => {
+        setLinkyBankPaymentOfferMinimized(route.chatId, route.offerId, true);
+        returnFromBankPaymentOffer(route.chatId);
+      },
     };
   }
 
@@ -410,7 +414,8 @@ export const buildTopbarTitle = (
   if (route.kind === "topupInvoice") return t("topupInvoiceTitle");
   if (route.kind === "manualPay") return t("manualPayTitle");
   if (route.kind === "bankPayment") return t("spdPaymentTitle");
-  if (route.kind === "bankPaymentOffer") return t("bankPaymentOfferDetails");
+  if (route.kind === "bankPaymentOffer")
+    return t("bankPaymentOfferIncomingTitle");
   if (route.kind === "lnAddressPay") return t("pay");
   if (route.kind === "cashuTokens") return t("tokens");
   if (route.kind === "cashuTokenEmit") return t("cashuEmit");

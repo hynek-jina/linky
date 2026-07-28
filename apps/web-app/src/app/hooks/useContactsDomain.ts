@@ -555,7 +555,9 @@ export const useContactsDomain = ({
       route.kind === "contactPay" ||
       route.kind === "chat"
         ? route.id
-        : null;
+        : route.kind === "bankPaymentOffer"
+          ? route.chatId
+          : null;
 
     if (!id) return null;
     return contacts.find((contact) => contact.id === id) ?? null;

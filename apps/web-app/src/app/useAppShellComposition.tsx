@@ -258,12 +258,14 @@ import {
   createLinkyBankPaymentOfferEvent,
   getLinkyBankPaymentOfferInfo,
   getLinkyBankPaymentOfferStatusRank,
+  isLinkyBankPaymentOfferEvent,
   isLinkyBankPaymentOfferTerminalStatus,
   LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
   LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY,
+  setLinkyBankPaymentOfferMinimized,
   shouldPushLinkyBankPaymentOfferStatus,
   type LinkyBankPaymentOfferStatus,
 } from "./lib/bankPaymentOffer";
@@ -316,6 +318,8 @@ import {
   privateImagePreviewText,
 } from "./lib/privateImageMessage";
 import {
+  getLinkyBankPaymentOfferPaymentNoticeOfferId,
+  isLinkyBankPaymentOfferPaymentNoticeEvent,
   LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
   wrapEventWithoutPushMarker,
   wrapEventWithPushMarker,
@@ -4510,9 +4514,11 @@ export const useAppShellComposition = () => {
   }, [unknownContacts]);
 
   const selectedChatContact = React.useMemo<ChatSelectedContact | null>(() => {
-    if (route.kind !== "chat") return null;
+    if (route.kind !== "chat" && route.kind !== "bankPaymentOffer") return null;
 
-    const chatId = String(route.id ?? "").trim();
+    const chatId = String(
+      route.kind === "chat" ? route.id : route.chatId,
+    ).trim();
     if (!chatId) return null;
 
     const source = selectedContact ?? unknownContactById.get(chatId) ?? null;
@@ -4696,18 +4702,26 @@ export const useAppShellComposition = () => {
       ...visibleContacts.conversations,
       ...visibleContacts.others,
     ];
-    return sortedContacts
-      .filter((contact) => {
-        const normalizedNpub = normalizeNpubIdentifier(contact.npub);
-        if (!normalizedNpub) return false;
-
-        return extractStatusFilterCurrencies(
+    return sortedContacts.flatMap((contact) => {
+      const normalizedNpub = normalizeNpubIdentifier(contact.npub);
+      if (!normalizedNpub) return [];
+      if (
+        !extractStatusFilterCurrencies(
           nostrStatusByNpub[normalizedNpub],
-        ).includes(LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY);
-      })
-      .slice(0, bankPaymentOfferRecipientCount);
+        ).includes(LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY)
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          ...contact,
+          pictureUrl: nostrPictureByNpub[normalizedNpub] ?? null,
+        },
+      ];
+    });
   }, [
-    bankPaymentOfferRecipientCount,
+    nostrPictureByNpub,
     nostrStatusByNpub,
     visibleContacts.pinned,
     visibleContacts.conversations,
@@ -5551,6 +5565,7 @@ export const useAppShellComposition = () => {
           amountSat: offerInfo.amountSat,
           logCompletedOnly: true,
           paymentNoticeContext: LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
+          paymentNoticeOfferId: offerInfo.offerId,
         });
         if (!result.ok) return;
 
@@ -9016,7 +9031,9 @@ export const useAppShellComposition = () => {
     replyContext,
     replyContextRef,
     selectedContact:
-      route.kind === "chat" ? selectedChatContact : selectedContact,
+      route.kind === "chat" || route.kind === "bankPaymentOffer"
+        ? selectedChatContact
+        : selectedContact,
     setReplyContext,
     setChatDraft,
     setChatSendIsBusy,
@@ -9457,6 +9474,93 @@ export const useAppShellComposition = () => {
 
         let insertedMessageId: string | null = null;
 
+        if (isLinkyBankPaymentOfferPaymentNoticeEvent(inner)) {
+          const taggedOfferId =
+            getLinkyBankPaymentOfferPaymentNoticeOfferId(inner);
+          const matchingOffer = taggedOfferId
+            ? null
+            : bankPaymentOfferMessages.reduce<{
+                createdAtSec: number;
+                offerId: string;
+              } | null>((latest, message) => {
+                if (String(message.contactId ?? "").trim() !== contactId) {
+                  return latest;
+                }
+
+                const info = getLinkyBankPaymentOfferInfo(
+                  String(message.content ?? ""),
+                );
+                if (!info) return latest;
+
+                const createdAtSec = Number(message.createdAtSec ?? 0);
+                if (latest && latest.createdAtSec >= createdAtSec) {
+                  return latest;
+                }
+                return { createdAtSec, offerId: info.offerId };
+              }, null);
+          const offerId =
+            taggedOfferId ?? matchingOffer?.offerId ?? `expired:${wrapId}`;
+
+          if (taggedOfferId || matchingOffer) {
+            setLinkyBankPaymentOfferMinimized(contactId, offerId, false);
+          }
+          setPendingDeleteId(null);
+          navigateTo({
+            route: "bankPaymentOffer",
+            chatId: contactId,
+            offerId,
+          });
+          return true;
+        }
+
+        if (isLinkyBankPaymentOfferEvent(inner)) {
+          const content = String(inner.content ?? "");
+          const offerInfo = getLinkyBankPaymentOfferInfo(content);
+          if (!offerInfo || !pTags.includes(myPubHex)) {
+            return openedFromNotificationData;
+          }
+
+          const offererPubkey =
+            String(offerInfo.offererPublicKey ?? "").trim() ||
+            senderPub ||
+            peerPubkey;
+          const isOutgoing = offererPubkey === myPubHex;
+          const tagClientId = extractClientTag(tags);
+          const createdAtSecRaw = Number(inner.created_at ?? 0);
+          const createdAtSec =
+            Number.isFinite(createdAtSecRaw) && createdAtSecRaw > 0
+              ? Math.trunc(createdAtSecRaw)
+              : Math.floor(Date.now() / 1_000);
+          const offerMessage: LocalNostrMessage = {
+            contactId,
+            content,
+            createdAtSec,
+            direction: isOutgoing ? "out" : "in",
+            id: `bank-payment-offer:${wrapId}`,
+            localOnly: true,
+            pubkey: isOutgoing ? myPubHex : offererPubkey,
+            rumorId: null,
+            status: "sent",
+            wrapId,
+          };
+          if (tagClientId) {
+            offerMessage.clientId = tagClientId;
+          }
+          upsertBankPaymentOfferMessage(offerMessage);
+          setLinkyBankPaymentOfferMinimized(
+            contactId,
+            offerInfo.offerId,
+            false,
+          );
+          setPendingDeleteId(null);
+          navigateTo({
+            route: "bankPaymentOffer",
+            chatId: contactId,
+            offerId: offerInfo.offerId,
+          });
+          return true;
+        }
+
         if (inner.kind === 14 || inner.kind === 15) {
           const existingByWrap = nostrMessagesLatestRef.current.find(
             (message) => String(message.wrapId ?? "").trim() === wrapId,
@@ -9700,6 +9804,7 @@ export const useAppShellComposition = () => {
     },
     [
       appendLocalNostrMessage,
+      bankPaymentOfferMessages,
       currentNsec,
       knownNostrMessageIdentityIndex,
       nostrFetchRelays,
@@ -9708,6 +9813,7 @@ export const useAppShellComposition = () => {
       setPendingDeleteId,
       triggerChatScrollToBottom,
       updateLocalNostrMessage,
+      upsertBankPaymentOfferMessage,
     ],
   );
 
@@ -10190,6 +10296,7 @@ export const useAppShellComposition = () => {
       cashuOwnTokens,
       cashuOwnSpentTokensCount: cashuOwnSpentTokens.length,
       bankPaymentOfferContacts,
+      bankPaymentOfferRecipientCount,
       deleteSpentCashuTokens,
       deleteSpentCashuTokensIsBusy,
       checkAllCashuTokensAndDeleteInvalid,
@@ -10263,6 +10370,7 @@ export const useAppShellComposition = () => {
       contactPayMethod,
       addNewContactFromSearchResult,
       contactSuggestions,
+      contacts,
       copyText,
       currentNpub,
       derivedProfile,
@@ -10375,8 +10483,10 @@ export const useAppShellComposition = () => {
     isMainSwipeRoute,
     mainSwipeRouteBuilderInput: {
       activeGroup,
+      bankPaymentOfferMessages,
       cashuBalance,
       cashuTotalBalance,
+      chatOwnPubkeyHex,
       contacts: displayContacts,
       contactsOnboardingCelebrating,
       contactsOnboardingTasks,
@@ -10397,6 +10507,7 @@ export const useAppShellComposition = () => {
       openProfileQr,
       openWalletScan,
       otherContactsLabel,
+      nostrPictureByNpub,
       renderContactCard: renderMainSwipeContactCard,
       route,
       scanIsOpen,

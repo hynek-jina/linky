@@ -1,4 +1,3 @@
-const NPUB_CASH_DOMAIN = "npub.cash";
 const NOSTR_URI_PREFIX = "nostr:";
 
 const normalizeNpubCase = (value: string): string => {
@@ -17,16 +16,12 @@ export const normalizeNpubIdentifier = (value: unknown): string | null => {
       : raw;
   if (!withoutPrefix) return null;
 
-  const atIndex = withoutPrefix.lastIndexOf("@");
+  const atIndex = withoutPrefix.indexOf("@");
   if (atIndex < 0) return normalizeNpubCase(withoutPrefix);
   if (atIndex === 0) return null;
 
   const localPart = withoutPrefix.slice(0, atIndex).trim();
-  const domainPart = withoutPrefix
-    .slice(atIndex + 1)
-    .trim()
-    .toLowerCase();
-  if (domainPart !== NPUB_CASH_DOMAIN) return null;
-  if (!localPart) return null;
+  const suffix = withoutPrefix.slice(atIndex + 1).trim();
+  if (!/^npub1/i.test(localPart) || !suffix) return null;
   return normalizeNpubCase(localPart);
 };

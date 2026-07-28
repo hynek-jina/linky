@@ -12,6 +12,9 @@ import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
 import type { ReplyContext } from "../app/hooks/messages/useSendChatMessage";
 import {
   getLinkyBankPaymentOfferInfo,
+  isLinkyBankPaymentOfferExpired,
+  isLinkyBankPaymentOfferMinimized,
+  setLinkyBankPaymentOfferMinimized,
   type LinkyBankPaymentOfferStatus,
 } from "../app/lib/bankPaymentOffer";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
@@ -141,7 +144,6 @@ export const ChatPage: FC<ChatPageProps> = ({
   getCashuTokenMessageInfo,
   getMintIconUrl,
   getNpubMessageContactInfo,
-  isBankPaymentOfferCanceled,
   lang,
   mentionContacts,
   onCancelEdit,
@@ -150,8 +152,6 @@ export const ChatPage: FC<ChatPageProps> = ({
   onBlockUnknownContact,
   onCopy,
   onDeclinePaymentRequest,
-  onRespondBankPaymentOffer,
-  onSettleBankPaymentOffer,
   onEdit,
   onOpenNpubContact,
   onPayPaymentRequest,
@@ -466,6 +466,46 @@ export const ChatPage: FC<ChatPageProps> = ({
     focusComposeInput();
   }, [replyContext, editContext, focusComposeInput, hasUnknownPubkeyHex, npub]);
 
+  useEffect(() => {
+    const chatId = String(selectedContact?.id ?? "").trim();
+    if (!chatId) return;
+
+    const nowSec = Math.floor(Date.now() / 1_000);
+    let newestOffer: { offerId: string; updatedAtSec: number } | null = null;
+
+    for (const message of bankPaymentOfferMessages) {
+      if (String(message.contactId ?? "").trim() !== chatId) continue;
+      if (String(message.direction ?? "") !== "in") continue;
+
+      const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+      if (!info || info.status !== "offered") continue;
+      if (
+        isLinkyBankPaymentOfferExpired(
+          info,
+          Number(message.createdAtSec ?? 0),
+          nowSec,
+        )
+      ) {
+        continue;
+      }
+      if (isLinkyBankPaymentOfferMinimized(chatId, info.offerId)) continue;
+
+      const updatedAtSec =
+        info.statusUpdatedAtSec ?? Number(message.createdAtSec ?? 0);
+      if (!newestOffer || updatedAtSec > newestOffer.updatedAtSec) {
+        newestOffer = { offerId: info.offerId, updatedAtSec };
+      }
+    }
+
+    if (newestOffer) {
+      navigateTo({
+        route: "bankPaymentOffer",
+        chatId,
+        offerId: newestOffer.offerId,
+      });
+    }
+  }, [bankPaymentOfferMessages, selectedContact?.id]);
+
   if (!selectedContact) {
     return (
       <section className="panel">
@@ -644,21 +684,6 @@ export const ChatPage: FC<ChatPageProps> = ({
               !parseLinkyPaymentRequestDeclineMessage(
                 String(message.content ?? ""),
               );
-            const canActOnBankPaymentOffer =
-              bankPaymentOfferInfo?.status === "offered";
-            const canCancelBankPaymentOffer =
-              canActOnBankPaymentOffer &&
-              String(message.direction ?? "") === "out";
-            const canRespondBankPaymentOffer =
-              canActOnBankPaymentOffer &&
-              String(message.direction ?? "") === "in";
-            const canConfirmBankPaymentPaid =
-              bankPaymentOfferInfo?.status === "bank_details_sent" &&
-              String(message.direction ?? "") === "in";
-            const canSettleBankPaymentOffer =
-              bankPaymentOfferInfo?.status === "bank_paid" &&
-              String(message.direction ?? "") === "out" &&
-              !isBankPaymentOfferCanceled(bankPaymentOfferInfo.offerId);
             const bankPaymentOfferPeerNotice = getBankPaymentOfferPeerNotice(
               message,
               bankPaymentOfferInfo,
@@ -706,16 +731,6 @@ export const ChatPage: FC<ChatPageProps> = ({
                 )}
                 bankPaymentOfferInfo={bankPaymentOfferInfo}
                 bankPaymentOfferPeerNotice={bankPaymentOfferPeerNotice}
-                canCancelBankPaymentOffer={canCancelBankPaymentOffer}
-                canConfirmBankPaymentPaid={canConfirmBankPaymentPaid}
-                canRespondBankPaymentOffer={canRespondBankPaymentOffer}
-                canSettleBankPaymentOffer={canSettleBankPaymentOffer}
-                onAcceptBankPaymentOffer={() => {
-                  void onRespondBankPaymentOffer(message, "accepted");
-                }}
-                onCancelBankPaymentOffer={() => {
-                  void onRespondBankPaymentOffer(message, "canceled");
-                }}
                 onOpenBankPaymentOfferDetails={() => {
                   const offerId = String(
                     bankPaymentOfferInfo?.offerId ?? "",
@@ -724,13 +739,8 @@ export const ChatPage: FC<ChatPageProps> = ({
                     message.contactId ?? selectedContact?.id ?? "",
                   ).trim();
                   if (!offerId || !chatId) return;
+                  setLinkyBankPaymentOfferMinimized(chatId, offerId, false);
                   navigateTo({ route: "bankPaymentOffer", chatId, offerId });
-                }}
-                onDeclineBankPaymentOffer={() => {
-                  void onRespondBankPaymentOffer(message, "declined");
-                }}
-                onSettleBankPaymentOffer={() => {
-                  void onSettleBankPaymentOffer(message);
                 }}
                 onDeclinePaymentRequest={() => {
                   void onDeclinePaymentRequest(message);

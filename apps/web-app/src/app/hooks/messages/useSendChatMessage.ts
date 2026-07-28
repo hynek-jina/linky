@@ -92,7 +92,12 @@ export const useSendChatMessage = <
 }: UseSendChatMessageParams<TRoute, TContact>) => {
   return React.useCallback(
     async (options?: SendChatMessageOptions) => {
-      if (route.kind !== "chat" && route.kind !== "contactPay") return;
+      if (
+        route.kind !== "chat" &&
+        route.kind !== "contactPay" &&
+        route.kind !== "bankPaymentOffer"
+      )
+        return;
       if (!selectedContact) return;
 
       const imageFile = options?.imageFile ?? null;
