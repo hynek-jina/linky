@@ -85,9 +85,11 @@ export function createLinkyPaymentNoticeEvent(args: {
   clientId: string;
   context?: typeof LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER;
   createdAt: number;
+  offerId?: string;
   recipientPublicKey: string;
   senderPublicKey: string;
 }): UnsignedEvent {
+  const offerId = String(args.offerId ?? "").trim();
   return {
     created_at: args.createdAt,
     kind: LINKY_PAYMENT_NOTICE_KIND,
@@ -98,9 +100,22 @@ export function createLinkyPaymentNoticeEvent(args: {
       ["client", args.clientId],
       [LINKY_PUSH_MARKER_TAG, LINKY_PAYMENT_NOTICE_VALUE],
       ...(args.context ? [["context", args.context]] : []),
+      ...(offerId ? [["offer", offerId]] : []),
     ],
     content: LINKY_PAYMENT_NOTICE_VALUE,
   };
+}
+
+export function getLinkyBankPaymentOfferPaymentNoticeOfferId(event: {
+  kind: number;
+  tags: string[][];
+}): string | null {
+  if (!isLinkyBankPaymentOfferPaymentNoticeEvent(event)) return null;
+
+  const offerId = event.tags.find(
+    (tag) => Array.isArray(tag) && tag[0] === "offer" && tag[1]?.trim(),
+  )?.[1];
+  return offerId?.trim() || null;
 }
 
 export function isLinkyBankPaymentOfferPaymentNoticeEvent(event: {

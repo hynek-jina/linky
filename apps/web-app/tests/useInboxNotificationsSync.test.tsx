@@ -478,6 +478,143 @@ describe("useInboxNotificationsSync", () => {
     });
   });
 
+  it("surfaces a declined proxy payment and opens the contact chat from the toast", async () => {
+    const createdAt = Math.floor(Date.now() / 1e3);
+    const originalOffer = createLinkyBankPaymentOfferEvent({
+      amountSat: 80,
+      amountText: "80 sat",
+      clientId: "offer-client",
+      createdAt: createdAt - 10,
+      offerId: "offer-declined",
+      offererPublicKey: "me-pubkey-hex",
+      recipientPublicKey: "known-contact-pubkey",
+      senderPublicKey: "me-pubkey-hex",
+      status: "offered",
+    });
+    const declineEvent = createLinkyBankPaymentOfferEvent({
+      amountSat: 80,
+      amountText: "80 sat",
+      clientId: "decline-client",
+      createdAt,
+      offerId: "offer-declined",
+      offererPublicKey: "me-pubkey-hex",
+      recipientPublicKey: "me-pubkey-hex",
+      senderPublicKey: "known-contact-pubkey",
+      status: "declined",
+    });
+    const wrapEvent = { id: "wrap-declined-offer" };
+    const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
+    querySyncMock.mockResolvedValue([]);
+    subscribeMock.mockImplementation(
+      (
+        _relays: unknown,
+        _filter: unknown,
+        handlers: { onevent: (event: typeof wrapEvent) => void },
+      ) => {
+        liveEventHandlers.push(handlers.onevent);
+        return { close: vi.fn(async () => {}) };
+      },
+    );
+    unwrapEventMock.mockReturnValue({
+      ...declineEvent,
+      id: "rumor-declined-offer",
+    });
+
+    const maybeShowPwaNotification = vi.fn(async () => {});
+    const onBankPaymentOfferMessage = vi.fn();
+    const onOpenInboxMessageToast = vi.fn();
+    const pushToast = vi.fn(
+      (_message: string, options?: { onClick?: () => void }) => {
+        options?.onClick?.();
+      },
+    );
+    const setContactAttentionById: React.Dispatch<
+      React.SetStateAction<Record<string, number>>
+    > = vi.fn();
+    const knownOfferMessage: LocalNostrMessage = {
+      clientId: "offer-client",
+      contactId: "contact-bob",
+      content: originalOffer.content,
+      createdAtSec: createdAt - 10,
+      direction: "out",
+      id: "known-offer-message",
+      localOnly: true,
+      pubkey: "me-pubkey-hex",
+      rumorId: null,
+      status: "sent",
+      wrapId: "known-offer-wrap",
+    };
+
+    const Harness = () => {
+      useInboxNotificationsSync({
+        appendLocalNostrMessage: vi.fn(() => "message-1"),
+        appendLocalNostrReaction: vi.fn(() => "reaction-1"),
+        bankPaymentOfferMessages: [knownOfferMessage],
+        contacts: [
+          {
+            id: "contact-bob",
+            name: "Bob",
+            npub: "npub-known",
+          },
+        ],
+        currentNsec: "nsec-test",
+        maybeShowPwaNotification,
+        nostrFetchRelays: [],
+        nostrMessageWrapIdsRef: { current: new Set<string>() },
+        nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
+        nostrMessagesRecent: [],
+        nostrReactionWrapIdsRef: { current: new Set<string>() },
+        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+        onBankPaymentOfferMessage,
+        onOpenInboxMessageToast,
+        pushToast,
+        route: { kind: "contacts" },
+        setContactAttentionById,
+        softDeleteLocalNostrReactionsByWrapIds: vi.fn(),
+        t: (key: string) => {
+          if (key === "chatIncomingMessageToast") return "{name}: {message}";
+          if (key === "bankPaymentOfferDeclinedNotification") {
+            return "Payment was declined.";
+          }
+          return key;
+        },
+        updateLocalNostrMessage: vi.fn(),
+        updateLocalNostrReaction: vi.fn(),
+      });
+      return null;
+    };
+
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(<Harness />));
+    await flushEffects();
+    await flushEffects();
+    await act(async () => {
+      liveEventHandlers[0]?.(wrapEvent);
+    });
+
+    expect(onBankPaymentOfferMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contactId: "contact-bob",
+        direction: "out",
+      }),
+    );
+    expect(pushToast).toHaveBeenCalledWith(
+      "Bob: Payment was declined.",
+      expect.objectContaining({ onClick: expect.any(Function) }),
+    );
+    expect(onOpenInboxMessageToast).toHaveBeenCalledWith({
+      contactId: "contact-bob",
+    });
+    expect(maybeShowPwaNotification).toHaveBeenCalledWith(
+      "Bob",
+      "Payment was declined.",
+      "wrap-declined-offer",
+    );
+    expect(setContactAttentionById).toHaveBeenCalledOnce();
+
+    await act(async () => root.unmount());
+  });
+
   it("treats self-authored copies matched by client id as outgoing and silent", async () => {
     const wrapEvent = { id: "wrap-self-copy-1" };
     querySyncMock.mockResolvedValue([wrapEvent]);

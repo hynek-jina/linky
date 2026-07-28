@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createLinkyPaymentNoticeEvent,
+  getLinkyBankPaymentOfferPaymentNoticeOfferId,
   isLinkyBankPaymentOfferPaymentNoticeEvent,
   LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
 } from "./pushWrappedEvent";
@@ -11,6 +12,7 @@ describe("payment notice context", () => {
       clientId: "proxy-notice",
       context: LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
       createdAt: 1_700_000_000,
+      offerId: "offer-123",
       recipientPublicKey: "recipient",
       senderPublicKey: "sender",
     });
@@ -22,8 +24,14 @@ describe("payment notice context", () => {
     });
 
     expect(isLinkyBankPaymentOfferPaymentNoticeEvent(proxyNotice)).toBe(true);
+    expect(getLinkyBankPaymentOfferPaymentNoticeOfferId(proxyNotice)).toBe(
+      "offer-123",
+    );
     expect(isLinkyBankPaymentOfferPaymentNoticeEvent(ordinaryNotice)).toBe(
       false,
+    );
+    expect(getLinkyBankPaymentOfferPaymentNoticeOfferId(ordinaryNotice)).toBe(
+      null,
     );
   });
 });

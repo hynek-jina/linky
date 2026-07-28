@@ -14,19 +14,23 @@ import {
 import {
   getLinkyBankPaymentOfferInfo,
   getLinkyBankPaymentOfferText,
+  isLinkyBankPaymentOfferExpired,
   isLinkyBankPaymentOfferEvent,
   isLinkyBankPaymentOfferTerminalStatus,
-  LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
-  type LinkyBankPaymentOfferInfo,
 } from "../../lib/bankPaymentOffer";
 import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
 import { formatChatMessagePreviewText } from "../../lib/chatMessageDisplay";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
 import {
+  getLinkyBankPaymentOfferPaymentNoticeOfferId,
   isLinkyBankPaymentOfferPaymentNoticeEvent,
   isLinkyPaymentNoticeEvent,
 } from "../../lib/pushWrappedEvent";
+import {
+  isOpenBankPaymentOffer,
+  isOpenChatForContact,
+} from "../../lib/inboxNotificationRoute";
 import type {
   ContactNameRowLike,
   LocalNostrMessage,
@@ -54,24 +58,6 @@ const PAYMENT_NOTICE_SEEN_WRAP_IDS_STORAGE_KEY_PREFIX =
   "linky.nostr.payment_notice_seen_wrap_ids.v1";
 const MAX_PERSISTED_PAYMENT_NOTICE_WRAP_IDS = 200;
 const PAYMENT_NOTICE_MATCH_WINDOW_SECONDS = 120;
-
-const isBankPaymentOfferExpired = (
-  offerInfo: LinkyBankPaymentOfferInfo,
-  createdAtSec: number,
-  nowSec: number,
-): boolean => {
-  const phaseStartedAtSecRaw =
-    offerInfo.statusUpdatedAtSec && offerInfo.statusUpdatedAtSec > 0
-      ? offerInfo.statusUpdatedAtSec
-      : createdAtSec;
-  const phaseStartedAtSec =
-    Number.isFinite(phaseStartedAtSecRaw) && phaseStartedAtSecRaw > 0
-      ? Math.trunc(phaseStartedAtSecRaw)
-      : null;
-  if (!phaseStartedAtSec) return false;
-
-  return nowSec - phaseStartedAtSec >= LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC;
-};
 
 const getPaymentNoticeSeenWrapIdsStorageKey = (pubkeyHex: string): string =>
   `${PAYMENT_NOTICE_SEEN_WRAP_IDS_STORAGE_KEY_PREFIX}.${pubkeyHex}`;
@@ -183,8 +169,6 @@ export const useInboxNotificationsSync = <
     // other contacts still arrive while a chat is open. The currently opened
     // chat contact is deduplicated below to avoid duplicate inserts.
     if (!enabled || !currentNsec) return;
-
-    const activeChatId = route.kind === "chat" ? String(route.id ?? "") : null;
 
     let cancelled = false;
     const identitySinceSec =
@@ -406,9 +390,16 @@ export const useInboxNotificationsSync = <
                 : String(buildUnknownContactId(resolvedPeerPub) ?? "").trim();
               if (!contactId) return;
 
-              const isActiveChatContact =
-                Boolean(activeChatId) &&
-                String(contactId) === String(activeChatId);
+              const isActiveChatContact = isOpenChatForContact(
+                route,
+                contactId,
+              );
+              const paymentOfferId =
+                getLinkyBankPaymentOfferPaymentNoticeOfferId(inner) ?? "";
+              const isActiveBankPaymentOffer = isOpenBankPaymentOffer(
+                route,
+                paymentOfferId,
+              );
 
               if (hasStoredIncomingCashuToken(contactId, createdAtSec)) {
                 rememberSeenPaymentNoticeWrapId(wrapId);
@@ -417,7 +408,11 @@ export const useInboxNotificationsSync = <
 
               rememberSeenPaymentNoticeWrapId(wrapId);
 
-              if (shouldSurfaceNotification && !isActiveChatContact) {
+              if (
+                shouldSurfaceNotification &&
+                !isActiveChatContact &&
+                !isActiveBankPaymentOffer
+              ) {
                 setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),
@@ -480,7 +475,7 @@ export const useInboxNotificationsSync = <
               }
               const isExpiredOffer =
                 offerInfo && !isTerminalOffer
-                  ? isBankPaymentOfferExpired(
+                  ? isLinkyBankPaymentOfferExpired(
                       offerInfo,
                       createdAtSec,
                       Math.floor(Date.now() / 1e3),
@@ -546,64 +541,56 @@ export const useInboxNotificationsSync = <
               }
               onBankPaymentOfferMessage(offerMessage);
 
-              const isActiveChatContact =
-                Boolean(activeChatId) &&
-                String(contactId) === String(activeChatId);
+              const isActiveChatContact = isOpenChatForContact(
+                route,
+                contactId,
+              );
+              const isActiveBankPaymentOffer = isOpenBankPaymentOffer(
+                route,
+                offerId,
+              );
 
               if (isTerminalOffer) {
-                const isFinalDecline = (() => {
-                  if (
-                    offerInfo?.status !== "declined" ||
-                    !isOutgoing ||
-                    isSelfAuthored
-                  ) {
-                    return false;
-                  }
-
-                  const statusByContactId = new Map<
-                    string,
-                    LinkyBankPaymentOfferInfo["status"]
-                  >();
-                  for (const knownMessage of bankPaymentOfferMessages) {
-                    const knownInfo = getLinkyBankPaymentOfferInfo(
-                      String(knownMessage.content ?? ""),
-                    );
-                    if (knownInfo?.offerId !== offerInfo.offerId) continue;
-                    const knownContactId = String(
-                      knownMessage.contactId ?? "",
-                    ).trim();
-                    if (!knownContactId) continue;
-                    statusByContactId.set(knownContactId, knownInfo.status);
-                  }
-                  statusByContactId.set(contactId, "declined");
-                  return (
-                    statusByContactId.size > 0 &&
-                    [...statusByContactId.values()].every(
-                      (status) => status === "declined",
-                    )
-                  );
-                })();
-
                 if (
-                  isFinalDecline &&
+                  offerInfo?.status === "declined" &&
+                  isOutgoing &&
+                  !isSelfAuthored &&
                   shouldSurfaceNotification &&
-                  !isActiveChatContact
+                  !isActiveChatContact &&
+                  !isActiveBankPaymentOffer
                 ) {
                   setContactAttentionById((prev) => ({
                     ...prev,
                     [contactId]: Date.now(),
                   }));
-                  const allDeclinedText = t("bankPaymentOfferAllDeclined");
+                  const notificationText = t(
+                    "bankPaymentOfferDeclinedNotification",
+                  );
+                  const senderLabel =
+                    contact?.name ??
+                    formatShortNpub(
+                      contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
+                    ) ??
+                    t("unknownContactTitle");
                   try {
                     if (document.visibilityState === "visible") {
-                      pushToast(allDeclinedText);
+                      pushToast(
+                        t("chatIncomingMessageToast")
+                          .replace("{name}", senderLabel)
+                          .replace("{message}", notificationText),
+                        {
+                          onClick: () => {
+                            onOpenInboxMessageToast({ contactId });
+                          },
+                        },
+                      );
                     }
                   } catch {
                     // No document in non-browser environments.
                   }
                   void maybeShowPwaNotification(
-                    t("appTitle"),
-                    allDeclinedText,
+                    senderLabel,
+                    notificationText,
                     wrapId,
                   );
                 }
@@ -613,6 +600,7 @@ export const useInboxNotificationsSync = <
               if (
                 shouldSurfaceNotification &&
                 !isActiveChatContact &&
+                !isActiveBankPaymentOffer &&
                 !isSelfAuthored
               ) {
                 setContactAttentionById((prev) => ({
@@ -744,9 +732,10 @@ export const useInboxNotificationsSync = <
                     ).trim());
               if (!contactId) return;
 
-              const isActiveChatContact =
-                Boolean(activeChatId) &&
-                String(contactId) === String(activeChatId);
+              const isActiveChatContact = isOpenChatForContact(
+                route,
+                contactId,
+              );
               const isCashuMessage = isCashuNotificationMessage(content);
 
               const messageDirection = isOutgoing ? "out" : "in";
@@ -896,7 +885,12 @@ export const useInboxNotificationsSync = <
                   : {}),
               });
 
-              if (shouldSurfaceNotification && !isOutgoing && !isCashuMessage) {
+              if (
+                shouldSurfaceNotification &&
+                !isOutgoing &&
+                !isCashuMessage &&
+                !isActiveChatContact
+              ) {
                 setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),

@@ -2,6 +2,61 @@ import { useEffect, useState } from "react";
 import type { CashuTokenId, ContactId } from "../evolu";
 import { parseRouteFromHash, type Route } from "../types/route";
 
+export const NATIVE_BACK_BUTTON_EVENT = "linky-native-back-button";
+const BANK_PAYMENT_OFFER_RETURN_HASH_KEY =
+  "linky.bank_payment_offer_return_hash.v1";
+
+const rememberBankPaymentOfferReturnHash = (): void => {
+  const currentRoute = parseRouteFromHash();
+  if (currentRoute.kind === "bankPaymentOffer") return;
+  if (
+    currentRoute.kind !== "chat" &&
+    currentRoute.kind !== "contacts" &&
+    currentRoute.kind !== "wallet"
+  ) {
+    return;
+  }
+
+  try {
+    const returnHash =
+      currentRoute.kind === "wallet"
+        ? "#wallet"
+        : currentRoute.kind === "contacts"
+          ? "#contacts"
+          : window.location.hash;
+    window.sessionStorage.setItem(
+      BANK_PAYMENT_OFFER_RETURN_HASH_KEY,
+      returnHash,
+    );
+  } catch {
+    // Session storage can be unavailable in privacy-restricted browsers.
+  }
+};
+
+export const returnFromBankPaymentOffer = (fallbackChatId: string): void => {
+  let returnHash = "";
+  try {
+    returnHash =
+      window.sessionStorage.getItem(BANK_PAYMENT_OFFER_RETURN_HASH_KEY) ?? "";
+    window.sessionStorage.removeItem(BANK_PAYMENT_OFFER_RETURN_HASH_KEY);
+  } catch {
+    // Fall back to the related chat when session storage is unavailable.
+  }
+
+  const normalizedReturnHash = returnHash.trim();
+  if (
+    normalizedReturnHash === "#contacts" ||
+    normalizedReturnHash === "#wallet" ||
+    (normalizedReturnHash.startsWith("#chat/") &&
+      !normalizedReturnHash.includes("/bank-payment-offer/"))
+  ) {
+    window.location.assign(normalizedReturnHash);
+    return;
+  }
+
+  navigateTo({ route: "chat", id: fallbackChatId });
+};
+
 export const useRouting = () => {
   const [route, setRoute] = useState<Route>(() => parseRouteFromHash());
 
@@ -9,6 +64,22 @@ export const useRouting = () => {
     const onHashChange = () => setRoute(parseRouteFromHash());
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  useEffect(() => {
+    const onNativeBackButton = (event: Event) => {
+      const currentRoute = parseRouteFromHash();
+      if (currentRoute.kind === "contacts" || currentRoute.kind === "wallet") {
+        return;
+      }
+
+      event.preventDefault();
+      window.history.back();
+    };
+
+    window.addEventListener(NATIVE_BACK_BUTTON_EVENT, onNativeBackButton);
+    return () =>
+      window.removeEventListener(NATIVE_BACK_BUTTON_EVENT, onNativeBackButton);
   }, []);
 
   return route;
@@ -139,6 +210,7 @@ export const navigateTo = (action: NavigationAction): void => {
       );
       break;
     case "bankPaymentOffer":
+      rememberBankPaymentOfferReturnHash();
       window.location.assign(
         `#chat/${encodeURIComponent(String(action.chatId ?? "").trim())}/bank-payment-offer/${encodeURIComponent(String(action.offerId ?? "").trim())}`,
       );

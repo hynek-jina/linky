@@ -7,6 +7,8 @@ export const LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT = 2;
 export const LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT = 1;
 export const LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT = 10;
 export const LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY = "CZK";
+const LINKY_BANK_PAYMENT_OFFER_MINIMIZED_STORAGE_KEY_PREFIX =
+  "linky.bank_payment_offer_minimized.v1";
 
 export type LinkyBankPaymentOfferStatus =
   | "accepted"
@@ -27,6 +29,61 @@ export interface LinkyBankPaymentOfferInfo {
   statusUpdatedAtSec: number | null;
   text: string;
 }
+
+export const isLinkyBankPaymentOfferExpired = (
+  offerInfo: LinkyBankPaymentOfferInfo,
+  createdAtSec: number,
+  nowSec: number,
+): boolean => {
+  if (isLinkyBankPaymentOfferTerminalStatus(offerInfo.status)) return false;
+
+  const phaseStartedAtSecRaw =
+    offerInfo.statusUpdatedAtSec && offerInfo.statusUpdatedAtSec > 0
+      ? offerInfo.statusUpdatedAtSec
+      : createdAtSec;
+  const phaseStartedAtSec =
+    Number.isFinite(phaseStartedAtSecRaw) && phaseStartedAtSecRaw > 0
+      ? Math.trunc(phaseStartedAtSecRaw)
+      : null;
+  if (!phaseStartedAtSec) return false;
+
+  return nowSec - phaseStartedAtSec >= LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC;
+};
+
+const getMinimizedOfferStorageKey = (chatId: string, offerId: string): string =>
+  `${LINKY_BANK_PAYMENT_OFFER_MINIMIZED_STORAGE_KEY_PREFIX}.${encodeURIComponent(chatId)}.${encodeURIComponent(offerId)}`;
+
+export const isLinkyBankPaymentOfferMinimized = (
+  chatId: string,
+  offerId: string,
+): boolean => {
+  try {
+    return (
+      window.sessionStorage.getItem(
+        getMinimizedOfferStorageKey(chatId, offerId),
+      ) === "1"
+    );
+  } catch {
+    return false;
+  }
+};
+
+export const setLinkyBankPaymentOfferMinimized = (
+  chatId: string,
+  offerId: string,
+  minimized: boolean,
+): void => {
+  try {
+    const key = getMinimizedOfferStorageKey(chatId, offerId);
+    if (minimized) {
+      window.sessionStorage.setItem(key, "1");
+    } else {
+      window.sessionStorage.removeItem(key);
+    }
+  } catch {
+    // Session storage can be unavailable in privacy-restricted browsers.
+  }
+};
 
 const readObjectField = (value: unknown, field: string): unknown => {
   if (typeof value !== "object" || value === null) return undefined;
@@ -98,6 +155,7 @@ export const shouldPushLinkyBankPaymentOfferStatus = (
   status === "accepted" ||
   status === "bank_details_sent" ||
   status === "bank_paid" ||
+  status === "declined" ||
   status === "offered";
 
 export const createLinkyBankPaymentOfferEvent = (args: {

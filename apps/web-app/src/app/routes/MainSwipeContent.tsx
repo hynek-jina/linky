@@ -1,13 +1,21 @@
 import React from "react";
 import { BottomTabBar } from "../../components/BottomTabBar";
+import { BankPaymentOfferBanner } from "../../components/BankPaymentOfferBanner";
 import { ContactAddIcon } from "../../components/icons";
 import { ContactsChecklist } from "../../components/ContactsChecklist";
 import { ContactsPage } from "../../pages/ContactsPage";
 import { WalletPage } from "../../pages/WalletPage";
 import type { Route } from "../../types/route";
-import { useMainSwipeRoutes } from "../context/AppShellContexts";
+import {
+  useAppShellCore,
+  useMainSwipeRoutes,
+} from "../context/AppShellContexts";
 import { useShowProfileQrOnTilt } from "../hooks/useShowProfileQrOnTilt";
-import type { ContactRowLike, ContactsGuideKey } from "../types/appTypes";
+import type {
+  ContactRowLike,
+  ContactsGuideKey,
+  LocalNostrMessage,
+} from "../types/appTypes";
 
 export interface MainSwipeRouteProps {
   activeGroup: string | null;
@@ -15,6 +23,8 @@ export interface MainSwipeRouteProps {
   canAddContact: boolean;
   cashuBalance: number;
   cashuTotalBalance: number;
+  bankPaymentOfferMessages: readonly LocalNostrMessage[];
+  chatOwnPubkeyHex: string | null;
   contacts: readonly ContactRowLike[];
   contactsOnboardingCelebrating: boolean;
   contactsOnboardingTasks: {
@@ -41,6 +51,7 @@ export interface MainSwipeRouteProps {
   openProfileQr: () => void;
   openWalletScan: () => void;
   otherContactsLabel: string;
+  nostrPictureByNpub: Readonly<Record<string, string | null>>;
   renderContactCard: (contact: ContactRowLike) => React.ReactNode;
   route: Route;
   scanIsOpen: boolean;
@@ -75,6 +86,8 @@ export const MainSwipeContent = (): React.ReactElement => {
     canAddContact,
     cashuBalance,
     cashuTotalBalance,
+    bankPaymentOfferMessages,
+    chatOwnPubkeyHex,
     contactsOnboardingCelebrating,
     contactsOnboardingTasks,
     contactsSearch,
@@ -94,6 +107,7 @@ export const MainSwipeContent = (): React.ReactElement => {
     openProfileQr,
     openWalletScan,
     otherContactsLabel,
+    nostrPictureByNpub,
     renderContactCard,
     route,
     scanIsOpen,
@@ -107,6 +121,7 @@ export const MainSwipeContent = (): React.ReactElement => {
     t,
     visibleContacts,
   } = mainSwipeProps;
+  const { formatDisplayedAmountText } = useAppShellCore();
 
   useShowProfileQrOnTilt({
     enabled:
@@ -125,7 +140,7 @@ export const MainSwipeContent = (): React.ReactElement => {
         onScroll={handleMainSwipeScroll}
       >
         <div
-          className="main-swipe-page"
+          className="main-swipe-page main-swipe-contacts-page"
           aria-hidden={route.kind !== "contacts"}
         >
           <ContactsPage
@@ -180,6 +195,14 @@ export const MainSwipeContent = (): React.ReactElement => {
           />
         </div>
       </div>
+      <BankPaymentOfferBanner
+        contacts={mainSwipeProps.contacts}
+        formatDisplayedAmountText={formatDisplayedAmountText}
+        messages={bankPaymentOfferMessages}
+        myPubkeyHex={chatOwnPubkeyHex}
+        nostrPictureByNpub={nostrPictureByNpub}
+        t={t}
+      />
       <BottomTabBar
         activeTab={bottomTabActive}
         activeProgress={mainSwipeProgress}

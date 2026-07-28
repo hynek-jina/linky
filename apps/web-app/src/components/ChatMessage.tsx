@@ -1,4 +1,4 @@
-import { Check, Download, Info, Plus, X } from "lucide-react";
+import { Download, Info, Plus, X } from "lucide-react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
@@ -66,10 +66,6 @@ interface ChatMessageProps {
   };
   bankPaymentOfferInfo: LinkyBankPaymentOfferInfo | null;
   bankPaymentOfferPeerNotice: BankPaymentOfferPeerNotice | null;
-  canCancelBankPaymentOffer: boolean;
-  canConfirmBankPaymentPaid: boolean;
-  canRespondBankPaymentOffer: boolean;
-  canSettleBankPaymentOffer: boolean;
   canEdit: boolean;
   canActOnPaymentRequest: boolean;
   canReplyOrReact: boolean;
@@ -84,11 +80,7 @@ interface ChatMessageProps {
   messageElRef?: (el: HTMLDivElement | null, messageId: string) => void;
   nextMessage: LocalNostrMessage | null;
   onCopy: (message: LocalNostrMessage) => void;
-  onAcceptBankPaymentOffer: () => void;
-  onCancelBankPaymentOffer: () => void;
-  onDeclineBankPaymentOffer: () => void;
   onOpenBankPaymentOfferDetails: () => void;
-  onSettleBankPaymentOffer: () => void;
   onDeclinePaymentRequest: () => void;
   onEdit: (message: LocalNostrMessage) => void;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
@@ -416,10 +408,6 @@ export function ChatMessage({
   actionLabels,
   bankPaymentOfferInfo,
   bankPaymentOfferPeerNotice,
-  canCancelBankPaymentOffer,
-  canConfirmBankPaymentPaid,
-  canRespondBankPaymentOffer,
-  canSettleBankPaymentOffer,
   canEdit,
   canActOnPaymentRequest,
   canReplyOrReact,
@@ -433,10 +421,7 @@ export function ChatMessage({
   message,
   messageElRef,
   nextMessage,
-  onAcceptBankPaymentOffer,
-  onCancelBankPaymentOffer,
   onCopy,
-  onDeclineBankPaymentOffer,
   onDeclinePaymentRequest,
   onEdit,
   onMintIconError,
@@ -446,7 +431,6 @@ export function ChatMessage({
   onPayPaymentRequest,
   onReact,
   onReply,
-  onSettleBankPaymentOffer,
   payPaymentRequestBusy,
   payPaymentRequestDisabled,
   paymentRequestInfo,
@@ -959,103 +943,18 @@ export function ChatMessage({
                       {bankOfferTimeLabel}
                     </div>
                   ) : null}
-                  {canRespondBankPaymentOffer ? (
-                    <div className="chat-payment-request-actions">
-                      <button
-                        type="button"
-                        className="btn-wide chat-payment-request-pay"
-                        onClick={onAcceptBankPaymentOffer}
-                      >
-                        <span className="btn-label-with-icon">
-                          <span className="btn-label-icon" aria-hidden="true">
-                            <Check size={18} />
-                          </span>
-                          <span>{t("bankPaymentOfferAccept")}</span>
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-wide secondary chat-payment-request-decline"
-                        onClick={onDeclineBankPaymentOffer}
-                      >
-                        <span className="btn-label-with-icon">
-                          <span className="btn-label-icon" aria-hidden="true">
-                            <X size={18} />
-                          </span>
-                          <span>{t("decline")}</span>
-                        </span>
-                      </button>
-                    </div>
-                  ) : canConfirmBankPaymentPaid ? (
-                    <div className="chat-payment-request-actions">
-                      <button
-                        type="button"
-                        className="btn-wide chat-payment-request-pay"
-                        onClick={onOpenBankPaymentOfferDetails}
-                      >
-                        <span className="btn-label-with-icon">
-                          <span className="btn-label-icon" aria-hidden="true">
-                            <Info size={18} />
-                          </span>
-                          <span>{t("details")}</span>
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-wide secondary chat-payment-request-decline"
-                        onClick={onDeclineBankPaymentOffer}
-                      >
-                        <span className="btn-label-with-icon">
-                          <span className="btn-label-icon" aria-hidden="true">
-                            <X size={18} />
-                          </span>
-                          <span>{t("decline")}</span>
-                        </span>
-                      </button>
-                    </div>
-                  ) : canSettleBankPaymentOffer ? (
-                    <div className="chat-payment-request-actions">
-                      <button
-                        type="button"
-                        className="btn-wide chat-payment-request-pay"
-                        onClick={onSettleBankPaymentOffer}
-                      >
-                        <span className="btn-label-with-icon">
-                          <span className="btn-label-icon" aria-hidden="true">
-                            <Check size={18} />
-                          </span>
-                          <span>{t("bankPaymentOfferSettle")}</span>
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-wide secondary chat-payment-request-decline"
-                        onClick={onCancelBankPaymentOffer}
-                      >
-                        <span className="btn-label-with-icon">
-                          <span className="btn-label-icon" aria-hidden="true">
-                            <X size={18} />
-                          </span>
-                          <span>{t("bankPaymentOfferCancel")}</span>
-                        </span>
-                      </button>
-                    </div>
-                  ) : canCancelBankPaymentOffer ? (
-                    <div className="chat-payment-request-actions">
-                      <button
-                        type="button"
-                        className="btn-wide secondary chat-payment-request-decline"
-                        onClick={onCancelBankPaymentOffer}
-                      >
-                        <span className="btn-label-with-icon">
-                          <span className="btn-label-icon" aria-hidden="true">
-                            <X size={18} />
-                          </span>
-                          <span>{t("bankPaymentOfferCancel")}</span>
-                        </span>
-                      </button>
-                    </div>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="btn-wide chat-payment-request-pay"
+                    onClick={onOpenBankPaymentOfferDetails}
+                  >
+                    <span className="btn-label-with-icon">
+                      <span className="btn-label-icon" aria-hidden="true">
+                        <Info size={18} />
+                      </span>
+                      <span>{t("details")}</span>
+                    </span>
+                  </button>
                 </div>
               ) : paymentRequestInfo ? (
                 <div className="chat-payment-request-card">

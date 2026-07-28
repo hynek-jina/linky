@@ -9,6 +9,7 @@ interface BuildMoneyRoutePropsParams {
   canWriteNfc: boolean;
   canPayWithCashu: MoneyRoutesProps["lnAddressPayProps"]["canPayWithCashu"];
   bankPaymentOfferContacts: MoneyRoutesProps["spdPaymentProps"]["offerContacts"];
+  bankPaymentOfferRecipientCount: MoneyRoutesProps["spdPaymentProps"]["initialOfferContactCount"];
   cashuBalance: MoneyRoutesProps["cashuTokensProps"]["cashuBalance"];
   cashuBalanceAfterMelt: MoneyRoutesProps["lnAddressPayProps"]["cashuBalanceAfterMelt"];
   cashuTotalBalance: MoneyRoutesProps["cashuTokensProps"]["cashuTotalBalance"];
@@ -105,6 +106,7 @@ export const buildMoneyRouteProps = ({
   canWriteNfc,
   canPayWithCashu,
   bankPaymentOfferContacts,
+  bankPaymentOfferRecipientCount,
   cashuBalance,
   cashuBalanceAfterMelt,
   cashuTotalBalance,
@@ -257,6 +259,7 @@ export const buildMoneyRouteProps = ({
     },
     spdPaymentProps: {
       cashuBalanceAfterMelt,
+      initialOfferContactCount: bankPaymentOfferRecipientCount,
       offerContacts: bankPaymentOfferContacts,
       onRequestReimbursement: onRequestBankPaymentOffer,
       spdPayload: route.kind === "bankPayment" ? route.spdPayload : "",

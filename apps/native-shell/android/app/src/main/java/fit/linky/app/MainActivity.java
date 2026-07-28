@@ -55,6 +55,7 @@ public class MainActivity extends BridgeActivity {
 	private static volatile WeakReference<MainActivity> activeInstanceRef = new WeakReference<>(null);
 	private static volatile boolean appInForeground = false;
 	private static final String EVENT_DEEP_LINK = "linky-native-deep-link";
+	private static final String EVENT_BACK_BUTTON = "linky-native-back-button";
 	private static final String EVENT_NOTIFICATION_OPEN = "linky-native-notification-open";
 	private static final String EVENT_NFC_WRITE = "linky-native-nfc-write";
 	private static final String EVENT_NOTIFICATION_PERMISSION = "linky-native-notification-permission";
@@ -75,6 +76,12 @@ public class MainActivity extends BridgeActivity {
 	private DecoratedBarcodeView nativeQrScannerView;
 	private View nativeQrScannerOverlay;
 	private boolean nativeQrScannerOpen = false;
+	private final OnBackPressedCallback appNavigationBackCallback = new OnBackPressedCallback(true) {
+		@Override
+		public void handleOnBackPressed() {
+			dispatchAppBackButton();
+		}
+	};
 	private final OnBackPressedCallback nativeQrScannerBackCallback = new OnBackPressedCallback(false) {
 		@Override
 		public void handleOnBackPressed() {
@@ -130,6 +137,7 @@ public class MainActivity extends BridgeActivity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		activeInstanceRef = new WeakReference<>(this);
+		getOnBackPressedDispatcher().addCallback(this, appNavigationBackCallback);
 		getOnBackPressedDispatcher().addCallback(this, nativeQrScannerBackCallback);
 
 		bridgePreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
@@ -201,6 +209,32 @@ public class MainActivity extends BridgeActivity {
 			ViewCompat.requestApplyInsets(webView);
 			dispatchSafeAreaInsets();
 		});
+	}
+
+	private void dispatchAppBackButton() {
+		WebView webView = getBridgeWebView();
+		if (webView == null) {
+			runDefaultBackAction();
+			return;
+		}
+
+		String javascript =
+			"(function(){" +
+				"var event=new Event('" + EVENT_BACK_BUTTON + "',{cancelable:true});" +
+				"window.dispatchEvent(event);" +
+				"return event.defaultPrevented;" +
+			"})()";
+		webView.evaluateJavascript(javascript, result -> {
+			if (!"true".equals(result)) {
+				runDefaultBackAction();
+			}
+		});
+	}
+
+	private void runDefaultBackAction() {
+		appNavigationBackCallback.setEnabled(false);
+		getOnBackPressedDispatcher().onBackPressed();
+		appNavigationBackCallback.setEnabled(true);
 	}
 
 	@Override
