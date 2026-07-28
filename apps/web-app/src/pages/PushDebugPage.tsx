@@ -296,12 +296,12 @@ export function PushDebugPage({
 
   return (
     <section className="panel">
-      <div className="settings-row">
+      <div className="settings-row settings-row-stack-mobile">
         <div className="settings-left">
           <span className="settings-label">Push / SW debug</span>
         </div>
-        <div className="settings-right">
-          <div className="badge-box">
+        <div className="settings-right settings-right-wrap">
+          <div className="badge-box badge-box-wrap">
             <button
               className="ghost"
               onClick={() => void refreshReport()}
@@ -366,6 +366,7 @@ export function PushDebugPage({
       <pre
         style={{
           overflowX: "auto",
+          overflowWrap: "anywhere",
           whiteSpace: "pre-wrap",
           fontSize: 12,
           lineHeight: 1.4,
