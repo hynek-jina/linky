@@ -66,21 +66,9 @@ export const useRouting = () => {
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
-  useEffect(() => {
-    const onNativeBackButton = (event: Event) => {
-      const currentRoute = parseRouteFromHash();
-      if (currentRoute.kind === "contacts" || currentRoute.kind === "wallet") {
-        return;
-      }
-
-      event.preventDefault();
-      window.history.back();
-    };
-
-    window.addEventListener(NATIVE_BACK_BUTTON_EVENT, onNativeBackButton);
-    return () =>
-      window.removeEventListener(NATIVE_BACK_BUTTON_EVENT, onNativeBackButton);
-  }, []);
+  // The native back press is handled by `useNativeBackHandler`, which walks the
+  // route hierarchy instead of the browser history. See its doc comment for why
+  // `history.back()` is not usable here.
 
   return route;
 };
