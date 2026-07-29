@@ -16,6 +16,7 @@ import { useRouting } from "../hooks/useRouting";
 import { useToasts } from "../hooks/useToasts";
 import { getInitialLang, translations, type Lang } from "../i18n";
 import { writeClipboardText } from "../platform/clipboard";
+import { shouldRenderNativeNfcWritePrompt } from "../platform/nativeBridge";
 import {
   triggerPasswordManagerSeedSave,
   type PasswordManagerSaveResult,
@@ -62,6 +63,7 @@ import { useScanNativeComposition } from "./hooks/composition/useScanNativeCompo
 import { useSystemSettingsComposition } from "./hooks/composition/useSystemSettingsComposition";
 import { useMainMenuState } from "./hooks/layout/useMainMenuState";
 import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
+import { useNativeBackHandler } from "./hooks/layout/useNativeBackHandler";
 import { isUnknownContactId } from "./hooks/messages/contactIdentity";
 import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
 import { useAppDataTransfer } from "./hooks/useAppDataTransfer";
@@ -86,6 +88,7 @@ import {
   buildTopbar,
   buildTopbarRight,
   buildTopbarTitle,
+  resolveBackAction,
 } from "./lib/topbarConfig";
 import type { ContactRowLike } from "./types/appTypes";
 import {
@@ -1195,6 +1198,72 @@ export const useAppShellComposition = () => {
       t,
     ],
   );
+
+  const closePostPaySaveContact = React.useCallback(() => {
+    setPostPaySaveContact(null);
+  }, []);
+
+  /**
+   * The topmost dismissible modal in `AuthenticatedLayout`, or null.
+   *
+   * These modals are plain state rendered as siblings of the route content, so
+   * nothing unmounts them on navigation — without this the Android back press
+   * would move the route out from under an open payment confirmation and leave
+   * its pending promise unresolved. Order is the reverse of the render order,
+   * because the last sibling rendered is the one on top.
+   */
+  const dismissTopModal = React.useMemo((): (() => void) | null => {
+    if (shareOptionsText) return closeShareOptions;
+    if (nfcWritePromptKind && shouldRenderNativeNfcWritePrompt()) {
+      return cancelPendingNfcWrite;
+    }
+    // The paid overlay hides every confirmation below it and clears itself on a
+    // timer, so there is nothing for back to dismiss while it is up.
+    if (paidOverlayIsOpen) return null;
+    if (pendingPaymentMintMeltConfirmation) {
+      return closePaymentMintMeltConfirmation;
+    }
+    if (pendingMintAutoswapChangeConfirmation) {
+      return closeMintAutoswapChangeConfirmation;
+    }
+    if (pendingLnurlWithdrawConfirmation) {
+      return closeLnurlWithdrawConfirmation;
+    }
+    if (pendingLightningInvoiceConfirmation) {
+      return closeLightningInvoiceConfirmation;
+    }
+    if (postPaySaveContact) return closePostPaySaveContact;
+    return null;
+  }, [
+    cancelPendingNfcWrite,
+    closeLightningInvoiceConfirmation,
+    closeLnurlWithdrawConfirmation,
+    closeMintAutoswapChangeConfirmation,
+    closePaymentMintMeltConfirmation,
+    closePostPaySaveContact,
+    closeShareOptions,
+    nfcWritePromptKind,
+    paidOverlayIsOpen,
+    pendingLightningInvoiceConfirmation,
+    pendingLnurlWithdrawConfirmation,
+    pendingMintAutoswapChangeConfirmation,
+    pendingPaymentMintMeltConfirmation,
+    postPaySaveContact,
+    shareOptionsText,
+  ]);
+
+  useNativeBackHandler({
+    closeMenu,
+    closeScan,
+    dismissTopModal,
+    menuIsOpen,
+    navigateBack: resolveBackAction(route, {
+      closeContactDetail,
+      contactPayBackToChatId,
+      navigateToMainReturn,
+    }),
+    scanIsOpen,
+  });
 
   const chatEditContactId =
     route.kind === "chat" && !selectedChatContact?.isUnknownContact

@@ -4,10 +4,13 @@ import type { Route } from "../../types/route";
 import { setLinkyBankPaymentOfferMinimized } from "./bankPaymentOffer";
 import type { TopbarButton } from "../types/appTypes";
 
-interface BuildTopbarArgs {
+export interface BackActionContext {
   closeContactDetail: () => void;
   contactPayBackToChatId: ContactId | null;
   navigateToMainReturn: () => void;
+}
+
+interface BuildTopbarArgs extends BackActionContext {
   route: Route;
   t: (key: string) => string;
 }
@@ -21,269 +24,99 @@ interface BuildTopbarRightArgs {
   toggleMenu: () => void;
 }
 
-export const buildTopbar = ({
-  closeContactDetail,
-  contactPayBackToChatId,
-  navigateToMainReturn,
-  route,
-  t,
-}: BuildTopbarArgs): TopbarButton | null => {
-  if (route.kind === "settings") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: navigateToMainReturn,
-    };
-  }
+/**
+ * Single source of truth for "go one level up" navigation.
+ *
+ * Both the top-left topbar button and the Android hardware/gesture back button
+ * resolve through this, so the two can never drift apart as routes are added.
+ * Returning `null` means the route is a root screen with nowhere to go back to
+ * (the hardware back press then falls through and closes the app).
+ */
+export const resolveBackAction = (
+  route: Route,
+  {
+    closeContactDetail,
+    contactPayBackToChatId,
+    navigateToMainReturn,
+  }: BackActionContext,
+): (() => void) | null => {
+  switch (route.kind) {
+    case "settings":
+    case "advanced":
+    case "profile":
+      return navigateToMainReturn;
 
-  if (route.kind === "settingsUnits") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "settings" }),
-    };
-  }
+    case "settingsUnits":
+    case "settingsMasterKeys":
+    case "advancedAutoPayLimit":
+    case "advancedPushDebug":
+    case "mints":
+    case "nostrRelays":
+    case "evoluServers":
+      return () => navigateTo({ route: "settings" });
 
-  if (route.kind === "settingsMasterKeys") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "settings" }),
-    };
-  }
+    case "mint":
+      return () => navigateTo({ route: "mints" });
 
-  if (route.kind === "advanced") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: navigateToMainReturn,
-    };
-  }
+    case "profileEdit":
+      return () => navigateTo({ route: "profile" });
 
-  if (route.kind === "advancedAutoPayLimit") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "settings" }),
-    };
-  }
+    case "transactions":
+    case "manualPay":
+    case "bankPayment":
+    case "cashuTokens":
+    case "cashuTokenEmit":
+    case "topup":
+      return () => navigateTo({ route: "wallet" });
 
-  if (route.kind === "advancedPushDebug") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "settings" }),
-    };
-  }
+    case "topupNoAmount":
+    case "topupInvoice":
+      return () => navigateTo({ route: "topup" });
 
-  if (route.kind === "mints") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "settings" }),
-    };
-  }
+    case "bankPaymentOffer": {
+      const { chatId, offerId } = route;
+      return () => {
+        setLinkyBankPaymentOfferMinimized(chatId, offerId, true);
+        returnFromBankPaymentOffer(chatId);
+      };
+    }
 
-  if (route.kind === "mint") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "mints" }),
-    };
-  }
+    case "cashuTokenNew":
+    case "cashuToken":
+      return () => navigateTo({ route: "cashuTokens" });
 
-  if (route.kind === "profile") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: navigateToMainReturn,
-    };
-  }
+    case "evoluData":
+      return () => navigateTo({ route: "advanced" });
 
-  if (route.kind === "profileEdit") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "profile" }),
-    };
-  }
+    case "lnAddressPay":
+    case "chat":
+      return () => navigateTo({ route: "contacts" });
 
-  if (route.kind === "transactions") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "wallet" }),
-    };
-  }
+    case "nostrRelay":
+    case "nostrRelayNew":
+      return () => navigateTo({ route: "nostrRelays" });
 
-  if (route.kind === "topup" || route.kind === "topupNoAmount") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () =>
-        navigateTo({ route: route.kind === "topup" ? "wallet" : "topup" }),
-    };
-  }
+    case "evoluServer":
+    case "evoluServerNew":
+    case "evoluCurrentData":
+    case "evoluHistoryData":
+      return () => navigateTo({ route: "evoluServers" });
 
-  if (route.kind === "topupInvoice") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "topup" }),
-    };
-  }
+    case "contactNew":
+    case "contact":
+      return closeContactDetail;
 
-  if (route.kind === "manualPay" || route.kind === "bankPayment") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "wallet" }),
-    };
-  }
+    case "contactEdit": {
+      const contactId = route.id;
+      return () => navigateTo({ route: "contact", id: contactId });
+    }
 
-  if (route.kind === "bankPaymentOffer") {
-    return {
-      icon: "×",
-      label: t("close"),
-      onClick: () => {
-        setLinkyBankPaymentOfferMinimized(route.chatId, route.offerId, true);
-        returnFromBankPaymentOffer(route.chatId);
-      },
-    };
-  }
+    case "contactPay": {
+      const contactId = route.id;
+      const backToChat =
+        String(contactPayBackToChatId ?? "") === String(contactId ?? "");
 
-  if (
-    route.kind === "cashuTokens" ||
-    route.kind === "cashuTokenNew" ||
-    route.kind === "cashuTokenEmit" ||
-    route.kind === "cashuToken"
-  ) {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () =>
-        navigateTo({
-          route:
-            route.kind === "cashuTokens" || route.kind === "cashuTokenEmit"
-              ? "wallet"
-              : "cashuTokens",
-        }),
-    };
-  }
-
-  if (route.kind === "evoluData") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "advanced" }),
-    };
-  }
-
-  if (route.kind === "lnAddressPay") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "contacts" }),
-    };
-  }
-
-  if (route.kind === "nostrRelays") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "settings" }),
-    };
-  }
-
-  if (route.kind === "evoluServers") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "settings" }),
-    };
-  }
-
-  if (route.kind === "nostrRelay") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "nostrRelays" }),
-    };
-  }
-
-  if (route.kind === "evoluServer") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "evoluServers" }),
-    };
-  }
-
-  if (route.kind === "evoluServerNew") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "evoluServers" }),
-    };
-  }
-
-  if (route.kind === "evoluCurrentData") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "evoluServers" }),
-    };
-  }
-
-  if (route.kind === "evoluHistoryData") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "evoluServers" }),
-    };
-  }
-
-  if (route.kind === "nostrRelayNew") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "nostrRelays" }),
-    };
-  }
-
-  if (route.kind === "contactNew") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: closeContactDetail,
-    };
-  }
-
-  if (route.kind === "contact") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: closeContactDetail,
-    };
-  }
-
-  if (route.kind === "contactEdit") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "contact", id: route.id }),
-    };
-  }
-
-  if (route.kind === "contactPay") {
-    const contactId = route.id;
-    const backToChat =
-      String(contactPayBackToChatId ?? "") === String(contactId ?? "");
-
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => {
+      return () => {
         if (backToChat && contactId) {
           navigateTo({ route: "chat", id: contactId });
           return;
@@ -293,19 +126,38 @@ export const buildTopbar = ({
           return;
         }
         navigateTo({ route: "contacts" });
-      },
-    };
-  }
+      };
+    }
 
-  if (route.kind === "chat") {
-    return {
-      icon: "<",
-      label: t("close"),
-      onClick: () => navigateTo({ route: "contacts" }),
-    };
+    // Root screens: nothing above them.
+    case "contacts":
+    case "wallet":
+      return null;
   }
+};
 
-  return null;
+export const buildTopbar = ({
+  closeContactDetail,
+  contactPayBackToChatId,
+  navigateToMainReturn,
+  route,
+  t,
+}: BuildTopbarArgs): TopbarButton | null => {
+  const onClick = resolveBackAction(route, {
+    closeContactDetail,
+    contactPayBackToChatId,
+    navigateToMainReturn,
+  });
+
+  if (!onClick) return null;
+
+  return {
+    // A bank payment offer is dismissed rather than stepped out of, so it keeps
+    // the close glyph instead of the back chevron.
+    icon: route.kind === "bankPaymentOffer" ? "×" : "<",
+    label: t("close"),
+    onClick,
+  };
 };
 
 export const buildTopbarRight = ({
