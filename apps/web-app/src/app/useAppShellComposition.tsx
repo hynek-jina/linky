@@ -71,6 +71,7 @@ import {
   NATIVE_DEEP_LINK_EVENT,
   NATIVE_NOTIFICATION_OPEN_EVENT,
   NATIVE_PUSH_ACTION_EVENT,
+  shouldRenderNativeNfcWritePrompt,
   startNativeNfcWrite,
   supportsNativeNfcWrite,
 } from "../platform/nativeBridge";
@@ -182,6 +183,7 @@ import {
 import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardingProgress";
 import { useMainMenuState } from "./hooks/layout/useMainMenuState";
 import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
+import { useNativeBackHandler } from "./hooks/layout/useNativeBackHandler";
 import {
   extractClientTag,
   extractEditedFromTag,
@@ -335,6 +337,7 @@ import {
   buildTopbar,
   buildTopbarRight,
   buildTopbarTitle,
+  resolveBackAction,
 } from "./lib/topbarConfig";
 import {
   readNotificationOpenData,
@@ -9304,12 +9307,74 @@ export const useAppShellComposition = () => {
     setChatDraft("");
   }, []);
 
-  const topbar = buildTopbar({
+  const backActionContext = {
     closeContactDetail,
     contactPayBackToChatId: contactPayBackToChatRef.current,
     navigateToMainReturn,
-    route,
-    t,
+  };
+
+  const topbar = buildTopbar({ ...backActionContext, route, t });
+
+  const closePostPaySaveContact = React.useCallback(() => {
+    setPostPaySaveContact(null);
+  }, []);
+
+  /**
+   * The topmost dismissible modal in `AuthenticatedLayout`, or null.
+   *
+   * These modals are plain state rendered as siblings of the route content, so
+   * nothing unmounts them on navigation — without this the Android back press
+   * would move the route out from under an open payment confirmation and leave
+   * its pending promise unresolved. Order is the reverse of the render order,
+   * because the last sibling rendered is the one on top.
+   */
+  const dismissTopModal = React.useMemo((): (() => void) | null => {
+    if (shareOptionsText) return closeShareOptions;
+    if (nfcWritePromptKind && shouldRenderNativeNfcWritePrompt()) {
+      return cancelPendingNfcWrite;
+    }
+    // The paid overlay hides every confirmation below it and clears itself on a
+    // timer, so there is nothing for back to dismiss while it is up.
+    if (paidOverlayIsOpen) return null;
+    if (pendingPaymentMintMeltConfirmation) {
+      return closePaymentMintMeltConfirmation;
+    }
+    if (pendingMintAutoswapChangeConfirmation) {
+      return closeMintAutoswapChangeConfirmation;
+    }
+    if (pendingLnurlWithdrawConfirmation) {
+      return closeLnurlWithdrawConfirmation;
+    }
+    if (pendingLightningInvoiceConfirmation) {
+      return closeLightningInvoiceConfirmation;
+    }
+    if (postPaySaveContact) return closePostPaySaveContact;
+    return null;
+  }, [
+    cancelPendingNfcWrite,
+    closeLightningInvoiceConfirmation,
+    closeLnurlWithdrawConfirmation,
+    closeMintAutoswapChangeConfirmation,
+    closePaymentMintMeltConfirmation,
+    closePostPaySaveContact,
+    closeShareOptions,
+    nfcWritePromptKind,
+    paidOverlayIsOpen,
+    pendingLightningInvoiceConfirmation,
+    pendingLnurlWithdrawConfirmation,
+    pendingMintAutoswapChangeConfirmation,
+    pendingPaymentMintMeltConfirmation,
+    postPaySaveContact,
+    shareOptionsText,
+  ]);
+
+  useNativeBackHandler({
+    closeMenu,
+    closeScan,
+    dismissTopModal,
+    menuIsOpen,
+    navigateBack: resolveBackAction(route, backActionContext),
+    scanIsOpen,
   });
 
   const topbarRight = buildTopbarRight({
