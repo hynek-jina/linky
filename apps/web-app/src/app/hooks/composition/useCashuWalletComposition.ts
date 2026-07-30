@@ -216,7 +216,6 @@ type CashuTokenQueryRow = Evolu.InferRow<
 interface UseCashuWalletCompositionParams {
   cashuTokensAll: readonly CashuTokenQueryRow[];
   contactPayBackToChatRef: React.MutableRefObject<ContactId | null>;
-  contactsHeaderVisible: boolean;
   contactsMessaging: Pick<
     ContactsMessagingCompositionResult,
     | "activeContactsOwnerContactCount"
@@ -310,7 +309,6 @@ interface UseCashuWalletCompositionParams {
 export const useCashuWalletComposition = ({
   cashuTokensAll,
   contactPayBackToChatRef,
-  contactsHeaderVisible,
   contactsMessaging,
   formatDisplayedAmountParts,
   formatDisplayedAmountText,
@@ -772,7 +770,6 @@ export const useCashuWalletComposition = ({
 
   useRouteAmountResetEffects({
     contactPayBackToChatRef,
-    contactsHeaderVisible,
     routeKind: route.kind,
     setContactPaymentIntent,
     setLnAddressPayAmount,
