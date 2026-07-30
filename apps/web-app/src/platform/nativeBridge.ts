@@ -21,6 +21,16 @@ type NativeScanResult = {
   value: string | null;
 };
 
+interface NativeBridgeRequestOptions<Result> {
+  eventName: string;
+  failure?: (error: unknown) => Result;
+  fallback: Result;
+  invoke: () => boolean | void;
+  parse: (event: Event) => Result | null;
+  signal?: AbortSignal;
+  timeoutMs: number;
+}
+
 export interface NativeScanStreamHandle {
   stop: () => void;
 }
@@ -147,6 +157,85 @@ const isAndroidNotificationsBridge = (
 const normalizeString = (value: unknown): string | null => {
   const normalized = String(value ?? "").trim();
   return normalized || null;
+};
+
+const parseNativeScanResultEvent = (event: Event): NativeScanResult | null => {
+  if (!(event instanceof CustomEvent) || !isRecord(event.detail)) {
+    return null;
+  }
+
+  const status = normalizeString(Reflect.get(event.detail, "status"));
+  const value = normalizeString(Reflect.get(event.detail, "value"));
+  const message = normalizeString(Reflect.get(event.detail, "message"));
+
+  if (status === "success" && value) {
+    return message === null
+      ? { cancelled: false, value }
+      : { cancelled: false, message, value };
+  }
+
+  if (status !== "cancelled" && status !== "error" && status !== "success") {
+    return null;
+  }
+
+  return message === null
+    ? { cancelled: status !== "error", value: null }
+    : { cancelled: status !== "error", message, value: null };
+};
+
+const requestNativeBridgeEvent = <Result>({
+  eventName,
+  failure,
+  fallback,
+  invoke,
+  parse,
+  signal,
+  timeoutMs,
+}: NativeBridgeRequestOptions<Result>): Promise<Result> => {
+  return new Promise<Result>((resolve) => {
+    let settled = false;
+
+    const finish = (result: Result) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    const onResult: EventListener = (event) => {
+      finish(parse(event) ?? fallback);
+    };
+
+    const onAbort = () => {
+      finish(fallback);
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      finish(fallback);
+    }, timeoutMs);
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener(eventName, onResult);
+      signal?.removeEventListener("abort", onAbort);
+    };
+
+    window.addEventListener(eventName, onResult);
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    if (signal?.aborted) {
+      finish(fallback);
+      return;
+    }
+
+    try {
+      if (invoke() === false) {
+        finish(fallback);
+      }
+    } catch (error) {
+      finish(failure?.(error) ?? fallback);
+    }
+  });
 };
 
 const getAndroidSecretStorageBridge = (): AndroidSecretStorageBridge | null => {
@@ -342,60 +431,21 @@ export const startNativeQrScan = (): Promise<NativeScanResult> | null => {
     return null;
   }
 
-  return new Promise<NativeScanResult>((resolve) => {
-    const eventName = "linky-native-scan-result";
-
-    const onResult: EventListener = (event) => {
-      if (!(event instanceof CustomEvent) || !isRecord(event.detail)) {
-        return;
-      }
-
-      cleanup();
-
-      const status = normalizeString(Reflect.get(event.detail, "status"));
-      const value = normalizeString(Reflect.get(event.detail, "value"));
-      const message = normalizeString(Reflect.get(event.detail, "message"));
-
-      if (status === "success" && value) {
-        resolve(
-          message === null
-            ? { cancelled: false, value }
-            : { cancelled: false, message, value },
-        );
-        return;
-      }
-
-      resolve(
-        message === null
-          ? { cancelled: status !== "error", value: null }
-          : { cancelled: status !== "error", message, value: null },
-      );
-    };
-
-    const cleanup = () => {
-      window.removeEventListener(eventName, onResult);
-    };
-
-    window.addEventListener(eventName, onResult, {
-      once: true,
-    });
-
-    try {
-      if (!bridge.startScan) {
-        cleanup();
-        resolve({ cancelled: true, value: null });
-        return;
-      }
-
+  return requestNativeBridgeEvent({
+    eventName: "linky-native-scan-result",
+    failure: (error) => ({
+      cancelled: false,
+      message: String(error ?? "Native scanner failed"),
+      value: null,
+    }),
+    fallback: { cancelled: true, value: null },
+    invoke: () => {
+      if (!bridge.startScan) return false;
       bridge.startScan();
-    } catch (error) {
-      cleanup();
-      resolve({
-        cancelled: false,
-        message: String(error ?? "Native scanner failed"),
-        value: null,
-      });
-    }
+      return true;
+    },
+    parse: parseNativeScanResultEvent,
+    timeoutMs: 2 * 60 * 1000,
   });
 };
 
@@ -414,28 +464,8 @@ export const startNativeQrScanStream = (
   const eventName = "linky-native-scan-result";
 
   const onResultEvent: EventListener = (event) => {
-    if (!(event instanceof CustomEvent) || !isRecord(event.detail)) {
-      return;
-    }
-
-    const status = normalizeString(Reflect.get(event.detail, "status"));
-    const value = normalizeString(Reflect.get(event.detail, "value"));
-    const message = normalizeString(Reflect.get(event.detail, "message"));
-
-    if (status === "success" && value) {
-      onResult(
-        message === null
-          ? { cancelled: false, value }
-          : { cancelled: false, message, value },
-      );
-      return;
-    }
-
-    onResult(
-      message === null
-        ? { cancelled: status !== "error", value: null }
-        : { cancelled: status !== "error", message, value: null },
-    );
+    const result = parseNativeScanResultEvent(event);
+    if (result) onResult(result);
   };
 
   const cleanup = () => {
@@ -505,41 +535,34 @@ export const requestNativeNotificationPermission = async (): Promise<
     return true;
   }
 
-  return new Promise<boolean>((resolve) => {
-    const eventName = "linky-native-notification-permission";
-
-    const onResult: EventListener = (event) => {
+  return requestNativeBridgeEvent({
+    eventName: "linky-native-notification-permission",
+    fallback: false,
+    invoke: () => {
+      if (!bridge.requestPermission) return false;
+      bridge.requestPermission();
+      return true;
+    },
+    parse: (event) => {
       if (!(event instanceof CustomEvent) || !isRecord(event.detail)) {
-        return;
+        return null;
       }
 
-      cleanup();
       const permission = normalizeString(
         Reflect.get(event.detail, "permission"),
       );
-      resolve(permission === "granted");
-    };
-
-    const cleanup = () => {
-      window.removeEventListener(eventName, onResult);
-    };
-
-    window.addEventListener(eventName, onResult, {
-      once: true,
-    });
-
-    try {
-      if (!bridge.requestPermission) {
-        cleanup();
-        resolve(false);
-        return;
+      if (
+        permission !== "denied" &&
+        permission !== "granted" &&
+        permission !== "prompt" &&
+        permission !== "unsupported"
+      ) {
+        return null;
       }
 
-      bridge.requestPermission();
-    } catch {
-      cleanup();
-      resolve(false);
-    }
+      return permission === "granted";
+    },
+    timeoutMs: 30_000,
   });
 };
 

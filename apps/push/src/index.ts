@@ -34,7 +34,6 @@ relayWatcher.start();
 const cleanupTimer = setInterval(() => {
   const nowMs = Date.now();
   storage.pruneChallenges(nowMs);
-  storage.pruneSeenEvents(nowMs, RelayWatcher.SEEN_EVENT_RETENTION_MS);
   relayWatcher.pruneSeen(nowMs);
   rateLimiter.prune(nowMs);
 }, 60 * 1000);

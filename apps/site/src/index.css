@@ -40,7 +40,8 @@ button {
   min-height: 100vh;
 }
 
-.site-shell {
+.site-shell,
+.cashu-shell {
   position: relative;
   isolation: isolate;
   min-height: 100vh;
@@ -52,6 +53,94 @@ button {
 .cashu-token-view {
   width: min(1120px, 100%);
   margin: 0 auto;
+}
+
+.cashu-panel {
+  padding: 24px 20px;
+  border-radius: 28px;
+  background: rgba(7, 18, 18, 0.72);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+}
+
+.cashu-panel-highlight {
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(20, 184, 166, 0.16),
+      transparent 28%
+    ),
+    rgba(7, 18, 18, 0.82);
+}
+
+.cashu-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.cashu-redeem-form {
+  margin-top: 20px;
+}
+
+.cashu-primary-actions {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.cashu-additional-options {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.cashu-option-column {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.cashu-option-column-qr {
+  justify-items: start;
+}
+
+.cashu-label {
+  color: #8fe1d4;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.cashu-option-title {
+  margin: 0;
+}
+
+.cashu-option-description {
+  margin: 0;
+  color: rgba(247, 244, 234, 0.72);
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.cashu-textarea,
+.cashu-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(247, 244, 234, 0.1);
+  border-radius: 18px;
+  background: rgba(3, 13, 13, 0.78);
+  color: #f7f4ea;
+  font: inherit;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.cashu-textarea {
+  min-height: 132px;
+  resize: vertical;
 }
 
 .cashu-textarea:focus,
@@ -69,55 +158,29 @@ button {
 }
 
 .cashu-token-header {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
 }
 
+.cashu-page-kicker {
+  margin: 0 0 12px;
+  color: #8fe1d4;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .cashu-mint-chip {
   display: flex;
   align-items: center;
+  gap: 16px;
+  min-width: 0;
 }
 
 .cashu-header-cta {
   flex-shrink: 0;
-}
-
-.cashu-token-actions {
-  display: inline-flex;
-  align-items: flex-start;
-  width: 42px;
-  height: 42px;
-  border: 0;
-  border-radius: 14px;
-  background: transparent;
-  box-shadow: none;
-  color: #fffdf4;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease,
-    transform 160ms ease;
-}
-
-.cashu-token-action:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.cashu-token-action:active {
-  transform: translateY(1px);
-}
-
-.cashu-token-action-glyph {
-  font-size: 1rem;
-  line-height: 1;
-  transform: translateY(-1px);
-}
-
-.cashu-token-action-logo {
-  width: 18px;
-  height: 18px;
-  display: block;
-  transform: translateY(-1px);
 }
 
 .cashu-token-copy {
@@ -211,13 +274,6 @@ button {
   color: #ffb4a3;
 }
 
-.cashu-inline-link {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 0.16em;
-  text-decoration-thickness: 0.08em;
-}
-
 .cashu-text-button {
   justify-self: center;
   padding: 0;
@@ -261,14 +317,6 @@ button {
   width: 100%;
   height: auto;
   border-radius: 16px;
-}
-
-.site-shell {
-  position: relative;
-  isolation: isolate;
-  min-height: 100vh;
-  overflow: clip;
-  padding: 20px 16px 28px;
 }
 
 .site-backdrop {
@@ -488,11 +536,6 @@ button {
   font: inherit;
 }
 
-.site-menu-chevron {
-  color: rgba(255, 253, 244, 0.5);
-  font-size: 1.15rem;
-}
-
 .hero {
   display: block;
 }
@@ -529,8 +572,7 @@ button {
   font-size: clamp(2.9rem, 11vw, 5.8rem);
 }
 
-.lede,
-.cta-hint {
+.lede {
   margin: 0;
   color: rgba(247, 244, 234, 0.78);
 }
@@ -665,12 +707,6 @@ button {
   display: block;
 }
 
-.cta-option-note {
-  display: block;
-  font-size: 0.84rem;
-  color: rgba(247, 244, 234, 0.54);
-}
-
 .cta-option:hover {
   background: rgba(255, 255, 255, 0.06);
 }
@@ -687,12 +723,6 @@ button {
 .cta-option:disabled {
   cursor: not-allowed;
   color: rgba(247, 244, 234, 0.38);
-}
-
-.cta-hint {
-  margin-top: 14px;
-  max-width: 30rem;
-  font-size: 0.95rem;
 }
 
 .hero-visual {

@@ -17,6 +17,7 @@ import {
   StorageConflictError,
   StorageLimitError,
 } from "./storage";
+import type { OwnershipProofInput, ProofAction } from "./types";
 
 interface HttpHandlerDependencies {
   config: PushServiceConfig;
@@ -26,6 +27,11 @@ interface HttpHandlerDependencies {
   pushDelivery: {
     nativeDeliveryEnabled: boolean;
   };
+}
+
+interface OwnershipRequest {
+  proofs: OwnershipProofInput[];
+  recipientPubkeys: string[];
 }
 
 function hashEndpoint(endpoint: string): string {
@@ -115,6 +121,25 @@ async function readJsonBody(
   return json;
 }
 
+async function readVerifiedOwnershipRequest<Body extends OwnershipRequest>(
+  request: Request,
+  readBody: (value: unknown) => Body,
+  action: ProofAction,
+  ownershipVerifier: OwnershipVerifier,
+  nowMs: number,
+): Promise<{ body: Body; consumedChallengeNonces: string[] }> {
+  const body = readBody(await readJsonBody(request));
+  return {
+    body,
+    consumedChallengeNonces: ownershipVerifier.verifyProofs(
+      action,
+      body.recipientPubkeys,
+      body.proofs,
+      nowMs,
+    ),
+  };
+}
+
 function errorResponse(
   config: PushServiceConfig,
   request: Request,
@@ -189,7 +214,6 @@ export function createHttpHandler({
       }
 
       const ip = ipFromRequest(request, server);
-      rateLimiter.prune(nowMs);
 
       if (request.method === "POST" && url.pathname === "/auth/challenge") {
         rateLimiter.check(
@@ -228,13 +252,14 @@ export function createHttpHandler({
           nowMs,
         );
 
-        const body = readSubscribeRequest(await readJsonBody(request));
-        const consumedChallengeNonces = ownershipVerifier.verifyProofs(
-          "subscribe",
-          body.recipientPubkeys,
-          body.proofs,
-          nowMs,
-        );
+        const { body, consumedChallengeNonces } =
+          await readVerifiedOwnershipRequest(
+            request,
+            readSubscribeRequest,
+            "subscribe",
+            ownershipVerifier,
+            nowMs,
+          );
 
         storage.registerSubscription({
           cleanupLegacySubscriptions: body.cleanupLegacySubscriptions,
@@ -272,13 +297,14 @@ export function createHttpHandler({
           });
         }
 
-        const body = readNativeSubscribeRequest(await readJsonBody(request));
-        const consumedChallengeNonces = ownershipVerifier.verifyProofs(
-          "subscribe",
-          body.recipientPubkeys,
-          body.proofs,
-          nowMs,
-        );
+        const { body, consumedChallengeNonces } =
+          await readVerifiedOwnershipRequest(
+            request,
+            readNativeSubscribeRequest,
+            "subscribe",
+            ownershipVerifier,
+            nowMs,
+          );
 
         storage.registerNativeSubscription({
           cleanupLegacySubscriptions: body.cleanupLegacySubscriptions,
@@ -310,13 +336,14 @@ export function createHttpHandler({
           nowMs,
         );
 
-        const body = readUnsubscribeRequest(await readJsonBody(request));
-        const consumedChallengeNonces = ownershipVerifier.verifyProofs(
-          "unsubscribe",
-          body.recipientPubkeys,
-          body.proofs,
-          nowMs,
-        );
+        const { body, consumedChallengeNonces } =
+          await readVerifiedOwnershipRequest(
+            request,
+            readUnsubscribeRequest,
+            "unsubscribe",
+            ownershipVerifier,
+            nowMs,
+          );
 
         const result = storage.unregisterSubscriptionPubkeys({
           endpoint: body.endpoint,
@@ -344,13 +371,14 @@ export function createHttpHandler({
           nowMs,
         );
 
-        const body = readNativeUnsubscribeRequest(await readJsonBody(request));
-        const consumedChallengeNonces = ownershipVerifier.verifyProofs(
-          "unsubscribe",
-          body.recipientPubkeys,
-          body.proofs,
-          nowMs,
-        );
+        const { body, consumedChallengeNonces } =
+          await readVerifiedOwnershipRequest(
+            request,
+            readNativeUnsubscribeRequest,
+            "unsubscribe",
+            ownershipVerifier,
+            nowMs,
+          );
 
         const result = storage.unregisterNativeSubscriptionPubkeys({
           token: body.token,

@@ -62,18 +62,27 @@ interface QueuePaymentTelemetryArgs {
   status: PaymentTelemetryStatus;
 }
 
+interface PaymentTelemetryLease {
+  expiresAtMs: number;
+  owner: string;
+}
+
 const PAYMENT_ANALYTICS_RECIPIENT_NPUB =
   "npub1xuxvcnmw4drf8duzalvalxrfxjvwtrjdmwxy0ez2e62uje4drrvqu6pz2w";
 const LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY =
   "linky.site.pendingPaymentTelemetry.v1";
+const LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY =
+  "linky.site.pendingPaymentTelemetryLock.v1";
 const PAYMENT_TELEMETRY_KIND = 24134;
 const PAYMENT_TELEMETRY_VALUE = "payment_telemetry";
 const MAX_QUEUE_ITEMS = 250;
 const MAX_ITEMS_PER_FLUSH = 10;
+const PAYMENT_TELEMETRY_LEASE_TTL_MS = 15_000;
 const AMOUNT_BUCKETS = [1, 10, 100, 1_000, 10_000, 100_000];
 const FEE_BUCKETS = [1, 5, 10, 25, 100, 500];
 
 let flushPromise: Promise<void> | null = null;
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 const getLowercaseUserAgent = (): string => {
   if (typeof navigator === "undefined") {
@@ -176,6 +185,15 @@ const getTelemetryDevicePlatform = ():
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const isPaymentTelemetryLease = (
+  value: unknown,
+): value is PaymentTelemetryLease => {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.owner === "string" && typeof value.expiresAtMs === "number"
+  );
 };
 
 const makeLocalId = (): string => {
@@ -404,6 +422,107 @@ const writeQueue = (items: readonly LocalPaymentTelemetryEvent[]): void => {
   }
 };
 
+const readPaymentTelemetryLease = (): PaymentTelemetryLease | null => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(
+      LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY,
+    );
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isPaymentTelemetryLease(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const writePaymentTelemetryLease = (lease: PaymentTelemetryLease): void => {
+  try {
+    window.localStorage.setItem(
+      LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY,
+      JSON.stringify(lease),
+    );
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
+const removePaymentTelemetryLease = (owner: string): void => {
+  try {
+    if (readPaymentTelemetryLease()?.owner === owner) {
+      window.localStorage.removeItem(
+        LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY,
+      );
+    }
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
+const withPaymentTelemetryLease = async (
+  run: () => Promise<void>,
+): Promise<boolean> => {
+  const nowMs = Date.now();
+  const current = readPaymentTelemetryLease();
+  if (current && current.expiresAtMs > nowMs) {
+    return false;
+  }
+
+  const owner = makeLocalId();
+  writePaymentTelemetryLease({
+    expiresAtMs: nowMs + PAYMENT_TELEMETRY_LEASE_TTL_MS,
+    owner,
+  });
+  if (readPaymentTelemetryLease()?.owner !== owner) {
+    return false;
+  }
+
+  const heartbeat = window.setInterval(
+    () => {
+      if (readPaymentTelemetryLease()?.owner !== owner) return;
+      writePaymentTelemetryLease({
+        expiresAtMs: Date.now() + PAYMENT_TELEMETRY_LEASE_TTL_MS,
+        owner,
+      });
+    },
+    Math.floor(PAYMENT_TELEMETRY_LEASE_TTL_MS / 3),
+  );
+
+  try {
+    await run();
+    return true;
+  } finally {
+    window.clearInterval(heartbeat);
+    removePaymentTelemetryLease(owner);
+  }
+};
+
+const schedulePaymentTelemetryFlush = (minimumDelayMs = 0): void => {
+  if (typeof window === "undefined") return;
+  if (flushTimer !== null) {
+    window.clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+
+  const queue = readQueue();
+  if (queue.length === 0) return;
+
+  const nextAttemptAtSec = Math.min(
+    ...queue.map((item) => item.nextAttemptAtSec),
+  );
+  const delayMs = Math.max(
+    minimumDelayMs,
+    nextAttemptAtSec * 1000 - Date.now(),
+    0,
+  );
+  flushTimer = window.setTimeout(() => {
+    flushTimer = null;
+    void flushPaymentTelemetryQueue();
+  }, delayMs);
+};
+
 const createPaymentTelemetryWrappedEvent = (args: {
   item: LocalPaymentTelemetryEvent;
 }): { baseEvent: UnsignedEvent } => {
@@ -477,6 +596,7 @@ export const queuePaymentTelemetry = (
   const entry = createLocalPaymentTelemetryEvent(args, createdAtSec);
   const nextQueue = [entry, ...readQueue()].slice(0, MAX_QUEUE_ITEMS);
   writeQueue(nextQueue);
+  schedulePaymentTelemetryFlush();
 };
 
 export const flushPaymentTelemetryQueue = async (): Promise<void> => {
@@ -484,53 +604,64 @@ export const flushPaymentTelemetryQueue = async (): Promise<void> => {
   if (typeof window === "undefined") return;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 
+  let nextMinimumDelayMs = 0;
   flushPromise = (async () => {
-    const queue = readQueue();
-    if (queue.length === 0) return;
+    const acquired = await withPaymentTelemetryLease(async () => {
+      const queue = readQueue();
+      if (queue.length === 0) return;
 
-    const nowSec = Math.floor(Date.now() / 1000);
-    const dueItems = queue
-      .filter((item) => item.nextAttemptAtSec <= nowSec)
-      .slice(0, MAX_ITEMS_PER_FLUSH);
-    if (dueItems.length === 0) return;
+      const nowSec = Math.floor(Date.now() / 1000);
+      const dueItems = queue
+        .filter((item) => item.nextAttemptAtSec <= nowSec)
+        .slice(0, MAX_ITEMS_PER_FLUSH);
+      if (dueItems.length === 0) return;
 
-    const decoded = nip19.decode(PAYMENT_ANALYTICS_RECIPIENT_NPUB);
-    if (decoded.type !== "npub" || typeof decoded.data !== "string") {
-      return;
-    }
-
-    const recipientPublicKey = decoded.data;
-    const remainingById = new Map(queue.map((item) => [item.id, item]));
-
-    for (const item of dueItems) {
-      try {
-        const event = createPaymentTelemetryWrappedEvent({
-          item,
-        });
-        event.baseEvent.tags[0] = ["p", recipientPublicKey];
-        await publishSiteWrappedEvent({
-          baseEvent: event.baseEvent,
-          errorMessage: "Failed to publish payment telemetry",
-          recipientNpub: PAYMENT_ANALYTICS_RECIPIENT_NPUB,
-        });
-        remainingById.delete(item.id);
-      } catch {
-        const current = remainingById.get(item.id);
-        if (!current) continue;
-        const nextAttemptCount = current.attemptCount + 1;
-        remainingById.set(item.id, {
-          ...current,
-          attemptCount: nextAttemptCount,
-          lastAttemptAtSec: nowSec,
-          nextAttemptAtSec:
-            nowSec + getPaymentTelemetryRetryDelaySec(nextAttemptCount),
-        });
+      const decoded = nip19.decode(PAYMENT_ANALYTICS_RECIPIENT_NPUB);
+      if (decoded.type !== "npub" || typeof decoded.data !== "string") {
+        return;
       }
-    }
 
-    writeQueue(Array.from(remainingById.values()));
+      const recipientPublicKey = decoded.data;
+      const publishedIds = new Set<string>();
+      const retryById = new Map<string, LocalPaymentTelemetryEvent>();
+
+      for (const item of dueItems) {
+        try {
+          const event = createPaymentTelemetryWrappedEvent({
+            item,
+          });
+          event.baseEvent.tags[0] = ["p", recipientPublicKey];
+          await publishSiteWrappedEvent({
+            baseEvent: event.baseEvent,
+            errorMessage: "Failed to publish payment telemetry",
+            recipientNpub: PAYMENT_ANALYTICS_RECIPIENT_NPUB,
+          });
+          publishedIds.add(item.id);
+        } catch {
+          const nextAttemptCount = item.attemptCount + 1;
+          retryById.set(item.id, {
+            ...item,
+            attemptCount: nextAttemptCount,
+            lastAttemptAtSec: nowSec,
+            nextAttemptAtSec:
+              nowSec + getPaymentTelemetryRetryDelaySec(nextAttemptCount),
+          });
+        }
+      }
+
+      const nextQueue = readQueue().flatMap((item) => {
+        if (publishedIds.has(item.id)) return [];
+        return [retryById.get(item.id) ?? item];
+      });
+      writeQueue(nextQueue);
+    });
+
+    if (!acquired) {
+      nextMinimumDelayMs = 1_000;
+    }
   })().finally(() => {
     flushPromise = null;
+    schedulePaymentTelemetryFlush(nextMinimumDelayMs);
   });
 
   return await flushPromise;
