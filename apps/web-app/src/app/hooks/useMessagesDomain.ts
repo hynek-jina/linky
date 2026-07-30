@@ -475,50 +475,42 @@ export const useMessagesDomain = ({
     [visibleMessageOwnerIdsSet],
   );
 
-  const nostrReactionDeletedWrapIds = React.useMemo(() => {
+  const normalizedReactionRows = React.useMemo(() => {
     const deletedWrapIds = new Set<string>();
+    const seenWrapIds = new Set<string>();
+    const reactions: LocalNostrReaction[] = [];
     for (const row of nostrReactionRows) {
       if (!isVisibleMessageOwner(row)) continue;
-      if (!isSqliteTrueish(row.isDeleted)) continue;
       const wrapId = toTrimmedText(row.wrapId);
-      if (!wrapId) continue;
-      deletedWrapIds.add(wrapId);
+      if (wrapId) seenWrapIds.add(wrapId);
+      if (isSqliteTrueish(row.isDeleted)) {
+        if (wrapId) deletedWrapIds.add(wrapId);
+        continue;
+      }
+      const normalized = toLocalNostrReaction(row);
+      if (normalized) reactions.push(normalized);
     }
-    return deletedWrapIds;
+    return { deletedWrapIds, reactions, seenWrapIds };
   }, [isVisibleMessageOwner, nostrReactionRows]);
 
-  const nostrReactionSeenWrapIds = React.useMemo(() => {
-    const seenWrapIds = new Set<string>();
-    for (const row of nostrReactionRows) {
+  const normalizedMessageRows = React.useMemo(() => {
+    const parsed: LocalNostrMessage[] = [];
+    for (const row of nostrMessageRows) {
       if (!isVisibleMessageOwner(row)) continue;
-      const wrapId = toTrimmedText(row.wrapId);
-      if (!wrapId) continue;
-      seenWrapIds.add(wrapId);
+      const normalized = toLocalNostrMessage(row);
+      if (normalized) parsed.push(normalized);
     }
-    return seenWrapIds;
-  }, [isVisibleMessageOwner, nostrReactionRows]);
+    return parsed;
+  }, [isVisibleMessageOwner, nostrMessageRows]);
 
   const evoluNostrMessagesLocal = React.useMemo(() => {
-    const parsed: LocalNostrMessage[] = [];
-    for (const row of nostrMessageRows) {
-      if (!isVisibleMessageOwner(row)) continue;
-      const normalized = toLocalNostrMessage(row);
-      if (normalized) parsed.push(normalized);
-    }
-    const deduped = dedupeNostrMessagesByPriority(parsed);
+    const deduped = dedupeNostrMessagesByPriority(normalizedMessageRows);
     return deduped.sort((a, b) => a.createdAtSec - b.createdAtSec);
-  }, [isVisibleMessageOwner, nostrMessageRows]);
+  }, [normalizedMessageRows]);
 
   const knownNostrMessageIdentityIndex = React.useMemo(() => {
-    const parsed: LocalNostrMessage[] = [];
-    for (const row of nostrMessageRows) {
-      if (!isVisibleMessageOwner(row)) continue;
-      const normalized = toLocalNostrMessage(row);
-      if (normalized) parsed.push(normalized);
-    }
-
-    return buildKnownNostrMessageIdentityIndex(parsed);
-  }, [isVisibleMessageOwner, nostrMessageRows]);
+    return buildKnownNostrMessageIdentityIndex(normalizedMessageRows);
+  }, [normalizedMessageRows]);
 
   const persistOverlayMessages = React.useCallback(
     (nextMessages: LocalNostrMessage[]) => {
@@ -571,14 +563,9 @@ export const useMessagesDomain = ({
     const parsed: LocalNostrReaction[] = [];
     const seenWrapIds = new Set<string>();
     const seenClientIds = new Set<string>();
-    for (const row of nostrReactionRows) {
-      if (!isVisibleMessageOwner(row)) continue;
-      if (isSqliteTrueish(row.isDeleted)) continue;
-      const normalized = toLocalNostrReaction(row);
-      if (!normalized) continue;
-
+    for (const normalized of normalizedReactionRows.reactions) {
       const wrapId = toTrimmedText(normalized.wrapId);
-      if (wrapId && nostrReactionDeletedWrapIds.has(wrapId)) continue;
+      if (wrapId && normalizedReactionRows.deletedWrapIds.has(wrapId)) continue;
       if (wrapId && seenWrapIds.has(wrapId)) continue;
       if (wrapId) seenWrapIds.add(wrapId);
 
@@ -590,7 +577,7 @@ export const useMessagesDomain = ({
     }
     parsed.sort((a, b) => a.createdAtSec - b.createdAtSec);
     return parsed;
-  }, [isVisibleMessageOwner, nostrReactionDeletedWrapIds, nostrReactionRows]);
+  }, [normalizedReactionRows]);
 
   const nostrMessageWrapIdsRef = React.useRef<Set<string>>(new Set());
   const nostrMessagesLatestRef = React.useRef<LocalNostrMessage[]>([]);
@@ -619,8 +606,10 @@ export const useMessagesDomain = ({
   React.useEffect(() => {
     nostrReactionsLatestRef.current = nostrReactionsLocal;
     nostrReactionUpdateShadowRef.current.clear();
-    nostrReactionWrapIdsRef.current = new Set(nostrReactionSeenWrapIds);
-  }, [nostrReactionSeenWrapIds, nostrReactionsLocal]);
+    nostrReactionWrapIdsRef.current = new Set(
+      normalizedReactionRows.seenWrapIds,
+    );
+  }, [normalizedReactionRows, nostrReactionsLocal]);
 
   const insertNostrMessage = React.useCallback(
     (payload: NostrMessageInsertPayload) => {
@@ -644,37 +633,41 @@ export const useMessagesDomain = ({
     [insert, messagesOwnerId, recordMessagesOwnerWrite],
   );
 
-  const getVisibleRowOwnerIdsById = React.useCallback(
-    (rows: readonly Record<string, unknown>[], id: unknown): OwnerId[] => {
-      const normalizedId = toTrimmedText(id);
-      if (!normalizedId) return [];
-
-      const ownerIds: OwnerId[] = [];
-      const seenOwnerIds = new Set<string>();
+  const buildVisibleRowOwnerIdsById = React.useCallback(
+    (rows: readonly Record<string, unknown>[]) => {
+      const ownerIdsById = new Map<string, OwnerId[]>();
       for (const row of rows) {
         if (!isVisibleMessageOwner(row)) continue;
-        if (toTrimmedText(row.id) !== normalizedId) continue;
-
+        const id = toTrimmedText(row.id);
+        if (!id) continue;
         const ownerId = resolveStoredOwnerId(row);
         if (!ownerId) continue;
-
-        const ownerIdText = String(ownerId);
-        if (seenOwnerIds.has(ownerIdText)) continue;
-        seenOwnerIds.add(ownerIdText);
-        ownerIds.push(ownerId);
+        const existing = ownerIdsById.get(id);
+        if (!existing) {
+          ownerIdsById.set(id, [ownerId]);
+          continue;
+        }
+        if (!existing.some((candidate) => candidate === ownerId)) {
+          existing.push(ownerId);
+        }
       }
-
-      return ownerIds;
+      return ownerIdsById;
     },
     [isVisibleMessageOwner],
+  );
+  const nostrMessageOwnerIdsById = React.useMemo(
+    () => buildVisibleRowOwnerIdsById(nostrMessageRows),
+    [buildVisibleRowOwnerIdsById, nostrMessageRows],
+  );
+  const nostrReactionOwnerIdsById = React.useMemo(
+    () => buildVisibleRowOwnerIdsById(nostrReactionRows),
+    [buildVisibleRowOwnerIdsById, nostrReactionRows],
   );
 
   const updateNostrMessage = React.useCallback(
     (payload: NostrMessageUpdatePayload) => {
-      const rowOwnerIds = getVisibleRowOwnerIdsById(
-        nostrMessageRows,
-        payload.id,
-      );
+      const rowOwnerIds =
+        nostrMessageOwnerIdsById.get(toTrimmedText(payload.id)) ?? [];
       if (rowOwnerIds.length > 0) {
         for (const ownerId of rowOwnerIds) {
           update("nostrMessage", payload, { ownerId });
@@ -689,9 +682,8 @@ export const useMessagesDomain = ({
       recordMessagesOwnerWrite();
     },
     [
-      getVisibleRowOwnerIdsById,
       messagesOwnerId,
-      nostrMessageRows,
+      nostrMessageOwnerIdsById,
       recordMessagesOwnerWrite,
       update,
     ],
@@ -699,10 +691,8 @@ export const useMessagesDomain = ({
 
   const updateNostrReaction = React.useCallback(
     (payload: NostrReactionUpdatePayload) => {
-      const rowOwnerIds = getVisibleRowOwnerIdsById(
-        nostrReactionRows,
-        payload.id,
-      );
+      const rowOwnerIds =
+        nostrReactionOwnerIdsById.get(toTrimmedText(payload.id)) ?? [];
       if (rowOwnerIds.length > 0) {
         for (const ownerId of rowOwnerIds) {
           update("nostrReaction", payload, { ownerId });
@@ -717,9 +707,8 @@ export const useMessagesDomain = ({
       recordMessagesOwnerWrite();
     },
     [
-      getVisibleRowOwnerIdsById,
       messagesOwnerId,
-      nostrReactionRows,
+      nostrReactionOwnerIdsById,
       recordMessagesOwnerWrite,
       update,
     ],
@@ -1512,16 +1501,15 @@ export const useMessagesDomain = ({
         }
       }
 
+      const overlayMessageIds = new Set(
+        overlayMessagesRef.current
+          .map((message) => toTrimmedText(message.id))
+          .filter(Boolean),
+      );
       for (const message of nostrMessagesLocal) {
         const messageId = toTrimmedText(message.id);
         if (!messageId || keepIds.has(messageId)) continue;
-        if (
-          overlayMessagesRef.current.some(
-            (overlayMessage) => toTrimmedText(overlayMessage.id) === messageId,
-          )
-        ) {
-          continue;
-        }
+        if (overlayMessageIds.has(messageId)) continue;
         updateNostrMessage({ id: messageId, isDeleted: Evolu.sqliteTrue });
       }
 

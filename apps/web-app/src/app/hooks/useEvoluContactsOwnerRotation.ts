@@ -1,8 +1,11 @@
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
 import React from "react";
-import type { EvoluHistoryMutationEntry } from "../../evolu";
-import { evolu, loadEvoluHistoryMutationEntries } from "../../evolu";
+import {
+  evolu,
+  loadEvoluHistoryMutationCounts,
+  subscribeEvoluHistoryMutationVersion,
+} from "../../evolu";
 import {
   CASHU_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
   CONTACTS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
@@ -24,7 +27,6 @@ import {
   TRANSACTIONS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
 } from "../../utils/constants";
 import { deriveEvoluOwnerMnemonicFromSlip39 } from "../../utils/slip39Nostr";
-import { countOwnerHistoryWrites } from "../lib/ownerRotationHistory";
 import {
   decodeRotationSnapshot,
   encodeRotationSnapshot,
@@ -63,13 +65,31 @@ interface VisibleOwnerSyncData {
   syncOwners: Evolu.SyncOwner[];
 }
 
+type DeriveOwnerMnemonic = (
+  role: Parameters<typeof deriveEvoluOwnerMnemonicFromSlip39>[1],
+  index: number,
+) => Promise<string | null>;
+
+const createCachedOwnerMnemonicDeriver = (
+  slip39Seed: string,
+): DeriveOwnerMnemonic => {
+  const cache = new Map<string, Promise<string | null>>();
+  return (role, index) => {
+    const key = `${role}:${index}`;
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const pending = deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, role, index);
+    cache.set(key, pending);
+    return pending;
+  };
+};
+
 interface UseEvoluContactsOwnerRotationParams {
   appOwnerId: Evolu.OwnerId | null;
   isSeedLogin: boolean;
   pushToast: (message: string) => void;
   slip39Seed: string | null;
   t: (key: string) => string;
-  update: EvoluMutations["update"];
   upsert: EvoluMutations["upsert"];
 }
 
@@ -400,6 +420,9 @@ const deriveOwnerSyncDataFromSeed = async (
   cashuOwnerIndex: number,
   messagesOwnerIndex: number,
   transactionsOwnerIndex: number,
+  deriveOwnerMnemonic: DeriveOwnerMnemonic = createCachedOwnerMnemonicDeriver(
+    slip39Seed,
+  ),
 ): Promise<OwnerSyncData | null> => {
   const [
     metaMnemonic,
@@ -409,24 +432,12 @@ const deriveOwnerSyncDataFromSeed = async (
     messagesMnemonic,
     transactionsMnemonic,
   ] = await Promise.all([
-    deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "meta", 0),
-    deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "identity", 0),
-    deriveEvoluOwnerMnemonicFromSlip39(
-      slip39Seed,
-      "contacts",
-      contactsOwnerIndex,
-    ),
-    deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, "cashu", cashuOwnerIndex),
-    deriveEvoluOwnerMnemonicFromSlip39(
-      slip39Seed,
-      "messages",
-      messagesOwnerIndex,
-    ),
-    deriveEvoluOwnerMnemonicFromSlip39(
-      slip39Seed,
-      "transactions",
-      transactionsOwnerIndex,
-    ),
+    deriveOwnerMnemonic("meta", 0),
+    deriveOwnerMnemonic("identity", 0),
+    deriveOwnerMnemonic("contacts", contactsOwnerIndex),
+    deriveOwnerMnemonic("cashu", cashuOwnerIndex),
+    deriveOwnerMnemonic("messages", messagesOwnerIndex),
+    deriveOwnerMnemonic("transactions", transactionsOwnerIndex),
   ]);
 
   if (
@@ -471,10 +482,13 @@ const deriveVisibleOwnerSyncDataFromSeed = async (
   slip39Seed: string,
   role: RotatingOwnerRole,
   activeOwnerIndex: number,
+  deriveOwnerMnemonic: DeriveOwnerMnemonic = createCachedOwnerMnemonicDeriver(
+    slip39Seed,
+  ),
 ): Promise<VisibleOwnerSyncData> => {
   const mnemonics = await Promise.all(
     Array.from({ length: activeOwnerIndex + 1 }, (_value, index) =>
-      deriveEvoluOwnerMnemonicFromSlip39(slip39Seed, role, index),
+      deriveOwnerMnemonic(role, index),
     ),
   );
 
@@ -498,7 +512,6 @@ export const useEvoluContactsOwnerRotation = ({
   pushToast,
   slip39Seed,
   t,
-  update,
   upsert,
 }: UseEvoluContactsOwnerRotationParams): UseEvoluContactsOwnerRotationResult => {
   const initialContactsOwnerIndex = React.useMemo(
@@ -553,9 +566,10 @@ export const useEvoluContactsOwnerRotation = ({
     React.useState(false);
   const [allowMissingOwnerMetaBootstrap, setAllowMissingOwnerMetaBootstrap] =
     React.useState(false);
-  const [historyMutationEntries, setHistoryMutationEntries] = React.useState<
-    readonly EvoluHistoryMutationEntry[]
-  >([]);
+  const [historyMutationCounts, setHistoryMutationCounts] = React.useState<
+    Readonly<Record<string, number>>
+  >({});
+  const [historyMutationVersion, setHistoryMutationVersion] = React.useState(0);
 
   const ownerMetaQuery = React.useMemo(
     () =>
@@ -629,25 +643,13 @@ export const useEvoluContactsOwnerRotation = ({
   );
   const allTransactionsRows = useQuery(allTransactionsQuery);
 
-  React.useEffect(() => {
-    let cancelled = false;
-
-    void loadEvoluHistoryMutationEntries().then((rows) => {
-      if (cancelled) return;
-      setHistoryMutationEntries(rows);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    allCashuTokensRows,
-    allContactsRows,
-    allNostrMessagesRows,
-    allNostrReactionsRows,
-    allTransactionsRows,
-    ownerMetaRows,
-  ]);
+  React.useEffect(
+    () =>
+      subscribeEvoluHistoryMutationVersion(() => {
+        setHistoryMutationVersion((version) => version + 1);
+      }),
+    [],
+  );
 
   const recordContactsOwnerWrite = React.useCallback(() => {
     // Rotation counts are derived from local Evolu history.
@@ -789,6 +791,75 @@ export const useEvoluContactsOwnerRotation = ({
     ? String(ownerSyncData?.transactionsOwner.id ?? "").trim()
     : String(appOwnerId ?? "").trim();
 
+  React.useEffect(() => {
+    const requests = [
+      {
+        key: "contacts",
+        ownerId: contactsActiveOwnerId,
+        rotatedAtMs: contactsRotationSnapshot?.rotatedAtMs ?? null,
+        tables: ["contact"],
+      },
+      {
+        key: "cashu",
+        ownerId: cashuActiveOwnerId,
+        rotatedAtMs: cashuRotationSnapshot?.rotatedAtMs ?? null,
+        tables: ["cashuToken"],
+      },
+      {
+        key: "messages",
+        ownerId: messagesActiveOwnerId,
+        rotatedAtMs: messagesRotationSnapshot?.rotatedAtMs ?? null,
+        tables: ["nostrMessage", "nostrReaction"],
+      },
+      {
+        key: "transactions",
+        ownerId: transactionsActiveOwnerId,
+        rotatedAtMs: transactionsRotationSnapshot?.rotatedAtMs ?? null,
+        tables: ["transaction"],
+      },
+    ].flatMap((request) =>
+      request.ownerId && request.rotatedAtMs !== null
+        ? [
+            {
+              key: request.key,
+              ownerId: request.ownerId,
+              rotatedAtMs: request.rotatedAtMs,
+              tables: request.tables,
+            },
+          ]
+        : [],
+    );
+
+    if (requests.length === 0) {
+      setHistoryMutationCounts((prev) =>
+        Object.keys(prev).length === 0 ? prev : {},
+      );
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      void loadEvoluHistoryMutationCounts(requests).then((counts) => {
+        if (!cancelled) setHistoryMutationCounts(counts);
+      });
+    }, 150);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    cashuActiveOwnerId,
+    cashuRotationSnapshot?.rotatedAtMs,
+    contactsActiveOwnerId,
+    contactsRotationSnapshot?.rotatedAtMs,
+    historyMutationVersion,
+    messagesActiveOwnerId,
+    messagesRotationSnapshot?.rotatedAtMs,
+    transactionsActiveOwnerId,
+    transactionsRotationSnapshot?.rotatedAtMs,
+  ]);
+
   const contactsOwnerWriteCount = React.useMemo(() => {
     if (!contactsActiveOwnerId) return 0;
     let count = 0;
@@ -828,89 +899,36 @@ export const useEvoluContactsOwnerRotation = ({
     return count;
   }, [allTransactionsRows, transactionsActiveOwnerId]);
 
-  const contactsOwnerEditCount = React.useMemo(
-    () =>
-      countOwnerHistoryWrites({
-        entries: historyMutationEntries,
-        fallbackCount: Math.max(
-          0,
-          contactsOwnerWriteCount - contactsOwnerBaselineCount,
-        ),
-        ownerId: contactsActiveOwnerId,
-        rotatedAtMs: contactsRotationSnapshot?.rotatedAtMs ?? null,
-        tables: ["contact"],
-      }),
-    [
-      contactsActiveOwnerId,
-      contactsOwnerBaselineCount,
-      contactsOwnerWriteCount,
-      contactsRotationSnapshot,
-      historyMutationEntries,
-    ],
-  );
+  const contactsOwnerEditCount =
+    contactsRotationSnapshot?.rotatedAtMs !== null &&
+    contactsRotationSnapshot?.rotatedAtMs !== undefined &&
+    historyMutationCounts.contacts !== undefined
+      ? historyMutationCounts.contacts
+      : Math.max(0, contactsOwnerWriteCount - contactsOwnerBaselineCount);
 
-  const cashuOwnerWriteDelta = React.useMemo(
-    () =>
-      countOwnerHistoryWrites({
-        entries: historyMutationEntries,
-        fallbackCount: Math.max(
-          0,
-          cashuOwnerWriteCount - cashuOwnerBaselineCount,
-        ),
-        ownerId: cashuActiveOwnerId,
-        rotatedAtMs: cashuRotationSnapshot?.rotatedAtMs ?? null,
-        tables: ["cashuToken"],
-      }),
-    [
-      cashuActiveOwnerId,
-      cashuOwnerBaselineCount,
-      cashuOwnerWriteCount,
-      cashuRotationSnapshot,
-      historyMutationEntries,
-    ],
-  );
+  const cashuOwnerWriteDelta =
+    cashuRotationSnapshot?.rotatedAtMs !== null &&
+    cashuRotationSnapshot?.rotatedAtMs !== undefined &&
+    historyMutationCounts.cashu !== undefined
+      ? historyMutationCounts.cashu
+      : Math.max(0, cashuOwnerWriteCount - cashuOwnerBaselineCount);
 
-  const messagesOwnerWriteDelta = React.useMemo(
-    () =>
-      countOwnerHistoryWrites({
-        entries: historyMutationEntries,
-        fallbackCount: Math.max(
-          0,
-          messagesOwnerWriteCount - messagesOwnerBaselineCount,
-        ),
-        ownerId: messagesActiveOwnerId,
-        rotatedAtMs: messagesRotationSnapshot?.rotatedAtMs ?? null,
-        tables: ["nostrMessage", "nostrReaction"],
-      }),
-    [
-      historyMutationEntries,
-      messagesActiveOwnerId,
-      messagesOwnerBaselineCount,
-      messagesOwnerWriteCount,
-      messagesRotationSnapshot,
-    ],
-  );
+  const messagesOwnerWriteDelta =
+    messagesRotationSnapshot?.rotatedAtMs !== null &&
+    messagesRotationSnapshot?.rotatedAtMs !== undefined &&
+    historyMutationCounts.messages !== undefined
+      ? historyMutationCounts.messages
+      : Math.max(0, messagesOwnerWriteCount - messagesOwnerBaselineCount);
 
-  const transactionsOwnerWriteDelta = React.useMemo(
-    () =>
-      countOwnerHistoryWrites({
-        entries: historyMutationEntries,
-        fallbackCount: Math.max(
+  const transactionsOwnerWriteDelta =
+    transactionsRotationSnapshot?.rotatedAtMs !== null &&
+    transactionsRotationSnapshot?.rotatedAtMs !== undefined &&
+    historyMutationCounts.transactions !== undefined
+      ? historyMutationCounts.transactions
+      : Math.max(
           0,
           transactionsOwnerWriteCount - transactionsOwnerBaselineCount,
-        ),
-        ownerId: transactionsActiveOwnerId,
-        rotatedAtMs: transactionsRotationSnapshot?.rotatedAtMs ?? null,
-        tables: ["transaction"],
-      }),
-    [
-      historyMutationEntries,
-      transactionsActiveOwnerId,
-      transactionsOwnerBaselineCount,
-      transactionsOwnerWriteCount,
-      transactionsRotationSnapshot,
-    ],
-  );
+        );
   const contactsOwnerWriteDelta = contactsOwnerEditCount;
 
   React.useEffect(() => {
@@ -1008,6 +1026,8 @@ export const useEvoluContactsOwnerRotation = ({
     }
 
     let cancelled = false;
+    const deriveOwnerMnemonic =
+      createCachedOwnerMnemonicDeriver(normalizedSeed);
     void Promise.all([
       deriveOwnerSyncDataFromSeed(
         normalizedSeed,
@@ -1015,26 +1035,31 @@ export const useEvoluContactsOwnerRotation = ({
         resolvedCashuOwnerIndex,
         resolvedMessagesOwnerIndex,
         resolvedTransactionsOwnerIndex,
+        deriveOwnerMnemonic,
       ),
       deriveVisibleOwnerSyncDataFromSeed(
         normalizedSeed,
         "cashu",
         resolvedCashuOwnerIndex,
+        deriveOwnerMnemonic,
       ),
       deriveVisibleOwnerSyncDataFromSeed(
         normalizedSeed,
         "contacts",
         resolvedContactsOwnerIndex,
+        deriveOwnerMnemonic,
       ),
       deriveVisibleOwnerSyncDataFromSeed(
         normalizedSeed,
         "messages",
         resolvedMessagesOwnerIndex,
+        deriveOwnerMnemonic,
       ),
       deriveVisibleOwnerSyncDataFromSeed(
         normalizedSeed,
         "transactions",
         resolvedTransactionsOwnerIndex,
+        deriveOwnerMnemonic,
       ),
       resolvedContactsOwnerIndex > 0
         ? deriveOwnerSyncDataFromSeed(
@@ -1043,6 +1068,7 @@ export const useEvoluContactsOwnerRotation = ({
             resolvedCashuOwnerIndex,
             resolvedMessagesOwnerIndex,
             resolvedTransactionsOwnerIndex,
+            deriveOwnerMnemonic,
           )
         : Promise.resolve(null),
       resolvedMessagesOwnerIndex > 0
@@ -1052,6 +1078,7 @@ export const useEvoluContactsOwnerRotation = ({
             resolvedCashuOwnerIndex,
             resolvedMessagesOwnerIndex - 1,
             resolvedTransactionsOwnerIndex,
+            deriveOwnerMnemonic,
           )
         : Promise.resolve(null),
       resolvedTransactionsOwnerIndex > 0
@@ -1061,6 +1088,7 @@ export const useEvoluContactsOwnerRotation = ({
             resolvedCashuOwnerIndex,
             resolvedMessagesOwnerIndex,
             resolvedTransactionsOwnerIndex - 1,
+            deriveOwnerMnemonic,
           )
         : Promise.resolve(null),
     ]).then(
@@ -1449,10 +1477,8 @@ export const useEvoluContactsOwnerRotation = ({
         return;
       }
 
-      // Encode the full rotation snapshot — adopters need baseline +
-      // rotatedAtMs so their local delta calculation starts at 0 and the
-      // cooldown blocks an immediate re-rotation. Legacy adopters that only
-      // know how to parse `contacts-N` ignore the extra fields.
+      // cashuBaseline remains on the wire for older clients that still decode
+      // contacts and cashu as a coupled rotation.
       const contactsPointerResult = upsertOwnerMetaSnapshot(
         upsert,
         derived.metaOwner.id,
@@ -1478,17 +1504,8 @@ export const useEvoluContactsOwnerRotation = ({
         nextIndex,
         0,
       );
-      setCounterValue(
-        EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
-        nextIndex,
-        cashuOwnerWriteCount,
-      );
       setStoredTimestampMs(
         EVOLU_CONTACTS_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
-        nowMs,
-      );
-      setStoredTimestampMs(
-        EVOLU_CASHU_OWNER_LAST_ROTATED_AT_MS_STORAGE_KEY,
         nowMs,
       );
 
@@ -1513,7 +1530,6 @@ export const useEvoluContactsOwnerRotation = ({
     slip39Seed,
     t,
     transactionsOwnerIndex,
-    update,
     upsert,
   ]);
 
@@ -1755,6 +1771,9 @@ export const useEvoluContactsOwnerRotation = ({
       setRotateMessagesOwnerIsBusy(false);
     }
   }, [
+    allNostrMessagesRows,
+    allNostrReactionsRows,
+    cashuOwnerIndex,
     contactsOwnerIndex,
     isSeedLogin,
     messagesOwnerIndex,
@@ -1876,6 +1895,8 @@ export const useEvoluContactsOwnerRotation = ({
       setRotateTransactionsOwnerIsBusy(false);
     }
   }, [
+    allTransactionsRows,
+    cashuOwnerIndex,
     contactsOwnerIndex,
     isSeedLogin,
     messagesOwnerIndex,

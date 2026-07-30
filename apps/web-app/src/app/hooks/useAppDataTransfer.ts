@@ -168,6 +168,8 @@ export const useAppDataTransfer = <
         if (npub) existingByNpub.set(npub, contact);
         if (ln) existingByLn.set(ln, contact);
       }
+      const insertedNpubs = new Set<string>();
+      const insertedLnAddresses = new Set<string>();
 
       const existingTokenSet = new Set<string>();
       const existingTokenIdSet = new Set<string>();
@@ -200,6 +202,15 @@ export const useAppDataTransfer = <
           (lnAddress
             ? existingByLn.get(String(lnAddress).toLowerCase())
             : undefined);
+        const normalizedLnAddress = lnAddress?.toLowerCase() ?? null;
+        if (
+          !existing &&
+          ((npub && insertedNpubs.has(npub)) ||
+            (normalizedLnAddress &&
+              insertedLnAddresses.has(normalizedLnAddress)))
+        ) {
+          continue;
+        }
 
         const payload = {
           name: name ? (name as typeof Evolu.NonEmptyString1000.Type) : null,
@@ -254,7 +265,13 @@ export const useAppDataTransfer = <
           const result = appOwnerId
             ? insert("contact", payload, { ownerId: appOwnerId })
             : insert("contact", payload);
-          if (result.ok) addedContacts += 1;
+          if (result.ok) {
+            addedContacts += 1;
+            if (npub) insertedNpubs.add(npub);
+            if (normalizedLnAddress) {
+              insertedLnAddresses.add(normalizedLnAddress);
+            }
+          }
         }
       }
 

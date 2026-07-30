@@ -381,9 +381,11 @@ export const buildTopbarRight = ({
     route.kind === "bankPayment" ||
     route.kind === "bankPaymentOffer" ||
     route.kind === "cashuTokens" ||
+    route.kind === "cashuTokenNew" ||
     route.kind === "cashuTokenEmit" ||
     route.kind === "cashuToken" ||
     route.kind === "transactions" ||
+    route.kind === "evoluData" ||
     route.kind === "evoluCurrentData" ||
     route.kind === "evoluHistoryData" ||
     route.kind === "contactEdit" ||
@@ -437,6 +439,7 @@ export const buildTopbarTitle = (
   if (route.kind === "evoluServers") return t("evoluServer");
   if (route.kind === "evoluServer") return t("evoluServer");
   if (route.kind === "evoluServerNew") return t("evoluAddServerLabel");
+  if (route.kind === "evoluData") return t("evoluData");
   if (route.kind === "evoluCurrentData") return t("evoluData");
   if (route.kind === "evoluHistoryData") return t("evoluHistory");
   if (route.kind === "contactNew") return t("newContact");
