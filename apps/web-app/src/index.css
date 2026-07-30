@@ -12,6 +12,7 @@
   --native-keyboard-inset: 0px;
   --chat-compose-height: 116px;
   --floating-safe-area-bottom: min(var(--safe-area-bottom), 24px);
+  --page-gutter: 20px;
   --topbar-content-height: 48px;
   --topbar-height: calc(var(--topbar-content-height) + var(--safe-area-top));
   font-family:

@@ -78,7 +78,11 @@ const AppShell = () => {
   );
 
   return (
-    <div className={currentNsec ? pageClassNameWithSwipe : "page"}>
+    <div
+      className={
+        currentNsec ? `${pageClassNameWithSwipe} authenticated-page` : "page"
+      }
+    >
       <PwaUpdateBanner t={t} />
       <CashuContactSendBanner
         amountText={
