@@ -3862,18 +3862,6 @@ button.icon {
   gap: 4px;
 }
 
-.contacts-toolbar {
-  overflow: hidden;
-  transition:
-    max-height 0.2s ease,
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.is-pulling-contacts-toolbar .contacts-toolbar {
-  transition: none;
-}
-
 .contacts-search-bar {
   position: relative;
   display: flex;
@@ -4859,10 +4847,6 @@ button.icon {
 
   .page.main-swipe-active .contacts-toolbar {
     flex: 0 0 auto;
-    max-height: none !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    transform: none !important;
   }
 
   .page.main-swipe-active .main-swipe-contacts-page > .panel {
