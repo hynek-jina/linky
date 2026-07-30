@@ -4806,6 +4806,7 @@ button.icon {
 @media (min-width: 961px) {
   .page.main-swipe-active {
     --desktop-wallet-share: 40%;
+    --desktop-surface-radius: 16px;
     position: relative;
     padding-bottom: 20px;
   }
@@ -4819,8 +4820,8 @@ button.icon {
     grid-template-columns: minmax(0, 3fr) minmax(340px, 2fr);
     overflow: hidden;
     border: 1px solid rgba(148, 163, 184, 0.14);
-    border-radius: 24px;
-    background: rgba(15, 23, 42, 0.34);
+    border-radius: var(--desktop-surface-radius);
+    background: transparent;
     scroll-snap-type: none;
   }
 
@@ -4852,6 +4853,21 @@ button.icon {
 
   .page.main-swipe-active .contacts-toolbar {
     flex: 0 0 auto;
+    background: transparent;
+  }
+
+  .page.main-swipe-active .contacts-search-bar input {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: var(--desktop-surface-radius);
+  }
+
+  .page.main-swipe-active .contacts-search-clear,
+  .page.main-swipe-active .contacts-search-clear:hover {
+    border-radius: 999px;
+  }
+
+  .page.main-swipe-active .main-swipe-page > .panel {
+    background: transparent !important;
   }
 
   .page.main-swipe-active .main-swipe-contacts-page > .panel {
@@ -4859,11 +4875,17 @@ button.icon {
     flex: 1 1 auto;
     overflow-y: auto;
     scrollbar-gutter: stable;
+    border-radius: var(--desktop-surface-radius);
   }
 
   .page.main-swipe-active .wallet-panel {
     margin-top: 0;
     padding-bottom: 24px;
+    border-radius: var(--desktop-surface-radius);
+  }
+
+  .page.main-swipe-active .wallet-actions .contacts-qr-btn {
+    border-radius: var(--desktop-surface-radius);
   }
 
   .page.main-swipe-active > .contacts-qr-bar {
