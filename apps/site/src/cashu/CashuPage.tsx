@@ -65,6 +65,11 @@ interface TokenSnapshot {
   unit: string;
 }
 
+interface TokenInspectionError {
+  code: "invalid" | "unknown";
+  detail: string | null;
+}
+
 interface RedeemSuccessState {
   lightningAddress: string;
 }
@@ -97,6 +102,13 @@ type MintInfoSearchValue =
   | MintInfoSearchObject
   | MintInfoSearchPrimitive
   | MintInfoSearchValue[];
+
+interface LnurlPayParameters {
+  callback: string;
+  commentAllowed: number;
+  maxSendable: number;
+  minSendable: number;
+}
 
 const localeStorageKey = "linky.lang";
 const fiatRatesStorageKey = "linky.fiat_rates.v1";
@@ -879,13 +891,14 @@ const findBestRedeemQuote = async (
     total: number;
   } | null = null;
   let lastError: unknown = null;
+  const lnurlPayParameters = await fetchLnurlPayParameters(lightningAddress);
 
   while (low <= high) {
     const requestedAmount = Math.floor((low + high) / 2);
 
     try {
       const invoice = await fetchLnurlInvoice(
-        lightningAddress,
+        lnurlPayParameters,
         requestedAmount,
         comment,
       );
@@ -1114,11 +1127,9 @@ const getLnurlEndpoint = (lightningAddress: string): string => {
   return `https://${domain}/.well-known/lnurlp/${encodeURIComponent(user)}`;
 };
 
-const fetchLnurlInvoice = async (
+const fetchLnurlPayParameters = async (
   lightningAddress: string,
-  amountSat: number,
-  comment?: string,
-): Promise<string> => {
+): Promise<LnurlPayParameters> => {
   if (!isLightningAddress(lightningAddress)) {
     throw new Error("Invalid lightning address");
   }
@@ -1146,32 +1157,48 @@ const fetchLnurlInvoice = async (
   const commentAllowed = Number(payRequest.commentAllowed ?? NaN);
   const minSendable = Number(payRequest.minSendable ?? NaN);
   const maxSendable = Number(payRequest.maxSendable ?? NaN);
-  const amountMsat = Math.round(amountSat * 1000);
 
   if (!callback) {
     throw new Error("LNURL callback missing");
   }
 
+  if (!Number.isFinite(minSendable) || !Number.isFinite(maxSendable)) {
+    throw new Error("Invalid LNURL amount range");
+  }
+
+  return {
+    callback,
+    commentAllowed,
+    maxSendable,
+    minSendable,
+  };
+};
+
+const fetchLnurlInvoice = async (
+  payParameters: LnurlPayParameters,
+  amountSat: number,
+  comment?: string,
+): Promise<string> => {
+  const amountMsat = Math.round(amountSat * 1000);
   if (
-    !Number.isFinite(minSendable) ||
-    !Number.isFinite(maxSendable) ||
-    amountMsat < minSendable ||
-    amountMsat > maxSendable
+    amountMsat < payParameters.minSendable ||
+    amountMsat > payParameters.maxSendable
   ) {
     throw new Error("Amount out of LNURL range");
   }
 
-  const invoiceUrl = new URL(callback);
+  const invoiceUrl = new URL(payParameters.callback);
   invoiceUrl.searchParams.set("amount", String(amountMsat));
   const trimmedComment = String(comment ?? "").trim();
   const canUseComment = trimmedComment.length > 0;
   const providerAdvertisesComment =
-    Number.isFinite(commentAllowed) && commentAllowed > 0;
+    Number.isFinite(payParameters.commentAllowed) &&
+    payParameters.commentAllowed > 0;
   const maybeWithCommentUrl = (() => {
     if (!canUseComment) return null;
     const url = new URL(invoiceUrl.toString());
     const maxLen = providerAdvertisesComment
-      ? Math.max(0, Math.trunc(commentAllowed))
+      ? Math.max(0, Math.trunc(payParameters.commentAllowed))
       : 140;
     if (maxLen <= 0) return null;
     url.searchParams.set("comment", trimmedComment.slice(0, maxLen));
@@ -1563,7 +1590,9 @@ function CashuPage() {
   const [tokenInput, setTokenInput] = useState("");
   const [activeToken, setActiveToken] = useState("");
   const [tokenState, setTokenState] = useState<TokenSnapshot | null>(null);
-  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<TokenInspectionError | null>(
+    null,
+  );
   const [lightningAddress, setLightningAddress] = useState("");
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemSuccess, setRedeemSuccess] = useState<RedeemSuccessState | null>(
@@ -1571,14 +1600,19 @@ function CashuPage() {
   );
   const [isInspecting, setIsInspecting] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
-  const [isRedeemButtonLocked, setIsRedeemButtonLocked] = useState(false);
   const [isAdditionalOptionsVisible, setIsAdditionalOptionsVisible] =
     useState(false);
   const [mintIconSrc, setMintIconSrc] = useState(GENERIC_MINT_ICON_DATA_URL);
   const [tokenQr, setTokenQr] = useState<string | null>(null);
-  const redeemButtonRef = useRef<HTMLButtonElement | null>(null);
   const redeemSubmitLockedRef = useRef(false);
   const activeCopy = useMemo(() => copy[locale], [locale]);
+  const tokenErrorMessage =
+    tokenError?.detail ??
+    (tokenError?.code === "invalid"
+      ? activeCopy.invalidToken
+      : tokenError?.code === "unknown"
+        ? activeCopy.validUnknown
+        : null);
   const displayedTokenAmount = tokenState?.isValid
     ? (tokenState.amount ?? 0)
     : (tokenState?.totalAmount ?? 0);
@@ -1656,22 +1690,6 @@ function CashuPage() {
     };
   }, []);
 
-  const lockRedeemButton = () => {
-    redeemSubmitLockedRef.current = true;
-    setIsRedeemButtonLocked(true);
-    if (redeemButtonRef.current) {
-      redeemButtonRef.current.disabled = true;
-    }
-  };
-
-  const unlockRedeemButton = () => {
-    redeemSubmitLockedRef.current = false;
-    setIsRedeemButtonLocked(false);
-    if (redeemButtonRef.current) {
-      redeemButtonRef.current.disabled = false;
-    }
-  };
-
   useEffect(() => {
     const syncFromUrl = () => {
       const next = getTokenFromUrl();
@@ -1681,7 +1699,7 @@ function CashuPage() {
       setRedeemSuccess(null);
       setRedeemError(null);
       setTokenQr(null);
-      unlockRedeemButton();
+      redeemSubmitLockedRef.current = false;
 
       if (next.source === "search" && next.token) {
         replaceHashToken(next.token);
@@ -1750,7 +1768,7 @@ function CashuPage() {
         setTokenState(snapshot);
         setMintIconSrc(snapshot.iconUrl);
         if (!snapshot.isValid) {
-          setTokenError(activeCopy.invalidToken);
+          setTokenError({ code: "invalid", detail: null });
           return;
         }
 
@@ -1760,7 +1778,11 @@ function CashuPage() {
         if (cancelled) return;
         setTokenState(null);
         setMintIconSrc(GENERIC_MINT_ICON_DATA_URL);
-        setTokenError(getErrorMessage(error, activeCopy.validUnknown));
+        const detail = getErrorMessage(error, "").trim();
+        setTokenError({
+          code: "unknown",
+          detail: detail || null,
+        });
       })
       .finally(() => {
         if (cancelled) return;
@@ -1770,7 +1792,7 @@ function CashuPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeCopy.invalidToken, activeCopy.validUnknown, activeToken]);
+  }, [activeToken]);
 
   const handleInspectSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1779,12 +1801,12 @@ function CashuPage() {
     setActiveToken(trimmedToken);
     setRedeemSuccess(null);
     setRedeemError(null);
-    unlockRedeemButton();
+    redeemSubmitLockedRef.current = false;
   };
 
   const handleRedeemSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isRedeeming || isRedeemButtonLocked || redeemSubmitLockedRef.current) {
+    if (redeemSubmitLockedRef.current) {
       return;
     }
 
@@ -1795,7 +1817,7 @@ function CashuPage() {
     if (!trimmedToken || !isLightningAddress(trimmedAddress)) return;
 
     setRedeemError(null);
-    lockRedeemButton();
+    redeemSubmitLockedRef.current = true;
     setIsRedeeming(true);
 
     try {
@@ -1813,7 +1835,7 @@ function CashuPage() {
             token: nextToken,
           });
         } catch {
-          unlockRedeemButton();
+          redeemSubmitLockedRef.current = false;
           replaceHashToken(nextToken);
           setTokenInput(nextToken);
           setActiveToken(nextToken);
@@ -1855,7 +1877,7 @@ function CashuPage() {
         status: "error",
       });
       void flushPaymentTelemetryQueue();
-      unlockRedeemButton();
+      redeemSubmitLockedRef.current = false;
     } finally {
       setIsRedeeming(false);
     }
@@ -1939,8 +1961,10 @@ function CashuPage() {
               </div>
             </form>
 
-            {tokenError ? (
-              <p className="cashu-status cashu-status-error">{tokenError}</p>
+            {tokenErrorMessage ? (
+              <p className="cashu-status cashu-status-error">
+                {tokenErrorMessage}
+              </p>
             ) : null}
           </div>
         </section>
@@ -2046,13 +2070,11 @@ function CashuPage() {
                               aria-label={activeCopy.lightningAddressLabel}
                             />
                             <button
-                              ref={redeemButtonRef}
                               className="secondary-cta"
                               type="submit"
                               disabled={
                                 !tokenState.isValid ||
                                 isRedeeming ||
-                                isRedeemButtonLocked ||
                                 !isLightningAddress(lightningAddress.trim())
                               }
                             >
@@ -2098,8 +2120,10 @@ function CashuPage() {
                   </>
                 )}
               </>
-            ) : tokenError ? (
-              <p className="cashu-status cashu-status-error">{tokenError}</p>
+            ) : tokenErrorMessage ? (
+              <p className="cashu-status cashu-status-error">
+                {tokenErrorMessage}
+              </p>
             ) : (
               <p className="cashu-status">{activeCopy.noTokenLoaded}</p>
             )}

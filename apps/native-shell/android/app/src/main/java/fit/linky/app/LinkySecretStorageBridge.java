@@ -11,6 +11,7 @@ public final class LinkySecretStorageBridge {
     private static final String PREFS_NAME = "linky.secure.secrets";
 
     private final Context context;
+    private volatile SharedPreferences preferences;
 
     public LinkySecretStorageBridge(Context context) {
         this.context = context.getApplicationContext();
@@ -56,16 +57,28 @@ public final class LinkySecretStorageBridge {
     }
 
     private SharedPreferences getPreferences() throws Exception {
-        MasterKey masterKey = new MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build();
+        SharedPreferences current = preferences;
+        if (current != null) {
+            return current;
+        }
 
-        return EncryptedSharedPreferences.create(
-            context,
-            PREFS_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        );
+        synchronized (this) {
+            current = preferences;
+            if (current == null) {
+                MasterKey masterKey = new MasterKey.Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build();
+                current = EncryptedSharedPreferences.create(
+                    context,
+                    PREFS_NAME,
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                );
+                preferences = current;
+            }
+        }
+
+        return current;
     }
 }

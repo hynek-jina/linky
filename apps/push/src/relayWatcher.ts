@@ -1,6 +1,10 @@
 import type { Event as NostrEvent } from "nostr-tools";
 import { nip19, SimplePool, verifyEvent } from "nostr-tools";
 
+import {
+  CATCH_UP_LOOKBACK_SECONDS,
+  SEEN_EVENT_RETENTION_MARGIN_MS,
+} from "./config";
 import { isHexString } from "./guards";
 import { PushDeliveryService } from "./push";
 import { PushStorage } from "./storage";
@@ -182,15 +186,14 @@ export class SeenEventIdCache {
 }
 
 export class RelayWatcher {
-  private static readonly CATCH_UP_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
   private static readonly LIVE_SUBSCRIPTION_REFRESH_MS = 10 * 60 * 1000;
   private static readonly SEEN_EVENT_CACHE_MAX_ENTRIES = 50_000;
-  static readonly SEEN_EVENT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
   private readonly relayUrls: string[];
   private readonly storage: PushStorage;
   private readonly pushDelivery: PushDeliveryService;
   private readonly seenEventIds: SeenEventIdCache;
+  private readonly eventDedupeTtlMs: number;
   private readonly pool = new SimplePool({ enableReconnect: true });
   private liveDeliveryEnabled = false;
   private refreshIntervalHandle: ReturnType<typeof setInterval> | null = null;
@@ -200,6 +203,7 @@ export class RelayWatcher {
     this.relayUrls = options.relayUrls;
     this.storage = options.storage;
     this.pushDelivery = options.pushDelivery;
+    this.eventDedupeTtlMs = options.eventDedupeTtlMs;
     this.seenEventIds = new SeenEventIdCache({
       ttlMs: options.eventDedupeTtlMs,
       maxEntries: RelayWatcher.SEEN_EVENT_CACHE_MAX_ENTRIES,
@@ -229,8 +233,7 @@ export class RelayWatcher {
   }
 
   private openSubscription(reason: string): void {
-    const since =
-      Math.floor(Date.now() / 1000) - RelayWatcher.CATCH_UP_LOOKBACK_SECONDS;
+    const since = Math.floor(Date.now() / 1000) - CATCH_UP_LOOKBACK_SECONDS;
     this.liveDeliveryEnabled = false;
     console.info(
       `[push] opening relay watcher subscription reason=${reason} since=${since}`,
@@ -264,11 +267,7 @@ export class RelayWatcher {
     this.openSubscription(reason);
   }
 
-  private markSeen(eventId: string, nowMs: number): boolean {
-    if (this.seenEventIds.has(eventId, nowMs)) {
-      return false;
-    }
-
+  private recordSeen(eventId: string, nowMs: number): boolean {
     if (!this.storage.recordSeenEvent(eventId, nowMs)) {
       this.seenEventIds.markSeen(eventId, nowMs);
       return false;
@@ -280,37 +279,29 @@ export class RelayWatcher {
 
   pruneSeen(nowMs: number): void {
     this.seenEventIds.pruneExpired(nowMs);
+    this.storage.pruneSeenEvents(
+      nowMs,
+      Math.max(
+        this.eventDedupeTtlMs,
+        CATCH_UP_LOOKBACK_SECONDS * 1000 + SEEN_EVENT_RETENTION_MARGIN_MS,
+      ),
+    );
   }
 
   private async handleEvent(event: NostrEvent): Promise<void> {
     const nowMs = Date.now();
-    if (!this.markSeen(event.id, nowMs)) {
-      console.info(`[push] skipped duplicate event id=${event.id}`);
-      return;
-    }
-
-    console.info(
-      `[push] observed gift wrap id=${event.id} pubkey=${event.pubkey} recipients=${describeEventRecipients(event)} createdAt=${event.created_at}`,
-    );
-
-    const validation = validateGiftWrapForPush(event);
-    if (!validation.ok) {
-      console.warn(
-        `[push] skipped malformed gift wrap id=${event.id} pubkey=${event.pubkey} recipients=${describeEventRecipients(event)} reason=${validation.reason ?? "unknown"}`,
-      );
+    if (this.seenEventIds.has(event.id, nowMs)) {
+      console.debug(`[push] skipped duplicate event id=${event.id}`);
       return;
     }
 
     if (!hasLinkyPushMarker(event)) {
-      console.info(
-        `[push] skipped non-push gift wrap id=${event.id} pubkey=${event.pubkey} recipients=${describeEventRecipients(event)}`,
-      );
       return;
     }
 
     const recipientPubkeys = extractRecipientPubkeys(event);
     if (recipientPubkeys.length === 0) {
-      console.info(`[push] skipped event without recipients id=${event.id}`);
+      console.debug(`[push] skipped event without recipients id=${event.id}`);
       return;
     }
 
@@ -322,14 +313,31 @@ export class RelayWatcher {
       subscriptionsByPubkey.size === 0 &&
       nativeSubscriptionsByPubkey.size === 0
     ) {
-      console.info(
+      console.debug(
         `[push] skipped event without matching subscriptions id=${event.id} recipients=${recipientPubkeys.join(",")}`,
       );
       return;
     }
 
+    const validation = validateGiftWrapForPush(event);
+    if (!validation.ok) {
+      console.debug(
+        `[push] skipped malformed gift wrap id=${event.id} pubkey=${event.pubkey} recipients=${describeEventRecipients(event)} reason=${validation.reason ?? "unknown"}`,
+      );
+      return;
+    }
+
+    if (!this.recordSeen(event.id, nowMs)) {
+      console.debug(`[push] skipped duplicate event id=${event.id}`);
+      return;
+    }
+
+    console.debug(
+      `[push] observed gift wrap id=${event.id} pubkey=${event.pubkey} recipients=${describeEventRecipients(event)} createdAt=${event.created_at}`,
+    );
+
     if (!this.liveDeliveryEnabled) {
-      console.info(
+      console.debug(
         `[push] suppressed historical gift wrap id=${event.id} recipients=${recipientPubkeys.join(",")} until live delivery is enabled`,
       );
       return;
@@ -342,13 +350,13 @@ export class RelayWatcher {
       const nativeSubscriptions =
         nativeSubscriptionsByPubkey.get(recipientPubkey) ?? [];
       if (subscriptions.length === 0 && nativeSubscriptions.length === 0) {
-        console.info(
+        console.debug(
           `[push] no subscriptions for recipient id=${event.id} recipient=${recipientPubkey}`,
         );
         continue;
       }
 
-      console.info(
+      console.debug(
         `[push] delivering gift wrap id=${event.id} recipient=${recipientPubkey} webSubscriptions=${subscriptions.length} nativeSubscriptions=${nativeSubscriptions.length}`,
       );
 

@@ -1,5 +1,8 @@
 import { resolve } from "node:path";
 
+export const CATCH_UP_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
+export const SEEN_EVENT_RETENTION_MARGIN_MS = 6 * 60 * 60 * 1000;
+
 const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol",

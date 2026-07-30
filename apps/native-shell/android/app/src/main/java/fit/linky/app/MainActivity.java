@@ -788,29 +788,45 @@ public class MainActivity extends BridgeActivity {
 		try {
 			Ndef ndef = Ndef.get(tag);
 			if (ndef != null) {
-				ndef.connect();
-				if (!ndef.isWritable()) {
-					finishPendingNfcWrite("error", "NFC tag is read-only.");
-					return;
-				}
+				try {
+					ndef.connect();
+					if (!ndef.isWritable()) {
+						finishPendingNfcWrite("error", "NFC tag is read-only.");
+						return;
+					}
 
-				int maxSize = ndef.getMaxSize();
-				if (maxSize > 0 && maxSize < encodedMessage.length) {
-					finishPendingNfcWrite("error", "NFC tag is too small.");
-					return;
-				}
+					int maxSize = ndef.getMaxSize();
+					if (maxSize > 0 && maxSize < encodedMessage.length) {
+						finishPendingNfcWrite("error", "NFC tag is too small.");
+						return;
+					}
 
-				ndef.writeNdefMessage(message);
-				finishPendingNfcWrite("success", null);
-				return;
+					ndef.writeNdefMessage(message);
+					finishPendingNfcWrite("success", null);
+					return;
+				} finally {
+					try {
+						ndef.close();
+					} catch (Exception ignored) {
+						// ignore tag cleanup failures
+					}
+				}
 			}
 
 			NdefFormatable formatable = NdefFormatable.get(tag);
 			if (formatable != null) {
-				formatable.connect();
-				formatable.format(message);
-				finishPendingNfcWrite("success", null);
-				return;
+				try {
+					formatable.connect();
+					formatable.format(message);
+					finishPendingNfcWrite("success", null);
+					return;
+				} finally {
+					try {
+						formatable.close();
+					} catch (Exception ignored) {
+						// ignore tag cleanup failures
+					}
+				}
 			}
 
 			finishPendingNfcWrite("error", "NFC tag does not support NDEF.");

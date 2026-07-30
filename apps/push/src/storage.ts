@@ -54,6 +54,22 @@ interface UnregisterNativeSubscriptionPubkeysParams {
   nowMs: number;
 }
 
+interface SubscriptionAssociationParams {
+  cleanupLegacySubscriptions: boolean;
+  recipientPubkeys: string[];
+  consumedChallengeNonces: string[];
+  maxPubkeysPerSubscription: number;
+  maxSubscriptionsPerPubkey: number;
+  nowMs: number;
+}
+
+type SubscriptionTransport = "native" | "web";
+
+interface SubscriptionTables {
+  association: string;
+  subscription: string;
+}
+
 export class StorageLimitError extends Error {
   readonly status = 409;
   readonly code = "subscription_limit";
@@ -308,13 +324,6 @@ export class PushStorage {
     this.registerSubscriptionTransaction(params);
   }
 
-  unregisterSubscription(endpoint: string): boolean {
-    const result = this.db
-      .query("DELETE FROM subscriptions WHERE endpoint = ?")
-      .run(endpoint);
-    return result.changes > 0;
-  }
-
   unregisterSubscriptionPubkeys(
     params: UnregisterSubscriptionPubkeysParams,
   ): UnregisterSubscriptionPubkeysResult {
@@ -323,13 +332,6 @@ export class PushStorage {
 
   registerNativeSubscription(params: RegisterNativeSubscriptionParams): void {
     this.registerNativeSubscriptionTransaction(params);
-  }
-
-  unregisterNativeSubscription(token: string): boolean {
-    const result = this.db
-      .query("DELETE FROM native_subscriptions WHERE token = ?")
-      .run(token);
-    return result.changes > 0;
   }
 
   unregisterNativeSubscriptionPubkeys(
@@ -520,73 +522,22 @@ export class PushStorage {
   private registerSubscriptionInternal(
     params: RegisterSubscriptionParams,
   ): void {
-    if (params.recipientPubkeys.length > params.maxPubkeysPerSubscription) {
-      throw new StorageLimitError(
-        `Subscriptions may track at most ${params.maxPubkeysPerSubscription} pubkeys`,
-      );
-    }
-
     const existingSubscriptionId =
       this.getSubscriptionIdByEndpoint(params.subscription.endpoint) ??
       (params.installationId === null
         ? null
         : this.getSubscriptionIdByInstallationId(params.installationId));
-    const currentPubkeys =
-      existingSubscriptionId === null
-        ? new Set<string>()
-        : this.getSubscriptionPubkeysInternal(existingSubscriptionId);
-    const comparisonSubscriptionId = existingSubscriptionId ?? 0;
-
-    for (const pubkey of params.recipientPubkeys) {
-      if (currentPubkeys.has(pubkey)) {
-        continue;
-      }
-      const currentCount = this.countSubscriptionsForPubkeyInternal(
-        pubkey,
-        comparisonSubscriptionId,
-      );
-      if (currentCount >= params.maxSubscriptionsPerPubkey) {
-        throw new StorageLimitError(
-          `Pubkey ${pubkey} already has the maximum ${params.maxSubscriptionsPerPubkey} subscriptions`,
-        );
-      }
-    }
-
-    this.consumeChallengesInternal(
-      params.consumedChallengeNonces,
-      params.nowMs,
+    this.registerSubscriptionAssociations(
+      params,
+      existingSubscriptionId,
+      "web",
+      () =>
+        this.upsertSubscriptionInternal(
+          params.installationId,
+          params.subscription,
+          params.nowMs,
+        ),
     );
-
-    const subscriptionId = this.upsertSubscriptionInternal(
-      params.installationId,
-      params.subscription,
-      params.nowMs,
-    );
-
-    if (params.cleanupLegacySubscriptions) {
-      this.pruneLegacySubscriptionsForPubkeys(
-        params.recipientPubkeys,
-        subscriptionId,
-      );
-    }
-
-    this.db
-      .query("DELETE FROM subscription_pubkeys WHERE subscription_id = ?")
-      .run(subscriptionId);
-
-    for (const pubkey of params.recipientPubkeys) {
-      this.db
-        .query(
-          `
-            INSERT INTO subscription_pubkeys (
-              subscription_id,
-              pubkey,
-              created_at
-            ) VALUES (?, ?, ?)
-          `,
-        )
-        .run(subscriptionId, pubkey, params.nowMs);
-    }
   }
 
   private unregisterSubscriptionPubkeysInternal(
@@ -600,43 +551,57 @@ export class PushStorage {
       };
     }
 
-    this.consumeChallengesInternal(
-      params.consumedChallengeNonces,
-      params.nowMs,
+    return this.unregisterSubscriptionAssociations(
+      params,
+      subscriptionId,
+      "web",
     );
-
-    let removedPubkeys = 0;
-    for (const pubkey of params.recipientPubkeys) {
-      const result = this.db
-        .query(
-          `
-            DELETE FROM subscription_pubkeys
-            WHERE subscription_id = ? AND pubkey = ?
-          `,
-        )
-        .run(subscriptionId, pubkey);
-      removedPubkeys += result.changes;
-    }
-
-    const remaining = this.countPubkeysForSubscriptionInternal(subscriptionId);
-    if (remaining === 0) {
-      this.db
-        .query("DELETE FROM subscriptions WHERE id = ?")
-        .run(subscriptionId);
-      return {
-        removedPubkeys,
-        removedSubscription: true,
-      };
-    }
-
-    return {
-      removedPubkeys,
-      removedSubscription: false,
-    };
   }
 
   private registerNativeSubscriptionInternal(
     params: RegisterNativeSubscriptionParams,
+  ): void {
+    const existingSubscriptionId =
+      this.getNativeSubscriptionIdByToken(params.device.token) ??
+      (params.installationId === null
+        ? null
+        : this.getNativeSubscriptionIdByInstallationId(params.installationId));
+    this.registerSubscriptionAssociations(
+      params,
+      existingSubscriptionId,
+      "native",
+      () =>
+        this.upsertNativeSubscriptionInternal(
+          params.installationId,
+          params.device,
+          params.nowMs,
+        ),
+    );
+  }
+
+  private unregisterNativeSubscriptionPubkeysInternal(
+    params: UnregisterNativeSubscriptionPubkeysParams,
+  ): UnregisterSubscriptionPubkeysResult {
+    const subscriptionId = this.getNativeSubscriptionIdByToken(params.token);
+    if (subscriptionId === null) {
+      return {
+        removedPubkeys: 0,
+        removedSubscription: false,
+      };
+    }
+
+    return this.unregisterSubscriptionAssociations(
+      params,
+      subscriptionId,
+      "native",
+    );
+  }
+
+  private registerSubscriptionAssociations(
+    params: SubscriptionAssociationParams,
+    existingSubscriptionId: number | null,
+    transport: SubscriptionTransport,
+    upsertSubscription: () => number,
   ): void {
     if (params.recipientPubkeys.length > params.maxPubkeysPerSubscription) {
       throw new StorageLimitError(
@@ -644,22 +609,19 @@ export class PushStorage {
       );
     }
 
-    const existingSubscriptionId =
-      this.getNativeSubscriptionIdByToken(params.device.token) ??
-      (params.installationId === null
-        ? null
-        : this.getNativeSubscriptionIdByInstallationId(params.installationId));
     const currentPubkeys =
       existingSubscriptionId === null
         ? new Set<string>()
-        : this.getNativeSubscriptionPubkeysInternal(existingSubscriptionId);
+        : this.getSubscriptionPubkeysInternal(
+            transport,
+            existingSubscriptionId,
+          );
     const comparisonSubscriptionId = existingSubscriptionId ?? 0;
 
     for (const pubkey of params.recipientPubkeys) {
-      if (currentPubkeys.has(pubkey)) {
-        continue;
-      }
-      const currentCount = this.countNativeSubscriptionsForPubkeyInternal(
+      if (currentPubkeys.has(pubkey)) continue;
+      const currentCount = this.countSubscriptionsForPubkeyInternal(
+        transport,
         pubkey,
         comparisonSubscriptionId,
       );
@@ -675,30 +637,25 @@ export class PushStorage {
       params.nowMs,
     );
 
-    const subscriptionId = this.upsertNativeSubscriptionInternal(
-      params.installationId,
-      params.device,
-      params.nowMs,
-    );
-
+    const subscriptionId = upsertSubscription();
     if (params.cleanupLegacySubscriptions) {
-      this.pruneLegacyNativeSubscriptionsForPubkeys(
+      this.pruneLegacySubscriptionsForPubkeys(
+        transport,
         params.recipientPubkeys,
         subscriptionId,
       );
     }
 
+    const tables = this.getSubscriptionTables(transport);
     this.db
-      .query(
-        "DELETE FROM native_subscription_pubkeys WHERE subscription_id = ?",
-      )
+      .query(`DELETE FROM ${tables.association} WHERE subscription_id = ?`)
       .run(subscriptionId);
 
     for (const pubkey of params.recipientPubkeys) {
       this.db
         .query(
           `
-            INSERT INTO native_subscription_pubkeys (
+            INSERT INTO ${tables.association} (
               subscription_id,
               pubkey,
               created_at
@@ -709,28 +666,25 @@ export class PushStorage {
     }
   }
 
-  private unregisterNativeSubscriptionPubkeysInternal(
-    params: UnregisterNativeSubscriptionPubkeysParams,
+  private unregisterSubscriptionAssociations(
+    params:
+      | UnregisterNativeSubscriptionPubkeysParams
+      | UnregisterSubscriptionPubkeysParams,
+    subscriptionId: number,
+    transport: SubscriptionTransport,
   ): UnregisterSubscriptionPubkeysResult {
-    const subscriptionId = this.getNativeSubscriptionIdByToken(params.token);
-    if (subscriptionId === null) {
-      return {
-        removedPubkeys: 0,
-        removedSubscription: false,
-      };
-    }
-
     this.consumeChallengesInternal(
       params.consumedChallengeNonces,
       params.nowMs,
     );
 
+    const tables = this.getSubscriptionTables(transport);
     let removedPubkeys = 0;
     for (const pubkey of params.recipientPubkeys) {
       const result = this.db
         .query(
           `
-            DELETE FROM native_subscription_pubkeys
+            DELETE FROM ${tables.association}
             WHERE subscription_id = ? AND pubkey = ?
           `,
         )
@@ -738,21 +692,21 @@ export class PushStorage {
       removedPubkeys += result.changes;
     }
 
-    const remaining =
-      this.countNativePubkeysForSubscriptionInternal(subscriptionId);
-    if (remaining === 0) {
-      this.db
-        .query("DELETE FROM native_subscriptions WHERE id = ?")
-        .run(subscriptionId);
+    if (
+      this.countPubkeysForSubscriptionInternal(transport, subscriptionId) > 0
+    ) {
       return {
         removedPubkeys,
-        removedSubscription: true,
+        removedSubscription: false,
       };
     }
 
+    this.db
+      .query(`DELETE FROM ${tables.subscription} WHERE id = ?`)
+      .run(subscriptionId);
     return {
       removedPubkeys,
-      removedSubscription: false,
+      removedSubscription: true,
     };
   }
 
@@ -887,38 +841,30 @@ export class PushStorage {
     return readNumberField(row, "id");
   }
 
-  private getSubscriptionPubkeysInternal(subscriptionId: number): Set<string> {
-    const rows = this.db
-      .query(
-        `
-          SELECT pubkey AS pubkey
-          FROM subscription_pubkeys
-          WHERE subscription_id = ?
-        `,
-      )
-      .all(subscriptionId);
-
-    const out = new Set<string>();
-    for (const row of rows) {
-      if (!isRecord(row)) {
-        continue;
-      }
-      const pubkey = readStringField(row, "pubkey");
-      if (pubkey !== null) {
-        out.add(pubkey);
-      }
-    }
-    return out;
+  private getSubscriptionTables(
+    transport: SubscriptionTransport,
+  ): SubscriptionTables {
+    return transport === "native"
+      ? {
+          association: "native_subscription_pubkeys",
+          subscription: "native_subscriptions",
+        }
+      : {
+          association: "subscription_pubkeys",
+          subscription: "subscriptions",
+        };
   }
 
-  private getNativeSubscriptionPubkeysInternal(
+  private getSubscriptionPubkeysInternal(
+    transport: SubscriptionTransport,
     subscriptionId: number,
   ): Set<string> {
+    const tables = this.getSubscriptionTables(transport);
     const rows = this.db
       .query(
         `
           SELECT pubkey AS pubkey
-          FROM native_subscription_pubkeys
+          FROM ${tables.association}
           WHERE subscription_id = ?
         `,
       )
@@ -938,9 +884,11 @@ export class PushStorage {
   }
 
   private pruneLegacySubscriptionsForPubkeys(
+    transport: SubscriptionTransport,
     pubkeys: readonly string[],
     keepSubscriptionId: number,
   ): void {
+    const tables = this.getSubscriptionTables(transport);
     const affectedSubscriptionIds = new Set<number>();
 
     for (const pubkey of pubkeys) {
@@ -948,8 +896,8 @@ export class PushStorage {
         .query(
           `
             SELECT sp.subscription_id AS subscriptionId
-            FROM subscription_pubkeys sp
-            INNER JOIN subscriptions s ON s.id = sp.subscription_id
+            FROM ${tables.association} sp
+            INNER JOIN ${tables.subscription} s ON s.id = sp.subscription_id
             WHERE sp.pubkey = ?
               AND sp.subscription_id != ?
               AND s.installation_id IS NULL
@@ -968,7 +916,7 @@ export class PushStorage {
         const result = this.db
           .query(
             `
-              DELETE FROM subscription_pubkeys
+              DELETE FROM ${tables.association}
               WHERE subscription_id = ? AND pubkey = ?
             `,
           )
@@ -980,11 +928,13 @@ export class PushStorage {
     }
 
     for (const subscriptionId of affectedSubscriptionIds) {
-      if (this.countPubkeysForSubscriptionInternal(subscriptionId) > 0) {
+      if (
+        this.countPubkeysForSubscriptionInternal(transport, subscriptionId) > 0
+      ) {
         continue;
       }
       this.db
-        .query("DELETE FROM subscriptions WHERE id = ?")
+        .query(`DELETE FROM ${tables.subscription} WHERE id = ?`)
         .run(subscriptionId);
     }
   }
@@ -1039,67 +989,17 @@ export class PushStorage {
     return subscriptionId;
   }
 
-  private pruneLegacyNativeSubscriptionsForPubkeys(
-    pubkeys: readonly string[],
-    keepSubscriptionId: number,
-  ): void {
-    const affectedSubscriptionIds = new Set<number>();
-
-    for (const pubkey of pubkeys) {
-      const rows = this.db
-        .query(
-          `
-            SELECT sp.subscription_id AS subscriptionId
-            FROM native_subscription_pubkeys sp
-            INNER JOIN native_subscriptions s ON s.id = sp.subscription_id
-            WHERE sp.pubkey = ?
-              AND sp.subscription_id != ?
-              AND s.installation_id IS NULL
-          `,
-        )
-        .all(pubkey, keepSubscriptionId);
-
-      for (const row of rows) {
-        if (!isRecord(row)) {
-          continue;
-        }
-        const subscriptionId = readNumberField(row, "subscriptionId");
-        if (subscriptionId === null) {
-          continue;
-        }
-        const result = this.db
-          .query(
-            `
-              DELETE FROM native_subscription_pubkeys
-              WHERE subscription_id = ? AND pubkey = ?
-            `,
-          )
-          .run(subscriptionId, pubkey);
-        if (result.changes > 0) {
-          affectedSubscriptionIds.add(subscriptionId);
-        }
-      }
-    }
-
-    for (const subscriptionId of affectedSubscriptionIds) {
-      if (this.countNativePubkeysForSubscriptionInternal(subscriptionId) > 0) {
-        continue;
-      }
-      this.db
-        .query("DELETE FROM native_subscriptions WHERE id = ?")
-        .run(subscriptionId);
-    }
-  }
-
   private countSubscriptionsForPubkeyInternal(
+    transport: SubscriptionTransport,
     pubkey: string,
     excludedSubscriptionId: number,
   ): number {
+    const tables = this.getSubscriptionTables(transport);
     const row = this.db
       .query(
         `
           SELECT COUNT(*) AS total
-          FROM subscription_pubkeys
+          FROM ${tables.association}
           WHERE pubkey = ? AND subscription_id != ?
         `,
       )
@@ -1111,51 +1011,16 @@ export class PushStorage {
     return readNumberField(row, "total") ?? 0;
   }
 
-  private countNativeSubscriptionsForPubkeyInternal(
-    pubkey: string,
-    excludedSubscriptionId: number,
-  ): number {
-    const row = this.db
-      .query(
-        `
-          SELECT COUNT(*) AS total
-          FROM native_subscription_pubkeys
-          WHERE pubkey = ? AND subscription_id != ?
-        `,
-      )
-      .get(pubkey, excludedSubscriptionId);
-
-    if (!isRecord(row)) {
-      return 0;
-    }
-    return readNumberField(row, "total") ?? 0;
-  }
-
-  private countPubkeysForSubscriptionInternal(subscriptionId: number): number {
-    const row = this.db
-      .query(
-        `
-          SELECT COUNT(*) AS total
-          FROM subscription_pubkeys
-          WHERE subscription_id = ?
-        `,
-      )
-      .get(subscriptionId);
-
-    if (!isRecord(row)) {
-      return 0;
-    }
-    return readNumberField(row, "total") ?? 0;
-  }
-
-  private countNativePubkeysForSubscriptionInternal(
+  private countPubkeysForSubscriptionInternal(
+    transport: SubscriptionTransport,
     subscriptionId: number,
   ): number {
+    const tables = this.getSubscriptionTables(transport);
     const row = this.db
       .query(
         `
           SELECT COUNT(*) AS total
-          FROM native_subscription_pubkeys
+          FROM ${tables.association}
           WHERE subscription_id = ?
         `,
       )
