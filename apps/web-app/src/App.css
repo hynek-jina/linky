@@ -4793,6 +4793,10 @@ button.icon {
   background: var(--app-flat-bg);
 }
 
+.desktop-main-pane-title {
+  display: none;
+}
+
 .main-swipe:has(+ .bank-payment-offer-banner) > .main-swipe-contacts-page {
   padding-top: 48px;
 }
@@ -4804,6 +4808,86 @@ button.icon {
   min-height: 0;
   overflow: hidden;
   -webkit-overflow-scrolling: auto;
+}
+
+@media (min-width: 961px) {
+  .page.main-swipe-active {
+    --desktop-wallet-share: 40%;
+    position: relative;
+    padding-bottom: 20px;
+  }
+
+  .page.main-swipe-active .topbar-title {
+    visibility: hidden;
+  }
+
+  .page.main-swipe-active .main-swipe {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(340px, 2fr);
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    border-radius: 24px;
+    background: rgba(15, 23, 42, 0.34);
+    scroll-snap-type: none;
+  }
+
+  .page.main-swipe-active .main-swipe-page {
+    min-width: 0;
+    padding: 26px 28px;
+    overflow-y: auto;
+    scroll-snap-align: none;
+    background: transparent;
+  }
+
+  .page.main-swipe-active .main-swipe-contacts-page {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .page.main-swipe-active .main-swipe-wallet-page {
+    border-left: 1px solid rgba(148, 163, 184, 0.14);
+  }
+
+  .page.main-swipe-active .desktop-main-pane-title {
+    display: block;
+    margin: 0 0 14px;
+    color: #f8fafc;
+    font-size: 20px;
+    line-height: 1.2;
+  }
+
+  .page.main-swipe-active .contacts-toolbar {
+    flex: 0 0 auto;
+    max-height: none !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transform: none !important;
+  }
+
+  .page.main-swipe-active .main-swipe-contacts-page > .panel {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .page.main-swipe-active .wallet-panel {
+    margin-top: 0;
+    padding-bottom: 24px;
+  }
+
+  .page.main-swipe-active > .contacts-qr-bar {
+    display: none;
+  }
+
+  .page.main-swipe-active .main-swipe-fab {
+    right: calc(var(--desktop-wallet-share) + 42px);
+    bottom: 42px;
+    transform: none !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
 }
 
 @media (max-width: 640px) {
