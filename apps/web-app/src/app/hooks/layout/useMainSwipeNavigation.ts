@@ -18,10 +18,16 @@ interface MainSwipeScrollable {
 
 type MainSwipeTarget = "contacts" | "wallet";
 
+const MAIN_SWIPE_SETTLE_FALLBACK_MS = 240;
+
 const getMainSwipeTargetLeft = (
   width: number,
   target: MainSwipeTarget,
 ): number => (target === "wallet" && width > 0 ? width : 0);
+
+export const getMainSwipeTargetForProgress = (
+  progress: number,
+): MainSwipeTarget => (progress > 0.5 ? "wallet" : "contacts");
 
 const getMainSwipeProgress = (element: MainSwipeScrollable): number => {
   const width = element.clientWidth > 0 ? element.clientWidth : 1;
@@ -96,15 +102,6 @@ export const useMainSwipeNavigation = ({
     mainSwipeProgressStore.setProgress(value);
   }, []);
 
-  const releaseVerticalScrollLock = React.useCallback(() => {
-    document.documentElement.classList.remove("is-main-swipe-dragging");
-  }, []);
-
-  const lockVerticalScrollForSwipe = React.useCallback(() => {
-    if (typeof document === "undefined") return;
-    document.documentElement.classList.add("is-main-swipe-dragging");
-  }, []);
-
   const stopInteractiveState = React.useCallback(() => {
     if (isDraggingRef.current) {
       isDraggingRef.current = false;
@@ -117,7 +114,6 @@ export const useMainSwipeNavigation = ({
       cancelProgrammaticFrame();
       programmaticTargetRef.current = null;
       stopInteractiveState();
-      releaseVerticalScrollLock();
 
       const element = mainSwipeRef.current;
       if (element) {
@@ -134,7 +130,6 @@ export const useMainSwipeNavigation = ({
     [
       cancelProgrammaticFrame,
       mainSwipeRef,
-      releaseVerticalScrollLock,
       routeKind,
       stopInteractiveState,
       updateMainSwipeProgress,
@@ -208,6 +203,40 @@ export const useMainSwipeNavigation = ({
     ],
   );
 
+  const finishNativeScroll = React.useCallback(() => {
+    clearMainSwipeScrollTimer();
+    if (programmaticTargetRef.current !== null) return;
+
+    const element = mainSwipeRef.current;
+    if (!element) {
+      stopInteractiveState();
+      return;
+    }
+
+    const progress = getMainSwipeProgress(element);
+    const target = getMainSwipeTargetForProgress(progress);
+    updateMainSwipeProgress(target === "wallet" ? 1 : 0);
+    stopInteractiveState();
+
+    if (target !== routeKind) {
+      navigateTo({ route: target });
+    }
+  }, [
+    clearMainSwipeScrollTimer,
+    mainSwipeRef,
+    routeKind,
+    stopInteractiveState,
+    updateMainSwipeProgress,
+  ]);
+
+  const scheduleNativeScrollFinish = React.useCallback(() => {
+    clearMainSwipeScrollTimer();
+    mainSwipeScrollTimerRef.current = window.setTimeout(() => {
+      mainSwipeScrollTimerRef.current = null;
+      finishNativeScroll();
+    }, MAIN_SWIPE_SETTLE_FALLBACK_MS);
+  }, [clearMainSwipeScrollTimer, finishNativeScroll, mainSwipeScrollTimerRef]);
+
   React.useLayoutEffect(() => {
     if (!isMainSwipeRoute) return;
     const element = mainSwipeRef.current;
@@ -227,7 +256,6 @@ export const useMainSwipeNavigation = ({
     const target = routeKind === "wallet" ? "wallet" : "contacts";
     const syncMainSwipeToRoute = () => {
       if (mainSwipeRef.current !== element) return;
-      releaseVerticalScrollLock();
       alignMainSwipeToTarget(element, target);
       updateMainSwipeProgress(target === "wallet" ? 1 : 0);
       stopInteractiveState();
@@ -275,7 +303,6 @@ export const useMainSwipeNavigation = ({
     isMainSwipeRoute,
     mainSwipeRef,
     routeKind,
-    releaseVerticalScrollLock,
     stopInteractiveState,
     updateMainSwipeProgress,
   ]);
@@ -290,12 +317,10 @@ export const useMainSwipeNavigation = ({
     programmaticTargetRef.current = null;
     clearMainSwipeScrollTimer();
     stopInteractiveState();
-    releaseVerticalScrollLock();
   }, [
     cancelProgrammaticFrame,
     clearMainSwipeScrollTimer,
     isMainSwipeRoute,
-    releaseVerticalScrollLock,
     stopInteractiveState,
   ]);
 
@@ -306,9 +331,18 @@ export const useMainSwipeNavigation = ({
 
     const markTouchActive = () => {
       touchActiveRef.current = true;
+      clearMainSwipeScrollTimer();
     };
     const markTouchInactive = () => {
       touchActiveRef.current = false;
+      if (isDraggingRef.current) {
+        scheduleNativeScrollFinish();
+      }
+    };
+    const finishScroll = () => {
+      if (!touchActiveRef.current) {
+        finishNativeScroll();
+      }
     };
 
     element.addEventListener("touchstart", markTouchActive, {
@@ -318,25 +352,28 @@ export const useMainSwipeNavigation = ({
     element.addEventListener("touchcancel", markTouchInactive, {
       passive: true,
     });
+    element.addEventListener("scrollend", finishScroll, { passive: true });
 
     return () => {
       element.removeEventListener("touchstart", markTouchActive);
       element.removeEventListener("touchend", markTouchInactive);
       element.removeEventListener("touchcancel", markTouchInactive);
+      element.removeEventListener("scrollend", finishScroll);
     };
-  }, [isMainSwipeRoute, mainSwipeRef]);
+  }, [
+    clearMainSwipeScrollTimer,
+    finishNativeScroll,
+    isMainSwipeRoute,
+    mainSwipeRef,
+    scheduleNativeScrollFinish,
+  ]);
 
   React.useEffect(
     () => () => {
       cancelProgrammaticFrame();
       clearMainSwipeScrollTimer();
-      releaseVerticalScrollLock();
     },
-    [
-      cancelProgrammaticFrame,
-      clearMainSwipeScrollTimer,
-      releaseVerticalScrollLock,
-    ],
+    [cancelProgrammaticFrame, clearMainSwipeScrollTimer],
   );
 
   const handleMainSwipeScroll = React.useMemo(
@@ -351,10 +388,6 @@ export const useMainSwipeNavigation = ({
               return;
             }
 
-            if (touchActiveRef.current) {
-              lockVerticalScrollForSwipe();
-            }
-
             if (!isDraggingRef.current) {
               isDraggingRef.current = true;
               mainSwipeProgressStore.setDragging(true);
@@ -363,22 +396,15 @@ export const useMainSwipeNavigation = ({
             updateMainSwipeProgress(progress);
 
             clearMainSwipeScrollTimer();
-
-            mainSwipeScrollTimerRef.current = window.setTimeout(() => {
-              mainSwipeScrollTimerRef.current = null;
-              const current = mainSwipeProgressStore.get().progress;
-              isDraggingRef.current = false;
-              mainSwipeProgressStore.setDragging(false);
-              commitMainSwipe(current > 0.5 ? "wallet" : "contacts");
-            }, 140);
+            if (!touchActiveRef.current) {
+              scheduleNativeScrollFinish();
+            }
           }
         : undefined,
     [
       clearMainSwipeScrollTimer,
-      commitMainSwipe,
       isMainSwipeRoute,
-      lockVerticalScrollForSwipe,
-      mainSwipeScrollTimerRef,
+      scheduleNativeScrollFinish,
       updateMainSwipeProgress,
     ],
   );
