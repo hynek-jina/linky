@@ -88,6 +88,32 @@ const createContactAndOpenChat = async (page: Page): Promise<string> => {
   return decodeURIComponent(contactMatch[1]);
 };
 
+test("keeps authenticated screen gutters aligned", async ({ page }) => {
+  await setAuthenticatedStorage(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const route of [
+    "/#settings",
+    "/#wallet/transactions",
+    "/#wallet/topup",
+    "/#contact/new",
+  ]) {
+    await page.goto(route);
+
+    const shell = page.locator(".page.authenticated-page");
+    await expect(shell).toBeVisible();
+    await expect(shell).toHaveCSS("padding-left", "20px");
+    await expect(shell).toHaveCSS("padding-right", "20px");
+    await expect(page.locator(".topbar")).toHaveCSS("padding-left", "20px");
+    await expect(page.locator(".topbar")).toHaveCSS("padding-right", "20px");
+
+    const rootPanel = page.locator(".page.authenticated-page > .panel");
+    await expect(rootPanel).toHaveCount(1);
+    await expect(rootPanel).toHaveCSS("padding-left", "0px");
+    await expect(rootPanel).toHaveCSS("padding-right", "0px");
+  }
+});
+
 test("keeps unauthenticated auth gating without render loops", async ({
   page,
 }) => {

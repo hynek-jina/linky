@@ -3,7 +3,7 @@
   margin: 0 auto;
   height: 100dvh;
   min-height: 0;
-  padding: calc(var(--topbar-height) + 8px) 20px 72px;
+  padding: calc(var(--topbar-height) + 8px) var(--page-gutter) 72px;
   background: var(--app-flat-bg);
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -29,6 +29,10 @@
   overflow: hidden;
   overscroll-behavior: none;
   max-width: none;
+}
+
+.page.authenticated-page > .panel {
+  padding-inline: 0;
 }
 
 .pwa-update-banner {
@@ -251,7 +255,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: calc(var(--safe-area-top) + 8px) 12px 8px;
+  padding: calc(var(--safe-area-top) + 8px) var(--page-gutter) 8px;
   background: rgba(15, 23, 42, 0.9);
   border-bottom: none;
   backdrop-filter: blur(8px);
@@ -1934,7 +1938,8 @@ button.settings-sensitive-action.is-armed {
 
 .chat-messages {
   margin-top: 14px;
-  padding: 18px 10px calc(12px + var(--chat-compose-height, 116px));
+  padding: 18px var(--page-gutter)
+    calc(12px + var(--chat-compose-height, 116px));
   border-radius: 12px;
   border: none;
   background: transparent;
@@ -2526,7 +2531,7 @@ button.settings-sensitive-action.is-armed {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px;
+  padding: 12px var(--page-gutter);
   padding-bottom: calc(12px + var(--floating-safe-area-bottom));
   background: rgba(15, 23, 42, 0.95);
   border-radius: 0;
@@ -4637,14 +4642,15 @@ button.icon {
   right: 0;
   bottom: 0;
   z-index: 20;
-  padding: 0 20px calc(20px + var(--floating-safe-area-bottom));
+  padding: 0 var(--page-gutter)
+    calc(var(--page-gutter) + var(--floating-safe-area-bottom));
   background: transparent;
   backdrop-filter: none;
 }
 
 .contacts-fab {
   position: fixed;
-  right: 20px;
+  right: var(--page-gutter);
   bottom: calc(96px + var(--floating-safe-area-bottom));
   z-index: 30;
   width: 56px;
@@ -4794,11 +4800,11 @@ button.icon {
 
 @media (max-width: 640px) {
   .page.main-swipe-active .main-swipe {
-    margin-inline: -20px;
+    margin-inline: calc(-1 * var(--page-gutter));
   }
 
   .page.main-swipe-active .main-swipe-page {
-    padding-inline: 20px;
+    padding-inline: var(--page-gutter);
   }
 }
 
