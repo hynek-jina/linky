@@ -61,11 +61,7 @@ if (!getGlobalBuffer()) {
       writable: true,
     });
   } catch {
-    Object.defineProperty(globalThis, "Buffer", {
-      configurable: true,
-      value: Buffer,
-      writable: true,
-    });
+    Reflect.set(globalThis, "Buffer", Buffer);
   }
 }
 

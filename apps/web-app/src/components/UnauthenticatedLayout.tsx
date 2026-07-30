@@ -5,10 +5,7 @@ import type {
   PendingOnboardingProfile,
   ReturningOnboardingStep,
 } from "../app/hooks/useProfileAuthDomain";
-import {
-  AVATAR_EDITOR_CONTROLS,
-  type AvatarEditorControlId,
-} from "../derivedProfile";
+import { type AvatarEditorControlId } from "../derivedProfile";
 import type { Lang } from "../i18n";
 import { getInitials } from "../utils/formatting";
 import { analyzeSlip39Input, SLIP39_WORD_COUNT } from "../utils/slip39Input";
@@ -16,7 +13,7 @@ import {
   PasswordManagerSaveForm,
   type PasswordManagerSaveFormHandle,
 } from "./PasswordManagerSaveForm";
-import { AvatarEditorIcon } from "./AvatarEditorIcon";
+import { AvatarControlGrid } from "./AvatarControlGrid";
 import { AvatarPhotoInput } from "./AvatarPhotoInput";
 import { PasteIcon } from "./icons";
 
@@ -460,54 +457,14 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             t={t}
           />
 
-          <div
-            className="onboarding-avatar-grid"
-            role="list"
-            aria-label={t("onboardingAvatarGridLabel")}
-          >
-            {AVATAR_EDITOR_CONTROLS.map((control) => (
-              <button
-                key={control.id}
-                type="button"
-                className="onboarding-avatar-choice onboarding-avatar-editButton"
-                onClick={() => cyclePendingOnboardingAvatarControl(control.id)}
-                disabled={onboardingIsBusy}
-                aria-label={control.label}
-                title={control.label}
-              >
-                <span
-                  className="onboarding-avatar-choicePlus onboarding-avatar-editEmoji"
-                  aria-hidden="true"
-                >
-                  <AvatarEditorIcon controlId={control.id} />
-                </span>
-              </button>
-            ))}
-
-            <button
-              type="button"
-              className={`onboarding-avatar-choice onboarding-avatar-choiceCustom${selectedGeneratedAvatar ? "" : " is-selected"}`}
-              onClick={() => void pickPendingOnboardingPhoto()}
-              disabled={onboardingIsBusy}
-              aria-pressed={!selectedGeneratedAvatar}
-            >
-              <span className="onboarding-avatar-choicePlus" aria-hidden="true">
-                {profile.customPictureUrl ? (
-                  <img
-                    src={profile.customPictureUrl}
-                    alt=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  "+"
-                )}
-              </span>
-              <span className="onboarding-avatar-choiceLabel">
-                {t("profileUploadPhoto")}
-              </span>
-            </button>
-          </div>
+          <AvatarControlGrid
+            customPictureUrl={profile.customPictureUrl}
+            disabled={onboardingIsBusy}
+            isCustomSelected={!selectedGeneratedAvatar}
+            onCycle={cyclePendingOnboardingAvatarControl}
+            onPickCustom={() => void pickPendingOnboardingPhoto()}
+            t={t}
+          />
 
           {profile.error ? (
             <div className="settings-row">

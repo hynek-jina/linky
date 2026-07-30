@@ -139,14 +139,14 @@ export function Topbar({
           onClick={topbarRight.onClick}
           aria-label={topbarRight.label}
           title={topbarRight.label}
-          {...(topbarRight.label === t("menu")
+          {...(topbarRight.icon === "☰"
             ? { "data-guide": "open-menu" }
             : topbarRight.icon === "scan"
               ? { "data-guide": "scan-contact-button" }
               : {})}
         >
           <span aria-hidden="true">
-            {topbarRight.label === t("menu") ? (
+            {topbarRight.icon === "☰" ? (
               <Settings size={20} />
             ) : topbarRight.icon === "edit" ? (
               <EditIcon size={18} />

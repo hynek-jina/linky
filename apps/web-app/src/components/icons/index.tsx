@@ -65,10 +65,6 @@ export function AddToHomeIcon({ size = 24, ...props }: IconProps) {
   return <SquarePlus size={size} {...props} />;
 }
 
-export function MessageIcon({ size = 24, ...props }: IconProps) {
-  return <MessageCircle size={size} {...props} />;
-}
-
 export function MessagesIcon({ size = 24, ...props }: IconProps) {
   return <MessageCircleMore size={size} {...props} />;
 }
