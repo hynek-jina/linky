@@ -69,7 +69,18 @@ const extractNpubFromCandidate = (value: string): string | null => {
   return normalizeStrictNpub(segments[0] ?? "");
 };
 
-const collectCandidatesFromUrl = (rawUrl: string, scheme: string): string[] => {
+interface DeepLinkLocation {
+  readonly host: string;
+  readonly segments: readonly string[];
+}
+
+const collectCandidatesFromUrl = (
+  rawUrl: string,
+  scheme: "cashu" | "nostr",
+  schemePrefix: RegExp,
+  queryKeys: readonly string[],
+  collectLocationCandidates: (location: DeepLinkLocation) => readonly string[],
+): string[] => {
   const candidates: string[] = [];
 
   try {
@@ -77,11 +88,6 @@ const collectCandidatesFromUrl = (rawUrl: string, scheme: string): string[] => {
     if (url.protocol.toLowerCase() !== `${scheme}:`) {
       return [];
     }
-
-    const queryKeys =
-      scheme === "nostr"
-        ? ["npub", "nostr", "uri"]
-        : ["cashu", "token", "cashutoken", "cashu_token", "uri", "t"];
 
     for (const key of queryKeys) {
       const queryValue = normalizeCandidate(url.searchParams.get(key) ?? "");
@@ -96,46 +102,12 @@ const collectCandidatesFromUrl = (rawUrl: string, scheme: string): string[] => {
       .map((segment) => normalizeCandidate(segment))
       .filter(Boolean);
 
-    if (host) {
-      const lowerHost = host.toLowerCase();
-      if (scheme === "nostr") {
-        if (
-          (lowerHost === "contact" || lowerHost === "npub") &&
-          segments.length > 0
-        ) {
-          candidates.push(segments[0]);
-        } else {
-          candidates.push(host);
-        }
-      } else {
-        candidates.push(host);
-      }
-    }
-
-    if (segments.length > 0) {
-      const first = String(segments[0] ?? "").toLowerCase();
-      if (
-        scheme === "nostr" &&
-        (first === "contact" || first === "npub") &&
-        segments.length > 1
-      ) {
-        candidates.push(segments[1]);
-      } else if (
-        scheme !== "nostr" ||
-        !host ||
-        host.toLowerCase() === "contact" ||
-        host.toLowerCase() === "npub"
-      ) {
-        candidates.push(segments[0]);
-      }
-    }
+    candidates.push(...collectLocationCandidates({ host, segments }));
   } catch {
     // ignore invalid URL parsing and fall back to manual extraction below
   }
 
-  const withoutScheme = rawUrl
-    .replace(scheme === "nostr" ? NOSTR_SCHEME_PREFIX : CASHU_SCHEME_PREFIX, "")
-    .trim();
+  const withoutScheme = rawUrl.replace(schemePrefix, "").trim();
   if (withoutScheme) {
     const manualPath = withoutScheme.split("?")[0]?.trim() ?? "";
     if (manualPath) {
@@ -146,10 +118,55 @@ const collectCandidatesFromUrl = (rawUrl: string, scheme: string): string[] => {
   return candidates;
 };
 
+const collectNostrCandidatesFromUrl = (rawUrl: string): string[] =>
+  collectCandidatesFromUrl(
+    rawUrl,
+    "nostr",
+    NOSTR_SCHEME_PREFIX,
+    ["npub", "nostr", "uri"],
+    ({ host, segments }) => {
+      const candidates: string[] = [];
+      const lowerHost = host.toLowerCase();
+      const firstSegment = segments[0] ?? "";
+      const lowerFirstSegment = firstSegment.toLowerCase();
+
+      if (host) {
+        candidates.push(
+          (lowerHost === "contact" || lowerHost === "npub") && firstSegment
+            ? firstSegment
+            : host,
+        );
+      }
+
+      if (
+        (lowerFirstSegment === "contact" || lowerFirstSegment === "npub") &&
+        segments[1]
+      ) {
+        candidates.push(segments[1]);
+      } else if (
+        firstSegment &&
+        (!host || lowerHost === "contact" || lowerHost === "npub")
+      ) {
+        candidates.push(firstSegment);
+      }
+
+      return candidates;
+    },
+  );
+
+const collectCashuCandidatesFromUrl = (rawUrl: string): string[] =>
+  collectCandidatesFromUrl(
+    rawUrl,
+    "cashu",
+    CASHU_SCHEME_PREFIX,
+    ["cashu", "token", "cashutoken", "cashu_token", "uri", "t"],
+    ({ host, segments }) => [host, segments[0] ?? ""].filter(Boolean),
+  );
+
 const parseNostrDeepLinkUrl = (
   normalizedRawUrl: string,
 ): NativeDeepLinkScanText | null => {
-  for (const candidate of collectCandidatesFromUrl(normalizedRawUrl, "nostr")) {
+  for (const candidate of collectNostrCandidatesFromUrl(normalizedRawUrl)) {
     const npub = extractNpubFromCandidate(candidate);
     if (!npub) continue;
     return {
@@ -165,7 +182,7 @@ const parseNostrDeepLinkUrl = (
 const parseCashuDeepLinkUrl = (
   normalizedRawUrl: string,
 ): NativeDeepLinkScanText | null => {
-  for (const candidate of collectCandidatesFromUrl(normalizedRawUrl, "cashu")) {
+  for (const candidate of collectCashuCandidatesFromUrl(normalizedRawUrl)) {
     const token = normalizeStrictCashuToken(candidate);
     if (!token) continue;
     return {

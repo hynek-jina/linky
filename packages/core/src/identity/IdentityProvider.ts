@@ -1,10 +1,9 @@
-import { hmac } from "@noble/hashes/hmac.js";
-import { sha512 } from "@noble/hashes/sha2.js";
 import { HDKey } from "@scure/bip32";
 import { entropyToMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { Context, Effect, Layer, Schema } from "effect";
 import { getPublicKey } from "nostr-tools";
+import { deriveBip85Entropy, deriveOwnerKey } from "./bip85";
 import {
   CASHU_SEED_PATH,
   cashuOwnerPath,
@@ -43,22 +42,6 @@ interface Identities {
   readonly storageTransactionsOwnerKey: (index: OwnerLaneIndex) => OwnerKey;
 }
 
-const BIP85_HMAC_KEY = new TextEncoder().encode("bip-entropy-from-k");
-
-const bip85Entropy = (
-  root: HDKey,
-  path: string,
-  bytes: 16 | 32,
-): Uint8Array => {
-  const node = root.derive(path);
-  if (!node.privateKey) throw new Error(`BIP-85 derivation failed at ${path}`);
-  return hmac(sha512, BIP85_HMAC_KEY, node.privateKey).slice(0, bytes);
-};
-
-const deriveOwnerKey = (root: HDKey, path: string): OwnerKey => {
-  return OwnerKey.make(bip85Entropy(root, path, 16));
-};
-
 export class IdentityProvider extends Context.Tag("IdentityProvider")<
   IdentityProvider,
   Identities
@@ -84,7 +67,7 @@ export class IdentityProvider extends Context.Tag("IdentityProvider")<
         getPublicKey(nostrSigningKey),
       );
 
-      const cashuEntropy = bip85Entropy(root, CASHU_SEED_PATH, 32);
+      const cashuEntropy = deriveBip85Entropy(root, CASHU_SEED_PATH, 32);
       const cashuMnemonic = entropyToMnemonic(cashuEntropy, wordlist);
       const cashuWalletSeed = CashuSeed.make(mnemonicToSeedSync(cashuMnemonic));
 

@@ -1,4 +1,30 @@
-import type { CashuTokenId, ContactId } from "../evolu";
+import * as Evolu from "@evolu/common";
+
+const CashuTokenId = Evolu.id("CashuToken");
+type CashuTokenId = typeof CashuTokenId.Type;
+const ContactId = Evolu.id("Contact");
+type ContactId = typeof ContactId.Type;
+
+const decodeSegment = (value: string): string | null => {
+  try {
+    return decodeURIComponent(value).trim() || null;
+  } catch {
+    return null;
+  }
+};
+
+const decodeHashSegment = (hash: string, prefix: string): string | null =>
+  hash.startsWith(prefix) ? decodeSegment(hash.slice(prefix.length)) : null;
+
+const parseCashuTokenId = (value: string): CashuTokenId | null => {
+  const result = CashuTokenId.fromUnknown(value);
+  return result.ok ? result.value : null;
+};
+
+const parseContactId = (value: string): ContactId | null => {
+  const result = ContactId.fromUnknown(value);
+  return result.ok ? result.value : null;
+};
 
 export type Route =
   | { kind: "contacts" }
@@ -63,11 +89,8 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#advanced/mints") return { kind: "mints" };
 
   const mintPrefix = "#advanced/mint/";
-  if (hash.startsWith(mintPrefix)) {
-    const rest = hash.slice(mintPrefix.length);
-    const mintUrl = decodeURIComponent(String(rest ?? "")).trim();
-    if (mintUrl) return { kind: "mint", mintUrl };
-  }
+  const mintUrl = decodeHashSegment(hash, mintPrefix);
+  if (mintUrl) return { kind: "mint", mintUrl };
   if (hash === "#profile/claim-lightning") {
     return { kind: "profileEdit" };
   }
@@ -81,39 +104,30 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#wallet/pay") return { kind: "manualPay" };
 
   const bankPaymentPrefix = "#wallet/bank-payment/";
-  if (hash.startsWith(bankPaymentPrefix)) {
-    const rest = hash.slice(bankPaymentPrefix.length);
-    const spdPayload = decodeURIComponent(String(rest ?? "")).trim();
-    if (spdPayload) return { kind: "bankPayment", spdPayload };
-  }
+  const spdPayload = decodeHashSegment(hash, bankPaymentPrefix);
+  if (spdPayload) return { kind: "bankPayment", spdPayload };
 
   if (hash === "#wallet/tokens") return { kind: "cashuTokens" };
 
   const payLnPrefix = "#payln/";
-  if (hash.startsWith(payLnPrefix)) {
-    const rest = hash.slice(payLnPrefix.length);
-    const lnAddress = decodeURIComponent(String(rest ?? "")).trim();
-    if (lnAddress) return { kind: "lnAddressPay", lnAddress };
-  }
+  const lnAddress = decodeHashSegment(hash, payLnPrefix);
+  if (lnAddress) return { kind: "lnAddressPay", lnAddress };
   if (hash === "#wallet/token/new") return { kind: "cashuTokenNew" };
   if (hash === "#wallet/token/emit") return { kind: "cashuTokenEmit" };
 
   const walletTokenPrefix = "#wallet/token/";
-  if (hash.startsWith(walletTokenPrefix)) {
-    const rest = hash.slice(walletTokenPrefix.length);
-    const id = decodeURIComponent(String(rest ?? "")).trim();
-    if (id) return { kind: "cashuToken", id: id as CashuTokenId };
+  const cashuTokenIdText = decodeHashSegment(hash, walletTokenPrefix);
+  if (cashuTokenIdText) {
+    const id = parseCashuTokenId(cashuTokenIdText);
+    if (id) return { kind: "cashuToken", id };
   }
 
   if (hash === "#nostr-relays") return { kind: "nostrRelays" };
   if (hash === "#nostr-relay/new") return { kind: "nostrRelayNew" };
 
   const relayPrefix = "#nostr-relay/";
-  if (hash.startsWith(relayPrefix)) {
-    const rest = hash.slice(relayPrefix.length);
-    const id = decodeURIComponent(String(rest ?? "")).trim();
-    if (id) return { kind: "nostrRelay", id };
-  }
+  const relayId = decodeHashSegment(hash, relayPrefix);
+  if (relayId) return { kind: "nostrRelay", id: relayId };
 
   if (hash === "#evolu-servers") return { kind: "evoluServers" };
   if (hash === "#evolu-data") return { kind: "evoluData" };
@@ -123,19 +137,16 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#evolu-server/new") return { kind: "evoluServerNew" };
 
   const evoluServerPrefix = "#evolu-server/";
-  if (hash.startsWith(evoluServerPrefix)) {
-    const rest = hash.slice(evoluServerPrefix.length);
-    const id = decodeURIComponent(String(rest ?? "")).trim();
-    if (id) return { kind: "evoluServer", id };
-  }
+  const evoluServerId = decodeHashSegment(hash, evoluServerPrefix);
+  if (evoluServerId) return { kind: "evoluServer", id: evoluServerId };
 
   const chatPrefix = "#chat/";
   if (hash.startsWith(chatPrefix)) {
     const rest = hash.slice(chatPrefix.length);
     const [rawId, rawSub, rawOfferId] = rest.split("/");
-    const id = decodeURIComponent(String(rawId ?? "")).trim();
+    const id = decodeSegment(rawId ?? "");
     const sub = String(rawSub ?? "").trim();
-    const offerId = decodeURIComponent(String(rawOfferId ?? "")).trim();
+    const offerId = decodeSegment(rawOfferId ?? "");
     if (id && sub === "bank-payment-offer" && offerId) {
       return { kind: "bankPaymentOffer", chatId: id, offerId };
     }
@@ -148,13 +159,15 @@ export const parseRouteFromHash = (): Route => {
   if (hash.startsWith(contactPrefix)) {
     const rest = hash.slice(contactPrefix.length);
     const [rawId, rawSub] = rest.split("/");
-    const id = decodeURIComponent(String(rawId ?? "")).trim();
+    const idText = decodeSegment(rawId ?? "");
     const sub = String(rawSub ?? "").trim();
 
-    if (id) {
-      if (sub === "edit") return { kind: "contactEdit", id: id as ContactId };
-      if (sub === "pay") return { kind: "contactPay", id: id as ContactId };
-      return { kind: "contact", id: id as ContactId };
+    if (idText) {
+      const id = parseContactId(idText);
+      if (!id) return { kind: "wallet" };
+      if (sub === "edit") return { kind: "contactEdit", id };
+      if (sub === "pay") return { kind: "contactPay", id };
+      return { kind: "contact", id };
     }
   }
 

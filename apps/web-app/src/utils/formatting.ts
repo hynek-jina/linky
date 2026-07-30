@@ -86,6 +86,26 @@ export const normalizeLocale = (lang?: string): string => {
 };
 
 const numberFormatters = new Map<string, Intl.NumberFormat>();
+const dateTimeFormatters = new Map<string, Intl.DateTimeFormat>();
+
+const getDateTimeFormatter = (
+  locale: string,
+  format: "dayMonth" | "time" | "weekday",
+): Intl.DateTimeFormat => {
+  const key = `${locale}:${format}`;
+  let formatter = dateTimeFormatters.get(key);
+  if (formatter) return formatter;
+
+  const options: Intl.DateTimeFormatOptions =
+    format === "time"
+      ? { hour: "2-digit", minute: "2-digit" }
+      : format === "dayMonth"
+        ? { day: "2-digit", month: "2-digit" }
+        : { weekday: "short" };
+  formatter = new Intl.DateTimeFormat(locale, options);
+  dateTimeFormatters.set(key, formatter);
+  return formatter;
+};
 
 export const formatInteger = (value: number, lang?: string): string => {
   const locale = normalizeLocale(lang);
@@ -113,15 +133,9 @@ export const formatContactMessageTimestamp = (
     d.getDate() === now.getDate();
   const locale = normalizeLocale(lang);
   if (sameDay) {
-    return new Intl.DateTimeFormat(locale, {
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(d);
+    return getDateTimeFormatter(locale, "time").format(d);
   }
-  return new Intl.DateTimeFormat(locale, {
-    day: "2-digit",
-    month: "2-digit",
-  }).format(d);
+  return getDateTimeFormatter(locale, "dayMonth").format(d);
 };
 
 export const previewTokenText = (token: string | null): string | null => {
@@ -154,9 +168,7 @@ export const formatChatDayLabel = (
   if (diffDays === 1) return t("yesterday");
 
   const locale = normalizeLocale(lang);
-  const weekday = new Intl.DateTimeFormat(locale, {
-    weekday: "short",
-  }).format(d);
+  const weekday = getDateTimeFormatter(locale, "weekday").format(d);
   const day = d.getDate();
   const month = d.getMonth() + 1;
   if (locale.startsWith("cs")) return `${weekday} ${day}. ${month}.`;

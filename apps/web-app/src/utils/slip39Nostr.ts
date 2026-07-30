@@ -1,7 +1,7 @@
 import {
   createSlip39Share,
   deriveCashuMnemonicFromMasterSecret,
-  deriveOwnerMnemonicFromMasterSecret,
+  deriveOwnerMnemonicsFromMasterSecret,
   encodeNostrNpub,
   encodeNostrNsec,
   IdentityProvider,
@@ -10,6 +10,7 @@ import {
   parseOwnerLaneIndex,
   parseSlip39Share,
   recoverMasterSecretFromSlip39Share,
+  type OwnerRole,
 } from "@linky/core/identity";
 import { Effect, Layer } from "effect";
 
@@ -17,6 +18,22 @@ interface DerivedNostrKeys {
   npub: string;
   nsec: string;
 }
+
+export interface EvoluOwnerMnemonicRequest {
+  readonly index?: number;
+  readonly role: OwnerRole;
+}
+
+interface PendingOwnerMnemonicRequest {
+  readonly index: number;
+  readonly resolve: (mnemonic: string | null) => void;
+  readonly role: OwnerRole;
+}
+
+const pendingOwnerMnemonicRequests = new Map<
+  string,
+  PendingOwnerMnemonicRequest[]
+>();
 
 const parseShare = async (rawText: string) => {
   return Effect.runPromise(parseSlip39Share(rawText));
@@ -71,27 +88,60 @@ export const deriveCashuBip85MnemonicFromSlip39 = async (
   }
 };
 
-export const deriveEvoluOwnerMnemonicFromSlip39 = async (
+export const deriveEvoluOwnerMnemonicsFromSlip39 = async (
   rawText: string,
-  role:
-    | "meta"
-    | "identity"
-    | "contacts"
-    | "cashu"
-    | "messages"
-    | "transactions",
-  contactsIndex = 0,
-): Promise<string | null> => {
+  requests: ReadonlyArray<EvoluOwnerMnemonicRequest>,
+): Promise<ReadonlyArray<string> | null> => {
   try {
     const share = await parseShare(rawText);
-    const index = await Effect.runPromise(parseOwnerLaneIndex(contactsIndex));
-    const masterSecret = await Effect.runPromise(
-      recoverMasterSecretFromSlip39Share(share),
-    );
+    const [masterSecret, parsedRequests] = await Promise.all([
+      Effect.runPromise(recoverMasterSecretFromSlip39Share(share)),
+      Promise.all(
+        requests.map(async (request) => ({
+          index: await Effect.runPromise(
+            parseOwnerLaneIndex(request.index ?? 0),
+          ),
+          role: request.role,
+        })),
+      ),
+    ]);
     return await Effect.runPromise(
-      deriveOwnerMnemonicFromMasterSecret(masterSecret, role, index),
+      deriveOwnerMnemonicsFromMasterSecret(masterSecret, parsedRequests),
     );
   } catch {
     return null;
   }
 };
+
+const flushOwnerMnemonicRequests = async (rawText: string): Promise<void> => {
+  const pending = pendingOwnerMnemonicRequests.get(rawText);
+  if (!pending) return;
+  pendingOwnerMnemonicRequests.delete(rawText);
+
+  const mnemonics = await deriveEvoluOwnerMnemonicsFromSlip39(
+    rawText,
+    pending.map(({ index, role }) => ({ index, role })),
+  );
+  pending.forEach((request, index) => {
+    request.resolve(mnemonics?.[index] ?? null);
+  });
+};
+
+export const deriveEvoluOwnerMnemonicFromSlip39 = (
+  rawText: string,
+  role: OwnerRole,
+  index = 0,
+): Promise<string | null> =>
+  new Promise((resolve) => {
+    const pending = pendingOwnerMnemonicRequests.get(rawText);
+    const request = { index, resolve, role };
+    if (pending) {
+      pending.push(request);
+      return;
+    }
+
+    pendingOwnerMnemonicRequests.set(rawText, [request]);
+    globalThis.queueMicrotask(() => {
+      void flushOwnerMnemonicRequests(rawText);
+    });
+  });
