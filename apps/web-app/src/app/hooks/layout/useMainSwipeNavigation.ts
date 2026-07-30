@@ -79,8 +79,6 @@ export const useMainSwipeNavigation = ({
   const programmaticFrameRef = React.useRef<number | null>(null);
   const isDraggingRef = React.useRef(false);
   const touchActiveRef = React.useRef(false);
-  const swipeStartWindowScrollYRef = React.useRef<number | null>(null);
-  const swipeWindowScrollLockedRef = React.useRef(false);
 
   const cancelProgrammaticFrame = React.useCallback(() => {
     if (programmaticFrameRef.current === null) return;
@@ -98,41 +96,13 @@ export const useMainSwipeNavigation = ({
     mainSwipeProgressStore.setProgress(value);
   }, []);
 
-  const releaseWindowScrollLock = React.useCallback(() => {
+  const releaseVerticalScrollLock = React.useCallback(() => {
     document.documentElement.classList.remove("is-main-swipe-dragging");
-    const scrollY = swipeStartWindowScrollYRef.current;
-    swipeWindowScrollLockedRef.current = false;
-    swipeStartWindowScrollYRef.current = null;
-
-    if (scrollY === null) return;
-    try {
-      window.scrollTo(window.scrollX, scrollY);
-    } catch {
-      // ignore
-    }
   }, []);
 
-  const lockWindowScrollForSwipe = React.useCallback(() => {
+  const lockVerticalScrollForSwipe = React.useCallback(() => {
     if (typeof document === "undefined") return;
-
-    const scrollY =
-      swipeStartWindowScrollYRef.current ??
-      Math.max(
-        window.scrollY,
-        window.pageYOffset,
-        document.documentElement.scrollTop,
-        document.body.scrollTop,
-      );
-    swipeStartWindowScrollYRef.current = scrollY;
-    if (!swipeWindowScrollLockedRef.current) {
-      swipeWindowScrollLockedRef.current = true;
-      document.documentElement.classList.add("is-main-swipe-dragging");
-    }
-    try {
-      window.scrollTo(window.scrollX, scrollY);
-    } catch {
-      // ignore
-    }
+    document.documentElement.classList.add("is-main-swipe-dragging");
   }, []);
 
   const stopInteractiveState = React.useCallback(() => {
@@ -147,7 +117,7 @@ export const useMainSwipeNavigation = ({
       cancelProgrammaticFrame();
       programmaticTargetRef.current = null;
       stopInteractiveState();
-      releaseWindowScrollLock();
+      releaseVerticalScrollLock();
 
       const element = mainSwipeRef.current;
       if (element) {
@@ -164,7 +134,7 @@ export const useMainSwipeNavigation = ({
     [
       cancelProgrammaticFrame,
       mainSwipeRef,
-      releaseWindowScrollLock,
+      releaseVerticalScrollLock,
       routeKind,
       stopInteractiveState,
       updateMainSwipeProgress,
@@ -257,7 +227,7 @@ export const useMainSwipeNavigation = ({
     const target = routeKind === "wallet" ? "wallet" : "contacts";
     const syncMainSwipeToRoute = () => {
       if (mainSwipeRef.current !== element) return;
-      releaseWindowScrollLock();
+      releaseVerticalScrollLock();
       alignMainSwipeToTarget(element, target);
       updateMainSwipeProgress(target === "wallet" ? 1 : 0);
       stopInteractiveState();
@@ -305,7 +275,7 @@ export const useMainSwipeNavigation = ({
     isMainSwipeRoute,
     mainSwipeRef,
     routeKind,
-    releaseWindowScrollLock,
+    releaseVerticalScrollLock,
     stopInteractiveState,
     updateMainSwipeProgress,
   ]);
@@ -320,12 +290,12 @@ export const useMainSwipeNavigation = ({
     programmaticTargetRef.current = null;
     clearMainSwipeScrollTimer();
     stopInteractiveState();
-    releaseWindowScrollLock();
+    releaseVerticalScrollLock();
   }, [
     cancelProgrammaticFrame,
     clearMainSwipeScrollTimer,
     isMainSwipeRoute,
-    releaseWindowScrollLock,
+    releaseVerticalScrollLock,
     stopInteractiveState,
   ]);
 
@@ -334,34 +304,25 @@ export const useMainSwipeNavigation = ({
     const element = mainSwipeRef.current;
     if (!element) return;
 
-    const rememberWindowScroll = () => {
+    const markTouchActive = () => {
       touchActiveRef.current = true;
-      swipeStartWindowScrollYRef.current = Math.max(
-        window.scrollY,
-        window.pageYOffset,
-        document.documentElement.scrollTop,
-        document.body.scrollTop,
-      );
     };
-    const forgetWindowScroll = () => {
+    const markTouchInactive = () => {
       touchActiveRef.current = false;
-      if (!swipeWindowScrollLockedRef.current) {
-        swipeStartWindowScrollYRef.current = null;
-      }
     };
 
-    element.addEventListener("touchstart", rememberWindowScroll, {
+    element.addEventListener("touchstart", markTouchActive, {
       passive: true,
     });
-    element.addEventListener("touchend", forgetWindowScroll, { passive: true });
-    element.addEventListener("touchcancel", forgetWindowScroll, {
+    element.addEventListener("touchend", markTouchInactive, { passive: true });
+    element.addEventListener("touchcancel", markTouchInactive, {
       passive: true,
     });
 
     return () => {
-      element.removeEventListener("touchstart", rememberWindowScroll);
-      element.removeEventListener("touchend", forgetWindowScroll);
-      element.removeEventListener("touchcancel", forgetWindowScroll);
+      element.removeEventListener("touchstart", markTouchActive);
+      element.removeEventListener("touchend", markTouchInactive);
+      element.removeEventListener("touchcancel", markTouchInactive);
     };
   }, [isMainSwipeRoute, mainSwipeRef]);
 
@@ -369,12 +330,12 @@ export const useMainSwipeNavigation = ({
     () => () => {
       cancelProgrammaticFrame();
       clearMainSwipeScrollTimer();
-      releaseWindowScrollLock();
+      releaseVerticalScrollLock();
     },
     [
       cancelProgrammaticFrame,
       clearMainSwipeScrollTimer,
-      releaseWindowScrollLock,
+      releaseVerticalScrollLock,
     ],
   );
 
@@ -391,7 +352,7 @@ export const useMainSwipeNavigation = ({
             }
 
             if (touchActiveRef.current) {
-              lockWindowScrollForSwipe();
+              lockVerticalScrollForSwipe();
             }
 
             if (!isDraggingRef.current) {
@@ -416,7 +377,7 @@ export const useMainSwipeNavigation = ({
       clearMainSwipeScrollTimer,
       commitMainSwipe,
       isMainSwipeRoute,
-      lockWindowScrollForSwipe,
+      lockVerticalScrollForSwipe,
       mainSwipeScrollTimerRef,
       updateMainSwipeProgress,
     ],

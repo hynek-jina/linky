@@ -3278,6 +3278,7 @@ export const useAppShellComposition = () => {
   const { isMainSwipeRoute } = useMainSwipePageEffects({
     contactsHeaderVisible,
     contactsPullDistanceRef,
+    mainSwipeRef,
     routeKind: route.kind,
     setContactsHeaderVisible,
     setContactsPulling,

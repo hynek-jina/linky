@@ -1,9 +1,5 @@
 import React from "react";
 
-export const shouldLockWalletWindowScroll = (routeKind: string): boolean => {
-  return routeKind === "wallet";
-};
-
 /**
  * Per-frame pull progress is published as a CSS variable instead of React
  * state: the previous setState-per-touchmove re-rendered the whole app shell
@@ -32,6 +28,7 @@ const setContactsPullingClass = (pulling: boolean): void => {
 interface UseMainSwipePageEffectsParams {
   contactsHeaderVisible: boolean;
   contactsPullDistanceRef: React.MutableRefObject<number>;
+  mainSwipeRef: React.RefObject<HTMLDivElement | null>;
   routeKind: string;
   setContactsHeaderVisible: React.Dispatch<React.SetStateAction<boolean>>;
   setContactsPulling: React.Dispatch<React.SetStateAction<boolean>>;
@@ -40,6 +37,7 @@ interface UseMainSwipePageEffectsParams {
 export const useMainSwipePageEffects = ({
   contactsHeaderVisible,
   contactsPullDistanceRef,
+  mainSwipeRef,
   routeKind,
   setContactsHeaderVisible,
   setContactsPulling,
@@ -60,20 +58,17 @@ export const useMainSwipePageEffects = ({
       return;
     }
     if (typeof window === "undefined") return;
+    const contactsScroller =
+      mainSwipeRef.current?.querySelector<HTMLDivElement>(
+        ".main-swipe-contacts-page",
+      ) ?? null;
+    if (!contactsScroller) return;
 
     let touchStartY = 0;
     let trackingTouch = false;
     let pulling = false;
 
-    const getWindowScrollTop = () =>
-      Math.max(
-        window.scrollY,
-        window.pageYOffset,
-        document.documentElement.scrollTop,
-        document.body.scrollTop,
-      );
-
-    const isWindowScrolled = () => getWindowScrollTop() > 1;
+    const isContactsScrollerScrolled = () => contactsScroller.scrollTop > 1;
 
     const resetPull = () => {
       contactsPullDistanceRef.current = 0;
@@ -106,15 +101,14 @@ export const useMainSwipePageEffects = ({
     };
 
     const onScroll = () => {
-      const scrollTop = getWindowScrollTop();
-      if (scrollTop > 1) {
+      if (isContactsScrollerScrolled()) {
         resetPull();
         hidePullUi();
       }
     };
 
     const onWheel = (event: WheelEvent) => {
-      if (isWindowScrolled()) return;
+      if (isContactsScrollerScrolled()) return;
       if (event.deltaY < 0) {
         contactsPullDistanceRef.current = Math.min(
           contactsPullDistanceRef.current + Math.abs(event.deltaY),
@@ -142,7 +136,7 @@ export const useMainSwipePageEffects = ({
     };
 
     const onTouchStart = (event: TouchEvent) => {
-      if (isWindowScrolled()) return;
+      if (isContactsScrollerScrolled()) return;
       const touch = event.touches[0];
       if (!touch) return;
       trackingTouch = true;
@@ -151,7 +145,7 @@ export const useMainSwipePageEffects = ({
     };
 
     const onTouchMove = (event: TouchEvent) => {
-      if (!trackingTouch || isWindowScrolled()) return;
+      if (!trackingTouch || isContactsScrollerScrolled()) return;
       const touch = event.touches[0];
       if (!touch) return;
       const delta = touch.clientY - touchStartY;
@@ -181,51 +175,37 @@ export const useMainSwipePageEffects = ({
       }
     };
 
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("wheel", onWheel, { passive: true });
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("touchend", onTouchEnd, { passive: true });
-    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    contactsScroller.addEventListener("scroll", onScroll, { passive: true });
+    contactsScroller.addEventListener("wheel", onWheel, { passive: true });
+    contactsScroller.addEventListener("touchstart", onTouchStart, {
+      passive: true,
+    });
+    contactsScroller.addEventListener("touchmove", onTouchMove, {
+      passive: true,
+    });
+    contactsScroller.addEventListener("touchend", onTouchEnd, {
+      passive: true,
+    });
+    contactsScroller.addEventListener("touchcancel", onTouchEnd, {
+      passive: true,
+    });
 
     return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
-      window.removeEventListener("touchcancel", onTouchEnd);
+      contactsScroller.removeEventListener("scroll", onScroll);
+      contactsScroller.removeEventListener("wheel", onWheel);
+      contactsScroller.removeEventListener("touchstart", onTouchStart);
+      contactsScroller.removeEventListener("touchmove", onTouchMove);
+      contactsScroller.removeEventListener("touchend", onTouchEnd);
+      contactsScroller.removeEventListener("touchcancel", onTouchEnd);
       setContactsPullingClass(false);
     };
   }, [
     contactsPullDistanceRef,
+    mainSwipeRef,
     routeKind,
     setContactsHeaderVisible,
     setContactsPulling,
   ]);
-
-  React.useEffect(() => {
-    if (!shouldLockWalletWindowScroll(routeKind)) return;
-    if (typeof document === "undefined") return;
-
-    const html = document.documentElement;
-    const body = document.body;
-    const prevHtmlOverflow = html.style.overflow;
-    const prevBodyOverflow = body.style.overflow;
-
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-    try {
-      window.scrollTo(0, 0);
-    } catch {
-      // ignore
-    }
-
-    return () => {
-      html.style.overflow = prevHtmlOverflow;
-      body.style.overflow = prevBodyOverflow;
-    };
-  }, [routeKind]);
 
   return {
     isMainSwipeRoute: routeKind === "contacts" || routeKind === "wallet",

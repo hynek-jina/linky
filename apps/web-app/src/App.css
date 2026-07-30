@@ -1,9 +1,13 @@
 .page {
   max-width: 1200px;
   margin: 0 auto;
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   padding: calc(var(--topbar-height) + 8px) 20px 72px;
   background: var(--app-flat-bg);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .page.chat-page {
@@ -3857,12 +3861,6 @@ button.icon {
   transition: none;
 }
 
-html.is-main-swipe-dragging,
-html.is-main-swipe-dragging body {
-  overflow-y: hidden !important;
-  overscroll-behavior-y: none;
-}
-
 .contacts-search-bar {
   position: relative;
   display: flex;
@@ -4784,8 +4782,16 @@ html.is-main-swipe-dragging body {
 .main-swipe-page {
   flex: 0 0 100%;
   min-width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
   scroll-snap-align: start;
   background: var(--app-flat-bg);
+}
+
+.is-main-swipe-dragging .main-swipe-page {
+  overflow-y: hidden;
 }
 
 .main-swipe:has(+ .bank-payment-offer-banner) > .main-swipe-contacts-page {
@@ -4793,10 +4799,11 @@ html.is-main-swipe-dragging body {
 }
 
 .page.main-swipe-active {
-  touch-action: pan-y;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .bottom-tab-icon {
