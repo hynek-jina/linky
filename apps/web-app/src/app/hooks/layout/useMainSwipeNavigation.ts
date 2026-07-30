@@ -78,6 +78,9 @@ export const useMainSwipeNavigation = ({
   const programmaticTargetRef = React.useRef<MainSwipeTarget | null>(null);
   const programmaticFrameRef = React.useRef<number | null>(null);
   const isDraggingRef = React.useRef(false);
+  const touchActiveRef = React.useRef(false);
+  const swipeStartWindowScrollYRef = React.useRef<number | null>(null);
+  const swipeWindowScrollLockedRef = React.useRef(false);
 
   const cancelProgrammaticFrame = React.useCallback(() => {
     if (programmaticFrameRef.current === null) return;
@@ -95,6 +98,43 @@ export const useMainSwipeNavigation = ({
     mainSwipeProgressStore.setProgress(value);
   }, []);
 
+  const releaseWindowScrollLock = React.useCallback(() => {
+    document.documentElement.classList.remove("is-main-swipe-dragging");
+    const scrollY = swipeStartWindowScrollYRef.current;
+    swipeWindowScrollLockedRef.current = false;
+    swipeStartWindowScrollYRef.current = null;
+
+    if (scrollY === null) return;
+    try {
+      window.scrollTo(window.scrollX, scrollY);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const lockWindowScrollForSwipe = React.useCallback(() => {
+    if (typeof document === "undefined") return;
+
+    const scrollY =
+      swipeStartWindowScrollYRef.current ??
+      Math.max(
+        window.scrollY,
+        window.pageYOffset,
+        document.documentElement.scrollTop,
+        document.body.scrollTop,
+      );
+    swipeStartWindowScrollYRef.current = scrollY;
+    if (!swipeWindowScrollLockedRef.current) {
+      swipeWindowScrollLockedRef.current = true;
+      document.documentElement.classList.add("is-main-swipe-dragging");
+    }
+    try {
+      window.scrollTo(window.scrollX, scrollY);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const stopInteractiveState = React.useCallback(() => {
     if (isDraggingRef.current) {
       isDraggingRef.current = false;
@@ -107,6 +147,7 @@ export const useMainSwipeNavigation = ({
       cancelProgrammaticFrame();
       programmaticTargetRef.current = null;
       stopInteractiveState();
+      releaseWindowScrollLock();
 
       const element = mainSwipeRef.current;
       if (element) {
@@ -123,6 +164,7 @@ export const useMainSwipeNavigation = ({
     [
       cancelProgrammaticFrame,
       mainSwipeRef,
+      releaseWindowScrollLock,
       routeKind,
       stopInteractiveState,
       updateMainSwipeProgress,
@@ -215,6 +257,7 @@ export const useMainSwipeNavigation = ({
     const target = routeKind === "wallet" ? "wallet" : "contacts";
     const syncMainSwipeToRoute = () => {
       if (mainSwipeRef.current !== element) return;
+      releaseWindowScrollLock();
       alignMainSwipeToTarget(element, target);
       updateMainSwipeProgress(target === "wallet" ? 1 : 0);
       stopInteractiveState();
@@ -262,6 +305,7 @@ export const useMainSwipeNavigation = ({
     isMainSwipeRoute,
     mainSwipeRef,
     routeKind,
+    releaseWindowScrollLock,
     stopInteractiveState,
     updateMainSwipeProgress,
   ]);
@@ -276,19 +320,62 @@ export const useMainSwipeNavigation = ({
     programmaticTargetRef.current = null;
     clearMainSwipeScrollTimer();
     stopInteractiveState();
+    releaseWindowScrollLock();
   }, [
     cancelProgrammaticFrame,
     clearMainSwipeScrollTimer,
     isMainSwipeRoute,
+    releaseWindowScrollLock,
     stopInteractiveState,
   ]);
+
+  React.useEffect(() => {
+    if (!isMainSwipeRoute) return;
+    const element = mainSwipeRef.current;
+    if (!element) return;
+
+    const rememberWindowScroll = () => {
+      touchActiveRef.current = true;
+      swipeStartWindowScrollYRef.current = Math.max(
+        window.scrollY,
+        window.pageYOffset,
+        document.documentElement.scrollTop,
+        document.body.scrollTop,
+      );
+    };
+    const forgetWindowScroll = () => {
+      touchActiveRef.current = false;
+      if (!swipeWindowScrollLockedRef.current) {
+        swipeStartWindowScrollYRef.current = null;
+      }
+    };
+
+    element.addEventListener("touchstart", rememberWindowScroll, {
+      passive: true,
+    });
+    element.addEventListener("touchend", forgetWindowScroll, { passive: true });
+    element.addEventListener("touchcancel", forgetWindowScroll, {
+      passive: true,
+    });
+
+    return () => {
+      element.removeEventListener("touchstart", rememberWindowScroll);
+      element.removeEventListener("touchend", forgetWindowScroll);
+      element.removeEventListener("touchcancel", forgetWindowScroll);
+    };
+  }, [isMainSwipeRoute, mainSwipeRef]);
 
   React.useEffect(
     () => () => {
       cancelProgrammaticFrame();
       clearMainSwipeScrollTimer();
+      releaseWindowScrollLock();
     },
-    [cancelProgrammaticFrame, clearMainSwipeScrollTimer],
+    [
+      cancelProgrammaticFrame,
+      clearMainSwipeScrollTimer,
+      releaseWindowScrollLock,
+    ],
   );
 
   const handleMainSwipeScroll = React.useMemo(
@@ -301,6 +388,10 @@ export const useMainSwipeNavigation = ({
             if (programmaticTargetRef.current !== null) {
               updateMainSwipeProgress(progress);
               return;
+            }
+
+            if (touchActiveRef.current) {
+              lockWindowScrollForSwipe();
             }
 
             if (!isDraggingRef.current) {
@@ -325,6 +416,7 @@ export const useMainSwipeNavigation = ({
       clearMainSwipeScrollTimer,
       commitMainSwipe,
       isMainSwipeRoute,
+      lockWindowScrollForSwipe,
       mainSwipeScrollTimerRef,
       updateMainSwipeProgress,
     ],

@@ -3853,6 +3853,16 @@ button.icon {
     transform 0.2s ease;
 }
 
+.is-pulling-contacts-toolbar .contacts-toolbar {
+  transition: none;
+}
+
+html.is-main-swipe-dragging,
+html.is-main-swipe-dragging body {
+  overflow-y: hidden !important;
+  overscroll-behavior-y: none;
+}
+
 .contacts-search-bar {
   position: relative;
   display: flex;
