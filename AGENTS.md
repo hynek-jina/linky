@@ -20,6 +20,7 @@ bun run native:ios:add     # Generate the Capacitor iOS project once
 bun run push:dev           # Start the Bun push notification service in watch mode
 bun run push:start         # Start the Bun push notification service once
 bun run check-code         # Run ALL checks: typecheck → eslint --fix → prettier --write
+bun run test               # Run Vitest unit tests in all workspaces
 bun run typecheck          # TypeScript type checking only
 bun run eslint             # Lint + autofix all workspaces
 bun run prettier           # Format + autofix all workspaces
@@ -153,7 +154,8 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 ## Testing
 
 - **Playwright** E2E tests in `apps/web-app/tests/`
-- **Vitest** unit tests (jsdom environment, Worker polyfill in `vitest.setup.ts`)
+- **Vitest** unit tests (jsdom environment, Worker polyfill in `vitest.setup.ts`); run via `bun run test`, also enforced on PRs and `main` pushes by `.github/workflows/tests.yml`
+- Vitest excludes `tests/**/*.spec.ts` — those are Playwright E2E suites run separately
 - Dev server for E2E: `http://127.0.0.1:5174`
 
 ## Gotchas

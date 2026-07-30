@@ -40,12 +40,23 @@ const translate = (key: string): string => {
   }
 };
 
-const waitForQrRender = async (): Promise<void> => {
-  await Promise.resolve();
-  await Promise.resolve();
-  await new Promise<void>((resolve) => {
-    window.setTimeout(resolve, 0);
-  });
+// The QR src updates asynchronously (qrcode.toDataURL + setState), so poll
+// until the assertion holds instead of racing it with a fixed delay.
+const waitFor = async (assertion: () => void): Promise<void> => {
+  const deadline = Date.now() + 2000;
+  for (;;) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      if (Date.now() > deadline) throw error;
+      await act(async () => {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, 10);
+        });
+      });
+    }
+  }
 };
 
 describe("TopupInvoicePage", () => {
@@ -124,12 +135,12 @@ describe("TopupInvoicePage", () => {
 
     await act(async () => {
       cashuTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await waitForQrRender();
     });
-
-    expect(
-      container.querySelector(".topup-invoice-qr")?.getAttribute("src"),
-    ).toBe("qr:creqArequest");
+    await waitFor(() => {
+      expect(
+        container.querySelector(".topup-invoice-qr")?.getAttribute("src"),
+      ).toBe("qr:creqArequest");
+    });
 
     await act(async () => {
       container
@@ -144,12 +155,12 @@ describe("TopupInvoicePage", () => {
 
     await act(async () => {
       lightningTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await waitForQrRender();
     });
-
-    expect(
-      container.querySelector(".topup-invoice-qr")?.getAttribute("src"),
-    ).toBe("qr:lnbc-invoice");
+    await waitFor(() => {
+      expect(
+        container.querySelector(".topup-invoice-qr")?.getAttribute("src"),
+      ).toBe("qr:lnbc-invoice");
+    });
 
     await act(async () => {
       container

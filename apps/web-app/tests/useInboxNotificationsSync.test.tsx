@@ -274,11 +274,21 @@ describe("useInboxNotificationsSync", () => {
       value: "visible",
     });
 
+    // Only live subscription events surface toasts; bootstrap querySync
+    // results are stored silently, so deliver the wrap through onevent.
     const wrapEvent = { id: "wrap-known-1" };
-    querySyncMock.mockResolvedValue([wrapEvent]);
-    subscribeMock.mockReturnValue({
-      close: vi.fn(async () => {}),
-    });
+    const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
+    querySyncMock.mockResolvedValue([]);
+    subscribeMock.mockImplementation(
+      (
+        _relays: unknown,
+        _filter: unknown,
+        handlers: { onevent: (event: typeof wrapEvent) => void },
+      ) => {
+        liveEventHandlers.push(handlers.onevent);
+        return { close: vi.fn(async () => {}) };
+      },
+    );
     unwrapEventMock.mockReturnValue({
       kind: 14,
       id: "rumor-known-1",
@@ -345,6 +355,9 @@ describe("useInboxNotificationsSync", () => {
     };
 
     const root = await renderHarness("contact-alice");
+    await act(async () => {
+      liveEventHandlers[0]?.(wrapEvent);
+    });
 
     expect(pushToast).toHaveBeenCalledWith(
       "Bob: hi from Bob",
@@ -358,14 +371,10 @@ describe("useInboxNotificationsSync", () => {
     });
 
     querySyncMock.mockReset();
-    subscribeMock.mockReset();
     unwrapEventMock.mockReset();
     pushToast.mockReset();
 
-    querySyncMock.mockResolvedValue([wrapEvent]);
-    subscribeMock.mockReturnValue({
-      close: vi.fn(async () => {}),
-    });
+    querySyncMock.mockResolvedValue([]);
     unwrapEventMock.mockReturnValue({
       kind: 14,
       id: "rumor-known-2",
@@ -376,6 +385,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const activeRoot = await renderHarness("contact-bob");
+    await act(async () => {
+      liveEventHandlers.at(-1)?.({ id: "wrap-known-2" });
+    });
 
     expect(pushToast).not.toHaveBeenCalled();
 
@@ -795,10 +807,18 @@ describe("useInboxNotificationsSync", () => {
 
   it("routes incoming messages to a known contact when the peer is only identifiable from p tags", async () => {
     const wrapEvent = { id: "wrap-known-via-ptag-1" };
-    querySyncMock.mockResolvedValue([wrapEvent]);
-    subscribeMock.mockReturnValue({
-      close: vi.fn(async () => {}),
-    });
+    const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
+    querySyncMock.mockResolvedValue([]);
+    subscribeMock.mockImplementation(
+      (
+        _relays: unknown,
+        _filter: unknown,
+        handlers: { onevent: (event: typeof wrapEvent) => void },
+      ) => {
+        liveEventHandlers.push(handlers.onevent);
+        return { close: vi.fn(async () => {}) };
+      },
+    );
     unwrapEventMock.mockReturnValue({
       kind: 14,
       id: "rumor-known-via-ptag-1",
@@ -866,6 +886,9 @@ describe("useInboxNotificationsSync", () => {
     });
     await flushEffects();
     await flushEffects();
+    await act(async () => {
+      liveEventHandlers[0]?.(wrapEvent);
+    });
 
     expect(appendLocalNostrMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1220,10 +1243,18 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const wrapEvent = { id: "wrap-payment-notice-1" };
-    querySyncMock.mockResolvedValue([wrapEvent]);
-    subscribeMock.mockReturnValue({
-      close: vi.fn(async () => {}),
-    });
+    const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
+    querySyncMock.mockResolvedValue([]);
+    subscribeMock.mockImplementation(
+      (
+        _relays: unknown,
+        _filter: unknown,
+        handlers: { onevent: (event: typeof wrapEvent) => void },
+      ) => {
+        liveEventHandlers.push(handlers.onevent);
+        return { close: vi.fn(async () => {}) };
+      },
+    );
     unwrapEventMock.mockReturnValue({
       kind: 24133,
       id: "rumor-payment-notice-1",
@@ -1294,6 +1325,9 @@ describe("useInboxNotificationsSync", () => {
     });
     await flushEffects();
     await flushEffects();
+    await act(async () => {
+      liveEventHandlers[0]?.(wrapEvent);
+    });
 
     expect(pushToast).toHaveBeenCalledWith("Bob: You received money");
     expect(maybeShowPwaNotification).toHaveBeenCalledWith(
@@ -1315,10 +1349,18 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const wrapEvent = { id: "wrap-payment-notice-repeat-1" };
-    querySyncMock.mockResolvedValue([wrapEvent]);
-    subscribeMock.mockReturnValue({
-      close: vi.fn(async () => {}),
-    });
+    const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
+    querySyncMock.mockResolvedValue([]);
+    subscribeMock.mockImplementation(
+      (
+        _relays: unknown,
+        _filter: unknown,
+        handlers: { onevent: (event: typeof wrapEvent) => void },
+      ) => {
+        liveEventHandlers.push(handlers.onevent);
+        return { close: vi.fn(async () => {}) };
+      },
+    );
     unwrapEventMock.mockReturnValue({
       kind: 24133,
       id: "payment-notice-repeat-1",
@@ -1393,18 +1435,29 @@ describe("useInboxNotificationsSync", () => {
     });
     await flushEffects();
     await flushEffects();
+    await act(async () => {
+      liveEventHandlers[0]?.(wrapEvent);
+    });
 
     await act(async () => {
       root.render(<Harness routeKind="wallet" />);
     });
     await flushEffects();
     await flushEffects();
+    // The route change re-runs the inbox effect and resubscribes; the same
+    // wrap arriving again must be deduped by the seen-wrap-id set.
+    await act(async () => {
+      liveEventHandlers.at(-1)?.(wrapEvent);
+    });
 
     await act(async () => {
       root.render(<Harness routeKind="contacts" />);
     });
     await flushEffects();
     await flushEffects();
+    await act(async () => {
+      liveEventHandlers.at(-1)?.(wrapEvent);
+    });
 
     expect(pushToast).toHaveBeenCalledTimes(1);
     expect(pushToast).toHaveBeenCalledWith("Bob: You received money");
@@ -1427,9 +1480,17 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const wrapEvent = { id: "wrap-payment-notice-restart-1" };
-    subscribeMock.mockReturnValue({
-      close: vi.fn(async () => {}),
-    });
+    const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
+    subscribeMock.mockImplementation(
+      (
+        _relays: unknown,
+        _filter: unknown,
+        handlers: { onevent: (event: typeof wrapEvent) => void },
+      ) => {
+        liveEventHandlers.push(handlers.onevent);
+        return { close: vi.fn(async () => {}) };
+      },
+    );
     unwrapEventMock.mockReturnValue({
       kind: 24133,
       id: "payment-notice-restart-1",
@@ -1492,13 +1553,16 @@ describe("useInboxNotificationsSync", () => {
       return null;
     };
 
-    querySyncMock.mockResolvedValue([wrapEvent]);
+    querySyncMock.mockResolvedValue([]);
     const firstRoot = createRoot(document.createElement("div"));
     await act(async () => {
       firstRoot.render(<Harness />);
     });
     await flushEffects();
     await flushEffects();
+    await act(async () => {
+      liveEventHandlers[0]?.(wrapEvent);
+    });
 
     expect(pushToast).toHaveBeenCalledTimes(1);
     expect(maybeShowPwaNotification).toHaveBeenCalledTimes(1);
@@ -1507,6 +1571,8 @@ describe("useInboxNotificationsSync", () => {
       firstRoot.unmount();
     });
 
+    // After a restart the same wrap comes back through bootstrap catch-up;
+    // the persisted seen-wrap-id set must keep it silent.
     querySyncMock.mockResolvedValue([wrapEvent]);
     const secondRoot = createRoot(document.createElement("div"));
     await act(async () => {

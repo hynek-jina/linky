@@ -10,6 +10,7 @@
     "eslint": "eslint --fix .",
     "prettier": "prettier --write .",
     "typecheck": "tsc -b",
+    "test": "vitest run",
     "preview": "vite preview",
     "prev": "vite preview"
   },

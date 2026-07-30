@@ -7,9 +7,9 @@ import {
   resolveCashuTokenStoredOwnerLaneById,
 } from "./cashuOwnerLane";
 
-const owner0 = Evolu.OwnerId.orThrow("aaaaaaaaaaaaaaaaaaaaaa");
-const owner1 = Evolu.OwnerId.orThrow("bbbbbbbbbbbbbbbbbbbbbb");
-const owner2 = Evolu.OwnerId.orThrow("cccccccccccccccccccccc");
+const owner0 = Evolu.OwnerId.orThrow("AAAAAAAAAAAAAAAAAAAAAA");
+const owner1 = Evolu.OwnerId.orThrow("AQEBAQEBAQEBAQEBAQEBAQ");
+const owner2 = Evolu.OwnerId.orThrow("AgICAgICAgICAgICAgICAg");
 
 describe("cashu owner lane helpers", () => {
   it("reads an owner id from an aggregated row", () => {
