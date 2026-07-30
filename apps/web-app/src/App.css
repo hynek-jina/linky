@@ -504,6 +504,14 @@
   color: #e2e8f0;
 }
 
+.topbar-left .topbar-btn {
+  justify-content: flex-start;
+}
+
+.topbar > .topbar-btn {
+  justify-content: flex-end;
+}
+
 .topbar-profile-btn {
   width: 34px;
   height: 34px;
@@ -5257,7 +5265,7 @@ button.icon {
 @media (max-width: 640px) {
   .chat-compose {
     gap: 4px;
-    padding: 0 12px;
+    padding: 0 var(--page-gutter);
     padding-bottom: calc(6px + var(--floating-safe-area-bottom));
     background: transparent;
     box-shadow: none;
