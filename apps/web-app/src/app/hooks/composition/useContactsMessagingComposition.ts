@@ -307,6 +307,9 @@ export const useContactsMessagingComposition = ({
       "1",
   );
 
+  // Ephemeral per-contact activity indicator.
+  // When a message/payment arrives, we show a dot and temporarily bump the
+  // contact to the top until the user opens it.
   const [contactAttentionById, setContactAttentionById] = useState<
     Record<string, number>
   >(() => ({}));
