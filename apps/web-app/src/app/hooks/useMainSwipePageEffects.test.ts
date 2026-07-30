@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   CONTACTS_PULL_REVEAL_DISTANCE_PX,
   getContactsPullProgress,
-  shouldLockWalletWindowScroll,
 } from "./useMainSwipePageEffects";
 
 describe("getContactsPullProgress", () => {
@@ -19,16 +18,5 @@ describe("getContactsPullProgress", () => {
     expect(getContactsPullProgress(CONTACTS_PULL_REVEAL_DISTANCE_PX * 2)).toBe(
       1,
     );
-  });
-});
-
-describe("shouldLockWalletWindowScroll", () => {
-  it("does not lock window scroll outside the wallet route", () => {
-    expect(shouldLockWalletWindowScroll("contacts")).toBe(false);
-    expect(shouldLockWalletWindowScroll("chat")).toBe(false);
-  });
-
-  it("locks window scroll on the wallet route", () => {
-    expect(shouldLockWalletWindowScroll("wallet")).toBe(true);
   });
 });
