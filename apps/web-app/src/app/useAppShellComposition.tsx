@@ -11,8 +11,6 @@ import React, { useMemo, useState } from "react";
 import { createSendTokenWithTokensAtMint } from "../cashuSend";
 import { ContactCard } from "../components/ContactCard";
 import {
-  DEFAULT_LIGHTNING_ADDRESS_DOMAIN,
-  deriveDefaultLightningAddress,
   deriveDefaultProfile,
   omitSyntheticContactLightningAddress,
 } from "../derivedProfile";
@@ -123,7 +121,6 @@ import {
 } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { parseNpubCashProfileInfo } from "../utils/npubCashInfo";
-import { resolveNpubCashServerBaseUrl } from "../utils/npubCashServer";
 import { setStoredPushContactNames } from "../utils/pushContactNamesStorage";
 import {
   getInitialAllowedDisplayCurrencies,
@@ -132,7 +129,6 @@ import {
   getInitialDisplayCurrency,
   getInitialLightningInvoiceAutoPayLimit,
   getInitialPayWithCashuEnabled,
-  getInitialShowProfileQrOnTiltEnabled,
   safeLocalStorageGet,
   safeLocalStorageGetJson,
   safeLocalStorageRemove,
@@ -148,6 +144,7 @@ import { useRestoreMissingTokens } from "./hooks/cashu/useRestoreMissingTokens";
 import { useSaveCashuFromText } from "./hooks/cashu/useSaveCashuFromText";
 import { useIdentityOwnersComposition } from "./hooks/composition/useIdentityOwnersComposition";
 import { usePaymentMoneyComposition } from "./hooks/composition/usePaymentMoneyComposition";
+import { useProfileComposition } from "./hooks/composition/useProfileComposition";
 import { useProfilePeopleComposition } from "./hooks/composition/useProfilePeopleComposition";
 import { useRoutingViewComposition } from "./hooks/composition/useRoutingViewComposition";
 import { useSystemSettingsComposition } from "./hooks/composition/useSystemSettingsComposition";
@@ -187,10 +184,6 @@ import { useNpubCashMintSelection } from "./hooks/mint/useNpubCashMintSelection"
 import { useContactPayMethod } from "./hooks/payments/useContactPayMethod";
 import { usePayContactWithCashuMessage } from "./hooks/payments/usePayContactWithCashuMessage";
 import { useRouteAmountResetEffects } from "./hooks/payments/useRouteAmountResetEffects";
-import { useProfileEditor } from "./hooks/profile/useProfileEditor";
-import { useProfileMetadataSyncEffect } from "./hooks/profile/useProfileMetadataSyncEffect";
-import { useProfileStatusEditor } from "./hooks/profile/useProfileStatusEditor";
-import { useProfileStatusSyncEffect } from "./hooks/profile/useProfileStatusSyncEffect";
 import { shouldKeepTopupQuoteAfterClaimError } from "./hooks/topup/topupMintClaim";
 import {
   isClaimableMintQuoteState,
@@ -219,7 +212,6 @@ import { useMintDomain } from "./hooks/useMintDomain";
 import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
 import { usePaidOverlayState } from "./hooks/usePaidOverlayState";
 import { usePaymentsDomain } from "./hooks/usePaymentsDomain";
-import { usePortraitOrientationLock } from "./hooks/usePortraitOrientationLock";
 import { useProfileNpubCashEffects } from "./hooks/useProfileNpubCashEffects";
 import { useRelayDomain } from "./hooks/useRelayDomain";
 import { useScannedTextHandler } from "./hooks/useScannedTextHandler";
@@ -636,8 +628,6 @@ export const useAppShellComposition = () => {
   const [cashuAutoswapEnabled, setCashuAutoswapEnabled] = useState<boolean>(
     () => getInitialCashuAutoswapEnabled(),
   );
-  const [showProfileQrOnTiltEnabled, setShowProfileQrOnTiltEnabled] =
-    useState<boolean>(() => getInitialShowProfileQrOnTiltEnabled());
   const [lightningInvoiceAutoPayLimit, setLightningInvoiceAutoPayLimit] =
     useState<number>(() => getInitialLightningInvoiceAutoPayLimit());
   const [
@@ -1229,26 +1219,7 @@ export const useAppShellComposition = () => {
     [],
   );
 
-  const [myProfileName, setMyProfileName] = useState<string | null>(null);
-  const [myProfilePicture, setMyProfilePicture] = useState<string | null>(null);
-  const [myProfileQr, setMyProfileQr] = useState<string | null>(null);
-  const [myProfileLnAddress, setMyProfileLnAddress] = useState<string | null>(
-    null,
-  );
-  const [ownedProfileLightningAddresses, setOwnedProfileLightningAddresses] =
-    useState<string[]>([]);
-  const [
-    ownedProfileLightningAddressesLoading,
-    setOwnedProfileLightningAddressesLoading,
-  ] = useState(true);
-  const [myProfileStatus, setMyProfileStatus] = useState<string | null>(null);
-  const [myProfileMetadata, setMyProfileMetadata] =
-    useState<NostrProfileMetadata | null>(null);
-
   const npubCashClaimInFlightRef = React.useRef(false);
-  const npubCashInfoInFlightRef = React.useRef(false);
-  const npubCashInfoLoadedForNpubRef = React.useRef<string | null>(null);
-  const npubCashInfoLoadedAtMsRef = React.useRef<number>(0);
   const npubCashMintSyncRef = React.useRef<string | null>(null);
 
   const nostrInFlight = React.useRef<Set<string>>(new Set());
@@ -1570,47 +1541,6 @@ export const useAppShellComposition = () => {
       return null;
     }
   }, [currentNpub]);
-
-  useTopupInvoiceQuoteEffects({
-    defaultMintUrl,
-    effectiveMyLightningAddress:
-      myProfileLnAddress ??
-      (currentNpub ? deriveDefaultLightningAddress(currentNpub) : null),
-    routeKind: route.kind,
-    t,
-    topupAmount,
-    topupInvoice,
-    topupInvoiceError,
-    topupInvoiceIsBusy,
-    topupInvoicePaidHandledRef,
-    topupInvoiceQr,
-    topupInvoiceStartBalanceRef,
-    topupMintQuote,
-    topupPaidNavTimerRef,
-    topupRefreshKey: myProfileName,
-    topupRecipientNprofile,
-    setTopupAmount,
-    setTopupInvoice,
-    setTopupInvoiceCashuRequest,
-    setTopupInvoiceError,
-    setTopupInvoiceIsBusy,
-    setTopupInvoiceQr,
-    setTopupInvoiceQrPayload,
-    setTopupMintQuote,
-  });
-
-  useAppPreferences({
-    allowedDisplayCurrencies,
-    cashuAutoswapEnabled,
-    displayCurrency,
-    bankPaymentOfferRecipientCount,
-    lang,
-    lightningInvoiceAutoPayLimit,
-    payWithCashuEnabled,
-    showProfileQrOnTiltEnabled,
-  });
-
-  usePortraitOrientationLock(showProfileQrOnTiltEnabled);
 
   useArmedDeleteTimeouts({
     pendingCashuDeleteId,
@@ -2715,39 +2645,26 @@ export const useAppShellComposition = () => {
     amountSat: number;
   }>(null);
 
-  const defaultLightningAddress = useMemo(() => {
-    if (!currentNpub) return null;
-    return deriveDefaultLightningAddress(currentNpub);
-  }, [currentNpub]);
-
-  const derivedProfile = useMemo(() => {
-    if (!currentNpub) return null;
-    return deriveDefaultProfile(currentNpub, lang);
-  }, [currentNpub, lang]);
-
-  const effectiveProfileName = myProfileName ?? derivedProfile?.name ?? null;
-  const effectiveProfilePicture =
-    myProfilePicture ?? derivedProfile?.pictureUrl ?? null;
-
-  const effectiveMyLightningAddress =
-    myProfileLnAddress ?? defaultLightningAddress;
-
-  const npubCashServerBaseUrl = useMemo(() => {
-    return resolveNpubCashServerBaseUrl(effectiveMyLightningAddress);
-  }, [effectiveMyLightningAddress]);
-
-  const profileClaimLightningAddressServerBaseUrl = useMemo(() => {
-    return resolveNpubCashServerBaseUrl(
-      `claim@${DEFAULT_LIGHTNING_ADDRESS_DOMAIN}`,
-    );
-  }, []);
-
   const {
     cycleProfileAvatarControl,
+    derivedProfile,
+    effectiveMyLightningAddress,
+    effectiveProfileName,
+    effectiveProfilePicture,
     isProfileEditing,
+    myProfileName,
+    myProfileQr,
+    myProfileStatus,
+    npubCashInfoInFlightRef,
+    npubCashInfoLoadedAtMsRef,
+    npubCashInfoLoadedForNpubRef,
+    npubCashServerBaseUrl,
     onPickProfilePhoto,
     onProfilePhotoError,
     onProfilePhotoSelected,
+    openProfileQr,
+    ownedProfileLightningAddresses,
+    profileClaimLightningAddressServerBaseUrl,
     profileCustomPictureUrl,
     profileEditInitialRef,
     profileEditLnAddress,
@@ -2757,33 +2674,70 @@ export const useAppShellComposition = () => {
     profileEditsSavable,
     profilePhotoInputRef,
     profileSelectedPictureKind,
+    profileStatusCurrencies,
+    profileStatusIsSaving,
     saveClaimedLightningAddress,
     saveProfileEdits,
+    selectedProfileStatusCurrencies,
     setIsProfileEditing,
+    setMyProfileQr,
+    setOwnedProfileLightningAddresses,
+    setOwnedProfileLightningAddressesLoading,
     setProfileEditLnAddress,
     setProfileEditName,
     setProfileEditStatus,
+    setShowProfileQrOnTiltEnabled,
+    showProfileQrOnTiltEnabled,
     toggleProfileEditing,
+    toggleProfileStatusCurrency,
     unregisteredOwnLightningAddress,
-  } = useProfileEditor({
+  } = useProfileComposition({
     currentNpub,
     currentNsec,
-    defaultLightningAddress,
-    effectiveMyLightningAddress,
-    effectiveProfileName,
-    effectiveProfilePicture,
-    myProfileMetadata,
-    myProfileStatus,
+    lang,
+    nostrBootstrapReady,
     nostrFetchRelays,
-    ownedLightningAddresses: ownedProfileLightningAddresses,
-    ownedLightningAddressesLoading: ownedProfileLightningAddressesLoading,
-    setMyProfileLnAddress,
-    setMyProfileMetadata,
-    setMyProfileName,
-    setMyProfilePicture,
-    setMyProfileStatus,
+    rememberBlobAvatarUrl,
+    route,
     setStatus,
     t,
+  });
+
+  useTopupInvoiceQuoteEffects({
+    defaultMintUrl,
+    effectiveMyLightningAddress,
+    routeKind: route.kind,
+    t,
+    topupAmount,
+    topupInvoice,
+    topupInvoiceError,
+    topupInvoiceIsBusy,
+    topupInvoicePaidHandledRef,
+    topupInvoiceQr,
+    topupInvoiceStartBalanceRef,
+    topupMintQuote,
+    topupPaidNavTimerRef,
+    topupRefreshKey: myProfileName,
+    topupRecipientNprofile,
+    setTopupAmount,
+    setTopupInvoice,
+    setTopupInvoiceCashuRequest,
+    setTopupInvoiceError,
+    setTopupInvoiceIsBusy,
+    setTopupInvoiceQr,
+    setTopupInvoiceQrPayload,
+    setTopupMintQuote,
+  });
+
+  useAppPreferences({
+    allowedDisplayCurrencies,
+    cashuAutoswapEnabled,
+    displayCurrency,
+    bankPaymentOfferRecipientCount,
+    lang,
+    lightningInvoiceAutoPayLimit,
+    payWithCashuEnabled,
+    showProfileQrOnTiltEnabled,
   });
 
   const defaultMintDisplay = useMemo(() => {
@@ -2915,6 +2869,8 @@ export const useAppShellComposition = () => {
     currentNsec,
     makeNip98AuthHeader,
     profileClaimLightningAddressServerBaseUrl,
+    setOwnedProfileLightningAddresses,
+    setOwnedProfileLightningAddressesLoading,
   ]);
 
   React.useEffect(() => {
@@ -2977,39 +2933,6 @@ export const useAppShellComposition = () => {
     touchMintInfo,
   });
 
-  useProfileMetadataSyncEffect({
-    canFetchFromNostr: nostrBootstrapReady,
-    currentNpub,
-    nostrFetchRelays,
-    rememberBlobAvatarUrl,
-    setMyProfileLnAddress,
-    setMyProfileMetadata,
-    setMyProfileName,
-    setMyProfilePicture,
-  });
-
-  useProfileStatusSyncEffect({
-    canFetchFromNostr: nostrBootstrapReady,
-    currentNpub,
-    nostrFetchRelays,
-    setMyProfileStatus,
-  });
-
-  const {
-    profileStatusCurrencies,
-    profileStatusIsSaving,
-    selectedProfileStatusCurrencies,
-    toggleProfileStatusCurrency,
-  } = useProfileStatusEditor({
-    currentNpub,
-    currentNsec,
-    myProfileStatus,
-    nostrFetchRelays,
-    setMyProfileStatus,
-    setStatus,
-    t,
-  });
-
   useProfileNpubCashEffects({
     claimNpubCashOnce,
     claimNpubCashOnceLatestRef,
@@ -3028,16 +2951,6 @@ export const useAppShellComposition = () => {
     setIsProfileEditing,
     setMyProfileQr,
   });
-
-  React.useEffect(() => {
-    if (route.kind !== "profileEdit") {
-      return;
-    }
-
-    if (!isProfileEditing) {
-      toggleProfileEditing();
-    }
-  }, [isProfileEditing, route.kind, toggleProfileEditing]);
 
   // Intentionally no automatic publishing of kind-0 profile metadata.
   // We only publish profile changes when the user does so explicitly.
@@ -8863,10 +8776,6 @@ export const useAppShellComposition = () => {
     updateLocalNostrMessage,
     updateLocalNostrReaction,
   });
-
-  const openProfileQr = React.useCallback(() => {
-    navigateTo({ route: "profile" });
-  }, []);
 
   const handleContactIdentifierScanned = React.useCallback(
     async (identifier: string) => {
