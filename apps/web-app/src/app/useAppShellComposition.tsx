@@ -1199,10 +1199,6 @@ export const useAppShellComposition = () => {
     ],
   );
 
-  const closePostPaySaveContact = React.useCallback(() => {
-    setPostPaySaveContact(null);
-  }, []);
-
   /**
    * The topmost dismissible modal in `AuthenticatedLayout`, or null.
    *
@@ -1212,7 +1208,7 @@ export const useAppShellComposition = () => {
    * its pending promise unresolved. Order is the reverse of the render order,
    * because the last sibling rendered is the one on top.
    */
-  const dismissTopModal = React.useMemo((): (() => void) | null => {
+  const dismissTopModal = ((): (() => void) | null => {
     if (shareOptionsText) return closeShareOptions;
     if (nfcWritePromptKind && shouldRenderNativeNfcWritePrompt()) {
       return cancelPendingNfcWrite;
@@ -1232,25 +1228,9 @@ export const useAppShellComposition = () => {
     if (pendingLightningInvoiceConfirmation) {
       return closeLightningInvoiceConfirmation;
     }
-    if (postPaySaveContact) return closePostPaySaveContact;
+    if (postPaySaveContact) return () => setPostPaySaveContact(null);
     return null;
-  }, [
-    cancelPendingNfcWrite,
-    closeLightningInvoiceConfirmation,
-    closeLnurlWithdrawConfirmation,
-    closeMintAutoswapChangeConfirmation,
-    closePaymentMintMeltConfirmation,
-    closePostPaySaveContact,
-    closeShareOptions,
-    nfcWritePromptKind,
-    paidOverlayIsOpen,
-    pendingLightningInvoiceConfirmation,
-    pendingLnurlWithdrawConfirmation,
-    pendingMintAutoswapChangeConfirmation,
-    pendingPaymentMintMeltConfirmation,
-    postPaySaveContact,
-    shareOptionsText,
-  ]);
+  })();
 
   useNativeBackHandler({
     closeMenu,
