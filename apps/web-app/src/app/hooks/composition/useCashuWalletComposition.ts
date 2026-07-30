@@ -3215,8 +3215,10 @@ export const useCashuWalletComposition = ({
       }
     },
     [
+      activeNostrMessagePublishClientIdsRef,
       appendLocalNostrMessage,
       cashuTokensAllFiltered,
+      chatSeenWrapIdsRef,
       currentNsec,
       logPaymentEvent,
       deleteCashuToken,
@@ -3234,7 +3236,7 @@ export const useCashuWalletComposition = ({
         [origin]: url,
       }));
     },
-    [],
+    [setMintIconUrlByMint],
   );
 
   const handleMintIconError = React.useCallback(
@@ -3244,7 +3246,7 @@ export const useCashuWalletComposition = ({
         [origin]: url,
       }));
     },
-    [],
+    [setMintIconUrlByMint],
   );
 
   const restoreMissingTokens = useRestoreMissingTokens({
@@ -4300,6 +4302,7 @@ export const useCashuWalletComposition = ({
 
     navigateTo({ route: "contact", id: selectedContact.id });
   }, [
+    contactPayBackToChatRef,
     currentNpub,
     defaultMintUrl,
     payAmount,

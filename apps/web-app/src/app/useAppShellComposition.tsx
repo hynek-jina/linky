@@ -953,7 +953,7 @@ export const useAppShellComposition = () => {
 
   const clearPendingDeleteOnMenuChange = React.useCallback(() => {
     setPendingDeleteId(null);
-  }, []);
+  }, [setPendingDeleteId]);
 
   const { closeMenu, menuIsOpen, navigateToMainReturn, toggleMenu } =
     useMainMenuState({
@@ -1098,6 +1098,7 @@ export const useAppShellComposition = () => {
     },
     [
       contactAttentionById,
+      getCashuTokenMessageInfo,
       getMintIconUrl,
       getNpubMessageContactInfo,
       handleMintIconError,
