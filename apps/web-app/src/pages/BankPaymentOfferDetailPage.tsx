@@ -303,7 +303,7 @@ export const BankPaymentOfferDetailPage: React.FC<
   const [isConfirmingPaid, setIsConfirmingPaid] = React.useState(false);
   const [isSettling, setIsSettling] = React.useState(false);
   const [responseStatus, setResponseStatus] = React.useState<
-    "accepted" | "declined" | null
+    "accepted" | "canceled" | "declined" | null
   >(null);
   const [errorText, setErrorText] = React.useState<string | null>(null);
   const [nowMs, setNowMs] = React.useState(() => Date.now());
@@ -433,7 +433,7 @@ export const BankPaymentOfferDetailPage: React.FC<
 
     const cancelOffer = async () => {
       if (responseStatus) return;
-      setResponseStatus("declined");
+      setResponseStatus("canceled");
       try {
         await onRespondBankPaymentOffer(activeEntry.message, "canceled");
       } finally {

@@ -86,7 +86,6 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
   const amountSat = Number.parseInt(payAmount.trim(), 10);
   const validAmount =
     Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0;
-  const remaining = validAmount;
   const canCoverAnything = cashuBalance > 0;
   const availableAmountText = `${t("availablePrefix")} ${formatDisplayedAmountText(
     cashuBalance,
@@ -96,7 +95,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
     : (method === "lightning" ? !ln : !canUseCashu) ||
       !Number.isFinite(amountSat) ||
       amountSat <= 0 ||
-      remaining > cashuBalanceAfterMelt;
+      validAmount > cashuBalanceAfterMelt;
 
   return (
     <PaymentAmountPanel
@@ -208,7 +207,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
       submitTitle={
         !isRequestFlow &&
         method === "lightning" &&
-        remaining > cashuBalanceAfterMelt
+        validAmount > cashuBalanceAfterMelt
           ? t("payInsufficient")
           : undefined
       }

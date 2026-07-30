@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -15,6 +16,7 @@ import {
   isLinkyBankPaymentOfferExpired,
   isLinkyBankPaymentOfferMinimized,
   setLinkyBankPaymentOfferMinimized,
+  type LinkyBankPaymentOfferInfo,
   type LinkyBankPaymentOfferStatus,
 } from "../app/lib/bankPaymentOffer";
 import { formatChatMessagePreviewText } from "../app/lib/chatMessageDisplay";
@@ -37,6 +39,7 @@ import {
 import { parsePrivateImageMessage } from "../app/lib/privateImageMessage";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import type {
+  ChatReactionChip,
   LocalNostrMessage,
   LocalNostrReaction,
   MintUrlInput,
@@ -128,6 +131,923 @@ interface ChatPageProps {
   t: (key: string) => string;
 }
 
+interface IndexedBankPaymentOffer {
+  contactId: string;
+  info: LinkyBankPaymentOfferInfo;
+  updatedAtSec: number;
+}
+
+interface ParsedChatMessage {
+  bankPaymentOfferInfo: LinkyBankPaymentOfferInfo | null;
+  declineInfo: ReturnType<typeof parseLinkyPaymentRequestDeclineMessage>;
+  isCashuToken: boolean;
+  paymentRequestInfo: CashuPaymentRequestMessageInfo | null;
+  privateImageInfo: ReturnType<typeof parsePrivateImageMessage>;
+}
+
+interface ChatMessageViewModel extends ParsedChatMessage {
+  bankPaymentOfferPeerNotice: BankPaymentOfferPeerNotice | null;
+  canActOnPaymentRequest: boolean;
+  canEdit: boolean;
+  canReplyOrReact: boolean;
+  message: LocalNostrMessage;
+  nextMessage: LocalNostrMessage | null;
+  onDeclinePaymentRequest: () => void;
+  onOpenBankPaymentOfferDetails: () => void;
+  onPayPaymentRequest: (requestInfo: CashuPaymentRequestMessageInfo) => void;
+  payPaymentRequestDisabled: boolean;
+  paymentRequestStatus: "declined" | "paid" | "requested" | null;
+  previousMessage: LocalNostrMessage | null;
+  reactions: readonly ChatReactionChip[];
+  replyQuoteText: string | null;
+}
+
+const buildBankPaymentOfferIndex = (
+  messages: LocalNostrMessage[],
+): Map<string, IndexedBankPaymentOffer[]> => {
+  const byOfferId = new Map<string, IndexedBankPaymentOffer[]>();
+
+  for (const message of messages) {
+    const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+    if (!info) continue;
+
+    const indexed = {
+      contactId: String(message.contactId ?? "").trim(),
+      info,
+      updatedAtSec:
+        info.statusUpdatedAtSec || Number(message.createdAtSec ?? 0) || 0,
+    };
+    const candidates = byOfferId.get(info.offerId);
+    if (candidates) candidates.push(indexed);
+    else byOfferId.set(info.offerId, [indexed]);
+  }
+
+  return byOfferId;
+};
+
+const getBankPaymentOfferPeerNotice = (
+  message: LocalNostrMessage,
+  offerInfo: LinkyBankPaymentOfferInfo | null,
+  offersById: Map<string, IndexedBankPaymentOffer[]>,
+): BankPaymentOfferPeerNotice | null => {
+  if (!offerInfo || String(message.direction ?? "") !== "out") return null;
+  if (
+    offerInfo.status === "bank_details_sent" ||
+    offerInfo.status === "bank_paid" ||
+    offerInfo.status === "canceled" ||
+    offerInfo.status === "settled"
+  ) {
+    return null;
+  }
+
+  const contactId = String(message.contactId ?? "").trim();
+  const currentUpdatedAtSec =
+    offerInfo.statusUpdatedAtSec || Number(message.createdAtSec ?? 0) || 0;
+  let otherAccepted = false;
+  let otherHasPriority = false;
+
+  for (const candidate of offersById.get(offerInfo.offerId) ?? []) {
+    if (!candidate.contactId || candidate.contactId === contactId) continue;
+
+    if (
+      candidate.info.status === "bank_details_sent" ||
+      candidate.info.status === "bank_paid" ||
+      candidate.info.status === "settled"
+    ) {
+      otherAccepted = true;
+      otherHasPriority = true;
+      break;
+    }
+
+    if (candidate.info.status !== "accepted") continue;
+    otherAccepted = true;
+    if (
+      offerInfo.status === "accepted" &&
+      (candidate.updatedAtSec < currentUpdatedAtSec ||
+        (candidate.updatedAtSec === currentUpdatedAtSec &&
+          candidate.contactId.localeCompare(contactId) < 0))
+    ) {
+      otherHasPriority = true;
+    }
+  }
+
+  if (!otherAccepted) return null;
+  if (offerInfo.status === "accepted") {
+    return otherHasPriority ? "backup_recipient" : null;
+  }
+  return "accepted_by_other";
+};
+
+interface ChatMessageListProps {
+  bankPaymentOfferMessages: LocalNostrMessage[];
+  cashuBalanceAfterMelt: number;
+  cashuIsBusy: boolean;
+  chatMessageElByIdRef: React.MutableRefObject<Map<string, HTMLDivElement>>;
+  chatMessages: LocalNostrMessage[];
+  chatMessagesRef: React.RefObject<HTMLDivElement | null>;
+  chatOwnPubkeyHex: string | null;
+  formatDisplayedAmountText: (amount: number) => string;
+  getCashuTokenMessageInfo: (id: string) => CashuTokenMessageInfo | null;
+  getMintIconUrl: ChatPageProps["getMintIconUrl"];
+  getNpubMessageContactInfo: ChatPageProps["getNpubMessageContactInfo"];
+  lang: string;
+  onCopy: ChatPageProps["onCopy"];
+  onDeclinePaymentRequest: ChatPageProps["onDeclinePaymentRequest"];
+  onEdit: ChatPageProps["onEdit"];
+  onOpenNpubContact: ChatPageProps["onOpenNpubContact"];
+  onPayPaymentRequest: ChatPageProps["onPayPaymentRequest"];
+  onReact: ChatPageProps["onReact"];
+  onReply: ChatPageProps["onReply"];
+  reactionsByMessageId: Map<string, LocalNostrReaction[]>;
+  selectedContactId: string;
+  setMintIconUrlByMint: ChatPageProps["setMintIconUrlByMint"];
+  t: ChatPageProps["t"];
+}
+
+const ChatMessageList = memo(function ChatMessageList({
+  bankPaymentOfferMessages,
+  cashuBalanceAfterMelt,
+  cashuIsBusy,
+  chatMessageElByIdRef,
+  chatMessages,
+  chatMessagesRef,
+  chatOwnPubkeyHex,
+  formatDisplayedAmountText,
+  getCashuTokenMessageInfo,
+  getMintIconUrl,
+  getNpubMessageContactInfo,
+  lang,
+  onCopy,
+  onDeclinePaymentRequest,
+  onEdit,
+  onOpenNpubContact,
+  onPayPaymentRequest,
+  onReact,
+  onReply,
+  reactionsByMessageId,
+  selectedContactId,
+  setMintIconUrlByMint,
+  t,
+}: ChatMessageListProps) {
+  const actionLabels = useMemo(
+    () => ({
+      copy: t("copy"),
+      edit: t("chatEditAction"),
+      edited: t("chatEdited"),
+      react: t("chatReactAction"),
+      reply: t("chatReplyAction"),
+    }),
+    [t],
+  );
+  const chatPendingLabel = t("chatPendingShort");
+  const locale = lang === "cs" ? "cs-CZ" : "en-US";
+  const formatChatDayLabelForLang = useCallback(
+    (timestamp: number) => formatChatDayLabel(timestamp, lang, t),
+    [lang, t],
+  );
+  const onMintIconLoad = useCallback(
+    (origin: string, url: string | null) => {
+      setMintIconUrlByMint((previous) => ({ ...previous, [origin]: url }));
+    },
+    [setMintIconUrlByMint],
+  );
+  const onMintIconError = useCallback(
+    (origin: string, nextUrl: string | null) => {
+      setMintIconUrlByMint((previous) => ({
+        ...previous,
+        [origin]: nextUrl,
+      }));
+    },
+    [setMintIconUrlByMint],
+  );
+  const messageElRef = useCallback(
+    (element: HTMLDivElement | null, messageId: string) => {
+      const elements = chatMessageElByIdRef.current;
+      if (element) elements.set(messageId, element);
+      else elements.delete(messageId);
+    },
+    [chatMessageElByIdRef],
+  );
+
+  const viewModels = useMemo<ChatMessageViewModel[]>(() => {
+    const byRumorId = new Map<string, LocalNostrMessage>();
+    const parsedByMessage = new Map<LocalNostrMessage, ParsedChatMessage>();
+
+    for (const message of chatMessages) {
+      const content = String(message.content ?? "");
+      const rumorId = String(message.rumorId ?? "").trim();
+      if (rumorId) byRumorId.set(rumorId, message);
+      parsedByMessage.set(message, {
+        bankPaymentOfferInfo: getLinkyBankPaymentOfferInfo(content),
+        declineInfo: parseLinkyPaymentRequestDeclineMessage(content),
+        isCashuToken: Boolean(getCashuTokenMessageInfo(content)),
+        paymentRequestInfo: parseCashuPaymentRequestMessage(content),
+        privateImageInfo: parsePrivateImageMessage(content),
+      });
+    }
+
+    const latestRequestResponseByRumorId = new Map<
+      string,
+      { respondedAtSec: number; status: "declined" | "paid" }
+    >();
+    for (const message of chatMessages) {
+      const replyToId = String(message.replyToId ?? "").trim();
+      const parsed = parsedByMessage.get(message);
+      if (!replyToId || !parsed) continue;
+      if (!parsed.isCashuToken && !parsed.declineInfo) continue;
+
+      const createdAtSec = Number(message.createdAtSec ?? 0) || 0;
+      const previous = latestRequestResponseByRumorId.get(replyToId);
+      if (previous && previous.respondedAtSec > createdAtSec) continue;
+      latestRequestResponseByRumorId.set(replyToId, {
+        respondedAtSec: createdAtSec,
+        status: parsed.isCashuToken ? "paid" : "declined",
+      });
+    }
+
+    const offersById = buildBankPaymentOfferIndex(bankPaymentOfferMessages);
+
+    return chatMessages.map((message, index) => {
+      const parsed = parsedByMessage.get(message) ?? {
+        bankPaymentOfferInfo: null,
+        declineInfo: null,
+        isCashuToken: false,
+        paymentRequestInfo: null,
+        privateImageInfo: null,
+      };
+      const rumorId = String(message.rumorId ?? "").trim();
+      const paymentRequestStatus = rumorId
+        ? (latestRequestResponseByRumorId.get(rumorId)?.status ?? "requested")
+        : "requested";
+      const replyToId = String(message.replyToId ?? "").trim();
+      const fallbackReplyContent =
+        String(message.replyToContent ?? "").trim() || null;
+      const repliedMessage = replyToId ? byRumorId.get(replyToId) : null;
+      const replyQuoteText = replyToId
+        ? formatChatMessagePreviewText({
+            content: repliedMessage?.content ?? fallbackReplyContent ?? "",
+            direction: repliedMessage?.direction ?? null,
+            formatDisplayedAmountText,
+            t,
+          })
+        : fallbackReplyContent
+          ? formatChatMessagePreviewText({
+              content: fallbackReplyContent,
+              formatDisplayedAmountText,
+              t,
+            })
+          : null;
+      const bankPaymentOfferPeerNotice = getBankPaymentOfferPeerNotice(
+        message,
+        parsed.bankPaymentOfferInfo,
+        offersById,
+      );
+
+      return {
+        ...parsed,
+        bankPaymentOfferPeerNotice,
+        canActOnPaymentRequest:
+          Boolean(parsed.paymentRequestInfo) &&
+          String(message.direction ?? "") === "in" &&
+          paymentRequestStatus === "requested",
+        canEdit:
+          String(message.direction ?? "") === "out" &&
+          Boolean(rumorId) &&
+          !parsed.isCashuToken &&
+          !parsed.paymentRequestInfo &&
+          !parsed.privateImageInfo &&
+          !parsed.bankPaymentOfferInfo &&
+          !parsed.declineInfo,
+        canReplyOrReact: Boolean(rumorId),
+        message,
+        nextMessage:
+          index + 1 < chatMessages.length ? chatMessages[index + 1] : null,
+        onDeclinePaymentRequest: () => {
+          void onDeclinePaymentRequest(message);
+        },
+        onOpenBankPaymentOfferDetails: () => {
+          const offerId = String(
+            parsed.bankPaymentOfferInfo?.offerId ?? "",
+          ).trim();
+          const chatId = String(message.contactId ?? selectedContactId).trim();
+          if (!offerId || !chatId) return;
+          setLinkyBankPaymentOfferMinimized(chatId, offerId, false);
+          navigateTo({ route: "bankPaymentOffer", chatId, offerId });
+        },
+        onPayPaymentRequest: (requestInfo) => {
+          void onPayPaymentRequest(message, requestInfo);
+        },
+        payPaymentRequestDisabled:
+          !parsed.paymentRequestInfo ||
+          cashuIsBusy ||
+          parsed.paymentRequestInfo.amount > cashuBalanceAfterMelt,
+        paymentRequestStatus: parsed.paymentRequestInfo
+          ? paymentRequestStatus
+          : null,
+        previousMessage: index > 0 ? chatMessages[index - 1] : null,
+        reactions: rumorId
+          ? aggregateReactions(
+              reactionsByMessageId.get(rumorId) ?? [],
+              chatOwnPubkeyHex,
+            )
+          : [],
+        replyQuoteText,
+      };
+    });
+  }, [
+    bankPaymentOfferMessages,
+    cashuBalanceAfterMelt,
+    cashuIsBusy,
+    chatMessages,
+    chatOwnPubkeyHex,
+    formatDisplayedAmountText,
+    getCashuTokenMessageInfo,
+    onDeclinePaymentRequest,
+    onPayPaymentRequest,
+    reactionsByMessageId,
+    selectedContactId,
+    t,
+  ]);
+
+  return (
+    <div
+      className="chat-messages"
+      role="log"
+      aria-live="polite"
+      ref={chatMessagesRef}
+    >
+      {viewModels.length === 0 ? (
+        <p className="muted">{t("chatEmpty")}</p>
+      ) : (
+        viewModels.map((viewModel) => (
+          <ChatMessage
+            key={String(viewModel.message.id)}
+            message={viewModel.message}
+            previousMessage={viewModel.previousMessage}
+            nextMessage={viewModel.nextMessage}
+            locale={locale}
+            formatChatDayLabel={formatChatDayLabelForLang}
+            getCashuTokenMessageInfo={getCashuTokenMessageInfo}
+            getMintIconUrl={getMintIconUrl}
+            getNpubMessageContactInfo={getNpubMessageContactInfo}
+            onMintIconLoad={onMintIconLoad}
+            onMintIconError={onMintIconError}
+            actionLabels={actionLabels}
+            canEdit={viewModel.canEdit}
+            canReplyOrReact={viewModel.canReplyOrReact}
+            reactions={viewModel.reactions}
+            paymentRequestInfo={viewModel.paymentRequestInfo}
+            paymentRequestStatus={viewModel.paymentRequestStatus}
+            declineInfo={viewModel.declineInfo}
+            bankPaymentOfferInfo={viewModel.bankPaymentOfferInfo}
+            bankPaymentOfferPeerNotice={viewModel.bankPaymentOfferPeerNotice}
+            onOpenBankPaymentOfferDetails={
+              viewModel.onOpenBankPaymentOfferDetails
+            }
+            onDeclinePaymentRequest={viewModel.onDeclinePaymentRequest}
+            onPayPaymentRequest={viewModel.onPayPaymentRequest}
+            canActOnPaymentRequest={viewModel.canActOnPaymentRequest}
+            payPaymentRequestDisabled={viewModel.payPaymentRequestDisabled}
+            payPaymentRequestBusy={cashuIsBusy}
+            replyQuoteText={viewModel.replyQuoteText}
+            onCopy={onCopy}
+            onEdit={onEdit}
+            onOpenNpubContact={onOpenNpubContact}
+            onReact={onReact}
+            onReply={onReply}
+            chatPendingLabel={chatPendingLabel}
+            messageElRef={messageElRef}
+          />
+        ))
+      )}
+    </div>
+  );
+});
+
+interface ChatComposerProps {
+  canPayThisContact: boolean;
+  canRequestThisContact: boolean;
+  canStartPay: boolean;
+  cashuIsBusy: boolean;
+  chatDraft: string;
+  chatSendIsBusy: boolean;
+  composeContainerRef: React.RefObject<HTMLDivElement | null>;
+  composeInputRef: React.RefObject<HTMLDivElement | null>;
+  editContext: EditChatContext | null;
+  getCashuTokenMessageInfo: ChatPageProps["getCashuTokenMessageInfo"];
+  getMintIconUrl: ChatPageProps["getMintIconUrl"];
+  getNpubMessageContactInfo: ChatPageProps["getNpubMessageContactInfo"];
+  hasUnknownPubkeyHex: boolean;
+  isFeedbackContact: boolean;
+  mentionContacts: MessageMentionContact[];
+  npub: string | null;
+  onCancelEdit: ChatPageProps["onCancelEdit"];
+  onCancelReply: ChatPageProps["onCancelReply"];
+  openContactPay: ChatPageProps["openContactPay"];
+  replyContext: ReplyContext | null;
+  replyPreviewText: string;
+  selectedContact: Contact;
+  sendChatImage: ChatPageProps["sendChatImage"];
+  sendChatMessage: ChatPageProps["sendChatMessage"];
+  setChatDraft: ChatPageProps["setChatDraft"];
+  t: ChatPageProps["t"];
+}
+
+const ChatComposer = memo(function ChatComposer({
+  canPayThisContact,
+  canRequestThisContact,
+  canStartPay,
+  cashuIsBusy,
+  chatDraft,
+  chatSendIsBusy,
+  composeContainerRef,
+  composeInputRef,
+  editContext,
+  getCashuTokenMessageInfo,
+  getMintIconUrl,
+  getNpubMessageContactInfo,
+  hasUnknownPubkeyHex,
+  isFeedbackContact,
+  mentionContacts,
+  npub,
+  onCancelEdit,
+  onCancelReply,
+  openContactPay,
+  replyContext,
+  replyPreviewText,
+  selectedContact,
+  sendChatImage,
+  sendChatMessage,
+  setChatDraft,
+  t,
+}: ChatComposerProps) {
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingSendDraftRef = useRef<string | null>(null);
+  const [draft, setDraft] = useState(chatDraft);
+  const draftRef = useRef(draft);
+  const [composeCaret, setComposeCaret] = useState(chatDraft.length);
+  const isDesktop =
+    typeof window !== "undefined" &&
+    window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const mentionQuery = useMemo(
+    () => getMessageMentionQuery(draft, composeCaret),
+    [composeCaret, draft],
+  );
+  const mentionSuggestions = useMemo(
+    () =>
+      mentionQuery
+        ? getMessageMentionSuggestions(mentionContacts, mentionQuery.query)
+        : [],
+    [mentionContacts, mentionQuery],
+  );
+  const hasDraftText = Boolean(draft.trim());
+  const canSendChat = Boolean(
+    !chatSendIsBusy && hasDraftText && (npub || hasUnknownPubkeyHex),
+  );
+  const canSendImage = Boolean(
+    !chatSendIsBusy && !editContext && (npub || hasUnknownPubkeyHex),
+  );
+
+  useEffect(() => {
+    setDraft(chatDraft);
+    setComposeCaret(chatDraft.length);
+  }, [chatDraft]);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(
+    () => () => {
+      setChatDraft(draftRef.current);
+    },
+    [setChatDraft],
+  );
+
+  useEffect(() => {
+    if (pendingSendDraftRef.current !== chatDraft) return;
+    pendingSendDraftRef.current = null;
+    void sendChatMessage();
+  }, [chatDraft, sendChatMessage]);
+
+  const focusComposeInput = useCallback(() => {
+    const input = composeInputRef.current;
+    if (!input || input.getAttribute("aria-disabled") === "true") return false;
+
+    try {
+      input.focus({ preventScroll: true });
+    } catch {
+      input.focus();
+    }
+
+    setMessageEditorCaret(input, getMessageEditorValue(input).length);
+    return document.activeElement === input;
+  }, [composeInputRef]);
+
+  const requestSend = useCallback(() => {
+    if (!canSendChat) return;
+    if (draft === chatDraft) {
+      void sendChatMessage();
+      return;
+    }
+
+    pendingSendDraftRef.current = draft;
+    setChatDraft(draft);
+  }, [canSendChat, chatDraft, draft, sendChatMessage, setChatDraft]);
+
+  const selectMentionSuggestion = useCallback(
+    (suggestion: MessageMentionSuggestion) => {
+      if (!mentionQuery) return;
+      const next = applyMessageMentionSuggestion(
+        draft,
+        mentionQuery,
+        suggestion,
+      );
+      setDraft(next.value);
+      setComposeCaret(next.caret);
+      window.requestAnimationFrame(() => {
+        const input = composeInputRef.current;
+        if (!input) return;
+        input.focus();
+        setMessageEditorCaret(input, next.caret);
+      });
+    },
+    [composeInputRef, draft, mentionQuery],
+  );
+
+  useEffect(() => {
+    if (!replyContext && !editContext) return;
+    if (!npub && !hasUnknownPubkeyHex) return;
+    focusComposeInput();
+  }, [editContext, focusComposeInput, hasUnknownPubkeyHex, npub, replyContext]);
+
+  return (
+    <div className="chat-compose" ref={composeContainerRef}>
+      {replyContext && (
+        <ReplyPreview
+          label={t("chatReplyingTo")}
+          body={replyPreviewText || t("chatReplyUnavailable")}
+          onCancel={onCancelReply}
+        />
+      )}
+      {editContext && (
+        <ReplyPreview
+          label={t("chatEditing")}
+          body={editContext.originalContent || t("chatEmpty")}
+          onCancel={onCancelEdit}
+        />
+      )}
+      {mentionSuggestions.length > 0 ? (
+        <div className="chat-mention-suggestions" role="listbox">
+          {mentionSuggestions.map((suggestion) => {
+            if (suggestion.kind === "group") {
+              return (
+                <button
+                  key={`group-${suggestion.groupName}`}
+                  type="button"
+                  className="chat-mention-suggestion"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectMentionSuggestion(suggestion)}
+                >
+                  <span className="chat-mention-suggestion-label">
+                    @{suggestion.groupName}
+                  </span>
+                  <span className="muted">
+                    {t("chatMentionGroupCount").replace(
+                      "{count}",
+                      String(suggestion.contacts.length),
+                    )}
+                  </span>
+                </button>
+              );
+            }
+
+            const info = getNpubMessageContactInfo(suggestion.contact.npub);
+            return (
+              <button
+                key={`contact-${suggestion.contact.npub}`}
+                type="button"
+                className="chat-mention-suggestion"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => selectMentionSuggestion(suggestion)}
+              >
+                <span className="chat-contact-pill-avatar" aria-hidden="true">
+                  {info?.pictureUrl ? (
+                    <img
+                      src={info.pictureUrl}
+                      alt=""
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="chat-contact-pill-avatar-fallback">
+                      {suggestion.contact.name.charAt(0)}
+                    </span>
+                  )}
+                </span>
+                <span className="chat-mention-suggestion-label">
+                  {suggestion.contact.name}
+                </span>
+                {suggestion.contact.groupName ? (
+                  <span className="muted">{suggestion.contact.groupName}</span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="chat-compose-input-wrap">
+        <input
+          ref={imageInputRef}
+          className="chat-image-input"
+          type="file"
+          accept="image/*"
+          onChange={(event) => {
+            const file = event.target.files?.[0] ?? null;
+            event.currentTarget.value = "";
+            if (!file) return;
+            void sendChatImage(file);
+          }}
+          tabIndex={-1}
+        />
+        <ChatMessageEditor
+          ref={composeInputRef}
+          value={draft}
+          onChange={setDraft}
+          onCaretChange={setComposeCaret}
+          onSendShortcut={() => {
+            if (isDesktop) requestSend();
+          }}
+          placeholder={t("chatPlaceholder")}
+          disabled={!npub && !hasUnknownPubkeyHex}
+          getCashuTokenMessageInfo={getCashuTokenMessageInfo}
+          getMintIconUrl={getMintIconUrl}
+          getNpubMessageContactInfo={getNpubMessageContactInfo}
+        />
+        {!hasDraftText ? (
+          <button
+            type="button"
+            className="chat-compose-image-button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={!canSendImage}
+            aria-label={t("chatImageAttach")}
+            title={t("chatImageAttach")}
+          >
+            <span className="chat-compose-send-icon" aria-hidden="true">
+              <GalleryIcon size={18} />
+            </span>
+          </button>
+        ) : null}
+        {hasDraftText ? (
+          <button
+            type="button"
+            className="chat-compose-send-button"
+            onClick={() => {
+              requestSend();
+              focusComposeInput();
+            }}
+            disabled={!canSendChat}
+            aria-label={editContext ? t("chatSaveAction") : t("send")}
+            title={editContext ? t("chatSaveAction") : t("send")}
+            data-guide="chat-send"
+          >
+            <span className="chat-compose-send-icon" aria-hidden="true">
+              <SendIcon size={18} />
+            </span>
+          </button>
+        ) : null}
+      </div>
+      {canPayThisContact && (
+        <div className="chat-compose-payment-actions">
+          {canRequestThisContact && (
+            <button
+              className="btn-wide secondary chat-pay-button"
+              onClick={() =>
+                openContactPay(selectedContact.id, true, "request")
+              }
+              disabled={cashuIsBusy}
+              data-guide="chat-request"
+            >
+              <span className="btn-label-with-icon">
+                <span className="btn-label-icon" aria-hidden="true">
+                  <RequestIcon size={18} />
+                </span>
+                <span>{t("requestPayment")}</span>
+              </span>
+            </button>
+          )}
+          <button
+            className="btn-wide secondary chat-pay-button"
+            onClick={() => openContactPay(selectedContact.id, true)}
+            disabled={cashuIsBusy || !canStartPay}
+            title={!canStartPay ? t("payInsufficient") : undefined}
+            data-guide="chat-pay"
+          >
+            <span className="btn-label-with-icon">
+              <span className="btn-label-icon" aria-hidden="true">
+                {isFeedbackContact ? (
+                  <DonateIcon size={18} />
+                ) : (
+                  <PayIcon size={18} />
+                )}
+              </span>
+              <span>{isFeedbackContact ? t("donate") : t("pay")}</span>
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+});
+
+const useChatViewport = (
+  chatMessagesRef: React.RefObject<HTMLDivElement | null>,
+  composeInputRef: React.RefObject<HTMLDivElement | null>,
+  selectedContactId: string | null,
+) => {
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (typeof window === "undefined") return;
+    if (!selectedContactId) return;
+
+    const root = document.documentElement;
+    const body = document.body;
+    const pendingRefreshTimeouts = new Set<number>();
+    const getWindowScrollTop = () =>
+      Math.max(
+        window.scrollY,
+        window.pageYOffset,
+        document.documentElement.scrollTop,
+        document.body.scrollTop,
+      );
+    const previousHtmlOverflow = root.style.overflow;
+    const previousBodyOverflow = body.style.overflow;
+    root.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+
+    const updateViewportHeight = () => {
+      const viewport = window.visualViewport;
+      const nextHeight = viewport?.height ?? window.innerHeight;
+      const nextOffsetTop = viewport?.offsetTop ?? 0;
+      const visibleHeight = Math.min(
+        window.innerHeight,
+        Math.max(0, nextHeight + nextOffsetTop),
+      );
+      const viewportKeyboardInset = Math.max(
+        0,
+        window.innerHeight - visibleHeight,
+      );
+      const nativeKeyboardInset = Number.parseFloat(
+        getComputedStyle(root).getPropertyValue("--native-keyboard-inset"),
+      );
+      const keyboardInset = Math.max(
+        viewportKeyboardInset,
+        Number.isFinite(nativeKeyboardInset) ? nativeKeyboardInset : 0,
+      );
+      root.style.setProperty(
+        "--chat-viewport-height",
+        `${Math.round(window.innerHeight - keyboardInset)}px`,
+      );
+      root.style.setProperty(
+        "--chat-keyboard-inset",
+        `${Math.round(keyboardInset)}px`,
+      );
+      if (keyboardInset > 0) {
+        root.dataset.chatKeyboardOpen = "true";
+      } else {
+        delete root.dataset.chatKeyboardOpen;
+      }
+
+      requestAnimationFrame(() => {
+        const messages = chatMessagesRef.current;
+        if (messages) messages.scrollTop = messages.scrollHeight;
+      });
+    };
+
+    const scheduleViewportRefresh = () => {
+      updateViewportHeight();
+      requestAnimationFrame(updateViewportHeight);
+
+      for (const delayMs of [120, 280]) {
+        const timeoutId = window.setTimeout(() => {
+          pendingRefreshTimeouts.delete(timeoutId);
+          updateViewportHeight();
+        }, delayMs);
+        pendingRefreshTimeouts.add(timeoutId);
+      }
+    };
+
+    const handleComposeFocusChange = (event: FocusEvent) => {
+      const input = composeInputRef.current;
+      if (!input || event.target !== input) return;
+      if (event.type === "focusin" && getWindowScrollTop() > 1) {
+        window.scrollTo(0, 0);
+      }
+      scheduleViewportRefresh();
+    };
+
+    updateViewportHeight();
+
+    const viewport = window.visualViewport;
+    window.addEventListener("resize", updateViewportHeight);
+    window.addEventListener("linky-native-window-insets", updateViewportHeight);
+    document.addEventListener("focusin", handleComposeFocusChange);
+    document.addEventListener("focusout", handleComposeFocusChange);
+    viewport?.addEventListener("resize", updateViewportHeight);
+    viewport?.addEventListener("scroll", updateViewportHeight);
+
+    return () => {
+      window.removeEventListener("resize", updateViewportHeight);
+      window.removeEventListener(
+        "linky-native-window-insets",
+        updateViewportHeight,
+      );
+      document.removeEventListener("focusin", handleComposeFocusChange);
+      document.removeEventListener("focusout", handleComposeFocusChange);
+      viewport?.removeEventListener("resize", updateViewportHeight);
+      viewport?.removeEventListener("scroll", updateViewportHeight);
+      for (const timeoutId of pendingRefreshTimeouts) {
+        window.clearTimeout(timeoutId);
+      }
+      root.style.overflow = previousHtmlOverflow;
+      body.style.overflow = previousBodyOverflow;
+      root.style.removeProperty("--chat-viewport-height");
+      root.style.removeProperty("--chat-keyboard-inset");
+      delete root.dataset.chatKeyboardOpen;
+    };
+  }, [chatMessagesRef, composeInputRef, selectedContactId]);
+};
+
+const useChatComposeHeight = (
+  composeContainerRef: React.RefObject<HTMLDivElement | null>,
+  selectedContactId: string | null,
+) => {
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (typeof window === "undefined") return;
+
+    const root = document.documentElement;
+    const compose = composeContainerRef.current;
+    if (!compose) return;
+
+    const updateComposeHeight = () => {
+      root.style.setProperty(
+        "--chat-compose-height",
+        `${Math.round(compose.getBoundingClientRect().height)}px`,
+      );
+    };
+
+    updateComposeHeight();
+    window.addEventListener("resize", updateComposeHeight);
+
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateComposeHeight);
+    observer?.observe(compose);
+
+    return () => {
+      window.removeEventListener("resize", updateComposeHeight);
+      observer?.disconnect();
+      root.style.removeProperty("--chat-compose-height");
+    };
+  }, [composeContainerRef, selectedContactId]);
+};
+
+interface UnknownContactWarningProps {
+  onAdd: () => Promise<void>;
+  onBlock: () => Promise<void>;
+  t: ChatPageProps["t"];
+}
+
+const UnknownContactWarning = memo(function UnknownContactWarning({
+  onAdd,
+  onBlock,
+  t,
+}: UnknownContactWarningProps) {
+  return (
+    <div className="chat-unknown-warning">
+      <p>{t("chatUnknownContactWarning")}</p>
+      <div className="chat-unknown-warning-actions">
+        <button
+          className="btn-wide chat-unknown-primary"
+          type="button"
+          onClick={() => void onAdd()}
+        >
+          {t("addContact")}
+        </button>
+        <button
+          className="btn-wide secondary"
+          type="button"
+          onClick={() => void onBlock()}
+        >
+          {t("blockContact")}
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export const ChatPage: FC<ChatPageProps> = ({
   cashuBalance,
   cashuBalanceAfterMelt,
@@ -169,10 +1089,8 @@ export const ChatPage: FC<ChatPageProps> = ({
   t,
 }) => {
   const { formatDisplayedAmountText } = useAppShellCore();
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const composeInputRef = useRef<HTMLDivElement | null>(null);
   const composeContainerRef = useRef<HTMLDivElement | null>(null);
-  const [composeCaret, setComposeCaret] = useState(chatDraft.length);
   const npub = selectedContact
     ? normalizeNpubIdentifier(selectedContact.npub)
     : null;
@@ -180,291 +1098,9 @@ export const ChatPage: FC<ChatPageProps> = ({
   const hasUnknownPubkeyHex = Boolean(
     String(selectedContact?.unknownPubkeyHex ?? "").trim(),
   );
-  const isDesktop =
-    typeof window !== "undefined" &&
-    window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-  const mentionQuery = useMemo(
-    () => getMessageMentionQuery(chatDraft, composeCaret),
-    [chatDraft, composeCaret],
-  );
-  const mentionSuggestions = useMemo(
-    () =>
-      mentionQuery
-        ? getMessageMentionSuggestions(mentionContacts, mentionQuery.query)
-        : [],
-    [mentionContacts, mentionQuery],
-  );
 
-  const selectMentionSuggestion = useCallback(
-    (suggestion: MessageMentionSuggestion) => {
-      if (!mentionQuery) return;
-      const next = applyMessageMentionSuggestion(
-        chatDraft,
-        mentionQuery,
-        suggestion,
-      );
-      setChatDraft(next.value);
-      setComposeCaret(next.caret);
-      window.requestAnimationFrame(() => {
-        const input = composeInputRef.current;
-        if (!input) return;
-        input.focus();
-        setMessageEditorCaret(input, next.caret);
-      });
-    },
-    [chatDraft, mentionQuery, setChatDraft],
-  );
-
-  const getBankPaymentOfferPeerNotice = useCallback(
-    (
-      message: LocalNostrMessage,
-      offerInfo: ReturnType<typeof getLinkyBankPaymentOfferInfo>,
-    ): BankPaymentOfferPeerNotice | null => {
-      if (!offerInfo) return null;
-      if (String(message.direction ?? "") !== "out") return null;
-      if (
-        offerInfo.status === "bank_details_sent" ||
-        offerInfo.status === "bank_paid" ||
-        offerInfo.status === "canceled" ||
-        offerInfo.status === "settled"
-      ) {
-        return null;
-      }
-
-      const contactId = String(message.contactId ?? "").trim();
-      const currentUpdatedAtSec =
-        offerInfo.statusUpdatedAtSec || Number(message.createdAtSec ?? 0) || 0;
-      let otherAccepted = false;
-      let otherHasPriority = false;
-
-      for (const candidate of bankPaymentOfferMessages) {
-        const candidateContactId = String(candidate.contactId ?? "").trim();
-        if (!candidateContactId || candidateContactId === contactId) {
-          continue;
-        }
-
-        const candidateInfo = getLinkyBankPaymentOfferInfo(
-          String(candidate.content ?? ""),
-        );
-        if (candidateInfo?.offerId !== offerInfo.offerId) continue;
-
-        if (
-          candidateInfo.status === "bank_details_sent" ||
-          candidateInfo.status === "bank_paid" ||
-          candidateInfo.status === "settled"
-        ) {
-          otherAccepted = true;
-          otherHasPriority = true;
-          break;
-        }
-
-        if (candidateInfo.status !== "accepted") continue;
-        otherAccepted = true;
-
-        const candidateUpdatedAtSec =
-          candidateInfo.statusUpdatedAtSec ||
-          Number(candidate.createdAtSec ?? 0) ||
-          0;
-        if (
-          offerInfo.status === "accepted" &&
-          (candidateUpdatedAtSec < currentUpdatedAtSec ||
-            (candidateUpdatedAtSec === currentUpdatedAtSec &&
-              candidateContactId.localeCompare(contactId) < 0))
-        ) {
-          otherHasPriority = true;
-        }
-      }
-
-      if (!otherAccepted) return null;
-      if (offerInfo.status === "accepted") {
-        return otherHasPriority ? "backup_recipient" : null;
-      }
-      return "accepted_by_other";
-    },
-    [bankPaymentOfferMessages],
-  );
-
-  const focusComposeInput = useCallback(() => {
-    const input = composeInputRef.current;
-    if (!input || input.getAttribute("aria-disabled") === "true") return false;
-
-    try {
-      input.focus({ preventScroll: true });
-    } catch {
-      input.focus();
-    }
-
-    setMessageEditorCaret(input, getMessageEditorValue(input).length);
-    return document.activeElement === input;
-  }, []);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (typeof window === "undefined") return;
-    if (!selectedContactId) return;
-
-    const root = document.documentElement;
-    const body = document.body;
-    const pendingRefreshTimeouts = new Set<number>();
-    const getWindowScrollTop = () =>
-      Math.max(
-        window.scrollY,
-        window.pageYOffset,
-        document.documentElement.scrollTop,
-        document.body.scrollTop,
-      );
-
-    // Prevent body scroll when keyboard opens on iOS
-    const prevHtmlOverflow = root.style.overflow;
-    const prevBodyOverflow = body.style.overflow;
-    root.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-
-    const updateViewportHeight = () => {
-      const vp = window.visualViewport;
-      const nextHeight = vp?.height ?? window.innerHeight;
-      const nextOffsetTop = vp?.offsetTop ?? 0;
-      const visibleHeight = Math.min(
-        window.innerHeight,
-        Math.max(0, nextHeight + nextOffsetTop),
-      );
-      const viewportKeyboardInset = Math.max(
-        0,
-        window.innerHeight - visibleHeight,
-      );
-      const nativeKeyboardInset = Number.parseFloat(
-        getComputedStyle(root).getPropertyValue("--native-keyboard-inset"),
-      );
-      const keyboardInset = Math.max(
-        viewportKeyboardInset,
-        Number.isFinite(nativeKeyboardInset) ? nativeKeyboardInset : 0,
-      );
-      root.style.setProperty(
-        "--chat-viewport-height",
-        `${Math.round(window.innerHeight - keyboardInset)}px`,
-      );
-      root.style.setProperty(
-        "--chat-keyboard-inset",
-        `${Math.round(keyboardInset)}px`,
-      );
-      if (keyboardInset > 0) {
-        root.dataset.chatKeyboardOpen = "true";
-      } else {
-        delete root.dataset.chatKeyboardOpen;
-      }
-
-      // Keep chat scrolled to bottom when keyboard opens/closes
-      requestAnimationFrame(() => {
-        const c = chatMessagesRef.current;
-        if (c) c.scrollTop = c.scrollHeight;
-      });
-    };
-
-    const scheduleViewportRefresh = () => {
-      updateViewportHeight();
-
-      requestAnimationFrame(() => {
-        updateViewportHeight();
-      });
-
-      for (const delayMs of [120, 280]) {
-        const timeoutId = window.setTimeout(() => {
-          pendingRefreshTimeouts.delete(timeoutId);
-          updateViewportHeight();
-        }, delayMs);
-        pendingRefreshTimeouts.add(timeoutId);
-      }
-    };
-
-    const handleComposeFocusChange = (event: FocusEvent) => {
-      const input = composeInputRef.current;
-      if (!input) return;
-      if (event.target !== input) return;
-
-      if (event.type === "focusin" && getWindowScrollTop() > 1) {
-        window.scrollTo(0, 0);
-      }
-
-      scheduleViewportRefresh();
-    };
-
-    updateViewportHeight();
-
-    const viewport = window.visualViewport;
-    window.addEventListener("resize", updateViewportHeight);
-    window.addEventListener("linky-native-window-insets", updateViewportHeight);
-    document.addEventListener("focusin", handleComposeFocusChange);
-    document.addEventListener("focusout", handleComposeFocusChange);
-    viewport?.addEventListener("resize", updateViewportHeight);
-    viewport?.addEventListener("scroll", updateViewportHeight);
-
-    return () => {
-      window.removeEventListener("resize", updateViewportHeight);
-      window.removeEventListener(
-        "linky-native-window-insets",
-        updateViewportHeight,
-      );
-      document.removeEventListener("focusin", handleComposeFocusChange);
-      document.removeEventListener("focusout", handleComposeFocusChange);
-      viewport?.removeEventListener("resize", updateViewportHeight);
-      viewport?.removeEventListener("scroll", updateViewportHeight);
-      for (const timeoutId of pendingRefreshTimeouts) {
-        window.clearTimeout(timeoutId);
-      }
-      pendingRefreshTimeouts.clear();
-      root.style.overflow = prevHtmlOverflow;
-      body.style.overflow = prevBodyOverflow;
-      root.style.removeProperty("--chat-viewport-height");
-      root.style.removeProperty("--chat-keyboard-inset");
-      delete root.dataset.chatKeyboardOpen;
-    };
-  }, [chatMessagesRef, selectedContactId]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (typeof window === "undefined") return;
-
-    const root = document.documentElement;
-    const compose = composeContainerRef.current;
-    if (!compose) return;
-
-    const updateComposeHeight = () => {
-      root.style.setProperty(
-        "--chat-compose-height",
-        `${Math.round(compose.getBoundingClientRect().height)}px`,
-      );
-    };
-
-    updateComposeHeight();
-
-    window.addEventListener("resize", updateComposeHeight);
-
-    let observer: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined") {
-      observer = new ResizeObserver(updateComposeHeight);
-      observer.observe(compose);
-    }
-
-    return () => {
-      window.removeEventListener("resize", updateComposeHeight);
-      observer?.disconnect();
-      root.style.removeProperty("--chat-compose-height");
-    };
-  }, [
-    editContext,
-    payWithCashuEnabled,
-    replyContext,
-    selectedContact?.id,
-    selectedContact?.isUnknownContact,
-    selectedContact?.lnAddress,
-    npub,
-  ]);
-
-  useEffect(() => {
-    if (!replyContext && !editContext) return;
-    if (!npub && !hasUnknownPubkeyHex) return;
-    focusComposeInput();
-  }, [replyContext, editContext, focusComposeInput, hasUnknownPubkeyHex, npub]);
+  useChatViewport(chatMessagesRef, composeInputRef, selectedContactId);
+  useChatComposeHeight(composeContainerRef, selectedContactId);
 
   useEffect(() => {
     const chatId = String(selectedContact?.id ?? "").trim();
@@ -506,6 +1142,28 @@ export const ChatPage: FC<ChatPageProps> = ({
     }
   }, [bankPaymentOfferMessages, selectedContact?.id]);
 
+  const replyPreviewText = useMemo(() => {
+    if (replyContext?.replyToContent) {
+      return formatChatMessagePreviewText({
+        content: replyContext.replyToContent,
+        formatDisplayedAmountText,
+        t,
+      });
+    }
+    if (!replyContext?.replyToId) return "";
+
+    const repliedMessage = chatMessages.find(
+      (message) =>
+        String(message.rumorId ?? "").trim() === replyContext.replyToId,
+    );
+    return formatChatMessagePreviewText({
+      content: repliedMessage?.content ?? "",
+      direction: repliedMessage?.direction ?? null,
+      formatDisplayedAmountText,
+      t,
+    });
+  }, [chatMessages, formatDisplayedAmountText, replyContext, t]);
+
   if (!selectedContact) {
     return (
       <section className="panel">
@@ -525,436 +1183,74 @@ export const ChatPage: FC<ChatPageProps> = ({
     !isUnknownContact && Boolean(npub || hasUnknownPubkeyHex);
   const isFeedbackContact = npub === feedbackContactNpub;
 
-  const byRumorId = new Map<string, LocalNostrMessage>();
-  for (const message of chatMessages) {
-    const rumorId = String(message.rumorId ?? "").trim();
-    if (!rumorId) continue;
-    byRumorId.set(rumorId, message);
-  }
-
-  const replyPreviewText = replyContext?.replyToContent
-    ? formatChatMessagePreviewText({
-        content: replyContext.replyToContent,
-        formatDisplayedAmountText,
-        t,
-      })
-    : replyContext?.replyToId
-      ? formatChatMessagePreviewText({
-          content: byRumorId.get(replyContext.replyToId)?.content ?? "",
-          direction: byRumorId.get(replyContext.replyToId)?.direction ?? null,
-          formatDisplayedAmountText,
-          t,
-        })
-      : "";
-  const latestRequestResponseByRumorId = new Map<
-    string,
-    {
-      respondedAtSec: number;
-      status: "declined" | "paid";
-    }
-  >();
-
-  for (const message of chatMessages) {
-    const replyToId = String(message.replyToId ?? "").trim();
-    if (!replyToId) continue;
-
-    const createdAtSec = Number(message.createdAtSec ?? 0) || 0;
-    const isPaymentReply = Boolean(
-      getCashuTokenMessageInfo(String(message.content ?? "")),
-    );
-    const isDeclineReply = Boolean(
-      parseLinkyPaymentRequestDeclineMessage(String(message.content ?? "")),
-    );
-    if (!isPaymentReply && !isDeclineReply) continue;
-
-    const previous = latestRequestResponseByRumorId.get(replyToId);
-    if (previous && previous.respondedAtSec > createdAtSec) continue;
-    latestRequestResponseByRumorId.set(replyToId, {
-      respondedAtSec: createdAtSec,
-      status: isPaymentReply ? "paid" : "declined",
-    });
-  }
-  const hasDraftText = Boolean(chatDraft.trim());
-
-  const canSendChat = Boolean(
-    !chatSendIsBusy && hasDraftText && (npub || hasUnknownPubkeyHex),
-  );
-  const canSendImage = Boolean(
-    !chatSendIsBusy &&
-    !editContext &&
-    selectedContact &&
-    (npub || hasUnknownPubkeyHex),
-  );
-
   return (
     <section className="panel chat-panel">
       {isUnknownContact ? (
-        <div className="chat-unknown-warning">
-          <p>{t("chatUnknownContactWarning")}</p>
-          <div className="chat-unknown-warning-actions">
-            <button
-              className="btn-wide chat-unknown-primary"
-              type="button"
-              onClick={() => {
-                void onAddUnknownContact();
-              }}
-            >
-              {t("addContact")}
-            </button>
-            <button
-              className="btn-wide secondary"
-              type="button"
-              onClick={() => {
-                void onBlockUnknownContact();
-              }}
-            >
-              {t("blockContact")}
-            </button>
-          </div>
-        </div>
+        <UnknownContactWarning
+          onAdd={onAddUnknownContact}
+          onBlock={onBlockUnknownContact}
+          t={t}
+        />
       ) : null}
 
       {!npub && !hasUnknownPubkeyHex && (
         <p className="muted">{t("chatMissingContactNpub")}</p>
       )}
 
-      <div
-        className="chat-messages"
-        role="log"
-        aria-live="polite"
-        ref={chatMessagesRef}
-      >
-        {chatMessages.length === 0 ? (
-          <p className="muted">{t("chatEmpty")}</p>
-        ) : (
-          chatMessages.map((message, idx) => {
-            const prev = idx > 0 ? chatMessages[idx - 1] : null;
-            const next =
-              idx + 1 < chatMessages.length ? chatMessages[idx + 1] : null;
-            const formatChatDayLabelForLang = (timestamp: number) =>
-              formatChatDayLabel(timestamp, lang, t);
+      <ChatMessageList
+        bankPaymentOfferMessages={bankPaymentOfferMessages}
+        cashuBalanceAfterMelt={cashuBalanceAfterMelt}
+        cashuIsBusy={cashuIsBusy}
+        chatMessageElByIdRef={chatMessageElByIdRef}
+        chatMessages={chatMessages}
+        chatMessagesRef={chatMessagesRef}
+        chatOwnPubkeyHex={chatOwnPubkeyHex}
+        formatDisplayedAmountText={formatDisplayedAmountText}
+        getCashuTokenMessageInfo={getCashuTokenMessageInfo}
+        getMintIconUrl={getMintIconUrl}
+        getNpubMessageContactInfo={getNpubMessageContactInfo}
+        lang={lang}
+        onCopy={onCopy}
+        onDeclinePaymentRequest={onDeclinePaymentRequest}
+        onEdit={onEdit}
+        onOpenNpubContact={onOpenNpubContact}
+        onPayPaymentRequest={onPayPaymentRequest}
+        onReact={onReact}
+        onReply={onReply}
+        reactionsByMessageId={reactionsByMessageId}
+        selectedContactId={selectedContact.id}
+        setMintIconUrlByMint={setMintIconUrlByMint}
+        t={t}
+      />
 
-            const rumorId = String(message.rumorId ?? "").trim();
-            const reactions = rumorId
-              ? aggregateReactions(
-                  reactionsByMessageId.get(rumorId) ?? [],
-                  chatOwnPubkeyHex,
-                )
-              : [];
-            const paymentRequestInfo = parseCashuPaymentRequestMessage(
-              String(message.content ?? ""),
-            );
-            const privateImageInfo = parsePrivateImageMessage(
-              String(message.content ?? ""),
-            );
-            const bankPaymentOfferInfo = getLinkyBankPaymentOfferInfo(
-              String(message.content ?? ""),
-            );
-            const paymentRequestStatus = rumorId
-              ? (latestRequestResponseByRumorId.get(rumorId)?.status ??
-                "requested")
-              : "requested";
-            const replyToId = String(message.replyToId ?? "").trim();
-            const fallbackReplyContent =
-              String(message.replyToContent ?? "").trim() || null;
-            const replyQuoteText = replyToId
-              ? formatChatMessagePreviewText({
-                  content:
-                    byRumorId.get(replyToId)?.content ??
-                    fallbackReplyContent ??
-                    "",
-                  direction: byRumorId.get(replyToId)?.direction ?? null,
-                  formatDisplayedAmountText,
-                  t,
-                })
-              : fallbackReplyContent
-                ? formatChatMessagePreviewText({
-                    content: fallbackReplyContent,
-                    formatDisplayedAmountText,
-                    t,
-                  })
-                : null;
-            const isOwnTextMessage =
-              String(message.direction ?? "") === "out" &&
-              Boolean(String(message.rumorId ?? "").trim()) &&
-              !getCashuTokenMessageInfo(String(message.content ?? "")) &&
-              !paymentRequestInfo &&
-              !privateImageInfo &&
-              !bankPaymentOfferInfo &&
-              !parseLinkyPaymentRequestDeclineMessage(
-                String(message.content ?? ""),
-              );
-            const bankPaymentOfferPeerNotice = getBankPaymentOfferPeerNotice(
-              message,
-              bankPaymentOfferInfo,
-            );
-
-            return (
-              <ChatMessage
-                key={String(message.id)}
-                message={message}
-                previousMessage={prev}
-                nextMessage={next}
-                locale={lang === "cs" ? "cs-CZ" : "en-US"}
-                formatChatDayLabel={formatChatDayLabelForLang}
-                getCashuTokenMessageInfo={getCashuTokenMessageInfo}
-                getMintIconUrl={getMintIconUrl}
-                getNpubMessageContactInfo={getNpubMessageContactInfo}
-                onMintIconLoad={(origin, url) => {
-                  setMintIconUrlByMint((prevByMint) => ({
-                    ...prevByMint,
-                    [origin]: url,
-                  }));
-                }}
-                onMintIconError={(origin, nextUrl) => {
-                  setMintIconUrlByMint((prevByMint) => ({
-                    ...prevByMint,
-                    [origin]: nextUrl,
-                  }));
-                }}
-                actionLabels={{
-                  copy: t("copy"),
-                  edit: t("chatEditAction"),
-                  edited: t("chatEdited"),
-                  react: t("chatReactAction"),
-                  reply: t("chatReplyAction"),
-                }}
-                canEdit={isOwnTextMessage}
-                canReplyOrReact={Boolean(rumorId)}
-                reactions={reactions}
-                paymentRequestInfo={paymentRequestInfo}
-                paymentRequestStatus={
-                  paymentRequestInfo ? paymentRequestStatus : null
-                }
-                declineInfo={parseLinkyPaymentRequestDeclineMessage(
-                  String(message.content ?? ""),
-                )}
-                bankPaymentOfferInfo={bankPaymentOfferInfo}
-                bankPaymentOfferPeerNotice={bankPaymentOfferPeerNotice}
-                onOpenBankPaymentOfferDetails={() => {
-                  const offerId = String(
-                    bankPaymentOfferInfo?.offerId ?? "",
-                  ).trim();
-                  const chatId = String(
-                    message.contactId ?? selectedContact?.id ?? "",
-                  ).trim();
-                  if (!offerId || !chatId) return;
-                  setLinkyBankPaymentOfferMinimized(chatId, offerId, false);
-                  navigateTo({ route: "bankPaymentOffer", chatId, offerId });
-                }}
-                onDeclinePaymentRequest={() => {
-                  void onDeclinePaymentRequest(message);
-                }}
-                onPayPaymentRequest={(requestInfo) => {
-                  void onPayPaymentRequest(message, requestInfo);
-                }}
-                canActOnPaymentRequest={
-                  Boolean(paymentRequestInfo) &&
-                  String(message.direction ?? "") === "in" &&
-                  paymentRequestStatus === "requested"
-                }
-                payPaymentRequestDisabled={
-                  !paymentRequestInfo ||
-                  cashuIsBusy ||
-                  paymentRequestInfo.amount > cashuBalanceAfterMelt
-                }
-                payPaymentRequestBusy={cashuIsBusy}
-                replyQuoteText={replyQuoteText}
-                onCopy={onCopy}
-                onEdit={onEdit}
-                onOpenNpubContact={onOpenNpubContact}
-                onReact={onReact}
-                onReply={onReply}
-                chatPendingLabel={t("chatPendingShort")}
-                messageElRef={(el, messageId) => {
-                  const map = chatMessageElByIdRef.current;
-                  if (el) map.set(messageId, el);
-                  else map.delete(messageId);
-                }}
-              />
-            );
-          })
-        )}
-      </div>
-
-      <div className="chat-compose" ref={composeContainerRef}>
-        {replyContext && (
-          <ReplyPreview
-            label={t("chatReplyingTo")}
-            body={replyPreviewText || t("chatReplyUnavailable")}
-            onCancel={onCancelReply}
-          />
-        )}
-        {editContext && (
-          <ReplyPreview
-            label={t("chatEditing")}
-            body={editContext.originalContent || t("chatEmpty")}
-            onCancel={onCancelEdit}
-          />
-        )}
-        {mentionSuggestions.length > 0 ? (
-          <div className="chat-mention-suggestions" role="listbox">
-            {mentionSuggestions.map((suggestion) => {
-              if (suggestion.kind === "group") {
-                return (
-                  <button
-                    key={`group-${suggestion.groupName}`}
-                    type="button"
-                    className="chat-mention-suggestion"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => selectMentionSuggestion(suggestion)}
-                  >
-                    <span className="chat-mention-suggestion-label">
-                      @{suggestion.groupName}
-                    </span>
-                    <span className="muted">
-                      {t("chatMentionGroupCount").replace(
-                        "{count}",
-                        String(suggestion.contacts.length),
-                      )}
-                    </span>
-                  </button>
-                );
-              }
-
-              const info = getNpubMessageContactInfo(suggestion.contact.npub);
-              return (
-                <button
-                  key={`contact-${suggestion.contact.npub}`}
-                  type="button"
-                  className="chat-mention-suggestion"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => selectMentionSuggestion(suggestion)}
-                >
-                  <span className="chat-contact-pill-avatar" aria-hidden="true">
-                    {info?.pictureUrl ? (
-                      <img
-                        src={info.pictureUrl}
-                        alt=""
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="chat-contact-pill-avatar-fallback">
-                        {suggestion.contact.name.charAt(0)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="chat-mention-suggestion-label">
-                    {suggestion.contact.name}
-                  </span>
-                  {suggestion.contact.groupName ? (
-                    <span className="muted">
-                      {suggestion.contact.groupName}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-        <div className="chat-compose-input-wrap">
-          <input
-            ref={imageInputRef}
-            className="chat-image-input"
-            type="file"
-            accept="image/*"
-            onChange={(event) => {
-              const file = event.target.files?.[0] ?? null;
-              event.currentTarget.value = "";
-              if (!file) return;
-              void sendChatImage(file);
-            }}
-            tabIndex={-1}
-          />
-          <ChatMessageEditor
-            ref={composeInputRef}
-            value={chatDraft}
-            onChange={setChatDraft}
-            onCaretChange={setComposeCaret}
-            onSendShortcut={() => {
-              if (!isDesktop || !canSendChat) return;
-              void sendChatMessage();
-            }}
-            placeholder={t("chatPlaceholder")}
-            disabled={!npub && !hasUnknownPubkeyHex}
-            getCashuTokenMessageInfo={getCashuTokenMessageInfo}
-            getMintIconUrl={getMintIconUrl}
-            getNpubMessageContactInfo={getNpubMessageContactInfo}
-          />
-          {!hasDraftText ? (
-            <button
-              type="button"
-              className="chat-compose-image-button"
-              onClick={() => imageInputRef.current?.click()}
-              disabled={!canSendImage}
-              aria-label={t("chatImageAttach")}
-              title={t("chatImageAttach")}
-            >
-              <span className="chat-compose-send-icon" aria-hidden="true">
-                <GalleryIcon size={18} />
-              </span>
-            </button>
-          ) : null}
-          {hasDraftText ? (
-            <button
-              type="button"
-              className="chat-compose-send-button"
-              onClick={() => {
-                void sendChatMessage();
-                focusComposeInput();
-              }}
-              disabled={!canSendChat}
-              aria-label={editContext ? t("chatSaveAction") : t("send")}
-              title={editContext ? t("chatSaveAction") : t("send")}
-              data-guide="chat-send"
-            >
-              <span className="chat-compose-send-icon" aria-hidden="true">
-                <SendIcon size={18} />
-              </span>
-            </button>
-          ) : null}
-        </div>
-        {canPayThisContact && (
-          <div className="chat-compose-payment-actions">
-            {canRequestThisContact && (
-              <button
-                className="btn-wide secondary chat-pay-button"
-                onClick={() =>
-                  openContactPay(selectedContact.id, true, "request")
-                }
-                disabled={cashuIsBusy}
-                data-guide="chat-request"
-              >
-                <span className="btn-label-with-icon">
-                  <span className="btn-label-icon" aria-hidden="true">
-                    <RequestIcon size={18} />
-                  </span>
-                  <span>{t("requestPayment")}</span>
-                </span>
-              </button>
-            )}
-            <button
-              className="btn-wide secondary chat-pay-button"
-              onClick={() => openContactPay(selectedContact.id, true)}
-              disabled={cashuIsBusy || !canStartPay}
-              title={!canStartPay ? t("payInsufficient") : undefined}
-              data-guide="chat-pay"
-            >
-              <span className="btn-label-with-icon">
-                <span className="btn-label-icon" aria-hidden="true">
-                  {isFeedbackContact ? (
-                    <DonateIcon size={18} />
-                  ) : (
-                    <PayIcon size={18} />
-                  )}
-                </span>
-                <span>{isFeedbackContact ? t("donate") : t("pay")}</span>
-              </span>
-            </button>
-          </div>
-        )}
-      </div>
+      <ChatComposer
+        canPayThisContact={canPayThisContact}
+        canRequestThisContact={canRequestThisContact}
+        canStartPay={canStartPay}
+        cashuIsBusy={cashuIsBusy}
+        chatDraft={chatDraft}
+        chatSendIsBusy={chatSendIsBusy}
+        composeContainerRef={composeContainerRef}
+        composeInputRef={composeInputRef}
+        editContext={editContext}
+        getCashuTokenMessageInfo={getCashuTokenMessageInfo}
+        getMintIconUrl={getMintIconUrl}
+        getNpubMessageContactInfo={getNpubMessageContactInfo}
+        hasUnknownPubkeyHex={hasUnknownPubkeyHex}
+        isFeedbackContact={isFeedbackContact}
+        mentionContacts={mentionContacts}
+        npub={npub}
+        onCancelEdit={onCancelEdit}
+        onCancelReply={onCancelReply}
+        openContactPay={openContactPay}
+        replyContext={replyContext}
+        replyPreviewText={replyPreviewText}
+        selectedContact={selectedContact}
+        sendChatImage={sendChatImage}
+        sendChatMessage={sendChatMessage}
+        setChatDraft={setChatDraft}
+        t={t}
+      />
     </section>
   );
 };

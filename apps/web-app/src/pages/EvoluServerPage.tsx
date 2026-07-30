@@ -1,6 +1,7 @@
 import type { SyncOwner } from "@evolu/common";
 import React from "react";
 import { useNavigation } from "../hooks/useRouting";
+import { deriveEvoluServerState } from "./evoluServerState";
 
 interface EvoluServerPageProps {
   evoluHasError: boolean;
@@ -61,17 +62,12 @@ export function EvoluServerPage({
           {(() => {
             const offline = isEvoluServerOffline(selectedEvoluServerUrl);
             const isLastServer = evoluServerUrls.length <= 1;
-            const state = evoluHasError
-              ? "disconnected"
-              : offline
-                ? "disconnected"
-                : (evoluServerStatusByUrl[selectedEvoluServerUrl] ??
-                  "checking");
-            const isSynced =
-              Boolean(syncOwner) &&
-              !evoluHasError &&
-              !offline &&
-              state === "connected";
+            const { state, labelKey } = deriveEvoluServerState({
+              evoluHasError,
+              isOffline: offline,
+              state: evoluServerStatusByUrl[selectedEvoluServerUrl],
+              syncOwner,
+            });
 
             return (
               <>
@@ -101,15 +97,7 @@ export function EvoluServerPage({
                     </span>
                   </div>
                   <div className="settings-right">
-                    <span className="muted">
-                      {offline
-                        ? t("evoluServerOfflineStatus")
-                        : isSynced
-                          ? t("evoluSyncOk")
-                          : state === "checking"
-                            ? t("evoluSyncing")
-                            : t("evoluNotSynced")}
-                    </span>
+                    <span className="muted">{t(labelKey)}</span>
                   </div>
                 </div>
 

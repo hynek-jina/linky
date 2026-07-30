@@ -61,6 +61,39 @@ interface TransactionDetailEntry {
   values: TransactionDetailValue[];
 }
 
+interface TransactionStatusPill {
+  className: string;
+  label: string;
+}
+
+interface TransactionHistoryRow {
+  amount?: unknown;
+  category?: unknown;
+  contactId?: unknown;
+  createdAtSec?: unknown;
+  detailsJson?: unknown;
+  direction?: unknown;
+  error?: unknown;
+  fee?: unknown;
+  id?: unknown;
+  method?: unknown;
+  mint?: unknown;
+  note?: unknown;
+  ownerId?: unknown;
+  pendingLabel?: unknown;
+  phase?: unknown;
+  status?: unknown;
+  unit?: unknown;
+}
+
+interface NostrMessageHistoryRow {
+  content?: unknown;
+  createdAtSec?: unknown;
+  rumorId?: unknown;
+}
+
+const TRANSACTION_PAGE_SIZE = 50;
+
 const readText = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -233,6 +266,428 @@ const isPaymentRequestTransaction = (item: TransactionItem): boolean => {
   );
 };
 
+const buildTransactionHistory = (
+  transactionRows: readonly TransactionHistoryRow[],
+  evoluAppOwnerId: string | null | undefined,
+  evoluTransactionsVisibleOwnerIds: readonly (string | null | undefined)[],
+): {
+  fulfilledRequestIds: Set<string>;
+  transactions: TransactionItem[];
+} => {
+  const items: TransactionItem[] = [];
+  const visibleOwnerIds = new Set(
+    [evoluAppOwnerId, ...evoluTransactionsVisibleOwnerIds]
+      .map((ownerId) => readText(ownerId))
+      .filter((ownerId): ownerId is string => ownerId !== null),
+  );
+  for (const row of transactionRows) {
+    const ownerId = readText(row.ownerId);
+    if (ownerId && visibleOwnerIds.size > 0 && !visibleOwnerIds.has(ownerId)) {
+      continue;
+    }
+    const id = readText(row.id);
+    const createdAtSec = readPositiveInt(row.createdAtSec);
+    const direction = readDirection(row.direction);
+    const status = readStatus(row.status);
+    if (!id || !createdAtSec || !direction || !status) continue;
+    const method = readText(row.method);
+    items.push({
+      amount: readAmount(row.amount),
+      category: deriveTransactionCategory(method, readText(row.category)),
+      contactId: readText(row.contactId),
+      createdAtSec,
+      details: parseJsonValue(row.detailsJson),
+      direction,
+      error: readText(row.error),
+      fee: readAmount(row.fee),
+      id,
+      method,
+      mint: readText(row.mint),
+      note: readText(row.note),
+      pendingLabel: readText(row.pendingLabel),
+      phase: readText(row.phase),
+      status,
+      unit: readText(row.unit),
+    });
+  }
+  items.sort((left, right) => {
+    const createdAtDiff = right.createdAtSec - left.createdAtSec;
+    if (createdAtDiff !== 0) return createdAtDiff;
+    return right.id.localeCompare(left.id);
+  });
+
+  const requestByRequestId = new Map<string, TransactionItem>();
+  const fulfillmentByRequestId = new Map<string, TransactionItem>();
+  const emittedByToken = new Map<string, TransactionItem>();
+  const spendByUsedToken = new Map<string, TransactionItem>();
+
+  for (const item of items) {
+    const requestId = readRequestIdFromDetails(item.details);
+    if (!requestId) continue;
+
+    if (isPaymentRequestTransaction(item)) {
+      if (!requestByRequestId.has(requestId)) {
+        requestByRequestId.set(requestId, item);
+      }
+      continue;
+    }
+
+    if (item.status !== "ok") continue;
+    if (!fulfillmentByRequestId.has(requestId)) {
+      fulfillmentByRequestId.set(requestId, item);
+    }
+  }
+
+  for (const item of items) {
+    if (item.status !== "ok") continue;
+
+    const issuedTokenId = readIssuedTokenReferenceId(item.details);
+    if (issuedTokenId && !emittedByToken.has(issuedTokenId)) {
+      emittedByToken.set(issuedTokenId, item);
+    }
+
+    const usedTokenIds = readTokenReferenceIds(
+      item.details,
+      "usedTokenIds",
+      "usedInputTokens",
+    );
+    for (const tokenId of usedTokenIds) {
+      if (spendByUsedToken.has(tokenId)) continue;
+      spendByUsedToken.set(tokenId, item);
+    }
+  }
+
+  const transactions = items
+    .filter((item) => {
+      const requestId = readRequestIdFromDetails(item.details);
+      if (requestId) {
+        if (isPaymentRequestTransaction(item)) {
+          return requestByRequestId.get(requestId)?.id === item.id;
+        }
+        if (requestByRequestId.has(requestId)) return false;
+        if (item.status === "ok") {
+          return fulfillmentByRequestId.get(requestId)?.id === item.id;
+        }
+      }
+
+      const issuedTokenId = readIssuedTokenReferenceId(item.details);
+      if (!issuedTokenId) return true;
+      return !spendByUsedToken.has(issuedTokenId);
+    })
+    .map((item) => {
+      let mergedItem = item;
+
+      const usedTokenIds = readTokenReferenceIds(
+        mergedItem.details,
+        "usedTokenIds",
+        "usedInputTokens",
+      );
+      for (const tokenId of usedTokenIds) {
+        const emittedTransaction = emittedByToken.get(tokenId);
+        if (!emittedTransaction || emittedTransaction.id === mergedItem.id) {
+          continue;
+        }
+        mergedItem = {
+          ...mergedItem,
+          details: mergeDetailRecords(
+            mergedItem.details,
+            emittedTransaction.details,
+          ),
+        };
+        break;
+      }
+
+      const requestId = readRequestIdFromDetails(item.details);
+      if (!requestId || !isPaymentRequestTransaction(item)) {
+        return mergedItem;
+      }
+
+      const fulfillment = fulfillmentByRequestId.get(requestId);
+      if (!fulfillment) return mergedItem;
+
+      return {
+        ...mergedItem,
+        details: mergeDetailRecords(mergedItem.details, fulfillment.details),
+      };
+    });
+
+  return {
+    fulfilledRequestIds: new Set(fulfillmentByRequestId.keys()),
+    transactions,
+  };
+};
+
+const deriveDeclinedRequestIds = (
+  nostrMessageRows: readonly NostrMessageHistoryRow[],
+): Set<string> => {
+  const requestIdByRumorId = new Map<string, string>();
+  const latestDeclineAtByRequestId = new Map<string, number>();
+
+  for (const row of nostrMessageRows) {
+    const rumorId = readText(row.rumorId);
+    const content = readText(row.content) || "";
+    const requestInfo = parseCashuPaymentRequestMessage(content);
+    const requestId = String(requestInfo?.requestId ?? "").trim();
+
+    if (rumorId && requestId) {
+      requestIdByRumorId.set(rumorId, requestId);
+    }
+  }
+
+  for (const row of nostrMessageRows) {
+    const content = readText(row.content) || "";
+    const declineInfo = parseLinkyPaymentRequestDeclineMessage(content);
+    const requestRumorId = String(declineInfo?.requestRumorId ?? "").trim();
+    if (!requestRumorId) continue;
+
+    const requestId = requestIdByRumorId.get(requestRumorId);
+    if (!requestId) continue;
+
+    const createdAtSec = readPositiveInt(row.createdAtSec);
+    const previousCreatedAtSec = latestDeclineAtByRequestId.get(requestId);
+    if (
+      previousCreatedAtSec !== undefined &&
+      createdAtSec !== null &&
+      previousCreatedAtSec > createdAtSec
+    ) {
+      continue;
+    }
+
+    latestDeclineAtByRequestId.set(requestId, createdAtSec ?? 0);
+  }
+
+  return new Set(latestDeclineAtByRequestId.keys());
+};
+
+const readLnurlSuccessMessage = (item: TransactionItem): string | null => {
+  const details = readJsonRecord(item.details);
+  if (!details) return null;
+  const message = readStringFromJson(details.lnurlSuccessMessage);
+  if (message) return message;
+  const url = readStringFromJson(details.lnurlSuccessUrl);
+  if (!url) return null;
+  const description = readStringFromJson(details.lnurlSuccessUrlDescription);
+  return description ? `${description} ${url}` : url;
+};
+
+const hasTransactionDetails = (
+  item: TransactionItem,
+  tokenByReferenceId: ReadonlyMap<string, string>,
+): boolean => {
+  if (
+    item.mint ||
+    item.error ||
+    (item.direction === "out" && item.fee !== null)
+  ) {
+    return true;
+  }
+
+  const details = readJsonRecord(item.details);
+  if (!details) return false;
+
+  const hasStoredToken = (
+    rawKeys: readonly string[],
+    referenceKey: string,
+  ): boolean => {
+    if (
+      rawKeys.some((key) => readStringFromJson(details[key]) !== null) ||
+      readStringArrayFromJson(details[referenceKey]).some((id) =>
+        tokenByReferenceId.has(id),
+      )
+    ) {
+      return true;
+    }
+    return rawKeys.some(
+      (key) => readStringArrayFromJson(details[key]).length > 0,
+    );
+  };
+
+  return (
+    hasStoredToken(["usedInputTokens"], "usedTokenIds") ||
+    hasStoredToken(["gainedToken", "acceptedToken"], "gainedTokenIds") ||
+    [
+      details.lightningInvoice,
+      details.lightningMemo,
+      details.lightningPreimage,
+      details.lnurlSuccessMessage,
+      details.lnurlSuccessUrl,
+    ].some((value) => readStringFromJson(value) !== null)
+  );
+};
+
+interface TransactionCardProps {
+  buildDetailEntries: (item: TransactionItem) => TransactionDetailEntry[];
+  buildProblemStatusPill: (
+    item: TransactionItem,
+    requestStatus: "declined" | "paid" | "pending" | null,
+  ) => TransactionStatusPill | null;
+  buildTitle: (item: TransactionItem) => string;
+  contactsById: ReadonlyMap<string, ContactSummary>;
+  copyText: (text: string) => Promise<void>;
+  formatAmountText: (amount: number | null, unit: string | null) => string;
+  formatDateText: (createdAtSec: number) => string;
+  getRequestStatus: (
+    item: TransactionItem,
+  ) => "declined" | "paid" | "pending" | null;
+  isExpanded: boolean;
+  item: TransactionItem;
+  nostrPictureByNpub: Readonly<Record<string, string | null>>;
+  onToggle: (id: string) => void;
+  t: (key: string) => string;
+  tokenByReferenceId: ReadonlyMap<string, string>;
+}
+
+const TransactionCardView = ({
+  buildDetailEntries,
+  buildProblemStatusPill,
+  buildTitle,
+  contactsById,
+  copyText,
+  formatAmountText,
+  formatDateText,
+  getRequestStatus,
+  isExpanded,
+  item,
+  nostrPictureByNpub,
+  onToggle,
+  t,
+  tokenByReferenceId,
+}: TransactionCardProps): React.ReactElement => {
+  const contact = item.contactId ? contactsById.get(item.contactId) : null;
+  const title = buildTitle(item);
+  const generatedPicture = contact?.npub
+    ? deriveDefaultProfile(contact.npub).pictureUrl
+    : null;
+  const pictureUrl =
+    (contact?.npub ? nostrPictureByNpub[contact.npub] : null) ||
+    generatedPicture;
+  const initials = getInitials(contact?.name || title);
+  const amountText = formatAmountText(item.amount, item.unit);
+  const amountClassName =
+    item.direction === "in"
+      ? "transaction-amount is-positive"
+      : "transaction-amount is-negative";
+  const requestStatus = getRequestStatus(item);
+  const problemStatusPill = buildProblemStatusPill(item, requestStatus);
+  const hasDetails = React.useMemo(
+    () => hasTransactionDetails(item, tokenByReferenceId),
+    [item, tokenByReferenceId],
+  );
+  const detailEntries = React.useMemo(
+    () => (hasDetails && isExpanded ? buildDetailEntries(item) : []),
+    [buildDetailEntries, hasDetails, isExpanded, item],
+  );
+  const isUnsuccessful =
+    requestStatus === "declined" ||
+    item.status === "declined" ||
+    item.status === "error";
+  const lnurlMessage = readLnurlSuccessMessage(item);
+
+  return (
+    <div
+      className={`transaction-card${hasDetails ? " is-expandable" : ""}${isUnsuccessful ? " is-unsuccessful" : ""}`}
+      onClick={() => {
+        if (hasDetails) onToggle(item.id);
+      }}
+      onKeyDown={(event) => {
+        if (!hasDetails) return;
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onToggle(item.id);
+      }}
+      role={hasDetails ? "button" : undefined}
+      tabIndex={hasDetails ? 0 : undefined}
+    >
+      <article className="transaction-row">
+        <div className="contact-avatar transaction-avatar" aria-hidden="true">
+          {contact ? (
+            pictureUrl ? (
+              <img
+                src={pictureUrl}
+                alt=""
+                loading="lazy"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span className="contact-avatar-fallback">{initials}</span>
+            )
+          ) : (
+            <span className="contact-avatar-fallback transaction-icon-fallback">
+              {item.category === "lightning" ? "⚡️" : "🥜"}
+            </span>
+          )}
+        </div>
+        <div className="transaction-main">
+          <div className="transaction-title">{title}</div>
+          {lnurlMessage ? (
+            <div className="transaction-subtitle">{lnurlMessage}</div>
+          ) : null}
+          <div className="transaction-meta">
+            <span>{formatDateText(item.createdAtSec)}</span>
+            {problemStatusPill ? (
+              <span className={problemStatusPill.className}>
+                {problemStatusPill.label}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className={amountClassName}>{amountText || ""}</div>
+      </article>
+      {detailEntries.length > 0 ? (
+        <div className="transaction-detail-panel">
+          <dl className="transaction-detail-list">
+            {detailEntries.map((field, index) => (
+              <React.Fragment key={`${item.id}:${field.label}:${index}`}>
+                <dt>{field.label}</dt>
+                <dd>
+                  <div className="transaction-detail-values">
+                    {field.values.map((value, valueIndex) =>
+                      value.copyValue ? (
+                        <button
+                          key={`${item.id}:${field.label}:${index}:${valueIndex}`}
+                          type="button"
+                          className="copyable transaction-detail-copy"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void copyText(value.copyValue ?? "");
+                          }}
+                          onKeyDown={(event) => {
+                            event.stopPropagation();
+                          }}
+                          title={t("copy")}
+                          aria-label={t("copy")}
+                        >
+                          <span className="transaction-detail-copyText">
+                            {value.value}
+                          </span>
+                          <span
+                            className="transaction-detail-copyIcon"
+                            aria-hidden="true"
+                          >
+                            <CompactCopyIcon size={14} />
+                          </span>
+                        </button>
+                      ) : (
+                        <span
+                          key={`${item.id}:${field.label}:${index}:${valueIndex}`}
+                        >
+                          {value.value}
+                        </span>
+                      ),
+                    )}
+                  </div>
+                </dd>
+              </React.Fragment>
+            ))}
+          </dl>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const TransactionCard = React.memo(TransactionCardView);
+
 export function TransactionsPage(): React.ReactElement {
   const {
     evoluAppOwnerId,
@@ -246,6 +701,7 @@ export function TransactionsPage(): React.ReactElement {
   const [expandedById, setExpandedById] = React.useState<
     Record<string, boolean>
   >({});
+  const [visibleCount, setVisibleCount] = React.useState(TRANSACTION_PAGE_SIZE);
   const locale = React.useMemo(() => normalizeLocale(lang), [lang]);
 
   const contactsQuery = React.useMemo(
@@ -327,204 +783,21 @@ export function TransactionsPage(): React.ReactElement {
   }, [contactRows]);
 
   const { fulfilledRequestIds, transactions } = React.useMemo(() => {
-    const items: TransactionItem[] = [];
-    const visibleOwnerIds = new Set(
-      [evoluAppOwnerId, ...evoluTransactionsVisibleOwnerIds]
-        .map((ownerId) => readText(ownerId))
-        .filter((ownerId): ownerId is string => ownerId !== null),
+    return buildTransactionHistory(
+      transactionRows,
+      evoluAppOwnerId,
+      evoluTransactionsVisibleOwnerIds,
     );
-    for (const row of transactionRows) {
-      if (typeof row !== "object" || row === null) continue;
-      const ownerId = readText("ownerId" in row ? row.ownerId : null);
-      if (
-        ownerId &&
-        visibleOwnerIds.size > 0 &&
-        !visibleOwnerIds.has(ownerId)
-      ) {
-        continue;
-      }
-      const id = readText("id" in row ? row.id : null);
-      const createdAtSec = readPositiveInt(
-        "createdAtSec" in row ? row.createdAtSec : null,
-      );
-      const direction = readDirection(
-        "direction" in row ? row.direction : null,
-      );
-      const status = readStatus("status" in row ? row.status : null);
-      if (!id || !createdAtSec || !direction || !status) continue;
-      const method = readText("method" in row ? row.method : null);
-      items.push({
-        amount: readAmount("amount" in row ? row.amount : null),
-        category: deriveTransactionCategory(
-          method,
-          readText("category" in row ? row.category : null),
-        ),
-        contactId: readText("contactId" in row ? row.contactId : null),
-        createdAtSec,
-        details: parseJsonValue("detailsJson" in row ? row.detailsJson : null),
-        direction,
-        error: readText("error" in row ? row.error : null),
-        fee: readAmount("fee" in row ? row.fee : null),
-        id,
-        method,
-        mint: readText("mint" in row ? row.mint : null),
-        note: readText("note" in row ? row.note : null),
-        pendingLabel: readText("pendingLabel" in row ? row.pendingLabel : null),
-        phase: readText("phase" in row ? row.phase : null),
-        status,
-        unit: readText("unit" in row ? row.unit : null),
-      });
-    }
-    items.sort((left, right) => {
-      const createdAtDiff = right.createdAtSec - left.createdAtSec;
-      if (createdAtDiff !== 0) return createdAtDiff;
-      return right.id.localeCompare(left.id);
-    });
-    const requestByRequestId = new Map<string, TransactionItem>();
-    const fulfillmentByRequestId = new Map<string, TransactionItem>();
-    const emittedByToken = new Map<string, TransactionItem>();
-    const spendByUsedToken = new Map<string, TransactionItem>();
-
-    for (const item of items) {
-      const requestId = readRequestIdFromDetails(item.details);
-      if (!requestId) continue;
-
-      if (isPaymentRequestTransaction(item)) {
-        if (!requestByRequestId.has(requestId)) {
-          requestByRequestId.set(requestId, item);
-        }
-        continue;
-      }
-
-      if (item.status !== "ok") continue;
-      if (!fulfillmentByRequestId.has(requestId)) {
-        fulfillmentByRequestId.set(requestId, item);
-      }
-    }
-
-    for (const item of items) {
-      if (item.status !== "ok") continue;
-
-      const issuedTokenId = readIssuedTokenReferenceId(item.details);
-      if (issuedTokenId && !emittedByToken.has(issuedTokenId)) {
-        emittedByToken.set(issuedTokenId, item);
-      }
-
-      const usedTokenIds = readTokenReferenceIds(
-        item.details,
-        "usedTokenIds",
-        "usedInputTokens",
-      );
-      for (const tokenId of usedTokenIds) {
-        if (spendByUsedToken.has(tokenId)) continue;
-        spendByUsedToken.set(tokenId, item);
-      }
-    }
-
-    const visibleTransactions = items
-      .filter((item) => {
-        const requestId = readRequestIdFromDetails(item.details);
-        if (requestId) {
-          if (isPaymentRequestTransaction(item)) {
-            return requestByRequestId.get(requestId)?.id === item.id;
-          }
-          if (requestByRequestId.has(requestId)) return false;
-          if (item.status === "ok") {
-            return fulfillmentByRequestId.get(requestId)?.id === item.id;
-          }
-        }
-
-        const issuedTokenId = readIssuedTokenReferenceId(item.details);
-        if (!issuedTokenId) return true;
-        return !spendByUsedToken.has(issuedTokenId);
-      })
-      .map((item) => {
-        let mergedItem = item;
-
-        const usedTokenIds = readTokenReferenceIds(
-          mergedItem.details,
-          "usedTokenIds",
-          "usedInputTokens",
-        );
-        for (const tokenId of usedTokenIds) {
-          const emittedTransaction = emittedByToken.get(tokenId);
-          if (!emittedTransaction) continue;
-          if (emittedTransaction.id === mergedItem.id) continue;
-          mergedItem = {
-            ...mergedItem,
-            details: mergeDetailRecords(
-              mergedItem.details,
-              emittedTransaction.details,
-            ),
-          };
-          break;
-        }
-
-        const requestId = readRequestIdFromDetails(item.details);
-        if (!requestId || !isPaymentRequestTransaction(item)) {
-          return mergedItem;
-        }
-
-        const fulfillment = fulfillmentByRequestId.get(requestId);
-        if (!fulfillment) return mergedItem;
-
-        return {
-          ...mergedItem,
-          details: mergeDetailRecords(mergedItem.details, fulfillment.details),
-        };
-      });
-
-    return {
-      fulfilledRequestIds: new Set(fulfillmentByRequestId.keys()),
-      transactions: visibleTransactions,
-    };
   }, [evoluAppOwnerId, evoluTransactionsVisibleOwnerIds, transactionRows]);
 
-  const declinedRequestIds = React.useMemo(() => {
-    const requestIdByRumorId = new Map<string, string>();
-    const latestDeclineAtByRequestId = new Map<string, number>();
-
-    for (const row of nostrMessageRows) {
-      if (typeof row !== "object" || row === null) continue;
-
-      const rumorId = readText("rumorId" in row ? row.rumorId : null);
-      const content = readText("content" in row ? row.content : null) || "";
-      const requestInfo = parseCashuPaymentRequestMessage(content);
-      const requestId = String(requestInfo?.requestId ?? "").trim();
-
-      if (rumorId && requestId) {
-        requestIdByRumorId.set(rumorId, requestId);
-      }
-    }
-
-    for (const row of nostrMessageRows) {
-      if (typeof row !== "object" || row === null) continue;
-
-      const content = readText("content" in row ? row.content : null) || "";
-      const declineInfo = parseLinkyPaymentRequestDeclineMessage(content);
-      const requestRumorId = String(declineInfo?.requestRumorId ?? "").trim();
-      if (!requestRumorId) continue;
-
-      const requestId = requestIdByRumorId.get(requestRumorId);
-      if (!requestId) continue;
-
-      const createdAtSec = readPositiveInt(
-        "createdAtSec" in row ? row.createdAtSec : null,
-      );
-      const previousCreatedAtSec = latestDeclineAtByRequestId.get(requestId);
-      if (
-        previousCreatedAtSec !== undefined &&
-        createdAtSec !== null &&
-        previousCreatedAtSec > createdAtSec
-      ) {
-        continue;
-      }
-
-      latestDeclineAtByRequestId.set(requestId, createdAtSec ?? 0);
-    }
-
-    return new Set(latestDeclineAtByRequestId.keys());
-  }, [nostrMessageRows]);
+  const declinedRequestIds = React.useMemo(
+    () => deriveDeclinedRequestIds(nostrMessageRows),
+    [nostrMessageRows],
+  );
+  const visibleTransactions = React.useMemo(
+    () => transactions.slice(0, visibleCount),
+    [transactions, visibleCount],
+  );
 
   const buildTitle = React.useCallback(
     (item: TransactionItem): string => {
@@ -541,7 +814,6 @@ export function TransactionsPage(): React.ReactElement {
             : t("transactionSentToContact"))
         );
       }
-      if (item.note) return item.note;
       if (item.category === "lightning") {
         if (item.direction === "in") {
           return item.method === "lightning_address"
@@ -567,17 +839,21 @@ export function TransactionsPage(): React.ReactElement {
     [contactsById, t],
   );
 
-  const formatDateText = React.useCallback(
-    (createdAtSec: number): string => {
-      return new Intl.DateTimeFormat(locale, {
+  const dateFormatter = React.useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
         hour: "2-digit",
         minute: "2-digit",
-      }).format(new Date(createdAtSec * 1000));
-    },
+      }),
     [locale],
+  );
+  const formatDateText = React.useCallback(
+    (createdAtSec: number): string =>
+      dateFormatter.format(new Date(createdAtSec * 1000)),
+    [dateFormatter],
   );
 
   const formatAmountText = React.useCallback(
@@ -595,7 +871,7 @@ export function TransactionsPage(): React.ReactElement {
     (
       item: TransactionItem,
       requestStatus: "declined" | "paid" | "pending" | null,
-    ): { className: string; label: string } | null => {
+    ): TransactionStatusPill | null => {
       if (
         requestStatus === "pending" ||
         item.status === "pending" ||
@@ -621,29 +897,6 @@ export function TransactionsPage(): React.ReactElement {
       return null;
     },
     [t],
-  );
-
-  const buildMeta = React.useCallback(
-    (item: TransactionItem): string => {
-      return formatDateText(item.createdAtSec);
-    },
-    [formatDateText],
-  );
-
-  const readLnurlSuccessMessage = React.useCallback(
-    (item: TransactionItem): string | null => {
-      const details = readJsonRecord(item.details);
-      if (!details) return null;
-      const message = readStringFromJson(details.lnurlSuccessMessage);
-      if (message) return message;
-      const url = readStringFromJson(details.lnurlSuccessUrl);
-      if (!url) return null;
-      const description = readStringFromJson(
-        details.lnurlSuccessUrlDescription,
-      );
-      return description ? `${description} ${url}` : url;
-    },
-    [],
   );
 
   const getRequestStatus = React.useCallback(
@@ -832,153 +1085,42 @@ export function TransactionsPage(): React.ReactElement {
       {transactions.length === 0 ? (
         <p className="muted">{t("paymentsHistoryEmpty")}</p>
       ) : (
-        <div className="transactions-list">
-          {transactions.map((item) => {
-            const contact = item.contactId
-              ? contactsById.get(item.contactId)
-              : null;
-            const generatedPicture = contact?.npub
-              ? deriveDefaultProfile(contact.npub).pictureUrl
-              : null;
-            const pictureUrl =
-              (contact?.npub ? nostrPictureByNpub[contact.npub] : null) ||
-              generatedPicture;
-            const initials = getInitials(contact?.name || buildTitle(item));
-            const amountText = formatAmountText(item.amount, item.unit);
-            const amountClassName =
-              item.direction === "in"
-                ? "transaction-amount is-positive"
-                : "transaction-amount is-negative";
-            const isExpanded = expandedById[item.id] === true;
-            const requestStatus = getRequestStatus(item);
-            const problemStatusPill = buildProblemStatusPill(
-              item,
-              requestStatus,
-            );
-            const detailEntries = buildDetailEntries(item);
-            const hasDetails = detailEntries.length > 0;
-            const isUnsuccessful =
-              requestStatus === "declined" ||
-              item.status === "declined" ||
-              item.status === "error";
-
-            return (
-              <div
+        <>
+          <div className="transactions-list">
+            {visibleTransactions.map((item) => (
+              <TransactionCard
+                buildDetailEntries={buildDetailEntries}
+                buildProblemStatusPill={buildProblemStatusPill}
+                buildTitle={buildTitle}
+                contactsById={contactsById}
+                copyText={copyText}
+                formatAmountText={formatAmountText}
+                formatDateText={formatDateText}
+                getRequestStatus={getRequestStatus}
+                isExpanded={expandedById[item.id] === true}
+                item={item}
                 key={item.id}
-                className={`transaction-card${hasDetails ? " is-expandable" : ""}${isUnsuccessful ? " is-unsuccessful" : ""}`}
-                onClick={() => {
-                  if (!hasDetails) return;
-                  toggleExpanded(item.id);
-                }}
-                onKeyDown={(event) => {
-                  if (!hasDetails) return;
-                  if (event.key !== "Enter" && event.key !== " ") return;
-                  event.preventDefault();
-                  toggleExpanded(item.id);
-                }}
-                role={hasDetails ? "button" : undefined}
-                tabIndex={hasDetails ? 0 : undefined}
+                nostrPictureByNpub={nostrPictureByNpub}
+                onToggle={toggleExpanded}
+                t={t}
+                tokenByReferenceId={tokenByReferenceId}
+              />
+            ))}
+          </div>
+          {visibleCount < transactions.length ? (
+            <div className="settings-row">
+              <button
+                type="button"
+                className="btn-wide secondary"
+                onClick={() =>
+                  setVisibleCount((count) => count + TRANSACTION_PAGE_SIZE)
+                }
               >
-                <article className="transaction-row">
-                  <div
-                    className="contact-avatar transaction-avatar"
-                    aria-hidden="true"
-                  >
-                    {contact ? (
-                      pictureUrl ? (
-                        <img
-                          src={pictureUrl}
-                          alt=""
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="contact-avatar-fallback">
-                          {initials}
-                        </span>
-                      )
-                    ) : (
-                      <span className="contact-avatar-fallback transaction-icon-fallback">
-                        {item.category === "lightning" ? "⚡️" : "🥜"}
-                      </span>
-                    )}
-                  </div>
-                  <div className="transaction-main">
-                    <div className="transaction-title">{buildTitle(item)}</div>
-                    {(() => {
-                      const lnurlMessage = readLnurlSuccessMessage(item);
-                      return lnurlMessage ? (
-                        <div className="transaction-subtitle">
-                          {lnurlMessage}
-                        </div>
-                      ) : null;
-                    })()}
-                    <div className="transaction-meta">
-                      <span>{buildMeta(item)}</span>
-                      {problemStatusPill ? (
-                        <span className={problemStatusPill.className}>
-                          {problemStatusPill.label}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className={amountClassName}>{amountText || ""}</div>
-                </article>
-                {hasDetails && isExpanded ? (
-                  <div className="transaction-detail-panel">
-                    <dl className="transaction-detail-list">
-                      {detailEntries.map((field, index) => (
-                        <React.Fragment
-                          key={`${item.id}:${field.label}:${index}`}
-                        >
-                          <dt>{field.label}</dt>
-                          <dd>
-                            <div className="transaction-detail-values">
-                              {field.values.map((value, valueIndex) =>
-                                value.copyValue ? (
-                                  <button
-                                    key={`${item.id}:${field.label}:${index}:${valueIndex}`}
-                                    type="button"
-                                    className="copyable transaction-detail-copy"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      void copyText(value.copyValue ?? "");
-                                    }}
-                                    onKeyDown={(event) => {
-                                      event.stopPropagation();
-                                    }}
-                                    title={t("copy")}
-                                    aria-label={t("copy")}
-                                  >
-                                    <span className="transaction-detail-copyText">
-                                      {value.value}
-                                    </span>
-                                    <span
-                                      className="transaction-detail-copyIcon"
-                                      aria-hidden="true"
-                                    >
-                                      <CompactCopyIcon size={14} />
-                                    </span>
-                                  </button>
-                                ) : (
-                                  <span
-                                    key={`${item.id}:${field.label}:${index}:${valueIndex}`}
-                                  >
-                                    {value.value}
-                                  </span>
-                                ),
-                              )}
-                            </div>
-                          </dd>
-                        </React.Fragment>
-                      ))}
-                    </dl>
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
+                {t("loadMore")}
+              </button>
+            </div>
+          ) : null}
+        </>
       )}
     </section>
   );

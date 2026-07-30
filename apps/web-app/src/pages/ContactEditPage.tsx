@@ -1,18 +1,12 @@
 import type { FC } from "react";
 import { Archive, RefreshCcw, Save } from "lucide-react";
 import type { ContactId } from "../evolu";
+import { ContactFields, type ContactFormData } from "./ContactNewPage";
 
 interface Contact {
   archivedAtSec?: number | string | null;
   id: ContactId;
   npub?: string | null;
-}
-
-interface ContactFormData {
-  name: string;
-  npub: string;
-  lnAddress: string;
-  group: string;
 }
 
 interface ContactEditPageProps {
@@ -61,16 +55,13 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
 
       <div className="form-grid">
         <div className="form-col">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <label>Jméno</label>
-            {String(form.npub ?? "").trim() &&
-              String(form.name ?? "").trim() && (
+          <ContactFields
+            form={form}
+            groupNames={groupNames}
+            includeNpub
+            nameLabelAction={
+              String(form.npub ?? "").trim() &&
+              String(form.name ?? "").trim() ? (
                 <button
                   type="button"
                   className="icon-only-ghost"
@@ -80,31 +71,11 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
                 >
                   <RefreshCcw size={18} aria-hidden="true" />
                 </button>
-              )}
-          </div>
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder={t("namePlaceholder")}
-          />
-
-          <label>{t("npub")}</label>
-          <input
-            value={form.npub}
-            onChange={(e) => setForm({ ...form, npub: e.target.value })}
-            placeholder={t("npubPlaceholder")}
-          />
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <label>{t("lightningAddress")}</label>
-            {String(form.npub ?? "").trim() &&
-              String(form.lnAddress ?? "").trim() && (
+              ) : null
+            }
+            lightningLabelAction={
+              String(form.npub ?? "").trim() &&
+              String(form.lnAddress ?? "").trim() ? (
                 <button
                   type="button"
                   className="icon-only-ghost"
@@ -116,28 +87,11 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
                 >
                   <RefreshCcw size={18} aria-hidden="true" />
                 </button>
-              )}
-          </div>
-          <input
-            value={form.lnAddress}
-            onChange={(e) => setForm({ ...form, lnAddress: e.target.value })}
-            placeholder={t("lightningAddressPlaceholder")}
+              ) : null
+            }
+            setForm={setForm}
+            t={t}
           />
-
-          <label>{t("group")}</label>
-          <input
-            value={form.group}
-            onChange={(e) => setForm({ ...form, group: e.target.value })}
-            placeholder={t("groupPlaceholder")}
-            list={groupNames.length ? "group-options" : undefined}
-          />
-          {groupNames.length > 0 && (
-            <datalist id="group-options">
-              {groupNames.map((group) => (
-                <option key={group} value={group} />
-              ))}
-            </datalist>
-          )}
 
           <div className="actions">
             {editingId ? (

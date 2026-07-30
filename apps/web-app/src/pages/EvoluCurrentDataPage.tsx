@@ -38,6 +38,17 @@ interface EvoluCurrentDataPageProps {
   t: (key: string) => string;
 }
 
+interface EvoluDataSectionConfig {
+  editsUntilRotation: number | null;
+  label: string;
+  onRotate: (() => Promise<void>) | null;
+  ownerIndex: number | null;
+  rotateIsBusy: boolean;
+  rotateLabel: string | null;
+  rotatingLabel: string | null;
+  rotationLimit: number | null;
+}
+
 function readRowOwnerId(row: unknown): string {
   if (typeof row !== "object" || row === null) return "";
   if (!("ownerId" in row)) return "";
@@ -186,88 +197,89 @@ export function EvoluCurrentDataPage({
     evoluTransactionsVisibleOwnerIds,
   ]);
 
+  const trackedTableConfigs = React.useMemo(() => {
+    const messageConfig = (label: string): EvoluDataSectionConfig => ({
+      label,
+      ownerIndex: evoluMessagesOwnerIndex,
+      editsUntilRotation: evoluMessagesOwnerEditsUntilRotation,
+      rotationLimit: MESSAGES_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
+      onRotate: requestManualRotateMessagesOwner,
+      rotateLabel: t("evoluMessagesOwnerRotate"),
+      rotateIsBusy: rotateMessagesOwnerIsBusy,
+      rotatingLabel: t("evoluMessagesOwnerRotating"),
+    });
+
+    return new Map<string, EvoluDataSectionConfig>([
+      [
+        "contact",
+        {
+          label: t("contactsTitle"),
+          ownerIndex: evoluContactsOwnerIndex,
+          editsUntilRotation: evoluContactsOwnerEditsUntilRotation,
+          rotationLimit: CONTACTS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
+          onRotate: requestManualRotateContactsOwner,
+          rotateLabel: t("evoluContactsCashuOwnerRotate"),
+          rotateIsBusy: rotateContactsOwnerIsBusy,
+          rotatingLabel: t("evoluContactsCashuOwnerRotating"),
+        },
+      ],
+      [
+        "cashuToken",
+        {
+          label: t("tokens"),
+          ownerIndex: evoluCashuOwnerIndex,
+          editsUntilRotation: evoluCashuOwnerEditsUntilRotation,
+          rotationLimit: CASHU_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
+          onRotate: requestManualRotateCashuOwner,
+          rotateLabel: t("evoluCashuOwnerRotate"),
+          rotateIsBusy: rotateCashuOwnerIsBusy,
+          rotatingLabel: t("evoluCashuOwnerRotating"),
+        },
+      ],
+      ["nostrMessage", messageConfig(t("messagesTitle"))],
+      ["nostrReaction", messageConfig(t("reactionsTitle"))],
+      [
+        "transaction",
+        {
+          label: t("transactionsTitle"),
+          ownerIndex: evoluTransactionsOwnerIndex,
+          editsUntilRotation: evoluTransactionsOwnerEditsUntilRotation,
+          rotationLimit: TRANSACTIONS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
+          onRotate: requestManualRotateTransactionsOwner,
+          rotateLabel: t("evoluTransactionsOwnerRotate"),
+          rotateIsBusy: rotateTransactionsOwnerIsBusy,
+          rotatingLabel: t("evoluTransactionsOwnerRotating"),
+        },
+      ],
+    ]);
+  }, [
+    evoluCashuOwnerEditsUntilRotation,
+    evoluCashuOwnerIndex,
+    evoluContactsOwnerEditsUntilRotation,
+    evoluContactsOwnerIndex,
+    evoluMessagesOwnerEditsUntilRotation,
+    evoluMessagesOwnerIndex,
+    evoluTransactionsOwnerEditsUntilRotation,
+    evoluTransactionsOwnerIndex,
+    requestManualRotateCashuOwner,
+    requestManualRotateContactsOwner,
+    requestManualRotateMessagesOwner,
+    requestManualRotateTransactionsOwner,
+    rotateCashuOwnerIsBusy,
+    rotateContactsOwnerIsBusy,
+    rotateMessagesOwnerIsBusy,
+    rotateTransactionsOwnerIsBusy,
+    t,
+  ]);
+
   const dataSections = React.useMemo(
     () =>
       Object.entries(filteredCurrentData)
+        .filter(
+          ([tableName, rows]) => isTrackedTable(tableName) || rows.length > 0,
+        )
         .map(([tableName, rows]) => {
-          if (tableName === "contact") {
-            return {
-              tableName,
-              rows,
-              label: t("contactsTitle"),
-              ownerIndex: evoluContactsOwnerIndex,
-              editsUntilRotation: evoluContactsOwnerEditsUntilRotation,
-              rotationLimit: CONTACTS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
-              onRotate: requestManualRotateContactsOwner,
-              rotateLabel: t("evoluContactsCashuOwnerRotate"),
-              rotateIsBusy: rotateContactsOwnerIsBusy,
-              rotatingLabel: t("evoluContactsCashuOwnerRotating"),
-            };
-          }
-
-          if (tableName === "cashuToken") {
-            return {
-              tableName,
-              rows,
-              label: t("tokens"),
-              ownerIndex: evoluCashuOwnerIndex,
-              editsUntilRotation: evoluCashuOwnerEditsUntilRotation,
-              rotationLimit: CASHU_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
-              onRotate: requestManualRotateCashuOwner,
-              rotateLabel: t("evoluCashuOwnerRotate"),
-              rotateIsBusy: rotateCashuOwnerIsBusy,
-              rotatingLabel: t("evoluCashuOwnerRotating"),
-            };
-          }
-
-          if (tableName === "nostrMessage") {
-            return {
-              tableName,
-              rows,
-              label: t("messagesTitle"),
-              ownerIndex: evoluMessagesOwnerIndex,
-              editsUntilRotation: evoluMessagesOwnerEditsUntilRotation,
-              rotationLimit: MESSAGES_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
-              onRotate: requestManualRotateMessagesOwner,
-              rotateLabel: t("evoluMessagesOwnerRotate"),
-              rotateIsBusy: rotateMessagesOwnerIsBusy,
-              rotatingLabel: t("evoluMessagesOwnerRotating"),
-            };
-          }
-
-          if (tableName === "nostrReaction") {
-            return {
-              tableName,
-              rows,
-              label: t("reactionsTitle"),
-              ownerIndex: evoluMessagesOwnerIndex,
-              editsUntilRotation: evoluMessagesOwnerEditsUntilRotation,
-              rotationLimit: MESSAGES_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
-              onRotate: requestManualRotateMessagesOwner,
-              rotateLabel: t("evoluMessagesOwnerRotate"),
-              rotateIsBusy: rotateMessagesOwnerIsBusy,
-              rotatingLabel: t("evoluMessagesOwnerRotating"),
-            };
-          }
-
-          if (tableName === "transaction") {
-            return {
-              tableName,
-              rows,
-              label: t("transactionsTitle"),
-              ownerIndex: evoluTransactionsOwnerIndex,
-              editsUntilRotation: evoluTransactionsOwnerEditsUntilRotation,
-              rotationLimit: TRANSACTIONS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
-              onRotate: requestManualRotateTransactionsOwner,
-              rotateLabel: t("evoluTransactionsOwnerRotate"),
-              rotateIsBusy: rotateTransactionsOwnerIsBusy,
-              rotatingLabel: t("evoluTransactionsOwnerRotating"),
-            };
-          }
-
-          return {
-            tableName,
-            rows,
+          const config = trackedTableConfigs.get(tableName) ?? {
             label: tableName,
             ownerIndex: null,
             editsUntilRotation: null,
@@ -277,30 +289,9 @@ export function EvoluCurrentDataPage({
             rotateIsBusy: false,
             rotatingLabel: null,
           };
-        })
-        .filter(
-          ({ tableName, rows }) => isTrackedTable(tableName) || rows.length > 0,
-        ),
-    [
-      evoluCashuOwnerEditsUntilRotation,
-      evoluCashuOwnerIndex,
-      evoluContactsOwnerEditsUntilRotation,
-      evoluContactsOwnerIndex,
-      evoluMessagesOwnerEditsUntilRotation,
-      evoluMessagesOwnerIndex,
-      evoluTransactionsOwnerEditsUntilRotation,
-      evoluTransactionsOwnerIndex,
-      filteredCurrentData,
-      requestManualRotateCashuOwner,
-      requestManualRotateContactsOwner,
-      requestManualRotateMessagesOwner,
-      requestManualRotateTransactionsOwner,
-      rotateCashuOwnerIsBusy,
-      rotateContactsOwnerIsBusy,
-      rotateMessagesOwnerIsBusy,
-      rotateTransactionsOwnerIsBusy,
-      t,
-    ],
+          return { tableName, rows, ...config };
+        }),
+    [filteredCurrentData, trackedTableConfigs],
   );
 
   if (isLoading) {
