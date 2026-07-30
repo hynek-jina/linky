@@ -2,6 +2,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { navigateTo } from "../../../hooks/useRouting";
+import { mainSwipeProgressStore } from "../../lib/mainSwipeProgressStore";
 import {
   alignMainSwipeToTarget,
   getMainSwipeTargetForProgress,
@@ -44,14 +45,14 @@ const createElement = (
 const SwipeHarness = (): React.ReactElement => {
   const mainSwipeRef = React.useRef<HTMLDivElement | null>(null);
   const mainSwipeScrollTimerRef = React.useRef<number | null>(null);
-  const { handleMainSwipeScroll } = useMainSwipeNavigation({
+  useMainSwipeNavigation({
     isMainSwipeRoute: true,
     mainSwipeRef,
     mainSwipeScrollTimerRef,
     routeKind: "contacts",
   });
 
-  return <div onScroll={handleMainSwipeScroll} ref={mainSwipeRef} />;
+  return <div ref={mainSwipeRef} />;
 };
 
 afterEach(() => {
@@ -158,9 +159,13 @@ describe("native swipe settling", () => {
       configurable: true,
       value: 390,
     });
+    const progressListener = vi.fn();
+    const unsubscribe = mainSwipeProgressStore.subscribe(progressListener);
     swipe.dispatchEvent(new Event("touchstart", { bubbles: true }));
     swipe.scrollLeft = 250;
     swipe.dispatchEvent(new Event("scroll", { bubbles: true }));
+    expect(mainSwipeProgressStore.get().progress).toBe(0);
+    expect(progressListener).not.toHaveBeenCalled();
 
     await act(async () => {
       vi.advanceTimersByTime(1_000);
@@ -170,6 +175,7 @@ describe("native swipe settling", () => {
     swipe.dispatchEvent(new Event("touchend", { bubbles: true }));
     swipe.dispatchEvent(new Event("scrollend", { bubbles: true }));
     expect(navigateTo).toHaveBeenCalledWith({ route: "wallet" });
+    unsubscribe();
 
     await act(async () => {
       root.unmount();
@@ -178,6 +184,11 @@ describe("native swipe settling", () => {
 
   it("uses the delayed fallback when scrollend is unavailable", async () => {
     vi.useFakeTimers();
+    const scrollEndDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "onscrollend",
+    );
+    Reflect.deleteProperty(HTMLElement.prototype, "onscrollend");
     const container = document.createElement("div");
     const root = createRoot(container);
 
@@ -214,5 +225,12 @@ describe("native swipe settling", () => {
     await act(async () => {
       root.unmount();
     });
+    if (scrollEndDescriptor) {
+      Object.defineProperty(
+        HTMLElement.prototype,
+        "onscrollend",
+        scrollEndDescriptor,
+      );
+    }
   });
 });

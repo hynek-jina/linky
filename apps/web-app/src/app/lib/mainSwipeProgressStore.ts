@@ -1,18 +1,14 @@
 import React from "react";
 
 /**
- * Frame-rate swipe progress lives outside React shell state on purpose:
- * updating it via useState in useAppShellComposition re-ran the whole app
- * shell (10k-line hook graph + both swipe pages) on every scroll event while
- * dragging between Contacts and Wallet. Only the bottom tab indicator and the
- * FAB need per-frame progress, so they subscribe to this store directly.
+ * Settled swipe progress lives outside the app shell so changing tabs only
+ * updates the indicator and FAB. Native scroll frames do not publish here.
  */
 export interface MainSwipeProgressState {
-  isDragging: boolean;
   progress: number;
 }
 
-let state: MainSwipeProgressState = { isDragging: false, progress: 0 };
+let state: MainSwipeProgressState = { progress: 0 };
 const listeners = new Set<() => void>();
 
 const emit = () => {
@@ -21,15 +17,9 @@ const emit = () => {
 
 export const mainSwipeProgressStore = {
   get: (): MainSwipeProgressState => state,
-  setDragging: (isDragging: boolean): void => {
-    if (state.isDragging === isDragging) return;
-    state = { ...state, isDragging };
-    emit();
-  },
-  setProgress: (progress: number): void => {
-    const clamped = Math.min(1, Math.max(0, progress));
-    if (state.progress === clamped) return;
-    state = { ...state, progress: clamped };
+  set: (nextState: MainSwipeProgressState): void => {
+    if (state.progress === nextState.progress) return;
+    state = nextState;
     emit();
   },
   subscribe: (listener: () => void): (() => void) => {

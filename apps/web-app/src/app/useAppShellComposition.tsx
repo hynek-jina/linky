@@ -3284,7 +3284,7 @@ export const useAppShellComposition = () => {
     setContactsPulling,
   });
 
-  const { commitMainSwipe, handleMainSwipeScroll } = useMainSwipeNavigation({
+  const { commitMainSwipe } = useMainSwipeNavigation({
     isMainSwipeRoute,
     mainSwipeRef,
     mainSwipeScrollTimerRef,
@@ -9707,7 +9707,6 @@ export const useAppShellComposition = () => {
       conversationsLabel,
       dismissContactsOnboarding,
       dismissWalletWarning,
-      handleMainSwipeScroll,
       handleMainSwipeTabChange: commitMainSwipe,
       mainSwipeRef,
       canAddContact,

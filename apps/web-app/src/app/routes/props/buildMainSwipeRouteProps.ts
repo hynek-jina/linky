@@ -18,7 +18,6 @@ interface BuildMainSwipeRoutePropsParams {
   conversationsLabel: MainSwipeRoutesProps["mainSwipeProps"]["conversationsLabel"];
   dismissContactsOnboarding: MainSwipeRoutesProps["mainSwipeProps"]["dismissContactsOnboarding"];
   dismissWalletWarning: MainSwipeRoutesProps["mainSwipeProps"]["dismissWalletWarning"];
-  handleMainSwipeScroll: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeScroll"];
   handleMainSwipeTabChange: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeTabChange"];
   mainSwipeRef: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeRef"];
   openNewContactPage: MainSwipeRoutesProps["mainSwipeProps"]["openNewContactPage"];
@@ -58,7 +57,6 @@ export const buildMainSwipeRouteProps = ({
   conversationsLabel,
   dismissContactsOnboarding,
   dismissWalletWarning,
-  handleMainSwipeScroll,
   handleMainSwipeTabChange,
   mainSwipeRef,
   openNewContactPage,
@@ -98,7 +96,6 @@ export const buildMainSwipeRouteProps = ({
       conversationsLabel,
       dismissContactsOnboarding,
       dismissWalletWarning,
-      handleMainSwipeScroll,
       handleMainSwipeTabChange,
       mainSwipeRef,
       openNewContactPage,
