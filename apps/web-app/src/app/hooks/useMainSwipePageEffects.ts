@@ -12,12 +12,21 @@ export const shouldLockWalletWindowScroll = (routeKind: string): boolean => {
  * gesture; the toolbar style reads `--contacts-pull` directly.
  */
 export const CONTACTS_PULL_CSS_VAR = "--contacts-pull";
+export const CONTACTS_PULL_REVEAL_DISTANCE_PX = 72;
+const CONTACTS_PULLING_CLASS = "is-pulling-contacts-toolbar";
 
 const setContactsPullCssVar = (progress: number): void => {
   document.documentElement.style.setProperty(
     CONTACTS_PULL_CSS_VAR,
     String(Math.min(1, Math.max(0, progress))),
   );
+};
+
+export const getContactsPullProgress = (distance: number): number =>
+  Math.min(1, Math.max(0, distance / CONTACTS_PULL_REVEAL_DISTANCE_PX));
+
+const setContactsPullingClass = (pulling: boolean): void => {
+  document.documentElement.classList.toggle(CONTACTS_PULLING_CLASS, pulling);
 };
 
 interface UseMainSwipePageEffectsParams {
@@ -46,12 +55,12 @@ export const useMainSwipePageEffects = ({
       setContactsHeaderVisible(false);
       setContactsPulling(false);
       contactsPullDistanceRef.current = 0;
+      setContactsPullingClass(false);
       setContactsPullCssVar(0);
       return;
     }
     if (typeof window === "undefined") return;
 
-    const pullThreshold = 36;
     let touchStartY = 0;
     let trackingTouch = false;
     let pulling = false;
@@ -71,14 +80,16 @@ export const useMainSwipePageEffects = ({
     };
 
     const updatePullProgress = (progress: number) => {
-      setContactsPullCssVar(progress);
       if (progress > 0 && !pulling) {
         pulling = true;
+        setContactsPullingClass(true);
         setContactsPulling(true);
       }
+      setContactsPullCssVar(progress);
     };
 
     const stopPulling = () => {
+      setContactsPullingClass(false);
       if (pulling) {
         pulling = false;
         setContactsPulling(false);
@@ -107,11 +118,10 @@ export const useMainSwipePageEffects = ({
       if (event.deltaY < 0) {
         contactsPullDistanceRef.current = Math.min(
           contactsPullDistanceRef.current + Math.abs(event.deltaY),
-          pullThreshold * 3,
+          CONTACTS_PULL_REVEAL_DISTANCE_PX * 3,
         );
-        const progress = Math.min(
-          contactsPullDistanceRef.current / pullThreshold,
-          1,
+        const progress = getContactsPullProgress(
+          contactsPullDistanceRef.current,
         );
         updatePullProgress(progress);
         if (progress >= 1 && !contactsHeaderVisibleRef.current) {
@@ -151,7 +161,7 @@ export const useMainSwipePageEffects = ({
         return;
       }
       contactsPullDistanceRef.current = delta;
-      const progress = Math.min(delta / pullThreshold, 1);
+      const progress = getContactsPullProgress(delta);
       updatePullProgress(progress);
       if (progress >= 1 && !contactsHeaderVisibleRef.current) {
         contactsHeaderVisibleRef.current = true;
@@ -185,6 +195,7 @@ export const useMainSwipePageEffects = ({
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("touchcancel", onTouchEnd);
+      setContactsPullingClass(false);
     };
   }, [
     contactsPullDistanceRef,
