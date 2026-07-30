@@ -381,25 +381,36 @@ export const useContactsGuide = ({
     stopContactsGuide,
   ]);
 
+  const contactsGuideActiveSelector =
+    contactsGuideActiveStep?.step.selector ?? null;
+  const contactsGuideActiveStepId = contactsGuideActiveStep?.step.id ?? null;
+
   React.useEffect(() => {
-    const active = contactsGuideActiveStep?.step ?? null;
-    if (!contactsGuide || !active) {
+    if (!contactsGuideActiveSelector) {
       setContactsGuideHighlightRect(null);
       return;
     }
 
+    const el = document.querySelector(contactsGuideActiveSelector);
+    if (!(el instanceof HTMLElement)) return;
+    try {
+      el.scrollIntoView({ block: "center", inline: "center" });
+    } catch {
+      // ignore
+    }
+  }, [contactsGuideActiveSelector, contactsGuideActiveStepId]);
+
+  React.useEffect(() => {
+    if (!contactsGuideActiveSelector) return;
+
+    let animationFrameId: number | null = null;
     const updateRect = () => {
-      const el = document.querySelector(active.selector) as HTMLElement | null;
-      if (!el) {
+      animationFrameId = null;
+      const el = document.querySelector(contactsGuideActiveSelector);
+      if (!(el instanceof HTMLElement)) {
         setContactsGuideHighlightRect(null);
         return;
       }
-      try {
-        el.scrollIntoView({ block: "center", inline: "center" });
-      } catch {
-        // ignore
-      }
-
       const r = el.getBoundingClientRect();
       const pad = 8;
       setContactsGuideHighlightRect({
@@ -409,17 +420,23 @@ export const useContactsGuide = ({
         height: Math.min(r.height + pad * 2, window.innerHeight - 16),
       });
     };
-
-    updateRect();
-
-    const onResize = () => updateRect();
-    window.addEventListener("resize", onResize);
-    window.addEventListener("scroll", onResize, { passive: true });
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("scroll", onResize);
+    const scheduleUpdateRect = () => {
+      if (animationFrameId !== null) return;
+      animationFrameId = window.requestAnimationFrame(updateRect);
     };
-  }, [contactsGuide, contactsGuideActiveStep, route.kind]);
+
+    scheduleUpdateRect();
+
+    window.addEventListener("resize", scheduleUpdateRect);
+    window.addEventListener("scroll", scheduleUpdateRect, { passive: true });
+    return () => {
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      window.removeEventListener("resize", scheduleUpdateRect);
+      window.removeEventListener("scroll", scheduleUpdateRect);
+    };
+  }, [contactsGuideActiveSelector, route.kind]);
 
   const contactsGuideNav = {
     back: () => {

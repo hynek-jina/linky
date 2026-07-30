@@ -266,7 +266,7 @@ export const useContactEditor = ({
       evolu.createQuery((db) =>
         db
           .selectFrom("transaction")
-          .select(["id", "contactId", "method", "detailsJson"])
+          .select(["id", "ownerId", "contactId", "method", "detailsJson"])
           .where("isDeleted", "is not", Evolu.sqliteTrue),
       ),
     [],
@@ -481,12 +481,21 @@ export const useContactEditor = ({
   );
 
   const updateTransactionFields = React.useCallback(
-    (payload: { contactId: ContactId; id: TransactionId }) => {
+    (
+      payload: { contactId: ContactId; id: TransactionId },
+      rowOwnerId: unknown,
+    ) => {
+      const parsedOwnerId = Evolu.OwnerId.fromUnknown(rowOwnerId);
+      if (parsedOwnerId.ok) {
+        return update("transaction", payload, {
+          ownerId: parsedOwnerId.value,
+        });
+      }
+
       if (transactionsOwnerId) {
-        const scoped = update("transaction", payload, {
+        return update("transaction", payload, {
           ownerId: transactionsOwnerId,
         });
-        if (scoped.ok) return scoped;
       }
 
       return update("transaction", payload);
@@ -521,10 +530,13 @@ export const useContactEditor = ({
         if (transactionLnAddress.toLowerCase() !== normalizedLnAddress)
           continue;
 
-        const result = updateTransactionFields({
-          id: transactionId as TransactionId,
-          contactId,
-        });
+        const result = updateTransactionFields(
+          {
+            id: transactionId as TransactionId,
+            contactId,
+          },
+          "ownerId" in row ? row.ownerId : null,
+        );
         if (!result.ok) continue;
         updatedCount += 1;
       }
@@ -835,7 +847,6 @@ export const useContactEditor = ({
     setStatus,
     t,
     updateContactFields,
-    upsert,
     refreshContactAvatarFromNostr,
   ]);
 

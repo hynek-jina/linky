@@ -1,7 +1,6 @@
-// Cross-device propagation of owner-lane rotations. Each rotation writes
-// one row to the synced `ownerMeta` table (one row per scope) so adopters
-// can converge on the same (index, baseline, cashuBaseline, rotatedAtMs)
-// snapshot.
+// Cross-device propagation of independent, pointer-only owner-lane rotations.
+// Each scope writes one synced `ownerMeta` row so adopters converge on the
+// active index and its rotation boundary without copying historical rows.
 //
 // Historically the `value` column was a plain `"contacts-N"` string carrying
 // only the index. Adopters then defaulted baseline / editCount / rotatedAt
@@ -19,15 +18,13 @@ export interface RotationSnapshot {
   /** New owner lane index (e.g. 3 → owner derivation path uses `<scope>-3`). */
   index: number;
   /**
-   * Row count copied forward into the new lane at rotation time. Null when
-   * decoding a legacy `"<scope>-N"` value that didn't carry baseline info;
-   * callers must then fall back to a local snapshot.
+   * Local count baseline captured at rotation time. Pointer-only rotations
+   * normally write zero. Null means a legacy `"<scope>-N"` value omitted it.
    */
   baseline: number | null;
   /**
-   * Contacts scope only: cashu rows copied forward in the same rotation
-   * (contacts + cashu rotate together). Null on non-contacts scopes and on
-   * legacy values.
+   * Legacy wire-compatibility field for clients that coupled contacts and
+   * cashu rotations. New clients keep the scopes independent.
    */
   cashuBaseline: number | null;
   /** Wall-clock timestamp the rotation completed. Null on legacy values. */

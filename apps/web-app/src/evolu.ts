@@ -128,15 +128,23 @@ const toJsonRows = (
   });
 
 interface EvoluSelectBuilder {
+  groupBy(columns: string[]): EvoluSelectBuilder;
   select(cb: (eb: EvoluExpressionBuilder) => unknown): EvoluSelectBuilder;
   selectAll(): EvoluSelectBuilder;
   orderBy(column: string, direction: string): EvoluSelectBuilder;
   limit(n: number): EvoluSelectBuilder;
   offset(n: number): EvoluSelectBuilder;
+  where(column: string, operator: string, value: unknown): EvoluSelectBuilder;
 }
 
 interface EvoluExpressionBuilder {
-  fn: { countAll(): { as(name: string): unknown } };
+  fn: {
+    count(column: string): {
+      as(name: string): unknown;
+      distinct(): { as(name: string): unknown };
+    };
+    countAll(): { as(name: string): unknown };
+  };
 }
 
 interface EvoluQueryBuilder {
@@ -806,13 +814,94 @@ export interface EvoluHistoryRow {
   [key: string]: JsonValue;
 }
 
-export interface EvoluHistoryMutationEntry {
-  id: string;
+export interface EvoluHistoryMutationCountRequest {
+  key: string;
   ownerId: string;
-  table: string;
-  timestampKey: string;
-  timestampMs: number | null;
+  rotatedAtMs: number;
+  tables: readonly string[];
 }
+
+const base64ToUint8Array = (value: string): Uint8Array | null => {
+  const normalized = value.trim().replace(/-/g, "+").replace(/_/g, "/");
+  if (!normalized) return null;
+  const padded = normalized.padEnd(
+    normalized.length + ((4 - (normalized.length % 4)) % 4),
+    "=",
+  );
+
+  try {
+    const decoded = atob(padded);
+    return Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+  } catch {
+    return null;
+  }
+};
+
+const timestampAfterMs = (timestampMs: number): Uint8Array => {
+  const bytes = new Uint8Array(16);
+  let value = Math.max(0, Math.trunc(timestampMs) + 1);
+  for (let index = 5; index >= 0; index -= 1) {
+    bytes[index] = value % 256;
+    value = Math.floor(value / 256);
+  }
+  return bytes;
+};
+
+export const loadEvoluHistoryMutationCounts = async (
+  requests: readonly EvoluHistoryMutationCountRequest[],
+): Promise<Readonly<Record<string, number>>> => {
+  const instance = getEvolu();
+  const counts: Record<string, number> = {};
+
+  await Promise.all(
+    requests.map(async (request) => {
+      const ownerId = base64ToUint8Array(request.ownerId);
+      const tables = request.tables
+        .map((table) => table.trim())
+        .filter(Boolean);
+      if (!ownerId || tables.length === 0) {
+        counts[request.key] = 0;
+        return;
+      }
+
+      try {
+        const q = createUntypedQuery(instance, (db) =>
+          db
+            .selectFrom("evolu_history")
+            .select((eb) => eb.fn.count("timestamp").distinct().as("count"))
+            .where("ownerId", "=", ownerId)
+            .where("table", "in", tables)
+            .where("timestamp", ">=", timestampAfterMs(request.rotatedAtMs))
+            .groupBy(["table", "id"]),
+        );
+        const rows = await loadUntypedQueryRows(instance, q);
+        counts[request.key] = rows.reduce(
+          (total, row) => total + Number(row.count ?? 0),
+          0,
+        );
+      } catch {
+        counts[request.key] = 0;
+      }
+    }),
+  );
+
+  return counts;
+};
+
+export const subscribeEvoluHistoryMutationVersion = (
+  listener: () => void,
+): (() => void) => {
+  const instance = getEvolu();
+  const q = createUntypedQuery(instance, (db) =>
+    db.selectFrom("evolu_history").select((eb) => eb.fn.countAll().as("count")),
+  );
+  const subscribeQuery = Reflect.get(Object(instance), "subscribeQuery");
+  if (typeof subscribeQuery !== "function") return () => {};
+  const subscribe = Reflect.apply(subscribeQuery, instance, [q]);
+  if (typeof subscribe !== "function") return () => {};
+  const unsubscribe = Reflect.apply(subscribe, undefined, [listener]);
+  return typeof unsubscribe === "function" ? unsubscribe : () => {};
+};
 
 // Load history data from evolu_history table with pagination support
 export const loadEvoluHistoryData = async (
@@ -843,30 +932,6 @@ export const loadEvoluHistoryData = async (
     return formattedRows;
   } catch (err) {
     console.error("Failed to load evolu_history:", err);
-    return [];
-  }
-};
-
-export const loadEvoluHistoryMutationEntries = async (): Promise<
-  readonly EvoluHistoryMutationEntry[]
-> => {
-  const instance = getEvolu();
-
-  try {
-    const q = createUntypedQuery(instance, (db) =>
-      db.selectFrom("evolu_history").selectAll(),
-    );
-    const rows = await loadUntypedQueryRows(instance, q);
-
-    return rows.map((row) => ({
-      id: uint8ArrayToBase64(row.id),
-      ownerId: uint8ArrayToBase64(row.ownerId),
-      table: String(row.table ?? ""),
-      timestampKey: uint8ArrayToBase64(row.timestamp),
-      timestampMs: timestampToMs(row.timestamp),
-    }));
-  } catch (err) {
-    console.error("Failed to load evolu history mutation entries:", err);
     return [];
   }
 };

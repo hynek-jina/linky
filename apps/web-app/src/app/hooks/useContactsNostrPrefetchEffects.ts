@@ -5,7 +5,6 @@ import {
   cacheProfileAvatarFromUrl,
   deleteCachedProfileAvatar,
   fetchNostrProfileMetadata,
-  fetchNostrProfilePicture,
   getNostrProfilePictureUrl,
   isCachedProfilePictureStale,
   loadCachedProfileAvatarObjectUrl,
@@ -68,6 +67,54 @@ export const useContactsNostrPrefetchEffects = <
   update,
   visibleOwnerIds,
 }: UseContactsNostrPrefetchEffectsParams<TContact>) => {
+  const metadataPromisesRef = React.useRef<
+    Map<string, Promise<Awaited<ReturnType<typeof fetchNostrProfileMetadata>>>>
+  >(new Map());
+  const metadataCompletedRef = React.useRef<Set<string>>(new Set());
+  const statusCompletedRef = React.useRef<Set<string>>(new Set());
+  const statusByNpubRef = React.useRef(nostrStatusByNpub);
+  const contactsRef = React.useRef(contacts);
+  statusByNpubRef.current = nostrStatusByNpub;
+  contactsRef.current = contacts;
+  const metadataContactsKey = contacts
+    .map(
+      (contact) =>
+        `${contact.id}:${normalizeNpubIdentifier(contact.npub) ?? ""}`,
+    )
+    .sort()
+    .join("|");
+  const uniqueNpubsKey = Array.from(
+    new Set(
+      contacts
+        .map((contact) => normalizeNpubIdentifier(contact.npub))
+        .filter((npub): npub is string => Boolean(npub)),
+    ),
+  )
+    .sort()
+    .join("|");
+
+  const loadProfileMetadata = React.useCallback(
+    (npub: string) => {
+      const relayKey = nostrFetchRelays
+        .map((relay) => relay.trim())
+        .filter(Boolean)
+        .sort()
+        .join(",");
+      const key = `${npub}|${relayKey}`;
+      const existing = metadataPromisesRef.current.get(key);
+      if (existing) return existing;
+
+      const promise = fetchNostrProfileMetadata(npub, {
+        relays: nostrFetchRelays,
+      }).finally(() => {
+        metadataPromisesRef.current.delete(key);
+      });
+      metadataPromisesRef.current.set(key, promise);
+      return promise;
+    },
+    [nostrFetchRelays],
+  );
+
   const updateContactFromNostr = React.useCallback(
     (
       contact: TContact,
@@ -94,11 +141,10 @@ export const useContactsNostrPrefetchEffects = <
     // user is editing/creating a contact to avoid overwriting form state.
     if (routeKind === "contactEdit" || routeKind === "contactNew") return;
 
-    const controller = new AbortController();
     let cancelled = false;
 
     const run = async () => {
-      for (const contact of contacts) {
+      for (const contact of contactsRef.current) {
         const rawNpub = String(contact.npub ?? "").trim();
         const npub = normalizeNpubIdentifier(rawNpub);
         if (!npub) continue;
@@ -158,25 +204,28 @@ export const useContactsNostrPrefetchEffects = <
           }
 
           if (Object.keys(patch).length > 0) {
+            metadataCompletedRef.current.add(npub);
             updateContactFromNostr(contact, { id: contact.id, ...patch });
           }
+          metadataCompletedRef.current.add(npub);
           continue;
         }
 
+        if (metadataCompletedRef.current.has(npub)) continue;
         if (!canFetchFromNostr) continue;
 
         if (nostrMetadataInFlight.current.has(npub)) continue;
         nostrMetadataInFlight.current.add(npub);
 
         try {
-          const metadata = await fetchNostrProfileMetadata(npub, {
-            signal: controller.signal,
-            relays: nostrFetchRelays,
-          });
+          const metadata = await loadProfileMetadata(npub);
 
           saveCachedProfileMetadata(npub, metadata);
           if (cancelled) return;
-          if (!metadata) continue;
+          if (!metadata) {
+            metadataCompletedRef.current.add(npub);
+            continue;
+          }
 
           const bestName = getBestNostrName(metadata);
           const ln = omitSyntheticContactLightningAddress(
@@ -204,8 +253,10 @@ export const useContactsNostrPrefetchEffects = <
           }
 
           if (Object.keys(patch).length > 0) {
+            metadataCompletedRef.current.add(npub);
             updateContactFromNostr(contact, { id: contact.id, ...patch });
           }
+          metadataCompletedRef.current.add(npub);
         } catch {
           saveCachedProfileMetadata(npub, null);
           if (cancelled) return;
@@ -219,15 +270,15 @@ export const useContactsNostrPrefetchEffects = <
 
     return () => {
       cancelled = true;
-      controller.abort();
     };
   }, [
     canFetchFromNostr,
-    contacts,
+    metadataContactsKey,
     routeKind,
     updateContactFromNostr,
     nostrFetchRelays,
     nostrMetadataInFlight,
+    loadProfileMetadata,
   ]);
 
   React.useEffect(() => {
@@ -236,7 +287,7 @@ export const useContactsNostrPrefetchEffects = <
 
     const uniqueNpubs: string[] = [];
     const seen = new Set<string>();
-    for (const contact of contacts) {
+    for (const contact of contactsRef.current) {
       const npub = normalizeNpubIdentifier(contact.npub);
       if (!npub) continue;
       if (seen.has(npub)) continue;
@@ -281,10 +332,7 @@ export const useContactsNostrPrefetchEffects = <
 
         try {
           if (cached && shouldRefreshCachedPicture) {
-            const metadata = await fetchNostrProfileMetadata(npub, {
-              signal: controller.signal,
-              relays: nostrFetchRelays,
-            });
+            const metadata = await loadProfileMetadata(npub);
             if (cancelled) return;
             if (!metadata) continue;
 
@@ -314,10 +362,9 @@ export const useContactsNostrPrefetchEffects = <
               }));
             }
           } else {
-            const url = await fetchNostrProfilePicture(npub, {
-              signal: controller.signal,
-              relays: nostrFetchRelays,
-            });
+            const metadata = await loadProfileMetadata(npub);
+            saveCachedProfileMetadata(npub, metadata);
+            const url = metadata ? getNostrProfilePictureUrl(metadata) : null;
             saveCachedProfilePicture(npub, url);
             if (cancelled) return;
 
@@ -365,8 +412,9 @@ export const useContactsNostrPrefetchEffects = <
     };
   }, [
     canFetchFromNostr,
-    contacts,
+    uniqueNpubsKey,
     nostrInFlight,
+    loadProfileMetadata,
     rememberBlobAvatarUrl,
     nostrFetchRelays,
     setNostrPictureByNpub,
@@ -378,7 +426,7 @@ export const useContactsNostrPrefetchEffects = <
 
     const uniqueNpubs: string[] = [];
     const seen = new Set<string>();
-    for (const contact of contacts) {
+    for (const contact of contactsRef.current) {
       const npub = normalizeNpubIdentifier(contact.npub);
       if (!npub) continue;
       if (seen.has(npub)) continue;
@@ -388,7 +436,11 @@ export const useContactsNostrPrefetchEffects = <
 
     const run = async () => {
       for (const npub of uniqueNpubs) {
-        if (nostrStatusByNpub[npub] !== undefined) continue;
+        if (statusCompletedRef.current.has(npub)) continue;
+        if (statusByNpubRef.current[npub] !== undefined) {
+          statusCompletedRef.current.add(npub);
+          continue;
+        }
 
         const cached = loadCachedNostrGeneralStatus(npub);
         if (cached) {
@@ -397,6 +449,7 @@ export const useContactsNostrPrefetchEffects = <
               ? prev
               : { ...prev, [npub]: cached.status },
           );
+          statusCompletedRef.current.add(npub);
           continue;
         }
 
@@ -413,6 +466,7 @@ export const useContactsNostrPrefetchEffects = <
           saveCachedNostrGeneralStatus(npub, status);
           if (cancelled) return;
           setNostrStatusByNpub((prev) => ({ ...prev, [npub]: status }));
+          statusCompletedRef.current.add(npub);
         } catch {
           if (cancelled) return;
         } finally {
@@ -429,9 +483,8 @@ export const useContactsNostrPrefetchEffects = <
     };
   }, [
     canFetchFromNostr,
-    contacts,
+    uniqueNpubsKey,
     nostrFetchRelays,
-    nostrStatusByNpub,
     nostrStatusInFlight,
     setNostrStatusByNpub,
   ]);

@@ -75,6 +75,14 @@ function haveSameRelayUrls(left: string[], right: string[]): boolean {
   return left.every((url, index) => url === right[index]);
 }
 
+function relayProfileSyncKey(npub: string, urls: readonly string[]): string {
+  return `${npub}|${Array.from(
+    new Set(urls.map((relay) => relay.trim()).filter(Boolean)),
+  )
+    .sort()
+    .join(",")}`;
+}
+
 export const useRelayDomain = ({
   currentNpub,
   currentNsec,
@@ -516,8 +524,8 @@ export const useRelayDomain = ({
     if (!canRunNetworkWork) return;
     if (!currentNpub) return;
 
-    if (relayProfileSyncForNpubRef.current === currentNpub) return;
-    relayProfileSyncForNpubRef.current = currentNpub;
+    const relaySyncKey = relayProfileSyncKey(currentNpub, relayUrls);
+    if (relayProfileSyncForNpubRef.current === relaySyncKey) return;
 
     let cancelled = false;
 
@@ -580,6 +588,12 @@ export const useRelayDomain = ({
         if (cancelled) return;
 
         if (urls.length > 0) {
+          // Record before setRelayUrls: the state change re-runs this effect,
+          // and the recorded key makes that follow-up run a no-op.
+          relayProfileSyncForNpubRef.current = relayProfileSyncKey(
+            currentNpub,
+            urls,
+          );
           setRelayUrls(urls);
 
           if (
@@ -591,10 +605,16 @@ export const useRelayDomain = ({
           return;
         }
 
+        relayProfileSyncForNpubRef.current = relayProfileSyncKey(
+          currentNpub,
+          NOSTR_RELAYS,
+        );
         setRelayUrls([...NOSTR_RELAYS]);
-        if (!currentNsec) return;
-        await publishNostrRelayLists(NOSTR_RELAYS);
+        if (currentNsec) {
+          await publishNostrRelayLists(NOSTR_RELAYS);
+        }
       } catch (e) {
+        relayProfileSyncForNpubRef.current = null;
         console.log("[linky][nostr] relay sync failed", {
           error: String(e ?? "unknown"),
         });
@@ -627,6 +647,12 @@ export const useRelayDomain = ({
     }
 
     const nextUrls = [...relayUrls, url];
+    if (currentNpub) {
+      relayProfileSyncForNpubRef.current = relayProfileSyncKey(
+        currentNpub,
+        nextUrls,
+      );
+    }
     setRelayUrls(nextUrls);
     void publishNostrRelayLists(nextUrls).catch((e) => {
       console.log("[linky][nostr] publish relay list failed", {
@@ -636,7 +662,14 @@ export const useRelayDomain = ({
 
     setNewRelayUrl("");
     navigateTo({ route: "nostrRelays" });
-  }, [newRelayUrl, publishNostrRelayLists, relayUrls, setStatus, t]);
+  }, [
+    currentNpub,
+    newRelayUrl,
+    publishNostrRelayLists,
+    relayUrls,
+    setStatus,
+    t,
+  ]);
 
   const requestDeleteSelectedRelay = React.useCallback(() => {
     if (route.kind !== "nostrRelay") return;
@@ -648,6 +681,12 @@ export const useRelayDomain = ({
 
     if (pendingRelayDeleteUrl === selectedRelayUrl) {
       const nextUrls = relayUrls.filter((u) => u !== selectedRelayUrl);
+      if (currentNpub) {
+        relayProfileSyncForNpubRef.current = relayProfileSyncKey(
+          currentNpub,
+          nextUrls,
+        );
+      }
       setRelayUrls(nextUrls);
       setPendingRelayDeleteUrl(null);
       void publishNostrRelayLists(nextUrls).catch((e) => {
@@ -662,6 +701,7 @@ export const useRelayDomain = ({
     setPendingRelayDeleteUrl(selectedRelayUrl);
     setStatus(t("deleteArmedHint"));
   }, [
+    currentNpub,
     pendingRelayDeleteUrl,
     publishNostrRelayLists,
     relayUrls,

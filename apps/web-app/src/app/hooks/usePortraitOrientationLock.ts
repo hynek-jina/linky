@@ -5,24 +5,32 @@ export const usePortraitOrientationLock = (enabled: boolean): void => {
     if (!enabled) return;
     if (typeof window === "undefined") return;
 
-    let lockRequested = false;
+    let lockInFlight = false;
+    let lockSucceeded = false;
 
     const requestLock = () => {
-      if (lockRequested) return;
-      lockRequested = true;
+      if (lockInFlight || lockSucceeded) return;
       try {
         const orientation = window.screen.orientation;
         if (!orientation) return;
         const lock = Reflect.get(orientation, "lock");
         if (typeof lock !== "function") return;
+        lockInFlight = true;
         void Promise.resolve(
           Reflect.apply(lock, orientation, ["portrait-primary"]),
-        ).catch(() => {
-          void Promise.resolve(
-            Reflect.apply(lock, orientation, ["portrait"]),
-          ).catch(() => {});
-        });
+        )
+          .catch(() =>
+            Promise.resolve(Reflect.apply(lock, orientation, ["portrait"])),
+          )
+          .then(() => {
+            lockSucceeded = true;
+          })
+          .catch(() => {})
+          .finally(() => {
+            lockInFlight = false;
+          });
       } catch {
+        lockInFlight = false;
         // Normal browser tabs often reject orientation locks. Installed PWAs and
         // native shells are the places where this can actually stick.
       }
