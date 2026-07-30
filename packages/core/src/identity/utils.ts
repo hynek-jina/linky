@@ -1,11 +1,10 @@
-import { hmac } from "@noble/hashes/hmac.js";
-import { sha512 } from "@noble/hashes/sha2.js";
 import { HDKey } from "@scure/bip32";
 import { entropyToMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { Effect, Schema, Match } from "effect";
 import { nip19 } from "nostr-tools";
 import { Slip39 } from "slip39-ts";
+import { deriveBip85Entropy, deriveOwnerKey } from "./bip85";
 import {
   CASHU_SEED_PATH,
   cashuOwnerPath,
@@ -30,13 +29,17 @@ import {
   Slip39Share,
 } from "./domain";
 
-const BIP85_HMAC_KEY = new TextEncoder().encode("bip-entropy-from-k");
 const EMPTY_PASSPHRASE = Slip39Passphrase.make("");
 const ZERO_OWNER_LANE_INDEX = OwnerLaneIndex.make(0);
 
 export interface CreateSlip39ShareOptions {
   readonly passphrase?: Slip39Passphrase;
   readonly title?: string;
+}
+
+export interface OwnerMnemonicRequest {
+  readonly index?: OwnerLaneIndex;
+  readonly role: OwnerRole;
 }
 
 export class IdentityUtilsError extends Schema.TaggedError<IdentityUtilsError>()(
@@ -79,16 +82,6 @@ const toSecretBytes = (value: unknown): Uint8Array | null => {
   return Uint8Array.from(out);
 };
 
-const bip85Entropy = (
-  root: HDKey,
-  path: string,
-  bytes: 16 | 32,
-): Uint8Array => {
-  const node = root.derive(path);
-  if (!node.privateKey) throw new Error(`BIP-85 derivation failed at ${path}`);
-  return hmac(sha512, BIP85_HMAC_KEY, node.privateKey).slice(0, bytes);
-};
-
 const deriveOwnerPath = (
   role: OwnerRole,
   index: OwnerLaneIndex = ZERO_OWNER_LANE_INDEX,
@@ -107,11 +100,14 @@ const deriveOwnerKeyFromPath = (
   root: HDKey,
   path: string,
 ): Effect.Effect<OwnerKey, IdentityUtilsError> =>
-  decodeUnknown(
-    OwnerKey,
-    bip85Entropy(root, path, 16),
-    `Failed to derive owner key at path ${path}`,
-  );
+  Effect.try({
+    try: () => deriveOwnerKey(root, path),
+    catch: (cause) =>
+      new IdentityUtilsError({
+        cause,
+        message: `Failed to derive owner key at path ${path}`,
+      }),
+  });
 
 const deriveOwnerMnemonicFromPath = (
   root: HDKey,
@@ -278,13 +274,30 @@ export const deriveOwnerMnemonicFromMasterSecret = (
     ),
   );
 
+export const deriveOwnerMnemonicsFromMasterSecret = (
+  masterSecret: MasterSecret,
+  requests: ReadonlyArray<OwnerMnemonicRequest>,
+): Effect.Effect<ReadonlyArray<Bip39Mnemonic12>, IdentityUtilsError> =>
+  Effect.sync(() => HDKey.fromMasterSeed(masterSecret)).pipe(
+    Effect.flatMap((root) =>
+      Effect.all(
+        requests.map((request) =>
+          deriveOwnerMnemonicFromPath(
+            root,
+            deriveOwnerPath(request.role, request.index),
+          ),
+        ),
+      ),
+    ),
+  );
+
 export const deriveCashuMnemonicFromMasterSecret = (
   masterSecret: MasterSecret,
 ): Effect.Effect<Bip39Mnemonic24, IdentityUtilsError> =>
   Effect.try({
     try: () => {
       const root = HDKey.fromMasterSeed(masterSecret);
-      const entropy = bip85Entropy(root, CASHU_SEED_PATH, 32);
+      const entropy = deriveBip85Entropy(root, CASHU_SEED_PATH, 32);
       return Schema.decodeUnknownSync(Bip39Mnemonic24)(
         entropyToMnemonic(entropy, wordlist),
       );

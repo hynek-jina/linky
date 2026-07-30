@@ -31,11 +31,20 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
 const isNativeSecretStorageBridge = (
   value: unknown,
 ): value is NativeSecretStorageBridge => {
-  return isRecord(value);
+  return (
+    isRecord(value) &&
+    typeof Reflect.get(value, "get") === "function" &&
+    typeof Reflect.get(value, "remove") === "function" &&
+    typeof Reflect.get(value, "set") === "function"
+  );
 };
 
 const isLinkyNativeBridge = (value: unknown): value is LinkyNativeBridge => {
-  return isRecord(value);
+  if (!isRecord(value)) return false;
+  const secretStorage = Reflect.get(value, "secretStorage");
+  return (
+    secretStorage === undefined || isNativeSecretStorageBridge(secretStorage)
+  );
 };
 
 const normalizeStoredValue = (value: unknown): string | null => {

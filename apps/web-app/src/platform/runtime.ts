@@ -1,5 +1,4 @@
 import { Capacitor } from "@capacitor/core";
-import type { CapacitorLike } from "../types/browser";
 
 export type PlatformTarget = "android" | "ios" | "web";
 export type TelemetryAppRuntime = "native" | "pwa" | "web";
@@ -24,23 +23,6 @@ export const getTelemetryAppHost = (): string | null => {
   return host ? host.slice(0, 255) : null;
 };
 
-const isCapacitorLike = (value: unknown): value is CapacitorLike => {
-  return typeof value === "object" && value !== null;
-};
-
-const getCapacitorGlobal = () => {
-  const capacitor = Reflect.get(globalThis, "Capacitor");
-  return isCapacitorLike(capacitor) ? capacitor : null;
-};
-
-const getCapacitorInstance = (): CapacitorLike | null => {
-  if (isCapacitorLike(Capacitor)) {
-    return Capacitor;
-  }
-
-  return getCapacitorGlobal();
-};
-
 const getNavigator = (): Navigator | null => {
   return typeof navigator === "undefined" ? null : navigator;
 };
@@ -63,26 +45,9 @@ const getNavigatorMaxTouchPoints = (): number => {
     : 0;
 };
 
-export const getCapacitorServerUrl = (): string | null => {
-  const capacitor = getCapacitorInstance();
-  if (!capacitor) return null;
-
-  try {
-    const serverUrl = capacitor.getServerUrl?.();
-    return typeof serverUrl === "string" && serverUrl.trim()
-      ? serverUrl.trim()
-      : null;
-  } catch {
-    return null;
-  }
-};
-
 export const getPlatformTarget = (): PlatformTarget => {
-  const capacitor = getCapacitorInstance();
-  if (!capacitor) return "web";
-
   try {
-    const platform = capacitor.getPlatform?.();
+    const platform = Capacitor.getPlatform();
     if (platform === "android" || platform === "ios") {
       return platform;
     }
@@ -94,11 +59,8 @@ export const getPlatformTarget = (): PlatformTarget => {
 };
 
 export const isNativePlatform = (): boolean => {
-  const capacitor = getCapacitorInstance();
-  if (!capacitor) return false;
-
   try {
-    if (capacitor.isNativePlatform?.()) {
+    if (Capacitor.isNativePlatform()) {
       return true;
     }
   } catch {

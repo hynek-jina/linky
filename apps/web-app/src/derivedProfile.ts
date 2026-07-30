@@ -71,6 +71,8 @@ type ClothingPreset = {
   clothingGraphic: string;
 };
 
+type NonEmptyReadonlyArray<T> = readonly [T, ...T[]];
+
 // Simple deterministic hash (FNV-1a 32-bit) that works synchronously in the browser.
 const hash32 = (input: string): number => {
   let hash = 0x811c9dc5;
@@ -93,7 +95,7 @@ const normalizeSeed = (seedValue: string): string => {
   return String(seedValue ?? "").trim() || "linky";
 };
 
-const HAIR_TOP_VALUES: readonly string[] = [
+const HAIR_TOP_VALUES = [
   "bob",
   "bun",
   "curly",
@@ -121,9 +123,9 @@ const HAIR_TOP_VALUES: readonly string[] = [
   "theCaesar",
   "theCaesarAndSidePart",
   "bigHair",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const HAT_TOP_VALUES: readonly string[] = [
+const HAT_TOP_VALUES = [
   "hat",
   "hijab",
   "turban",
@@ -131,11 +133,14 @@ const HAT_TOP_VALUES: readonly string[] = [
   "winterHat02",
   "winterHat03",
   "winterHat04",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const TOP_VALUES: readonly string[] = [...HAIR_TOP_VALUES, ...HAT_TOP_VALUES];
+const TOP_VALUES = [
+  ...HAIR_TOP_VALUES,
+  ...HAT_TOP_VALUES,
+] satisfies NonEmptyReadonlyArray<string>;
 
-const HAIR_COLOR_VALUES: readonly string[] = [
+const HAIR_COLOR_VALUES = [
   "a55728",
   "2c1b18",
   "b58143",
@@ -146,9 +151,9 @@ const HAIR_COLOR_VALUES: readonly string[] = [
   "ecdcbf",
   "c93305",
   "e8e1e1",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const HAT_COLOR_VALUES: readonly string[] = [
+const HAT_COLOR_VALUES = [
   "262e33",
   "65c9ff",
   "5199e4",
@@ -164,9 +169,9 @@ const HAT_COLOR_VALUES: readonly string[] = [
   "ff488e",
   "ff5c5c",
   "ffffff",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const ACCESSORIES_VALUES: readonly string[] = [
+const ACCESSORIES_VALUES = [
   "kurt",
   "prescription01",
   "prescription02",
@@ -174,9 +179,9 @@ const ACCESSORIES_VALUES: readonly string[] = [
   "sunglasses",
   "wayfarers",
   "eyepatch",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const ACCESSORIES_COLOR_VALUES: readonly string[] = [
+const ACCESSORIES_COLOR_VALUES = [
   "262e33",
   "65c9ff",
   "5199e4",
@@ -192,11 +197,11 @@ const ACCESSORIES_COLOR_VALUES: readonly string[] = [
   "ff488e",
   "ff5c5c",
   "ffffff",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
 const ACCESSORIES_SLOT_COUNT = ACCESSORIES_VALUES.length + 1;
 
-const EYEBROWS_VALUES: readonly string[] = [
+const EYEBROWS_VALUES = [
   "angryNatural",
   "defaultNatural",
   "flatNatural",
@@ -210,9 +215,9 @@ const EYEBROWS_VALUES: readonly string[] = [
   "raisedExcited",
   "sadConcerned",
   "upDown",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const EYES_VALUES: readonly string[] = [
+const EYES_VALUES = [
   "closed",
   "cry",
   "default",
@@ -225,9 +230,9 @@ const EYES_VALUES: readonly string[] = [
   "winkWacky",
   "wink",
   "xDizzy",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const MOUTH_VALUES: readonly string[] = [
+const MOUTH_VALUES = [
   "concerned",
   "default",
   "disbelief",
@@ -240,19 +245,21 @@ const MOUTH_VALUES: readonly string[] = [
   "tongue",
   "twinkle",
   "vomit",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const FACIAL_HAIR_VALUES: readonly string[] = [
+const FACIAL_HAIR_VALUES = [
   "beardLight",
   "beardMajestic",
   "beardMedium",
   "moustacheFancy",
   "moustacheMagnum",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const FACIAL_HAIR_PROBABILITY_VALUES: readonly number[] = [0, 100];
+const FACIAL_HAIR_PROBABILITY_VALUES = [
+  0, 100,
+] satisfies NonEmptyReadonlyArray<number>;
 
-const SKIN_COLOR_VALUES: readonly string[] = [
+const SKIN_COLOR_VALUES = [
   "614335",
   "d08b5b",
   "ae5d29",
@@ -260,9 +267,9 @@ const SKIN_COLOR_VALUES: readonly string[] = [
   "ffdbb4",
   "fd9841",
   "f8d25c",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const CLOTHES_COLOR_VALUES: readonly string[] = [
+const CLOTHES_COLOR_VALUES = [
   "262e33",
   "65c9ff",
   "5199e4",
@@ -277,9 +284,9 @@ const CLOTHES_COLOR_VALUES: readonly string[] = [
   "ff488e",
   "ff5c5c",
   "ffffff",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const CLOTHING_VALUES: readonly string[] = [
+const CLOTHING_VALUES = [
   "blazerAndShirt",
   "blazerAndSweater",
   "collarAndSweater",
@@ -289,9 +296,9 @@ const CLOTHING_VALUES: readonly string[] = [
   "shirtCrewNeck",
   "shirtScoopNeck",
   "shirtVNeck",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
-const CLOTHING_GRAPHIC_VALUES: readonly string[] = [
+const CLOTHING_GRAPHIC_VALUES = [
   "bat",
   "bear",
   "cumbia",
@@ -302,7 +309,7 @@ const CLOTHING_GRAPHIC_VALUES: readonly string[] = [
   "resist",
   "skull",
   "skullOutline",
-];
+] satisfies NonEmptyReadonlyArray<string>;
 
 export const AVATAR_EDITOR_CONTROLS: readonly AvatarEditorControl[] = [
   { id: "top", label: "Top" },
@@ -321,11 +328,9 @@ const normalizeIndex = (value: number, max: number): number => {
 };
 
 const pickIndexedValue = <T>(
-  values: readonly T[],
+  values: NonEmptyReadonlyArray<T>,
   index: number,
-): T | undefined => {
-  return values[normalizeIndex(index, values.length)];
-};
+): T => values[normalizeIndex(index, values.length)] ?? values[0];
 
 const nextPseudoRandomIndex = (
   seed: string,
@@ -397,13 +402,14 @@ const buildAvatarUrl = (selection: DerivedAvatarSelection): string => {
   const accessoriesAreVisible =
     (accessoriesSlotIndex ?? 0) < ACCESSORIES_VALUES.length;
   const accessories: AccessoriesPreset = {
-    accessories:
-      pickIndexedValue(ACCESSORIES_VALUES, accessoriesSlotIndex ?? 0) ??
-      ACCESSORIES_VALUES[0] ??
-      "round",
-    accessoriesColor:
-      pickIndexedValue(ACCESSORIES_COLOR_VALUES, accessoriesColorIndex ?? 0) ??
-      "262e33",
+    accessories: pickIndexedValue(
+      ACCESSORIES_VALUES,
+      accessoriesSlotIndex ?? 0,
+    ),
+    accessoriesColor: pickIndexedValue(
+      ACCESSORIES_COLOR_VALUES,
+      accessoriesColorIndex ?? 0,
+    ),
     accessoriesProbability: accessoriesAreVisible ? 100 : 0,
   };
 
@@ -412,20 +418,12 @@ const buildAvatarUrl = (selection: DerivedAvatarSelection): string => {
     FACE_DIMENSIONS,
   );
   const face: FacePreset = {
-    eyebrows:
-      EYEBROWS_VALUES[
-        normalizeIndex(eyebrowsIndex ?? 0, EYEBROWS_VALUES.length)
-      ] ??
-      EYEBROWS_VALUES[0] ??
-      "default",
-    eyes:
-      EYES_VALUES[normalizeIndex(eyesIndex ?? 0, EYES_VALUES.length)] ??
-      EYES_VALUES[0] ??
-      "default",
+    eyebrows: pickIndexedValue(EYEBROWS_VALUES, eyebrowsIndex ?? 0),
+    eyes: pickIndexedValue(EYES_VALUES, eyesIndex ?? 0),
   };
 
   const mouth: MouthPreset = {
-    mouth: pickIndexedValue(MOUTH_VALUES, selection.mouthIndex) ?? "smile",
+    mouth: pickIndexedValue(MOUTH_VALUES, selection.mouthIndex),
   };
 
   const [facialHairProbabilityIndex, facialHairIndex] = splitCombinationIndex(
@@ -433,72 +431,52 @@ const buildAvatarUrl = (selection: DerivedAvatarSelection): string => {
     FACIAL_HAIR_DIMENSIONS,
   );
   const facialHair: FacialHairPreset = {
-    facialHair:
-      pickIndexedValue(FACIAL_HAIR_VALUES, facialHairIndex ?? 0) ??
-      "beardLight",
-    facialHairProbability:
-      pickIndexedValue(
-        FACIAL_HAIR_PROBABILITY_VALUES,
-        facialHairProbabilityIndex ?? 0,
-      ) ?? 0,
+    facialHair: pickIndexedValue(FACIAL_HAIR_VALUES, facialHairIndex ?? 0),
+    facialHairProbability: pickIndexedValue(
+      FACIAL_HAIR_PROBABILITY_VALUES,
+      facialHairProbabilityIndex ?? 0,
+    ),
   };
 
   const skin: SkinPreset = {
-    skinColor:
-      pickIndexedValue(SKIN_COLOR_VALUES, selection.skinIndex) ?? "614335",
+    skinColor: pickIndexedValue(SKIN_COLOR_VALUES, selection.skinIndex),
   };
 
   const [clothingIndex, clothesColorIndex, clothingGraphicIndex] =
     splitCombinationIndex(selection.clothingIndex, CLOTHING_DIMENSIONS);
   const clothing: ClothingPreset = {
-    clothing: pickIndexedValue(CLOTHING_VALUES, clothingIndex ?? 0) ?? "hoodie",
-    clothesColor:
-      pickIndexedValue(CLOTHES_COLOR_VALUES, clothesColorIndex ?? 0) ??
-      "262e33",
-    clothingGraphic:
-      pickIndexedValue(CLOTHING_GRAPHIC_VALUES, clothingGraphicIndex ?? 0) ??
-      "bat",
+    clothing: pickIndexedValue(CLOTHING_VALUES, clothingIndex ?? 0),
+    clothesColor: pickIndexedValue(
+      CLOTHES_COLOR_VALUES,
+      clothesColorIndex ?? 0,
+    ),
+    clothingGraphic: pickIndexedValue(
+      CLOTHING_GRAPHIC_VALUES,
+      clothingGraphicIndex ?? 0,
+    ),
   };
 
   const params = new URLSearchParams();
   params.set("seed", normalizeSeed(selection.seed));
-  params.set("top", top ?? TOP_VALUES[0] ?? "shortWaved");
-  params.set("hairColor", hairColor ?? HAIR_COLOR_VALUES[0] ?? "2c1b18");
-  params.set("hatColor", hatColor ?? HAT_COLOR_VALUES[0] ?? "3c4f5c");
-  params.set(
-    "accessories",
-    accessories?.accessories ?? ACCESSORIES_VALUES[0] ?? "round",
-  );
-  params.set(
-    "accessoriesColor",
-    accessories?.accessoriesColor ?? ACCESSORIES_COLOR_VALUES[0] ?? "3c4f5c",
-  );
+  params.set("top", top);
+  params.set("hairColor", hairColor);
+  params.set("hatColor", hatColor);
+  params.set("accessories", accessories.accessories);
+  params.set("accessoriesColor", accessories.accessoriesColor);
   params.set(
     "accessoriesProbability",
-    String(accessories?.accessoriesProbability ?? 0),
+    String(accessories.accessoriesProbability),
   );
-  params.set("eyebrows", face?.eyebrows ?? EYEBROWS_VALUES[0] ?? "default");
-  params.set("eyes", face?.eyes ?? EYES_VALUES[0] ?? "default");
-  params.set("mouth", mouth?.mouth ?? MOUTH_VALUES[0] ?? "smile");
-  params.set(
-    "facialHair",
-    facialHair?.facialHair ?? FACIAL_HAIR_VALUES[0] ?? "beardLight",
-  );
-  params.set("facialHairColor", hairColor ?? HAIR_COLOR_VALUES[0] ?? "2c1b18");
-  params.set(
-    "facialHairProbability",
-    String(facialHair?.facialHairProbability ?? 0),
-  );
-  params.set("skinColor", skin?.skinColor ?? SKIN_COLOR_VALUES[0] ?? "ffdbb4");
-  params.set("clothing", clothing?.clothing ?? CLOTHING_VALUES[0] ?? "hoodie");
-  params.set(
-    "clothesColor",
-    clothing?.clothesColor ?? CLOTHES_COLOR_VALUES[0] ?? "3c4f5c",
-  );
-  params.set(
-    "clothingGraphic",
-    clothing?.clothingGraphic ?? CLOTHING_GRAPHIC_VALUES[0] ?? "skullOutline",
-  );
+  params.set("eyebrows", face.eyebrows);
+  params.set("eyes", face.eyes);
+  params.set("mouth", mouth.mouth);
+  params.set("facialHair", facialHair.facialHair);
+  params.set("facialHairColor", hairColor);
+  params.set("facialHairProbability", String(facialHair.facialHairProbability));
+  params.set("skinColor", skin.skinColor);
+  params.set("clothing", clothing.clothing);
+  params.set("clothesColor", clothing.clothesColor);
+  params.set("clothingGraphic", clothing.clothingGraphic);
 
   return `https://api.dicebear.com/9.x/avataaars/svg?${params.toString()}`;
 };
