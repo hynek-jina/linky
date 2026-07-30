@@ -893,6 +893,12 @@ const useChatViewport = (
     body.style.overflow = "hidden";
 
     const updateViewportHeight = () => {
+      // iOS can pan the document after focusin has already fired, especially
+      // when reopening the keyboard. The chat owns its scrolling, so keep the
+      // document itself pinned before applying visual viewport measurements.
+      if (getWindowScrollTop() > 1) {
+        window.scrollTo(0, 0);
+      }
       pendingViewportAnchor ??= captureChatViewportAnchor(
         chatMessagesRef.current,
       );
@@ -957,9 +963,6 @@ const useChatViewport = (
     const handleComposeFocusChange = (event: FocusEvent) => {
       const input = composeInputRef.current;
       if (!input || event.target !== input) return;
-      if (event.type === "focusin" && getWindowScrollTop() > 1) {
-        window.scrollTo(0, 0);
-      }
       scheduleViewportRefresh();
     };
 
