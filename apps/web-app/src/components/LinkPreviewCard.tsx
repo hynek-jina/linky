@@ -15,7 +15,15 @@ interface LinkPreviewCardProps {
 }
 
 const HOSTED_APP_ORIGIN = "https://app.linky.fit";
-const previewCache = new Map<string, LinkPreview | null>();
+const MAX_PREVIEW_CACHE_SIZE = 200;
+const NEGATIVE_PREVIEW_CACHE_TTL_MS = 60_000;
+
+interface PreviewCacheEntry {
+  cachedAtMs: number;
+  preview: LinkPreview | null;
+}
+
+const previewCache = new Map<string, PreviewCacheEntry>();
 const previewRequests = new Map<string, Promise<LinkPreview | null>>();
 
 const isUnknownRecord = (value: unknown): value is Record<string, unknown> =>
@@ -45,10 +53,34 @@ const getPreviewEndpoint = (url: string): string => {
   return isNativePlatform() ? `${HOSTED_APP_ORIGIN}${path}` : path;
 };
 
-const loadLinkPreview = (url: string): Promise<LinkPreview | null> => {
-  if (previewCache.has(url)) {
-    return Promise.resolve(previewCache.get(url) ?? null);
+const getCachedPreview = (url: string): LinkPreview | null | undefined => {
+  const entry = previewCache.get(url);
+  if (!entry) return undefined;
+  if (
+    entry.preview === null &&
+    Date.now() - entry.cachedAtMs >= NEGATIVE_PREVIEW_CACHE_TTL_MS
+  ) {
+    previewCache.delete(url);
+    return undefined;
   }
+  previewCache.delete(url);
+  previewCache.set(url, entry);
+  return entry.preview;
+};
+
+const cachePreview = (url: string, preview: LinkPreview | null) => {
+  previewCache.delete(url);
+  previewCache.set(url, { cachedAtMs: Date.now(), preview });
+  while (previewCache.size > MAX_PREVIEW_CACHE_SIZE) {
+    const oldestUrl = previewCache.keys().next().value;
+    if (typeof oldestUrl !== "string") return;
+    previewCache.delete(oldestUrl);
+  }
+};
+
+const loadLinkPreview = (url: string): Promise<LinkPreview | null> => {
+  const cached = getCachedPreview(url);
+  if (cached !== undefined) return Promise.resolve(cached);
   const existing = previewRequests.get(url);
   if (existing) return existing;
 
@@ -61,7 +93,7 @@ const loadLinkPreview = (url: string): Promise<LinkPreview | null> => {
     })
     .catch(() => null)
     .then((preview) => {
-      previewCache.set(url, preview);
+      cachePreview(url, preview);
       previewRequests.delete(url);
       return preview;
     });
@@ -72,10 +104,11 @@ const loadLinkPreview = (url: string): Promise<LinkPreview | null> => {
 export function LinkPreviewCard({ url }: LinkPreviewCardProps) {
   const cardRef = React.useRef<HTMLAnchorElement | null>(null);
   const [shouldLoad, setShouldLoad] = React.useState(
-    previewCache.has(url) || typeof IntersectionObserver === "undefined",
+    getCachedPreview(url) !== undefined ||
+      typeof IntersectionObserver === "undefined",
   );
   const [preview, setPreview] = React.useState<LinkPreview | null>(
-    previewCache.get(url) ?? null,
+    getCachedPreview(url) ?? null,
   );
 
   React.useEffect(() => {

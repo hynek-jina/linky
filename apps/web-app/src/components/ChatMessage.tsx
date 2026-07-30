@@ -1,4 +1,4 @@
-import { Download, Info, Plus, X } from "lucide-react";
+import { Info, Plus, X } from "lucide-react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
@@ -12,11 +12,7 @@ import {
   normalizeMessageLinkMatch,
 } from "../app/lib/messageLinks";
 import type { CashuPaymentRequestMessageInfo } from "../app/lib/paymentRequestMessage";
-import {
-  decryptPrivateImageMessage,
-  parsePrivateImageMessage,
-  type PrivateImageMessagePayload,
-} from "../app/lib/privateImageMessage";
+import { parsePrivateImageMessage } from "../app/lib/privateImageMessage";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import { isStandaloneCashuTokenMessage } from "../app/lib/tokenText";
 import type {
@@ -28,10 +24,11 @@ import { deriveDefaultProfile } from "../derivedProfile";
 import { getNextMintIconUrl } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import { EditIndicator } from "./EditIndicator";
-import { PayIcon, ShareIcon } from "./icons";
+import { PayIcon } from "./icons";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
+import { PrivateImageBubble } from "./PrivateImageBubble";
 
 interface MintIcon {
   failed: boolean;
@@ -101,59 +98,18 @@ interface ChatMessageProps {
 const SWIPE_REPLY_THRESHOLD = 48;
 const SWIPE_REPLY_VERTICAL_TOLERANCE = 24;
 const LONG_PRESS_MS = 450;
+const chatTimeFormatters = new Map<string, Intl.DateTimeFormat>();
 
-const PRIVATE_IMAGE_FILENAME = "linky-obrazek.jpg";
+const getChatTimeFormatter = (locale: string): Intl.DateTimeFormat => {
+  const cached = chatTimeFormatters.get(locale);
+  if (cached) return cached;
 
-const isCancelledShareError = (error: unknown): boolean => {
-  if (typeof error !== "object" || error === null) return false;
-
-  const name =
-    "name" in error && typeof error.name === "string" ? error.name : "";
-  if (name === "AbortError") return true;
-
-  const message =
-    "message" in error && typeof error.message === "string"
-      ? error.message
-      : "";
-  return /cancel|abort|dismiss/i.test(message);
-};
-
-const downloadPrivateImageBlob = (blob: Blob) => {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = PRIVATE_IMAGE_FILENAME;
-  anchor.rel = "noopener";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-};
-
-const sharePrivateImageBlob = async (
-  blob: Blob,
-  title: string,
-): Promise<void> => {
-  if (typeof navigator.share !== "function") {
-    throw new Error("share-unavailable");
-  }
-
-  const file = new File([blob], PRIVATE_IMAGE_FILENAME, {
-    type: blob.type || "image/jpeg",
+  const formatter = new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
   });
-  const shareData: ShareData = {
-    files: [file],
-    title,
-  };
-
-  if (
-    typeof navigator.canShare === "function" &&
-    !navigator.canShare(shareData)
-  ) {
-    throw new Error("share-unavailable");
-  }
-
-  await navigator.share(shareData);
+  chatTimeFormatters.set(locale, formatter);
+  return formatter;
 };
 
 const formatRemainingTime = (
@@ -197,214 +153,7 @@ const getBankPaymentOfferDescription = (
   return key ? t(key).replace("{amount}", amountText) : "";
 };
 
-interface PrivateImageBubbleProps {
-  payload: PrivateImageMessagePayload;
-  t: (key: string) => string;
-}
-
-function PrivateImageBubble({ payload, t }: PrivateImageBubbleProps) {
-  const [imageUrl, setImageUrl] = React.useState<string | null>(null);
-  const [imageBlob, setImageBlob] = React.useState<Blob | null>(null);
-  const [failed, setFailed] = React.useState(false);
-  const [viewerOpen, setViewerOpen] = React.useState(false);
-  const [viewerErrorText, setViewerErrorText] = React.useState<string | null>(
-    null,
-  );
-
-  React.useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | null = null;
-
-    setImageUrl(null);
-    setImageBlob(null);
-    setFailed(false);
-    setViewerOpen(false);
-    setViewerErrorText(null);
-
-    void decryptPrivateImageMessage(payload)
-      .then((blob) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setImageBlob(blob);
-        setImageUrl(objectUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [payload]);
-
-  React.useEffect(() => {
-    if (!viewerOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setViewerOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [viewerOpen]);
-
-  const openViewer = () => {
-    setViewerErrorText(null);
-    setViewerOpen(true);
-  };
-
-  const closeViewer = () => {
-    setViewerOpen(false);
-    setViewerErrorText(null);
-  };
-
-  const saveImage = () => {
-    if (!imageBlob) return;
-    downloadPrivateImageBlob(imageBlob);
-  };
-
-  const shareImage = async () => {
-    if (!imageBlob) return;
-
-    setViewerErrorText(null);
-    try {
-      await sharePrivateImageBlob(imageBlob, t("chatImageMessage"));
-    } catch (error) {
-      if (isCancelledShareError(error)) return;
-      setViewerErrorText(t("shareUnavailable"));
-    }
-  };
-
-  if (failed) {
-    return (
-      <div className="chat-private-image-placeholder is-error">
-        {t("chatImageLoadFailed")}
-      </div>
-    );
-  }
-
-  if (!imageUrl) {
-    return (
-      <div
-        className="chat-private-image-placeholder"
-        style={{ aspectRatio: `${payload.width} / ${payload.height}` }}
-      >
-        <span className="btn-spinner" aria-hidden="true" />
-        <span>{t("chatImageDecrypting")}</span>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        className="chat-private-image-button"
-        onClick={openViewer}
-        onPointerDown={(event) => event.stopPropagation()}
-        aria-label={t("chatImageOpen")}
-      >
-        <img
-          className="chat-private-image"
-          src={imageUrl}
-          alt={t("chatImageMessage")}
-          width={payload.width}
-          height={payload.height}
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-        />
-      </button>
-
-      {viewerOpen && imageBlob ? (
-        <div
-          className="chat-image-viewer"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("chatImageMessage")}
-          onClick={closeViewer}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <div
-            className="chat-image-viewer-toolbar"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="topbar-btn chat-image-viewer-back"
-              onClick={closeViewer}
-              aria-label={t("chatImageBackToChat")}
-              title={t("chatImageBackToChat")}
-            >
-              <span aria-hidden="true">&lt;</span>
-            </button>
-          </div>
-
-          <div className="chat-image-viewer-stage">
-            <img
-              className="chat-image-viewer-image"
-              src={imageUrl}
-              alt={t("chatImageMessage")}
-              width={payload.width}
-              height={payload.height}
-              decoding="async"
-              referrerPolicy="no-referrer"
-              onClick={(event) => event.stopPropagation()}
-            />
-          </div>
-
-          <div
-            className="chat-image-viewer-footer"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {viewerErrorText ? (
-              <div className="chat-image-viewer-error" role="status">
-                {viewerErrorText}
-              </div>
-            ) : null}
-            <div className="chat-image-viewer-actions">
-              <button
-                type="button"
-                className="chat-image-viewer-action"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  saveImage();
-                }}
-              >
-                <span className="btn-label-with-icon">
-                  <span className="btn-label-icon" aria-hidden="true">
-                    <Download size={20} />
-                  </span>
-                  <span>{t("chatImageSave")}</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                className="chat-image-viewer-action"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void shareImage();
-                }}
-              >
-                <span className="btn-label-with-icon">
-                  <span className="btn-label-icon" aria-hidden="true">
-                    <ShareIcon size={20} />
-                  </span>
-                  <span>{t("share")}</span>
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-export function ChatMessage({
+function ChatMessageComponent({
   actionLabels,
   bankPaymentOfferInfo,
   bankPaymentOfferPeerNotice,
@@ -481,10 +230,7 @@ export function ChatMessage({
   const showDaySeparator = prevDayKey !== dayKey;
   const showTime = !isIdentityChangeMessage && nextMinuteKey !== minuteKey;
 
-  const timeLabel = new Intl.DateTimeFormat(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
+  const timeLabel = getChatTimeFormatter(locale).format(d);
 
   const tokenInfo = privateImageInfo ? null : getCashuTokenMessageInfo(content);
   const isDeclineMessage = Boolean(declineInfo);
@@ -527,15 +273,23 @@ export function ChatMessage({
         : "";
 
   React.useEffect(() => {
-    if (!bankPaymentOfferInfo) return;
     if (!bankOfferPhaseTtlSec) return;
+    if (bankOfferPhaseStartedAtSec <= 0) return;
+
+    const expiresAtMs =
+      (bankOfferPhaseStartedAtSec + bankOfferPhaseTtlSec) * 1_000;
+    if (Date.now() >= expiresAtMs) return;
 
     const intervalId = window.setInterval(() => {
-      setNowMs(Date.now());
+      const nextNowMs = Date.now();
+      setNowMs(nextNowMs);
+      if (nextNowMs >= expiresAtMs) {
+        window.clearInterval(intervalId);
+      }
     }, 1_000);
 
     return () => window.clearInterval(intervalId);
-  }, [bankOfferPhaseTtlSec, bankPaymentOfferInfo]);
+  }, [bankOfferPhaseStartedAtSec, bankOfferPhaseTtlSec]);
 
   const renderCashuTokenPill = React.useCallback(
     (info: CashuTokenMessageInfo, key?: string) => {
@@ -1062,3 +816,5 @@ export function ChatMessage({
     </React.Fragment>
   );
 }
+
+export const ChatMessage = React.memo(ChatMessageComponent);

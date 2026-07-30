@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
   getLinkyBankPaymentOfferInfo,
   getLinkyBankPaymentOfferStatusRank,
   isLinkyBankPaymentOfferExpired,
@@ -46,6 +47,7 @@ const isNewerEntry = (candidate: OfferEntry, current: OfferEntry): boolean => {
 const findActiveOffer = (
   messages: readonly LocalNostrMessage[],
   myPubkeyHex: string | null,
+  nowSec: number,
 ): ActiveOffer | null => {
   const groups = new Map<string, Map<string, OfferEntry>>();
 
@@ -91,7 +93,7 @@ const findActiveOffer = (
       isLinkyBankPaymentOfferExpired(
         entry.info,
         Number(entry.message.createdAtSec ?? 0),
-        Math.floor(Date.now() / 1_000),
+        nowSec,
       )
     ) {
       continue;
@@ -119,10 +121,31 @@ export const BankPaymentOfferBanner: React.FC<BankPaymentOfferBannerProps> = ({
   nostrPictureByNpub,
   t,
 }) => {
-  const active = React.useMemo(
-    () => findActiveOffer(messages, myPubkeyHex),
-    [messages, myPubkeyHex],
+  const [nowSec, setNowSec] = React.useState(() =>
+    Math.floor(Date.now() / 1_000),
   );
+  const active = React.useMemo(
+    () => findActiveOffer(messages, myPubkeyHex, nowSec),
+    [messages, myPubkeyHex, nowSec],
+  );
+  const activeOfferId = active?.entry.info.offerId ?? null;
+  const activePhaseStartedAtSec = active
+    ? active.entry.info.statusUpdatedAtSec ||
+      Number(active.entry.message.createdAtSec ?? 0)
+    : 0;
+
+  React.useEffect(() => {
+    if (!activeOfferId || activePhaseStartedAtSec <= 0) return;
+
+    const expiresAtMs =
+      (activePhaseStartedAtSec + LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC) *
+      1_000;
+    const timeoutId = window.setTimeout(
+      () => setNowSec(Math.floor(Date.now() / 1_000)),
+      Math.max(0, expiresAtMs - Date.now() + 25),
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [activeOfferId, activePhaseStartedAtSec]);
 
   if (!active) return null;
 

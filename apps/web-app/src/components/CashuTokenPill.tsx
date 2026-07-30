@@ -1,3 +1,4 @@
+import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { isCashuTokenUnavailableState } from "../app/lib/cashuTokenState";
 import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
@@ -35,12 +36,15 @@ export function CashuTokenPill({
   const storedAmount = Number(token.amount ?? 0);
   const storedMint = String(token.mint ?? "").trim();
 
-  const parsed =
-    !storedMint || !(storedAmount > 0)
-      ? tokenText
-        ? parseCashuToken(tokenText)
-        : null
-      : null;
+  const parsed = React.useMemo(
+    () =>
+      !storedMint || !(storedAmount > 0)
+        ? tokenText
+          ? parseCashuToken(tokenText)
+          : null
+        : null,
+    [storedAmount, storedMint, tokenText],
+  );
 
   const amount =
     (Number.isFinite(storedAmount) && storedAmount > 0
