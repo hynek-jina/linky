@@ -59,10 +59,6 @@ export const isCashuTokenUnavailableState = (value: unknown): boolean =>
 export const isCashuTokenErrorState = (value: unknown): boolean =>
   normalizeCashuTokenState(value) === CASHU_TOKEN_STATE_ERROR;
 
-// Error messages on cashuToken rows that signal the proofs are definitively
-// dead at the mint — the user can safely purge these from local storage.
-// Mirrors the patterns checked by `useCashuTokenChecks` when deciding whether
-// a row is unrecoverable.
 const SPENT_OR_INVALID_ERROR_PATTERNS: readonly string[] = [
   "token already spent",
   "proofs already spent",
@@ -72,16 +68,55 @@ const SPENT_OR_INVALID_ERROR_PATTERNS: readonly string[] = [
   "invalid token",
 ];
 
+const DEFINITIVE_INVALID_CODES = new Set<number>([
+  11001, // TokenAlreadySpentError
+]);
+
+const TRANSIENT_ERROR_PATTERNS: readonly string[] = [
+  "failed to fetch",
+  "networkerror",
+  "network error",
+  "timeout",
+  "timed out",
+  "econn",
+  "enotfound",
+  "dns",
+  "offline",
+  "503",
+  "502",
+  "504",
+];
+
+const getCashuErrorMessage = (error: unknown): string => {
+  if (typeof error === "object" && error !== null && "message" in error) {
+    return String(Reflect.get(error, "message") ?? "");
+  }
+  return String(error ?? "");
+};
+
+export const isDefinitiveCashuError = (error: unknown): boolean => {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = Reflect.get(error, "code");
+    if (typeof code === "number" && DEFINITIVE_INVALID_CODES.has(code)) {
+      return true;
+    }
+  }
+
+  const message = getCashuErrorMessage(error).trim().toLowerCase();
+  return SPENT_OR_INVALID_ERROR_PATTERNS.some((pattern) =>
+    message.includes(pattern),
+  );
+};
+
+export const isTransientCashuError = (error: unknown): boolean => {
+  const message = getCashuErrorMessage(error).trim().toLowerCase();
+  return TRANSIENT_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
+};
+
 export const isCashuTokenDefinitivelySpent = (token: {
   state?: unknown;
   error?: unknown;
 }): boolean => {
   if (!isCashuTokenErrorState(token.state)) return false;
-  const errorText = String(token.error ?? "")
-    .trim()
-    .toLowerCase();
-  if (!errorText) return false;
-  return SPENT_OR_INVALID_ERROR_PATTERNS.some((pattern) =>
-    errorText.includes(pattern),
-  );
+  return isDefinitiveCashuError(token.error);
 };

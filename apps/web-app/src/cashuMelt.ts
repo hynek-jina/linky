@@ -7,14 +7,13 @@ import type {
 } from "@cashu/cashu-ts";
 import {
   bumpCashuDeterministicCounter,
-  CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE,
   getCashuDeterministicCounter,
   getCashuDeterministicSeedFromStorage,
-  getCashuSwapCounterUsage,
   getCashuSwapOutputCounters,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
 import { isCashuRecoverableOutputCollisionError } from "./utils/cashuErrors";
+import { sendWithCashuDeterministicCounters } from "./cashuSend";
 import { getCashuLib } from "./utils/cashuLib";
 import {
   cashuAmountToNumber,
@@ -250,7 +249,7 @@ export const meltInvoiceWithTokensAtMint = async (args: {
 
     const run = async (): Promise<CashuPayResult | CashuPayErrorResult> => {
       const amountToSend = quote.amount.add(quote.fee_reserve);
-      let swapped: SendResponse | null = null;
+      let swapped: SendResponse;
 
       const swapOnce = async (counter: number | null) => {
         if (typeof counter === "number") {
@@ -278,50 +277,15 @@ export const meltInvoiceWithTokensAtMint = async (args: {
       };
 
       try {
-        const counter0 = det
-          ? getCashuDeterministicCounter({
-              mintUrl: mint,
-              unit: walletUnit,
-              keysetId,
-            })
-          : null;
-
-        if (typeof counter0 === "number") {
-          let counter = counter0;
-          let lastError: unknown;
-          for (let attempt = 0; attempt < 5; attempt += 1) {
-            try {
-              swapped = await swapOnce(counter);
-              lastError = null;
-              break;
-            } catch (e) {
-              lastError = e;
-              if (!isCashuRecoverableOutputCollisionError(e) || !det) throw e;
-              bumpCashuDeterministicCounter({
-                mintUrl: mint,
-                unit: walletUnit,
-                keysetId,
-                used: CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE * 2,
-              });
-              counter = getCashuDeterministicCounter({
-                mintUrl: mint,
-                unit: walletUnit,
-                keysetId,
-              });
-            }
-          }
-
-          if (!swapped) throw lastError ?? new Error("swap failed");
-
-          bumpCashuDeterministicCounter({
+        swapped = await sendWithCashuDeterministicCounters(
+          {
+            deterministic: det !== null,
             mintUrl: mint,
             unit: walletUnit,
             keysetId,
-            used: getCashuSwapCounterUsage(swapped.keep.length),
-          });
-        } else {
-          swapped = await swapOnce(null);
-        }
+          },
+          swapOnce,
+        );
       } catch (e) {
         return {
           ok: false,

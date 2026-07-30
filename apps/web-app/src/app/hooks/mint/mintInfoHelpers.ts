@@ -4,6 +4,7 @@ import {
   MAIN_MINT_URL,
   normalizeMintUrl,
 } from "../../../utils/mint";
+import { extractCashuTokenMeta } from "../../lib/tokenText";
 import type {
   CashuTokenRowLike,
   LocalMintInfoRow,
@@ -83,10 +84,20 @@ const getLastSeenAtSec = (row: MintInfoRowLike): number =>
 const hasJsonText = (value: OptionalText): boolean =>
   Boolean(String(value ?? "").trim().length);
 
-const getMintRowScore = (row: MintInfoRowLike): number => {
-  const hasInfo = hasJsonText(row.infoJson);
-  const hasFees = hasJsonText(row.feesJson);
-  return (hasInfo ? 2 : 0) + (hasFees ? 1 : 0) + getLastSeenAtSec(row);
+const compareMintRows = (
+  left: MintInfoRowLike,
+  right: MintInfoRowLike,
+): number => {
+  const recencyDifference = getLastSeenAtSec(left) - getLastSeenAtSec(right);
+  if (recencyDifference !== 0) return recencyDifference;
+
+  const infoDifference =
+    Number(hasJsonText(left.infoJson)) - Number(hasJsonText(right.infoJson));
+  if (infoDifference !== 0) return infoDifference;
+
+  return (
+    Number(hasJsonText(left.feesJson)) - Number(hasJsonText(right.feesJson))
+  );
 };
 
 const getCanonicalMintUrl = (row: MintInfoRowLike): string | null => {
@@ -118,10 +129,7 @@ export const getMintInfoDedupedRows = (
       continue;
     }
 
-    if (
-      getMintRowScore(row as MintInfoRowLike) >
-      getMintRowScore(existing as MintInfoRowLike)
-    ) {
+    if (compareMintRows(row, existing) > 0) {
       bestByUrl.set(key, row);
     }
   }
@@ -172,7 +180,7 @@ export const getEncounteredMintUrls = (
     const state = String(row.state ?? "");
     if (state !== "accepted") continue;
 
-    const mint = String(row.mint ?? "").trim();
+    const mint = extractCashuTokenMeta(row).mint;
     const normalized = normalizeMintUrl(mint);
     if (normalized) set.add(normalized);
   }
@@ -298,11 +306,7 @@ const getDuplicateGroups = (
 };
 
 const chooseBestDuplicateRow = (rows: DuplicateRow[]): DuplicateRow => {
-  return [...rows].sort(
-    (a, b) =>
-      getMintRowScore(b as MintInfoRowLike) -
-      getMintRowScore(a as MintInfoRowLike),
-  )[0];
+  return [...rows].sort((a, b) => compareMintRows(b, a))[0];
 };
 
 export const buildMintDedupeSignature = (

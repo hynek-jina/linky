@@ -11,7 +11,6 @@ import {
 import { isCashuRecoverableOutputCollisionError } from "./utils/cashuErrors";
 import { getCashuLib } from "./utils/cashuLib";
 import {
-  cashuAmountToNumber,
   dedupeCashuProofs,
   filterUnspentCashuProofs,
   sumCashuProofAmounts,
@@ -42,6 +41,48 @@ export type CashuSendResult =
       sendAmount: number;
       unit: string | null;
     };
+
+export const sendWithCashuDeterministicCounters = async <
+  TResult extends { keep: readonly Proof[] },
+>(
+  args: {
+    deterministic: boolean;
+    keysetId: string;
+    mintUrl: string;
+    unit: string;
+  },
+  send: (counter: number | null) => Promise<TResult>,
+): Promise<TResult> => {
+  if (!args.deterministic) return await send(null);
+
+  let counter = getCashuDeterministicCounter(args);
+  let result: TResult | null = null;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      result = await send(counter);
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (!isCashuRecoverableOutputCollisionError(error)) throw error;
+      bumpCashuDeterministicCounter({
+        ...args,
+        used: CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE * 2,
+      });
+      counter = getCashuDeterministicCounter(args);
+    }
+  }
+
+  if (!result) throw lastError ?? new Error("swap failed");
+
+  bumpCashuDeterministicCounter({
+    ...args,
+    used: getCashuSwapCounterUsage(result.keep.length),
+  });
+  return result;
+};
 
 export const createSendTokenWithTokensAtMint = async (args: {
   amount: number;
@@ -128,69 +169,41 @@ export const createSendTokenWithTokensAtMint = async (args: {
       };
     }
 
+    const swapOnce = async (counter: number | null) => {
+      if (typeof counter === "number") {
+        const outputCounters = getCashuSwapOutputCounters(counter);
+        return await wallet.send(sendAmount, spendableProofs, undefined, {
+          send: {
+            type: "deterministic",
+            counter: outputCounters.send,
+          },
+          keep: {
+            type: "deterministic",
+            counter: outputCounters.keep,
+          },
+        });
+      }
+      return await wallet.send(sendAmount, spendableProofs);
+    };
+
+    const runSwap = async (): Promise<SendResponse> => {
+      return await sendWithCashuDeterministicCounters(
+        {
+          deterministic: det !== null,
+          mintUrl: mint,
+          unit: walletUnit,
+          keysetId,
+        },
+        swapOnce,
+      );
+    };
+
     const swapped = await (det
       ? withCashuDeterministicCounterLock(
           { mintUrl: mint, unit: walletUnit, keysetId },
-          async () => {
-            const counter0 = getCashuDeterministicCounter({
-              mintUrl: mint,
-              unit: walletUnit,
-              keysetId,
-            });
-
-            const swapOnce = async (counter: number) => {
-              const outputCounters = getCashuSwapOutputCounters(counter);
-              return await wallet.send(sendAmount, spendableProofs, undefined, {
-                send: {
-                  type: "deterministic",
-                  counter: outputCounters.send,
-                },
-                keep: {
-                  type: "deterministic",
-                  counter: outputCounters.keep,
-                },
-              });
-            };
-
-            let counter = counter0;
-            let swapped: SendResponse | null = null;
-            let lastError: unknown;
-            for (let attempt = 0; attempt < 5; attempt += 1) {
-              try {
-                swapped = await swapOnce(counter);
-                lastError = null;
-                break;
-              } catch (e) {
-                lastError = e;
-                if (!isCashuRecoverableOutputCollisionError(e)) throw e;
-                bumpCashuDeterministicCounter({
-                  mintUrl: mint,
-                  unit: walletUnit,
-                  keysetId,
-                  used: CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE * 2,
-                });
-                counter = getCashuDeterministicCounter({
-                  mintUrl: mint,
-                  unit: walletUnit,
-                  keysetId,
-                });
-              }
-            }
-
-            if (!swapped) throw lastError ?? new Error("swap failed");
-
-            const keepLen = swapped.keep.length;
-            bumpCashuDeterministicCounter({
-              mintUrl: mint,
-              unit: walletUnit,
-              keysetId,
-              used: getCashuSwapCounterUsage(keepLen),
-            });
-
-            return swapped;
-          },
+          runSwap,
         )
-      : wallet.send(sendAmount, spendableProofs));
+      : runSwap());
 
     // Recovery: if the caller fails after swap, this token should represent
     // the user's full funds (keep + send).
@@ -237,22 +250,6 @@ export const createSendTokenWithTokensAtMint = async (args: {
             unit: walletUnit,
           })
         : null;
-
-    try {
-      const denomSummary = (proofs: Proof[]) =>
-        proofs.reduce<Record<string, number>>((acc, p) => {
-          const amt = cashuAmountToNumber(p.amount);
-          if (amt > 0) acc[String(amt)] = (acc[String(amt)] ?? 0) + 1;
-          return acc;
-        }, {});
-      console.log("[linky][pay] swap-denoms", {
-        mint,
-        send: denomSummary(sendProofs),
-        keep: denomSummary(remainingProofs),
-      });
-    } catch {
-      // ignore logging errors
-    }
 
     return {
       ok: true,

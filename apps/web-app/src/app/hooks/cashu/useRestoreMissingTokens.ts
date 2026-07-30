@@ -1,5 +1,5 @@
 import type { Proof as CashuProof } from "@cashu/cashu-ts";
-import * as Evolu from "@evolu/common";
+import type * as Evolu from "@evolu/common";
 import React from "react";
 import {
   ensureCashuDeterministicCounterAtLeast,
@@ -15,6 +15,7 @@ import {
 import { sumCashuProofAmounts } from "../../../utils/cashuProofs";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
 import {
+  buildSparseCashuTokenPayload,
   createCashuTokenId,
   hasMatchingCashuToken,
 } from "../../lib/cashuTokenIdentity";
@@ -63,29 +64,6 @@ export const useRestoreMissingTokens = ({
   t,
   tokensRestoreIsBusy,
 }: UseRestoreMissingTokensParams) => {
-  const buildCashuTokenPayload = React.useCallback(
-    (args: {
-      amount: number;
-      mint: string;
-      state: "accepted";
-      token: string;
-      unit: string | null;
-    }) => {
-      const payload: {
-        id: ReturnType<typeof createCashuTokenId>;
-        token: typeof Evolu.NonEmptyString.Type;
-        state: typeof Evolu.NonEmptyString100.Type;
-      } = {
-        id: createCashuTokenId(args.token),
-        token: args.token as typeof Evolu.NonEmptyString.Type,
-        state: args.state as typeof Evolu.NonEmptyString100.Type,
-      };
-
-      return payload;
-    },
-    [],
-  );
-
   return React.useCallback(async () => {
     if (tokensRestoreIsBusy) return;
     if (cashuIsBusy) return;
@@ -440,11 +418,9 @@ export const useRestoreMissingTokens = ({
                   memo: "restored",
                 });
 
-                const payload = buildCashuTokenPayload({
+                const payload = buildSparseCashuTokenPayload({
+                  id: createCashuTokenId(token),
                   token,
-                  mint: mintUrl,
-                  unit: wallet.unit ?? null,
-                  amount,
                   state: "accepted",
                 });
 
@@ -501,7 +477,6 @@ export const useRestoreMissingTokens = ({
     upsert,
     isMintDeleted,
     logPaymentEvent,
-    buildCashuTokenPayload,
     mintInfoDeduped,
     pushToast,
     readSeenMintsFromStorage,

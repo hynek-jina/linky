@@ -17,6 +17,7 @@ import { safeLocalStorageSet } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
 import { resolveCashuRowStoredOwnerLane } from "../lib/cashuOwnerLane";
 import {
+  buildSparseCashuTokenPayload,
   createCashuTokenId,
   hasMatchingCashuToken,
   isDeletedCashuRow,
@@ -147,7 +148,6 @@ export const useLightningPaymentsDomain = ({
   cashuOwnerId,
   cashuTokensAll,
   cashuTokensWithMeta,
-  cashuVisibleOwnerIds,
   contacts,
   defaultMintUrl,
   formatDisplayedAmountParts,
@@ -163,12 +163,9 @@ export const useLightningPaymentsDomain = ({
   update,
 }: UseLightningPaymentsDomainParams) => {
   type CashuTokenInsertPayload = {
-    amount: typeof Evolu.PositiveInt.Type | null;
-    error: typeof Evolu.NonEmptyString1000.Type | null;
-    mint: typeof Evolu.NonEmptyString1000.Type | null;
-    state: typeof Evolu.NonEmptyString100.Type;
-    token: typeof Evolu.NonEmptyString.Type;
-    unit: typeof Evolu.NonEmptyString100.Type | null;
+    error?: string | null;
+    state: string;
+    token: string;
   };
 
   const insertCashuToken = React.useCallback(
@@ -194,17 +191,12 @@ export const useLightningPaymentsDomain = ({
         return { ok: true, error: null, skippedDuplicate: true };
       }
 
-      const sparsePayload: {
-        id: CashuTokenId;
-        state: typeof Evolu.NonEmptyString100.Type;
-        token: typeof Evolu.NonEmptyString.Type;
-        error?: typeof Evolu.NonEmptyString1000.Type;
-      } = {
+      const sparsePayload = buildSparseCashuTokenPayload({
         id: createCashuTokenId(payload.token),
         token: payload.token,
         state: payload.state,
-      };
-      if (payload.error) sparsePayload.error = payload.error;
+        ...(payload.error !== undefined ? { error: payload.error } : {}),
+      });
 
       const result = cashuOwnerId
         ? upsert("cashuToken", sparsePayload, { ownerId: cashuOwnerId })
@@ -224,39 +216,12 @@ export const useLightningPaymentsDomain = ({
   const markCashuTokenDeleted = React.useCallback(
     (row: CashuTokenWithMetaRow) => {
       const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
-      const ownerCandidates = new Map<string, Evolu.OwnerId>();
-      const addOwnerCandidate = (ownerId: Evolu.OwnerId | null) => {
-        if (!ownerId) return;
-        ownerCandidates.set(String(ownerId), ownerId);
-      };
-
-      addOwnerCandidate(resolveCashuRowStoredOwnerLane(row));
-      addOwnerCandidate(cashuOwnerId);
-      for (const ownerId of cashuVisibleOwnerIds) {
-        addOwnerCandidate(ownerId);
-      }
-
-      if (ownerCandidates.size === 0) return update("cashuToken", payload);
-
-      let firstError: unknown = null;
-      let firstSuccess: ReturnType<EvoluMutations["update"]> | null = null;
-      for (const ownerId of ownerCandidates.values()) {
-        const result = update("cashuToken", payload, { ownerId });
-        if (result.ok) {
-          if (!firstSuccess) firstSuccess = result;
-          continue;
-        }
-        if (firstError === null) firstError = result.error;
-      }
-
-      if (firstSuccess) return firstSuccess;
-
-      return {
-        ok: false,
-        error: firstError ?? "cashu token delete failed",
-      };
+      const ownerId = resolveCashuRowStoredOwnerLane(row) ?? cashuOwnerId;
+      return ownerId
+        ? update("cashuToken", payload, { ownerId })
+        : update("cashuToken", payload);
     },
-    [cashuOwnerId, cashuVisibleOwnerIds, update],
+    [cashuOwnerId, update],
   );
 
   const deleteAcceptedCashuTokensByText = React.useCallback(
@@ -344,16 +309,8 @@ export const useLightningPaymentsDomain = ({
                 const recoveryToken = result.remainingToken;
                 const inserted = insertCashuToken(
                   {
-                    token: recoveryToken as typeof Evolu.NonEmptyString.Type,
-                    mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
-                    unit: result.unit
-                      ? (result.unit as typeof Evolu.NonEmptyString100.Type)
-                      : null,
-                    amount:
-                      result.remainingAmount > 0
-                        ? (result.remainingAmount as typeof Evolu.PositiveInt.Type)
-                        : null,
-                    state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                    token: recoveryToken,
+                    state: "accepted",
                     error: null,
                   },
                   { ignoreAliases: candidate.tokens },
@@ -407,17 +364,8 @@ export const useLightningPaymentsDomain = ({
               if (result.remainingToken && result.remainingAmount > 0) {
                 const inserted = insertCashuToken(
                   {
-                    token:
-                      result.remainingToken as typeof Evolu.NonEmptyString.Type,
-                    mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
-                    unit: result.unit
-                      ? (result.unit as typeof Evolu.NonEmptyString100.Type)
-                      : null,
-                    amount:
-                      result.remainingAmount > 0
-                        ? (result.remainingAmount as typeof Evolu.PositiveInt.Type)
-                        : null,
-                    state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                    token: result.remainingToken,
+                    state: "accepted",
                     error: null,
                   },
                   { ignoreAliases: candidate.tokens },
@@ -663,16 +611,8 @@ export const useLightningPaymentsDomain = ({
                   const recoveryToken = result.remainingToken;
                   const inserted = insertCashuToken(
                     {
-                      token: recoveryToken as typeof Evolu.NonEmptyString.Type,
-                      mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
-                      unit: result.unit
-                        ? (result.unit as typeof Evolu.NonEmptyString100.Type)
-                        : null,
-                      amount:
-                        result.remainingAmount > 0
-                          ? (result.remainingAmount as typeof Evolu.PositiveInt.Type)
-                          : null,
-                      state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                      token: recoveryToken,
+                      state: "accepted",
                       error: null,
                     },
                     { ignoreAliases: candidate.tokens },
@@ -711,17 +651,8 @@ export const useLightningPaymentsDomain = ({
                 if (result.remainingToken && result.remainingAmount > 0) {
                   const inserted = insertCashuToken(
                     {
-                      token:
-                        result.remainingToken as typeof Evolu.NonEmptyString.Type,
-                      mint: result.mint as typeof Evolu.NonEmptyString1000.Type,
-                      unit: result.unit
-                        ? (result.unit as typeof Evolu.NonEmptyString100.Type)
-                        : null,
-                      amount:
-                        result.remainingAmount > 0
-                          ? (result.remainingAmount as typeof Evolu.PositiveInt.Type)
-                          : null,
-                      state: "accepted" as typeof Evolu.NonEmptyString100.Type,
+                      token: result.remainingToken,
+                      state: "accepted",
                       error: null,
                     },
                     { ignoreAliases: candidate.tokens },
