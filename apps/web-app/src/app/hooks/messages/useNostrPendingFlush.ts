@@ -1,7 +1,6 @@
 import React from "react";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
-import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
@@ -21,6 +20,7 @@ import type {
   UpdateLocalNostrReaction,
   LocalNostrMessage,
 } from "../../types/appTypes";
+import { resolveNostrChatIdentity } from "./contactIdentity";
 
 interface UseNostrPendingFlushParams<TContact extends ContactIdentityRowLike> {
   activePublishClientIdsRef: React.MutableRefObject<Set<string>>;
@@ -71,22 +71,15 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
       })
       .sort((a, b) => (a.createdAtSec ?? 0) - (b.createdAtSec ?? 0));
 
-    if (pending.length === 0) return;
+    const pendingReactions = nostrReactionsLocal
+      .filter((reaction) => String(reaction.status ?? "sent") === "pending")
+      .sort((a, b) => (a.createdAtSec ?? 0) - (b.createdAtSec ?? 0));
+
+    if (pending.length === 0 && pendingReactions.length === 0) return;
 
     const run = (async () => {
       try {
-        const { nip19, getEventHash, getPublicKey } =
-          await import("nostr-tools");
-
-        const decodedMe = nip19.decode(currentNsec);
-        if (
-          decodedMe.type !== "nsec" ||
-          !(decodedMe.data instanceof Uint8Array)
-        )
-          return;
-        const privBytes = decodedMe.data;
-        const myPubHex = getPublicKey(privBytes);
-
+        const { getEventHash } = await import("nostr-tools");
         const pool = await getSharedAppNostrPool();
 
         for (const message of pending) {
@@ -94,23 +87,10 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
             (candidate) =>
               String(candidate.id ?? "") === String(message.contactId ?? ""),
           );
-          const contactNpub = normalizeNpubIdentifier(contact?.npub);
-          if (!contactNpub) continue;
-
-          let decodedContact: ReturnType<typeof nip19.decode> | null = null;
-          try {
-            decodedContact = nip19.decode(contactNpub);
-          } catch {
-            decodedContact = null;
-          }
-          if (
-            !decodedContact ||
-            decodedContact.type !== "npub" ||
-            typeof decodedContact.data !== "string"
-          ) {
-            continue;
-          }
-          const contactPubHex = decodedContact.data;
+          if (!contact) continue;
+          const identity = await resolveNostrChatIdentity(currentNsec, contact);
+          if (!identity) continue;
+          const { contactPubHex, myPubHex, privBytes } = identity;
 
           const tags: string[][] = [
             ["p", contactPubHex],
@@ -153,7 +133,7 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
             ? wrapEventWithoutPushMarker(baseEvent, privBytes, contactPubHex)
             : wrapEventWithPushMarker(baseEvent, privBytes, contactPubHex);
 
-          await appendPushDebugLog(
+          void appendPushDebugLog(
             "client",
             "chat pending flush wraps created",
             {
@@ -182,7 +162,7 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
             wrapForContact,
           );
 
-          await appendPushDebugLog(
+          void appendPushDebugLog(
             "client",
             "chat pending flush publish outcome",
             {
@@ -206,10 +186,6 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
           });
         }
 
-        const pendingReactions = nostrReactionsLocal
-          .filter((reaction) => String(reaction.status ?? "sent") === "pending")
-          .sort((a, b) => (a.createdAtSec ?? 0) - (b.createdAtSec ?? 0));
-
         for (const reaction of pendingReactions) {
           const messageRumorId = String(reaction.messageId ?? "").trim();
           if (!messageRumorId) continue;
@@ -225,23 +201,10 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
               String(candidate.id ?? "") ===
               String(targetMessage.contactId ?? ""),
           );
-          const contactNpub = normalizeNpubIdentifier(contact?.npub);
-          if (!contactNpub) continue;
-
-          let decodedContact: ReturnType<typeof nip19.decode> | null = null;
-          try {
-            decodedContact = nip19.decode(contactNpub);
-          } catch {
-            decodedContact = null;
-          }
-          if (
-            !decodedContact ||
-            decodedContact.type !== "npub" ||
-            typeof decodedContact.data !== "string"
-          ) {
-            continue;
-          }
-          const contactPubHex = decodedContact.data;
+          if (!contact) continue;
+          const identity = await resolveNostrChatIdentity(currentNsec, contact);
+          if (!identity) continue;
+          const { contactPubHex, myPubHex, privBytes } = identity;
 
           const emoji = String(reaction.emoji ?? "").trim();
           if (!emoji) continue;
@@ -290,6 +253,8 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
             wrapId: reactionRumorId,
           });
         }
+      } catch {
+        return;
       } finally {
         nostrPendingFlushRef.current = null;
       }

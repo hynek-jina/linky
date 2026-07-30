@@ -1,6 +1,7 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import { getSharedAppNostrPool } from "./app/lib/nostrPool";
 import { NOSTR_RELAYS } from "./nostrProfile";
-import { getSharedNostrPool } from "./utils/nostrPool";
+import { normalizeRelayUrls } from "./utils/nostrRelays";
 
 export const PROFILE_STATUS_CURRENCIES = ["BTC", "CZK", "USD"] as const;
 export const STATUS_FILTER_PREFIX = "status:";
@@ -31,22 +32,6 @@ const getNostrTools = () => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-};
-
-const normalizeRelayUrls = (urls: string[]): string[] => {
-  const seen = new Set<string>();
-  const out: string[] = [];
-
-  for (const raw of urls) {
-    const url = String(raw ?? "").trim();
-    if (!url) continue;
-    if (!(url.startsWith("wss://") || url.startsWith("ws://"))) continue;
-    if (seen.has(url)) continue;
-    seen.add(url);
-    out.push(url);
-  }
-
-  return out;
 };
 
 const normalizeStatusText = (value: unknown): string | null => {
@@ -292,40 +277,36 @@ export const fetchNostrGeneralStatus = async (
     return null;
   }
 
-  const pool = await getSharedNostrPool();
+  const pool = await getSharedAppNostrPool();
 
+  let events: NostrToolsEvent[] = [];
   try {
-    let events: NostrToolsEvent[] = [];
-    try {
-      events = await pool.querySync(
-        relays,
-        { kinds: [30315], authors: [pubkey], limit: 20 },
-        { maxWait: 8000 },
-      );
-    } catch {
-      return null;
-    }
-
-    const newest = events
-      .slice()
-      .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
-      .find(
-        (event) =>
-          hasGeneralStatusIdentifier(event) && !isExpiredStatusEvent(event),
-      );
-
-    if (!newest) return null;
-    return normalizeStatusText(newest.content);
-  } finally {
-    // Keep the shared pool open.
+    events = await pool.querySync(
+      relays,
+      { kinds: [30315], authors: [pubkey], limit: 20 },
+      { maxWait: 8000 },
+    );
+  } catch {
+    return null;
   }
+
+  const newest = events
+    .slice()
+    .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+    .find(
+      (event) =>
+        hasGeneralStatusIdentifier(event) && !isExpiredStatusEvent(event),
+    );
+
+  if (!newest) return null;
+  return normalizeStatusText(newest.content);
 };
 
 export const publishNostrGeneralStatus = async (params: {
   privBytes: Uint8Array;
   relays: string[];
   status: string | null;
-}): Promise<{ anySuccess: boolean; publishedTo: string[] }> => {
+}): Promise<{ anySuccess: boolean }> => {
   const { privBytes, relays, status } = params;
   const { finalizeEvent, getPublicKey } = await getNostrTools();
   const pubkey = getPublicKey(privBytes);
@@ -339,14 +320,11 @@ export const publishNostrGeneralStatus = async (params: {
   } satisfies UnsignedEvent;
 
   const signed = finalizeEvent(baseEvent, privBytes);
-  const pool = await getSharedNostrPool();
+  const pool = await getSharedAppNostrPool();
   const publishResults = await Promise.allSettled(pool.publish(relays, signed));
   const anySuccess = publishResults.some(
     (result) => result.status === "fulfilled",
   );
 
-  return {
-    anySuccess,
-    publishedTo: relays,
-  };
+  return { anySuccess };
 };

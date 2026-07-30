@@ -90,100 +90,71 @@ export const useChatMessageEffects = <TContact extends ContactRowLike>({
     [requestIdByMessageRumorId],
   );
 
+  const autoAcceptCashuTokenFromMessages = React.useCallback(
+    (messages: readonly LocalNostrMessage[], newestFirst: boolean): void => {
+      const candidates = newestFirst ? [...messages].reverse() : messages;
+
+      for (const message of candidates) {
+        const id = String(message.id ?? "");
+        if (!id) continue;
+        if (autoAcceptedChatMessageIdsRef.current.has(id)) continue;
+        if (String(message.direction ?? "") !== "in") continue;
+
+        const content = String(message.content ?? "");
+        if (getLinkyBankPaymentOfferInfo(content)) continue;
+        if (parsePrivateImageMessage(content)) continue;
+
+        const info = getCashuTokenMessageInfo(content);
+        if (!info) continue;
+
+        autoAcceptedChatMessageIdsRef.current.add(id);
+        if (!info.isValid) continue;
+        if (isCashuTokenKnownAny(info.tokenRaw)) continue;
+        if (isCashuTokenStored(info.tokenRaw)) continue;
+
+        const requestId = getRequestIdForPaymentReply(message);
+        const contactId = String(message.contactId ?? "").trim();
+        void saveCashuFromText(info.tokenRaw, {
+          ...(contactId ? { contactId } : {}),
+          ...(requestId ? { requestId } : {}),
+        });
+        return;
+      }
+    },
+    [
+      autoAcceptedChatMessageIdsRef,
+      getCashuTokenMessageInfo,
+      getRequestIdForPaymentReply,
+      isCashuTokenKnownAny,
+      isCashuTokenStored,
+      saveCashuFromText,
+    ],
+  );
+
   React.useEffect(() => {
     // Auto-accept Cashu tokens received from others into the wallet.
     if (route.kind !== "chat") return;
     if (cashuIsBusy) return;
     if (!cashuTokensHydratedRef.current) return;
-
-    for (let i = chatMessages.length - 1; i >= 0; i -= 1) {
-      const message = chatMessages[i];
-      const id = String(message.id ?? "");
-      if (!id) continue;
-      if (autoAcceptedChatMessageIdsRef.current.has(id)) continue;
-
-      const isOut = String(message.direction ?? "") === "out";
-      if (isOut) continue;
-
-      const content = String(message.content ?? "");
-      if (getLinkyBankPaymentOfferInfo(content)) continue;
-      if (parsePrivateImageMessage(content)) continue;
-
-      const info = getCashuTokenMessageInfo(content);
-      if (!info) continue;
-
-      // Mark it as processed so we don't keep retrying every render.
-      autoAcceptedChatMessageIdsRef.current.add(id);
-
-      // Only accept if it's not already in our wallet.
-      if (!info.isValid) continue;
-      if (isCashuTokenKnownAny(info.tokenRaw)) continue;
-      if (isCashuTokenStored(info.tokenRaw)) continue;
-
-      const requestId = getRequestIdForPaymentReply(message);
-      const contactId = String(message.contactId ?? "").trim();
-      void saveCashuFromText(info.tokenRaw, {
-        ...(contactId ? { contactId } : {}),
-        ...(requestId ? { requestId } : {}),
-      });
-      break;
-    }
+    autoAcceptCashuTokenFromMessages(chatMessages, true);
   }, [
-    autoAcceptedChatMessageIdsRef,
+    autoAcceptCashuTokenFromMessages,
     cashuIsBusy,
     chatMessages,
-    getCashuTokenMessageInfo,
-    isCashuTokenKnownAny,
-    isCashuTokenStored,
     route.kind,
-    saveCashuFromText,
     cashuTokensHydratedRef,
-    getRequestIdForPaymentReply,
   ]);
 
   React.useEffect(() => {
     // Auto-accept Cashu tokens from incoming messages even when chat isn't open.
     if (cashuIsBusy) return;
     if (!cashuTokensHydratedRef.current) return;
-
-    for (const message of nostrMessagesRecent) {
-      const id = String(message.id ?? "");
-      if (!id) continue;
-      if (autoAcceptedChatMessageIdsRef.current.has(id)) continue;
-
-      const direction = String(message.direction ?? "");
-      if (direction !== "in") continue;
-
-      const content = String(message.content ?? "");
-      if (getLinkyBankPaymentOfferInfo(content)) continue;
-      if (parsePrivateImageMessage(content)) continue;
-
-      const info = getCashuTokenMessageInfo(content);
-      if (!info) continue;
-
-      autoAcceptedChatMessageIdsRef.current.add(id);
-      if (!info.isValid) continue;
-      if (isCashuTokenKnownAny(info.tokenRaw)) continue;
-      if (isCashuTokenStored(info.tokenRaw)) continue;
-
-      const requestId = getRequestIdForPaymentReply(message);
-      const contactId = String(message.contactId ?? "").trim();
-      void saveCashuFromText(info.tokenRaw, {
-        ...(contactId ? { contactId } : {}),
-        ...(requestId ? { requestId } : {}),
-      });
-      break;
-    }
+    autoAcceptCashuTokenFromMessages(nostrMessagesRecent, false);
   }, [
-    autoAcceptedChatMessageIdsRef,
+    autoAcceptCashuTokenFromMessages,
     cashuIsBusy,
-    getCashuTokenMessageInfo,
-    isCashuTokenKnownAny,
-    isCashuTokenStored,
     nostrMessagesRecent,
-    saveCashuFromText,
     cashuTokensHydratedRef,
-    getRequestIdForPaymentReply,
   ]);
 
   React.useEffect(() => {

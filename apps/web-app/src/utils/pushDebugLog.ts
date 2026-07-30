@@ -3,7 +3,9 @@ import type { JsonRecord, JsonValue } from "../types/json";
 const PUSH_DEBUG_CACHE_NAME = "linky-push-debug-v1";
 const PUSH_DEBUG_LOG_URL = "/__debug__/push-log.json";
 const PUSH_DEBUG_LOG_LIMIT = 100;
-let pushDebugLogWriteQueue: Promise<void> = Promise.resolve();
+const PUSH_DEBUG_LOG_BATCH_DELAY_MS = 50;
+const pendingPushDebugEntries: PushDebugLogEntry[] = [];
+let pushDebugLogFlushPromise: Promise<void> | null = null;
 
 export interface PushDebugLogEntry {
   details?: JsonValue;
@@ -108,6 +110,38 @@ async function writeStoredLog(entries: PushDebugLogEntry[]): Promise<void> {
   );
 }
 
+function schedulePushDebugLogFlush(): Promise<void> {
+  if (pushDebugLogFlushPromise) return pushDebugLogFlushPromise;
+
+  pushDebugLogFlushPromise = new Promise<void>((resolve) => {
+    setTimeout(resolve, PUSH_DEBUG_LOG_BATCH_DELAY_MS);
+  })
+    .then(async () => {
+      const nextEntries = pendingPushDebugEntries.splice(0);
+      if (nextEntries.length === 0) return;
+
+      try {
+        const existing = await readStoredLog();
+        await writeStoredLog(
+          [...nextEntries.reverse(), ...existing].slice(
+            0,
+            PUSH_DEBUG_LOG_LIMIT,
+          ),
+        );
+      } catch {
+        // Ignore debug logging failures.
+      }
+    })
+    .finally(() => {
+      pushDebugLogFlushPromise = null;
+      if (pendingPushDebugEntries.length > 0) {
+        void schedulePushDebugLogFlush();
+      }
+    });
+
+  return pushDebugLogFlushPromise;
+}
+
 export async function appendPushDebugLog(
   source: string,
   message: string,
@@ -117,30 +151,14 @@ export async function appendPushDebugLog(
     return;
   }
 
-  pushDebugLogWriteQueue = pushDebugLogWriteQueue
-    .catch(() => {
-      // Ignore previous debug logging failures and keep the queue moving.
-    })
-    .then(async () => {
-      try {
-        const existing = await readStoredLog();
-        const nextEntry: PushDebugLogEntry = {
-          message,
-          source,
-          timestamp: new Date().toISOString(),
-          ...(details === undefined
-            ? {}
-            : { details: normalizeJsonValue(details) }),
-        };
-        await writeStoredLog(
-          [nextEntry, ...existing].slice(0, PUSH_DEBUG_LOG_LIMIT),
-        );
-      } catch {
-        // Ignore debug logging failures.
-      }
-    });
+  pendingPushDebugEntries.push({
+    message,
+    source,
+    timestamp: new Date().toISOString(),
+    ...(details === undefined ? {} : { details: normalizeJsonValue(details) }),
+  });
 
-  await pushDebugLogWriteQueue;
+  await schedulePushDebugLogFlush();
 }
 
 export async function readPushDebugLog(): Promise<PushDebugLogEntry[]> {
@@ -148,6 +166,7 @@ export async function readPushDebugLog(): Promise<PushDebugLogEntry[]> {
     return [];
   }
 
+  await pushDebugLogFlushPromise;
   return readStoredLog();
 }
 
@@ -157,6 +176,8 @@ export async function clearPushDebugLog(): Promise<void> {
   }
 
   try {
+    pendingPushDebugEntries.length = 0;
+    await pushDebugLogFlushPromise;
     const cache = await caches.open(PUSH_DEBUG_CACHE_NAME);
     await cache.delete(PUSH_DEBUG_LOG_URL);
   } catch {

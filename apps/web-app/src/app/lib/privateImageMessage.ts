@@ -69,8 +69,6 @@ interface BlossomUploadAuth {
 
 export interface PrivateImageSendResult {
   content: string;
-  eventContent: string;
-  tags: string[][];
 }
 
 const textEncoder = new TextEncoder();
@@ -439,8 +437,6 @@ export const createPrivateImageSendPayload = async (
 
   return {
     content: serializePrivateImageMessage(payload),
-    eventContent: payload.url,
-    tags: buildPrivateImageEventTags(payload),
   };
 };
 

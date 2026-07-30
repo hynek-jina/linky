@@ -5,6 +5,7 @@ import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
 import { formatShortNpub } from "../../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import { normalizeRelayUrls } from "../../../utils/nostrRelays";
 import {
   getInitialNostrIdentitySource,
   getInitialNostrIdentitySwitchedAtSec,
@@ -163,6 +164,55 @@ export const useInboxNotificationsSync = <
 }: UseInboxNotificationsSyncParams<TContact, TRoute>) => {
   const paymentNoticeWrapIdsRef = React.useRef<Set<string>>(new Set());
   const bankPaymentOfferWrapIdsRef = React.useRef<Set<string>>(new Set());
+  const latestValuesRef = React.useRef({
+    appendLocalNostrMessage,
+    appendLocalNostrReaction,
+    bankPaymentOfferMessages,
+    contacts,
+    formatDisplayedAmountText,
+    knownNostrMessageIdentityIndex,
+    maybeShowPwaNotification,
+    nostrFetchRelays,
+    nostrMessageWrapIdsRef,
+    nostrMessagesLatestRef,
+    nostrMessagesRecent,
+    nostrReactionWrapIdsRef,
+    nostrReactionsLatestRef,
+    onBankPaymentOfferMessage,
+    onOpenInboxMessageToast,
+    pushToast,
+    route,
+    setContactAttentionById,
+    softDeleteLocalNostrReactionsByWrapIds,
+    t,
+    updateLocalNostrMessage,
+    updateLocalNostrReaction,
+  });
+  latestValuesRef.current = {
+    appendLocalNostrMessage,
+    appendLocalNostrReaction,
+    bankPaymentOfferMessages,
+    contacts,
+    formatDisplayedAmountText,
+    knownNostrMessageIdentityIndex,
+    maybeShowPwaNotification,
+    nostrFetchRelays,
+    nostrMessageWrapIdsRef,
+    nostrMessagesLatestRef,
+    nostrMessagesRecent,
+    nostrReactionWrapIdsRef,
+    nostrReactionsLatestRef,
+    onBankPaymentOfferMessage,
+    onOpenInboxMessageToast,
+    pushToast,
+    route,
+    setContactAttentionById,
+    softDeleteLocalNostrReactionsByWrapIds,
+    t,
+    updateLocalNostrMessage,
+    updateLocalNostrReaction,
+  };
+  const relaySignature = normalizeRelayUrls(nostrFetchRelays).join("\n");
 
   React.useEffect(() => {
     // Best-effort: keep syncing the NIP-17 inbox globally so messages from
@@ -177,7 +227,7 @@ export const useInboxNotificationsSync = <
         : null;
 
     const seenWrapIds = new Set<string>();
-    for (const message of nostrMessagesRecent) {
+    for (const message of latestValuesRef.current.nostrMessagesRecent) {
       const wrapId = String(message.wrapId ?? "").trim();
       if (wrapId) seenWrapIds.add(wrapId);
     }
@@ -190,7 +240,8 @@ export const useInboxNotificationsSync = <
       if (normalizedWrapId) seenWrapIds.add(normalizedWrapId);
     }
     const seenRumorKeys = new Set<string>();
-    for (const message of nostrMessagesLatestRef.current) {
+    for (const message of latestValuesRef.current.nostrMessagesLatestRef
+      .current) {
       const rumorId = String(message.rumorId ?? "").trim();
       if (!rumorId) continue;
 
@@ -241,6 +292,7 @@ export const useInboxNotificationsSync = <
           string,
           { id: string; name: string | null; npub: string | null }
         >();
+        let indexedContacts: readonly TContact[] | null = null;
         const rememberContactPubkey = (
           pubkey: string,
           contact: { id: string; name: string | null; npub: string | null },
@@ -254,6 +306,7 @@ export const useInboxNotificationsSync = <
         const findContactByPubkey = (
           pubkey: string,
         ): { id: string; name: string | null; npub: string | null } | null => {
+          refreshContactIndex();
           const normalizedPubkey = normalizePubkeyHex(pubkey);
           return (
             (normalizedPubkey ? contactByPubHex.get(normalizedPubkey) : null) ??
@@ -261,25 +314,33 @@ export const useInboxNotificationsSync = <
             null
           );
         };
-        for (const contact of contacts) {
-          const npub = normalizeNpubIdentifier(contact.npub);
-          if (!npub) continue;
-          try {
-            const decoded = nip19.decode(npub);
-            if (decoded.type !== "npub" || typeof decoded.data !== "string")
-              continue;
-            const pub = decoded.data.trim();
-            if (!pub) continue;
-            const name = String(contact.name ?? "").trim() || null;
-            rememberContactPubkey(pub, {
-              id: String(contact.id ?? "").trim(),
-              name,
-              npub,
-            });
-          } catch {
-            // ignore
+        function refreshContactIndex(): void {
+          const latestContacts = latestValuesRef.current.contacts;
+          if (indexedContacts === latestContacts) return;
+
+          indexedContacts = latestContacts;
+          contactByPubHex.clear();
+          for (const contact of latestContacts) {
+            const npub = normalizeNpubIdentifier(contact.npub);
+            if (!npub) continue;
+            try {
+              const decoded = nip19.decode(npub);
+              if (decoded.type !== "npub" || typeof decoded.data !== "string")
+                continue;
+              const pub = decoded.data.trim();
+              if (!pub) continue;
+              const name = String(contact.name ?? "").trim() || null;
+              rememberContactPubkey(pub, {
+                id: String(contact.id ?? "").trim(),
+                name,
+                npub,
+              });
+            } catch {
+              // ignore
+            }
           }
         }
+        refreshContactIndex();
 
         const isBlockedPubkey = (pubkeyHex: string): boolean => {
           const normalizedPubkey = normalizePubkeyHex(pubkeyHex);
@@ -299,31 +360,33 @@ export const useInboxNotificationsSync = <
           contactId: string,
           createdAtSec: number,
         ): boolean => {
-          return nostrMessagesLatestRef.current.some((message) => {
-            if (String(message.contactId ?? "").trim() !== contactId) {
-              return false;
-            }
-            if (String(message.direction ?? "").trim() !== "in") {
-              return false;
-            }
+          return latestValuesRef.current.nostrMessagesLatestRef.current.some(
+            (message) => {
+              if (String(message.contactId ?? "").trim() !== contactId) {
+                return false;
+              }
+              if (String(message.direction ?? "").trim() !== "in") {
+                return false;
+              }
 
-            const messageCreatedAtSec = Number(message.createdAtSec ?? 0);
-            if (
-              !Number.isFinite(messageCreatedAtSec) ||
-              messageCreatedAtSec <= 0
-            ) {
-              return false;
-            }
+              const messageCreatedAtSec = Number(message.createdAtSec ?? 0);
+              if (
+                !Number.isFinite(messageCreatedAtSec) ||
+                messageCreatedAtSec <= 0
+              ) {
+                return false;
+              }
 
-            if (
-              Math.abs(messageCreatedAtSec - createdAtSec) >
-              PAYMENT_NOTICE_MATCH_WINDOW_SECONDS
-            ) {
-              return false;
-            }
+              if (
+                Math.abs(messageCreatedAtSec - createdAtSec) >
+                PAYMENT_NOTICE_MATCH_WINDOW_SECONDS
+              ) {
+                return false;
+              }
 
-            return isCashuNotificationMessage(String(message.content ?? ""));
-          });
+              return isCashuNotificationMessage(String(message.content ?? ""));
+            },
+          );
         };
 
         const pool = await getSharedAppNostrPool();
@@ -333,13 +396,17 @@ export const useInboxNotificationsSync = <
           shouldSurfaceNotification: boolean,
         ) => {
           try {
+            const latest = latestValuesRef.current;
             const wrapId = String(wrap?.id ?? "");
             if (!wrapId) return;
             if (seenWrapIds.has(wrapId)) return;
             if (
-              hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
-                wrapId,
-              })
+              hasKnownNostrMessageIdentity(
+                latestValuesRef.current.knownNostrMessageIdentityIndex,
+                {
+                  wrapId,
+                },
+              )
             ) {
               seenWrapIds.add(wrapId);
               return;
@@ -366,8 +433,10 @@ export const useInboxNotificationsSync = <
             if (isLinkyPaymentNoticeEvent(inner)) {
               const paymentNoticeText =
                 isLinkyBankPaymentOfferPaymentNoticeEvent(inner)
-                  ? t("notificationReceivedBankPaymentReimbursement")
-                  : t("notificationReceivedMoney");
+                  ? latestValuesRef.current.t(
+                      "notificationReceivedBankPaymentReimbursement",
+                    )
+                  : latestValuesRef.current.t("notificationReceivedMoney");
               const tags = Array.isArray(inner.tags) ? inner.tags : [];
               const pTags = tags
                 .filter((tag) => Array.isArray(tag) && tag[0] === "p")
@@ -391,13 +460,13 @@ export const useInboxNotificationsSync = <
               if (!contactId) return;
 
               const isActiveChatContact = isOpenChatForContact(
-                route,
+                latestValuesRef.current.route,
                 contactId,
               );
               const paymentOfferId =
                 getLinkyBankPaymentOfferPaymentNoticeOfferId(inner) ?? "";
               const isActiveBankPaymentOffer = isOpenBankPaymentOffer(
-                route,
+                latestValuesRef.current.route,
                 paymentOfferId,
               );
 
@@ -413,7 +482,7 @@ export const useInboxNotificationsSync = <
                 !isActiveChatContact &&
                 !isActiveBankPaymentOffer
               ) {
-                setContactAttentionById((prev) => ({
+                latest.setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),
                 }));
@@ -431,9 +500,10 @@ export const useInboxNotificationsSync = <
                     formatShortNpub(
                       contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
                     ) ??
-                    t("unknownContactTitle");
-                  pushToast(
-                    t("chatIncomingMessageToast")
+                    latest.t("unknownContactTitle");
+                  latest.pushToast(
+                    latest
+                      .t("chatIncomingMessageToast")
                       .replace("{name}", senderLabel)
                       .replace("{message}", paymentNoticeText),
                   );
@@ -443,8 +513,14 @@ export const useInboxNotificationsSync = <
               if (shouldSurfaceNotification) {
                 const title =
                   contact?.name ??
-                  (contact ? t("appTitle") : t("unknownContactTitle"));
-                void maybeShowPwaNotification(title, paymentNoticeText, wrapId);
+                  (contact
+                    ? latest.t("appTitle")
+                    : latest.t("unknownContactTitle"));
+                void latest.maybeShowPwaNotification(
+                  title,
+                  paymentNoticeText,
+                  wrapId,
+                );
               }
               return;
             }
@@ -459,7 +535,7 @@ export const useInboxNotificationsSync = <
                 : false;
               let hasTerminalKnownOffer = false;
               if (offerId) {
-                for (const message of bankPaymentOfferMessages) {
+                for (const message of latest.bankPaymentOfferMessages) {
                   const knownInfo = getLinkyBankPaymentOfferInfo(
                     String(message.content ?? ""),
                   );
@@ -533,14 +609,14 @@ export const useInboxNotificationsSync = <
               if (tagClientId) {
                 offerMessage.clientId = tagClientId;
               }
-              onBankPaymentOfferMessage(offerMessage);
+              latest.onBankPaymentOfferMessage(offerMessage);
 
               const isActiveChatContact = isOpenChatForContact(
-                route,
+                latest.route,
                 contactId,
               );
               const isActiveBankPaymentOffer = isOpenBankPaymentOffer(
-                route,
+                latest.route,
                 offerId,
               );
 
@@ -553,11 +629,11 @@ export const useInboxNotificationsSync = <
                   !isActiveChatContact &&
                   !isActiveBankPaymentOffer
                 ) {
-                  setContactAttentionById((prev) => ({
+                  latest.setContactAttentionById((prev) => ({
                     ...prev,
                     [contactId]: Date.now(),
                   }));
-                  const notificationText = t(
+                  const notificationText = latest.t(
                     "bankPaymentOfferDeclinedNotification",
                   );
                   const senderLabel =
@@ -565,16 +641,17 @@ export const useInboxNotificationsSync = <
                     formatShortNpub(
                       contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
                     ) ??
-                    t("unknownContactTitle");
+                    latest.t("unknownContactTitle");
                   try {
                     if (document.visibilityState === "visible") {
-                      pushToast(
-                        t("chatIncomingMessageToast")
+                      latest.pushToast(
+                        latest
+                          .t("chatIncomingMessageToast")
                           .replace("{name}", senderLabel)
                           .replace("{message}", notificationText),
                         {
                           onClick: () => {
-                            onOpenInboxMessageToast({ contactId });
+                            latest.onOpenInboxMessageToast({ contactId });
                           },
                         },
                       );
@@ -582,7 +659,7 @@ export const useInboxNotificationsSync = <
                   } catch {
                     // No document in non-browser environments.
                   }
-                  void maybeShowPwaNotification(
+                  void latest.maybeShowPwaNotification(
                     senderLabel,
                     notificationText,
                     wrapId,
@@ -597,7 +674,7 @@ export const useInboxNotificationsSync = <
                 !isActiveBankPaymentOffer &&
                 !isSelfAuthored
               ) {
-                setContactAttentionById((prev) => ({
+                latest.setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),
                 }));
@@ -615,9 +692,10 @@ export const useInboxNotificationsSync = <
                     formatShortNpub(
                       contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
                     ) ??
-                    t("unknownContactTitle");
-                  pushToast(
-                    t("chatIncomingMessageToast")
+                    latest.t("unknownContactTitle");
+                  latest.pushToast(
+                    latest
+                      .t("chatIncomingMessageToast")
                       .replace("{name}", senderLabel)
                       .replace("{message}", offerText),
                   );
@@ -627,14 +705,16 @@ export const useInboxNotificationsSync = <
               if (shouldSurfaceNotification && !isSelfAuthored) {
                 const title =
                   contact?.name ??
-                  (contact ? t("appTitle") : t("unknownContactTitle"));
-                void maybeShowPwaNotification(title, offerText, wrapId);
+                  (contact
+                    ? latest.t("appTitle")
+                    : latest.t("unknownContactTitle"));
+                void latest.maybeShowPwaNotification(title, offerText, wrapId);
               }
               return;
             }
 
             if (inner.kind === 14 || inner.kind === 15) {
-              if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
+              if (latest.nostrMessageWrapIdsRef.current.has(wrapId)) return;
               if (isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)) return;
 
               const tags = Array.isArray(inner.tags) ? inner.tags : [];
@@ -666,7 +746,7 @@ export const useInboxNotificationsSync = <
               const matchedOutgoingMessage =
                 senderPub === myPubHex
                   ? null
-                  : (nostrMessagesLatestRef.current.find((message) => {
+                  : (latest.nostrMessagesLatestRef.current.find((message) => {
                       if (String(message.direction ?? "").trim() !== "out") {
                         return false;
                       }
@@ -727,7 +807,7 @@ export const useInboxNotificationsSync = <
               if (!contactId) return;
 
               const isActiveChatContact = isOpenChatForContact(
-                route,
+                latest.route,
                 contactId,
               );
               const isCashuMessage = isCashuNotificationMessage(content);
@@ -742,13 +822,16 @@ export const useInboxNotificationsSync = <
               }
 
               if (
-                hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
-                  contactId,
-                  direction: messageDirection,
-                  ...(tagClientId ? { clientId: tagClientId } : {}),
-                  ...(rumorId ? { rumorId } : {}),
-                  wrapId,
-                })
+                hasKnownNostrMessageIdentity(
+                  latest.knownNostrMessageIdentityIndex,
+                  {
+                    contactId,
+                    direction: messageDirection,
+                    ...(tagClientId ? { clientId: tagClientId } : {}),
+                    ...(rumorId ? { rumorId } : {}),
+                    wrapId,
+                  },
+                )
               ) {
                 return;
               }
@@ -772,7 +855,7 @@ export const useInboxNotificationsSync = <
               };
 
               if (editedFromId) {
-                const target = nostrMessagesLatestRef.current.find(
+                const target = latest.nostrMessagesLatestRef.current.find(
                   (message) => {
                     const matchesContactId =
                       String(message.contactId ?? "") === String(contactId);
@@ -796,7 +879,7 @@ export const useInboxNotificationsSync = <
                   const existingOriginal =
                     String(target.originalContent ?? "").trim() ||
                     String(target.content ?? "");
-                  updateLocalNostrMessage(targetId, {
+                  latest.updateLocalNostrMessage(targetId, {
                     content,
                     status: "sent",
                     wrapId,
@@ -816,8 +899,8 @@ export const useInboxNotificationsSync = <
               // handling messages for that contact.
               if (isActiveChatContact) return;
 
-              const existingMessage = nostrMessagesLatestRef.current.find(
-                (message) => {
+              const existingMessage =
+                latest.nostrMessagesLatestRef.current.find((message) => {
                   const matchesContactId =
                     String(message.contactId ?? "") === String(contactId);
                   if (
@@ -843,23 +926,25 @@ export const useInboxNotificationsSync = <
                   return (
                     String(message.content ?? "").trim() === content.trim()
                   );
-                },
-              );
-              if (existingMessage) {
-                updateLocalNostrMessage(String(existingMessage.id ?? ""), {
-                  status: "sent",
-                  wrapId,
-                  pubkey: effectivePubkey,
-                  ...(tagClientId ? { clientId: tagClientId } : {}),
-                  ...(rumorId ? { rumorId } : {}),
-                  ...(replyToId ? { replyToId } : {}),
-                  ...(rootMessageId ? { rootMessageId } : {}),
-                  ...(editedFromId ? { editedFromId } : {}),
                 });
+              if (existingMessage) {
+                latest.updateLocalNostrMessage(
+                  String(existingMessage.id ?? ""),
+                  {
+                    status: "sent",
+                    wrapId,
+                    pubkey: effectivePubkey,
+                    ...(tagClientId ? { clientId: tagClientId } : {}),
+                    ...(rumorId ? { rumorId } : {}),
+                    ...(replyToId ? { replyToId } : {}),
+                    ...(rootMessageId ? { rootMessageId } : {}),
+                    ...(editedFromId ? { editedFromId } : {}),
+                  },
+                );
                 return;
               }
 
-              const insertedMessageId = appendLocalNostrMessage({
+              const insertedMessageId = latest.appendLocalNostrMessage({
                 contactId,
                 direction: isOutgoing ? "out" : "in",
                 content,
@@ -885,7 +970,7 @@ export const useInboxNotificationsSync = <
                 !isCashuMessage &&
                 !isActiveChatContact
               ) {
-                setContactAttentionById((prev) => ({
+                latest.setContactAttentionById((prev) => ({
                   ...prev,
                   [contactId]: Date.now(),
                 }));
@@ -903,24 +988,25 @@ export const useInboxNotificationsSync = <
                     formatShortNpub(
                       contact?.npub ?? nip19.npubEncode(resolvedPeerPub),
                     ) ??
-                    t("unknownContactTitle");
+                    latest.t("unknownContactTitle");
                   const formattedPreview = formatChatMessagePreviewText({
                     content,
                     direction: messageDirection,
-                    formatDisplayedAmountText,
-                    t,
+                    formatDisplayedAmountText: latest.formatDisplayedAmountText,
+                    t: latest.t,
                   });
                   const preview =
                     formattedPreview.length > 80
                       ? `${formattedPreview.slice(0, 80)}…`
                       : formattedPreview;
-                  pushToast(
-                    t("chatIncomingMessageToast")
+                  latest.pushToast(
+                    latest
+                      .t("chatIncomingMessageToast")
                       .replace("{name}", senderLabel)
                       .replace("{message}", preview),
                     {
                       onClick: () => {
-                        onOpenInboxMessageToast({
+                        latest.onOpenInboxMessageToast({
                           contactId,
                           ...(insertedMessageId
                             ? { messageId: insertedMessageId }
@@ -933,14 +1019,16 @@ export const useInboxNotificationsSync = <
 
                 const title =
                   contact?.name ??
-                  (contact ? t("appTitle") : t("unknownContactTitle"));
+                  (contact
+                    ? latest.t("appTitle")
+                    : latest.t("unknownContactTitle"));
                 const notificationBody = formatChatMessagePreviewText({
                   content,
                   direction: messageDirection,
-                  formatDisplayedAmountText,
-                  t,
+                  formatDisplayedAmountText: latest.formatDisplayedAmountText,
+                  t: latest.t,
                 });
-                void maybeShowPwaNotification(
+                void latest.maybeShowPwaNotification(
                   title,
                   notificationBody,
                   `msg_${resolvedPeerPub}`,
@@ -957,7 +1045,7 @@ export const useInboxNotificationsSync = <
               const normalizedMessageId = String(messageId ?? "").trim();
               if (!normalizedMessageId) return;
 
-              const knownMessage = nostrMessagesLatestRef.current.find(
+              const knownMessage = latest.nostrMessagesLatestRef.current.find(
                 (message) =>
                   String(message.rumorId ?? "").trim() === normalizedMessageId,
               );
@@ -973,15 +1061,17 @@ export const useInboxNotificationsSync = <
 
               const reactionWrapId = String(inner.id ?? "").trim() || wrapId;
               if (!reactionWrapId) return;
-              if (nostrReactionWrapIdsRef.current.has(reactionWrapId)) return;
+              if (latest.nostrReactionWrapIdsRef.current.has(reactionWrapId))
+                return;
 
               const clientId = extractClientTag(tags);
-              const existingByWrap = nostrReactionsLatestRef.current.find(
-                (reaction) =>
-                  String(reaction.wrapId ?? "").trim() === reactionWrapId,
-              );
+              const existingByWrap =
+                latest.nostrReactionsLatestRef.current.find(
+                  (reaction) =>
+                    String(reaction.wrapId ?? "").trim() === reactionWrapId,
+                );
               if (existingByWrap) {
-                updateLocalNostrReaction(existingByWrap.id, {
+                latest.updateLocalNostrReaction(existingByWrap.id, {
                   status: "sent",
                   wrapId: reactionWrapId,
                   ...(clientId ? { clientId } : {}),
@@ -990,13 +1080,13 @@ export const useInboxNotificationsSync = <
               }
 
               const existingByClient = clientId
-                ? nostrReactionsLatestRef.current.find(
+                ? latest.nostrReactionsLatestRef.current.find(
                     (reaction) =>
                       String(reaction.clientId ?? "").trim() === clientId,
                   )
                 : null;
               if (existingByClient) {
-                updateLocalNostrReaction(existingByClient.id, {
+                latest.updateLocalNostrReaction(existingByClient.id, {
                   status: "sent",
                   wrapId: reactionWrapId,
                   messageId: normalizedMessageId,
@@ -1007,7 +1097,7 @@ export const useInboxNotificationsSync = <
                 return;
               }
 
-              appendLocalNostrReaction({
+              latest.appendLocalNostrReaction({
                 messageId: normalizedMessageId,
                 reactorPubkey: senderPub,
                 emoji,
@@ -1022,16 +1112,17 @@ export const useInboxNotificationsSync = <
             if (inner.kind === 5) {
               const referencedIds = extractDeleteReferencedIds(inner.tags);
               if (referencedIds.length === 0) return;
-              softDeleteLocalNostrReactionsByWrapIds(referencedIds);
+              latest.softDeleteLocalNostrReactionsByWrapIds(referencedIds);
             }
           } catch {
             // ignore individual events
           }
         };
 
-        const relays = nostrFetchRelays.length
-          ? nostrFetchRelays
-          : NOSTR_RELAYS;
+        const latestRelays = normalizeRelayUrls(
+          latestValuesRef.current.nostrFetchRelays,
+        );
+        const relays = latestRelays.length ? latestRelays : NOSTR_RELAYS;
 
         const existing = await pool.querySync(
           relays,
@@ -1080,30 +1171,5 @@ export const useInboxNotificationsSync = <
       cleanup?.();
       cleanup = undefined;
     };
-  }, [
-    bankPaymentOfferMessages,
-    contacts,
-    currentNsec,
-    enabled,
-    formatDisplayedAmountText,
-    appendLocalNostrMessage,
-    appendLocalNostrReaction,
-    updateLocalNostrMessage,
-    updateLocalNostrReaction,
-    maybeShowPwaNotification,
-    nostrFetchRelays,
-    knownNostrMessageIdentityIndex,
-    nostrMessagesRecent,
-    nostrMessageWrapIdsRef,
-    nostrMessagesLatestRef,
-    nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
-    onBankPaymentOfferMessage,
-    onOpenInboxMessageToast,
-    pushToast,
-    route,
-    setContactAttentionById,
-    softDeleteLocalNostrReactionsByWrapIds,
-    t,
-  ]);
+  }, [currentNsec, enabled, relaySignature]);
 };

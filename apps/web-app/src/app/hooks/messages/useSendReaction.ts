@@ -1,7 +1,6 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React from "react";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
-import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import { wrapEventWithoutPushMarker } from "../../lib/pushWrappedEvent";
@@ -12,7 +11,7 @@ import type {
   PublishWrappedResult,
   UpdateLocalNostrReaction,
 } from "../../types/appTypes";
-import { readUnknownPubkeyHex } from "./contactIdentity";
+import { resolveNostrChatIdentity } from "./contactIdentity";
 
 interface UseSendReactionParams<
   TRoute extends { kind: string },
@@ -74,49 +73,17 @@ export const useSendReaction = <
       const messageKind = args.messageKind === 15 ? 15 : 14;
       if (!messageRumorId || !emoji || !messageAuthorPubkey) return;
 
-      const contactNpub = normalizeNpubIdentifier(selectedContact.npub);
-      const unknownPubkeyHex = readUnknownPubkeyHex(selectedContact);
-      if (!contactNpub && !unknownPubkeyHex) {
-        setStatus(t("chatMissingContactNpub"));
-        return;
-      }
-
       try {
-        const { nip19, getEventHash, getPublicKey } =
-          await import("nostr-tools");
-
-        const decodedMe = nip19.decode(currentNsec);
-        if (
-          decodedMe.type !== "nsec" ||
-          !(decodedMe.data instanceof Uint8Array)
-        )
-          throw new Error("invalid nsec");
-        const privBytes = decodedMe.data;
-        const myPubHex = getPublicKey(privBytes);
-
-        let contactPubHex = unknownPubkeyHex;
-
-        if (!contactPubHex) {
-          if (!contactNpub) {
-            setStatus(t("chatMissingContactNpub"));
-            return;
-          }
-          let decodedContact: ReturnType<typeof nip19.decode> | null = null;
-          try {
-            decodedContact = nip19.decode(contactNpub);
-          } catch {
-            decodedContact = null;
-          }
-          if (
-            !decodedContact ||
-            decodedContact.type !== "npub" ||
-            typeof decodedContact.data !== "string"
-          ) {
-            setStatus(t("chatMissingContactNpub"));
-            return;
-          }
-          contactPubHex = decodedContact.data;
+        const { getEventHash } = await import("nostr-tools");
+        const identity = await resolveNostrChatIdentity(
+          currentNsec,
+          selectedContact,
+        );
+        if (!identity) {
+          setStatus(t("chatMissingContactNpub"));
+          return;
         }
+        const { contactPubHex, myPubHex, privBytes } = identity;
 
         // One reaction per user per message: find all my reactions
         const myReactions = (

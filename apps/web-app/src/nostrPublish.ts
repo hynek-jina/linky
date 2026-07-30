@@ -1,10 +1,9 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import { getSharedAppNostrPool } from "./app/lib/nostrPool";
 import type { JsonRecord } from "./types/json";
-import { getSharedNostrPool } from "./utils/nostrPool";
 
 export type PublishResult = {
   anySuccess: boolean;
-  publishedTo: string[];
 };
 
 export const publishKind0ProfileMetadata = async (params: {
@@ -28,11 +27,8 @@ export const publishKind0ProfileMetadata = async (params: {
 
   const signed: NostrToolsEvent = finalizeEvent(baseEvent, privBytes);
 
-  const pool = await getSharedNostrPool();
+  const pool = await getSharedAppNostrPool();
   const publishResults = await Promise.allSettled(pool.publish(relays, signed));
   const anySuccess = publishResults.some((r) => r.status === "fulfilled");
-  return {
-    anySuccess,
-    publishedTo: relays,
-  };
+  return { anySuccess };
 };
