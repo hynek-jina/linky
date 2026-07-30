@@ -73,6 +73,23 @@ const isContactsGuideKey = (value: string): value is ContactsGuideKey =>
   value === "message" ||
   value === "backup_keys";
 
+const DESKTOP_SPLIT_VIEW_QUERY = "(min-width: 961px)";
+
+const useDesktopSplitView = (): boolean => {
+  const [isDesktopSplitView, setIsDesktopSplitView] = React.useState(false);
+
+  React.useEffect(() => {
+    const mediaQuery = window.matchMedia(DESKTOP_SPLIT_VIEW_QUERY);
+    const updateMatch = () => setIsDesktopSplitView(mediaQuery.matches);
+
+    updateMatch();
+    mediaQuery.addEventListener("change", updateMatch);
+    return () => mediaQuery.removeEventListener("change", updateMatch);
+  }, []);
+
+  return isDesktopSplitView;
+};
+
 // Per-frame swipe progress subscribers are isolated in these two small
 // components so drag updates re-render only the tab bar and the FAB, not the
 // whole swipe content with both pages.
@@ -176,6 +193,7 @@ export const MainSwipeContent = (): React.ReactElement => {
     visibleContacts,
   } = mainSwipeProps;
   const { formatDisplayedAmountText } = useAppShellCore();
+  const isDesktopSplitView = useDesktopSplitView();
 
   useShowProfileQrOnTilt({
     enabled:
@@ -190,8 +208,9 @@ export const MainSwipeContent = (): React.ReactElement => {
       <div className="main-swipe" ref={mainSwipeRef}>
         <div
           className="main-swipe-page main-swipe-contacts-page"
-          aria-hidden={route.kind !== "contacts"}
+          aria-hidden={!isDesktopSplitView && route.kind !== "contacts"}
         >
+          <h2 className="desktop-main-pane-title">{t("contactsTitle")}</h2>
           <ContactsPage
             onboardingContent={
               showContactsOnboarding ? (
@@ -214,7 +233,10 @@ export const MainSwipeContent = (): React.ReactElement => {
             contactsSearchInputRef={contactsSearchInputRef}
             contactsSearch={contactsSearch}
             setContactsSearch={setContactsSearch}
-            showGroupFilter={showGroupFilter}
+            showGroupFilter={
+              showGroupFilter ||
+              (isDesktopSplitView && contactFilterOptions.length > 0)
+            }
             activeGroup={activeGroup}
             setActiveGroup={setActiveGroup}
             filterOptions={contactFilterOptions}
@@ -230,7 +252,11 @@ export const MainSwipeContent = (): React.ReactElement => {
             t={t}
           />
         </div>
-        <div className="main-swipe-page" aria-hidden={route.kind !== "wallet"}>
+        <div
+          className="main-swipe-page main-swipe-wallet-page"
+          aria-hidden={!isDesktopSplitView && route.kind !== "wallet"}
+        >
+          <h2 className="desktop-main-pane-title">{t("wallet")}</h2>
           <WalletPage
             cashuBalance={cashuBalance}
             cashuTotalBalance={cashuTotalBalance}
