@@ -13,6 +13,8 @@ export type CashuDeterministicSeed = {
   bip39seed: Uint8Array;
 };
 
+let cachedDeterministicSeed: CashuDeterministicSeed | null = null;
+
 const normalizeMintUrlLoose = (value: string): string => {
   return String(value ?? "")
     .trim()
@@ -30,13 +32,19 @@ export const getCashuDeterministicSeedFromStorage =
     ).trim();
 
     const mnemonic = cashuMnemonic || fallbackMnemonic;
-    if (!mnemonic) return null;
-    if (!validateMnemonic(mnemonic, wordlist)) return null;
+    if (!mnemonic || !validateMnemonic(mnemonic, wordlist)) {
+      cachedDeterministicSeed = null;
+      return null;
+    }
+    if (cachedDeterministicSeed?.mnemonic === mnemonic) {
+      return cachedDeterministicSeed;
+    }
 
-    return {
+    cachedDeterministicSeed = {
       mnemonic,
       bip39seed: mnemonicToSeedSync(mnemonic),
     };
+    return cachedDeterministicSeed;
   };
 
 const CASHU_COUNTER_STORAGE_PREFIX = "linky.cashu.detCounter.v1";
@@ -75,6 +83,7 @@ const CASHU_SEED_BOUND_PREFIXES = [
 ] as const;
 
 export const wipeCashuDeterministicState = (): void => {
+  cachedDeterministicSeed = null;
   try {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i += 1) {
@@ -98,9 +107,8 @@ export const wipeCashuDeterministicState = (): void => {
   counterLocks.clear();
 };
 
-// In-memory per-keyset queue to ensure we never reuse the same deterministic
-// output counter range due to overlapping async mint operations.
-// Note: this does not coordinate across browser tabs/windows.
+// Same-tab ordering queue. Cross-tab exclusion is provided by the
+// localStorage lease acquired inside withCashuDeterministicCounterLock.
 const counterLocks = new Map<string, Promise<void>>();
 
 export const withCashuDeterministicCounterLock = async <T>(

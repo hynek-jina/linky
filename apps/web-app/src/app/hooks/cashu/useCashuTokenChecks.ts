@@ -28,8 +28,10 @@ import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   CASHU_TOKEN_STATE_PENDING,
   isCashuTokenAcceptedState,
+  isDefinitiveCashuError,
   isCashuTokenEmittedState,
   isCashuTokenIssuedState,
+  isTransientCashuError,
   normalizeCashuTokenState,
 } from "../../lib/cashuTokenState";
 import { resolveCashuTokenStoredOwnerLaneById } from "../../lib/cashuOwnerLane";
@@ -87,9 +89,9 @@ export const useCashuTokenChecks = ({
   // teardown). Wallets are read-only here (NUT-07 checkstate / metadata
   // for token decode), so sharing across operations is safe.
   type LoadedCashuWallet = Awaited<ReturnType<typeof createLoadedCashuWallet>>;
-  const cashuWalletCacheRef = React.useRef<Map<string, LoadedCashuWallet>>(
-    new Map(),
-  );
+  const cashuWalletCacheRef = React.useRef<
+    Map<string, Promise<LoadedCashuWallet>>
+  >(new Map());
   React.useEffect(() => {
     const cache = cashuWalletCacheRef.current;
     return () => {
@@ -103,18 +105,29 @@ export const useCashuTokenChecks = ({
     }): Promise<LoadedCashuWallet> => {
       const key = `${args.mintUrl}|${args.unit}`;
       const cached = cashuWalletCacheRef.current.get(key);
-      if (cached) return cached;
-      const { Mint, Wallet } = await getCashuLib();
-      const det = getCashuDeterministicSeedFromStorage();
-      const wallet = await createLoadedCashuWallet({
-        Mint,
-        Wallet,
-        mintUrl: args.mintUrl,
-        unit: args.unit,
-        ...(det ? { bip39seed: det.bip39seed } : {}),
-      });
-      cashuWalletCacheRef.current.set(key, wallet);
-      return wallet;
+      if (cached) return await cached;
+
+      const loading = (async () => {
+        const { Mint, Wallet } = await getCashuLib();
+        const det = getCashuDeterministicSeedFromStorage();
+        return await createLoadedCashuWallet({
+          Mint,
+          Wallet,
+          mintUrl: args.mintUrl,
+          unit: args.unit,
+          ...(det ? { bip39seed: det.bip39seed } : {}),
+        });
+      })();
+      cashuWalletCacheRef.current.set(key, loading);
+
+      try {
+        return await loading;
+      } catch (error) {
+        if (cashuWalletCacheRef.current.get(key) === loading) {
+          cashuWalletCacheRef.current.delete(key);
+        }
+        throw error;
+      }
     },
     [],
   );
@@ -197,60 +210,6 @@ export const useCashuTokenChecks = ({
       }
       setStatus(t("cashuChecking"));
 
-      const looksLikeTransientError = (message: string) => {
-        const m = message.toLowerCase();
-        return (
-          m.includes("failed to fetch") ||
-          m.includes("networkerror") ||
-          m.includes("network error") ||
-          m.includes("timeout") ||
-          m.includes("timed out") ||
-          m.includes("econn") ||
-          m.includes("enotfound") ||
-          m.includes("dns") ||
-          m.includes("offline") ||
-          m.includes("503") ||
-          m.includes("502") ||
-          m.includes("504")
-        );
-      };
-
-      // NUT error codes signalling a definitively invalid token. Preferred
-      // signal: cashu-ts surfaces these as `MintOperationError` instances
-      // with a numeric `.code` field. We fall back to substring matching
-      // for non-mint errors (e.g. local "Token proofs missing" thrown
-      // above), but the substring match is intentionally narrower than
-      // before — the previous loose `.includes("spent")` could trip on
-      // unrelated errors and on a single spent proof in the merge group.
-      const DEFINITIVE_INVALID_CODES = new Set<number>([
-        11001, // TokenAlreadySpentError
-      ]);
-      const isDefinitiveInvalidError = (error: unknown): boolean => {
-        if (
-          error &&
-          typeof error === "object" &&
-          "code" in error &&
-          typeof (error as { code?: unknown }).code === "number" &&
-          DEFINITIVE_INVALID_CODES.has((error as { code: number }).code)
-        ) {
-          return true;
-        }
-        const m = String(
-          (error && typeof error === "object" && "message" in error
-            ? (error as { message?: unknown }).message
-            : error) ?? "",
-        )
-          .trim()
-          .toLowerCase();
-        return (
-          m.includes("token already spent") ||
-          m.includes("invalid proof") ||
-          m.includes("invalid proofs") ||
-          m.includes("token proofs missing") ||
-          m.includes("invalid token")
-        );
-      };
-
       const normalizeProofs = (items: ProofLike[]): Proof[] =>
         items.filter(
           (p): p is Proof =>
@@ -301,8 +260,8 @@ export const useCashuTokenChecks = ({
               effectiveState = CASHU_TOKEN_STATE_ACCEPTED;
             } catch (e) {
               const message = String(e).trim() || "Token invalid";
-              const definitive = isDefinitiveInvalidError(e);
-              const transient = looksLikeTransientError(message);
+              const definitive = isDefinitiveCashuError(e);
+              const transient = isTransientCashuError(e);
 
               if (definitive && !transient) {
                 updateCashuToken({
@@ -567,8 +526,8 @@ export const useCashuTokenChecks = ({
         return "ok";
       } catch (e) {
         const message = String(e).trim() || "Token invalid";
-        const definitive = isDefinitiveInvalidError(e);
-        const transient = looksLikeTransientError(message);
+        const definitive = isDefinitiveCashuError(e);
+        const transient = isTransientCashuError(e);
 
         if (definitive && !transient) {
           updateCashuToken({

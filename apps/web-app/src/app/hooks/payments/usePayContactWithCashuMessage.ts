@@ -14,6 +14,7 @@ import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
 import { resolveCashuRowStoredOwnerLane } from "../../lib/cashuOwnerLane";
 import {
+  buildSparseCashuTokenPayload,
   createCashuTokenId,
   hasMatchingCashuToken,
 } from "../../lib/cashuTokenIdentity";
@@ -146,29 +147,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   update,
   updateLocalNostrMessage,
 }: UsePayContactWithCashuMessageParams) => {
-  const buildCashuTokenPayload = React.useCallback(
-    (args: {
-      amount: number | null;
-      mint: string | null;
-      state: "accepted" | "pending";
-      token: string;
-      unit: string | null;
-    }) => {
-      const payload: {
-        id: CashuTokenId;
-        token: typeof Evolu.NonEmptyString.Type;
-        state: typeof Evolu.NonEmptyString100.Type;
-      } = {
-        id: createCashuTokenId(args.token),
-        token: args.token as typeof Evolu.NonEmptyString.Type,
-        state: args.state as typeof Evolu.NonEmptyString100.Type,
-      };
-
-      return payload;
-    },
-    [],
-  );
-
   return React.useCallback(
     async (args: {
       contact: TContact;
@@ -275,7 +253,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       const cashuWriteOwnerId = await resolveOwnerIdForWrite();
 
       const insertCashuToken = (
-        payload: ReturnType<typeof buildCashuTokenPayload>,
+        payload: ReturnType<typeof buildSparseCashuTokenPayload>,
       ) => {
         if (hasMatchingCashuToken(cashuTokensAll, payload)) {
           return { ok: true, error: null, skippedDuplicate: true };
@@ -334,10 +312,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         unit: string | null;
       }> = [];
       let usedInputTokens: string[] = [];
-      const sendTokenMetaByText = new Map<
-        string,
-        { mint: string; unit: string | null; amount: number }
-      >();
+      const sendTokenTexts = new Set<string>();
       let gainedToken: string | null = null;
 
       let lastError: unknown = null;
@@ -430,11 +405,9 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
               lastMint = candidate.mint;
               if (split.remainingToken && split.remainingAmount > 0) {
                 const inserted = insertCashuToken(
-                  buildCashuTokenPayload({
+                  buildSparseCashuTokenPayload({
+                    id: createCashuTokenId(split.remainingToken),
                     token: split.remainingToken,
-                    mint: split.mint,
-                    unit: split.unit ?? null,
-                    amount: split.remainingAmount,
                     state: "accepted",
                   }),
                 );
@@ -471,11 +444,9 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             if (remainingToken && remainingAmount > 0) {
               gainedToken = remainingToken;
               const inserted = insertCashuToken(
-                buildCashuTokenPayload({
+                buildSparseCashuTokenPayload({
+                  id: createCashuTokenId(remainingToken),
                   token: remainingToken,
-                  mint: split.mint,
-                  unit: split.unit ?? null,
-                  amount: remainingAmount,
                   state: "accepted",
                 }),
               );
@@ -497,11 +468,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
               sendToken: previewTokenText(split.sendToken),
               remainingToken: previewTokenText(split.remainingToken),
             });
-            sendTokenMetaByText.set(split.sendToken, {
-              mint: split.mint,
-              unit: split.unit ?? null,
-              amount: split.sendAmount,
-            });
+            sendTokenTexts.add(split.sendToken);
             sentAmountSat = split.sendAmount;
             break;
           } catch (e) {
@@ -563,10 +530,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
 
         const pool = await getSharedAppNostrPool();
 
-        const messagePlans: Array<{
-          text: string;
-          onSuccess?: () => void;
-        }> = [];
+        const messagePlans: Array<{ text: string }> = [];
 
         for (const batch of sendBatches) {
           logPayStep("plan-send-token", {
@@ -706,9 +670,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             wrapId: String(wrapForMe.id ?? ""),
           });
 
-          plan.onSuccess?.();
           publishedAnyTokenMessage = true;
-          if (sendTokenMetaByText.has(messageText)) {
+          if (sendTokenTexts.has(messageText)) {
             publishedSendTokens.add(messageText);
           }
         }
@@ -741,19 +704,15 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           });
         }
 
-        if (sendTokenMetaByText.size > 0) {
-          const unsentTokens = Array.from(sendTokenMetaByText.keys()).filter(
+        if (sendTokenTexts.size > 0) {
+          const unsentTokens = Array.from(sendTokenTexts).filter(
             (token) => !publishedSendTokens.has(token),
           );
           for (const tokenText of unsentTokens) {
-            const meta = sendTokenMetaByText.get(tokenText);
-            if (!meta) continue;
             insertCashuToken(
-              buildCashuTokenPayload({
+              buildSparseCashuTokenPayload({
+                id: createCashuTokenId(tokenText),
                 token: tokenText,
-                mint: meta.mint,
-                unit: meta.unit ?? null,
-                amount: meta.amount,
                 state: "pending",
               }),
             );
@@ -851,7 +810,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       t,
       update,
       buildCashuMintCandidates,
-      buildCashuTokenPayload,
+      cashuTokensAll,
       updateLocalNostrMessage,
       appendLocalNostrMessage,
       publishWrappedWithRetry,

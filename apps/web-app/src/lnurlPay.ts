@@ -463,7 +463,7 @@ const sha256HexFromString = (input: string): string => {
   return hex;
 };
 
-export const fetchLnurlPayPreview = async (
+const fetchValidatedLnurlPayRequest = async (
   paymentTarget: string,
 ): Promise<LnurlPayPreview> => {
   const requestUrl = resolveLnurlPayRequestUrl(paymentTarget);
@@ -534,6 +534,12 @@ export const fetchLnurlPayPreview = async (
   };
 };
 
+export const fetchLnurlPayPreview = async (
+  paymentTarget: string,
+): Promise<LnurlPayPreview> => {
+  return await fetchValidatedLnurlPayRequest(paymentTarget);
+};
+
 export const fetchLnurlInvoiceForTarget = async (
   paymentTarget: string,
   amountSat: number,
@@ -543,48 +549,30 @@ export const fetchLnurlInvoiceForTarget = async (
     throw new Error("Invalid amount");
   }
 
-  const lnurlpUrl = resolveLnurlPayRequestUrl(paymentTarget);
-  const payReqJson = await fetchLnurlJson(lnurlpUrl);
-  if (!isLnurlPayRequest(payReqJson)) {
-    throw new Error("Invalid LNURL pay response");
-  }
-  const payReq = payReqJson;
-  if (String(payReq.status ?? "").toUpperCase() === "ERROR") {
-    throw new Error(asNonEmptyString(payReq.reason) ?? "LNURL error");
-  }
-
-  const callback = asNonEmptyString(payReq.callback);
-  if (!callback) throw new Error("LNURL callback missing");
-
-  const minSendable = Number(payReq.minSendable ?? NaN);
-  const maxSendable = Number(payReq.maxSendable ?? NaN);
-  if (!Number.isFinite(minSendable) || !Number.isFinite(maxSendable)) {
-    throw new Error("LNURL min/max missing");
-  }
+  const payRequest = await fetchValidatedLnurlPayRequest(paymentTarget);
 
   const amountMsat = Math.round(amountSat * 1000);
-  if (amountMsat < minSendable || amountMsat > maxSendable) {
+  if (
+    amountMsat < payRequest.minSendableMsat ||
+    amountMsat > payRequest.maxSendableMsat
+  ) {
     throw new Error("Amount out of LNURL range");
   }
 
-  const callbackUrl = new URL(callback);
+  const callbackUrl = new URL(payRequest.callback);
   callbackUrl.searchParams.set("amount", String(amountMsat));
 
-  const commentAllowed = Number(payReq.commentAllowed ?? 0);
   const rawComment = String(comment ?? "").trim();
 
   // Some LNURL-pay providers omit/misreport commentAllowed. We try to include
   // a short comment (e.g., user display name) and fall back silently if it
   // causes invoice fetch to fail.
   const canUseComment = rawComment.length > 0;
-  const providerAdvertisesComment =
-    Number.isFinite(commentAllowed) && commentAllowed > 0;
+  const providerAdvertisesComment = payRequest.commentAllowed > 0;
   const maybeWithCommentUrl = (() => {
     if (!canUseComment) return null;
     const u = new URL(callbackUrl.toString());
-    const maxLen = providerAdvertisesComment
-      ? Math.max(0, Math.floor(commentAllowed))
-      : 140;
+    const maxLen = providerAdvertisesComment ? payRequest.commentAllowed : 140;
     if (maxLen <= 0) return null;
     u.searchParams.set("comment", rawComment.slice(0, maxLen));
     return u.toString();
@@ -621,7 +609,7 @@ export const fetchLnurlInvoiceForTarget = async (
 
   // LUD-06 step 7: verify the invoice's `h` tag is sha256(utf8(metadata)) and
   // its amount equals the user-specified millisatoshis.
-  const metadataRaw = asNonEmptyString(payReq.metadata);
+  const metadataRaw = payRequest.metadataRaw;
   if (metadataRaw) {
     const invoiceHashHex = getLightningInvoiceDescriptionHashHex(pr);
     if (invoiceHashHex) {
@@ -639,19 +627,10 @@ export const fetchLnurlInvoiceForTarget = async (
   }
 
   return {
-    lightningAddress:
-      parseLnurlPayMetadata(metadataRaw)?.lightningAddress ?? null,
+    lightningAddress: payRequest.lightningAddress,
     pr,
     successAction: parseLnurlPaySuccessAction(invoiceJson.successAction),
   };
-};
-
-export const fetchLnurlInvoiceForLightningAddress = async (
-  lightningAddress: string,
-  amountSat: number,
-  comment?: string,
-): Promise<LnurlPayInvoiceResult> => {
-  return fetchLnurlInvoiceForTarget(lightningAddress, amountSat, comment);
 };
 
 const resolveLnurlWithdrawRequestUrl = (value: string): string => {

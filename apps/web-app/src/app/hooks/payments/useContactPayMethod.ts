@@ -2,7 +2,6 @@ import React from "react";
 import type { Route } from "../../../types/route";
 
 interface UseContactPayMethodParams {
-  allowPromisesEnabled: boolean;
   payWithCashuEnabled: boolean;
   routeKind: Route["kind"];
   selectedContactLnAddress: string;
@@ -13,7 +12,6 @@ interface UseContactPayMethodParams {
 }
 
 export const useContactPayMethod = ({
-  allowPromisesEnabled,
   payWithCashuEnabled,
   routeKind,
   selectedContactLnAddress,
@@ -28,8 +26,7 @@ export const useContactPayMethod = ({
 
     const npub = String(selectedContactNpub ?? "").trim();
     const ln = String(selectedContactLnAddress ?? "").trim();
-    const canUseCashu =
-      (payWithCashuEnabled || allowPromisesEnabled) && Boolean(npub);
+    const canUseCashu = payWithCashuEnabled && Boolean(npub);
     const canUseLightning = Boolean(ln);
 
     // Default: prefer cashu when possible.
@@ -46,7 +43,6 @@ export const useContactPayMethod = ({
     // No usable method; keep a stable default for UI.
     setContactPayMethod("lightning");
   }, [
-    allowPromisesEnabled,
     payWithCashuEnabled,
     routeKind,
     selectedContactLnAddress,

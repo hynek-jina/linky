@@ -12,7 +12,10 @@ import type {
   OptionalNumber,
   OptionalText,
 } from "../../types/appTypes";
-import { createCashuTokenId } from "../../lib/cashuTokenIdentity";
+import {
+  buildSparseCashuTokenPayload,
+  createCashuTokenId,
+} from "../../lib/cashuTokenIdentity";
 import { isUnknownContactId } from "../messages/contactIdentity";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
@@ -62,40 +65,6 @@ export const useSaveCashuFromText = ({
   t,
   touchMintInfo,
 }: UseSaveCashuFromTextParams) => {
-  const buildCashuTokenPayload = React.useCallback(
-    (args: {
-      amount: number | null;
-      error: string | null;
-      mint: string | null;
-      identityToken: string;
-      state: "accepted" | "error";
-      token: string;
-      unit: string | null;
-    }) => {
-      const payload: {
-        id: ReturnType<typeof createCashuTokenId>;
-        token: typeof Evolu.NonEmptyString.Type;
-        state: typeof Evolu.NonEmptyString100.Type;
-        error?: typeof Evolu.NonEmptyString1000.Type;
-      } = {
-        id: createCashuTokenId(args.identityToken),
-        token: args.token as typeof Evolu.NonEmptyString.Type,
-        state: args.state as typeof Evolu.NonEmptyString100.Type,
-      };
-
-      const error = String(args.error ?? "").trim();
-      if (error) {
-        payload.error = error.slice(
-          0,
-          1000,
-        ) as typeof Evolu.NonEmptyString1000.Type;
-      }
-
-      return payload;
-    },
-    [],
-  );
-
   return React.useCallback(
     async (
       tokenText: string,
@@ -174,12 +143,9 @@ export const useSaveCashuFromText = ({
 
           const result = upsert(
             "cashuToken",
-            buildCashuTokenPayload({
+            buildSparseCashuTokenPayload({
+              id: createCashuTokenId(tokenRaw),
               token: acceptedToken,
-              identityToken: tokenRaw,
-              mint: String(accepted.mint ?? ""),
-              unit: accepted.unit,
-              amount: accepted.amount > 0 ? accepted.amount : null,
               state: "accepted",
               error: null,
             }),
@@ -282,12 +248,9 @@ export const useSaveCashuFromText = ({
           }
           const result = upsert(
             "cashuToken",
-            buildCashuTokenPayload({
+            buildSparseCashuTokenPayload({
+              id: createCashuTokenId(tokenRaw),
               token: tokenRaw,
-              identityToken: tokenRaw,
-              mint: parsedMint,
-              unit: null,
-              amount: typeof parsedAmount === "number" ? parsedAmount : null,
               state: "error",
               error: message,
             }),
@@ -323,7 +286,6 @@ export const useSaveCashuFromText = ({
       showPaidOverlay,
       t,
       touchMintInfo,
-      buildCashuTokenPayload,
     ],
   );
 };

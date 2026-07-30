@@ -23,6 +23,7 @@ import type {
   LoggedPaymentEventParams,
 } from "../../types/appTypes";
 import {
+  buildSparseCashuTokenPayload,
   createCashuTokenId,
   hasMatchingCashuToken,
 } from "../../lib/cashuTokenIdentity";
@@ -113,40 +114,6 @@ export const useNpubCashClaim = ({
   t,
   touchMintInfo,
 }: UseNpubCashClaimParams) => {
-  const buildCashuTokenPayload = React.useCallback(
-    (args: {
-      amount: number | null;
-      error: string | null;
-      mint: string | null;
-      identityToken: string;
-      state: "accepted" | "error";
-      token: string;
-      unit: string | null;
-    }) => {
-      const payload: {
-        id: ReturnType<typeof createCashuTokenId>;
-        token: typeof Evolu.NonEmptyString.Type;
-        state: typeof Evolu.NonEmptyString100.Type;
-        error?: typeof Evolu.NonEmptyString1000.Type;
-      } = {
-        id: createCashuTokenId(args.identityToken),
-        token: args.token as typeof Evolu.NonEmptyString.Type,
-        state: args.state as typeof Evolu.NonEmptyString100.Type,
-      };
-
-      const error = String(args.error ?? "").trim();
-      if (error) {
-        payload.error = error.slice(
-          0,
-          1000,
-        ) as typeof Evolu.NonEmptyString1000.Type;
-      }
-
-      return payload;
-    },
-    [],
-  );
-
   const acceptAndStoreCashuToken = React.useCallback(
     async (tokenText: string) => {
       const tokenRaw = tokenText.trim();
@@ -185,12 +152,9 @@ export const useNpubCashClaim = ({
 
           const result = upsert(
             "cashuToken",
-            buildCashuTokenPayload({
+            buildSparseCashuTokenPayload({
+              id: createCashuTokenId(tokenRaw),
               token: acceptedToken,
-              identityToken: tokenRaw,
-              mint: String(accepted.mint ?? ""),
-              unit: accepted.unit,
-              amount: accepted.amount > 0 ? accepted.amount : null,
               state: "accepted",
               error: null,
             }),
@@ -291,12 +255,9 @@ export const useNpubCashClaim = ({
           if (ownerId) {
             upsert(
               "cashuToken",
-              buildCashuTokenPayload({
+              buildSparseCashuTokenPayload({
+                id: createCashuTokenId(tokenRaw),
                 token: tokenRaw,
-                identityToken: tokenRaw,
-                mint: parsedMint,
-                unit: null,
-                amount: typeof parsedAmount === "number" ? parsedAmount : null,
                 state: "error",
                 error: message,
               }),
@@ -316,7 +277,6 @@ export const useNpubCashClaim = ({
       formatDisplayedAmountParts,
       upsert,
       isMintDeleted,
-      buildCashuTokenPayload,
       logPaymentEvent,
       maybeShowPwaNotification,
       mintInfoByUrl,

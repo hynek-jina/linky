@@ -396,28 +396,6 @@ export const useTopupInvoiceQuoteEffects = ({
           amount: amountSat,
           unit: "sat",
         });
-
-        setTopupInvoice(invoice);
-        const cashuRequest = buildTopupInvoiceCashuRequest({
-          amountSat,
-          mintUrl,
-          quoteId,
-          recipientNprofile: topupRecipientNprofile,
-        });
-        setTopupInvoiceCashuRequest(cashuRequest);
-        const qrPayload = buildTopupInvoiceQrPayload({
-          cashuRequest,
-          invoice,
-        });
-        setTopupInvoiceQrPayload(qrPayload);
-
-        const QRCode = await import("qrcode");
-        const qr = await QRCode.toDataURL(qrPayload, {
-          margin: 1,
-          width: 320,
-        });
-        if (cancelled) return;
-        setTopupInvoiceQr(qr);
       } catch (error) {
         if (!cancelled) {
           const message = String(error ?? "");

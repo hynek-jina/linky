@@ -1,10 +1,7 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
 import { useDeferredOnlineReady } from "../../../hooks/useDeferredOnlineReady";
-import {
-  LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
-  LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
-} from "../../../utils/constants";
+import { LOCAL_MINT_INFO_STORAGE_KEY_PREFIX } from "../../../utils/constants";
 import {
   MAIN_MINT_URL,
   normalizeMintUrl,
@@ -12,7 +9,6 @@ import {
 } from "../../../utils/mint";
 import {
   safeLocalStorageGetJson,
-  safeLocalStorageSet,
   safeLocalStorageSetJson,
 } from "../../../utils/storage";
 import { makeLocalId } from "../../../utils/validation";
@@ -188,10 +184,14 @@ export const useMintInfoStore = ({
     Record<string, { lastCheckedAtSec: number; latencyMs: number | null }>
   >(() => ({}));
 
-  const mintInfoCheckOnceRef = React.useRef<Set<string>>(new Set());
+  const mintInfoRefreshInFlightRef = React.useRef<Set<string>>(new Set());
+  const mintInfoLastSuccessfulRefreshRef = React.useRef<Map<string, number>>(
+    new Map(),
+  );
 
   React.useEffect(() => {
-    mintInfoCheckOnceRef.current = new Set();
+    mintInfoRefreshInFlightRef.current = new Set();
+    mintInfoLastSuccessfulRefreshRef.current = new Map();
   }, [appOwnerId]);
 
   const getMintRuntime = React.useCallback(
@@ -222,12 +222,11 @@ export const useMintInfoStore = ({
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
         return;
       }
-      if (mintInfoCheckOnceRef.current.has(cleaned)) return;
-
-      mintInfoCheckOnceRef.current.add(cleaned);
-
       const ownerId = appOwnerIdRef.current;
       if (!ownerId) return;
+      if (mintInfoRefreshInFlightRef.current.has(cleaned)) return;
+
+      mintInfoRefreshInFlightRef.current.add(cleaned);
 
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), 8000);
@@ -315,6 +314,7 @@ export const useMintInfoStore = ({
           lastCheckedAtSec: nowSec,
           latencyMs: Math.max(0, Math.round(finishedAt - startedAt)),
         });
+        mintInfoLastSuccessfulRefreshRef.current.set(cleaned, nowSec);
       } catch {
         recordMintRuntime(cleaned, {
           lastCheckedAtSec: nowSec,
@@ -322,6 +322,7 @@ export const useMintInfoStore = ({
         });
       } finally {
         window.clearTimeout(timeout);
+        mintInfoRefreshInFlightRef.current.delete(cleaned);
       }
     },
     [appOwnerIdRef, isMintDeleted, mintInfoByUrl, recordMintRuntime],
@@ -338,7 +339,15 @@ export const useMintInfoStore = ({
       return;
     }
 
-    if (canRunNetworkWork && !getMintRuntime(cleaned)) {
+    const lastSuccessful =
+      mintInfoLastSuccessfulRefreshRef.current.get(cleaned) ??
+      Number(existing.lastCheckedAtSec ?? 0);
+    const lastAttempt = getMintRuntime(cleaned)?.lastCheckedAtSec ?? 0;
+    if (
+      canRunNetworkWork &&
+      nowSec - lastSuccessful > 86_400 &&
+      (lastAttempt === 0 || nowSec - lastAttempt > 60)
+    ) {
       void refreshMintInfo(cleaned);
     }
   }, [
@@ -379,11 +388,15 @@ export const useMintInfoStore = ({
 
       touchMintInfo(cleaned, nowSec);
 
-      const lastChecked = getMintRuntime(cleaned)?.lastCheckedAtSec ?? 0;
+      const lastSuccessful =
+        mintInfoLastSuccessfulRefreshRef.current.get(cleaned) ??
+        Number(existing.lastCheckedAtSec ?? 0);
+      const lastAttempt = getMintRuntime(cleaned)?.lastCheckedAtSec ?? 0;
       const oneDay = 86_400;
       if (
         canRunNetworkWork &&
-        (lastChecked === 0 || nowSec - lastChecked > oneDay)
+        nowSec - lastSuccessful > oneDay &&
+        (lastAttempt === 0 || nowSec - lastAttempt > 60)
       ) {
         void refreshMintInfo(cleaned);
       }
@@ -421,15 +434,6 @@ export const useMintInfoStore = ({
       deduped,
     );
   }, [appOwnerIdRef, mintInfoAll]);
-
-  React.useEffect(() => {
-    const remembered = safeLocalStorageGetJson(
-      LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
-      "",
-    );
-    if (!String(remembered ?? "").trim()) return;
-    safeLocalStorageSet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY, "");
-  }, []);
 
   return {
     getMintRuntime,
