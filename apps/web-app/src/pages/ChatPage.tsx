@@ -25,6 +25,11 @@ import {
   setMessageEditorCaret,
 } from "../app/lib/messageEditorDom";
 import {
+  captureChatViewportAnchor,
+  restoreChatViewportAnchor,
+  type ChatViewportAnchor,
+} from "../app/lib/chatViewport";
+import {
   applyMessageMentionSuggestion,
   getMessageMentionQuery,
   getMessageMentionSuggestions,
@@ -873,7 +878,8 @@ const useChatViewport = (
     const root = document.documentElement;
     const body = document.body;
     const pendingRefreshTimeouts = new Set<number>();
-    let pendingBottomScrollFrame: number | null = null;
+    let pendingViewportAnchor: ChatViewportAnchor | null = null;
+    let pendingViewportAnchorFrame: number | null = null;
     const getWindowScrollTop = () =>
       Math.max(
         window.scrollY,
@@ -887,6 +893,9 @@ const useChatViewport = (
     body.style.overflow = "hidden";
 
     const updateViewportHeight = () => {
+      pendingViewportAnchor ??= captureChatViewportAnchor(
+        chatMessagesRef.current,
+      );
       const viewport = window.visualViewport;
       const nextHeight = viewport?.height ?? window.innerHeight;
       const nextOffsetTop = viewport?.offsetTop ?? 0;
@@ -919,16 +928,16 @@ const useChatViewport = (
         delete root.dataset.chatKeyboardOpen;
       }
 
-      if (pendingBottomScrollFrame !== null) {
-        window.cancelAnimationFrame(pendingBottomScrollFrame);
+      if (pendingViewportAnchorFrame !== null) {
+        window.cancelAnimationFrame(pendingViewportAnchorFrame);
       }
-      pendingBottomScrollFrame = window.requestAnimationFrame(() => {
-        pendingBottomScrollFrame = null;
-        const messages = chatMessagesRef.current;
-        const scrollHeight = messages?.scrollHeight;
-        if (messages && scrollHeight !== undefined) {
-          messages.scrollTop = scrollHeight;
-        }
+      pendingViewportAnchorFrame = window.requestAnimationFrame(() => {
+        pendingViewportAnchorFrame = null;
+        restoreChatViewportAnchor(
+          chatMessagesRef.current,
+          pendingViewportAnchor,
+        );
+        pendingViewportAnchor = null;
       });
     };
 
@@ -977,8 +986,8 @@ const useChatViewport = (
       for (const timeoutId of pendingRefreshTimeouts) {
         window.clearTimeout(timeoutId);
       }
-      if (pendingBottomScrollFrame !== null) {
-        window.cancelAnimationFrame(pendingBottomScrollFrame);
+      if (pendingViewportAnchorFrame !== null) {
+        window.cancelAnimationFrame(pendingViewportAnchorFrame);
       }
       root.style.overflow = previousHtmlOverflow;
       body.style.overflow = previousBodyOverflow;
