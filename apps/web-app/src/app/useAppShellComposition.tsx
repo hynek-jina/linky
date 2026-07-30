@@ -1,7 +1,7 @@
 import { Share } from "@capacitor/share";
 import type { Proof } from "@cashu/cashu-ts";
 import * as Evolu from "@evolu/common";
-import { useOwner, useQuery } from "@evolu/react";
+import { useQuery } from "@evolu/react";
 import {
   nip19,
   type Event as NostrToolsEvent,
@@ -23,7 +23,6 @@ import {
   useEvoluDatabaseInfoState,
   useEvoluLastError,
   useEvoluServersManager,
-  useEvoluSyncOwner,
   wipeEvoluStorage as wipeEvoluStorageImpl,
   type CashuTokenId,
   type ContactId,
@@ -58,10 +57,6 @@ import {
   parseStatusFilterValue,
 } from "../nostrStatus";
 import { writeClipboardText } from "../platform/clipboard";
-import {
-  persistSyncedActiveNostrIdentity,
-  readStoredNostrNsec,
-} from "../platform/identitySecrets";
 import {
   cancelNativeNfcWrite,
   consumePendingIosNativeDeepLinkUrl,
@@ -131,18 +126,11 @@ import { parseNpubCashProfileInfo } from "../utils/npubCashInfo";
 import { resolveNpubCashServerBaseUrl } from "../utils/npubCashServer";
 import { setStoredPushContactNames } from "../utils/pushContactNamesStorage";
 import {
-  clearStoredPushNsec,
-  setStoredPushNsec,
-} from "../utils/pushNsecStorage";
-import {
   getInitialAllowedDisplayCurrencies,
   getInitialBankPaymentOfferRecipientCount,
   getInitialCashuAutoswapEnabled,
   getInitialDisplayCurrency,
   getInitialLightningInvoiceAutoPayLimit,
-  getInitialNostrIdentitySource,
-  getInitialNostrIdentitySwitchedAtSec,
-  getInitialNostrNsec,
   getInitialPayWithCashuEnabled,
   getInitialShowProfileQrOnTiltEnabled,
   safeLocalStorageGet,
@@ -158,17 +146,13 @@ import { useCashuTokenChecks } from "./hooks/cashu/useCashuTokenChecks";
 import { useNpubCashClaim } from "./hooks/cashu/useNpubCashClaim";
 import { useRestoreMissingTokens } from "./hooks/cashu/useRestoreMissingTokens";
 import { useSaveCashuFromText } from "./hooks/cashu/useSaveCashuFromText";
+import { useIdentityOwnersComposition } from "./hooks/composition/useIdentityOwnersComposition";
 import { usePaymentMoneyComposition } from "./hooks/composition/usePaymentMoneyComposition";
-import { useProfileAuthComposition } from "./hooks/composition/useProfileAuthComposition";
 import { useProfilePeopleComposition } from "./hooks/composition/useProfilePeopleComposition";
 import { useRoutingViewComposition } from "./hooks/composition/useRoutingViewComposition";
 import { useSystemSettingsComposition } from "./hooks/composition/useSystemSettingsComposition";
 import { useContactEditor } from "./hooks/contacts/useContactEditor";
 import { useVisibleContacts } from "./hooks/contacts/useVisibleContacts";
-import {
-  ACTIVE_NOSTR_IDENTITY_ROW_ID,
-  resolveSyncedNostrIdentity,
-} from "./lib/nostrIdentitySync";
 import { useContactsOnboardingProgress } from "./hooks/guide/useContactsOnboardingProgress";
 import { useMainMenuState } from "./hooks/layout/useMainMenuState";
 import { useMainSwipeNavigation } from "./hooks/layout/useMainSwipeNavigation";
@@ -225,7 +209,6 @@ import { useCashuDomain } from "./hooks/useCashuDomain";
 import { useContactsDomain } from "./hooks/useContactsDomain";
 import { useContactsNostrPrefetchEffects } from "./hooks/useContactsNostrPrefetchEffects";
 import { useEvoluNostrBootstrapReady } from "./hooks/useEvoluNostrBootstrapReady";
-import { useEvoluContactsOwnerRotation } from "./hooks/useEvoluContactsOwnerRotation";
 import { useFeedbackContact } from "./hooks/useFeedbackContact";
 import { useFiatRates } from "./hooks/useFiatRates";
 import { useGuideScannerDomain } from "./hooks/useGuideScannerDomain";
@@ -282,7 +265,6 @@ import {
 import {
   buildIdentityChangeMessageContent,
   buildIdentityChangeMessageWrapId,
-  type IdentityChangeMessageSource,
 } from "./lib/identityChangeMessage";
 import {
   consumeNotificationOpenDetailFromHash,
@@ -474,13 +456,101 @@ export const useAppShellComposition = () => {
 
   const hasMintOverrideRef = React.useRef(false);
 
-  const appOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
-  const cashuOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
-  const messagesOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
-  const transactionsOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
-  const recordTransactionsOwnerWriteRef = React.useRef<
-    ((count?: number) => void) | null
-  >(null);
+  const route = useRouting();
+  const { dismissToast, toasts, pushToast } = useToasts();
+  const [lang, setLang] = useState<Lang>(() => getInitialLang());
+  const t = React.useCallback(
+    (key: string) => (hasTranslationKey(key) ? translations[lang][key] : key),
+    [lang],
+  );
+  const {
+    activeNostrIdentitySource,
+    activeSyncedNostrIdentity,
+    appOwnerId,
+    appOwnerIdRef,
+    appendIdentityChangeNoticesRef,
+    cashuOwnerEditsUntilRotation,
+    cashuOwnerId,
+    cashuOwnerIdRef,
+    cashuOwnerIndex,
+    cashuVisibleOwnerIds,
+    confirmPendingOnboardingProfile,
+    contactsOwnerEditCount,
+    contactsOwnerEditsUntilRotation,
+    contactsOwnerId,
+    contactsOwnerIndex,
+    contactsOwnerNewContactsCount,
+    contactsOwnerPointer,
+    contactsVisibleOwnerIds,
+    createNewAccount,
+    currentNpub,
+    currentNsec,
+    historicalOwnerSetsReady,
+    identityOwnerId,
+    isSeedLogin,
+    legacyIdentitiesOwnerId,
+    legacyMessagesIdentityOwnerId,
+    logoutArmed,
+    messagesBackupOwnerId,
+    messagesOwnerEditsUntilRotation,
+    messagesOwnerId,
+    messagesOwnerIdRef,
+    messagesOwnerIndex,
+    messagesVisibleOwnerIds,
+    metaOwnerId,
+    nostrIdentityRows,
+    onboardingIsBusy,
+    onboardingPhotoInputRef,
+    onboardingStep,
+    openReturningOnboarding,
+    onPendingOnboardingPhotoError,
+    onPendingOnboardingPhotoSelected,
+    pasteReturningSlip39FromClipboard,
+    pickPendingOnboardingPhoto,
+    recordContactsOwnerWrite,
+    recordMessagesOwnerWrite,
+    recordTransactionsOwnerWrite,
+    recordTransactionsOwnerWriteRef,
+    requestDeriveNostrKeys,
+    requestLogout,
+    requestManualRotateCashuOwner,
+    requestManualRotateContactsOwner,
+    requestManualRotateMessagesOwner,
+    requestManualRotateTransactionsOwner,
+    requestPasteNostrKeys,
+    rotateCashuOwnerIsBusy,
+    rotateContactsOwnerIsBusy,
+    rotateMessagesOwnerIsBusy,
+    rotateTransactionsOwnerIsBusy,
+    savePendingOnboardingBackupToPasswordManager,
+    seedMnemonic,
+    cyclePendingOnboardingAvatarControl,
+    selectReturningSlip39Suggestion,
+    setOnboardingStep,
+    setPendingOnboardingName,
+    setReturningSlip39Input,
+    slip39Seed,
+    submitReturningSlip39,
+    syncedNostrIdentityMatchesLocal,
+    syncedNostrIdentityResolution,
+    syncOwner,
+    transactionsBackupOwnerId,
+    transactionsBootstrapSnapshot,
+    transactionsOwnerEditsUntilRotation,
+    transactionsOwnerId,
+    transactionsOwnerIdRef,
+    transactionsOwnerIndex,
+    transactionsOwnerPointer,
+    transactionsVisibleOwnerIds,
+  } = useIdentityOwnersComposition({
+    evolu,
+    lang,
+    navigation: globalThis.location,
+    pushToast,
+    t,
+    upsert,
+  });
+
   const {
     logPaymentEvent,
     makeLocalStorageKey,
@@ -493,9 +563,6 @@ export const useAppShellComposition = () => {
     recordTransactionsOwnerWriteRef,
     transactionsOwnerIdRef,
   });
-
-  const route = useRouting();
-  const { dismissToast, toasts, pushToast } = useToasts();
 
   const evoluServers = useEvoluServersManager();
   const evoluServerUrls = evoluServers.configuredUrls;
@@ -552,7 +619,6 @@ export const useAppShellComposition = () => {
   const [contactAttentionById, setContactAttentionById] = useState<
     Record<string, number>
   >(() => ({}));
-  const [lang, setLang] = useState<Lang>(() => getInitialLang());
   const [allowedDisplayCurrencies, setAllowedDisplayCurrencies] = useState<
     DisplayCurrency[]
   >(() => getInitialAllowedDisplayCurrencies());
@@ -658,33 +724,7 @@ export const useAppShellComposition = () => {
     [displayCurrency, fiatRates, lang],
   );
 
-  const [currentNsec, setCurrentNsec] = useState<string | null>(() =>
-    getInitialNostrNsec(),
-  );
   const [chatOwnPubkeyHex, setChatOwnPubkeyHex] = useState<string | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      const storedNsec = await readStoredNostrNsec();
-      if (cancelled) return;
-      setCurrentNsec((current) =>
-        current === storedNsec ? current : storedNsec,
-      );
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Evolu is local-first; to get automatic cross-device/browser sync you must
-  // "use" an owner (which starts syncing over configured transports).
-  // We only enable it after the user has an nsec (our identity gate).
-  const syncOwner = useEvoluSyncOwner(Boolean(currentNsec));
-
-  useOwner(syncOwner);
 
   const evoluLastError = useEvoluLastError({ logToConsole: true });
   const evoluHasError = Boolean(evoluLastError);
@@ -714,20 +754,6 @@ export const useAppShellComposition = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentNsec]);
-
-  React.useEffect(() => {
-    void (async () => {
-      try {
-        if (currentNsec) {
-          await setStoredPushNsec(currentNsec);
-        } else {
-          await clearStoredPushNsec();
-        }
-      } catch {
-        // ignore
-      }
-    })();
   }, [currentNsec]);
 
   React.useEffect(() => {
@@ -769,7 +795,6 @@ export const useAppShellComposition = () => {
     return "disconnected" as const;
   }, [evoluActiveServerUrls, evoluHasError, evoluServerStatusByUrl, syncOwner]);
 
-  const appOwnerId = syncOwner?.id ?? null;
   const pendingTopupStorageKey = `${LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX}.${String(appOwnerId ?? "anon")}`;
 
   useAnonymousPaymentTelemetry({
@@ -814,7 +839,7 @@ export const useAppShellComposition = () => {
       }
       hasMintOverrideRef.current = false;
     }
-  }, [appOwnerId, makeLocalStorageKey]);
+  }, [appOwnerId, appOwnerIdRef, makeLocalStorageKey]);
 
   // Evolu error subscription handled by useEvoluLastError.
 
@@ -1043,13 +1068,6 @@ export const useAppShellComposition = () => {
   const [lnurlWithdrawIsBusy, setLnurlWithdrawIsBusy] = useState(false);
 
   const chatMessagesRef = React.useRef<HTMLDivElement | null>(null);
-  const appendIdentityChangeNoticesRef = React.useRef<
-    | ((args: {
-        changedAtSec: number;
-        identitySource: IdentityChangeMessageSource;
-      }) => void)
-    | null
-  >(null);
   const chatMessageElByIdRef = React.useRef<Map<string, HTMLDivElement>>(
     new Map(),
   );
@@ -1236,11 +1254,6 @@ export const useAppShellComposition = () => {
     targetNpub: string;
   } | null>(null);
 
-  const t = React.useCallback(
-    (key: string) => (hasTranslationKey(key) ? translations[lang][key] : key),
-    [lang],
-  );
-
   const {
     paidOverlayIsOpen,
     paidOverlayTitle,
@@ -1325,125 +1338,6 @@ export const useAppShellComposition = () => {
       topupPaidNavTimerRef,
     ],
   );
-
-  const {
-    activeNostrIdentitySource,
-    confirmPendingOnboardingProfile,
-    createNewAccount,
-    currentNpub,
-    isSeedLogin,
-    logoutArmed,
-    onboardingIsBusy,
-    onboardingPhotoInputRef,
-    onboardingStep,
-    openReturningOnboarding,
-    onPendingOnboardingPhotoError,
-    onPendingOnboardingPhotoSelected,
-    pasteReturningSlip39FromClipboard,
-    pickPendingOnboardingPhoto,
-    requestDeriveNostrKeys,
-    requestPasteNostrKeys,
-    requestLogout,
-    savePendingOnboardingBackupToPasswordManager,
-    seedMnemonic,
-    cyclePendingOnboardingAvatarControl,
-    selectReturningSlip39Suggestion,
-    slip39Seed,
-    setReturningSlip39Input,
-    setOnboardingStep,
-    setPendingOnboardingName,
-    submitReturningSlip39,
-  } = useProfileAuthComposition({
-    appendIdentityChangeNoticesRef,
-    currentNsec,
-    lang,
-    pushToast,
-    t,
-    upsert,
-  });
-
-  const {
-    cashuOwnerId,
-    cashuOwnerEditsUntilRotation,
-    cashuOwnerIndex,
-    cashuSyncOwner,
-    cashuVisibleOwnerIds,
-    contactsSyncOwner,
-    contactsOwnerEditCount,
-    contactsOwnerEditsUntilRotation,
-    contactsOwnerId,
-    contactsOwnerIndex,
-    contactsOwnerNewContactsCount,
-    contactsOwnerPointer,
-    contactsVisibleOwnerIds,
-    identityOwnerId,
-    identitySyncOwner,
-    historicalBootstrapSyncOwners,
-    legacyIdentitiesOwnerId,
-    legacyMessagesIdentityOwnerId,
-    metaOwnerId,
-    metaSyncOwner,
-    messagesBackupOwnerId,
-    messagesOwnerId,
-    messagesOwnerEditsUntilRotation,
-    messagesOwnerIndex,
-    messagesSyncOwner,
-    messagesVisibleOwnerIds,
-    recordContactsOwnerWrite,
-    recordMessagesOwnerWrite,
-    recordTransactionsOwnerWrite,
-    requestManualRotateCashuOwner,
-    requestManualRotateContactsOwner,
-    requestManualRotateMessagesOwner,
-    requestManualRotateTransactionsOwner,
-    rotateCashuOwnerIsBusy,
-    rotateContactsOwnerIsBusy,
-    rotateMessagesOwnerIsBusy,
-    rotateTransactionsOwnerIsBusy,
-    transactionsBackupOwnerId,
-    transactionsBootstrapSnapshot,
-    transactionsOwnerEditsUntilRotation,
-    transactionsOwnerId,
-    transactionsOwnerIndex,
-    transactionsOwnerPointer,
-    transactionsSyncOwner,
-    transactionsVisibleOwnerIds,
-  } = useEvoluContactsOwnerRotation({
-    appOwnerId,
-    isSeedLogin,
-    pushToast,
-    slip39Seed,
-    t,
-    upsert,
-  });
-
-  useOwner(contactsSyncOwner);
-  useOwner(cashuSyncOwner);
-  useOwner(messagesSyncOwner);
-  useOwner(transactionsSyncOwner);
-  useOwner(metaSyncOwner);
-  useOwner(identitySyncOwner);
-
-  const historicalOwnerSetsReady = isSeedLogin
-    ? cashuVisibleOwnerIds.length === cashuOwnerIndex + 1 &&
-      contactsVisibleOwnerIds.length === contactsOwnerIndex + 1 &&
-      messagesVisibleOwnerIds.length === messagesOwnerIndex + 1 &&
-      transactionsVisibleOwnerIds.length === transactionsOwnerIndex + 1
-    : true;
-  React.useEffect(() => {
-    if (!isSeedLogin || !historicalOwnerSetsReady) return;
-
-    // Evolu does not expose an initial-sync-complete signal. Keep historical
-    // lanes subscribed for the whole authenticated session instead of
-    // guessing completion from a quiet timer and disconnecting them while
-    // their stored messages may still be arriving.
-    const stopUsingOwners = historicalBootstrapSyncOwners.map((owner) =>
-      evolu.useOwner(owner),
-    );
-    return () => {
-      for (const stopUsingOwner of stopUsingOwners) stopUsingOwner();
-    };
-  }, [historicalBootstrapSyncOwners, historicalOwnerSetsReady, isSeedLogin]);
 
   // Default mint cross-tab + cross-device sync via Evolu `ownerMeta`.
   //
@@ -1546,10 +1440,6 @@ export const useAppShellComposition = () => {
     upsertDefaultMintToOwnerMetaRef.current = upsertDefaultMintToOwnerMeta;
   }, [upsertDefaultMintToOwnerMeta]);
 
-  React.useEffect(() => {
-    cashuOwnerIdRef.current = cashuOwnerId;
-  }, [cashuOwnerId]);
-
   const resolveOwnerIdForWrite = React.useCallback(async () => {
     if (cashuOwnerIdRef.current) return cashuOwnerIdRef.current;
     if (isSeedLogin) return null;
@@ -1559,19 +1449,7 @@ export const useAppShellComposition = () => {
     } catch {
       return null;
     }
-  }, [isSeedLogin]);
-
-  React.useEffect(() => {
-    messagesOwnerIdRef.current = messagesOwnerId;
-  }, [messagesOwnerId]);
-
-  React.useEffect(() => {
-    transactionsOwnerIdRef.current = transactionsOwnerId;
-  }, [transactionsOwnerId]);
-
-  React.useEffect(() => {
-    recordTransactionsOwnerWriteRef.current = recordTransactionsOwnerWrite;
-  }, [recordTransactionsOwnerWrite]);
+  }, [cashuOwnerIdRef, isSeedLogin]);
 
   React.useEffect(() => {
     if (!appOwnerId) return;
@@ -1790,115 +1668,6 @@ export const useAppShellComposition = () => {
     [],
   );
   const cashuTokensAll = useQuery(cashuTokensAllQuery);
-
-  const nostrIdentityQuery = useMemo(
-    () =>
-      evolu.createQuery((db) =>
-        db
-          .selectFrom("nostrIdentity")
-          .selectAll()
-          .where("isDeleted", "is not", Evolu.sqliteTrue)
-          .orderBy("createdAt", "desc"),
-      ),
-    [],
-  );
-  const nostrIdentityRows = useQuery(nostrIdentityQuery);
-
-  const activeIdentityOwnerId = String(identityOwnerId ?? "").trim();
-  const legacyNostrIdentityOwnerIds = React.useMemo(
-    () =>
-      new Set(
-        [
-          ...messagesVisibleOwnerIds,
-          legacyIdentitiesOwnerId,
-          legacyMessagesIdentityOwnerId,
-          metaOwnerId,
-        ]
-          .map((ownerId) => String(ownerId ?? "").trim())
-          .filter(Boolean),
-      ),
-    [
-      legacyIdentitiesOwnerId,
-      legacyMessagesIdentityOwnerId,
-      messagesVisibleOwnerIds,
-      metaOwnerId,
-    ],
-  );
-  const syncedNostrIdentityResolution = React.useMemo(
-    () =>
-      resolveSyncedNostrIdentity(
-        nostrIdentityRows,
-        activeIdentityOwnerId,
-        legacyNostrIdentityOwnerIds,
-      ),
-    [activeIdentityOwnerId, legacyNostrIdentityOwnerIds, nostrIdentityRows],
-  );
-  const activeSyncedNostrIdentity = syncedNostrIdentityResolution.identity;
-  const syncedNostrIdentityMatchesLocal = React.useMemo(() => {
-    if (!activeSyncedNostrIdentity) return true;
-
-    const localSource = getInitialNostrIdentitySource();
-    const localSwitchedAtSec = getInitialNostrIdentitySwitchedAtSec();
-    const localNsec = String(currentNsec ?? "").trim();
-    const syncedSwitchedAtSec = activeSyncedNostrIdentity.switchedAtSec;
-    const switchedAtMatches =
-      localSwitchedAtSec === syncedSwitchedAtSec ||
-      (!localSwitchedAtSec && !syncedSwitchedAtSec);
-
-    return (
-      localNsec === activeSyncedNostrIdentity.nsec &&
-      localSource === activeSyncedNostrIdentity.source &&
-      switchedAtMatches
-    );
-  }, [activeSyncedNostrIdentity, currentNsec]);
-
-  React.useEffect(() => {
-    if (!syncedNostrIdentityResolution.shouldMigrateLegacyIdentity) return;
-    if (!activeSyncedNostrIdentity || !identityOwnerId) return;
-
-    upsert(
-      "nostrIdentity",
-      {
-        id: ACTIVE_NOSTR_IDENTITY_ROW_ID,
-        nsec: activeSyncedNostrIdentity.nsec,
-        source: activeSyncedNostrIdentity.source,
-        ...(activeSyncedNostrIdentity.npub
-          ? { npub: activeSyncedNostrIdentity.npub }
-          : {}),
-        ...(activeSyncedNostrIdentity.switchedAtSec
-          ? { switchedAtSec: activeSyncedNostrIdentity.switchedAtSec }
-          : {}),
-      },
-      { ownerId: identityOwnerId },
-    );
-  }, [
-    activeSyncedNostrIdentity,
-    identityOwnerId,
-    syncedNostrIdentityResolution.shouldMigrateLegacyIdentity,
-    upsert,
-  ]);
-
-  React.useEffect(() => {
-    if (!activeSyncedNostrIdentity) return;
-    if (syncedNostrIdentityMatchesLocal) return;
-
-    void persistSyncedActiveNostrIdentity({
-      identitySource: activeSyncedNostrIdentity.source,
-      nsec: activeSyncedNostrIdentity.nsec,
-      switchedAtSec: activeSyncedNostrIdentity.switchedAtSec,
-    }).then(() => {
-      setCurrentNsec((current) =>
-        current === activeSyncedNostrIdentity.nsec
-          ? current
-          : activeSyncedNostrIdentity.nsec,
-      );
-      globalThis.location.reload();
-    });
-  }, [
-    activeSyncedNostrIdentity,
-    syncedNostrIdentityMatchesLocal,
-    setCurrentNsec,
-  ]);
 
   const activeCashuOwnerId = String(cashuOwnerId ?? "").trim();
   const visibleCashuOwnerIds = React.useMemo(
@@ -2652,7 +2421,11 @@ export const useAppShellComposition = () => {
     return () => {
       appendIdentityChangeNoticesRef.current = null;
     };
-  }, [appendLocalNostrMessage, lastMessageByContactId]);
+  }, [
+    appendIdentityChangeNoticesRef,
+    appendLocalNostrMessage,
+    lastMessageByContactId,
+  ]);
 
   React.useEffect(() => {
     const pendingTokens = cashuTokensAllFiltered.filter((row) => {
