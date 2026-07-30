@@ -281,33 +281,48 @@ export const useContactEditor = ({
     setContactEditInitial(null);
   }, []);
 
+  const clearContactSuggestions = React.useCallback(() => {
+    setContactSuggestions((current) => (current.length === 0 ? current : []));
+  }, []);
+  const contactSuggestionRelayKey = nostrFetchRelays
+    .map((relay) => relay.trim())
+    .filter(Boolean)
+    .join("\n");
+  const contactSuggestionKnownNpubsKey = Array.from(
+    new Set(
+      [
+        ...contacts.map((contact) => normalizeNpubIdentifier(contact.npub)),
+        normalizeNpubIdentifier(currentNpub),
+      ].filter((npub): npub is string => Boolean(npub)),
+    ),
+  )
+    .sort()
+    .join("\n");
+
   React.useEffect(() => {
     if (route.kind !== "contactNew") {
-      setContactSuggestions([]);
+      clearContactSuggestions();
       return;
     }
 
     if (form.npub.trim()) {
-      setContactSuggestions([]);
+      clearContactSuggestions();
       return;
     }
 
-    const relays = nostrFetchRelays
-      .map((relay) => relay.trim())
-      .filter(Boolean);
+    const relays = contactSuggestionRelayKey
+      ? contactSuggestionRelayKey.split("\n")
+      : [];
     if (relays.length === 0) {
-      setContactSuggestions([]);
+      clearContactSuggestions();
       return;
     }
 
-    const knownNpubs = new Set<string>();
-    for (const contact of contacts) {
-      const normalized = normalizeNpubIdentifier(contact.npub);
-      if (normalized) knownNpubs.add(normalized);
-    }
-
-    const ownNpub = normalizeNpubIdentifier(currentNpub);
-    if (ownNpub) knownNpubs.add(ownNpub);
+    const knownNpubs = new Set(
+      contactSuggestionKnownNpubsKey
+        ? contactSuggestionKnownNpubsKey.split("\n")
+        : [],
+    );
 
     let cancelled = false;
 
@@ -333,7 +348,7 @@ export const useContactEditor = ({
           .map((entry) => entry[0]);
 
         if (authors.length === 0) {
-          setContactSuggestions([]);
+          clearContactSuggestions();
           return;
         }
 
@@ -393,7 +408,7 @@ export const useContactEditor = ({
 
         setContactSuggestions(nextSuggestions);
       } catch {
-        if (!cancelled) setContactSuggestions([]);
+        if (!cancelled) clearContactSuggestions();
       }
     };
 
@@ -402,7 +417,13 @@ export const useContactEditor = ({
     return () => {
       cancelled = true;
     };
-  }, [contacts, currentNpub, form.npub, nostrFetchRelays, route.kind]);
+  }, [
+    clearContactSuggestions,
+    contactSuggestionKnownNpubsKey,
+    contactSuggestionRelayKey,
+    form.npub,
+    route.kind,
+  ]);
 
   const buildFullContactOverridePayload = React.useCallback(
     (
