@@ -1,5 +1,5 @@
 import { Share } from "@capacitor/share";
-import type { MintProofsConfig, OutputType, Proof } from "@cashu/cashu-ts";
+import type { Proof } from "@cashu/cashu-ts";
 import * as Evolu from "@evolu/common";
 import { useOwner, useQuery } from "@evolu/react";
 import {
@@ -79,22 +79,13 @@ import {
   type PasswordManagerSaveResult,
 } from "../platform/passwordManager";
 import { isNativePlatform } from "../platform/runtime";
-import {
-  bumpCashuDeterministicCounter,
-  ensureCashuDeterministicCounterAtLeast,
-  getCashuDeterministicCounter,
-  getCashuDeterministicSeedFromStorage,
-  withCashuDeterministicCounterLock,
-} from "../utils/cashuDeterministic";
+import { getCashuDeterministicSeedFromStorage } from "../utils/cashuDeterministic";
 import {
   isCashuOutputsAlreadySignedError,
   isCashuOutputsArePendingError,
 } from "../utils/cashuErrors";
 import { getCashuLib } from "../utils/cashuLib";
-import {
-  cashuAmountToNumber,
-  sumCashuProofAmounts,
-} from "../utils/cashuProofs";
+import { cashuAmountToNumber } from "../utils/cashuProofs";
 import { createLoadedCashuWallet } from "../utils/cashuWallet";
 import {
   ARCHIVED_CONTACTS_FILTER,
@@ -105,7 +96,6 @@ import {
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
   FEEDBACK_CONTACT_NPUB,
   LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
-  LOCAL_PENDING_AUTOSWAP_CLAIM_STORAGE_KEY_PREFIX,
   LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX,
   MAX_CONTACTS_PER_OWNER,
   NO_GROUP_FILTER,
@@ -253,6 +243,13 @@ import { useScannedTextHandlerRefBridge } from "./hooks/useScannedTextHandlerRef
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
 import { findUniqueContactByLightningAddress } from "./lib/contactIdentity";
+import {
+  appendPendingAutoswapClaim,
+  claimAutoswapPendingEntry,
+  makePendingAutoswapClaimsKey,
+  readPendingAutoswapClaims,
+  type AutoswapPendingClaim,
+} from "./lib/autoswapClaim";
 import { resolveContactRowOwnerLane } from "./lib/contactOwnerLane";
 import {
   createLinkyBankPaymentOfferEvent,
@@ -286,6 +283,11 @@ import {
   buildIdentityChangeMessageWrapId,
   type IdentityChangeMessageSource,
 } from "./lib/identityChangeMessage";
+import {
+  consumeNotificationOpenDetailFromHash,
+  readNotificationOpenRoute,
+  readNotificationOpenTarget,
+} from "./lib/notificationOpenTarget";
 import type { AppNostrPool } from "./lib/nostrPool";
 import { getSharedAppNostrPool } from "./lib/nostrPool";
 import {
@@ -337,9 +339,18 @@ import {
   buildTopbarTitle,
 } from "./lib/topbarConfig";
 import {
-  readNotificationOpenData,
-  unwrapNotificationOpenValue,
-} from "./lib/notificationOpen";
+  isExpiredPendingTopupQuote,
+  isLikelyCorsOrNetworkError,
+  isSameTopupMintQuote,
+  makeClaimedTopupQuoteLockKey,
+  makeClaimedTopupQuoteStorageKey,
+  readClaimedTopupQuoteFromStorage,
+  readPendingTopupQuoteFromStorage,
+  toPendingTopupQuoteStorage,
+  toTopupMintQuoteDraft,
+  type ClaimedTopupQuoteStorage,
+} from "./lib/topupQuoteStorage";
+import { mintTopupProofs } from "./lib/topupProofRecovery";
 import type {
   ContactRowLike,
   LocalNostrMessage,
@@ -348,11 +359,11 @@ import type {
 } from "./types/appTypes";
 
 const inMemoryNostrPictureCache = new Map<string, string | null>();
-const inMemoryMintIconCache = new Map<string, string | null>();
 const INLINE_NPUB_PATTERN =
   /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?/gi;
 
 type TranslationKey = keyof (typeof translations)["cs"];
+type LoadedCashuWallet = Awaited<ReturnType<typeof createLoadedCashuWallet>>;
 
 const hasTranslationKey = (key: string): key is TranslationKey =>
   Object.prototype.hasOwnProperty.call(translations.cs, key);
@@ -360,119 +371,6 @@ const hasTranslationKey = (key: string): key is TranslationKey =>
 const readObjectField = (value: unknown, field: string): unknown => {
   if (typeof value !== "object" || value === null) return undefined;
   return Reflect.get(value, field);
-};
-
-interface NotificationOpenTarget {
-  outerEventId: string;
-  recipientPubkey: string;
-  relayHints: string[];
-  senderPubkey: string | null;
-}
-
-const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
-
-const readNotificationOpenRoute = (value: unknown): string | null => {
-  const source = unwrapNotificationOpenValue(value);
-  if (typeof source === "string") {
-    const normalized = source.trim();
-    return normalized || null;
-  }
-
-  const notification = unwrapNotificationOpenValue(
-    readObjectField(source, "notification"),
-  );
-  const data = unwrapNotificationOpenValue(
-    readObjectField(notification, "data") ?? readObjectField(source, "data"),
-  );
-  const normalized = String(
-    readObjectField(source, "route") ?? readObjectField(data, "route") ?? "",
-  ).trim();
-  return normalized || null;
-};
-
-const readNotificationRelayHints = (value: unknown): string[] => {
-  const source = readNotificationOpenData(value);
-  if (!Array.isArray(source)) {
-    return [];
-  }
-
-  const seen = new Set<string>();
-  const relayHints: string[] = [];
-  for (const entry of source) {
-    const relay = String(entry ?? "").trim();
-    if (!relay) continue;
-    if (!(relay.startsWith("wss://") || relay.startsWith("ws://"))) {
-      continue;
-    }
-    if (seen.has(relay)) continue;
-    seen.add(relay);
-    relayHints.push(relay);
-  }
-  return relayHints;
-};
-
-const readNotificationOpenTarget = (
-  value: unknown,
-): NotificationOpenTarget | null => {
-  const source = unwrapNotificationOpenValue(value);
-  if (typeof source !== "object" || source === null) {
-    return null;
-  }
-
-  const outerEventId = String(
-    readObjectField(source, "outerEventId") ?? "",
-  ).trim();
-  const recipientPubkey = normalizePubkeyHex(
-    readObjectField(source, "recipientPubkey"),
-  );
-  const relayHints = readNotificationRelayHints(
-    readObjectField(source, "relayHints"),
-  );
-  const senderPubkey = normalizePubkeyHex(
-    readObjectField(source, "senderPubkey"),
-  );
-
-  if (!outerEventId || !recipientPubkey) {
-    return null;
-  }
-
-  return {
-    outerEventId,
-    recipientPubkey,
-    relayHints,
-    senderPubkey,
-  };
-};
-
-const consumeNotificationOpenDetailFromHash = (): string | null => {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const rawHash = String(window.location.hash ?? "");
-  const queryIndex = rawHash.indexOf("?");
-  if (queryIndex < 0) {
-    return null;
-  }
-
-  const baseHash = rawHash.slice(0, queryIndex) || "#contacts";
-  const search = rawHash.slice(queryIndex + 1);
-  const params = new URLSearchParams(search);
-  const detail = params.get(NOTIFICATION_OPEN_HASH_PARAM);
-  if (!detail) {
-    return null;
-  }
-
-  params.delete(NOTIFICATION_OPEN_HASH_PARAM);
-  const nextQuery = params.toString();
-  const nextHash = nextQuery ? `${baseHash}?${nextQuery}` : baseHash;
-  window.history.replaceState(
-    null,
-    "",
-    `${window.location.pathname}${window.location.search}${nextHash}`,
-  );
-
-  return detail;
 };
 
 type CashuProofPayload = Record<string, unknown> & {
@@ -515,723 +413,6 @@ const extractMentionedNpubs = (content: string): string[] => {
   }
 
   return npubs;
-};
-
-interface PendingTopupQuoteStorage {
-  amount: number;
-  createdAtMs: number;
-  invoice?: string | null;
-  mintUrl: string;
-  quote: string;
-  unit: string | null;
-}
-
-interface ClaimedTopupQuoteStorage {
-  amount: number;
-  claimedAtMs: number;
-  mintUrl: string;
-  quote: string;
-  token: string;
-  unit: string | null;
-}
-
-const PENDING_TOPUP_QUOTE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const CLAIMED_TOPUP_QUOTE_STORAGE_KEY_PREFIX = "linky.topup.claimed.v1";
-const CLAIMED_AUTOSWAP_QUOTE_STORAGE_KEY_PREFIX = "linky.autoswap.claimed.v1";
-const CLAIMED_TOPUP_QUOTE_LOCK_STORAGE_KEY_PREFIX = "linky.topup.claimLock.v1";
-
-const encodeStorageSegment = (value: string): string =>
-  encodeURIComponent(String(value ?? "").trim());
-
-const isExpiredPendingTopupQuote = (createdAtMs: number): boolean =>
-  Date.now() - createdAtMs > PENDING_TOPUP_QUOTE_MAX_AGE_MS;
-
-const isSameTopupMintQuote = (
-  left: TopupMintQuoteDraft | null,
-  right: TopupMintQuoteDraft | null,
-): boolean => {
-  if (!left || !right) return left === right;
-
-  return (
-    left.mintUrl === right.mintUrl &&
-    left.quote === right.quote &&
-    left.amount === right.amount &&
-    left.unit === right.unit
-  );
-};
-
-const toTopupMintQuoteDraft = (
-  value: PendingTopupQuoteStorage,
-): TopupMintQuoteDraft => ({
-  mintUrl: value.mintUrl,
-  quote: value.quote,
-  amount: value.amount,
-  invoice: typeof value.invoice === "string" ? value.invoice : null,
-  unit: value.unit,
-});
-
-const toPendingTopupQuoteStorage = (
-  value: TopupMintQuoteDraft,
-): PendingTopupQuoteStorage => ({
-  mintUrl: value.mintUrl,
-  quote: value.quote,
-  amount: value.amount,
-  invoice: value.invoice,
-  unit: value.unit,
-  createdAtMs: Date.now(),
-});
-
-const isPendingTopupQuoteStorage = (
-  value: unknown,
-): value is PendingTopupQuoteStorage => {
-  if (typeof value !== "object" || value === null) return false;
-
-  const amount = readObjectField(value, "amount");
-  const createdAtMs = readObjectField(value, "createdAtMs");
-  const invoice = readObjectField(value, "invoice");
-  const mintUrl = readObjectField(value, "mintUrl");
-  const quote = readObjectField(value, "quote");
-  const unit = readObjectField(value, "unit");
-
-  return (
-    typeof amount === "number" &&
-    Number.isFinite(amount) &&
-    amount > 0 &&
-    typeof createdAtMs === "number" &&
-    Number.isFinite(createdAtMs) &&
-    (invoice === undefined ||
-      invoice === null ||
-      typeof invoice === "string") &&
-    typeof mintUrl === "string" &&
-    mintUrl.trim().length > 0 &&
-    typeof quote === "string" &&
-    quote.trim().length > 0 &&
-    (unit === null || typeof unit === "string")
-  );
-};
-
-const isClaimedTopupQuoteStorage = (
-  value: unknown,
-): value is ClaimedTopupQuoteStorage => {
-  if (typeof value !== "object" || value === null) return false;
-
-  const amount = readObjectField(value, "amount");
-  const claimedAtMs = readObjectField(value, "claimedAtMs");
-  const mintUrl = readObjectField(value, "mintUrl");
-  const quote = readObjectField(value, "quote");
-  const token = readObjectField(value, "token");
-  const unit = readObjectField(value, "unit");
-
-  return (
-    typeof amount === "number" &&
-    typeof claimedAtMs === "number" &&
-    typeof mintUrl === "string" &&
-    typeof quote === "string" &&
-    typeof token === "string" &&
-    (unit === null || typeof unit === "string")
-  );
-};
-
-const makeClaimedTopupQuoteStorageKey = (args: {
-  mintUrl: string;
-  ownerId: string;
-  quote: string;
-}): string => {
-  return `${CLAIMED_TOPUP_QUOTE_STORAGE_KEY_PREFIX}.${encodeStorageSegment(
-    args.ownerId,
-  )}.${encodeStorageSegment(args.mintUrl)}.${encodeStorageSegment(args.quote)}`;
-};
-
-const makeClaimedAutoswapQuoteStorageKey = (args: {
-  mintUrl: string;
-  ownerId: string;
-  quote: string;
-}): string => {
-  return `${CLAIMED_AUTOSWAP_QUOTE_STORAGE_KEY_PREFIX}.${encodeStorageSegment(
-    args.ownerId,
-  )}.${encodeStorageSegment(args.mintUrl)}.${encodeStorageSegment(args.quote)}`;
-};
-
-const makeClaimedTopupQuoteLockKey = (args: {
-  mintUrl: string;
-  ownerId: string;
-  quote: string;
-}): string => {
-  return `${CLAIMED_TOPUP_QUOTE_LOCK_STORAGE_KEY_PREFIX}.${encodeStorageSegment(
-    args.ownerId,
-  )}.${encodeStorageSegment(args.mintUrl)}.${encodeStorageSegment(args.quote)}`;
-};
-
-const readClaimedTopupQuoteFromStorage = (
-  key: string,
-): ClaimedTopupQuoteStorage | null => {
-  const raw = safeLocalStorageGet(key);
-  if (!raw) return null;
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return isClaimedTopupQuoteStorage(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-};
-
-const readPendingTopupQuoteFromStorage = (
-  key: string,
-): PendingTopupQuoteStorage | null => {
-  const raw = safeLocalStorageGet(key);
-  if (!raw) return null;
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return isPendingTopupQuoteStorage(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-};
-
-interface AutoswapPendingClaim {
-  amount: number;
-  createdAtMs: number;
-  invoice: string;
-  mintUrl: string;
-  quote: string;
-  unit: string;
-}
-
-const isAutoswapPendingClaim = (
-  value: unknown,
-): value is AutoswapPendingClaim =>
-  typeof value === "object" &&
-  value !== null &&
-  typeof (value as { amount?: unknown }).amount === "number" &&
-  typeof (value as { createdAtMs?: unknown }).createdAtMs === "number" &&
-  typeof (value as { invoice?: unknown }).invoice === "string" &&
-  typeof (value as { mintUrl?: unknown }).mintUrl === "string" &&
-  typeof (value as { quote?: unknown }).quote === "string" &&
-  typeof (value as { unit?: unknown }).unit === "string";
-
-const makePendingAutoswapClaimsKey = (ownerId: string): string =>
-  `${LOCAL_PENDING_AUTOSWAP_CLAIM_STORAGE_KEY_PREFIX}.${encodeStorageSegment(
-    ownerId,
-  )}`;
-
-const readPendingAutoswapClaims = (key: string): AutoswapPendingClaim[] => {
-  const raw = safeLocalStorageGet(key);
-  if (!raw) return [];
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isAutoswapPendingClaim);
-  } catch {
-    return [];
-  }
-};
-
-const writePendingAutoswapClaims = (
-  key: string,
-  claims: AutoswapPendingClaim[],
-): void => {
-  if (claims.length === 0) {
-    safeLocalStorageRemove(key);
-    return;
-  }
-  safeLocalStorageSetJson(key, claims);
-};
-
-const appendPendingAutoswapClaim = (
-  key: string,
-  claim: AutoswapPendingClaim,
-): void => {
-  const existing = readPendingAutoswapClaims(key);
-  const filtered = existing.filter(
-    (entry) => entry.quote !== claim.quote || entry.mintUrl !== claim.mintUrl,
-  );
-  filtered.push(claim);
-  writePendingAutoswapClaims(key, filtered);
-};
-
-const removePendingAutoswapClaim = (
-  key: string,
-  args: { mintUrl: string; quote: string },
-): void => {
-  const existing = readPendingAutoswapClaims(key);
-  const next = existing.filter(
-    (entry) => !(entry.quote === args.quote && entry.mintUrl === args.mintUrl),
-  );
-  writePendingAutoswapClaims(key, next);
-};
-
-const isLikelyCorsOrNetworkError = (message: string): boolean => {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("failed to fetch") ||
-    lower.includes("cors") ||
-    lower.includes("networkerror") ||
-    lower.includes("load failed")
-  );
-};
-
-interface TopupMintProofsWalletLike {
-  keysetId: string;
-  mintProofsBolt11: (
-    amount: number,
-    quote: string,
-    config?: MintProofsConfig,
-    outputType?: OutputType,
-  ) => Promise<Proof[]>;
-  restore: (
-    start: number,
-    count: number,
-    options?: { keysetId?: string },
-  ) => Promise<{
-    lastCounterWithSignature?: number;
-    proofs: Proof[];
-  }>;
-  checkProofsStates: (proofs: Proof[]) => Promise<Array<{ state?: unknown }>>;
-  unit: string;
-}
-
-const filterSpendableTopupProofs = async (
-  wallet: TopupMintProofsWalletLike,
-  proofs: Proof[],
-): Promise<Proof[]> => {
-  if (proofs.length === 0) return proofs;
-
-  try {
-    const states = await wallet.checkProofsStates(proofs);
-    return proofs.filter((_, idx) => {
-      const state = String(states[idx]?.state ?? "")
-        .trim()
-        .toUpperCase();
-      return state === "UNSPENT";
-    });
-  } catch {
-    return proofs;
-  }
-};
-
-const findExactSubsetByAmount = (
-  proofs: Proof[],
-  target: number,
-): Proof[] | null => {
-  if (target <= 0) return null;
-  const indexed = proofs
-    .map((proof, idx) => ({
-      idx,
-      amount: cashuAmountToNumber(proof.amount),
-      proof,
-    }))
-    .filter((entry) => entry.amount > 0 && entry.amount <= target)
-    .sort((a, b) => b.amount - a.amount);
-  if (indexed.length === 0) return null;
-
-  const memo = new Set<string>();
-  const dfs = (start: number, remaining: number): Proof[] | null => {
-    if (remaining === 0) return [];
-    if (start >= indexed.length) return null;
-    const memoKey = `${start}|${remaining}`;
-    if (memo.has(memoKey)) return null;
-    for (let i = start; i < indexed.length; i += 1) {
-      const entry = indexed[i];
-      if (!entry || entry.amount > remaining) continue;
-      const rest = dfs(i + 1, remaining - entry.amount);
-      if (rest) return [entry.proof, ...rest];
-    }
-    memo.add(memoKey);
-    return null;
-  };
-
-  return dfs(0, target);
-};
-
-type RestoreAlreadySignedResult =
-  | {
-      kind: "recovery";
-      lastCounterWithSignature?: number;
-      proofs: Proof[];
-    }
-  | {
-      kind: "collision";
-      lastCounterWithSignature?: number;
-    }
-  | { kind: "empty" };
-
-const restoreAlreadySignedTopupProofs = async (args: {
-  amount: number;
-  counter: number;
-  keysetId: string;
-  wallet: TopupMintProofsWalletLike;
-}): Promise<RestoreAlreadySignedResult> => {
-  const restoreCount = 100;
-  const restored = await args.wallet.restore(args.counter, restoreCount, {
-    keysetId: args.keysetId,
-  });
-
-  if (restored.proofs.length === 0) {
-    return { kind: "empty" };
-  }
-
-  const spendableProofs = await filterSpendableTopupProofs(
-    args.wallet,
-    restored.proofs,
-  );
-
-  const totalSpendable = sumCashuProofAmounts(spendableProofs);
-
-  if (totalSpendable < args.amount) {
-    // Mint has signatures here but they're (mostly) SPENT. Common cause:
-    // the wallet's deterministic counter window overlaps proofs from a
-    // prior unrelated operation (melt blanks, an old quote already
-    // claimed and spent). The CURRENT quote was never issued — it's
-    // still PAID at the mint. Caller must bump past `lastCounterWithSignature`
-    // and retry `mintProofs` with fresh outputs against the same quote.
-    const result: {
-      kind: "collision";
-      lastCounterWithSignature?: number;
-    } = { kind: "collision" };
-    if (restored.lastCounterWithSignature !== undefined) {
-      result.lastCounterWithSignature = restored.lastCounterWithSignature;
-    }
-    return result;
-  }
-
-  // Prefer an exact subset matching `amount`; fall back to the full set.
-  const exact = findExactSubsetByAmount(spendableProofs, args.amount);
-  const proofs = exact ?? spendableProofs;
-
-  const result: {
-    kind: "recovery";
-    lastCounterWithSignature?: number;
-    proofs: Proof[];
-  } = { kind: "recovery", proofs };
-  if (restored.lastCounterWithSignature !== undefined) {
-    result.lastCounterWithSignature = restored.lastCounterWithSignature;
-  }
-  return result;
-};
-
-const mintTopupProofs = async (args: {
-  amount: number;
-  mintUrl: string;
-  quoteId: string;
-  unit: string | null;
-  wallet: TopupMintProofsWalletLike;
-}): Promise<Proof[]> => {
-  const det = getCashuDeterministicSeedFromStorage();
-  const unit = String(args.wallet.unit ?? args.unit ?? "").trim();
-  const keysetId = String(args.wallet.keysetId ?? "").trim();
-
-  if (!(det && unit && keysetId)) {
-    return await args.wallet.mintProofsBolt11(args.amount, args.quoteId);
-  }
-
-  return await withCashuDeterministicCounterLock(
-    {
-      mintUrl: args.mintUrl,
-      unit,
-      keysetId,
-    },
-    async () => {
-      let counter = getCashuDeterministicCounter({
-        mintUrl: args.mintUrl,
-        unit,
-        keysetId,
-      });
-
-      // OutputsArePending (NUT 11004) — orphan `c_ IS NULL` row matching one
-      // of our B_'s. NUT-09 restore won't surface unsigned promises, so we
-      // bump the counter by a fixed margin and retry.
-      //
-      // OutputsAlreadySigned (NUT 11005, some mints surface 11003) — disambiguate
-      // via NUT-09 restore:
-      // - Recovery: quote was issued in a prior session, restored proofs
-      //   are still spendable. Use them.
-      // - Collision: deterministic counter window overlaps spent proofs
-      //   from an unrelated past operation. The current quote is still
-      //   PAID; bump past `lastCounterWithSignature` and retry mintProofs
-      //   with fresh outputs.
-      let pendingRetries = 0;
-      const maxPendingRetries = 5;
-      let collisionRetries = 0;
-      const maxCollisionRetries = 5;
-
-      while (true) {
-        try {
-          const proofs = await args.wallet.mintProofsBolt11(
-            args.amount,
-            args.quoteId,
-            undefined,
-            { type: "deterministic", counter },
-          );
-
-          bumpCashuDeterministicCounter({
-            mintUrl: args.mintUrl,
-            unit,
-            keysetId,
-            used: proofs.length,
-          });
-
-          return proofs;
-        } catch (error) {
-          if (
-            isCashuOutputsArePendingError(error) &&
-            pendingRetries < maxPendingRetries
-          ) {
-            pendingRetries += 1;
-            bumpCashuDeterministicCounter({
-              mintUrl: args.mintUrl,
-              unit,
-              keysetId,
-              used: 64,
-            });
-            counter = getCashuDeterministicCounter({
-              mintUrl: args.mintUrl,
-              unit,
-              keysetId,
-            });
-            continue;
-          }
-          if (!isCashuOutputsAlreadySignedError(error)) throw error;
-          if (collisionRetries >= maxCollisionRetries) throw error;
-          collisionRetries += 1;
-
-          let restored: RestoreAlreadySignedResult;
-          try {
-            restored = await restoreAlreadySignedTopupProofs({
-              amount: args.amount,
-              counter,
-              keysetId,
-              wallet: args.wallet,
-            });
-          } catch {
-            throw error;
-          }
-
-          if (restored.kind === "recovery") {
-            const lastCounter = restored.lastCounterWithSignature;
-            ensureCashuDeterministicCounterAtLeast({
-              mintUrl: args.mintUrl,
-              unit,
-              keysetId,
-              atLeast:
-                typeof lastCounter === "number" && Number.isFinite(lastCounter)
-                  ? lastCounter + 1
-                  : counter + restored.proofs.length,
-            });
-            return restored.proofs;
-          }
-
-          // Collision (or empty restore): bump past colliding range and
-          // retry mintProofs against the still-PAID quote.
-          if (
-            restored.kind === "collision" &&
-            typeof restored.lastCounterWithSignature === "number" &&
-            Number.isFinite(restored.lastCounterWithSignature)
-          ) {
-            ensureCashuDeterministicCounterAtLeast({
-              mintUrl: args.mintUrl,
-              unit,
-              keysetId,
-              atLeast: restored.lastCounterWithSignature + 1,
-            });
-          } else {
-            bumpCashuDeterministicCounter({
-              mintUrl: args.mintUrl,
-              unit,
-              keysetId,
-              used: 64,
-            });
-          }
-          counter = getCashuDeterministicCounter({
-            mintUrl: args.mintUrl,
-            unit,
-            keysetId,
-          });
-          continue;
-        }
-      }
-    },
-  );
-};
-
-interface AutoswapClaimContext {
-  upsert: (
-    table: "cashuToken",
-    payload: {
-      id: CashuTokenId;
-      token: typeof Evolu.NonEmptyString.Type;
-      state: typeof Evolu.NonEmptyString100.Type;
-    },
-    options?: { ownerId: Evolu.OwnerId },
-  ) => { ok: boolean; error?: unknown; value?: { id: CashuTokenId } };
-  isCashuTokenKnownAny: (token: string) => boolean;
-  resolveOwnerIdForWrite: () => Promise<Evolu.OwnerId | null>;
-}
-
-type AutoswapClaimOutcome =
-  | { kind: "claimed" }
-  | { kind: "in_flight" }
-  | { kind: "not_claimable_yet" }
-  | { kind: "dropped"; reason: string }
-  | { kind: "failed"; reason: string };
-
-// Single source of truth for claiming a queued autoswap entry: load the
-// target wallet, gate on a claimable mint quote, mint+restore proofs under
-// the deterministic counter lock, encode + insert the resulting cashuToken,
-// and clear the persisted entry. Sharing one in-flight set across the
-// autoswap melt path and the 5s background tick guarantees a single
-// minted-token writer per quote so isCashuTokenKnownAny dedup works
-// correctly even when mintProofs and NUT-09 restore return proofs in
-// different orders.
-type LoadedCashuWallet = Awaited<ReturnType<typeof createLoadedCashuWallet>>;
-
-const claimAutoswapPendingEntry = async (args: {
-  claim: AutoswapPendingClaim;
-  claimOwnerKey: string;
-  claimsKey: string;
-  ctx: AutoswapClaimContext;
-  inFlightSet: Set<string>;
-  // Optional cross-tick wallet cache. The background claim effect ticks
-  // every 10s; if the mint quote isn't `PAID` yet we'd otherwise re-run
-  // loadMint() (info+keysets+keys = 3 calls) on every tick until it flips.
-  // Re-using the wallet handle skips those 3 calls per pending claim.
-  walletCache?: Map<string, LoadedCashuWallet>;
-}): Promise<AutoswapClaimOutcome> => {
-  const key = `${args.claim.mintUrl}|${args.claim.quote}`;
-  if (args.inFlightSet.has(key)) return { kind: "in_flight" };
-  args.inFlightSet.add(key);
-
-  try {
-    const claimStorageKey = makeClaimedAutoswapQuoteStorageKey({
-      ownerId: args.claimOwnerKey,
-      mintUrl: args.claim.mintUrl,
-      quote: args.claim.quote,
-    });
-    const insertClaimedToken = async (
-      claimed: ClaimedTopupQuoteStorage,
-    ): Promise<{ ok: true } | { ok: false; reason: string }> => {
-      if (args.ctx.isCashuTokenKnownAny(claimed.token)) return { ok: true };
-
-      const ownerId = await args.ctx.resolveOwnerIdForWrite();
-      const payload = {
-        id: createCashuTokenId(claimed.token),
-        token: claimed.token as typeof Evolu.NonEmptyString.Type,
-        state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-      };
-      const result = ownerId
-        ? args.ctx.upsert("cashuToken", payload, { ownerId })
-        : args.ctx.upsert("cashuToken", payload);
-      if (!result.ok) {
-        return {
-          ok: false,
-          reason: getUnknownErrorMessage(result.error, "unknown"),
-        };
-      }
-      return { ok: true };
-    };
-
-    const claimedBeforeRun = readClaimedTopupQuoteFromStorage(claimStorageKey);
-    if (claimedBeforeRun) {
-      const restored = await insertClaimedToken(claimedBeforeRun);
-      if (!restored.ok) {
-        return { kind: "failed", reason: restored.reason };
-      }
-      removePendingAutoswapClaim(args.claimsKey, {
-        mintUrl: args.claim.mintUrl,
-        quote: args.claim.quote,
-      });
-      return { kind: "claimed" };
-    }
-
-    const { Mint, Wallet, MintQuoteState, getEncodedToken } =
-      await getCashuLib();
-    const det = getCashuDeterministicSeedFromStorage();
-    const walletCacheKey = `${args.claim.mintUrl}|${args.claim.unit || "sat"}`;
-    let wallet = args.walletCache?.get(walletCacheKey);
-    if (!wallet) {
-      wallet = await createLoadedCashuWallet({
-        Mint,
-        Wallet,
-        mintUrl: args.claim.mintUrl,
-        unit: args.claim.unit || "sat",
-        ...(det ? { bip39seed: det.bip39seed } : {}),
-      });
-      args.walletCache?.set(walletCacheKey, wallet);
-    }
-
-    const status = await wallet.checkMintQuoteBolt11(args.claim.quote);
-    const state = readMintQuoteState(status);
-    if (!isClaimableMintQuoteState(state, MintQuoteState)) {
-      return { kind: "not_claimable_yet" };
-    }
-
-    const proofs = await mintTopupProofs({
-      amount: args.claim.amount,
-      mintUrl: args.claim.mintUrl,
-      quoteId: args.claim.quote,
-      unit: wallet.unit ?? args.claim.unit ?? "sat",
-      wallet,
-    });
-    const token = String(
-      getEncodedToken({
-        mint: args.claim.mintUrl,
-        proofs,
-        unit: wallet.unit ?? args.claim.unit ?? "sat",
-      }) ?? "",
-    ).trim();
-    if (!token) return { kind: "failed", reason: "empty token" };
-
-    safeLocalStorageSetJson(claimStorageKey, {
-      amount: args.claim.amount,
-      claimedAtMs: Date.now(),
-      mintUrl: args.claim.mintUrl,
-      quote: args.claim.quote,
-      token,
-      unit: wallet.unit ?? args.claim.unit ?? "sat",
-    });
-
-    const inserted = await insertClaimedToken({
-      amount: args.claim.amount,
-      claimedAtMs: Date.now(),
-      mintUrl: args.claim.mintUrl,
-      quote: args.claim.quote,
-      token,
-      unit: wallet.unit ?? args.claim.unit ?? "sat",
-    });
-    if (!inserted.ok) {
-      return { kind: "failed", reason: inserted.reason };
-    }
-
-    removePendingAutoswapClaim(args.claimsKey, {
-      mintUrl: args.claim.mintUrl,
-      quote: args.claim.quote,
-    });
-    return { kind: "claimed" };
-  } catch (error) {
-    if (isCashuOutputsAlreadySignedError(error)) {
-      // mintTopupProofs has its own restore loop. Reaching here means
-      // recovery exhausted the deterministic counter window for this
-      // quote — keep retrying every 5s would loop forever. Drop the
-      // entry; the user's separate Restore action can still recover any
-      // stranded proofs at the mint via a wider counter scan.
-      removePendingAutoswapClaim(args.claimsKey, {
-        mintUrl: args.claim.mintUrl,
-        quote: args.claim.quote,
-      });
-      return {
-        kind: "dropped",
-        reason: getUnknownErrorMessage(error, "outputs already signed"),
-      };
-    }
-    return {
-      kind: "failed",
-      reason: getUnknownErrorMessage(error, "unknown"),
-    };
-  } finally {
-    args.inFlightSet.delete(key);
-  }
 };
 
 const logPayStep = (step: string, data?: PaymentLogData): void => {
@@ -1402,8 +583,6 @@ export const useAppShellComposition = () => {
       ),
     ),
   );
-  const [allowPromisesEnabled] = useState<boolean>(false);
-
   const setBankPaymentOfferRecipientCount = React.useCallback(
     (value: number) => {
       setBankPaymentOfferRecipientCountState(
@@ -1671,6 +850,22 @@ export const useAppShellComposition = () => {
   const avatarObjectUrlsByNpubRef = React.useRef<Map<string, string>>(
     new Map(),
   );
+
+  React.useEffect(() => {
+    const objectUrls = avatarObjectUrlsByNpubRef.current;
+    return () => {
+      for (const url of objectUrls.values()) {
+        if (!url.startsWith("blob:")) continue;
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      }
+      objectUrls.clear();
+      inMemoryNostrPictureCache.clear();
+    };
+  }, [currentNsec]);
 
   const rememberBlobAvatarUrl = React.useCallback(
     (npub: string, url: string | null): string | null => {
@@ -2223,7 +1418,6 @@ export const useAppShellComposition = () => {
     pushToast,
     slip39Seed,
     t,
-    update,
     upsert,
   });
 
@@ -2498,7 +1692,6 @@ export const useAppShellComposition = () => {
   });
 
   useAppPreferences({
-    allowPromisesEnabled,
     allowedDisplayCurrencies,
     cashuAutoswapEnabled,
     displayCurrency,
@@ -2819,15 +2012,14 @@ export const useAppShellComposition = () => {
     ],
   );
 
-  const cashuTokensFiltered = React.useMemo(() => {
-    return dedupeVisibleCashuRows(cashuTokensAll).filter(
-      (row) => !row.isDeleted,
-    );
-  }, [cashuTokensAll, dedupeVisibleCashuRows]);
-
   const cashuTokensAllFiltered = React.useMemo(() => {
     return dedupeVisibleCashuRows(cashuTokensAll);
   }, [cashuTokensAll, dedupeVisibleCashuRows]);
+
+  const cashuTokensFiltered = React.useMemo(
+    () => cashuTokensAllFiltered.filter((row) => !row.isDeleted),
+    [cashuTokensAllFiltered],
+  );
 
   const cashuTokensWithMeta = useMemo(
     () =>
@@ -3238,7 +2430,6 @@ export const useAppShellComposition = () => {
     getMintIconUrl,
     getMintRuntime,
     isMintDeleted,
-    mintIconUrlByMint,
     mintInfoByUrl,
     mintInfoDeduped,
     refreshMintInfo,
@@ -3253,13 +2444,7 @@ export const useAppShellComposition = () => {
     rememberSeenMint,
   });
 
-  React.useEffect(() => {
-    for (const [origin, url] of Object.entries(mintIconUrlByMint)) {
-      inMemoryMintIconCache.set(origin, url ?? null);
-    }
-  }, [mintIconUrlByMint]);
-
-  // Payment history and tutorial state are local-only (not stored in Evolu).
+  // Tutorial progress remains local-only.
 
   React.useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -4765,11 +3950,11 @@ export const useAppShellComposition = () => {
     upsert,
   });
 
-  const closeContactDetail = () => {
+  const closeContactDetail = React.useCallback(() => {
     clearContactForm();
     setPendingDeleteId(null);
     navigateTo({ route: "contacts" });
-  };
+  }, [clearContactForm]);
 
   const openNewContactPage = React.useCallback(() => {
     if (activeContactsOwnerContactCount >= MAX_CONTACTS_PER_OWNER) {
@@ -4823,7 +4008,6 @@ export const useAppShellComposition = () => {
     null | "cashu" | "lightning"
   >(null);
   useContactPayMethod({
-    allowPromisesEnabled,
     payWithCashuEnabled,
     routeKind: route.kind,
     selectedContactLnAddress: String(selectedContact?.lnAddress ?? ""),
@@ -5398,104 +4582,116 @@ export const useAppShellComposition = () => {
     };
   }, [bankPaymentOfferMessages, currentNsec, respondToBankPaymentOffer]);
 
+  const bankPaymentOfferExpiryGroups = React.useMemo(() => {
+    if (!currentNpub || bankPaymentOfferMessages.length === 0) return [];
+
+    let myPubHex: string;
+    try {
+      const decoded = nip19.decode(currentNpub);
+      if (decoded.type !== "npub" || typeof decoded.data !== "string") {
+        return [];
+      }
+      myPubHex = decoded.data;
+    } catch {
+      return [];
+    }
+
+    const groups = new Map<
+      string,
+      {
+        info: NonNullable<ReturnType<typeof getLinkyBankPaymentOfferInfo>>;
+        message: LocalNostrMessage;
+      }[]
+    >();
+    for (const message of bankPaymentOfferMessages) {
+      const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+      if (
+        !info ||
+        String(info.offererPublicKey ?? "").trim() !== myPubHex ||
+        isLinkyBankPaymentOfferTerminalStatus(info.status)
+      ) {
+        continue;
+      }
+      const group = groups.get(info.offerId) ?? [];
+      group.push({ info, message });
+      groups.set(info.offerId, group);
+    }
+
+    const nowSec = Math.floor(Date.now() / 1e3);
+    const statusPriority: LinkyBankPaymentOfferStatus[] = [
+      "bank_paid",
+      "bank_details_sent",
+      "accepted",
+      "offered",
+    ];
+    return Array.from(groups.values()).flatMap((group) => {
+      const activeStatus = statusPriority.find((status) =>
+        group.some((entry) => entry.info.status === status),
+      );
+      if (!activeStatus) return [];
+
+      const phaseStartedAtSec = Math.min(
+        ...group
+          .filter((entry) => entry.info.status === activeStatus)
+          .map(
+            (entry) =>
+              entry.info.statusUpdatedAtSec ||
+              Number(entry.message.createdAtSec ?? 0) ||
+              nowSec,
+          ),
+      );
+      return [
+        {
+          expiresAtMs:
+            (phaseStartedAtSec + LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC) *
+            1_000,
+          messages: group.map((entry) => entry.message),
+        },
+      ];
+    });
+  }, [bankPaymentOfferMessages, currentNpub]);
+
   React.useEffect(() => {
-    if (!currentNsec) return;
-    if (bankPaymentOfferMessages.length === 0) return;
+    const nextExpiryMs = Math.min(
+      ...bankPaymentOfferExpiryGroups.map((group) => group.expiresAtMs),
+    );
+    if (!Number.isFinite(nextExpiryMs)) return;
 
     let cancelled = false;
-
-    const tick = async () => {
-      if (bankPaymentOfferExpiryInFlightRef.current) return;
+    let timeoutId = 0;
+    const expireDueGroups = () => {
+      if (cancelled) return;
+      if (bankPaymentOfferExpiryInFlightRef.current) {
+        timeoutId = window.setTimeout(expireDueGroups, 100);
+        return;
+      }
 
       bankPaymentOfferExpiryInFlightRef.current = true;
-      try {
-        const { getPublicKey } = await import("nostr-tools");
-        const decodedMe = nip19.decode(currentNsec);
-        if (
-          decodedMe.type !== "nsec" ||
-          !(decodedMe.data instanceof Uint8Array)
-        ) {
-          return;
-        }
-
-        const myPubHex = getPublicKey(decodedMe.data);
-        const nowSec = Math.floor(Date.now() / 1e3);
-        const groups = new Map<
-          string,
-          {
-            info: NonNullable<ReturnType<typeof getLinkyBankPaymentOfferInfo>>;
-            message: LocalNostrMessage;
-          }[]
-        >();
-
-        for (const message of bankPaymentOfferMessages) {
-          const info = getLinkyBankPaymentOfferInfo(
-            String(message.content ?? ""),
-          );
-          if (!info) continue;
-          if (String(info.offererPublicKey ?? "").trim() !== myPubHex) {
-            continue;
+      void (async () => {
+        try {
+          const nowMs = Date.now();
+          for (const group of bankPaymentOfferExpiryGroups) {
+            if (group.expiresAtMs > nowMs) continue;
+            for (const message of group.messages) {
+              if (cancelled) return;
+              await respondToBankPaymentOffer(message, "canceled");
+            }
           }
-          if (isLinkyBankPaymentOfferTerminalStatus(info.status)) continue;
-
-          const group = groups.get(info.offerId) ?? [];
-          group.push({ info, message });
-          groups.set(info.offerId, group);
+        } finally {
+          bankPaymentOfferExpiryInFlightRef.current = false;
         }
-
-        const statusPriority: LinkyBankPaymentOfferStatus[] = [
-          "bank_paid",
-          "bank_details_sent",
-          "accepted",
-          "offered",
-        ];
-
-        for (const group of groups.values()) {
-          if (cancelled) return;
-
-          const activeStatus = statusPriority.find((status) =>
-            group.some((entry) => entry.info.status === status),
-          );
-          if (!activeStatus) continue;
-
-          const phaseEntries = group.filter(
-            (entry) => entry.info.status === activeStatus,
-          );
-          const phaseStartedAtSec = Math.min(
-            ...phaseEntries.map(
-              (entry) =>
-                entry.info.statusUpdatedAtSec ||
-                Number(entry.message.createdAtSec ?? 0) ||
-                nowSec,
-            ),
-          );
-          if (
-            nowSec - phaseStartedAtSec <
-            LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC
-          ) {
-            continue;
-          }
-
-          for (const entry of group) {
-            if (cancelled) return;
-            await respondToBankPaymentOffer(entry.message, "canceled");
-          }
-        }
-      } finally {
-        bankPaymentOfferExpiryInFlightRef.current = false;
-      }
+      })();
     };
-
-    void tick();
-    const intervalId = window.setInterval(() => {
-      void tick();
-    }, 1_000);
+    timeoutId = window.setTimeout(
+      expireDueGroups,
+      Math.max(0, nextExpiryMs - Date.now()),
+    );
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
     };
-  }, [bankPaymentOfferMessages, currentNsec, respondToBankPaymentOffer]);
+  }, [bankPaymentOfferExpiryGroups, respondToBankPaymentOffer]);
 
   const payContactWithCashuMessage =
     usePayContactWithCashuMessage<ContactRowLike>({
@@ -6415,6 +5611,21 @@ export const useAppShellComposition = () => {
     route,
     t,
   });
+  const contactsGuideNavRef = React.useRef(contactsGuideNav);
+  React.useLayoutEffect(() => {
+    contactsGuideNavRef.current = contactsGuideNav;
+  }, [contactsGuideNav]);
+  const stableContactsGuideNav = React.useMemo(
+    () => ({
+      back: () => {
+        contactsGuideNavRef.current.back();
+      },
+      next: () => {
+        contactsGuideNavRef.current.next();
+      },
+    }),
+    [],
+  );
 
   const openManualContactFromScan = React.useCallback(() => {
     closeScan();
@@ -7549,52 +6760,60 @@ export const useAppShellComposition = () => {
     update,
   ]);
 
-  const openContactPay = (
-    contactId: string,
-    fromChat = false,
-    intent: "pay" | "request" = "pay",
-  ) => {
-    const knownContact =
-      contacts.find((row) => String(row.id ?? "").trim() === contactId) ?? null;
-    if (!knownContact) return;
+  const openContactPay = React.useCallback(
+    (
+      contactId: string,
+      fromChat = false,
+      intent: "pay" | "request" = "pay",
+    ) => {
+      const knownContact =
+        contacts.find((row) => String(row.id ?? "").trim() === contactId) ??
+        null;
+      if (!knownContact) return;
 
-    contactPayBackToChatRef.current = fromChat ? knownContact.id : null;
-    setContactPaymentIntent(intent);
-    navigateTo({ route: "contactPay", id: knownContact.id });
-  };
+      contactPayBackToChatRef.current = fromChat ? knownContact.id : null;
+      setContactPaymentIntent(intent);
+      navigateTo({ route: "contactPay", id: knownContact.id });
+    },
+    [contacts],
+  );
 
-  const openContactDetail = (contact: DisplayContact) => {
-    const contactId = String(contact.id ?? "").trim();
-    if (!contactId) return;
+  const openContactDetail = React.useCallback(
+    (contact: DisplayContact) => {
+      const contactId = String(contact.id ?? "").trim();
+      if (!contactId) return;
 
-    setPendingDeleteId(null);
-    clearContactAttention(contactId);
-    contactPayBackToChatRef.current = null;
+      setPendingDeleteId(null);
+      clearContactAttention(contactId);
+      contactPayBackToChatRef.current = null;
 
-    if (contact.isUnknownContact) {
-      navigateTo({ route: "chat", id: contactId });
-      return;
-    }
-
-    const knownContact =
-      contacts.find((row) => String(row.id ?? "").trim() === contactId) ?? null;
-    if (!knownContact) {
-      navigateTo({ route: "contacts" });
-      return;
-    }
-
-    const npub = String(knownContact.npub ?? "").trim();
-    const ln = String(knownContact.lnAddress ?? "").trim();
-    if (!npub) {
-      if (ln) {
-        openContactPay(knownContact.id);
+      if (contact.isUnknownContact) {
+        navigateTo({ route: "chat", id: contactId });
         return;
       }
-      navigateTo({ route: "contact", id: knownContact.id });
-      return;
-    }
-    navigateTo({ route: "chat", id: String(knownContact.id) });
-  };
+
+      const knownContact =
+        contacts.find((row) => String(row.id ?? "").trim() === contactId) ??
+        null;
+      if (!knownContact) {
+        navigateTo({ route: "contacts" });
+        return;
+      }
+
+      const npub = String(knownContact.npub ?? "").trim();
+      const ln = String(knownContact.lnAddress ?? "").trim();
+      if (!npub) {
+        if (ln) {
+          openContactPay(knownContact.id);
+          return;
+        }
+        navigateTo({ route: "contact", id: knownContact.id });
+        return;
+      }
+      navigateTo({ route: "chat", id: String(knownContact.id) });
+    },
+    [clearContactAttention, contacts, openContactPay],
+  );
 
   const addUnknownContactFromChat = React.useCallback(async () => {
     if (route.kind !== "chat") return;
@@ -9304,39 +8523,61 @@ export const useAppShellComposition = () => {
     setChatDraft("");
   }, []);
 
-  const topbar = buildTopbar({
-    closeContactDetail,
-    contactPayBackToChatId: contactPayBackToChatRef.current,
-    navigateToMainReturn,
-    route,
-    t,
-  });
+  const contactPayBackToChatId = contactPayBackToChatRef.current;
+  const topbar = React.useMemo(
+    () =>
+      buildTopbar({
+        closeContactDetail,
+        contactPayBackToChatId,
+        navigateToMainReturn,
+        route,
+        t,
+      }),
+    [
+      closeContactDetail,
+      contactPayBackToChatId,
+      navigateToMainReturn,
+      route,
+      t,
+    ],
+  );
 
-  const topbarRight = buildTopbarRight({
-    chatEditContactId:
-      route.kind === "chat" && !selectedChatContact?.isUnknownContact
-        ? (selectedContact?.id ?? null)
-        : null,
-    isProfileEditing,
-    openScan,
-    route,
-    t,
-    toggleMenu,
-  });
-
-  const topbarTitle = buildTopbarTitle(route, t);
-
-  const chatTopbarContact =
-    route.kind === "chat" && selectedChatContact
-      ? {
-          contactId: selectedChatContact.isUnknownContact
-            ? null
-            : (selectedContact?.id ?? null),
-          isUnknownContact: Boolean(selectedChatContact.isUnknownContact),
-          name: String(selectedChatContact.name ?? "").trim() || null,
-          npub: normalizeNpubIdentifier(selectedChatContact.npub),
-        }
+  const chatEditContactId =
+    route.kind === "chat" && !selectedChatContact?.isUnknownContact
+      ? (selectedContact?.id ?? null)
       : null;
+  const topbarRight = React.useMemo(
+    () =>
+      buildTopbarRight({
+        chatEditContactId,
+        isProfileEditing,
+        openScan,
+        route,
+        t,
+        toggleMenu,
+      }),
+    [chatEditContactId, isProfileEditing, openScan, route, t, toggleMenu],
+  );
+
+  const topbarTitle = React.useMemo(
+    () => buildTopbarTitle(route, t),
+    [route, t],
+  );
+
+  const chatTopbarContact = React.useMemo(
+    () =>
+      route.kind === "chat" && selectedChatContact
+        ? {
+            contactId: selectedChatContact.isUnknownContact
+              ? null
+              : (selectedContact?.id ?? null),
+            isUnknownContact: Boolean(selectedChatContact.isUnknownContact),
+            name: String(selectedChatContact.name ?? "").trim() || null,
+            npub: normalizeNpubIdentifier(selectedChatContact.npub),
+          }
+        : null,
+    [route.kind, selectedChatContact, selectedContact?.id],
+  );
 
   const getCashuTokenMessageInfo = React.useCallback(
     (text: string) =>
@@ -9848,8 +9089,6 @@ export const useAppShellComposition = () => {
     navigateTo({ route: "profile" });
   }, []);
 
-  const closeProfileQr = React.useCallback(() => {}, []);
-
   const handleContactIdentifierScanned = React.useCallback(
     async (identifier: string) => {
       await addNewContactFromIdentifier(identifier);
@@ -10351,6 +9590,16 @@ export const useAppShellComposition = () => {
     },
   });
 
+  const restoreEditingContact = React.useCallback(() => {
+    if (!editingId) return;
+    restoreArchivedContact(editingId);
+  }, [editingId, restoreArchivedContact]);
+
+  const restoreCurrentContact = React.useCallback(() => {
+    if (!selectedContact) return;
+    restoreArchivedContact(selectedContact.id);
+  }, [restoreArchivedContact, selectedContact]);
+
   const { peopleRouteProps } = useProfilePeopleComposition({
     peopleRouteBuilderInput: {
       cashuBalance,
@@ -10442,14 +9691,8 @@ export const useAppShellComposition = () => {
       profileSelectedPictureKind,
       blockArchivedContact,
       selectedProfileStatusCurrencies,
-      restoreArchivedContact: () => {
-        if (!editingId) return;
-        restoreArchivedContact(editingId);
-      },
-      restoreSelectedContact: () => {
-        if (!selectedContact) return;
-        restoreArchivedContact(selectedContact.id);
-      },
+      restoreArchivedContact: restoreEditingContact,
+      restoreSelectedContact: restoreCurrentContact,
       requestDeleteCurrentContact,
       resetEditedContactFieldFromNostr,
       replyContext,
@@ -10502,7 +9745,6 @@ export const useAppShellComposition = () => {
       mainSwipeProgress,
       mainSwipeRef,
       canAddContact,
-      closeProfileQr,
       openNewContactPage,
       openProfileQr,
       openWalletScan,
@@ -10651,122 +9893,240 @@ export const useAppShellComposition = () => {
     },
   });
 
-  const appState = {
-    allowedDisplayCurrencies,
-    applyAmountInputKey: applyDisplayedAmountInputKey,
-    cashuBalance,
-    cashuBalanceAfterMelt,
-    cashuIsBusy,
-    canWriteNfc,
-    chatTopbarContact,
-    contactsGuide,
-    contactsGuideActiveStep,
-    contactsGuideHighlightRect,
-    currentNpub,
-    currentNsec,
-    displayCurrency,
-    derivedProfile,
-    displayUnit,
-    effectiveMyLightningAddress,
-    effectiveProfileName,
-    effectiveProfilePicture,
-    evoluAppOwnerId: appOwnerId ? String(appOwnerId) : null,
-    evoluTransactionsVisibleOwnerIds: transactionsVisibleOwnerIds.map(
-      (ownerId) => String(ownerId),
-    ),
-    formatDisplayedAmountParts,
-    formatDisplayedAmountText,
-    isProfileEditing,
-    lang,
-    menuIsOpen,
-    myProfileQr,
-    nfcWritePromptKind,
-    nostrPictureByNpub,
-    paidOverlayIsOpen,
-    paidOverlayTitle,
-    pendingMintAutoswapChangeConfirmation,
-    pendingPaymentMintMeltConfirmation,
-    pendingLnurlWithdrawConfirmation,
-    pendingLightningInvoiceConfirmation,
-    postPaySaveContact,
-    profileCustomPictureUrl,
-    profileEditInitialRef,
-    profileEditLnAddress,
-    profileEditName,
-    profileEditPicture,
-    profileEditStatus,
-    profileEditsSavable,
-    profileStatus: myProfileStatus,
-    profileStatusCurrencies,
-    profileStatusIsSaving,
-    profilePhotoInputRef,
-    selectedProfileStatusCurrencies,
-    profileSelectedPictureKind,
-    route,
-    scanAllowsManualContact,
-    scanEntryPoint,
-    scanImageInputRef,
-    scanIsOpen,
-    shareOptionsText,
-    scanVideoRef,
-    t,
-    topbar,
-    topbarRight,
-    topbarTitle,
-    lnurlWithdrawIsBusy,
-  };
+  const evoluTransactionsVisibleOwnerIds = React.useMemo(
+    () => transactionsVisibleOwnerIds.map((ownerId) => String(ownerId)),
+    [transactionsVisibleOwnerIds],
+  );
 
-  const appActions = {
-    cancelPendingNfcWrite,
-    closeMintAutoswapChangeConfirmation,
-    closePaymentMintMeltConfirmation,
-    closeLnurlWithdrawConfirmation,
-    closeMenu,
-    closeShareOptions,
-    closeLightningInvoiceConfirmation,
-    closeProfileQr,
-    closeScan,
-    confirmMintAutoswapChangeConfirmation,
-    confirmPaymentMintMelt,
-    confirmLnurlWithdraw,
-    confirmLightningInvoicePayment,
-    contactsGuideNav,
-    copyShareOptionsText,
-    copyText,
-    cycleDisplayCurrency,
-    cycleProfileAvatarControl,
-    onPickProfilePhoto,
-    onPickScanImage,
-    onProfilePhotoError,
-    onProfilePhotoSelected,
-    onScanImageSelected,
-    openFeedbackContact,
-    openIssueTokenFromScan,
-    openManualContactFromScan,
-    openManualPayFromScan,
-    openProfileQr,
-    openReceiveScan,
-    openWalletScan,
-    pasteScanValue,
-    saveProfileEdits,
-    setContactNewPrefill,
-    setIsProfileEditing,
-    setLang,
-    setLightningInvoiceAutoPayLimit,
-    setPostPaySaveContact,
-    setProfileEditLnAddress,
-    setProfileEditName,
-    setProfileEditStatus,
-    setDisplayCurrency: setDisplayCurrencyIfAllowed,
-    stopContactsGuide,
-    shareOptionsViaEmail,
-    shareOptionsViaSms,
-    shareOptionsViaWhatsApp,
-    toggleAllowedDisplayCurrency,
-    toggleProfileEditing,
-    toggleProfileStatusCurrency,
-    writeCurrentNpubToNfc,
-  };
+  const appState = React.useMemo(
+    () => ({
+      allowedDisplayCurrencies,
+      applyAmountInputKey: applyDisplayedAmountInputKey,
+      cashuBalance,
+      cashuBalanceAfterMelt,
+      cashuIsBusy,
+      canWriteNfc,
+      chatTopbarContact,
+      contactsGuide,
+      contactsGuideActiveStep,
+      contactsGuideHighlightRect,
+      currentNpub,
+      currentNsec,
+      displayCurrency,
+      derivedProfile,
+      displayUnit,
+      effectiveMyLightningAddress,
+      effectiveProfileName,
+      effectiveProfilePicture,
+      evoluAppOwnerId: appOwnerId ? String(appOwnerId) : null,
+      evoluTransactionsVisibleOwnerIds,
+      formatDisplayedAmountParts,
+      formatDisplayedAmountText,
+      isProfileEditing,
+      lang,
+      menuIsOpen,
+      myProfileQr,
+      nfcWritePromptKind,
+      nostrPictureByNpub,
+      paidOverlayIsOpen,
+      paidOverlayTitle,
+      pendingMintAutoswapChangeConfirmation,
+      pendingPaymentMintMeltConfirmation,
+      pendingLnurlWithdrawConfirmation,
+      pendingLightningInvoiceConfirmation,
+      postPaySaveContact,
+      profileCustomPictureUrl,
+      profileEditInitialRef,
+      profileEditLnAddress,
+      profileEditName,
+      profileEditPicture,
+      profileEditStatus,
+      profileEditsSavable,
+      profileStatus: myProfileStatus,
+      profileStatusCurrencies,
+      profileStatusIsSaving,
+      profilePhotoInputRef,
+      selectedProfileStatusCurrencies,
+      profileSelectedPictureKind,
+      route,
+      scanAllowsManualContact,
+      scanEntryPoint,
+      scanImageInputRef,
+      scanIsOpen,
+      shareOptionsText,
+      scanVideoRef,
+      t,
+      topbar,
+      topbarRight,
+      topbarTitle,
+      lnurlWithdrawIsBusy,
+    }),
+    [
+      allowedDisplayCurrencies,
+      applyDisplayedAmountInputKey,
+      appOwnerId,
+      cashuBalance,
+      cashuBalanceAfterMelt,
+      cashuIsBusy,
+      canWriteNfc,
+      chatTopbarContact,
+      contactsGuide,
+      contactsGuideActiveStep,
+      contactsGuideHighlightRect,
+      currentNpub,
+      currentNsec,
+      derivedProfile,
+      displayCurrency,
+      displayUnit,
+      effectiveMyLightningAddress,
+      effectiveProfileName,
+      effectiveProfilePicture,
+      evoluTransactionsVisibleOwnerIds,
+      formatDisplayedAmountParts,
+      formatDisplayedAmountText,
+      isProfileEditing,
+      lang,
+      lnurlWithdrawIsBusy,
+      menuIsOpen,
+      myProfileQr,
+      myProfileStatus,
+      nfcWritePromptKind,
+      nostrPictureByNpub,
+      paidOverlayIsOpen,
+      paidOverlayTitle,
+      pendingLightningInvoiceConfirmation,
+      pendingLnurlWithdrawConfirmation,
+      pendingMintAutoswapChangeConfirmation,
+      pendingPaymentMintMeltConfirmation,
+      postPaySaveContact,
+      profileCustomPictureUrl,
+      profileEditInitialRef,
+      profileEditLnAddress,
+      profileEditName,
+      profileEditPicture,
+      profileEditStatus,
+      profileEditsSavable,
+      profilePhotoInputRef,
+      profileSelectedPictureKind,
+      profileStatusCurrencies,
+      profileStatusIsSaving,
+      route,
+      scanAllowsManualContact,
+      scanEntryPoint,
+      scanImageInputRef,
+      scanIsOpen,
+      scanVideoRef,
+      selectedProfileStatusCurrencies,
+      shareOptionsText,
+      t,
+      topbar,
+      topbarRight,
+      topbarTitle,
+    ],
+  );
+
+  const appActions = React.useMemo(
+    () => ({
+      cancelPendingNfcWrite,
+      closeMintAutoswapChangeConfirmation,
+      closePaymentMintMeltConfirmation,
+      closeLnurlWithdrawConfirmation,
+      closeMenu,
+      closeShareOptions,
+      closeLightningInvoiceConfirmation,
+      closeScan,
+      confirmMintAutoswapChangeConfirmation,
+      confirmPaymentMintMelt,
+      confirmLnurlWithdraw,
+      confirmLightningInvoicePayment,
+      contactsGuideNav: stableContactsGuideNav,
+      copyShareOptionsText,
+      copyText,
+      cycleDisplayCurrency,
+      cycleProfileAvatarControl,
+      onPickProfilePhoto,
+      onPickScanImage,
+      onProfilePhotoError,
+      onProfilePhotoSelected,
+      onScanImageSelected,
+      openFeedbackContact,
+      openIssueTokenFromScan,
+      openManualContactFromScan,
+      openManualPayFromScan,
+      openProfileQr,
+      openReceiveScan,
+      openWalletScan,
+      pasteScanValue,
+      saveProfileEdits,
+      setContactNewPrefill,
+      setIsProfileEditing,
+      setLang,
+      setLightningInvoiceAutoPayLimit,
+      setPostPaySaveContact,
+      setProfileEditLnAddress,
+      setProfileEditName,
+      setProfileEditStatus,
+      setDisplayCurrency: setDisplayCurrencyIfAllowed,
+      stopContactsGuide,
+      shareOptionsViaEmail,
+      shareOptionsViaSms,
+      shareOptionsViaWhatsApp,
+      toggleAllowedDisplayCurrency,
+      toggleProfileEditing,
+      toggleProfileStatusCurrency,
+      writeCurrentNpubToNfc,
+    }),
+    [
+      cancelPendingNfcWrite,
+      closeLightningInvoiceConfirmation,
+      closeLnurlWithdrawConfirmation,
+      closeMenu,
+      closeMintAutoswapChangeConfirmation,
+      closePaymentMintMeltConfirmation,
+      closeScan,
+      closeShareOptions,
+      confirmLightningInvoicePayment,
+      confirmLnurlWithdraw,
+      confirmMintAutoswapChangeConfirmation,
+      confirmPaymentMintMelt,
+      stableContactsGuideNav,
+      copyShareOptionsText,
+      copyText,
+      cycleDisplayCurrency,
+      cycleProfileAvatarControl,
+      onPickProfilePhoto,
+      onPickScanImage,
+      onProfilePhotoError,
+      onProfilePhotoSelected,
+      onScanImageSelected,
+      openFeedbackContact,
+      openIssueTokenFromScan,
+      openManualContactFromScan,
+      openManualPayFromScan,
+      openProfileQr,
+      openReceiveScan,
+      openWalletScan,
+      pasteScanValue,
+      saveProfileEdits,
+      setContactNewPrefill,
+      setDisplayCurrencyIfAllowed,
+      setIsProfileEditing,
+      setLang,
+      setLightningInvoiceAutoPayLimit,
+      setPostPaySaveContact,
+      setProfileEditLnAddress,
+      setProfileEditName,
+      setProfileEditStatus,
+      shareOptionsViaEmail,
+      shareOptionsViaSms,
+      shareOptionsViaWhatsApp,
+      stopContactsGuide,
+      toggleAllowedDisplayCurrency,
+      toggleProfileEditing,
+      toggleProfileStatusCurrency,
+      writeCurrentNpubToNfc,
+    ],
+  );
 
   return {
     appActions,

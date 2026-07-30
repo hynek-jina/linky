@@ -2,7 +2,6 @@ import React from "react";
 
 interface UseShowProfileQrOnTiltParams {
   enabled: boolean;
-  onHideProfileQr: () => void;
   onShowProfileQr: () => void;
 }
 
@@ -85,7 +84,6 @@ const readScreenOrientation = (): {
 
 export const useShowProfileQrOnTilt = ({
   enabled,
-  onHideProfileQr,
   onShowProfileQr,
 }: UseShowProfileQrOnTiltParams): void => {
   const armedRef = React.useRef(true);
@@ -93,15 +91,9 @@ export const useShowProfileQrOnTilt = ({
   const baselineGravityYRef = React.useRef<number | null>(null);
   const lastOpenedAtRef = React.useRef(0);
   const motionTiltedRef = React.useRef(false);
-  const openedByTiltRef = React.useRef(false);
   const orientationTiltedRef = React.useRef(false);
-  const onHideProfileQrRef = React.useRef(onHideProfileQr);
   const onShowProfileQrRef = React.useRef(onShowProfileQr);
   const screenTiltedRef = React.useRef(false);
-
-  React.useEffect(() => {
-    onHideProfileQrRef.current = onHideProfileQr;
-  }, [onHideProfileQr]);
 
   React.useEffect(() => {
     onShowProfileQrRef.current = onShowProfileQr;
@@ -113,7 +105,6 @@ export const useShowProfileQrOnTilt = ({
       baselineBetaRef.current = null;
       baselineGravityYRef.current = null;
       motionTiltedRef.current = false;
-      openedByTiltRef.current = false;
       orientationTiltedRef.current = false;
       screenTiltedRef.current = false;
       return;
@@ -132,12 +123,11 @@ export const useShowProfileQrOnTilt = ({
       if (now - lastOpenedAtRef.current < OPEN_COOLDOWN_MS) return;
 
       armedRef.current = false;
-      openedByTiltRef.current = true;
       lastOpenedAtRef.current = now;
       onShowProfileQrRef.current();
     };
 
-    const maybeCloseProfileQr = () => {
+    const maybeResetTilt = () => {
       if (
         motionTiltedRef.current ||
         orientationTiltedRef.current ||
@@ -146,9 +136,6 @@ export const useShowProfileQrOnTilt = ({
         return;
       }
       armedRef.current = true;
-      if (!openedByTiltRef.current) return;
-      openedByTiltRef.current = false;
-      onHideProfileQrRef.current();
     };
 
     const onDeviceOrientation = (event: DeviceOrientationEvent) => {
@@ -168,7 +155,7 @@ export const useShowProfileQrOnTilt = ({
 
       if (isResetTilt(beta, baselineBeta)) {
         orientationTiltedRef.current = false;
-        maybeCloseProfileQr();
+        maybeResetTilt();
         return;
       }
     };
@@ -190,7 +177,7 @@ export const useShowProfileQrOnTilt = ({
 
       if (isMotionResetTilt(gravityY, baselineGravityY)) {
         motionTiltedRef.current = false;
-        maybeCloseProfileQr();
+        maybeResetTilt();
         return;
       }
     };
@@ -206,7 +193,7 @@ export const useShowProfileQrOnTilt = ({
 
       if (isScreenResetTilt(screenOrientation)) {
         screenTiltedRef.current = false;
-        maybeCloseProfileQr();
+        maybeResetTilt();
         return;
       }
     };

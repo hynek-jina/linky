@@ -37,7 +37,6 @@ import {
 } from "../../pages";
 import {
   useAppShellCore,
-  useAppShellRouteContext,
   useMoneyRoutes,
   usePeopleRoutes,
   useSystemRoutes,
@@ -92,146 +91,97 @@ export interface MainSwipeRoutesProps {
   mainSwipeProps: MainSwipeRouteProps;
 }
 
+const assertNever = (route: never): never => {
+  throw new Error(`Unhandled app route: ${JSON.stringify(route)}`);
+};
+
 export const AppRouteContent = (): React.ReactElement => {
   const { route } = useAppShellCore();
-  const { isMainSwipeRoute } = useAppShellRouteContext();
   const peopleRoutes = usePeopleRoutes();
   const moneyRoutes = useMoneyRoutes();
   const systemRoutes = useSystemRoutes();
 
-  return (
-    <>
-      {route.kind === "settings" && (
-        <AdvancedPage {...systemRoutes.advancedProps} />
-      )}
-
-      {route.kind === "settingsUnits" && <SettingsPage />}
-
-      {route.kind === "settingsMasterKeys" && (
-        <MasterKeysPage {...systemRoutes.masterKeysProps} />
-      )}
-
-      {route.kind === "advanced" && (
-        <AdvancedPage {...systemRoutes.advancedProps} />
-      )}
-
-      {route.kind === "advancedAutoPayLimit" && (
+  switch (route.kind) {
+    case "contacts":
+    case "wallet":
+      return <MainSwipeContent />;
+    case "settings":
+    case "advanced":
+      return <AdvancedPage {...systemRoutes.advancedProps} />;
+    case "settingsUnits":
+      return <SettingsPage />;
+    case "settingsMasterKeys":
+      return <MasterKeysPage {...systemRoutes.masterKeysProps} />;
+    case "advancedAutoPayLimit":
+      return (
         <AdvancedAutoPayLimitPage {...systemRoutes.advancedAutoPayLimitProps} />
-      )}
-
-      {route.kind === "advancedPushDebug" && (
-        <PushDebugPage {...systemRoutes.advancedPushDebugProps} />
-      )}
-
-      {route.kind === "mints" && <MintsPage {...systemRoutes.mintsProps} />}
-
-      {route.kind === "mint" && (
-        <MintDetailPage {...systemRoutes.mintDetailProps} />
-      )}
-
-      {route.kind === "evoluServers" && (
-        <EvoluServersPage {...systemRoutes.evoluServersProps} />
-      )}
-
-      {route.kind === "evoluCurrentData" && (
-        <EvoluCurrentDataPage {...systemRoutes.evoluCurrentDataProps} />
-      )}
-
-      {route.kind === "evoluHistoryData" && (
-        <EvoluHistoryDataPage {...systemRoutes.evoluHistoryDataProps} />
-      )}
-
-      {route.kind === "evoluServer" && (
-        <EvoluServerPage {...systemRoutes.evoluServerProps} />
-      )}
-
-      {route.kind === "evoluServerNew" && (
-        <EvoluServerNewPage {...systemRoutes.evoluServerNewProps} />
-      )}
-
-      {route.kind === "evoluData" && (
-        <EvoluDataDetailPage {...systemRoutes.evoluDataDetailProps} />
-      )}
-
-      {route.kind === "nostrRelays" && (
-        <NostrRelaysPage {...systemRoutes.nostrRelaysProps} />
-      )}
-
-      {route.kind === "nostrRelayNew" && (
-        <NostrRelayNewPage {...systemRoutes.nostrRelayNewProps} />
-      )}
-
-      {route.kind === "nostrRelay" && (
-        <NostrRelayPage {...systemRoutes.nostrRelayProps} />
-      )}
-
-      {isMainSwipeRoute && <MainSwipeContent />}
-
-      {route.kind === "topup" && <TopupPage {...moneyRoutes.topupProps} />}
-
-      {route.kind === "transactions" && <TransactionsPage />}
-
-      {route.kind === "topupNoAmount" && <TopupNoAmountPage />}
-
-      {route.kind === "topupInvoice" && (
-        <TopupInvoicePage {...moneyRoutes.topupInvoiceProps} />
-      )}
-
-      {route.kind === "cashuTokens" && (
-        <CashuTokensPage {...moneyRoutes.cashuTokensProps} />
-      )}
-
-      {route.kind === "cashuTokenNew" && (
-        <CashuTokenNewPage {...moneyRoutes.cashuTokenNewProps} />
-      )}
-
-      {route.kind === "cashuTokenEmit" && (
-        <CashuTokenEmitPage {...moneyRoutes.cashuTokenEmitProps} />
-      )}
-
-      {route.kind === "cashuToken" && (
-        <CashuTokenPage {...moneyRoutes.cashuTokenProps()} />
-      )}
-
-      {route.kind === "contact" && (
-        <ContactPage {...peopleRoutes.contactProps} />
-      )}
-
-      {route.kind === "contactPay" && (
-        <ContactPayPage {...peopleRoutes.contactPayProps} />
-      )}
-
-      {route.kind === "lnAddressPay" && (
-        <LnAddressPayPage {...moneyRoutes.lnAddressPayProps} />
-      )}
-
-      {route.kind === "manualPay" && (
-        <ManualPayPage {...moneyRoutes.manualPayProps} />
-      )}
-
-      {route.kind === "bankPayment" && (
-        <SpdPaymentPage {...moneyRoutes.spdPaymentProps} />
-      )}
-
-      {route.kind === "bankPaymentOffer" && (
+      );
+    case "advancedPushDebug":
+      return <PushDebugPage {...systemRoutes.advancedPushDebugProps} />;
+    case "mints":
+      return <MintsPage {...systemRoutes.mintsProps} />;
+    case "mint":
+      return <MintDetailPage {...systemRoutes.mintDetailProps} />;
+    case "evoluServers":
+      return <EvoluServersPage {...systemRoutes.evoluServersProps} />;
+    case "evoluCurrentData":
+      return <EvoluCurrentDataPage {...systemRoutes.evoluCurrentDataProps} />;
+    case "evoluHistoryData":
+      return <EvoluHistoryDataPage {...systemRoutes.evoluHistoryDataProps} />;
+    case "evoluServer":
+      return <EvoluServerPage {...systemRoutes.evoluServerProps} />;
+    case "evoluServerNew":
+      return <EvoluServerNewPage {...systemRoutes.evoluServerNewProps} />;
+    case "evoluData":
+      return <EvoluDataDetailPage {...systemRoutes.evoluDataDetailProps} />;
+    case "nostrRelays":
+      return <NostrRelaysPage {...systemRoutes.nostrRelaysProps} />;
+    case "nostrRelayNew":
+      return <NostrRelayNewPage {...systemRoutes.nostrRelayNewProps} />;
+    case "nostrRelay":
+      return <NostrRelayPage {...systemRoutes.nostrRelayProps} />;
+    case "topup":
+      return <TopupPage {...moneyRoutes.topupProps} />;
+    case "transactions":
+      return <TransactionsPage />;
+    case "topupNoAmount":
+      return <TopupNoAmountPage />;
+    case "topupInvoice":
+      return <TopupInvoicePage {...moneyRoutes.topupInvoiceProps} />;
+    case "cashuTokens":
+      return <CashuTokensPage {...moneyRoutes.cashuTokensProps} />;
+    case "cashuTokenNew":
+      return <CashuTokenNewPage {...moneyRoutes.cashuTokenNewProps} />;
+    case "cashuTokenEmit":
+      return <CashuTokenEmitPage {...moneyRoutes.cashuTokenEmitProps} />;
+    case "cashuToken":
+      return <CashuTokenPage {...moneyRoutes.cashuTokenProps()} />;
+    case "contact":
+      return <ContactPage {...peopleRoutes.contactProps} />;
+    case "contactPay":
+      return <ContactPayPage {...peopleRoutes.contactPayProps} />;
+    case "lnAddressPay":
+      return <LnAddressPayPage {...moneyRoutes.lnAddressPayProps} />;
+    case "manualPay":
+      return <ManualPayPage {...moneyRoutes.manualPayProps} />;
+    case "bankPayment":
+      return <SpdPaymentPage {...moneyRoutes.spdPaymentProps} />;
+    case "bankPaymentOffer":
+      return (
         <BankPaymentOfferDetailPage
           {...peopleRoutes.bankPaymentOfferDetailProps()}
         />
-      )}
-
-      {route.kind === "chat" && <ChatPage {...peopleRoutes.chatProps} />}
-
-      {route.kind === "contactEdit" && (
-        <ContactEditPage {...peopleRoutes.contactEditProps} />
-      )}
-
-      {route.kind === "contactNew" && (
-        <ContactNewPage {...peopleRoutes.contactNewProps} />
-      )}
-
-      {(route.kind === "profile" || route.kind === "profileEdit") && (
-        <ProfilePage {...peopleRoutes.profileProps} />
-      )}
-    </>
-  );
+      );
+    case "chat":
+      return <ChatPage {...peopleRoutes.chatProps} />;
+    case "contactEdit":
+      return <ContactEditPage {...peopleRoutes.contactEditProps} />;
+    case "contactNew":
+      return <ContactNewPage {...peopleRoutes.contactNewProps} />;
+    case "profile":
+    case "profileEdit":
+      return <ProfilePage {...peopleRoutes.profileProps} />;
+    default:
+      return assertNever(route satisfies never);
+  }
 };

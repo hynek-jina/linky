@@ -3,7 +3,6 @@ import {
   getDefaultDisplayCurrency,
 } from "./browserPreferences";
 import {
-  ALLOW_PROMISES_STORAGE_KEY,
   BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
   CASHU_AUTOSWAP_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
@@ -281,18 +280,6 @@ export const getInitialCashuAutoswapEnabled = (): boolean => {
 export const getInitialShowProfileQrOnTiltEnabled = (): boolean => {
   try {
     return localStorage.getItem(SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-};
-
-export const getInitialAllowPromisesEnabled = (): boolean => {
-  try {
-    const raw = localStorage.getItem(ALLOW_PROMISES_STORAGE_KEY);
-    const v = String(raw ?? "").trim();
-    // Default: disabled.
-    if (!v) return false;
-    return v === "1";
   } catch {
     return false;
   }

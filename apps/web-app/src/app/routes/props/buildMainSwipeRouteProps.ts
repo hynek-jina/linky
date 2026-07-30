@@ -23,7 +23,6 @@ interface BuildMainSwipeRoutePropsParams {
   isMainSwipeDragging: MainSwipeRoutesProps["mainSwipeProps"]["isMainSwipeDragging"];
   mainSwipeProgress: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeProgress"];
   mainSwipeRef: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeRef"];
-  closeProfileQr: MainSwipeRoutesProps["mainSwipeProps"]["closeProfileQr"];
   openNewContactPage: MainSwipeRoutesProps["mainSwipeProps"]["openNewContactPage"];
   openProfileQr: MainSwipeRoutesProps["mainSwipeProps"]["openProfileQr"];
   openWalletScan: MainSwipeRoutesProps["mainSwipeProps"]["openWalletScan"];
@@ -66,7 +65,6 @@ export const buildMainSwipeRouteProps = ({
   isMainSwipeDragging,
   mainSwipeProgress,
   mainSwipeRef,
-  closeProfileQr,
   openNewContactPage,
   openProfileQr,
   openWalletScan,
@@ -109,7 +107,6 @@ export const buildMainSwipeRouteProps = ({
       isMainSwipeDragging,
       mainSwipeProgress,
       mainSwipeRef,
-      closeProfileQr,
       openNewContactPage,
       openProfileQr,
       openWalletScan,

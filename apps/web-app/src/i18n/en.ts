@@ -822,9 +822,6 @@ export const en = {
   nfcWriteTokenSuccess: "Token written to NFC.",
   nfcWriteProfileSuccess: "npub written to NFC.",
 
-  allowPromises: "Allow promises",
-  totalBalanceWithPromises: "Total balance (incl. promises)",
-
   pay: "Pay",
   decline: "Decline",
   requestPayment: "Request",
