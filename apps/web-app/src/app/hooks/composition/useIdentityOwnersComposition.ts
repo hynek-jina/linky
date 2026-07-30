@@ -1,0 +1,308 @@
+import * as Evolu from "@evolu/common";
+import { useOwner, useQuery } from "@evolu/react";
+import React from "react";
+import type { evolu, useEvolu } from "../../../evolu";
+import { useEvoluSyncOwner } from "../../../evolu";
+import type { Lang } from "../../../i18n";
+import {
+  persistSyncedActiveNostrIdentity,
+  readStoredNostrNsec,
+} from "../../../platform/identitySecrets";
+import {
+  clearStoredPushNsec,
+  setStoredPushNsec,
+} from "../../../utils/pushNsecStorage";
+import {
+  getInitialNostrIdentitySource,
+  getInitialNostrIdentitySwitchedAtSec,
+  getInitialNostrNsec,
+} from "../../../utils/storage";
+import type { IdentityChangeMessageSource } from "../../lib/identityChangeMessage";
+import {
+  ACTIVE_NOSTR_IDENTITY_ROW_ID,
+  resolveSyncedNostrIdentity,
+} from "../../lib/nostrIdentitySync";
+import { useEvoluContactsOwnerRotation } from "../useEvoluContactsOwnerRotation";
+import { useProfileAuthComposition } from "./useProfileAuthComposition";
+
+interface IdentityOwnersNavigation {
+  reload: () => void;
+}
+
+interface UseIdentityOwnersCompositionParams {
+  evolu: typeof evolu;
+  lang: Lang;
+  navigation: IdentityOwnersNavigation;
+  pushToast: (message: string) => void;
+  t: (key: string) => string;
+  upsert: ReturnType<typeof useEvolu>["upsert"];
+}
+
+export const useIdentityOwnersComposition = ({
+  evolu,
+  lang,
+  navigation,
+  pushToast,
+  t,
+  upsert,
+}: UseIdentityOwnersCompositionParams) => {
+  const appOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const cashuOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const messagesOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const transactionsOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
+  const recordTransactionsOwnerWriteRef = React.useRef<
+    ((count?: number) => void) | null
+  >(null);
+
+  const [currentNsec, setCurrentNsec] = React.useState<string | null>(() =>
+    getInitialNostrNsec(),
+  );
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const storedNsec = await readStoredNostrNsec();
+      if (cancelled) return;
+      setCurrentNsec((current) =>
+        current === storedNsec ? current : storedNsec,
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const syncOwner = useEvoluSyncOwner(Boolean(currentNsec));
+
+  useOwner(syncOwner);
+
+  React.useEffect(() => {
+    void (async () => {
+      try {
+        if (currentNsec) {
+          await setStoredPushNsec(currentNsec);
+        } else {
+          await clearStoredPushNsec();
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [currentNsec]);
+
+  const appOwnerId = syncOwner?.id ?? null;
+
+  const appendIdentityChangeNoticesRef = React.useRef<
+    | ((args: {
+        changedAtSec: number;
+        identitySource: IdentityChangeMessageSource;
+      }) => void)
+    | null
+  >(null);
+
+  const profileAuth = useProfileAuthComposition({
+    appendIdentityChangeNoticesRef,
+    currentNsec,
+    lang,
+    pushToast,
+    t,
+    upsert,
+  });
+
+  const ownerRotation = useEvoluContactsOwnerRotation({
+    appOwnerId,
+    isSeedLogin: profileAuth.isSeedLogin,
+    pushToast,
+    slip39Seed: profileAuth.slip39Seed,
+    t,
+    upsert,
+  });
+
+  useOwner(ownerRotation.contactsSyncOwner);
+  useOwner(ownerRotation.cashuSyncOwner);
+  useOwner(ownerRotation.messagesSyncOwner);
+  useOwner(ownerRotation.transactionsSyncOwner);
+  useOwner(ownerRotation.metaSyncOwner);
+  useOwner(ownerRotation.identitySyncOwner);
+
+  const historicalOwnerSetsReady = profileAuth.isSeedLogin
+    ? ownerRotation.cashuVisibleOwnerIds.length ===
+        ownerRotation.cashuOwnerIndex + 1 &&
+      ownerRotation.contactsVisibleOwnerIds.length ===
+        ownerRotation.contactsOwnerIndex + 1 &&
+      ownerRotation.messagesVisibleOwnerIds.length ===
+        ownerRotation.messagesOwnerIndex + 1 &&
+      ownerRotation.transactionsVisibleOwnerIds.length ===
+        ownerRotation.transactionsOwnerIndex + 1
+    : true;
+  React.useEffect(() => {
+    if (!profileAuth.isSeedLogin || !historicalOwnerSetsReady) return;
+
+    // Evolu does not expose an initial-sync-complete signal. Keep historical
+    // lanes subscribed for the whole authenticated session instead of
+    // guessing completion from a quiet timer and disconnecting them while
+    // their stored messages may still be arriving.
+    const stopUsingOwners = ownerRotation.historicalBootstrapSyncOwners.map(
+      (owner) => evolu.useOwner(owner),
+    );
+    return () => {
+      for (const stopUsingOwner of stopUsingOwners) stopUsingOwner();
+    };
+  }, [
+    evolu,
+    historicalOwnerSetsReady,
+    ownerRotation.historicalBootstrapSyncOwners,
+    profileAuth.isSeedLogin,
+  ]);
+
+  React.useEffect(() => {
+    cashuOwnerIdRef.current = ownerRotation.cashuOwnerId;
+  }, [ownerRotation.cashuOwnerId]);
+
+  React.useEffect(() => {
+    messagesOwnerIdRef.current = ownerRotation.messagesOwnerId;
+  }, [ownerRotation.messagesOwnerId]);
+
+  React.useEffect(() => {
+    transactionsOwnerIdRef.current = ownerRotation.transactionsOwnerId;
+  }, [ownerRotation.transactionsOwnerId]);
+
+  React.useEffect(() => {
+    recordTransactionsOwnerWriteRef.current =
+      ownerRotation.recordTransactionsOwnerWrite;
+  }, [ownerRotation.recordTransactionsOwnerWrite]);
+
+  const nostrIdentityQuery = React.useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("nostrIdentity")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue)
+          .orderBy("createdAt", "desc"),
+      ),
+    [evolu],
+  );
+  const nostrIdentityRows = useQuery(nostrIdentityQuery);
+
+  const activeIdentityOwnerId = String(
+    ownerRotation.identityOwnerId ?? "",
+  ).trim();
+  const legacyNostrIdentityOwnerIds = React.useMemo(
+    () =>
+      new Set(
+        [
+          ...ownerRotation.messagesVisibleOwnerIds,
+          ownerRotation.legacyIdentitiesOwnerId,
+          ownerRotation.legacyMessagesIdentityOwnerId,
+          ownerRotation.metaOwnerId,
+        ]
+          .map((ownerId) => String(ownerId ?? "").trim())
+          .filter(Boolean),
+      ),
+    [
+      ownerRotation.legacyIdentitiesOwnerId,
+      ownerRotation.legacyMessagesIdentityOwnerId,
+      ownerRotation.messagesVisibleOwnerIds,
+      ownerRotation.metaOwnerId,
+    ],
+  );
+  const syncedNostrIdentityResolution = React.useMemo(
+    () =>
+      resolveSyncedNostrIdentity(
+        nostrIdentityRows,
+        activeIdentityOwnerId,
+        legacyNostrIdentityOwnerIds,
+      ),
+    [activeIdentityOwnerId, legacyNostrIdentityOwnerIds, nostrIdentityRows],
+  );
+  const activeSyncedNostrIdentity = syncedNostrIdentityResolution.identity;
+  const syncedNostrIdentityMatchesLocal = React.useMemo(() => {
+    if (!activeSyncedNostrIdentity) return true;
+
+    const localSource = getInitialNostrIdentitySource();
+    const localSwitchedAtSec = getInitialNostrIdentitySwitchedAtSec();
+    const localNsec = String(currentNsec ?? "").trim();
+    const syncedSwitchedAtSec = activeSyncedNostrIdentity.switchedAtSec;
+    const switchedAtMatches =
+      localSwitchedAtSec === syncedSwitchedAtSec ||
+      (!localSwitchedAtSec && !syncedSwitchedAtSec);
+
+    return (
+      localNsec === activeSyncedNostrIdentity.nsec &&
+      localSource === activeSyncedNostrIdentity.source &&
+      switchedAtMatches
+    );
+  }, [activeSyncedNostrIdentity, currentNsec]);
+
+  React.useEffect(() => {
+    if (!syncedNostrIdentityResolution.shouldMigrateLegacyIdentity) return;
+    if (!activeSyncedNostrIdentity || !ownerRotation.identityOwnerId) return;
+
+    upsert(
+      "nostrIdentity",
+      {
+        id: ACTIVE_NOSTR_IDENTITY_ROW_ID,
+        nsec: activeSyncedNostrIdentity.nsec,
+        source: activeSyncedNostrIdentity.source,
+        ...(activeSyncedNostrIdentity.npub
+          ? { npub: activeSyncedNostrIdentity.npub }
+          : {}),
+        ...(activeSyncedNostrIdentity.switchedAtSec
+          ? { switchedAtSec: activeSyncedNostrIdentity.switchedAtSec }
+          : {}),
+      },
+      { ownerId: ownerRotation.identityOwnerId },
+    );
+  }, [
+    activeSyncedNostrIdentity,
+    ownerRotation.identityOwnerId,
+    syncedNostrIdentityResolution.shouldMigrateLegacyIdentity,
+    upsert,
+  ]);
+
+  React.useEffect(() => {
+    if (!activeSyncedNostrIdentity) return;
+    if (syncedNostrIdentityMatchesLocal) return;
+
+    void persistSyncedActiveNostrIdentity({
+      identitySource: activeSyncedNostrIdentity.source,
+      nsec: activeSyncedNostrIdentity.nsec,
+      switchedAtSec: activeSyncedNostrIdentity.switchedAtSec,
+    }).then(() => {
+      setCurrentNsec((current) =>
+        current === activeSyncedNostrIdentity.nsec
+          ? current
+          : activeSyncedNostrIdentity.nsec,
+      );
+      navigation.reload();
+    });
+  }, [
+    activeSyncedNostrIdentity,
+    navigation,
+    syncedNostrIdentityMatchesLocal,
+    setCurrentNsec,
+  ]);
+
+  return {
+    ...profileAuth,
+    ...ownerRotation,
+    activeSyncedNostrIdentity,
+    appOwnerId,
+    appOwnerIdRef,
+    appendIdentityChangeNoticesRef,
+    cashuOwnerIdRef,
+    currentNsec,
+    historicalOwnerSetsReady,
+    messagesOwnerIdRef,
+    nostrIdentityRows,
+    recordTransactionsOwnerWriteRef,
+    setCurrentNsec,
+    syncedNostrIdentityMatchesLocal,
+    syncedNostrIdentityResolution,
+    syncOwner,
+    transactionsOwnerIdRef,
+  };
+};
