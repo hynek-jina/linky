@@ -37,6 +37,8 @@ type UseGuideScannerDomainResult = ReturnType<typeof useContactsGuide> & {
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
 };
 
+const MAX_QR_DECODE_SIDE = 640;
+
 const formatScanDebugDetails = (details?: Record<string, unknown>) => {
   if (!details) {
     return null;
@@ -475,11 +477,27 @@ export const useGuideScannerDomain = ({
             const width = video.videoWidth || 0;
             const height = video.videoHeight || 0;
             if (width > 0 && height > 0) {
-              canvas.width = width;
-              canvas.height = height;
-              ctx.drawImage(video, 0, 0, width, height);
-              const imageData = ctx.getImageData(0, 0, width, height);
-              const result = jsQr(imageData.data, width, height);
+              const scale = Math.min(
+                1,
+                MAX_QR_DECODE_SIDE / Math.max(width, height),
+              );
+              const decodeWidth = Math.round(width * scale);
+              const decodeHeight = Math.round(height * scale);
+              if (
+                canvas.width !== decodeWidth ||
+                canvas.height !== decodeHeight
+              ) {
+                canvas.width = decodeWidth;
+                canvas.height = decodeHeight;
+              }
+              ctx.drawImage(video, 0, 0, decodeWidth, decodeHeight);
+              const imageData = ctx.getImageData(
+                0,
+                0,
+                decodeWidth,
+                decodeHeight,
+              );
+              const result = jsQr(imageData.data, decodeWidth, decodeHeight);
               const value = String(result?.data ?? "").trim();
               if (value) {
                 const didHandle = await handleDetectedScanValue(value);

@@ -20,8 +20,6 @@ interface BuildMainSwipeRoutePropsParams {
   dismissWalletWarning: MainSwipeRoutesProps["mainSwipeProps"]["dismissWalletWarning"];
   handleMainSwipeScroll: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeScroll"];
   handleMainSwipeTabChange: MainSwipeRoutesProps["mainSwipeProps"]["handleMainSwipeTabChange"];
-  isMainSwipeDragging: MainSwipeRoutesProps["mainSwipeProps"]["isMainSwipeDragging"];
-  mainSwipeProgress: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeProgress"];
   mainSwipeRef: MainSwipeRoutesProps["mainSwipeProps"]["mainSwipeRef"];
   openNewContactPage: MainSwipeRoutesProps["mainSwipeProps"]["openNewContactPage"];
   openProfileQr: MainSwipeRoutesProps["mainSwipeProps"]["openProfileQr"];
@@ -62,8 +60,6 @@ export const buildMainSwipeRouteProps = ({
   dismissWalletWarning,
   handleMainSwipeScroll,
   handleMainSwipeTabChange,
-  isMainSwipeDragging,
-  mainSwipeProgress,
   mainSwipeRef,
   openNewContactPage,
   openProfileQr,
@@ -104,8 +100,6 @@ export const buildMainSwipeRouteProps = ({
       dismissWalletWarning,
       handleMainSwipeScroll,
       handleMainSwipeTabChange,
-      isMainSwipeDragging,
-      mainSwipeProgress,
       mainSwipeRef,
       openNewContactPage,
       openProfileQr,

@@ -10,6 +10,7 @@ import {
   useAppShellCore,
   useMainSwipeRoutes,
 } from "../context/AppShellContexts";
+import { useMainSwipeProgress } from "../lib/mainSwipeProgressStore";
 import { useShowProfileQrOnTilt } from "../hooks/useShowProfileQrOnTilt";
 import type {
   ContactRowLike,
@@ -43,8 +44,6 @@ export interface MainSwipeRouteProps {
     | ((event: React.UIEvent<HTMLDivElement>) => void)
     | undefined;
   handleMainSwipeTabChange: (target: "contacts" | "wallet") => void;
-  isMainSwipeDragging: boolean;
-  mainSwipeProgress: number;
   mainSwipeRef: React.RefObject<HTMLDivElement | null>;
   openNewContactPage: () => void;
   openProfileQr: () => void;
@@ -77,6 +76,70 @@ const isContactsGuideKey = (value: string): value is ContactsGuideKey =>
   value === "message" ||
   value === "backup_keys";
 
+// Per-frame swipe progress subscribers are isolated in these two small
+// components so drag updates re-render only the tab bar and the FAB, not the
+// whole swipe content with both pages.
+interface MainSwipeBottomTabBarProps {
+  activeTab: "contacts" | "wallet" | null;
+  contactsLabel: string;
+  onTabChange: (tab: "contacts" | "wallet") => void;
+  t: (key: string) => string;
+  walletLabel: string;
+}
+
+const MainSwipeBottomTabBar = ({
+  activeTab,
+  contactsLabel,
+  onTabChange,
+  t,
+  walletLabel,
+}: MainSwipeBottomTabBarProps): React.ReactElement => {
+  const { isDragging, progress } = useMainSwipeProgress();
+  return (
+    <BottomTabBar
+      activeTab={activeTab}
+      activeProgress={progress}
+      contactsLabel={contactsLabel}
+      disableIndicatorTransition={isDragging}
+      onTabChange={onTabChange}
+      t={t}
+      walletLabel={walletLabel}
+    />
+  );
+};
+
+interface MainSwipeFabProps {
+  canAddContact: boolean;
+  label: string;
+  onClick: () => void;
+}
+
+const MainSwipeFab = ({
+  canAddContact,
+  label,
+  onClick,
+}: MainSwipeFabProps): React.ReactElement => {
+  const { isDragging, progress } = useMainSwipeProgress();
+  return (
+    <button
+      type="button"
+      className={`contacts-fab main-swipe-fab${canAddContact ? "" : " is-disabled"}${isDragging ? " is-interactive" : ""}`}
+      onClick={onClick}
+      aria-disabled={!canAddContact}
+      aria-label={label}
+      title={label}
+      data-guide="contact-add-button"
+      style={{
+        transform: `translateX(${-progress * 100}%)`,
+        opacity: Math.max(0, 1 - progress * 1.1),
+        pointerEvents: progress < 0.5 ? "auto" : "none",
+      }}
+    >
+      <ContactAddIcon className="contacts-fab-svgIcon" />
+    </button>
+  );
+};
+
 export const MainSwipeContent = (): React.ReactElement => {
   const { mainSwipeProps } = useMainSwipeRoutes();
   const {
@@ -98,8 +161,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     dismissWalletWarning,
     handleMainSwipeScroll,
     handleMainSwipeTabChange,
-    isMainSwipeDragging,
-    mainSwipeProgress,
     mainSwipeRef,
     openNewContactPage,
     openProfileQr,
@@ -200,31 +261,18 @@ export const MainSwipeContent = (): React.ReactElement => {
         nostrPictureByNpub={nostrPictureByNpub}
         t={t}
       />
-      <BottomTabBar
+      <MainSwipeBottomTabBar
         activeTab={bottomTabActive}
-        activeProgress={mainSwipeProgress}
         contactsLabel={t("contactsTitle")}
-        disableIndicatorTransition={isMainSwipeDragging}
         onTabChange={handleMainSwipeTabChange}
         t={t}
         walletLabel={t("wallet")}
       />
-      <button
-        type="button"
-        className={`contacts-fab main-swipe-fab${canAddContact ? "" : " is-disabled"}${isMainSwipeDragging ? " is-interactive" : ""}`}
+      <MainSwipeFab
+        canAddContact={canAddContact}
+        label={t("addContact")}
         onClick={openNewContactPage}
-        aria-disabled={!canAddContact}
-        aria-label={t("addContact")}
-        title={t("addContact")}
-        data-guide="contact-add-button"
-        style={{
-          transform: `translateX(${-mainSwipeProgress * 100}%)`,
-          opacity: Math.max(0, 1 - mainSwipeProgress * 1.1),
-          pointerEvents: mainSwipeProgress < 0.5 ? "auto" : "none",
-        }}
-      >
-        <ContactAddIcon className="contacts-fab-svgIcon" />
-      </button>
+      />
     </>
   );
 };

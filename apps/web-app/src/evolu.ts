@@ -1104,9 +1104,14 @@ export const useEvoluServersManager = (opts?: {
     let cancelled = false;
 
     const run = async () => {
+      // Only urls with no known status get a visible "checking" state; known
+      // urls keep their last status during background re-probes so steady-state
+      // polls don't re-render the app when nothing changed.
       setStatusByUrl((prev) => {
+        const missing = activeUrls.filter((url) => prev[url] === undefined);
+        if (missing.length === 0) return prev;
         const next = { ...prev };
-        for (const url of activeUrls) next[url] = "checking";
+        for (const url of missing) next[url] = "checking";
         return next;
       });
 
@@ -1119,8 +1124,12 @@ export const useEvoluServersManager = (opts?: {
 
       if (cancelled) return;
       setStatusByUrl((prev) => {
+        const changed = results.filter(
+          ([url, ok]) => prev[url] !== (ok ? "connected" : "disconnected"),
+        );
+        if (changed.length === 0) return prev;
         const next = { ...prev };
-        for (const [url, ok] of results)
+        for (const [url, ok] of changed)
           next[url] = ok ? "connected" : "disconnected";
         return next;
       });

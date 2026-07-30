@@ -873,6 +873,7 @@ const useChatViewport = (
     const root = document.documentElement;
     const body = document.body;
     const pendingRefreshTimeouts = new Set<number>();
+    let pendingBottomScrollFrame: number | null = null;
     const getWindowScrollTop = () =>
       Math.max(
         window.scrollY,
@@ -918,9 +919,16 @@ const useChatViewport = (
         delete root.dataset.chatKeyboardOpen;
       }
 
-      requestAnimationFrame(() => {
+      if (pendingBottomScrollFrame !== null) {
+        window.cancelAnimationFrame(pendingBottomScrollFrame);
+      }
+      pendingBottomScrollFrame = window.requestAnimationFrame(() => {
+        pendingBottomScrollFrame = null;
         const messages = chatMessagesRef.current;
-        if (messages) messages.scrollTop = messages.scrollHeight;
+        const scrollHeight = messages?.scrollHeight;
+        if (messages && scrollHeight !== undefined) {
+          messages.scrollTop = scrollHeight;
+        }
       });
     };
 
@@ -968,6 +976,9 @@ const useChatViewport = (
       viewport?.removeEventListener("scroll", updateViewportHeight);
       for (const timeoutId of pendingRefreshTimeouts) {
         window.clearTimeout(timeoutId);
+      }
+      if (pendingBottomScrollFrame !== null) {
+        window.cancelAnimationFrame(pendingBottomScrollFrame);
       }
       root.style.overflow = previousHtmlOverflow;
       body.style.overflow = previousBodyOverflow;
