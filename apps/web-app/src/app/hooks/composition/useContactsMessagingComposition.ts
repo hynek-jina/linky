@@ -1624,6 +1624,7 @@ export const useContactsMessagingComposition = ({
     pushToast,
     setContactNewPrefill,
     setForm,
+    setPayAmount,
     t,
   ]);
 
@@ -2627,7 +2628,7 @@ export const useContactsMessagingComposition = ({
       setContactPaymentIntent(intent);
       navigateTo({ route: "contactPay", id: knownContact.id });
     },
-    [contacts],
+    [contactPayBackToChatRef, contacts, setContactPaymentIntent],
   );
 
   const openContactDetail = React.useCallback(
@@ -2664,7 +2665,7 @@ export const useContactsMessagingComposition = ({
       }
       navigateTo({ route: "chat", id: String(knownContact.id) });
     },
-    [clearContactAttention, contacts, openContactPay],
+    [clearContactAttention, contactPayBackToChatRef, contacts, openContactPay],
   );
 
   const addUnknownContactFromChat = React.useCallback(async () => {
@@ -2780,8 +2781,6 @@ export const useContactsMessagingComposition = ({
     clearContactAttention,
     removeLocalNostrMessagesByContactId,
     route.kind,
-    selectedChatContact?.npub,
-    selectedChatContact?.unknownPubkeyHex,
     selectedChatContact,
     setStatus,
     t,

@@ -984,6 +984,7 @@ export const useScanNativeComposition = ({
     [
       appendLocalNostrMessage,
       bankPaymentOfferMessages,
+      contactsLatestRef,
       currentNsec,
       knownNostrMessageIdentityIndex,
       nostrFetchRelays,
