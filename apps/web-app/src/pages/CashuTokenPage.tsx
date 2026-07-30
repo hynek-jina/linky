@@ -70,19 +70,21 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   const tokenMeta = row ? extractCashuTokenMeta(row) : null;
   const tokenText = tokenMeta?.tokenText ?? "";
 
-  const parsed = tokenText ? parseCashuToken(tokenText) : null;
-  const tokenAmount = (() => {
+  const { mintText, tokenAmount } = React.useMemo(() => {
+    const parsed = tokenText ? parseCashuToken(tokenText) : null;
     const storedAmount = Number(tokenMeta?.amount ?? 0);
-    if (Number.isFinite(storedAmount) && storedAmount > 0) {
-      return storedAmount;
-    }
-
     const parsedAmount = Number(parsed?.amount ?? 0);
-    return Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : 0;
-  })();
-  const mintText =
-    String(tokenMeta?.mint ?? "").trim() ||
-    (parsed?.mint ? String(parsed.mint).trim() : "");
+    const amount =
+      Number.isFinite(storedAmount) && storedAmount > 0
+        ? storedAmount
+        : Number.isFinite(parsedAmount) && parsedAmount > 0
+          ? parsedAmount
+          : 0;
+    const mint =
+      String(tokenMeta?.mint ?? "").trim() ||
+      (parsed?.mint ? String(parsed.mint).trim() : "");
+    return { mintText: mint, tokenAmount: amount };
+  }, [tokenMeta?.amount, tokenMeta?.mint, tokenText]);
   const mintDisplay = (() => {
     if (!mintText) return null;
     try {
@@ -207,12 +209,12 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   // mount, which would otherwise kick the user out before the QR has
   // a chance to render.
   const rowMissing = !row || !tokenMeta;
-  const hadRowRef = React.useRef(false);
+  const loadedRouteIdRef = React.useRef<CashuTokenId | null>(null);
   const [showMissingRecovery, setShowMissingRecovery] = React.useState(false);
-  if (!rowMissing) hadRowRef.current = true;
+  if (!rowMissing) loadedRouteIdRef.current = routeId;
   React.useEffect(() => {
     setShowMissingRecovery(false);
-    if (!rowMissing || hadRowRef.current) return;
+    if (!rowMissing || loadedRouteIdRef.current === routeId) return;
 
     const timeoutId = window.setTimeout(() => {
       setShowMissingRecovery(true);
@@ -222,9 +224,9 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
 
   React.useEffect(() => {
     if (!rowMissing) return;
-    if (!hadRowRef.current) return;
+    if (loadedRouteIdRef.current !== routeId) return;
     navigateTo({ route: "cashuTokens" });
-  }, [navigateTo, rowMissing]);
+  }, [navigateTo, routeId, rowMissing]);
 
   if (rowMissing) {
     if (!showMissingRecovery) return null;

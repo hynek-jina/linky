@@ -137,7 +137,10 @@ export const ContactPage: FC<ContactPageProps> = ({
 }) => {
   const navigateTo = useNavigation();
   const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub);
-  const verifiedNip05 = useVerifiedNip05(selectedNpub);
+  const selectedLnAddress = String(selectedContact?.lnAddress ?? "").trim();
+  const verifiedNip05 = useVerifiedNip05(
+    selectedLnAddress ? selectedNpub : null,
+  );
   if (!selectedContact) {
     return (
       <section className="panel">
@@ -149,7 +152,7 @@ export const ContactPage: FC<ContactPageProps> = ({
   const contactId = selectedContact.id;
   const name = String(selectedContact.name ?? "").trim();
   const group = String(selectedContact.groupName ?? "").trim();
-  const ln = String(selectedContact.lnAddress ?? "").trim();
+  const ln = selectedLnAddress;
   const npub = selectedNpub;
   const url = npub ? nostrPictureByNpub[npub] : null;
   const hasLightningAddress = ln.length > 0;

@@ -10,11 +10,93 @@ import {
   getInitials,
 } from "../utils/formatting";
 
-interface ContactFormData {
+export interface ContactFormData {
   name: string;
   npub: string;
   lnAddress: string;
   group: string;
+}
+
+interface ContactFieldsProps {
+  form: ContactFormData;
+  groupNames: string[];
+  includeNpub?: boolean;
+  lightningLabelAction?: React.ReactNode;
+  nameLabelAction?: React.ReactNode;
+  setForm: (value: ContactFormData) => void;
+  t: (key: string) => string;
+}
+
+export function ContactFields({
+  form,
+  groupNames,
+  includeNpub = false,
+  lightningLabelAction,
+  nameLabelAction,
+  setForm,
+  t,
+}: ContactFieldsProps) {
+  const renderLabel = (label: string, action: React.ReactNode | undefined) =>
+    action === undefined ? (
+      <label>{label}</label>
+    ) : (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <label>{label}</label>
+        {action}
+      </div>
+    );
+
+  return (
+    <>
+      {renderLabel(t("name"), nameLabelAction)}
+      <input
+        value={form.name}
+        onChange={(event) => setForm({ ...form, name: event.target.value })}
+        placeholder={t("namePlaceholder")}
+      />
+
+      {includeNpub ? (
+        <>
+          <label>{t("npub")}</label>
+          <input
+            value={form.npub}
+            onChange={(event) => setForm({ ...form, npub: event.target.value })}
+            placeholder={t("npubPlaceholder")}
+          />
+        </>
+      ) : null}
+
+      {renderLabel(t("lightningAddress"), lightningLabelAction)}
+      <input
+        value={form.lnAddress}
+        onChange={(event) =>
+          setForm({ ...form, lnAddress: event.target.value })
+        }
+        placeholder={t("lightningAddressPlaceholder")}
+      />
+
+      <label>{t("group")}</label>
+      <input
+        value={form.group}
+        onChange={(event) => setForm({ ...form, group: event.target.value })}
+        placeholder={t("groupPlaceholder")}
+        list={groupNames.length ? "group-options" : undefined}
+      />
+      {groupNames.length > 0 && (
+        <datalist id="group-options">
+          {groupNames.map((group) => (
+            <option key={group} value={group} />
+          ))}
+        </datalist>
+      )}
+    </>
+  );
 }
 
 interface ContactSearchCandidate {
@@ -464,36 +546,12 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
             </>
           ) : (
             <>
-              <label>{t("name")}</label>
-              <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder={t("namePlaceholder")}
+              <ContactFields
+                form={form}
+                groupNames={groupNames}
+                setForm={setForm}
+                t={t}
               />
-
-              <label>{t("lightningAddress")}</label>
-              <input
-                value={form.lnAddress}
-                onChange={(e) =>
-                  setForm({ ...form, lnAddress: e.target.value })
-                }
-                placeholder={t("lightningAddressPlaceholder")}
-              />
-
-              <label>{t("group")}</label>
-              <input
-                value={form.group}
-                onChange={(e) => setForm({ ...form, group: e.target.value })}
-                placeholder={t("groupPlaceholder")}
-                list={groupNames.length ? "group-options" : undefined}
-              />
-              {groupNames.length > 0 && (
-                <datalist id="group-options">
-                  {groupNames.map((group) => (
-                    <option key={group} value={group} />
-                  ))}
-                </datalist>
-              )}
 
               <div className="actions">
                 <button onClick={handleSaveContact} disabled={isSavingContact}>

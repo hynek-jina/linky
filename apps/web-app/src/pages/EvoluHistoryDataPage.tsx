@@ -63,7 +63,6 @@ export function EvoluHistoryDataPage({
     [normalizeOwnerId],
   );
 
-  // Load initial data
   useEffect(() => {
     loadHistoryData(BATCH_SIZE, 0).then((data) => {
       setHistoryData(data);
@@ -72,7 +71,6 @@ export function EvoluHistoryDataPage({
     });
   }, [loadHistoryData]);
 
-  // Get unique table names from loaded data
   const visibleHistoryData = useMemo(() => {
     if (allowedOwnerIds.size === 0) return [] as EvoluHistoryRow[];
     return historyData.filter((row) =>
@@ -88,13 +86,11 @@ export function EvoluHistoryDataPage({
     return Array.from(tables).sort();
   }, [visibleHistoryData]);
 
-  // Filter data by selected table
   const filteredData = useMemo(() => {
     if (!selectedTable) return visibleHistoryData;
     return visibleHistoryData.filter((row) => row.table === selectedTable);
   }, [selectedTable, visibleHistoryData]);
 
-  // Load more data
   const handleLoadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore) return;
 
@@ -128,7 +124,6 @@ export function EvoluHistoryDataPage({
 
   return (
     <section className="panel" style={{ paddingTop: 8 }}>
-      {/* Filter by table - same style as contacts page */}
       {tableNames.length > 0 && (
         <nav
           className="group-filter-bar"
@@ -168,147 +163,142 @@ export function EvoluHistoryDataPage({
 
       <div style={{ maxHeight: 600, overflow: "auto" }}>
         {filteredData.length > 0 ? (
-          <>
-            <table
-              style={{
-                width: "100%",
-                fontSize: 11,
-                borderCollapse: "collapse",
-              }}
-            >
-              <thead>
-                <tr style={{ backgroundColor: "var(--color-bg-tertiary)" }}>
-                  <th
-                    style={{
-                      padding: 4,
-                      textAlign: "left",
-                      borderBottom: "1px solid var(--color-border)",
-                    }}
-                  >
-                    {t("evoluTable")}
-                  </th>
-                  <th
-                    style={{
-                      padding: 4,
-                      textAlign: "left",
-                      borderBottom: "1px solid var(--color-border)",
-                    }}
-                  >
-                    {t("evoluColumn")}
-                  </th>
-                  <th
-                    style={{
-                      padding: 4,
-                      textAlign: "left",
-                      borderBottom: "1px solid var(--color-border)",
-                    }}
-                  >
-                    {t("evoluId")}
-                  </th>
-                  <th
-                    style={{
-                      padding: 4,
-                      textAlign: "left",
-                      borderBottom: "1px solid var(--color-border)",
-                    }}
-                  >
-                    {t("evoluValue")}
-                  </th>
-                  <th
-                    style={{
-                      padding: 4,
-                      textAlign: "left",
-                      borderBottom: "1px solid var(--color-border)",
-                    }}
-                  >
-                    {t("evoluTimestamp")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredData.map((row, idx) => (
-                  <tr key={idx}>
-                    <td
-                      style={{
-                        padding: 4,
-                        borderBottom: "1px solid var(--color-border)",
-                      }}
-                    >
-                      {row.table}
-                    </td>
-                    <td
-                      style={{
-                        padding: 4,
-                        borderBottom: "1px solid var(--color-border)",
-                      }}
-                    >
-                      {row.column}
-                    </td>
-                    <td
-                      style={{
-                        padding: 4,
-                        borderBottom: "1px solid var(--color-border)",
-                        fontSize: 10,
-                        maxWidth: 100,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                      title={row.id}
-                    >
-                      {row.id}
-                    </td>
-                    <td
-                      style={{
-                        padding: 4,
-                        borderBottom: "1px solid var(--color-border)",
-                        maxWidth: 150,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                      title={String(row.value ?? "")}
-                    >
-                      {typeof row.value === "object" && row.value !== null
-                        ? JSON.stringify(row.value).slice(0, 40)
-                        : String(row.value ?? "").slice(0, 40)}
-                    </td>
-                    <td
-                      style={{
-                        padding: 4,
-                        borderBottom: "1px solid var(--color-border)",
-                        fontSize: 10,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {row.timestamp}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {hasMore && (
-              <div style={{ marginTop: 16, textAlign: "center" }}>
-                <button
-                  onClick={handleLoadMore}
-                  disabled={isLoadingMore}
-                  className="secondary"
+          <table
+            style={{
+              width: "100%",
+              fontSize: 11,
+              borderCollapse: "collapse",
+            }}
+          >
+            <thead>
+              <tr style={{ backgroundColor: "var(--color-bg-tertiary)" }}>
+                <th
+                  style={{
+                    padding: 4,
+                    textAlign: "left",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
                 >
-                  {isLoadingMore ? t("loadingMore") : t("loadMore")}
-                </button>
-              </div>
-            )}
-
-            {!hasMore && historyData.length > 0 && (
-              <p
-                className="muted"
-                style={{ marginTop: 16, textAlign: "center" }}
-              >
-                {t("allRecordsLoaded")}
-              </p>
-            )}
-          </>
+                  {t("evoluTable")}
+                </th>
+                <th
+                  style={{
+                    padding: 4,
+                    textAlign: "left",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  {t("evoluColumn")}
+                </th>
+                <th
+                  style={{
+                    padding: 4,
+                    textAlign: "left",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  {t("evoluId")}
+                </th>
+                <th
+                  style={{
+                    padding: 4,
+                    textAlign: "left",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  {t("evoluValue")}
+                </th>
+                <th
+                  style={{
+                    padding: 4,
+                    textAlign: "left",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                >
+                  {t("evoluTimestamp")}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredData.map((row, idx) => (
+                <tr key={idx}>
+                  <td
+                    style={{
+                      padding: 4,
+                      borderBottom: "1px solid var(--color-border)",
+                    }}
+                  >
+                    {row.table}
+                  </td>
+                  <td
+                    style={{
+                      padding: 4,
+                      borderBottom: "1px solid var(--color-border)",
+                    }}
+                  >
+                    {row.column}
+                  </td>
+                  <td
+                    style={{
+                      padding: 4,
+                      borderBottom: "1px solid var(--color-border)",
+                      fontSize: 10,
+                      maxWidth: 100,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                    title={row.id}
+                  >
+                    {row.id}
+                  </td>
+                  <td
+                    style={{
+                      padding: 4,
+                      borderBottom: "1px solid var(--color-border)",
+                      maxWidth: 150,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                    title={String(row.value ?? "")}
+                  >
+                    {typeof row.value === "object" && row.value !== null
+                      ? JSON.stringify(row.value).slice(0, 40)
+                      : String(row.value ?? "").slice(0, 40)}
+                  </td>
+                  <td
+                    style={{
+                      padding: 4,
+                      borderBottom: "1px solid var(--color-border)",
+                      fontSize: 10,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {row.timestamp}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         ) : (
           <p className="muted">{t("evoluNoDataYet")}</p>
+        )}
+
+        {hasMore && (
+          <div style={{ marginTop: 16, textAlign: "center" }}>
+            <button
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+              className="secondary"
+            >
+              {isLoadingMore ? t("loadingMore") : t("loadMore")}
+            </button>
+          </div>
+        )}
+
+        {!hasMore && historyData.length > 0 && (
+          <p className="muted" style={{ marginTop: 16, textAlign: "center" }}>
+            {t("allRecordsLoaded")}
+          </p>
         )}
       </div>
     </section>

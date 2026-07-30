@@ -74,6 +74,86 @@ interface AdvancedPageProps {
   t: (key: string) => string;
 }
 
+interface SettingsLinkRowProps {
+  className?: string;
+  dataGuide?: string;
+  disabled?: boolean;
+  icon: React.ReactNode;
+  label: React.ReactNode;
+  onClick: () => void;
+  tail?: React.ReactNode;
+}
+
+function SettingsLinkRow({
+  className = "",
+  dataGuide,
+  disabled,
+  icon,
+  label,
+  onClick,
+  tail,
+}: SettingsLinkRowProps) {
+  return (
+    <button
+      type="button"
+      className={`settings-row settings-link${className ? ` ${className}` : ""}`}
+      onClick={onClick}
+      disabled={disabled}
+      data-guide={dataGuide}
+    >
+      <span className="settings-left">
+        <span className="settings-icon" aria-hidden="true">
+          {icon}
+        </span>
+        <span className="settings-label">{label}</span>
+      </span>
+      <span className="settings-right">
+        {tail}
+        <span className="settings-chevron" aria-hidden="true">
+          &gt;
+        </span>
+      </span>
+    </button>
+  );
+}
+
+interface SettingsToggleRowProps {
+  checked: boolean;
+  disabled?: boolean;
+  icon: React.ReactNode;
+  label: string;
+  onChange: (checked: boolean) => void;
+}
+
+function SettingsToggleRow({
+  checked,
+  disabled,
+  icon,
+  label,
+  onChange,
+}: SettingsToggleRowProps) {
+  return (
+    <div className="settings-row">
+      <div className="settings-left">
+        <span className="settings-icon" aria-hidden="true">
+          {icon}
+        </span>
+        <span className="settings-label">{label}</span>
+      </div>
+      <label className="switch">
+        <input
+          className="switch-input"
+          type="checkbox"
+          aria-label={label}
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+      </label>
+    </div>
+  );
+}
+
 export function AdvancedPage({
   __APP_VERSION__,
   connectedRelayCount,
@@ -178,11 +258,6 @@ export function AdvancedPage({
     return () => {
       clearArmTimeout();
     };
-  }, [clearArmTimeout]);
-
-  useEffect(() => {
-    clearArmTimeout();
-    setArmedSecurityAction(null);
   }, [clearArmTimeout]);
 
   useEffect(() => {
@@ -306,123 +381,54 @@ export function AdvancedPage({
           </div>
         </div>
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={() => navigateTo({ route: "settingsUnits" })}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Bitcoin size={18} />
-            </span>
-            <span className="settings-label">{t("unit")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          icon={<Bitcoin size={18} />}
+          label={t("unit")}
+        />
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={openFeedbackContact}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <FeedbackIcon size={18} />
-            </span>
-            <span className="settings-label">{t("feedback")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          icon={<FeedbackIcon size={18} />}
+          label={t("feedback")}
+        />
 
-        <div className="settings-row">
-          <div className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Bell size={18} />
-            </span>
-            <span className="settings-label">{t("notifications")}</span>
-          </div>
-          <label className="switch">
-            <input
-              className="switch-input"
-              type="checkbox"
-              aria-label={t("notifications")}
-              checked={notificationsEnabled}
-              disabled={!currentNsec || notificationsIsBusy}
-              onChange={(event) =>
-                void handleNotificationsChange(event.target.checked)
-              }
-            />
-          </label>
-        </div>
+        <SettingsToggleRow
+          icon={<Bell size={18} />}
+          label={t("notifications")}
+          checked={notificationsEnabled}
+          disabled={!currentNsec || notificationsIsBusy}
+          onChange={(checked) => void handleNotificationsChange(checked)}
+        />
       </div>
 
       <div className="settings-section">
         <h2 className="settings-section-title">{t("settingsPayments")}</h2>
 
-        <div className="settings-row">
-          <div className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Bean size={18} />
-            </span>
-            <span className="settings-label">{t("preferCashu")}</span>
-          </div>
-          <label className="switch">
-            <input
-              className="switch-input"
-              type="checkbox"
-              aria-label={t("preferCashu")}
-              checked={payWithCashuEnabled}
-              onChange={(event) => setPayWithCashuEnabled(event.target.checked)}
-            />
-          </label>
-        </div>
+        <SettingsToggleRow
+          icon={<Bean size={18} />}
+          label={t("preferCashu")}
+          checked={payWithCashuEnabled}
+          onChange={setPayWithCashuEnabled}
+        />
 
-        <div className="settings-row">
-          <div className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <RefreshCw size={18} />
-            </span>
-            <span className="settings-label">{t("cashuAutoswap")}</span>
-          </div>
-          <label className="switch">
-            <input
-              className="switch-input"
-              type="checkbox"
-              aria-label={t("cashuAutoswap")}
-              checked={cashuAutoswapEnabled}
-              onChange={(event) =>
-                setCashuAutoswapEnabled(event.target.checked)
-              }
-            />
-          </label>
-        </div>
+        <SettingsToggleRow
+          icon={<RefreshCw size={18} />}
+          label={t("cashuAutoswap")}
+          checked={cashuAutoswapEnabled}
+          onChange={setCashuAutoswapEnabled}
+        />
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={() => navigateTo({ route: "advancedAutoPayLimit" })}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Zap size={18} />
-            </span>
-            <span className="settings-label">
-              {t("lightningInvoiceAutoPayLimit")}
-            </span>
-          </span>
-          <span className="settings-right">
+          icon={<Zap size={18} />}
+          label={t("lightningInvoiceAutoPayLimit")}
+          tail={
             <span className="settings-tail-content settings-value">
               {getAutoPayLimitLabel(lightningInvoiceAutoPayLimit)}
             </span>
-            <span className="settings-chevron" aria-hidden="true">
-              &gt;
-            </span>
-          </span>
-        </button>
+          }
+        />
 
         <div className="settings-row">
           <div className="settings-left">
@@ -481,145 +487,75 @@ export function AdvancedPage({
       <div className="settings-section">
         <h2 className="settings-section-title">{t("settingsNetwork")}</h2>
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={() => navigateTo({ route: "nostrRelays" })}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <RadioTower size={18} />
-            </span>
-            <span className="settings-label">Nostr</span>
-          </span>
-          <span className="settings-right">
+          icon={<RadioTower size={18} />}
+          label="Nostr"
+          tail={
             <span className="settings-tail-content settings-connection-state">
               <span className="relay-count">
                 {connectedRelayCount}/{relayUrls.length}
               </span>
               <span className={`status-dot ${nostrRelayOverallStatus}`} />
             </span>
-            <span className="settings-chevron" aria-hidden="true">
-              &gt;
-            </span>
-          </span>
-        </button>
+          }
+        />
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={() => navigateTo({ route: "evoluServers" })}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Cloud size={18} />
-            </span>
-            <span className="settings-label">Evolu</span>
-          </span>
-          <span className="settings-right">
+          icon={<Cloud size={18} />}
+          label="Evolu"
+          tail={
             <span className="settings-tail-content settings-connection-state">
               <span className="relay-count">
                 {evoluConnectedServerCount}/{evoluServerUrls.length}
               </span>
               <span className={`status-dot ${evoluOverallStatus}`} />
             </span>
-            <span className="settings-chevron" aria-hidden="true">
-              &gt;
-            </span>
-          </span>
-        </button>
+          }
+        />
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={() => navigateTo({ route: "mints" })}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Landmark size={18} />
-            </span>
-            <span className="settings-label">Mint</span>
-          </span>
-          <span className="settings-right">
-            {defaultMintDisplay ? (
+          icon={<Landmark size={18} />}
+          label="Mint"
+          tail={
+            defaultMintDisplay ? (
               <span className="settings-tail-content settings-value settings-value-truncate">
                 {defaultMintDisplay}
               </span>
-            ) : null}
-            <span className="settings-chevron" aria-hidden="true">
-              &gt;
-            </span>
-          </span>
-        </button>
+            ) : null
+          }
+        />
       </div>
 
       <div className="settings-section">
         <h2 className="settings-section-title">{t("settingsDebug")}</h2>
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={() => navigateTo({ route: "cashuTokens" })}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Coins size={18} />
-            </span>
-            <span className="settings-label">{t("tokens")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          icon={<Coins size={18} />}
+          label={t("tokens")}
+        />
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={exportAppData}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Upload size={18} />
-            </span>
-            <span className="settings-label">{t("exportData")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          icon={<Upload size={18} />}
+          label={t("exportData")}
+        />
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={requestImportAppData}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Download size={18} />
-            </span>
-            <span className="settings-label">{t("importData")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          icon={<Download size={18} />}
+          label={t("importData")}
+        />
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={() => void dedupeContacts()}
           disabled={dedupeContactsIsBusy}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <BrushCleaning size={18} />
-            </span>
-            <span className="settings-label">{t("dedupeContacts")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          icon={<BrushCleaning size={18} />}
+          label={t("dedupeContacts")}
+        />
 
         <input
           ref={importDataFileInputRef}
@@ -633,88 +569,48 @@ export function AdvancedPage({
           }}
         />
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={() => void handleReloadApp()}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <RotateCw size={18} />
-            </span>
-            <span className="settings-label">{t("reloadApp")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          icon={<RotateCw size={18} />}
+          label={t("reloadApp")}
+        />
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={() => navigateTo({ route: "advancedPushDebug" })}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <FlaskConical size={18} />
-            </span>
-            <span className="settings-label">Push / SW Debug (log)</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          icon={<FlaskConical size={18} />}
+          label="Push / SW Debug (log)"
+        />
       </div>
 
       <div className="settings-section">
         <h2 className="settings-section-title">{t("settingsSecurity")}</h2>
 
-        <button
-          type="button"
-          className="settings-row settings-link"
+        <SettingsLinkRow
           onClick={() => navigateTo({ route: "settingsMasterKeys" })}
           disabled={!hasSeedMnemonic}
-          data-guide="open-master-keys"
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <ShieldCheck size={18} />
-            </span>
-            <span className="settings-label">{t("masterKeys")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          dataGuide="open-master-keys"
+          icon={<ShieldCheck size={18} />}
+          label={t("masterKeys")}
+        />
 
-        <button
-          type="button"
+        <SettingsLinkRow
           className={
             armedSecurityAction === "copyNostr"
-              ? "settings-row settings-link settings-sensitive-action is-armed"
-              : "settings-row settings-link settings-sensitive-action"
+              ? "settings-sensitive-action is-armed"
+              : "settings-sensitive-action"
           }
           onClick={() => requestSecurityAction("copyNostr", copyNostrKeys)}
           disabled={!hasCurrentNsec}
-          data-guide="copy-nostr-keys"
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Copy size={18} />
-            </span>
-            <span className="settings-label">{t("copyNostrKeys")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          dataGuide="copy-nostr-keys"
+          icon={<Copy size={18} />}
+          label={t("copyNostrKeys")}
+        />
 
-        <button
-          type="button"
+        <SettingsLinkRow
           className={
             armedSecurityAction === "pasteNostr"
-              ? "settings-row settings-link settings-sensitive-action is-armed"
-              : "settings-row settings-link settings-sensitive-action"
+              ? "settings-sensitive-action is-armed"
+              : "settings-sensitive-action"
           }
           onClick={() =>
             requestSecurityAction(
@@ -724,37 +620,20 @@ export function AdvancedPage({
             )
           }
           disabled={!hasCurrentNsec || !hasSeedMnemonic}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <UserRound size={18} />
-            </span>
-            <span className="settings-label">{t("pasteCustomNostrKeys")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          icon={<UserRound size={18} />}
+          label={t("pasteCustomNostrKeys")}
+        />
 
-        <button
-          type="button"
+        <SettingsLinkRow
           className={
             logoutArmed
-              ? "settings-row settings-link settings-danger-link is-armed"
-              : "settings-row settings-link settings-danger-link"
+              ? "settings-danger-link is-armed"
+              : "settings-danger-link"
           }
           onClick={requestLogout}
-        >
-          <span className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <LogOut size={18} />
-            </span>
-            <span className="settings-label">{t("logout")}</span>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            &gt;
-          </span>
-        </button>
+          icon={<LogOut size={18} />}
+          label={t("logout")}
+        />
       </div>
 
       <div className="settings-version">
