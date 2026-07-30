@@ -112,11 +112,11 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 - `apps/web-app/src/App.tsx` is a thin wrapper that default-exports `app/AppShell`
 - App shell structure lives under `apps/web-app/src/app/`:
   - `AppShell.tsx` is a thin renderer/auth gate that wires `AppShellContextsProvider` and route content
-  - `useAppShellComposition.tsx` owns AppShell orchestration, hook composition, and route-prop bundle assembly
+  - `useAppShellComposition.tsx` is a thin composition layer that wires the per-domain composition hooks together and assembles route-prop bundles; domain state/effects/callbacks live in `hooks/composition/` per-domain hooks
   - `context/AppShellContexts.tsx` is the single authenticated shell context transport; it provides shell/route contexts and typed consumer hooks (`useAppShellCore`, `useAppShellActions`, `useAppShellRouteContext`)
   - `hooks/` contains app domain hooks (`useRelayDomain`, `useMintDomain`, `useContactsDomain`, `useMessagesDomain`, `usePaymentsDomain`, `useCashuDomain`, `useProfileAuthDomain`, `useGuideScannerDomain`) plus app-shell extraction hooks (`useAppDataTransfer`, `useContactsNostrPrefetchEffects`, `useMainSwipePageEffects`, `useProfileNpubCashEffects`, `useScannedTextHandler`, `useFeedbackContact`, `useOwnerScopedStorage`, `usePaidOverlayState`, `useRouteDerivedShellState`)
   - `hooks/useEvoluContactsOwnerRotation.ts` owns deterministic contacts/cashu/messages/transactions owner derivation, pointer-only contacts/cashu/messages/transactions rotations, legacy cashu mirror upkeep for older clients, and per-scope owner pointer persistence in `ownerMeta`
-  - `hooks/composition/` contains sub-composition slices for shell orchestration concerns (`useProfileAuthComposition`, `useProfilePeopleComposition`, `usePaymentMoneyComposition`, `useRoutingViewComposition`, `useSystemSettingsComposition`)
+  - `hooks/composition/` contains per-domain composition hooks (`useIdentityOwnersComposition`, `useProfileComposition`, `useContactsMessagingComposition`, `useCashuWalletComposition`, `useScanNativeComposition`) plus sub-composition slices for shell orchestration concerns (`useProfileAuthComposition`, `useProfilePeopleComposition`, `usePaymentMoneyComposition`, `useRoutingViewComposition`, `useSystemSettingsComposition`)
   - `hooks/contacts/` contains contact-editor and contact-list view helpers (`useContactEditor`, `useVisibleContacts`)
   - `hooks/layout/` contains extracted shell layout/menu/swipe state helpers (`useMainMenuState`, `useMainSwipeNavigation`)
   - `hooks/profile/` contains extracted profile editor and profile metadata sync flows (`useProfileEditor`, `useProfileMetadataSyncEffect`)

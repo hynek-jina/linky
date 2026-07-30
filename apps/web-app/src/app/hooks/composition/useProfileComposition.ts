@@ -180,6 +180,9 @@ export const useProfileComposition = ({
     }
   }, [isProfileEditing, route.kind, toggleProfileEditing]);
 
+  // Intentionally no automatic publishing of kind-0 profile metadata.
+  // We only publish profile changes when the user does so explicitly.
+
   const openProfileQr = React.useCallback(() => {
     navigateTo({ route: "profile" });
   }, []);
