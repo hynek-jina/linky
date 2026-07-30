@@ -842,7 +842,6 @@ export const useAppShellComposition = () => {
   } = useCashuWalletComposition({
     cashuTokensAll,
     contactPayBackToChatRef,
-    contactsHeaderVisible,
     contactsMessaging: {
       activeContactsOwnerContactCount,
       activeNostrMessagePublishClientIdsRef,
