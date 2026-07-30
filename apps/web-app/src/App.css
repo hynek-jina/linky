@@ -4790,10 +4790,6 @@ button.icon {
   background: var(--app-flat-bg);
 }
 
-.is-main-swipe-dragging .main-swipe-page {
-  overflow-y: hidden;
-}
-
 .main-swipe:has(+ .bank-payment-offer-banner) > .main-swipe-contacts-page {
   padding-top: 48px;
 }
