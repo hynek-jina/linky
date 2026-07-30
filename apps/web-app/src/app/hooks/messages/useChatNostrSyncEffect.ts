@@ -23,6 +23,7 @@ import {
   extractReplyContextFromTags,
   isInvalidInnerRumorPubkey,
   isNestedEncryptedNip44PayloadForAnyPubkey,
+  resolveStableMessageRumorId,
 } from "./chatNostrProtocol";
 import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
 import { resolveNostrChatIdentity } from "./contactIdentity";
@@ -345,7 +346,10 @@ export const useChatNostrSyncEffect = ({
                 return;
               }
 
-              const stableRumorId = editedFromId || rumorId;
+              const stableRumorId = resolveStableMessageRumorId(
+                rumorId,
+                editedFromId,
+              );
 
               appendLocalNostrMessage({
                 contactId: String(selectedContact.id),

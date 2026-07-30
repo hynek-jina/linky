@@ -183,6 +183,7 @@ import {
   buildUnknownContactId,
   isUnknownContactId,
   normalizePubkeyHex,
+  readUnknownContactIdPubkey,
 } from "./hooks/messages/contactIdentity";
 import { hasKnownNostrMessageIdentity } from "./hooks/messages/messageHelpers";
 import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
@@ -2517,6 +2518,9 @@ export const useAppShellComposition = () => {
     visibleMessageOwnerIds,
   });
   reassignContactMessagesRef.current = reassignLocalNostrMessagesContactId;
+  const pendingArchivedContactThreadIdsRef = React.useRef(
+    new Map<string, string>(),
+  );
 
   const evoluOwnersReadyForNostr = isSeedLogin
     ? Boolean(
@@ -3312,6 +3316,8 @@ export const useAppShellComposition = () => {
       if (!isUnknownContactId(normalizedContactId)) continue;
 
       const candidatePubkeyFromLast = normalizePubkeyHex(lastMessage.pubkey);
+      const candidatePubkeyFromId =
+        readUnknownContactIdPubkey(normalizedContactId);
       const candidatePubkeyFromThread = nostrMessagesLocal
         .filter(
           (message) =>
@@ -3327,7 +3333,10 @@ export const useAppShellComposition = () => {
         });
 
       const unknownPubkeyHex =
-        candidatePubkeyFromThread ?? candidatePubkeyFromLast ?? null;
+        candidatePubkeyFromId ??
+        candidatePubkeyFromThread ??
+        candidatePubkeyFromLast ??
+        null;
       if (unknownPubkeyHex && blockedPubkeys.has(unknownPubkeyHex)) continue;
       const ownPubkey = normalizePubkeyHex(chatOwnPubkeyHex);
       if (unknownPubkeyHex && ownPubkey && unknownPubkeyHex === ownPubkey) {
@@ -5722,60 +5731,22 @@ export const useAppShellComposition = () => {
     }
 
     const archivedAtSec = Math.ceil(Date.now() / 1e3);
-    const archivePayload = contactToArchive
-      ? {
-          id,
-          archivedAtSec: archivedAtSec as typeof Evolu.PositiveInt.Type,
-          name: String(contactToArchive.name ?? "").trim()
-            ? (String(
-                contactToArchive.name ?? "",
-              ).trim() as typeof Evolu.NonEmptyString1000.Type)
-            : null,
-          npub: String(contactToArchive.npub ?? "").trim()
-            ? (String(
-                contactToArchive.npub ?? "",
-              ).trim() as typeof Evolu.NonEmptyString1000.Type)
-            : null,
-          lnAddress: String(contactToArchive.lnAddress ?? "").trim()
-            ? (String(
-                contactToArchive.lnAddress ?? "",
-              ).trim() as typeof Evolu.NonEmptyString1000.Type)
-            : null,
-          groupName: String(contactToArchive.groupName ?? "").trim()
-            ? (String(
-                contactToArchive.groupName ?? "",
-              ).trim() as typeof Evolu.NonEmptyString1000.Type)
-            : null,
-        }
+    const storedContactOwnerId = contactToArchive
+      ? resolveContactRowOwnerLane(contactToArchive, contactsVisibleOwnerIds)
       : null;
-
-    const result = contactsOwnerId
-      ? (() => {
-          if (archivePayload) {
-            const scopedUpsert = upsert("contact", archivePayload, {
-              ownerId: contactsOwnerId,
-            });
-            if (scopedUpsert.ok) return scopedUpsert;
-          }
-          const scoped = update(
-            "contact",
-            { id, archivedAtSec },
-            { ownerId: contactsOwnerId },
-          );
-          if (scoped.ok) return scoped;
-          return update("contact", { id, archivedAtSec });
-        })()
+    const archiveOwnerId = storedContactOwnerId ?? contactsOwnerId;
+    const result = archiveOwnerId
+      ? update("contact", { id, archivedAtSec }, { ownerId: archiveOwnerId })
       : update("contact", { id, archivedAtSec });
     if (result.ok) {
       if (
         unknownThreadContactId &&
         unknownThreadContactId !== normalizedContactId
       ) {
-        reassignLocalNostrMessagesContactId(
-          unknownThreadContactId,
+        pendingArchivedContactThreadIdsRef.current.set(
           normalizedContactId,
+          unknownThreadContactId,
         );
-        clearContactAttention(unknownThreadContactId);
       }
       recordContactsOwnerWrite();
       setStatus(t("contactArchived"));
@@ -5789,52 +5760,41 @@ export const useAppShellComposition = () => {
     (id: ContactId) => {
       const contactToRestore =
         contacts.find((contact) => contact.id === id) ?? null;
-      const restorePayload = contactToRestore
-        ? {
-            id,
-            archivedAtSec: null,
-            name: String(contactToRestore.name ?? "").trim()
-              ? (String(
-                  contactToRestore.name ?? "",
-                ).trim() as typeof Evolu.NonEmptyString1000.Type)
-              : null,
-            npub: String(contactToRestore.npub ?? "").trim()
-              ? (String(
-                  contactToRestore.npub ?? "",
-                ).trim() as typeof Evolu.NonEmptyString1000.Type)
-              : null,
-            lnAddress: String(contactToRestore.lnAddress ?? "").trim()
-              ? (String(
-                  contactToRestore.lnAddress ?? "",
-                ).trim() as typeof Evolu.NonEmptyString1000.Type)
-              : null,
-            groupName: String(contactToRestore.groupName ?? "").trim()
-              ? (String(
-                  contactToRestore.groupName ?? "",
-                ).trim() as typeof Evolu.NonEmptyString1000.Type)
-              : null,
-          }
+      const storedContactOwnerId = contactToRestore
+        ? resolveContactRowOwnerLane(contactToRestore, contactsVisibleOwnerIds)
         : null;
-
-      const result = contactsOwnerId
-        ? (() => {
-            if (restorePayload) {
-              const scopedUpsert = upsert("contact", restorePayload, {
-                ownerId: contactsOwnerId,
-              });
-              if (scopedUpsert.ok) return scopedUpsert;
-            }
-            const scoped = update(
-              "contact",
-              { id, archivedAtSec: null },
-              { ownerId: contactsOwnerId },
-            );
-            if (scoped.ok) return scoped;
-            return update("contact", { id, archivedAtSec: null });
-          })()
+      const restoreOwnerId = storedContactOwnerId ?? contactsOwnerId;
+      const result = restoreOwnerId
+        ? update(
+            "contact",
+            { id, archivedAtSec: null },
+            { ownerId: restoreOwnerId },
+          )
         : update("contact", { id, archivedAtSec: null });
 
       if (result.ok) {
+        const restoredNpub = normalizeNpubIdentifier(contactToRestore?.npub);
+        if (restoredNpub) {
+          try {
+            const decodedContact = nip19.decode(restoredNpub);
+            if (
+              decodedContact.type === "npub" &&
+              typeof decodedContact.data === "string"
+            ) {
+              const unknownContactId = buildUnknownContactId(
+                decodedContact.data,
+              );
+              if (unknownContactId) {
+                reassignLocalNostrMessagesContactId(
+                  unknownContactId,
+                  String(id),
+                );
+              }
+            }
+          } catch {
+            // Ignore malformed archived contact identifiers.
+          }
+        }
         recordContactsOwnerWrite();
         setStatus(t("contactRestored"));
         closeContactDetail();
@@ -5847,11 +5807,12 @@ export const useAppShellComposition = () => {
       closeContactDetail,
       contacts,
       contactsOwnerId,
+      contactsVisibleOwnerIds,
       recordContactsOwnerWrite,
+      reassignLocalNostrMessagesContactId,
       setStatus,
       t,
       update,
-      upsert,
     ],
   );
 
@@ -6683,6 +6644,23 @@ export const useAppShellComposition = () => {
       return next;
     });
   }, []);
+
+  React.useEffect(() => {
+    for (const contact of contacts) {
+      const contactId = String(contact.id ?? "").trim();
+      if (!contactId) continue;
+      const unknownContactId =
+        pendingArchivedContactThreadIdsRef.current.get(contactId);
+      if (!unknownContactId) continue;
+
+      const archivedAtSec = Number(contact.archivedAtSec ?? 0);
+      if (!Number.isFinite(archivedAtSec) || archivedAtSec <= 0) continue;
+
+      pendingArchivedContactThreadIdsRef.current.delete(contactId);
+      reassignLocalNostrMessagesContactId(contactId, unknownContactId);
+      clearContactAttention(unknownContactId);
+    }
+  }, [clearContactAttention, contacts, reassignLocalNostrMessagesContactId]);
 
   const blockArchivedContact = React.useCallback(async () => {
     if (route.kind !== "contactEdit") return;

@@ -12,6 +12,7 @@ import {
   extractDeleteReferencedIds,
   extractReplyContextFromTags,
   isNestedEncryptedNip44Payload,
+  resolveStableMessageRumorId,
 } from "../src/app/hooks/messages/chatNostrProtocol";
 import {
   buildKnownNostrMessageIdentityIndex,
@@ -83,6 +84,21 @@ describe("applyEditToMessage", () => {
     expect(next.isEdited).toBe(true);
     expect(next.editedAtSec).toBe(200);
     expect(next.editedFromId).toBe("rumor-1");
+    expect(next.rumorId).toBe("rumor-1");
+  });
+});
+
+describe("resolveStableMessageRumorId", () => {
+  it("keeps the original message id for edits", () => {
+    expect(resolveStableMessageRumorId("edit-event", "original-message")).toBe(
+      "original-message",
+    );
+  });
+
+  it("uses the event id for unedited messages", () => {
+    expect(resolveStableMessageRumorId("message-event", null)).toBe(
+      "message-event",
+    );
   });
 });
 
