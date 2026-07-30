@@ -98,15 +98,8 @@ export const useMainSwipeNavigation = ({
     mainSwipeScrollTimerRef.current = null;
   }, [mainSwipeScrollTimerRef]);
 
-  const updateMainSwipeProgress = React.useCallback((value: number) => {
-    mainSwipeProgressStore.setProgress(value);
-  }, []);
-
   const stopInteractiveState = React.useCallback(() => {
-    if (isDraggingRef.current) {
-      isDraggingRef.current = false;
-    }
-    mainSwipeProgressStore.setDragging(false);
+    isDraggingRef.current = false;
   }, []);
 
   const finishProgrammaticScroll = React.useCallback(
@@ -118,22 +111,16 @@ export const useMainSwipeNavigation = ({
       const element = mainSwipeRef.current;
       if (element) {
         alignMainSwipeToTarget(element, target, "auto");
-        updateMainSwipeProgress(getMainSwipeProgress(element));
-      } else {
-        updateMainSwipeProgress(target === "wallet" ? 1 : 0);
       }
+      mainSwipeProgressStore.set({
+        progress: target === "wallet" ? 1 : 0,
+      });
 
       if (shouldNavigate && target !== routeKind) {
         navigateTo({ route: target });
       }
     },
-    [
-      cancelProgrammaticFrame,
-      mainSwipeRef,
-      routeKind,
-      stopInteractiveState,
-      updateMainSwipeProgress,
-    ],
+    [cancelProgrammaticFrame, mainSwipeRef, routeKind, stopInteractiveState],
   );
 
   const trackProgrammaticScroll = React.useCallback(
@@ -149,7 +136,6 @@ export const useMainSwipeNavigation = ({
 
         const width = element.clientWidth || 1;
         const targetLeft = getMainSwipeTargetLeft(width, target);
-        updateMainSwipeProgress(getMainSwipeProgress(element));
 
         if (Math.abs(element.scrollLeft - targetLeft) <= 1) {
           finishProgrammaticScroll(target, shouldNavigate);
@@ -161,12 +147,7 @@ export const useMainSwipeNavigation = ({
 
       programmaticFrameRef.current = window.requestAnimationFrame(tick);
     },
-    [
-      cancelProgrammaticFrame,
-      finishProgrammaticScroll,
-      mainSwipeRef,
-      updateMainSwipeProgress,
-    ],
+    [cancelProgrammaticFrame, finishProgrammaticScroll, mainSwipeRef],
   );
 
   const commitMainSwipe = React.useCallback(
@@ -190,7 +171,9 @@ export const useMainSwipeNavigation = ({
 
       stopInteractiveState();
       programmaticTargetRef.current = target;
-      mainSwipeProgressStore.setDragging(true);
+      mainSwipeProgressStore.set({
+        progress: target === "wallet" ? 1 : 0,
+      });
       alignMainSwipeToTarget(element, target, "smooth");
       trackProgrammaticScroll(target, true);
     },
@@ -215,8 +198,10 @@ export const useMainSwipeNavigation = ({
 
     const progress = getMainSwipeProgress(element);
     const target = getMainSwipeTargetForProgress(progress);
-    updateMainSwipeProgress(target === "wallet" ? 1 : 0);
-    stopInteractiveState();
+    isDraggingRef.current = false;
+    mainSwipeProgressStore.set({
+      progress: target === "wallet" ? 1 : 0,
+    });
 
     if (target !== routeKind) {
       navigateTo({ route: target });
@@ -226,7 +211,6 @@ export const useMainSwipeNavigation = ({
     mainSwipeRef,
     routeKind,
     stopInteractiveState,
-    updateMainSwipeProgress,
   ]);
 
   const scheduleNativeScrollFinish = React.useCallback(() => {
@@ -257,8 +241,10 @@ export const useMainSwipeNavigation = ({
     const syncMainSwipeToRoute = () => {
       if (mainSwipeRef.current !== element) return;
       alignMainSwipeToTarget(element, target);
-      updateMainSwipeProgress(target === "wallet" ? 1 : 0);
-      stopInteractiveState();
+      isDraggingRef.current = false;
+      mainSwipeProgressStore.set({
+        progress: target === "wallet" ? 1 : 0,
+      });
     };
 
     cancelProgrammaticFrame();
@@ -298,14 +284,7 @@ export const useMainSwipeNavigation = ({
       removeResizeListener?.();
       restoreScrollBehavior?.();
     };
-  }, [
-    cancelProgrammaticFrame,
-    isMainSwipeRoute,
-    mainSwipeRef,
-    routeKind,
-    stopInteractiveState,
-    updateMainSwipeProgress,
-  ]);
+  }, [cancelProgrammaticFrame, isMainSwipeRoute, mainSwipeRef, routeKind]);
 
   React.useEffect(() => {
     previousRouteKindRef.current = routeKind;
@@ -328,6 +307,7 @@ export const useMainSwipeNavigation = ({
     if (!isMainSwipeRoute) return;
     const element = mainSwipeRef.current;
     if (!element) return;
+    const supportsScrollEnd = "onscrollend" in element;
 
     const markTouchActive = () => {
       touchActiveRef.current = true;
@@ -335,13 +315,26 @@ export const useMainSwipeNavigation = ({
     };
     const markTouchInactive = () => {
       touchActiveRef.current = false;
-      if (isDraggingRef.current) {
+      if (isDraggingRef.current && !supportsScrollEnd) {
         scheduleNativeScrollFinish();
       }
     };
     const finishScroll = () => {
       if (!touchActiveRef.current) {
         finishNativeScroll();
+      }
+    };
+    // Keep WebKit's native scroll/compositing path free of per-frame React
+    // work. The tab indicator and FAB update once when the swipe settles.
+    const handleScroll = () => {
+      if (programmaticTargetRef.current !== null) return;
+
+      if (!isDraggingRef.current) {
+        isDraggingRef.current = true;
+      }
+
+      if (!touchActiveRef.current && !supportsScrollEnd) {
+        scheduleNativeScrollFinish();
       }
     };
 
@@ -352,12 +345,14 @@ export const useMainSwipeNavigation = ({
     element.addEventListener("touchcancel", markTouchInactive, {
       passive: true,
     });
+    element.addEventListener("scroll", handleScroll, { passive: true });
     element.addEventListener("scrollend", finishScroll, { passive: true });
 
     return () => {
       element.removeEventListener("touchstart", markTouchActive);
       element.removeEventListener("touchend", markTouchInactive);
       element.removeEventListener("touchcancel", markTouchInactive);
+      element.removeEventListener("scroll", handleScroll);
       element.removeEventListener("scrollend", finishScroll);
     };
   }, [
@@ -376,41 +371,5 @@ export const useMainSwipeNavigation = ({
     [cancelProgrammaticFrame, clearMainSwipeScrollTimer],
   );
 
-  const handleMainSwipeScroll = React.useMemo(
-    () =>
-      isMainSwipeRoute
-        ? (event: React.UIEvent<HTMLDivElement>) => {
-            const element = event.currentTarget;
-            const progress = getMainSwipeProgress(element);
-
-            if (programmaticTargetRef.current !== null) {
-              updateMainSwipeProgress(progress);
-              return;
-            }
-
-            if (!isDraggingRef.current) {
-              isDraggingRef.current = true;
-              mainSwipeProgressStore.setDragging(true);
-            }
-
-            updateMainSwipeProgress(progress);
-
-            clearMainSwipeScrollTimer();
-            if (!touchActiveRef.current) {
-              scheduleNativeScrollFinish();
-            }
-          }
-        : undefined,
-    [
-      clearMainSwipeScrollTimer,
-      isMainSwipeRoute,
-      scheduleNativeScrollFinish,
-      updateMainSwipeProgress,
-    ],
-  );
-
-  return {
-    commitMainSwipe,
-    handleMainSwipeScroll,
-  };
+  return { commitMainSwipe };
 };

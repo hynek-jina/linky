@@ -4711,10 +4711,6 @@ button.icon {
   display: none;
 }
 
-.bottom-tabs.is-interactive .bottom-tabs-indicator {
-  transition: none;
-}
-
 .bottom-tab {
   background: transparent;
   border: none;
@@ -4756,8 +4752,6 @@ button.icon {
   display: flex;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: none;
   touch-action: auto;
   scrollbar-width: none;
@@ -4775,17 +4769,12 @@ button.icon {
     opacity 220ms ease;
 }
 
-.main-swipe-fab.is-interactive {
-  transition: none;
-}
-
 .main-swipe-page {
   flex: 0 0 100%;
   min-width: 100%;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
   scroll-snap-align: start;
   background: var(--app-flat-bg);
 }
@@ -4800,6 +4789,7 @@ button.icon {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
+  -webkit-overflow-scrolling: auto;
 }
 
 .bottom-tab-icon {

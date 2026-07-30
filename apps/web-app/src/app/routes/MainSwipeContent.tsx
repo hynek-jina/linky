@@ -40,9 +40,6 @@ export interface MainSwipeRouteProps {
   contactsToolbarStyle: React.CSSProperties;
   conversationsLabel: string;
   dismissContactsOnboarding: () => void;
-  handleMainSwipeScroll:
-    | ((event: React.UIEvent<HTMLDivElement>) => void)
-    | undefined;
   handleMainSwipeTabChange: (target: "contacts" | "wallet") => void;
   mainSwipeRef: React.RefObject<HTMLDivElement | null>;
   openNewContactPage: () => void;
@@ -94,13 +91,12 @@ const MainSwipeBottomTabBar = ({
   t,
   walletLabel,
 }: MainSwipeBottomTabBarProps): React.ReactElement => {
-  const { isDragging, progress } = useMainSwipeProgress();
+  const { progress } = useMainSwipeProgress();
   return (
     <BottomTabBar
       activeTab={activeTab}
       activeProgress={progress}
       contactsLabel={contactsLabel}
-      disableIndicatorTransition={isDragging}
       onTabChange={onTabChange}
       t={t}
       walletLabel={walletLabel}
@@ -119,11 +115,11 @@ const MainSwipeFab = ({
   label,
   onClick,
 }: MainSwipeFabProps): React.ReactElement => {
-  const { isDragging, progress } = useMainSwipeProgress();
+  const { progress } = useMainSwipeProgress();
   return (
     <button
       type="button"
-      className={`contacts-fab main-swipe-fab${canAddContact ? "" : " is-disabled"}${isDragging ? " is-interactive" : ""}`}
+      className={`contacts-fab main-swipe-fab${canAddContact ? "" : " is-disabled"}`}
       onClick={onClick}
       aria-disabled={!canAddContact}
       aria-label={label}
@@ -159,7 +155,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     conversationsLabel,
     dismissContactsOnboarding,
     dismissWalletWarning,
-    handleMainSwipeScroll,
     handleMainSwipeTabChange,
     mainSwipeRef,
     openNewContactPage,
@@ -192,11 +187,7 @@ export const MainSwipeContent = (): React.ReactElement => {
 
   return (
     <>
-      <div
-        className="main-swipe"
-        ref={mainSwipeRef}
-        onScroll={handleMainSwipeScroll}
-      >
+      <div className="main-swipe" ref={mainSwipeRef}>
         <div
           className="main-swipe-page main-swipe-contacts-page"
           aria-hidden={route.kind !== "contacts"}
