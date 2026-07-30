@@ -74,6 +74,12 @@ export const extractEditedFromTag = (tags: unknown): string | null => {
   return null;
 };
 
+export const resolveStableMessageRumorId = (
+  rumorId: unknown,
+  editedFromId: unknown,
+): string | null =>
+  normalizeText(editedFromId) || normalizeText(rumorId) || null;
+
 export const extractDeleteReferencedIds = (tags: unknown): string[] => {
   const ids: string[] = [];
   const seen = new Set<string>();

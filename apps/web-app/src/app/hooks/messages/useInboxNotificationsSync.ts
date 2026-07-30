@@ -50,6 +50,7 @@ import {
   extractReplyContextFromTags,
   isInvalidInnerRumorPubkey,
   isNestedEncryptedNip44PayloadForAnyPubkey,
+  resolveStableMessageRumorId,
 } from "./chatNostrProtocol";
 import { buildUnknownContactId, normalizePubkeyHex } from "./contactIdentity";
 import type { KnownNostrMessageIdentityIndex } from "./messageHelpers";
@@ -321,6 +322,9 @@ export const useInboxNotificationsSync = <
           indexedContacts = latestContacts;
           contactByPubHex.clear();
           for (const contact of latestContacts) {
+            const archivedAtSec = Number(contact.archivedAtSec ?? 0);
+            if (Number.isFinite(archivedAtSec) && archivedAtSec > 0) continue;
+
             const npub = normalizeNpubIdentifier(contact.npub);
             if (!npub) continue;
             try {
@@ -839,6 +843,10 @@ export const useInboxNotificationsSync = <
               const { replyToId, rootMessageId } =
                 extractReplyContextFromTags(tags);
               const editedFromId = extractEditedFromTag(tags);
+              const stableRumorId = resolveStableMessageRumorId(
+                rumorId,
+                editedFromId,
+              );
               const effectivePubkey = isOutgoing ? myPubHex : resolvedPeerPub;
               const normalizedIncomingPeerPubkey = isOutgoing
                 ? null
@@ -885,7 +893,7 @@ export const useInboxNotificationsSync = <
                     wrapId,
                     pubkey: effectivePubkey,
                     ...(tagClientId ? { clientId: tagClientId } : {}),
-                    ...(rumorId ? { rumorId } : {}),
+                    ...(stableRumorId ? { rumorId: stableRumorId } : {}),
                     isEdited: true,
                     editedAtSec: createdAtSec,
                     editedFromId,
@@ -935,7 +943,7 @@ export const useInboxNotificationsSync = <
                     wrapId,
                     pubkey: effectivePubkey,
                     ...(tagClientId ? { clientId: tagClientId } : {}),
-                    ...(rumorId ? { rumorId } : {}),
+                    ...(stableRumorId ? { rumorId: stableRumorId } : {}),
                     ...(replyToId ? { replyToId } : {}),
                     ...(rootMessageId ? { rootMessageId } : {}),
                     ...(editedFromId ? { editedFromId } : {}),
@@ -949,7 +957,7 @@ export const useInboxNotificationsSync = <
                 direction: isOutgoing ? "out" : "in",
                 content,
                 wrapId,
-                rumorId: rumorId || null,
+                rumorId: stableRumorId,
                 pubkey: effectivePubkey,
                 createdAtSec,
                 ...(tagClientId ? { clientId: tagClientId } : {}),

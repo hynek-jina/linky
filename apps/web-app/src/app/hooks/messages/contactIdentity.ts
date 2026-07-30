@@ -34,6 +34,16 @@ export const isUnknownContactId = (id: unknown): boolean => {
   return normalizedId.startsWith(UNKNOWN_CONTACT_ID_PREFIX);
 };
 
+export const readUnknownContactIdPubkey = (id: unknown): string | null => {
+  const normalizedId = String(id ?? "")
+    .trim()
+    .toLowerCase();
+  if (!normalizedId.startsWith(UNKNOWN_CONTACT_ID_PREFIX)) return null;
+  return normalizePubkeyHex(
+    normalizedId.slice(UNKNOWN_CONTACT_ID_PREFIX.length),
+  );
+};
+
 export interface ResolvedNostrChatIdentity {
   contactPubHex: string;
   myPubHex: string;
