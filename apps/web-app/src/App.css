@@ -4792,6 +4792,16 @@ button.icon {
   -webkit-overflow-scrolling: auto;
 }
 
+@media (max-width: 640px) {
+  .page.main-swipe-active .main-swipe {
+    margin-inline: -20px;
+  }
+
+  .page.main-swipe-active .main-swipe-page {
+    padding-inline: 20px;
+  }
+}
+
 .bottom-tab-icon {
   display: inline-flex;
   align-items: center;
@@ -5241,8 +5251,14 @@ button.icon {
 @media (max-width: 640px) {
   .chat-compose {
     gap: 4px;
-    padding: 8px 12px;
+    padding: 0 12px;
     padding-bottom: calc(6px + var(--floating-safe-area-bottom));
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .chat-messages {
+    padding-bottom: var(--chat-compose-height, 116px);
   }
 
   .chat-message-editor {
