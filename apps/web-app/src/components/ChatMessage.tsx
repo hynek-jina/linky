@@ -280,15 +280,26 @@ function ChatMessageComponent({
       (bankOfferPhaseStartedAtSec + bankOfferPhaseTtlSec) * 1_000;
     if (Date.now() >= expiresAtMs) return;
 
-    const intervalId = window.setInterval(() => {
-      const nextNowMs = Date.now();
-      setNowMs(nextNowMs);
-      if (nextNowMs >= expiresAtMs) {
-        window.clearInterval(intervalId);
-      }
-    }, 1_000);
+    let timeoutId: number | null = null;
+    const scheduleNextTick = () => {
+      const currentNowMs = Date.now();
+      if (currentNowMs >= expiresAtMs) return;
 
-    return () => window.clearInterval(intervalId);
+      const nextSecondMs = (Math.floor(currentNowMs / 1_000) + 1) * 1_000;
+      const nextBoundaryMs = Math.min(nextSecondMs, expiresAtMs);
+      timeoutId = window.setTimeout(() => {
+        setNowMs(Date.now());
+        scheduleNextTick();
+      }, nextBoundaryMs - currentNowMs);
+    };
+
+    scheduleNextTick();
+
+    return () => {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
   }, [bankOfferPhaseStartedAtSec, bankOfferPhaseTtlSec]);
 
   const renderCashuTokenPill = React.useCallback(

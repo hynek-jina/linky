@@ -1,15 +1,13 @@
 import React from "react";
 import { navigateTo } from "../../../hooks/useRouting";
 import type { Route } from "../../../types/route";
+import { mainSwipeProgressStore } from "../../lib/mainSwipeProgressStore";
 
 interface UseMainSwipeNavigationParams {
   isMainSwipeRoute: boolean;
-  mainSwipeProgressRef: React.MutableRefObject<number>;
   mainSwipeRef: React.RefObject<HTMLDivElement | null>;
   mainSwipeScrollTimerRef: React.MutableRefObject<number | null>;
   routeKind: Route["kind"];
-  setIsMainSwipeDragging: React.Dispatch<React.SetStateAction<boolean>>;
-  setMainSwipeProgress: React.Dispatch<React.SetStateAction<number>>;
 }
 
 interface MainSwipeScrollable {
@@ -72,12 +70,9 @@ export const alignMainSwipeToTarget = (
 
 export const useMainSwipeNavigation = ({
   isMainSwipeRoute,
-  mainSwipeProgressRef,
   mainSwipeRef,
   mainSwipeScrollTimerRef,
   routeKind,
-  setIsMainSwipeDragging,
-  setMainSwipeProgress,
 }: UseMainSwipeNavigationParams) => {
   const previousRouteKindRef = React.useRef<Route["kind"]>(routeKind);
   const programmaticTargetRef = React.useRef<MainSwipeTarget | null>(null);
@@ -96,21 +91,16 @@ export const useMainSwipeNavigation = ({
     mainSwipeScrollTimerRef.current = null;
   }, [mainSwipeScrollTimerRef]);
 
-  const updateMainSwipeProgress = React.useCallback(
-    (value: number) => {
-      const clamped = Math.min(1, Math.max(0, value));
-      mainSwipeProgressRef.current = clamped;
-      setMainSwipeProgress(clamped);
-    },
-    [mainSwipeProgressRef, setMainSwipeProgress],
-  );
+  const updateMainSwipeProgress = React.useCallback((value: number) => {
+    mainSwipeProgressStore.setProgress(value);
+  }, []);
 
   const stopInteractiveState = React.useCallback(() => {
     if (isDraggingRef.current) {
       isDraggingRef.current = false;
     }
-    setIsMainSwipeDragging(false);
-  }, [setIsMainSwipeDragging]);
+    mainSwipeProgressStore.setDragging(false);
+  }, []);
 
   const finishProgrammaticScroll = React.useCallback(
     (target: MainSwipeTarget, shouldNavigate: boolean) => {
@@ -193,7 +183,7 @@ export const useMainSwipeNavigation = ({
 
       stopInteractiveState();
       programmaticTargetRef.current = target;
-      setIsMainSwipeDragging(true);
+      mainSwipeProgressStore.setDragging(true);
       alignMainSwipeToTarget(element, target, "smooth");
       trackProgrammaticScroll(target, true);
     },
@@ -201,7 +191,6 @@ export const useMainSwipeNavigation = ({
       clearMainSwipeScrollTimer,
       finishProgrammaticScroll,
       mainSwipeRef,
-      setIsMainSwipeDragging,
       stopInteractiveState,
       trackProgrammaticScroll,
     ],
@@ -302,34 +291,44 @@ export const useMainSwipeNavigation = ({
     [cancelProgrammaticFrame, clearMainSwipeScrollTimer],
   );
 
-  const handleMainSwipeScroll = isMainSwipeRoute
-    ? (event: React.UIEvent<HTMLDivElement>) => {
-        const element = event.currentTarget;
-        const progress = getMainSwipeProgress(element);
+  const handleMainSwipeScroll = React.useMemo(
+    () =>
+      isMainSwipeRoute
+        ? (event: React.UIEvent<HTMLDivElement>) => {
+            const element = event.currentTarget;
+            const progress = getMainSwipeProgress(element);
 
-        if (programmaticTargetRef.current !== null) {
-          updateMainSwipeProgress(progress);
-          return;
-        }
+            if (programmaticTargetRef.current !== null) {
+              updateMainSwipeProgress(progress);
+              return;
+            }
 
-        if (!isDraggingRef.current) {
-          isDraggingRef.current = true;
-          setIsMainSwipeDragging(true);
-        }
+            if (!isDraggingRef.current) {
+              isDraggingRef.current = true;
+              mainSwipeProgressStore.setDragging(true);
+            }
 
-        updateMainSwipeProgress(progress);
+            updateMainSwipeProgress(progress);
 
-        clearMainSwipeScrollTimer();
+            clearMainSwipeScrollTimer();
 
-        mainSwipeScrollTimerRef.current = window.setTimeout(() => {
-          mainSwipeScrollTimerRef.current = null;
-          const current = mainSwipeProgressRef.current;
-          isDraggingRef.current = false;
-          setIsMainSwipeDragging(false);
-          commitMainSwipe(current > 0.5 ? "wallet" : "contacts");
-        }, 140);
-      }
-    : undefined;
+            mainSwipeScrollTimerRef.current = window.setTimeout(() => {
+              mainSwipeScrollTimerRef.current = null;
+              const current = mainSwipeProgressStore.get().progress;
+              isDraggingRef.current = false;
+              mainSwipeProgressStore.setDragging(false);
+              commitMainSwipe(current > 0.5 ? "wallet" : "contacts");
+            }, 140);
+          }
+        : undefined,
+    [
+      clearMainSwipeScrollTimer,
+      commitMainSwipe,
+      isMainSwipeRoute,
+      mainSwipeScrollTimerRef,
+      updateMainSwipeProgress,
+    ],
+  );
 
   return {
     commitMainSwipe,

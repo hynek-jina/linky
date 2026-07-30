@@ -26,7 +26,10 @@ import {
   resolveStableMessageRumorId,
 } from "./chatNostrProtocol";
 import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
-import { resolveNostrChatIdentity } from "./contactIdentity";
+import {
+  readUnknownPubkeyHex,
+  resolveNostrChatIdentity,
+} from "./contactIdentity";
 import type { KnownNostrMessageIdentityIndex } from "./messageHelpers";
 import { hasKnownNostrMessageIdentity } from "./messageHelpers";
 
@@ -71,11 +74,68 @@ export const useChatNostrSyncEffect = ({
   updateLocalNostrMessage,
   updateLocalNostrReaction,
 }: UseChatNostrSyncEffectParams) => {
+  const latestValuesRef = React.useRef({
+    appendLocalNostrMessage,
+    appendLocalNostrReaction,
+    chatMessages,
+    chatMessagesLatestRef,
+    chatSeenWrapIdsRef,
+    knownNostrMessageIdentityIndex,
+    logPayStep,
+    nostrMessageWrapIdsRef,
+    nostrReactionWrapIdsRef,
+    nostrReactionsLatestRef,
+    selectedContact,
+    softDeleteLocalNostrReactionsByWrapIds,
+    updateLocalNostrMessage,
+    updateLocalNostrReaction,
+  });
+
+  React.useEffect(() => {
+    latestValuesRef.current = {
+      appendLocalNostrMessage,
+      appendLocalNostrReaction,
+      chatMessages,
+      chatMessagesLatestRef,
+      chatSeenWrapIdsRef,
+      knownNostrMessageIdentityIndex,
+      logPayStep,
+      nostrMessageWrapIdsRef,
+      nostrReactionWrapIdsRef,
+      nostrReactionsLatestRef,
+      selectedContact,
+      softDeleteLocalNostrReactionsByWrapIds,
+      updateLocalNostrMessage,
+      updateLocalNostrReaction,
+    };
+  }, [
+    appendLocalNostrMessage,
+    appendLocalNostrReaction,
+    chatMessages,
+    chatMessagesLatestRef,
+    chatSeenWrapIdsRef,
+    knownNostrMessageIdentityIndex,
+    logPayStep,
+    nostrMessageWrapIdsRef,
+    nostrReactionWrapIdsRef,
+    nostrReactionsLatestRef,
+    selectedContact,
+    softDeleteLocalNostrReactionsByWrapIds,
+    updateLocalNostrMessage,
+    updateLocalNostrReaction,
+  ]);
+
+  const selectedContactId = normalizeText(selectedContact?.id);
+  const selectedContactNpub = normalizeText(selectedContact?.npub);
+  const selectedContactUnknownPubkeyHex =
+    readUnknownPubkeyHex(selectedContact) ?? "";
+
   React.useEffect(() => {
     // NIP-17 inbox sync + subscription while a chat is open.
     if (!enabled) return;
     if (route.kind !== "chat") return;
-    if (!selectedContact) return;
+    const selectedContactAtStart = latestValuesRef.current.selectedContact;
+    if (!selectedContactAtStart) return;
 
     if (!currentNsec) return;
 
@@ -85,8 +145,8 @@ export const useChatNostrSyncEffect = ({
         ? getInitialNostrIdentitySwitchedAtSec()
         : null;
 
-    const existingWrapIds = chatSeenWrapIdsRef.current;
-    for (const m of chatMessages) {
+    const existingWrapIds = latestValuesRef.current.chatSeenWrapIdsRef.current;
+    for (const m of latestValuesRef.current.chatMessages) {
       const id = String(m.wrapId ?? "");
       if (id) existingWrapIds.add(id);
     }
@@ -96,7 +156,7 @@ export const useChatNostrSyncEffect = ({
         const { unwrapEvent } = await import("nostr-tools/nip17");
         const identity = await resolveNostrChatIdentity(
           currentNsec,
-          selectedContact,
+          selectedContactAtStart,
         );
         if (!identity) return;
         const { contactPubHex, myPubHex, privBytes } = identity;
@@ -109,16 +169,19 @@ export const useChatNostrSyncEffect = ({
             if (!wrapId) return;
             if (existingWrapIds.has(wrapId)) return;
             if (
-              hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
-                wrapId,
-              })
+              hasKnownNostrMessageIdentity(
+                latestValuesRef.current.knownNostrMessageIdentityIndex,
+                {
+                  wrapId,
+                },
+              )
             ) {
               existingWrapIds.add(wrapId);
               return;
             }
             existingWrapIds.add(wrapId);
 
-            const inner = unwrapEvent(wrap, privBytes) as NostrToolsEvent;
+            const inner = unwrapEvent(wrap, privBytes);
             if (!inner) return;
 
             const innerPub = String(inner.pubkey ?? "").trim();
@@ -134,7 +197,8 @@ export const useChatNostrSyncEffect = ({
             if (cancelled) return;
 
             if (inner.kind === 14 || inner.kind === 15) {
-              if (nostrMessageWrapIdsRef.current.has(wrapId)) return;
+              const latest = latestValuesRef.current;
+              if (latest.nostrMessageWrapIdsRef.current.has(wrapId)) return;
               if (isInvalidInnerRumorPubkey(innerPub, wrap.pubkey)) return;
 
               const content =
@@ -162,7 +226,7 @@ export const useChatNostrSyncEffect = ({
               const hasOutgoingLocalMatch =
                 innerPub === myPubHex
                   ? false
-                  : chatMessagesLatestRef.current.some((message) => {
+                  : latest.chatMessagesLatestRef.current.some((message) => {
                       if (String(message.direction ?? "").trim() !== "out") {
                         return false;
                       }
@@ -199,19 +263,22 @@ export const useChatNostrSyncEffect = ({
               const messageDirection = isOutgoing ? "out" : "in";
 
               if (
-                hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
-                  contactId: String(selectedContact.id),
-                  direction: messageDirection,
-                  ...(tagClientId ? { clientId: tagClientId } : {}),
-                  ...(rumorId ? { rumorId } : {}),
-                  wrapId,
-                })
+                hasKnownNostrMessageIdentity(
+                  latest.knownNostrMessageIdentityIndex,
+                  {
+                    contactId: String(selectedContactAtStart.id),
+                    direction: messageDirection,
+                    ...(tagClientId ? { clientId: tagClientId } : {}),
+                    ...(rumorId ? { rumorId } : {}),
+                    wrapId,
+                  },
+                )
               ) {
                 return;
               }
 
               if (editedFromId) {
-                const messages = chatMessagesLatestRef.current;
+                const messages = latest.chatMessagesLatestRef.current;
                 const target = messages.find((message) => {
                   if (String(message.direction ?? "") !== messageDirection)
                     return false;
@@ -227,7 +294,7 @@ export const useChatNostrSyncEffect = ({
                   const existingOriginal =
                     String(target.originalContent ?? "").trim() ||
                     String(target.content ?? "");
-                  updateLocalNostrMessage(targetId, {
+                  latest.updateLocalNostrMessage(targetId, {
                     content,
                     status: "sent",
                     wrapId,
@@ -243,7 +310,7 @@ export const useChatNostrSyncEffect = ({
               }
 
               if (!editedFromId && rumorId) {
-                const messages = chatMessagesLatestRef.current;
+                const messages = latest.chatMessagesLatestRef.current;
                 const existingEditedVersion = messages.find((message) => {
                   if (normalizeText(message.direction) !== messageDirection)
                     return false;
@@ -262,7 +329,7 @@ export const useChatNostrSyncEffect = ({
 
                   if (hasOriginalContent) return;
 
-                  updateLocalNostrMessage(existingEditedVersionId, {
+                  latest.updateLocalNostrMessage(existingEditedVersionId, {
                     originalContent: content,
                   });
                   return;
@@ -270,7 +337,7 @@ export const useChatNostrSyncEffect = ({
               }
 
               if (isOutgoing) {
-                const messages = chatMessagesLatestRef.current;
+                const messages = latest.chatMessagesLatestRef.current;
                 const pending = messages.find((message) => {
                   const isOut = String(message.direction ?? "") === "out";
                   const isPending =
@@ -293,7 +360,7 @@ export const useChatNostrSyncEffect = ({
                   );
                 });
                 if (pending) {
-                  updateLocalNostrMessage(String(pending.id ?? ""), {
+                  latest.updateLocalNostrMessage(String(pending.id ?? ""), {
                     status: "sent",
                     wrapId,
                     pubkey: effectivePubkey,
@@ -302,8 +369,8 @@ export const useChatNostrSyncEffect = ({
                     ...(replyToId ? { replyToId } : {}),
                     ...(rootMessageId ? { rootMessageId } : {}),
                   });
-                  logPayStep("message-ack", {
-                    contactId: String(selectedContact.id ?? ""),
+                  latest.logPayStep("message-ack", {
+                    contactId: String(selectedContactAtStart.id ?? ""),
                     clientId: tagClientId ? String(tagClientId) : null,
                     wrapId,
                   });
@@ -311,7 +378,7 @@ export const useChatNostrSyncEffect = ({
                 }
               }
 
-              const existingMessage = chatMessagesLatestRef.current.find(
+              const existingMessage = latest.chatMessagesLatestRef.current.find(
                 (message) => {
                   if (String(message.direction ?? "") !== messageDirection)
                     return false;
@@ -333,16 +400,19 @@ export const useChatNostrSyncEffect = ({
                 },
               );
               if (existingMessage) {
-                updateLocalNostrMessage(String(existingMessage.id ?? ""), {
-                  status: "sent",
-                  wrapId,
-                  pubkey: effectivePubkey,
-                  ...(tagClientId ? { clientId: String(tagClientId) } : {}),
-                  ...(!editedFromId && rumorId ? { rumorId } : {}),
-                  ...(replyToId ? { replyToId } : {}),
-                  ...(rootMessageId ? { rootMessageId } : {}),
-                  ...(editedFromId ? { editedFromId } : {}),
-                });
+                latest.updateLocalNostrMessage(
+                  String(existingMessage.id ?? ""),
+                  {
+                    status: "sent",
+                    wrapId,
+                    pubkey: effectivePubkey,
+                    ...(tagClientId ? { clientId: String(tagClientId) } : {}),
+                    ...(!editedFromId && rumorId ? { rumorId } : {}),
+                    ...(replyToId ? { replyToId } : {}),
+                    ...(rootMessageId ? { rootMessageId } : {}),
+                    ...(editedFromId ? { editedFromId } : {}),
+                  },
+                );
                 return;
               }
 
@@ -351,8 +421,8 @@ export const useChatNostrSyncEffect = ({
                 editedFromId,
               );
 
-              appendLocalNostrMessage({
-                contactId: String(selectedContact.id),
+              latest.appendLocalNostrMessage({
+                contactId: String(selectedContactAtStart.id),
                 direction: messageDirection,
                 content,
                 wrapId,
@@ -374,6 +444,7 @@ export const useChatNostrSyncEffect = ({
             }
 
             if (inner.kind === 7) {
+              const latest = latestValuesRef.current;
               const tagsArray = Array.isArray(inner.tags) ? inner.tags : [];
               const messageId = tagsArray
                 .find((tag) => Array.isArray(tag) && tag[0] === "e")
@@ -392,7 +463,7 @@ export const useChatNostrSyncEffect = ({
                 return;
 
               const knownRumorIds = new Set(
-                chatMessagesLatestRef.current
+                latest.chatMessagesLatestRef.current
                   .map((message) => String(message.rumorId ?? "").trim())
                   .filter(Boolean),
               );
@@ -403,16 +474,17 @@ export const useChatNostrSyncEffect = ({
 
               const reactionWrapId = String(inner.id ?? "").trim() || wrapId;
               if (!reactionWrapId) return;
-              if (nostrReactionWrapIdsRef.current.has(reactionWrapId)) return;
+              if (latest.nostrReactionWrapIdsRef.current.has(reactionWrapId))
+                return;
 
               const clientId = extractClientTag(tagsArray);
-              const reactions = nostrReactionsLatestRef.current;
+              const reactions = latest.nostrReactionsLatestRef.current;
               const existingByWrap = reactions.find(
                 (reaction) =>
                   String(reaction.wrapId ?? "").trim() === reactionWrapId,
               );
               if (existingByWrap) {
-                updateLocalNostrReaction(existingByWrap.id, {
+                latest.updateLocalNostrReaction(existingByWrap.id, {
                   status: "sent",
                   wrapId: reactionWrapId,
                   ...(clientId ? { clientId } : {}),
@@ -427,7 +499,7 @@ export const useChatNostrSyncEffect = ({
                   )
                 : null;
               if (existingByClient) {
-                updateLocalNostrReaction(existingByClient.id, {
+                latest.updateLocalNostrReaction(existingByClient.id, {
                   status: "sent",
                   wrapId: reactionWrapId,
                   messageId: normalizedMessageId,
@@ -447,7 +519,7 @@ export const useChatNostrSyncEffect = ({
               );
               if (duplicateByIdentity) return;
 
-              appendLocalNostrReaction({
+              latest.appendLocalNostrReaction({
                 messageId: normalizedMessageId,
                 reactorPubkey: innerPub,
                 emoji,
@@ -462,7 +534,9 @@ export const useChatNostrSyncEffect = ({
             if (inner.kind === 5) {
               const referencedIds = extractDeleteReferencedIds(inner.tags);
               if (referencedIds.length === 0) return;
-              softDeleteLocalNostrReactionsByWrapIds(referencedIds);
+              latestValuesRef.current.softDeleteLocalNostrReactionsByWrapIds(
+                referencedIds,
+              );
             }
           } catch {
             // ignore individual events
@@ -476,9 +550,7 @@ export const useChatNostrSyncEffect = ({
         );
 
         if (!cancelled) {
-          for (const e of Array.isArray(existing)
-            ? (existing as NostrToolsEvent[])
-            : [])
+          for (const e of Array.isArray(existing) ? existing : [])
             processWrap(e);
         }
 
@@ -516,22 +588,11 @@ export const useChatNostrSyncEffect = ({
       cleanup = undefined;
     };
   }, [
-    appendLocalNostrMessage,
-    appendLocalNostrReaction,
-    chatMessages,
-    chatMessagesLatestRef,
-    chatSeenWrapIdsRef,
     currentNsec,
     enabled,
-    knownNostrMessageIdentityIndex,
-    logPayStep,
-    nostrMessageWrapIdsRef,
-    nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
     route.kind,
-    selectedContact,
-    softDeleteLocalNostrReactionsByWrapIds,
-    updateLocalNostrMessage,
-    updateLocalNostrReaction,
+    selectedContactId,
+    selectedContactNpub,
+    selectedContactUnknownPubkeyHex,
   ]);
 };

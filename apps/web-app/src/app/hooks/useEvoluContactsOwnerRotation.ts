@@ -147,6 +147,13 @@ interface UseEvoluContactsOwnerRotationResult {
 const createMetaPointerRowId = (scope: string): Evolu.Id =>
   Evolu.createIdFromString<"OwnerMeta">(`owner-pointer-${scope}`);
 
+// Stable identities for the non-seed fallbacks below. Inline `[appOwnerId]` /
+// `[]` literals in the returned object gave every render a fresh array, which
+// cascaded through visible-owner memo chains into effect deps and caused
+// render loops on the unauthenticated shell.
+const EMPTY_OWNER_IDS: Evolu.OwnerId[] = [];
+const EMPTY_SYNC_OWNERS: Evolu.SyncOwner[] = [];
+
 const formatMutationError = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -2052,6 +2059,11 @@ export const useEvoluContactsOwnerRotation = ({
       transactionsOwnerWriteDelta,
   );
 
+  const nonSeedVisibleOwnerIds = React.useMemo(
+    () => (appOwnerId ? [appOwnerId] : EMPTY_OWNER_IDS),
+    [appOwnerId],
+  );
+
   return {
     cashuOwnerId: isSeedLogin
       ? (ownerSyncData?.cashuOwner.id ?? null)
@@ -2062,9 +2074,7 @@ export const useEvoluContactsOwnerRotation = ({
     cashuSyncOwner: isSeedLogin ? (ownerSyncData?.cashuOwner ?? null) : null,
     cashuVisibleOwnerIds: isSeedLogin
       ? cashuVisibleOwnerIds
-      : appOwnerId
-        ? [appOwnerId]
-        : [],
+      : nonSeedVisibleOwnerIds,
     contactsBackupOwnerId: isSeedLogin ? contactsBackupOwnerId : null,
     contactsOwnerEditCount,
     contactsOwnerEditsUntilRotation,
@@ -2079,9 +2089,7 @@ export const useEvoluContactsOwnerRotation = ({
     contactsOwnerPointer: `contacts-${resolvedContactsOwnerIndex}`,
     contactsVisibleOwnerIds: isSeedLogin
       ? contactsVisibleOwnerIds
-      : appOwnerId
-        ? [appOwnerId]
-        : [],
+      : nonSeedVisibleOwnerIds,
     identityOwnerId: isSeedLogin
       ? (fixedOwnerSyncData?.identityOwner.id ?? null)
       : appOwnerId,
@@ -2090,7 +2098,7 @@ export const useEvoluContactsOwnerRotation = ({
       : null,
     historicalBootstrapSyncOwners: isSeedLogin
       ? historicalBootstrapSyncOwners
-      : [],
+      : EMPTY_SYNC_OWNERS,
     legacyIdentitiesOwnerId: isSeedLogin
       ? (fixedOwnerSyncData?.legacyIdentitiesOwner.id ?? null)
       : null,
@@ -2113,9 +2121,7 @@ export const useEvoluContactsOwnerRotation = ({
       : null,
     messagesVisibleOwnerIds: isSeedLogin
       ? messagesVisibleOwnerIds
-      : appOwnerId
-        ? [appOwnerId]
-        : [],
+      : nonSeedVisibleOwnerIds,
     recordMessagesOwnerWrite,
     recordTransactionsOwnerWrite,
     recordContactsOwnerWrite,
@@ -2140,8 +2146,6 @@ export const useEvoluContactsOwnerRotation = ({
     transactionsBootstrapSnapshot: allTransactionsRows,
     transactionsVisibleOwnerIds: isSeedLogin
       ? transactionsVisibleOwnerIds
-      : appOwnerId
-        ? [appOwnerId]
-        : [],
+      : nonSeedVisibleOwnerIds,
   };
 };

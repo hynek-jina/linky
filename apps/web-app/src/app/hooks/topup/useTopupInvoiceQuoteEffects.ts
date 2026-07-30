@@ -116,10 +116,8 @@ interface UseTopupInvoiceQuoteEffectsParams {
   topupInvoice: string | null;
   topupInvoiceError: string | null;
   topupInvoiceIsBusy: boolean;
-  topupInvoiceCashuRequest: string | null;
   topupInvoicePaidHandledRef: React.MutableRefObject<boolean>;
   topupInvoiceQr: string | null;
-  topupInvoiceQrPayload: string | null;
   topupInvoiceStartBalanceRef: React.MutableRefObject<number | null>;
   topupMintQuote: TopupMintQuoteDraft | null;
   topupPaidNavTimerRef: React.MutableRefObject<number | null>;
@@ -148,10 +146,8 @@ export const useTopupInvoiceQuoteEffects = ({
   topupInvoice,
   topupInvoiceError,
   topupInvoiceIsBusy,
-  topupInvoiceCashuRequest,
   topupInvoicePaidHandledRef,
   topupInvoiceQr,
-  topupInvoiceQrPayload,
   topupInvoiceStartBalanceRef,
   topupMintQuote,
   topupPaidNavTimerRef,
@@ -171,72 +167,71 @@ export const useTopupInvoiceQuoteEffects = ({
   // to re-trigger and abort the in-flight request when React re-renders.
   const isFetchingRef = React.useRef(false);
   const hasPendingTopupQuote = topupMintQuote !== null;
+  const topupInvoiceQrInputRef = React.useRef<{
+    cashuRequest: string | null;
+    invoice: string;
+    payload: string;
+  } | null>(null);
+  const topupInvoiceQrKey =
+    routeKind === "topupInvoice" ? (topupMintQuote?.invoice ?? null) : null;
 
-  React.useEffect(() => {
-    if (routeKind !== "topupInvoice") return;
-    if (!topupMintQuote?.invoice) return;
+  if (topupInvoiceQrKey && topupMintQuote) {
     const cashuRequest = buildTopupInvoiceCashuRequest({
       amountSat: topupMintQuote.amount,
       mintUrl: topupMintQuote.mintUrl,
       quoteId: topupMintQuote.quote,
       recipientNprofile: topupRecipientNprofile,
     });
-    const qrPayload = buildTopupInvoiceQrPayload({
+    topupInvoiceQrInputRef.current = {
       cashuRequest,
-      invoice: topupMintQuote.invoice,
-    });
-    if (
-      topupInvoice === topupMintQuote.invoice &&
-      topupInvoiceCashuRequest === cashuRequest &&
-      topupInvoiceQr &&
-      topupInvoiceQrPayload === qrPayload
-    ) {
-      return;
-    }
+      invoice: topupInvoiceQrKey,
+      payload: buildTopupInvoiceQrPayload({
+        cashuRequest,
+        invoice: topupInvoiceQrKey,
+      }),
+    };
+  } else {
+    topupInvoiceQrInputRef.current = null;
+  }
+
+  React.useEffect(() => {
+    const input = topupInvoiceQrInputRef.current;
+    if (!input) return;
 
     let cancelled = false;
-    const invoiceChanged = topupInvoice !== topupMintQuote.invoice;
-    const cashuRequestChanged = topupInvoiceCashuRequest !== cashuRequest;
-    const payloadChanged = topupInvoiceQrPayload !== qrPayload;
 
     void (async () => {
-      if (
-        (invoiceChanged || cashuRequestChanged || payloadChanged) &&
-        topupInvoiceQr
-      ) {
-        setTopupInvoiceQr(null);
-      }
-
-      setTopupInvoice(topupMintQuote.invoice);
-      setTopupInvoiceCashuRequest(cashuRequest);
-      setTopupInvoiceQrPayload(qrPayload);
-      setTopupInvoiceError(null);
+      setTopupInvoiceQr((current) => (current === null ? current : null));
+      setTopupInvoice((current) =>
+        current === input.invoice ? current : input.invoice,
+      );
+      setTopupInvoiceCashuRequest((current) =>
+        current === input.cashuRequest ? current : input.cashuRequest,
+      );
+      setTopupInvoiceQrPayload((current) =>
+        current === input.payload ? current : input.payload,
+      );
+      setTopupInvoiceError((current) => (current === null ? current : null));
 
       const QRCode = await import("qrcode");
-      const qr = await QRCode.toDataURL(qrPayload, {
+      const qr = await QRCode.toDataURL(input.payload, {
         margin: 1,
         width: 320,
       });
       if (cancelled) return;
-      setTopupInvoiceQr(qr);
+      setTopupInvoiceQr((current) => (current === qr ? current : qr));
     })();
 
     return () => {
       cancelled = true;
     };
   }, [
-    routeKind,
+    topupInvoiceQrKey,
     setTopupInvoice,
     setTopupInvoiceCashuRequest,
     setTopupInvoiceError,
     setTopupInvoiceQr,
     setTopupInvoiceQrPayload,
-    topupInvoice,
-    topupInvoiceCashuRequest,
-    topupInvoiceQr,
-    topupInvoiceQrPayload,
-    topupMintQuote,
-    topupRecipientNprofile,
   ]);
 
   React.useEffect(() => {

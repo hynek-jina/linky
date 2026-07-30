@@ -3,6 +3,7 @@ import { useAppShellCore } from "../app/context/AppShellContexts";
 import { isCashuTokenUnavailableState } from "../app/lib/cashuTokenState";
 import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
 import { parseCashuToken } from "../cashu";
+import type { CashuTokenId } from "../evolu";
 import { getNextMintIconUrl } from "../utils/mint";
 
 interface MintIcon {
@@ -16,19 +17,61 @@ interface CashuTokenPillProps {
   ariaLabel: string;
   getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   isError?: boolean;
-  onClick: () => void;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
-  token: CashuTokenRowLike;
+  onOpenToken: (id: CashuTokenId) => void;
+  token: CashuTokenRowLike & { id: CashuTokenId };
 }
 
-export function CashuTokenPill({
+function getTokenMint(token: CashuTokenRowLike): MintUrlInput {
+  const storedMint = String(token.mint ?? "").trim();
+  if (storedMint) return storedMint;
+
+  const tokenText = String(token.token ?? token.rawToken ?? "").trim();
+  const parsed = tokenText ? parseCashuToken(tokenText) : null;
+  return parsed?.mint ? String(parsed.mint).trim() : null;
+}
+
+function areMintIconsEqual(previous: MintIcon, next: MintIcon) {
+  return (
+    previous.failed === next.failed &&
+    previous.host === next.host &&
+    previous.origin === next.origin &&
+    previous.url === next.url
+  );
+}
+
+function arePropsEqual(
+  previous: CashuTokenPillProps,
+  next: CashuTokenPillProps,
+) {
+  if (
+    previous.ariaLabel !== next.ariaLabel ||
+    previous.isError !== next.isError ||
+    previous.onMintIconError !== next.onMintIconError ||
+    previous.onMintIconLoad !== next.onMintIconLoad ||
+    previous.onOpenToken !== next.onOpenToken ||
+    previous.token !== next.token
+  ) {
+    return false;
+  }
+
+  if (previous.getMintIconUrl === next.getMintIconUrl) return true;
+
+  const mint = getTokenMint(next.token);
+  return areMintIconsEqual(
+    previous.getMintIconUrl(mint),
+    next.getMintIconUrl(mint),
+  );
+}
+
+export const CashuTokenPill = React.memo(function CashuTokenPill({
   ariaLabel,
   getMintIconUrl,
   isError = false,
-  onClick,
   onMintIconError,
   onMintIconLoad,
+  onOpenToken,
   token,
 }: CashuTokenPillProps) {
   const { formatDisplayedAmountParts } = useAppShellCore();
@@ -62,13 +105,16 @@ export function CashuTokenPill({
   const showMintFallback = icon.failed || !icon.url;
   const displayAmount = formatDisplayedAmountParts(amount);
   const isMuted = isCashuTokenUnavailableState(token.state);
+  const handleClick = React.useCallback(() => {
+    onOpenToken(token.id);
+  }, [onOpenToken, token.id]);
 
   return (
     <button
       className={
         isError ? "pill pill-error" : isMuted ? "pill pill-muted" : "pill"
       }
-      onClick={onClick}
+      onClick={handleClick}
       style={{ cursor: "pointer" }}
       aria-label={ariaLabel}
     >
@@ -117,4 +163,4 @@ export function CashuTokenPill({
       </span>
     </button>
   );
-}
+}, arePropsEqual);

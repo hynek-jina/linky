@@ -526,14 +526,9 @@ export const useAppShellComposition = () => {
   const [pendingEvoluServerDeleteUrl, setPendingEvoluServerDeleteUrl] =
     useState<string | null>(null);
   const [contactsHeaderVisible, setContactsHeaderVisible] = useState(false);
-  const [contactsPullProgress, setContactsPullProgress] = useState(0);
+  const [contactsPulling, setContactsPulling] = useState(false);
   const contactsPullDistanceRef = React.useRef(0);
   const mainSwipeRef = React.useRef<HTMLDivElement | null>(null);
-  const [mainSwipeProgress, setMainSwipeProgress] = useState(() =>
-    route.kind === "wallet" ? 1 : 0,
-  );
-  const [isMainSwipeDragging, setIsMainSwipeDragging] = useState(false);
-  const mainSwipeProgressRef = React.useRef(route.kind === "wallet" ? 1 : 0);
   const mainSwipeScrollTimerRef = React.useRef<number | null>(null);
 
   const [contactsOnboardingHasPaid, setContactsOnboardingHasPaid] =
@@ -1673,10 +1668,8 @@ export const useAppShellComposition = () => {
     topupInvoice,
     topupInvoiceError,
     topupInvoiceIsBusy,
-    topupInvoiceCashuRequest,
     topupInvoicePaidHandledRef,
     topupInvoiceQr,
-    topupInvoiceQrPayload,
     topupInvoiceStartBalanceRef,
     topupMintQuote,
     topupPaidNavTimerRef,
@@ -3285,20 +3278,16 @@ export const useAppShellComposition = () => {
   const { isMainSwipeRoute } = useMainSwipePageEffects({
     contactsHeaderVisible,
     contactsPullDistanceRef,
-    contactsPullProgress,
     routeKind: route.kind,
     setContactsHeaderVisible,
-    setContactsPullProgress,
+    setContactsPulling,
   });
 
   const { commitMainSwipe, handleMainSwipeScroll } = useMainSwipeNavigation({
     isMainSwipeRoute,
-    mainSwipeProgressRef,
     mainSwipeRef,
     mainSwipeScrollTimerRef,
     routeKind: route.kind,
-    setIsMainSwipeDragging,
-    setMainSwipeProgress,
   });
 
   const unknownContacts = React.useMemo<UnknownChatContact[]>(() => {
@@ -4002,14 +3991,14 @@ export const useAppShellComposition = () => {
   const canAddContact =
     activeContactsOwnerContactCount < MAX_CONTACTS_PER_OWNER;
 
+  const clearPendingDeleteOnMenuChange = React.useCallback(() => {
+    setPendingDeleteId(null);
+  }, []);
+
   const { closeMenu, menuIsOpen, navigateToMainReturn, toggleMenu } =
     useMainMenuState({
-      onClose: () => {
-        setPendingDeleteId(null);
-      },
-      onOpen: () => {
-        setPendingDeleteId(null);
-      },
+      onClose: clearPendingDeleteOnMenuChange,
+      onOpen: clearPendingDeleteOnMenuChange,
       route,
     });
 
@@ -9699,7 +9688,7 @@ export const useAppShellComposition = () => {
     selectedEvoluServerUrl,
   } = useRoutingViewComposition({
     contactsHeaderVisible,
-    contactsPullProgress,
+    contactsPulling,
     groupNamesCount: groupNames.length,
     isMainSwipeRoute,
     mainSwipeRouteBuilderInput: {
@@ -9719,8 +9708,6 @@ export const useAppShellComposition = () => {
       dismissWalletWarning,
       handleMainSwipeScroll,
       handleMainSwipeTabChange: commitMainSwipe,
-      isMainSwipeDragging,
-      mainSwipeProgress,
       mainSwipeRef,
       canAddContact,
       openNewContactPage,
