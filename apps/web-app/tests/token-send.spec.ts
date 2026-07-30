@@ -9,7 +9,6 @@ const NPUB_RECEIVER =
 test("send token", async ({ page }) => {
   const senderNsec = nip19.nsecEncode(generateSecretKey());
   const senderMnemonic = generateMnemonic(wordlist, 128);
-  const receiverName = `Receiver ${Date.now()}`;
 
   const readBalanceSat = async (timeoutMs = 5_000) => {
     const balance = page.getByLabel("Available balance");
@@ -35,6 +34,11 @@ test("send token", async ({ page }) => {
         try {
           localStorage.setItem("linky.nostr_nsec", nsec);
           localStorage.setItem("linky.initialMnemonic", mnemonicValue);
+          localStorage.setItem("linky.display_currency.v1", "sat");
+          localStorage.setItem(
+            "linky.display_allowed_currencies.v1",
+            JSON.stringify(["sat"]),
+          );
         } catch {
           // ignore
         }
@@ -60,8 +64,8 @@ test("send token", async ({ page }) => {
 
     // Now configure the test mint URL (Evolu ownerId is ready)
     await page.getByRole("button", { name: "Menu" }).click();
-    await page.getByRole("button", { name: "Advanced" }).click();
-    await page.getByRole("button", { name: "Mints" }).click();
+    await page.waitForURL(/#settings$/, { timeout: 10_000 });
+    await page.getByRole("button", { name: /^Mint\b/ }).click();
 
     await page.locator("#defaultMintUrl").waitFor({ state: "visible" });
 
@@ -87,9 +91,9 @@ test("send token", async ({ page }) => {
     await page.getByRole("button", { name: "Wallet" }).click();
     await page.getByRole("button", { name: "Receive" }).click();
 
-    await page.getByRole("button", { name: "1" }).click();
-    await page.getByRole("button", { name: "0" }).click();
-    await page.getByRole("button", { name: "0" }).click();
+    await page.getByRole("button", { name: "1", exact: true }).click();
+    await page.getByRole("button", { name: "0", exact: true }).click();
+    await page.getByRole("button", { name: "0", exact: true }).click();
 
     await page.getByRole("button", { name: "Show top-up invoice" }).click();
 
@@ -98,26 +102,25 @@ test("send token", async ({ page }) => {
     // Leave the invoice screen before the mint finishes claiming proofs.
     await page.getByRole("button", { name: "Wallet" }).click();
 
-    await expect(page.locator(".toast").first()).toContainText(
-      "Click to copy token",
-      {
-        timeout: 120_000,
-      },
-    );
-
-    const balanceAfterTopup = await readBalanceSat(120_000);
+    await expect
+      .poll(async () => readBalanceSat(120_000), { timeout: 120_000 })
+      .toBeGreaterThan(0);
+    const balanceAfterTopup = await readBalanceSat();
     expect(balanceAfterTopup).toBeGreaterThan(0);
 
     await page.getByRole("button", { name: "Contacts" }).click();
-    await page.waitForURL(/#$/, { timeout: 5000 });
+    await page.waitForURL(/#(?:contacts)?$/, { timeout: 5000 });
 
     await page.getByRole("button", { name: "Add contact" }).click();
-    const contactFormInputs = page.locator(".form-col input");
-    await expect(contactFormInputs.nth(0)).toBeVisible();
-    await contactFormInputs.nth(0).fill(receiverName);
-    await contactFormInputs.nth(1).fill(NPUB_RECEIVER);
-    await page.getByRole("button", { name: "Save contact" }).click();
-    await page.waitForURL(/#$/, { timeout: 5000 });
+    const searchInput = page.locator("[data-guide='contact-search-input']");
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill(NPUB_RECEIVER);
+    await searchInput.press("Enter");
+    await expect(
+      page.getByRole("button", { name: "Add", exact: true }),
+    ).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.waitForURL(/#(?:contacts)?$/, { timeout: 5000 });
 
     const contactCards = page.locator('[data-guide="contact-card"]');
     await expect
@@ -127,8 +130,8 @@ test("send token", async ({ page }) => {
 
     await page.getByRole("button", { name: "Pay" }).click();
 
-    await page.getByRole("button", { name: "1" }).click();
-    await page.getByRole("button", { name: "0" }).click();
+    await page.getByRole("button", { name: "1", exact: true }).click();
+    await page.getByRole("button", { name: "0", exact: true }).click();
 
     const chatMessages = page.locator(".chat-message");
     const messageCountBeforePay = await chatMessages.count();

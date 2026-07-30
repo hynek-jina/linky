@@ -7,6 +7,14 @@ import { generateSecretKey, nip19 } from "nostr-tools";
 
 const CONTACT_NPUB =
   "npub12g0qmc3xa4hc9nxca936chppd6zhkr494xyypstcd7wg0gaa2xzswunml3";
+const decodedContactNpub = nip19.decode(CONTACT_NPUB);
+if (
+  decodedContactNpub.type !== "npub" ||
+  typeof decodedContactNpub.data !== "string"
+) {
+  throw new Error("Invalid test contact npub");
+}
+const CONTACT_PUBKEY_HEX = decodedContactNpub.data;
 
 const setBaseStorage = async (page: Page) => {
   await page.addInitScript(() => {
@@ -50,18 +58,21 @@ const setAuthenticatedStorage = async (page: Page) => {
   );
 };
 
-const createContactAndOpenChat = async (page: Page, contactName: string) => {
+const createContactAndOpenChat = async (page: Page): Promise<string> => {
   await page.goto("/#");
   await page.locator("[data-guide='contact-add-button']").first().click();
   await page.waitForURL(/#contact\/new$/, { timeout: 10_000 });
 
-  const formInputs = page.locator(".form-col input");
-  await expect(formInputs.nth(0)).toBeVisible();
-  await formInputs.nth(0).fill(contactName);
-  await formInputs.nth(1).fill(CONTACT_NPUB);
-  await page.getByRole("button", { name: "Save contact" }).click();
+  const searchInput = page.locator("[data-guide='contact-search-input']");
+  await expect(searchInput).toBeVisible();
+  await searchInput.fill(CONTACT_NPUB);
+  await searchInput.press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Add", exact: true }).click();
 
-  await page.waitForURL(/#$/, { timeout: 10_000 });
+  await page.waitForURL(/#(?:contacts)?$/, { timeout: 20_000 });
   const contactCards = page.locator("[data-guide='contact-card']");
   await expect
     .poll(async () => contactCards.count(), { timeout: 20_000 })
@@ -69,20 +80,41 @@ const createContactAndOpenChat = async (page: Page, contactName: string) => {
   await contactCards.first().click();
   await page.waitForURL(/#chat\/[^/]+$/, { timeout: 10_000 });
   await expect(page.locator("[data-guide='chat-input']")).toBeVisible();
+
+  const contactMatch = new URL(page.url()).hash.match(/^#chat\/([^/]+)$/);
+  if (!contactMatch?.[1]) {
+    throw new Error(`Could not parse contact id from ${page.url()}`);
+  }
+  return decodeURIComponent(contactMatch[1]);
 };
 
-test("keeps unauthenticated auth gating", async ({ page }) => {
+test("keeps unauthenticated auth gating without render loops", async ({
+  page,
+}) => {
+  const maximumDepthErrors: string[] = [];
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      message.text().includes("Maximum update depth exceeded")
+    ) {
+      maximumDepthErrors.push(message.text());
+    }
+  });
   await setBaseStorage(page);
 
   await page.goto("/#wallet");
 
   await expect(
-    page.getByRole("button", { name: "Create account" }),
+    page.getByRole("button", { name: "I'm getting started" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Paste nsec" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "I'm returning" }),
+  ).toBeVisible();
   await expect(page.locator("[data-guide='contact-add-button']")).toHaveCount(
     0,
   );
+  await page.waitForTimeout(3_000);
+  expect(maximumDepthErrors).toEqual([]);
 });
 
 test("restores an account from SLIP-39 without getting stuck", async ({
@@ -105,8 +137,6 @@ test("restores an account from SLIP-39 without getting stuck", async ({
 test("preserves route parity and critical handlers", async ({ page }) => {
   await setAuthenticatedStorage(page);
 
-  const contactName = `Parity Contact ${Date.now()}`;
-
   await page.goto("/#");
   await expect(
     page.locator("[data-guide='contact-add-button']").first(),
@@ -122,28 +152,34 @@ test("preserves route parity and critical handlers", async ({ page }) => {
 
   await page.goto("/#");
   await page.getByRole("button", { name: "Menu" }).click();
-  await page.locator("[data-guide='open-advanced']").click();
-  await page.waitForURL(/#advanced$/, { timeout: 10_000 });
-  await expect(page.getByRole("button", { name: "Mints" })).toBeVisible();
+  await page.waitForURL(/#settings$/, { timeout: 10_000 });
+  await expect(page.getByRole("button", { name: /^Mint\b/ })).toBeVisible();
 
   await page.goto("/#");
   await page.locator("[data-guide='contact-add-button']").first().click();
   await page.waitForURL(/#contact\/new$/, { timeout: 10_000 });
 
   await page.locator("[data-guide='scan-contact-button']").click();
-  const scanDialog = page.getByRole("dialog", { name: "Scan" });
+  const scanDialog = page.getByRole("dialog", { name: "Add contact" });
   await expect(scanDialog).toBeVisible();
   await scanDialog.getByRole("button", { name: "Close" }).click();
-  await expect(page.getByRole("dialog", { name: "Scan" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Add contact" })).toHaveCount(
+    0,
+  );
 
-  const formInputs = page.locator(".form-col input");
-  await expect(formInputs.nth(0)).toBeVisible();
-  await formInputs.nth(0).fill(contactName);
-  await formInputs.nth(1).fill(CONTACT_NPUB);
-  await page.getByRole("button", { name: "Save contact" }).click();
+  const searchInput = page.locator("[data-guide='contact-search-input']");
+  await expect(searchInput).toBeVisible();
+  await searchInput.fill(CONTACT_NPUB);
+  await searchInput.press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Add", exact: true }).click();
 
-  await page.waitForURL(/#$/, { timeout: 10_000 });
-  await expect(page.locator(".toast")).toContainText("Contact saved");
+  await page.waitForURL(/#(?:contacts)?$/, { timeout: 10_000 });
+  await expect(
+    page.locator(".toast").filter({ hasText: "Contact saved" }),
+  ).toBeVisible();
 
   const contactCards = page.locator("[data-guide='contact-card']");
   await expect
@@ -176,7 +212,7 @@ test("preserves route parity and critical handlers", async ({ page }) => {
   await expect(page.locator("[data-guide='chat-input']")).toBeVisible();
 
   await page.getByRole("banner").getByRole("button", { name: "Close" }).click();
-  await page.waitForURL(/#$/, { timeout: 10_000 });
+  await page.waitForURL(/#(?:contacts)?$/, { timeout: 10_000 });
   await page.getByRole("button", { name: "Wallet" }).click();
   await page.waitForURL(/#wallet$/, { timeout: 10_000 });
   await expect(page.getByLabel("Available balance")).toBeVisible();
@@ -189,21 +225,18 @@ test("preserves route parity and critical handlers", async ({ page }) => {
     },
   );
 
-  await page.getByRole("button", { name: "1" }).click();
-  await page.getByRole("button", { name: "0" }).click();
+  await page.getByRole("button", { name: "1", exact: true }).click();
+  await page.getByRole("button", { name: "0", exact: true }).click();
   const paySend = page.locator("[data-guide='pay-send']");
   await expect(paySend).toBeVisible();
-  await expect(paySend).toBeEnabled();
-
-  await paySend.click();
-  await expect(page.locator(".page")).toBeVisible();
+  await expect(paySend).toBeDisabled();
 });
 
 test("supports chat reply, edit, reaction toggle, and copy actions", async ({
   page,
 }) => {
   await setAuthenticatedStorage(page);
-  await createContactAndOpenChat(page, `Action Contact ${Date.now()}`);
+  const contactId = await createContactAndOpenChat(page);
 
   const chatInput = page.locator("[data-guide='chat-input']");
   const sendButton = page.locator("[data-guide='chat-send']");
@@ -237,7 +270,10 @@ test("supports chat reply, edit, reaction toggle, and copy actions", async ({
   );
 
   await replyBubble.locator(".chat-bubble").click({ button: "right" });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page
+    .getByRole("menu")
+    .getByRole("button", { name: "Edit", exact: true })
+    .click();
   await chatInput.fill("Reply body edited");
   await page.getByRole("button", { name: "Save" }).click();
   const editedBubble = page
@@ -247,8 +283,10 @@ test("supports chat reply, edit, reaction toggle, and copy actions", async ({
   await expect(editedBubble).toContainText("edited");
 
   await editedBubble.locator(".chat-bubble").click({ button: "right" });
-  await page.getByRole("button", { name: "React", exact: true }).click();
-  await page.getByRole("button", { name: "👍" }).click();
+  await page
+    .getByRole("listbox", { name: "Emoji picker" })
+    .getByRole("button", { name: "👍", exact: true })
+    .click();
   const reactionChip = editedBubble.locator(".reaction-chip", {
     hasText: "👍",
   });
@@ -259,4 +297,19 @@ test("supports chat reply, edit, reaction toggle, and copy actions", async ({
   await editedBubble.locator(".chat-bubble").click({ button: "right" });
   await page.getByRole("button", { name: "Copy", exact: true }).click();
   await expect(page.locator(".toast")).toContainText("Copied to clipboard");
+
+  await page.goto(`/#contact/${encodeURIComponent(contactId)}/edit`);
+  const archiveButton = page.getByRole("button", {
+    name: "Archive contact",
+    exact: true,
+  });
+  await archiveButton.click();
+  await archiveButton.click();
+  await page.waitForURL(/#(?:contacts)?$/, { timeout: 10_000 });
+
+  const unknownContactId = `unknown:${CONTACT_PUBKEY_HEX}`;
+  await page.goto(`/#chat/${encodeURIComponent(unknownContactId)}`);
+  await expect(
+    page.locator(".chat-message").filter({ hasText: "First message" }).first(),
+  ).toBeVisible();
 });

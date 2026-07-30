@@ -15,7 +15,7 @@ test("recovers once when the main bundle cannot start", async ({ page }) => {
       value: 50,
     });
   });
-  await page.route("**/src/main.tsx", async (route) => {
+  await page.route("**/src/main.tsx*", async (route) => {
     mainBundleRequests += 1;
     await route.abort();
   });
