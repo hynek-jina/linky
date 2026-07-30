@@ -1,7 +1,7 @@
 import type { Event as NostrToolsEvent } from "nostr-tools";
+import { getSharedAppNostrPool } from "./app/lib/nostrPool";
 import type { JsonRecord } from "./types/json";
-import { getSharedNostrPool } from "./utils/nostrPool";
-import { NOSTR_RELAYS } from "./utils/nostrRelays";
+import { NOSTR_RELAYS, normalizeRelayUrls } from "./utils/nostrRelays";
 import { isHttpUrl } from "./utils/validation";
 
 export type NostrProfileMetadata = {
@@ -148,22 +148,6 @@ const PICTURE_NONE_TTL_MS = 2 * 60 * 1000;
 const METADATA_NONE_TTL_MS = 2 * 60 * 1000;
 
 const now = () => Date.now();
-
-const normalizeRelayUrls = (urls: string[]): string[] => {
-  const seen = new Set<string>();
-  const out: string[] = [];
-
-  for (const raw of urls) {
-    const url = String(raw ?? "").trim();
-    if (!url) continue;
-    if (!(url.startsWith("wss://") || url.startsWith("ws://"))) continue;
-    if (seen.has(url)) continue;
-    seen.add(url);
-    out.push(url);
-  }
-
-  return out;
-};
 
 function canFetchAvatarAsBlob(avatarUrl: string): boolean {
   // Fetching cross-origin images as blobs requires permissive CORS headers.
@@ -351,71 +335,64 @@ export const fetchNostrProfileMetadata = async (
     return null;
   }
 
-  const pool = await getSharedNostrPool();
+  const pool = await getSharedAppNostrPool();
 
+  let events: NostrToolsEvent[] = [];
   try {
-    let events: NostrToolsEvent[] = [];
-    try {
-      const filter = {
-        authors: [pubkey],
-        kinds: [0],
-        limit: 5,
-        ...(options?.since && options.since > 0
-          ? { since: options.since }
-          : {}),
-      };
-      events = await pool.querySync(relays, filter, { maxWait: 8000 });
-    } catch {
-      return null;
-    }
-
-    const newest = events
-      .slice()
-      .sort(
-        (a: NostrToolsEvent, b: NostrToolsEvent) =>
-          (b.created_at ?? 0) - (a.created_at ?? 0),
-      )[0];
-
-    if (!newest?.content) return null;
-
-    let raw: unknown;
-    try {
-      raw = JSON.parse(newest.content);
-    } catch {
-      return null;
-    }
-
-    if (!isJsonRecord(raw)) return null;
-    const obj = raw;
-
-    const name = asTrimmedNonEmptyString(obj.name);
-    const displayName =
-      asTrimmedNonEmptyString(obj.display_name) ??
-      asTrimmedNonEmptyString(obj.displayName);
-    const lud16 = asTrimmedNonEmptyString(obj.lud16);
-    const lud06 = asTrimmedNonEmptyString(obj.lud06);
-    const nip05 = asTrimmedNonEmptyString(obj.nip05);
-
-    const picture = asTrimmedNonEmptyString(obj.picture);
-    const image = asTrimmedNonEmptyString(obj.image);
-
-    const metadata: NostrProfileMetadata = {
-      ...(name ? { name } : {}),
-      ...(displayName ? { displayName } : {}),
-      ...(lud16 ? { lud16 } : {}),
-      ...(lud06 ? { lud06 } : {}),
-      ...(nip05 ? { nip05 } : {}),
-      ...(picture ? { picture } : {}),
-      ...(image ? { image } : {}),
+    const filter = {
+      authors: [pubkey],
+      kinds: [0],
+      limit: 5,
+      ...(options?.since && options.since > 0 ? { since: options.since } : {}),
     };
-
-    // If nothing useful, treat as null so we can TTL it.
-    if (Object.keys(metadata).length === 0) return null;
-    return metadata;
-  } finally {
-    // Intentionally keep the shared pool open to reduce churn and
-    // avoid "WebSocket is already in CLOSING or CLOSED state" noise.
+    events = await pool.querySync(relays, filter, { maxWait: 8000 });
+  } catch {
+    return null;
   }
+
+  const newest = events
+    .slice()
+    .sort(
+      (a: NostrToolsEvent, b: NostrToolsEvent) =>
+        (b.created_at ?? 0) - (a.created_at ?? 0),
+    )[0];
+
+  if (!newest?.content) return null;
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(newest.content);
+  } catch {
+    return null;
+  }
+
+  if (!isJsonRecord(raw)) return null;
+  const obj = raw;
+
+  const name = asTrimmedNonEmptyString(obj.name);
+  const displayName =
+    asTrimmedNonEmptyString(obj.display_name) ??
+    asTrimmedNonEmptyString(obj.displayName);
+  const lud16 = asTrimmedNonEmptyString(obj.lud16);
+  const lud06 = asTrimmedNonEmptyString(obj.lud06);
+  const nip05 = asTrimmedNonEmptyString(obj.nip05);
+
+  const picture = asTrimmedNonEmptyString(obj.picture);
+  const image = asTrimmedNonEmptyString(obj.image);
+
+  const metadata: NostrProfileMetadata = {
+    ...(name ? { name } : {}),
+    ...(displayName ? { displayName } : {}),
+    ...(lud16 ? { lud16 } : {}),
+    ...(lud06 ? { lud06 } : {}),
+    ...(nip05 ? { nip05 } : {}),
+    ...(picture ? { picture } : {}),
+    ...(image ? { image } : {}),
+  };
+
+  // If nothing useful, treat as null so we can TTL it.
+  if (Object.keys(metadata).length === 0) return null;
+  return metadata;
 };
 
 export const fetchNostrProfilePicture = async (

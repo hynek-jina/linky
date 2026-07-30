@@ -28,11 +28,6 @@ const PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY =
   "linky.push_notifications_disabled";
 
 let nativePushListenersPromise: Promise<void> | null = null;
-interface NativePluginListenerHandle {
-  remove: () => Promise<void>;
-}
-
-const nativePushListenerHandles: NativePluginListenerHandle[] = [];
 const pendingNativePushTokenWaiters = new Set<{
   reject: (error: Error) => void;
   resolve: (token: string) => void;
@@ -418,78 +413,70 @@ async function ensureNativePushListeners(): Promise<void> {
   }
 
   nativePushListenersPromise = (async () => {
-    nativePushListenerHandles.push(
-      await PushNotifications.addListener("registration", (token: Token) => {
-        const normalized = String(token.value ?? "").trim();
-        void appendPushDebugLog("client", "native push token event", {
-          tokenHash: hashStoredIdentifier(normalized),
-        });
+    await PushNotifications.addListener("registration", (token: Token) => {
+      const normalized = String(token.value ?? "").trim();
+      void appendPushDebugLog("client", "native push token event", {
+        tokenHash: hashStoredIdentifier(normalized),
+      });
 
-        if (!normalized) {
-          const error = new Error("Native push token is empty");
-          for (const waiter of pendingNativePushTokenWaiters) {
-            waiter.reject(error);
-          }
-          pendingNativePushTokenWaiters.clear();
-          return;
-        }
-
+      if (!normalized) {
+        const error = new Error("Native push token is empty");
         for (const waiter of pendingNativePushTokenWaiters) {
-          waiter.resolve(normalized);
+          waiter.reject(error);
         }
         pendingNativePushTokenWaiters.clear();
-      }),
-    );
+        return;
+      }
 
-    nativePushListenerHandles.push(
-      await PushNotifications.addListener("registrationError", (error) => {
-        const wrappedError = new Error(
-          String(error.error ?? "Native push registration failed"),
+      for (const waiter of pendingNativePushTokenWaiters) {
+        waiter.resolve(normalized);
+      }
+      pendingNativePushTokenWaiters.clear();
+    });
+
+    await PushNotifications.addListener("registrationError", (error) => {
+      const wrappedError = new Error(
+        String(error.error ?? "Native push registration failed"),
+      );
+      void appendPushDebugLog("client", "native push token error", {
+        error,
+      });
+      for (const waiter of pendingNativePushTokenWaiters) {
+        waiter.reject(wrappedError);
+      }
+      pendingNativePushTokenWaiters.clear();
+    });
+
+    await PushNotifications.addListener(
+      "pushNotificationReceived",
+      (notification: PushNotificationSchema) => {
+        void appendPushDebugLog(
+          "client",
+          "native push notification received",
+          notification,
         );
-        void appendPushDebugLog("client", "native push token error", {
-          error,
-        });
-        for (const waiter of pendingNativePushTokenWaiters) {
-          waiter.reject(wrappedError);
-        }
-        pendingNativePushTokenWaiters.clear();
-      }),
+        window.dispatchEvent(
+          new CustomEvent("linky-native-push-received", {
+            detail: notification,
+          }),
+        );
+      },
     );
 
-    nativePushListenerHandles.push(
-      await PushNotifications.addListener(
-        "pushNotificationReceived",
-        (notification: PushNotificationSchema) => {
-          void appendPushDebugLog(
-            "client",
-            "native push notification received",
-            notification,
-          );
-          window.dispatchEvent(
-            new CustomEvent("linky-native-push-received", {
-              detail: notification,
-            }),
-          );
-        },
-      ),
-    );
-
-    nativePushListenerHandles.push(
-      await PushNotifications.addListener(
-        "pushNotificationActionPerformed",
-        (notification: PushNotificationActionPerformed) => {
-          void appendPushDebugLog(
-            "client",
-            "native push notification action",
-            notification,
-          );
-          window.dispatchEvent(
-            new CustomEvent(NATIVE_PUSH_ACTION_EVENT, {
-              detail: notification,
-            }),
-          );
-        },
-      ),
+    await PushNotifications.addListener(
+      "pushNotificationActionPerformed",
+      (notification: PushNotificationActionPerformed) => {
+        void appendPushDebugLog(
+          "client",
+          "native push notification action",
+          notification,
+        );
+        window.dispatchEvent(
+          new CustomEvent(NATIVE_PUSH_ACTION_EVENT, {
+            detail: notification,
+          }),
+        );
+      },
     );
   })();
 

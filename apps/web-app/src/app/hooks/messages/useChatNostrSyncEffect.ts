@@ -1,7 +1,6 @@
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
-import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import {
   getInitialNostrIdentitySource,
   getInitialNostrIdentitySwitchedAtSec,
@@ -26,7 +25,7 @@ import {
   isNestedEncryptedNip44PayloadForAnyPubkey,
 } from "./chatNostrProtocol";
 import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
-import { readUnknownPubkeyHex } from "./contactIdentity";
+import { resolveNostrChatIdentity } from "./contactIdentity";
 import type { KnownNostrMessageIdentityIndex } from "./messageHelpers";
 import { hasKnownNostrMessageIdentity } from "./messageHelpers";
 
@@ -77,10 +76,6 @@ export const useChatNostrSyncEffect = ({
     if (route.kind !== "chat") return;
     if (!selectedContact) return;
 
-    const contactNpub = normalizeNpubIdentifier(selectedContact.npub);
-    const unknownPubkeyHex = readUnknownPubkeyHex(selectedContact);
-
-    if (!contactNpub && !unknownPubkeyHex) return;
     if (!currentNsec) return;
 
     let cancelled = false;
@@ -97,38 +92,13 @@ export const useChatNostrSyncEffect = ({
 
     const run = async () => {
       try {
-        const { nip19, getPublicKey } = await import("nostr-tools");
         const { unwrapEvent } = await import("nostr-tools/nip17");
-
-        const decodedMe = nip19.decode(currentNsec);
-        if (
-          decodedMe.type !== "nsec" ||
-          !(decodedMe.data instanceof Uint8Array)
-        )
-          return;
-        const privBytes = decodedMe.data;
-        const myPubHex = getPublicKey(privBytes);
-
-        let contactPubHex = unknownPubkeyHex;
-        if (!contactPubHex) {
-          if (!contactNpub) {
-            return;
-          }
-          let decodedContact: ReturnType<typeof nip19.decode> | null = null;
-          try {
-            decodedContact = nip19.decode(contactNpub);
-          } catch {
-            decodedContact = null;
-          }
-          if (
-            !decodedContact ||
-            decodedContact.type !== "npub" ||
-            typeof decodedContact.data !== "string"
-          ) {
-            return;
-          }
-          contactPubHex = decodedContact.data;
-        }
+        const identity = await resolveNostrChatIdentity(
+          currentNsec,
+          selectedContact,
+        );
+        if (!identity) return;
+        const { contactPubHex, myPubHex, privBytes } = identity;
 
         const pool = await getSharedAppNostrPool();
 

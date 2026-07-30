@@ -10,6 +10,7 @@ import type { Event as NostrEvent } from "nostr-tools";
 import { getPublicKey, nip19, SimplePool } from "nostr-tools";
 import { unwrapEvent } from "nostr-tools/nip17";
 import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
+import { ExpirationPlugin } from "workbox-expiration";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst } from "workbox-strategies";
 import {
@@ -30,7 +31,7 @@ import {
   isLinkyBankPaymentOfferPaymentNoticeEvent,
   isLinkyPaymentNoticeEvent,
 } from "./app/lib/pushWrappedEvent";
-import { NOSTR_RELAYS } from "./utils/nostrRelays";
+import { NOSTR_RELAYS, normalizeRelayUrls } from "./utils/nostrRelays";
 import { getStoredPushContactName } from "./utils/pushContactNamesStorage";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
 import { getStoredPushNsec } from "./utils/pushNsecStorage";
@@ -67,16 +68,7 @@ function describeError(error: unknown): string {
 function readEnvelopeDebugMeta(
   envelope: PushNotificationEnvelope,
 ): PushNotificationData {
-  const data = envelope.data ?? {};
-  return {
-    ...(data.createdAt === undefined ? {} : { createdAt: data.createdAt }),
-    ...(data.outerEventId ? { outerEventId: data.outerEventId } : {}),
-    ...(data.recipientNpub ? { recipientNpub: data.recipientNpub } : {}),
-    ...(data.recipientPubkey ? { recipientPubkey: data.recipientPubkey } : {}),
-    ...(data.relayHints ? { relayHints: data.relayHints } : {}),
-    ...(data.senderPubkey ? { senderPubkey: data.senderPubkey } : {}),
-    ...(data.type ? { type: data.type } : {}),
-  };
+  return envelope.data ?? {};
 }
 
 function readPushNotificationData(value: unknown): PushNotificationData {
@@ -120,13 +112,7 @@ function buildNotificationOpenDetail(
 ): Record<string, unknown> {
   return {
     route: "#contacts",
-    ...(data.createdAt === undefined ? {} : { createdAt: data.createdAt }),
-    ...(data.outerEventId ? { outerEventId: data.outerEventId } : {}),
-    ...(data.recipientNpub ? { recipientNpub: data.recipientNpub } : {}),
-    ...(data.recipientPubkey ? { recipientPubkey: data.recipientPubkey } : {}),
-    ...(data.relayHints ? { relayHints: data.relayHints } : {}),
-    ...(data.senderPubkey ? { senderPubkey: data.senderPubkey } : {}),
-    ...(data.type ? { type: data.type } : {}),
+    ...data,
   };
 }
 
@@ -177,44 +163,13 @@ function isRecord(
 function readPushEnvelope(value: unknown): PushNotificationEnvelope | null {
   if (!isRecord(value)) return null;
 
-  const rawData = value.data;
-  const data = isRecord(rawData)
-    ? {
-        ...(typeof rawData.createdAt === "number" &&
-        Number.isFinite(rawData.createdAt)
-          ? { createdAt: rawData.createdAt }
-          : {}),
-        ...(typeof rawData.outerEventId === "string" &&
-        rawData.outerEventId.trim().length > 0
-          ? { outerEventId: rawData.outerEventId }
-          : {}),
-        ...(typeof rawData.recipientNpub === "string" &&
-        rawData.recipientNpub.trim().length > 0
-          ? { recipientNpub: rawData.recipientNpub }
-          : {}),
-        ...(typeof rawData.recipientPubkey === "string" &&
-        rawData.recipientPubkey.trim().length > 0
-          ? { recipientPubkey: rawData.recipientPubkey }
-          : {}),
-        ...(Array.isArray(rawData.relayHints)
-          ? {
-              relayHints: rawData.relayHints.filter(
-                (entry): entry is string =>
-                  typeof entry === "string" && entry.trim().length > 0,
-              ),
-            }
-          : {}),
-        ...(typeof rawData.type === "string" && rawData.type.trim().length > 0
-          ? { type: rawData.type }
-          : {}),
-      }
-    : undefined;
+  const data = readPushNotificationData(value.data);
 
   return {
     ...(typeof value.body === "string" && value.body.trim().length > 0
       ? { body: value.body }
       : {}),
-    ...(data ? { data } : {}),
+    ...(Object.keys(data).length > 0 ? { data } : {}),
     ...(typeof value.title === "string" && value.title.trim().length > 0
       ? { title: value.title }
       : {}),
@@ -294,22 +249,6 @@ function createSpaydResponse(url: URL): Response {
   });
 }
 
-function normalizeRelayUrls(urls: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-
-  for (const raw of urls) {
-    const url = String(raw ?? "").trim();
-    if (!url) continue;
-    if (!(url.startsWith("wss://") || url.startsWith("ws://"))) continue;
-    if (seen.has(url)) continue;
-    seen.add(url);
-    out.push(url);
-  }
-
-  return out;
-}
-
 function getPTagPubkeys(inner: { tags: string[][] }): string[] {
   const out: string[] = [];
 
@@ -330,12 +269,9 @@ async function fetchOuterWrapEvent(
   const outerEventId = String(envelope.data?.outerEventId ?? "").trim();
   const recipientPubkey = String(envelope.data?.recipientPubkey ?? "").trim();
   if (!outerEventId || !recipientPubkey) {
-    await logSw(
-      "sw decrypt fetch skipped because push envelope is incomplete",
-      {
-        data: readEnvelopeDebugMeta(envelope),
-      },
-    );
+    void logSw("sw decrypt fetch skipped because push envelope is incomplete", {
+      data: readEnvelopeDebugMeta(envelope),
+    });
     return null;
   }
 
@@ -344,13 +280,13 @@ async function fetchOuterWrapEvent(
     ...NOSTR_RELAYS,
   ]);
   if (relays.length === 0) {
-    await logSw("sw decrypt fetch skipped because no relays were available", {
+    void logSw("sw decrypt fetch skipped because no relays were available", {
       data: readEnvelopeDebugMeta(envelope),
     });
     return null;
   }
 
-  await logSw("sw decrypt fetching outer wrap", {
+  void logSw("sw decrypt fetching outer wrap", {
     data: readEnvelopeDebugMeta(envelope),
     relayCount: relays.length,
     relays,
@@ -364,14 +300,14 @@ async function fetchOuterWrapEvent(
       { maxWait: 5000 },
     );
     const wrap = events[0] ?? null;
-    await logSw("sw decrypt outer wrap fetch completed", {
+    void logSw("sw decrypt outer wrap fetch completed", {
       data: readEnvelopeDebugMeta(envelope),
       found: Boolean(wrap),
       resultCount: events.length,
     });
     return wrap;
   } catch (error) {
-    await logSw("sw decrypt outer wrap fetch failed", {
+    void logSw("sw decrypt outer wrap fetch failed", {
       data: readEnvelopeDebugMeta(envelope),
       error: describeError(error),
     });
@@ -384,13 +320,13 @@ async function fetchOuterWrapEvent(
 async function decryptIncomingMessageBody(
   envelope: PushNotificationEnvelope,
 ): Promise<DecryptedPushMessage | null> {
-  await logSw("sw decrypt started", {
+  void logSw("sw decrypt started", {
     data: readEnvelopeDebugMeta(envelope),
   });
 
   const nsec = await getStoredPushNsec();
   if (!nsec) {
-    await logSw("sw decrypt failed because nsec is missing from indexeddb", {
+    void logSw("sw decrypt failed because nsec is missing from indexeddb", {
       data: readEnvelopeDebugMeta(envelope),
     });
     return null;
@@ -398,7 +334,7 @@ async function decryptIncomingMessageBody(
 
   const decoded = nip19.decode(nsec);
   if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
-    await logSw("sw decrypt failed because stored nsec is invalid", {
+    void logSw("sw decrypt failed because stored nsec is invalid", {
       data: readEnvelopeDebugMeta(envelope),
     });
     return null;
@@ -408,7 +344,7 @@ async function decryptIncomingMessageBody(
   const myPubHex = getPublicKey(privBytes);
   const recipientPubkey = normalizePubkeyHex(envelope.data?.recipientPubkey);
   if (!recipientPubkey || recipientPubkey !== myPubHex) {
-    await logSw("sw decrypt failed because recipient pubkey did not match", {
+    void logSw("sw decrypt failed because recipient pubkey did not match", {
       data: readEnvelopeDebugMeta(envelope),
       derivedPubkey: myPubHex,
       hasRecipientPubkey: Boolean(recipientPubkey),
@@ -418,7 +354,7 @@ async function decryptIncomingMessageBody(
 
   const wrap = await fetchOuterWrapEvent(envelope);
   if (!wrap) {
-    await logSw("sw decrypt failed because outer wrap event was not fetched", {
+    void logSw("sw decrypt failed because outer wrap event was not fetched", {
       data: readEnvelopeDebugMeta(envelope),
     });
     return null;
@@ -428,7 +364,7 @@ async function decryptIncomingMessageBody(
   try {
     inner = unwrapEvent(wrap, privBytes);
   } catch (error) {
-    await logSw("sw decrypt failed because unwrapEvent threw", {
+    void logSw("sw decrypt failed because unwrapEvent threw", {
       data: readEnvelopeDebugMeta(envelope),
       error: describeError(error),
       wrapPubkey: wrap.pubkey,
@@ -436,21 +372,18 @@ async function decryptIncomingMessageBody(
     return null;
   }
   if (!inner) {
-    await logSw(
-      "sw decrypt failed because inner rumor was missing or invalid",
-      {
-        data: readEnvelopeDebugMeta(envelope),
-        hasInner: Boolean(inner),
-        innerKind: null,
-      },
-    );
+    void logSw("sw decrypt failed because inner rumor was missing or invalid", {
+      data: readEnvelopeDebugMeta(envelope),
+      hasInner: Boolean(inner),
+      innerKind: null,
+    });
     return null;
   }
 
   const senderPub = String(inner.pubkey ?? "").trim();
   const content = String(inner.content ?? "").trim();
   if (!senderPub) {
-    await logSw(
+    void logSw(
       "sw decrypt failed because inner rumor lacked sender or content",
       {
         contentLength: content.length,
@@ -461,7 +394,7 @@ async function decryptIncomingMessageBody(
     return null;
   }
   if (isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)) {
-    await logSw(
+    void logSw(
       "sw decrypt rejected inner rumor because it reused wrap pubkey",
       {
         data: readEnvelopeDebugMeta(envelope),
@@ -474,7 +407,7 @@ async function decryptIncomingMessageBody(
 
   const pTags = getPTagPubkeys(inner);
   if (!pTags.includes(myPubHex)) {
-    await logSw(
+    void logSw(
       "sw decrypt failed because inner rumor did not address this recipient",
       {
         data: readEnvelopeDebugMeta(envelope),
@@ -487,7 +420,7 @@ async function decryptIncomingMessageBody(
   if (isLinkyPaymentNoticeEvent(inner)) {
     const isBankPaymentReimbursement =
       isLinkyBankPaymentOfferPaymentNoticeEvent(inner);
-    await logSw("sw decrypt succeeded", {
+    void logSw("sw decrypt succeeded", {
       contentLength: content.length,
       data: readEnvelopeDebugMeta(envelope),
       isPaymentNotice: true,
@@ -507,7 +440,7 @@ async function decryptIncomingMessageBody(
     const offerText = getLinkyBankPaymentOfferText(content);
     if (!offerText) return null;
 
-    await logSw("sw decrypt succeeded", {
+    void logSw("sw decrypt succeeded", {
       contentLength: content.length,
       data: readEnvelopeDebugMeta(envelope),
       isBankPaymentOffer: true,
@@ -522,14 +455,11 @@ async function decryptIncomingMessageBody(
   }
 
   if (inner.kind !== 14 || !content) {
-    await logSw(
-      "sw decrypt failed because inner rumor was missing or invalid",
-      {
-        data: readEnvelopeDebugMeta(envelope),
-        hasInner: Boolean(inner),
-        innerKind: inner.kind,
-      },
-    );
+    void logSw("sw decrypt failed because inner rumor was missing or invalid", {
+      data: readEnvelopeDebugMeta(envelope),
+      hasInner: Boolean(inner),
+      innerKind: inner.kind,
+    });
     return null;
   }
 
@@ -541,7 +471,7 @@ async function decryptIncomingMessageBody(
       privBytes,
     )
   ) {
-    await logSw("sw decrypt rejected nested encrypted payload", {
+    void logSw("sw decrypt rejected nested encrypted payload", {
       data: readEnvelopeDebugMeta(envelope),
       hasTaggedPeerPub: Boolean(taggedPeerPub),
       senderPub,
@@ -550,7 +480,7 @@ async function decryptIncomingMessageBody(
     return null;
   }
 
-  await logSw("sw decrypt succeeded", {
+  void logSw("sw decrypt succeeded", {
     contentLength: content.length,
     data: readEnvelopeDebugMeta(envelope),
     senderPub,
@@ -577,6 +507,14 @@ registerRoute(
   ({ request }: { request: Request }) => request.destination === "image",
   new CacheFirst({
     cacheName: "linky-runtime-images-v1",
+    plugins: [
+      // @ts-expect-error workbox-expiration declares lifecycle callbacks as required `T | undefined`, incompatible with exactOptionalPropertyTypes
+      new ExpirationPlugin({
+        maxAgeSeconds: 7 * 24 * 60 * 60,
+        maxEntries: 200,
+        purgeOnQuotaError: true,
+      }),
+    ],
   }),
 );
 
@@ -662,6 +600,20 @@ self.addEventListener("push", (event) => {
     (async () => {
       const clientList = await getWindowClients();
       const shouldSuppressNotification = hasVisibleWindowClient(clientList);
+      if (shouldSuppressNotification) {
+        await Promise.all([
+          logSw("notification suppressed because app client is visible", {
+            data,
+            tag: data.outerEventId ?? "linky-inbox",
+          }),
+          postClientMessage({
+            data,
+            type: "push-received",
+          }),
+        ]);
+        return;
+      }
+
       const decryptedMessage = await decryptIncomingMessageBody(envelope).catch(
         () => null,
       );
@@ -712,29 +664,24 @@ self.addEventListener("push", (event) => {
           data,
           type: "push-received",
         }),
-        shouldSuppressNotification
-          ? logSw("notification suppressed because app client is visible", {
+        self.registration
+          .showNotification(notificationTitle, options)
+          .then(() =>
+            logSw("notification displayed", {
               data,
+              isCashuMessage: decryptedMessage?.isCashu ?? false,
+              isPaymentNotice: decryptedMessage?.isPaymentNotice ?? false,
               tag: options.tag ?? null,
-            })
-          : self.registration
-              .showNotification(notificationTitle, options)
-              .then(() =>
-                logSw("notification displayed", {
-                  data,
-                  isCashuMessage: decryptedMessage?.isCashu ?? false,
-                  isPaymentNotice: decryptedMessage?.isPaymentNotice ?? false,
-                  tag: options.tag ?? null,
-                  usedFallbackBody:
-                    decryptedMessage === null && fallbackBody.length > 0,
-                }),
-              )
-              .catch((error) =>
-                logSw("notification display failed", {
-                  data,
-                  error: describeError(error),
-                }),
-              ),
+              usedFallbackBody:
+                decryptedMessage === null && fallbackBody.length > 0,
+            }),
+          )
+          .catch((error) =>
+            logSw("notification display failed", {
+              data,
+              error: describeError(error),
+            }),
+          ),
       ]);
     })(),
   );
