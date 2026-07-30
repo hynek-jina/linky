@@ -1,7 +1,6 @@
 import React from "react";
 import { persistLang, type Lang } from "../../i18n";
 import {
-  ALLOW_PROMISES_STORAGE_KEY,
   BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
   CASHU_AUTOSWAP_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
@@ -14,7 +13,6 @@ import {
 import type { DisplayCurrency } from "../../utils/displayAmounts";
 
 interface UseAppPreferencesParams {
-  allowPromisesEnabled: boolean;
   allowedDisplayCurrencies: readonly DisplayCurrency[];
   cashuAutoswapEnabled: boolean;
   displayCurrency: DisplayCurrency;
@@ -26,7 +24,6 @@ interface UseAppPreferencesParams {
 }
 
 export const useAppPreferences = ({
-  allowPromisesEnabled,
   allowedDisplayCurrencies,
   cashuAutoswapEnabled,
   displayCurrency,
@@ -95,17 +92,6 @@ export const useAppPreferences = ({
       // ignore
     }
   }, [bankPaymentOfferRecipientCount]);
-
-  React.useEffect(() => {
-    try {
-      localStorage.setItem(
-        ALLOW_PROMISES_STORAGE_KEY,
-        allowPromisesEnabled ? "1" : "0",
-      );
-    } catch {
-      // ignore
-    }
-  }, [allowPromisesEnabled]);
 
   React.useEffect(() => {
     try {

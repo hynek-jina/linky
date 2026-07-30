@@ -122,7 +122,6 @@ export interface AppShellActionsContextValue {
   closeShareOptions: () => void;
   closeLnurlWithdrawConfirmation: () => void;
   closeLightningInvoiceConfirmation: () => void;
-  closeProfileQr: () => void;
   closeScan: () => void;
   confirmMintAutoswapChangeConfirmation: () => void;
   confirmPaymentMintMelt: () => Promise<void>;

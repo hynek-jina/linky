@@ -1,5 +1,6 @@
 import type { MoneyRoutesProps } from "../../routes/AppRouteContent";
 import { buildMoneyRouteProps } from "../../routes/props/buildMoneyRouteProps";
+import { useMemoizedRouteBuilder } from "./useMemoizedRouteBundle";
 
 interface UsePaymentMoneyCompositionParams {
   moneyRouteBuilderInput: Parameters<typeof buildMoneyRouteProps>[0];
@@ -13,6 +14,9 @@ export const usePaymentMoneyComposition = ({
   moneyRouteBuilderInput,
 }: UsePaymentMoneyCompositionParams): PaymentMoneyCompositionResult => {
   return {
-    moneyRouteProps: buildMoneyRouteProps(moneyRouteBuilderInput),
+    moneyRouteProps: useMemoizedRouteBuilder(
+      moneyRouteBuilderInput,
+      buildMoneyRouteProps,
+    ),
   };
 };

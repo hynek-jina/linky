@@ -2,6 +2,7 @@ import React from "react";
 import type { MainSwipeRoutesProps } from "../../routes/AppRouteContent";
 import { buildMainSwipeRouteProps } from "../../routes/props/buildMainSwipeRouteProps";
 import { useRouteDerivedShellState } from "../useRouteDerivedShellState";
+import { useMemoizedRouteBuilder } from "./useMemoizedRouteBundle";
 
 type MainSwipeRouteBuilderInput = Omit<
   Parameters<typeof buildMainSwipeRouteProps>[0],
@@ -48,12 +49,16 @@ export const useRoutingViewComposition = ({
     showContactsToolbar &&
     (groupNamesCount + statusFilterCount > 0 || ungroupedCount > 0);
 
-  const contactsToolbarStyle = {
-    opacity: contactsToolbarProgress,
-    maxHeight: `${Math.round(220 * contactsToolbarProgress)}px`,
-    transform: `translateY(${(1 - contactsToolbarProgress) * -12}px)`,
-    pointerEvents: contactsToolbarProgress > 0.02 ? "auto" : "none",
-  } satisfies React.CSSProperties;
+  const contactsToolbarStyle = React.useMemo(
+    () =>
+      ({
+        opacity: contactsToolbarProgress,
+        maxHeight: `${Math.round(220 * contactsToolbarProgress)}px`,
+        transform: `translateY(${(1 - contactsToolbarProgress) * -12}px)`,
+        pointerEvents: contactsToolbarProgress > 0.02 ? "auto" : "none",
+      }) satisfies React.CSSProperties,
+    [contactsToolbarProgress],
+  );
 
   const { bottomTabActive, pageClassNameWithSwipe, selectedEvoluServerUrl } =
     useRouteDerivedShellState({
@@ -62,13 +67,18 @@ export const useRoutingViewComposition = ({
       showGroupFilter,
     });
 
+  const routeBuilderInput = {
+    ...mainSwipeRouteBuilderInput,
+    bottomTabActive,
+    contactsToolbarStyle,
+    showGroupFilter,
+  };
+
   return {
-    mainSwipeRouteProps: buildMainSwipeRouteProps({
-      ...mainSwipeRouteBuilderInput,
-      bottomTabActive,
-      contactsToolbarStyle,
-      showGroupFilter,
-    }),
+    mainSwipeRouteProps: useMemoizedRouteBuilder(
+      routeBuilderInput,
+      buildMainSwipeRouteProps,
+    ),
     pageClassNameWithSwipe,
     selectedEvoluServerUrl,
   };

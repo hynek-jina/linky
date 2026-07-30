@@ -113,8 +113,6 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 - App shell structure lives under `apps/web-app/src/app/`:
   - `AppShell.tsx` is a thin renderer/auth gate that wires `AppShellContextsProvider` and route content
   - `useAppShellComposition.tsx` owns AppShell orchestration, hook composition, and route-prop bundle assembly
-  - `AppShellBoundaryMap.md` defines AppShell ownership boundaries and behavior invariants for split work
-  - `context/ContextSplitContract.md` defines target context lanes, typed read hooks, and composition-to-context ownership mapping for the split plan
   - `context/AppShellContexts.tsx` is the single authenticated shell context transport; it provides shell/route contexts and typed consumer hooks (`useAppShellCore`, `useAppShellActions`, `useAppShellRouteContext`)
   - `hooks/` contains app domain hooks (`useRelayDomain`, `useMintDomain`, `useContactsDomain`, `useMessagesDomain`, `usePaymentsDomain`, `useCashuDomain`, `useProfileAuthDomain`, `useGuideScannerDomain`) plus app-shell extraction hooks (`useAppDataTransfer`, `useContactsNostrPrefetchEffects`, `useMainSwipePageEffects`, `useProfileNpubCashEffects`, `useScannedTextHandler`, `useFeedbackContact`, `useOwnerScopedStorage`, `usePaidOverlayState`, `useRouteDerivedShellState`)
   - `hooks/useEvoluContactsOwnerRotation.ts` owns deterministic contacts/cashu/messages/transactions owner derivation, pointer-only contacts/cashu/messages/transactions rotations, legacy cashu mirror upkeep for older clients, and per-scope owner pointer persistence in `ownerMeta`

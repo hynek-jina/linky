@@ -830,9 +830,6 @@ export const cs = {
   nfcWriteTokenSuccess: "Token byl nahrán na NFC.",
   nfcWriteProfileSuccess: "npub byl nahrán na NFC.",
 
-  allowPromises: "Povolit sliby",
-  totalBalanceWithPromises: "Celková bilance (vč. slibů)",
-
   pay: "Zaplatit",
   decline: "Odmítnout",
   requestPayment: "Požádat",

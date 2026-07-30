@@ -60,12 +60,10 @@ export const CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY =
   "linky.contacts_onboarding_has_backuped_keys";
 export const CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY =
   "linky.cashu_onboarding_set_main_mint.v1";
-export const CASHU_RECOVERY_VAULT_STORAGE_KEY = "linky.cashu_recovery_vault";
 export const PAY_WITH_CASHU_STORAGE_KEY = "linky.pay_with_cashu";
 export const CASHU_AUTOSWAP_STORAGE_KEY = "linky.cashu_autoswap.v1";
 export const SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY =
   "linky.show_profile_qr_on_tilt.v1";
-export const ALLOW_PROMISES_STORAGE_KEY = "linky.allow_promises";
 export const LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY =
   "linky.lightning_invoice_auto_pay_limit";
 export const BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY =
@@ -82,16 +80,11 @@ export const LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY =
 export const PENDING_DEEP_LINK_TEXT_STORAGE_KEY =
   "linky.pendingDeepLinkText.v1";
 
-export const PROMISE_TOTAL_CAP_SAT = 100_000;
-export const PROMISE_EXPIRES_SEC = 30 * 24 * 60 * 60;
 export const WALLET_WARNING_BALANCE_THRESHOLD_SAT = 500_000;
 export const WALLET_WARNING_DISMISSED_STORAGE_KEY =
   "linky.wallet_hardware_support_banner_dismissed.v1";
 export const LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT = 10_000;
 export const CASHU_AUTOSWAP_MIN_SOURCE_SUM = 128;
-export const LIGHTNING_INVOICE_AUTO_PAY_LIMIT_OPTIONS = [
-  0, 1_000, 10_000, 100_000,
-] as const;
 
 export const LOCAL_PAYMENT_EVENTS_STORAGE_KEY_PREFIX =
   "linky.local.paymentEvents.v1";

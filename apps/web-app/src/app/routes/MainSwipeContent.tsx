@@ -46,7 +46,6 @@ export interface MainSwipeRouteProps {
   isMainSwipeDragging: boolean;
   mainSwipeProgress: number;
   mainSwipeRef: React.RefObject<HTMLDivElement | null>;
-  closeProfileQr: () => void;
   openNewContactPage: () => void;
   openProfileQr: () => void;
   openWalletScan: () => void;
@@ -102,7 +101,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     isMainSwipeDragging,
     mainSwipeProgress,
     mainSwipeRef,
-    closeProfileQr,
     openNewContactPage,
     openProfileQr,
     openWalletScan,
@@ -128,7 +126,6 @@ export const MainSwipeContent = (): React.ReactElement => {
       showProfileQrOnTiltEnabled &&
       (route.kind === "contacts" || route.kind === "wallet") &&
       !scanIsOpen,
-    onHideProfileQr: closeProfileQr,
     onShowProfileQr: openProfileQr,
   });
 
