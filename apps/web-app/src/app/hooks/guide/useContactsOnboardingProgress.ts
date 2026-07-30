@@ -9,9 +9,11 @@ import {
 interface UseContactsOnboardingProgressParams {
   cashuBalance: number;
   contactsCount: number;
+  contactsOnboardingDismissedSynced: boolean;
   contactsOnboardingHasBackedUpKeys: boolean;
   contactsOnboardingHasPaid: boolean;
   contactsOnboardingHasSentMessage: boolean;
+  persistContactsOnboardingDismissed: () => void;
   routeKind: Route["kind"];
   stopContactsGuide: () => void;
   t: (key: string) => string;
@@ -33,9 +35,11 @@ interface ContactsOnboardingTasksSummary {
 export const useContactsOnboardingProgress = ({
   cashuBalance,
   contactsCount,
+  contactsOnboardingDismissedSynced,
   contactsOnboardingHasBackedUpKeys,
   contactsOnboardingHasPaid,
   contactsOnboardingHasSentMessage,
+  persistContactsOnboardingDismissed,
   routeKind,
   stopContactsGuide,
   t,
@@ -94,11 +98,24 @@ export const useContactsOnboardingProgress = ({
   const showContactsOnboarding =
     !contactsOnboardingDismissed && routeKind === "contacts";
 
-  const dismissContactsOnboarding = React.useCallback(() => {
+  React.useEffect(() => {
+    if (!contactsOnboardingDismissedSynced) return;
     safeLocalStorageSet(CONTACTS_ONBOARDING_DISMISSED_STORAGE_KEY, "1");
     setContactsOnboardingDismissed(true);
     stopContactsGuide();
-  }, [stopContactsGuide]);
+  }, [contactsOnboardingDismissedSynced, stopContactsGuide]);
+
+  React.useEffect(() => {
+    if (!contactsOnboardingDismissed) return;
+    persistContactsOnboardingDismissed();
+  }, [contactsOnboardingDismissed, persistContactsOnboardingDismissed]);
+
+  const dismissContactsOnboarding = React.useCallback(() => {
+    safeLocalStorageSet(CONTACTS_ONBOARDING_DISMISSED_STORAGE_KEY, "1");
+    setContactsOnboardingDismissed(true);
+    persistContactsOnboardingDismissed();
+    stopContactsGuide();
+  }, [persistContactsOnboardingDismissed, stopContactsGuide]);
 
   React.useEffect(() => {
     if (contactsOnboardingDismissed) return;

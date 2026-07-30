@@ -292,6 +292,11 @@ import {
 import type { AppNostrPool } from "./lib/nostrPool";
 import { getSharedAppNostrPool } from "./lib/nostrPool";
 import {
+  buildDismissedOnboardingTutorialOwnerMetaPayload,
+  hasDismissedOnboardingTutorialOwnerMetaRow,
+  ONBOARDING_TUTORIAL_OWNER_META_SCOPE,
+} from "./lib/onboardingTutorialSync";
+import {
   publishSingleWrappedWithRetry as publishSingleWrappedWithRetryBase,
   publishWrappedWithRetry as publishWrappedWithRetryBase,
 } from "./lib/nostrPublishRetry";
@@ -1538,6 +1543,37 @@ export const useAppShellComposition = () => {
     },
     [metaOwnerId, ownerMetaDefaultMintRowId, ownerMetaDefaultMintValue, upsert],
   );
+
+  const onboardingTutorialOwnerId = isSeedLogin ? metaOwnerId : appOwnerId;
+  const onboardingTutorialOwnerMetaQuery = useMemo(
+    () =>
+      evolu.createQuery((db) =>
+        db
+          .selectFrom("ownerMeta")
+          .selectAll()
+          .where("isDeleted", "is not", Evolu.sqliteTrue)
+          .where("scope", "=", ONBOARDING_TUTORIAL_OWNER_META_SCOPE),
+      ),
+    [],
+  );
+  const onboardingTutorialOwnerMetaRows = useQuery(
+    onboardingTutorialOwnerMetaQuery,
+  );
+  const contactsOnboardingDismissedSynced = React.useMemo(
+    () =>
+      hasDismissedOnboardingTutorialOwnerMetaRow(
+        onboardingTutorialOwnerMetaRows,
+        onboardingTutorialOwnerId,
+      ),
+    [onboardingTutorialOwnerId, onboardingTutorialOwnerMetaRows],
+  );
+  const persistContactsOnboardingDismissed = React.useCallback(() => {
+    if (!onboardingTutorialOwnerId) return;
+    if (contactsOnboardingDismissedSynced) return;
+    upsert("ownerMeta", buildDismissedOnboardingTutorialOwnerMetaPayload(), {
+      ownerId: onboardingTutorialOwnerId,
+    });
+  }, [contactsOnboardingDismissedSynced, onboardingTutorialOwnerId, upsert]);
 
   const upsertDefaultMintToOwnerMetaRef = React.useRef(
     upsertDefaultMintToOwnerMeta,
@@ -5658,9 +5694,11 @@ export const useAppShellComposition = () => {
   } = useContactsOnboardingProgress({
     cashuBalance,
     contactsCount: contacts.length,
+    contactsOnboardingDismissedSynced,
     contactsOnboardingHasBackedUpKeys,
     contactsOnboardingHasPaid,
     contactsOnboardingHasSentMessage,
+    persistContactsOnboardingDismissed,
     routeKind: route.kind,
     stopContactsGuide,
     t,
