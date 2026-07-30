@@ -4,7 +4,6 @@ import type { Route } from "../../../types/route";
 
 interface UseRouteAmountResetEffectsParams {
   contactPayBackToChatRef: React.MutableRefObject<ContactId | null>;
-  contactsHeaderVisible: boolean;
   routeKind: Route["kind"];
   setContactPaymentIntent: React.Dispatch<
     React.SetStateAction<"pay" | "request">
@@ -15,7 +14,6 @@ interface UseRouteAmountResetEffectsParams {
 
 export const useRouteAmountResetEffects = ({
   contactPayBackToChatRef,
-  contactsHeaderVisible,
   routeKind,
   setContactPaymentIntent,
   setLnAddressPayAmount,
@@ -30,7 +28,6 @@ export const useRouteAmountResetEffects = ({
     }
   }, [
     contactPayBackToChatRef,
-    contactsHeaderVisible,
     routeKind,
     setContactPaymentIntent,
     setPayAmount,

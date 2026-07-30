@@ -14,7 +14,6 @@ interface BuildMainSwipeRoutePropsParams {
   contactsSearch: MainSwipeRoutesProps["mainSwipeProps"]["contactsSearch"];
   contactsSearchInputRef: MainSwipeRoutesProps["mainSwipeProps"]["contactsSearchInputRef"];
   contactFilterOptions: MainSwipeRoutesProps["mainSwipeProps"]["contactFilterOptions"];
-  contactsToolbarStyle: MainSwipeRoutesProps["mainSwipeProps"]["contactsToolbarStyle"];
   conversationsLabel: MainSwipeRoutesProps["mainSwipeProps"]["conversationsLabel"];
   dismissContactsOnboarding: MainSwipeRoutesProps["mainSwipeProps"]["dismissContactsOnboarding"];
   dismissWalletWarning: MainSwipeRoutesProps["mainSwipeProps"]["dismissWalletWarning"];
@@ -53,7 +52,6 @@ export const buildMainSwipeRouteProps = ({
   contactsSearch,
   contactsSearchInputRef,
   contactFilterOptions,
-  contactsToolbarStyle,
   conversationsLabel,
   dismissContactsOnboarding,
   dismissWalletWarning,
@@ -92,7 +90,6 @@ export const buildMainSwipeRouteProps = ({
       contactsSearch,
       contactsSearchInputRef,
       contactFilterOptions,
-      contactsToolbarStyle,
       conversationsLabel,
       dismissContactsOnboarding,
       dismissWalletWarning,

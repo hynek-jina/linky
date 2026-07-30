@@ -68,7 +68,6 @@ import { useAppDataTransfer } from "./hooks/useAppDataTransfer";
 import { useAppPreferences } from "./hooks/useAppPreferences";
 import { useArmedDeleteTimeouts } from "./hooks/useArmedDeleteTimeouts";
 import { useFiatRates } from "./hooks/useFiatRates";
-import { useMainSwipePageEffects } from "./hooks/useMainSwipePageEffects";
 import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
@@ -226,9 +225,6 @@ export const useAppShellComposition = () => {
 
   const [pendingEvoluServerDeleteUrl, setPendingEvoluServerDeleteUrl] =
     useState<string | null>(null);
-  const [contactsHeaderVisible, setContactsHeaderVisible] = useState(false);
-  const [contactsPulling, setContactsPulling] = useState(false);
-  const contactsPullDistanceRef = React.useRef(0);
   const mainSwipeRef = React.useRef<HTMLDivElement | null>(null);
   const mainSwipeScrollTimerRef = React.useRef<number | null>(null);
   const [allowedDisplayCurrencies, setAllowedDisplayCurrencies] = useState<
@@ -947,14 +943,7 @@ export const useAppShellComposition = () => {
     showProfileQrOnTiltEnabled,
   });
 
-  const { isMainSwipeRoute } = useMainSwipePageEffects({
-    contactsHeaderVisible,
-    contactsPullDistanceRef,
-    mainSwipeRef,
-    routeKind: route.kind,
-    setContactsHeaderVisible,
-    setContactsPulling,
-  });
+  const isMainSwipeRoute = route.kind === "contacts" || route.kind === "wallet";
 
   const { commitMainSwipe } = useMainSwipeNavigation({
     isMainSwipeRoute,
@@ -1471,8 +1460,6 @@ export const useAppShellComposition = () => {
     pageClassNameWithSwipe,
     selectedEvoluServerUrl,
   } = useRoutingViewComposition({
-    contactsHeaderVisible,
-    contactsPulling,
     groupNamesCount: groupNames.length,
     isMainSwipeRoute,
     mainSwipeRouteBuilderInput: {

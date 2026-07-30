@@ -37,7 +37,6 @@ export interface MainSwipeRouteProps {
   contactsSearch: string;
   contactsSearchInputRef: React.RefObject<HTMLInputElement | null>;
   contactFilterOptions: Array<{ count: number; label: string; value: string }>;
-  contactsToolbarStyle: React.CSSProperties;
   conversationsLabel: string;
   dismissContactsOnboarding: () => void;
   handleMainSwipeTabChange: (target: "contacts" | "wallet") => void;
@@ -168,7 +167,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     contactsSearch,
     contactsSearchInputRef,
     contactFilterOptions,
-    contactsToolbarStyle,
     conversationsLabel,
     dismissContactsOnboarding,
     dismissWalletWarning,
@@ -229,7 +227,6 @@ export const MainSwipeContent = (): React.ReactElement => {
                 />
               ) : null
             }
-            contactsToolbarStyle={contactsToolbarStyle}
             contactsSearchInputRef={contactsSearchInputRef}
             contactsSearch={contactsSearch}
             setContactsSearch={setContactsSearch}

@@ -10,7 +10,6 @@ interface ContactsPageProps {
   canAddContact?: boolean;
   contactsSearch: string;
   contactsSearchInputRef: React.RefObject<HTMLInputElement | null>;
-  contactsToolbarStyle: React.CSSProperties;
   conversationsLabel: string;
   filterOptions: Array<{ count: number; label: string; value: string }>;
   openNewContactPage: () => void;
@@ -37,7 +36,6 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
     canAddContact = true,
     contactsSearch,
     contactsSearchInputRef,
-    contactsToolbarStyle,
     conversationsLabel,
     filterOptions,
     openNewContactPage,
@@ -61,7 +59,7 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
     return (
       <>
         {onboardingContent}
-        <div className="contacts-toolbar" style={contactsToolbarStyle}>
+        <div className="contacts-toolbar">
           <div className="contacts-search-bar" role="search">
             <input
               ref={contactsSearchInputRef}
