@@ -3862,6 +3862,13 @@ button.icon {
   gap: 4px;
 }
 
+.contacts-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--app-flat-bg);
+}
+
 .contacts-search-bar {
   position: relative;
   display: flex;
@@ -4614,9 +4621,7 @@ button.icon {
 }
 
 .group-filter-bar {
-  position: sticky;
-  top: 48px;
-  z-index: 9;
+  position: static;
   padding: 10px 0 6px;
   background: transparent;
   border-top: none;
