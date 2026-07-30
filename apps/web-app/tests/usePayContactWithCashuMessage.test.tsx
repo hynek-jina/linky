@@ -56,6 +56,12 @@ import { usePayContactWithCashuMessage } from "../src/app/hooks/payments/usePayC
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+// Evolu OwnerIds must be canonical 22-char base64url ids; arbitrary strings
+// fail validation in resolveCashuRowStoredOwnerLane and silently fall back to
+// the active write lane, which is exactly the bug this test guards against.
+const LANE_OLD = "AAAAAAAAAAAAAAAAAAAAAA";
+const LANE_ACTIVE = "AQEBAQEBAQEBAQEBAQEBAQ";
+
 const flushEffects = async () => {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -102,7 +108,7 @@ describe("usePayContactWithCashuMessage", () => {
     wrapEventWithPushMarkerMock.mockReturnValue({ id: "wrap-payment-notice" });
 
     const operations: string[] = [];
-    const insert = vi.fn(
+    const upsert = vi.fn(
       (table: string, payload: { state?: string; token?: string }) => {
         if (table === "cashuToken") {
           operations.push(
@@ -152,7 +158,7 @@ describe("usePayContactWithCashuMessage", () => {
         cashuTokensWithMeta: [
           {
             id: "old-token-1",
-            ownerId: "lane-old",
+            ownerId: LANE_OLD,
             state: "accepted",
             mint: "https://mint.example",
             token: "cashu-old-token",
@@ -161,7 +167,7 @@ describe("usePayContactWithCashuMessage", () => {
           },
         ],
         // Active write lane differs from the lane that holds the spent token.
-        cashuVisibleOwnerIds: ["lane-old", "lane-active"],
+        cashuVisibleOwnerIds: [LANE_OLD, LANE_ACTIVE],
         chatSeenWrapIdsRef: { current: new Set<string>() },
         currentNpub: "npub-test",
         currentNsec: "nsec-test",
@@ -172,12 +178,11 @@ describe("usePayContactWithCashuMessage", () => {
           amountText: "600",
           unitLabel: "sat",
         }),
-        insert,
         logPayStep: vi.fn(),
         logPaymentEvent: vi.fn(),
         nostrMessagesLocal: [],
         payWithCashuEnabled: true,
-        resolveOwnerIdForWrite: vi.fn(async () => "lane-active"),
+        resolveOwnerIdForWrite: vi.fn(async () => LANE_ACTIVE),
         publishSingleWrappedWithRetry: vi.fn(async () => ({
           anySuccess: true,
           error: null,
@@ -193,6 +198,7 @@ describe("usePayContactWithCashuMessage", () => {
         t: (key: string) => key,
         update,
         updateLocalNostrMessage: vi.fn(),
+        upsert,
       });
 
       React.useEffect(() => {
@@ -226,10 +232,10 @@ describe("usePayContactWithCashuMessage", () => {
     // The spent token is soft-deleted in ITS OWN lane (lane-old), not the
     // active write lane (lane-active) — otherwise Evolu's (ownerId, id) keying
     // makes the delete a no-op and the token stays spendable.
-    expect(operations).toContain("update:old-token-1:lane-old");
-    expect(operations).not.toContain("update:old-token-1:lane-active");
+    expect(operations).toContain(`update:old-token-1:${LANE_OLD}`);
+    expect(operations).not.toContain(`update:old-token-1:${LANE_ACTIVE}`);
     expect(operations).toContain("insert:cashu-change-token:accepted");
-    expect(operations.indexOf("update:old-token-1:lane-old")).toBeLessThan(
+    expect(operations.indexOf(`update:old-token-1:${LANE_OLD}`)).toBeLessThan(
       operations.indexOf("insert:cashu-change-token:accepted"),
     );
 

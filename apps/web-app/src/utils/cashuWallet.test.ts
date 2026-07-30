@@ -98,24 +98,24 @@ describe("createLoadedCashuWallet", () => {
     const activeKeys = { "1": "02aa", "2": "02bb" };
     const legacyKeys = { "128": "03cc" };
     const mintGetKeys = vi.fn(async (id?: string) => {
-      if (id === "01active") {
+      if (id === "01884a74bb2fc5ee") {
         return {
           keysets: [
             {
               active: true,
-              id: "01active",
+              id: "01884a74bb2fc5ee",
               keys: activeKeys,
               unit: "sat",
             },
           ],
         };
       }
-      if (id === "01legacy") {
+      if (id === "009a1f293253e41e") {
         return {
           keysets: [
             {
               active: false,
-              id: "01legacy",
+              id: "009a1f293253e41e",
               keys: legacyKeys,
               unit: "sat",
             },
@@ -138,13 +138,13 @@ describe("createLoadedCashuWallet", () => {
         keysets: [
           {
             active: true,
-            id: "01active",
+            id: "01884a74bb2fc5ee",
             input_fee_ppk: 10,
             unit: "sat",
           },
           {
             active: false,
-            id: "01legacy",
+            id: "009a1f293253e41e",
             input_fee_ppk: 10,
             unit: "sat",
           },
@@ -185,27 +185,27 @@ describe("createLoadedCashuWallet", () => {
       unit: "sat",
     });
 
-    expect(mintGetKeys).toHaveBeenCalledWith("01active");
-    expect(mintGetKeys).toHaveBeenCalledWith("01legacy");
+    expect(mintGetKeys).toHaveBeenCalledWith("01884a74bb2fc5ee");
+    expect(mintGetKeys).toHaveBeenCalledWith("009a1f293253e41e");
     expect(loadMintFromCache).toHaveBeenCalledWith(mintInfo, {
       mintUrl: "https://mint.example",
       keysets: [
         {
           active: true,
-          id: "01active",
+          id: "01884a74bb2fc5ee",
           input_fee_ppk: 10,
           keys: activeKeys,
           unit: "sat",
         },
         {
           active: false,
-          id: "01legacy",
+          id: "009a1f293253e41e",
           input_fee_ppk: 10,
           keys: legacyKeys,
           unit: "sat",
         },
       ],
     });
-    expect(bindKeyset).toHaveBeenCalledWith("01active");
+    expect(bindKeyset).toHaveBeenCalledWith("01884a74bb2fc5ee");
   });
 });
