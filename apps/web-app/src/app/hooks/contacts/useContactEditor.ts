@@ -1,5 +1,4 @@
 import * as Evolu from "@evolu/common";
-import { useQuery } from "@evolu/react";
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
 import { omitSyntheticContactLightningAddress } from "../../../derivedProfile";
@@ -271,7 +270,6 @@ export const useContactEditor = ({
       ),
     [],
   );
-  const transactionRows = useQuery(transactionsQuery);
 
   const openScannedContactPendingNpubRef = React.useRef<string | null>(null);
 
@@ -525,10 +523,11 @@ export const useContactEditor = ({
   );
 
   const backfillLightningAddressTransactions = React.useCallback(
-    (contactId: ContactId, lnAddress: string) => {
+    async (contactId: ContactId, lnAddress: string) => {
       const normalizedLnAddress = lnAddress.trim().toLowerCase();
       if (!normalizedLnAddress) return;
 
+      const transactionRows = await evolu.loadQuery(transactionsQuery);
       let updatedCount = 0;
       for (const row of transactionRows) {
         if (typeof row !== "object" || row === null) continue;
@@ -566,7 +565,7 @@ export const useContactEditor = ({
         recordTransactionsOwnerWrite(updatedCount);
       }
     },
-    [recordTransactionsOwnerWrite, transactionRows, updateTransactionFields],
+    [recordTransactionsOwnerWrite, transactionsQuery, updateTransactionFields],
   );
 
   React.useEffect(() => {
@@ -829,7 +828,7 @@ export const useContactEditor = ({
     }
 
     if (savedContactId && lnAddress) {
-      backfillLightningAddressTransactions(savedContactId, lnAddress);
+      await backfillLightningAddressTransactions(savedContactId, lnAddress);
     }
 
     if (npub) {
@@ -1081,7 +1080,7 @@ export const useContactEditor = ({
       setRecentlyAddedContactId(result.value.id);
       setStatus(t("contactSaved"));
       if (lnAddress) {
-        backfillLightningAddressTransactions(result.value.id, lnAddress);
+        await backfillLightningAddressTransactions(result.value.id, lnAddress);
       }
       if (candidate.pictureUrl) {
         saveCachedProfilePicture(npub, candidate.pictureUrl);

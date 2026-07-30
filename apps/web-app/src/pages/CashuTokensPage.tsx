@@ -1,5 +1,5 @@
 import type { Dispatch, FC, SetStateAction } from "react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
@@ -75,6 +75,36 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
     void checkIssuedCashuTokensAndDeleteClaimed();
   }, [checkIssuedCashuTokensAndDeleteClaimed, hasIssuedTokens]);
 
+  const handleMintIconLoad = useCallback(
+    (origin: string, url: string | null) => {
+      setMintIconUrlByMint((prev) => ({
+        ...prev,
+        [origin]: url,
+      }));
+    },
+    [setMintIconUrlByMint],
+  );
+
+  const handleMintIconError = useCallback(
+    (origin: string, nextUrl: string | null) => {
+      setMintIconUrlByMint((prev) => ({
+        ...prev,
+        [origin]: nextUrl,
+      }));
+    },
+    [setMintIconUrlByMint],
+  );
+
+  const handleOpenToken = useCallback(
+    (id: CashuTokenId) => {
+      navigateTo({
+        route: "cashuToken",
+        id,
+      });
+    },
+    [navigateTo],
+  );
+
   const renderTokenList = (
     tokens: readonly CashuTokenListItem[],
     emptyLabel: string,
@@ -91,24 +121,9 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
             token={token}
             getMintIconUrl={getMintIconUrl}
             isError={String(token.state ?? "") === "error"}
-            onMintIconLoad={(origin, url) => {
-              setMintIconUrlByMint((prev) => ({
-                ...prev,
-                [origin]: url,
-              }));
-            }}
-            onMintIconError={(origin, nextUrl) => {
-              setMintIconUrlByMint((prev) => ({
-                ...prev,
-                [origin]: nextUrl,
-              }));
-            }}
-            onClick={() =>
-              navigateTo({
-                route: "cashuToken",
-                id: token.id,
-              })
-            }
+            onMintIconLoad={handleMintIconLoad}
+            onMintIconError={handleMintIconError}
+            onOpenToken={handleOpenToken}
             ariaLabel={t("cashuToken")}
           />
         ))}

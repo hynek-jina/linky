@@ -14,7 +14,7 @@ type MainSwipeRouteBuilderInput = Omit<
 
 interface UseRoutingViewCompositionParams {
   contactsHeaderVisible: boolean;
-  contactsPullProgress: number;
+  contactsPulling: boolean;
   groupNamesCount: number;
   isMainSwipeRoute: boolean;
   mainSwipeRouteBuilderInput: MainSwipeRouteBuilderInput;
@@ -30,34 +30,32 @@ export interface RoutingViewCompositionResult {
 
 export const useRoutingViewComposition = ({
   contactsHeaderVisible,
-  contactsPullProgress,
+  contactsPulling,
   groupNamesCount,
   isMainSwipeRoute,
   mainSwipeRouteBuilderInput,
   statusFilterCount,
   ungroupedCount,
 }: UseRoutingViewCompositionParams): RoutingViewCompositionResult => {
-  const contactsToolbarProgress =
-    mainSwipeRouteBuilderInput.route.kind === "contacts"
-      ? contactsHeaderVisible
-        ? 1
-        : contactsPullProgress
-      : 0;
-
-  const showContactsToolbar = contactsToolbarProgress > 0;
+  const showContactsToolbar =
+    mainSwipeRouteBuilderInput.route.kind === "contacts" &&
+    (contactsHeaderVisible || contactsPulling);
   const showGroupFilter =
     showContactsToolbar &&
     (groupNamesCount + statusFilterCount > 0 || ungroupedCount > 0);
 
+  // Frame-rate reveal progress comes from the `--contacts-pull` CSS variable
+  // written by the pull-gesture handlers, so this style object stays stable
+  // during the gesture instead of invalidating the route bundle per frame.
   const contactsToolbarStyle = React.useMemo(
     () =>
       ({
-        opacity: contactsToolbarProgress,
-        maxHeight: `${Math.round(220 * contactsToolbarProgress)}px`,
-        transform: `translateY(${(1 - contactsToolbarProgress) * -12}px)`,
-        pointerEvents: contactsToolbarProgress > 0.02 ? "auto" : "none",
+        opacity: "var(--contacts-pull, 0)",
+        maxHeight: "calc(var(--contacts-pull, 0) * 220px)",
+        transform: "translateY(calc((1 - var(--contacts-pull, 0)) * -12px))",
+        pointerEvents: showContactsToolbar ? "auto" : "none",
       }) satisfies React.CSSProperties,
-    [contactsToolbarProgress],
+    [showContactsToolbar],
   );
 
   const { bottomTabActive, pageClassNameWithSwipe, selectedEvoluServerUrl } =

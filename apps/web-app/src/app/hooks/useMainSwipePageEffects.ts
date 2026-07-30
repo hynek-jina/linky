@@ -4,39 +4,49 @@ export const shouldLockWalletWindowScroll = (routeKind: string): boolean => {
   return routeKind === "wallet";
 };
 
+/**
+ * Per-frame pull progress is published as a CSS variable instead of React
+ * state: the previous setState-per-touchmove re-rendered the whole app shell
+ * for every frame of the pull gesture. React only sees the discrete
+ * transitions (pull started/ended, header revealed), each at most once per
+ * gesture; the toolbar style reads `--contacts-pull` directly.
+ */
+export const CONTACTS_PULL_CSS_VAR = "--contacts-pull";
+
+const setContactsPullCssVar = (progress: number): void => {
+  document.documentElement.style.setProperty(
+    CONTACTS_PULL_CSS_VAR,
+    String(Math.min(1, Math.max(0, progress))),
+  );
+};
+
 interface UseMainSwipePageEffectsParams {
   contactsHeaderVisible: boolean;
   contactsPullDistanceRef: React.MutableRefObject<number>;
-  contactsPullProgress: number;
   routeKind: string;
   setContactsHeaderVisible: React.Dispatch<React.SetStateAction<boolean>>;
-  setContactsPullProgress: React.Dispatch<React.SetStateAction<number>>;
+  setContactsPulling: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export const useMainSwipePageEffects = ({
   contactsHeaderVisible,
   contactsPullDistanceRef,
-  contactsPullProgress,
   routeKind,
   setContactsHeaderVisible,
-  setContactsPullProgress,
+  setContactsPulling,
 }: UseMainSwipePageEffectsParams) => {
   const contactsHeaderVisibleRef = React.useRef(contactsHeaderVisible);
-  const contactsPullProgressRef = React.useRef(contactsPullProgress);
 
   React.useEffect(() => {
     contactsHeaderVisibleRef.current = contactsHeaderVisible;
   }, [contactsHeaderVisible]);
 
   React.useEffect(() => {
-    contactsPullProgressRef.current = contactsPullProgress;
-  }, [contactsPullProgress]);
-
-  React.useEffect(() => {
     if (routeKind !== "contacts") {
       setContactsHeaderVisible(false);
+      setContactsPulling(false);
       contactsPullDistanceRef.current = 0;
-      setContactsPullProgress(0);
+      setContactsPullCssVar(0);
       return;
     }
     if (typeof window === "undefined") return;
@@ -44,6 +54,7 @@ export const useMainSwipePageEffects = ({
     const pullThreshold = 36;
     let touchStartY = 0;
     let trackingTouch = false;
+    let pulling = false;
 
     const getWindowScrollTop = () =>
       Math.max(
@@ -59,15 +70,28 @@ export const useMainSwipePageEffects = ({
       contactsPullDistanceRef.current = 0;
     };
 
+    const updatePullProgress = (progress: number) => {
+      setContactsPullCssVar(progress);
+      if (progress > 0 && !pulling) {
+        pulling = true;
+        setContactsPulling(true);
+      }
+    };
+
+    const stopPulling = () => {
+      if (pulling) {
+        pulling = false;
+        setContactsPulling(false);
+      }
+    };
+
     const hidePullUi = () => {
       if (contactsHeaderVisibleRef.current) {
         contactsHeaderVisibleRef.current = false;
         setContactsHeaderVisible(false);
       }
-      if (contactsPullProgressRef.current > 0) {
-        contactsPullProgressRef.current = 0;
-        setContactsPullProgress(0);
-      }
+      stopPulling();
+      setContactsPullCssVar(0);
     };
 
     const onScroll = () => {
@@ -89,8 +113,7 @@ export const useMainSwipePageEffects = ({
           contactsPullDistanceRef.current / pullThreshold,
           1,
         );
-        contactsPullProgressRef.current = progress;
-        setContactsPullProgress(progress);
+        updatePullProgress(progress);
         if (progress >= 1 && !contactsHeaderVisibleRef.current) {
           contactsHeaderVisibleRef.current = true;
           setContactsHeaderVisible(true);
@@ -129,8 +152,7 @@ export const useMainSwipePageEffects = ({
       }
       contactsPullDistanceRef.current = delta;
       const progress = Math.min(delta / pullThreshold, 1);
-      contactsPullProgressRef.current = progress;
-      setContactsPullProgress(progress);
+      updatePullProgress(progress);
       if (progress >= 1 && !contactsHeaderVisibleRef.current) {
         contactsHeaderVisibleRef.current = true;
         setContactsHeaderVisible(true);
@@ -141,13 +163,11 @@ export const useMainSwipePageEffects = ({
       trackingTouch = false;
       if (!contactsHeaderVisibleRef.current) {
         resetPull();
-        if (contactsPullProgressRef.current > 0) {
-          contactsPullProgressRef.current = 0;
-          setContactsPullProgress(0);
-        }
+        stopPulling();
+        setContactsPullCssVar(0);
       } else {
-        contactsPullProgressRef.current = 1;
-        setContactsPullProgress(1);
+        stopPulling();
+        setContactsPullCssVar(1);
       }
     };
 
@@ -170,7 +190,7 @@ export const useMainSwipePageEffects = ({
     contactsPullDistanceRef,
     routeKind,
     setContactsHeaderVisible,
-    setContactsPullProgress,
+    setContactsPulling,
   ]);
 
   React.useEffect(() => {
