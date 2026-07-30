@@ -1774,14 +1774,13 @@ function CashuPage() {
 
         setTokenError(null);
       })
-      .catch((error) => {
+      .catch(() => {
         if (cancelled) return;
         setTokenState(null);
         setMintIconSrc(GENERIC_MINT_ICON_DATA_URL);
-        const detail = getErrorMessage(error, "").trim();
         setTokenError({
           code: "unknown",
-          detail: detail || null,
+          detail: null,
         });
       })
       .finally(() => {
