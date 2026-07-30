@@ -4635,6 +4635,11 @@ button.icon {
   gap: 10px;
   overflow-x: auto;
   padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.group-filter-inner::-webkit-scrollbar {
+  display: none;
 }
 
 .contacts-qr-bar {
@@ -4780,10 +4785,16 @@ button.icon {
   flex: 0 0 100%;
   min-width: 100%;
   min-height: 0;
+  padding-bottom: calc(96px + var(--floating-safe-area-bottom));
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scroll-snap-align: start;
+  scrollbar-width: none;
   background: var(--app-flat-bg);
+}
+
+.main-swipe-page::-webkit-scrollbar {
+  display: none;
 }
 
 .desktop-main-pane-title {
@@ -4799,6 +4810,7 @@ button.icon {
   flex-direction: column;
   height: 100dvh;
   min-height: 0;
+  padding-bottom: 0;
   overflow: hidden;
   -webkit-overflow-scrolling: auto;
 }
