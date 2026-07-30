@@ -1410,13 +1410,41 @@ export const useMessagesDomain = ({
       if (!normalizedFrom || !normalizedTo) return 0;
 
       const movedMessageIds = new Set<string>();
+      const targetIsUnknown = isUnknownContactId(normalizedTo);
+      const nextOverlayMessages: LocalNostrMessage[] = [];
 
-      const nextOverlayMessages = overlayMessagesRef.current.map((message) => {
-        if (toTrimmedText(message.contactId) !== normalizedFrom) return message;
+      for (const message of overlayMessagesRef.current) {
+        if (toTrimmedText(message.contactId) !== normalizedFrom) {
+          nextOverlayMessages.push(message);
+          continue;
+        }
+
         movedMessageIds.add(toTrimmedText(message.id));
-        return { ...message, contactId: normalizedTo };
-      });
-      persistOverlayMessages(nextOverlayMessages);
+        const movedMessage = { ...message, contactId: normalizedTo };
+
+        if (targetIsUnknown) {
+          nextOverlayMessages.push(movedMessage);
+          continue;
+        }
+
+        const payload = buildMessageInsertPayload(movedMessage);
+        const result = payload ? insertNostrMessage(payload) : null;
+        if (!result?.ok) nextOverlayMessages.push(movedMessage);
+      }
+
+      if (targetIsUnknown) {
+        for (const message of nostrMessagesLatestRef.current) {
+          if (toTrimmedText(message.contactId) !== normalizedFrom) continue;
+          const id = toTrimmedText(message.id);
+          if (!id) continue;
+          movedMessageIds.add(id);
+          nextOverlayMessages.push({
+            ...message,
+            contactId: normalizedTo,
+          });
+          updateNostrMessage({ id, isDeleted: Evolu.sqliteTrue });
+        }
+      }
 
       for (const row of nostrMessageRows) {
         if (!isVisibleMessageOwner(row)) continue;
@@ -1424,12 +1452,32 @@ export const useMessagesDomain = ({
         const id = toTrimmedText(row.id);
         if (!id) continue;
         movedMessageIds.add(id);
+
+        if (targetIsUnknown) {
+          const message = toLocalNostrMessage(row);
+          if (message) {
+            nextOverlayMessages.push({
+              ...message,
+              contactId: normalizedTo,
+            });
+          }
+          updateNostrMessage({ id, isDeleted: Evolu.sqliteTrue });
+          continue;
+        }
+
         updateNostrMessage({ id, contactId: normalizedTo });
       }
+
+      persistOverlayMessages(
+        dedupeNostrMessagesByPriority(nextOverlayMessages).sort(
+          (a, b) => a.createdAtSec - b.createdAtSec,
+        ),
+      );
 
       return movedMessageIds.size;
     },
     [
+      insertNostrMessage,
       isVisibleMessageOwner,
       nostrMessageRows,
       persistOverlayMessages,
