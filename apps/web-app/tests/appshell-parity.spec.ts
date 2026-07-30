@@ -112,6 +112,16 @@ test("keeps authenticated screen gutters aligned", async ({ page }) => {
     await expect(rootPanel).toHaveCSS("padding-left", "0px");
     await expect(rootPanel).toHaveCSS("padding-right", "0px");
   }
+
+  await page.goto("/#profile");
+  await expect(page.locator(".topbar-left .topbar-btn")).toHaveCSS(
+    "justify-content",
+    "flex-start",
+  );
+  await expect(page.locator(".topbar > .topbar-btn")).toHaveCSS(
+    "justify-content",
+    "flex-end",
+  );
 });
 
 test("keeps unauthenticated auth gating without render loops", async ({
