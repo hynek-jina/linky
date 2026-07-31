@@ -36,6 +36,7 @@ import type {
   LoggedPaymentEventParams,
   MintUrlInput,
 } from "../types/appTypes";
+import { executeCashuMelt } from "./payments/executeCashuMelt";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -244,6 +245,23 @@ export const useLightningPaymentsDomain = ({
     [cashuTokensAll, markCashuTokenDeleted, normalizeMintUrl],
   );
 
+  const executeMelt = React.useCallback(
+    async (invoice: string, candidate: { mint: string; tokens: string[] }) =>
+      await executeCashuMelt({
+        invoice,
+        mint: candidate.mint,
+        tokens: candidate.tokens,
+        unit: "sat",
+        insertAcceptedToken: (token, ignoredAliases) =>
+          insertCashuToken(
+            { token, state: "accepted", error: null },
+            { ignoreAliases: ignoredAliases },
+          ),
+        deleteSpentTokens: deleteAcceptedCashuTokensByText,
+      }),
+    [deleteAcceptedCashuTokensByText, insertCashuToken],
+  );
+
   const payLightningInvoiceWithCashu = React.useCallback(
     async (invoice: string) => {
       const normalized = invoice.trim();
@@ -295,35 +313,12 @@ export const useLightningPaymentsDomain = ({
         let lastMint: string | null = null;
         for (const candidate of [selectedCandidate]) {
           try {
-            const { meltInvoiceWithTokensAtMint } =
-              await import("../../cashuMelt");
-            const result = await meltInvoiceWithTokensAtMint({
-              invoice: normalized,
-              mint: candidate.mint,
-              tokens: candidate.tokens,
-              unit: "sat",
-            });
+            const { result, localPersistenceErrors } = await executeMelt(
+              normalized,
+              candidate,
+            );
 
             if (!result.ok) {
-              if (result.remainingToken && result.remainingAmount > 0) {
-                const recoveryToken = result.remainingToken;
-                const inserted = insertCashuToken(
-                  {
-                    token: recoveryToken,
-                    state: "accepted",
-                    error: null,
-                  },
-                  { ignoreAliases: candidate.tokens },
-                );
-
-                if (inserted.ok) {
-                  deleteAcceptedCashuTokensByText(
-                    candidate.tokens,
-                    candidate.mint,
-                  );
-                }
-              }
-
               lastError = result.error;
               lastMint = candidate.mint;
 
@@ -357,31 +352,6 @@ export const useLightningPaymentsDomain = ({
                 `${t("payFailed")}: ${String(result.error ?? "unknown")}`,
               );
               return false;
-            }
-
-            const localPersistenceErrors: string[] = [];
-            try {
-              if (result.remainingToken && result.remainingAmount > 0) {
-                const inserted = insertCashuToken(
-                  {
-                    token: result.remainingToken,
-                    state: "accepted",
-                    error: null,
-                  },
-                  { ignoreAliases: candidate.tokens },
-                );
-                if (!inserted.ok) {
-                  localPersistenceErrors.push(
-                    `change insert: ${String(inserted.error ?? "unknown")}`,
-                  );
-                }
-              }
-
-              deleteAcceptedCashuTokensByText(candidate.tokens, candidate.mint);
-            } catch (e) {
-              localPersistenceErrors.push(
-                `spent delete: ${getUnknownErrorMessage(e, "unknown")}`,
-              );
             }
 
             logPaymentEvent({
@@ -464,10 +434,9 @@ export const useLightningPaymentsDomain = ({
       cashuIsBusy,
       cashuTokensWithMeta,
       defaultMintUrl,
+      executeMelt,
       formatDisplayedAmountParts,
-      insertCashuToken,
       logPaymentEvent,
-      deleteAcceptedCashuTokensByText,
       normalizeMintUrl,
       setCashuIsBusy,
       setContactsOnboardingHasPaid,
@@ -597,35 +566,12 @@ export const useLightningPaymentsDomain = ({
 
           for (const candidate of [selectedCandidate]) {
             try {
-              const { meltInvoiceWithTokensAtMint } =
-                await import("../../cashuMelt");
-              const result = await meltInvoiceWithTokensAtMint({
-                invoice: attemptInvoice,
-                mint: candidate.mint,
-                tokens: candidate.tokens,
-                unit: "sat",
-              });
+              const { result, localPersistenceErrors } = await executeMelt(
+                attemptInvoice,
+                candidate,
+              );
 
               if (!result.ok) {
-                if (result.remainingToken && result.remainingAmount > 0) {
-                  const recoveryToken = result.remainingToken;
-                  const inserted = insertCashuToken(
-                    {
-                      token: recoveryToken,
-                      state: "accepted",
-                      error: null,
-                    },
-                    { ignoreAliases: candidate.tokens },
-                  );
-
-                  if (inserted.ok) {
-                    deleteAcceptedCashuTokensByText(
-                      candidate.tokens,
-                      candidate.mint,
-                    );
-                  }
-                }
-
                 lastError = result.error;
                 lastMint = candidate.mint;
 
@@ -644,34 +590,6 @@ export const useLightningPaymentsDomain = ({
                 finalErrorMessage = String(result.error ?? "unknown");
                 finalErrorMint = result.mint;
                 break;
-              }
-
-              const localPersistenceErrors: string[] = [];
-              try {
-                if (result.remainingToken && result.remainingAmount > 0) {
-                  const inserted = insertCashuToken(
-                    {
-                      token: result.remainingToken,
-                      state: "accepted",
-                      error: null,
-                    },
-                    { ignoreAliases: candidate.tokens },
-                  );
-                  if (!inserted.ok) {
-                    localPersistenceErrors.push(
-                      `change insert: ${String(inserted.error ?? "unknown")}`,
-                    );
-                  }
-                }
-
-                deleteAcceptedCashuTokensByText(
-                  candidate.tokens,
-                  candidate.mint,
-                );
-              } catch (e) {
-                localPersistenceErrors.push(
-                  `spent delete: ${getUnknownErrorMessage(e, "unknown")}`,
-                );
               }
 
               const successActionMessage =
@@ -855,10 +773,9 @@ export const useLightningPaymentsDomain = ({
       cashuTokensWithMeta,
       contacts,
       defaultMintUrl,
+      executeMelt,
       formatDisplayedAmountParts,
-      insertCashuToken,
       logPaymentEvent,
-      deleteAcceptedCashuTokensByText,
       normalizeMintUrl,
       setCashuIsBusy,
       setContactsOnboardingHasPaid,

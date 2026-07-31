@@ -1,11 +1,8 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
 import { parseCashuToken } from "../../../cashu";
-import { acceptCashuToken } from "../../../cashuAccept";
 import { navigateTo } from "../../../hooks/useRouting";
-import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
-import { safeLocalStorageSet } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import type {
   LoggedPaymentEventParams,
@@ -17,6 +14,7 @@ import {
   createCashuTokenId,
 } from "../../lib/cashuTokenIdentity";
 import { isUnknownContactId } from "../messages/contactIdentity";
+import { createDefaultCashuTokenAcceptor } from "./acceptAndPersistCashuToken";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -65,6 +63,16 @@ export const useSaveCashuFromText = ({
   t,
   touchMintInfo,
 }: UseSaveCashuFromTextParams) => {
+  const acceptAndPersistCashuToken = React.useMemo(
+    () =>
+      createDefaultCashuTokenAcceptor({
+        ensureCashuTokenPersisted,
+        rememberCashuTokenKnown,
+        upsert,
+      }),
+    [ensureCashuTokenPersisted, rememberCashuTokenKnown, upsert],
+  );
+
   return React.useCallback(
     async (
       tokenText: string,
@@ -108,30 +116,26 @@ export const useSaveCashuFromText = ({
       await enqueueCashuOp(async () => {
         setCashuIsBusy(true);
         try {
-          const ownerId = await resolveOwnerIdForWrite();
-          if (!ownerId) {
+          const result = await acceptAndPersistCashuToken({
+            tokenText: tokenRaw,
+            isAlreadyStored: isCashuTokenStored,
+            isAcceptedAlreadyStored: (rawToken, acceptedToken) =>
+              isCashuTokenStored(rawToken) ||
+              (acceptedToken !== "" && isCashuTokenStored(acceptedToken)),
+            resolveOwnerBeforeDuplicateCheck: true,
+            resolveOwnerId: resolveOwnerIdForWrite,
+          });
+
+          if (result.status === "empty") return;
+          if (result.status === "storage-unavailable") {
             setStatus(`${t("errorPrefix")}: Cashu storage is not ready`);
             return;
           }
-          if (isCashuTokenStored(tokenRaw)) {
+          if (result.status === "duplicate-before-accept") {
             setStatus(t("cashuExists"));
             return;
           }
-
-          const accepted = await acceptCashuToken(tokenRaw);
-          const acceptedToken = String(accepted.token ?? "").trim();
-
-          if (acceptedToken) {
-            safeLocalStorageSet(
-              LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
-              acceptedToken,
-            );
-          }
-
-          if (
-            isCashuTokenStored(tokenRaw) ||
-            (acceptedToken !== "" && isCashuTokenStored(acceptedToken))
-          ) {
+          if (result.status === "duplicate-after-accept") {
             setStatus(t("cashuExists"));
             if (options?.navigateToTokens) {
               navigateTo({ route: "cashuTokens" });
@@ -140,30 +144,38 @@ export const useSaveCashuFromText = ({
             }
             return;
           }
-
-          const result = upsert(
-            "cashuToken",
-            buildSparseCashuTokenPayload({
-              id: createCashuTokenId(tokenRaw),
-              token: acceptedToken,
-              state: "accepted",
-              error: null,
-            }),
-            { ownerId },
-          );
-          if (!result.ok) {
+          if (result.status === "persist-failed") {
+            setStatus(`${t("errorPrefix")}: ${result.error}`);
+            return;
+          }
+          if (result.status === "accept-failed") {
+            logPaymentEvent({
+              direction: "in",
+              status: "error",
+              amount: parsedAmount,
+              contactId: paymentContactId,
+              details: {
+                rawToken: tokenRaw,
+                ...(unknownContactId ? { unknownContactId } : {}),
+                ...(options?.requestId ? { requestId: options.requestId } : {}),
+              },
+              fee: null,
+              mint: parsedMint,
+              unit: null,
+              error: result.error,
+              method: "cashu_receive",
+              phase: "receive",
+            });
             setStatus(
-              `${t("errorPrefix")}: ${getUnknownErrorMessage(result.error, "unknown")}`,
+              result.persistenceError
+                ? `${t("errorPrefix")}: ${result.persistenceError}`
+                : `${t("cashuAcceptFailed")}: ${result.error}`,
             );
             return;
           }
 
-          rememberCashuTokenKnown(tokenRaw, acceptedToken);
-          safeLocalStorageSet(
-            LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
-            acceptedToken,
-          );
-          ensureCashuTokenPersisted(acceptedToken);
+          const accepted = result.accepted;
+          const acceptedToken = String(accepted.token ?? "").trim();
 
           const cleanedMint = String(accepted.mint ?? "")
             .trim()
@@ -269,8 +281,8 @@ export const useSaveCashuFromText = ({
       });
     },
     [
+      acceptAndPersistCashuToken,
       enqueueCashuOp,
-      ensureCashuTokenPersisted,
       formatDisplayedAmountParts,
       upsert,
       isCashuTokenStored,
@@ -279,7 +291,6 @@ export const useSaveCashuFromText = ({
       mintInfoByUrl,
       refreshMintInfo,
       resolveOwnerIdForWrite,
-      rememberCashuTokenKnown,
       setCashuDraft,
       setCashuIsBusy,
       setStatus,

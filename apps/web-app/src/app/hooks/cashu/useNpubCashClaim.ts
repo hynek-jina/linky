@@ -1,10 +1,8 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
 import { parseCashuToken } from "../../../cashu";
-import { acceptCashuToken } from "../../../cashuAccept";
 import type { JsonValue } from "../../../types/json";
 import {
-  LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
   LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX,
   LOCAL_NPUB_CASH_CLAIM_LOCK_STORAGE_KEY_PREFIX,
 } from "../../../utils/constants";
@@ -27,6 +25,7 @@ import {
   createCashuTokenId,
   hasMatchingCashuToken,
 } from "../../lib/cashuTokenIdentity";
+import { createDefaultCashuTokenAcceptor } from "./acceptAndPersistCashuToken";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -114,6 +113,16 @@ export const useNpubCashClaim = ({
   t,
   touchMintInfo,
 }: UseNpubCashClaimParams) => {
+  const acceptAndPersistCashuToken = React.useMemo(
+    () =>
+      createDefaultCashuTokenAcceptor({
+        ensureCashuTokenPersisted,
+        rememberCashuTokenKnown,
+        upsert,
+      }),
+    [ensureCashuTokenPersisted, rememberCashuTokenKnown, upsert],
+  );
+
   const acceptAndStoreCashuToken = React.useCallback(
     async (tokenText: string) => {
       const tokenRaw = tokenText.trim();
@@ -128,70 +137,57 @@ export const useNpubCashClaim = ({
           parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
 
         try {
-          // De-dupe: don't accept/store the same token twice.
-          const alreadyStored = hasMatchingCashuToken(cashuTokensAll, {
-            token: tokenRaw,
+          const result = await acceptAndPersistCashuToken({
+            tokenText: tokenRaw,
+            isAlreadyStored: (token) =>
+              hasMatchingCashuToken(cashuTokensAll, { token }),
+            resolveOwnerId: resolveOwnerIdForWrite,
           });
-          if (alreadyStored) return;
 
-          const ownerId = await resolveOwnerIdForWrite();
-          if (!ownerId) {
+          if (
+            result.status === "empty" ||
+            result.status === "duplicate-before-accept" ||
+            result.status === "duplicate-after-accept"
+          ) {
+            return;
+          }
+          if (result.status === "storage-unavailable") {
             setStatus(`${t("errorPrefix")}: Cashu storage is not ready`);
             return;
           }
-
-          const accepted = await acceptCashuToken(tokenRaw);
-          const acceptedToken = String(accepted.token ?? "").trim();
-
-          if (acceptedToken) {
-            safeLocalStorageSet(
-              LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
-              acceptedToken,
-            );
+          if (result.status === "persist-failed") {
+            setStatus(`${t("errorPrefix")}: ${result.error}`);
+            return;
           }
-
-          const result = upsert(
-            "cashuToken",
-            buildSparseCashuTokenPayload({
-              id: createCashuTokenId(tokenRaw),
-              token: acceptedToken,
-              state: "accepted",
-              error: null,
-            }),
-            { ownerId },
-          );
-          if (!result.ok) {
-            setStatus(
-              `${t("errorPrefix")}: ${getUnknownErrorMessage(result.error, "unknown")}`,
-            );
+          if (result.status === "accept-failed") {
+            const message = result.error;
+            logPaymentEvent({
+              direction: "in",
+              status: "error",
+              amount: parsedAmount,
+              fee: null,
+              mint: parsedMint,
+              unit: null,
+              error: message,
+              contactId: null,
+              method: "cashu_receive",
+              phase: "receive",
+            });
+            setStatus(`${t("cashuAcceptFailed")}: ${message}`);
             return;
           }
 
-          rememberCashuTokenKnown(tokenRaw, acceptedToken);
-          // Remember the last successfully accepted token so we can recover it
-          // if storage gets wiped (e.g., private browsing) or if persistence
-          // glitches.
-          safeLocalStorageSet(
-            LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY,
-            acceptedToken,
-          );
-          ensureCashuTokenPersisted(acceptedToken);
-
+          const accepted = result.accepted;
           const cleanedMint = String(accepted.mint ?? "")
             .trim()
             .replace(/\/+$/, "");
-          if (cleanedMint) {
+          if (cleanedMint && !isMintDeleted(cleanedMint)) {
             const nowSec = Math.floor(Date.now() / 1000);
             const existing = mintInfoByUrl.get(cleanedMint);
+            touchMintInfo(cleanedMint, nowSec);
 
-            if (isMintDeleted(cleanedMint)) {
-              // Respect user deletion across any owner scope.
-            } else {
-              touchMintInfo(cleanedMint, nowSec);
-
-              const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
-              if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
-            }
+            const lastChecked = Number(existing?.lastCheckedAtSec ?? 0) || 0;
+            if (existing && !lastChecked) void refreshMintInfo(cleanedMint);
           }
 
           logPaymentEvent({
@@ -237,7 +233,6 @@ export const useNpubCashClaim = ({
           void maybeShowPwaNotification(t("mints"), body, "cashu_claim");
         } catch (error) {
           const message = getUnknownErrorMessage(error, "Accept failed");
-
           logPaymentEvent({
             direction: "in",
             status: "error",
@@ -272,8 +267,8 @@ export const useNpubCashClaim = ({
     },
     [
       cashuTokensAll,
+      acceptAndPersistCashuToken,
       enqueueCashuOp,
-      ensureCashuTokenPersisted,
       formatDisplayedAmountParts,
       upsert,
       isMintDeleted,
@@ -282,7 +277,6 @@ export const useNpubCashClaim = ({
       mintInfoByUrl,
       refreshMintInfo,
       resolveOwnerIdForWrite,
-      rememberCashuTokenKnown,
       routeKind,
       setCashuIsBusy,
       setStatus,
