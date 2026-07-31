@@ -120,7 +120,6 @@ interface UseProfileAuthDomainParams {
 }
 
 interface UseProfileAuthDomainResult {
-  activeNostrIdentitySource: NostrIdentitySource;
   confirmPendingOnboardingProfile: () => Promise<void>;
   createNewAccount: () => Promise<void>;
   currentNpub: string | null;
@@ -134,7 +133,6 @@ interface UseProfileAuthDomainResult {
   onPendingOnboardingPhotoSelected: (dataUrl: string) => void;
   pasteReturningSlip39FromClipboard: () => Promise<void>;
   pickPendingOnboardingPhoto: () => Promise<void>;
-  requestDeriveNostrKeys: () => Promise<void>;
   requestPasteNostrKeys: () => Promise<void>;
   requestLogout: () => void;
   savePendingOnboardingBackupToPasswordManager: (
@@ -961,40 +959,6 @@ export const useProfileAuthDomain = ({
     updateReturningOnboardingStep,
   ]);
 
-  const requestDeriveNostrKeys = React.useCallback(async () => {
-    if (onboardingIsBusy) return;
-
-    const normalizedSeed = String(slip39Seed ?? "").trim();
-    if (!normalizedSeed) {
-      pushToast(t("seedMissing"));
-      return;
-    }
-
-    setOnboardingIsBusy(true);
-    try {
-      const derived = await deriveNostrKeysFromSlip39(normalizedSeed);
-      if (!derived) {
-        pushToast(t("restoreFailed"));
-        return;
-      }
-
-      await setIdentityFromNsecAndReload(derived.nsec, normalizedSeed, {
-        identitySource: "derived",
-        invalidMessageKey: "restoreFailed",
-        recordChatNotice: true,
-        switchedAtSec: null,
-      });
-    } finally {
-      setOnboardingIsBusy(false);
-    }
-  }, [
-    onboardingIsBusy,
-    pushToast,
-    setIdentityFromNsecAndReload,
-    slip39Seed,
-    t,
-  ]);
-
   const requestPasteNostrKeys = React.useCallback(async () => {
     if (onboardingIsBusy) return;
 
@@ -1081,7 +1045,6 @@ export const useProfileAuthDomain = ({
   }, [logoutArmed]);
 
   return {
-    activeNostrIdentitySource,
     confirmPendingOnboardingProfile,
     createNewAccount,
     currentNpub,
@@ -1095,7 +1058,6 @@ export const useProfileAuthDomain = ({
     onPendingOnboardingPhotoError,
     pasteReturningSlip39FromClipboard,
     pickPendingOnboardingPhoto,
-    requestDeriveNostrKeys,
     requestPasteNostrKeys,
     requestLogout,
     savePendingOnboardingBackupToPasswordManager,
