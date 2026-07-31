@@ -1,4 +1,4 @@
-import type { Proof, ProofLike, ProofState } from "@cashu/cashu-ts";
+import type { Proof, ProofLike } from "@cashu/cashu-ts";
 import * as Evolu from "@evolu/common";
 import React from "react";
 import { parseCashuToken } from "../../../cashu";
@@ -9,7 +9,6 @@ import { getCashuDeterministicSeedFromStorage } from "../../../utils/cashuDeterm
 import { getCashuLib } from "../../../utils/cashuLib";
 import {
   dedupeCashuProofs,
-  partitionCashuProofGroupsByState,
   sumCashuProofAmounts,
 } from "../../../utils/cashuProofs";
 import {
@@ -36,6 +35,7 @@ import {
 } from "../../lib/cashuTokenState";
 import { resolveCashuTokenStoredOwnerLaneById } from "../../lib/cashuOwnerLane";
 import type { CashuTokenRowLike } from "../../types/appTypes";
+import { checkCashuProofGroupsByState, isCashuProof } from "./cashuProofState";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -211,14 +211,7 @@ export const useCashuTokenChecks = ({
       setStatus(t("cashuChecking"));
 
       const normalizeProofs = (items: ProofLike[]): Proof[] =>
-        items.filter(
-          (p): p is Proof =>
-            !!p &&
-            Reflect.get(p, "amount") !== undefined &&
-            typeof (p as { secret?: unknown }).secret === "string" &&
-            typeof (p as { C?: unknown }).C === "string" &&
-            typeof (p as { id?: unknown }).id === "string",
-        );
+        items.filter(isCashuProof);
 
       try {
         let tokenText = initialTokenText;
@@ -407,29 +400,21 @@ export const useCashuTokenChecks = ({
         // Bulk state check across all candidate proofs in one round-trip.
         // cashu-ts batches into chunks of 100 internally and re-emits states
         // aligned to input order, so partitioning by group offset is safe.
-        let bulkStates: ProofState[] | null = null;
-        try {
-          const flatProofs = candidates.flatMap((c) => c.proofs);
-          const result = await wallet.checkProofsStates(flatProofs);
-          bulkStates = Array.isArray(result) ? result : [];
-        } catch {
-          // If the mint is unreachable the existing behaviour was to push on
-          // and let the swap surface the error. Preserve that by leaving
-          // bulkStates null — we'll fall back to a single-candidate (primary
-          // only) flow below to avoid merge poisoning.
-          bulkStates = null;
-        }
+        const proofStateCheck = await checkCashuProofGroupsByState(
+          candidates.map((candidate) => ({
+            id: candidate.id,
+            proofs: candidate.proofs,
+          })),
+          async (proofs) => await wallet.checkProofsStates(proofs),
+        );
 
         let liveCandidates: Array<{
           id: CashuTokenId | null;
           proofs: Proof[];
         }>;
 
-        if (bulkStates) {
-          const partition = partitionCashuProofGroupsByState(
-            candidates.map((c) => ({ id: c.id, proofs: c.proofs })),
-            bulkStates,
-          );
+        if (proofStateCheck.status === "ok") {
+          const partition = proofStateCheck.partition;
 
           // Mark every fully-spent row as error individually. Crucially we
           // do NOT mark unrelated rows just because one row in the same
@@ -762,24 +747,15 @@ export const useCashuTokenChecks = ({
 
           if (decodedTokens.length === 0) continue;
 
-          let states: ProofState[] = [];
-          try {
-            const flatProofs = decodedTokens.flatMap((entry) => entry.proofs);
-            const response = await wallet.checkProofsStates(flatProofs);
-            states = Array.isArray(response) ? response : [];
-          } catch {
-            // Mint state check failed — skip the group; next manual run
-            // gets another chance.
-            continue;
-          }
-
-          const partition = partitionCashuProofGroupsByState(
+          const proofStateCheck = await checkCashuProofGroupsByState(
             decodedTokens.map((entry) => ({
               id: entry.id,
               proofs: entry.proofs,
             })),
-            states,
+            async (proofs) => await wallet.checkProofsStates(proofs),
           );
+          if (proofStateCheck.status === "unavailable") continue;
+          const partition = proofStateCheck.partition;
 
           checkedCount += decodedTokens.length;
 
@@ -852,18 +828,12 @@ export const useCashuTokenChecks = ({
 
       if (proofs.length === 0) return false;
 
-      let states: ProofState[] = [];
-      try {
-        const response = await wallet.checkProofsStates(proofs);
-        states = Array.isArray(response) ? response : [];
-      } catch {
-        return false;
-      }
-
-      const partition = partitionCashuProofGroupsByState(
+      const proofStateCheck = await checkCashuProofGroupsByState(
         [{ id, proofs }],
-        states,
+        async (proofsToCheck) => await wallet.checkProofsStates(proofsToCheck),
       );
+      if (proofStateCheck.status === "unavailable") return false;
+      const partition = proofStateCheck.partition;
       const fullySpent = partition.fullySpentIds.some(
         (entryId) => entryId !== null && String(entryId) === String(id),
       );

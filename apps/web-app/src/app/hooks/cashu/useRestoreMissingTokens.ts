@@ -24,6 +24,7 @@ import type {
   LoggedPaymentEventParams,
   MintUrlInput,
 } from "../../types/appTypes";
+import { scanCashuRestoreKeyset } from "./cashuRestoreScanner";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -267,133 +268,43 @@ export const useRestoreMissingTokens = ({
                 keysetId,
               });
 
-              // If the user deleted tokens locally, scanning only forward from the
-              // persisted cursor can miss them (they may be below the cursor).
-              // Scan a recent window behind the current high-water mark.
               const detCounter = getCashuDeterministicCounter({
                 mintUrl,
                 unit: wallet.unit,
                 keysetId,
               });
-              const highWater = Math.max(
+              const knownSecrets = ensureSet(mintUrl, wallet.unit);
+              const scan = await scanCashuRestoreKeyset({
                 savedCursor,
-                typeof detCounter === "number" && Number.isFinite(detCounter)
-                  ? detCounter
-                  : 0,
-              );
-              const start = Math.max(0, highWater - restoreRescanWindow);
+                deterministicCounter: detCounter,
+                knownSecrets,
+                rescanWindow: restoreRescanWindow,
+                // Scan up to 300 counter positions in 100-position restore
+                // requests. Wider gaps cost every user 5–50s; stale counters
+                // are deliberately handled by wipeCashuDeterministicState.
+                batchRestore: async (counterStart) =>
+                  await wallet.batchRestore(300, 100, counterStart, keysetId),
+                checkProofsStates: async (proofs) =>
+                  await wallet.checkProofsStates(proofs),
+              });
+              if (scan.status === "unavailable") continue;
 
-              // cashu-ts batchRestore arg semantics (see source):
-              //   t (1st)  = total gap budget in counter positions
-              //   e (2nd)  = positions per HTTP /v1/restore request
-              //   stops after ceil(t / e) consecutive empty rounds
-              //
-              // The cashu-ts default `(300, 100)` is fine for healthy
-              // wallets: any consecutive activity keeps the scan going and
-              // a fully empty keyset finishes in ~1-2 s. We deliberately
-              // do NOT bump this further to chase very stale counters —
-              // those should be prevented at the source via
-              // `wipeCashuDeterministicState()` whenever the cashu BIP-85
-              // mnemonic changes. Widening the budget here would cost
-              // every user 5-50 s of restore wait just to rescue a handful
-              // of pre-fix wallets that can also recover by re-onboarding
-              // (which now wipes stale counters).
-              const batchRestore = async (counterStart: number) =>
-                await wallet.batchRestore(300, 100, counterStart, keysetId);
-
-              let restored: {
-                lastCounterWithSignature?: number;
-                proofs: CashuProof[];
-              };
-              try {
-                restored = await batchRestore(start);
-              } catch {
-                continue;
-              }
-
-              const last = restored.lastCounterWithSignature;
-              if (typeof last === "number" && Number.isFinite(last)) {
+              if (scan.nextCursor !== null) {
                 setCashuRestoreCursor({
                   mintUrl,
                   unit: wallet.unit,
                   keysetId,
-                  cursor: last + 1,
+                  cursor: scan.nextCursor,
                 });
                 ensureCashuDeterministicCounterAtLeast({
                   mintUrl,
                   unit: wallet.unit,
                   keysetId,
-                  atLeast: last + 1,
+                  atLeast: scan.nextCursor,
                 });
               }
 
-              const knownSecrets = ensureSet(mintUrl, wallet.unit);
-
-              const filterFresh = (proofs: CashuProof[]) =>
-                (proofs ?? []).filter((p) => {
-                  const secret = String(p?.secret ?? "").trim();
-                  return secret && !knownSecrets.has(secret);
-                });
-
-              const filterSpendable = async (proofs: CashuProof[]) => {
-                if (proofs.length === 0) return proofs;
-                try {
-                  const states = await wallet.checkProofsStates(proofs);
-                  return proofs.filter((_, idx) => {
-                    const state = String(
-                      (states as Array<{ state?: unknown }>)?.[idx]?.state ??
-                        "",
-                    ).trim();
-                    return state === "UNSPENT";
-                  });
-                } catch {
-                  return [];
-                }
-              };
-
-              // Windowed scan first.
-              let freshProofs = filterFresh(restored.proofs ?? []);
-              let spendableProofs = await filterSpendable(freshProofs);
-
-              // If user deleted older tokens and our cursor is far ahead, the window
-              // may not include them. Fall back to a one-time deep scan from 0.
-              if (spendableProofs.length === 0 && start > 0) {
-                try {
-                  const deep = await batchRestore(0);
-
-                  // Prefer advancing cursors based on the furthest scan.
-                  const last0 = restored.lastCounterWithSignature;
-                  const last1 = deep.lastCounterWithSignature;
-                  const maxLast = Math.max(
-                    typeof last0 === "number" && Number.isFinite(last0)
-                      ? last0
-                      : -1,
-                    typeof last1 === "number" && Number.isFinite(last1)
-                      ? last1
-                      : -1,
-                  );
-                  if (maxLast >= 0) {
-                    setCashuRestoreCursor({
-                      mintUrl,
-                      unit: wallet.unit,
-                      keysetId,
-                      cursor: maxLast + 1,
-                    });
-                    ensureCashuDeterministicCounterAtLeast({
-                      mintUrl,
-                      unit: wallet.unit,
-                      keysetId,
-                      atLeast: maxLast + 1,
-                    });
-                  }
-
-                  restored = deep;
-                  freshProofs = filterFresh(restored.proofs ?? []);
-                  spendableProofs = await filterSpendable(freshProofs);
-                } catch {
-                  /* restore attempt failed, skip */
-                }
-              }
+              const spendableProofs = scan.proofs;
 
               if (spendableProofs.length === 0) continue;
 
