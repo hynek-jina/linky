@@ -11,6 +11,7 @@ import {
 } from "../../../derivedProfile";
 import { useEvolu, type ContactId } from "../../../evolu";
 import { navigateTo, useRouting } from "../../../hooks/useRouting";
+import { useDeferredOnlineReady } from "../../../hooks/useDeferredOnlineReady";
 import { type Lang } from "../../../i18n";
 import {
   cacheProfileAvatarFromUrl,
@@ -78,6 +79,7 @@ import { useContactsNostrPrefetchEffects } from "../useContactsNostrPrefetchEffe
 import { useEvoluNostrBootstrapReady } from "../useEvoluNostrBootstrapReady";
 import { useFeedbackContact } from "../useFeedbackContact";
 import { useMessagesDomain } from "../useMessagesDomain";
+import { usePushRegistrationLifecycle } from "../usePushRegistrationLifecycle";
 import { useRelayDomain } from "../useRelayDomain";
 import { findUniqueContactByLightningAddress } from "../../lib/contactIdentity";
 import { resolveContactRowOwnerLane } from "../../lib/contactOwnerLane";
@@ -850,6 +852,13 @@ export const useContactsMessagingComposition = ({
     tokensSnapshot: cashuTokensAll,
     transactionsSnapshot: transactionsBootstrapSnapshot,
   });
+  const canRunNostrNetworkWork =
+    useDeferredOnlineReady() && nostrBootstrapReady;
+
+  usePushRegistrationLifecycle({
+    currentNsec,
+    enabled: canRunNostrNetworkWork,
+  });
 
   const {
     canSaveNewRelay,
@@ -867,7 +876,7 @@ export const useContactsMessagingComposition = ({
   } = useRelayDomain({
     currentNpub,
     currentNsec,
-    networkEnabled: nostrBootstrapReady,
+    networkEnabled: canRunNostrNetworkWork,
     route,
     setStatus,
     t,
