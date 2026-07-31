@@ -43,7 +43,6 @@ interface PublishCashuMessagePaymentArgs {
   activePublishClientIds: Set<string>;
   appendLocalNostrMessage: (message: NewLocalNostrMessage) => string;
   batches: readonly CashuMessagePaymentSendBatch[];
-  chatSeenWrapIds: Set<string>;
   contactId: ContactId;
   contactNpub: string;
   currentNsec: string;
@@ -73,7 +72,6 @@ export const publishCashuMessagePayment = async ({
   activePublishClientIds,
   appendLocalNostrMessage,
   batches,
-  chatSeenWrapIds,
   contactId,
   contactNpub,
   currentNsec,
@@ -234,7 +232,6 @@ export const publishCashuMessagePayment = async ({
     }
 
     const selfWrapId = String(wrapForMe.id ?? "");
-    chatSeenWrapIds.add(selfWrapId);
     if (localMessageId) {
       updateLocalNostrMessage(localMessageId, {
         pubkey: myPublicKey,

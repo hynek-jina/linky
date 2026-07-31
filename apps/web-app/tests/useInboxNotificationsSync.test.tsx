@@ -1,5 +1,6 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
+import type { Event as NostrToolsEvent } from "nostr-tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -17,14 +18,14 @@ const {
 }));
 
 vi.mock("nostr-tools", () => ({
-  getPublicKey: vi.fn(() => "me-pubkey-hex"),
+  getPublicKey: vi.fn(() => "1".repeat(64)),
   nip19: {
     decode: vi.fn((value: string) => {
       if (value === "nsec-test") {
         return { type: "nsec", data: new Uint8Array([1, 2, 3]) };
       }
       if (value === "npub-known") {
-        return { type: "npub", data: "known-contact-pubkey" };
+        return { type: "npub", data: "2".repeat(64) };
       }
       throw new Error(`Unexpected decode value: ${value}`);
     }),
@@ -59,6 +60,27 @@ import type {
 } from "../src/app/types/appTypes";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+const MY_PUBKEY = "1".repeat(64);
+const KNOWN_CONTACT_PUBKEY = "2".repeat(64);
+const OUTER_PUBKEY = "3".repeat(64);
+
+const eventId = (label: string): string =>
+  Array.from(new TextEncoder().encode(label))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .padEnd(64, "0")
+    .slice(0, 64);
+
+const createWrapEvent = (label: string): NostrToolsEvent => ({
+  content: "encrypted",
+  created_at: 1_730_000_000,
+  id: eventId(label),
+  kind: 1059,
+  pubkey: OUTER_PUBKEY,
+  sig: "4".repeat(128),
+  tags: [["p", MY_PUBKEY]],
+});
 
 const flushEffects = async () => {
   await act(async () => {
@@ -117,19 +139,19 @@ describe("useInboxNotificationsSync", () => {
   });
 
   it("stores an incoming message under a local unknown-thread id for unknown pubkeys", async () => {
-    const wrapEvent = { id: "wrap-unknown-1" };
+    const wrapEvent = createWrapEvent("wrap-unknown-1");
     querySyncMock.mockResolvedValue([wrapEvent]);
     subscribeMock.mockReturnValue({
       close: vi.fn(async () => {}),
     });
     unwrapEventMock.mockReturnValue({
       kind: 14,
-      id: "rumor-unknown-1",
+      id: eventId("rumor-unknown-1"),
       pubkey:
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       content: "hello from unknown",
       created_at: 1730000000,
-      tags: [["p", "me-pubkey-hex"]],
+      tags: [["p", MY_PUBKEY]],
     });
     nip44DecryptMock.mockImplementation(() => {
       throw new Error("not encrypted");
@@ -188,8 +210,8 @@ describe("useInboxNotificationsSync", () => {
         direction: "in",
         pubkey:
           "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        rumorId: "rumor-unknown-1",
-        wrapId: "wrap-unknown-1",
+        rumorId: eventId("rumor-unknown-1"),
+        wrapId: eventId("wrap-unknown-1"),
       }),
     );
 
@@ -198,20 +220,95 @@ describe("useInboxNotificationsSync", () => {
     });
   });
 
+  it("continues backfill and subscribes after one event throws", async () => {
+    const firstWrap = createWrapEvent("wrap-throwing");
+    const secondWrap = createWrapEvent("wrap-after-throw");
+    querySyncMock.mockResolvedValue([firstWrap, secondWrap]);
+    subscribeMock.mockReturnValue({
+      close: vi.fn(async () => {}),
+    });
+    unwrapEventMock
+      .mockReturnValueOnce({
+        kind: 14,
+        id: eventId("rumor-throwing"),
+        pubkey: KNOWN_CONTACT_PUBKEY,
+        content: "first",
+        created_at: 1730000000,
+        tags: [["p", MY_PUBKEY]],
+      })
+      .mockReturnValueOnce({
+        kind: 14,
+        id: eventId("rumor-after-throw"),
+        pubkey: KNOWN_CONTACT_PUBKEY,
+        content: "second",
+        created_at: 1730000001,
+        tags: [["p", MY_PUBKEY]],
+      });
+    nip44DecryptMock.mockImplementation(() => {
+      throw new Error("not encrypted");
+    });
+    const appendLocalNostrMessage = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error("write failed");
+      })
+      .mockReturnValue("message-2");
+
+    const Harness = () => {
+      useInboxNotificationsSync({
+        appendLocalNostrMessage,
+        appendLocalNostrReaction: vi.fn(() => "reaction-1"),
+        contacts: [
+          {
+            id: "contact-bob",
+            name: "Bob",
+            npub: "npub-known",
+          },
+        ],
+        currentNsec: "nsec-test",
+        maybeShowPwaNotification: vi.fn(async () => {}),
+        nostrFetchRelays: [],
+        nostrMessageWrapIdsRef: { current: new Set<string>() },
+        nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
+        nostrMessagesRecent: [],
+        nostrReactionWrapIdsRef: { current: new Set<string>() },
+        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
+        pushToast: vi.fn(),
+        route: { kind: "contacts" },
+        setContactAttentionById: vi.fn(),
+        softDeleteLocalNostrReactionsByWrapIds: vi.fn(),
+        t: (key: string) => key,
+        updateLocalNostrMessage: vi.fn(),
+        updateLocalNostrReaction: vi.fn(),
+      });
+      return null;
+    };
+
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(<Harness />));
+    await flushEffects();
+    await flushEffects();
+
+    expect(appendLocalNostrMessage).toHaveBeenCalledTimes(2);
+    expect(subscribeMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => root.unmount());
+  });
+
   it("ignores events whose inner content is still an encrypted payload", async () => {
-    const wrapEvent = { id: "wrap-encrypted-1" };
+    const wrapEvent = createWrapEvent("wrap-encrypted-1");
     querySyncMock.mockResolvedValue([wrapEvent]);
     subscribeMock.mockReturnValue({
       close: vi.fn(async () => {}),
     });
     unwrapEventMock.mockReturnValue({
       kind: 14,
-      id: "rumor-encrypted-1",
+      id: eventId("rumor-encrypted-1"),
       pubkey:
         "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
       content: "encrypted-inner-payload",
       created_at: 1730000001,
-      tags: [["p", "me-pubkey-hex"]],
+      tags: [["p", MY_PUBKEY]],
     });
     nip44DecryptMock.mockReturnValue('{"kind":14}');
 
@@ -276,7 +373,7 @@ describe("useInboxNotificationsSync", () => {
 
     // Only live subscription events surface toasts; bootstrap querySync
     // results are stored silently, so deliver the wrap through onevent.
-    const wrapEvent = { id: "wrap-known-1" };
+    const wrapEvent = createWrapEvent("wrap-known-1");
     const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
     querySyncMock.mockResolvedValue([]);
     subscribeMock.mockImplementation(
@@ -291,11 +388,11 @@ describe("useInboxNotificationsSync", () => {
     );
     unwrapEventMock.mockReturnValue({
       kind: 14,
-      id: "rumor-known-1",
-      pubkey: "known-contact-pubkey",
+      id: eventId("rumor-known-1"),
+      pubkey: KNOWN_CONTACT_PUBKEY,
       content: "hi from Bob",
       created_at: 1730000002,
-      tags: [["p", "me-pubkey-hex"]],
+      tags: [["p", MY_PUBKEY]],
     });
     nip44DecryptMock.mockImplementation(() => {
       throw new Error("not encrypted");
@@ -377,16 +474,16 @@ describe("useInboxNotificationsSync", () => {
     querySyncMock.mockResolvedValue([]);
     unwrapEventMock.mockReturnValue({
       kind: 14,
-      id: "rumor-known-2",
-      pubkey: "known-contact-pubkey",
+      id: eventId("rumor-known-2"),
+      pubkey: KNOWN_CONTACT_PUBKEY,
       content: "this stays silent",
       created_at: 1730000003,
-      tags: [["p", "me-pubkey-hex"]],
+      tags: [["p", MY_PUBKEY]],
     });
 
     const activeRoot = await renderHarness("contact-bob");
     await act(async () => {
-      liveEventHandlers.at(-1)?.({ id: "wrap-known-2" });
+      liveEventHandlers.at(-1)?.(createWrapEvent("wrap-known-2"));
     });
 
     expect(pushToast).not.toHaveBeenCalled();
@@ -412,19 +509,19 @@ describe("useInboxNotificationsSync", () => {
       clientId: "expired-offer-client",
       createdAt: oldCreatedAtSec,
       offerId: "expired-offer",
-      offererPublicKey: "known-contact-pubkey",
-      recipientPublicKey: "me-pubkey-hex",
-      senderPublicKey: "known-contact-pubkey",
+      offererPublicKey: KNOWN_CONTACT_PUBKEY,
+      recipientPublicKey: MY_PUBKEY,
+      senderPublicKey: KNOWN_CONTACT_PUBKEY,
       status: "offered",
     });
-    const wrapEvent = { id: "wrap-expired-offer-1" };
+    const wrapEvent = createWrapEvent("wrap-expired-offer-1");
     querySyncMock.mockResolvedValue([wrapEvent]);
     subscribeMock.mockReturnValue({
       close: vi.fn(async () => {}),
     });
     unwrapEventMock.mockReturnValue({
       ...offerEvent,
-      id: "rumor-expired-offer-1",
+      id: eventId("rumor-expired-offer-1"),
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-1");
@@ -498,19 +595,19 @@ describe("useInboxNotificationsSync", () => {
       clientId: "settled-client",
       createdAt,
       offerId: "offer-settled",
-      offererPublicKey: "me-pubkey-hex",
-      recipientPublicKey: "me-pubkey-hex",
-      senderPublicKey: "known-contact-pubkey",
+      offererPublicKey: MY_PUBKEY,
+      recipientPublicKey: MY_PUBKEY,
+      senderPublicKey: KNOWN_CONTACT_PUBKEY,
       status: "settled",
     });
-    const wrapEvent = { id: "wrap-settled-offer" };
+    const wrapEvent = createWrapEvent("wrap-settled-offer");
     querySyncMock.mockResolvedValue([wrapEvent]);
     subscribeMock.mockReturnValue({
       close: vi.fn(async () => {}),
     });
     unwrapEventMock.mockReturnValue({
       ...settledEvent,
-      id: "rumor-settled-offer",
+      id: eventId("rumor-settled-offer"),
     });
 
     const onBankPaymentOfferMessage = vi.fn();
@@ -569,9 +666,9 @@ describe("useInboxNotificationsSync", () => {
       clientId: "offer-client",
       createdAt: createdAt - 10,
       offerId: "offer-declined",
-      offererPublicKey: "me-pubkey-hex",
-      recipientPublicKey: "known-contact-pubkey",
-      senderPublicKey: "me-pubkey-hex",
+      offererPublicKey: MY_PUBKEY,
+      recipientPublicKey: KNOWN_CONTACT_PUBKEY,
+      senderPublicKey: MY_PUBKEY,
       status: "offered",
     });
     const declineEvent = createLinkyBankPaymentOfferEvent({
@@ -580,12 +677,12 @@ describe("useInboxNotificationsSync", () => {
       clientId: "decline-client",
       createdAt,
       offerId: "offer-declined",
-      offererPublicKey: "me-pubkey-hex",
-      recipientPublicKey: "me-pubkey-hex",
-      senderPublicKey: "known-contact-pubkey",
+      offererPublicKey: MY_PUBKEY,
+      recipientPublicKey: MY_PUBKEY,
+      senderPublicKey: KNOWN_CONTACT_PUBKEY,
       status: "declined",
     });
-    const wrapEvent = { id: "wrap-declined-offer" };
+    const wrapEvent = createWrapEvent("wrap-declined-offer");
     const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
     querySyncMock.mockResolvedValue([]);
     subscribeMock.mockImplementation(
@@ -600,7 +697,7 @@ describe("useInboxNotificationsSync", () => {
     );
     unwrapEventMock.mockReturnValue({
       ...declineEvent,
-      id: "rumor-declined-offer",
+      id: eventId("rumor-declined-offer"),
     });
 
     const maybeShowPwaNotification = vi.fn(async () => {});
@@ -622,7 +719,7 @@ describe("useInboxNotificationsSync", () => {
       direction: "out",
       id: "known-offer-message",
       localOnly: true,
-      pubkey: "me-pubkey-hex",
+      pubkey: MY_PUBKEY,
       rumorId: null,
       status: "sent",
       wrapId: "known-offer-wrap",
@@ -691,7 +788,7 @@ describe("useInboxNotificationsSync", () => {
     expect(maybeShowPwaNotification).toHaveBeenCalledWith(
       "Bob",
       "Payment was declined.",
-      "wrap-declined-offer",
+      eventId("wrap-declined-offer"),
     );
     expect(setContactAttentionById).toHaveBeenCalledOnce();
 
@@ -699,21 +796,21 @@ describe("useInboxNotificationsSync", () => {
   });
 
   it("treats self-authored copies matched by client id as outgoing and silent", async () => {
-    const wrapEvent = { id: "wrap-self-copy-1" };
+    const wrapEvent = createWrapEvent("wrap-self-copy-1");
     querySyncMock.mockResolvedValue([wrapEvent]);
     subscribeMock.mockReturnValue({
       close: vi.fn(async () => {}),
     });
     unwrapEventMock.mockReturnValue({
       kind: 14,
-      id: "rumor-self-copy-1",
+      id: eventId("rumor-self-copy-1"),
       pubkey:
         "feedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
       content: "hi from me",
       created_at: 1730000004,
       tags: [
-        ["p", "known-contact-pubkey"],
-        ["p", "me-pubkey-hex"],
+        ["p", KNOWN_CONTACT_PUBKEY],
+        ["p", MY_PUBKEY],
         ["client", "client-fixed"],
       ],
     });
@@ -756,7 +853,7 @@ describe("useInboxNotificationsSync", () => {
               content: "hi from me",
               wrapId: "pending:client-fixed",
               rumorId: "rumor-self-copy-1",
-              pubkey: "me-pubkey-hex",
+              pubkey: MY_PUBKEY,
               createdAtSec: 1730000003,
               status: "pending",
               clientId: "client-fixed",
@@ -806,7 +903,7 @@ describe("useInboxNotificationsSync", () => {
   });
 
   it("routes incoming messages to a known contact when the peer is only identifiable from p tags", async () => {
-    const wrapEvent = { id: "wrap-known-via-ptag-1" };
+    const wrapEvent = createWrapEvent("wrap-known-via-ptag-1");
     const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
     querySyncMock.mockResolvedValue([]);
     subscribeMock.mockImplementation(
@@ -821,14 +918,14 @@ describe("useInboxNotificationsSync", () => {
     );
     unwrapEventMock.mockReturnValue({
       kind: 14,
-      id: "rumor-known-via-ptag-1",
+      id: eventId("rumor-known-via-ptag-1"),
       pubkey:
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       content: "hello from Bob",
       created_at: 1730000005,
       tags: [
-        ["p", "known-contact-pubkey"],
-        ["p", "me-pubkey-hex"],
+        ["p", KNOWN_CONTACT_PUBKEY],
+        ["p", MY_PUBKEY],
       ],
     });
     nip44DecryptMock.mockImplementation(() => {
@@ -895,9 +992,9 @@ describe("useInboxNotificationsSync", () => {
         contactId: "contact-bob",
         content: "hello from Bob",
         direction: "in",
-        pubkey: "known-contact-pubkey",
-        rumorId: "rumor-known-via-ptag-1",
-        wrapId: "wrap-known-via-ptag-1",
+        pubkey: KNOWN_CONTACT_PUBKEY,
+        rumorId: eventId("rumor-known-via-ptag-1"),
+        wrapId: eventId("wrap-known-via-ptag-1"),
       }),
     );
     expect(pushToast).toHaveBeenCalledWith(
@@ -909,7 +1006,7 @@ describe("useInboxNotificationsSync", () => {
     expect(maybeShowPwaNotification).toHaveBeenCalledWith(
       "Bob",
       "hello from Bob",
-      "msg_known-contact-pubkey",
+      `msg_${KNOWN_CONTACT_PUBKEY}`,
     );
 
     await act(async () => {
@@ -923,19 +1020,19 @@ describe("useInboxNotificationsSync", () => {
       value: "visible",
     });
 
-    const wrapEvent = { id: "wrap-cashu-1" };
+    const wrapEvent = createWrapEvent("wrap-cashu-1");
     querySyncMock.mockResolvedValue([wrapEvent]);
     subscribeMock.mockReturnValue({
       close: vi.fn(async () => {}),
     });
     unwrapEventMock.mockReturnValue({
       kind: 14,
-      id: "rumor-cashu-1",
-      pubkey: "known-contact-pubkey",
+      id: eventId("rumor-cashu-1"),
+      pubkey: KNOWN_CONTACT_PUBKEY,
       content:
         "cashuAeyJ0b2tlbiI6W3sibWludCI6Imh0dHBzOi8vbWludC5leGFtcGxlIiwicHJvb2ZzIjpbeyJhbW91bnQiOjIxfV19XX0",
       created_at: 1730000006,
-      tags: [["p", "me-pubkey-hex"]],
+      tags: [["p", MY_PUBKEY]],
     });
     nip44DecryptMock.mockImplementation(() => {
       throw new Error("not encrypted");
@@ -1019,18 +1116,18 @@ describe("useInboxNotificationsSync", () => {
       value: "visible",
     });
 
-    const wrapEvent = { id: "wrap-stored-1" };
+    const wrapEvent = createWrapEvent("wrap-stored-1");
     querySyncMock.mockResolvedValue([wrapEvent]);
     subscribeMock.mockReturnValue({
       close: vi.fn(async () => {}),
     });
     unwrapEventMock.mockReturnValue({
       kind: 14,
-      id: "rumor-stored-1",
-      pubkey: "known-contact-pubkey",
+      id: eventId("rumor-stored-1"),
+      pubkey: KNOWN_CONTACT_PUBKEY,
       content: "already saved",
       created_at: 1730000100,
-      tags: [["p", "me-pubkey-hex"]],
+      tags: [["p", MY_PUBKEY]],
     });
     nip44DecryptMock.mockImplementation(() => {
       throw new Error("not encrypted");
@@ -1070,7 +1167,7 @@ describe("useInboxNotificationsSync", () => {
               content: "already saved",
               createdAtSec: 1730000100,
               direction: "in",
-              pubkey: "known-contact-pubkey",
+              pubkey: KNOWN_CONTACT_PUBKEY,
               replyToId: null,
               replyToContent: null,
               rootMessageId: null,
@@ -1115,9 +1212,9 @@ describe("useInboxNotificationsSync", () => {
     expect(setContactAttentionById).not.toHaveBeenCalled();
     expect(updateLocalNostrMessage).toHaveBeenCalledWith("stored-message-1", {
       status: "sent",
-      wrapId: "wrap-stored-1",
-      pubkey: "known-contact-pubkey",
-      rumorId: "rumor-stored-1",
+      wrapId: eventId("wrap-stored-1"),
+      pubkey: KNOWN_CONTACT_PUBKEY,
+      rumorId: eventId("rumor-stored-1"),
     });
 
     await act(async () => {
@@ -1134,18 +1231,18 @@ describe("useInboxNotificationsSync", () => {
       value: "visible",
     });
 
-    const wrapEvent = { id: "wrap-deleted-contact-1" };
+    const wrapEvent = createWrapEvent("wrap-deleted-contact-1");
     querySyncMock.mockResolvedValue([wrapEvent]);
     subscribeMock.mockReturnValue({
       close: vi.fn(async () => {}),
     });
     unwrapEventMock.mockReturnValue({
       kind: 14,
-      id: "rumor-deleted-contact-1",
+      id: eventId("rumor-deleted-contact-1"),
       pubkey: deletedContactPubkey,
       content: "stale thread message",
       created_at: 1730000200,
-      tags: [["p", "me-pubkey-hex"]],
+      tags: [["p", MY_PUBKEY]],
     });
     nip44DecryptMock.mockImplementation(() => {
       throw new Error("not encrypted");
@@ -1225,9 +1322,9 @@ describe("useInboxNotificationsSync", () => {
       "stored-message-deleted-1",
       expect.objectContaining({
         pubkey: deletedContactPubkey,
-        rumorId: "rumor-deleted-contact-1",
+        rumorId: eventId("rumor-deleted-contact-1"),
         status: "sent",
-        wrapId: "wrap-deleted-contact-1",
+        wrapId: eventId("wrap-deleted-contact-1"),
       }),
     );
 
@@ -1242,7 +1339,7 @@ describe("useInboxNotificationsSync", () => {
       value: "visible",
     });
 
-    const wrapEvent = { id: "wrap-payment-notice-1" };
+    const wrapEvent = createWrapEvent("wrap-payment-notice-1");
     const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
     querySyncMock.mockResolvedValue([]);
     subscribeMock.mockImplementation(
@@ -1257,13 +1354,13 @@ describe("useInboxNotificationsSync", () => {
     );
     unwrapEventMock.mockReturnValue({
       kind: 24133,
-      id: "rumor-payment-notice-1",
-      pubkey: "known-contact-pubkey",
+      id: eventId("rumor-payment-notice-1"),
+      pubkey: KNOWN_CONTACT_PUBKEY,
       content: "payment_notice",
       created_at: 1730000007,
       tags: [
-        ["p", "known-contact-pubkey"],
-        ["p", "me-pubkey-hex"],
+        ["p", KNOWN_CONTACT_PUBKEY],
+        ["p", MY_PUBKEY],
         ["linky", "payment_notice"],
       ],
     });
@@ -1333,7 +1430,7 @@ describe("useInboxNotificationsSync", () => {
     expect(maybeShowPwaNotification).toHaveBeenCalledWith(
       "Bob",
       "You received money",
-      "wrap-payment-notice-1",
+      eventId("wrap-payment-notice-1"),
     );
     expect(appendLocalNostrMessage).not.toHaveBeenCalled();
 
@@ -1348,7 +1445,7 @@ describe("useInboxNotificationsSync", () => {
       value: "visible",
     });
 
-    const wrapEvent = { id: "wrap-payment-notice-repeat-1" };
+    const wrapEvent = createWrapEvent("wrap-payment-notice-repeat-1");
     const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
     querySyncMock.mockResolvedValue([]);
     subscribeMock.mockImplementation(
@@ -1363,13 +1460,13 @@ describe("useInboxNotificationsSync", () => {
     );
     unwrapEventMock.mockReturnValue({
       kind: 24133,
-      id: "payment-notice-repeat-1",
-      pubkey: "known-contact-pubkey",
+      id: eventId("payment-notice-repeat-1"),
+      pubkey: KNOWN_CONTACT_PUBKEY,
       content: "payment_notice",
       created_at: 1730000008,
       tags: [
-        ["p", "known-contact-pubkey"],
-        ["p", "me-pubkey-hex"],
+        ["p", KNOWN_CONTACT_PUBKEY],
+        ["p", MY_PUBKEY],
         ["linky", "payment_notice"],
       ],
     });
@@ -1465,7 +1562,7 @@ describe("useInboxNotificationsSync", () => {
     expect(maybeShowPwaNotification).toHaveBeenCalledWith(
       "Bob",
       "You received money",
-      "wrap-payment-notice-repeat-1",
+      eventId("wrap-payment-notice-repeat-1"),
     );
 
     await act(async () => {
@@ -1479,7 +1576,7 @@ describe("useInboxNotificationsSync", () => {
       value: "visible",
     });
 
-    const wrapEvent = { id: "wrap-payment-notice-restart-1" };
+    const wrapEvent = createWrapEvent("wrap-payment-notice-restart-1");
     const liveEventHandlers: Array<(event: typeof wrapEvent) => void> = [];
     subscribeMock.mockImplementation(
       (
@@ -1493,13 +1590,13 @@ describe("useInboxNotificationsSync", () => {
     );
     unwrapEventMock.mockReturnValue({
       kind: 24133,
-      id: "payment-notice-restart-1",
-      pubkey: "known-contact-pubkey",
+      id: eventId("payment-notice-restart-1"),
+      pubkey: KNOWN_CONTACT_PUBKEY,
       content: "payment_notice",
       created_at: 1730000200,
       tags: [
-        ["p", "known-contact-pubkey"],
-        ["p", "me-pubkey-hex"],
+        ["p", KNOWN_CONTACT_PUBKEY],
+        ["p", MY_PUBKEY],
         ["linky", "payment_notice"],
       ],
     });
@@ -1596,20 +1693,20 @@ describe("useInboxNotificationsSync", () => {
       value: "visible",
     });
 
-    const wrapEvent = { id: "wrap-payment-notice-stored-token-1" };
+    const wrapEvent = createWrapEvent("wrap-payment-notice-stored-token-1");
     querySyncMock.mockResolvedValue([wrapEvent]);
     subscribeMock.mockReturnValue({
       close: vi.fn(async () => {}),
     });
     unwrapEventMock.mockReturnValue({
       kind: 24133,
-      id: "payment-notice-stored-token-1",
-      pubkey: "known-contact-pubkey",
+      id: eventId("payment-notice-stored-token-1"),
+      pubkey: KNOWN_CONTACT_PUBKEY,
       content: "payment_notice",
       created_at: 1730000300,
       tags: [
-        ["p", "known-contact-pubkey"],
-        ["p", "me-pubkey-hex"],
+        ["p", KNOWN_CONTACT_PUBKEY],
+        ["p", MY_PUBKEY],
         ["linky", "payment_notice"],
       ],
     });
@@ -1652,7 +1749,7 @@ describe("useInboxNotificationsSync", () => {
                 "cashuAeyJ0b2tlbiI6W3sibWludCI6Imh0dHBzOi8vbWludC5leGFtcGxlIiwicHJvb2ZzIjpbeyJhbW91bnQiOjIxfV19XX0",
               createdAtSec: 1730000300,
               direction: "in",
-              pubkey: "known-contact-pubkey",
+              pubkey: KNOWN_CONTACT_PUBKEY,
               replyToId: null,
               replyToContent: null,
               rootMessageId: null,

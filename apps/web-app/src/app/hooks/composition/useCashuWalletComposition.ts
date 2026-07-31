@@ -220,7 +220,6 @@ interface UseCashuWalletCompositionParams {
     | "appendLocalNostrMessage"
     | "buildSavedContactName"
     | "chatMessages"
-    | "chatSeenWrapIdsRef"
     | "contacts"
     | "enqueuePendingPayment"
     | "isBankPaymentOfferCanceled"
@@ -343,7 +342,6 @@ export const useCashuWalletComposition = ({
     appendLocalNostrMessage,
     buildSavedContactName,
     chatMessages,
-    chatSeenWrapIdsRef,
     contacts,
     enqueuePendingPayment,
     isBankPaymentOfferCanceled,
@@ -1796,7 +1794,6 @@ export const useCashuWalletComposition = ({
       cashuBalance,
       cashuTokensAll,
       cashuTokensWithMeta,
-      chatSeenWrapIdsRef,
       currentNpub,
       currentNsec,
       defaultMintUrl,
@@ -3121,7 +3118,6 @@ export const useCashuWalletComposition = ({
           return;
         }
 
-        chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
         if (pendingId) {
           updateLocalNostrMessage(pendingId, {
             status: "sent",
@@ -3144,7 +3140,6 @@ export const useCashuWalletComposition = ({
       activeNostrMessagePublishClientIdsRef,
       appendLocalNostrMessage,
       cashuTokensAllFiltered,
-      chatSeenWrapIdsRef,
       currentNsec,
       logPaymentEvent,
       deleteCashuToken,

@@ -79,7 +79,6 @@ const createArgs = () => {
         unit: "sat",
       },
     ],
-    chatSeenWrapIds: new Set<string>(),
     contactId,
     contactNpub,
     currentNsec,
@@ -169,7 +168,6 @@ describe("publishCashuMessagePayment", () => {
         ["e", "reply-id", "", "reply"],
       ],
     });
-    expect(args.chatSeenWrapIds).toContain(`wrap-${getPublicKey(privateKey)}`);
     expect(result).toEqual({
       hasPendingMessages: false,
       paymentNoticeError: null,
@@ -202,7 +200,6 @@ describe("publishCashuMessagePayment", () => {
       expect(args.appendLocalNostrMessage).toHaveBeenCalledOnce();
       expect(args.updateLocalNostrMessage).not.toHaveBeenCalled();
       expect(args.activePublishClientIds).toEqual(new Set());
-      expect(args.chatSeenWrapIds).toEqual(new Set());
       expect(args.publishSingleWrappedWithRetry).not.toHaveBeenCalled();
       expect(result).toMatchObject({
         hasPendingMessages: true,

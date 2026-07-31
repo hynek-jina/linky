@@ -51,7 +51,6 @@ interface UsePayContactWithCashuMessageParams {
   cashuBalance: number;
   cashuTokensAll: readonly CashuTokenRow[];
   cashuTokensWithMeta: readonly CashuTokenWithMeta[];
-  chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   currentNpub: string | null;
   currentNsec: string | null;
   defaultMintUrl: string | null;
@@ -94,7 +93,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   cashuBalance,
   cashuTokensAll,
   cashuTokensWithMeta,
-  chatSeenWrapIdsRef,
   currentNpub,
   currentNsec,
   defaultMintUrl,
@@ -288,7 +286,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           activePublishClientIds: activePublishClientIdsRef.current,
           appendLocalNostrMessage,
           batches: [swap.batch],
-          chatSeenWrapIds: chatSeenWrapIdsRef.current,
           contactId,
           contactNpub,
           currentNsec,
@@ -384,7 +381,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       cashuBalance,
       cashuTokensAll,
       cashuTokensWithMeta,
-      chatSeenWrapIdsRef,
       currentNpub,
       currentNsec,
       defaultMintUrl,

@@ -152,7 +152,6 @@ const setup = async (options: SetupOptions = {}) => {
           OLD_OWNER_ID,
         ),
       ],
-      chatSeenWrapIdsRef: { current: new Set<string>() },
       currentNpub: "npub-test",
       currentNsec: "nsec-test",
       defaultMintUrl: "https://mint.example",
