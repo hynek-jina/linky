@@ -4,18 +4,10 @@ import React from "react";
 import type { evolu, useEvolu } from "../../../evolu";
 import { useEvoluSyncOwner } from "../../../evolu";
 import type { Lang } from "../../../i18n";
-import {
-  persistSyncedActiveNostrIdentity,
-  readStoredNostrNsec,
-} from "../../../platform/identitySecrets";
-import {
-  clearStoredPushNsec,
-  setStoredPushNsec,
-} from "../../../utils/pushNsecStorage";
+import { persistSyncedActiveNostrIdentity } from "../../../platform/identitySecrets";
 import {
   getInitialNostrIdentitySource,
   getInitialNostrIdentitySwitchedAtSec,
-  getInitialNostrNsec,
 } from "../../../utils/storage";
 import type { IdentityChangeMessageSource } from "../../lib/identityChangeMessage";
 import {
@@ -30,19 +22,23 @@ interface IdentityOwnersNavigation {
 }
 
 interface UseIdentityOwnersCompositionParams {
+  currentNsec: string;
   evolu: typeof evolu;
   lang: Lang;
   navigation: IdentityOwnersNavigation;
   pushToast: (message: string) => void;
+  setCurrentNsec: (currentNsec: string | null) => void;
   t: (key: string) => string;
   upsert: ReturnType<typeof useEvolu>["upsert"];
 }
 
 export const useIdentityOwnersComposition = ({
+  currentNsec,
   evolu,
   lang,
   navigation,
   pushToast,
+  setCurrentNsec,
   t,
   upsert,
 }: UseIdentityOwnersCompositionParams) => {
@@ -51,43 +47,9 @@ export const useIdentityOwnersComposition = ({
   const messagesOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const transactionsOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
 
-  const [currentNsec, setCurrentNsec] = React.useState<string | null>(() =>
-    getInitialNostrNsec(),
-  );
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      const storedNsec = await readStoredNostrNsec();
-      if (cancelled) return;
-      setCurrentNsec((current) =>
-        current === storedNsec ? current : storedNsec,
-      );
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const syncOwner = useEvoluSyncOwner(Boolean(currentNsec));
 
   useOwner(syncOwner);
-
-  React.useEffect(() => {
-    void (async () => {
-      try {
-        if (currentNsec) {
-          await setStoredPushNsec(currentNsec);
-        } else {
-          await clearStoredPushNsec();
-        }
-      } catch {
-        // ignore
-      }
-    })();
-  }, [currentNsec]);
 
   const appOwnerId = syncOwner?.id ?? null;
 
@@ -264,11 +226,7 @@ export const useIdentityOwnersComposition = ({
       nsec: activeSyncedNostrIdentity.nsec,
       switchedAtSec: activeSyncedNostrIdentity.switchedAtSec,
     }).then(() => {
-      setCurrentNsec((current) =>
-        current === activeSyncedNostrIdentity.nsec
-          ? current
-          : activeSyncedNostrIdentity.nsec,
-      );
+      setCurrentNsec(activeSyncedNostrIdentity.nsec);
       navigation.reload();
     });
   }, [

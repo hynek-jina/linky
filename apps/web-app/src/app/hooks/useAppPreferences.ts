@@ -1,5 +1,4 @@
 import React from "react";
-import { persistLang, type Lang } from "../../i18n";
 import {
   BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
   CASHU_AUTOSWAP_STORAGE_KEY,
@@ -17,7 +16,6 @@ interface UseAppPreferencesParams {
   cashuAutoswapEnabled: boolean;
   displayCurrency: DisplayCurrency;
   bankPaymentOfferRecipientCount: number;
-  lang: Lang;
   lightningInvoiceAutoPayLimit: number;
   payWithCashuEnabled: boolean;
   showProfileQrOnTiltEnabled: boolean;
@@ -28,22 +26,10 @@ export const useAppPreferences = ({
   cashuAutoswapEnabled,
   displayCurrency,
   bankPaymentOfferRecipientCount,
-  lang,
   lightningInvoiceAutoPayLimit,
   payWithCashuEnabled,
   showProfileQrOnTiltEnabled,
 }: UseAppPreferencesParams): void => {
-  React.useEffect(() => {
-    persistLang(lang);
-    try {
-      document.documentElement.lang = lang;
-      document.documentElement.setAttribute("translate", "no");
-      document.documentElement.classList.add("notranslate");
-    } catch {
-      // ignore
-    }
-  }, [lang]);
-
   React.useEffect(() => {
     try {
       localStorage.setItem(DISPLAY_CURRENCY_STORAGE_KEY, displayCurrency);

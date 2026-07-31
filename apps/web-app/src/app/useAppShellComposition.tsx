@@ -14,7 +14,6 @@ import {
 } from "../evolu";
 import { useRouting } from "../hooks/useRouting";
 import { useToasts } from "../hooks/useToasts";
-import { getInitialLang, translations, type Lang } from "../i18n";
 import { writeClipboardText } from "../platform/clipboard";
 import { shouldRenderNativeNfcWritePrompt } from "../platform/nativeBridge";
 import {
@@ -67,6 +66,7 @@ import { useNativeBackHandler } from "./hooks/layout/useNativeBackHandler";
 import { isUnknownContactId } from "./hooks/messages/contactIdentity";
 import { useChatMessageEffects } from "./hooks/messages/useChatMessageEffects";
 import { useAppDataTransfer } from "./hooks/useAppDataTransfer";
+import { useAppLanguage } from "./hooks/useAppLanguage";
 import { useAppPreferences } from "./hooks/useAppPreferences";
 import { useArmedDeleteTimeouts } from "./hooks/useArmedDeleteTimeouts";
 import { useFiatRates } from "./hooks/useFiatRates";
@@ -96,21 +96,20 @@ import {
   type DisplayContact,
 } from "./hooks/composition/useContactsMessagingComposition";
 
-type TranslationKey = keyof (typeof translations)["cs"];
+interface UseAppShellCompositionParams {
+  currentNsec: string;
+  setCurrentNsec: (currentNsec: string | null) => void;
+}
 
-const hasTranslationKey = (key: string): key is TranslationKey =>
-  Object.prototype.hasOwnProperty.call(translations.cs, key);
-
-export const useAppShellComposition = () => {
+export const useAppShellComposition = ({
+  currentNsec,
+  setCurrentNsec,
+}: UseAppShellCompositionParams) => {
   const { insert, update, upsert } = useEvolu();
 
   const route = useRouting();
   const { dismissToast, toasts, pushToast } = useToasts();
-  const [lang, setLang] = useState<Lang>(() => getInitialLang());
-  const t = React.useCallback(
-    (key: string) => (hasTranslationKey(key) ? translations[lang][key] : key),
-    [lang],
-  );
+  const { lang, setLang, t } = useAppLanguage();
   const {
     activeNostrIdentitySource,
     activeSyncedNostrIdentity,
@@ -122,7 +121,6 @@ export const useAppShellComposition = () => {
     cashuOwnerIdRef,
     cashuOwnerIndex,
     cashuVisibleOwnerIds,
-    confirmPendingOnboardingProfile,
     contactsOwnerEditCount,
     contactsOwnerEditsUntilRotation,
     contactsOwnerId,
@@ -130,9 +128,7 @@ export const useAppShellComposition = () => {
     contactsOwnerNewContactsCount,
     contactsOwnerPointer,
     contactsVisibleOwnerIds,
-    createNewAccount,
     currentNpub,
-    currentNsec,
     historicalOwnerSetsReady,
     identityOwnerId,
     isSeedLogin,
@@ -147,14 +143,6 @@ export const useAppShellComposition = () => {
     messagesVisibleOwnerIds,
     metaOwnerId,
     nostrIdentityRows,
-    onboardingIsBusy,
-    onboardingPhotoInputRef,
-    onboardingStep,
-    openReturningOnboarding,
-    onPendingOnboardingPhotoError,
-    onPendingOnboardingPhotoSelected,
-    pasteReturningSlip39FromClipboard,
-    pickPendingOnboardingPhoto,
     requestDeriveNostrKeys,
     requestLogout,
     requestManualRotateCashuOwner,
@@ -166,15 +154,8 @@ export const useAppShellComposition = () => {
     rotateContactsOwnerIsBusy,
     rotateMessagesOwnerIsBusy,
     rotateTransactionsOwnerIsBusy,
-    savePendingOnboardingBackupToPasswordManager,
     seedMnemonic,
-    cyclePendingOnboardingAvatarControl,
-    selectReturningSlip39Suggestion,
-    setOnboardingStep,
-    setPendingOnboardingName,
-    setReturningSlip39Input,
     slip39Seed,
-    submitReturningSlip39,
     syncedNostrIdentityMatchesLocal,
     syncedNostrIdentityResolution,
     syncOwner,
@@ -187,10 +168,12 @@ export const useAppShellComposition = () => {
     transactionsOwnerPointer,
     transactionsVisibleOwnerIds,
   } = useIdentityOwnersComposition({
+    currentNsec,
     evolu,
     lang,
     navigation: globalThis.location,
     pushToast,
+    setCurrentNsec,
     t,
     upsert,
   });
@@ -352,13 +335,11 @@ export const useAppShellComposition = () => {
     try {
       wipeEvoluStorageImpl();
     } catch {
-      const failMessage =
-        translations[lang].evoluWipeStorageFailed ?? "evoluWipeStorageFailed";
-      pushToast(failMessage);
+      pushToast(t("evoluWipeStorageFailed"));
     } finally {
       setEvoluWipeStorageIsBusy(false);
     }
-  }, [evoluWipeStorageIsBusy, lang, pushToast]);
+  }, [evoluWipeStorageIsBusy, pushToast, t]);
 
   const [contactPaymentIntent, setContactPaymentIntent] = useState<
     "pay" | "request"
@@ -930,7 +911,6 @@ export const useAppShellComposition = () => {
     cashuAutoswapEnabled,
     displayCurrency,
     bankPaymentOfferRecipientCount,
-    lang,
     lightningInvoiceAutoPayLimit,
     payWithCashuEnabled,
     showProfileQrOnTiltEnabled,
@@ -1907,9 +1887,6 @@ export const useAppShellComposition = () => {
     appActions,
     appState,
     cancelPendingCashuContactSend,
-    confirmPendingOnboardingProfile,
-    createNewAccount,
-    currentNsec,
     dismissToast,
     displayUnit,
     formatDisplayedAmountParts,
@@ -1918,27 +1895,12 @@ export const useAppShellComposition = () => {
     lang,
     mainSwipeRouteProps,
     moneyRouteProps,
-    onboardingIsBusy,
-    onboardingPhotoInputRef,
-    onboardingStep,
-    openReturningOnboarding,
-    onPendingOnboardingPhotoError,
-    onPendingOnboardingPhotoSelected,
     pageClassNameWithSwipe,
-    pasteReturningSlip39FromClipboard,
-    pickPendingOnboardingPhoto,
     peopleRouteProps,
     pendingCashuContactSend,
     pushToast,
     route,
-    cyclePendingOnboardingAvatarControl,
-    selectReturningSlip39Suggestion,
-    savePendingOnboardingBackupToPasswordManager,
     setLang,
-    setReturningSlip39Input,
-    setOnboardingStep,
-    setPendingOnboardingName,
-    submitReturningSlip39,
     systemRouteProps,
     t,
     toasts,

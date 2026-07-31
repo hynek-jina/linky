@@ -114,7 +114,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 - Web app seed/identity helpers in `src/utils/slip39Nostr.ts` are app-level adapters that delegate SLIP-39/BIP-85 derivation to `@linky/core/identity`
 - `apps/web-app/src/App.tsx` is a thin wrapper that default-exports `app/AppShell`
 - App shell structure lives under `apps/web-app/src/app/`:
-  - `AppShell.tsx` is a thin renderer/auth gate that wires `AppShellContextsProvider` and route content
+  - `AppShell.tsx` resolves auth before mounting either the minimal onboarding composition or the full authenticated composition, then wires `AppShellContextsProvider` and route content for authenticated sessions
   - `useAppShellComposition.tsx` is a thin composition layer that wires the per-domain composition hooks together and assembles route-prop bundles; domain state/effects/callbacks live in `hooks/composition/` per-domain hooks
   - `context/AppShellContexts.tsx` is the single authenticated shell context transport; it provides shell/route contexts and typed consumer hooks (`useAppShellCore`, `useAppShellActions`, `useAppShellRouteContext`)
   - `hooks/` contains app domain hooks (`useRelayDomain`, `useMintDomain`, `useContactsDomain`, `useMessagesDomain`, `usePaymentsDomain`, `useCashuDomain`, `useProfileAuthDomain`, `useGuideScannerDomain`) plus app-shell extraction hooks (`useAppDataTransfer`, `useContactsNostrPrefetchEffects`, `useMainSwipePageEffects`, `useProfileNpubCashEffects`, `useScannedTextHandler`, `useFeedbackContact`, `useOwnerScopedStorage`, `usePaidOverlayState`, `useRouteDerivedShellState`)
