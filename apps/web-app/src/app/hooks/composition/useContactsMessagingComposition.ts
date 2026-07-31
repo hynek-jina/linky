@@ -50,6 +50,7 @@ import {
   safeLocalStorageGet,
   safeLocalStorageGetJson,
   safeLocalStorageSetJson,
+  withLocalStorageLeaseLock,
 } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
@@ -85,14 +86,20 @@ import { findUniqueContactByLightningAddress } from "../../lib/contactIdentity";
 import { resolveContactRowOwnerLane } from "../../lib/contactOwnerLane";
 import {
   createLinkyBankPaymentOfferEvent,
+  forgetLinkyBankPaymentOfferSpdPayload,
   getLinkyBankPaymentOfferInfo,
   getLinkyBankPaymentOfferStatusRank,
   isLinkyBankPaymentOfferTerminalStatus,
+  isLinkyBankPaymentOfferWholeOfferTerminalStatus,
+  LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX,
   LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
   LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY,
+  markLinkyBankPaymentOfferBankDetailsSent,
+  readLinkyBankPaymentOfferSpdRecord,
+  rememberLinkyBankPaymentOfferSpdPayload,
   shouldPushLinkyBankPaymentOfferStatus,
   type LinkyBankPaymentOfferStatus,
 } from "../../lib/bankPaymentOffer";
@@ -469,12 +476,6 @@ export const useContactsMessagingComposition = ({
   const [bankPaymentOfferMessages, setBankPaymentOfferMessages] = useState<
     LocalNostrMessage[]
   >([]);
-
-  const bankPaymentOfferSpdPayloadByOfferIdRef = React.useRef<
-    Map<string, string>
-  >(new Map());
-
-  const autoSentBankDetailsOfferIdsRef = React.useRef<Set<string>>(new Set());
 
   const bankPaymentOfferExpiryInFlightRef = React.useRef(false);
 
@@ -1728,10 +1729,13 @@ export const useContactsMessagingComposition = ({
 
         const offerId = makeLocalId();
         if (spdPayload) {
-          bankPaymentOfferSpdPayloadByOfferIdRef.current.set(
+          // Persisted so the offer survives an app reload: the auto-responder
+          // needs this payload when a recipient's acceptance arrives later.
+          rememberLinkyBankPaymentOfferSpdPayload({
             offerId,
+            ownerPubkey: myPubHex,
             spdPayload,
-          );
+          });
         }
 
         const pool = await getSharedAppNostrPool();
@@ -1817,7 +1821,11 @@ export const useContactsMessagingComposition = ({
     async (
       message: LocalNostrMessage,
       nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
-      options?: { spdPayload?: string | null; withPush?: boolean },
+      options?: {
+        requireContactDelivery?: boolean;
+        spdPayload?: string | null;
+        withPush?: boolean;
+      },
     ): Promise<boolean> => {
       const offerInfo = getLinkyBankPaymentOfferInfo(
         String(message.content ?? ""),
@@ -1913,16 +1921,37 @@ export const useContactsMessagingComposition = ({
             );
 
         const pool = await getSharedAppNostrPool();
-        const publishOutcome = await publishWrappedWithRetry(
-          pool,
-          NOSTR_RELAYS,
-          wrapForMe,
-          wrapForContact,
-        );
+        if (options?.requireContactDelivery) {
+          // Publish the contact wrap first and treat its failure as the whole
+          // send failing: publishing only the self copy would sync a
+          // bank_details_sent status the recipient never received, which
+          // suppresses every retry.
+          const contactOutcome = await publishSingleWrappedWithRetry(
+            pool,
+            NOSTR_RELAYS,
+            wrapForContact,
+          );
+          if (!contactOutcome.anySuccess) {
+            setStatus(t("spdPaymentOfferFailed"));
+            return false;
+          }
+          try {
+            await publishSingleWrappedWithRetry(pool, NOSTR_RELAYS, wrapForMe);
+          } catch {
+            // Self copy is best effort; the contact already has the details.
+          }
+        } else {
+          const publishOutcome = await publishWrappedWithRetry(
+            pool,
+            NOSTR_RELAYS,
+            wrapForMe,
+            wrapForContact,
+          );
 
-        if (!publishOutcome.anySuccess) {
-          setStatus(t("spdPaymentOfferFailed"));
-          return false;
+          if (!publishOutcome.anySuccess) {
+            setStatus(t("spdPaymentOfferFailed"));
+            return false;
+          }
         }
 
         const messageWrapId =
@@ -1954,6 +1983,7 @@ export const useContactsMessagingComposition = ({
     [
       currentNsec,
       contacts,
+      publishSingleWrappedWithRetry,
       publishWrappedWithRetry,
       setStatus,
       t,
@@ -2127,6 +2157,19 @@ export const useContactsMessagingComposition = ({
         for (const [offerId, group] of groups) {
           if (cancelled) return;
 
+          if (
+            group.some(
+              (entry) =>
+                entry.info &&
+                isLinkyBankPaymentOfferWholeOfferTerminalStatus(
+                  entry.info.status,
+                ),
+            )
+          ) {
+            forgetLinkyBankPaymentOfferSpdPayload(offerId);
+            continue;
+          }
+
           const hasActiveBankDetails = group.some(
             (entry) =>
               entry.info?.status === "bank_details_sent" ||
@@ -2152,23 +2195,51 @@ export const useContactsMessagingComposition = ({
           const candidate = accepted[0] ?? null;
           if (!candidate?.info) continue;
 
-          const spdPayload =
-            bankPaymentOfferSpdPayloadByOfferIdRef.current.get(offerId) ?? "";
-          if (!spdPayload) continue;
-
           const candidateKey = `${offerId}:${String(candidate.message.contactId ?? "").trim()}`;
-          if (autoSentBankDetailsOfferIdsRef.current.has(candidateKey)) {
+          const record = readLinkyBankPaymentOfferSpdRecord({
+            offerId,
+            ownerPubkey: myPubHex,
+          });
+          // Details go to exactly one winner, so any recorded send blocks the
+          // offer — a per-candidate check would let a tab with a lagging
+          // message view send the same bank details to a second recipient.
+          if (!record || record.sentCandidateKeys.length > 0) {
             continue;
           }
 
-          autoSentBankDetailsOfferIdsRef.current.add(candidateKey);
-          const sent = await respondToBankPaymentOffer(
-            candidate.message,
-            "bank_details_sent",
-            { spdPayload },
-          );
-          if (!sent) {
-            autoSentBankDetailsOfferIdsRef.current.delete(candidateKey);
+          try {
+            await withLocalStorageLeaseLock({
+              key: `${LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX}.${offerId}`,
+              timeoutMs: 0,
+              fn: async () => {
+                // Re-read under the lock: another tab may have just sent.
+                const lockedRecord = readLinkyBankPaymentOfferSpdRecord({
+                  offerId,
+                  ownerPubkey: myPubHex,
+                });
+                if (!lockedRecord) return;
+                if (lockedRecord.sentCandidateKeys.length > 0) return;
+
+                const sent = await respondToBankPaymentOffer(
+                  candidate.message,
+                  "bank_details_sent",
+                  {
+                    requireContactDelivery: true,
+                    spdPayload: lockedRecord.spdPayload,
+                  },
+                );
+                // Marked only after a successful publish so an interrupted
+                // send retries; the lease lock covers the concurrent window.
+                if (sent) {
+                  markLinkyBankPaymentOfferBankDetailsSent({
+                    candidateKey,
+                    offerId,
+                  });
+                }
+              },
+            });
+          } catch {
+            // Another tab holds the send lock for this offer; let it finish.
           }
         }
       } catch {

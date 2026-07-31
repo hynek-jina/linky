@@ -15,6 +15,7 @@ import {
   getLinkyBankPaymentOfferText,
   isLinkyBankPaymentOfferExpired,
   isLinkyBankPaymentOfferTerminalStatus,
+  isLinkyBankPaymentOfferWholeOfferTerminalStatus,
 } from "../../lib/bankPaymentOffer";
 import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
 import { formatChatMessagePreviewText } from "../../lib/chatMessageDisplay";
@@ -412,12 +413,16 @@ export const useInboxNotificationsSync = <
           const isTerminalOffer = offerInfo
             ? isLinkyBankPaymentOfferTerminalStatus(offerInfo.status)
             : false;
+          // Whole-offer statuses only: one recipient's declined thread must
+          // not swallow another recipient's later acceptance of the offer.
           const hasTerminalKnownOffer = offerId
             ? latest.bankPaymentOfferMessages.some((message) => {
                 const knownInfo = getLinkyBankPaymentOfferInfo(message.content);
                 return (
                   knownInfo?.offerId === offerId &&
-                  isLinkyBankPaymentOfferTerminalStatus(knownInfo.status)
+                  isLinkyBankPaymentOfferWholeOfferTerminalStatus(
+                    knownInfo.status,
+                  )
                 );
               })
             : false;
