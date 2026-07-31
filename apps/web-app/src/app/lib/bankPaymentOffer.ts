@@ -9,6 +9,11 @@ export const LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT = 10;
 export const LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY = "CZK";
 const LINKY_BANK_PAYMENT_OFFER_MINIMIZED_STORAGE_KEY_PREFIX =
   "linky.bank_payment_offer_minimized.v1";
+const LINKY_BANK_PAYMENT_OFFER_SPD_STORAGE_KEY_PREFIX =
+  "linky.bank_payment_offer_spd.v1";
+const LINKY_BANK_PAYMENT_OFFER_SPD_MAX_AGE_SEC = 60 * 60;
+export const LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX =
+  "linky.bank_payment_offer_details_lock.v1";
 
 export type LinkyBankPaymentOfferStatus =
   | "accepted"
@@ -90,6 +95,160 @@ const readObjectField = (value: unknown, field: string): unknown => {
   return Reflect.get(value, field);
 };
 
+export interface LinkyBankPaymentOfferSpdRecord {
+  createdAtSec: number;
+  ownerPubkey: string;
+  sentCandidateKeys: string[];
+  spdPayload: string;
+}
+
+const isLinkyBankPaymentOfferSpdRecord = (
+  value: unknown,
+): value is LinkyBankPaymentOfferSpdRecord => {
+  const createdAtSec = readObjectField(value, "createdAtSec");
+  const ownerPubkey = readObjectField(value, "ownerPubkey");
+  const sentCandidateKeys = readObjectField(value, "sentCandidateKeys");
+  const spdPayload = readObjectField(value, "spdPayload");
+  return (
+    typeof createdAtSec === "number" &&
+    Number.isFinite(createdAtSec) &&
+    createdAtSec > 0 &&
+    typeof ownerPubkey === "string" &&
+    Array.isArray(sentCandidateKeys) &&
+    sentCandidateKeys.every((key) => typeof key === "string") &&
+    typeof spdPayload === "string" &&
+    spdPayload.trim() !== ""
+  );
+};
+
+// One storage key per offer so concurrent tabs working on different offers
+// never overwrite each other's records.
+const getSpdRecordStorageKey = (offerId: string): string =>
+  `${LINKY_BANK_PAYMENT_OFFER_SPD_STORAGE_KEY_PREFIX}.${encodeURIComponent(offerId)}`;
+
+// A future createdAtSec (backward clock jump) also counts as expired so a
+// record can never outlive the intended one-hour window.
+const isExpiredSpdRecord = (
+  record: LinkyBankPaymentOfferSpdRecord,
+  nowSec: number,
+): boolean =>
+  record.createdAtSec > nowSec ||
+  nowSec - record.createdAtSec >= LINKY_BANK_PAYMENT_OFFER_SPD_MAX_AGE_SEC;
+
+const readSpdRecordByStorageKey = (
+  storageKey: string,
+): LinkyBankPaymentOfferSpdRecord | null => {
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(storageKey);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (isLinkyBankPaymentOfferSpdRecord(parsed)) return parsed;
+  } catch {
+    // ignore corrupted storage content
+  }
+  return null;
+};
+
+const writeSpdRecord = (
+  offerId: string,
+  record: LinkyBankPaymentOfferSpdRecord,
+): void => {
+  try {
+    window.localStorage.setItem(
+      getSpdRecordStorageKey(offerId),
+      JSON.stringify(record),
+    );
+  } catch {
+    // Local storage can be unavailable in privacy-restricted browsers.
+  }
+};
+
+const pruneExpiredSpdRecords = (nowSec: number): void => {
+  try {
+    const staleKeys: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (
+        !key?.startsWith(`${LINKY_BANK_PAYMENT_OFFER_SPD_STORAGE_KEY_PREFIX}.`)
+      ) {
+        continue;
+      }
+      const record = readSpdRecordByStorageKey(key);
+      if (!record || isExpiredSpdRecord(record, nowSec)) staleKeys.push(key);
+    }
+    for (const key of staleKeys) window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+};
+
+export const rememberLinkyBankPaymentOfferSpdPayload = (args: {
+  offerId: string;
+  ownerPubkey: string;
+  spdPayload: string;
+}): void => {
+  const offerId = args.offerId.trim();
+  const spdPayload = args.spdPayload.trim();
+  if (!offerId || !spdPayload) return;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  pruneExpiredSpdRecords(nowSec);
+  writeSpdRecord(offerId, {
+    createdAtSec: nowSec,
+    ownerPubkey: args.ownerPubkey,
+    sentCandidateKeys: [],
+    spdPayload,
+  });
+};
+
+export const readLinkyBankPaymentOfferSpdRecord = (args: {
+  offerId: string;
+  ownerPubkey: string;
+}): LinkyBankPaymentOfferSpdRecord | null => {
+  const record = readSpdRecordByStorageKey(
+    getSpdRecordStorageKey(args.offerId),
+  );
+  if (!record) return null;
+  // Delete rather than just hide an expired record so a later clock
+  // correction cannot bring it back to life.
+  if (isExpiredSpdRecord(record, Math.floor(Date.now() / 1000))) {
+    forgetLinkyBankPaymentOfferSpdPayload(args.offerId);
+    return null;
+  }
+  if (record.ownerPubkey !== args.ownerPubkey) return null;
+  return record;
+};
+
+export const markLinkyBankPaymentOfferBankDetailsSent = (args: {
+  candidateKey: string;
+  offerId: string;
+}): void => {
+  const record = readSpdRecordByStorageKey(
+    getSpdRecordStorageKey(args.offerId),
+  );
+  if (!record || record.sentCandidateKeys.includes(args.candidateKey)) return;
+  writeSpdRecord(args.offerId, {
+    ...record,
+    sentCandidateKeys: [...record.sentCandidateKeys, args.candidateKey],
+  });
+};
+
+export const forgetLinkyBankPaymentOfferSpdPayload = (
+  offerId: string,
+): void => {
+  try {
+    window.localStorage.removeItem(getSpdRecordStorageKey(offerId));
+  } catch {
+    // ignore
+  }
+};
+
 const isLinkyBankPaymentOfferStatus = (
   value: unknown,
 ): value is LinkyBankPaymentOfferStatus =>
@@ -105,6 +264,12 @@ export const isLinkyBankPaymentOfferTerminalStatus = (
   status: LinkyBankPaymentOfferStatus,
 ): boolean =>
   status === "canceled" || status === "declined" || status === "settled";
+
+// Unlike `declined`, which only ends one recipient's thread, these statuses
+// end the offer for every recipient.
+export const isLinkyBankPaymentOfferWholeOfferTerminalStatus = (
+  status: LinkyBankPaymentOfferStatus,
+): boolean => status === "canceled" || status === "settled";
 
 export const getLinkyBankPaymentOfferStatusRank = (
   status: LinkyBankPaymentOfferStatus,
