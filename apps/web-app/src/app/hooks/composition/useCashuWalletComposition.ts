@@ -20,10 +20,7 @@ import {
 } from "../../../lnurlPay";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { getCashuDeterministicSeedFromStorage } from "../../../utils/cashuDeterministic";
-import {
-  isCashuOutputsAlreadySignedError,
-  isCashuOutputsArePendingError,
-} from "../../../utils/cashuErrors";
+import { isCashuOutputsAlreadySignedError } from "../../../utils/cashuErrors";
 import { getCashuLib } from "../../../utils/cashuLib";
 import { cashuAmountToNumber } from "../../../utils/cashuProofs";
 import { createLoadedCashuWallet } from "../../../utils/cashuWallet";
@@ -70,7 +67,6 @@ import { useNpubCashMintSelection } from "../mint/useNpubCashMintSelection";
 import { useContactPayMethod } from "../payments/useContactPayMethod";
 import { usePayContactWithCashuMessage } from "../payments/usePayContactWithCashuMessage";
 import { useRouteAmountResetEffects } from "../payments/useRouteAmountResetEffects";
-import { shouldKeepTopupQuoteAfterClaimError } from "../topup/topupMintClaim";
 import {
   isClaimableMintQuoteState,
   readMintQuoteState,
@@ -1250,19 +1246,9 @@ export const useCashuWalletComposition = ({
             route: route.kind,
           });
         }
-        if (
-          shouldKeepTopupQuoteAfterClaimError(
-            error,
-            (e: unknown) =>
-              isCashuOutputsAlreadySignedError(e) ||
-              isCashuOutputsArePendingError(e),
-          )
-        ) {
-          setStatus(`${t("restoreFailed")}: ${message}`);
-        } else if (isCashuOutputsAlreadySignedError(error) && !cancelled) {
-          // Recovery already ran inside mintTopupProofs. Drop the pending
-          // quote so the 5s tick stops re-issuing the same failing mint
-          // call against the same deterministic counter.
+        if (isCashuOutputsAlreadySignedError(error) && !cancelled) {
+          // mintTopupProofs exhausted deterministic recovery; clearing the
+          // quote prevents the five-second poll from repeating the failed claim.
           setTopupMintQuote(null);
         }
       } finally {

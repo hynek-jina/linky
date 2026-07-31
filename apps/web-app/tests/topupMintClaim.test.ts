@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  isTopupMintQuoteClaimableState,
-  shouldKeepTopupQuoteAfterClaimError,
-} from "../src/app/hooks/topup/topupMintClaim";
+import { isTopupMintQuoteClaimableState } from "../src/app/hooks/topup/topupMintClaim";
 import { isCashuOutputsAlreadySignedError } from "../src/utils/cashuErrors";
 
 describe("topup mint claim helpers", () => {
@@ -38,17 +35,5 @@ describe("topup mint claim helpers", () => {
     expect(isCashuOutputsAlreadySignedError(new Error("network failed"))).toBe(
       false,
     );
-  });
-
-  it("drops the pending quote after an already-signed restore miss", () => {
-    // Recovery in mintTopupProofs exhausts the deterministic restore loop
-    // before we land here, so retrying the same quote forever just spams
-    // the mint with the same failing call.
-    expect(
-      shouldKeepTopupQuoteAfterClaimError(
-        new Error("outputs already signed"),
-        isCashuOutputsAlreadySignedError,
-      ),
-    ).toBe(false);
   });
 });
