@@ -1,18 +1,29 @@
+import * as Evolu from "@evolu/common";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ContactRowLike } from "../src/app/types/appTypes";
+import { createCashuTokenId } from "../src/app/lib/cashuTokenIdentity";
+import type {
+  CashuTokenUpdate,
+  CashuTokenUpsert,
+} from "../src/app/hooks/payments/persistCashuMessagePayment";
+import type {
+  CashuTokenRowLike,
+  ContactRowLike,
+  LocalNostrMessage,
+  NewLocalNostrMessage,
+} from "../src/app/types/appTypes";
 
 const {
-  createSendTokenWithTokensAtMintMock,
   createLinkyPaymentNoticeEventMock,
+  createSendTokenWithTokensAtMintMock,
   getSharedAppNostrPoolMock,
   navigateToMock,
   wrapEventWithPushMarkerMock,
   wrapEventWithoutPushMarkerMock,
 } = vi.hoisted(() => ({
-  createSendTokenWithTokensAtMintMock: vi.fn(),
   createLinkyPaymentNoticeEventMock: vi.fn(),
+  createSendTokenWithTokensAtMintMock: vi.fn(),
   getSharedAppNostrPoolMock: vi.fn(),
   navigateToMock: vi.fn(),
   wrapEventWithPushMarkerMock: vi.fn(),
@@ -36,10 +47,10 @@ vi.mock("nostr-tools", () => ({
   nip19: {
     decode: vi.fn((value: string) => {
       if (value === "nsec-test") {
-        return { type: "nsec", data: new Uint8Array([1, 2, 3]) };
+        return { data: new Uint8Array([1, 2, 3]), type: "nsec" };
       }
       if (value === "npub-test") {
-        return { type: "npub", data: "contact-pubkey-hex" };
+        return { data: "contact-pubkey-hex", type: "npub" };
       }
       throw new Error(`Unexpected decode value: ${value}`);
     }),
@@ -48,6 +59,7 @@ vi.mock("nostr-tools", () => ({
 
 vi.mock("../src/app/lib/pushWrappedEvent", () => ({
   createLinkyPaymentNoticeEvent: createLinkyPaymentNoticeEventMock,
+  LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER: "bank_payment_offer",
   wrapEventWithPushMarker: wrapEventWithPushMarkerMock,
   wrapEventWithoutPushMarker: wrapEventWithoutPushMarkerMock,
 }));
@@ -56,191 +68,328 @@ import { usePayContactWithCashuMessage } from "../src/app/hooks/payments/usePayC
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-// Evolu OwnerIds must be canonical 22-char base64url ids; arbitrary strings
-// fail validation in resolveCashuRowStoredOwnerLane and silently fall back to
-// the active write lane, which is exactly the bug this test guards against.
-const LANE_OLD = "AAAAAAAAAAAAAAAAAAAAAA";
-const LANE_ACTIVE = "AQEBAQEBAQEBAQEBAQEBAQ";
+const oldOwnerResult = Evolu.OwnerId.fromUnknown("AAAAAAAAAAAAAAAAAAAAAA");
+const activeOwnerResult = Evolu.OwnerId.fromUnknown("AQEBAQEBAQEBAQEBAQEBAQ");
+if (!oldOwnerResult.ok || !activeOwnerResult.ok) {
+  throw new Error("Invalid test owner ids");
+}
+const OLD_OWNER_ID = oldOwnerResult.value;
+const ACTIVE_OWNER_ID = activeOwnerResult.value;
+const CONTACT_ID = Evolu.createIdFromString<"Contact">("contact");
+const OLD_TOKEN_ID = createCashuTokenId("cashu-old-token");
+const withOwner = (row: CashuTokenRowLike, ownerId: Evolu.OwnerId) => ({
+  ...row,
+  ownerId,
+});
 
-const flushEffects = async () => {
+type PayContact = ReturnType<
+  typeof usePayContactWithCashuMessage<ContactRowLike>
+>;
+
+interface SetupOptions {
+  appendLocalNostrMessage?: (message: NewLocalNostrMessage) => string;
+  cashuTokensAll?: readonly CashuTokenRowLike[];
+  cashuTokensWithMeta?: readonly CashuTokenRowLike[];
+  enqueuePendingPayment?: ReturnType<typeof vi.fn>;
+  logPaymentEvent?: ReturnType<typeof vi.fn>;
+  nostrMessagesLocal?: LocalNostrMessage[];
+  publishSingleWrappedWithRetry?: ReturnType<typeof vi.fn>;
+  publishWrappedWithRetry?: ReturnType<typeof vi.fn>;
+  pushToast?: ReturnType<typeof vi.fn>;
+  showPaidOverlay?: ReturnType<typeof vi.fn>;
+  update?: CashuTokenUpdate;
+  updateLocalNostrMessage?: ReturnType<typeof vi.fn>;
+  upsert?: CashuTokenUpsert;
+}
+
+const setup = async (options: SetupOptions = {}) => {
+  let payContact: PayContact | null = null;
+  const enqueuePendingPayment = options.enqueuePendingPayment ?? vi.fn();
+  const logPaymentEvent = options.logPaymentEvent ?? vi.fn();
+  const publishSingleWrappedWithRetry =
+    options.publishSingleWrappedWithRetry ??
+    vi.fn(async () => ({ anySuccess: true, error: null }));
+  const publishWrappedWithRetry =
+    options.publishWrappedWithRetry ??
+    vi.fn(async () => ({ anySuccess: true, error: null }));
+  const pushToast = options.pushToast ?? vi.fn();
+  const showPaidOverlay = options.showPaidOverlay ?? vi.fn();
+  const update =
+    options.update ?? vi.fn<CashuTokenUpdate>(() => ({ ok: true }));
+  const updateLocalNostrMessage = options.updateLocalNostrMessage ?? vi.fn();
+  const upsert =
+    options.upsert ?? vi.fn<CashuTokenUpsert>(() => ({ ok: true }));
+
+  const Harness = () => {
+    const pay = usePayContactWithCashuMessage<ContactRowLike>({
+      activePublishClientIdsRef: { current: new Set<string>() },
+      appendLocalNostrMessage:
+        options.appendLocalNostrMessage ?? (() => "local-message"),
+      buildCashuMintCandidates: (mintGroups) => {
+        const mint = mintGroups.get("https://mint.example");
+        return mint
+          ? [
+              {
+                mint: "https://mint.example",
+                sum: mint.sum,
+                tokens: mint.tokens,
+              },
+            ]
+          : [];
+      },
+      cashuBalance: 1_000,
+      cashuTokensAll: options.cashuTokensAll ?? [],
+      cashuTokensWithMeta: options.cashuTokensWithMeta ?? [
+        withOwner(
+          {
+            amount: 1_000,
+            id: OLD_TOKEN_ID,
+            mint: "https://mint.example",
+            state: "accepted",
+            token: "cashu-old-token",
+            unit: "sat",
+          },
+          OLD_OWNER_ID,
+        ),
+      ],
+      chatSeenWrapIdsRef: { current: new Set<string>() },
+      currentNpub: "npub-test",
+      currentNsec: "nsec-test",
+      defaultMintUrl: "https://mint.example",
+      enqueuePendingPayment,
+      formatDisplayedAmountParts: (amountSat) => ({
+        approxPrefix: "",
+        amountText: String(amountSat),
+        unitLabel: "sat",
+      }),
+      logPayStep: vi.fn(),
+      logPaymentEvent,
+      nostrMessagesLocal: options.nostrMessagesLocal ?? [],
+      payWithCashuEnabled: true,
+      publishSingleWrappedWithRetry,
+      publishWrappedWithRetry,
+      pushToast,
+      resolveOwnerIdForWrite: vi.fn(async () => ACTIVE_OWNER_ID),
+      setContactsOnboardingHasPaid: vi.fn(),
+      setStatus: vi.fn(),
+      showPaidOverlay,
+      t: (key) => key,
+      update,
+      updateLocalNostrMessage,
+      upsert,
+    });
+
+    React.useEffect(() => {
+      payContact = pay;
+    }, [pay]);
+    return null;
+  };
+
+  const root = createRoot(document.createElement("div"));
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    root.render(<Harness />);
   });
+
+  return {
+    enqueuePendingPayment,
+    getPay: () => payContact,
+    logPaymentEvent,
+    publishSingleWrappedWithRetry,
+    publishWrappedWithRetry,
+    pushToast,
+    root,
+    showPaidOverlay,
+    update,
+    updateLocalNostrMessage,
+    upsert,
+  };
 };
 
 describe("usePayContactWithCashuMessage", () => {
   afterEach(() => {
-    createSendTokenWithTokensAtMintMock.mockReset();
     createLinkyPaymentNoticeEventMock.mockReset();
+    createSendTokenWithTokensAtMintMock.mockReset();
     getSharedAppNostrPoolMock.mockReset();
     navigateToMock.mockReset();
     wrapEventWithPushMarkerMock.mockReset();
     wrapEventWithoutPushMarkerMock.mockReset();
+    vi.restoreAllMocks();
     localStorage.clear();
   });
 
-  it("deletes spent accepted tokens before inserting the change token", async () => {
-    createSendTokenWithTokensAtMintMock.mockResolvedValue({
-      ok: true,
-      mint: "https://mint.example",
-      unit: "sat",
-      sendAmount: 600,
-      sendToken: "cashu-send-token",
-      remainingAmount: 400,
-      remainingToken: "cashu-change-token",
+  it("orders swap, owner-aware commit, publish, and transaction finalization", async () => {
+    const operations: string[] = [];
+    createSendTokenWithTokensAtMintMock.mockImplementation(async () => {
+      operations.push("swap");
+      return {
+        mint: "https://mint.example",
+        ok: true,
+        remainingAmount: 400,
+        remainingToken: "cashu-change-token",
+        sendAmount: 600,
+        sendProofs: [],
+        sendToken: "cashu-send-token",
+        unit: "sat",
+      };
     });
     getSharedAppNostrPoolMock.mockResolvedValue({});
     wrapEventWithoutPushMarkerMock
       .mockReturnValueOnce({ id: "wrap-me" })
       .mockReturnValueOnce({ id: "wrap-contact" });
     createLinkyPaymentNoticeEventMock.mockReturnValue({
-      created_at: 1730000000,
+      content: "payment_notice",
+      created_at: 1_730_000_000,
       kind: 24133,
       pubkey: "my-pubkey-hex",
-      tags: [
-        ["p", "contact-pubkey-hex"],
-        ["p", "my-pubkey-hex"],
-        ["client", "payment-notice-client"],
-        ["linky", "payment_notice"],
-      ],
-      content: "payment_notice",
+      tags: [],
     });
-    wrapEventWithPushMarkerMock.mockReturnValue({ id: "wrap-payment-notice" });
+    wrapEventWithPushMarkerMock.mockReturnValue({
+      id: "wrap-payment-notice",
+    });
 
-    const operations: string[] = [];
-    const upsert = vi.fn(
-      (table: string, payload: { state?: string; token?: string }) => {
-        if (table === "cashuToken") {
-          operations.push(
-            `insert:${String(payload.token ?? "")}:${String(payload.state ?? "")}`,
-          );
-        }
-        return { ok: true };
-      },
-    );
-    const update = vi.fn(
-      (
-        table: string,
-        payload: { id?: string | null },
-        options?: { ownerId?: string },
-      ) => {
-        if (table === "cashuToken") {
-          operations.push(
-            `update:${String(payload.id ?? "")}:${String(options?.ownerId ?? "none")}`,
-          );
-        }
-        return { ok: true };
-      },
-    );
+    const update = vi.fn<CashuTokenUpdate>((_table, payload, options) => {
+      if (typeof payload === "object" && payload !== null) {
+        operations.push(
+          `delete:${String(Reflect.get(payload, "id"))}:${String(options?.ownerId)}`,
+        );
+      }
+      return { ok: true };
+    });
+    const upsert = vi.fn<CashuTokenUpsert>((_table, payload) => {
+      if (typeof payload === "object" && payload !== null) {
+        operations.push(
+          `insert:${String(Reflect.get(payload, "token"))}:${String(Reflect.get(payload, "state"))}`,
+        );
+      }
+      return { ok: true };
+    });
+    const publishWrappedWithRetry = vi.fn(async () => {
+      operations.push("publish");
+      return { anySuccess: true, error: null };
+    });
+    const logPaymentEvent = vi.fn(() => {
+      operations.push("transaction");
+    });
+    const harness = await setup({
+      logPaymentEvent,
+      publishWrappedWithRetry,
+      update,
+      upsert,
+    });
 
-    let payContactWithCashuMessage: ReturnType<
-      typeof usePayContactWithCashuMessage<ContactRowLike>
-    > | null = null;
-
-    const Harness = () => {
-      const pay = usePayContactWithCashuMessage<ContactRowLike>({
-        activePublishClientIdsRef: { current: new Set<string>() },
-        appendLocalNostrMessage: () => "local-message-1",
-        buildCashuMintCandidates: (mintGroups) => {
-          const mint = mintGroups.get("https://mint.example");
-          return mint
-            ? [
-                {
-                  mint: "https://mint.example",
-                  sum: mint.sum,
-                  tokens: mint.tokens,
-                },
-              ]
-            : [];
-        },
-        cashuBalance: 1000,
-        cashuTokensAll: [],
-        cashuTokensWithMeta: [
-          {
-            id: "old-token-1",
-            ownerId: LANE_OLD,
-            state: "accepted",
-            mint: "https://mint.example",
-            token: "cashu-old-token",
-            amount: 1000,
-            unit: "sat",
+    let result: Awaited<ReturnType<PayContact>> | null = null;
+    await act(async () => {
+      result =
+        (await harness.getPay()?.({
+          amountSat: 600,
+          contact: {
+            id: CONTACT_ID,
+            name: "Alice",
+            npub: "npub-test",
           },
-        ],
-        // Active write lane differs from the lane that holds the spent token.
-        cashuVisibleOwnerIds: [LANE_OLD, LANE_ACTIVE],
-        chatSeenWrapIdsRef: { current: new Set<string>() },
-        currentNpub: "npub-test",
-        currentNsec: "nsec-test",
-        defaultMintUrl: "https://mint.example",
-        enqueuePendingPayment: vi.fn(),
-        formatDisplayedAmountParts: () => ({
-          approxPrefix: "",
-          amountText: "600",
-          unitLabel: "sat",
-        }),
-        logPayStep: vi.fn(),
-        logPaymentEvent: vi.fn(),
-        nostrMessagesLocal: [],
-        payWithCashuEnabled: true,
-        resolveOwnerIdForWrite: vi.fn(async () => LANE_ACTIVE),
-        publishSingleWrappedWithRetry: vi.fn(async () => ({
-          anySuccess: true,
-          error: null,
-        })),
-        publishWrappedWithRetry: vi.fn(async () => ({
-          anySuccess: true,
-          error: null,
-        })),
-        pushToast: vi.fn(),
-        setContactsOnboardingHasPaid: vi.fn(),
-        setStatus: vi.fn(),
-        showPaidOverlay: vi.fn(),
-        t: (key: string) => key,
-        update,
-        updateLocalNostrMessage: vi.fn(),
-        upsert,
-      });
-
-      React.useEffect(() => {
-        payContactWithCashuMessage = pay;
-      }, [pay]);
-
-      return null;
-    };
-
-    const container = document.createElement("div");
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<Harness />);
-    });
-    await flushEffects();
-
-    expect(payContactWithCashuMessage).not.toBeNull();
-
-    await act(async () => {
-      await payContactWithCashuMessage?.({
-        contact: {
-          id: "contact-1",
-          name: "Alice",
-          npub: "npub-test",
-        },
-        amountSat: 600,
-      });
+        })) ?? null;
     });
 
-    // The spent token is soft-deleted in ITS OWN lane (lane-old), not the
-    // active write lane (lane-active) — otherwise Evolu's (ownerId, id) keying
-    // makes the delete a no-op and the token stays spendable.
-    expect(operations).toContain(`update:old-token-1:${LANE_OLD}`);
-    expect(operations).not.toContain(`update:old-token-1:${LANE_ACTIVE}`);
-    expect(operations).toContain("insert:cashu-change-token:accepted");
-    expect(operations.indexOf(`update:old-token-1:${LANE_OLD}`)).toBeLessThan(
-      operations.indexOf("insert:cashu-change-token:accepted"),
+    expect(result).toEqual({ ok: true, queued: false });
+    expect(operations).toEqual([
+      "swap",
+      `delete:${String(OLD_TOKEN_ID)}:${String(OLD_OWNER_ID)}`,
+      "insert:cashu-change-token:accepted",
+      "publish",
+      "transaction",
+    ]);
+    expect(operations).not.toContain(
+      `delete:${String(OLD_TOKEN_ID)}:${String(ACTIVE_OWNER_ID)}`,
     );
 
+    await act(async () => harness.root.unmount());
+  });
+
+  it("queues an offline placeholder without swapping or publishing", async () => {
+    vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+    const appendLocalNostrMessage = vi.fn(() => "offline-message");
+    const harness = await setup({ appendLocalNostrMessage });
+
+    let result: Awaited<ReturnType<PayContact>> | null = null;
     await act(async () => {
-      root.unmount();
+      result =
+        (await harness.getPay()?.({
+          amountSat: 600,
+          contact: {
+            id: CONTACT_ID,
+            name: "Alice",
+            npub: "npub-test",
+          },
+        })) ?? null;
     });
+
+    expect(result).toEqual({ ok: true, queued: true });
+    expect(createSendTokenWithTokensAtMintMock).not.toHaveBeenCalled();
+    expect(harness.publishWrappedWithRetry).not.toHaveBeenCalled();
+    expect(harness.publishSingleWrappedWithRetry).not.toHaveBeenCalled();
+    expect(harness.enqueuePendingPayment).toHaveBeenCalledWith({
+      amountSat: 600,
+      contactId: CONTACT_ID,
+      messageId: "offline-message",
+    });
+    expect(appendLocalNostrMessage).toHaveBeenCalledOnce();
+
+    await act(async () => harness.root.unmount());
+  });
+
+  it("stores an unpublished send token and returns queued on relay failure", async () => {
+    createSendTokenWithTokensAtMintMock.mockResolvedValue({
+      mint: "https://mint.example",
+      ok: true,
+      remainingAmount: 0,
+      remainingToken: null,
+      sendAmount: 600,
+      sendProofs: [],
+      sendToken: "cashu-send-token",
+      unit: "sat",
+    });
+    getSharedAppNostrPoolMock.mockResolvedValue({});
+    wrapEventWithoutPushMarkerMock
+      .mockReturnValueOnce({ id: "wrap-me" })
+      .mockReturnValueOnce({ id: "wrap-contact" });
+    const pushToast = vi.fn();
+    const showPaidOverlay = vi.fn();
+    const upsert = vi.fn<CashuTokenUpsert>(() => ({ ok: true }));
+    const harness = await setup({
+      publishWrappedWithRetry: vi.fn(async () => ({
+        anySuccess: false,
+        error: "relay unavailable",
+      })),
+      pushToast,
+      showPaidOverlay,
+      upsert,
+    });
+
+    let result: Awaited<ReturnType<PayContact>> | null = null;
+    await act(async () => {
+      result =
+        (await harness.getPay()?.({
+          amountSat: 600,
+          contact: {
+            id: CONTACT_ID,
+            name: "Alice",
+            npub: "npub-test",
+          },
+        })) ?? null;
+    });
+
+    expect(result).toEqual({ ok: true, queued: true });
+    expect(upsert).toHaveBeenCalledWith(
+      "cashuToken",
+      expect.objectContaining({
+        state: "pending",
+        token: "cashu-send-token",
+      }),
+      { ownerId: ACTIVE_OWNER_ID },
+    );
+    expect(pushToast).toHaveBeenCalledWith("payFailed: relay unavailable");
+    expect(showPaidOverlay).toHaveBeenCalledWith("paidQueuedTo");
+
+    await act(async () => harness.root.unmount());
   });
 });
