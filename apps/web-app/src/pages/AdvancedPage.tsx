@@ -26,6 +26,7 @@ import {
   useAppShellActions,
   useAppShellCore,
 } from "../app/context/AppShellContexts";
+import { useAdvancedSettingsContext } from "../app/context/SystemSettingsContexts";
 import {
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
@@ -34,45 +35,6 @@ import { FeedbackIcon } from "../components/icons";
 import { useNavigation } from "../hooks/useRouting";
 import { getNativeNotificationPermissionState } from "../platform/nativeBridge";
 import { isNativePlatform } from "../platform/runtime";
-
-interface AdvancedPageProps {
-  __APP_VERSION__: string;
-  activeNostrIdentitySource: "custom" | "derived";
-  connectedRelayCount: number;
-  copyNostrKeys: () => void;
-  currentNpub: string | null;
-  currentNsec: string | null;
-  dedupeContacts: () => Promise<void>;
-  dedupeContactsIsBusy: boolean;
-  defaultMintDisplay: string | null;
-  evoluConnectedServerCount: number;
-  evoluOverallStatus: "connected" | "checking" | "disconnected";
-  evoluServerUrls: string[];
-  exportAppData: () => void;
-  handleImportAppDataFilePicked: (file: File | null) => Promise<void>;
-  importDataFileInputRef: React.RefObject<HTMLInputElement | null>;
-  isSeedLogin: boolean;
-  bankPaymentOfferRecipientCount: number;
-  lightningInvoiceAutoPayLimit: number;
-  logoutArmed: boolean;
-  nostrRelayOverallStatus: "connected" | "checking" | "disconnected";
-  payWithCashuEnabled: boolean;
-  cashuAutoswapEnabled: boolean;
-  showProfileQrOnTiltEnabled: boolean;
-  pushToast: (message: string) => void;
-  relayUrls: string[];
-  requestImportAppData: () => void;
-  requestDeriveNostrKeys: () => Promise<void>;
-  requestPasteNostrKeys: () => Promise<void>;
-  requestLogout: () => void;
-  seedMnemonic: string | null;
-  setBankPaymentOfferRecipientCount: (value: number) => void;
-  setLightningInvoiceAutoPayLimit: (value: number) => void;
-  setPayWithCashuEnabled: (value: boolean) => void;
-  setCashuAutoswapEnabled: (value: boolean) => void;
-  setShowProfileQrOnTiltEnabled: (value: boolean) => void;
-  t: (key: string) => string;
-}
 
 interface SettingsLinkRowProps {
   className?: string;
@@ -154,39 +116,38 @@ function SettingsToggleRow({
   );
 }
 
-export function AdvancedPage({
-  __APP_VERSION__,
-  connectedRelayCount,
-  copyNostrKeys,
-  currentNsec,
-  dedupeContacts,
-  dedupeContactsIsBusy,
-  defaultMintDisplay,
-  evoluConnectedServerCount,
-  evoluOverallStatus,
-  evoluServerUrls,
-  exportAppData,
-  handleImportAppDataFilePicked,
-  importDataFileInputRef,
-  bankPaymentOfferRecipientCount,
-  lightningInvoiceAutoPayLimit,
-  logoutArmed,
-  nostrRelayOverallStatus,
-  payWithCashuEnabled,
-  cashuAutoswapEnabled,
-  pushToast,
-  relayUrls,
-  requestImportAppData,
-  requestPasteNostrKeys,
-  requestLogout,
-  seedMnemonic,
-  setBankPaymentOfferRecipientCount,
-  setPayWithCashuEnabled,
-  setCashuAutoswapEnabled,
-  t,
-}: AdvancedPageProps): React.ReactElement {
+export function AdvancedPage(): React.ReactElement {
+  const {
+    bankPaymentOfferRecipientCount,
+    cashuAutoswapEnabled,
+    connectedRelayCount,
+    copyNostrKeys,
+    dedupeContacts,
+    dedupeContactsIsBusy,
+    defaultMintDisplay,
+    evoluConnectedServerCount,
+    evoluOverallStatus,
+    evoluServerUrls,
+    exportAppData,
+    handleImportAppDataFilePicked,
+    importDataFileInputRef,
+    lightningInvoiceAutoPayLimit,
+    logoutArmed,
+    nostrRelayOverallStatus,
+    payWithCashuEnabled,
+    pushToast,
+    relayUrls,
+    requestImportAppData,
+    requestLogout,
+    requestPasteNostrKeys,
+    seedMnemonic,
+    setBankPaymentOfferRecipientCount,
+    setCashuAutoswapEnabled,
+    setPayWithCashuEnabled,
+  } = useAdvancedSettingsContext();
   const navigateTo = useNavigation();
-  const { formatDisplayedAmountParts, lang } = useAppShellCore();
+  const { currentNsec, formatDisplayedAmountParts, lang, t } =
+    useAppShellCore();
   const { openFeedbackContact, setLang } = useAppShellActions();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationsIsBusy, setNotificationsIsBusy] = useState(false);

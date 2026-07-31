@@ -1,17 +1,11 @@
 import React from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useRelaySettingsContext } from "../app/context/SystemSettingsContexts";
 import { NostrRelayRow } from "../components/NostrRelayRow";
 
-interface NostrRelaysPageProps {
-  relayStatusByUrl: Record<string, "connected" | "checking" | "disconnected">;
-  relayUrls: string[];
-  t: (key: string) => string;
-}
-
-export function NostrRelaysPage({
-  relayUrls,
-  relayStatusByUrl,
-  t,
-}: NostrRelaysPageProps): React.ReactElement {
+export function NostrRelaysPage(): React.ReactElement {
+  const { relayUrls, relayStatusByUrl } = useRelaySettingsContext();
+  const { t } = useAppShellCore();
   return (
     <section className="panel">
       {relayUrls.length === 0 ? (

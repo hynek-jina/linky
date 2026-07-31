@@ -1,31 +1,24 @@
 import React from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import {
+  useAdvancedSettingsContext,
+  useEvoluSettingsContext,
+} from "../app/context/SystemSettingsContexts";
+import { normalizeEvoluServerUrl } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 
-interface EvoluServerNewPageProps {
-  evoluServerUrls: string[];
-  evoluWipeStorageIsBusy: boolean;
-  newEvoluServerUrl: string;
-  normalizeEvoluServerUrl: (url: string) => string | null;
-  pushToast: (message: string) => void;
-  saveEvoluServerUrls: (urls: string[]) => void;
-  setNewEvoluServerUrl: (url: string) => void;
-  setStatus: (message: string) => void;
-  t: (key: string) => string;
-  wipeEvoluStorage: () => Promise<void>;
-}
-
-export function EvoluServerNewPage({
-  evoluServerUrls,
-  evoluWipeStorageIsBusy,
-  newEvoluServerUrl,
-  normalizeEvoluServerUrl,
-  pushToast,
-  saveEvoluServerUrls,
-  setNewEvoluServerUrl,
-  setStatus,
-  t,
-  wipeEvoluStorage,
-}: EvoluServerNewPageProps): React.ReactElement {
+export function EvoluServerNewPage(): React.ReactElement {
+  const {
+    evoluServerUrls,
+    evoluWipeStorageIsBusy,
+    newEvoluServerUrl,
+    saveEvoluServerUrls,
+    setNewEvoluServerUrl,
+    setStatus,
+    wipeEvoluStorage,
+  } = useEvoluSettingsContext();
+  const { t } = useAppShellCore();
+  const { pushToast } = useAdvancedSettingsContext();
   const navigateTo = useNavigation();
   return (
     <section className="panel">

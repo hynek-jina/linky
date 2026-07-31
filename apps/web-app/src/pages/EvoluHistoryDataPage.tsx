@@ -1,26 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import type { EvoluHistoryRow } from "../evolu";
-
-interface EvoluHistoryDataPageProps {
-  evoluCashuOwnerEditsUntilRotation: number;
-  evoluContactsOwnerEditsUntilRotation: number;
-  evoluHistoryAllowedOwnerIds: string[];
-  evoluMessagesOwnerEditsUntilRotation: number;
-  evoluTransactionsOwnerEditsUntilRotation: number;
-  loadHistoryData: (
-    limit: number,
-    offset: number,
-  ) => Promise<EvoluHistoryRow[]>;
-  t: (key: string) => string;
-}
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
+import { loadEvoluHistoryData, type EvoluHistoryRow } from "../evolu";
 
 const BATCH_SIZE = 50;
 
-export function EvoluHistoryDataPage({
-  evoluHistoryAllowedOwnerIds,
-  loadHistoryData,
-  t,
-}: EvoluHistoryDataPageProps): React.ReactElement {
+export function EvoluHistoryDataPage(): React.ReactElement {
+  const { evoluHistoryAllowedOwnerIds } = useEvoluSettingsContext();
+  const { t } = useAppShellCore();
   const [historyData, setHistoryData] = useState<EvoluHistoryRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -64,12 +51,12 @@ export function EvoluHistoryDataPage({
   );
 
   useEffect(() => {
-    loadHistoryData(BATCH_SIZE, 0).then((data) => {
+    loadEvoluHistoryData(BATCH_SIZE, 0).then((data) => {
       setHistoryData(data);
       setIsLoading(false);
       setHasMore(data.length === BATCH_SIZE);
     });
-  }, [loadHistoryData]);
+  }, []);
 
   const visibleHistoryData = useMemo(() => {
     if (allowedOwnerIds.size === 0) return [] as EvoluHistoryRow[];
@@ -98,7 +85,7 @@ export function EvoluHistoryDataPage({
     const newOffset = offset + BATCH_SIZE;
 
     try {
-      const newData = await loadHistoryData(BATCH_SIZE, newOffset);
+      const newData = await loadEvoluHistoryData(BATCH_SIZE, newOffset);
 
       if (newData.length > 0) {
         setHistoryData((prev) => [...prev, ...newData]);
@@ -112,7 +99,7 @@ export function EvoluHistoryDataPage({
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMore, offset, loadHistoryData]);
+  }, [isLoadingMore, hasMore, offset]);
 
   if (isLoading) {
     return (

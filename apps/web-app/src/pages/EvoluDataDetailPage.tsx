@@ -1,53 +1,37 @@
 import React, { useState } from "react";
-import type { EvoluHistoryRow, loadEvoluCurrentData } from "../evolu";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
+import {
+  loadEvoluCurrentData,
+  loadEvoluHistoryData,
+  type EvoluHistoryRow,
+} from "../evolu";
 import {
   CONTACTS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
   MAX_CONTACTS_PER_OWNER,
 } from "../utils/constants";
 
-interface EvoluDataDetailPageProps {
-  evoluDatabaseBytes: number | null;
-  evoluTableCounts: Record<string, number | null>;
-  evoluHistoryCount: number | null;
-  evoluContactsOwnerEditCount: number;
-  evoluContactsOwnerId: string | null;
-  evoluContactsOwnerIndex: number;
-  evoluContactsOwnerNewContactsCount: number;
-  evoluContactsOwnerPointer: string;
-  evoluTransactionsOwnerId: string | null;
-  evoluTransactionsOwnerIndex: number;
-  evoluTransactionsOwnerPointer: string;
-  evoluTransactionsVisibleOwnerIds: readonly string[];
-  clearDatabaseArmed: boolean;
-  pendingClearDatabase: boolean;
-  requestClearDatabase: () => void;
-  loadHistoryData: () => Promise<EvoluHistoryRow[]>;
-  loadCurrentData: typeof loadEvoluCurrentData;
-  t: (key: string) => string;
-}
-
 const ONE_MB = 1024 * 1024;
 
-export function EvoluDataDetailPage({
-  evoluDatabaseBytes,
-  evoluTableCounts,
-  evoluHistoryCount,
-  evoluContactsOwnerEditCount,
-  evoluContactsOwnerId,
-  evoluContactsOwnerIndex,
-  evoluContactsOwnerNewContactsCount,
-  evoluContactsOwnerPointer,
-  evoluTransactionsOwnerId,
-  evoluTransactionsOwnerIndex,
-  evoluTransactionsOwnerPointer,
-  evoluTransactionsVisibleOwnerIds,
-  clearDatabaseArmed,
-  pendingClearDatabase,
-  requestClearDatabase,
-  loadHistoryData,
-  loadCurrentData,
-  t,
-}: EvoluDataDetailPageProps): React.ReactElement {
+export function EvoluDataDetailPage(): React.ReactElement {
+  const {
+    clearDatabaseArmed,
+    evoluContactsOwnerEditCount,
+    evoluContactsOwnerId,
+    evoluContactsOwnerIndex,
+    evoluContactsOwnerNewContactsCount,
+    evoluContactsOwnerPointer,
+    evoluDatabaseBytes,
+    evoluHistoryCount,
+    evoluTableCounts,
+    evoluTransactionsOwnerId,
+    evoluTransactionsOwnerIndex,
+    evoluTransactionsOwnerPointer,
+    evoluTransactionsVisibleOwnerIds,
+    evoluWipeStorageIsBusy,
+    requestClearDatabase,
+  } = useEvoluSettingsContext();
+  const { t } = useAppShellCore();
   const [ownerView, setOwnerView] = useState<
     "all" | "meta" | "contacts" | "transactions"
   >("all");
@@ -124,7 +108,7 @@ export function EvoluDataDetailPage({
   const handleShowHistory = async () => {
     if (!showHistoryData && historyData.length === 0) {
       setIsLoading(true);
-      const data = await loadHistoryData();
+      const data = await loadEvoluHistoryData();
       setHistoryData(data);
       setIsLoading(false);
     }
@@ -134,7 +118,7 @@ export function EvoluDataDetailPage({
   const handleShowCurrent = async () => {
     if (!showCurrentData && Object.keys(currentData).length === 0) {
       setIsLoading(true);
-      const data = await loadCurrentData();
+      const data = await loadEvoluCurrentData();
       setCurrentData(data);
       setIsLoading(false);
     }
@@ -279,7 +263,7 @@ export function EvoluDataDetailPage({
                   : "btn-wide secondary"
               }
               onClick={requestClearDatabase}
-              disabled={pendingClearDatabase}
+              disabled={evoluWipeStorageIsBusy}
             >
               {t("evoluClearDatabase")}
             </button>

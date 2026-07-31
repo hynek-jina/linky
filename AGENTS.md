@@ -116,7 +116,7 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
 - App shell structure lives under `apps/web-app/src/app/`:
   - `AppShell.tsx` resolves auth before mounting either the minimal onboarding composition or the full authenticated composition, then wires `AppShellContextsProvider` and route content for authenticated sessions
   - `useAppShellComposition.tsx` is a thin composition layer that wires the per-domain composition hooks together and assembles route-prop bundles; domain state/effects/callbacks live in `hooks/composition/` per-domain hooks
-  - `context/AppShellContexts.tsx` is the single authenticated shell context transport; it provides shell/route contexts and typed consumer hooks (`useAppShellCore`, `useAppShellActions`, `useAppShellRouteContext`)
+  - `context/AppShellContexts.tsx` provides shared shell/route contexts and typed consumer hooks (`useAppShellCore`, `useAppShellActions`, `useAppShellRouteContext`); `context/SystemSettingsContexts.tsx` provides independently memoized advanced/key-backup, Evolu, mint, and relay contexts consumed directly by system pages
   - `hooks/` contains app domain hooks (`useRelayDomain`, `useMintDomain`, `useContactsDomain`, `useMessagesDomain`, `usePaymentsDomain`, `useCashuDomain`, `useProfileAuthDomain`, `useGuideScannerDomain`) plus app-shell extraction hooks (`useAppDataTransfer`, `useContactsNostrPrefetchEffects`, `useMainSwipePageEffects`, `useProfileNpubCashEffects`, `useScannedTextHandler`, `useFeedbackContact`, `useOwnerScopedStorage`, `usePaidOverlayState`, `useRouteDerivedShellState`)
   - `hooks/useEvoluContactsOwnerRotation.ts` owns deterministic contacts/cashu/messages/transactions owner derivation, pointer-only contacts/cashu/messages/transactions rotations, legacy cashu mirror upkeep for older clients, and per-scope owner pointer persistence in `ownerMeta`
   - `hooks/composition/` contains per-domain composition hooks (`useIdentityOwnersComposition`, `useProfileComposition`, `useContactsMessagingComposition`, `useCashuWalletComposition`, `useScanNativeComposition`) plus sub-composition slices for shell orchestration concerns (`useProfileAuthComposition`, `useProfilePeopleComposition`, `usePaymentMoneyComposition`, `useRoutingViewComposition`, `useSystemSettingsComposition`)
@@ -132,8 +132,8 @@ Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh
   - `hooks/mint/` contains mint-info store/helpers (`useMintInfoStore`, `mintInfoHelpers`)
   - `routes/AppRouteContent.tsx` handles route-kind page rendering
   - `routes/MainSwipeContent.tsx` handles contacts/wallet swipe UI
-- `routes/useSystemRouteProps.ts` builds shared system/settings route prop groups
-- `routes/props/` contains grouped route-prop builders (`buildPeopleRouteProps`, `buildMoneyRouteProps`, `buildMainSwipeRouteProps`)
+- System/settings pages read their source state and callbacks from the four `SystemSettingsContexts` hooks instead of receiving assembled route props
+- `routes/props/` still contains grouped route-prop builders for the pending people, money, and main-swipe migrations (`buildPeopleRouteProps`, `buildMoneyRouteProps`, `buildMainSwipeRouteProps`)
 - `lib/` contains shared app helpers (Nostr pool, token text parsing, topbar config)
 - `types/appTypes.ts` contains app-local shared types
 - `apps/push/src/` is split by concern: `http.ts` (Bun API, including `/native/subscribe` + `/native/unsubscribe` for Android FCM tokens), `ownership.ts` (signed challenge verification), `storage.ts` (SQLite persistence for web subscriptions, native tokens, pubkeys, challenges, seen outer event ids), `relayWatcher.ts` (relay subscription for outer `kind: 1059` events with catch-up vs live delivery gating), and `push.ts` (Web Push + Firebase Admin delivery with invalid subscription/token cleanup)

@@ -1,18 +1,14 @@
 import React from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useRelaySettingsContext } from "../app/context/SystemSettingsContexts";
 
-interface NostrRelayPageProps {
-  pendingRelayDeleteUrl: string | null;
-  requestDeleteSelectedRelay: () => void;
-  selectedRelayUrl: string | null;
-  t: (key: string) => string;
-}
-
-export function NostrRelayPage({
-  pendingRelayDeleteUrl,
-  requestDeleteSelectedRelay,
-  selectedRelayUrl,
-  t,
-}: NostrRelayPageProps): React.ReactElement {
+export function NostrRelayPage(): React.ReactElement {
+  const {
+    pendingRelayDeleteUrl,
+    requestDeleteSelectedRelay,
+    selectedRelayUrl,
+  } = useRelaySettingsContext();
+  const { t } = useAppShellCore();
   return (
     <section className="panel">
       {selectedRelayUrl ? (

@@ -39,7 +39,6 @@ import {
   useAppShellCore,
   useMoneyRoutes,
   usePeopleRoutes,
-  useSystemRoutes,
 } from "../context/AppShellContexts";
 import { MainSwipeContent, type MainSwipeRouteProps } from "./MainSwipeContent";
 
@@ -67,26 +66,6 @@ export interface MoneyRoutesProps {
   topupProps: React.ComponentProps<typeof TopupPage>;
 }
 
-export interface SystemRoutesProps {
-  advancedProps: React.ComponentProps<typeof AdvancedPage>;
-  advancedAutoPayLimitProps: React.ComponentProps<
-    typeof AdvancedAutoPayLimitPage
-  >;
-  advancedPushDebugProps: React.ComponentProps<typeof PushDebugPage>;
-  evoluCurrentDataProps: React.ComponentProps<typeof EvoluCurrentDataPage>;
-  evoluDataDetailProps: React.ComponentProps<typeof EvoluDataDetailPage>;
-  evoluHistoryDataProps: React.ComponentProps<typeof EvoluHistoryDataPage>;
-  evoluServerNewProps: React.ComponentProps<typeof EvoluServerNewPage>;
-  evoluServerProps: React.ComponentProps<typeof EvoluServerPage>;
-  evoluServersProps: React.ComponentProps<typeof EvoluServersPage>;
-  mintDetailProps: React.ComponentProps<typeof MintDetailPage>;
-  masterKeysProps: React.ComponentProps<typeof MasterKeysPage>;
-  mintsProps: React.ComponentProps<typeof MintsPage>;
-  nostrRelayNewProps: React.ComponentProps<typeof NostrRelayNewPage>;
-  nostrRelayProps: React.ComponentProps<typeof NostrRelayPage>;
-  nostrRelaysProps: React.ComponentProps<typeof NostrRelaysPage>;
-}
-
 export interface MainSwipeRoutesProps {
   mainSwipeProps: MainSwipeRouteProps;
 }
@@ -99,7 +78,6 @@ export const AppRouteContent = (): React.ReactElement => {
   const { route } = useAppShellCore();
   const peopleRoutes = usePeopleRoutes();
   const moneyRoutes = useMoneyRoutes();
-  const systemRoutes = useSystemRoutes();
 
   switch (route.kind) {
     case "contacts":
@@ -107,39 +85,37 @@ export const AppRouteContent = (): React.ReactElement => {
       return <MainSwipeContent />;
     case "settings":
     case "advanced":
-      return <AdvancedPage {...systemRoutes.advancedProps} />;
+      return <AdvancedPage />;
     case "settingsUnits":
       return <SettingsPage />;
     case "settingsMasterKeys":
-      return <MasterKeysPage {...systemRoutes.masterKeysProps} />;
+      return <MasterKeysPage />;
     case "advancedAutoPayLimit":
-      return (
-        <AdvancedAutoPayLimitPage {...systemRoutes.advancedAutoPayLimitProps} />
-      );
+      return <AdvancedAutoPayLimitPage />;
     case "advancedPushDebug":
-      return <PushDebugPage {...systemRoutes.advancedPushDebugProps} />;
+      return <PushDebugPage />;
     case "mints":
-      return <MintsPage {...systemRoutes.mintsProps} />;
+      return <MintsPage />;
     case "mint":
-      return <MintDetailPage {...systemRoutes.mintDetailProps} />;
+      return <MintDetailPage />;
     case "evoluServers":
-      return <EvoluServersPage {...systemRoutes.evoluServersProps} />;
+      return <EvoluServersPage />;
     case "evoluCurrentData":
-      return <EvoluCurrentDataPage {...systemRoutes.evoluCurrentDataProps} />;
+      return <EvoluCurrentDataPage />;
     case "evoluHistoryData":
-      return <EvoluHistoryDataPage {...systemRoutes.evoluHistoryDataProps} />;
+      return <EvoluHistoryDataPage />;
     case "evoluServer":
-      return <EvoluServerPage {...systemRoutes.evoluServerProps} />;
+      return <EvoluServerPage />;
     case "evoluServerNew":
-      return <EvoluServerNewPage {...systemRoutes.evoluServerNewProps} />;
+      return <EvoluServerNewPage />;
     case "evoluData":
-      return <EvoluDataDetailPage {...systemRoutes.evoluDataDetailProps} />;
+      return <EvoluDataDetailPage />;
     case "nostrRelays":
-      return <NostrRelaysPage {...systemRoutes.nostrRelaysProps} />;
+      return <NostrRelaysPage />;
     case "nostrRelayNew":
-      return <NostrRelayNewPage {...systemRoutes.nostrRelayNewProps} />;
+      return <NostrRelayNewPage />;
     case "nostrRelay":
-      return <NostrRelayPage {...systemRoutes.nostrRelayProps} />;
+      return <NostrRelayPage />;
     case "topup":
       return <TopupPage {...moneyRoutes.topupProps} />;
     case "transactions":

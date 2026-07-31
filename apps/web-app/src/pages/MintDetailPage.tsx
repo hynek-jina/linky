@@ -1,29 +1,10 @@
-import type { OwnerId } from "@evolu/common";
-import type { LocalMintInfoRow } from "../app/types/appTypes";
+import { sqliteTrue } from "@evolu/common";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useMintSettingsContext } from "../app/context/SystemSettingsContexts";
 import { useNavigation } from "../hooks/useRouting";
-import type { extractPpk } from "../utils/mint";
-import type { safeLocalStorageSetJson } from "../utils/storage";
-
-interface MintDetailPageProps {
-  Evolu: { sqliteTrue: LocalMintInfoRow["isDeleted"] };
-  LOCAL_MINT_INFO_STORAGE_KEY_PREFIX: string;
-  appOwnerIdRef: React.RefObject<OwnerId | null>;
-  extractPpk: (data: Parameters<typeof extractPpk>[0]) => number | null;
-  getMintRuntime: (
-    url: string,
-  ) => { lastCheckedAtSec: number; latencyMs: number | null } | null;
-  lang: string;
-  mintInfoByUrl: Map<string, LocalMintInfoRow>;
-  mintUrl: string;
-  normalizeMintUrl: (url: string) => string;
-  pendingMintDeleteUrl: string | null;
-  refreshMintInfo: (url: string) => Promise<void>;
-  safeLocalStorageSetJson: typeof safeLocalStorageSetJson;
-  setMintInfoAll: React.Dispatch<React.SetStateAction<LocalMintInfoRow[]>>;
-  setPendingMintDeleteUrl: (url: string | null) => void;
-  setStatus: (message: string) => void;
-  t: (key: string) => string;
-}
+import { LOCAL_MINT_INFO_STORAGE_KEY_PREFIX } from "../utils/constants";
+import { extractPpk, normalizeMintUrl } from "../utils/mint";
+import { safeLocalStorageSetJson } from "../utils/storage";
 
 const isPpkSearchInput = (
   value: unknown,
@@ -41,24 +22,19 @@ const isPpkSearchInput = (
   );
 };
 
-export function MintDetailPage({
-  Evolu,
-  LOCAL_MINT_INFO_STORAGE_KEY_PREFIX,
-  appOwnerIdRef,
-  extractPpk,
-  getMintRuntime,
-  lang,
-  mintInfoByUrl,
-  mintUrl,
-  normalizeMintUrl,
-  pendingMintDeleteUrl,
-  refreshMintInfo,
-  safeLocalStorageSetJson,
-  setMintInfoAll,
-  setPendingMintDeleteUrl,
-  setStatus,
-  t,
-}: MintDetailPageProps) {
+export function MintDetailPage() {
+  const {
+    appOwnerIdRef,
+    getMintRuntime,
+    mintInfoByUrl,
+    pendingMintDeleteUrl,
+    refreshMintInfo,
+    setMintInfoAll,
+    setPendingMintDeleteUrl,
+    setStatus,
+  } = useMintSettingsContext();
+  const { lang, route, t } = useAppShellCore();
+  const mintUrl = route.kind === "mint" ? route.mintUrl : "";
   const navigateTo = useNavigation();
   const cleaned = normalizeMintUrl(mintUrl);
   const row = mintInfoByUrl.get(cleaned) ?? null;
@@ -171,7 +147,7 @@ export function MintDetailPage({
                       if (url !== cleaned) return mintInfoRow;
                       return {
                         ...mintInfoRow,
-                        isDeleted: Evolu.sqliteTrue,
+                        isDeleted: sqliteTrue,
                       };
                     });
                     safeLocalStorageSetJson(

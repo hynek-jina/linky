@@ -1,42 +1,25 @@
-import type { SyncOwner } from "@evolu/common";
 import React from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
 import { useNavigation } from "../hooks/useRouting";
 import { deriveEvoluServerState } from "./evoluServerState";
 
-interface EvoluServerPageProps {
-  evoluHasError: boolean;
-  evoluServerStatusByUrl: Record<
-    string,
-    "connected" | "checking" | "disconnected"
-  >;
-  evoluServersReloadRequired: boolean;
-  evoluServerUrls: string[];
-  isEvoluServerOffline: (url: string) => boolean;
-  pendingEvoluServerDeleteUrl: string | null;
-  saveEvoluServerUrls: (urls: string[]) => void;
-  selectedEvoluServerUrl: string | null;
-  setEvoluServerOffline: (url: string, offline: boolean) => void;
-  setPendingEvoluServerDeleteUrl: (url: string | null) => void;
-  setStatus: (message: string) => void;
-  syncOwner: SyncOwner | null;
-  t: (key: string) => string;
-}
-
-export function EvoluServerPage({
-  evoluHasError,
-  evoluServerStatusByUrl,
-  evoluServersReloadRequired,
-  evoluServerUrls,
-  isEvoluServerOffline,
-  pendingEvoluServerDeleteUrl,
-  saveEvoluServerUrls,
-  selectedEvoluServerUrl,
-  setEvoluServerOffline,
-  setPendingEvoluServerDeleteUrl,
-  setStatus,
-  syncOwner,
-  t,
-}: EvoluServerPageProps): React.ReactElement {
+export function EvoluServerPage(): React.ReactElement {
+  const {
+    evoluHasError,
+    evoluServerStatusByUrl,
+    evoluServersReloadRequired,
+    evoluServerUrls,
+    isEvoluServerOffline,
+    pendingEvoluServerDeleteUrl,
+    saveEvoluServerUrls,
+    setEvoluServerOffline,
+    setPendingEvoluServerDeleteUrl,
+    setStatus,
+    syncOwner,
+  } = useEvoluSettingsContext();
+  const { route, t } = useAppShellCore();
+  const selectedEvoluServerUrl = route.kind === "evoluServer" ? route.id : null;
   const navigateTo = useNavigation();
   return (
     <section className="panel">

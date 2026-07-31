@@ -18,9 +18,15 @@ import type {
   MainSwipeRoutesProps,
   MoneyRoutesProps,
   PeopleRoutesProps,
-  SystemRoutesProps,
 } from "../routes/AppRouteContent";
 import type { ContactsGuideStep, TopbarButton } from "../types/appTypes";
+import {
+  SystemSettingsContextsProvider,
+  type AdvancedSettingsContextValue,
+  type EvoluSettingsContextValue,
+  type MintSettingsContextValue,
+  type RelaySettingsContextValue,
+} from "./SystemSettingsContexts";
 
 interface ChatContact {
   contactId: ContactId | null;
@@ -184,13 +190,16 @@ export interface AppShellRouteContextValue {
   moneyRoutes: MoneyRoutesProps;
   pageClassNameWithSwipe: string;
   peopleRoutes: PeopleRoutesProps;
-  systemRoutes: SystemRoutesProps;
 }
 
 interface AppShellContextsProviderProps {
   actions: AppShellActionsContextValue;
+  advancedSettings: AdvancedSettingsContextValue;
   children: React.ReactNode;
   core: AppShellCoreContextValue;
+  evoluSettings: EvoluSettingsContextValue;
+  mintSettings: MintSettingsContextValue;
+  relaySettings: RelaySettingsContextValue;
   routes: AppShellRouteContextValue;
 }
 
@@ -211,15 +220,26 @@ const useContextValue = <T,>(contextValue: T | null, hookName: string): T => {
 
 export const AppShellContextsProvider = ({
   actions,
+  advancedSettings,
   children,
   core,
+  evoluSettings,
+  mintSettings,
+  relaySettings,
   routes,
 }: AppShellContextsProviderProps): React.ReactElement => {
   return (
     <AppShellCoreContext.Provider value={core}>
       <AppShellActionsContext.Provider value={actions}>
         <AppShellRouteContext.Provider value={routes}>
-          {children}
+          <SystemSettingsContextsProvider
+            advancedSettings={advancedSettings}
+            evoluSettings={evoluSettings}
+            mintSettings={mintSettings}
+            relaySettings={relaySettings}
+          >
+            {children}
+          </SystemSettingsContextsProvider>
         </AppShellRouteContext.Provider>
       </AppShellActionsContext.Provider>
     </AppShellCoreContext.Provider>
@@ -249,6 +269,3 @@ export const useMoneyRoutes = (): MoneyRoutesProps =>
 
 export const useMainSwipeRoutes = (): MainSwipeRoutesProps =>
   useAppShellRouteContext().mainSwipeRoutes;
-
-export const useSystemRoutes = (): SystemRoutesProps =>
-  useAppShellRouteContext().systemRoutes;
