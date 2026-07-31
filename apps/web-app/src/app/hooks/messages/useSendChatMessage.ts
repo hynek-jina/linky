@@ -44,7 +44,6 @@ interface UseSendChatMessageParams<
   activePublishClientIdsRef: React.MutableRefObject<Set<string>>;
   appendLocalNostrMessage: AppendLocalNostrMessage;
   chatDraft: string;
-  chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   chatSendIsBusy: boolean;
   currentNsec: string | null;
   publishWrappedWithRetry: (
@@ -73,7 +72,6 @@ export const useSendChatMessage = <
   activePublishClientIdsRef,
   appendLocalNostrMessage,
   chatDraft,
-  chatSeenWrapIdsRef,
   chatSendIsBusy,
   currentNsec,
   publishWrappedWithRetry,
@@ -263,7 +261,6 @@ export const useSendChatMessage = <
           return;
         }
 
-        chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
         if (pendingId) {
           updateLocalNostrMessage(pendingId, {
             status: "sent",
@@ -285,7 +282,6 @@ export const useSendChatMessage = <
       activePublishClientIdsRef,
       appendLocalNostrMessage,
       chatDraft,
-      chatSeenWrapIdsRef,
       chatSendIsBusy,
       currentNsec,
       publishWrappedWithRetry,

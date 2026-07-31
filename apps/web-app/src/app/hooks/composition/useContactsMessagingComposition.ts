@@ -434,8 +434,6 @@ export const useContactsMessagingComposition = ({
     new Set(),
   );
 
-  const chatSeenWrapIdsRef = React.useRef<Set<string>>(new Set());
-
   const autoAcceptedChatMessageIdsRef = React.useRef<Set<string>>(new Set());
 
   const activeChatRouteId = route.kind === "chat" ? String(route.id ?? "") : "";
@@ -2298,7 +2296,6 @@ export const useContactsMessagingComposition = ({
 
   useNostrPendingFlush({
     activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
-    chatSeenWrapIdsRef,
     contacts,
     currentNsec,
     enabled: nostrBootstrapReady,
@@ -2937,11 +2934,11 @@ export const useContactsMessagingComposition = ({
     appendLocalNostrReaction,
     chatMessages,
     chatMessagesLatestRef,
-    chatSeenWrapIdsRef,
     currentNsec,
     enabled: nostrBootstrapReady,
     knownNostrMessageIdentityIndex,
     logPayStep,
+    nostrFetchRelays,
     nostrMessageWrapIdsRef,
     nostrReactionWrapIdsRef,
     nostrReactionsLatestRef,
@@ -2956,7 +2953,6 @@ export const useContactsMessagingComposition = ({
     activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
     appendLocalNostrMessage,
     chatDraft,
-    chatSeenWrapIdsRef,
     chatSendIsBusy,
     currentNsec,
     publishWrappedWithRetry,
@@ -3234,7 +3230,6 @@ export const useContactsMessagingComposition = ({
     chatMessagesWithBankPaymentOffers,
     chatOwnPubkeyHex,
     chatScrollTargetIdRef,
-    chatSeenWrapIdsRef,
     chatSendIsBusy,
     closeContactDetail,
     connectedRelayCount,

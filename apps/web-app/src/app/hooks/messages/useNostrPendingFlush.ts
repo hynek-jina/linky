@@ -24,7 +24,6 @@ import { resolveNostrChatIdentity } from "./contactIdentity";
 
 interface UseNostrPendingFlushParams<TContact extends ContactIdentityRowLike> {
   activePublishClientIdsRef: React.MutableRefObject<Set<string>>;
-  chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   contacts: readonly TContact[];
   currentNsec: string | null;
   enabled?: boolean;
@@ -42,7 +41,6 @@ interface UseNostrPendingFlushParams<TContact extends ContactIdentityRowLike> {
 
 export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
   activePublishClientIdsRef,
-  chatSeenWrapIdsRef,
   contacts,
   currentNsec,
   enabled = true,
@@ -178,7 +176,6 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
 
           if (!publishOutcome.anySuccess) continue;
 
-          chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
           updateLocalNostrMessage(String(message.id ?? ""), {
             status: "sent",
             wrapId: String(wrapForMe.id ?? ""),
@@ -264,7 +261,6 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
     await run;
   }, [
     activePublishClientIdsRef,
-    chatSeenWrapIdsRef,
     contacts,
     currentNsec,
     enabled,
