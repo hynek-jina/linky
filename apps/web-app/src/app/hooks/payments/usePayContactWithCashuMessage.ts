@@ -1,37 +1,18 @@
 import * as Evolu from "@evolu/common";
-import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
 import { createSendTokenWithTokensAtMint } from "../../../cashuSend";
-import { type CashuTokenId, type ContactId } from "../../../evolu";
+import type { ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
-import { previewTokenText } from "../../../utils/formatting";
 import { normalizeMintUrl } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
-import { resolveCashuRowStoredOwnerLane } from "../../lib/cashuOwnerLane";
-import {
-  buildSparseCashuTokenPayload,
-  createCashuTokenId,
-  hasMatchingCashuToken,
-} from "../../lib/cashuTokenIdentity";
-import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
-import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
-import {
-  buildPaymentAmountAttempts,
-  getPaymentAmountReserveCap,
-  isRetryablePaymentAmountFailure,
-} from "../../lib/paymentAmountFallback";
-import { selectSingleMintCandidateForAmount } from "../../lib/paymentMintSelection";
-import {
-  createLinkyPaymentNoticeEvent,
-  LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
-  wrapEventWithPushMarker,
-  wrapEventWithoutPushMarker,
-} from "../../lib/pushWrappedEvent";
+import type { AppNostrPool } from "../../lib/nostrPool";
+import { LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER } from "../../lib/pushWrappedEvent";
 import type {
   CashuTokenRowLike,
   ContactRowLike,
@@ -43,34 +24,22 @@ import type {
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
 import type { ReplyContext } from "../messages/useSendChatMessage";
-
-type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
+import { buildCashuMessagePaymentPayload } from "./buildCashuMessagePaymentPayload";
+import type { CashuMessagePaymentHookResult } from "./cashuMessagePaymentTypes";
+import {
+  type CashuTokenUpdate,
+  type CashuTokenUpsert,
+  logCashuMessagePublishFailure,
+  logCashuMessageSwapFailure,
+  persistCashuMessagePaymentResult,
+  persistCashuMessageSwapAttempt,
+} from "./persistCashuMessagePayment";
+import { publishCashuMessagePayment } from "./publishCashuMessagePayment";
+import { selectCashuMessagePayment } from "./selectCashuMessagePayment";
 
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 
-export const buildCashuSendAmountAttempts = (args: {
-  availableAmountSat: number;
-  maxReservedFeeSat: number;
-  requestedAmountSat: number;
-  reservedFeeSat: number;
-}): number[] => {
-  const {
-    availableAmountSat,
-    maxReservedFeeSat,
-    requestedAmountSat,
-    reservedFeeSat,
-  } = args;
-
-  return buildPaymentAmountAttempts(
-    requestedAmountSat,
-    availableAmountSat,
-  ).filter((attemptAmountSat) => {
-    return (
-      reservedFeeSat + (requestedAmountSat - attemptAmountSat) <=
-      maxReservedFeeSat
-    );
-  });
-};
+const ContactIdSchema = Evolu.id("Contact");
 
 interface UsePayContactWithCashuMessageParams {
   activePublishClientIdsRef: React.MutableRefObject<Set<string>>;
@@ -92,30 +61,30 @@ interface UsePayContactWithCashuMessageParams {
     messageId?: string;
   }) => void;
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
-  upsert: EvoluMutations["upsert"];
   logPayStep: (step: string, data?: PaymentLogData) => void;
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   nostrMessagesLocal: LocalNostrMessage[];
   payWithCashuEnabled: boolean;
+  publishSingleWrappedWithRetry: (
+    pool: AppNostrPool,
+    relays: string[],
+    event: NostrToolsEvent,
+  ) => Promise<{ anySuccess: boolean; error: string | null }>;
   publishWrappedWithRetry: (
     pool: AppNostrPool,
     relays: string[],
     wrapForMe: NostrToolsEvent,
     wrapForContact: NostrToolsEvent,
   ) => Promise<PublishWrappedResult>;
-  publishSingleWrappedWithRetry: (
-    pool: AppNostrPool,
-    relays: string[],
-    event: NostrToolsEvent,
-  ) => Promise<{ anySuccess: boolean; error: string | null }>;
   pushToast: (message: string) => void;
   resolveOwnerIdForWrite: () => Promise<Evolu.OwnerId | null>;
   setContactsOnboardingHasPaid: React.Dispatch<React.SetStateAction<boolean>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   showPaidOverlay: (title: string) => void;
   t: (key: string) => string;
-  update: EvoluMutations["update"];
+  update: CashuTokenUpdate;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
+  upsert: CashuTokenUpsert;
 }
 
 export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
@@ -131,13 +100,12 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   defaultMintUrl,
   enqueuePendingPayment,
   formatDisplayedAmountParts,
-  upsert,
   logPayStep,
   logPaymentEvent,
   nostrMessagesLocal,
   payWithCashuEnabled,
-  publishWrappedWithRetry,
   publishSingleWrappedWithRetry,
+  publishWrappedWithRetry,
   pushToast,
   resolveOwnerIdForWrite,
   setContactsOnboardingHasPaid,
@@ -146,32 +114,32 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   t,
   update,
   updateLocalNostrMessage,
+  upsert,
 }: UsePayContactWithCashuMessageParams) => {
   return React.useCallback(
     async (args: {
-      contact: TContact;
       amountSat: number;
+      contact: TContact;
       fromQueue?: boolean;
       logCompletedOnly?: boolean;
-      pendingMessageId?: string;
       paymentNoticeContext?: typeof LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER;
       paymentNoticeOfferId?: string;
       paymentRequestId?: string | null;
+      pendingMessageId?: string;
       replyContext?: ReplyContext | null;
-    }): Promise<{ ok: boolean; queued: boolean; error?: string }> => {
+    }): Promise<CashuMessagePaymentHookResult> => {
       const {
-        contact,
         amountSat,
+        contact,
         fromQueue,
-        logCompletedOnly,
-        pendingMessageId,
+        logCompletedOnly = false,
         paymentNoticeContext,
         paymentNoticeOfferId,
         paymentRequestId,
+        pendingMessageId,
         replyContext,
       } = args;
       const notify = !fromQueue;
-
       const normalizedPendingMessageId =
         typeof pendingMessageId === "string" && pendingMessageId.trim()
           ? pendingMessageId.trim()
@@ -179,20 +147,27 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
 
       if (!currentNsec || !currentNpub) {
         if (notify) setStatus(t("profileMissingNpub"));
-        return { ok: false, queued: false, error: "missing nsec" };
+        return { error: "missing nsec", ok: false, queued: false };
       }
 
       const contactNpub = String(contact.npub ?? "").trim();
       if (!contactNpub) {
         if (notify) setStatus(t("chatMissingContactNpub"));
-        return { ok: false, queued: false, error: "missing contact npub" };
+        return { error: "missing contact npub", ok: false, queued: false };
       }
 
+      const parsedContactId = ContactIdSchema.fromUnknown(contact.id);
+      if (!parsedContactId.ok) {
+        if (notify) setStatus(t("payFailed"));
+        return { error: "invalid contact id", ok: false, queued: false };
+      }
+      const contactId = parsedContactId.value;
+
       logPayStep("start", {
-        contactId: String(contact.id ?? ""),
         amountSat,
-        fromQueue: Boolean(fromQueue),
         cashuBalance,
+        contactId: String(contactId),
+        fromQueue: Boolean(fromQueue),
         payWithCashuEnabled,
       });
 
@@ -206,8 +181,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         const displayAmount = formatDisplayedAmountParts(amountSat);
         const clientId = makeLocalId();
         const messageId = appendLocalNostrMessage({
-          contactId: String(contact.id ?? ""),
-          direction: "out",
+          clientId,
+          contactId: String(contactId),
           content: t("payQueuedMessage")
             .replace(
               "{amount}",
@@ -215,24 +190,20 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
             )
             .replace("{unit}", displayAmount.unitLabel)
             .replace("{name}", displayName),
-          wrapId: `pending:pay:${clientId}`,
-          rumorId: null,
-          pubkey: "",
-          createdAtSec: Math.floor(Date.now() / 1000),
-          status: "pending",
-          clientId,
+          createdAtSec: Math.floor(Date.now() / 1_000),
+          direction: "out",
           localOnly: true,
+          pubkey: "",
+          rumorId: null,
+          status: "pending",
+          wrapId: `pending:pay:${clientId}`,
         });
         logPayStep("queued-offline", {
-          contactId: String(contact.id ?? ""),
           amountSat,
+          contactId: String(contactId),
           messageId,
         });
-        enqueuePendingPayment({
-          contactId: contact.id as ContactId,
-          amountSat,
-          messageId,
-        });
+        enqueuePendingPayment({ amountSat, contactId, messageId });
         if (notify) {
           showPaidOverlay(
             t("paidQueuedTo")
@@ -245,511 +216,123 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           );
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateTo({ route: "chat", id: contact.id as ContactId });
+          navigateTo({ id: contactId, route: "chat" });
         }
         return { ok: true, queued: true };
       }
 
+      const selection = selectCashuMessagePayment({
+        amountSat,
+        buildCandidates: buildCashuMintCandidates,
+        cashuBalance,
+        defaultMintUrl,
+        normalizeMintUrl,
+        tokens: cashuTokensWithMeta,
+      });
+      logPayStep("mint-candidates", {
+        candidates: selection.candidates.map((candidate) => ({
+          mint: candidate.mint,
+          sum: candidate.sum,
+          tokenCount: candidate.tokens.length,
+        })),
+        count: selection.candidates.length,
+      });
+
+      if (selection.kind === "insufficient") {
+        if (notify) setStatus(t("payInsufficient"));
+        return { error: "insufficient", ok: false, queued: false };
+      }
+
       const cashuWriteOwnerId = await resolveOwnerIdForWrite();
-
-      const insertCashuToken = (
-        payload: ReturnType<typeof buildSparseCashuTokenPayload>,
-      ) => {
-        if (hasMatchingCashuToken(cashuTokensAll, payload)) {
-          return { ok: true, error: null, skippedDuplicate: true };
-        }
-
-        const result = cashuWriteOwnerId
-          ? upsert("cashuToken", payload, { ownerId: cashuWriteOwnerId })
-          : upsert("cashuToken", payload);
-
-        return {
-          ok: result.ok,
-          error: result.ok
-            ? null
-            : getUnknownErrorMessage(result.error, "unknown"),
-          skippedDuplicate: false,
-        };
-      };
-
-      // Soft-deletes MUST target the owner lane that actually holds the row.
-      // Evolu keys rows by (ownerId, id), so deleting a spent token under the
-      // active write lane when it lives in an older cashu-n lane silently
-      // no-ops and leaves the token spendable — blocking the next payment.
-      const updateCashuToken = (
-        payload: {
-          id: CashuTokenId;
-          isDeleted: typeof Evolu.sqliteTrue;
+      const swap = await buildCashuMessagePaymentPayload({
+        commitSwapState: async (outcome) => {
+          persistCashuMessageSwapAttempt({
+            cashuTokensAll,
+            cashuTokensWithMeta,
+            cashuWriteOwnerId,
+            outcome,
+            update,
+            upsert,
+          });
         },
-        targetOwnerId?: Evolu.OwnerId | null,
-      ) => {
-        const ownerId = targetOwnerId ?? cashuWriteOwnerId;
-        return ownerId
-          ? update("cashuToken", payload, { ownerId })
-          : update("cashuToken", payload);
-      };
+        createSendToken: createSendTokenWithTokensAtMint,
+        logPayStep,
+        selection,
+      });
 
-      const deleteSpentTokensForMint = (mintUrl: string) => {
-        for (const row of cashuTokensWithMeta) {
-          if (!isCashuTokenAcceptedState(row.state)) continue;
-          if (String(row.mint ?? "").trim() !== mintUrl) continue;
-          const deleted = updateCashuToken(
-            { id: row.id as CashuTokenId, isDeleted: Evolu.sqliteTrue },
-            resolveCashuRowStoredOwnerLane(row),
+      if (swap.kind !== "success") {
+        logCashuMessageSwapFailure({
+          amountSat,
+          contactId,
+          error: swap.error,
+          logCompletedOnly,
+          logPaymentEvent,
+          mint: swap.mint,
+        });
+        if (notify) {
+          setStatus(
+            swap.error
+              ? `${t("payFailed")}: ${swap.error}`
+              : t("payInsufficient"),
           );
-          if (!deleted.ok) throw deleted.error;
         }
-      };
-
-      const remainingAmount = amountSat;
-
-      const cashuToSend = Math.min(cashuBalance, remainingAmount);
-
-      const sendBatches: Array<{
-        token: string;
-        amount: number;
-        mint: string;
-        unit: string | null;
-      }> = [];
-      let usedInputTokens: string[] = [];
-      const sendTokenTexts = new Set<string>();
-      let gainedToken: string | null = null;
-
-      let lastError: unknown = null;
-      let lastMint: string | null = null;
-      let sentAmountSat = 0;
-
-      if (cashuToSend > 0) {
-        const mintGroups = new Map<string, { tokens: string[]; sum: number }>();
-        for (const row of cashuTokensWithMeta) {
-          if (!isCashuTokenAcceptedState(row.state)) continue;
-          const mint = String(row.mint ?? "").trim();
-          if (!mint) continue;
-          const tokenText = String(row.token ?? row.rawToken ?? "").trim();
-          if (!tokenText) continue;
-
-          const amount = Number(row.amount ?? 0) || 0;
-          const entry = mintGroups.get(mint) ?? { tokens: [], sum: 0 };
-          entry.tokens.push(tokenText);
-          entry.sum += amount;
-          mintGroups.set(mint, entry);
-        }
-
-        const preferredMint = normalizeMintUrl(defaultMintUrl ?? "");
-        const candidates = buildCashuMintCandidates(mintGroups, preferredMint);
-
-        logPayStep("mint-candidates", {
-          count: candidates.length,
-          candidates: candidates.map((c) => ({
-            mint: c.mint,
-            sum: c.sum,
-            tokenCount: c.tokens.length,
-          })),
-        });
-
-        if (candidates.length === 0) {
-          if (notify) setStatus(t("payInsufficient"));
-          return { ok: false, queued: false, error: "insufficient" };
-        }
-
-        const candidate = selectSingleMintCandidateForAmount(
-          candidates,
-          cashuToSend,
-        );
-        if (!candidate) {
-          if (notify) setStatus(t("payInsufficient"));
-          return { ok: false, queued: false, error: "insufficient" };
-        }
-
-        usedInputTokens = [...candidate.tokens];
-
-        const requestedAmountSat = cashuToSend;
-        const maxReservedFeeSat = getPaymentAmountReserveCap(
-          requestedAmountSat,
-          candidate.sum,
-        );
-
-        const sendAmountAttempts = buildCashuSendAmountAttempts({
-          requestedAmountSat,
-          availableAmountSat: candidate.sum,
-          reservedFeeSat: 0,
-          maxReservedFeeSat,
-        });
-
-        for (
-          let attemptIndex = 0;
-          attemptIndex < sendAmountAttempts.length;
-          attemptIndex += 1
-        ) {
-          const attemptAmountSat = sendAmountAttempts[attemptIndex];
-          const hasLowerAmountFallback =
-            attemptIndex < sendAmountAttempts.length - 1;
-
-          try {
-            logPayStep("swap-request", {
-              mint: candidate.mint,
-              amount: attemptAmountSat,
-              requestedAmountSat,
-              reservedFeeSat: 0,
-              tokenCount: candidate.tokens.length,
-            });
-            const split = await createSendTokenWithTokensAtMint({
-              amount: attemptAmountSat,
-              mint: candidate.mint,
-              tokens: candidate.tokens,
-              unit: "sat",
-            });
-
-            if (!split.ok) {
-              lastError = split.error;
-              lastMint = candidate.mint;
-              if (split.remainingToken && split.remainingAmount > 0) {
-                const inserted = insertCashuToken(
-                  buildSparseCashuTokenPayload({
-                    id: createCashuTokenId(split.remainingToken),
-                    token: split.remainingToken,
-                    state: "accepted",
-                  }),
-                );
-                if (!inserted.ok) throw inserted.error;
-
-                deleteSpentTokensForMint(candidate.mint);
-
-                logPayStep("swap-recovery", {
-                  mint: split.mint,
-                  requestedAmountSat,
-                  recoveryAmount: split.remainingAmount,
-                  recoveryToken: previewTokenText(split.remainingToken),
-                  error: split.error,
-                });
-                break;
-              }
-
-              if (
-                hasLowerAmountFallback &&
-                isRetryablePaymentAmountFailure(
-                  String(split.error ?? "unknown"),
-                )
-              ) {
-                continue;
-              }
-              break;
-            }
-
-            deleteSpentTokensForMint(candidate.mint);
-
-            const remainingToken = split.remainingToken;
-            const remainingAmount = split.remainingAmount;
-
-            if (remainingToken && remainingAmount > 0) {
-              gainedToken = remainingToken;
-              const inserted = insertCashuToken(
-                buildSparseCashuTokenPayload({
-                  id: createCashuTokenId(remainingToken),
-                  token: remainingToken,
-                  state: "accepted",
-                }),
-              );
-              if (!inserted.ok) throw inserted.error;
-            }
-
-            sendBatches.push({
-              token: split.sendToken,
-              amount: split.sendAmount,
-              mint: split.mint,
-              unit: split.unit ?? null,
-            });
-            logPayStep("swap-ok", {
-              mint: split.mint,
-              requestedAmountSat,
-              sendAmount: split.sendAmount,
-              remainingAmount: split.remainingAmount,
-              reservedFeeDeltaSat: requestedAmountSat - split.sendAmount,
-              sendToken: previewTokenText(split.sendToken),
-              remainingToken: previewTokenText(split.remainingToken),
-            });
-            sendTokenTexts.add(split.sendToken);
-            sentAmountSat = split.sendAmount;
-            break;
-          } catch (e) {
-            lastError = e;
-            lastMint = candidate.mint;
-            if (
-              hasLowerAmountFallback &&
-              isRetryablePaymentAmountFailure(
-                getUnknownErrorMessage(e, "unknown"),
-              )
-            ) {
-              continue;
-            }
-            break;
-          }
-        }
-
-        if (sendBatches.length === 0) {
-          if (!logCompletedOnly) {
-            logPaymentEvent({
-              direction: "out",
-              status: "error",
-              amount: amountSat,
-              fee: null,
-              mint: lastMint,
-              unit: "sat",
-              error: getUnknownErrorMessage(lastError, "insufficient funds"),
-              contactId: contact.id as ContactId,
-              method: "cashu_chat",
-              phase: "swap",
-            });
-          }
-          if (notify) {
-            setStatus(
-              lastError
-                ? `${t("payFailed")}: ${getUnknownErrorMessage(lastError, "unknown")}`
-                : t("payInsufficient"),
-            );
-          }
-          return {
-            ok: false,
-            queued: false,
-            error: getUnknownErrorMessage(lastError, ""),
-          };
-        }
+        return {
+          error: getUnknownErrorMessage(swap.error, ""),
+          ok: false,
+          queued: false,
+        };
       }
 
       try {
-        const { nip19, getPublicKey } = await import("nostr-tools");
+        const publishing = await publishCashuMessagePayment({
+          activePublishClientIds: activePublishClientIdsRef.current,
+          appendLocalNostrMessage,
+          batches: [swap.batch],
+          chatSeenWrapIds: chatSeenWrapIdsRef.current,
+          contactId,
+          contactNpub,
+          currentNsec,
+          logPayStep,
+          nostrMessagesLocal,
+          ...(paymentNoticeContext ? { paymentNoticeContext } : {}),
+          ...(paymentNoticeOfferId ? { paymentNoticeOfferId } : {}),
+          pendingMessageId: normalizedPendingMessageId,
+          publishSingleWrappedWithRetry,
+          publishWrappedWithRetry,
+          relays: NOSTR_RELAYS,
+          ...(replyContext ? { replyContext } : {}),
+          updateLocalNostrMessage,
+        });
 
-        const decodedMe = nip19.decode(currentNsec);
-        if (decodedMe.type !== "nsec") throw new Error("invalid nsec");
-        const privBytes = decodedMe.data as Uint8Array;
-        const myPubHex = getPublicKey(privBytes);
-
-        const decodedContact = nip19.decode(contactNpub);
-        if (decodedContact.type !== "npub") throw new Error("invalid npub");
-        const contactPubHex = decodedContact.data as string;
-
-        const pool = await getSharedAppNostrPool();
-
-        const messagePlans: Array<{ text: string }> = [];
-
-        for (const batch of sendBatches) {
-          logPayStep("plan-send-token", {
-            mint: batch.mint,
-            amount: batch.amount,
-            token: previewTokenText(batch.token),
-          });
-          messagePlans.unshift({
-            text: String(batch.token ?? "").trim(),
-          });
-        }
-
-        const publishedSendTokens = new Set<string>();
-        let publishedAnyTokenMessage = false;
-        let hasPendingMessages = false;
-        const canReusePendingMessage = Boolean(
-          normalizedPendingMessageId &&
-          nostrMessagesLocal.some(
-            (m) => String(m.id ?? "") === normalizedPendingMessageId,
-          ),
-        );
-        let reusedPendingMessage = false;
-
-        for (const plan of messagePlans) {
-          const messageText = plan.text;
-          const clientId = makeLocalId();
-          activePublishClientIdsRef.current.add(clientId);
-          logPayStep("publish-pending", {
-            clientId,
-            token: previewTokenText(messageText),
-          });
-          const baseEvent = {
-            created_at: Math.ceil(Date.now() / 1e3),
-            kind: 14,
-            pubkey: myPubHex,
-            tags: [
-              ["p", contactPubHex],
-              ["p", myPubHex],
-              ["client", clientId],
-            ],
-            content: messageText,
-          } satisfies UnsignedEvent;
-
-          if (replyContext?.replyToId) {
-            const rootId =
-              String(replyContext.rootMessageId ?? "").trim() ||
-              String(replyContext.replyToId ?? "").trim();
-            const replyId = String(replyContext.replyToId ?? "").trim();
-            if (rootId) baseEvent.tags.push(["e", rootId, "", "root"]);
-            if (replyId) baseEvent.tags.push(["e", replyId, "", "reply"]);
-          }
-
-          let pendingId = "";
-          if (canReusePendingMessage && !reusedPendingMessage) {
-            pendingId = normalizedPendingMessageId ?? "";
-            reusedPendingMessage = true;
-            updateLocalNostrMessage(pendingId, {
-              status: "pending",
-              wrapId: `pending:${clientId}`,
-              pubkey: myPubHex,
-              content: messageText,
-              clientId,
-              localOnly: false,
-            });
-          } else {
-            pendingId = appendLocalNostrMessage({
-              contactId: String(contact.id ?? ""),
-              direction: "out",
-              content: messageText,
-              wrapId: `pending:${clientId}`,
-              rumorId: null,
-              pubkey: myPubHex,
-              createdAtSec: baseEvent.created_at,
-              status: "pending",
-              clientId,
-              ...(replyContext?.replyToId
-                ? {
-                    replyToId: replyContext.replyToId,
-                    replyToContent: replyContext.replyToContent,
-                    rootMessageId:
-                      String(replyContext.rootMessageId ?? "").trim() ||
-                      replyContext.replyToId,
-                  }
-                : {}),
-            });
-          }
-
-          const wrapForMe = wrapEventWithoutPushMarker(
-            baseEvent,
-            privBytes,
-            myPubHex,
-          );
-          const wrapForContact = wrapEventWithoutPushMarker(
-            baseEvent,
-            privBytes,
-            contactPubHex,
-          );
-
-          let publishOutcome: PublishWrappedResult;
-          try {
-            publishOutcome = await publishWrappedWithRetry(
-              pool,
-              NOSTR_RELAYS,
-              wrapForMe,
-              wrapForContact,
-            );
-          } finally {
-            activePublishClientIdsRef.current.delete(clientId);
-          }
-
-          const anySuccess = publishOutcome.anySuccess;
-          if (!anySuccess) {
-            const firstError = publishOutcome.error;
-            logPayStep("publish-failed", {
-              clientId,
-              error: getUnknownErrorMessage(firstError, "publish failed"),
-            });
-            hasPendingMessages = true;
-            if (notify) {
-              pushToast(
-                `${t("payFailed")}: ${getUnknownErrorMessage(firstError, "publish failed")}`,
-              );
-            }
-            continue;
-          }
-
-          chatSeenWrapIdsRef.current.add(String(wrapForMe.id ?? ""));
-          if (pendingId) {
-            updateLocalNostrMessage(pendingId, {
-              status: "sent",
-              wrapId: String(wrapForMe.id ?? ""),
-              pubkey: myPubHex,
-            });
-          }
-          logPayStep("publish-ok", {
-            clientId,
-            wrapId: String(wrapForMe.id ?? ""),
-          });
-
-          publishedAnyTokenMessage = true;
-          if (sendTokenTexts.has(messageText)) {
-            publishedSendTokens.add(messageText);
+        for (const publishError of publishing.publishErrors) {
+          if (notify) {
+            pushToast(`${t("payFailed")}: ${publishError.error}`);
           }
         }
 
-        if (publishedAnyTokenMessage) {
-          const paymentNoticeClientId = makeLocalId();
-          const paymentNoticeEvent = createLinkyPaymentNoticeEvent({
-            clientId: paymentNoticeClientId,
-            ...(paymentNoticeContext ? { context: paymentNoticeContext } : {}),
-            createdAt: Math.ceil(Date.now() / 1e3),
-            ...(paymentNoticeOfferId ? { offerId: paymentNoticeOfferId } : {}),
-            recipientPublicKey: contactPubHex,
-            senderPublicKey: myPubHex,
-          });
-          const paymentNoticeWrap = wrapEventWithPushMarker(
-            paymentNoticeEvent,
-            privBytes,
-            contactPubHex,
-          );
-          const paymentNoticeOutcome = await publishSingleWrappedWithRetry(
-            pool,
-            NOSTR_RELAYS,
-            paymentNoticeWrap,
-          );
-          logPayStep("payment-notice-publish", {
-            anySuccess: paymentNoticeOutcome.anySuccess,
-            clientId: paymentNoticeClientId,
-            error: paymentNoticeOutcome.error,
-            wrapId: String(paymentNoticeWrap.id ?? ""),
-          });
-        }
-
-        if (sendTokenTexts.size > 0) {
-          const unsentTokens = Array.from(sendTokenTexts).filter(
-            (token) => !publishedSendTokens.has(token),
-          );
-          for (const tokenText of unsentTokens) {
-            insertCashuToken(
-              buildSparseCashuTokenPayload({
-                id: createCashuTokenId(tokenText),
-                token: tokenText,
-                state: "pending",
-              }),
-            );
-          }
-        }
-
-        const usedMint = sendBatches[0]?.mint ?? null;
-
-        if (!logCompletedOnly || !hasPendingMessages) {
-          logPaymentEvent({
-            direction: "out",
-            status: "ok",
-            amount: sentAmountSat,
-            details: {
-              ...(gainedToken ? { gainedToken } : {}),
-              ...(paymentRequestId ? { requestId: paymentRequestId } : {}),
-              usedInputTokens,
-            },
-            fee: null,
-            mint: usedMint,
-            unit: "sat",
-            error: null,
-            contactId: contact.id as ContactId,
-            method: "cashu_chat",
-            phase: hasPendingMessages ? "publish" : "complete",
-          });
-        }
+        persistCashuMessagePaymentResult({
+          cashuTokensAll,
+          cashuWriteOwnerId,
+          contactId,
+          logCompletedOnly,
+          logPaymentEvent,
+          paymentRequestId: paymentRequestId ?? null,
+          publishing,
+          swap,
+          upsert,
+        });
 
         if (notify) {
           const displayName =
             String(contact.name ?? "").trim() ||
             String(contact.lnAddress ?? "").trim() ||
             t("appTitle");
-          const displayAmount = formatDisplayedAmountParts(sentAmountSat);
-
+          const displayAmount = formatDisplayedAmountParts(swap.batch.amount);
           showPaidOverlay(
-            (hasPendingMessages ? t("paidQueuedTo") : t("paidSentTo"))
+            (publishing.hasPendingMessages
+              ? t("paidQueuedTo")
+              : t("paidSentTo")
+            )
               .replace(
                 "{amount}",
                 `${displayAmount.approxPrefix}${displayAmount.amountText}`,
@@ -757,68 +340,71 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
               .replace("{unit}", displayAmount.unitLabel)
               .replace("{name}", displayName),
           );
-
           safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
           setContactsOnboardingHasPaid(true);
-          navigateTo({ route: "chat", id: contact.id as ContactId });
+          navigateTo({ id: contactId, route: "chat" });
         }
 
-        return { ok: true, queued: hasPendingMessages };
-      } catch (e) {
-        if (!logCompletedOnly) {
-          logPaymentEvent({
-            direction: "out",
-            status: "error",
-            amount: amountSat,
-            fee: null,
-            mint: lastMint,
-            unit: "sat",
-            error: getUnknownErrorMessage(e, "unknown"),
-            contactId: contact.id as ContactId,
-            method: "cashu_chat",
-            phase: "publish",
-          });
-        }
-        if (notify) {
-          setStatus(
-            `${t("payFailed")}: ${getUnknownErrorMessage(e, "unknown")}`,
-          );
-        }
-        return {
-          ok: false,
-          queued: false,
-          error: getUnknownErrorMessage(e, "unknown"),
-        };
+        return { ok: true, queued: publishing.hasPendingMessages };
+      } catch (error) {
+        persistCashuMessagePaymentResult({
+          cashuTokensAll,
+          cashuWriteOwnerId,
+          contactId,
+          logCompletedOnly: true,
+          logPaymentEvent,
+          paymentRequestId: paymentRequestId ?? null,
+          publishing: {
+            hasPendingMessages: true,
+            paymentNoticeError: null,
+            publishErrors: [],
+            publishedTokenTexts: [],
+            unpublishedTokenTexts: [swap.batch.token],
+          },
+          swap,
+          upsert,
+        });
+        logCashuMessagePublishFailure({
+          amountSat,
+          contactId,
+          error,
+          logCompletedOnly,
+          logPaymentEvent,
+          mint: swap.batch.mint,
+        });
+        const errorMessage = getUnknownErrorMessage(error, "unknown");
+        if (notify) setStatus(`${t("payFailed")}: ${errorMessage}`);
+        return { error: errorMessage, ok: false, queued: false };
       }
     },
     [
+      activePublishClientIdsRef,
+      appendLocalNostrMessage,
+      buildCashuMintCandidates,
       cashuBalance,
+      cashuTokensAll,
       cashuTokensWithMeta,
       chatSeenWrapIdsRef,
-      activePublishClientIdsRef,
       currentNpub,
       currentNsec,
+      defaultMintUrl,
       enqueuePendingPayment,
       formatDisplayedAmountParts,
-      upsert,
       logPayStep,
       logPaymentEvent,
+      nostrMessagesLocal,
+      payWithCashuEnabled,
+      publishSingleWrappedWithRetry,
+      publishWrappedWithRetry,
       pushToast,
       resolveOwnerIdForWrite,
+      setContactsOnboardingHasPaid,
       setStatus,
       showPaidOverlay,
       t,
       update,
-      buildCashuMintCandidates,
-      cashuTokensAll,
       updateLocalNostrMessage,
-      appendLocalNostrMessage,
-      publishWrappedWithRetry,
-      publishSingleWrappedWithRetry,
-      nostrMessagesLocal,
-      setContactsOnboardingHasPaid,
-      payWithCashuEnabled,
-      defaultMintUrl,
+      upsert,
     ],
   );
 };
