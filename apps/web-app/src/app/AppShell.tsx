@@ -13,46 +13,35 @@ import {
   type AppShellRouteContextValue,
 } from "./context/AppShellContexts";
 import { AppRouteContent } from "./routes/AppRouteContent";
+import { useCurrentNsec } from "./hooks/useCurrentNsec";
 import { useAppShellComposition } from "./useAppShellComposition";
+import { useUnauthenticatedAppShellComposition } from "./useUnauthenticatedAppShellComposition";
 
-const AppShell = () => {
-  if (import.meta.env.DEV) console.log("[linky][render] AppShell");
+interface AuthenticatedAppShellProps {
+  currentNsec: string;
+  setCurrentNsec: (currentNsec: string | null) => void;
+}
+
+const AuthenticatedAppShell = ({
+  currentNsec,
+  setCurrentNsec,
+}: AuthenticatedAppShellProps) => {
   const {
     appActions,
     appState,
     cancelPendingCashuContactSend,
-    confirmPendingOnboardingProfile,
-    createNewAccount,
-    currentNsec,
     dismissToast,
     formatDisplayedAmountText,
     isMainSwipeRoute,
-    lang,
     mainSwipeRouteProps,
     moneyRouteProps,
-    onboardingIsBusy,
-    onboardingPhotoInputRef,
-    onboardingStep,
-    openReturningOnboarding,
-    onPendingOnboardingPhotoError,
-    onPendingOnboardingPhotoSelected,
     pageClassNameWithSwipe,
-    pasteReturningSlip39FromClipboard,
     peopleRouteProps,
     pendingCashuContactSend,
-    pickPendingOnboardingPhoto,
-    cyclePendingOnboardingAvatarControl,
-    selectReturningSlip39Suggestion,
-    savePendingOnboardingBackupToPasswordManager,
-    setReturningSlip39Input,
-    setOnboardingStep,
-    setLang,
-    setPendingOnboardingName,
-    submitReturningSlip39,
     systemRouteProps,
     t,
     toasts,
-  } = useAppShellComposition();
+  } = useAppShellComposition({ currentNsec, setCurrentNsec });
 
   const coreContextValue: AppShellCoreContextValue = appState;
 
@@ -78,11 +67,7 @@ const AppShell = () => {
   );
 
   return (
-    <div
-      className={
-        currentNsec ? `${pageClassNameWithSwipe} authenticated-page` : "page"
-      }
-    >
+    <div className={`${pageClassNameWithSwipe} authenticated-page`}>
       <PwaUpdateBanner t={t} />
       <CashuContactSendBanner
         amountText={
@@ -98,47 +83,92 @@ const AppShell = () => {
       <ToastNotifications toasts={toasts} dismissToast={dismissToast} />
       <InstallPwaBanner t={t} />
 
-      {!currentNsec ? (
-        <UnauthenticatedLayout
-          confirmPendingOnboardingProfile={confirmPendingOnboardingProfile}
-          onboardingStep={onboardingStep}
-          onboardingIsBusy={onboardingIsBusy}
-          lang={lang}
-          onboardingPhotoInputRef={onboardingPhotoInputRef}
-          openReturningOnboarding={openReturningOnboarding}
-          onPendingOnboardingPhotoError={onPendingOnboardingPhotoError}
-          onPendingOnboardingPhotoSelected={onPendingOnboardingPhotoSelected}
-          setOnboardingStep={setOnboardingStep}
-          createNewAccount={createNewAccount}
-          cyclePendingOnboardingAvatarControl={
-            cyclePendingOnboardingAvatarControl
-          }
-          pasteReturningSlip39FromClipboard={pasteReturningSlip39FromClipboard}
-          pickPendingOnboardingPhoto={pickPendingOnboardingPhoto}
-          selectReturningSlip39Suggestion={selectReturningSlip39Suggestion}
-          savePendingOnboardingBackupToPasswordManager={
-            savePendingOnboardingBackupToPasswordManager
-          }
-          setReturningSlip39Input={setReturningSlip39Input}
-          setLang={setLang}
-          setPendingOnboardingName={setPendingOnboardingName}
-          submitReturningSlip39={submitReturningSlip39}
-          t={t}
-        />
-      ) : null}
-
-      {currentNsec ? (
-        <AppShellContextsProvider
-          actions={actionsContextValue}
-          core={coreContextValue}
-          routes={routeContextValue}
-        >
-          <AuthenticatedLayout>
-            <AppRouteContent />
-          </AuthenticatedLayout>
-        </AppShellContextsProvider>
-      ) : null}
+      <AppShellContextsProvider
+        actions={actionsContextValue}
+        core={coreContextValue}
+        routes={routeContextValue}
+      >
+        <AuthenticatedLayout>
+          <AppRouteContent />
+        </AuthenticatedLayout>
+      </AppShellContextsProvider>
     </div>
+  );
+};
+
+const UnauthenticatedAppShell = () => {
+  const {
+    confirmPendingOnboardingProfile,
+    createNewAccount,
+    cyclePendingOnboardingAvatarControl,
+    dismissToast,
+    lang,
+    onboardingIsBusy,
+    onboardingPhotoInputRef,
+    onboardingStep,
+    openReturningOnboarding,
+    onPendingOnboardingPhotoError,
+    onPendingOnboardingPhotoSelected,
+    pasteReturningSlip39FromClipboard,
+    pickPendingOnboardingPhoto,
+    savePendingOnboardingBackupToPasswordManager,
+    selectReturningSlip39Suggestion,
+    setLang,
+    setOnboardingStep,
+    setPendingOnboardingName,
+    setReturningSlip39Input,
+    submitReturningSlip39,
+    t,
+    toasts,
+  } = useUnauthenticatedAppShellComposition();
+
+  return (
+    <div className="page">
+      <PwaUpdateBanner t={t} />
+      <ToastNotifications toasts={toasts} dismissToast={dismissToast} />
+      <InstallPwaBanner t={t} />
+      <UnauthenticatedLayout
+        confirmPendingOnboardingProfile={confirmPendingOnboardingProfile}
+        onboardingStep={onboardingStep}
+        onboardingIsBusy={onboardingIsBusy}
+        lang={lang}
+        onboardingPhotoInputRef={onboardingPhotoInputRef}
+        openReturningOnboarding={openReturningOnboarding}
+        onPendingOnboardingPhotoError={onPendingOnboardingPhotoError}
+        onPendingOnboardingPhotoSelected={onPendingOnboardingPhotoSelected}
+        setOnboardingStep={setOnboardingStep}
+        createNewAccount={createNewAccount}
+        cyclePendingOnboardingAvatarControl={
+          cyclePendingOnboardingAvatarControl
+        }
+        pasteReturningSlip39FromClipboard={pasteReturningSlip39FromClipboard}
+        pickPendingOnboardingPhoto={pickPendingOnboardingPhoto}
+        selectReturningSlip39Suggestion={selectReturningSlip39Suggestion}
+        savePendingOnboardingBackupToPasswordManager={
+          savePendingOnboardingBackupToPasswordManager
+        }
+        setReturningSlip39Input={setReturningSlip39Input}
+        setLang={setLang}
+        setPendingOnboardingName={setPendingOnboardingName}
+        submitReturningSlip39={submitReturningSlip39}
+        t={t}
+      />
+    </div>
+  );
+};
+
+const AppShell = () => {
+  if (import.meta.env.DEV) console.log("[linky][render] AppShell");
+  const { currentNsec, isResolved, setCurrentNsec } = useCurrentNsec();
+
+  if (!isResolved) return <div className="page" />;
+  if (!currentNsec) return <UnauthenticatedAppShell />;
+
+  return (
+    <AuthenticatedAppShell
+      currentNsec={currentNsec}
+      setCurrentNsec={setCurrentNsec}
+    />
   );
 };
 
