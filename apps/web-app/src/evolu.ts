@@ -590,6 +590,15 @@ export const getEvolu = (mnemonic?: string | null): EvoluInstance => {
 // Legacy export for backward compatibility - gets the current global instance
 export const evolu = getEvolu();
 
+export const createCashuTokensAllQuery = () =>
+  evolu.createQuery((db) =>
+    db.selectFrom("cashuToken").selectAll().orderBy("createdAt", "desc"),
+  );
+
+export type CashuTokenRow = Evolu.InferRow<
+  ReturnType<typeof createCashuTokensAllQuery>
+>;
+
 export const useEvoluSyncOwner = (enabled: boolean): Evolu.SyncOwner | null => {
   const [syncOwner, setSyncOwner] = useState<Evolu.SyncOwner | null>(null);
 

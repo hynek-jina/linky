@@ -1,6 +1,7 @@
 import type { Proof as CashuProof } from "@cashu/cashu-ts";
 import type * as Evolu from "@evolu/common";
 import React from "react";
+import type { CashuTokenRow } from "../../../evolu";
 import {
   ensureCashuDeterministicCounterAtLeast,
   getCashuDeterministicCounter,
@@ -20,7 +21,6 @@ import {
   hasMatchingCashuToken,
 } from "../../lib/cashuTokenIdentity";
 import type {
-  CashuTokenRowLike,
   LoggedPaymentEventParams,
   MintUrlInput,
 } from "../../types/appTypes";
@@ -30,7 +30,7 @@ type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
 interface UseRestoreMissingTokensParams {
   cashuIsBusy: boolean;
-  cashuTokensAll: readonly CashuTokenRowLike[];
+  cashuTokensAll: readonly CashuTokenRow[];
   defaultMintUrl: string | null;
   enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;
   upsert: EvoluMutations["upsert"];

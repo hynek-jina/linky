@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createCashuTokenRowFixture } from "../../testUtils/cashuTokenRow";
 import {
+  enrichCashuTokenRow,
   extractCashuTokenFromText,
   extractCashuTokenMeta,
   isStandaloneCashuTokenMessage,
@@ -24,11 +26,24 @@ const buildCashuToken = (): string => {
   return `cashuA${base64Url}`;
 };
 
+const buildEmptyCashuToken = (): string => {
+  const payload = JSON.stringify({
+    token: [{ mint: "https://mint.example", proofs: [] }],
+  });
+  const base64Url = btoa(payload)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  return `cashuA${base64Url}`;
+};
+
 describe("extractCashuTokenMeta", () => {
   it("derives mint, unit, and amount from the token", () => {
     const token = buildCashuToken();
 
-    expect(extractCashuTokenMeta({ token })).toEqual({
+    expect(
+      extractCashuTokenMeta(createCashuTokenRowFixture({ token })),
+    ).toEqual({
       tokenText: token,
       mint: "https://mint.example",
       unit: "sat",
@@ -41,10 +56,12 @@ describe("extractCashuTokenMeta", () => {
 
     expect(
       extractCashuTokenMeta({
-        token,
-        mint: "https://stale.example",
-        unit: "usd",
-        amount: 999,
+        ...createCashuTokenRowFixture({
+          token,
+          mint: "https://stale.example",
+          unit: "usd",
+          amount: 999,
+        }),
       }),
     ).toEqual({
       tokenText: token,
@@ -52,6 +69,43 @@ describe("extractCashuTokenMeta", () => {
       unit: "sat",
       amount: 21,
     });
+  });
+});
+
+describe("enrichCashuTokenRow", () => {
+  it("uses parsed metadata and preserves persistence fields", () => {
+    const row = createCashuTokenRowFixture({
+      amount: 999,
+      id: "metadata-row",
+      mint: "https://stale.example",
+      ownerId: "AQEBAQEBAQEBAQEBAQEBAQ",
+      token: buildCashuToken(),
+      unit: "usd",
+    });
+
+    const enriched = enrichCashuTokenRow(row);
+
+    expect(enriched).toMatchObject({
+      amount: 21,
+      id: row.id,
+      mint: "https://mint.example",
+      ownerId: row.ownerId,
+      tokenText: row.token,
+      unit: "sat",
+    });
+  });
+
+  it("omits invalid and zero-value rows", () => {
+    expect(
+      enrichCashuTokenRow(
+        createCashuTokenRowFixture({ token: "cashu-invalid" }),
+      ),
+    ).toBeNull();
+    expect(
+      enrichCashuTokenRow(
+        createCashuTokenRowFixture({ token: buildEmptyCashuToken() }),
+      ),
+    ).toBeNull();
   });
 });
 

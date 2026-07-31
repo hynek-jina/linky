@@ -1,23 +1,20 @@
 import type { OwnerId } from "@evolu/common";
 import React from "react";
+import type { CashuTokenRow } from "../../evolu";
 import {
   getGenericMintIconUrl,
   getMintIconOverride,
   getMintOriginAndHost,
   normalizeMintUrl,
 } from "../../utils/mint";
-import type {
-  CashuTokenRowLike,
-  LocalMintInfoRow,
-  MintUrlInput,
-} from "../types/appTypes";
+import type { LocalMintInfoRow, MintUrlInput } from "../types/appTypes";
 import { getMintInfoIconUrl } from "./mint/mintInfoHelpers";
 import { useMintInfoStore } from "./mint/useMintInfoStore";
 
 interface UseMintDomainParams {
   appOwnerId: OwnerId | null;
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
-  cashuTokensAll: readonly CashuTokenRowLike[];
+  cashuTokensAll: readonly CashuTokenRow[];
   defaultMintUrl: string | null;
   rememberSeenMint: (mintUrl: MintUrlInput) => void;
 }

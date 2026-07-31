@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createCashuTokenId } from "./cashuTokenIdentity";
+import { createCashuTokenRowFixture } from "../../testUtils/cashuTokenRow";
 import {
   serializePrivateImageMessage,
   type PrivateImageMessagePayload,
@@ -107,8 +107,12 @@ describe("getCashuTokenMessageInfo", () => {
     const token = buildCashuToken();
 
     expect(
-      getCashuTokenMessageInfo(token, [{ rawToken: token, state: "accepted" }])
-        ?.isValid,
+      getCashuTokenMessageInfo(token, [
+        createCashuTokenRowFixture({
+          rawToken: token,
+          state: "accepted",
+        }),
+      ])?.isValid,
     ).toBe(false);
   });
 
@@ -116,8 +120,9 @@ describe("getCashuTokenMessageInfo", () => {
     const token = buildCashuToken();
 
     expect(
-      getCashuTokenMessageInfo(token, [{ rawToken: token, state: "error" }])
-        ?.isValid,
+      getCashuTokenMessageInfo(token, [
+        createCashuTokenRowFixture({ rawToken: token, state: "error" }),
+      ])?.isValid,
     ).toBe(false);
   });
 
@@ -126,7 +131,11 @@ describe("getCashuTokenMessageInfo", () => {
 
     expect(
       getCashuTokenMessageInfo(token, [
-        { isDeleted: "1", rawToken: token, state: "error" },
+        createCashuTokenRowFixture({
+          isDeleted: true,
+          rawToken: token,
+          state: "error",
+        }),
       ])?.isValid,
     ).toBe(false);
   });
@@ -136,7 +145,10 @@ describe("getCashuTokenMessageInfo", () => {
 
     expect(
       getCashuTokenMessageInfo(token, [
-        { id: createCashuTokenId(token), token: "cashu-accepted-token" },
+        createCashuTokenRowFixture({
+          id: token,
+          token: "cashu-accepted-token",
+        }),
       ])?.isValid,
     ).toBe(false);
   });

@@ -1,6 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
+import { createCashuTokenRowFixture } from "../../../testUtils/cashuTokenRow";
 import { buildCashuMintCandidates } from "../../lib/paymentMintSelection";
+import type { CashuTokenWithMeta } from "../../lib/tokenText";
 import { selectCashuMessagePayment } from "./selectCashuMessagePayment";
+
+const tokenWithMeta = (input: {
+  amount: number;
+  mint: string;
+  rawToken?: string;
+  state: string;
+  token?: string;
+}): CashuTokenWithMeta => {
+  const row = createCashuTokenRowFixture({
+    id: input.token || input.rawToken || "empty-token-row",
+    ...(input.rawToken ? { rawToken: input.rawToken } : {}),
+    state: input.state,
+    ...(input.token ? { token: input.token } : {}),
+  });
+
+  return {
+    ...row,
+    amount: input.amount,
+    mint: input.mint,
+    token: input.token ? row.token : null,
+    tokenText: input.token ?? input.rawToken ?? "",
+    unit: "sat",
+  };
+};
 
 describe("selectCashuMessagePayment", () => {
   it("groups only accepted rows with usable mint and token text", () => {
@@ -12,36 +38,35 @@ describe("selectCashuMessagePayment", () => {
       defaultMintUrl: "https://preferred.example///",
       normalizeMintUrl: (mint) => mint.replace(/\/+$/, ""),
       tokens: [
-        {
+        tokenWithMeta({
           amount: 40,
           mint: "https://mint.example",
           state: "accepted",
           token: "token-a",
-        },
-        {
+        }),
+        tokenWithMeta({
           amount: 35,
           mint: "https://mint.example",
           rawToken: "legacy-token",
           state: "accepted",
-        },
-        {
+        }),
+        tokenWithMeta({
           amount: 500,
           mint: "https://mint.example",
           state: "reserved",
           token: "reserved",
-        },
-        {
+        }),
+        tokenWithMeta({
           amount: 500,
           mint: "",
           state: "accepted",
           token: "missing-mint",
-        },
-        {
+        }),
+        tokenWithMeta({
           amount: 500,
           mint: "https://mint.example",
           state: "accepted",
-          token: "",
-        },
+        }),
       ],
     });
 
@@ -74,12 +99,12 @@ describe("selectCashuMessagePayment", () => {
       defaultMintUrl: null,
       normalizeMintUrl: (mint) => mint,
       tokens: [
-        {
+        tokenWithMeta({
           amount: 100,
           mint: "https://mint.example",
           state: "accepted",
           token: "token",
-        },
+        }),
       ],
     });
 
@@ -98,18 +123,18 @@ describe("selectCashuMessagePayment", () => {
       defaultMintUrl: null,
       normalizeMintUrl: (mint) => mint,
       tokens: [
-        {
+        tokenWithMeta({
           amount: 60,
           mint: "https://mint-a.example",
           state: "accepted",
           token: "token-a",
-        },
-        {
+        }),
+        tokenWithMeta({
           amount: 60,
           mint: "https://mint-b.example",
           state: "accepted",
           token: "token-b",
-        },
+        }),
       ],
     });
 
@@ -127,24 +152,24 @@ describe("selectCashuMessagePayment", () => {
       defaultMintUrl: null,
       normalizeMintUrl: (mint) => mint,
       tokens: [
-        {
+        tokenWithMeta({
           amount: 100,
           mint: "https://mint.example",
           state: "pending",
           token: "pending",
-        },
-        {
+        }),
+        tokenWithMeta({
           amount: 100,
           mint: "https://mint.example",
           state: "issued",
           token: "issued",
-        },
-        {
+        }),
+        tokenWithMeta({
           amount: 100,
           mint: "https://mint.example",
           state: "externalized",
           token: "externalized",
-        },
+        }),
       ],
     });
 

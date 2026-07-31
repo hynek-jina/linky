@@ -1,5 +1,6 @@
 import { parseCashuToken } from "../../cashu";
-import type { CashuTokenRowLike, MintUrlInput } from "../types/appTypes";
+import type { CashuTokenRow } from "../../evolu";
+import type { MintUrlInput } from "../types/appTypes";
 import { getLinkyBankPaymentOfferInfo } from "./bankPaymentOffer";
 import { createCashuTokenId } from "./cashuTokenIdentity";
 import { parsePrivateImageMessage } from "./privateImageMessage";
@@ -25,7 +26,7 @@ const getMintDisplay = (mintValue: MintUrlInput): string | null => {
 };
 
 const isKnownCashuToken = (
-  cashuTokensAll: readonly CashuTokenRowLike[],
+  cashuTokensAll: readonly Pick<CashuTokenRow, "id" | "rawToken" | "token">[],
   tokenRaw: string,
 ): boolean => {
   const tokenId = String(createCashuTokenId(tokenRaw));
@@ -42,7 +43,7 @@ const isKnownCashuToken = (
 
 export const getCashuTokenMessageInfo = (
   text: string,
-  cashuTokensAll: readonly CashuTokenRowLike[],
+  cashuTokensAll: readonly Pick<CashuTokenRow, "id" | "rawToken" | "token">[],
 ): CashuTokenMessageInfo | null => {
   if (getLinkyBankPaymentOfferInfo(text)) return null;
   if (parsePrivateImageMessage(text)) return null;

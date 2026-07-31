@@ -15,7 +15,8 @@ import {
   persistCashuMessagePaymentResult,
   persistCashuMessageSwapAttempt,
 } from "./persistCashuMessagePayment";
-import type { CashuTokenRowLike } from "../../types/appTypes";
+import { createCashuTokenRowFixture } from "../../../testUtils/cashuTokenRow";
+import type { CashuTokenWithMeta } from "../../lib/tokenText";
 
 const oldOwnerResult = Evolu.OwnerId.fromUnknown("AAAAAAAAAAAAAAAAAAAAAA");
 const activeOwnerResult = Evolu.OwnerId.fromUnknown("AQEBAQEBAQEBAQEBAQEBAQ");
@@ -25,9 +26,24 @@ if (!oldOwnerResult.ok || !activeOwnerResult.ok) {
 const oldOwnerId = oldOwnerResult.value;
 const activeOwnerId = activeOwnerResult.value;
 const contactId = Evolu.createIdFromString<"Contact">("contact");
-const withOwner = (row: CashuTokenRowLike, ownerId: Evolu.OwnerId) => ({
-  ...row,
-  ownerId,
+const tokenWithMeta = (
+  input: {
+    amount?: number;
+    mint: string;
+    state: string;
+    token: string;
+  },
+  ownerId: Evolu.OwnerId,
+): CashuTokenWithMeta => ({
+  ...createCashuTokenRowFixture({
+    ownerId: String(ownerId),
+    state: input.state,
+    token: input.token,
+  }),
+  amount: input.amount ?? null,
+  mint: input.mint,
+  tokenText: input.token,
+  unit: "sat",
 });
 
 const selection = {
@@ -91,30 +107,27 @@ describe("persistCashuMessageSwapAttempt", () => {
     persistCashuMessageSwapAttempt({
       cashuTokensAll: [],
       cashuTokensWithMeta: [
-        withOwner(
+        tokenWithMeta(
           {
             amount: 100,
-            id: createCashuTokenId("old-token"),
             mint: "https://mint.example",
             state: "accepted",
             token: "old-token",
           },
           oldOwnerId,
         ),
-        withOwner(
+        tokenWithMeta(
           {
             amount: 100,
-            id: createCashuTokenId("other-mint"),
             mint: "https://other.example",
             state: "accepted",
             token: "other-mint",
           },
           oldOwnerId,
         ),
-        withOwner(
+        tokenWithMeta(
           {
             amount: 100,
-            id: createCashuTokenId("pending"),
             mint: "https://mint.example",
             state: "pending",
             token: "pending",
@@ -153,9 +166,8 @@ describe("persistCashuMessageSwapAttempt", () => {
     persistCashuMessageSwapAttempt({
       cashuTokensAll: [],
       cashuTokensWithMeta: [
-        withOwner(
+        tokenWithMeta(
           {
-            id: createCashuTokenId("old-token"),
             mint: "https://mint.example",
             state: "accepted",
             token: "old-token",
@@ -176,29 +188,6 @@ describe("persistCashuMessageSwapAttempt", () => {
     });
 
     expect(operations).toEqual(["insert:recovery", "delete"]);
-  });
-
-  it("rejects invalid stored token ids at runtime", () => {
-    expect(() =>
-      persistCashuMessageSwapAttempt({
-        cashuTokensAll: [],
-        cashuTokensWithMeta: [
-          withOwner(
-            {
-              id: "invalid",
-              mint: "https://mint.example",
-              state: "accepted",
-              token: "old-token",
-            },
-            oldOwnerId,
-          ),
-        ],
-        cashuWriteOwnerId: activeOwnerId,
-        outcome: successCommit,
-        update: vi.fn<CashuTokenUpdate>(() => ({ ok: true })),
-        upsert: vi.fn<CashuTokenUpsert>(() => ({ ok: true })),
-      }),
-    ).toThrow("Invalid Cashu token id");
   });
 
   it("surfaces mutation failures to the swap executor", () => {
@@ -302,7 +291,9 @@ describe("persistCashuMessagePaymentResult", () => {
     const upsert = vi.fn<CashuTokenUpsert>(() => ({ ok: true }));
 
     persistCashuMessagePaymentResult({
-      cashuTokensAll: [{ state: "accepted", token: "send-token" }],
+      cashuTokensAll: [
+        createCashuTokenRowFixture({ state: "accepted", token: "send-token" }),
+      ],
       cashuWriteOwnerId: activeOwnerId,
       contactId,
       logCompletedOnly: false,

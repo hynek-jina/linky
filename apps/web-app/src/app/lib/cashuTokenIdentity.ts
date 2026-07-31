@@ -1,6 +1,5 @@
 import * as Evolu from "@evolu/common";
-import type { CashuTokenId } from "../../evolu";
-import type { CashuTokenRowLike } from "../types/appTypes";
+import type { CashuTokenId, CashuTokenRow } from "../../evolu";
 
 export const createCashuTokenId = (token: string): CashuTokenId =>
   Evolu.createIdFromString<"CashuToken">(token.trim());
@@ -46,13 +45,21 @@ export const buildSparseCashuTokenPayload = (
 };
 
 interface CashuTokenIdentityLike {
-  id?: unknown;
   rawToken?: unknown;
   token?: unknown;
 }
 
+type PersistedCashuTokenIdentity = Pick<
+  CashuTokenRow,
+  "id" | "rawToken" | "token"
+>;
+
 export const readCashuTokenAliases = (
-  value: CashuTokenIdentityLike | null | undefined,
+  value:
+    | CashuTokenIdentityLike
+    | PersistedCashuTokenIdentity
+    | null
+    | undefined,
 ): string[] => {
   const aliases = new Set<string>();
 
@@ -65,15 +72,15 @@ export const readCashuTokenAliases = (
   return Array.from(aliases);
 };
 
-export const isDeletedCashuRow = (row: CashuTokenRowLike): boolean => {
-  const normalized = String(row.isDeleted ?? "")
-    .trim()
-    .toLowerCase();
-  return normalized === "1" || normalized === "true";
-};
+export const isDeletedCashuRow = (
+  row: Pick<CashuTokenRow, "isDeleted">,
+): boolean => row.isDeleted === Evolu.sqliteTrue;
 
 export const hasMatchingCashuToken = (
-  rows: readonly CashuTokenRowLike[],
+  rows: readonly Pick<
+    CashuTokenRow,
+    "id" | "isDeleted" | "rawToken" | "token"
+  >[],
   value: CashuTokenIdentityLike | null | undefined,
 ): boolean => {
   const aliases = new Set(readCashuTokenAliases(value));
@@ -83,7 +90,7 @@ export const hasMatchingCashuToken = (
   );
 
   return rows.some((row) => {
-    if (candidateIds.has(String(row.id ?? "").trim())) return true;
+    if (candidateIds.has(String(row.id))) return true;
     if (isDeletedCashuRow(row)) return false;
     return readCashuTokenAliases(row).some((alias) => aliases.has(alias));
   });

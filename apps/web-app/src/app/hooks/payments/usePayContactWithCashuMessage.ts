@@ -2,7 +2,7 @@ import * as Evolu from "@evolu/common";
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
 import { createSendTokenWithTokensAtMint } from "../../../cashuSend";
-import type { ContactId } from "../../../evolu";
+import type { CashuTokenRow, ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../../utils/constants";
@@ -13,8 +13,8 @@ import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
 import type { AppNostrPool } from "../../lib/nostrPool";
 import { LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER } from "../../lib/pushWrappedEvent";
+import type { CashuTokenWithMeta } from "../../lib/tokenText";
 import type {
-  CashuTokenRowLike,
   ContactRowLike,
   LocalNostrMessage,
   LoggedPaymentEventParams,
@@ -49,8 +49,8 @@ interface UsePayContactWithCashuMessageParams {
     preferredMint: string,
   ) => Array<{ mint: string; sum: number; tokens: string[] }>;
   cashuBalance: number;
-  cashuTokensAll: readonly CashuTokenRowLike[];
-  cashuTokensWithMeta: readonly CashuTokenRowLike[];
+  cashuTokensAll: readonly CashuTokenRow[];
+  cashuTokensWithMeta: readonly CashuTokenWithMeta[];
   chatSeenWrapIdsRef: React.MutableRefObject<Set<string>>;
   currentNpub: string | null;
   currentNsec: string | null;

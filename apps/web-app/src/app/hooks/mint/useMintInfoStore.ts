@@ -1,5 +1,6 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
+import type { CashuTokenRow } from "../../../evolu";
 import { useDeferredOnlineReady } from "../../../hooks/useDeferredOnlineReady";
 import { LOCAL_MINT_INFO_STORAGE_KEY_PREFIX } from "../../../utils/constants";
 import {
@@ -12,11 +13,7 @@ import {
   safeLocalStorageSetJson,
 } from "../../../utils/storage";
 import { makeLocalId } from "../../../utils/validation";
-import type {
-  CashuTokenRowLike,
-  LocalMintInfoRow,
-  MintUrlInput,
-} from "../../types/appTypes";
+import type { LocalMintInfoRow, MintUrlInput } from "../../types/appTypes";
 import {
   buildMintDedupeSignature,
   dedupeMintInfoRows,
@@ -31,7 +28,7 @@ import {
 interface UseMintInfoStoreParams {
   appOwnerId: Evolu.OwnerId | null;
   appOwnerIdRef: React.MutableRefObject<Evolu.OwnerId | null>;
-  cashuTokensAll: readonly CashuTokenRowLike[];
+  cashuTokensAll: readonly CashuTokenRow[];
   defaultMintUrl: string | null;
   rememberSeenMint: (mintUrl: MintUrlInput) => void;
 }

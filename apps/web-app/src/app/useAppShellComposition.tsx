@@ -3,6 +3,7 @@ import { useQuery } from "@evolu/react";
 import React, { useMemo, useState } from "react";
 import { ContactCard } from "../components/ContactCard";
 import {
+  createCashuTokensAllQuery,
   evolu,
   normalizeEvoluServerUrl,
   useEvolu,
@@ -49,7 +50,6 @@ import {
   safeLocalStorageSetJson,
 } from "../utils/storage";
 import {
-  createCashuTokensAllQuery,
   logPayStep,
   useCashuWalletComposition,
 } from "./hooks/composition/useCashuWalletComposition";
@@ -1099,10 +1099,7 @@ export const useAppShellComposition = ({
   const otherContactsLabel = t("otherContacts");
 
   const { exportAppData, handleImportAppDataFilePicked, requestImportAppData } =
-    useAppDataTransfer<
-      (typeof contacts)[number],
-      (typeof cashuTokensAll)[number]
-    >({
+    useAppDataTransfer<(typeof contacts)[number]>({
       appOwnerId: contactsOwnerId,
       cashuOwnerId,
       cashuTokens: cashuTokensFiltered,

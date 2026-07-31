@@ -1,21 +1,18 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
-import type { ContactId } from "../../evolu";
+import type { CashuTokenRow, ContactId } from "../../evolu";
 import type { JsonValue } from "../../types/json";
 import { asRecord } from "../../utils/validation";
-import type { CashuTokenRowLike, ContactRowLike } from "../types/appTypes";
+import type { ContactRowLike } from "../types/appTypes";
 import { createCashuTokenId } from "../lib/cashuTokenIdentity";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
-interface UseAppDataTransferParams<
-  TContact extends ContactRowLike,
-  TCashuToken extends CashuTokenRowLike,
-> {
+interface UseAppDataTransferParams<TContact extends ContactRowLike> {
   appOwnerId: Evolu.OwnerId | null;
   cashuOwnerId: Evolu.OwnerId | null;
-  cashuTokens: readonly TCashuToken[];
-  cashuTokensAll: readonly TCashuToken[];
+  cashuTokens: readonly CashuTokenRow[];
+  cashuTokensAll: readonly CashuTokenRow[];
   contacts: readonly TContact[];
   importDataFileInputRef: React.RefObject<HTMLInputElement | null>;
   insert: EvoluMutations["insert"];
@@ -25,10 +22,7 @@ interface UseAppDataTransferParams<
   update: EvoluMutations["update"];
 }
 
-export const useAppDataTransfer = <
-  TContact extends ContactRowLike,
-  TCashuToken extends CashuTokenRowLike,
->({
+export const useAppDataTransfer = <TContact extends ContactRowLike>({
   appOwnerId,
   cashuOwnerId,
   cashuTokens,
@@ -40,7 +34,7 @@ export const useAppDataTransfer = <
   pushToast,
   t,
   update,
-}: UseAppDataTransferParams<TContact, TCashuToken>) => {
+}: UseAppDataTransferParams<TContact>) => {
   const buildImportedCashuTokenPayload = React.useCallback(
     (args: {
       error: string | null;
@@ -178,7 +172,7 @@ export const useAppDataTransfer = <
         const raw = String(token.rawToken ?? "").trim();
         if (encoded) existingTokenSet.add(encoded);
         if (raw) existingTokenSet.add(raw);
-        if (token.id) existingTokenIdSet.add(String(token.id));
+        existingTokenIdSet.add(String(token.id));
       }
 
       let addedContacts = 0;
