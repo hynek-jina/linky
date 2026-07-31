@@ -217,9 +217,6 @@ export const buildTransactionInsertPayload = (args: {
 interface UseOwnerScopedStorageParams {
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
   insert: EvoluMutations["insert"];
-  recordTransactionsOwnerWriteRef: React.MutableRefObject<
-    ((count?: number) => void) | null
-  >;
   transactionsOwnerIdRef: React.MutableRefObject<OwnerId | null>;
 }
 
@@ -237,7 +234,6 @@ interface UseOwnerScopedStorageResult {
 export const useOwnerScopedStorage = ({
   appOwnerIdRef,
   insert,
-  recordTransactionsOwnerWriteRef,
   transactionsOwnerIdRef,
 }: UseOwnerScopedStorageParams): UseOwnerScopedStorageResult => {
   const migratedLegacyPaymentsKeyRef = React.useRef<string | null>(null);
@@ -311,13 +307,12 @@ export const useOwnerScopedStorage = ({
 
       const transactionOwnerId = transactionsOwnerIdRef.current ?? ownerId;
       try {
-        const insertResult = transactionOwnerId
-          ? insert("transaction", transactionPayload, {
-              ownerId: transactionOwnerId,
-            })
-          : insert("transaction", transactionPayload);
-        if (insertResult.ok) {
-          recordTransactionsOwnerWriteRef.current?.();
+        if (transactionOwnerId) {
+          insert("transaction", transactionPayload, {
+            ownerId: transactionOwnerId,
+          });
+        } else {
+          insert("transaction", transactionPayload);
         }
       } catch {
         // Transaction history must never break payment receive/send flows.
@@ -338,13 +333,7 @@ export const useOwnerScopedStorage = ({
         nextTelemetryQueue,
       );
     },
-    [
-      appOwnerIdRef,
-      insert,
-      makeLocalStorageKey,
-      recordTransactionsOwnerWriteRef,
-      transactionsOwnerIdRef,
-    ],
+    [appOwnerIdRef, insert, makeLocalStorageKey, transactionsOwnerIdRef],
   );
 
   const migrateLegacyPaymentEventsToEvolu = React.useCallback(
@@ -388,14 +377,12 @@ export const useOwnerScopedStorage = ({
         });
 
         try {
-          const insertResult = writeOwnerId
-            ? insert("transaction", transactionPayload, {
-                ownerId: writeOwnerId,
-              })
-            : insert("transaction", transactionPayload);
-
-          if (insertResult.ok) {
-            recordTransactionsOwnerWriteRef.current?.();
+          if (writeOwnerId) {
+            insert("transaction", transactionPayload, {
+              ownerId: writeOwnerId,
+            });
+          } else {
+            insert("transaction", transactionPayload);
           }
         } catch {
           // ignore legacy migration failures and keep payment flows unaffected
@@ -409,7 +396,7 @@ export const useOwnerScopedStorage = ({
       }
       migratedLegacyPaymentsKeyRef.current = migratedKey;
     },
-    [insert, recordTransactionsOwnerWriteRef],
+    [insert],
   );
 
   return {

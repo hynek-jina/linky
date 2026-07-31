@@ -223,9 +223,6 @@ interface UseContactsMessagingCompositionParams {
   metaOwnerId: IdentityOwnersCompositionResult["metaOwnerId"];
   nostrIdentityRows: NostrBootstrapParams["identitiesSnapshot"];
   pushToast: (message: string) => void;
-  recordContactsOwnerWrite: IdentityOwnersCompositionResult["recordContactsOwnerWrite"];
-  recordMessagesOwnerWrite: IdentityOwnersCompositionResult["recordMessagesOwnerWrite"];
-  recordTransactionsOwnerWrite: IdentityOwnersCompositionResult["recordTransactionsOwnerWrite"];
   route: ReturnType<typeof useRouting>;
   setContactPaymentIntent: React.Dispatch<
     React.SetStateAction<"pay" | "request">
@@ -270,9 +267,6 @@ export const useContactsMessagingComposition = ({
   metaOwnerId,
   nostrIdentityRows,
   pushToast,
-  recordContactsOwnerWrite,
-  recordMessagesOwnerWrite,
-  recordTransactionsOwnerWrite,
   route,
   setContactPaymentIntent,
   setPayAmount,
@@ -761,7 +755,6 @@ export const useContactsMessagingComposition = ({
     chatMessagesRef,
     messagesOwnerId,
     messagesOwnerIdRef,
-    recordMessagesOwnerWrite,
     route,
     visibleMessageOwnerIds,
   });
@@ -1573,13 +1566,11 @@ export const useContactsMessagingComposition = ({
     currentNpub,
     insert,
     nostrFetchRelays,
-    recordTransactionsOwnerWrite,
     route,
     selectedContact,
     setContactNewPrefill,
     setPendingDeleteId,
     setRecentlyAddedContactId,
-    recordContactsOwnerWrite,
     setStatus,
     t,
     transactionsOwnerId,
@@ -2353,7 +2344,6 @@ export const useContactsMessagingComposition = ({
           unknownThreadContactId,
         );
       }
-      recordContactsOwnerWrite();
       setStatus(t("contactArchived"));
       closeContactDetail();
       return;
@@ -2400,7 +2390,6 @@ export const useContactsMessagingComposition = ({
             // Ignore malformed archived contact identifiers.
           }
         }
-        recordContactsOwnerWrite();
         setStatus(t("contactRestored"));
         closeContactDetail();
         return;
@@ -2413,7 +2402,6 @@ export const useContactsMessagingComposition = ({
       contacts,
       contactsOwnerId,
       contactsVisibleOwnerIds,
-      recordContactsOwnerWrite,
       reassignLocalNostrMessagesContactId,
       setStatus,
       t,
@@ -2592,7 +2580,6 @@ export const useContactsMessagingComposition = ({
         });
 
     if (result.ok) {
-      recordContactsOwnerWrite();
       setStatus(t("contactBlocked"));
       closeContactDetail();
       return;
@@ -2604,7 +2591,6 @@ export const useContactsMessagingComposition = ({
     clearContactAttention,
     closeContactDetail,
     contactsOwnerId,
-    recordContactsOwnerWrite,
     removeLocalNostrMessagesByContactId,
     route.kind,
     selectedContact,
@@ -2720,8 +2706,6 @@ export const useContactsMessagingComposition = ({
       setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
       return;
     }
-
-    recordContactsOwnerWrite();
   }, [
     clearContactAttention,
     contactsOwnerId,
@@ -2729,7 +2713,6 @@ export const useContactsMessagingComposition = ({
     contacts,
     insert,
     pendingUnknownContactAddRef,
-    recordContactsOwnerWrite,
     reassignLocalNostrMessagesContactId,
     route.kind,
     selectedChatContact,
@@ -2899,7 +2882,6 @@ export const useContactsMessagingComposition = ({
       }
 
       openScannedContactPendingNpubRef.current = npub;
-      recordContactsOwnerWrite();
       setStatus(t("contactSaved"));
     },
     [
@@ -2911,7 +2893,6 @@ export const useContactsMessagingComposition = ({
       insert,
       lang,
       openScannedContactPendingNpubRef,
-      recordContactsOwnerWrite,
       setStatus,
       t,
       unknownNameByNpub,

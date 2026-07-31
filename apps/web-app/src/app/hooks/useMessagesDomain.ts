@@ -39,7 +39,6 @@ interface UseMessagesDomainParams {
   chatMessagesRef: React.RefObject<HTMLDivElement | null>;
   messagesOwnerId: OwnerId | null;
   messagesOwnerIdRef: React.MutableRefObject<OwnerId | null>;
-  recordMessagesOwnerWrite: (count?: number) => void;
   route: Route;
   visibleMessageOwnerIds: readonly string[];
 }
@@ -420,7 +419,6 @@ export const useMessagesDomain = ({
   chatMessagesRef,
   messagesOwnerId,
   messagesOwnerIdRef,
-  recordMessagesOwnerWrite,
   route,
   visibleMessageOwnerIds,
 }: UseMessagesDomainParams) => {
@@ -616,10 +614,9 @@ export const useMessagesDomain = ({
       const result = messagesOwnerId
         ? insert("nostrMessage", payload, { ownerId: messagesOwnerId })
         : insert("nostrMessage", payload);
-      if (result.ok) recordMessagesOwnerWrite();
       return result;
     },
-    [insert, messagesOwnerId, recordMessagesOwnerWrite],
+    [insert, messagesOwnerId],
   );
 
   const insertNostrReaction = React.useCallback(
@@ -627,10 +624,9 @@ export const useMessagesDomain = ({
       const result = messagesOwnerId
         ? insert("nostrReaction", payload, { ownerId: messagesOwnerId })
         : insert("nostrReaction", payload);
-      if (result.ok) recordMessagesOwnerWrite();
       return result;
     },
-    [insert, messagesOwnerId, recordMessagesOwnerWrite],
+    [insert, messagesOwnerId],
   );
 
   const buildVisibleRowOwnerIdsById = React.useCallback(
@@ -672,21 +668,14 @@ export const useMessagesDomain = ({
         for (const ownerId of rowOwnerIds) {
           update("nostrMessage", payload, { ownerId });
         }
-        recordMessagesOwnerWrite(rowOwnerIds.length);
         return;
       }
 
       if (messagesOwnerId)
         update("nostrMessage", payload, { ownerId: messagesOwnerId });
       else update("nostrMessage", payload);
-      recordMessagesOwnerWrite();
     },
-    [
-      messagesOwnerId,
-      nostrMessageOwnerIdsById,
-      recordMessagesOwnerWrite,
-      update,
-    ],
+    [messagesOwnerId, nostrMessageOwnerIdsById, update],
   );
 
   const updateNostrReaction = React.useCallback(
@@ -697,21 +686,14 @@ export const useMessagesDomain = ({
         for (const ownerId of rowOwnerIds) {
           update("nostrReaction", payload, { ownerId });
         }
-        recordMessagesOwnerWrite(rowOwnerIds.length);
         return;
       }
 
       if (messagesOwnerId)
         update("nostrReaction", payload, { ownerId: messagesOwnerId });
       else update("nostrReaction", payload);
-      recordMessagesOwnerWrite();
     },
-    [
-      messagesOwnerId,
-      nostrReactionOwnerIdsById,
-      recordMessagesOwnerWrite,
-      update,
-    ],
+    [messagesOwnerId, nostrReactionOwnerIdsById, update],
   );
 
   const [pendingPayments, setPendingPayments] = React.useState<
