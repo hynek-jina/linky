@@ -1,16 +1,14 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React from "react";
-import { useDeferredOnlineReady } from "../../hooks/useDeferredOnlineReady";
 import { navigateTo } from "../../hooks/useRouting";
 import { NOSTR_RELAYS } from "../../nostrProfile";
-import { isNativePlatform } from "../../platform/runtime";
 import type { Route } from "../../types/route";
 import { getSharedAppNostrPool } from "../lib/nostrPool";
 
 interface UseRelayDomainParams {
   currentNpub: string | null;
   currentNsec: string | null;
-  networkEnabled?: boolean;
+  networkEnabled: boolean;
   route: Route;
   setStatus: (value: string | null) => void;
   t: (key: string) => string;
@@ -29,21 +27,6 @@ interface UseRelayDomainResult {
   saveNewRelay: () => void;
   selectedRelayUrl: string | null;
   setNewRelayUrl: React.Dispatch<React.SetStateAction<string>>;
-}
-
-const PUSH_REVALIDATION_COOLDOWN_MS = 12 * 60 * 60 * 1000;
-const PUSH_REVALIDATION_FAILURE_RETRY_MS = 5 * 60 * 1000;
-
-function isPushRegistrationRefreshMessage(
-  value: unknown,
-): value is { type: "push-received" | "push-subscription-change" } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "type" in value &&
-    (value.type === "push-received" ||
-      value.type === "push-subscription-change")
-  );
 }
 
 function extractUniqueRelayTags(
@@ -86,12 +69,11 @@ function relayProfileSyncKey(npub: string, urls: readonly string[]): string {
 export const useRelayDomain = ({
   currentNpub,
   currentNsec,
-  networkEnabled = true,
+  networkEnabled,
   route,
   setStatus,
   t,
 }: UseRelayDomainParams): UseRelayDomainResult => {
-  const canRunNetworkWork = useDeferredOnlineReady() && networkEnabled;
   const [newRelayUrl, setNewRelayUrl] = React.useState<string>("");
   const [relayStatusByUrl, setRelayStatusByUrl] = React.useState<
     Record<string, "checking" | "connected" | "disconnected">
@@ -102,8 +84,6 @@ export const useRelayDomain = ({
   const [pendingRelayDeleteUrl, setPendingRelayDeleteUrl] = React.useState<
     string | null
   >(null);
-  const lastPushRevalidationMsRef = React.useRef(0);
-
   React.useEffect(() => {
     if (!pendingRelayDeleteUrl) return;
     const timeoutId = window.setTimeout(() => {
@@ -111,193 +91,6 @@ export const useRelayDomain = ({
     }, 5000);
     return () => window.clearTimeout(timeoutId);
   }, [pendingRelayDeleteUrl]);
-
-  const revalidatePwaPushRegistration = React.useCallback(
-    async (reason: string, force = false) => {
-      if (!canRunNetworkWork) return;
-      if (!currentNsec) return;
-      if (isNativePlatform()) return;
-      if (!("Notification" in window)) return;
-      if (Notification.permission !== "granted") return;
-      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        return;
-      }
-
-      try {
-        if (reason === "foreground" && document.visibilityState !== "visible") {
-          return;
-        }
-      } catch {
-        // If visibility cannot be read, keep the best-effort registration path.
-      }
-
-      const now = Date.now();
-      if (
-        !force &&
-        now - lastPushRevalidationMsRef.current < PUSH_REVALIDATION_COOLDOWN_MS
-      ) {
-        return;
-      }
-
-      lastPushRevalidationMsRef.current = now;
-      try {
-        const {
-          arePushNotificationsDisabledByUser,
-          registerPushNotifications,
-        } = await import("../../utils/pushNotifications");
-        if (arePushNotificationsDisabledByUser()) {
-          return;
-        }
-
-        const result = await registerPushNotifications(currentNsec);
-        if (!result.success) {
-          lastPushRevalidationMsRef.current =
-            Date.now() -
-            PUSH_REVALIDATION_COOLDOWN_MS +
-            PUSH_REVALIDATION_FAILURE_RETRY_MS;
-          console.error(
-            `Push notification revalidation failed (${reason}):`,
-            result.error ?? "unknown error",
-          );
-        }
-      } catch (error) {
-        lastPushRevalidationMsRef.current =
-          Date.now() -
-          PUSH_REVALIDATION_COOLDOWN_MS +
-          PUSH_REVALIDATION_FAILURE_RETRY_MS;
-        console.error(
-          `Push notification revalidation error (${reason}):`,
-          error,
-        );
-      }
-    },
-    [canRunNetworkWork, currentNsec],
-  );
-
-  React.useEffect(() => {
-    if (!canRunNetworkWork) return;
-    if (!currentNsec) return;
-
-    const initPush = async () => {
-      try {
-        const {
-          arePushNotificationsDisabledByUser,
-          registerPushNotifications,
-        } = await import("../../utils/pushNotifications");
-        if (arePushNotificationsDisabledByUser()) {
-          return;
-        }
-
-        if (isNativePlatform()) {
-          const result = await registerPushNotifications(currentNsec);
-          if (!result.success) {
-            console.error(
-              "Native push notification registration failed:",
-              result.error ?? "unknown error",
-            );
-          }
-          return;
-        }
-
-        if (Notification.permission === "granted") {
-          const result = await registerPushNotifications(currentNsec);
-          if (!result.success) {
-            console.error(
-              "Push notification registration failed:",
-              result.error ?? "unknown error",
-            );
-          }
-          return;
-        }
-
-        if (Notification.permission === "default") {
-          const granted = await Notification.requestPermission();
-          if (granted === "granted") {
-            const result = await registerPushNotifications(currentNsec);
-            if (!result.success) {
-              console.error(
-                "Push notification registration failed:",
-                result.error ?? "unknown error",
-              );
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Push notification initialization error:", error);
-      }
-    };
-
-    if (isNativePlatform()) {
-      void initPush();
-      return;
-    }
-
-    if ("serviceWorker" in navigator && "PushManager" in window) {
-      void initPush();
-    }
-  }, [canRunNetworkWork, currentNsec]);
-
-  React.useEffect(() => {
-    if (!currentNsec) return;
-    if (isNativePlatform()) return;
-
-    const refresh = () => {
-      void revalidatePwaPushRegistration("foreground");
-    };
-
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") {
-        refresh();
-      }
-    };
-
-    window.addEventListener("focus", refresh);
-    window.addEventListener("online", refresh);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-
-    return () => {
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("online", refresh);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
-  }, [currentNsec, revalidatePwaPushRegistration]);
-
-  React.useEffect(() => {
-    if (!currentNsec) {
-      return;
-    }
-
-    if (isNativePlatform()) {
-      return;
-    }
-
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      return;
-    }
-
-    const onServiceWorkerMessage = (event: MessageEvent) => {
-      if (!isPushRegistrationRefreshMessage(event.data)) {
-        return;
-      }
-
-      if (Notification.permission !== "granted") {
-        return;
-      }
-
-      void revalidatePwaPushRegistration(
-        event.data.type,
-        event.data.type === "push-subscription-change",
-      );
-    };
-
-    navigator.serviceWorker.addEventListener("message", onServiceWorkerMessage);
-    return () => {
-      navigator.serviceWorker.removeEventListener(
-        "message",
-        onServiceWorkerMessage,
-      );
-    };
-  }, [currentNsec, revalidatePwaPushRegistration]);
 
   const nostrFetchRelays = React.useMemo(() => {
     const merged = [...relayUrls, ...NOSTR_RELAYS];
@@ -361,7 +154,7 @@ export const useRelayDomain = ({
 
   React.useEffect(() => {
     if (relayUrls.length === 0) return;
-    if (!canRunNetworkWork) return;
+    if (!networkEnabled) return;
 
     let cancelled = false;
     setRelayStatusByUrl((prev) => {
@@ -391,17 +184,17 @@ export const useRelayDomain = ({
     return () => {
       cancelled = true;
     };
-  }, [canRunNetworkWork, checkRelayConnection, relayUrls]);
+  }, [checkRelayConnection, networkEnabled, relayUrls]);
 
   const effectiveRelayStatusByUrl = React.useMemo(() => {
-    if (canRunNetworkWork) return relayStatusByUrl;
+    if (networkEnabled) return relayStatusByUrl;
 
     const next = { ...relayStatusByUrl };
     for (const url of relayUrls) {
       next[url] = "disconnected";
     }
     return next;
-  }, [canRunNetworkWork, relayStatusByUrl, relayUrls]);
+  }, [networkEnabled, relayStatusByUrl, relayUrls]);
 
   const connectedRelayCount = React.useMemo(() => {
     return relayUrls.reduce((sum, url) => {
@@ -521,7 +314,7 @@ export const useRelayDomain = ({
   const relayProfileSyncForNpubRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    if (!canRunNetworkWork) return;
+    if (!networkEnabled) return;
     if (!currentNpub) return;
 
     const relaySyncKey = relayProfileSyncKey(currentNpub, relayUrls);
@@ -626,9 +419,9 @@ export const useRelayDomain = ({
       cancelled = true;
     };
   }, [
-    canRunNetworkWork,
     currentNpub,
     currentNsec,
+    networkEnabled,
     publishNostrRelayLists,
     relayUrls,
   ]);
