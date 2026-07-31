@@ -9,21 +9,18 @@ import {
   isCashuTokenUnavailableState,
 } from "../app/lib/cashuTokenState";
 import { extractCashuTokenMeta } from "../app/lib/tokenText";
-import type { CashuTokenRowLike } from "../app/types/appTypes";
 import { parseCashuToken } from "../cashu";
 import { NfcIcon } from "../components/icons";
 import { WalletBalance } from "../components/WalletBalance";
-import type { CashuTokenId } from "../evolu";
+import type { CashuTokenId, CashuTokenRow } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 import { buildCashuShareUrl } from "../utils/deepLinks";
-
-type CashuTokenPageRow = CashuTokenRowLike & { id: CashuTokenId };
 
 interface CashuTokenPageProps {
   canSendToContact: boolean;
   canWriteToNfc: boolean;
   cashuIsBusy: boolean;
-  cashuTokensAll: readonly CashuTokenPageRow[];
+  cashuTokensAll: readonly CashuTokenRow[];
   checkAndRefreshCashuToken: (
     id: CashuTokenId,
   ) => Promise<"ok" | "invalid" | "transient" | "skipped">;

@@ -3,7 +3,7 @@ import * as Evolu from "@evolu/common";
 import React from "react";
 import { parseCashuToken } from "../../../cashu";
 import { acceptCashuToken } from "../../../cashuAccept";
-import type { CashuTokenId } from "../../../evolu";
+import type { CashuTokenId, CashuTokenRow } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { getCashuDeterministicSeedFromStorage } from "../../../utils/cashuDeterministic";
 import { getCashuLib } from "../../../utils/cashuLib";
@@ -34,12 +34,10 @@ import {
   normalizeCashuTokenState,
 } from "../../lib/cashuTokenState";
 import { resolveCashuTokenStoredOwnerLaneById } from "../../lib/cashuOwnerLane";
-import type { CashuTokenRowLike } from "../../types/appTypes";
 import { checkCashuProofGroupsByState, isCashuProof } from "./cashuProofState";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
-type CashuTokenRow = CashuTokenRowLike & { id?: CashuTokenId | string | null };
 type CashuTokenUpdatePayload = Readonly<{
   id: CashuTokenId;
   error?: string | null;
@@ -239,7 +237,7 @@ export const useCashuTokenChecks = ({
               }
 
               const result = updateCashuToken({
-                id: primaryRow.id as CashuTokenId,
+                id: primaryRow.id,
                 token: acceptedTokenText as typeof Evolu.NonEmptyString.Type,
                 state:
                   CASHU_TOKEN_STATE_ACCEPTED as typeof Evolu.NonEmptyString100.Type,
@@ -258,7 +256,7 @@ export const useCashuTokenChecks = ({
 
               if (definitive && !transient) {
                 updateCashuToken({
-                  id: primaryRow.id as CashuTokenId,
+                  id: primaryRow.id,
                   state: "error" as typeof Evolu.NonEmptyString100.Type,
                   error: message.slice(
                     0,
@@ -307,7 +305,7 @@ export const useCashuTokenChecks = ({
         // handler marked the *primary* row as invalid even when its own
         // proofs were unspent (user could still claim it in another wallet).
         type Candidate = {
-          id: CashuTokenId | null;
+          id: CashuTokenId;
           isPrimary: boolean;
           proofs: Proof[];
         };
@@ -318,10 +316,7 @@ export const useCashuTokenChecks = ({
           const candidateState = normalizeCashuTokenState(candidate.state);
           if (candidateState === CASHU_TOKEN_STATE_PENDING) continue;
 
-          const candidateIsPrimary =
-            candidate.id !== null &&
-            candidate.id !== undefined &&
-            String(candidate.id) === String(primaryRow.id ?? "");
+          const candidateIsPrimary = candidate.id === primaryRow.id;
 
           // After a re-accept the primary row's in-memory `token` is the
           // pre-swap text (its proofs are now spent on the mint). Use the
@@ -366,12 +361,9 @@ export const useCashuTokenChecks = ({
           );
           if (!candidateProofs.length) continue;
 
-          const candidateId = candidate.id ?? null;
           candidates.push({
-            id: candidateId as CashuTokenId | null,
-            isPrimary:
-              candidateId !== null &&
-              String(candidateId) === String(primaryRow.id ?? ""),
+            id: candidate.id,
+            isPrimary: candidate.id === primaryRow.id,
             proofs: candidateProofs,
           });
         }
@@ -386,7 +378,7 @@ export const useCashuTokenChecks = ({
           );
           if (fallbackProofs.length) {
             candidates.push({
-              id: (primaryRow.id as CashuTokenId | null) ?? null,
+              id: primaryRow.id,
               isPrimary: true,
               proofs: fallbackProofs,
             });
@@ -409,7 +401,7 @@ export const useCashuTokenChecks = ({
         );
 
         let liveCandidates: Array<{
-          id: CashuTokenId | null;
+          id: CashuTokenId;
           proofs: Proof[];
         }>;
 
@@ -420,7 +412,6 @@ export const useCashuTokenChecks = ({
           // do NOT mark unrelated rows just because one row in the same
           // mint+unit group is spent.
           for (const id of partition.fullySpentIds) {
-            if (!id) continue;
             updateCashuToken({
               id,
               state: "error" as typeof Evolu.NonEmptyString100.Type,
@@ -432,7 +423,7 @@ export const useCashuTokenChecks = ({
           // If the primary row is fully spent, surface that to the user and
           // stop — there is nothing to refresh.
           const primaryFullySpent = partition.fullySpentIds.some(
-            (id) => id !== null && String(id) === String(primaryRow.id ?? ""),
+            (id) => id === primaryRow.id,
           );
           if (primaryFullySpent) {
             setStatus(`${t("cashuCheckFailed")}: Token already spent`);
@@ -457,9 +448,7 @@ export const useCashuTokenChecks = ({
             : [{ id: candidates[0].id, proofs: candidates[0].proofs }];
         }
 
-        const mergeIds: CashuTokenId[] = liveCandidates
-          .map((c) => c.id)
-          .filter((id): id is CashuTokenId => !!id);
+        const mergeIds = liveCandidates.map((candidate) => candidate.id);
 
         const proofs = dedupeCashuProofs(
           liveCandidates.flatMap((c) => c.proofs),
@@ -487,7 +476,7 @@ export const useCashuTokenChecks = ({
           unit: walletUnit,
         });
         const persistResult = updateCashuToken({
-          id: primaryRow.id as CashuTokenId,
+          id: primaryRow.id,
           token: verifiedToken as typeof Evolu.NonEmptyString.Type,
           state:
             CASHU_TOKEN_STATE_ACCEPTED as typeof Evolu.NonEmptyString100.Type,
@@ -499,7 +488,7 @@ export const useCashuTokenChecks = ({
         }
 
         for (const mergeId of mergeIds) {
-          if (String(mergeId) === String(primaryRow.id ?? "")) continue;
+          if (mergeId === primaryRow.id) continue;
           updateCashuToken({
             id: mergeId,
             isDeleted: Evolu.sqliteTrue,
@@ -516,7 +505,7 @@ export const useCashuTokenChecks = ({
 
         if (definitive && !transient) {
           updateCashuToken({
-            id: primaryRow.id as CashuTokenId,
+            id: primaryRow.id,
             state: "error" as typeof Evolu.NonEmptyString100.Type,
             error: message.slice(
               0,
@@ -578,10 +567,9 @@ export const useCashuTokenChecks = ({
     try {
       const groups = new Map<string, CashuTokenRow[]>();
       for (const row of cashuTokensAll) {
-        if (row?.isDeleted) continue;
-        if (isCashuTokenEmittedState(row?.state)) continue;
-        const id = row?.id as CashuTokenId | undefined;
-        if (!id) continue;
+        if (row.isDeleted) continue;
+        if (isCashuTokenEmittedState(row.state)) continue;
+        const id = row.id;
 
         const tokenText = String(row.token ?? row.rawToken ?? "").trim();
         const parsed = tokenText ? parseCashuToken(tokenText) : null;
@@ -602,7 +590,7 @@ export const useCashuTokenChecks = ({
           return 0;
         });
         const primaryRow = orderedRows[0];
-        if (!primaryRow?.id) continue;
+        if (!primaryRow) continue;
 
         await refreshCashuTokenGroup({
           primaryRow,
@@ -678,11 +666,10 @@ export const useCashuTokenChecks = ({
       const { getTokenMetadata } = await getCashuLib();
 
       for (const row of cashuTokensAll) {
-        if (row?.isDeleted) continue;
-        if (!isCashuTokenIssuedState(row?.state)) continue;
+        if (row.isDeleted) continue;
+        if (!isCashuTokenIssuedState(row.state)) continue;
 
-        const id = row?.id as CashuTokenId | undefined;
-        if (!id) continue;
+        const id = row.id;
 
         const tokenText = String(row.token ?? row.rawToken ?? "").trim();
         if (!tokenText) continue;

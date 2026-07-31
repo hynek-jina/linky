@@ -2,21 +2,19 @@ import type { OwnerId } from "@evolu/common";
 import * as Evolu from "@evolu/common";
 import React from "react";
 import { parseCashuToken } from "../../cashu";
+import type { CashuTokenRow } from "../../evolu";
 import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../utils/constants";
 import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
 import { isCashuTokenErrorState } from "../lib/cashuTokenState";
 import { createCashuTokenId } from "../lib/cashuTokenIdentity";
-import type {
-  CashuTokenRowLike,
-  LoggedPaymentEventParams,
-} from "../types/appTypes";
+import type { LoggedPaymentEventParams } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
 interface UseCashuDomainParams {
   appOwnerId: OwnerId | null;
   appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
-  cashuTokensAll: readonly CashuTokenRowLike[];
+  cashuTokensAll: readonly CashuTokenRow[];
   upsert: EvoluMutations["upsert"];
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
 }
@@ -67,7 +65,7 @@ export const useCashuDomain = ({
   );
 
   const rowMatchesToken = React.useCallback(
-    (row: CashuTokenRowLike, tokenRaw: string): boolean => {
+    (row: CashuTokenRow, tokenRaw: string): boolean => {
       const candidate = normalizeCashuTokenText(tokenRaw);
       if (!candidate) return false;
       if (String(row.id ?? "") === String(createCashuTokenId(candidate))) {

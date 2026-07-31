@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createCashuTokenRowFixture } from "../../testUtils/cashuTokenRow";
 import {
-  createCashuTokenId,
   hasMatchingCashuToken,
   readCashuTokenAliases,
 } from "./cashuTokenIdentity";
@@ -21,9 +21,9 @@ describe("hasMatchingCashuToken", () => {
     expect(
       hasMatchingCashuToken(
         [
-          {
+          createCashuTokenRowFixture({
             token: "cashu-active-token",
-          },
+          }),
         ],
         {
           rawToken: "cashu-active-token",
@@ -37,10 +37,11 @@ describe("hasMatchingCashuToken", () => {
     expect(
       hasMatchingCashuToken(
         [
-          {
-            isDeleted: "1",
+          createCashuTokenRowFixture({
+            id: "legacy-deleted-row",
+            isDeleted: true,
             token: "cashu-deleted-token",
-          },
+          }),
         ],
         {
           token: "cashu-deleted-token",
@@ -55,10 +56,10 @@ describe("hasMatchingCashuToken", () => {
     expect(
       hasMatchingCashuToken(
         [
-          {
-            id: createCashuTokenId(originalToken),
+          createCashuTokenRowFixture({
+            id: originalToken,
             token: "cashu-accepted-token",
-          },
+          }),
         ],
         { token: originalToken },
       ),
@@ -70,7 +71,13 @@ describe("hasMatchingCashuToken", () => {
 
     expect(
       hasMatchingCashuToken(
-        [{ id: createCashuTokenId(token), isDeleted: "1", token }],
+        [
+          createCashuTokenRowFixture({
+            id: token,
+            isDeleted: true,
+            token,
+          }),
+        ],
         { token },
       ),
     ).toBe(true);

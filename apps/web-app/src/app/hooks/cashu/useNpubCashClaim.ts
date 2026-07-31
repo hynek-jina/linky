@@ -1,6 +1,7 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
 import { parseCashuToken } from "../../../cashu";
+import type { CashuTokenRow } from "../../../evolu";
 import type { JsonValue } from "../../../types/json";
 import {
   LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX,
@@ -16,7 +17,6 @@ import {
 } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import type {
-  CashuTokenRowLike,
   LocalMintInfoRow,
   LoggedPaymentEventParams,
 } from "../../types/appTypes";
@@ -31,7 +31,7 @@ type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
 interface UseNpubCashClaimParams {
   cashuIsBusy: boolean;
-  cashuTokensAll: readonly CashuTokenRowLike[];
+  cashuTokensAll: readonly CashuTokenRow[];
   currentNpub: string | null;
   currentNsec: string | null;
   enqueueCashuOp: (op: () => Promise<void>) => Promise<void>;

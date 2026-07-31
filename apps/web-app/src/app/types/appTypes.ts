@@ -1,4 +1,4 @@
-import type { CashuTokenId, ContactId } from "../../evolu";
+import type { ContactId } from "../../evolu";
 import type {
   TelemetryAppRuntime,
   TelemetryDevicePlatform,
@@ -231,19 +231,6 @@ export type MintUrlInput =
   | null
   | undefined;
 export type MintSupportsMppValue = OptionalBooleanTextNumber;
-
-export type CashuTokenRowLike = {
-  amount?: OptionalNumber;
-  error?: OptionalText;
-  id?: CashuTokenId | string | null;
-  isDeleted?: OptionalText;
-  lastCheckedAtSec?: OptionalNumber;
-  mint?: OptionalText;
-  rawToken?: OptionalText;
-  state?: OptionalText;
-  token?: OptionalText;
-  unit?: OptionalText;
-};
 
 export type LocalMintInfoRow = {
   feesJson?: OptionalText;

@@ -1,13 +1,12 @@
 import type { Dispatch, FC, SetStateAction } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
-import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
+import type { CashuTokenWithMeta } from "../app/lib/tokenText";
+import type { MintUrlInput } from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
 import { TokenAddIcon } from "../components/icons";
 import type { CashuTokenId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
-
-type CashuTokenListItem = CashuTokenRowLike & { id: CashuTokenId };
 
 interface CashuTokensPageProps {
   canRestoreTokens: boolean;
@@ -16,9 +15,9 @@ interface CashuTokensPageProps {
   cashuBulkCheckIsBusy: boolean;
   cashuIsBusy: boolean;
   cashuMeltToMainMintButtonLabel: string | null;
-  cashuOwnTokens: readonly CashuTokenListItem[];
+  cashuOwnTokens: readonly CashuTokenWithMeta[];
   cashuOwnSpentTokensCount: number;
-  cashuIssuedTokens: readonly CashuTokenListItem[];
+  cashuIssuedTokens: readonly CashuTokenWithMeta[];
   checkAllCashuTokensAndDeleteInvalid: () => Promise<void>;
   checkIssuedCashuTokensAndDeleteClaimed: () => Promise<{
     checked: number;
@@ -106,7 +105,7 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
   );
 
   const renderTokenList = (
-    tokens: readonly CashuTokenListItem[],
+    tokens: readonly CashuTokenWithMeta[],
     emptyLabel: string,
   ) => {
     if (tokens.length === 0) {

@@ -1,5 +1,5 @@
-import type { CashuTokenRowLike } from "../../types/appTypes";
 import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
+import type { CashuTokenWithMeta } from "../../lib/tokenText";
 import { getPaymentAmountReserveCap } from "../../lib/paymentAmountFallback";
 import {
   selectSingleMintCandidateForAmount,
@@ -17,7 +17,7 @@ interface SelectCashuMessagePaymentArgs {
   cashuBalance: number;
   defaultMintUrl: string | null;
   normalizeMintUrl: (mint: string) => string;
-  tokens: readonly CashuTokenRowLike[];
+  tokens: readonly CashuTokenWithMeta[];
 }
 
 export const selectCashuMessagePayment = ({

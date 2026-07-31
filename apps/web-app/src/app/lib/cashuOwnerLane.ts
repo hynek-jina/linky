@@ -1,34 +1,15 @@
 import * as Evolu from "@evolu/common";
+import type { CashuTokenId, CashuTokenRow } from "../../evolu";
 
-interface CashuOwnerLaneRow {
-  readonly id?: unknown;
-  readonly ownerId?: unknown;
-}
+type CashuOwnerLaneRow = Pick<CashuTokenRow, "id" | "ownerId">;
+type CashuOwnerRow = Pick<CashuTokenRow, "ownerId">;
 
-/**
- * Read the persisted owner-lane id from an aggregated cashu token row.
- *
- * Cashu token reads aggregate multiple deterministic `cashu-n` owner lanes, so
- * each row carries the id of the lane it physically lives in. The runtime row
- * always has `ownerId`, but the shared row type does not declare it, so we read
- * it defensively instead of casting.
- */
-export const readCashuRowOwnerId = (row: unknown): string => {
-  if (typeof row !== "object" || row === null) return "";
-  if (!("ownerId" in row)) return "";
-  const ownerId = Reflect.get(row, "ownerId");
-  if (typeof ownerId !== "string") return "";
-  return ownerId.trim();
-};
+export const readCashuRowOwnerId = (row: CashuOwnerRow): string =>
+  String(row.ownerId);
 
 export const resolveCashuRowStoredOwnerLane = (
-  row: unknown,
-): Evolu.OwnerId | null => {
-  const rowOwnerId = readCashuRowOwnerId(row);
-  if (!rowOwnerId) return null;
-  const parsed = Evolu.OwnerId.fromUnknown(rowOwnerId);
-  return parsed.ok ? parsed.value : null;
-};
+  row: CashuOwnerRow | null | undefined,
+): Evolu.OwnerId | null => row?.ownerId ?? null;
 
 /**
  * Resolve the branded {@link Evolu.OwnerId} a cashu token row belongs to.
@@ -43,29 +24,18 @@ export const resolveCashuRowStoredOwnerLane = (
  * among the visible owners (caller should fall back to its default behavior).
  */
 export const resolveCashuRowOwnerLane = (
-  row: unknown,
+  row: CashuOwnerRow,
   visibleOwnerIds: readonly Evolu.OwnerId[],
 ): Evolu.OwnerId | null => {
-  const storedOwnerId = resolveCashuRowStoredOwnerLane(row);
-  if (!storedOwnerId) return null;
-  const rowOwnerId = String(storedOwnerId);
-  return (
-    visibleOwnerIds.find((owner) => String(owner).trim() === rowOwnerId) ?? null
-  );
+  return visibleOwnerIds.find((owner) => owner === row.ownerId) ?? null;
 };
 
 export const resolveCashuTokenStoredOwnerLaneById = (
   rows: readonly CashuOwnerLaneRow[],
-  id: unknown,
+  id: CashuTokenId,
   fallbackOwnerId: Evolu.OwnerId | null,
 ): Evolu.OwnerId | null => {
-  const idText = String(id ?? "").trim();
-  if (!idText) return fallbackOwnerId;
-
-  const row =
-    rows.find((entry) => {
-      return String(entry.id ?? "").trim() === idText;
-    }) ?? null;
+  const row = rows.find((entry) => entry.id === id) ?? null;
 
   return resolveCashuRowStoredOwnerLane(row) ?? fallbackOwnerId;
 };

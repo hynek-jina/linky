@@ -1,22 +1,16 @@
+import * as Evolu from "@evolu/common";
+import type { CashuTokenRow } from "../../evolu";
 import { isCashuTokenErrorState } from "./cashuTokenState";
 
 interface CashuRowPreferenceInput {
   activeOwnerId: string;
-  candidate: {
-    isDeleted?: unknown;
-    ownerId?: unknown;
-    state?: unknown;
-  };
-  existing: {
-    isDeleted?: unknown;
-    ownerId?: unknown;
-    state?: unknown;
-  };
+  candidate: Pick<CashuTokenRow, "isDeleted" | "ownerId" | "state">;
+  existing: Pick<CashuTokenRow, "isDeleted" | "ownerId" | "state">;
   ownerRank: ReadonlyMap<string, number>;
 }
 
-const readOwnerId = (row: { ownerId?: unknown }): string =>
-  typeof row.ownerId === "string" ? row.ownerId.trim() : "";
+const readOwnerId = (row: Pick<CashuTokenRow, "ownerId">): string =>
+  String(row.ownerId);
 
 export const isCashuRowCandidateBetter = ({
   activeOwnerId,
@@ -28,8 +22,8 @@ export const isCashuRowCandidateBetter = ({
   const existingOwnerId = readOwnerId(existing);
   const candidateRank = ownerRank.get(candidateOwnerId) ?? -1;
   const existingRank = ownerRank.get(existingOwnerId) ?? -1;
-  const candidateIsDeleted = Boolean(candidate.isDeleted);
-  const existingIsDeleted = Boolean(existing.isDeleted);
+  const candidateIsDeleted = candidate.isDeleted === Evolu.sqliteTrue;
+  const existingIsDeleted = existing.isDeleted === Evolu.sqliteTrue;
 
   // A tombstone in a newer owner lane must hide an older live duplicate.
   // Within one lane, however, a later valid re-import should beat an old

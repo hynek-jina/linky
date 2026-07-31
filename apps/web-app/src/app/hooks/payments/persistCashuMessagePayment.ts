@@ -1,5 +1,5 @@
 import * as Evolu from "@evolu/common";
-import type { ContactId } from "../../../evolu";
+import type { CashuTokenId, CashuTokenRow, ContactId } from "../../../evolu";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { resolveCashuRowStoredOwnerLane } from "../../lib/cashuOwnerLane";
 import {
@@ -8,17 +8,13 @@ import {
   hasMatchingCashuToken,
 } from "../../lib/cashuTokenIdentity";
 import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
-import type {
-  CashuTokenRowLike,
-  LoggedPaymentEventParams,
-} from "../../types/appTypes";
+import type { CashuTokenWithMeta } from "../../lib/tokenText";
+import type { LoggedPaymentEventParams } from "../../types/appTypes";
 import type {
   CashuMessagePaymentPublishingOutcome,
   CashuMessagePaymentSwapCommit,
   SuccessfulCashuMessagePaymentSwap,
 } from "./cashuMessagePaymentTypes";
-
-const CashuTokenIdSchema = Evolu.id("CashuToken");
 
 export type CashuTokenMutationResult =
   | { ok: true }
@@ -33,14 +29,14 @@ export type CashuTokenUpsert = (
 export type CashuTokenUpdate = (
   table: "cashuToken",
   payload: {
-    id: typeof CashuTokenIdSchema.Type;
+    id: CashuTokenId;
     isDeleted: typeof Evolu.sqliteTrue;
   },
   options?: { ownerId: Evolu.OwnerId },
 ) => CashuTokenMutationResult;
 
 interface CashuPersistenceDependencies {
-  cashuTokensAll: readonly CashuTokenRowLike[];
+  cashuTokensAll: readonly CashuTokenRow[];
   cashuWriteOwnerId: Evolu.OwnerId | null;
   upsert: CashuTokenUpsert;
 }
@@ -73,7 +69,7 @@ const insertCashuToken = (
 };
 
 interface PersistCashuMessageSwapAttemptArgs extends CashuPersistenceDependencies {
-  cashuTokensWithMeta: readonly CashuTokenRowLike[];
+  cashuTokensWithMeta: readonly CashuTokenWithMeta[];
   outcome: CashuMessagePaymentSwapCommit;
   update: CashuTokenUpdate;
 }
@@ -99,19 +95,15 @@ export const persistCashuMessageSwapAttempt = ({
         continue;
       }
 
-      const tokenId = CashuTokenIdSchema.fromUnknown(row.id);
-      if (!tokenId.ok) {
-        throw new Error("Invalid Cashu token id");
-      }
       const ownerId = resolveCashuRowStoredOwnerLane(row) ?? cashuWriteOwnerId;
       const result = ownerId
         ? update(
             "cashuToken",
-            { id: tokenId.value, isDeleted: Evolu.sqliteTrue },
+            { id: row.id, isDeleted: Evolu.sqliteTrue },
             { ownerId },
           )
         : update("cashuToken", {
-            id: tokenId.value,
+            id: row.id,
             isDeleted: Evolu.sqliteTrue,
           });
       if (!result.ok) throw result.error;

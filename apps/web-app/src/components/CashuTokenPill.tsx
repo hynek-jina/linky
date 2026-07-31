@@ -1,7 +1,8 @@
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { isCashuTokenUnavailableState } from "../app/lib/cashuTokenState";
-import type { CashuTokenRowLike, MintUrlInput } from "../app/types/appTypes";
+import type { CashuTokenWithMeta } from "../app/lib/tokenText";
+import type { MintUrlInput } from "../app/types/appTypes";
 import { parseCashuToken } from "../cashu";
 import type { CashuTokenId } from "../evolu";
 import { getNextMintIconUrl } from "../utils/mint";
@@ -20,10 +21,10 @@ interface CashuTokenPillProps {
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
   onOpenToken: (id: CashuTokenId) => void;
-  token: CashuTokenRowLike & { id: CashuTokenId };
+  token: CashuTokenWithMeta;
 }
 
-function getTokenMint(token: CashuTokenRowLike): MintUrlInput {
+function getTokenMint(token: CashuTokenWithMeta): MintUrlInput {
   const storedMint = String(token.mint ?? "").trim();
   if (storedMint) return storedMint;
 

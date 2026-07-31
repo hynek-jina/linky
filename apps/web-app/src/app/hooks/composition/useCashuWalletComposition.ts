@@ -8,6 +8,7 @@ import { deriveDefaultProfile } from "../../../derivedProfile";
 import {
   evolu,
   useEvolu,
+  type CashuTokenRow,
   type CashuTokenId,
   type ContactId,
 } from "../../../evolu";
@@ -92,9 +93,15 @@ import {
   type AutoswapPendingClaim,
 } from "../../lib/autoswapClaim";
 import { getLinkyBankPaymentOfferInfo } from "../../lib/bankPaymentOffer";
-import { resolveCashuRowStoredOwnerLane } from "../../lib/cashuOwnerLane";
+import {
+  readCashuRowOwnerId,
+  resolveCashuRowStoredOwnerLane,
+} from "../../lib/cashuOwnerLane";
 import { isCashuRowCandidateBetter } from "../../lib/cashuRowPreference";
-import { createCashuTokenId } from "../../lib/cashuTokenIdentity";
+import {
+  createCashuTokenId,
+  readCashuTokenAliases as readCashuRowAliases,
+} from "../../lib/cashuTokenIdentity";
 import {
   CASHU_TOKEN_STATE_RESERVED,
   isCashuTokenAcceptedState,
@@ -129,7 +136,10 @@ import {
   wrapEventWithPushMarker,
 } from "../../lib/pushWrappedEvent";
 import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "../../lib/tokenMessageInfo";
-import { extractCashuTokenMeta } from "../../lib/tokenText";
+import {
+  enrichCashuTokenRow,
+  extractCashuTokenMeta,
+} from "../../lib/tokenText";
 import {
   isExpiredPendingTopupQuote,
   isLikelyCorsOrNetworkError,
@@ -200,17 +210,8 @@ type ProfileCompositionResult = ReturnType<typeof useProfileComposition>;
 type OwnerScopedStorageResult = ReturnType<typeof useOwnerScopedStorage>;
 type EvoluMutations = ReturnType<typeof useEvolu>;
 
-export const createCashuTokensAllQuery = () =>
-  evolu.createQuery((db) =>
-    db.selectFrom("cashuToken").selectAll().orderBy("createdAt", "desc"),
-  );
-
-type CashuTokenQueryRow = Evolu.InferRow<
-  ReturnType<typeof createCashuTokensAllQuery>
->;
-
 interface UseCashuWalletCompositionParams {
-  cashuTokensAll: readonly CashuTokenQueryRow[];
+  cashuTokensAll: readonly CashuTokenRow[];
   contactPayBackToChatRef: React.MutableRefObject<ContactId | null>;
   contactsMessaging: Pick<
     ContactsMessagingCompositionResult,
@@ -795,35 +796,10 @@ export const useCashuWalletComposition = ({
       ),
     [cashuVisibleOwnerIds],
   );
-  const readCashuRowOwnerId = React.useCallback((row: unknown): string => {
-    if (typeof row !== "object" || row === null) return "";
-    if (!("ownerId" in row)) return "";
-    const ownerId = row.ownerId;
-    if (typeof ownerId !== "string") return "";
-    return ownerId.trim();
-  }, []);
-
-  const readCashuRowAliases = React.useCallback(
-    (row: { rawToken?: string | null; token?: string | null } | null) => {
-      return [
-        String(row?.rawToken ?? "").trim(),
-        String(row?.token ?? "").trim(),
-      ].filter(Boolean);
-    },
-    [],
-  );
-
   const dedupeVisibleCashuRows = React.useCallback(
-    function dedupeVisibleCashuRows<
-      TRow extends {
-        id?: string | null;
-        isDeleted?: unknown;
-        ownerId?: unknown;
-        rawToken?: string | null;
-        state?: unknown;
-        token?: string | null;
-      },
-    >(rows: readonly TRow[]): TRow[] {
+    function dedupeVisibleCashuRows(
+      rows: readonly CashuTokenRow[],
+    ): CashuTokenRow[] {
       if (visibleCashuOwnerIds.size === 0) return [];
 
       const ownerRank = new Map<string, number>();
@@ -835,15 +811,16 @@ export const useCashuWalletComposition = ({
       }
 
       const canonicalByAlias = new Map<string, string>();
-      const bestByCanonical = new Map<string, TRow>();
-      const readRowCandidates = (row: TRow): string[] => {
-        const id = String(row.id ?? "").trim();
-        return id
-          ? [id, ...readCashuRowAliases(row)]
-          : readCashuRowAliases(row);
-      };
+      const bestByCanonical = new Map<string, CashuTokenRow>();
+      const readRowCandidates = (row: CashuTokenRow): string[] => [
+        String(row.id),
+        ...readCashuRowAliases(row),
+      ];
 
-      const isCandidateBetter = (candidate: TRow, existing: TRow): boolean => {
+      const isCandidateBetter = (
+        candidate: CashuTokenRow,
+        existing: CashuTokenRow,
+      ): boolean => {
         return isCashuRowCandidateBetter({
           activeOwnerId: activeCashuOwnerId,
           candidate,
@@ -883,12 +860,7 @@ export const useCashuWalletComposition = ({
         return bestByCanonical.get(canonicalKey) === row;
       });
     },
-    [
-      activeCashuOwnerId,
-      readCashuRowAliases,
-      readCashuRowOwnerId,
-      visibleCashuOwnerIds,
-    ],
+    [activeCashuOwnerId, visibleCashuOwnerIds],
   );
 
   const cashuTokensAllFiltered = React.useMemo(() => {
@@ -903,25 +875,8 @@ export const useCashuWalletComposition = ({
   const cashuTokensWithMeta = useMemo(
     () =>
       cashuTokensFiltered.flatMap((row) => {
-        const meta = extractCashuTokenMeta({
-          amount: row.amount,
-          mint: row.mint,
-          rawToken: row.rawToken,
-          token: row.token,
-          unit: row.unit,
-        });
-        const amount = meta.amount ?? 0;
-        if (amount <= 0) return [];
-
-        return [
-          {
-            ...row,
-            mint: meta.mint ?? null,
-            unit: meta.unit ?? null,
-            amount,
-            tokenText: meta.tokenText,
-          },
-        ];
+        const enriched = enrichCashuTokenRow(row);
+        return enriched ? [enriched] : [];
       }),
     [cashuTokensFiltered],
   );
@@ -1031,7 +986,7 @@ export const useCashuWalletComposition = ({
       update(
         "cashuToken",
         {
-          id: row.id as CashuTokenId,
+          id: row.id,
           isDeleted: Evolu.sqliteTrue,
         },
         { ownerId: appOwnerId },
@@ -1043,7 +998,6 @@ export const useCashuWalletComposition = ({
     cashuOwnerId,
     cashuTokensAll,
     upsert,
-    readCashuRowOwnerId,
     update,
   ]);
 
@@ -1370,7 +1324,7 @@ export const useCashuWalletComposition = ({
       });
       if (!hasMessage) continue;
       const payload = {
-        id: row.id as CashuTokenId,
+        id: row.id,
         isDeleted: Evolu.sqliteTrue,
       };
       // Target the lane that holds the row (Evolu keys rows by (ownerId, id));
@@ -1493,7 +1447,7 @@ export const useCashuWalletComposition = ({
     useState(false);
   const deleteSpentCashuTokens = React.useCallback(async () => {
     if (deleteSpentCashuTokensIsBusy) return;
-    const targets = cashuOwnSpentTokens.filter((token) => Boolean(token.id));
+    const targets = cashuOwnSpentTokens;
     if (targets.length === 0) return;
 
     setDeleteSpentCashuTokensIsBusy(true);
@@ -1502,7 +1456,7 @@ export const useCashuWalletComposition = ({
       let deleted = 0;
       for (const token of targets) {
         const payload = {
-          id: token.id as CashuTokenId,
+          id: token.id,
           isDeleted: Evolu.sqliteTrue,
         };
         // Delete in the row's own lane; Evolu keys rows by (ownerId, id) so a
@@ -2308,10 +2262,8 @@ export const useCashuWalletComposition = ({
               return candidate.tokens.includes(tokenText);
             });
             for (const row of spentRows) {
-              const rowId = row.id;
-              if (!rowId) continue;
               const deleted = updateCashuToken(
-                { id: rowId as CashuTokenId, isDeleted: Evolu.sqliteTrue },
+                { id: row.id, isDeleted: Evolu.sqliteTrue },
                 resolveCashuRowStoredOwnerLane(row),
               );
               if (!deleted.ok) throw deleted.error;
@@ -3000,15 +2952,7 @@ export const useCashuWalletComposition = ({
 
       return true;
     },
-    [
-      cashuTokensAll,
-      readCashuRowAliases,
-      readCashuRowOwnerId,
-      resolveOwnerIdForWrite,
-      setStatus,
-      t,
-      update,
-    ],
+    [cashuTokensAll, resolveOwnerIdForWrite, setStatus, t, update],
   );
 
   const startSendCashuTokenToContact = React.useCallback(
@@ -3375,14 +3319,10 @@ export const useCashuWalletComposition = ({
     };
 
     const deleteCashuRows = async (
-      rows: readonly {
-        id?: CashuTokenId | string | null;
-        ownerId?: unknown;
-      }[],
+      rows: readonly Pick<CashuTokenRow, "id" | "ownerId">[],
       fallbackOwnerId?: Evolu.OwnerId | null,
     ) => {
       for (const row of rows) {
-        if (!row.id) continue;
         const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
         const ownerId = resolveCashuRowStoredOwnerLane(row) ?? fallbackOwnerId;
         const result = ownerId
@@ -3596,7 +3536,6 @@ export const useCashuWalletComposition = ({
     cashuTokensWithMeta,
     defaultMintUrl,
     logPaymentEvent,
-    readCashuRowAliases,
     resolveOwnerIdForWrite,
     setCashuEmitAmount,
     setStatus,
@@ -3728,17 +3667,16 @@ export const useCashuWalletComposition = ({
       };
     };
 
+    type DeletableCashuRow = Pick<CashuTokenRow, "id"> &
+      Partial<Pick<CashuTokenRow, "ownerId">>;
+
     const markRowsDeleted = async (
-      rows: Array<{
-        id?: CashuTokenId | string | null;
-        ownerId?: unknown;
-      }>,
+      rows: DeletableCashuRow[],
       fallbackOwnerId?: Evolu.OwnerId | null,
     ) => {
       for (const row of rows) {
-        if (!row.id) continue;
         const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
-        const ownerId = resolveCashuRowStoredOwnerLane(row) ?? fallbackOwnerId;
+        const ownerId = row.ownerId ?? fallbackOwnerId;
         const result = ownerId
           ? update("cashuToken", payload, { ownerId })
           : update("cashuToken", payload);
@@ -3857,8 +3795,7 @@ export const useCashuWalletComposition = ({
         }
       }
 
-      let activeSourceRows: Array<{ id?: CashuTokenId | string | null }> =
-        sourceRows;
+      let activeSourceRows: DeletableCashuRow[] = sourceRows;
       let activeSourceOwnerId = cashuOwnerId;
       let activeSourceTokens = sourceTokens;
 
@@ -4062,7 +3999,6 @@ export const useCashuWalletComposition = ({
     formatMintButtonLabel,
     upsert,
     isCashuTokenKnownAny,
-    readCashuRowAliases,
     rememberSeenMint,
     resolveOwnerIdForWrite,
     setCashuIsBusy,

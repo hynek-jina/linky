@@ -1,6 +1,6 @@
 import * as Evolu from "@evolu/common";
 import React from "react";
-import type { CashuTokenId } from "../../evolu";
+import type { CashuTokenRow } from "../../evolu";
 import {
   fetchLnurlInvoiceForTarget,
   getLnurlPayDisplayText,
@@ -30,8 +30,11 @@ import {
   isRetryablePaymentAmountFailure,
 } from "../lib/paymentAmountFallback";
 import { selectSingleMintCandidateForAmount } from "../lib/paymentMintSelection";
+import {
+  extractCashuTokenMeta,
+  type CashuTokenWithMeta,
+} from "../lib/tokenText";
 import type {
-  CashuTokenRowLike,
   ContactPayRowLike,
   LoggedPaymentEventParams,
   MintUrlInput,
@@ -62,33 +65,31 @@ const readLightningPreimage = (value: unknown): string | null => {
   return null;
 };
 
-type CashuTokenWithMetaRow = CashuTokenRowLike & { id: CashuTokenId };
 type ContactRow = ContactPayRowLike;
-
-const isCashuTokenRowWithId = (
-  row: CashuTokenRowLike,
-): row is CashuTokenWithMetaRow => {
-  return typeof row.id === "string" && row.id.trim().length > 0;
-};
 
 export const findAcceptedCashuRowsToDelete = (args: {
   fallbackMintUrl: string;
   normalizeMintUrl: (url: MintUrlInput) => string | null;
-  rows: readonly CashuTokenRowLike[];
+  rows: readonly CashuTokenRow[];
   tokenTexts: readonly string[];
-}): CashuTokenWithMetaRow[] => {
+}): CashuTokenRow[] => {
   const usedTokens = new Set(
     args.tokenTexts
       .map((tokenText) => String(tokenText ?? "").trim())
       .filter(Boolean),
   );
   if (usedTokens.size === 0) return [];
+  const spentMint = args.normalizeMintUrl(args.fallbackMintUrl);
+  const isSpentMintRow = (row: CashuTokenRow): boolean => {
+    if (!spentMint) return false;
+    return args.normalizeMintUrl(extractCashuTokenMeta(row).mint) === spentMint;
+  };
 
-  const exactRows: CashuTokenWithMetaRow[] = [];
+  const exactRows: CashuTokenRow[] = [];
   for (const row of args.rows) {
-    if (!isCashuTokenRowWithId(row)) continue;
     if (isDeletedCashuRow(row)) continue;
     if (!isCashuTokenAcceptedState(row.state)) continue;
+    if (!isSpentMintRow(row)) continue;
     const matchesInput = readCashuTokenAliases(row).some((alias) =>
       usedTokens.has(alias),
     );
@@ -97,15 +98,13 @@ export const findAcceptedCashuRowsToDelete = (args: {
 
   if (exactRows.length > 0) return exactRows;
 
-  const fallbackMint = args.normalizeMintUrl(args.fallbackMintUrl);
-  if (!fallbackMint) return [];
+  if (!spentMint) return [];
 
-  const fallbackRows: CashuTokenWithMetaRow[] = [];
+  const fallbackRows: CashuTokenRow[] = [];
   for (const row of args.rows) {
-    if (!isCashuTokenRowWithId(row)) continue;
     if (isDeletedCashuRow(row)) continue;
     if (!isCashuTokenAcceptedState(row.state)) continue;
-    if (args.normalizeMintUrl(row.mint) !== fallbackMint) continue;
+    if (!isSpentMintRow(row)) continue;
     fallbackRows.push(row);
   }
 
@@ -121,8 +120,8 @@ interface UseLightningPaymentsDomainParams {
   cashuBalance: number;
   cashuIsBusy: boolean;
   cashuOwnerId: Evolu.OwnerId | null;
-  cashuTokensAll: readonly CashuTokenRowLike[];
-  cashuTokensWithMeta: CashuTokenWithMetaRow[];
+  cashuTokensAll: readonly CashuTokenRow[];
+  cashuTokensWithMeta: readonly CashuTokenWithMeta[];
   cashuVisibleOwnerIds: readonly Evolu.OwnerId[];
   contacts: readonly ContactRow[];
   defaultMintUrl: string | null;
@@ -215,7 +214,7 @@ export const useLightningPaymentsDomain = ({
   );
 
   const markCashuTokenDeleted = React.useCallback(
-    (row: CashuTokenWithMetaRow) => {
+    (row: CashuTokenRow) => {
       const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
       const ownerId = resolveCashuRowStoredOwnerLane(row) ?? cashuOwnerId;
       return ownerId

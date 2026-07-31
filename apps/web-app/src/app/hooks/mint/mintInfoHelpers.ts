@@ -1,4 +1,5 @@
 import * as Evolu from "@evolu/common";
+import type { CashuTokenRow } from "../../../evolu";
 import {
   extractPpk,
   MAIN_MINT_URL,
@@ -6,7 +7,6 @@ import {
 } from "../../../utils/mint";
 import { extractCashuTokenMeta } from "../../lib/tokenText";
 import type {
-  CashuTokenRowLike,
   LocalMintInfoRow,
   MintUrlInput,
   OptionalText,
@@ -172,7 +172,7 @@ export const getMintInfoByUrlMap = (
 };
 
 export const getEncounteredMintUrls = (
-  cashuTokensAll: readonly CashuTokenRowLike[],
+  cashuTokensAll: readonly CashuTokenRow[],
 ): string[] => {
   const set = new Set<string>();
 

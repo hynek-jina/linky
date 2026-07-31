@@ -1,13 +1,11 @@
 import { normalizeCashuToken, parseCashuToken } from "../../cashu";
+import type { CashuTokenRow } from "../../evolu";
 import { isSpdPaymentPayload } from "../../utils/spdPayment";
-import type { CashuTokenMeta, CashuTokenRowLike } from "../types/appTypes";
+import type { CashuTokenMeta } from "../types/appTypes";
 import { getLinkyBankPaymentOfferInfo } from "./bankPaymentOffer";
 
 export const extractCashuTokenMeta = (
-  row: Pick<
-    CashuTokenRowLike,
-    "amount" | "mint" | "rawToken" | "token" | "unit"
-  >,
+  row: Pick<CashuTokenRow, "amount" | "mint" | "rawToken" | "token" | "unit">,
 ): CashuTokenMeta => {
   const tokenText = String(row.token ?? row.rawToken ?? "").trim();
   const storedMint = String(row.mint ?? "").trim();
@@ -45,6 +43,30 @@ export const extractCashuTokenMeta = (
   }
 
   return { tokenText, mint, unit, amount };
+};
+
+export type CashuTokenWithMeta = Omit<
+  CashuTokenRow,
+  "amount" | "mint" | "unit"
+> &
+  CashuTokenMeta;
+
+export const enrichCashuTokenRow = (
+  row: CashuTokenRow,
+): CashuTokenWithMeta | null => {
+  const meta = extractCashuTokenMeta(row);
+  if (
+    meta.amount === null ||
+    !Number.isFinite(meta.amount) ||
+    meta.amount <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    ...row,
+    ...meta,
+  };
 };
 
 export const extractCashuTokenFromText = (text: string): string | null => {
