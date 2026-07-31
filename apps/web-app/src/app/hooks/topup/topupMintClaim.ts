@@ -26,17 +26,3 @@ export const isTopupMintQuoteClaimableState = (
     normalizedState === issuedState
   );
 };
-
-export const shouldKeepTopupQuoteAfterClaimError = (
-  error: unknown,
-  isOutputsAlreadySignedError: (error: unknown) => boolean,
-): boolean => {
-  void error;
-  void isOutputsAlreadySignedError;
-  // mintTopupProofs already runs the deterministic restore loop on OAS.
-  // If we land in the receive-effect catch with OAS, recovery has exhausted
-  // every counter offset it knows about — retrying every 5s will keep
-  // failing. The proofs were minted by some other path (autoswap, another
-  // tab, another device); Evolu sync will bring the resulting token row.
-  return false;
-};
