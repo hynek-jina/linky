@@ -123,13 +123,10 @@ interface UseEvoluContactsOwnerRotationResult {
   messagesOwnerEditsUntilRotation: number;
   messagesSyncOwner: Evolu.SyncOwner | null;
   messagesVisibleOwnerIds: Evolu.OwnerId[];
-  recordMessagesOwnerWrite: (count?: number) => void;
-  recordTransactionsOwnerWrite: (count?: number) => void;
   requestManualRotateCashuOwner: () => Promise<void>;
   requestManualRotateContactsOwner: () => Promise<void>;
   requestManualRotateMessagesOwner: () => Promise<void>;
   requestManualRotateTransactionsOwner: () => Promise<void>;
-  recordContactsOwnerWrite: (count?: number) => void;
   rotateCashuOwnerIsBusy: boolean;
   rotateContactsOwnerIsBusy: boolean;
   rotateMessagesOwnerIsBusy: boolean;
@@ -657,18 +654,6 @@ export const useEvoluContactsOwnerRotation = ({
       }),
     [],
   );
-
-  const recordContactsOwnerWrite = React.useCallback(() => {
-    // Rotation counts are derived from local Evolu history.
-  }, []);
-
-  const recordMessagesOwnerWrite = React.useCallback(() => {
-    // Rotation counts are derived from local Evolu history.
-  }, []);
-
-  const recordTransactionsOwnerWrite = React.useCallback(() => {
-    // Rotation counts are derived from local Evolu history.
-  }, []);
 
   React.useEffect(() => {
     if (!isSeedLogin) {
@@ -2122,9 +2107,6 @@ export const useEvoluContactsOwnerRotation = ({
     messagesVisibleOwnerIds: isSeedLogin
       ? messagesVisibleOwnerIds
       : nonSeedVisibleOwnerIds,
-    recordMessagesOwnerWrite,
-    recordTransactionsOwnerWrite,
-    recordContactsOwnerWrite,
     requestManualRotateCashuOwner,
     requestManualRotateContactsOwner,
     requestManualRotateMessagesOwner,

@@ -50,9 +50,6 @@ export const useIdentityOwnersComposition = ({
   const cashuOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const messagesOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
   const transactionsOwnerIdRef = React.useRef<Evolu.OwnerId | null>(null);
-  const recordTransactionsOwnerWriteRef = React.useRef<
-    ((count?: number) => void) | null
-  >(null);
 
   const [currentNsec, setCurrentNsec] = React.useState<string | null>(() =>
     getInitialNostrNsec(),
@@ -168,11 +165,6 @@ export const useIdentityOwnersComposition = ({
   React.useEffect(() => {
     transactionsOwnerIdRef.current = ownerRotation.transactionsOwnerId;
   }, [ownerRotation.transactionsOwnerId]);
-
-  React.useEffect(() => {
-    recordTransactionsOwnerWriteRef.current =
-      ownerRotation.recordTransactionsOwnerWrite;
-  }, [ownerRotation.recordTransactionsOwnerWrite]);
 
   const nostrIdentityQuery = React.useMemo(
     () =>
@@ -298,7 +290,6 @@ export const useIdentityOwnersComposition = ({
     historicalOwnerSetsReady,
     messagesOwnerIdRef,
     nostrIdentityRows,
-    recordTransactionsOwnerWriteRef,
     setCurrentNsec,
     syncedNostrIdentityMatchesLocal,
     syncedNostrIdentityResolution,

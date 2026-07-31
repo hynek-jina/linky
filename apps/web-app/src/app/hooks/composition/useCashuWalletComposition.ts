@@ -256,7 +256,6 @@ interface UseCashuWalletCompositionParams {
     | "currentNsec"
     | "isSeedLogin"
     | "metaOwnerId"
-    | "recordContactsOwnerWrite"
     | "transactionsOwnerId"
   >;
   insert: EvoluMutations["insert"];
@@ -335,7 +334,6 @@ export const useCashuWalletComposition = ({
     currentNsec,
     isSeedLogin,
     metaOwnerId,
-    recordContactsOwnerWrite,
     transactionsOwnerId,
   } = identity;
   const {
@@ -2084,7 +2082,6 @@ export const useCashuWalletComposition = ({
         return null;
       }
 
-      recordContactsOwnerWrite();
       openScannedContactPendingNpubRef.current = normalizedNpub;
 
       return {
@@ -2105,7 +2102,6 @@ export const useCashuWalletComposition = ({
       insert,
       lang,
       openScannedContactPendingNpubRef,
-      recordContactsOwnerWrite,
       setStatus,
       t,
       unknownNameByNpub,

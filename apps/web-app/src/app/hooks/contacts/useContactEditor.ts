@@ -64,7 +64,6 @@ interface UseContactEditorParams {
   currentNpub: string | null;
   insert: EvoluMutations["insert"];
   nostrFetchRelays: string[];
-  recordTransactionsOwnerWrite: (count?: number) => void;
   route: Route;
   selectedContact: SelectedContactRow | null;
   setContactNewPrefill: React.Dispatch<
@@ -74,7 +73,6 @@ interface UseContactEditorParams {
   setRecentlyAddedContactId: React.Dispatch<
     React.SetStateAction<ContactId | null>
   >;
-  recordContactsOwnerWrite: (count?: number) => void;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
   transactionsOwnerId: Evolu.OwnerId | null;
@@ -230,13 +228,11 @@ export const useContactEditor = ({
   currentNpub,
   insert,
   nostrFetchRelays,
-  recordTransactionsOwnerWrite,
   route,
   selectedContact,
   setContactNewPrefill,
   setPendingDeleteId,
   setRecentlyAddedContactId,
-  recordContactsOwnerWrite,
   setStatus,
   t,
   transactionsOwnerId,
@@ -528,7 +524,6 @@ export const useContactEditor = ({
       if (!normalizedLnAddress) return;
 
       const transactionRows = await evolu.loadQuery(transactionsQuery);
-      let updatedCount = 0;
       for (const row of transactionRows) {
         if (typeof row !== "object" || row === null) continue;
 
@@ -550,22 +545,16 @@ export const useContactEditor = ({
         if (transactionLnAddress.toLowerCase() !== normalizedLnAddress)
           continue;
 
-        const result = updateTransactionFields(
+        updateTransactionFields(
           {
             id: transactionId as TransactionId,
             contactId,
           },
           "ownerId" in row ? row.ownerId : null,
         );
-        if (!result.ok) continue;
-        updatedCount += 1;
-      }
-
-      if (updatedCount > 0) {
-        recordTransactionsOwnerWrite(updatedCount);
       }
     },
-    [recordTransactionsOwnerWrite, transactionsQuery, updateTransactionFields],
+    [transactionsQuery, updateTransactionFields],
   );
 
   React.useEffect(() => {
@@ -801,7 +790,6 @@ export const useContactEditor = ({
       if (Object.keys(changedFields).length > 1) {
         const result = updateContactFields(changedFields);
         if (result.ok) {
-          recordContactsOwnerWrite();
           setStatus(t("contactUpdated"));
         } else {
           setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -818,7 +806,6 @@ export const useContactEditor = ({
       if (result.ok) {
         savedContactId = result.value.id;
         setRecentlyAddedContactId(result.value.id);
-        recordContactsOwnerWrite();
         setStatus(t("contactSaved"));
       } else {
         setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
@@ -861,7 +848,6 @@ export const useContactEditor = ({
     insert,
     isSavingContact,
     route.kind,
-    recordContactsOwnerWrite,
     setPendingDeleteId,
     setRecentlyAddedContactId,
     setStatus,
@@ -1076,7 +1062,6 @@ export const useContactEditor = ({
         return;
       }
 
-      recordContactsOwnerWrite();
       setRecentlyAddedContactId(result.value.id);
       setStatus(t("contactSaved"));
       if (lnAddress) {
@@ -1100,7 +1085,6 @@ export const useContactEditor = ({
       currentNpub,
       insert,
       isSavingContact,
-      recordContactsOwnerWrite,
       refreshContactAvatarFromNostr,
       setPendingDeleteId,
       setRecentlyAddedContactId,

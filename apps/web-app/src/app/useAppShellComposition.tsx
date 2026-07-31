@@ -155,10 +155,6 @@ export const useAppShellComposition = () => {
     onPendingOnboardingPhotoSelected,
     pasteReturningSlip39FromClipboard,
     pickPendingOnboardingPhoto,
-    recordContactsOwnerWrite,
-    recordMessagesOwnerWrite,
-    recordTransactionsOwnerWrite,
-    recordTransactionsOwnerWriteRef,
     requestDeriveNostrKeys,
     requestLogout,
     requestManualRotateCashuOwner,
@@ -208,7 +204,6 @@ export const useAppShellComposition = () => {
   } = useOwnerScopedStorage({
     appOwnerIdRef,
     insert,
-    recordTransactionsOwnerWriteRef,
     transactionsOwnerIdRef,
   });
 
@@ -615,9 +610,6 @@ export const useAppShellComposition = () => {
     metaOwnerId,
     nostrIdentityRows,
     pushToast,
-    recordContactsOwnerWrite,
-    recordMessagesOwnerWrite,
-    recordTransactionsOwnerWrite,
     route,
     setContactPaymentIntent,
     setPayAmount,
@@ -885,7 +877,6 @@ export const useAppShellComposition = () => {
       currentNsec,
       isSeedLogin,
       metaOwnerId,
-      recordContactsOwnerWrite,
       transactionsOwnerId,
     },
     insert,
