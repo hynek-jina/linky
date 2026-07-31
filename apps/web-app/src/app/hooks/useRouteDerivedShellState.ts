@@ -1,4 +1,3 @@
-import React from "react";
 import type { Route } from "../../types/route";
 
 interface UseRouteDerivedShellStateParams {
@@ -10,7 +9,6 @@ interface UseRouteDerivedShellStateParams {
 interface UseRouteDerivedShellStateResult {
   bottomTabActive: "contacts" | "wallet" | null;
   pageClassNameWithSwipe: string;
-  selectedEvoluServerUrl: string | null;
 }
 
 export const useRouteDerivedShellState = ({
@@ -18,12 +16,6 @@ export const useRouteDerivedShellState = ({
   route,
   showGroupFilter,
 }: UseRouteDerivedShellStateParams): UseRouteDerivedShellStateResult => {
-  const selectedEvoluServerUrl = React.useMemo(() => {
-    if (route.kind !== "evoluServer") return null;
-    const url = String(route.id ?? "").trim();
-    return url || null;
-  }, [route]);
-
   const bottomTabActive: "contacts" | "wallet" | null =
     route.kind === "wallet"
       ? "wallet"
@@ -43,6 +35,5 @@ export const useRouteDerivedShellState = ({
   return {
     bottomTabActive,
     pageClassNameWithSwipe,
-    selectedEvoluServerUrl,
   };
 };

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
-import type { loadEvoluCurrentData } from "../evolu";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
+import { loadEvoluCurrentData } from "../evolu";
 import { writeClipboardText } from "../platform/clipboard";
 import {
   CASHU_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
@@ -7,36 +9,6 @@ import {
   MESSAGES_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
   TRANSACTIONS_OWNER_ROTATION_TRIGGER_WRITE_COUNT,
 } from "../utils/constants";
-
-interface EvoluCurrentDataPageProps {
-  evoluCashuOwnerEditsUntilRotation: number;
-  evoluCashuOwnerId: string | null;
-  evoluCashuOwnerIndex: number;
-  evoluCashuVisibleOwnerIds: readonly string[];
-  evoluContactsOwnerEditsUntilRotation: number;
-  evoluContactsOwnerId: string | null;
-  evoluContactsOwnerIndex: number;
-  evoluMessagesBackupOwnerId: string | null;
-  evoluMessagesOwnerEditsUntilRotation: number;
-  evoluMessagesOwnerId: string | null;
-  evoluMessagesOwnerIndex: number;
-  evoluMessagesVisibleOwnerIds: readonly string[];
-  evoluTransactionsBackupOwnerId: string | null;
-  evoluTransactionsOwnerEditsUntilRotation: number;
-  evoluTransactionsOwnerId: string | null;
-  evoluTransactionsOwnerIndex: number;
-  evoluTransactionsVisibleOwnerIds: readonly string[];
-  requestManualRotateCashuOwner: () => Promise<void>;
-  requestManualRotateContactsOwner: () => Promise<void>;
-  requestManualRotateMessagesOwner: () => Promise<void>;
-  requestManualRotateTransactionsOwner: () => Promise<void>;
-  rotateCashuOwnerIsBusy: boolean;
-  rotateContactsOwnerIsBusy: boolean;
-  rotateMessagesOwnerIsBusy: boolean;
-  rotateTransactionsOwnerIsBusy: boolean;
-  loadCurrentData: typeof loadEvoluCurrentData;
-  t: (key: string) => string;
-}
 
 interface EvoluDataSectionConfig {
   editsUntilRotation: number | null;
@@ -75,33 +47,33 @@ function stringifyCellValue(value: unknown): string {
   return String(value ?? "");
 }
 
-export function EvoluCurrentDataPage({
-  evoluCashuOwnerEditsUntilRotation,
-  evoluCashuOwnerId,
-  evoluCashuOwnerIndex,
-  evoluCashuVisibleOwnerIds,
-  evoluContactsOwnerEditsUntilRotation,
-  evoluContactsOwnerId,
-  evoluContactsOwnerIndex,
-  evoluMessagesOwnerEditsUntilRotation,
-  evoluMessagesOwnerId,
-  evoluMessagesOwnerIndex,
-  evoluMessagesVisibleOwnerIds,
-  evoluTransactionsOwnerEditsUntilRotation,
-  evoluTransactionsOwnerId,
-  evoluTransactionsOwnerIndex,
-  evoluTransactionsVisibleOwnerIds,
-  requestManualRotateCashuOwner,
-  requestManualRotateContactsOwner,
-  requestManualRotateMessagesOwner,
-  requestManualRotateTransactionsOwner,
-  rotateCashuOwnerIsBusy,
-  rotateContactsOwnerIsBusy,
-  rotateMessagesOwnerIsBusy,
-  rotateTransactionsOwnerIsBusy,
-  loadCurrentData,
-  t,
-}: EvoluCurrentDataPageProps): React.ReactElement {
+export function EvoluCurrentDataPage(): React.ReactElement {
+  const {
+    evoluCashuOwnerEditsUntilRotation,
+    evoluCashuOwnerId,
+    evoluCashuOwnerIndex,
+    evoluCashuVisibleOwnerIds,
+    evoluContactsOwnerEditsUntilRotation,
+    evoluContactsOwnerId,
+    evoluContactsOwnerIndex,
+    evoluMessagesOwnerEditsUntilRotation,
+    evoluMessagesOwnerId,
+    evoluMessagesOwnerIndex,
+    evoluMessagesVisibleOwnerIds,
+    evoluTransactionsOwnerEditsUntilRotation,
+    evoluTransactionsOwnerId,
+    evoluTransactionsOwnerIndex,
+    evoluTransactionsVisibleOwnerIds,
+    requestManualRotateCashuOwner,
+    requestManualRotateContactsOwner,
+    requestManualRotateMessagesOwner,
+    requestManualRotateTransactionsOwner,
+    rotateCashuOwnerIsBusy,
+    rotateContactsOwnerIsBusy,
+    rotateMessagesOwnerIsBusy,
+    rotateTransactionsOwnerIsBusy,
+  } = useEvoluSettingsContext();
+  const { t } = useAppShellCore();
   const previewRowCount = 2;
   const [currentData, setCurrentData] = useState<
     Awaited<ReturnType<typeof loadEvoluCurrentData>>
@@ -113,11 +85,11 @@ export function EvoluCurrentDataPage({
   const [copiedCellKey, setCopiedCellKey] = useState<string | null>(null);
 
   useEffect(() => {
-    loadCurrentData().then((data) => {
+    loadEvoluCurrentData().then((data) => {
       setCurrentData(data);
       setIsLoading(false);
     });
-  }, [loadCurrentData]);
+  }, []);
 
   useEffect(() => {
     if (copiedCellKey === null) return;

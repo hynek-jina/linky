@@ -1,20 +1,11 @@
 import React from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useRelaySettingsContext } from "../app/context/SystemSettingsContexts";
 
-interface NostrRelayNewPageProps {
-  canSaveNewRelay: boolean;
-  newRelayUrl: string;
-  saveNewRelay: () => void;
-  setNewRelayUrl: (url: string) => void;
-  t: (key: string) => string;
-}
-
-export function NostrRelayNewPage({
-  canSaveNewRelay,
-  newRelayUrl,
-  saveNewRelay,
-  setNewRelayUrl,
-  t,
-}: NostrRelayNewPageProps): React.ReactElement {
+export function NostrRelayNewPage(): React.ReactElement {
+  const { canSaveNewRelay, newRelayUrl, saveNewRelay, setNewRelayUrl } =
+    useRelaySettingsContext();
+  const { t } = useAppShellCore();
   return (
     <section className="panel">
       <label htmlFor="relayUrl">{t("relayUrl")}</label>

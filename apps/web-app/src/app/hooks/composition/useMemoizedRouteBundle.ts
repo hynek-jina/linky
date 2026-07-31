@@ -73,6 +73,15 @@ export const useMemoizedRouteBuilder = <
   );
 };
 
+export const useMemoizedContextValue = <T extends object>(value: T): T => {
+  const signature = Reflect.ownKeys(value).map(
+    (key): KeySignatureEntry => [0, key],
+  );
+  const keySignatureDependency = useKeySignatureDependency(signature);
+  const dependencies = readOwnValues(value);
+  return React.useMemo(() => value, [keySignatureDependency, ...dependencies]);
+};
+
 export const useMemoizedRouteBundle = <T extends object>(value: T): T => {
   const signature: KeySignatureEntry[] = [];
   const dependencies: DependencyValue[] = [];

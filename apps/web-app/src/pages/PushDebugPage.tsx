@@ -1,5 +1,6 @@
 import React from "react";
 
+import { useAppShellCore } from "../app/context/AppShellContexts";
 import { isNativePlatform } from "../platform/runtime";
 import {
   appendPushDebugLog,
@@ -12,11 +13,6 @@ import {
   requestNotificationPermission,
   unregisterPushNotifications,
 } from "../utils/pushNotifications";
-
-interface PushDebugPageProps {
-  currentNsec: string | null;
-  t: (key: string) => string;
-}
 
 interface PushDebugMessage {
   receivedAtIso: string;
@@ -131,10 +127,8 @@ async function loadPushDebugReport(): Promise<PushDebugReport> {
   return report;
 }
 
-export function PushDebugPage({
-  currentNsec,
-  t,
-}: PushDebugPageProps): React.ReactElement {
+export function PushDebugPage(): React.ReactElement {
+  const { currentNsec, t } = useAppShellCore();
   const [report, setReport] = React.useState<PushDebugReport>(INITIAL_REPORT);
   const [messages, setMessages] = React.useState<PushDebugMessage[]>([]);
   const [isBusy, setIsBusy] = React.useState(false);

@@ -27,18 +27,21 @@ const AuthenticatedAppShell = ({
   setCurrentNsec,
 }: AuthenticatedAppShellProps) => {
   const {
+    advancedSettingsContext,
     appActions,
     appState,
     cancelPendingCashuContactSend,
     dismissToast,
+    evoluSettingsContext,
     formatDisplayedAmountText,
     isMainSwipeRoute,
     mainSwipeRouteProps,
+    mintSettingsContext,
     moneyRouteProps,
     pageClassNameWithSwipe,
     peopleRouteProps,
     pendingCashuContactSend,
-    systemRouteProps,
+    relaySettingsContext,
     t,
     toasts,
   } = useAppShellComposition({ currentNsec, setCurrentNsec });
@@ -54,7 +57,6 @@ const AuthenticatedAppShell = ({
       moneyRoutes: moneyRouteProps,
       pageClassNameWithSwipe,
       peopleRoutes: peopleRouteProps,
-      systemRoutes: systemRouteProps,
     }),
     [
       isMainSwipeRoute,
@@ -62,7 +64,6 @@ const AuthenticatedAppShell = ({
       moneyRouteProps,
       pageClassNameWithSwipe,
       peopleRouteProps,
-      systemRouteProps,
     ],
   );
 
@@ -85,7 +86,11 @@ const AuthenticatedAppShell = ({
 
       <AppShellContextsProvider
         actions={actionsContextValue}
+        advancedSettings={advancedSettingsContext}
         core={coreContextValue}
+        evoluSettings={evoluSettingsContext}
+        mintSettings={mintSettingsContext}
+        relaySettings={relaySettingsContext}
         routes={routeContextValue}
       >
         <AuthenticatedLayout>

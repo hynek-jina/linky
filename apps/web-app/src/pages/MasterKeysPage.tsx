@@ -1,28 +1,21 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Copy, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useAdvancedSettingsContext } from "../app/context/SystemSettingsContexts";
 import {
   PasswordManagerSaveForm,
   type PasswordManagerSaveFormHandle,
 } from "../components/PasswordManagerSaveForm";
-import type { PasswordManagerSaveResult } from "../platform/passwordManager";
 
-interface MasterKeysPageProps {
-  copySeed: () => void;
-  passwordManagerSeedUsername: string;
-  pushToast: (message: string) => void;
-  saveSeedToPasswordManager: () => Promise<PasswordManagerSaveResult>;
-  seedMnemonic: string | null;
-  t: (key: string) => string;
-}
-
-export function MasterKeysPage({
-  copySeed,
-  passwordManagerSeedUsername,
-  pushToast,
-  saveSeedToPasswordManager,
-  seedMnemonic,
-  t,
-}: MasterKeysPageProps): React.ReactElement {
+export function MasterKeysPage(): React.ReactElement {
+  const {
+    copySeed,
+    passwordManagerSeedUsername,
+    pushToast,
+    saveSeedToPasswordManager,
+    seedMnemonic,
+  } = useAdvancedSettingsContext();
+  const { t } = useAppShellCore();
   const [isVisible, setIsVisible] = useState(false);
   const passwordManagerSaveFormRef =
     useRef<PasswordManagerSaveFormHandle | null>(null);

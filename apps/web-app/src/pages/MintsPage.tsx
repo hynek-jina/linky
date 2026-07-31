@@ -1,43 +1,25 @@
-import type { MintUrlInput } from "../app/types/appTypes";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useMintSettingsContext } from "../app/context/SystemSettingsContexts";
 import { MintButton } from "../components/MintButton";
-import { isTestMintUrl } from "../utils/mint";
-
-interface MintIcon {
-  failed: boolean;
-  host: string | null;
-  origin: string | null;
-  url: string | null;
-}
-
-interface MintsPageProps {
-  MAIN_MINT_URL: string;
-  PRESET_MINTS: readonly string[];
-  applyDefaultMintSelection: (mint: string) => Promise<void>;
-  cashuIsBusy: boolean;
-  cashuMeltToMainMintButtonLabel: string | null;
-  defaultMintUrl: string | null;
-  defaultMintUrlDraft: string;
-  getMintIconUrl: (mint: MintUrlInput) => MintIcon;
-  meltLargestForeignMintToMainMint: () => Promise<void>;
-  normalizeMintUrl: (url: string) => string;
-  setDefaultMintUrlDraft: (value: string) => void;
-  t: (key: string) => string;
-}
-
-export function MintsPage({
+import {
+  isTestMintUrl,
   MAIN_MINT_URL,
-  PRESET_MINTS,
-  applyDefaultMintSelection,
-  cashuIsBusy,
-  cashuMeltToMainMintButtonLabel,
-  defaultMintUrl,
-  defaultMintUrlDraft,
-  getMintIconUrl,
-  meltLargestForeignMintToMainMint,
   normalizeMintUrl,
-  setDefaultMintUrlDraft,
-  t,
-}: MintsPageProps) {
+  PRESET_MINTS,
+} from "../utils/mint";
+
+export function MintsPage() {
+  const {
+    applyDefaultMintSelection,
+    cashuIsBusy,
+    cashuMeltToMainMintButtonLabel,
+    defaultMintUrl,
+    defaultMintUrlDraft,
+    getMintIconUrl,
+    meltLargestForeignMintToMainMint,
+    setDefaultMintUrlDraft,
+  } = useMintSettingsContext();
+  const { t } = useAppShellCore();
   const selectedMint =
     normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) || MAIN_MINT_URL;
   const stripped = (value: string) => value.replace(/^https?:\/\//i, "");

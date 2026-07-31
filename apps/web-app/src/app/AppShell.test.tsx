@@ -103,7 +103,10 @@ const authenticatedComposition = {
   pageClassNameWithSwipe: "page",
   pendingCashuContactSend: null,
   peopleRouteProps: {},
-  systemRouteProps: {},
+  advancedSettingsContext: {},
+  evoluSettingsContext: {},
+  mintSettingsContext: {},
+  relaySettingsContext: {},
   t: translate,
   toasts: [],
 };

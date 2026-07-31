@@ -1,38 +1,23 @@
-import type { SyncOwner } from "@evolu/common";
 import React from "react";
+import { useAppShellCore } from "../app/context/AppShellContexts";
+import { useEvoluSettingsContext } from "../app/context/SystemSettingsContexts";
 import { useNavigation } from "../hooks/useRouting";
 import { deriveEvoluServerState } from "./evoluServerState";
 
-interface EvoluServersPageProps {
-  evoluHasError: boolean;
-  evoluHistoryCount: number | null;
-  evoluServerStatusByUrl: Record<
-    string,
-    "connected" | "checking" | "disconnected"
-  >;
-  evoluServerUrls: string[];
-  evoluTableCounts: Record<string, number | null>;
-  isEvoluServerOffline: (url: string) => boolean;
-  clearDatabaseArmed: boolean;
-  pendingClearDatabase: boolean;
-  requestClearDatabase: () => void;
-  syncOwner: SyncOwner | null;
-  t: (key: string) => string;
-}
-
-export function EvoluServersPage({
-  evoluHasError,
-  evoluHistoryCount,
-  evoluServerStatusByUrl,
-  evoluServerUrls,
-  evoluTableCounts,
-  isEvoluServerOffline,
-  clearDatabaseArmed,
-  pendingClearDatabase,
-  requestClearDatabase,
-  syncOwner,
-  t,
-}: EvoluServersPageProps): React.ReactElement {
+export function EvoluServersPage(): React.ReactElement {
+  const {
+    clearDatabaseArmed,
+    evoluHasError,
+    evoluHistoryCount,
+    evoluServerStatusByUrl,
+    evoluServerUrls,
+    evoluTableCounts,
+    evoluWipeStorageIsBusy,
+    isEvoluServerOffline,
+    requestClearDatabase,
+    syncOwner,
+  } = useEvoluSettingsContext();
+  const { t } = useAppShellCore();
   const navigateTo = useNavigation();
 
   const totalCurrentRows = Object.values(evoluTableCounts).reduce<number>(
@@ -102,7 +87,7 @@ export function EvoluServersPage({
               : "btn-wide secondary"
           }
           onClick={requestClearDatabase}
-          disabled={pendingClearDatabase}
+          disabled={evoluWipeStorageIsBusy}
         >
           {t("evoluClearDatabase")}
         </button>

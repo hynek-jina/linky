@@ -19,7 +19,6 @@ interface UseRoutingViewCompositionParams {
 export interface RoutingViewCompositionResult {
   mainSwipeRouteProps: MainSwipeRoutesProps;
   pageClassNameWithSwipe: string;
-  selectedEvoluServerUrl: string | null;
 }
 
 export const useRoutingViewComposition = ({
@@ -33,12 +32,13 @@ export const useRoutingViewComposition = ({
     mainSwipeRouteBuilderInput.route.kind === "contacts" &&
     (groupNamesCount + statusFilterCount > 0 || ungroupedCount > 0);
 
-  const { bottomTabActive, pageClassNameWithSwipe, selectedEvoluServerUrl } =
-    useRouteDerivedShellState({
+  const { bottomTabActive, pageClassNameWithSwipe } = useRouteDerivedShellState(
+    {
       isMainSwipeRoute,
       route: mainSwipeRouteBuilderInput.route,
       showGroupFilter,
-    });
+    },
+  );
 
   const routeBuilderInput = {
     ...mainSwipeRouteBuilderInput,
@@ -52,6 +52,5 @@ export const useRoutingViewComposition = ({
       buildMainSwipeRouteProps,
     ),
     pageClassNameWithSwipe,
-    selectedEvoluServerUrl,
   };
 };
