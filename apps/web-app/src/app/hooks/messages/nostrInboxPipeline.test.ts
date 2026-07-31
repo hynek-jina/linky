@@ -544,6 +544,27 @@ describe("message decoding and persistence", () => {
       expect.objectContaining({ rumorId: null }),
     );
   });
+
+  it("coerces non-positive created_at to now instead of dropping the message", () => {
+    const harness = createHarness();
+    const beforeSec = Math.floor(Date.now() / 1000);
+
+    expect(
+      harness.process(createControlledWrap(validRumor({ created_at: 0 }))).kind,
+    ).toBe("inserted-message");
+    expect(harness.messages[0]?.createdAtSec).toBeGreaterThanOrEqual(beforeSec);
+  });
+
+  it("truncates fractional created_at values", () => {
+    const harness = createHarness();
+
+    expect(
+      harness.process(
+        createControlledWrap(validRumor({ created_at: 1_700_000_000.75 })),
+      ).kind,
+    ).toBe("inserted-message");
+    expect(harness.messages[0]?.createdAtSec).toBe(1_700_000_000);
+  });
 });
 
 describe("gift-wrap rejection rules", () => {
@@ -842,6 +863,68 @@ describe("reaction persistence", () => {
       "inserted-reaction",
     );
     expect(harness.reactions).toHaveLength(1);
+  });
+
+  it("stores reactions referencing an edit event id under the stable rumor id", () => {
+    const original = createStoredMessage();
+    const harness = createHarness({ messages: [original] });
+
+    expect(
+      harness.process(createMessageWrap("edited", [["edited_from", RUMOR_ID]]))
+        .kind,
+    ).toBe("edited-message");
+    const editRumorId = [...harness.seen.messageReferences.keys()].find(
+      (id) => id !== RUMOR_ID,
+    );
+    if (!editRumorId) throw new Error("missing edit rumor reference");
+
+    const reactionWrap = wrapEvent(
+      {
+        kind: 7,
+        created_at: 1_700_000_010,
+        content: "👍",
+        tags: [
+          ["p", recipientPubkey],
+          ["e", editRumorId],
+          ["k", "14"],
+        ],
+      },
+      senderPrivateKey,
+      recipientPubkey,
+    );
+    expect(harness.process(reactionWrap).kind).toBe("inserted-reaction");
+    expect(harness.reactions[0]?.messageId).toBe(RUMOR_ID);
+  });
+
+  it("persists reactions and deletes whose inner rumor lacks a recipient p tag", () => {
+    const harness = createHarness({ messages: [createStoredMessage()] });
+    const reactionWrap = wrapEvent(
+      {
+        kind: 7,
+        created_at: 1_700_000_010,
+        content: "👍",
+        tags: [
+          ["e", RUMOR_ID],
+          ["k", "14"],
+        ],
+      },
+      senderPrivateKey,
+      recipientPubkey,
+    );
+    expect(harness.process(reactionWrap).kind).toBe("inserted-reaction");
+
+    const reactionWrapId = harness.reactions[0]?.wrapId ?? "";
+    const deleteWrap = wrapEvent(
+      {
+        kind: 5,
+        created_at: 1_700_000_020,
+        content: "",
+        tags: [["e", reactionWrapId]],
+      },
+      senderPrivateKey,
+      recipientPubkey,
+    );
+    expect(harness.process(deleteWrap).kind).toBe("deleted-reactions");
   });
 
   it("uses the outer wrap id when a reaction has no inner id", () => {

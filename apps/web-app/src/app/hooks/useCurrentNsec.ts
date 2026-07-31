@@ -12,6 +12,30 @@ interface CurrentNsecState {
   isResolved: boolean;
 }
 
+const NSEC_RESOLUTION_TIMEOUT_MS = 5_000;
+
+// The whole app renders blank until resolution settles, so a rejected or
+// hung native bridge read must fall back to the local snapshot instead of
+// leaving the auth gate closed forever.
+const readStoredNostrNsecBestEffort = async (
+  fallbackNsec: string | null,
+): Promise<string | null> => {
+  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      readStoredNostrNsec().catch(() => fallbackNsec),
+      new Promise<string | null>((resolve) => {
+        timeoutId = globalThis.setTimeout(
+          () => resolve(fallbackNsec),
+          NSEC_RESOLUTION_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== null) globalThis.clearTimeout(timeoutId);
+  }
+};
+
 export const useCurrentNsec = () => {
   const [state, setState] = React.useState<CurrentNsecState>(() => {
     const currentNsec = getInitialNostrNsec();
@@ -25,7 +49,9 @@ export const useCurrentNsec = () => {
     let cancelled = false;
 
     void (async () => {
-      const currentNsec = await readStoredNostrNsec();
+      const currentNsec = await readStoredNostrNsecBestEffort(
+        getInitialNostrNsec(),
+      );
       if (cancelled) return;
       setState((previousState) =>
         previousState.isResolved && previousState.currentNsec === currentNsec

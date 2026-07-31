@@ -25,7 +25,10 @@ import type {
 } from "../../types/appTypes";
 import type { ReplyContext } from "../messages/useSendChatMessage";
 import { buildCashuMessagePaymentPayload } from "./buildCashuMessagePaymentPayload";
-import type { CashuMessagePaymentHookResult } from "./cashuMessagePaymentTypes";
+import type {
+  CashuMessagePaymentHookResult,
+  CashuMessagePaymentPublishingOutcome,
+} from "./cashuMessagePaymentTypes";
 import {
   type CashuTokenUpdate,
   type CashuTokenUpsert,
@@ -281,8 +284,9 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         };
       }
 
+      let publishing: CashuMessagePaymentPublishingOutcome;
       try {
-        const publishing = await publishCashuMessagePayment({
+        publishing = await publishCashuMessagePayment({
           activePublishClientIds: activePublishClientIdsRef.current,
           appendLocalNostrMessage,
           batches: [swap.batch],
@@ -300,49 +304,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           ...(replyContext ? { replyContext } : {}),
           updateLocalNostrMessage,
         });
-
-        for (const publishError of publishing.publishErrors) {
-          if (notify) {
-            pushToast(`${t("payFailed")}: ${publishError.error}`);
-          }
-        }
-
-        persistCashuMessagePaymentResult({
-          cashuTokensAll,
-          cashuWriteOwnerId,
-          contactId,
-          logCompletedOnly,
-          logPaymentEvent,
-          paymentRequestId: paymentRequestId ?? null,
-          publishing,
-          swap,
-          upsert,
-        });
-
-        if (notify) {
-          const displayName =
-            String(contact.name ?? "").trim() ||
-            String(contact.lnAddress ?? "").trim() ||
-            t("appTitle");
-          const displayAmount = formatDisplayedAmountParts(swap.batch.amount);
-          showPaidOverlay(
-            (publishing.hasPendingMessages
-              ? t("paidQueuedTo")
-              : t("paidSentTo")
-            )
-              .replace(
-                "{amount}",
-                `${displayAmount.approxPrefix}${displayAmount.amountText}`,
-              )
-              .replace("{unit}", displayAmount.unitLabel)
-              .replace("{name}", displayName),
-          );
-          safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
-          setContactsOnboardingHasPaid(true);
-          navigateTo({ id: contactId, route: "chat" });
-        }
-
-        return { ok: true, queued: publishing.hasPendingMessages };
       } catch (error) {
         persistCashuMessagePaymentResult({
           cashuTokensAll,
@@ -373,6 +334,46 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         if (notify) setStatus(`${t("payFailed")}: ${errorMessage}`);
         return { error: errorMessage, ok: false, queued: false };
       }
+
+      for (const publishError of publishing.publishErrors) {
+        if (notify) {
+          pushToast(`${t("payFailed")}: ${publishError.error}`);
+        }
+      }
+
+      persistCashuMessagePaymentResult({
+        cashuTokensAll,
+        cashuWriteOwnerId,
+        contactId,
+        logCompletedOnly,
+        logPaymentEvent,
+        paymentRequestId: paymentRequestId ?? null,
+        publishing,
+        swap,
+        upsert,
+      });
+
+      if (notify) {
+        const displayName =
+          String(contact.name ?? "").trim() ||
+          String(contact.lnAddress ?? "").trim() ||
+          t("appTitle");
+        const displayAmount = formatDisplayedAmountParts(swap.batch.amount);
+        showPaidOverlay(
+          (publishing.hasPendingMessages ? t("paidQueuedTo") : t("paidSentTo"))
+            .replace(
+              "{amount}",
+              `${displayAmount.approxPrefix}${displayAmount.amountText}`,
+            )
+            .replace("{unit}", displayAmount.unitLabel)
+            .replace("{name}", displayName),
+        );
+        safeLocalStorageSet(CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY, "1");
+        setContactsOnboardingHasPaid(true);
+        navigateTo({ id: contactId, route: "chat" });
+      }
+
+      return { ok: true, queued: publishing.hasPendingMessages };
     },
     [
       activePublishClientIdsRef,

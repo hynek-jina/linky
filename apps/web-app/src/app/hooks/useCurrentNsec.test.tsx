@@ -76,4 +76,22 @@ describe("useCurrentNsec", () => {
 
     await act(async () => root.unmount());
   });
+
+  it("falls back to the local snapshot when the native read rejects", async () => {
+    mocks.getInitialNostrNsec.mockReturnValue("nsec1local");
+    mocks.isNativePlatform.mockReturnValue(true);
+    mocks.readStoredNostrNsec.mockRejectedValue(new Error("bridge failed"));
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<CurrentNsecProbe />);
+    });
+
+    expect(container.textContent).toBe("true:nsec1local");
+
+    await act(async () => root.unmount());
+  });
 });

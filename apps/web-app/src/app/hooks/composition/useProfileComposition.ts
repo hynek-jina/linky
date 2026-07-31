@@ -38,8 +38,9 @@ export const useProfileComposition = ({
   setStatus,
   t,
 }: UseProfileCompositionParams) => {
-  const [showProfileQrOnTiltEnabled, setShowProfileQrOnTiltEnabled] =
-    React.useState<boolean>(() => getInitialShowProfileQrOnTiltEnabled());
+  const [showProfileQrOnTiltEnabled] = React.useState<boolean>(() =>
+    getInitialShowProfileQrOnTiltEnabled(),
+  );
   const [myProfileName, setMyProfileName] = React.useState<string | null>(null);
   const [myProfilePicture, setMyProfilePicture] = React.useState<string | null>(
     null,
@@ -238,7 +239,6 @@ export const useProfileComposition = ({
     setProfileEditLnAddress,
     setProfileEditName,
     setProfileEditStatus,
-    setShowProfileQrOnTiltEnabled,
     showProfileQrOnTiltEnabled,
     toggleProfileEditing,
     toggleProfileStatusCurrency,

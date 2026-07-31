@@ -106,6 +106,9 @@ interface DeferredNostrInboxReaction {
 
 interface NostrInboxMessageReference {
   contactId: string;
+  // Persisted rows store the stable rumor id, so reactions resolved through
+  // this reference must join on it rather than the raw e-tag value.
+  messageRumorId: string;
   pubkey: string;
 }
 
@@ -474,7 +477,11 @@ const processMessage = ({
   const stableRumorId = resolveStableMessageRumorId(rumorId, editedFromId);
   const effectivePubkey = direction === "out" ? identity.pubkey : peerPubkey;
   const rememberMessageReference = (): void => {
-    const reference = { contactId, pubkey: effectivePubkey };
+    const reference = {
+      contactId,
+      messageRumorId: stableRumorId || rumorId,
+      pubkey: effectivePubkey,
+    };
     if (rumorId) seen.messageReferences.set(rumorId, reference);
     if (stableRumorId) seen.messageReferences.set(stableRumorId, reference);
   };
@@ -667,10 +674,6 @@ const processReaction = ({
   if (isInvalidInnerRumorPubkey(rumor.pubkey, wrap.pubkey)) {
     return ignored(delivery, wrapId, "outer-rumor-pubkey");
   }
-  const pTags = readTagValues(rumor.tags, "p");
-  if (rumor.pubkey !== identity.pubkey && !pTags.includes(identity.pubkey)) {
-    return ignored(delivery, wrapId, "not-addressed");
-  }
   if (
     rumor.pubkey !== identity.pubkey &&
     policy.isBlockedIncomingPubkey(rumor.pubkey)
@@ -682,13 +685,17 @@ const processReaction = ({
   if (!isEventId(referencedMessageId)) {
     return ignored(delivery, wrapId, "invalid-reaction-reference");
   }
-  const knownMessage =
+  const snapshotMessage =
     snapshot.messages.find(
       (message) => normalizeText(message.rumorId) === referencedMessageId,
-    ) ??
-    seen.messageReferences.get(referencedMessageId) ??
-    null;
+    ) ?? null;
+  const messageReference = snapshotMessage
+    ? null
+    : (seen.messageReferences.get(referencedMessageId) ?? null);
+  const knownMessage = snapshotMessage ?? messageReference;
   if (!knownMessage) return ignored(delivery, wrapId, "unknown-message");
+  const resolvedMessageId =
+    messageReference?.messageRumorId || referencedMessageId;
 
   const contactId = normalizeText(knownMessage.contactId);
   const peerPubkey =
@@ -719,14 +726,14 @@ const processReaction = ({
   }
   const clientId = extractClientTag(rumor.tags);
   const reactionIdentity = buildReactionIdentity(
-    referencedMessageId,
+    resolvedMessageId,
     rumor.pubkey,
     emoji,
   );
   const rememberReactionReference = (): void => {
     seen.reactionReferences.set(reactionWrapId, {
       emoji,
-      messageId: referencedMessageId,
+      messageId: resolvedMessageId,
       reactorPubkey: rumor.pubkey,
       wrapId: reactionWrapId,
     });
@@ -757,7 +764,7 @@ const processReaction = ({
     effects.updateReaction(existingByClient.id, {
       status: "sent",
       wrapId: reactionWrapId,
-      messageId: referencedMessageId,
+      messageId: resolvedMessageId,
       reactorPubkey: rumor.pubkey,
       emoji,
       ...(clientId ? { clientId } : {}),
@@ -769,14 +776,14 @@ const processReaction = ({
   const duplicate = snapshot.reactions.some(
     (reaction) =>
       !seen.deletedReactionWrapIds.has(normalizeText(reaction.wrapId)) &&
-      normalizeText(reaction.messageId) === referencedMessageId &&
+      normalizeText(reaction.messageId) === resolvedMessageId &&
       normalizeText(reaction.reactorPubkey) === rumor.pubkey &&
       normalizeText(reaction.emoji) === emoji,
   );
   if (duplicate) return ignored(delivery, wrapId, "duplicate-reaction");
 
   effects.appendReaction({
-    messageId: referencedMessageId,
+    messageId: resolvedMessageId,
     reactorPubkey: rumor.pubkey,
     emoji,
     createdAtSec: Math.trunc(rumor.created_at),
@@ -807,10 +814,6 @@ const processReactionDelete = ({
   }
   if (isInvalidInnerRumorPubkey(rumor.pubkey, wrap.pubkey)) {
     return ignored(delivery, wrapId, "outer-rumor-pubkey");
-  }
-  const pTags = readTagValues(rumor.tags, "p");
-  if (rumor.pubkey !== identity.pubkey && !pTags.includes(identity.pubkey)) {
-    return ignored(delivery, wrapId, "not-addressed");
   }
   if (
     rumor.pubkey !== identity.pubkey &&
@@ -1041,10 +1044,22 @@ export const processNostrInboxWrap = ({
   if (!isDecodedNostrInboxRumor(decoded)) {
     return ignored(delivery, wrapId, "invalid-rumor");
   }
-  const rumor = decoded;
-  if (!Number.isInteger(rumor.kind) || !Number.isInteger(rumor.created_at)) {
+  if (!Number.isInteger(decoded.kind)) {
     return ignored(delivery, wrapId, "invalid-rumor-numbers");
   }
+  // Non-positive or fractional timestamps are coerced to "now" (as both
+  // pre-unification processors did) instead of dropping the event or letting
+  // an epoch-zero value hit the identity cutoff and retention pruning.
+  const rumor =
+    Number.isInteger(decoded.created_at) && decoded.created_at > 0
+      ? decoded
+      : {
+          ...decoded,
+          created_at:
+            decoded.created_at > 0
+              ? Math.trunc(decoded.created_at)
+              : Math.ceil(Date.now() / 1000),
+        };
   if (
     identity.identitySinceSec !== null &&
     rumor.created_at < identity.identitySinceSec
