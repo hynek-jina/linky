@@ -4,7 +4,7 @@ import { useFiatRates } from "../app/hooks/useFiatRates";
 import { navigateTo } from "../hooks/useRouting";
 import type { FiatRates } from "../utils/displayAmounts";
 import { formatInteger, getInitials } from "../utils/formatting";
-import { tryParseSpdPayment, type SpdPayment } from "../utils/spdPayment";
+import { tryParseBankPayment, type BankPayment } from "../utils/spdPayment";
 
 interface SpdPaymentPageProps {
   cashuBalanceAfterMelt: number;
@@ -35,7 +35,7 @@ interface SpdPaymentFieldRow {
   value: string;
 }
 
-const getSpdField = (payment: SpdPayment, key: string): string =>
+const getSpdField = (payment: BankPayment, key: string): string =>
   String(payment.fields[key] ?? "").trim();
 
 const SATS_PER_BTC = 100_000_000;
@@ -88,7 +88,7 @@ const parseSpdAmount = (value: string): number | null => {
 };
 
 const getSpdAmountSat = (
-  payment: SpdPayment,
+  payment: BankPayment,
   fiatRates: FiatRates | null,
 ): number | null => {
   const amount = parseSpdAmount(getSpdField(payment, "AM"));
@@ -109,7 +109,7 @@ const getSpdAmountSat = (
 };
 
 const buildSpdRows = (
-  payment: SpdPayment,
+  payment: BankPayment,
   t: (key: string) => string,
 ): SpdPaymentFieldRow[] => {
   const rows: SpdPaymentFieldRow[] = [];
@@ -121,6 +121,8 @@ const buildSpdRows = (
 
   addRow("RN", t("spdPaymentRecipient"));
   addRow("ACC", t("spdPaymentAccount"));
+  addRow("BIC", t("spdPaymentBic"));
+  addRow("RF", t("spdPaymentReference"));
   addRow("X-VS", t("spdPaymentVariableSymbol"));
   addRow("X-SS", t("spdPaymentSpecificSymbol"));
   addRow("X-KS", t("spdPaymentConstantSymbol"));
@@ -151,7 +153,7 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
       getInitialOfferContactKeys(offerContacts, initialOfferContactCount),
     );
   const payment = React.useMemo(
-    () => tryParseSpdPayment(spdPayload),
+    () => tryParseBankPayment(spdPayload),
     [spdPayload],
   );
   const selectedOfferContacts = React.useMemo(

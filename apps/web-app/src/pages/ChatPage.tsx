@@ -64,7 +64,7 @@ import {
 } from "../components/icons";
 import { ReplyPreview } from "../components/ReplyPreview";
 import { navigateTo } from "../hooks/useRouting";
-import { formatChatDayLabel } from "../utils/formatting";
+import { formatChatDayLabel, normalizeLocale } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
 interface Contact {
@@ -305,7 +305,7 @@ const ChatMessageList = memo(function ChatMessageList({
     [t],
   );
   const chatPendingLabel = t("chatPendingShort");
-  const locale = lang === "cs" ? "cs-CZ" : "en-US";
+  const locale = normalizeLocale(lang);
   const formatChatDayLabelForLang = useCallback(
     (timestamp: number) => formatChatDayLabel(timestamp, lang, t),
     [lang, t],
@@ -601,9 +601,13 @@ const ChatComposer = memo(function ChatComposer({
   const mentionSuggestions = useMemo(
     () =>
       mentionQuery
-        ? getMessageMentionSuggestions(mentionContacts, mentionQuery.query)
+        ? getMessageMentionSuggestions(
+            mentionContacts,
+            mentionQuery.query,
+            npub,
+          )
         : [],
-    [mentionContacts, mentionQuery],
+    [mentionContacts, mentionQuery, npub],
   );
   const hasDraftText = Boolean(draft.trim());
   const canSendChat = Boolean(
@@ -784,6 +788,7 @@ const ChatComposer = memo(function ChatComposer({
             if (isDesktop) requestSend();
           }}
           placeholder={t("chatPlaceholder")}
+          removeContactLabel={t("chatRemoveContactFromDraft")}
           disabled={!npub && !hasUnknownPubkeyHex}
           getCashuTokenMessageInfo={getCashuTokenMessageInfo}
           getMintIconUrl={getMintIconUrl}

@@ -85,6 +85,7 @@
         "@scure/bip32": "^2.0.1",
         "@scure/bip39": "^1.4.0",
         "buffer": "^6.0.3",
+        "bysquare": "^4.0.0",
         "cbor-x": "^1.6.0",
         "effect": "^3.19.19",
         "js-sha256": "^0.11.0",
@@ -3607,6 +3608,16 @@
       "sha512-tcpfCCl6XWo6nCVnpcVrxQ+9AYN1iqMIzgrSKYMB/fjLtV2eyAVEg7AxQJuCq/26R6HpKWykQXuSOq/21RYcbg==",
     ],
 
+    "bysquare": [
+      "bysquare@4.0.0",
+      "",
+      {
+        "dependencies": { "lzma1": "0.2.0", "validator": "^13.15.26" },
+        "bin": { "bysquare": "lib/cli.js" },
+      },
+      "sha512-V1gGJFn39TY9XnvQDbzMTgGau3wCatsH5+XNSC2wXGgYijIVUD0gkZGalNIub28R+XhM/zUvge+8ccMPJ2+bZw==",
+    ],
+
     "call-bind": [
       "call-bind@1.0.8",
       "",
@@ -5706,6 +5717,13 @@
       "sha512-GXn7gyHAMhO13WSKrIiNfztwxodVsP8IoZ3XfrJV4yH2x0/OeTO/FIaAHTY5YekdGgW94njfuKmyyt1E0mR6Ug==",
     ],
 
+    "lzma1": [
+      "lzma1@0.2.0",
+      "",
+      {},
+      "sha512-JkPtHHKANh2je4Gp2kTjtobUXf7+zzfGHYm9PPRnx+Mr4KhAqoyb8dwtCExGaxkJl5upwWStdkIJWpn28XWiHw==",
+    ],
+
     "lucide-react": [
       "lucide-react@1.21.0",
       "",
@@ -7393,6 +7411,13 @@
       "",
       { "bin": { "uuid": "dist/esm/bin/uuid" } },
       "sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==",
+    ],
+
+    "validator": [
+      "validator@13.15.35",
+      "",
+      {},
+      "sha512-TQ5pAGhd5whStmqWvYF4OjQROlmv9SMFVt37qoCBdqRffuuklWYQlCNnEs2ZaIBD1kZRNnikiZOS1eqgkar0iw==",
     ],
 
     "vite": [

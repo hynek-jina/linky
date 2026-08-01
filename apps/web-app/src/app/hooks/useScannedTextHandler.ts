@@ -17,7 +17,7 @@ import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
 } from "../../utils/lightningInvoice";
-import { isSpdPaymentPayload, parseSpdPayment } from "../../utils/spdPayment";
+import { isBankPaymentPayload, parseBankPayment } from "../../utils/spdPayment";
 import {
   parseCashuPaymentRequestMessage,
   type CashuPaymentRequestMessageInfo,
@@ -106,7 +106,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
         scanText = leg.value;
       }
 
-      if (isSpdPaymentPayload(scanText)) {
+      if (isBankPaymentPayload(scanText)) {
         if (scanEntryPoint === "receive") {
           setStatus(t("scanReceiveUnsupportedPayment"));
           closeScan();
@@ -120,7 +120,7 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
         }
 
         try {
-          const payment = parseSpdPayment(scanText);
+          const payment = parseBankPayment(scanText);
           closeScan();
           navigateTo({
             route: "bankPayment",

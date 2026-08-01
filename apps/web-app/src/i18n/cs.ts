@@ -3,6 +3,7 @@ export const cs = {
   appTagline: "Osobní lightning kontakty",
 
   settings: "Nastavení",
+  detail: "Detail",
   settingsGeneral: "Obecné",
   settingsPayments: "Platby",
   settingsNetwork: "Síť",
@@ -13,6 +14,7 @@ export const cs = {
   advanced: "Pokročilé",
   paymentsHistory: "Historie plateb",
   transactionsTitle: "Transakce",
+  showTransactions: "Ukázat transakce",
   feedback: "Zpětná vazba",
   donate: "Přispět",
   data: "Data",
@@ -423,7 +425,8 @@ export const cs = {
 
   language: "Jazyk",
   czech: "Čeština",
-  english: "Angličtina",
+  english: "English",
+  german: "Deutsch",
 
   list: "Seznam",
   contactsTitle: "Kontakty",
@@ -536,12 +539,14 @@ export const cs = {
   npub: "Identifikátor",
   lightningAddress: "Lightning adresa",
   group: "Skupina",
+  existingGroups: "Existující skupiny",
 
   namePlaceholder: "Např. Alice",
   npubPlaceholder: "npub nebo ověřené jméno (NIP-05)",
   lightningAddressPlaceholder: "např. alice@zapsat.cz",
   groupPlaceholder: "např. Friends",
   chatMentionGroupCount: "{count} kontaktů",
+  chatRemoveContactFromDraft: "Odebrat kontakt ze zprávy",
 
   all: "Vše",
   noGroup: "Bez skupiny",
@@ -703,6 +708,8 @@ export const cs = {
   spdPaymentRecipientUnknown: "Příjemce z QR",
   spdPaymentRecipient: "Příjemce",
   spdPaymentAccount: "Účet",
+  spdPaymentBic: "BIC / SWIFT",
+  spdPaymentReference: "Reference platby",
   spdPaymentAmount: "Částka",
   spdPaymentCurrency: "Měna",
   spdPaymentVariableSymbol: "Variabilní symbol",

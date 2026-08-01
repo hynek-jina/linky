@@ -6,6 +6,11 @@ import { evolu } from "../../evolu";
 import { isStatusFilterValue } from "../../nostrStatus";
 import type { Route } from "../../types/route";
 import { ARCHIVED_CONTACTS_FILTER } from "../../utils/constants";
+import {
+  getContactGroups,
+  normalizeContactGroups,
+  serializeContactGroups,
+} from "../../utils/contactGroups";
 import type {
   OptionalBooleanTextNumber,
   OptionalNumber,
@@ -218,7 +223,7 @@ export const useContactsDomain = ({
         id: ContactId;
       } & Partial<
         Record<
-          "groupName" | "lnAddress" | "name" | "npub",
+          "groupName" | "groupNamesJson" | "lnAddress" | "name" | "npub",
           typeof Evolu.NonEmptyString1000.Type | null
         >
       >,
@@ -332,6 +337,12 @@ export const useContactsDomain = ({
         let mergedNpub = normalize(keep.npub) ? keep.npub : null;
         let mergedLn = normalize(keep.lnAddress) ? keep.lnAddress : null;
         let mergedGroup = normalize(keep.groupName) ? keep.groupName : null;
+        const mergedGroups = normalizeContactGroups(
+          group.flatMap((contact) => getContactGroups(contact)),
+        );
+        const mergedGroupsJson = mergedGroups.length
+          ? serializeContactGroups(mergedGroups)
+          : null;
 
         for (const contact of group) {
           if (!mergedName && normalize(contact.name)) mergedName = contact.name;
@@ -348,7 +359,8 @@ export const useContactsDomain = ({
           (keep.name ?? null) !== (mergedName ?? null) ||
           (keep.npub ?? null) !== (mergedNpub ?? null) ||
           (keep.lnAddress ?? null) !== (mergedLn ?? null) ||
-          (keep.groupName ?? null) !== (mergedGroup ?? null);
+          (keep.groupName ?? null) !== (mergedGroup ?? null) ||
+          String(keep.groupNamesJson ?? "") !== String(mergedGroupsJson ?? "");
 
         if (keepNeedsUpdate) {
           const result = writeContactProfileUpdate(
@@ -360,6 +372,9 @@ export const useContactsDomain = ({
                 | typeof Evolu.NonEmptyString1000.Type
                 | null,
               groupName: mergedGroup as
+                | typeof Evolu.NonEmptyString1000.Type
+                | null,
+              groupNamesJson: mergedGroupsJson as
                 | typeof Evolu.NonEmptyString1000.Type
                 | null,
             },
@@ -447,6 +462,11 @@ export const useContactsDomain = ({
               contact.groupName ?? "",
             ).trim() as typeof Evolu.NonEmptyString1000.Type)
           : null,
+        groupNamesJson: String(contact.groupNamesJson ?? "").trim()
+          ? (String(
+              contact.groupNamesJson ?? "",
+            ).trim() as typeof Evolu.NonEmptyString1000.Type)
+          : null,
         archivedAtSec:
           typeof contact.archivedAtSec === "number" &&
           Number.isFinite(contact.archivedAtSec) &&
@@ -483,14 +503,14 @@ export const useContactsDomain = ({
       const archivedAtSec = Number(contact.archivedAtSec ?? 0);
       if (Number.isFinite(archivedAtSec) && archivedAtSec > 0) continue;
 
-      const raw = (contact.groupName ?? null) as string | null;
-      const normalized = (raw ?? "").trim();
-      if (!normalized) {
+      const groups = getContactGroups(contact);
+      if (groups.length === 0) {
         ungrouped += 1;
         continue;
       }
-
-      counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+      for (const group of groups) {
+        counts.set(group, (counts.get(group) ?? 0) + 1);
+      }
     }
 
     const names = Array.from(counts.entries())
@@ -529,12 +549,12 @@ export const useContactsDomain = ({
   const contactsSearchData = React.useMemo(() => {
     return contacts.map((contact) => {
       const idKey = String(contact.id ?? "").trim();
-      const groupName = String(contact.groupName ?? "").trim();
+      const groupNames = getContactGroups(contact);
       const haystack = [
         contact.name,
         contact.npub,
         contact.lnAddress,
-        contact.groupName,
+        ...groupNames,
       ]
         .map((value) =>
           String(value ?? "")
@@ -544,7 +564,7 @@ export const useContactsDomain = ({
         .filter(Boolean)
         .join(" ");
 
-      return { contact, idKey, groupName, haystack };
+      return { contact, idKey, groupNames, haystack };
     });
   }, [contacts]);
 

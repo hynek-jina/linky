@@ -8,7 +8,6 @@ import { AmountDisplay } from "../components/AmountDisplay";
 import { NoAmountIcon, PasteIcon } from "../components/icons";
 import { Keypad } from "../components/Keypad";
 import { useNavigation } from "../hooks/useRouting";
-import { formatShortNpub, getInitials } from "../utils/formatting";
 
 interface TopupPageProps {
   currentNpub: string | null;
@@ -24,8 +23,6 @@ interface TopupPageProps {
 export const TopupPage: FC<TopupPageProps> = ({
   currentNpub,
   displayUnit,
-  effectiveProfileName,
-  effectiveProfilePicture,
   setTopupAmount,
   t,
   topupAmount,
@@ -43,32 +40,6 @@ export const TopupPage: FC<TopupPageProps> = ({
 
   return (
     <section className="panel">
-      <div className="contact-header">
-        <div className="contact-avatar is-large" aria-hidden="true">
-          {effectiveProfilePicture ? (
-            <img
-              src={effectiveProfilePicture}
-              alt=""
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <span className="contact-avatar-fallback">
-              {getInitials(
-                effectiveProfileName ??
-                  (currentNpub ? formatShortNpub(currentNpub) : ""),
-              )}
-            </span>
-          )}
-        </div>
-        <div className="contact-header-text">
-          <h3>
-            {effectiveProfileName ??
-              (currentNpub ? formatShortNpub(currentNpub) : t("appTitle"))}
-          </h3>
-        </div>
-      </div>
-
       <AmountDisplay amount={topupAmount} cycleOnClick />
 
       <Keypad

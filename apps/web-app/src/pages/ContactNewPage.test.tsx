@@ -25,7 +25,7 @@ describe("ContactNewPage", () => {
           addNewContactFromSearchResult={async () => {}}
           contactSuggestions={[]}
           form={{
-            group: "",
+            groups: [],
             lnAddress: "alice@example.com",
             name: "",
             npub: "",

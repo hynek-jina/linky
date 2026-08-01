@@ -3,6 +3,7 @@ export const en = {
   appTagline: "Personal lightning contacts",
 
   settings: "Settings",
+  detail: "Detail",
   settingsGeneral: "General",
   settingsPayments: "Payments",
   settingsNetwork: "Network",
@@ -13,6 +14,7 @@ export const en = {
   advanced: "Advanced",
   paymentsHistory: "Payment history",
   transactionsTitle: "Transactions",
+  showTransactions: "Show transactions",
   feedback: "Feedback",
   donate: "Donate",
   data: "Data",
@@ -418,8 +420,9 @@ export const en = {
   profileNavigationHint: "Friends can add you by scanning your profile",
 
   language: "Language",
-  czech: "Czech",
+  czech: "Čeština",
   english: "English",
+  german: "Deutsch",
 
   list: "List",
   contactsTitle: "Contacts",
@@ -533,12 +536,14 @@ export const en = {
   npub: "Identifier",
   lightningAddress: "Lightning address",
   group: "Group",
+  existingGroups: "Existing groups",
 
   namePlaceholder: "E.g. Alice",
   npubPlaceholder: "npub or verified name (NIP-05)",
   lightningAddressPlaceholder: "e.g. linky@linky.fit",
   groupPlaceholder: "e.g. Friends",
   chatMentionGroupCount: "{count} contacts",
+  chatRemoveContactFromDraft: "Remove contact from message",
 
   all: "All",
   noGroup: "No group",
@@ -697,6 +702,8 @@ export const en = {
   spdPaymentRecipientUnknown: "QR recipient",
   spdPaymentRecipient: "Recipient",
   spdPaymentAccount: "Account",
+  spdPaymentBic: "BIC / SWIFT",
+  spdPaymentReference: "Payment reference",
   spdPaymentAmount: "Amount",
   spdPaymentCurrency: "Currency",
   spdPaymentVariableSymbol: "Variable symbol",

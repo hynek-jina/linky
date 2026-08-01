@@ -3,11 +3,13 @@ import {
   parseSiteDisplayCurrency,
   type SiteDisplayCurrency,
 } from "./siteDisplayCurrency";
+import type { SiteLocale } from "./sitePreferences";
 
 export interface SiteHeaderMenuCopy {
   czechLabel: string;
   currencyLabel: string;
   englishLabel: string;
+  germanLabel: string;
   menuLabel: string;
   openAppLabel: string;
   switchLabel: string;
@@ -16,8 +18,8 @@ export interface SiteHeaderMenuCopy {
 interface SiteHeaderMenuProps {
   copy: SiteHeaderMenuCopy;
   displayCurrency: SiteDisplayCurrency;
-  locale: "cs" | "en";
-  onLocaleChange: (locale: "cs" | "en") => void;
+  locale: SiteLocale;
+  onLocaleChange: (locale: SiteLocale) => void;
   setDisplayCurrency: (currency: SiteDisplayCurrency) => void;
 }
 
@@ -111,12 +113,17 @@ export function SiteHeaderMenu({
                 className="site-menu-select"
                 value={locale}
                 onChange={(event) => {
-                  onLocaleChange(event.target.value === "cs" ? "cs" : "en");
+                  onLocaleChange(
+                    event.target.value === "cs" || event.target.value === "de"
+                      ? event.target.value
+                      : "en",
+                  );
                   setMenuOpen(false);
                 }}
                 aria-label={copy.switchLabel}
               >
                 <option value="cs">{copy.czechLabel}</option>
+                <option value="de">{copy.germanLabel}</option>
                 <option value="en">{copy.englishLabel}</option>
               </select>
             </div>

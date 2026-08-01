@@ -1,6 +1,7 @@
 import React from "react";
 import type { JsonValue } from "../../types/json";
 import { normalizeMintUrl } from "../../utils/mint";
+import { optimizeCaseInsensitiveQrPayload } from "../../utils/qrPayload";
 import { asRecord } from "../../utils/validation";
 
 interface UseProfileNpubCashEffectsParams {
@@ -68,15 +69,19 @@ export const useProfileNpubCashEffects = ({
         const size = 240;
         const canvas = document.createElement("canvas");
 
-        await QRCode.toCanvas(canvas, currentNpub, {
-          errorCorrectionLevel: "H",
-          margin: 1,
-          width: size,
-          color: {
-            dark: "#0f172a",
-            light: "#ffffff",
+        await QRCode.toCanvas(
+          canvas,
+          optimizeCaseInsensitiveQrPayload(currentNpub),
+          {
+            errorCorrectionLevel: "H",
+            margin: 1,
+            width: size,
+            color: {
+              dark: "#0f172a",
+              light: "#ffffff",
+            },
           },
-        });
+        );
 
         const context = canvas.getContext("2d");
         if (!context) {

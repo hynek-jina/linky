@@ -5,11 +5,11 @@ import {
   type SiteDisplayCurrency,
 } from "./siteDisplayCurrency";
 import { SiteHeaderMenu } from "./SiteHeaderMenu";
-import { getDefaultSiteLocale } from "./sitePreferences";
+import { getDefaultSiteLocale, type SiteLocale } from "./sitePreferences";
 
 type CtaMode = "android-apk" | "google-play" | "web" | "zapstore";
 
-type Locale = "cs" | "en";
+type Locale = SiteLocale;
 
 interface UspItemCopy {
   title: string;
@@ -22,6 +22,7 @@ interface LocaleCopy {
   czechLabel: string;
   currencyLabel: string;
   englishLabel: string;
+  germanLabel: string;
   htmlLang: string;
   menuLabel: string;
   openAppLabel: string;
@@ -55,6 +56,7 @@ const copy: Record<Locale, LocaleCopy> = {
     czechLabel: "Čeština",
     currencyLabel: "Jednotky",
     englishLabel: "English",
+    germanLabel: "Deutsch",
     htmlLang: "cs",
     menuLabel: "Menu",
     openAppLabel: "Otevřít aplikaci",
@@ -103,9 +105,10 @@ const copy: Record<Locale, LocaleCopy> = {
       "Ukázka soukromého používání aplikace Linky bez osobních údajů",
   },
   en: {
-    czechLabel: "Czech",
+    czechLabel: "Čeština",
     currencyLabel: "Units",
     englishLabel: "English",
+    germanLabel: "Deutsch",
     htmlLang: "en",
     menuLabel: "Menu",
     openAppLabel: "Open web app",
@@ -153,6 +156,59 @@ const copy: Record<Locale, LocaleCopy> = {
     closingImageAlt:
       "Preview of private Linky usage without personal information",
   },
+  de: {
+    czechLabel: "Čeština",
+    currencyLabel: "Einheiten",
+    englishLabel: "English",
+    germanLabel: "Deutsch",
+    htmlLang: "de",
+    menuLabel: "Menü",
+    openAppLabel: "Web-App öffnen",
+    switchLabel: "Sprache",
+    title: "Baue dein Bitcoin-Netzwerk auf",
+    subtitle:
+      "Mit jeder Zahlung wächst dein Netzwerk und deine Beziehungen werden stärker. Mit Linky sendest du Bitcoin so einfach wie eine Nachricht – an Freunde, Familie oder alle anderen.",
+    webCta: "Web-App",
+    googlePlayCta: "Google Play",
+    androidApkCta: "Android APK",
+    zapstoreCta: "Zapstore",
+    ctaMenuLabel: "Optionen zum Öffnen der App",
+    privacyLabel: "Datenschutz",
+    imageTitle: "Fotorealistisches Treffen von Menschen mit der Linky-App",
+    githubLabel: "GitHub",
+    nostrLabel: "Nostr-Profil",
+    uspSectionTitle: "Warum Linky",
+    uspItems: [
+      {
+        title: "Sende Bitcoin wie eine Nachricht",
+        description:
+          "Wähle einen Kontakt, gib einen Betrag ein und sende Geld so einfach wie eine Chatnachricht.",
+        imageSrc: "/contacts_mock.png",
+        imageAlt:
+          "Vorschau einer Bitcoin-Zahlung an einen Kontakt in der Linky-App",
+      },
+      {
+        title: "Fordere eine Zahlung an",
+        description:
+          "Sende eine Zahlungsanforderung direkt im Chat, damit die andere Person sie mit einem Tippen begleichen kann.",
+        imageSrc: "/request_mock.png",
+        imageAlt: "Vorschau einer Zahlungsanforderung in der Linky-App",
+      },
+      {
+        title: "Sende Bitcoin auch an Menschen ohne Wallet",
+        description:
+          "Du kannst eine Zahlung für jemanden vorbereiten, der noch keine Wallet hat. Linky macht die Übergabe einfach.",
+        imageSrc: "/issue_mock.png",
+        imageAlt:
+          "Vorschau einer Bitcoin-Zahlung an Menschen ohne Wallet in der Linky-App",
+      },
+    ],
+    closingSectionTitle: "Datenschutz",
+    closingSectionDescription:
+      "Nutzer benötigen weder Telefonnummer noch E-Mail-Adresse oder Ausweisdokumente.",
+    closingImageAlt:
+      "Vorschau der privaten Linky-Nutzung ohne persönliche Daten",
+  },
 };
 
 const localeStorageKey = "linky.lang";
@@ -164,7 +220,7 @@ const isNodeTarget = (value: EventTarget | null): value is Node => {
 const getInitialLocale = (): Locale => {
   if (typeof window !== "undefined") {
     const savedLocale = window.localStorage.getItem(localeStorageKey);
-    if (savedLocale === "cs" || savedLocale === "en") {
+    if (savedLocale === "cs" || savedLocale === "de" || savedLocale === "en") {
       return savedLocale;
     }
   }
@@ -401,6 +457,7 @@ function App() {
             czechLabel: activeCopy.czechLabel,
             currencyLabel: activeCopy.currencyLabel,
             englishLabel: activeCopy.englishLabel,
+            germanLabel: activeCopy.germanLabel,
             menuLabel: activeCopy.menuLabel,
             openAppLabel: activeCopy.openAppLabel,
             switchLabel: activeCopy.switchLabel,

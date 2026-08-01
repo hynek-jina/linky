@@ -1,6 +1,6 @@
 import type { SiteDisplayCurrency } from "./siteDisplayCurrency";
 
-export type SiteLocale = "cs" | "en";
+export type SiteLocale = "cs" | "de" | "en";
 
 const getPrimaryBrowserLanguage = (): string => {
   if (typeof navigator === "undefined") return "";
@@ -25,6 +25,7 @@ export const getDefaultSiteLocale = (): SiteLocale => {
   const language = getPrimaryBrowserLanguage();
 
   if (language.startsWith("cs")) return "cs";
+  if (language.startsWith("de")) return "de";
   return "en";
 };
 

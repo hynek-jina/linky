@@ -105,11 +105,16 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
                 className="select"
                 value={lang}
                 onChange={(event) =>
-                  setLang(event.target.value === "cs" ? "cs" : "en")
+                  setLang(
+                    event.target.value === "cs" || event.target.value === "de"
+                      ? event.target.value
+                      : "en",
+                  )
                 }
                 aria-label={t("language")}
               >
                 <option value="cs">{t("czech")}</option>
+                <option value="de">{t("german")}</option>
                 <option value="en">{t("english")}</option>
               </select>
             </div>

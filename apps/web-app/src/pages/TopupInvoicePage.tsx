@@ -1,6 +1,7 @@
 import React, { type FC } from "react";
 import { Copy } from "lucide-react";
 import { WalletBalance } from "../components/WalletBalance";
+import { optimizeCaseInsensitiveQrPayload } from "../utils/qrPayload";
 
 type TopupInvoiceQrMode = "cashu" | "universal" | "lightning";
 
@@ -227,7 +228,11 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
 
     void (async () => {
       const QRCode = await import("qrcode");
-      const qr = await QRCode.toDataURL(selectedPayload, {
+      const qrPayload =
+        selectedPayload === lightningPayload
+          ? optimizeCaseInsensitiveQrPayload(selectedPayload)
+          : selectedPayload;
+      const qr = await QRCode.toDataURL(qrPayload, {
         margin: 1,
         width: 320,
       });
@@ -237,7 +242,13 @@ export const TopupInvoicePage: FC<TopupInvoicePageProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [qrMode, selectedPayload, topupInvoiceQr, universalPayload]);
+  }, [
+    lightningPayload,
+    qrMode,
+    selectedPayload,
+    topupInvoiceQr,
+    universalPayload,
+  ]);
 
   const handleCopyInvoice = () => {
     const copyValue = String(selectedPayload ?? "").trim();

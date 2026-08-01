@@ -2,6 +2,7 @@ import { Info, Plus, X } from "lucide-react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
+  isLinkyBankPaymentOfferWholeOfferTerminalStatus,
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
   type LinkyBankPaymentOfferInfo,
   type LinkyBankPaymentOfferStatus,
@@ -708,18 +709,22 @@ function ChatMessageComponent({
                       {bankOfferTimeLabel}
                     </div>
                   ) : null}
-                  <button
-                    type="button"
-                    className="btn-wide chat-payment-request-pay"
-                    onClick={onOpenBankPaymentOfferDetails}
-                  >
-                    <span className="btn-label-with-icon">
-                      <span className="btn-label-icon" aria-hidden="true">
-                        <Info size={18} />
+                  {!isLinkyBankPaymentOfferWholeOfferTerminalStatus(
+                    bankPaymentOfferInfo.status,
+                  ) ? (
+                    <button
+                      type="button"
+                      className="btn-wide chat-payment-request-pay"
+                      onClick={onOpenBankPaymentOfferDetails}
+                    >
+                      <span className="btn-label-with-icon">
+                        <span className="btn-label-icon" aria-hidden="true">
+                          <Info size={18} />
+                        </span>
+                        <span>{t("details")}</span>
                       </span>
-                      <span>{t("details")}</span>
-                    </span>
-                  </button>
+                    </button>
+                  ) : null}
                 </div>
               ) : paymentRequestInfo ? (
                 <div className="chat-payment-request-card">

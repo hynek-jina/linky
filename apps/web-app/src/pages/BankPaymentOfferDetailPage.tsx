@@ -18,8 +18,8 @@ import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
   openSpdPaymentInBank,
   shareSpdPaymentQrJpeg,
-  tryParseSpdPayment,
-  type SpdPayment,
+  tryParseBankPayment,
+  type BankPayment,
 } from "../utils/spdPayment";
 
 interface BankPaymentOfferDetailPageProps {
@@ -49,7 +49,7 @@ interface BankPaymentFieldRow {
   value: string;
 }
 
-const getSpdField = (payment: SpdPayment, key: string): string =>
+const getSpdField = (payment: BankPayment, key: string): string =>
   String(payment.fields[key] ?? "").trim();
 
 const getEntryTime = (entry: BankPaymentOfferEntry): number =>
@@ -213,7 +213,7 @@ const RequesterIntro = ({
 );
 
 const buildPaymentRows = (
-  payment: SpdPayment,
+  payment: BankPayment,
   t: (key: string) => string,
 ): BankPaymentFieldRow[] => {
   const rows: BankPaymentFieldRow[] = [];
@@ -236,6 +236,8 @@ const buildPaymentRows = (
 
   addRow("RN", t("spdPaymentRecipient"));
   addRow("ACC", t("spdPaymentAccount"));
+  addRow("BIC", t("spdPaymentBic"));
+  addRow("RF", t("spdPaymentReference"));
   addRow("X-VS", t("spdPaymentVariableSymbol"));
   addRow("X-SS", t("spdPaymentSpecificSymbol"));
   addRow("X-KS", t("spdPaymentConstantSymbol"));
@@ -317,7 +319,9 @@ export const BankPaymentOfferDetailPage: React.FC<
   );
   const payment = React.useMemo(
     () =>
-      entry?.info.spdPayload ? tryParseSpdPayment(entry.info.spdPayload) : null,
+      entry?.info.spdPayload
+        ? tryParseBankPayment(entry.info.spdPayload)
+        : null,
     [entry],
   );
 

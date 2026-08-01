@@ -11,7 +11,7 @@ type ContactRow = ContactNameRowLike;
 
 interface ContactsSearchItem<TContact extends ContactRow> {
   contact: TContact;
-  groupName?: string | null;
+  groupNames?: readonly string[];
   haystack: string;
   idKey: string | null;
   statusFilterValues?: readonly string[];
@@ -77,7 +77,9 @@ export const useVisibleContacts = <TContact extends ContactRow>({
       }
       if (activeGroup === noGroupFilterValue) {
         return contactsSearchData.filter(
-          (item) => !item.groupName && !isArchivedContact(item.contact),
+          (item) =>
+            (item.groupNames ?? []).length === 0 &&
+            !isArchivedContact(item.contact),
         );
       }
       const statusFilterCurrency = parseStatusFilterValue(activeGroup);
@@ -90,7 +92,8 @@ export const useVisibleContacts = <TContact extends ContactRow>({
       }
       return contactsSearchData.filter(
         (item) =>
-          item.groupName === activeGroup && !isArchivedContact(item.contact),
+          (item.groupNames ?? []).includes(activeGroup) &&
+          !isArchivedContact(item.contact),
       );
     })();
 

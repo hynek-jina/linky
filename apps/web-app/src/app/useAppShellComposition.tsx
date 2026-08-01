@@ -65,6 +65,7 @@ import { useFiatRates } from "./hooks/useFiatRates";
 import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
+import { getDesktopActiveContactId } from "./routes/desktopRouteSection";
 import {
   buildIdentityChangeMessageContent,
   buildIdentityChangeMessageWrapId,
@@ -1044,6 +1045,9 @@ export const useAppShellComposition = ({
           avatarUrl={avatarUrl}
           lastMessage={last ?? null}
           hasAttention={hasAttention}
+          isActive={
+            String(contact.id ?? "") === getDesktopActiveContactId(route)
+          }
           isUnknownContact={Boolean(contact.isUnknownContact)}
           statusText={statusText}
           tokenInfo={tokenInfo}
@@ -1066,6 +1070,7 @@ export const useAppShellComposition = ({
       lastMessageByContactId,
       nostrPictureByNpub,
       nostrStatusByNpub,
+      route,
     ],
   );
 

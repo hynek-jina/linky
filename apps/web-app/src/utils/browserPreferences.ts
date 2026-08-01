@@ -23,7 +23,9 @@ const getPrimaryBrowserLanguage = (): string => {
 
 export const getDefaultLang = (): Lang => {
   const language = getPrimaryBrowserLanguage();
-  return language.startsWith("cs") ? "cs" : "en";
+  if (language.startsWith("cs")) return "cs";
+  if (language.startsWith("de")) return "de";
+  return "en";
 };
 
 export const getDefaultDisplayCurrency = (): DisplayCurrency => {

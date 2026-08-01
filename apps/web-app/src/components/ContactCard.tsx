@@ -28,6 +28,7 @@ interface ContactCardProps {
   };
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
   hasAttention: boolean;
+  isActive?: boolean;
   lastMessage?: LocalNostrMessage | null;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
@@ -44,6 +45,7 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
     getMintIconUrl,
     getNpubMessageContactInfo,
     hasAttention,
+    isActive = false,
     lastMessage,
     onMintIconError,
     onMintIconLoad,
@@ -98,7 +100,8 @@ export const ContactCard: React.FC<ContactCardProps> = React.memo(
 
     return (
       <article
-        className="contact-card is-clickable"
+        className={`contact-card is-clickable${isActive ? " is-active" : ""}`}
+        aria-current={isActive ? "page" : undefined}
         data-guide="contact-card"
         data-guide-contact-id={String(contact.id)}
         role="button"

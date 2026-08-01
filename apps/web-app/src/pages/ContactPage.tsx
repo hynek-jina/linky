@@ -14,6 +14,7 @@ import {
 } from "../nostrProfile";
 import { formatDisplayGeneralStatus } from "../nostrStatus";
 import { formatShortLightningAddress, getInitials } from "../utils/formatting";
+import { getContactGroups } from "../utils/contactGroups";
 import { resolveVerifiedNip05Identifier } from "../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
@@ -22,6 +23,7 @@ interface Contact {
   id: ContactId;
   name?: string | null;
   groupName?: string | null;
+  groupNamesJson?: string | null;
   lnAddress?: string | null;
   npub?: string | null;
 }
@@ -151,7 +153,7 @@ export const ContactPage: FC<ContactPageProps> = ({
 
   const contactId = selectedContact.id;
   const name = String(selectedContact.name ?? "").trim();
-  const group = String(selectedContact.groupName ?? "").trim();
+  const groups = getContactGroups(selectedContact);
   const ln = selectedLnAddress;
   const npub = selectedNpub;
   const url = npub ? nostrPictureByNpub[npub] : null;
@@ -216,7 +218,18 @@ export const ContactPage: FC<ContactPageProps> = ({
               {t("archivedContactBadge")}
             </span>
           ) : null}
-          {group ? <p className="contact-detail-group">{group}</p> : null}
+          {groups.length > 0 ? (
+            <div className="contact-group-pills contact-detail-groups">
+              {groups.map((group) => (
+                <span
+                  className="group-filter-btn contact-group-pill"
+                  key={group}
+                >
+                  {group}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {hasLightningAddress ? (

@@ -8,13 +8,15 @@ import {
   formatShortLightningAddress,
   formatShortNpub,
   getInitials,
+  normalizeLocale,
 } from "../utils/formatting";
+import { normalizeContactGroups } from "../utils/contactGroups";
 
 export interface ContactFormData {
   name: string;
   npub: string;
   lnAddress: string;
-  group: string;
+  groups: string[];
 }
 
 interface ContactFieldsProps {
@@ -36,6 +38,20 @@ export function ContactFields({
   setForm,
   t,
 }: ContactFieldsProps) {
+  const [groupInput, setGroupInput] = React.useState("");
+  const allGroups = normalizeContactGroups([...form.groups, ...groupNames]);
+  const addGroup = (value: string) => {
+    const groups = normalizeContactGroups([...form.groups, value]);
+    if (groups.length === form.groups.length) return;
+    setForm({ ...form, groups });
+    setGroupInput("");
+  };
+  const removeGroup = (value: string) => {
+    setForm({
+      ...form,
+      groups: form.groups.filter((group) => group !== value),
+    });
+  };
   const renderLabel = (label: string, action: React.ReactNode | undefined) =>
     action === undefined ? (
       <label>{label}</label>
@@ -82,19 +98,41 @@ export function ContactFields({
       />
 
       <label>{t("group")}</label>
+      {allGroups.length > 0 ? (
+        <div className="contact-group-selector" aria-label={t("group")}>
+          {allGroups.map((group) => {
+            const isSelected = form.groups.includes(group);
+            return (
+              <button
+                className={
+                  isSelected
+                    ? "group-filter-btn contact-group-pill is-active"
+                    : "group-filter-btn contact-group-pill"
+                }
+                key={group}
+                type="button"
+                onClick={() =>
+                  isSelected ? removeGroup(group) : addGroup(group)
+                }
+                aria-pressed={isSelected}
+              >
+                {group}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <input
-        value={form.group}
-        onChange={(event) => setForm({ ...form, group: event.target.value })}
+        value={groupInput}
+        onChange={(event) => setGroupInput(event.target.value)}
+        onBlur={() => addGroup(groupInput)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== ",") return;
+          event.preventDefault();
+          addGroup(groupInput);
+        }}
         placeholder={t("groupPlaceholder")}
-        list={groupNames.length ? "group-options" : undefined}
       />
-      {groupNames.length > 0 && (
-        <datalist id="group-options">
-          {groupNames.map((group) => (
-            <option key={group} value={group} />
-          ))}
-        </datalist>
-      )}
     </>
   );
 }
@@ -274,7 +312,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   const createManualFromSearch = () => {
     const prefill = getContactQueryPrefill(searchQuery);
     setForm({
-      group: "",
+      groups: [],
       lnAddress: prefill.lnAddress,
       name: prefill.name,
       npub: "",
@@ -311,7 +349,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
       (todayStartMs - dateStartMs) / (24 * 60 * 60 * 1000),
     );
 
-    const lowerLocale = lang === "cs" ? "cs-CZ" : "en-US";
+    const lowerLocale = normalizeLocale(lang);
     if (dayDiff === 0) {
       return `${t("contactSuggestionLastSeen")} ${t("today").toLocaleLowerCase(lowerLocale)}`;
     }
@@ -319,7 +357,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
       return `${t("contactSuggestionLastSeen")} ${t("yesterday").toLocaleLowerCase(lowerLocale)}`;
     }
 
-    const locale = lang === "cs" ? "cs-CZ" : "en-US";
+    const locale = normalizeLocale(lang);
     const formatted = new Intl.DateTimeFormat(locale, {
       day: "numeric",
       month: "long",

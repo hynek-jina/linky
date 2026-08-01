@@ -22,7 +22,7 @@ export function MenuModal({
   const navigateTo = useNavigation();
 
   const handleLangChange = (value: string) => {
-    setLang(value === "cs" ? "cs" : "en");
+    setLang(value === "cs" || value === "de" ? value : "en");
   };
 
   return (
@@ -49,6 +49,7 @@ export function MenuModal({
               aria-label={t("language")}
             >
               <option value="cs">{t("czech")}</option>
+              <option value="de">{t("german")}</option>
               <option value="en">{t("english")}</option>
             </select>
           </div>

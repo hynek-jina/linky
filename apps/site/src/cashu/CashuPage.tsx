@@ -7,14 +7,14 @@ import {
   type SiteDisplayCurrency,
 } from "../siteDisplayCurrency";
 import { SiteHeaderMenu } from "../SiteHeaderMenu";
-import { getDefaultSiteLocale } from "../sitePreferences";
+import { getDefaultSiteLocale, type SiteLocale } from "../sitePreferences";
 import { forwardCashuTokenPrivately } from "./nostrGiftWrap";
 import {
   flushPaymentTelemetryQueue,
   queuePaymentTelemetry,
 } from "./paymentTelemetry";
 
-type Locale = "cs" | "en";
+type Locale = SiteLocale;
 
 interface LocaleCopy {
   cashuLabel: string;
@@ -24,6 +24,7 @@ interface LocaleCopy {
   currencyLabel: string;
   expandOptionsLabel: string;
   englishLabel: string;
+  germanLabel: string;
   githubLabel: string;
   invalidToken: string;
   linkyPrimaryAction: string;
@@ -128,7 +129,8 @@ const copy: Record<Locale, LocaleCopy> = {
     czechLabel: "Čeština",
     currencyLabel: "Jednotky",
     expandOptionsLabel: "Další možnosti ↓",
-    englishLabel: "Angličtina",
+    englishLabel: "English",
+    germanLabel: "Deutsch",
     githubLabel: "GitHub",
     invalidToken: "Utraceno",
     linkyPrimaryAction: "Vyzvednout v Linky",
@@ -165,10 +167,11 @@ const copy: Record<Locale, LocaleCopy> = {
     cashuLabel: "Cashu",
     cashuOptionDescription: "Scan the code with your Cashu wallet",
     collapseOptionsLabel: "Hide options ↑",
-    czechLabel: "Czech",
+    czechLabel: "Čeština",
     currencyLabel: "Units",
     expandOptionsLabel: "Show options ↓",
     englishLabel: "English",
+    germanLabel: "Deutsch",
     githubLabel: "GitHub",
     invalidToken: "Spent",
     linkyPrimaryAction: "Redeem in Linky",
@@ -201,6 +204,49 @@ const copy: Record<Locale, LocaleCopy> = {
     tokenLabel: "Cashu token",
     validUnknown: "Could not load the token.",
   },
+  de: {
+    cashuLabel: "Cashu",
+    cashuOptionDescription: "Scanne den Code mit deiner Cashu-Wallet",
+    collapseOptionsLabel: "Optionen ausblenden ↑",
+    czechLabel: "Čeština",
+    currencyLabel: "Einheiten",
+    expandOptionsLabel: "Weitere Optionen ↓",
+    englishLabel: "English",
+    germanLabel: "Deutsch",
+    githubLabel: "GitHub",
+    invalidToken: "Ausgegeben",
+    linkyPrimaryAction: "In Linky einlösen",
+    lightningAddressLabel: "Lightning-Adresse",
+    lightningOptionDescription:
+      "Lasse das Guthaben an deine Lightning-Adresse auszahlen.",
+    lightningAddressPlaceholder: "name@linky.fit",
+    loadingToken: "Token wird beim Mint geprüft…",
+    noTokenLoaded:
+      "Füge einen Token ein oder öffne die Seite direkt mit einem Token in der URL.",
+    nostrLabel: "Nostr-Profil",
+    openInWalletLabel: "In Wallet öffnen",
+    pageTitle:
+      "Erstelle einen Link zum Einlösen von Bitcoin an eine Lightning-Adresse",
+    payoutIntro:
+      "Jemand sendet dir Bitcoin. Du kannst sie in der Linky-App oder jeder Lightning-Wallet einlösen.",
+    privacyLabel: "Datenschutz",
+    menuLabel: "Menü",
+    openAppLabel: "Web-App öffnen",
+    redeemButton: "An Adresse auszahlen",
+    redeemConfirmed: "Erledigt",
+    redeemFailed: "Einlösen fehlgeschlagen.",
+    redeemLnurlComment: "Mit Linky eingelöst",
+    redeemSuccessAddress: "Guthaben an {address} ausgezahlt",
+    redeeming: "Wird eingelöst…",
+    showTokenButton: "Token anzeigen",
+    spentInfo: "Jemand hat ihn bereits eingelöst.",
+    statusSpent: "Ausgegeben",
+    subtitle:
+      "Füge einen vorhandenen Cashu-Token ein und erstelle einen Link, über den Bitcoin an eine Lightning-Adresse ausgezahlt werden können.",
+    switchLabel: "Sprache",
+    tokenLabel: "Cashu-Token",
+    validUnknown: "Der Token konnte nicht geladen werden.",
+  },
 };
 
 const GENERIC_MINT_ICON_SVG =
@@ -224,7 +270,7 @@ const cashuLibPromise = getCashuLib();
 const getInitialLocale = (): Locale => {
   if (typeof window !== "undefined") {
     const savedLocale = window.localStorage.getItem(localeStorageKey);
-    if (savedLocale === "cs" || savedLocale === "en") {
+    if (savedLocale === "cs" || savedLocale === "de" || savedLocale === "en") {
       return savedLocale;
     }
   }
@@ -344,7 +390,9 @@ const fetchSiteFiatRates = async (
 };
 
 const normalizeLocale = (lang: Locale): string => {
-  return lang === "cs" ? "cs-CZ" : "en-US";
+  if (lang === "cs") return "cs-CZ";
+  if (lang === "de") return "de-DE";
+  return "en-US";
 };
 
 const formatInteger = (value: number, lang: Locale): string => {
@@ -1907,6 +1955,7 @@ function CashuPage() {
             czechLabel: activeCopy.czechLabel,
             currencyLabel: activeCopy.currencyLabel,
             englishLabel: activeCopy.englishLabel,
+            germanLabel: activeCopy.germanLabel,
             menuLabel: activeCopy.menuLabel,
             openAppLabel: activeCopy.openAppLabel,
             switchLabel: activeCopy.switchLabel,

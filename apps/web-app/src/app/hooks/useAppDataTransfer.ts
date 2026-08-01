@@ -77,6 +77,7 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
           npub: String(contact.npub ?? "").trim() || null,
           lnAddress: String(contact.lnAddress ?? "").trim() || null,
           groupName: String(contact.groupName ?? "").trim() || null,
+          groupNamesJson: String(contact.groupNamesJson ?? "").trim() || null,
         })),
         cashuTokens: cashuTokens.map((token) => {
           const tokenText = String(token.token ?? "").trim();
@@ -188,6 +189,7 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
         const lnAddressRaw = sanitizeText(rec.lnAddress, 1000);
         const lnAddress = lnAddressRaw ? lnAddressRaw : null;
         const groupName = sanitizeText(rec.groupName, 1000);
+        const groupNamesJson = sanitizeText(rec.groupNamesJson, 1000);
 
         if (!name && !npub && !lnAddress) continue;
 
@@ -214,6 +216,9 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
             : null,
           groupName: groupName
             ? (groupName as typeof Evolu.NonEmptyString1000.Type)
+            : null,
+          groupNamesJson: groupNamesJson
+            ? (groupNamesJson as typeof Evolu.NonEmptyString1000.Type)
             : null,
         };
 
@@ -247,6 +252,13 @@ export const useAppDataTransfer = <TContact extends ContactRowLike>({
               (String(existing.groupName ?? "").trim()
                 ? (String(
                     existing.groupName ?? "",
+                  ).trim() as typeof Evolu.NonEmptyString1000.Type)
+                : null),
+            groupNamesJson:
+              payload.groupNamesJson ??
+              (String(existing.groupNamesJson ?? "").trim()
+                ? (String(
+                    existing.groupNamesJson ?? "",
                   ).trim() as typeof Evolu.NonEmptyString1000.Type)
                 : null),
           };
