@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CashuTokenId, ContactId } from "../../evolu";
 import type { Route } from "../../types/route";
 import { setLinkyBankPaymentOfferMinimized } from "./bankPaymentOffer";
-import { resolveBackAction, type BackActionContext } from "./topbarConfig";
+import {
+  buildTopbarRight,
+  buildTopbarTitle,
+  resolveBackAction,
+  type BackActionContext,
+} from "./topbarConfig";
 
 vi.mock("./bankPaymentOffer", () => ({
   setLinkyBankPaymentOfferMinimized: vi.fn(),
@@ -24,6 +29,74 @@ const baseContext: BackActionContext = {
   navigateToMainReturn,
 };
 
+/**
+ * One sample per Route kind, as a Record keyed by `Route["kind"]`.
+ *
+ * `buildTopbarRight` and `buildTopbarTitle` are if-chains, NOT exhaustive
+ * switches: a new route kind that neither handles produces the hamburger button
+ * and a blank title, silently, with no compile error. This map is the guard —
+ * adding a kind to the union without adding it here is a TYPE error, and the
+ * cases below then exercise the new kind automatically.
+ */
+const ROUTE_SAMPLES: Record<Route["kind"], Route> = {
+  advanced: { kind: "advanced" },
+  advancedAutoPayLimit: { kind: "advancedAutoPayLimit" },
+  advancedPushDebug: { kind: "advancedPushDebug" },
+  bankPayment: { kind: "bankPayment", spdPayload: "SPD*1.0" },
+  bankPaymentOffer: {
+    kind: "bankPaymentOffer",
+    chatId: "chat-1",
+    offerId: "offer-1",
+  },
+  cashuToken: { kind: "cashuToken", id: tokenId },
+  cashuTokenEmit: { kind: "cashuTokenEmit" },
+  cashuTokenNew: { kind: "cashuTokenNew" },
+  cashuTokens: { kind: "cashuTokens" },
+  chat: { kind: "chat", id: "chat-1" },
+  contact: { kind: "contact", id: contactId },
+  contactEdit: { kind: "contactEdit", id: contactId },
+  contactNew: { kind: "contactNew" },
+  contactPay: { kind: "contactPay", id: contactId },
+  contacts: { kind: "contacts" },
+  evoluCurrentData: { kind: "evoluCurrentData" },
+  evoluData: { kind: "evoluData" },
+  evoluHistoryData: { kind: "evoluHistoryData" },
+  evoluServer: { kind: "evoluServer", id: "server-1" },
+  evoluServerNew: { kind: "evoluServerNew" },
+  evoluServers: { kind: "evoluServers" },
+  lnAddressPay: { kind: "lnAddressPay", lnAddress: "a@b.c" },
+  manualPay: { kind: "manualPay" },
+  mint: { kind: "mint", mintUrl: "https://mint.example" },
+  mints: { kind: "mints" },
+  nostrRelay: { kind: "nostrRelay", id: "relay-1" },
+  nostrRelayNew: { kind: "nostrRelayNew" },
+  nostrRelays: { kind: "nostrRelays" },
+  profile: { kind: "profile" },
+  profileEdit: { kind: "profileEdit" },
+  settings: { kind: "settings" },
+  settingsMasterKeys: { kind: "settingsMasterKeys" },
+  settingsNotifications: { kind: "settingsNotifications" },
+  settingsUnits: { kind: "settingsUnits" },
+  topup: { kind: "topup" },
+  topupInvoice: { kind: "topupInvoice" },
+  topupNoAmount: { kind: "topupNoAmount" },
+  transactions: { kind: "transactions" },
+  wallet: { kind: "wallet" },
+};
+
+const openScan = vi.fn();
+const toggleMenu = vi.fn();
+
+const rightSlotFor = (route: Route) =>
+  buildTopbarRight({
+    chatEditContactId: null,
+    isProfileEditing: false,
+    openScan,
+    route,
+    t: (key) => key,
+    toggleMenu,
+  });
+
 const backHashFor = (
   route: Route,
   context: BackActionContext = baseContext,
@@ -38,6 +111,8 @@ beforeEach(() => {
   assignMock.mockClear();
   closeContactDetail.mockClear();
   navigateToMainReturn.mockClear();
+  openScan.mockClear();
+  toggleMenu.mockClear();
 });
 
 describe("resolveBackAction", () => {
@@ -51,6 +126,7 @@ describe("resolveBackAction", () => {
       { kind: "settings" },
       { kind: "settingsUnits" },
       { kind: "settingsMasterKeys" },
+      { kind: "settingsNotifications" },
       { kind: "advanced" },
       { kind: "advancedAutoPayLimit" },
       { kind: "advancedPushDebug" },
@@ -97,6 +173,7 @@ describe("resolveBackAction", () => {
   it("walks settings sub-pages back up to settings", () => {
     expect(backHashFor({ kind: "settingsUnits" })).toBe("#settings");
     expect(backHashFor({ kind: "settingsMasterKeys" })).toBe("#settings");
+    expect(backHashFor({ kind: "settingsNotifications" })).toBe("#settings");
     expect(backHashFor({ kind: "advancedAutoPayLimit" })).toBe("#settings");
     expect(backHashFor({ kind: "advancedPushDebug" })).toBe("#settings");
     expect(backHashFor({ kind: "mints" })).toBe("#settings");
@@ -169,5 +246,83 @@ describe("resolveBackAction", () => {
       "offer-1",
       true,
     );
+  });
+});
+
+describe("ROUTE_SAMPLES", () => {
+  it("keys every sample by its own route kind", () => {
+    // `Record<Route["kind"], Route>` forces an entry for every kind, but not
+    // that the entry describes that kind. A copy-paste would otherwise drop a
+    // kind from the coverage below without any signal.
+    for (const [kind, route] of Object.entries(ROUTE_SAMPLES)) {
+      expect(route.kind).toBe(kind);
+    }
+  });
+});
+
+describe("buildTopbarTitle", () => {
+  it("gives every route kind a title", () => {
+    for (const route of Object.values(ROUTE_SAMPLES)) {
+      const title = buildTopbarTitle(route, (key) => key);
+      // Report the kind by name: a bare toBeTruthy() diff says only "null".
+      expect({ kind: route.kind, title }).toEqual({
+        kind: route.kind,
+        title: expect.any(String),
+      });
+    }
+  });
+
+  it("titles the notifications page with the shared history key", () => {
+    // The harness passes `t = (key) => key`, so this is an identity assertion
+    // on the translation key itself.
+    expect(
+      buildTopbarTitle({ kind: "settingsNotifications" }, (key) => key),
+    ).toBe("notificationsHistory");
+  });
+
+  it("does not title the notifications page with a colliding key", () => {
+    const title = buildTopbarTitle(
+      { kind: "settingsNotifications" },
+      (key) => key,
+    );
+
+    expect(typeof title).toBe("string");
+    // "notifications" labels AdvancedPage's push-enable toggle; the page title
+    // must not read as that switch. The other two keys do not exist and must
+    // not be created.
+    expect(title).not.toBe("notifications");
+    expect(title).not.toBe("notificationsTitle");
+    expect(title).not.toBe("notificationsPageTitle");
+  });
+});
+
+describe("buildTopbarRight", () => {
+  it("renders no right-slot button on the notifications page", () => {
+    expect(rightSlotFor({ kind: "settingsNotifications" })).toBeNull();
+  });
+
+  it("renders no hamburger button on the settings family", () => {
+    // Deliberately NOT exhaustive: `mint`, `nostrRelay`, `nostrRelayNew`,
+    // `evoluServer` and `evoluServerNew` are settings sub-pages that DO fall
+    // through to the hamburger button today. That inconsistency is
+    // pre-existing; Phase 6 does not change it, and naming it here stops a
+    // future reader from assuming the list below covers every settings screen.
+    const settingsFamily: Route[] = [
+      { kind: "settings" },
+      { kind: "settingsUnits" },
+      { kind: "settingsMasterKeys" },
+      { kind: "settingsNotifications" },
+      { kind: "advanced" },
+      { kind: "advancedAutoPayLimit" },
+      { kind: "advancedPushDebug" },
+      { kind: "mints" },
+    ];
+
+    for (const route of settingsFamily) {
+      expect(
+        rightSlotFor(route),
+        `expected no right-slot button for route ${route.kind}`,
+      ).toBeNull();
+    }
   });
 });

@@ -48,6 +48,7 @@ export const resolveBackAction = (
 
     case "settingsUnits":
     case "settingsMasterKeys":
+    case "settingsNotifications":
     case "advancedAutoPayLimit":
     case "advancedPushDebug":
     case "mints":
@@ -218,10 +219,16 @@ export const buildTopbarRight = ({
     };
   }
 
+  // NOT exhaustive over `Route["kind"]` — unlike `resolveBackAction` above and
+  // `AppRouteContent`'s switch, an unlisted kind falls through to the hamburger
+  // button below with no compile error. Every new sub-page must be added here
+  // by hand; `topbarConfig.test.ts`'s `ROUTE_SAMPLES` map is the guard that
+  // turns the omission into a failing test.
   if (
     route.kind === "settings" ||
     route.kind === "settingsUnits" ||
     route.kind === "settingsMasterKeys" ||
+    route.kind === "settingsNotifications" ||
     route.kind === "advanced" ||
     route.kind === "advancedAutoPayLimit" ||
     route.kind === "advancedPushDebug" ||
@@ -257,10 +264,20 @@ export const buildTopbarTitle = (
   route: Route,
   t: (key: string) => string,
 ): string | null => {
+  // NOT exhaustive over `Route["kind"]` — unlike `resolveBackAction` above and
+  // `AppRouteContent`'s switch, an unlisted kind falls through to the trailing
+  // `null` and renders a blank `topbar-title-spacer` with no compile error.
+  // Every new route must be added here by hand; `topbarConfig.test.ts`'s
+  // `ROUTE_SAMPLES` map is the guard that turns the omission into a failing
+  // test.
   if (route.kind === "contacts") return t("contactsTitle");
   if (route.kind === "settings") return t("settings");
   if (route.kind === "settingsUnits") return t("unit");
   if (route.kind === "settingsMasterKeys") return t("masterKeys");
+  // Shared with the settings entry row so the row and the screen read the same
+  // words. NOT `t("notifications")` — that key labels AdvancedPage's
+  // push-enable toggle, and the page title must not read as that switch.
+  if (route.kind === "settingsNotifications") return t("notificationsHistory");
   if (route.kind === "wallet") return t("wallet");
   if (route.kind === "transactions") return t("transactionsTitle");
   if (route.kind === "topup") return t("topupTitle");

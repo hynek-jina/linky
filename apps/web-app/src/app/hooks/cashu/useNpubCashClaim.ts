@@ -25,6 +25,11 @@ import {
   createCashuTokenId,
   hasMatchingCashuToken,
 } from "../../lib/cashuTokenIdentity";
+import { resolveNotificationAlert } from "../../lib/notificationAlert";
+import { buildNotificationRecord } from "../../lib/notificationRecord";
+import { notificationRecordStore } from "../../lib/notificationRecordStore";
+import { resolveCurrentVisibleSurface } from "../../lib/notificationSurface";
+import { notifyNotificationRecord } from "../../lib/notify";
 import { createDefaultCashuTokenAcceptor } from "./acceptAndPersistCashuToken";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
@@ -46,11 +51,6 @@ interface UseNpubCashClaimParams {
     method: string,
     payload?: Record<string, string>,
   ) => Promise<string>;
-  maybeShowPwaNotification: (
-    title: string,
-    body: string,
-    tag?: string,
-  ) => Promise<void>;
   mintInfoByUrl: ReadonlyMap<string, LocalMintInfoRow>;
   npubCashServerBaseUrl: string;
   npubCashClaimInFlightRef: React.MutableRefObject<boolean>;
@@ -99,7 +99,6 @@ export const useNpubCashClaim = ({
   logPaymentEvent,
   makeLocalStorageKey,
   makeNip98AuthHeader,
-  maybeShowPwaNotification,
   mintInfoByUrl,
   npubCashServerBaseUrl,
   npubCashClaimInFlightRef,
@@ -135,6 +134,9 @@ export const useNpubCashClaim = ({
         const parsedMint = parsed?.mint?.trim() ? parsed.mint.trim() : null;
         const parsedAmount =
           parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
+        // The Evolu row key doubles as the notification record's idempotency key, so it is
+        // computed once here and reused by both the token upsert and the record id.
+        const tokenId = createCashuTokenId(tokenRaw);
 
         try {
           const result = await acceptAndPersistCashuToken({
@@ -203,6 +205,10 @@ export const useNpubCashClaim = ({
             phase: "receive",
           });
 
+          // This gate governs the paid OVERLAY, not the record: a claim arriving on the
+          // topup-invoice screen is still recorded below. Suppressing the alert on that screen is
+          // the decision table's job (the topupInvoice visible surface owns an npubCashClaim
+          // record), not this gate's.
           if (routeKind !== "topupInvoice") {
             const title =
               accepted.amount && accepted.amount > 0
@@ -230,7 +236,52 @@ export const useNpubCashClaim = ({
                   return `${displayAmount.approxPrefix}${displayAmount.amountText} ${displayAmount.unitLabel}`;
                 })()
               : t("cashuAccepted");
-          void maybeShowPwaNotification(t("mints"), body, "cashu_claim");
+
+          const nowMs = Date.now();
+          // Kind-prefixed so it can never collide with a 64-hex wrap id, and stable because the
+          // token id is already the Evolu row key.
+          const record = buildNotificationRecord({
+            chatId: null,
+            conversationKey: null,
+            id: `npubCashClaim:${String(tokenId)}`,
+            kind: "npubCashClaim",
+            nowMs,
+            preview: body,
+            senderLabel: t("mints"),
+          });
+
+          // The durable write is unconditional and happens BEFORE any noise reasoning.
+          // `upsert` returns the MERGED record — everything below uses `stored`, never the
+          // freshly built `record`, which always carries `alertedAt: null` and would make the
+          // "already alerted" decision row dead code on a redelivery.
+          const stored = notificationRecordStore.upsert(record);
+
+          // The hook holds only `routeKind`, which is sufficient: an npubCashClaim has no
+          // chatId/offerId, so only the topupInvoice surface and the Notifications-page surface
+          // can own it.
+          const route = { kind: routeKind };
+          // Origin is always "live": a claim is a poll/user-initiated wallet event, never a
+          // relay backlog replay.
+          const outcome = resolveNotificationAlert({
+            nowMs,
+            origin: "live",
+            record: stored,
+            route,
+            syncEpochMs: notificationRecordStore.getSyncEpochMs(),
+            visibleSurface: resolveCurrentVisibleSurface(route),
+          });
+
+          if (outcome.alertedAt !== null) {
+            notificationRecordStore.markAlerted(stored.id, outcome.alertedAt);
+          }
+          if (outcome.readAt !== null) {
+            notificationRecordStore.markRead(stored.id, outcome.readAt);
+          }
+          void notifyNotificationRecord({
+            appTitle: t("appTitle"),
+            decision: outcome.decision,
+            record: stored,
+          });
         } catch (error) {
           const message = getUnknownErrorMessage(error, "Accept failed");
           logPaymentEvent({
@@ -251,7 +302,7 @@ export const useNpubCashClaim = ({
             upsert(
               "cashuToken",
               buildSparseCashuTokenPayload({
-                id: createCashuTokenId(tokenRaw),
+                id: tokenId,
                 token: tokenRaw,
                 state: "error",
                 error: message,
@@ -273,7 +324,6 @@ export const useNpubCashClaim = ({
       upsert,
       isMintDeleted,
       logPaymentEvent,
-      maybeShowPwaNotification,
       mintInfoByUrl,
       refreshMintInfo,
       resolveOwnerIdForWrite,

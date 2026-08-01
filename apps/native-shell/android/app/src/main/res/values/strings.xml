@@ -6,7 +6,31 @@
     <string name="nostr_url_scheme">nostr</string>
     <string name="package_name">fit.linky.app</string>
     <string name="push_notification_channel_id">linky_messages</string>
+    <!--
+      D-P2-01: Linky's Android notification channel names are deliberately NOT localized.
+      There is no res/values-cs/ and none should be added. Android resolves channel names
+      against the *system* locale, never Linky's in-app `linky.lang` preference, so a
+      values-cs/ directory would still show English to a Czech-language Linky user on an
+      English phone - a half fix with a permanent maintenance cost for every future channel
+      (Phase 3's takeover, Phase 4's linky_messages_quiet_v1). Revisit this decision before
+      adding a localized values directory.
+    -->
     <string name="push_notification_channel_name">Linky messages</string>
+    <!--
+      A SEPARATE, versioned channel id rather than a mutation of linky_messages above.
+      Android will not raise or lower the importance of a channel that already exists and
+      reports no error when you try, so "quiet" cannot be a setting on the existing channel;
+      and renaming linky_messages to a _v1 form would discard every current user's
+      per-channel settings for zero benefit. Additive only - do not touch linky_messages.
+    -->
+    <string name="push_notification_quiet_channel_id">linky_messages_quiet_v1</string>
+    <!--
+      D-P2-01 applies here too: channel names are deliberately NOT localized. Android
+      resolves channel names against the *system* locale, never Linky's in-app `linky.lang`
+      preference, so a values-cs/ directory would still show English to a Czech-language
+      Linky user on an English phone. Do not add one for this channel.
+    -->
+    <string name="push_notification_quiet_channel_name">Linky messages (quiet)</string>
     <string name="push_notification_fallback_title">Linky</string>
     <string name="push_notification_fallback_body">Nová aktivita v Linky</string>
 </resources>

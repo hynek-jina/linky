@@ -74,7 +74,7 @@ export const useRouting = () => {
 };
 
 // Navigation types
-type NavigationAction =
+export type NavigationAction =
   | { route: "advanced" }
   | { route: "advancedAutoPayLimit" }
   | { route: "advancedPushDebug" }
@@ -107,6 +107,7 @@ type NavigationAction =
   | { route: "profileEdit" }
   | { route: "settings" }
   | { route: "settingsMasterKeys" }
+  | { route: "settingsNotifications" }
   | { route: "settingsUnits" }
   | { route: "transactions" }
   | { route: "topup" }
@@ -127,6 +128,9 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "settingsMasterKeys":
       window.location.assign("#settings/master-keys");
+      break;
+    case "settingsNotifications":
+      window.location.assign("#settings/notifications");
       break;
     case "advanced":
       window.location.assign("#advanced");

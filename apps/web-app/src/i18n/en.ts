@@ -44,7 +44,19 @@ export const en = {
   notificationsDisabled: "Notifications disabled",
   notificationsDisableError: "Notifications could not be disabled",
   notificationsDenied: "Denied",
+  notificationsBlocked: "Blocked - allow in system settings",
+  notificationsAppBlocked: "Notifications are turned off for Linky",
+  notificationsChannelMissing: "Notification channel is missing",
+  notificationsChannelBlocked: "Notification channel is muted",
+  notificationsChannelSilent: "Notifications are silent - no pop-up",
+  notificationsOpenSettings: "Open notification settings",
   notificationsError: "Error",
+  notificationsHistory: "Notification history",
+  notificationsMarkAllRead: "Mark all read",
+  notificationsMarkRead: "Mark read",
+  notificationsMarkUnread: "Mark unread",
+  notificationsEmpty: "No notifications yet",
+  notificationsUnreadCount: "Unread notifications",
   notificationReceivedMoney: "You received money",
   notificationReceivedBankPaymentReimbursement:
     "Your sats for the bank payment have arrived",
@@ -368,6 +380,16 @@ export const en = {
   unknownContactTitle: "Unknown contact",
   unknownContactNamePrefix: "[Unknown]",
   chatIncomingMessageToast: "{name}: {message}",
+
+  // In-app notification banner (components/NotificationBanner.tsx). The banner
+  // replaces the inbox toasts from plan 05-06 on; `chatIncomingMessageToast`
+  // above is deliberately retained but no longer used in production from then.
+  // `{count}` is substituted with String.prototype.replace at the call site.
+  notificationBannerLabel: "New notification",
+  notificationBannerOpen: "Open",
+  notificationBannerDismiss: "Dismiss",
+  notificationBannerMore: "+{count} more",
+
   chatEmpty: "No messages yet.",
   chatIdentityChangedNotice: "My identity changed.",
   chatPlaceholder: "Message",

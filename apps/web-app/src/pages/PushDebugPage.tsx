@@ -1,6 +1,13 @@
 import React from "react";
 
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import {
+  cancelAllNativeConversationNotifications,
+  cancelNativePushPlaceholder,
+  type NativeLocalNotificationPostResult,
+  postNativeLocalNotification,
+  supportsNativeLocalNotifications,
+} from "../platform/nativeBridge";
 import { isNativePlatform } from "../platform/runtime";
 import {
   appendPushDebugLog,
@@ -54,6 +61,12 @@ const INITIAL_REPORT: PushDebugReport = {
   serviceWorkerController: false,
   serviceWorkerRegistrations: [],
 };
+
+function formatPostResult(
+  result: NativeLocalNotificationPostResult | null,
+): string {
+  return `${result?.status ?? "null"} / ${result?.delivery ?? "-"}`;
+}
 
 async function resetServiceWorkersAndCaches(): Promise<void> {
   if ("serviceWorker" in navigator) {
@@ -288,6 +301,92 @@ export function PushDebugPage(): React.ReactElement {
     }
   }, [reportText]);
 
+  const debugPostPayload = React.useCallback(
+    (suffix: "a" | "b" | "c", senderName: string, text: string) => ({
+      conversationKey: `linky-debug-sender-${suffix}`,
+      eventCreatedAtSec: Math.floor(Date.now() / 1000) - 3 * 86400,
+      outerEventId: `linky-debug-outer-${suffix}`,
+      recipientPubkey: "linky-debug-recipient",
+      relayHints: "wss://relay.damus.io",
+      senderName,
+      text,
+    }),
+    [],
+  );
+
+  const handlePostTest = React.useCallback(() => {
+    const result = postNativeLocalNotification(
+      debugPostPayload(
+        "a",
+        "Debug Alice",
+        `Test — ${new Date().toLocaleTimeString()}`,
+      ),
+    );
+    setStatus(`post: ${formatPostResult(result)}`);
+  }, [debugPostPayload]);
+
+  const handlePostBurst = React.useCallback(() => {
+    const results: string[] = [];
+    for (let i = 1; i <= 5; i += 1) {
+      results.push(
+        formatPostResult(
+          postNativeLocalNotification(
+            debugPostPayload(
+              "a",
+              "Debug Alice",
+              `Burst ${i}/5 — ${new Date().toLocaleTimeString()}`,
+            ),
+          ),
+        ),
+      );
+    }
+    setStatus(`burst: ${results.join(" | ")}`);
+  }, [debugPostPayload]);
+
+  const handlePostThreeSenders = React.useCallback(() => {
+    const time = new Date().toLocaleTimeString();
+    const results = [
+      postNativeLocalNotification(
+        debugPostPayload(
+          "a",
+          "Debug Alice",
+          `Hello from Debug Alice — ${time}`,
+        ),
+      ),
+      postNativeLocalNotification(
+        debugPostPayload("b", "Debug Bob", `Hello from Debug Bob — ${time}`),
+      ),
+      postNativeLocalNotification(
+        debugPostPayload(
+          "c",
+          "Debug Carol",
+          `Hello from Debug Carol — ${time}`,
+        ),
+      ),
+    ];
+    setStatus(`senders: ${results.map(formatPostResult).join(" | ")}`);
+  }, [debugPostPayload]);
+
+  const handleCancelAllNotifications = React.useCallback(() => {
+    const ok = cancelAllNativeConversationNotifications();
+    setStatus(`cancelAll: ${ok}`);
+  }, []);
+
+  const handleCancelPushPlaceholder = React.useCallback(() => {
+    const ok = cancelNativePushPlaceholder("linky-debug-outer-a");
+    setStatus(`cancelPlaceholder: ${ok}`);
+  }, []);
+
+  // Phase 3 shipped the five buttons below as a temporary developer trigger for the
+  // native notification bridge before the real inbox path existed. Phase 4 criterion 4
+  // proved the real path drives the bridge, so they are now gated behind
+  // `import.meta.env.DEV`: Vite constant-folds this to `false` in any production build
+  // (including the debug APK, which bundles `vite build` output), so the block is dead
+  // code there and the `linky-debug-sender-*` conversation keys cannot reach a device.
+  // Kept rather than deleted so the bridge stays pokeable from `bun run dev`.
+  const localNotificationsSupported =
+    import.meta.env.DEV && supportsNativeLocalNotifications();
+
   return (
     <section className="panel">
       <div className="settings-row settings-row-stack-mobile">
@@ -345,6 +444,45 @@ export function PushDebugPage(): React.ReactElement {
             >
               Copy logs
             </button>
+            {localNotificationsSupported ? (
+              <>
+                <button
+                  className="ghost"
+                  onClick={handlePostTest}
+                  disabled={isBusy}
+                >
+                  Post test
+                </button>
+                <button
+                  className="ghost"
+                  onClick={handlePostBurst}
+                  disabled={isBusy}
+                >
+                  Post burst of 5
+                </button>
+                <button
+                  className="ghost"
+                  onClick={handlePostThreeSenders}
+                  disabled={isBusy}
+                >
+                  Post 3 senders
+                </button>
+                <button
+                  className="ghost"
+                  onClick={handleCancelAllNotifications}
+                  disabled={isBusy}
+                >
+                  Cancel all (Linky)
+                </button>
+                <button
+                  className="ghost"
+                  onClick={handleCancelPushPlaceholder}
+                  disabled={isBusy}
+                >
+                  Cancel placeholder
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       </div>

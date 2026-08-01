@@ -1,11 +1,8 @@
 package fit.linky.app;
 
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.Context;
 import android.content.Intent;
-import android.os.Build;
+import android.net.Uri;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
@@ -36,9 +33,14 @@ public final class LinkyFirebaseMessagingService extends MessagingService {
     }
 
     private void showBackgroundNotification(RemoteMessage remoteMessage) {
-        createNotificationChannelIfNeeded();
+        LinkyLocalNotifications.createChannelIfNeeded(this);
 
         Map<String, String> data = remoteMessage.getData();
+        String outerEventId = data.get("outerEventId");
+        int placeholderId = LinkyNotificationSupport.placeholderNotificationId(
+            outerEventId,
+            remoteMessage.getMessageId()
+        );
         String title = normalizeText(
             data.get("title"),
             getString(R.string.push_notification_fallback_title)
@@ -59,9 +61,14 @@ public final class LinkyFirebaseMessagingService extends MessagingService {
             normalizeText(remoteMessage.getMessageId(), "linky-native-message")
         );
 
+        String idSource = outerEventId != null && !outerEventId.trim().isEmpty()
+            ? outerEventId.trim()
+            : normalizeText(remoteMessage.getMessageId(), "linky-native-message");
+        launchIntent.setData(Uri.parse("linky-notification://push-pending/" + Uri.encode(idSource)));
+
         PendingIntent pendingIntent = PendingIntent.getActivity(
             this,
-            buildNotificationId(remoteMessage),
+            placeholderId,
             launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
@@ -79,44 +86,10 @@ public final class LinkyFirebaseMessagingService extends MessagingService {
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body));
 
         NotificationManagerCompat.from(this).notify(
-            buildNotificationId(remoteMessage),
+            LinkyLocalNotifications.TAG_PUSH_PLACEHOLDER,
+            placeholderId,
             builder.build()
         );
-    }
-
-    private void createNotificationChannelIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return;
-        }
-
-        NotificationManager notificationManager =
-            (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (notificationManager == null) {
-            return;
-        }
-
-        String channelId = getString(R.string.push_notification_channel_id);
-        NotificationChannel existingChannel = notificationManager.getNotificationChannel(channelId);
-        if (existingChannel != null) {
-            return;
-        }
-
-        NotificationChannel channel = new NotificationChannel(
-            channelId,
-            getString(R.string.push_notification_channel_name),
-            NotificationManager.IMPORTANCE_HIGH
-        );
-        channel.setDescription(getString(R.string.push_notification_channel_name));
-        notificationManager.createNotificationChannel(channel);
-    }
-
-    private int buildNotificationId(RemoteMessage remoteMessage) {
-        String outerEventId = remoteMessage.getData().get("outerEventId");
-        if (outerEventId != null && !outerEventId.trim().isEmpty()) {
-            return outerEventId.hashCode();
-        }
-        String messageId = remoteMessage.getMessageId();
-        return normalizeText(messageId, "linky-native-message").hashCode();
     }
 
     private String normalizeText(String value, String fallback) {

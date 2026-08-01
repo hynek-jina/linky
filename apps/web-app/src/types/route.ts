@@ -31,6 +31,7 @@ export type Route =
   | { kind: "settings" }
   | { kind: "settingsUnits" }
   | { kind: "settingsMasterKeys" }
+  | { kind: "settingsNotifications" }
   | { kind: "advanced" }
   | { kind: "advancedAutoPayLimit" }
   | { kind: "advancedPushDebug" }
@@ -79,6 +80,9 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#settings") return { kind: "settings" };
   if (hash === "#settings/units") return { kind: "settingsUnits" };
   if (hash === "#settings/master-keys") return { kind: "settingsMasterKeys" };
+  if (hash === "#settings/notifications") {
+    return { kind: "settingsNotifications" };
+  }
   if (hash === "#advanced") return { kind: "advanced" };
   if (hash === "#advanced/auto-pay-limit") {
     return { kind: "advancedAutoPayLimit" };

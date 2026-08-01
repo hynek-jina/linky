@@ -1,20 +1,63 @@
 import type { Event as NostrEvent } from "nostr-tools";
 import { nip19, SimplePool, verifyEvent } from "nostr-tools";
+import type { SubCloser, SubscribeManyParams } from "nostr-tools/abstract-pool";
+import type { Filter } from "nostr-tools/filter";
 
 import {
   CATCH_UP_LOOKBACK_SECONDS,
   SEEN_EVENT_RETENTION_MARGIN_MS,
 } from "./config";
 import { isHexString } from "./guards";
-import { PushDeliveryService } from "./push";
-import { PushStorage } from "./storage";
-import type { PushNotificationData } from "./types";
+import type {
+  PushNotificationData,
+  StoredNativeSubscription,
+  StoredSubscription,
+} from "./types";
 
-interface RelayWatcherOptions {
+// The watcher only ever calls the four storage methods, two delivery methods
+// and two pool methods listed below. Declaring them structurally (instead of
+// naming PushStorage/PushDeliveryService/SimplePool) keeps the real classes
+// assignable while letting a test pass a plain object literal — the concrete
+// classes carry `private readonly` members, which TypeScript treats nominally
+// and which would otherwise force a cast at every test double.
+export interface RelayWatcherStorage {
+  recordSeenEvent(eventId: string, firstSeenAt: number): boolean;
+  pruneSeenEvents(nowMs: number, maxAgeMs: number): void;
+  getSubscriptionsForPubkeys(
+    pubkeys: string[],
+  ): Map<string, StoredSubscription[]>;
+  getNativeSubscriptionsForPubkeys(
+    pubkeys: string[],
+  ): Map<string, StoredNativeSubscription[]>;
+}
+
+export interface RelayWatcherPushDelivery {
+  deliverWeb(
+    subscription: StoredSubscription,
+    payloadData: PushNotificationData,
+  ): Promise<void>;
+  deliverNative(
+    subscription: StoredNativeSubscription,
+    payloadData: PushNotificationData,
+  ): Promise<void>;
+}
+
+export interface RelayWatcherPool {
+  subscribeMany(
+    relays: string[],
+    filter: Filter,
+    params: SubscribeManyParams,
+  ): SubCloser;
+  close(relays: string[]): void;
+}
+
+export interface RelayWatcherOptions {
   relayUrls: string[];
-  storage: PushStorage;
-  pushDelivery: PushDeliveryService;
+  storage: RelayWatcherStorage;
+  pushDelivery: RelayWatcherPushDelivery;
   eventDedupeTtlMs: number;
+  pool?: RelayWatcherPool;
+  subscriptionRefreshMs?: number;
 }
 
 interface SeenEventIdCacheOptions {
@@ -190,12 +233,17 @@ export class RelayWatcher {
   private static readonly SEEN_EVENT_CACHE_MAX_ENTRIES = 50_000;
 
   private readonly relayUrls: string[];
-  private readonly storage: PushStorage;
-  private readonly pushDelivery: PushDeliveryService;
+  private readonly storage: RelayWatcherStorage;
+  private readonly pushDelivery: RelayWatcherPushDelivery;
   private readonly seenEventIds: SeenEventIdCache;
   private readonly eventDedupeTtlMs: number;
-  private readonly pool = new SimplePool({ enableReconnect: true });
-  private liveDeliveryEnabled = false;
+  private readonly pool: RelayWatcherPool;
+  private readonly subscriptionRefreshMs: number;
+  // Only the FIRST drain of the 3-day catch-up window suppresses delivery.
+  // Re-opening the socket (periodic refresh, onclose, restart) is not a reason
+  // to suppress anything: historical replays are already deduped by
+  // seenEventIds and storage.recordSeenEvent.
+  private initialCatchUpComplete = false;
   private refreshIntervalHandle: ReturnType<typeof setInterval> | null = null;
   private subscription: ClosableSubscription | null = null;
 
@@ -204,6 +252,10 @@ export class RelayWatcher {
     this.storage = options.storage;
     this.pushDelivery = options.pushDelivery;
     this.eventDedupeTtlMs = options.eventDedupeTtlMs;
+    this.pool = options.pool ?? new SimplePool({ enableReconnect: true });
+    this.subscriptionRefreshMs =
+      options.subscriptionRefreshMs ??
+      RelayWatcher.LIVE_SUBSCRIPTION_REFRESH_MS;
     this.seenEventIds = new SeenEventIdCache({
       ttlMs: options.eventDedupeTtlMs,
       maxEntries: RelayWatcher.SEEN_EVENT_CACHE_MAX_ENTRIES,
@@ -218,7 +270,7 @@ export class RelayWatcher {
     this.openSubscription("initial start");
     this.refreshIntervalHandle = setInterval(() => {
       this.restartSubscription("periodic refresh");
-    }, RelayWatcher.LIVE_SUBSCRIPTION_REFRESH_MS);
+    }, this.subscriptionRefreshMs);
   }
 
   async stop(): Promise<void> {
@@ -226,7 +278,6 @@ export class RelayWatcher {
       clearInterval(this.refreshIntervalHandle);
       this.refreshIntervalHandle = null;
     }
-    this.liveDeliveryEnabled = false;
     await this.subscription?.close("server shutdown");
     this.subscription = null;
     this.pool.close(this.relayUrls);
@@ -234,7 +285,6 @@ export class RelayWatcher {
 
   private openSubscription(reason: string): void {
     const since = Math.floor(Date.now() / 1000) - CATCH_UP_LOOKBACK_SECONDS;
-    this.liveDeliveryEnabled = false;
     console.info(
       `[push] opening relay watcher subscription reason=${reason} since=${since}`,
     );
@@ -249,19 +299,21 @@ export class RelayWatcher {
           void this.handleEvent(event);
         },
         oneose: () => {
-          this.liveDeliveryEnabled = true;
-          console.info("[push] relay watcher caught up; live delivery enabled");
+          if (!this.initialCatchUpComplete) {
+            this.initialCatchUpComplete = true;
+            console.info(
+              "[push] relay watcher caught up; live delivery enabled",
+            );
+          }
         },
         onclose: (reasons) => {
-          this.liveDeliveryEnabled = false;
           console.warn("[push] relay subscription closed", reasons);
         },
       },
     );
   }
 
-  private restartSubscription(reason: string): void {
-    this.liveDeliveryEnabled = false;
+  restartSubscription(reason: string): void {
     this.subscription?.close(reason);
     this.subscription = null;
     this.openSubscription(reason);
@@ -327,6 +379,16 @@ export class RelayWatcher {
       return;
     }
 
+    if (!this.initialCatchUpComplete) {
+      // First drain of the 3-day catch-up window: remember the wrap so it can
+      // never notify later, but never push for it.
+      this.recordSeen(event.id, nowMs);
+      console.debug(
+        `[push] suppressed historical gift wrap id=${event.id} recipients=${recipientPubkeys.join(",")} until live delivery is enabled`,
+      );
+      return;
+    }
+
     if (!this.recordSeen(event.id, nowMs)) {
       console.debug(`[push] skipped duplicate event id=${event.id}`);
       return;
@@ -335,13 +397,6 @@ export class RelayWatcher {
     console.debug(
       `[push] observed gift wrap id=${event.id} pubkey=${event.pubkey} recipients=${describeEventRecipients(event)} createdAt=${event.created_at}`,
     );
-
-    if (!this.liveDeliveryEnabled) {
-      console.debug(
-        `[push] suppressed historical gift wrap id=${event.id} recipients=${recipientPubkeys.join(",")} until live delivery is enabled`,
-      );
-      return;
-    }
 
     const deliveries: Promise<void>[] = [];
 

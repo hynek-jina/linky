@@ -58,15 +58,40 @@ const readNotificationRelayHints = (value: unknown): string[] => {
   return relayHints;
 };
 
-export const readNotificationOpenTarget = (
+/**
+ * Reads ONLY the outer wrap id from a notification-open detail.
+ *
+ * Split out of `readNotificationOpenTarget` because that function hard-requires
+ * `recipientPubkey` and returns `null` without it — which is exactly the Phase 8
+ * defect (D3). The record-store-first resolution in `useScanNativeComposition`
+ * has to run BEFORE the strict parse, so it needs the id on its own.
+ *
+ * Returns a trimmed non-empty string or `null`. It deliberately does NOT
+ * validate the id as 64-hex: the value is used only as a lookup key against the
+ * CURRENT owner's own records, never as a network parameter and never as a
+ * branded id, so a garbage value simply finds nothing.
+ */
+export const readNotificationOpenOuterEventId = (
   value: unknown,
-): NotificationOpenTarget | null => {
+): string | null => {
   const source = unwrapNotificationOpenValue(value);
   if (typeof source !== "object" || source === null) return null;
 
   const outerEventId = String(
     readObjectField(source, "outerEventId") ?? "",
   ).trim();
+  return outerEventId || null;
+};
+
+export const readNotificationOpenTarget = (
+  value: unknown,
+): NotificationOpenTarget | null => {
+  const source = unwrapNotificationOpenValue(value);
+  if (typeof source !== "object" || source === null) return null;
+
+  // Delegated so there is exactly ONE place that knows where the id lives; the
+  // strict parse and the local record-store lookup cannot drift apart.
+  const outerEventId = readNotificationOpenOuterEventId(value);
   const recipientPubkey = normalizePubkeyHex(
     readObjectField(source, "recipientPubkey"),
   );
@@ -77,6 +102,9 @@ export const readNotificationOpenTarget = (
     readObjectField(source, "senderPubkey"),
   );
 
+  // NOT weakened by plan 09-04. D3 is fixed by SUPPLYING `recipientPubkey`
+  // (plan 09-03) and by adding a local, zero-network path AROUND this parser —
+  // never by letting a detail without a recipient through it (T-09-22).
   if (!outerEventId || !recipientPubkey) return null;
 
   return { outerEventId, recipientPubkey, relayHints, senderPubkey };

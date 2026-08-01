@@ -3,6 +3,7 @@ import "../App.css";
 import { AuthenticatedLayout } from "../components/AuthenticatedLayout";
 import { CashuContactSendBanner } from "../components/CashuContactSendBanner";
 import { InstallPwaBanner } from "../components/InstallPwaBanner";
+import { NotificationBanner } from "../components/NotificationBanner";
 import { PwaUpdateBanner } from "../components/PwaUpdateBanner";
 import { ToastNotifications } from "../components/ToastNotifications";
 import { UnauthenticatedLayout } from "../components/UnauthenticatedLayout";
@@ -82,6 +83,13 @@ const AuthenticatedAppShell = ({
         t={t}
       />
       <ToastNotifications toasts={toasts} dismissToast={dismissToast} />
+      {/*
+       * Deliberately mounted outside the currentNsec gate, like every sibling banner:
+       * nothing produces post-and-alert before login, so the gate would be moot. It also
+       * deliberately renders AFTER the toast container, and its z-index 95 sits below
+       * .toast-container's 96, so a status toast still reads above an incoming message.
+       */}
+      <NotificationBanner t={t} />
       <InstallPwaBanner t={t} />
 
       <AppShellContextsProvider

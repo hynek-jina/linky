@@ -9,6 +9,7 @@ import {
   getNativeNotificationPermissionState,
   NATIVE_PUSH_ACTION_EVENT,
   requestNativeNotificationPermission,
+  supportsNativeRemotePush,
 } from "../platform/nativeBridge";
 import { isNativePlatform } from "../platform/runtime";
 import { appendPushDebugLog } from "./pushDebugLog";
@@ -534,10 +535,12 @@ async function unregisterNativeTokenOnServer(params: {
 async function registerNativePushNotifications(
   currentNsec: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const permissionState = getNativeNotificationPermissionState();
-  if (permissionState === null || permissionState === "unsupported") {
+  if (!supportsNativeRemotePush()) {
+    // FCM availability, not notification permission. `areSupported()` is now true on every
+    // build, so keying this on the permission state would let a debug APK proceed into
+    // PushNotifications.register() and hang on the 15s waitForNativePushToken timeout.
     await appendPushDebugLog("client", "native push unsupported", {
-      permissionState,
+      permissionState: getNativeNotificationPermissionState(),
     });
     return {
       success: false,
@@ -549,7 +552,7 @@ async function registerNativePushNotifications(
   const granted = await requestNotificationPermission();
   await appendPushDebugLog("client", "native push registration requested", {
     granted,
-    permissionState,
+    permissionState: getNativeNotificationPermissionState(),
   });
 
   if (!granted) {
@@ -896,6 +899,22 @@ export async function unregisterPushNotifications(
 
   if (isNativePlatform()) {
     try {
+      if (!supportsNativeRemotePush()) {
+        // Mirror of the registerNativePushNotifications gate: on a build without
+        // google-services.json, PushNotifications.unregister() throws
+        // IllegalStateException "Default FirebaseApp is not initialized" on the
+        // native thread, where the JS .catch() below cannot absorb it — the
+        // process dies. Nothing was ever registered on such a build, so skipping
+        // the plugin call and clearing local state is the whole job.
+        clearStoredRegisteredNativePushToken();
+        clearStoredRegisteredNativePushPubkey();
+        await appendPushDebugLog("client", "native push unregister skipped", {
+          permissionState: getNativeNotificationPermissionState(),
+          reason: "unsupported",
+        });
+        return true;
+      }
+
       const storedToken = readStoredRegisteredNativePushToken();
       const responseOk =
         storedToken === null

@@ -1,23 +1,86 @@
 import { getPublicKey, nip19 } from "nostr-tools";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { registerPushNotifications } from "./pushNotifications";
 
-vi.mock("../platform/runtime", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../platform/runtime")>();
-  return {
-    ...actual,
-    isNativePlatform: () => false,
-  };
-});
+// This file covers two disjoint branches of `registerPushNotifications`:
+// the native FCM-availability gate (D-P2-15) and the browser subscription lifecycle.
+// `nativeFlag` is the switch between them, so the two suites can share one module mock set.
+
+const nativeFlag = vi.hoisted(() => ({ value: true }));
+
+const bridgeState = vi.hoisted<{
+  permissionState: string | null;
+  remotePush: boolean;
+}>(() => ({
+  permissionState: "granted",
+  remotePush: false,
+}));
+
+const pushSpies = vi.hoisted(() => ({
+  addListener: vi.fn(() => Promise.resolve({ remove: () => {} })),
+  register: vi.fn(() => Promise.resolve()),
+  unregister: vi.fn(() => Promise.resolve()),
+}));
+
+const debugLog = vi.hoisted(() => ({
+  append: vi.fn<
+    (source: string, message: string, details?: unknown) => Promise<void>
+  >(() => Promise.resolve()),
+}));
+
+const permissionSpy = vi.hoisted(() => ({
+  request: vi.fn(() => Promise.resolve(true)),
+}));
+
+vi.mock("@capacitor/push-notifications", () => ({
+  PushNotifications: pushSpies,
+}));
 
 vi.mock("./pushDebugLog", () => ({
-  appendPushDebugLog: vi.fn().mockResolvedValue(undefined),
+  appendPushDebugLog: debugLog.append,
 }));
+
+vi.mock("../platform/runtime", async () => {
+  const actual = await vi.importActual<typeof import("../platform/runtime")>(
+    "../platform/runtime",
+  );
+  return { ...actual, isNativePlatform: () => nativeFlag.value };
+});
+
+vi.mock("../platform/nativeBridge", () => ({
+  NATIVE_PUSH_ACTION_EVENT: "linky-native-push-action",
+  getNativeNotificationPermissionState: () => bridgeState.permissionState,
+  requestNativeNotificationPermission: permissionSpy.request,
+  supportsNativeRemotePush: () => bridgeState.remotePush,
+}));
+
+import {
+  registerPushNotifications,
+  unregisterPushNotifications,
+} from "./pushNotifications";
+
+// Never decoded by the native suite: none of its cases reach `derivePushIdentity` (D-P2-14).
+const TEST_NSEC = "nsec1testtesttest";
 
 const SECRET_KEY = new Uint8Array(32).fill(7);
 const NSEC = nip19.nsecEncode(SECRET_KEY);
 const PUBKEY = getPublicKey(SECRET_KEY);
 const VAPID_KEY = "AQID";
+
+const readLoggedPermissionState = (details: unknown): unknown => {
+  if (typeof details !== "object" || details === null) {
+    return undefined;
+  }
+
+  return Reflect.get(details, "permissionState");
+};
+
+type DebugLogCall = [source: string, message: string, details?: unknown];
+
+const findUnsupportedDebugLogCall = (): DebugLogCall | undefined => {
+  return debugLog.append.mock.calls.find(
+    (call) => call[1] === "native push unsupported",
+  );
+};
 
 interface RecordedRequest {
   body: unknown;
@@ -91,6 +154,11 @@ const readField = (value: unknown, field: string): unknown =>
   isRecord(value) ? value[field] : undefined;
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  nativeFlag.value = true;
+  bridgeState.permissionState = "granted";
+  bridgeState.remotePush = false;
+
   localStorage.clear();
   originalServiceWorkerDescriptor = Object.getOwnPropertyDescriptor(
     navigator,
@@ -136,7 +204,6 @@ beforeEach(() => {
 afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
-  vi.restoreAllMocks();
   if (originalServiceWorkerDescriptor) {
     Object.defineProperty(
       navigator,
@@ -148,7 +215,92 @@ afterEach(() => {
   }
 });
 
+describe("registerPushNotifications - native FCM-availability gate", () => {
+  it("closes the gate on a debug build where the permission is granted but FCM is absent", async () => {
+    bridgeState.permissionState = "granted";
+    bridgeState.remotePush = false;
+
+    const result = await registerPushNotifications(TEST_NSEC);
+
+    expect(permissionSpy.request).not.toHaveBeenCalled();
+    expect(pushSpies.register).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(String(result.error ?? "")).toContain("google-services.json");
+  });
+
+  it("closes the gate when there is no native notifications bridge at all", async () => {
+    bridgeState.permissionState = null;
+    bridgeState.remotePush = false;
+
+    const result = await registerPushNotifications(TEST_NSEC);
+
+    expect(permissionSpy.request).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(String(result.error ?? "")).toContain("google-services.json");
+  });
+
+  it("still opens the gate on a release build where FCM is configured", async () => {
+    bridgeState.permissionState = "granted";
+    bridgeState.remotePush = true;
+
+    await registerPushNotifications(TEST_NSEC);
+
+    expect(permissionSpy.request).toHaveBeenCalled();
+  });
+
+  it("never reaches PushNotifications.register while FCM is unavailable", async () => {
+    bridgeState.permissionState = "granted";
+    bridgeState.remotePush = false;
+
+    await registerPushNotifications(TEST_NSEC);
+
+    // The 15 000 ms `waitForNativePushToken` timeout is armed by `register()`.
+    // Keeping this call unreachable is what keeps the Advanced toggle responsive.
+    expect(pushSpies.register).not.toHaveBeenCalled();
+  });
+
+  it("records the observed permission state in the push debug log when it skips registration", async () => {
+    bridgeState.permissionState = "granted";
+    bridgeState.remotePush = false;
+
+    await registerPushNotifications(TEST_NSEC);
+
+    const unsupportedCall = findUnsupportedDebugLogCall();
+    expect(unsupportedCall).toBeDefined();
+    expect(readLoggedPermissionState(unsupportedCall?.[2])).toBe("granted");
+  });
+});
+
+describe("unregisterPushNotifications - native FCM-availability gate", () => {
+  it("never reaches PushNotifications.unregister while FCM is unavailable", async () => {
+    bridgeState.permissionState = "granted";
+    bridgeState.remotePush = false;
+
+    const result = await unregisterPushNotifications(TEST_NSEC);
+
+    // On a build without google-services.json, PushNotifications.unregister() throws
+    // "Default FirebaseApp is not initialized" on the NATIVE thread — the JS .catch()
+    // never runs and the process dies. The call must stay unreachable, exactly like
+    // register(); and since nothing was ever registered, skipping counts as success.
+    expect(pushSpies.unregister).not.toHaveBeenCalled();
+    expect(result).toBe(true);
+  });
+
+  it("still reaches PushNotifications.unregister on a release build where FCM is configured", async () => {
+    bridgeState.permissionState = "granted";
+    bridgeState.remotePush = true;
+
+    await unregisterPushNotifications(TEST_NSEC);
+
+    expect(pushSpies.unregister).toHaveBeenCalled();
+  });
+});
+
 describe("registerPushNotifications browser lifecycle", () => {
+  beforeEach(() => {
+    nativeFlag.value = false;
+  });
+
   it("reuses a subscription with the current VAPID key and persists registration", async () => {
     const subscription = createSubscription(
       "https://push.example/current",

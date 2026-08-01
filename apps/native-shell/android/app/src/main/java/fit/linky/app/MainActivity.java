@@ -1,9 +1,11 @@
 package fit.linky.app;
 
 import android.Manifest;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.nfc.FormatException;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
@@ -15,6 +17,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.util.Log;
@@ -23,6 +26,9 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationChannelCompat;
+import androidx.core.app.NotificationChannelGroupCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
@@ -60,10 +66,13 @@ public class MainActivity extends BridgeActivity {
 	private static final String EVENT_NFC_WRITE = "linky-native-nfc-write";
 	private static final String EVENT_NOTIFICATION_PERMISSION = "linky-native-notification-permission";
 	private static final String EVENT_SCAN_RESULT = "linky-native-scan-result";
-	private static final String EXTRA_NOTIFICATION_ROUTE = "linky_notification_route";
-	private static final String EXTRA_NOTIFICATION_OUTER_EVENT_ID = "outerEventId";
-	private static final String EXTRA_NOTIFICATION_RECIPIENT_PUBKEY = "recipientPubkey";
-	private static final String EXTRA_NOTIFICATION_RELAY_HINTS = "relayHints";
+	// Package-private: LinkyLocalNotifications builds its content intents with these exact
+	// keys, so the existing buildNotificationOpenDetail/extractNotificationRoute machinery
+	// reads them back without any literal duplication.
+	static final String EXTRA_NOTIFICATION_ROUTE = "linky_notification_route";
+	static final String EXTRA_NOTIFICATION_OUTER_EVENT_ID = "outerEventId";
+	static final String EXTRA_NOTIFICATION_RECIPIENT_PUBKEY = "recipientPubkey";
+	static final String EXTRA_NOTIFICATION_RELAY_HINTS = "relayHints";
 	private static final long NFC_READ_SUPPRESS_AFTER_WRITE_MS = 4000L;
 	private static final String PREFS_NAME = "linky.native.bridge";
 	private static final String PREF_PENDING_DEEP_LINK_URL = "pending_deep_link_url";
@@ -71,6 +80,10 @@ public class MainActivity extends BridgeActivity {
 	private static final String PREF_PENDING_NOTIFICATION_ROUTE = "pending_notification_route";
 	private static final String PREF_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested";
 	private static final String FIREBASE_GOOGLE_APP_ID_RESOURCE = "google_app_id";
+	// One error reason covers malformed JSON and a missing conversationKey alike:
+	// distinguishing them would need a second parse pass and has no consumer.
+	private static final String NOTIFICATION_POST_INVALID_PAYLOAD_RESULT =
+		"{\"status\":\"error\",\"reason\":\"invalid_payload\"}";
 	private long lastNativeQrScanAtMs = 0L;
 	private String lastNativeQrValue = null;
 	private DecoratedBarcodeView nativeQrScannerView;
@@ -144,6 +157,7 @@ public class MainActivity extends BridgeActivity {
 		nfcAdapter = NfcAdapter.getDefaultAdapter(this);
 		cacheIntentDeepLinkUrl(getIntent());
 		cacheIntentNotificationRoute(getIntent());
+		LinkyLocalNotifications.createChannelIfNeeded(this);
 
 		notificationPermissionLauncher = registerForActivityResult(
 			new ActivityResultContracts.RequestPermission(),
@@ -303,6 +317,7 @@ public class MainActivity extends BridgeActivity {
 		String notificationRoute = extractNotificationRoute(intent);
 		if (notificationRoute != null) {
 			cachePendingNotificationRoute(notificationRoute);
+			cachePendingNotificationOpenDetail(intent);
 			dispatchNotificationOpen(intent);
 		}
 	}
@@ -983,11 +998,15 @@ public class MainActivity extends BridgeActivity {
 		return null;
 	}
 
+	/**
+	 * granted | prompt | denied | blocked
+	 *
+	 * "denied" means denied once — a retry still shows the dialog, so keep offering "grant".
+	 * "blocked" means permanently denied — the launcher fires its callback immediately with
+	 * false and no dialog appears, so the UI must switch to "open settings".
+	 * "prompt" means never asked.
+	 */
 	private String getNotificationPermissionState() {
-		if (!isNativePushSupported()) {
-			return "unsupported";
-		}
-
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
 			return "granted";
 		}
@@ -997,8 +1016,141 @@ public class MainActivity extends BridgeActivity {
 			return "granted";
 		}
 
-		boolean wasRequested = bridgePreferences.getBoolean(PREF_NOTIFICATION_PERMISSION_REQUESTED, false);
-		return wasRequested ? "denied" : "prompt";
+		if (ActivityCompat.shouldShowRequestPermissionRationale(
+			this,
+			Manifest.permission.POST_NOTIFICATIONS
+		)) {
+			return "denied";
+		}
+
+		return bridgePreferences.getBoolean(PREF_NOTIFICATION_PERMISSION_REQUESTED, false)
+			? "blocked"
+			: "prompt";
+	}
+
+	/**
+	 * granted | permission_denied | app_blocked | channel_missing | channel_blocked | channel_silent
+	 *
+	 * Only "granted" means a heads-up will actually be seen. "channel_silent" means the entry
+	 * lands in the shade but never pops up.
+	 */
+	private String getNotificationDeliveryState() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+			&& ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+				!= PackageManager.PERMISSION_GRANTED) {
+			return "permission_denied";
+		}
+
+		NotificationManagerCompat manager = NotificationManagerCompat.from(this);
+		if (!manager.areNotificationsEnabled()) {
+			return "app_blocked";
+		}
+
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+			return "granted"; // no channels below API 26
+		}
+
+		String channelId = getString(R.string.push_notification_channel_id);
+		NotificationChannelCompat channel = manager.getNotificationChannelCompat(channelId);
+		if (channel == null) {
+			return "channel_missing";
+		}
+
+		if (isChannelBlocked(manager, channel)) {
+			return "channel_blocked";
+		}
+
+		// The quiet channel carries every post-quietly decision. Android reports no error
+		// when you post to a blocked channel, so without this probe a user who turns that
+		// category off would keep seeing "granted" while those notifications vanish.
+		//
+		// Two deliberate asymmetries with the loud channel above:
+		//   - a null quiet channel is NOT channel_missing. It is created lazily on the
+		//     first quiet post, so its absence is the normal state of a fresh install.
+		//   - the channel_silent test below is never applied to it. Low importance is the
+		//     entire point of this channel, so reporting it would put a permanent and
+		//     unfixable warning on the Advanced page.
+		String quietChannelId = getString(R.string.push_notification_quiet_channel_id);
+		NotificationChannelCompat quietChannel =
+			manager.getNotificationChannelCompat(quietChannelId);
+		if (quietChannel != null && isChannelBlocked(manager, quietChannel)) {
+			return "channel_blocked";
+		}
+
+		if (channel.getImportance() < NotificationManagerCompat.IMPORTANCE_HIGH) {
+			return "channel_silent"; // shade only, no heads-up
+		}
+
+		return "granted";
+	}
+
+	/**
+	 * True when the platform will drop posts to this channel outright — either the
+	 * channel itself is turned off, or the group it belongs to is. Shared by the loud
+	 * and quiet probes so the two cannot drift apart.
+	 */
+	private boolean isChannelBlocked(
+		NotificationManagerCompat manager,
+		NotificationChannelCompat channel
+	) {
+		if (channel.getImportance() == NotificationManagerCompat.IMPORTANCE_NONE) {
+			return true;
+		}
+
+		String channelGroupId = channel.getGroup();
+		if (channelGroupId != null) {
+			NotificationChannelGroupCompat channelGroup =
+				manager.getNotificationChannelGroupCompat(channelGroupId);
+			return channelGroup != null && channelGroup.isBlocked();
+		}
+
+		return false;
+	}
+
+	private void openNotificationSettings(String channelId) {
+		String packageName = getPackageName();
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			String normalizedChannelId = channelId == null ? "" : channelId.trim();
+
+			// While the POST_NOTIFICATIONS permission is denied (or the app is blocked
+			// pre-13), the channel screen's only toggle is inert — the user can tap it
+			// without changing the permission bit. Only the app-level screen re-grants,
+			// so the channel deep link is reserved for channel-level problems.
+			String deliveryState = getNotificationDeliveryState();
+			boolean channelScreenCanHelp =
+				!"permission_denied".equals(deliveryState)
+					&& !"app_blocked".equals(deliveryState);
+
+			if (channelScreenCanHelp && !normalizedChannelId.isEmpty()) {
+				Intent channelIntent = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+					.putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+					.putExtra(Settings.EXTRA_CHANNEL_ID, normalizedChannelId);
+				if (startSettingsIntent(channelIntent)) {
+					return;
+				}
+			}
+
+			Intent appIntent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+				.putExtra(Settings.EXTRA_APP_PACKAGE, packageName);
+			if (startSettingsIntent(appIntent)) {
+				return;
+			}
+		}
+
+		Intent detailsIntent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+			.setData(Uri.fromParts("package", packageName, null));
+		startSettingsIntent(detailsIntent);
+	}
+
+	private boolean startSettingsIntent(Intent intent) {
+		try {
+			startActivity(intent);
+			return true;
+		} catch (ActivityNotFoundException error) {
+			Log.w(SCAN_LOG_TAG, "settings intent not handled: " + intent.getAction(), error);
+			return false;
+		}
 	}
 
 	private boolean isNativePushSupported() {
@@ -1024,6 +1176,11 @@ public class MainActivity extends BridgeActivity {
 	private final class LinkyNativeNotificationsBridge {
 		@JavascriptInterface
 		public boolean areSupported() {
+			return true;
+		}
+
+		@JavascriptInterface
+		public boolean isPushSupported() {
 			return isNativePushSupported();
 		}
 
@@ -1033,15 +1190,19 @@ public class MainActivity extends BridgeActivity {
 		}
 
 		@JavascriptInterface
-		public void requestPermission() {
-			if (!isNativePushSupported()) {
-				dispatchWindowEvent(
-					EVENT_NOTIFICATION_PERMISSION,
-					createPermissionDetail("unsupported")
-				);
-				return;
-			}
+		public String getDeliveryState() {
+			return getNotificationDeliveryState();
+		}
 
+		@JavascriptInterface
+		public void openSystemSettings() {
+			runOnUiThread(() -> openNotificationSettings(
+				getString(R.string.push_notification_channel_id)
+			));
+		}
+
+		@JavascriptInterface
+		public void requestPermission() {
 			if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
 				dispatchWindowEvent(
 					EVENT_NOTIFICATION_PERMISSION,
@@ -1053,6 +1214,65 @@ public class MainActivity extends BridgeActivity {
 			bridgePreferences.edit().putBoolean(PREF_NOTIFICATION_PERMISSION_REQUESTED, true).apply();
 
 			runOnUiThread(() -> notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS));
+		}
+
+		/**
+		 * Posts one message into its conversation's shade entry. Runs synchronously on the
+		 * JavaBridge thread — notify() is binder-thread-safe, so there is no thread hop.
+		 *
+		 * Always posts, never gates on the delivery state: when permission is denied
+		 * notify() is a harmless no-op, and reporting the delivery state alongside
+		 * "posted" tells the caller why nothing appeared instead of hiding a refusal.
+		 *
+		 * The whole body is contained: an uncaught throw on the JavaBridge thread kills
+		 * the process, so a hostile payload must never escape as an exception.
+		 */
+		@JavascriptInterface
+		public String post(String payloadJson) {
+			try {
+				LinkyNotificationSupport.PostPayload payload =
+					LinkyNotificationSupport.parsePostPayload(payloadJson);
+				if (payload == null) {
+					return NOTIFICATION_POST_INVALID_PAYLOAD_RESULT;
+				}
+
+				LinkyLocalNotifications.post(MainActivity.this, payload);
+
+				JSONObject result = new JSONObject();
+				result.put("status", "posted");
+				result.put("delivery", getNotificationDeliveryState());
+				return result.toString();
+			} catch (Exception error) {
+				Log.w(SCAN_LOG_TAG, "local notification post failed", error);
+				return NOTIFICATION_POST_INVALID_PAYLOAD_RESULT;
+			}
+		}
+
+		@JavascriptInterface
+		public void cancelConversation(String conversationKey) {
+			try {
+				LinkyLocalNotifications.cancelConversation(MainActivity.this, conversationKey);
+			} catch (Exception error) {
+				Log.w(SCAN_LOG_TAG, "local notification cancelConversation failed", error);
+			}
+		}
+
+		@JavascriptInterface
+		public void cancelAll() {
+			try {
+				LinkyLocalNotifications.cancelAll(MainActivity.this);
+			} catch (Exception error) {
+				Log.w(SCAN_LOG_TAG, "local notification cancelAll failed", error);
+			}
+		}
+
+		@JavascriptInterface
+		public void cancelPushPlaceholder(String outerEventId) {
+			try {
+				LinkyLocalNotifications.cancelPushPlaceholder(MainActivity.this, outerEventId);
+			} catch (Exception error) {
+				Log.w(SCAN_LOG_TAG, "local notification cancelPushPlaceholder failed", error);
+			}
 		}
 	}
 

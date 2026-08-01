@@ -88,6 +88,8 @@ android {
             resValue "string", "package_name", "fit.linky.app.debug"
             resValue "string", "push_notification_channel_id", "linky_debug_messages"
             resValue "string", "push_notification_channel_name", "Linky debug messages"
+            resValue "string", "push_notification_quiet_channel_id", "linky_debug_messages_quiet_v1"
+            resValue "string", "push_notification_quiet_channel_name", "Linky debug messages (quiet)"
         }
         release {
             minifyEnabled false
@@ -123,6 +125,7 @@ dependencies {
     implementation "com.journeyapps:zxing-android-embedded:$zxingEmbeddedVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    testImplementation "org.json:json:20240303"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')

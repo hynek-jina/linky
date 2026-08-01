@@ -6210,3 +6210,285 @@ button.tag-button {
 .scan-action-btn-label {
   color: #f9fbfc !important;
 }
+
+/* ---------------------------------------------------------------------------
+   In-app notification banner (Phase 5, BANNER-01).
+
+   Geometry is copied from .bank-payment-offer-banner (:4212-4219), NOT from
+   .toast-container (:5586-5595), whose hardcoded 70px top offset predates
+   --safe-area-top and renders under the topbar on a device with a status-bar
+   inset. That bug is deliberately neither inherited here nor fixed here.
+
+   z-index 95 sits immediately below .toast-container (96), so a "Copied to
+   clipboard" status toast still reads above an incoming-message banner, and
+   above .modal-overlay (85), so an open confirmation dialog cannot swallow the
+   alert. It stays below .message-actions-sheet (101) and .chat-image-viewer
+   (120), which are deliberate full-attention surfaces.
+
+   Disabled pointer events on the container, with `auto` on the card alone, are
+   the concrete implementation of "never intercepts a tap outside its own
+   bounds". A fixed container pinned to all four edges is exactly what would
+   break it, so this one is anchored on three and sizes itself vertically.
+
+   There is no bottom tab bar in this app, and .chat-compose is
+   `position: fixed; bottom: …` (:2531-2547), so a top-anchored banner clears
+   the composer by construction. That is recorded here rather than enforced by
+   a rule, because there is no rule to write.
+   --------------------------------------------------------------------------- */
+.notification-banner-container {
+  position: fixed;
+  top: calc(var(--topbar-height) + 8px);
+  right: var(--page-gutter);
+  left: var(--page-gutter);
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(520px, calc(100vw - 2 * var(--page-gutter)));
+  margin-inline: auto;
+  pointer-events: none;
+}
+
+.notification-banner {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid #1f2937;
+  background: #0b1222;
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.45);
+  /* 180ms is deliberately shorter than BANNER_TAP_ACCEPT_DELAY_MS (400), which
+     is what makes the tap-acceptance delay cover the whole entrance. Plan
+     05-01 pins `BANNER_TAP_ACCEPT_DELAY_MS > 180` in a committed test. */
+  transition:
+    transform 180ms ease-out,
+    opacity 180ms ease-out;
+}
+
+.notification-banner-card {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.notification-banner-sender {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Clamps VISUALLY only. truncateNotificationPreview already cut the string to
+   80 chars at build time (notificationRecord.ts:111); cutting again here would
+   nest a second ellipsis inside the first. */
+.notification-banner-preview {
+  font-size: 13px;
+  color: #94a3b8;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notification-banner-count {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.notification-banner-close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* The first reduced-motion query in this repo — there was no precedent to copy.
+   A banner that slides in is the one animation a motion-sensitive user cannot
+   dismiss in advance, because it arrives unbidden. */
+@media (prefers-reduced-motion: reduce) {
+  .notification-banner {
+    transition: none;
+  }
+}
+
+/* ===========================================================================
+   Phase 6 — the Notifications page (pages/NotificationsPage.tsx).
+
+   Appended at EOF on purpose: this file is edited by several plans at once and
+   a block at the end keeps the diff off every other hunk.
+
+   Ordinary route content inside `AuthenticatedLayout`, so there is deliberately
+   no `position: fixed` and no `top:` offset here — the topbar offset is already
+   handled by the layout. If an offset is ever needed, use `--topbar-height`,
+   `--page-gutter` and `--safe-area-*` from `src/index.css`; do NOT copy
+   `.toast-container`'s hardcoded 70 px top offset, which predates
+   `--safe-area-top` and renders under the topbar on a real device.
+   =========================================================================== */
+
+.notifications-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.notifications-mark-all {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(20, 184, 166, 1);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.notifications-mark-all:disabled {
+  color: #64748b;
+  cursor: default;
+}
+
+.notifications-list {
+  display: block;
+}
+
+.notification-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 4px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  cursor: pointer;
+}
+
+.notification-row:last-child {
+  border-bottom: none;
+}
+
+/* A subtle tint only — the dot is the primary unread signal. */
+.notification-row.is-unread {
+  background: rgba(20, 184, 166, 0.06);
+}
+
+.notification-row-icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  color: #94a3b8;
+}
+
+/* `min-width: 0` is what lets the two text children actually truncate. */
+.notification-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notification-row-sender {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* No `-webkit-line-clamp`: `truncateNotificationPreview` already clamps the
+   string to 80 characters at build time, so one line is the whole of it. */
+.notification-row-preview {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.notification-row-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-row-time {
+  white-space: nowrap;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+/* Same 10 px and same teal as `.contact-unread-dot`, but a NEW class: that one
+   is absolutely positioned inside `.contact-avatar.with-badge`, and this one
+   sits in normal flow. */
+.notification-row-unread-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 1);
+}
+
+.notification-row-toggle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+/* `outline`, not `box-shadow`: `button:focus-visible` above sets
+   `box-shadow: none !important` app-wide, so a shadow ring would never show. */
+.notification-row-toggle:focus-visible {
+  outline: 2px solid rgba(20, 184, 166, 0.9);
+  outline-offset: 2px;
+}
+
+/* Modifier on `.settings-inline-badge`, which is uppercase with 0.06em tracking
+   — both look wrong on a numeral. `.settings-inline-badge` itself is NOT
+   edited; this block sits later in the file, so at equal specificity it wins. */
+.notifications-unread-badge {
+  text-transform: none;
+  letter-spacing: normal;
+}

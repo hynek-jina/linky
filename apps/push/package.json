@@ -10,6 +10,7 @@
     "build": "bun build ./src/index.ts --outdir ./dist --target bun",
     "eslint": "eslint --fix .",
     "prettier": "prettier --write .",
+    "test": "bun test",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

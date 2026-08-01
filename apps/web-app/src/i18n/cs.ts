@@ -44,7 +44,19 @@ export const cs = {
   notificationsDisabled: "Notifikace vypnuty",
   notificationsDisableError: "Notifikace se nepodařilo vypnout",
   notificationsDenied: "Zamítnuto",
+  notificationsBlocked: "Zablokováno - povolte v nastavení systému",
+  notificationsAppBlocked: "Notifikace jsou pro Linky vypnuté",
+  notificationsChannelMissing: "Kanál notifikací chybí",
+  notificationsChannelBlocked: "Kanál notifikací je ztlumený",
+  notificationsChannelSilent: "Notifikace jsou tiché - bez vyskakování",
+  notificationsOpenSettings: "Otevřít nastavení notifikací",
   notificationsError: "Chyba",
+  notificationsHistory: "Historie notifikací",
+  notificationsMarkAllRead: "Označit vše jako přečtené",
+  notificationsMarkRead: "Označit jako přečtené",
+  notificationsMarkUnread: "Označit jako nepřečtené",
+  notificationsEmpty: "Zatím žádné notifikace",
+  notificationsUnreadCount: "Nepřečtené notifikace",
   notificationReceivedMoney: "Přijali jste peníze",
   notificationReceivedBankPaymentReimbursement:
     "Dorazily ti saty za bankovní platbu",
@@ -371,6 +383,16 @@ export const cs = {
   unknownContactTitle: "Neznámý kontakt",
   unknownContactNamePrefix: "[Neznámý]",
   chatIncomingMessageToast: "{name}: {message}",
+
+  // In-app notification banner (components/NotificationBanner.tsx). The banner
+  // replaces the inbox toasts from plan 05-06 on; `chatIncomingMessageToast`
+  // above is deliberately retained but no longer used in production from then.
+  // `{count}` is substituted with String.prototype.replace at the call site.
+  notificationBannerLabel: "Nové upozornění",
+  notificationBannerOpen: "Otevřít",
+  notificationBannerDismiss: "Zavřít",
+  notificationBannerMore: "+{count} dalších",
+
   chatEmpty: "Zatím žádné zprávy.",
   chatIdentityChangedNotice: "Došlo ke změně mojí identity.",
   chatPlaceholder: "Zpráva",

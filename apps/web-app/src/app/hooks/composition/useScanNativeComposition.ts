@@ -55,9 +55,16 @@ import {
 } from "../../lib/cashuTokenState";
 import {
   consumeNotificationOpenDetailFromHash,
+  readNotificationOpenOuterEventId,
   readNotificationOpenRoute,
   readNotificationOpenTarget,
 } from "../../lib/notificationOpenTarget";
+import { notificationRecordStore } from "../../lib/notificationRecordStore";
+import {
+  findNotificationRecordByOuterEventId,
+  openNotificationRecord,
+  resolveNotificationNavigation,
+} from "../../lib/notificationTapRoute";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
 import {
@@ -537,10 +544,47 @@ export const useScanNativeComposition = ({
 
   const openNotificationChat = React.useCallback(
     async (rawDetail: unknown): Promise<boolean> => {
-      const target = readNotificationOpenTarget(rawDetail);
-      if (!target || !currentNsec) {
-        return false;
+      if (!currentNsec) return false;
+
+      // D3 layer 2. The record store is a LOCAL authority for this: for every
+      // chat and payment record the store's `id` IS the outer wrap id
+      // (`buildNotificationRecord({ id: wrapId, … })`), and `notify.ts`
+      // forwards that same id as the payload's `outerEventId`. So this is an
+      // exact identity match, and it needs neither the strict target parse —
+      // which hard-requires `recipientPubkey` — nor the 2.5 s relay fetch below.
+      //
+      // `notificationRecordStore.get()` returns the CURRENTLY BOUND owner's
+      // records only, which is what keeps a forged `outerEventId` from reaching
+      // another identity's record (T-09-18).
+      //
+      // `openNotificationRecord` also marks the record read through the single
+      // writer of `readAt`. That is correct for a tap and is something the relay
+      // path below never did.
+      const outerEventId = readNotificationOpenOuterEventId(rawDetail);
+      if (outerEventId) {
+        const storedRecord = findNotificationRecordByOuterEventId(
+          notificationRecordStore.get(),
+          outerEventId,
+        );
+        // The navigation check is what keeps the `#contacts` fallback reachable:
+        // a record whose destination does not resolve (a null chatId, a blank id)
+        // must NOT claim the tap, or the user lands nowhere at all.
+        if (
+          storedRecord &&
+          resolveNotificationNavigation(storedRecord) !== null
+        ) {
+          setPendingDeleteId(null);
+          openNotificationRecord(storedRecord, {
+            navigate: navigateTo,
+            nowMs: Date.now(),
+            scrollToMessage: triggerChatScrollToBottom,
+          });
+          return true;
+        }
       }
+
+      const target = readNotificationOpenTarget(rawDetail);
+      if (!target) return false;
 
       let openedFromNotificationData = false;
       try {
@@ -1116,6 +1160,8 @@ export const useScanNativeComposition = ({
         return;
       }
 
+      consumePendingNativeNotificationOpenDetail();
+      consumePendingNativeNotificationRoute();
       openNotification(detail);
     };
 

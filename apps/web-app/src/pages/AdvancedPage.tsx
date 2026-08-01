@@ -31,9 +31,20 @@ import {
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
 } from "../app/lib/bankPaymentOffer";
+import { resolveNotificationDeliveryPresentation } from "../app/lib/notificationDeliveryState";
+import { NotificationsUnreadBadge } from "../components/NotificationsUnreadBadge";
 import { FeedbackIcon } from "../components/icons";
 import { useNavigation } from "../hooks/useRouting";
-import { getNativeNotificationPermissionState } from "../platform/nativeBridge";
+import type {
+  NativeNotificationDeliveryState,
+  NativeNotificationPermissionState,
+} from "../platform/nativeBridge";
+import {
+  getNativeNotificationDeliveryState,
+  getNativeNotificationPermissionState,
+  openNativeSystemNotificationSettings,
+  requestNativeNotificationPermission,
+} from "../platform/nativeBridge";
 import { isNativePlatform } from "../platform/runtime";
 
 interface SettingsLinkRowProps {
@@ -151,6 +162,10 @@ export function AdvancedPage(): React.ReactElement {
   const { openFeedbackContact, setLang } = useAppShellActions();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationsIsBusy, setNotificationsIsBusy] = useState(false);
+  const [notificationDeliveryState, setNotificationDeliveryState] =
+    useState<NativeNotificationDeliveryState | null>(null);
+  const [notificationPermissionState, setNotificationPermissionState] =
+    useState<NativeNotificationPermissionState | null>(null);
   const [armedSecurityAction, setArmedSecurityAction] = useState<
     "copyNostr" | "pasteNostr" | null
   >(null);
@@ -160,6 +175,10 @@ export function AdvancedPage(): React.ReactElement {
   const appVersionLabel = __APP_COMMIT_SHA__
     ? `${__APP_VERSION__} (${__APP_COMMIT_SHA__})`
     : `${__APP_VERSION__}`;
+  const notificationPresentation = resolveNotificationDeliveryPresentation({
+    deliveryState: notificationDeliveryState,
+    permissionState: notificationPermissionState,
+  });
 
   const getAutoPayLimitLabel = useCallback(
     (limit: number) => {
@@ -168,6 +187,11 @@ export function AdvancedPage(): React.ReactElement {
     },
     [formatDisplayedAmountParts],
   );
+
+  const refreshNativeNotificationState = useCallback(() => {
+    setNotificationDeliveryState(getNativeNotificationDeliveryState());
+    setNotificationPermissionState(getNativeNotificationPermissionState());
+  }, []);
 
   const clearArmTimeout = useCallback(() => {
     if (armTimeoutRef.current !== null) {
@@ -265,6 +289,21 @@ export function AdvancedPage(): React.ReactElement {
     };
   }, []);
 
+  useEffect(() => {
+    refreshNativeNotificationState();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshNativeNotificationState();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [refreshNativeNotificationState]);
+
   const handleNotificationsChange = async (enabled: boolean) => {
     if (!currentNsec) {
       pushToast(t("notificationsNotLoggedIn"));
@@ -312,8 +351,20 @@ export function AdvancedPage(): React.ReactElement {
       pushToast(t("notificationsError"));
     } finally {
       setNotificationsIsBusy(false);
+      refreshNativeNotificationState();
     }
   };
+
+  const handleNotificationRemediation = useCallback(async () => {
+    if (notificationPresentation.action === "openSettings") {
+      openNativeSystemNotificationSettings();
+      // The visibilitychange listener refreshes when the user returns from Settings.
+      return;
+    }
+
+    await requestNativeNotificationPermission();
+    refreshNativeNotificationState();
+  }, [notificationPresentation.action, refreshNativeNotificationState]);
 
   return (
     <section className="panel settings-page">
@@ -360,6 +411,32 @@ export function AdvancedPage(): React.ReactElement {
           checked={notificationsEnabled}
           disabled={!currentNsec || notificationsIsBusy}
           onChange={(checked) => void handleNotificationsChange(checked)}
+        />
+
+        {notificationPresentation.statusKey !== null && (
+          <SettingsLinkRow
+            dataGuide="notification-delivery-state"
+            icon={<Bell size={18} />}
+            label={
+              notificationPresentation.action === "openSettings"
+                ? t("notificationsOpenSettings")
+                : t("enable")
+            }
+            onClick={() => void handleNotificationRemediation()}
+            tail={
+              <span className="settings-tail-content settings-value settings-value-truncate">
+                {t(notificationPresentation.statusKey)}
+              </span>
+            }
+          />
+        )}
+
+        <SettingsLinkRow
+          dataGuide="notifications-entry"
+          icon={<Bell size={18} />}
+          label={t("notificationsHistory")}
+          onClick={() => navigateTo({ route: "settingsNotifications" })}
+          tail={<NotificationsUnreadBadge t={t} />}
         />
       </div>
 

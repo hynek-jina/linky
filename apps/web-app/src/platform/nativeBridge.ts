@@ -9,7 +9,8 @@ import {
   isNativePlatform,
 } from "./runtime";
 
-type NativeNotificationPermissionState =
+export type NativeNotificationPermissionState =
+  | "blocked"
   | "denied"
   | "granted"
   | "prompt"
@@ -90,7 +91,14 @@ interface AndroidScannerBridge {
 
 interface AndroidNotificationsBridge {
   areSupported?: () => boolean;
+  cancelAll?: () => void;
+  cancelConversation?: (conversationKey: string) => void;
+  cancelPushPlaceholder?: (outerEventId: string) => void;
+  getDeliveryState?: () => string;
   getPermissionState?: () => string;
+  isPushSupported?: () => boolean;
+  openSystemSettings?: () => void;
+  post?: (payloadJson: string) => string;
   requestPermission?: () => void;
 }
 
@@ -125,6 +133,42 @@ export type NativeNfcWriteStatus =
   | "error"
   | "success"
   | "unsupported";
+
+export type NativeNotificationDeliveryState =
+  | "app_blocked"
+  | "channel_blocked"
+  | "channel_missing"
+  | "channel_silent"
+  | "granted"
+  | "permission_denied";
+
+export type NativeLocalNotificationPostStatus = "error" | "posted";
+
+export interface NativeLocalNotificationPostResult {
+  delivery: NativeNotificationDeliveryState | null;
+  reason: string | null;
+  status: NativeLocalNotificationPostStatus;
+}
+
+export interface NativeLocalNotificationPayload {
+  conversationKey: string;
+  conversationTitle?: string;
+  eventCreatedAtSec?: number;
+  outerEventId?: string;
+  /**
+   * Selects the Android channel: `linky_messages` when false or absent,
+   * `linky_messages_quiet_v1` (IMPORTANCE_DEFAULT — no peek, no sound) when
+   * true. Optional rather than required because absent must mean false in BOTH
+   * directions: a new JS against an old APK simply omits a key the Java side
+   * never reads, and an old JS against a new APK gets the default channel
+   * because `parsePostPayload` uses `opt*` accessors.
+   */
+  quiet?: boolean;
+  recipientPubkey?: string;
+  relayHints?: string;
+  senderName?: string;
+  text: string;
+}
 
 export interface NativeNfcWriteResult {
   message: string | null;
@@ -280,6 +324,25 @@ const isNativeNfcWriteStatus = (
     value === "success" ||
     value === "unsupported"
   );
+};
+
+const isNativeNotificationDeliveryState = (
+  value: string | null,
+): value is NativeNotificationDeliveryState => {
+  return (
+    value === "app_blocked" ||
+    value === "channel_blocked" ||
+    value === "channel_missing" ||
+    value === "channel_silent" ||
+    value === "granted" ||
+    value === "permission_denied"
+  );
+};
+
+const isNativeLocalNotificationPostStatus = (
+  value: string | null,
+): value is NativeLocalNotificationPostStatus => {
+  return value === "error" || value === "posted";
 };
 
 const supportsIosNativeQrScan = (): boolean => {
@@ -501,12 +564,19 @@ export const startNativeQrScanStream = (
 export const getNativeNotificationPermissionState =
   (): NativeNotificationPermissionState | null => {
     const bridge = getAndroidNotificationsBridge();
-    if (!isNativePlatform() || !bridge?.areSupported?.()) {
+    if (!isNativePlatform() || !bridge?.getPermissionState) {
       return null;
     }
 
-    const rawState = normalizeString(bridge.getPermissionState?.());
+    let rawState: string | null;
+    try {
+      rawState = normalizeString(bridge.getPermissionState());
+    } catch {
+      return null;
+    }
+
     if (
+      rawState === "blocked" ||
       rawState === "denied" ||
       rawState === "granted" ||
       rawState === "prompt" ||
@@ -518,15 +588,53 @@ export const getNativeNotificationPermissionState =
     return "unsupported";
   };
 
+export const getNativeNotificationDeliveryState =
+  (): NativeNotificationDeliveryState | null => {
+    const bridge = getAndroidNotificationsBridge();
+    if (!isNativePlatform() || !bridge?.getDeliveryState) {
+      return null;
+    }
+
+    try {
+      const rawState = normalizeString(bridge.getDeliveryState());
+      return isNativeNotificationDeliveryState(rawState) ? rawState : null;
+    } catch {
+      return null;
+    }
+  };
+
+export const supportsNativeRemotePush = (): boolean => {
+  const bridge = getAndroidNotificationsBridge();
+  if (!isNativePlatform() || !bridge?.isPushSupported) {
+    return false;
+  }
+
+  try {
+    return bridge.isPushSupported() === true;
+  } catch {
+    return false;
+  }
+};
+
+export const openNativeSystemNotificationSettings = (): boolean => {
+  const bridge = getAndroidNotificationsBridge();
+  if (!isNativePlatform() || !bridge?.openSystemSettings) {
+    return false;
+  }
+
+  try {
+    bridge.openSystemSettings();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const requestNativeNotificationPermission = async (): Promise<
   boolean | null
 > => {
   const bridge = getAndroidNotificationsBridge();
-  if (
-    !isNativePlatform() ||
-    !bridge?.areSupported?.() ||
-    !bridge.requestPermission
-  ) {
+  if (!isNativePlatform() || !bridge?.requestPermission) {
     return null;
   }
 
@@ -552,6 +660,7 @@ export const requestNativeNotificationPermission = async (): Promise<
         Reflect.get(event.detail, "permission"),
       );
       if (
+        permission !== "blocked" &&
         permission !== "denied" &&
         permission !== "granted" &&
         permission !== "prompt" &&
@@ -564,6 +673,86 @@ export const requestNativeNotificationPermission = async (): Promise<
     },
     timeoutMs: 30_000,
   });
+};
+
+export const supportsNativeLocalNotifications = (): boolean => {
+  const bridge = getAndroidNotificationsBridge();
+  return isNativePlatform() && Boolean(bridge?.post);
+};
+
+export const postNativeLocalNotification = (
+  payload: NativeLocalNotificationPayload,
+): NativeLocalNotificationPostResult | null => {
+  const bridge = getAndroidNotificationsBridge();
+  if (!isNativePlatform() || !bridge?.post) {
+    return null;
+  }
+
+  try {
+    const resultJson = bridge.post(JSON.stringify(payload));
+    const parsed: unknown = JSON.parse(resultJson);
+    if (!isRecord(parsed)) {
+      return null;
+    }
+
+    const status = normalizeString(Reflect.get(parsed, "status"));
+    if (!isNativeLocalNotificationPostStatus(status)) {
+      return null;
+    }
+
+    const delivery = normalizeString(Reflect.get(parsed, "delivery"));
+    return {
+      delivery: isNativeNotificationDeliveryState(delivery) ? delivery : null,
+      reason: normalizeString(Reflect.get(parsed, "reason")),
+      status,
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const cancelNativeConversationNotification = (
+  conversationKey: string,
+): boolean => {
+  const bridge = getAndroidNotificationsBridge();
+  if (!isNativePlatform() || !bridge?.cancelConversation) {
+    return false;
+  }
+
+  try {
+    bridge.cancelConversation(conversationKey);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const cancelAllNativeConversationNotifications = (): boolean => {
+  const bridge = getAndroidNotificationsBridge();
+  if (!isNativePlatform() || !bridge?.cancelAll) {
+    return false;
+  }
+
+  try {
+    bridge.cancelAll();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const cancelNativePushPlaceholder = (outerEventId: string): boolean => {
+  const bridge = getAndroidNotificationsBridge();
+  if (!isNativePlatform() || !bridge?.cancelPushPlaceholder) {
+    return false;
+  }
+
+  try {
+    bridge.cancelPushPlaceholder(outerEventId);
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 export const supportsNativeNfcWrite = (): boolean => {

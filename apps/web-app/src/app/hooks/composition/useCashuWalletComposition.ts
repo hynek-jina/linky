@@ -260,11 +260,6 @@ interface UseCashuWalletCompositionParams {
   >;
   insert: EvoluMutations["insert"];
   lang: Lang;
-  maybeShowPwaNotification: (
-    title: string,
-    body: string,
-    tag?: string,
-  ) => Promise<void>;
   ownerScopedStorage: Pick<
     OwnerScopedStorageResult,
     | "logPaymentEvent"
@@ -310,7 +305,6 @@ export const useCashuWalletComposition = ({
   identity,
   insert,
   lang,
-  maybeShowPwaNotification,
   ownerScopedStorage,
   payAmount,
   profile,
@@ -1728,7 +1722,6 @@ export const useCashuWalletComposition = ({
     logPaymentEvent,
     makeLocalStorageKey,
     makeNip98AuthHeader,
-    maybeShowPwaNotification,
     mintInfoByUrl,
     npubCashServerBaseUrl,
     npubCashClaimInFlightRef,

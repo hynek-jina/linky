@@ -26,6 +26,7 @@ import {
   NostrRelayNewPage,
   NostrRelayPage,
   NostrRelaysPage,
+  NotificationsPage,
   ProfilePage,
   PushDebugPage,
   SettingsPage,
@@ -90,6 +91,8 @@ export const AppRouteContent = (): React.ReactElement => {
       return <SettingsPage />;
     case "settingsMasterKeys":
       return <MasterKeysPage />;
+    case "settingsNotifications":
+      return <NotificationsPage />;
     case "advancedAutoPayLimit":
       return <AdvancedAutoPayLimitPage />;
     case "advancedPushDebug":

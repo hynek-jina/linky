@@ -17,6 +17,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # Vitest spawns real Node worker processes. Node >= 25 is where
+      # globalThis.localStorage/sessionStorage shadow the ones jsdom would
+      # install (repaired in apps/web-app/vitest.setup.ts). Pin the runner so
+      # apps/web-app/src/utils/storage.environment.test.ts can actually fail
+      # here instead of passing vacuously on a pre-v25 runner.
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 26
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:

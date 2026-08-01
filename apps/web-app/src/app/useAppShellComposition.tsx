@@ -23,6 +23,7 @@ import {
 import {
   CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY,
   FEEDBACK_CONTACT_NPUB,
+  LOCAL_NOTIFICATIONS_STORAGE_KEY_PREFIX,
 } from "../utils/constants";
 import {
   applyAmountInputKey,
@@ -69,13 +70,15 @@ import {
   buildIdentityChangeMessageContent,
   buildIdentityChangeMessageWrapId,
 } from "./lib/identityChangeMessage";
+import { clearNotificationBanners } from "./lib/notificationBannerQueue";
+import { notificationRecordStore } from "./lib/notificationRecordStore";
+import { readDocumentVisible } from "./lib/notificationSurface";
 import {
   buildDismissedOnboardingTutorialOwnerMetaPayload,
   hasDismissedOnboardingTutorialOwnerMetaRow,
   ONBOARDING_TUTORIAL_OWNER_META_SCOPE,
 } from "./lib/onboardingTutorialSync";
 import { parsePrivateImageMessage } from "./lib/privateImageMessage";
-import { showPwaNotification } from "./lib/pwaNotifications";
 import {
   buildTopbar,
   buildTopbarRight,
@@ -387,17 +390,51 @@ export const useAppShellComposition = ({
 
   useStoragePersistRequestEffect({ refreshKey: t });
 
-  const maybeShowPwaNotification = React.useCallback(
-    async (title: string, body: string, tag?: string) => {
-      await showPwaNotification({
-        appTitle: t("appTitle"),
-        body,
-        title,
-        ...(tag === undefined ? {} : { tag }),
-      });
-    },
-    [t],
-  );
+  // The record store key is owner-scoped exactly like every other linky.* store
+  // (useOwnerScopedStorage.ts:245-251). We compose it from the appOwnerId VALUE rather than
+  // through makeLocalStorageKey, because that helper reads appOwnerIdRef.current and falls back
+  // to "anon" — binding the anon bucket is how the first records after login land somewhere the
+  // app never reads back. No owner id => bindOwner(null), which flushes and unbinds.
+  React.useEffect(() => {
+    const ownerId = String(appOwnerId ?? "").trim();
+    // T-05-SEC-01: the banner queue is module state with no owner key of its own. If the
+    // user logs out or switches identity while a banner holds a NotificationRecord in
+    // memory, that record's sender and preview stay on screen under the NEW identity.
+    // The record store is cleared by bindOwner; the banner queue has to be cleared here.
+    clearNotificationBanners();
+    notificationRecordStore.bindOwner(
+      ownerId ? `${LOCAL_NOTIFICATIONS_STORAGE_KEY_PREFIX}.${ownerId}` : null,
+    );
+  }, [appOwnerId]);
+
+  const openChatId = route.kind === "chat" ? String(route.id ?? "").trim() : "";
+
+  const [documentVisible, setDocumentVisible] =
+    React.useState(readDocumentVisible);
+  React.useEffect(() => {
+    const onChange = () => setDocumentVisible(readDocumentVisible());
+    document.addEventListener("visibilitychange", onChange);
+    window.addEventListener("pageshow", onChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onChange);
+      window.removeEventListener("pageshow", onChange);
+    };
+  }, []);
+
+  // Route-observing, NOT call-site-hooked: there are 21 navigateTo({route:"chat"}) sites across
+  // 10 files, so any writer attached to call sites is incomplete on day one (clearContactAttention
+  // covers 6 of them, which is exactly the failure mode). The `deliveredAt <= now` bound lives in
+  // the store: a message arriving WHILE the chat is open is marked read by the alert path (decision
+  // row 5), and this bulk pass must not retroactively claim it.
+  //
+  // The `documentVisible` dependency is what makes foreground-resume work: a record that arrived
+  // while the app was backgrounded on THIS chat is marked read, and its shade entry cancelled, the
+  // moment the user comes back — the same job Signal's onResume does. An effect keyed only on
+  // `openChatId` does not re-run on resume, because the open chat id has not changed.
+  React.useEffect(() => {
+    if (!openChatId || !documentVisible) return;
+    notificationRecordStore.markChatRead(openChatId, Date.now());
+  }, [openChatId, documentVisible]);
 
   const contactPayBackToChatRef = React.useRef<ContactId | null>(null);
 
@@ -571,7 +608,6 @@ export const useAppShellComposition = ({
     legacyIdentitiesOwnerId,
     legacyMessagesIdentityOwnerId,
     logPayStep,
-    maybeShowPwaNotification,
     messagesOwnerId,
     messagesOwnerIdRef,
     messagesVisibleOwnerIds,
@@ -847,7 +883,6 @@ export const useAppShellComposition = ({
     },
     insert,
     lang,
-    maybeShowPwaNotification,
     ownerScopedStorage: {
       logPaymentEvent,
       makeLocalStorageKey,

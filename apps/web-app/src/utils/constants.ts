@@ -105,6 +105,11 @@ export const LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX =
   "linky.local.pendingTopupQuote.v1";
 export const LOCAL_PENDING_AUTOSWAP_CLAIM_STORAGE_KEY_PREFIX =
   "linky.local.pendingAutoswapClaim.v1";
+// Deliberately NOT in the `linky.local.*` infix family: the roadmap fixes the key as
+// `linky.notifications.v1.<ownerId>`. Precedent for a non-`.local.` owner-scoped key:
+// CASHU_SEEN_MINTS_STORAGE_KEY in utils/mint.ts. The constant NAME stays in the
+// LOCAL_*_STORAGE_KEY_PREFIX family so grep still finds it.
+export const LOCAL_NOTIFICATIONS_STORAGE_KEY_PREFIX = "linky.notifications.v1";
 
 export const BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY =
   "linky.blocked_nostr_pubkeys.v1";

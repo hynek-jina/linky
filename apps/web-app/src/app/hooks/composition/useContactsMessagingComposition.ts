@@ -221,11 +221,6 @@ interface UseContactsMessagingCompositionParams {
   legacyIdentitiesOwnerId: IdentityOwnersCompositionResult["legacyIdentitiesOwnerId"];
   legacyMessagesIdentityOwnerId: IdentityOwnersCompositionResult["legacyMessagesIdentityOwnerId"];
   logPayStep: (step: string, data?: PaymentLogData) => void;
-  maybeShowPwaNotification: (
-    title: string,
-    body: string,
-    tag?: string,
-  ) => Promise<void>;
   messagesOwnerId: IdentityOwnersCompositionResult["messagesOwnerId"];
   messagesOwnerIdRef: IdentityOwnersCompositionResult["messagesOwnerIdRef"];
   messagesVisibleOwnerIds: IdentityOwnersCompositionResult["messagesVisibleOwnerIds"];
@@ -269,7 +264,6 @@ export const useContactsMessagingComposition = ({
   legacyIdentitiesOwnerId,
   legacyMessagesIdentityOwnerId,
   logPayStep,
-  maybeShowPwaNotification,
   messagesOwnerId,
   messagesOwnerIdRef,
   messagesVisibleOwnerIds,
@@ -3178,6 +3172,10 @@ export const useContactsMessagingComposition = ({
     setChatDraft("");
   }, []);
 
+  // Its last consumer, the inbox-event in-app alert, was retired in Phase 5 when the
+  // banner replaced it; `openNotificationRecord` is the replacement, and it navigates
+  // from the record rather than from a callback passed down the tree. Kept because
+  // `notificationTapRoute.ts` cites this shape by name as the one it generalises.
   const openInboxMessageToast = React.useCallback(
     (params: { contactId: string; messageId?: string }) => {
       const contactId = String(params.contactId ?? "").trim();
@@ -3198,7 +3196,6 @@ export const useContactsMessagingComposition = ({
     currentNsec,
     enabled: nostrBootstrapReady,
     formatDisplayedAmountText,
-    maybeShowPwaNotification,
     nostrFetchRelays,
     knownNostrMessageIdentityIndex,
     nostrMessageWrapIdsRef,
@@ -3207,8 +3204,6 @@ export const useContactsMessagingComposition = ({
     nostrReactionWrapIdsRef,
     nostrReactionsLatestRef,
     onBankPaymentOfferMessage: upsertBankPaymentOfferMessage,
-    onOpenInboxMessageToast: openInboxMessageToast,
-    pushToast,
     route,
     setContactAttentionById,
     softDeleteLocalNostrReactionsByWrapIds,

@@ -21,6 +21,7 @@ import {
   parseDisplayCurrency,
   type DisplayCurrency,
 } from "./displayAmounts";
+import { getUnknownErrorMessage } from "./unknown";
 
 interface StorageStructuredValue {
   toString(): string;
@@ -66,10 +67,70 @@ const sleep = async (delayMs: number): Promise<void> => {
   });
 };
 
+export type LocalStorageOperation =
+  | "get"
+  | "set"
+  | "remove"
+  | "getJson"
+  | "setJson";
+
+export interface LocalStorageFailure {
+  operation: LocalStorageOperation;
+  key: string;
+  message: string;
+}
+
+let localStorageFailureCount = 0;
+let lastLocalStorageFailure: LocalStorageFailure | null = null;
+let localStorageFailureReporter:
+  | ((failure: LocalStorageFailure) => void)
+  | null = null;
+
+// Every localStorage access below is best-effort and swallows its error, which
+// makes a broken environment indistinguishable from a successful no-op. The
+// counter/last-failure record make the swallowed failure assertable without
+// letting anything throw at the call site.
+const reportLocalStorageFailure = (
+  operation: LocalStorageOperation,
+  key: string,
+  error: unknown,
+): void => {
+  localStorageFailureCount += 1;
+  const failure: LocalStorageFailure = {
+    operation,
+    key,
+    message: getUnknownErrorMessage(error, "unknown localStorage error"),
+  };
+  lastLocalStorageFailure = failure;
+  try {
+    localStorageFailureReporter?.(failure);
+  } catch {
+    // A broken reporter must never break a best-effort storage call.
+  }
+};
+
+export const getLocalStorageFailureCount = (): number =>
+  localStorageFailureCount;
+
+export const getLastLocalStorageFailure = (): LocalStorageFailure | null =>
+  lastLocalStorageFailure;
+
+export const resetLocalStorageFailures = (): void => {
+  localStorageFailureCount = 0;
+  lastLocalStorageFailure = null;
+};
+
+export const setLocalStorageFailureReporter = (
+  reporter: ((failure: LocalStorageFailure) => void) | null,
+): void => {
+  localStorageFailureReporter = reporter;
+};
+
 export const safeLocalStorageGet = (key: string): string | null => {
   try {
     return localStorage.getItem(key);
-  } catch {
+  } catch (e) {
+    reportLocalStorageFailure("get", key, e);
     return null;
   }
 };
@@ -77,16 +138,16 @@ export const safeLocalStorageGet = (key: string): string | null => {
 export const safeLocalStorageSet = (key: string, value: string): void => {
   try {
     localStorage.setItem(key, value);
-  } catch {
-    // ignore
+  } catch (e) {
+    reportLocalStorageFailure("set", key, e);
   }
 };
 
 export const safeLocalStorageRemove = (key: string): void => {
   try {
     localStorage.removeItem(key);
-  } catch {
-    // ignore
+  } catch (e) {
+    reportLocalStorageFailure("remove", key, e);
   }
 };
 
@@ -98,7 +159,10 @@ export const safeLocalStorageGetJson = <T extends StoragePayload>(
   if (!raw) return fallback;
   try {
     return JSON.parse(raw) as T;
-  } catch {
+  } catch (e) {
+    // A corrupt payload is data corruption, not a storage fault; report it
+    // under its own operation so the two stay distinguishable.
+    reportLocalStorageFailure("getJson", key, e);
     return fallback;
   }
 };
@@ -109,8 +173,8 @@ export const safeLocalStorageSetJson = (
 ): void => {
   try {
     safeLocalStorageSet(key, JSON.stringify(value));
-  } catch {
-    // ignore
+  } catch (e) {
+    reportLocalStorageFailure("setJson", key, e);
   }
 };
 
@@ -199,12 +263,12 @@ export const getInitialDisplayCurrency = (): DisplayCurrency => {
   try {
     const allowedCurrencies = getInitialAllowedDisplayCurrencies();
     const stored = parseDisplayCurrency(
-      localStorage.getItem(DISPLAY_CURRENCY_STORAGE_KEY),
+      safeLocalStorageGet(DISPLAY_CURRENCY_STORAGE_KEY),
     );
     if (stored && allowedCurrencies.includes(stored)) return stored;
 
     const legacyDefault =
-      localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1"
+      safeLocalStorageGet(UNIT_TOGGLE_STORAGE_KEY) === "1"
         ? "btc"
         : getDefaultDisplayCurrency();
 
@@ -218,7 +282,7 @@ export const getInitialDisplayCurrency = (): DisplayCurrency => {
 
 export const getInitialAllowedDisplayCurrencies = (): DisplayCurrency[] => {
   try {
-    const rawStored = localStorage.getItem(
+    const rawStored = safeLocalStorageGet(
       DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
     );
     if (rawStored) {
@@ -236,11 +300,11 @@ export const getInitialAllowedDisplayCurrencies = (): DisplayCurrency[] => {
     }
 
     const storedCurrency = parseDisplayCurrency(
-      localStorage.getItem(DISPLAY_CURRENCY_STORAGE_KEY),
+      safeLocalStorageGet(DISPLAY_CURRENCY_STORAGE_KEY),
     );
     const legacyDefault =
       storedCurrency ??
-      (localStorage.getItem(UNIT_TOGGLE_STORAGE_KEY) === "1"
+      (safeLocalStorageGet(UNIT_TOGGLE_STORAGE_KEY) === "1"
         ? "btc"
         : getDefaultDisplayCurrency());
 
@@ -255,7 +319,7 @@ export const getInitialAllowedDisplayCurrencies = (): DisplayCurrency[] => {
 
 export const getInitialPayWithCashuEnabled = (): boolean => {
   try {
-    const raw = localStorage.getItem(PAY_WITH_CASHU_STORAGE_KEY);
+    const raw = safeLocalStorageGet(PAY_WITH_CASHU_STORAGE_KEY);
     const v = String(raw ?? "").trim();
     // Default: enabled.
     if (!v) return true;
@@ -267,7 +331,7 @@ export const getInitialPayWithCashuEnabled = (): boolean => {
 
 export const getInitialCashuAutoswapEnabled = (): boolean => {
   try {
-    const raw = localStorage.getItem(CASHU_AUTOSWAP_STORAGE_KEY);
+    const raw = safeLocalStorageGet(CASHU_AUTOSWAP_STORAGE_KEY);
     const v = String(raw ?? "").trim();
     // Opt-in: keep an explicitly stored preference, otherwise stay disabled.
     if (!v) return false;
@@ -279,7 +343,7 @@ export const getInitialCashuAutoswapEnabled = (): boolean => {
 
 export const getInitialShowProfileQrOnTiltEnabled = (): boolean => {
   try {
-    return localStorage.getItem(SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY) === "1";
+    return safeLocalStorageGet(SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY) === "1";
   } catch {
     return false;
   }
@@ -287,7 +351,7 @@ export const getInitialShowProfileQrOnTiltEnabled = (): boolean => {
 
 export const getInitialLightningInvoiceAutoPayLimit = (): number => {
   try {
-    const raw = localStorage.getItem(
+    const raw = safeLocalStorageGet(
       LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
     );
     const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
@@ -304,7 +368,7 @@ export const getInitialBankPaymentOfferRecipientCount = (
   fallback: number,
 ): number => {
   try {
-    const raw = localStorage.getItem(
+    const raw = safeLocalStorageGet(
       BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
     );
     const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
@@ -319,7 +383,7 @@ export const getInitialBankPaymentOfferRecipientCount = (
 
 export const getInitialNostrNsec = (): string | null => {
   try {
-    const raw = localStorage.getItem(NOSTR_NSEC_STORAGE_KEY);
+    const raw = safeLocalStorageGet(NOSTR_NSEC_STORAGE_KEY);
     const v = String(raw ?? "").trim();
     return v ? v : null;
   } catch {
@@ -329,7 +393,7 @@ export const getInitialNostrNsec = (): string | null => {
 
 export const getInitialNostrIdentitySource = (): "custom" | "derived" => {
   try {
-    const raw = localStorage.getItem(NOSTR_IDENTITY_SOURCE_STORAGE_KEY);
+    const raw = safeLocalStorageGet(NOSTR_IDENTITY_SOURCE_STORAGE_KEY);
     return String(raw ?? "").trim() === "custom" ? "custom" : "derived";
   } catch {
     return "derived";
@@ -338,9 +402,7 @@ export const getInitialNostrIdentitySource = (): "custom" | "derived" => {
 
 export const getInitialNostrIdentitySwitchedAtSec = (): number | null => {
   try {
-    const raw = localStorage.getItem(
-      NOSTR_IDENTITY_SWITCHED_AT_SEC_STORAGE_KEY,
-    );
+    const raw = safeLocalStorageGet(NOSTR_IDENTITY_SWITCHED_AT_SEC_STORAGE_KEY);
     const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
     if (!Number.isFinite(parsed) || parsed <= 0) return null;
     return parsed;

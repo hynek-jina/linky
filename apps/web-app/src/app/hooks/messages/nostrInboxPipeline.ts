@@ -168,10 +168,48 @@ export interface NostrInboxPolicy {
   isBlockedIncomingPubkey: (pubkey: string) => boolean;
   isCancelled: () => boolean;
   ownsConversation: (context: NostrInboxConversationContext) => boolean;
+  /**
+   * "Already have the MESSAGE" is not "already have a NOTIFICATION RECORD".
+   *
+   * Off by default, and the active-chat subscription leaves it off: for that
+   * consumer a wrap another writer already stored, or a conversation it does not
+   * own, is genuinely nothing to do.
+   *
+   * The inbox subscription turns it on because it owns a SECOND, independent
+   * store. With it on, the three Evolu-known gates (`known-wrap`,
+   * `known-message-wrap`, `known-message-identity`) and the `ownsConversation`
+   * gate stop being early returns and become suppression flags: the wrap is still
+   * decoded and still reaches `effects.observeIncomingMessage`, and only the Evolu
+   * write is skipped. Turning any of them back into a bare return silently
+   * reintroduces the "no record while the chat is open" bug.
+   *
+   * The Evolu-known gates fall through on LIVE delivery only — catch-up
+   * legitimately replays pre-record-store history, which has no record to write.
+   * `ownsConversation` falls through on both, because an open chat must not cost a
+   * record on either path.
+   */
+  reportsSuppressedWrites?: boolean;
   resolveConversation: (peerPubkey: string) => NostrInboxConversation | null;
   resolveUnknownConversation: (
     peerPubkey: string,
   ) => NostrInboxConversation | null;
+}
+
+/**
+ * The facts a consumer needs to write a durable notification record, handed over
+ * at the one point where every record gate has passed and no Evolu write decision
+ * has been taken yet.
+ */
+export interface NostrInboxObservedMessage {
+  contactId: string;
+  content: string;
+  createdAtSec: number;
+  delivery: NostrInboxDelivery;
+  direction: "in" | "out";
+  isCashuMessage: boolean;
+  peerPubkey: string;
+  suppressed: boolean;
+  wrapId: string;
 }
 
 export interface NostrInboxAcknowledgement {
@@ -187,12 +225,26 @@ export interface NostrInboxEffects {
   appendMessage: (message: NewLocalNostrMessage) => string;
   appendReaction: (reaction: NewLocalNostrReaction) => string;
   deleteReactionsByWrapIds: (wrapIds: readonly string[]) => void;
+  /**
+   * Fired once the wrap has decrypted to a structurally valid rumor whose inner
+   * pubkey is not the outer wrapper's — i.e. the moment the wrap stops being
+   * opaque. Placed once, for every kind.
+   */
+  onDecodedWrap?: (wrapId: string) => void;
+  /**
+   * The record point for chat messages. Fired after every RECORD gate has passed
+   * and before any Evolu write decision, so a consumer's durable write can precede
+   * every alert gate even when the write below it is suppressed.
+   */
+  observeIncomingMessage?: (message: NostrInboxObservedMessage) => void;
   updateMessage: UpdateLocalNostrMessage;
   updateReaction: UpdateLocalNostrReaction;
 }
 
 interface NostrInboxBaseOutcome {
   delivery: NostrInboxDelivery;
+  /** True when a gate suppressed this wrap's Evolu write but not its record. */
+  suppressed?: boolean;
   wrapId: string;
 }
 
@@ -356,6 +408,7 @@ const resolveMessageConversation = ({
 }): {
   contactId: string;
   direction: "in" | "out";
+  owned: boolean;
   peerPubkey: string;
 } | null => {
   const pTags = readTagValues(tags, "p");
@@ -411,10 +464,16 @@ const resolveMessageConversation = ({
   if (!contactId) return null;
   const direction = isOutgoing ? "out" : "in";
   if (!isOutgoing && policy.isBlockedIncomingPubkey(peerPubkey)) return null;
-  if (!policy.ownsConversation({ contactId, direction, peerPubkey })) {
-    return null;
-  }
-  return { contactId, direction, peerPubkey };
+  // Ownership is reported rather than enforced here: `processMessage` still
+  // returns `conversation-scope` at this exact point for consumers that do not
+  // report suppressed writes, so nothing downstream of it can observe a
+  // difference.
+  return {
+    contactId,
+    direction,
+    owned: policy.ownsConversation({ contactId, direction, peerPubkey }),
+    peerPubkey,
+  };
 };
 
 const processMessage = ({
@@ -425,9 +484,11 @@ const processMessage = ({
   rumor,
   seen,
   snapshot,
+  suppressedByWrap,
   wrap,
 }: Omit<ProcessNostrInboxWrapParams, "unwrapEvent"> & {
   rumor: DecodedNostrInboxRumor;
+  suppressedByWrap: boolean;
 }): NostrInboxOutcome => {
   const wrapId = wrap.id;
   const rumorId = isEventId(rumor.id) ? rumor.id : "";
@@ -452,8 +513,15 @@ const processMessage = ({
     tags: rumor.tags,
   });
   if (!conversation) return ignored(delivery, wrapId, "conversation-scope");
+  if (!conversation.owned && !policy.reportsSuppressedWrites) {
+    return ignored(delivery, wrapId, "conversation-scope");
+  }
 
   const { contactId, direction, peerPubkey } = conversation;
+  // An unowned conversation suppresses on BOTH deliveries — a chat the user
+  // already has open must not cost a record on catch-up either. The Evolu-known
+  // gates below suppress on live only.
+  let suppressed = suppressedByWrap || !conversation.owned;
   const taggedPeerPubkey =
     readTagValues(rumor.tags, "p").find(
       (pubkey) => pubkey !== identity.pubkey,
@@ -494,6 +562,12 @@ const processMessage = ({
           normalizeText(message.editedFromId) === editedFromId),
     );
     if (target) {
+      // An edit of a message this device already has — or of one whose chat is
+      // open and therefore owned by the active-chat subscription — is neither a
+      // new notification nor a new record, so a suppressed edit stops here
+      // WITHOUT reaching the record point. An edit whose target is unknown falls
+      // through and is recorded like any other message.
+      if (suppressed) return ignored(delivery, wrapId, "suppressed-edit");
       const targetId = normalizeText(target.id);
       if (!targetId) return ignored(delivery, wrapId, "invalid-target");
       const existingOriginal =
@@ -515,7 +589,7 @@ const processMessage = ({
     }
   }
 
-  if (!editedFromId && rumorId) {
+  if (!suppressed && !editedFromId && rumorId) {
     const editedVersion = snapshot.messages.find(
       (message) =>
         matchesConversation(message, contactId, direction, peerPubkey) &&
@@ -549,7 +623,35 @@ const processMessage = ({
       wrapId,
     })
   ) {
-    return ignored(delivery, wrapId, "known-message-identity");
+    if (!(policy.reportsSuppressedWrites && delivery === "live")) {
+      return ignored(delivery, wrapId, "known-message-identity");
+    }
+    suppressed = true;
+  }
+
+  // THE RECORD POINT. Every gate above is a record gate; everything below is an
+  // Evolu write decision. Nothing that observes visibility, focus, route or
+  // delivery origin may be inserted between here and the caller's durable write.
+  effects.observeIncomingMessage?.({
+    contactId,
+    content,
+    createdAtSec: Math.trunc(rumor.created_at),
+    delivery,
+    direction,
+    isCashuMessage: isCashuNotificationMessage(content),
+    peerPubkey,
+    suppressed,
+    wrapId,
+  });
+
+  if (suppressed) {
+    return {
+      delivery,
+      kind: "ignored",
+      reason: "suppressed-write",
+      suppressed: true,
+      wrapId,
+    };
   }
 
   if (direction === "out") {
@@ -1027,11 +1129,18 @@ export const processNostrInboxWrap = ({
   if (seen.wrapIds.has(wrapId)) {
     return ignored(delivery, wrapId, "seen-wrap");
   }
+  // Evolu-known gates fall through on LIVE delivery for a consumer that keeps a
+  // second store: a wrap the active-chat subscription already inserted has a
+  // MESSAGE row but no notification record.
+  const canSuppressKnown =
+    policy.reportsSuppressedWrites === true && delivery === "live";
+  let suppressedByWrap = false;
   if (
     hasKnownNostrMessageIdentity(snapshot.knownMessageIdentities, { wrapId })
   ) {
     seen.wrapIds.add(wrapId);
-    return ignored(delivery, wrapId, "known-wrap");
+    if (!canSuppressKnown) return ignored(delivery, wrapId, "known-wrap");
+    suppressedByWrap = true;
   }
   seen.wrapIds.add(wrapId);
 
@@ -1069,6 +1178,9 @@ export const processNostrInboxWrap = ({
   if (isInvalidInnerRumorPubkey(rumor.pubkey, wrap.pubkey)) {
     return ignored(delivery, wrapId, "outer-rumor-pubkey");
   }
+  // The wrap has stopped being opaque: this is where a generic push placeholder
+  // can be replaced by the decrypted entry.
+  effects.onDecodedWrap?.(wrapId);
   if (policy.isCancelled()) return ignored(delivery, wrapId, "cancelled");
 
   const specialOutcome = resolveSpecialEvent({
@@ -1078,11 +1190,18 @@ export const processNostrInboxWrap = ({
     rumor,
     wrapId,
   });
-  if (specialOutcome) return specialOutcome;
+  if (specialOutcome) {
+    return suppressedByWrap
+      ? { ...specialOutcome, suppressed: true }
+      : specialOutcome;
+  }
 
   if (rumor.kind === 14 || rumor.kind === 15) {
     if (snapshot.messageWrapIds.has(wrapId)) {
-      return ignored(delivery, wrapId, "known-message-wrap");
+      if (!canSuppressKnown) {
+        return ignored(delivery, wrapId, "known-message-wrap");
+      }
+      suppressedByWrap = true;
     }
     const outcome = processMessage({
       delivery,
@@ -1092,6 +1211,7 @@ export const processNostrInboxWrap = ({
       rumor,
       seen,
       snapshot,
+      suppressedByWrap,
       wrap,
     });
     retryDeferredReactions({
