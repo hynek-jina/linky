@@ -9,9 +9,15 @@ import {
 } from "../utils/displayAmounts";
 
 export function SettingsPage(): React.ReactElement {
-  const { allowedDisplayCurrencies, displayCurrency, lang, t } =
-    useAppShellCore();
-  const { toggleAllowedDisplayCurrency } = useAppShellActions();
+  const {
+    allowedDisplayCurrencies,
+    decimalAmountInputEnabled,
+    displayCurrency,
+    lang,
+    t,
+  } = useAppShellCore();
+  const { toggleAllowedDisplayCurrency, toggleDecimalAmountInput } =
+    useAppShellActions();
 
   return (
     <section className="panel">
@@ -52,6 +58,29 @@ export function SettingsPage(): React.ReactElement {
           </div>
         );
       })}
+
+      <div className="settings-row">
+        <div className="settings-left">
+          <span className="settings-label-group settings-label-group-stacked">
+            <span className="settings-label">{t("decimalInput")}</span>
+            <span className="settings-description">
+              {t("decimalInputDescription")}
+            </span>
+          </span>
+        </div>
+
+        <div className="settings-right">
+          <label className="switch">
+            <input
+              className="switch-input"
+              type="checkbox"
+              checked={decimalAmountInputEnabled}
+              aria-label={t("decimalInput")}
+              onChange={toggleDecimalAmountInput}
+            />
+          </label>
+        </div>
+      </div>
     </section>
   );
 }

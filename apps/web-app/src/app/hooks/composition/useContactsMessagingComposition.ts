@@ -43,8 +43,10 @@ import {
   NO_GROUP_FILTER,
 } from "../../../utils/constants";
 import { formatShortNpub, getBestNostrName } from "../../../utils/formatting";
+import { getContactGroups } from "../../../utils/contactGroups";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { setStoredPushContactNames } from "../../../utils/pushContactNamesStorage";
+import { getBankPaymentOfferCurrency } from "../../../utils/spdPayment";
 import {
   getInitialBankPaymentOfferRecipientCount,
   safeLocalStorageGet,
@@ -96,7 +98,6 @@ import {
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
-  LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY,
   markLinkyBankPaymentOfferBankDetailsSent,
   readLinkyBankPaymentOfferSpdRecord,
   rememberLinkyBankPaymentOfferSpdPayload,
@@ -851,12 +852,12 @@ export const useContactsMessagingComposition = ({
     tokensSnapshot: cashuTokensAll,
     transactionsSnapshot: transactionsBootstrapSnapshot,
   });
-  const canRunNostrNetworkWork =
-    useDeferredOnlineReady() && nostrBootstrapReady;
+  const deferredOnlineReady = useDeferredOnlineReady();
+  const canRunNostrNetworkWork = deferredOnlineReady && nostrBootstrapReady;
 
   usePushRegistrationLifecycle({
     currentNsec,
-    enabled: canRunNostrNetworkWork,
+    enabled: deferredOnlineReady,
   });
 
   const {
@@ -1391,7 +1392,7 @@ export const useContactsMessagingComposition = ({
   const displayContactsSearchData = React.useMemo(() => {
     return displayContacts.map((contact) => {
       const idKey = String(contact.id ?? "").trim();
-      const groupName = String(contact.groupName ?? "").trim();
+      const groupNames = getContactGroups(contact);
       const normalizedNpub = normalizeNpubIdentifier(contact.npub);
       const statusFilterValues = normalizedNpub
         ? extractStatusFilterCurrencies(nostrStatusByNpub[normalizedNpub])
@@ -1400,7 +1401,7 @@ export const useContactsMessagingComposition = ({
         contact.name,
         contact.npub,
         contact.lnAddress,
-        contact.groupName,
+        ...groupNames,
         contact.unknownPubkeyHex,
         ...statusFilterValues,
       ]
@@ -1415,7 +1416,7 @@ export const useContactsMessagingComposition = ({
       return {
         contact,
         idKey,
-        groupName,
+        groupNames,
         haystack,
         statusFilterValues,
       };
@@ -1426,6 +1427,7 @@ export const useContactsMessagingComposition = ({
     const currencyCounts = new Map<string, number>();
 
     for (const contact of displayContacts) {
+      if (Number(contact.archivedAtSec ?? 0) > 0) continue;
       const normalizedNpub = normalizeNpubIdentifier(contact.npub);
       if (!normalizedNpub) continue;
 
@@ -1460,11 +1462,13 @@ export const useContactsMessagingComposition = ({
     const archivedCount = displayContacts.filter(
       (contact) => Number(contact.archivedAtSec ?? 0) > 0,
     ).length;
-    options.push({
-      count: archivedCount,
-      label: t("archiveFilter"),
-      value: ARCHIVED_CONTACTS_FILTER,
-    });
+    if (archivedCount > 0) {
+      options.push({
+        count: archivedCount,
+        label: t("archiveFilter"),
+        value: ARCHIVED_CONTACTS_FILTER,
+      });
+    }
     for (const groupName of groupNames) {
       options.push({
         count: groupCounts.get(groupName) ?? 0,
@@ -1519,7 +1523,14 @@ export const useContactsMessagingComposition = ({
     pinnedContactId: recentlyAddedContactId,
   });
 
+  const bankPaymentOfferCurrency =
+    route.kind === "bankPayment"
+      ? getBankPaymentOfferCurrency(route.spdPayload)
+      : null;
+
   const bankPaymentOfferContacts = React.useMemo(() => {
+    if (!bankPaymentOfferCurrency) return [];
+
     const sortedContacts = [
       ...visibleContacts.pinned,
       ...visibleContacts.conversations,
@@ -1531,7 +1542,7 @@ export const useContactsMessagingComposition = ({
       if (
         !extractStatusFilterCurrencies(
           nostrStatusByNpub[normalizedNpub],
-        ).includes(LINKY_BANK_PAYMENT_OFFER_RECIPIENT_STATUS_CURRENCY)
+        ).includes(bankPaymentOfferCurrency)
       ) {
         return [];
       }
@@ -1544,6 +1555,7 @@ export const useContactsMessagingComposition = ({
       ];
     });
   }, [
+    bankPaymentOfferCurrency,
     nostrPictureByNpub,
     nostrStatusByNpub,
     visibleContacts.pinned,
@@ -1612,7 +1624,7 @@ export const useContactsMessagingComposition = ({
         name: String(prefill.suggestedName ?? ""),
         npub: String(prefill.npub ?? ""),
         lnAddress: String(prefill.lnAddress ?? ""),
-        group: "",
+        groups: [],
       });
     }
     navigateTo({ route: "contactNew" });
@@ -2891,11 +2903,13 @@ export const useContactsMessagingComposition = ({
         const npub = normalizeNpubIdentifier(contact.npub);
         if (!name || !npub) return [];
         const groupName = String(contact.groupName ?? "").trim();
+        const groupNames = getContactGroups(contact);
         return [
           {
             name,
             npub,
             groupName: groupName || null,
+            groupNames,
             statusNames: extractStatusFilterCurrencies(nostrStatusByNpub[npub]),
           },
         ];
@@ -2970,6 +2984,97 @@ export const useContactsMessagingComposition = ({
       insert,
       lang,
       openScannedContactPendingNpubRef,
+      setStatus,
+      t,
+      unknownNameByNpub,
+    ],
+  );
+
+  const addNpubMessageContacts = React.useCallback(
+    (rawNpubs: readonly string[]) => {
+      const savedNpubs = new Set(
+        contacts.flatMap((contact) => {
+          const npub = normalizeNpubIdentifier(contact.npub);
+          return npub ? [npub] : [];
+        }),
+      );
+      const myNpub = normalizeNpubIdentifier(currentNpub);
+      if (myNpub) savedNpubs.add(myNpub);
+
+      const newNpubs: string[] = [];
+      for (const rawNpub of rawNpubs) {
+        const npub = normalizeNpubIdentifier(rawNpub);
+        if (!npub || savedNpubs.has(npub)) continue;
+        savedNpubs.add(npub);
+        newNpubs.push(npub);
+      }
+      if (newNpubs.length === 0) return;
+
+      if (
+        activeContactsOwnerContactCount + newNpubs.length >
+        MAX_CONTACTS_PER_OWNER
+      ) {
+        setStatus(
+          t("contactsLimitReached").replace(
+            "{max}",
+            String(MAX_CONTACTS_PER_OWNER),
+          ),
+        );
+        return;
+      }
+
+      const payloads = newNpubs.flatMap((npub) => {
+        const defaultProfile = deriveDefaultProfile(npub, lang);
+        const name = Evolu.NonEmptyString1000.fromUnknown(
+          buildSavedContactName(
+            unknownNameByNpub[npub] ?? defaultProfile.name,
+            npub,
+          ),
+        );
+        const parsedNpub = Evolu.NonEmptyString1000.fromUnknown(npub);
+        if (!name.ok || !parsedNpub.ok) return [];
+
+        return [
+          {
+            name: name.value,
+            npub: parsedNpub.value,
+            lnAddress: null,
+            groupName: null,
+          },
+        ];
+      });
+      if (payloads.length !== newNpubs.length) {
+        setStatus(`${t("errorPrefix")}: ${t("invalidNpub")}`);
+        return;
+      }
+
+      for (const payload of payloads) {
+        const result = contactsOwnerId
+          ? (() => {
+              const scoped = insert("contact", payload, {
+                ownerId: contactsOwnerId,
+              });
+              if (scoped.ok) return scoped;
+              return insert("contact", payload);
+            })()
+          : insert("contact", payload);
+
+        if (!result.ok) {
+          setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
+          return;
+        }
+      }
+
+      setStatus(t("contactsSaved").replace("{count}", String(payloads.length)));
+    },
+    [
+      activeContactsOwnerContactCount,
+      buildSavedContactName,
+      contacts,
+      contactsOwnerId,
+      currentNpub,
+      insert,
+      lang,
       setStatus,
       t,
       unknownNameByNpub,
@@ -3278,6 +3383,7 @@ export const useContactsMessagingComposition = ({
     activeNostrMessagePublishClientIdsRef,
     addNewContactFromIdentifier,
     addNewContactFromSearchResult,
+    addNpubMessageContacts,
     addUnknownContactFromChat,
     appendLocalNostrMessage,
     appendLocalNostrReaction,

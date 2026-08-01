@@ -3,6 +3,7 @@ import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useMintSettingsContext } from "../app/context/SystemSettingsContexts";
 import { useNavigation } from "../hooks/useRouting";
 import { LOCAL_MINT_INFO_STORAGE_KEY_PREFIX } from "../utils/constants";
+import { normalizeLocale } from "../utils/formatting";
 import { extractPpk, normalizeMintUrl } from "../utils/mint";
 import { safeLocalStorageSetJson } from "../utils/storage";
 
@@ -174,7 +175,7 @@ export function MintDetailPage() {
           <p className="muted" style={{ marginTop: 10 }}>
             {t("mintLastChecked")}:{" "}
             {new Date(lastCheckedAtSec * 1000).toLocaleString(
-              lang === "cs" ? "cs-CZ" : "en-US",
+              normalizeLocale(lang),
             )}
           </p>
         ) : null}

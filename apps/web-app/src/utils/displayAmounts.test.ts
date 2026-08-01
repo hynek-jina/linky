@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyAmountInputKeyWithDraft,
   formatDisplayAmountParts,
   getNextDisplayCurrency,
   normalizeAllowedDisplayCurrencies,
+  type DisplayAmountOptions,
 } from "./displayAmounts";
 
 const fiatRates = {
@@ -81,5 +83,32 @@ describe("getNextDisplayCurrency", () => {
 
   it("stays on the same currency when only one is allowed", () => {
     expect(getNextDisplayCurrency("sat", ["sat"])).toBe("sat");
+  });
+});
+
+describe("applyAmountInputKeyWithDraft", () => {
+  it("preserves and converts two decimal places for fiat input", () => {
+    const options: DisplayAmountOptions = {
+      displayCurrency: "usd",
+      fiatRates,
+      lang: "en",
+    };
+    let amountSat = "";
+    let displayValue: string | null = null;
+
+    for (const key of ["1", "2", ".", "3", "4", "5"]) {
+      const result = applyAmountInputKeyWithDraft(
+        amountSat,
+        displayValue,
+        key,
+        options,
+        true,
+      );
+      amountSat = result.amountSat;
+      displayValue = result.displayValue;
+    }
+
+    expect(displayValue).toBe("12.34");
+    expect(amountSat).toBe("24680");
   });
 });

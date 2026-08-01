@@ -56,6 +56,8 @@ export interface AppShellCoreContextValue {
   } | null;
   currentNpub: string | null;
   currentNsec: string | null;
+  decimalAmountInputEnabled: boolean;
+  decimalAmountInputKeyVisible: boolean;
   displayCurrency: DisplayCurrency;
   derivedProfile: DerivedProfileDefaults | null;
   displayUnit: string;
@@ -65,6 +67,11 @@ export interface AppShellCoreContextValue {
   evoluAppOwnerId: string | null;
   evoluTransactionsVisibleOwnerIds: readonly string[];
   applyAmountInputKey: (currentAmount: string, key: string) => string;
+  applyAmountInputKeyWithDraft: (
+    currentAmount: string,
+    currentDisplayValue: string | null,
+    key: string,
+  ) => { amountSat: string; displayValue: string };
   formatDisplayedAmountParts: (amountSat: number) => DisplayAmountParts;
   formatDisplayedAmountText: (amountSat: number) => string;
   isProfileEditing: boolean;
@@ -108,6 +115,8 @@ export interface AppShellCoreContextValue {
   profileSelectedPictureKind: "custom" | "generated";
   route: Route;
   scanAllowsManualContact: boolean;
+  scanCameraLabel: string | null;
+  scanCanSwitchCamera: boolean;
   scanEntryPoint: "contacts" | "receive" | "send" | null;
   scanImageInputRef: React.RefObject<HTMLInputElement | null>;
   scanIsOpen: boolean;
@@ -138,6 +147,7 @@ export interface AppShellActionsContextValue {
     next: () => void;
   };
   copyText: (text: string) => Promise<void>;
+  cycleScanCamera: () => void;
   cycleDisplayCurrency: () => void;
   cycleProfileAvatarControl: (controlId: AvatarEditorControlId) => void;
   onPickProfilePhoto: () => void;
@@ -177,6 +187,7 @@ export interface AppShellActionsContextValue {
   shareOptionsViaSms: () => void;
   shareOptionsViaWhatsApp: () => void;
   toggleAllowedDisplayCurrency: (currency: DisplayCurrency) => void;
+  toggleDecimalAmountInput: () => void;
   toggleProfileEditing: () => void;
   toggleProfileStatusCurrency: (
     currency: ProfileStatusCurrency,

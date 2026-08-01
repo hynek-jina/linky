@@ -2,6 +2,7 @@ import React from "react";
 import {
   BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
   CASHU_AUTOSWAP_STORAGE_KEY,
+  DECIMAL_AMOUNT_INPUT_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
@@ -14,6 +15,7 @@ import type { DisplayCurrency } from "../../utils/displayAmounts";
 interface UseAppPreferencesParams {
   allowedDisplayCurrencies: readonly DisplayCurrency[];
   cashuAutoswapEnabled: boolean;
+  decimalAmountInputEnabled: boolean;
   displayCurrency: DisplayCurrency;
   bankPaymentOfferRecipientCount: number;
   lightningInvoiceAutoPayLimit: number;
@@ -24,12 +26,24 @@ interface UseAppPreferencesParams {
 export const useAppPreferences = ({
   allowedDisplayCurrencies,
   cashuAutoswapEnabled,
+  decimalAmountInputEnabled,
   displayCurrency,
   bankPaymentOfferRecipientCount,
   lightningInvoiceAutoPayLimit,
   payWithCashuEnabled,
   showProfileQrOnTiltEnabled,
 }: UseAppPreferencesParams): void => {
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(
+        DECIMAL_AMOUNT_INPUT_STORAGE_KEY,
+        decimalAmountInputEnabled ? "1" : "0",
+      );
+    } catch {
+      // ignore
+    }
+  }, [decimalAmountInputEnabled]);
+
   React.useEffect(() => {
     try {
       localStorage.setItem(DISPLAY_CURRENCY_STORAGE_KEY, displayCurrency);

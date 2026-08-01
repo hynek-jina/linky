@@ -35,12 +35,25 @@ import {
   TopupPage,
   TransactionsPage,
 } from "../../pages";
+import { AppTopbar } from "../../components/AppTopbar";
+import { AppScanModal } from "../../components/AppScanModal";
+import { DesktopNavigation } from "../../components/DesktopNavigation";
+import { useDesktopSplitView } from "../../hooks/useDesktopSplitView";
 import {
   useAppShellCore,
   useMoneyRoutes,
   usePeopleRoutes,
 } from "../context/AppShellContexts";
-import { MainSwipeContent, type MainSwipeRouteProps } from "./MainSwipeContent";
+import {
+  DesktopContactsPane,
+  DesktopWalletPane,
+  MainSwipeContent,
+  type MainSwipeRouteProps,
+} from "./MainSwipeContent";
+import {
+  getDesktopRouteSection,
+  isDesktopSectionRoot,
+} from "./desktopRouteSection";
 
 export interface PeopleRoutesProps {
   bankPaymentOfferDetailProps: () => React.ComponentProps<
@@ -74,7 +87,7 @@ const assertNever = (route: never): never => {
   throw new Error(`Unhandled app route: ${JSON.stringify(route)}`);
 };
 
-export const AppRouteContent = (): React.ReactElement => {
+const RoutePage = (): React.ReactElement => {
   const { route } = useAppShellCore();
   const peopleRoutes = usePeopleRoutes();
   const moneyRoutes = useMoneyRoutes();
@@ -160,4 +173,50 @@ export const AppRouteContent = (): React.ReactElement => {
     default:
       return assertNever(route satisfies never);
   }
+};
+
+export const AppRouteContent = (): React.ReactElement => {
+  const { route, scanIsOpen, t } = useAppShellCore();
+  const isDesktopSplitView = useDesktopSplitView();
+
+  if (!isDesktopSplitView) return <RoutePage />;
+
+  const section = getDesktopRouteSection(route);
+  const detailIsEmpty = isDesktopSectionRoot(route);
+  const secondaryIsOpen = !detailIsEmpty || scanIsOpen;
+
+  return (
+    <div
+      className={`desktop-app-layout${secondaryIsOpen ? "" : " is-primary-only"}`}
+    >
+      <DesktopNavigation />
+
+      <main className="desktop-primary-pane">
+        {section === "contacts" ? (
+          <DesktopContactsPane />
+        ) : section === "wallet" ? (
+          <DesktopWalletPane />
+        ) : (
+          <div className="desktop-primary-content desktop-settings-pane">
+            <AdvancedPage />
+          </div>
+        )}
+      </main>
+
+      {secondaryIsOpen ? (
+        <section className="desktop-secondary-pane" aria-label={t("detail")}>
+          {scanIsOpen ? (
+            <AppScanModal />
+          ) : (
+            <>
+              <AppTopbar className="desktop-app-topbar" desktopDetail={true} />
+              <div className="desktop-secondary-content">
+                <RoutePage />
+              </div>
+            </>
+          )}
+        </section>
+      ) : null}
+    </div>
+  );
 };

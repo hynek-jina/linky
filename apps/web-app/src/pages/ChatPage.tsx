@@ -64,7 +64,7 @@ import {
 } from "../components/icons";
 import { ReplyPreview } from "../components/ReplyPreview";
 import { navigateTo } from "../hooks/useRouting";
-import { formatChatDayLabel } from "../utils/formatting";
+import { formatChatDayLabel, normalizeLocale } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
 interface Contact {
@@ -102,6 +102,7 @@ interface ChatPageProps {
   onCancelEdit: () => void;
   onCancelReply: () => void;
   onAddUnknownContact: () => Promise<void>;
+  onAddNpubContacts: (npubs: readonly string[]) => void;
   onBlockUnknownContact: () => Promise<void>;
   onCopy: (message: LocalNostrMessage) => void;
   onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
@@ -257,6 +258,7 @@ interface ChatMessageListProps {
   getNpubMessageContactInfo: ChatPageProps["getNpubMessageContactInfo"];
   lang: string;
   onCopy: ChatPageProps["onCopy"];
+  onAddNpubContacts: ChatPageProps["onAddNpubContacts"];
   onDeclinePaymentRequest: ChatPageProps["onDeclinePaymentRequest"];
   onEdit: ChatPageProps["onEdit"];
   onOpenNpubContact: ChatPageProps["onOpenNpubContact"];
@@ -283,6 +285,7 @@ const ChatMessageList = memo(function ChatMessageList({
   getNpubMessageContactInfo,
   lang,
   onCopy,
+  onAddNpubContacts,
   onDeclinePaymentRequest,
   onEdit,
   onOpenNpubContact,
@@ -305,7 +308,7 @@ const ChatMessageList = memo(function ChatMessageList({
     [t],
   );
   const chatPendingLabel = t("chatPendingShort");
-  const locale = lang === "cs" ? "cs-CZ" : "en-US";
+  const locale = normalizeLocale(lang);
   const formatChatDayLabelForLang = useCallback(
     (timestamp: number) => formatChatDayLabel(timestamp, lang, t),
     [lang, t],
@@ -516,6 +519,7 @@ const ChatMessageList = memo(function ChatMessageList({
             payPaymentRequestBusy={cashuIsBusy}
             replyQuoteText={viewModel.replyQuoteText}
             onCopy={onCopy}
+            onAddNpubContacts={onAddNpubContacts}
             onEdit={onEdit}
             onOpenNpubContact={onOpenNpubContact}
             onReact={onReact}
@@ -601,9 +605,13 @@ const ChatComposer = memo(function ChatComposer({
   const mentionSuggestions = useMemo(
     () =>
       mentionQuery
-        ? getMessageMentionSuggestions(mentionContacts, mentionQuery.query)
+        ? getMessageMentionSuggestions(
+            mentionContacts,
+            mentionQuery.query,
+            npub,
+          )
         : [],
-    [mentionContacts, mentionQuery],
+    [mentionContacts, mentionQuery, npub],
   );
   const hasDraftText = Boolean(draft.trim());
   const canSendChat = Boolean(
@@ -784,6 +792,7 @@ const ChatComposer = memo(function ChatComposer({
             if (isDesktop) requestSend();
           }}
           placeholder={t("chatPlaceholder")}
+          removeContactLabel={t("chatRemoveContactFromDraft")}
           disabled={!npub && !hasUnknownPubkeyHex}
           getCashuTokenMessageInfo={getCashuTokenMessageInfo}
           getMintIconUrl={getMintIconUrl}
@@ -1092,6 +1101,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   onCancelEdit,
   onCancelReply,
   onAddUnknownContact,
+  onAddNpubContacts,
   onBlockUnknownContact,
   onCopy,
   onDeclinePaymentRequest,
@@ -1234,6 +1244,7 @@ export const ChatPage: FC<ChatPageProps> = ({
         getNpubMessageContactInfo={getNpubMessageContactInfo}
         lang={lang}
         onCopy={onCopy}
+        onAddNpubContacts={onAddNpubContacts}
         onDeclinePaymentRequest={onDeclinePaymentRequest}
         onEdit={onEdit}
         onOpenNpubContact={onOpenNpubContact}

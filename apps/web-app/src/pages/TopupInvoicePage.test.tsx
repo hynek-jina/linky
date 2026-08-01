@@ -159,7 +159,7 @@ describe("TopupInvoicePage", () => {
     await waitFor(() => {
       expect(
         container.querySelector(".topup-invoice-qr")?.getAttribute("src"),
-      ).toBe("qr:lnbc-invoice");
+      ).toBe("qr:LNBC-INVOICE");
     });
 
     await act(async () => {

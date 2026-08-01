@@ -3,18 +3,19 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getInitialSiteDisplayCurrency,
+  siteDisplayCurrencies,
   siteDisplayCurrencyStorageKey,
   type SiteDisplayCurrency,
 } from "../siteDisplayCurrency";
 import { SiteHeaderMenu } from "../SiteHeaderMenu";
-import { getDefaultSiteLocale } from "../sitePreferences";
+import { getDefaultSiteLocale, type SiteLocale } from "../sitePreferences";
 import { forwardCashuTokenPrivately } from "./nostrGiftWrap";
 import {
   flushPaymentTelemetryQueue,
   queuePaymentTelemetry,
 } from "./paymentTelemetry";
 
-type Locale = "cs" | "en";
+type Locale = SiteLocale;
 
 interface LocaleCopy {
   cashuLabel: string;
@@ -24,6 +25,7 @@ interface LocaleCopy {
   currencyLabel: string;
   expandOptionsLabel: string;
   englishLabel: string;
+  germanLabel: string;
   githubLabel: string;
   invalidToken: string;
   linkyPrimaryAction: string;
@@ -37,8 +39,6 @@ interface LocaleCopy {
   pageTitle: string;
   payoutIntro: string;
   privacyLabel: string;
-  menuLabel: string;
-  openAppLabel: string;
   redeemButton: string;
   redeemConfirmed: string;
   redeemFailed: string;
@@ -87,7 +87,9 @@ class RedeemError extends Error {
 }
 
 interface SiteFiatRates {
+  chfPerBtc: number;
   czkPerBtc: number;
+  eurPerBtc: number;
   fetchedAtMs: number;
   usdPerBtc: number;
 }
@@ -128,7 +130,8 @@ const copy: Record<Locale, LocaleCopy> = {
     czechLabel: "Čeština",
     currencyLabel: "Jednotky",
     expandOptionsLabel: "Další možnosti ↓",
-    englishLabel: "Angličtina",
+    englishLabel: "English",
+    germanLabel: "Deutsch",
     githubLabel: "GitHub",
     invalidToken: "Utraceno",
     linkyPrimaryAction: "Vyzvednout v Linky",
@@ -144,8 +147,6 @@ const copy: Record<Locale, LocaleCopy> = {
     payoutIntro:
       "Někdo vám posílá bitcoin. Vyzvednout si ho můžete v aplikaci Linky nebo jakékoliv lightning peněžence",
     privacyLabel: "Ochrana soukromí",
-    menuLabel: "Menu",
-    openAppLabel: "Otevřít aplikaci",
     redeemButton: "Vybrat na adresu",
     redeemConfirmed: "Hotovo",
     redeemFailed: "Vyzvednutí se nepodařilo.",
@@ -165,10 +166,11 @@ const copy: Record<Locale, LocaleCopy> = {
     cashuLabel: "Cashu",
     cashuOptionDescription: "Scan the code with your Cashu wallet",
     collapseOptionsLabel: "Hide options ↑",
-    czechLabel: "Czech",
+    czechLabel: "Čeština",
     currencyLabel: "Units",
     expandOptionsLabel: "Show options ↓",
     englishLabel: "English",
+    germanLabel: "Deutsch",
     githubLabel: "GitHub",
     invalidToken: "Spent",
     linkyPrimaryAction: "Redeem in Linky",
@@ -184,8 +186,6 @@ const copy: Record<Locale, LocaleCopy> = {
     payoutIntro:
       "Someone is sending you bitcoin. You can redeem it in the Linky app or in any Lightning wallet.",
     privacyLabel: "Privacy Policy",
-    menuLabel: "Menu",
-    openAppLabel: "Open web app",
     redeemButton: "Redeem to address",
     redeemConfirmed: "Success",
     redeemFailed: "Redeem failed.",
@@ -200,6 +200,47 @@ const copy: Record<Locale, LocaleCopy> = {
     switchLabel: "Language",
     tokenLabel: "Cashu token",
     validUnknown: "Could not load the token.",
+  },
+  de: {
+    cashuLabel: "Cashu",
+    cashuOptionDescription: "Scanne den Code mit deiner Cashu-Wallet",
+    collapseOptionsLabel: "Optionen ausblenden ↑",
+    czechLabel: "Čeština",
+    currencyLabel: "Einheiten",
+    expandOptionsLabel: "Weitere Optionen ↓",
+    englishLabel: "English",
+    germanLabel: "Deutsch",
+    githubLabel: "GitHub",
+    invalidToken: "Ausgegeben",
+    linkyPrimaryAction: "In Linky einlösen",
+    lightningAddressLabel: "Lightning-Adresse",
+    lightningOptionDescription:
+      "Lasse das Guthaben an deine Lightning-Adresse auszahlen.",
+    lightningAddressPlaceholder: "name@linky.fit",
+    loadingToken: "Token wird beim Mint geprüft…",
+    noTokenLoaded:
+      "Füge einen Token ein oder öffne die Seite direkt mit einem Token in der URL.",
+    nostrLabel: "Nostr-Profil",
+    openInWalletLabel: "In Wallet öffnen",
+    pageTitle:
+      "Erstelle einen Link zum Einlösen von Bitcoin an eine Lightning-Adresse",
+    payoutIntro:
+      "Jemand sendet dir Bitcoin. Du kannst sie in der Linky-App oder jeder Lightning-Wallet einlösen.",
+    privacyLabel: "Datenschutz",
+    redeemButton: "An Adresse auszahlen",
+    redeemConfirmed: "Erledigt",
+    redeemFailed: "Einlösen fehlgeschlagen.",
+    redeemLnurlComment: "Mit Linky eingelöst",
+    redeemSuccessAddress: "Guthaben an {address} ausgezahlt",
+    redeeming: "Wird eingelöst…",
+    showTokenButton: "Token anzeigen",
+    spentInfo: "Jemand hat ihn bereits eingelöst.",
+    statusSpent: "Ausgegeben",
+    subtitle:
+      "Füge einen vorhandenen Cashu-Token ein und erstelle einen Link, über den Bitcoin an eine Lightning-Adresse ausgezahlt werden können.",
+    switchLabel: "Sprache",
+    tokenLabel: "Cashu-Token",
+    validUnknown: "Der Token konnte nicht geladen werden.",
   },
 };
 
@@ -224,7 +265,7 @@ const cashuLibPromise = getCashuLib();
 const getInitialLocale = (): Locale => {
   if (typeof window !== "undefined") {
     const savedLocale = window.localStorage.getItem(localeStorageKey);
-    if (savedLocale === "cs" || savedLocale === "en") {
+    if (savedLocale === "cs" || savedLocale === "de" || savedLocale === "en") {
       return savedLocale;
     }
   }
@@ -255,14 +296,22 @@ const readObjectField = (value: unknown, field: string): unknown => {
 };
 
 const isSiteFiatRates = (value: unknown): value is SiteFiatRates => {
+  const chfPerBtc = readObjectField(value, "chfPerBtc");
   const czkPerBtc = readObjectField(value, "czkPerBtc");
+  const eurPerBtc = readObjectField(value, "eurPerBtc");
   const fetchedAtMs = readObjectField(value, "fetchedAtMs");
   const usdPerBtc = readObjectField(value, "usdPerBtc");
 
   return (
+    typeof chfPerBtc === "number" &&
+    Number.isFinite(chfPerBtc) &&
+    chfPerBtc > 0 &&
     typeof czkPerBtc === "number" &&
     Number.isFinite(czkPerBtc) &&
     czkPerBtc > 0 &&
+    typeof eurPerBtc === "number" &&
+    Number.isFinite(eurPerBtc) &&
+    eurPerBtc > 0 &&
     typeof fetchedAtMs === "number" &&
     Number.isFinite(fetchedAtMs) &&
     fetchedAtMs > 0 &&
@@ -303,15 +352,23 @@ const areSiteFiatRatesStale = (value: SiteFiatRates | null): boolean => {
 const parseFetchedSiteFiatRates = (value: unknown): SiteFiatRates | null => {
   const data = readObjectField(value, "data");
   const rates = readObjectField(data, "rates");
+  const chfRaw = readObjectField(rates, "CHF");
   const czkRaw = readObjectField(rates, "CZK");
+  const eurRaw = readObjectField(rates, "EUR");
   const usdRaw = readObjectField(rates, "USD");
 
+  const chfPerBtc = Number.parseFloat(String(chfRaw ?? ""));
   const czkPerBtc = Number.parseFloat(String(czkRaw ?? ""));
+  const eurPerBtc = Number.parseFloat(String(eurRaw ?? ""));
   const usdPerBtc = Number.parseFloat(String(usdRaw ?? ""));
 
   if (
+    !Number.isFinite(chfPerBtc) ||
+    chfPerBtc <= 0 ||
     !Number.isFinite(czkPerBtc) ||
     czkPerBtc <= 0 ||
+    !Number.isFinite(eurPerBtc) ||
+    eurPerBtc <= 0 ||
     !Number.isFinite(usdPerBtc) ||
     usdPerBtc <= 0
   ) {
@@ -319,7 +376,9 @@ const parseFetchedSiteFiatRates = (value: unknown): SiteFiatRates | null => {
   }
 
   return {
+    chfPerBtc,
     czkPerBtc,
+    eurPerBtc,
     fetchedAtMs: Date.now(),
     usdPerBtc,
   };
@@ -344,7 +403,9 @@ const fetchSiteFiatRates = async (
 };
 
 const normalizeLocale = (lang: Locale): string => {
-  return lang === "cs" ? "cs-CZ" : "en-US";
+  if (lang === "cs") return "cs-CZ";
+  if (lang === "de") return "de-DE";
+  return "en-US";
 };
 
 const formatInteger = (value: number, lang: Locale): string => {
@@ -371,6 +432,18 @@ const formatCashuDisplayAmount = (
     const fiatValue = (normalizedAmount / satsPerBtc) * fiatRates.czkPerBtc;
     const approxPrefix = normalizedAmount > 0 ? "~" : "";
     return `${approxPrefix}${formatInteger(Math.round(fiatValue), lang)} Kč`;
+  }
+
+  if (displayCurrency === "eur" && fiatRates) {
+    const fiatValue = (normalizedAmount / satsPerBtc) * fiatRates.eurPerBtc;
+    const approxPrefix = normalizedAmount > 0 ? "~" : "";
+    return `${approxPrefix}${formatInteger(Math.round(fiatValue), lang)} EUR`;
+  }
+
+  if (displayCurrency === "chf" && fiatRates) {
+    const fiatValue = (normalizedAmount / satsPerBtc) * fiatRates.chfPerBtc;
+    const approxPrefix = normalizedAmount > 0 ? "~" : "";
+    return `${approxPrefix}${formatInteger(Math.round(fiatValue), lang)} CHF`;
   }
 
   if (displayCurrency === "usd" && fiatRates) {
@@ -1626,6 +1699,11 @@ function CashuPage() {
       ),
     [displayCurrency, displayedTokenAmount, fiatRates, locale],
   );
+  const cycleDisplayCurrency = () => {
+    const currentIndex = siteDisplayCurrencies.indexOf(displayCurrency);
+    const nextIndex = (currentIndex + 1) % siteDisplayCurrencies.length;
+    setDisplayCurrency(siteDisplayCurrencies[nextIndex] ?? "sat");
+  };
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -1905,16 +1983,12 @@ function CashuPage() {
         <SiteHeaderMenu
           copy={{
             czechLabel: activeCopy.czechLabel,
-            currencyLabel: activeCopy.currencyLabel,
             englishLabel: activeCopy.englishLabel,
-            menuLabel: activeCopy.menuLabel,
-            openAppLabel: activeCopy.openAppLabel,
+            germanLabel: activeCopy.germanLabel,
             switchLabel: activeCopy.switchLabel,
           }}
-          displayCurrency={displayCurrency}
           locale={locale}
           onLocaleChange={setLocale}
-          setDisplayCurrency={setDisplayCurrency}
         />
       </header>
 
@@ -1984,8 +2058,20 @@ function CashuPage() {
                   />
                 ) : null}
                 <div className="cashu-token-copy">
-                  <h1 className={!tokenState?.isValid ? "is-spent" : undefined}>
-                    {displayedTokenAmountText}
+                  <h1>
+                    <button
+                      type="button"
+                      className={
+                        tokenState?.isValid
+                          ? "cashu-token-amount"
+                          : "cashu-token-amount is-spent"
+                      }
+                      aria-label={activeCopy.currencyLabel}
+                      title={activeCopy.currencyLabel}
+                      onClick={cycleDisplayCurrency}
+                    >
+                      {displayedTokenAmountText}
+                    </button>
                   </h1>
                   {tokenState?.mintHost ? (
                     <p className="cashu-mint-subtle">{tokenState.mintHost}</p>

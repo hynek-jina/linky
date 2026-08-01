@@ -64,7 +64,7 @@ export const WalletPage: React.FC<WalletPageProps> = React.memo(
               className="wallet-subtle-link"
               onClick={() => navigateTo({ route: "transactions" })}
             >
-              {t("transactionsTitle")}
+              {t("showTransactions")}
             </button>
           </div>
         </div>

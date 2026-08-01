@@ -95,8 +95,8 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
                     type="button"
                     className={
                       activeGroup === option.value
-                        ? "group-filter-btn is-active"
-                        : "group-filter-btn"
+                        ? "group-filter-btn contact-group-pill is-active"
+                        : "group-filter-btn contact-group-pill"
                     }
                     onClick={() =>
                       setActiveGroup(

@@ -1,7 +1,5 @@
 # Linky
 
-> ⚠️ Hobby tool without guarantees. Use at your own risk.
-
 Linky is a mobile-first PWA for contacts, Nostr messaging, and Lightning/Cashu payments.
 It is local-first: data is stored in Evolu (SQLite) and syncs between devices.
 

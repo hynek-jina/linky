@@ -1,6 +1,6 @@
 import { normalizeCashuToken, parseCashuToken } from "../../cashu";
 import type { CashuTokenRow } from "../../evolu";
-import { isSpdPaymentPayload } from "../../utils/spdPayment";
+import { isBankPaymentPayload } from "../../utils/spdPayment";
 import type { CashuTokenMeta } from "../types/appTypes";
 import { getLinkyBankPaymentOfferInfo } from "./bankPaymentOffer";
 
@@ -72,7 +72,7 @@ export const enrichCashuTokenRow = (
 export const extractCashuTokenFromText = (text: string): string | null => {
   const raw0 = String(text ?? "").trim();
   if (!raw0) return null;
-  if (isSpdPaymentPayload(raw0) || getLinkyBankPaymentOfferInfo(raw0)) {
+  if (isBankPaymentPayload(raw0) || getLinkyBankPaymentOfferInfo(raw0)) {
     return null;
   }
 

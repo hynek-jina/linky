@@ -3,6 +3,7 @@ export const cs = {
   appTagline: "Osobní lightning kontakty",
 
   settings: "Nastavení",
+  detail: "Detail",
   settingsGeneral: "Obecné",
   settingsPayments: "Platby",
   settingsNetwork: "Síť",
@@ -13,6 +14,7 @@ export const cs = {
   advanced: "Pokročilé",
   paymentsHistory: "Historie plateb",
   transactionsTitle: "Transakce",
+  showTransactions: "Ukázat transakce",
   feedback: "Zpětná vazba",
   donate: "Přispět",
   data: "Data",
@@ -423,7 +425,8 @@ export const cs = {
 
   language: "Jazyk",
   czech: "Čeština",
-  english: "Angličtina",
+  english: "English",
+  german: "Deutsch",
 
   list: "Seznam",
   contactsTitle: "Kontakty",
@@ -489,6 +492,7 @@ export const cs = {
   contactsOnboardingTaskPay: "Zaplatit",
   contactsOnboardingTaskMessage: "Poslat zprávu",
   addContact: "Přidat kontakt",
+  addAllContacts: "Přidat všechny",
   contactLoadQr: "Načíst QR",
   search: "Vyhledat",
   contactSearching: "Hledám...",
@@ -536,12 +540,14 @@ export const cs = {
   npub: "Identifikátor",
   lightningAddress: "Lightning adresa",
   group: "Skupina",
+  existingGroups: "Existující skupiny",
 
   namePlaceholder: "Např. Alice",
   npubPlaceholder: "npub nebo ověřené jméno (NIP-05)",
   lightningAddressPlaceholder: "např. alice@zapsat.cz",
   groupPlaceholder: "např. Friends",
   chatMentionGroupCount: "{count} kontaktů",
+  chatRemoveContactFromDraft: "Odebrat kontakt ze zprávy",
 
   all: "Vše",
   noGroup: "Bez skupiny",
@@ -555,6 +561,7 @@ export const cs = {
   fillAtLeastOne: "Vyplňte alespoň jedno pole.",
   contactsLimitReached: "Byl dosažen limit kontaktů ({max}).",
   contactSaved: "Kontakt byl uložen.",
+  contactsSaved: "Kontakty byly uloženy ({count}).",
   contactUpdated: "Kontakt byl upraven.",
   nip05NotFound: "NIP-05 jméno {identifier} nebylo nalezeno.",
   nip05ResolveFailed: "NIP-05 jméno {identifier} se nepodařilo ověřit.",
@@ -703,6 +710,8 @@ export const cs = {
   spdPaymentRecipientUnknown: "Příjemce z QR",
   spdPaymentRecipient: "Příjemce",
   spdPaymentAccount: "Účet",
+  spdPaymentBic: "BIC / SWIFT",
+  spdPaymentReference: "Reference platby",
   spdPaymentAmount: "Částka",
   spdPaymentCurrency: "Měna",
   spdPaymentVariableSymbol: "Variabilní symbol",
@@ -721,6 +730,7 @@ export const cs = {
   scanPermissionDenied:
     "Přístup ke kameře byl zamítnut. V Brave klikněte na zámek → Nastavení webu → Kamera → Povolit a stránku obnovte.",
   scanGallery: "Galerie",
+  scanSwitchCamera: "Přepnout kameru",
   scanImageUnsupported: "Ve vybraném obrázku jsem nenašel čitelný QR kód.",
   scanPastePrompt: "Vložte LN fakturu, Cashu token, LNURL nebo npub.",
   scanReceiveUnsupportedPayment:
@@ -743,6 +753,9 @@ export const cs = {
   unitCzkName: "České koruny",
   unitUsdName: "Americké dolary",
   unitHiddenName: "Skryté",
+  decimalInput: "Desetinná místa",
+  decimalInputDescription: "Povolit zadávání haléřů u fiat měn.",
+  decimalPoint: ",",
 
   cashuBalance: "Dostupný zůstatek",
   pasteCashu: "Vložit cashu",

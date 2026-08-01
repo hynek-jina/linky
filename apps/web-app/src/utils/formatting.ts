@@ -71,16 +71,25 @@ export const normalizeLocale = (lang?: string): string => {
   const raw = String(lang ?? "").trim();
   if (raw) {
     if (raw === "cs") return "cs-CZ";
+    if (raw === "de") return "de-DE";
     if (raw === "en") return "en-US";
     return raw;
   }
   if (typeof document !== "undefined") {
     const docLang = String(document.documentElement?.lang ?? "").trim();
-    if (docLang) return docLang === "cs" ? "cs-CZ" : docLang;
+    if (docLang) {
+      if (docLang === "cs") return "cs-CZ";
+      if (docLang === "de") return "de-DE";
+      return docLang;
+    }
   }
   if (typeof navigator !== "undefined") {
     const navLang = String(navigator.language ?? "").trim();
-    if (navLang) return navLang === "cs" ? "cs-CZ" : navLang;
+    if (navLang) {
+      if (navLang === "cs") return "cs-CZ";
+      if (navLang === "de") return "de-DE";
+      return navLang;
+    }
   }
   return "en-US";
 };

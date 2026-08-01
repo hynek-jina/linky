@@ -25,6 +25,7 @@ interface ChatMessageEditorProps {
   onChange: (value: string) => void;
   onSendShortcut: () => void;
   placeholder: string;
+  removeContactLabel: string;
   value: string;
 }
 
@@ -32,12 +33,17 @@ const appendContactPill = (
   fragment: DocumentFragment,
   rawValue: string,
   info: NpubMessageContactInfo,
+  removeContactLabel: string,
 ) => {
   const pill = document.createElement("span");
   pill.className = "pill chat-contact-pill chat-compose-inline-pill";
   pill.contentEditable = "false";
   pill.dataset.messageEntityValue = rawValue;
-  pill.setAttribute("aria-label", info.displayName);
+  pill.setAttribute(
+    "aria-label",
+    `${info.displayName} — ${removeContactLabel}`,
+  );
+  pill.title = removeContactLabel;
 
   const avatar = document.createElement("span");
   avatar.className = "chat-contact-pill-avatar";
@@ -59,8 +65,25 @@ const appendContactPill = (
   const label = document.createElement("span");
   label.className = "chat-contact-pill-label";
   label.textContent = info.displayName;
-  pill.append(avatar, label);
+  const remove = document.createElement("span");
+  remove.className = "chat-compose-contact-remove";
+  remove.setAttribute("aria-hidden", "true");
+  remove.textContent = "×";
+  pill.append(avatar, label, remove);
   fragment.append(pill);
+};
+
+const removeEntityFromValue = (
+  value: string,
+  start: number,
+  end: number,
+): string => {
+  const removeEnd = value[end] === " " ? end + 1 : end;
+  const removeStart =
+    removeEnd === end && start > 0 && value[start - 1] === " "
+      ? start - 1
+      : start;
+  return `${value.slice(0, removeStart)}${value.slice(removeEnd)}`;
 };
 
 const appendCashuPill = (
@@ -106,6 +129,7 @@ export const ChatMessageEditor = React.forwardRef<
     onChange,
     onSendShortcut,
     placeholder,
+    removeContactLabel,
     value,
   },
   forwardedRef,
@@ -143,7 +167,7 @@ export const ChatMessageEditor = React.forwardRef<
       const contactInfo = npub ? getNpubMessageContactInfo(npub) : null;
       const tokenInfo = npub ? null : getCashuTokenMessageInfo(rawValue);
       if (contactInfo) {
-        appendContactPill(fragment, rawValue, contactInfo);
+        appendContactPill(fragment, rawValue, contactInfo, removeContactLabel);
       } else if (tokenInfo) {
         appendCashuPill(
           fragment,
@@ -172,6 +196,7 @@ export const ChatMessageEditor = React.forwardRef<
     getCashuTokenMessageInfo,
     getMintIconUrl,
     getNpubMessageContactInfo,
+    removeContactLabel,
     value,
   ]);
 
@@ -257,9 +282,37 @@ export const ChatMessageEditor = React.forwardRef<
         }
       }}
       onInput={publishEditorState}
-      onClick={() => {
+      onClick={(event) => {
         const editor = localRef.current;
-        if (editor) onCaretChange(getMessageEditorCaret(editor));
+        if (!editor) return;
+        const target = event.target;
+        const contactPill =
+          target instanceof Element
+            ? target.closest<HTMLElement>(
+                ".chat-contact-pill[data-message-entity-value]",
+              )
+            : null;
+        if (contactPill && editor.contains(contactPill)) {
+          const entityElements = Array.from(
+            editor.querySelectorAll<HTMLElement>("[data-message-entity-value]"),
+          );
+          const entityIndex = entityElements.indexOf(contactPill);
+          const entity = getMessageEditorEntityRanges(editor)[entityIndex];
+          if (entity) {
+            event.preventDefault();
+            const currentValue = getMessageEditorValue(editor);
+            const nextValue = removeEntityFromValue(
+              currentValue,
+              entity.start,
+              entity.end,
+            );
+            pendingCaretRef.current = entity.start;
+            onChange(nextValue);
+            onCaretChange(entity.start);
+            return;
+          }
+        }
+        onCaretChange(getMessageEditorCaret(editor));
       }}
       onKeyUp={() => {
         const editor = localRef.current;

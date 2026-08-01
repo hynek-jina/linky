@@ -1,5 +1,4 @@
-import { ArrowUpToLine } from "lucide-react";
-import { TopupIcon } from "./icons";
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 
 interface WalletActionButtonProps {
   dataGuide?: string;
@@ -18,9 +17,9 @@ export function WalletActionButton({
 }: WalletActionButtonProps) {
   const iconContent =
     icon === "topup" ? (
-      <TopupIcon size={18} strokeWidth={2} />
+      <ArrowDownRight size={18} strokeWidth={2} />
     ) : (
-      <ArrowUpToLine size={18} />
+      <ArrowUpRight size={18} strokeWidth={2} />
     );
 
   return (

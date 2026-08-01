@@ -25,6 +25,10 @@ import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { getContactQueryPrefill } from "../../lib/contactQueryPrefill";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
+import {
+  getContactGroups,
+  serializeContactGroups,
+} from "../../../utils/contactGroups";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -217,7 +221,7 @@ export const makeEmptyContactForm = (): ContactFormState => ({
   name: "",
   npub: "",
   lnAddress: "",
-  group: "",
+  groups: [],
 });
 
 export const useContactEditor = ({
@@ -248,7 +252,7 @@ export const useContactEditor = ({
     ContactSuggestionCandidate[]
   >([]);
   const [contactEditInitial, setContactEditInitial] = React.useState<{
-    group: string;
+    groups: string[];
     id: ContactId;
     lnAddress: string;
     name: string;
@@ -425,7 +429,7 @@ export const useContactEditor = ({
         id: ContactId;
       } & Partial<
         Record<
-          "groupName" | "lnAddress" | "name" | "npub",
+          "groupName" | "groupNamesJson" | "lnAddress" | "name" | "npub",
           typeof Evolu.NonEmptyString1000.Type | null
         >
       >,
@@ -464,6 +468,12 @@ export const useContactEditor = ({
           payload.groupName !== undefined
             ? payload.groupName
             : (readText(source.groupName) as
+                | typeof Evolu.NonEmptyString1000.Type
+                | null),
+        groupNamesJson:
+          payload.groupNamesJson !== undefined
+            ? payload.groupNamesJson
+            : (readText(source.groupNamesJson) as
                 | typeof Evolu.NonEmptyString1000.Type
                 | null),
       };
@@ -570,7 +580,7 @@ export const useContactEditor = ({
           name: contactNewPrefill.suggestedName ?? "",
           npub: contactNewPrefill.npub ?? "",
           lnAddress: contactNewPrefill.lnAddress,
-          group: "",
+          groups: [],
         });
         setContactNewPrefill(null);
       } else if (previousRouteKind !== "contactNew") {
@@ -597,14 +607,14 @@ export const useContactEditor = ({
         name: String(selectedContact.name ?? ""),
         npub: String(selectedContact.npub ?? ""),
         lnAddress: String(selectedContact.lnAddress ?? ""),
-        group: String(selectedContact.groupName ?? ""),
+        groups: getContactGroups(selectedContact),
       };
     });
     setForm({
       name: String(selectedContact.name ?? ""),
       npub: String(selectedContact.npub ?? ""),
       lnAddress: String(selectedContact.lnAddress ?? ""),
-      group: String(selectedContact.groupName ?? ""),
+      groups: getContactGroups(selectedContact),
     });
   }, [
     contactNewPrefill,
@@ -649,7 +659,9 @@ export const useContactEditor = ({
     const name = form.name.trim();
     const rawNpub = form.npub.trim();
     const lnAddressInput = form.lnAddress.trim();
-    const group = form.group.trim();
+    const groups = form.groups;
+    const group = groups[0] ?? "";
+    const groupNamesJson = serializeContactGroups(groups);
 
     if (!name && !rawNpub && !lnAddressInput) {
       setStatus(t("fillAtLeastOne"));
@@ -732,11 +744,15 @@ export const useContactEditor = ({
         ? (lnAddress as typeof Evolu.NonEmptyString1000.Type)
         : null,
       groupName: group ? (group as typeof Evolu.NonEmptyString1000.Type) : null,
+      groupNamesJson: groups.length
+        ? (groupNamesJson as typeof Evolu.NonEmptyString1000.Type)
+        : null,
     };
     let savedContactId: ContactId | null = editingId;
 
     const createPayload: Partial<{
       groupName: typeof Evolu.NonEmptyString1000.Type;
+      groupNamesJson: typeof Evolu.NonEmptyString1000.Type;
       lnAddress: typeof Evolu.NonEmptyString1000.Type;
       name: typeof Evolu.NonEmptyString1000.Type;
       npub: typeof Evolu.NonEmptyString1000.Type;
@@ -745,6 +761,8 @@ export const useContactEditor = ({
     if (payload.npub) createPayload.npub = payload.npub;
     if (payload.lnAddress) createPayload.lnAddress = payload.lnAddress;
     if (payload.groupName) createPayload.groupName = payload.groupName;
+    if (payload.groupNamesJson)
+      createPayload.groupNamesJson = payload.groupNamesJson;
 
     if (editingId) {
       // Build update payload with only changed fields to minimize history entries.
@@ -753,7 +771,7 @@ export const useContactEditor = ({
         id: typeof editingId;
       } & Partial<
         Record<
-          "groupName" | "lnAddress" | "name" | "npub",
+          "groupName" | "groupNamesJson" | "lnAddress" | "name" | "npub",
           typeof Evolu.NonEmptyString1000.Type | null
         >
       > = { id: editingId };
@@ -763,11 +781,17 @@ export const useContactEditor = ({
         const nextNpub = payload.npub ? String(payload.npub) : null;
         const nextLn = payload.lnAddress ? String(payload.lnAddress) : null;
         const nextGroup = payload.groupName ? String(payload.groupName) : null;
+        const nextGroupsJson = payload.groupNamesJson
+          ? String(payload.groupNamesJson)
+          : null;
 
         const prevName = initial.name || null;
         const prevNpub = initial.npub || null;
         const prevLn = initial.lnAddress || null;
-        const prevGroup = initial.group || null;
+        const prevGroup = initial.groups[0] ?? null;
+        const prevGroupsJson = initial.groups.length
+          ? serializeContactGroups(initial.groups)
+          : null;
 
         if ((prevName ?? "") !== (nextName ?? "")) {
           changedFields.name = payload.name;
@@ -780,6 +804,9 @@ export const useContactEditor = ({
         }
         if ((prevGroup ?? "") !== (nextGroup ?? "")) {
           changedFields.groupName = payload.groupName;
+        }
+        if ((prevGroupsJson ?? "") !== (nextGroupsJson ?? "")) {
+          changedFields.groupNamesJson = payload.groupNamesJson;
         }
       } else {
         // Fallback: if we don't have initial data, update all fields.
@@ -841,7 +868,7 @@ export const useContactEditor = ({
     contacts,
     currentNpub,
     editingId,
-    form.group,
+    form.groups,
     form.lnAddress,
     form.name,
     form.npub,
@@ -1203,7 +1230,7 @@ export const useContactEditor = ({
     const name = form.name.trim();
     const npub = form.npub.trim();
     const lnAddress = form.lnAddress.trim();
-    const group = form.group.trim();
+    const groups = serializeContactGroups(form.groups);
 
     const hasRequired = Boolean(name || npub || lnAddress);
     if (!hasRequired) return false;
@@ -1212,13 +1239,13 @@ export const useContactEditor = ({
       name !== initial.name.trim() ||
       npub !== initial.npub.trim() ||
       lnAddress !== initial.lnAddress.trim() ||
-      group !== initial.group.trim();
+      groups !== serializeContactGroups(initial.groups);
 
     return dirty;
   }, [
     contactEditInitial,
     editingId,
-    form.group,
+    form.groups,
     form.lnAddress,
     form.name,
     form.npub,

@@ -1,14 +1,29 @@
 import { getPublicKey, nip19 } from "nostr-tools";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { registerPushNotifications } from "./pushNotifications";
+import {
+  registerPushNotifications,
+  unregisterPushNotifications,
+} from "./pushNotifications";
+
+const runtimeMocks = vi.hoisted(() => ({
+  isNativePlatform: vi.fn(() => false),
+}));
+
+const nativePushMocks = vi.hoisted(() => ({
+  unregister: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock("../platform/runtime", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../platform/runtime")>();
   return {
     ...actual,
-    isNativePlatform: () => false,
+    isNativePlatform: runtimeMocks.isNativePlatform,
   };
 });
+
+vi.mock("@capacitor/push-notifications", () => ({
+  PushNotifications: nativePushMocks,
+}));
 
 vi.mock("./pushDebugLog", () => ({
   appendPushDebugLog: vi.fn().mockResolvedValue(undefined),
@@ -98,6 +113,8 @@ beforeEach(() => {
   );
   recordedRequests = [];
   subscribeSucceeds = true;
+  runtimeMocks.isNativePlatform.mockReturnValue(false);
+  nativePushMocks.unregister.mockResolvedValue(undefined);
 
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -253,5 +270,19 @@ describe("registerPushNotifications browser lifecycle", () => {
     expect(localStorage.getItem("linky.push_subscription_pubkey")).toBe(
       "previous-pubkey",
     );
+  });
+});
+
+describe("unregisterPushNotifications native lifecycle", () => {
+  it("succeeds locally when no server-side token was stored", async () => {
+    runtimeMocks.isNativePlatform.mockReturnValue(true);
+
+    await expect(unregisterPushNotifications(NSEC)).resolves.toBe(true);
+
+    expect(nativePushMocks.unregister).toHaveBeenCalledOnce();
+    expect(
+      recordedRequests.some(({ url }) => url.endsWith("/native/unsubscribe")),
+    ).toBe(false);
+    expect(localStorage.getItem("linky.push_notifications_disabled")).toBe("1");
   });
 });

@@ -2,6 +2,7 @@ import React from "react";
 import type { Route } from "../../../types/route";
 import { buildBip321PaymentUri } from "../../../utils/bip321";
 import { MAIN_MINT_URL, normalizeMintUrl } from "../../../utils/mint";
+import { optimizeCaseInsensitiveQrPayload } from "../../../utils/qrPayload";
 import { buildCashuPaymentRequestMessage } from "../../lib/paymentRequestMessage";
 
 export interface TopupMintQuoteDraft {
@@ -214,7 +215,11 @@ export const useTopupInvoiceQuoteEffects = ({
       setTopupInvoiceError((current) => (current === null ? current : null));
 
       const QRCode = await import("qrcode");
-      const qr = await QRCode.toDataURL(input.payload, {
+      const qrPayload =
+        input.payload === input.invoice
+          ? optimizeCaseInsensitiveQrPayload(input.payload)
+          : input.payload;
+      const qr = await QRCode.toDataURL(qrPayload, {
         margin: 1,
         width: 320,
       });

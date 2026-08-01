@@ -310,11 +310,46 @@
   color: #e2e8f0;
 }
 
+.scan-video-wrap {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
 .scan-video {
   width: 100%;
   height: 100%;
   background: #0f172a;
   object-fit: cover;
+}
+
+.scan-camera-switch {
+  position: absolute;
+  right: 12px;
+  bottom: calc(var(--floating-safe-area-bottom) + 104px);
+  z-index: 2;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid rgba(226, 232, 240, 0.28);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.scan-camera-switch:hover,
+.scan-camera-switch:focus {
+  transform: none;
+  background: rgba(30, 41, 59, 0.94);
+}
+
+.scan-camera-switch span {
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .scan-footer {
@@ -1299,8 +1334,8 @@
   background: transparent;
 }
 
-.balance-number {
-  font-size: 44px;
+.wallet-hero .balance-number {
+  font-size: 48px;
 }
 
 .wallet-paste {
@@ -1423,6 +1458,17 @@ button.settings-link:hover {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.settings-description {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.settings-label-group-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .settings-right {
@@ -2666,6 +2712,26 @@ button.settings-sensitive-action.is-armed {
   user-select: all;
 }
 
+.chat-contact-pill.chat-compose-inline-pill {
+  cursor: pointer;
+  user-select: none;
+}
+
+.chat-compose-contact-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: -2px;
+  border-radius: 999px;
+  color: currentColor;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+  opacity: 0.72;
+}
+
 .chat-contact-pill-add {
   display: inline-flex;
   align-items: center;
@@ -3203,6 +3269,11 @@ button.danger {
   flex-wrap: wrap;
 }
 
+.wallet-actions .contacts-qr-btn {
+  flex-direction: column;
+  min-height: 88px;
+}
+
 .wallet-subtle-link {
   margin-top: 12px;
   padding: 0;
@@ -3729,6 +3800,28 @@ button.icon {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chat-add-all-contacts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(20, 184, 166, 0.16);
+  color: #99f6e4;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-add-all-contacts:hover,
+.chat-add-all-contacts:focus-visible {
+  background: rgba(20, 184, 166, 0.24);
 }
 
 .chat-payment-request-card {
@@ -4801,6 +4894,10 @@ button.icon {
   display: none;
 }
 
+.desktop-app-layout {
+  display: none;
+}
+
 .main-swipe:has(+ .bank-payment-offer-banner) > .main-swipe-contacts-page {
   padding-top: 48px;
 }
@@ -4816,6 +4913,279 @@ button.icon {
 }
 
 @media (min-width: 961px) {
+  .page.authenticated-page,
+  .page.authenticated-page.chat-page,
+  .page.authenticated-page.main-swipe-active {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    min-height: 0;
+    margin: 0;
+    padding: 18px;
+    overflow: hidden;
+  }
+
+  .mobile-app-topbar {
+    display: none;
+  }
+
+  .desktop-app-layout {
+    display: grid;
+    grid-template-columns: 104px minmax(360px, 0.88fr) minmax(420px, 1.12fr);
+    gap: 16px;
+    width: min(1240px, 100%);
+    height: 100%;
+    margin: 0 auto;
+  }
+
+  .desktop-app-layout.is-primary-only {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+
+  .desktop-navigation,
+  .desktop-primary-pane,
+  .desktop-secondary-pane {
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background: rgba(11, 18, 34, 0.72);
+    border-radius: 18px;
+  }
+
+  .desktop-navigation {
+    position: fixed;
+    top: 18px;
+    bottom: 18px;
+    left: 18px;
+    z-index: 5;
+    width: 104px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 18px 10px 12px;
+    border: 0;
+    background: transparent;
+  }
+
+  .desktop-navigation-profile {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 20px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 999px;
+    background: #0b1222;
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .desktop-navigation-profile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .desktop-navigation-main {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .desktop-navigation-item {
+    width: 100%;
+    min-height: 66px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 8px 4px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .desktop-navigation-item:hover,
+  .desktop-navigation-item:focus-visible {
+    transform: none;
+    box-shadow: none;
+    background: rgba(148, 163, 184, 0.08);
+    color: #e2e8f0;
+  }
+
+  .desktop-navigation-item.is-active {
+    background: rgba(45, 213, 190, 0.12);
+    color: #5eead4;
+  }
+
+  .desktop-navigation-settings {
+    margin-top: auto;
+  }
+
+  .desktop-primary-pane,
+  .desktop-secondary-pane {
+    overflow: hidden;
+  }
+
+  .desktop-primary-pane {
+    grid-column: 2;
+    border: 0;
+    background: transparent;
+  }
+
+  .desktop-primary-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    padding: 18px 20px;
+  }
+
+  .desktop-primary-content > .panel {
+    min-height: 0;
+    margin-top: 0;
+    overflow-y: auto;
+    background: transparent !important;
+    scrollbar-gutter: stable;
+  }
+
+  .desktop-contacts-pane > .panel,
+  .desktop-settings-pane > .settings-page {
+    flex: 1 1 auto;
+  }
+
+  .desktop-contacts-pane > .panel {
+    box-sizing: border-box;
+    margin-inline: -18px;
+    padding-inline: 18px;
+  }
+
+  .desktop-contacts-pane .contacts-toolbar {
+    flex: 0 0 auto;
+    background: transparent;
+  }
+
+  .desktop-contacts-pane .contact-card.is-active {
+    position: relative;
+    margin: 0;
+    padding: 8px 0;
+    background: transparent;
+  }
+
+  .desktop-contacts-pane .contact-card.is-active::before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    inset: -4px -12px;
+    border-radius: 18px;
+    background: rgba(45, 213, 190, 0.12);
+  }
+
+  .desktop-contacts-pane .contact-card.is-active > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .desktop-contacts-pane .contact-card.is-active .contact-title {
+    color: #99f6e4;
+  }
+
+  .desktop-contacts-pane .desktop-contacts-fab {
+    position: absolute;
+    right: 28px;
+    bottom: 26px;
+  }
+
+  .desktop-contacts-pane > .bank-payment-offer-banner {
+    position: absolute;
+  }
+
+  .desktop-wallet-pane .wallet-panel {
+    padding-bottom: 24px;
+  }
+
+  .desktop-secondary-pane {
+    grid-column: 3;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .desktop-app-topbar {
+    flex: 0 0 auto;
+  }
+
+  .desktop-app-topbar .topbar {
+    position: static;
+    min-height: 58px;
+    padding: 10px 18px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(15, 23, 42, 0.54);
+    backdrop-filter: none;
+  }
+
+  .desktop-app-topbar .topbar-profile-btn {
+    display: none;
+  }
+
+  .desktop-secondary-content {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 16px 24px 24px;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .desktop-secondary-content > .panel {
+    margin-top: 0;
+    padding-inline: 0;
+    background: transparent;
+  }
+
+  .page.authenticated-page.chat-page .desktop-secondary-content {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .desktop-secondary-content .chat-panel {
+    height: 100%;
+  }
+
+  .desktop-secondary-content .chat-compose {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    padding-inline: 18px;
+  }
+
+  .desktop-secondary-content .chat-messages {
+    padding-inline: 18px;
+  }
+
+  .desktop-secondary-pane > .scan-overlay {
+    position: absolute;
+    border-radius: inherit;
+    overflow: hidden;
+  }
+
+  .desktop-secondary-pane > .scan-overlay .scan-sheet {
+    height: 100%;
+  }
+
   .page.main-swipe-active {
     --desktop-wallet-share: 40%;
     --desktop-surface-radius: 16px;
@@ -4859,7 +5229,7 @@ button.icon {
     display: block;
     margin: 0 0 14px;
     color: #f8fafc;
-    font-size: 20px;
+    font-size: 16px;
     line-height: 1.2;
   }
 
@@ -4869,7 +5239,6 @@ button.icon {
   }
 
   .page.main-swipe-active .contacts-search-bar input {
-    border: 1px solid rgba(148, 163, 184, 0.18);
     border-radius: var(--desktop-surface-radius);
   }
 
@@ -5227,6 +5596,51 @@ button.icon {
   margin: 0;
   color: #94a3b8;
   font-size: 13px;
+}
+
+.contact-detail-groups {
+  justify-content: center;
+}
+
+.contact-detail-groups .group-filter-btn {
+  padding: 5px 10px;
+  background: rgba(148, 163, 184, 0.08);
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.contact-group-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.contact-group-selector {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.contact-group-selector::-webkit-scrollbar {
+  display: none;
+}
+
+.group-filter-btn.contact-group-pill {
+  padding: 6px 10px;
+  background: rgba(148, 163, 184, 0.08);
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.group-filter-btn.contact-group-pill.is-active {
+  background: rgba(20, 184, 166, 0.15);
+  color: #99f6e4;
 }
 
 .contact-detail-status {

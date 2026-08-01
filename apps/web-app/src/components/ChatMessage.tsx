@@ -2,6 +2,7 @@ import { Info, Plus, X } from "lucide-react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
+  isLinkyBankPaymentOfferWholeOfferTerminalStatus,
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
   type LinkyBankPaymentOfferInfo,
   type LinkyBankPaymentOfferStatus,
@@ -82,6 +83,7 @@ interface ChatMessageProps {
   onEdit: (message: LocalNostrMessage) => void;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
+  onAddNpubContacts: (npubs: readonly string[]) => void;
   onOpenNpubContact: (npub: string) => void;
   onPayPaymentRequest: (requestInfo: CashuPaymentRequestMessageInfo) => void;
   onReact: (message: LocalNostrMessage, emoji: string) => void;
@@ -175,6 +177,7 @@ function ChatMessageComponent({
   onEdit,
   onMintIconError,
   onMintIconLoad,
+  onAddNpubContacts,
   onOpenBankPaymentOfferDetails,
   onOpenNpubContact,
   onPayPaymentRequest,
@@ -503,6 +506,46 @@ function ChatMessageComponent({
     renderCashuTokenPill,
   ]);
 
+  const unsavedMessageContactNpubs = React.useMemo(() => {
+    if (
+      isOut ||
+      paymentRequestInfo ||
+      isDeclineMessage ||
+      bankPaymentOfferInfo ||
+      privateImageInfo
+    ) {
+      return [];
+    }
+
+    const npubs: string[] = [];
+    const seenNpubs = new Set<string>();
+    const matches = Array.from(content.matchAll(MESSAGE_INLINE_ENTITY_PATTERN));
+
+    for (const match of matches) {
+      const matchedText = String(match[0] ?? "");
+      if (!MESSAGE_NPUB_PATTERN.test(matchedText)) continue;
+
+      const normalizedNpub = normalizeNpubIdentifier(matchedText);
+      if (!normalizedNpub || seenNpubs.has(normalizedNpub)) continue;
+
+      const contactInfo = getNpubMessageContactInfo(normalizedNpub);
+      if (!contactInfo || contactInfo.isSaved) continue;
+
+      seenNpubs.add(normalizedNpub);
+      npubs.push(contactInfo.npub);
+    }
+
+    return npubs;
+  }, [
+    bankPaymentOfferInfo,
+    content,
+    getNpubMessageContactInfo,
+    isDeclineMessage,
+    isOut,
+    paymentRequestInfo,
+    privateImageInfo,
+  ]);
+
   const isStandaloneTokenMessage = React.useMemo(() => {
     if (!tokenInfo) return false;
     return isStandaloneCashuTokenMessage(content);
@@ -708,18 +751,22 @@ function ChatMessageComponent({
                       {bankOfferTimeLabel}
                     </div>
                   ) : null}
-                  <button
-                    type="button"
-                    className="btn-wide chat-payment-request-pay"
-                    onClick={onOpenBankPaymentOfferDetails}
-                  >
-                    <span className="btn-label-with-icon">
-                      <span className="btn-label-icon" aria-hidden="true">
-                        <Info size={18} />
+                  {!isLinkyBankPaymentOfferWholeOfferTerminalStatus(
+                    bankPaymentOfferInfo.status,
+                  ) ? (
+                    <button
+                      type="button"
+                      className="btn-wide chat-payment-request-pay"
+                      onClick={onOpenBankPaymentOfferDetails}
+                    >
+                      <span className="btn-label-with-icon">
+                        <span className="btn-label-icon" aria-hidden="true">
+                          <Info size={18} />
+                        </span>
+                        <span>{t("details")}</span>
                       </span>
-                      <span>{t("details")}</span>
-                    </span>
-                  </button>
+                    </button>
+                  ) : null}
                 </div>
               ) : paymentRequestInfo ? (
                 <div className="chat-payment-request-card">
@@ -794,6 +841,16 @@ function ChatMessageComponent({
               ) : (
                 content
               )}
+              {unsavedMessageContactNpubs.length > 1 ? (
+                <button
+                  type="button"
+                  className="chat-add-all-contacts"
+                  onClick={() => onAddNpubContacts(unsavedMessageContactNpubs)}
+                >
+                  <Plus size={15} strokeWidth={2.5} aria-hidden="true" />
+                  <span>{t("addAllContacts")}</span>
+                </button>
+              ) : null}
               {previewUrl ? (
                 <LinkPreviewCard key={previewUrl} url={previewUrl} />
               ) : null}

@@ -161,6 +161,7 @@ export type ContactRowLike = {
   archivedAtSec?: OptionalNumber;
   createdAt?: OptionalNumber;
   groupName?: OptionalText;
+  groupNamesJson?: OptionalText;
   id?: ContactIdLike;
   isUnknownContact?: boolean;
   lnAddress?: OptionalText;
@@ -260,7 +261,7 @@ export type ContactsGuideStep = {
 };
 
 export type ContactFormState = {
-  group: string;
+  groups: string[];
   lnAddress: string;
   name: string;
   npub: string;

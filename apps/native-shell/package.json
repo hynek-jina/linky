@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build:web": "bun run --filter @linky/web-app build",
+    "android:icons": "bash ./scripts/generate-android-icons.sh",
     "android:release:check": "bash ./scripts/check-android-release-prereqs.sh",
     "android:add": "bash ./scripts/with-java17.sh cap add android && bash ./scripts/patch-android-java.sh",
     "android:sync": "bun run build:web && bash ./scripts/with-java17.sh cap sync android && bash ./scripts/patch-android-java.sh",

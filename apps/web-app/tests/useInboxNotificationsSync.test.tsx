@@ -88,6 +88,14 @@ const flushEffects = async () => {
   });
 };
 
+const waitForInboxSubscription = async () => {
+  await act(async () => {
+    await vi.waitFor(() => {
+      expect(subscribeMock).toHaveBeenCalledTimes(1);
+    });
+  });
+};
+
 describe("useInboxNotificationsSync", () => {
   afterEach(() => {
     querySyncMock.mockReset();
@@ -199,8 +207,7 @@ describe("useInboxNotificationsSync", () => {
     await act(async () => {
       root.render(<Harness />);
     });
-    await flushEffects();
-    await flushEffects();
+    await waitForInboxSubscription();
 
     expect(appendLocalNostrMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -286,11 +293,9 @@ describe("useInboxNotificationsSync", () => {
 
     const root = createRoot(document.createElement("div"));
     await act(async () => root.render(<Harness />));
-    await flushEffects();
-    await flushEffects();
+    await waitForInboxSubscription();
 
     expect(appendLocalNostrMessage).toHaveBeenCalledTimes(2);
-    expect(subscribeMock).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
   });

@@ -4,7 +4,10 @@ import {
   useAppShellCore,
 } from "../app/context/AppShellContexts";
 import { shouldRenderNativeNfcWritePrompt } from "../platform/nativeBridge";
+import { useDesktopSplitView } from "../hooks/useDesktopSplitView";
+import { AppScanModal } from "./AppScanModal";
 import { ContactsGuideOverlay } from "./ContactsGuideOverlay";
+import { AppTopbar } from "./AppTopbar";
 import { LightningInvoiceConfirmModal } from "./LightningInvoiceConfirmModal";
 import { LnurlWithdrawConfirmModal } from "./LnurlWithdrawConfirmModal";
 import { MenuModal } from "./MenuModal";
@@ -13,9 +16,7 @@ import { NfcWriteModal } from "./NfcWriteModal";
 import { PaidOverlay } from "./PaidOverlay";
 import { PaymentMintMeltConfirmModal } from "./PaymentMintMeltConfirmModal";
 import { SaveContactPromptModal } from "./SaveContactPromptModal";
-import { ScanModal } from "./ScanModal";
 import { ShareOptionsModal } from "./ShareOptionsModal";
-import { Topbar } from "./Topbar";
 
 interface AuthenticatedLayoutProps {
   children: React.ReactNode;
@@ -26,22 +27,11 @@ export function AuthenticatedLayout({
 }: AuthenticatedLayoutProps): React.ReactElement {
   const actions = useAppShellActions();
   const state = useAppShellCore();
+  const isDesktopSplitView = useDesktopSplitView();
 
   return (
     <>
-      <Topbar
-        chatTopbarContact={state.chatTopbarContact}
-        currentNpub={state.currentNpub}
-        effectiveProfileName={state.effectiveProfileName}
-        effectiveProfilePicture={state.effectiveProfilePicture}
-        nostrPictureByNpub={state.nostrPictureByNpub}
-        openProfileQr={actions.openProfileQr}
-        route={state.route}
-        t={state.t}
-        topbar={state.topbar}
-        topbarRight={state.topbarRight}
-        topbarTitle={state.topbarTitle}
-      />
+      <AppTopbar className="mobile-app-topbar" />
 
       {state.contactsGuide && state.contactsGuideActiveStep?.step ? (
         <ContactsGuideOverlay
@@ -69,23 +59,7 @@ export function AuthenticatedLayout({
 
       {children}
 
-      {state.scanIsOpen && (
-        <ScanModal
-          closeScan={actions.closeScan}
-          onIssueToken={actions.openIssueTokenFromScan}
-          onPickScanImage={actions.onPickScanImage}
-          onScanImageSelected={actions.onScanImageSelected}
-          onTypePayment={actions.openManualPayFromScan}
-          onTypeManually={actions.openManualContactFromScan}
-          pasteScanValue={actions.pasteScanValue}
-          scanEntryPoint={state.scanEntryPoint}
-          scanImageInputRef={state.scanImageInputRef}
-          scanVideoRef={state.scanVideoRef}
-          showTypeAction={state.scanAllowsManualContact}
-          showWalletActions={!state.scanAllowsManualContact}
-          t={state.t}
-        />
-      )}
+      {!isDesktopSplitView ? <AppScanModal /> : null}
 
       {state.postPaySaveContact && !state.paidOverlayIsOpen ? (
         <SaveContactPromptModal

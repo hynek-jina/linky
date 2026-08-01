@@ -5,17 +5,21 @@ import {
   IssueTokenIcon,
   KeyboardIcon,
   PasteIcon,
+  SwitchCameraIcon,
   TopupIcon,
 } from "./icons";
 
 interface ScanModalProps {
   closeScan: () => void;
+  cycleScanCamera: () => void;
   onIssueToken: () => void;
   onPickScanImage: () => void;
   onScanImageSelected: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onTypePayment: () => void;
   onTypeManually: () => void;
   pasteScanValue: () => Promise<void>;
+  scanCameraLabel: string | null;
+  scanCanSwitchCamera: boolean;
   scanEntryPoint: "contacts" | "receive" | "send" | null;
   scanImageInputRef: React.RefObject<HTMLInputElement | null>;
   scanVideoRef: React.RefObject<HTMLVideoElement | null>;
@@ -26,12 +30,15 @@ interface ScanModalProps {
 
 export function ScanModal({
   closeScan,
+  cycleScanCamera,
   onIssueToken,
   onPickScanImage,
   onScanImageSelected,
   onTypePayment,
   onTypeManually,
   pasteScanValue,
+  scanCameraLabel,
+  scanCanSwitchCamera,
   scanEntryPoint,
   scanImageInputRef,
   scanVideoRef,
@@ -72,7 +79,21 @@ export function ScanModal({
           </button>
         </div>
 
-        <video ref={scanVideoRef} className="scan-video" />
+        <div className="scan-video-wrap">
+          <video ref={scanVideoRef} className="scan-video" />
+          {scanCanSwitchCamera ? (
+            <button
+              type="button"
+              className="scan-camera-switch"
+              onClick={cycleScanCamera}
+              aria-label={t("scanSwitchCamera")}
+              title={scanCameraLabel ?? t("scanSwitchCamera")}
+            >
+              <SwitchCameraIcon aria-hidden="true" />
+              <span>{t("scanSwitchCamera")}</span>
+            </button>
+          ) : null}
+        </div>
         <input
           ref={scanImageInputRef}
           type="file"

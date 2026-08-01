@@ -1,5 +1,6 @@
 export interface MessageMentionContact {
   groupName: string | null;
+  groupNames?: readonly string[];
   name: string;
   npub: string;
   statusNames: string[];
@@ -42,6 +43,7 @@ export const getMessageMentionQuery = (
 export const getMessageMentionSuggestions = (
   contacts: readonly MessageMentionContact[],
   query: string,
+  groupExcludedNpub?: string | null,
 ): MessageMentionSuggestion[] => {
   const normalizedQuery = normalizeSearchText(query);
   const matches = (value: string) =>
@@ -53,10 +55,14 @@ export const getMessageMentionSuggestions = (
 
   const contactsByGroup = new Map<string, MessageMentionContact[]>();
   for (const contact of contacts) {
-    const referenceNames = [contact.groupName, ...contact.statusNames];
+    const referenceNames = [
+      ...(contact.groupNames ?? [contact.groupName]),
+      ...contact.statusNames,
+    ];
     for (const referenceName of referenceNames) {
       const groupName = String(referenceName ?? "").trim();
       if (!groupName || !contact.npub || !matches(groupName)) continue;
+      if (contact.npub === groupExcludedNpub) continue;
       const existing = contactsByGroup.get(groupName) ?? [];
       if (!existing.some((candidate) => candidate.npub === contact.npub)) {
         existing.push(contact);

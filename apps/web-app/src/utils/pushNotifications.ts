@@ -140,6 +140,27 @@ export function setPushNotificationsDisabledByUser(disabled: boolean): void {
   localStorage.removeItem(PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY);
 }
 
+export async function hasNativePushRegistrationForIdentity(
+  currentNsec: string,
+): Promise<boolean> {
+  if (!isNativePlatform()) {
+    return false;
+  }
+
+  const token = readStoredRegisteredNativePushToken();
+  const registeredPubkey = readStoredRegisteredNativePushPubkey();
+  if (!token || !registeredPubkey) {
+    return false;
+  }
+
+  try {
+    const { pubkey } = await derivePushIdentity(currentNsec);
+    return registeredPubkey === pubkey;
+  } catch {
+    return false;
+  }
+}
+
 type PushSubscriptionData = {
   endpoint: string;
   expirationTime: number | null;
@@ -916,7 +937,7 @@ export async function unregisterPushNotifications(
         tokenHash: hashStoredIdentifier(storedToken),
         unregistered,
       });
-      return responseOk && unregistered;
+      return responseOk || unregistered;
     } catch (error) {
       await appendPushDebugLog("client", "native push unregister exception", {
         error,

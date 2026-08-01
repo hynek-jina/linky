@@ -26,10 +26,12 @@ import {
 } from "../utils/constants";
 import {
   applyAmountInputKey,
+  applyAmountInputKeyWithDraft,
   formatDisplayAmountParts,
   formatDisplayAmountText,
   getDisplayUnitLabel,
   getNextDisplayCurrency,
+  isFiatDisplayCurrency,
   normalizeAllowedDisplayCurrencies,
   type DisplayCurrency,
 } from "../utils/displayAmounts";
@@ -37,6 +39,7 @@ import { MAIN_MINT_URL, normalizeMintUrl } from "../utils/mint";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
   getInitialAllowedDisplayCurrencies,
+  getInitialDecimalAmountInputEnabled,
   getInitialDisplayCurrency,
   safeLocalStorageGet,
   safeLocalStorageSet,
@@ -65,6 +68,7 @@ import { useFiatRates } from "./hooks/useFiatRates";
 import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
+import { getDesktopActiveContactId } from "./routes/desktopRouteSection";
 import {
   buildIdentityChangeMessageContent,
   buildIdentityChangeMessageWrapId,
@@ -202,6 +206,8 @@ export const useAppShellComposition = ({
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(() =>
     getInitialDisplayCurrency(),
   );
+  const [decimalAmountInputEnabled, setDecimalAmountInputEnabled] =
+    useState<boolean>(getInitialDecimalAmountInputEnabled);
 
   React.useEffect(() => {
     if (allowedDisplayCurrencies.includes(displayCurrency)) return;
@@ -239,8 +245,16 @@ export const useAppShellComposition = ({
     [],
   );
 
+  const toggleDecimalAmountInput = React.useCallback(() => {
+    setDecimalAmountInputEnabled((current) => !current);
+  }, []);
+
   const fiatRates = useFiatRates();
   const displayUnit = getDisplayUnitLabel(displayCurrency, lang);
+  const decimalAmountInputKeyVisible =
+    decimalAmountInputEnabled &&
+    isFiatDisplayCurrency(displayCurrency) &&
+    fiatRates !== null;
   const applyDisplayedAmountInputKey = React.useCallback(
     (currentAmount: string, key: string) =>
       applyAmountInputKey(currentAmount, key, {
@@ -249,6 +263,17 @@ export const useAppShellComposition = ({
         lang,
       }),
     [displayCurrency, fiatRates, lang],
+  );
+  const applyDisplayedAmountInputKeyWithDraft = React.useCallback(
+    (currentAmount: string, currentDisplayValue: string | null, key: string) =>
+      applyAmountInputKeyWithDraft(
+        currentAmount,
+        currentDisplayValue,
+        key,
+        { displayCurrency, fiatRates, lang },
+        decimalAmountInputKeyVisible,
+      ),
+    [decimalAmountInputKeyVisible, displayCurrency, fiatRates, lang],
   );
   const formatDisplayedAmountParts = React.useCallback(
     (amountSat: number) =>
@@ -432,6 +457,7 @@ export const useAppShellComposition = ({
     activeNostrMessagePublishClientIdsRef,
     addNewContactFromIdentifier,
     addNewContactFromSearchResult,
+    addNpubMessageContacts,
     addUnknownContactFromChat,
     appendLocalNostrMessage,
     autoAcceptedChatMessageIdsRef,
@@ -894,6 +920,7 @@ export const useAppShellComposition = ({
   useAppPreferences({
     allowedDisplayCurrencies,
     cashuAutoswapEnabled,
+    decimalAmountInputEnabled,
     displayCurrency,
     bankPaymentOfferRecipientCount,
     lightningInvoiceAutoPayLimit,
@@ -932,6 +959,7 @@ export const useAppShellComposition = ({
     contactsOnboardingCelebrating,
     contactsOnboardingTasks,
     copyShareOptionsText,
+    cycleScanCamera,
     dismissContactsOnboarding,
     nfcWritePromptKind,
     onPickScanImage,
@@ -945,6 +973,8 @@ export const useAppShellComposition = ({
     openWalletScan,
     pasteScanValue,
     scanAllowsManualContact,
+    scanCameraLabel,
+    scanCanSwitchCamera,
     scanEntryPoint,
     scanImageInputRef,
     scanIsOpen,
@@ -1044,6 +1074,9 @@ export const useAppShellComposition = ({
           avatarUrl={avatarUrl}
           lastMessage={last ?? null}
           hasAttention={hasAttention}
+          isActive={
+            String(contact.id ?? "") === getDesktopActiveContactId(route)
+          }
           isUnknownContact={Boolean(contact.isUnknownContact)}
           statusText={statusText}
           tokenInfo={tokenInfo}
@@ -1066,6 +1099,7 @@ export const useAppShellComposition = ({
       lastMessageByContactId,
       nostrPictureByNpub,
       nostrStatusByNpub,
+      route,
     ],
   );
 
@@ -1208,12 +1242,21 @@ export const useAppShellComposition = ({
       buildTopbarRight({
         chatEditContactId,
         isProfileEditing,
+        openReceiveScan,
         openScan,
         route,
         t,
         toggleMenu,
       }),
-    [chatEditContactId, isProfileEditing, openScan, route, t, toggleMenu],
+    [
+      chatEditContactId,
+      isProfileEditing,
+      openReceiveScan,
+      openScan,
+      route,
+      t,
+      toggleMenu,
+    ],
   );
 
   const topbarTitle = React.useMemo(
@@ -1391,6 +1434,7 @@ export const useAppShellComposition = ({
       onCancelEdit,
       onCancelReply,
       onAddUnknownContact: addUnknownContactFromChat,
+      onAddNpubContacts: addNpubMessageContacts,
       onBlockUnknownContact: blockUnknownContactFromChat,
       onCopy: onCopyChatMessage,
       onDeclinePaymentRequest: onDeclineChatPaymentRequest,
@@ -1630,6 +1674,7 @@ export const useAppShellComposition = ({
     () => ({
       allowedDisplayCurrencies,
       applyAmountInputKey: applyDisplayedAmountInputKey,
+      applyAmountInputKeyWithDraft: applyDisplayedAmountInputKeyWithDraft,
       cashuBalance,
       cashuBalanceAfterMelt,
       cashuIsBusy,
@@ -1640,6 +1685,8 @@ export const useAppShellComposition = ({
       contactsGuideHighlightRect,
       currentNpub,
       currentNsec,
+      decimalAmountInputEnabled,
+      decimalAmountInputKeyVisible,
       displayCurrency,
       derivedProfile,
       displayUnit,
@@ -1678,6 +1725,8 @@ export const useAppShellComposition = ({
       profileSelectedPictureKind,
       route,
       scanAllowsManualContact,
+      scanCameraLabel,
+      scanCanSwitchCamera,
       scanEntryPoint,
       scanImageInputRef,
       scanIsOpen,
@@ -1692,6 +1741,7 @@ export const useAppShellComposition = ({
     [
       allowedDisplayCurrencies,
       applyDisplayedAmountInputKey,
+      applyDisplayedAmountInputKeyWithDraft,
       appOwnerId,
       cashuBalance,
       cashuBalanceAfterMelt,
@@ -1703,6 +1753,8 @@ export const useAppShellComposition = ({
       contactsGuideHighlightRect,
       currentNpub,
       currentNsec,
+      decimalAmountInputEnabled,
+      decimalAmountInputKeyVisible,
       derivedProfile,
       displayCurrency,
       displayUnit,
@@ -1740,6 +1792,8 @@ export const useAppShellComposition = ({
       profileStatusIsSaving,
       route,
       scanAllowsManualContact,
+      scanCameraLabel,
+      scanCanSwitchCamera,
       scanEntryPoint,
       scanImageInputRef,
       scanIsOpen,
@@ -1770,6 +1824,7 @@ export const useAppShellComposition = ({
       contactsGuideNav: stableContactsGuideNav,
       copyShareOptionsText,
       copyText,
+      cycleScanCamera,
       cycleDisplayCurrency,
       cycleProfileAvatarControl,
       onPickProfilePhoto,
@@ -1800,6 +1855,7 @@ export const useAppShellComposition = ({
       shareOptionsViaSms,
       shareOptionsViaWhatsApp,
       toggleAllowedDisplayCurrency,
+      toggleDecimalAmountInput,
       toggleProfileEditing,
       toggleProfileStatusCurrency,
       writeCurrentNpubToNfc,
@@ -1820,6 +1876,7 @@ export const useAppShellComposition = ({
       stableContactsGuideNav,
       copyShareOptionsText,
       copyText,
+      cycleScanCamera,
       cycleDisplayCurrency,
       cycleProfileAvatarControl,
       onPickProfilePhoto,
@@ -1850,6 +1907,7 @@ export const useAppShellComposition = ({
       shareOptionsViaWhatsApp,
       stopContactsGuide,
       toggleAllowedDisplayCurrency,
+      toggleDecimalAmountInput,
       toggleProfileEditing,
       toggleProfileStatusCurrency,
       writeCurrentNpubToNfc,

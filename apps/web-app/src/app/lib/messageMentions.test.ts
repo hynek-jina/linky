@@ -61,6 +61,28 @@ describe("message mentions", () => {
     });
   });
 
+  it("excludes the message recipient from group suggestions only", () => {
+    const suggestions = getMessageMentionSuggestions(
+      contacts,
+      "rod",
+      "npub1karel",
+    );
+    const group = suggestions.find((suggestion) => suggestion.kind === "group");
+    expect(group?.kind).toBe("group");
+    if (!group || group.kind !== "group") return;
+
+    expect(group.contacts.map((contact) => contact.npub)).toEqual([
+      "npub1anna",
+    ]);
+    expect(
+      getMessageMentionSuggestions(contacts, "karel", "npub1karel").some(
+        (suggestion) =>
+          suggestion.kind === "contact" &&
+          suggestion.contact.npub === "npub1karel",
+      ),
+    ).toBe(true);
+  });
+
   it("treats status currencies as contact groups", () => {
     const statusGroup = getMessageMentionSuggestions(contacts, "btc")[0];
     expect(statusGroup?.kind).toBe("group");

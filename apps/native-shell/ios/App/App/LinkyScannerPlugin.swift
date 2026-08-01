@@ -102,12 +102,26 @@ final class LinkyScannerViewController: UIViewController, AVCaptureMetadataOutpu
     }
 
     private func configureCaptureSession() {
-        guard let device = AVCaptureDevice.default(for: .video) else {
+        guard let device = AVCaptureDevice.default(
+            .builtInWideAngleCamera,
+            for: .video,
+            position: .back
+        ) ?? AVCaptureDevice.default(for: .video) else {
             delegate?.linkyScannerViewController(self, didFailWith: "Camera unavailable")
             return
         }
 
         do {
+            do {
+                try configureCamera(device)
+            } catch {
+                // Keep scanning with the device defaults if configuration is unavailable.
+            }
+
+            if captureSession.canSetSessionPreset(.high) {
+                captureSession.sessionPreset = .high
+            }
+
             let input = try AVCaptureDeviceInput(device: device)
             guard captureSession.canAddInput(input) else {
                 delegate?.linkyScannerViewController(self, didFailWith: "Camera input unavailable")
@@ -133,6 +147,27 @@ final class LinkyScannerViewController: UIViewController, AVCaptureMetadataOutpu
             self.previewLayer = previewLayer
         } catch {
             delegate?.linkyScannerViewController(self, didFailWith: "Camera setup failed")
+        }
+    }
+
+    private func configureCamera(_ device: AVCaptureDevice) throws {
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+
+        if device.isFocusPointOfInterestSupported {
+            device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+        }
+        if device.isFocusModeSupported(.continuousAutoFocus) {
+            device.focusMode = .continuousAutoFocus
+        }
+        if device.isAutoFocusRangeRestrictionSupported {
+            device.autoFocusRangeRestriction = .near
+        }
+        if device.isExposurePointOfInterestSupported {
+            device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+        }
+        if device.isExposureModeSupported(.continuousAutoExposure) {
+            device.exposureMode = .continuousAutoExposure
         }
     }
 

@@ -5,6 +5,7 @@ import { ContactAddIcon } from "../../components/icons";
 import { ContactsChecklist } from "../../components/ContactsChecklist";
 import { ContactsPage } from "../../pages/ContactsPage";
 import { WalletPage } from "../../pages/WalletPage";
+import { useDesktopSplitView } from "../../hooks/useDesktopSplitView";
 import type { Route } from "../../types/route";
 import {
   useAppShellCore,
@@ -71,23 +72,6 @@ const isContactsGuideKey = (value: string): value is ContactsGuideKey =>
   value === "pay" ||
   value === "message" ||
   value === "backup_keys";
-
-const DESKTOP_SPLIT_VIEW_QUERY = "(min-width: 961px)";
-
-const useDesktopSplitView = (): boolean => {
-  const [isDesktopSplitView, setIsDesktopSplitView] = React.useState(false);
-
-  React.useEffect(() => {
-    const mediaQuery = window.matchMedia(DESKTOP_SPLIT_VIEW_QUERY);
-    const updateMatch = () => setIsDesktopSplitView(mediaQuery.matches);
-
-    updateMatch();
-    mediaQuery.addEventListener("change", updateMatch);
-    return () => mediaQuery.removeEventListener("change", updateMatch);
-  }, []);
-
-  return isDesktopSplitView;
-};
 
 // Per-frame swipe progress subscribers are isolated in these two small
 // components so drag updates re-render only the tab bar and the FAB, not the
@@ -288,5 +272,121 @@ export const MainSwipeContent = (): React.ReactElement => {
         onClick={openNewContactPage}
       />
     </>
+  );
+};
+
+export const DesktopContactsPane = (): React.ReactElement => {
+  const { mainSwipeProps } = useMainSwipeRoutes();
+  const { formatDisplayedAmountText } = useAppShellCore();
+  const {
+    activeGroup,
+    bankPaymentOfferMessages,
+    canAddContact,
+    chatOwnPubkeyHex,
+    contactsOnboardingCelebrating,
+    contactsOnboardingTasks,
+    contactsSearch,
+    contactsSearchInputRef,
+    contactFilterOptions,
+    conversationsLabel,
+    dismissContactsOnboarding,
+    nostrPictureByNpub,
+    openNewContactPage,
+    otherContactsLabel,
+    renderContactCard,
+    setActiveGroup,
+    setContactsSearch,
+    showContactsOnboarding,
+    startContactsGuide,
+    t,
+    visibleContacts,
+  } = mainSwipeProps;
+
+  return (
+    <div className="desktop-primary-content desktop-contacts-pane">
+      <ContactsPage
+        onboardingContent={
+          showContactsOnboarding ? (
+            <ContactsChecklist
+              contactsOnboardingCelebrating={contactsOnboardingCelebrating}
+              dismissContactsOnboarding={dismissContactsOnboarding}
+              onShowHow={(key) => {
+                if (!isContactsGuideKey(key)) return;
+                startContactsGuide(key);
+              }}
+              progressPercent={contactsOnboardingTasks.percent}
+              t={t}
+              tasks={contactsOnboardingTasks.tasks}
+              tasksCompleted={contactsOnboardingTasks.done}
+              tasksTotal={contactsOnboardingTasks.total}
+            />
+          ) : null
+        }
+        contactsSearchInputRef={contactsSearchInputRef}
+        contactsSearch={contactsSearch}
+        setContactsSearch={setContactsSearch}
+        showGroupFilter={contactFilterOptions.length > 0}
+        activeGroup={activeGroup}
+        setActiveGroup={setActiveGroup}
+        filterOptions={contactFilterOptions}
+        visibleContacts={visibleContacts}
+        conversationsLabel={conversationsLabel}
+        otherContactsLabel={otherContactsLabel}
+        renderContactCard={renderContactCard}
+        bottomTabActive="contacts"
+        canAddContact={canAddContact}
+        openNewContactPage={openNewContactPage}
+        showBottomTabBar={false}
+        showFab={false}
+        t={t}
+      />
+      <BankPaymentOfferBanner
+        contacts={mainSwipeProps.contacts}
+        formatDisplayedAmountText={formatDisplayedAmountText}
+        messages={bankPaymentOfferMessages}
+        myPubkeyHex={chatOwnPubkeyHex}
+        nostrPictureByNpub={nostrPictureByNpub}
+        t={t}
+      />
+      <button
+        type="button"
+        className={`contacts-fab desktop-contacts-fab${canAddContact ? "" : " is-disabled"}`}
+        onClick={openNewContactPage}
+        aria-disabled={!canAddContact}
+        aria-label={t("addContact")}
+        title={t("addContact")}
+      >
+        <ContactAddIcon className="contacts-fab-svgIcon" />
+      </button>
+    </div>
+  );
+};
+
+export const DesktopWalletPane = (): React.ReactElement => {
+  const { mainSwipeProps } = useMainSwipeRoutes();
+  const {
+    cashuBalance,
+    cashuTotalBalance,
+    dismissWalletWarning,
+    openWalletScan,
+    scanIsOpen,
+    showWalletWarning,
+    t,
+  } = mainSwipeProps;
+
+  return (
+    <div className="desktop-primary-content desktop-wallet-pane">
+      <WalletPage
+        cashuBalance={cashuBalance}
+        cashuTotalBalance={cashuTotalBalance}
+        openScan={openWalletScan}
+        scanIsOpen={scanIsOpen}
+        bottomTabActive="wallet"
+        dismissWalletWarning={dismissWalletWarning}
+        showWalletWarning={showWalletWarning}
+        showBottomTabBar={false}
+        t={t}
+      />
+    </div>
   );
 };

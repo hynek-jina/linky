@@ -3,7 +3,8 @@ import { getSharedAppNostrPool } from "./app/lib/nostrPool";
 import { NOSTR_RELAYS } from "./nostrProfile";
 import { normalizeRelayUrls } from "./utils/nostrRelays";
 
-export const PROFILE_STATUS_CURRENCIES = ["BTC", "CZK", "USD"] as const;
+export const PROFILE_STATUS_CURRENCIES = ["BTC", "CZK", "EUR"] as const;
+const LEGACY_PROFILE_STATUS_CURRENCIES = ["USD"] as const;
 export const STATUS_FILTER_PREFIX = "status:";
 
 export type ProfileStatusCurrency = (typeof PROFILE_STATUS_CURRENCIES)[number];
@@ -70,11 +71,15 @@ const parseLinkyProfileExchangeStatus = (
   if (!parts) return null;
   if (parts.length === 0) return null;
 
-  const validCurrencies = new Set<string>(PROFILE_STATUS_CURRENCIES);
+  const validCurrencies = new Set<string>([
+    ...PROFILE_STATUS_CURRENCIES,
+    ...LEGACY_PROFILE_STATUS_CURRENCIES,
+  ]);
   if (!parts.every((part) => validCurrencies.has(part))) return null;
 
+  const supportedCurrencies = new Set<string>(PROFILE_STATUS_CURRENCIES);
   return parts.filter((part): part is ProfileStatusCurrency =>
-    validCurrencies.has(part),
+    supportedCurrencies.has(part),
   );
 };
 

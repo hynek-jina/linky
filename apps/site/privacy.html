@@ -24,6 +24,9 @@
           <button class="locale-pill" type="button" data-switch-locale="cs">
             CZ
           </button>
+          <button class="locale-pill" type="button" data-switch-locale="de">
+            DE
+          </button>
           <button class="locale-pill" type="button" data-switch-locale="en">
             EN
           </button>
@@ -97,6 +100,40 @@
               tvé zařízení publikována nebo dále relayována.
             </p>
           </section>
+          <section class="privacy-locale" data-locale="de" hidden>
+            <p class="privacy-eyebrow">Datenschutz</p>
+            <h1>Datenschutzerklärung</h1>
+            <p>
+              Linky ist eine Local-First-Anwendung für Kontakte, private
+              Nachrichten und Bitcoin-Zahlungen. Alle Daten sind nur für den
+              Nutzer zugänglich. Der Betreiber der App hat keinen Zugriff auf
+              Nachrichten, Kontakte oder Informationen über die Token-Beträge.
+            </p>
+            <p>
+              Die Daten werden über Evolu und Nostr-Relays synchronisiert,
+              können jedoch weiterhin nur vom Nutzer gelesen werden. Die App
+              verwendet außerdem Cashu-Mints von Drittanbietern zur Ausgabe von
+              Token und bietet optionale Push-Benachrichtigungen.
+            </p>
+            <p>
+              Private Schlüssel bleiben vollständig unter der Kontrolle des
+              Nutzers. Der Betreiber kann Nutzerdaten nicht wiederherstellen, da
+              er nicht über sie verfügt.
+            </p>
+            <p>
+              Diese Website unter linky.fit kann übliche technische Hosting- und
+              Sicherheitsprotokolle verarbeiten. Die Produkt-App unter
+              app.linky.fit kann außerdem für ihre Funktion notwendige
+              Netzwerkanfragen senden, darunter Anfragen an Relays, Mints,
+              LNURL-Dienste und den optionalen Linky-Push-Dienst.
+            </p>
+            <p>
+              Da Linky auf dezentralen und von Drittanbietern betriebenen
+              Systemen beruht, kann die vollständige Löschung bereits
+              veröffentlichter oder außerhalb deines Geräts weitergeleiteter
+              Daten nicht immer garantiert werden.
+            </p>
+          </section>
 
           <section id="how-to-delete-your-data" class="privacy-delete">
             <section class="privacy-locale" data-locale="en" hidden>
@@ -166,6 +203,42 @@
                 lokální šifrovaná data.
               </p>
             </section>
+
+            <section class="privacy-locale" data-locale="de" hidden>
+              <h2>So löschst du deine Daten</h2>
+              <p>
+                Linky betreibt kein herkömmliches serverseitiges Benutzerkonto,
+                in dem der Betreiber deine Kontakte, privaten Nachrichten oder
+                dein Wallet-Guthaben direkt einsehen oder für dich löschen
+                könnte. Die meisten Linky-Daten kontrollierst du selbst auf
+                deinem Gerät und über deine kryptografische Identität.
+              </p>
+              <p>
+                Um auf deinem Gerät gespeicherte Linky-Daten zu löschen, nutze
+                in der App die Optionen zum Abmelden und Zurücksetzen lokaler
+                Daten unter Einstellungen oder Erweitert. Alternativ kannst du
+                die App-Daten auf deinem Gerät löschen und die App
+                deinstallieren.
+              </p>
+              <p>
+                Wenn du Push-Benachrichtigungen aktiviert hast, deaktiviere sie
+                in der App oder auf deinem Gerät. Zugehörige Metadaten des
+                Push-Abonnements können für einen begrenzten technischen
+                Zeitraum auf dem Linky-Push-Dienst verbleiben und werden danach
+                beim Abmelden oder bei Bereinigungen entfernt.
+              </p>
+              <p>
+                Daten, die du zuvor auf dezentralen Nostr-Relays veröffentlicht
+                oder an Drittanbieter wie Relays, Cashu-Mints oder LNURL-Dienste
+                gesendet hast, können von Linky oder dem Linky-Betreiber
+                möglicherweise nicht vollständig gelöscht werden, nachdem sie
+                dein Gerät verlassen haben.
+              </p>
+              <p>
+                Linky kann gelöschte Schlüssel nicht wiederherstellen und
+                gelöschte lokale verschlüsselte Daten nicht rekonstruieren.
+              </p>
+            </section>
           </section>
         </section>
       </section>
@@ -177,12 +250,14 @@
           rel="noreferrer"
           data-label-en="GitHub"
           data-label-cs="GitHub"
+          data-label-de="GitHub"
           >GitHub</a
         >
         <a
           href="nostr://npub1kkht6jvgr8mt4844saf80j5jjwyy6fdy90sxsuxt4hfv8pel499s96jvz8"
           data-label-en="Nostr profile"
           data-label-cs="Nostr profil"
+          data-label-de="Nostr-Profil"
           >Nostr profile</a
         >
         <a
@@ -190,6 +265,7 @@
           aria-current="page"
           data-label-en="Privacy Policy"
           data-label-cs="Ochrana soukromí"
+          data-label-de="Datenschutz"
           >Privacy Policy</a
         >
       </footer>
@@ -201,7 +277,11 @@
 
       const detectLocale = () => {
         const savedLocale = window.localStorage.getItem(localeStorageKey);
-        if (savedLocale === "cs" || savedLocale === "en") {
+        if (
+          savedLocale === "cs" ||
+          savedLocale === "de" ||
+          savedLocale === "en"
+        ) {
           return savedLocale;
         }
 
@@ -214,14 +294,18 @@
             .trim()
             .toLowerCase();
           if (!normalized) continue;
-          return normalized.startsWith("cs") ? "cs" : "en";
+          if (normalized.startsWith("cs")) return "cs";
+          if (normalized.startsWith("de")) return "de";
+          return "en";
         }
 
         const fallbackLanguage = String(navigator.language ?? "")
           .trim()
           .toLowerCase();
 
-        return fallbackLanguage.startsWith("cs") ? "cs" : "en";
+        if (fallbackLanguage.startsWith("cs")) return "cs";
+        if (fallbackLanguage.startsWith("de")) return "de";
+        return "en";
       };
 
       const applyLocale = (locale) => {
@@ -243,7 +327,9 @@
           const label =
             locale === "cs"
               ? link.getAttribute("data-label-cs")
-              : link.getAttribute("data-label-en");
+              : locale === "de"
+                ? link.getAttribute("data-label-de")
+                : link.getAttribute("data-label-en");
 
           if (label) {
             link.textContent = label;
@@ -251,7 +337,11 @@
         }
 
         document.title =
-          locale === "cs" ? "Linky Ochrana soukromí" : "Linky Privacy Policy";
+          locale === "cs"
+            ? "Linky Ochrana soukromí"
+            : locale === "de"
+              ? "Linky Datenschutz"
+              : "Linky Privacy Policy";
       };
 
       const locale = detectLocale();
@@ -260,7 +350,11 @@
       for (const button of localeButtons) {
         button.addEventListener("click", () => {
           const nextLocale = button.getAttribute("data-switch-locale");
-          if (nextLocale !== "cs" && nextLocale !== "en") {
+          if (
+            nextLocale !== "cs" &&
+            nextLocale !== "de" &&
+            nextLocale !== "en"
+          ) {
             return;
           }
 

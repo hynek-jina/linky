@@ -13,6 +13,9 @@ export const getReceivedMoneyCopyForLanguage = (
   if (normalized.startsWith("cs")) {
     return "Přijali jste peníze";
   }
+  if (normalized.startsWith("de")) {
+    return "Du hast Geld erhalten";
+  }
   return "You received money";
 };
 
@@ -24,6 +27,9 @@ export const getBankPaymentReimbursementCopyForLanguage = (
     .toLowerCase();
   if (normalized.startsWith("cs")) {
     return "Dorazily ti saty za bankovní platbu";
+  }
+  if (normalized.startsWith("de")) {
+    return "Deine Sats für die Bankzahlung sind angekommen";
   }
   return "Your sats for the bank payment have arrived";
 };
