@@ -726,16 +726,28 @@ button {
 }
 
 .usp-section {
+  position: relative;
+  z-index: 3;
   margin-top: 28px;
   padding: 42px 22px;
-  border-radius: 30px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.usp-section::before {
+  position: absolute;
+  inset-block: 0;
+  right: calc((100% - 100vw) / 2);
+  left: calc((100% - 100vw) / 2);
+  z-index: -1;
+  content: "";
   background:
     radial-gradient(
       circle at 12% 12%,
       rgba(20, 184, 166, 0.11),
       transparent 30%
     ),
-    rgba(6, 25, 24, 0.68);
+    rgb(6, 25, 24);
 }
 
 .usp-section-title {
@@ -840,8 +852,12 @@ button {
 @media (min-width: 760px) {
   .hero-copy {
     grid-template-columns: minmax(0, 1fr) minmax(280px, 0.78fr);
-    align-items: end;
+    align-items: start;
     gap: 18px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(3.5rem, 8vw, 4.5rem);
   }
 
   .usp-section,
@@ -931,19 +947,9 @@ button {
     height: 64px;
   }
 
-  .hero {
-    min-height: calc(100vh - 148px);
-  }
-
-  .hero-copy,
-  .hero-image {
-    border-radius: 34px;
-  }
-
   .hero-copy {
+    border-radius: 34px;
     padding: 34px;
-    position: relative;
-    z-index: 2;
   }
 
   .topbar {
@@ -963,5 +969,55 @@ button {
     grid-template-columns: minmax(0, 1fr) minmax(240px, 360px);
     align-items: start;
     gap: 28px;
+  }
+}
+
+@media (max-width: 839px) {
+  .hero-copy {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-visual {
+    margin-bottom: -56px;
+  }
+}
+
+@media (min-width: 840px) {
+  .hero {
+    position: relative;
+    min-height: clamp(380px, 46vw, 680px);
+  }
+
+  .hero-copy {
+    display: block;
+  }
+
+  .hero-intro {
+    position: relative;
+    z-index: 2;
+    width: min(calc(52% - 18px), 34rem);
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(3.25rem, 6.5vw, 5.8rem);
+  }
+
+  .hero-visual {
+    position: absolute;
+    top: 34px;
+    right: calc((100% - 100vw) / 2);
+    bottom: -72px;
+    left: calc(52% + 18px);
+    z-index: 1;
+    width: auto;
+    margin: 0;
+  }
+
+  .hero-image {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    object-fit: contain;
+    object-position: top left;
   }
 }
