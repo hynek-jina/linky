@@ -479,6 +479,7 @@ export const de = {
   contactsOnboardingTaskPay: "Bezahlen",
   contactsOnboardingTaskMessage: "Nachricht senden",
   addContact: "Kontakt hinzufügen",
+  addAllContacts: "Alle hinzufügen",
   contactLoadQr: "QR-Code laden",
   search: "Suchen",
   contactSearching: "Wird gesucht…",
@@ -543,6 +544,7 @@ export const de = {
   fillAtLeastOne: "Fülle mindestens ein Feld aus.",
   contactsLimitReached: "Kontaktlimit erreicht ({max}).",
   contactSaved: "Kontakt gespeichert.",
+  contactsSaved: "Kontakte gespeichert ({count}).",
   contactUpdated: "Kontakt aktualisiert.",
   nip05NotFound: "NIP-05-Name {identifier} wurde nicht gefunden.",
   nip05ResolveFailed: "NIP-05-Name {identifier} konnte nicht geprüft werden.",
@@ -709,6 +711,7 @@ export const de = {
     "Zum Scannen ist eine sichere HTTPS-Verbindung erforderlich.",
   scanPermissionDenied: "Der Kamerazugriff wurde abgelehnt.",
   scanGallery: "Galerie",
+  scanSwitchCamera: "Kamera wechseln",
   scanImageUnsupported:
     "Im ausgewählten Bild wurde kein lesbarer QR-Code gefunden.",
   scanPastePrompt:
@@ -734,6 +737,9 @@ export const de = {
   unitCzkName: "Tschechische Kronen",
   unitUsdName: "US-Dollar",
   unitHiddenName: "Ausgeblendet",
+  decimalInput: "Dezimalstellen",
+  decimalInputDescription: "Cent-Beträge bei Fiatwährungen erlauben.",
+  decimalPoint: ",",
 
   cashuBalance: "Verfügbares Guthaben",
   pasteCashu: "Cashu einfügen",

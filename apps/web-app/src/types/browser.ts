@@ -75,18 +75,6 @@ declare global {
   }
 }
 
-export interface CameraPermissionStatusLike {
-  state?: string;
-}
-
-export interface NavigatorWithOptionalCameraPermissions {
-  permissions?: {
-    query?: (descriptor: {
-      name: "camera";
-    }) => Promise<CameraPermissionStatusLike>;
-  };
-}
-
 export interface CapacitorLike {
   getPlatform?: () => string;
   getServerUrl?: () => string | undefined;

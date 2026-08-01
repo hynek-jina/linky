@@ -1,5 +1,6 @@
 repository: https://github.com/hynek-jina/linky
 release_source: ./apps/native-shell/android/app/build/outputs/apk/release/app-release.apk
+release_notes: ./CHANGELOG.md
 description: |
     Linky is a mobile-first app for contacts, private Nostr messaging, and
     Lightning/Cashu payments.

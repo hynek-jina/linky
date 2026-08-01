@@ -2,6 +2,7 @@ import { useState, type Dispatch, type FC, type SetStateAction } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { AmountDisplay } from "../components/AmountDisplay";
 import { Keypad } from "../components/Keypad";
+import { useAmountInputKeypad } from "../components/useAmountInputKeypad";
 
 interface CashuTokenEmitPageProps {
   cashuBalance: number;
@@ -30,7 +31,7 @@ export const CashuTokenEmitPage: FC<CashuTokenEmitPageProps> = ({
   setCashuEmitAmount,
   t,
 }) => {
-  const { applyAmountInputKey, formatDisplayedAmountText } = useAppShellCore();
+  const { formatDisplayedAmountText } = useAppShellCore();
   const [mintWarningDismissed, setMintWarningDismissed] = useState(false);
   const amountSat = Number.parseInt(cashuEmitAmount.trim(), 10);
   const invalid =
@@ -49,6 +50,10 @@ export const CashuTokenEmitPage: FC<CashuTokenEmitPageProps> = ({
     amountSat > cashuBalance &&
     amountSat <= cashuBalanceAfterMelt &&
     !mintWarningDismissed;
+  const amountInput = useAmountInputKeypad({
+    amount: cashuEmitAmount,
+    onAmountChange: (nextAmount) => setCashuEmitAmount(nextAmount),
+  });
 
   return (
     <>
@@ -105,17 +110,23 @@ export const CashuTokenEmitPage: FC<CashuTokenEmitPageProps> = ({
           </div>
         </div>
 
-        <AmountDisplay amount={cashuEmitAmount} cycleOnClick />
+        <AmountDisplay
+          amount={cashuEmitAmount}
+          cycleOnClick
+          inputDisplayValue={amountInput.inputDisplayValue}
+        />
 
         <Keypad
           ariaLabel={`${t("payAmount")} (${displayUnit})`}
+          decimalKeyEnabled={amountInput.decimalKeyEnabled}
           disabled={cashuIsBusy}
           onKeyPress={(key: string) => {
             if (cashuIsBusy) return;
-            setCashuEmitAmount((value) => applyAmountInputKey(value, key));
+            amountInput.onKeyPress(key);
           }}
           translations={{
             clearForm: t("clearForm"),
+            decimalPoint: t("decimalPoint"),
             delete: t("delete"),
           }}
         />

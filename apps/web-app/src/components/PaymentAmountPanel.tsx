@@ -1,8 +1,8 @@
 import type { FC, ReactNode } from "react";
-import { useAppShellCore } from "../app/context/AppShellContexts";
 import { AmountDisplay } from "./AmountDisplay";
 import { PayIcon } from "./icons";
 import { Keypad } from "./Keypad";
+import { useAmountInputKeypad } from "./useAmountInputKeypad";
 
 interface PaymentAmountPanelProps {
   amount: string;
@@ -39,8 +39,11 @@ export const PaymentAmountPanel: FC<PaymentAmountPanelProps> = ({
   submitTitle,
   t,
 }) => {
-  const { applyAmountInputKey } = useAppShellCore();
   const isSubmitBusy = submitBusy ?? cashuIsBusy;
+  const amountInput = useAmountInputKeypad({
+    amount,
+    onAmountChange: (nextAmount) => onAmountChange(nextAmount),
+  });
 
   return (
     <section className="panel">
@@ -48,17 +51,23 @@ export const PaymentAmountPanel: FC<PaymentAmountPanelProps> = ({
       {notices}
 
       <div {...(stepGuideId ? { "data-guide": stepGuideId } : {})}>
-        <AmountDisplay amount={amount} cycleOnClick />
+        <AmountDisplay
+          amount={amount}
+          cycleOnClick
+          inputDisplayValue={amountInput.inputDisplayValue}
+        />
 
         <Keypad
           ariaLabel={`${t("payAmount")} (${displayUnit})`}
+          decimalKeyEnabled={amountInput.decimalKeyEnabled}
           disabled={cashuIsBusy}
           onKeyPress={(key: string) => {
             if (cashuIsBusy) return;
-            onAmountChange((value) => applyAmountInputKey(value, key));
+            amountInput.onKeyPress(key);
           }}
           translations={{
             clearForm: t("clearForm"),
+            decimalPoint: t("decimalPoint"),
             delete: t("delete"),
           }}
         />

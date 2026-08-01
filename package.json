@@ -16,6 +16,7 @@
     "site:build": "bun run --filter @linky/site build",
     "site:preview": "bun run --filter @linky/site preview",
     "native:android:release:check": "bun run --filter @linky/native-shell android:release:check",
+    "native:android:icons": "bun run --filter @linky/native-shell android:icons",
     "native:android:add": "bun run --filter @linky/native-shell android:add",
     "native:android:sync": "bun run --filter @linky/native-shell android:sync",
     "native:android:open": "bun run --filter @linky/native-shell android:open",

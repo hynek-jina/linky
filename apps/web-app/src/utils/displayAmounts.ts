@@ -36,7 +36,7 @@ export interface DisplayAmountParts {
 
 const SATS_PER_BTC = 100_000_000;
 
-const isFiatCurrency = (
+export const isFiatDisplayCurrency = (
   displayCurrency: DisplayCurrency,
 ): displayCurrency is FiatDisplayCurrency =>
   displayCurrency === "czk" ||
@@ -197,14 +197,24 @@ const parsePositiveInteger = (value: string): number => {
   return parsed;
 };
 
-const getDisplayAmountInputValue = (
+const parsePositiveDisplayNumber = (value: string): number => {
+  const normalized = String(value ?? "")
+    .trim()
+    .replace(",", ".");
+  if (!/^\d+(?:\.\d*)?$/.test(normalized)) return 0;
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return parsed;
+};
+
+export const getDisplayAmountInputValue = (
   amountSat: number,
   options: DisplayAmountOptions,
 ): string => {
   const normalizedAmount = normalizeAmountSat(amountSat);
   if (normalizedAmount <= 0) return "";
 
-  if (isFiatCurrency(options.displayCurrency) && options.fiatRates) {
+  if (isFiatDisplayCurrency(options.displayCurrency) && options.fiatRates) {
     return String(
       Math.max(
         0,
@@ -226,10 +236,10 @@ export const toAmountSatFromDisplayInput = (
   displayValue: string,
   options: DisplayAmountOptions,
 ): number => {
-  const parsedDisplayValue = parsePositiveInteger(displayValue);
+  const parsedDisplayValue = parsePositiveDisplayNumber(displayValue);
   if (parsedDisplayValue <= 0) return 0;
 
-  if (isFiatCurrency(options.displayCurrency) && options.fiatRates) {
+  if (isFiatDisplayCurrency(options.displayCurrency) && options.fiatRates) {
     const rate = getRateForCurrency(options.displayCurrency, options.fiatRates);
     const amountSat = Math.round((parsedDisplayValue / rate) * SATS_PER_BTC);
     return Number.isFinite(amountSat) && amountSat > 0 ? amountSat : 0;
@@ -238,26 +248,64 @@ export const toAmountSatFromDisplayInput = (
   return parsedDisplayValue;
 };
 
+export interface AmountInputKeyResult {
+  amountSat: string;
+  displayValue: string;
+}
+
+export const applyAmountInputKeyWithDraft = (
+  currentAmount: string,
+  currentDisplayValue: string | null,
+  key: string,
+  options: DisplayAmountOptions,
+  allowDecimals: boolean,
+): AmountInputKeyResult => {
+  const currentAmountSat = parsePositiveInteger(currentAmount);
+  const displayValue =
+    currentDisplayValue ??
+    getDisplayAmountInputValue(currentAmountSat, options);
+
+  let nextDisplayValue = displayValue;
+  if (key === "C") {
+    nextDisplayValue = "";
+  } else if (key === "⌫") {
+    nextDisplayValue = displayValue.slice(0, -1);
+  } else if (key === "." || key === ",") {
+    if (allowDecimals && !displayValue.includes(".")) {
+      nextDisplayValue = `${displayValue || "0"}.`;
+    }
+  } else if (/^\d$/.test(key)) {
+    const candidate = (displayValue + key).replace(/^0+(\d)/, "$1");
+    if (!allowDecimals || /^\d*(?:\.\d{0,2})?$/.test(candidate)) {
+      nextDisplayValue = candidate;
+    }
+  }
+
+  const nextAmountSat = toAmountSatFromDisplayInput(nextDisplayValue, options);
+  return {
+    amountSat: nextAmountSat > 0 ? String(nextAmountSat) : "",
+    displayValue: nextDisplayValue,
+  };
+};
+
 export const applyAmountInputKey = (
   currentAmount: string,
   key: string,
   options: DisplayAmountOptions,
 ): string => {
-  if (key === "C") return "";
-
   const currentAmountSat = parsePositiveInteger(currentAmount);
   const currentDisplayValue = getDisplayAmountInputValue(
     currentAmountSat,
     options,
   );
 
-  const nextDisplayValue =
-    key === "⌫"
-      ? currentDisplayValue.slice(0, -1)
-      : (currentDisplayValue + key).replace(/^0+(\d)/, "$1");
-
-  const nextAmountSat = toAmountSatFromDisplayInput(nextDisplayValue, options);
-  return nextAmountSat > 0 ? String(nextAmountSat) : "";
+  return applyAmountInputKeyWithDraft(
+    currentAmount,
+    currentDisplayValue,
+    key,
+    options,
+    false,
+  ).amountSat;
 };
 
 export const formatDisplayAmountParts = (
@@ -283,7 +331,7 @@ export const formatDisplayAmountParts = (
     };
   }
 
-  if (isFiatCurrency(options.displayCurrency) && options.fiatRates) {
+  if (isFiatDisplayCurrency(options.displayCurrency) && options.fiatRates) {
     const currency = options.displayCurrency;
     return {
       amountText: getFiatFormatter(locale, currency).format(

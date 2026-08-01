@@ -5,6 +5,7 @@ import {
 import {
   BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
   CASHU_AUTOSWAP_STORAGE_KEY,
+  DECIMAL_AMOUNT_INPUT_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_SAT,
@@ -250,6 +251,14 @@ export const getInitialAllowedDisplayCurrencies = (): DisplayCurrency[] => {
     );
   } catch {
     return getDefaultAllowedDisplayCurrencies();
+  }
+};
+
+export const getInitialDecimalAmountInputEnabled = (): boolean => {
+  try {
+    return localStorage.getItem(DECIMAL_AMOUNT_INPUT_STORAGE_KEY) === "1";
+  } catch {
+    return false;
   }
 };
 

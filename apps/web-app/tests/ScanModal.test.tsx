@@ -45,12 +45,15 @@ describe("ScanModal", () => {
 
   const baseProps = {
     closeScan: () => {},
+    cycleScanCamera: () => {},
     onIssueToken: () => {},
     onPickScanImage: () => {},
     onScanImageSelected: () => {},
     onTypePayment: () => {},
     onTypeManually: () => {},
     pasteScanValue: async () => {},
+    scanCameraLabel: null,
+    scanCanSwitchCamera: false,
     scanEntryPoint: null,
     scanImageInputRef: { current: null },
     scanVideoRef: { current: null },
@@ -77,6 +80,33 @@ describe("ScanModal", () => {
 
     expect(container.textContent).not.toContain("Type");
     expect(container.textContent).toContain("Paste");
+  });
+
+  it("offers camera switching when multiple cameras are available", async () => {
+    const cycleScanCamera = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <ScanModal
+          {...baseProps}
+          cycleScanCamera={cycleScanCamera}
+          scanCameraLabel="Back Camera 2"
+          scanCanSwitchCamera={true}
+        />,
+      );
+    });
+
+    const button = container.querySelector(".scan-camera-switch");
+    expect(button?.getAttribute("title")).toBe("Back Camera 2");
+
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(cycleScanCamera).toHaveBeenCalledTimes(1);
   });
 
   it("calls the manual handler when the type button is pressed", async () => {

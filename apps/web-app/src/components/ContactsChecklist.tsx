@@ -29,6 +29,7 @@ export function ContactsChecklist({
 }: ContactsChecklistProps): React.ReactElement {
   const isComplete =
     contactsOnboardingCelebrating || tasksCompleted === tasksTotal;
+  const nextTask = tasks.find((task) => !task.done);
 
   return (
     <section className="panel panel-plain contacts-checklist">
@@ -77,39 +78,29 @@ export function ContactsChecklist({
         </div>
       ) : (
         <div className="contacts-checklist-items" role="list">
-          {tasks.map((task) => (
+          {nextTask ? (
             <div
-              key={task.key}
-              className={
-                task.done
-                  ? "contacts-checklist-item is-done"
-                  : "contacts-checklist-item"
-              }
+              key={nextTask.key}
+              className="contacts-checklist-item"
               role="listitem"
             >
               <span
-                className={
-                  task.done
-                    ? "contacts-checklist-check is-done"
-                    : "contacts-checklist-check is-bullet"
-                }
+                className="contacts-checklist-check is-bullet"
                 aria-hidden="true"
               >
-                {task.done ? "✓" : "•"}
+                •
               </span>
-              <span className="contacts-checklist-label">{task.label}</span>
+              <span className="contacts-checklist-label">{nextTask.label}</span>
 
-              {!task.done ? (
-                <button
-                  type="button"
-                  className="contacts-checklist-how"
-                  onClick={() => onShowHow(task.key)}
-                >
-                  {t("contactsOnboardingShowHow")}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="contacts-checklist-how"
+                onClick={() => onShowHow(nextTask.key)}
+              >
+                {t("contactsOnboardingShowHow")}
+              </button>
             </div>
-          ))}
+          ) : null}
         </div>
       )}
     </section>

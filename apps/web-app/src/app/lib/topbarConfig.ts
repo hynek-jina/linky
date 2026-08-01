@@ -18,6 +18,7 @@ interface BuildTopbarArgs extends BackActionContext {
 interface BuildTopbarRightArgs {
   chatEditContactId: ContactId | null;
   isProfileEditing: boolean;
+  openReceiveScan: () => void;
   openScan: () => void;
   route: Route;
   t: (key: string) => string;
@@ -163,6 +164,7 @@ export const buildTopbar = ({
 export const buildTopbarRight = ({
   chatEditContactId,
   isProfileEditing,
+  openReceiveScan,
   openScan,
   route,
   t,
@@ -218,6 +220,14 @@ export const buildTopbarRight = ({
     };
   }
 
+  if (route.kind === "topup") {
+    return {
+      icon: "scan",
+      label: t("scan"),
+      onClick: openReceiveScan,
+    };
+  }
+
   if (
     route.kind === "settings" ||
     route.kind === "settingsUnits" ||
@@ -226,7 +236,6 @@ export const buildTopbarRight = ({
     route.kind === "advancedAutoPayLimit" ||
     route.kind === "advancedPushDebug" ||
     route.kind === "mints" ||
-    route.kind === "topup" ||
     route.kind === "topupNoAmount" ||
     route.kind === "topupInvoice" ||
     route.kind === "manualPay" ||

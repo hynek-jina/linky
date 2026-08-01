@@ -1,9 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  getInitialSiteDisplayCurrency,
-  siteDisplayCurrencyStorageKey,
-  type SiteDisplayCurrency,
-} from "./siteDisplayCurrency";
 import { SiteHeaderMenu } from "./SiteHeaderMenu";
 import { getDefaultSiteLocale, type SiteLocale } from "./sitePreferences";
 
@@ -20,12 +15,9 @@ interface UspItemCopy {
 
 interface LocaleCopy {
   czechLabel: string;
-  currencyLabel: string;
   englishLabel: string;
   germanLabel: string;
   htmlLang: string;
-  menuLabel: string;
-  openAppLabel: string;
   switchLabel: string;
   title: string;
   subtitle: string;
@@ -54,12 +46,9 @@ const zapstoreUrl = "https://zapstore.dev/apps/fit.linky.app";
 const copy: Record<Locale, LocaleCopy> = {
   cs: {
     czechLabel: "Čeština",
-    currencyLabel: "Jednotky",
     englishLabel: "English",
     germanLabel: "Deutsch",
     htmlLang: "cs",
-    menuLabel: "Menu",
-    openAppLabel: "Otevřít aplikaci",
     switchLabel: "Jazyk",
     title: "Budujte svou bitcoinovou síť",
     subtitle:
@@ -106,12 +95,9 @@ const copy: Record<Locale, LocaleCopy> = {
   },
   en: {
     czechLabel: "Čeština",
-    currencyLabel: "Units",
     englishLabel: "English",
     germanLabel: "Deutsch",
     htmlLang: "en",
-    menuLabel: "Menu",
-    openAppLabel: "Open web app",
     switchLabel: "Language",
     title: "Build your bitcoin network",
     subtitle:
@@ -158,12 +144,9 @@ const copy: Record<Locale, LocaleCopy> = {
   },
   de: {
     czechLabel: "Čeština",
-    currencyLabel: "Einheiten",
     englishLabel: "English",
     germanLabel: "Deutsch",
     htmlLang: "de",
-    menuLabel: "Menü",
-    openAppLabel: "Web-App öffnen",
     switchLabel: "Sprache",
     title: "Baue dein Bitcoin-Netzwerk auf",
     subtitle:
@@ -385,11 +368,9 @@ function AppCta({
 
 function App() {
   const [locale, setLocale] = useState<Locale>(getInitialLocale);
-  const [displayCurrency, setDisplayCurrency] = useState<SiteDisplayCurrency>(
-    getInitialSiteDisplayCurrency,
-  );
   const [preferredCtaMode, setPreferredCtaMode] =
     useState<CtaMode>(getDefaultCtaMode);
+  const [brandIsCompact, setBrandIsCompact] = useState(false);
   const activeCopy = useMemo(() => copy[locale], [locale]);
   const ctaMode = preferredCtaMode;
 
@@ -402,8 +383,16 @@ function App() {
   }, [locale]);
 
   useEffect(() => {
-    window.localStorage.setItem(siteDisplayCurrencyStorageKey, displayCurrency);
-  }, [displayCurrency]);
+    const updateBrand = () => {
+      setBrandIsCompact(window.scrollY > 72);
+    };
+
+    updateBrand();
+    window.addEventListener("scroll", updateBrand, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", updateBrand);
+    };
+  }, []);
 
   const openWebApp = () => {
     window.open("https://app.linky.fit", "_blank", "noopener,noreferrer");
@@ -445,7 +434,15 @@ function App() {
       <div className="site-backdrop" aria-hidden="true" />
 
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Linky home">
+        <a
+          className={
+            brandIsCompact
+              ? "brand brand-floating is-compact"
+              : "brand brand-floating"
+          }
+          href="/"
+          aria-label="Linky home"
+        >
           <span className="brand-mark">
             <img className="brand-logo" src="/icon.svg" alt="Linky" />
           </span>
@@ -455,19 +452,14 @@ function App() {
         <SiteHeaderMenu
           copy={{
             czechLabel: activeCopy.czechLabel,
-            currencyLabel: activeCopy.currencyLabel,
             englishLabel: activeCopy.englishLabel,
             germanLabel: activeCopy.germanLabel,
-            menuLabel: activeCopy.menuLabel,
-            openAppLabel: activeCopy.openAppLabel,
             switchLabel: activeCopy.switchLabel,
           }}
-          displayCurrency={displayCurrency}
           locale={locale}
           onLocaleChange={(nextLocale) => {
             setLocale(nextLocale);
           }}
-          setDisplayCurrency={setDisplayCurrency}
         />
       </header>
 
@@ -476,17 +468,6 @@ function App() {
           <div className="hero-intro">
             <h1>{activeCopy.title}</h1>
             <p className="lede">{activeCopy.subtitle}</p>
-
-            <AppCta
-              androidApkCta={activeCopy.androidApkCta}
-              ctaMenuLabel={activeCopy.ctaMenuLabel}
-              ctaMode={ctaMode}
-              googlePlayCta={activeCopy.googlePlayCta}
-              onPrimaryAction={handlePrimaryAction}
-              onSelectMode={setPreferredCtaMode}
-              webCta={activeCopy.webCta}
-              zapstoreCta={activeCopy.zapstoreCta}
-            />
           </div>
 
           <div className="hero-visual" aria-label={activeCopy.imageTitle}>
@@ -500,6 +481,7 @@ function App() {
       </section>
 
       <section className="usp-section" aria-label={activeCopy.uspSectionTitle}>
+        <h2 className="usp-section-title">{activeCopy.uspSectionTitle}</h2>
         <div className="usp-grid">
           {activeCopy.uspItems.map((item) => {
             return (
@@ -508,7 +490,7 @@ function App() {
                   <img src={item.imageSrc} alt={item.imageAlt} />
                 </div>
                 <div className="usp-card-copy">
-                  <h2>{item.title}</h2>
+                  <h3>{item.title}</h3>
                   <p>{item.description}</p>
                 </div>
               </article>
@@ -517,45 +499,50 @@ function App() {
         </div>
       </section>
 
-      <section className="closing-section">
-        <div className="closing-copy">
-          <h2>{activeCopy.closingSectionTitle}</h2>
-          <p>{activeCopy.closingSectionDescription}</p>
-          <AppCta
-            androidApkCta={activeCopy.androidApkCta}
-            ctaMenuLabel={activeCopy.ctaMenuLabel}
-            ctaMode={ctaMode}
-            googlePlayCta={activeCopy.googlePlayCta}
-            onPrimaryAction={handlePrimaryAction}
-            onSelectMode={setPreferredCtaMode}
-            webCta={activeCopy.webCta}
-            zapstoreCta={activeCopy.zapstoreCta}
-          />
+      <section className="footer-section">
+        <div className="closing-section">
+          <div className="closing-copy">
+            <h2>{activeCopy.closingSectionTitle}</h2>
+            <p>{activeCopy.closingSectionDescription}</p>
+          </div>
+
+          <div className="closing-visual">
+            <img
+              className="closing-image"
+              src="/not_personal.png"
+              alt={activeCopy.closingImageAlt}
+            />
+          </div>
         </div>
 
-        <div className="closing-visual">
-          <img
-            className="closing-image"
-            src="/not_personal.png"
-            alt={activeCopy.closingImageAlt}
-          />
-        </div>
+        <footer className="footer-links">
+          <a href="/cashu/">Cashu</a>
+          <a
+            href="https://github.com/hynek-jina/linky"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {activeCopy.githubLabel}
+          </a>
+          <a href="nostr://npub1kkht6jvgr8mt4844saf80j5jjwyy6fdy90sxsuxt4hfv8pel499s96jvz8">
+            {activeCopy.nostrLabel}
+          </a>
+          <a href="/privacy.html">{activeCopy.privacyLabel}</a>
+        </footer>
       </section>
 
-      <footer className="footer-links">
-        <a href="/cashu/">Cashu</a>
-        <a
-          href="https://github.com/hynek-jina/linky"
-          target="_blank"
-          rel="noreferrer"
-        >
-          {activeCopy.githubLabel}
-        </a>
-        <a href="nostr://npub1kkht6jvgr8mt4844saf80j5jjwyy6fdy90sxsuxt4hfv8pel499s96jvz8">
-          {activeCopy.nostrLabel}
-        </a>
-        <a href="/privacy.html">{activeCopy.privacyLabel}</a>
-      </footer>
+      <div className="floating-cta">
+        <AppCta
+          androidApkCta={activeCopy.androidApkCta}
+          ctaMenuLabel={activeCopy.ctaMenuLabel}
+          ctaMode={ctaMode}
+          googlePlayCta={activeCopy.googlePlayCta}
+          onPrimaryAction={handlePrimaryAction}
+          onSelectMode={setPreferredCtaMode}
+          webCta={activeCopy.webCta}
+          zapstoreCta={activeCopy.zapstoreCta}
+        />
+      </div>
     </main>
   );
 }

@@ -33,6 +33,7 @@ export const getDefaultSiteDisplayCurrency = (): SiteDisplayCurrency => {
   const language = getPrimaryBrowserLanguage();
 
   if (language.startsWith("cs")) return "czk";
+  if (language.startsWith("de")) return "eur";
   if (language.startsWith("en")) return "usd";
   return "sat";
 };

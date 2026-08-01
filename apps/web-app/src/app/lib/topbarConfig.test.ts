@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CashuTokenId, ContactId } from "../../evolu";
 import type { Route } from "../../types/route";
 import { setLinkyBankPaymentOfferMinimized } from "./bankPaymentOffer";
-import { resolveBackAction, type BackActionContext } from "./topbarConfig";
+import {
+  buildTopbarRight,
+  resolveBackAction,
+  type BackActionContext,
+} from "./topbarConfig";
 
 vi.mock("./bankPaymentOffer", () => ({
   setLinkyBankPaymentOfferMinimized: vi.fn(),
@@ -169,5 +173,25 @@ describe("resolveBackAction", () => {
       "offer-1",
       true,
     );
+  });
+});
+
+describe("buildTopbarRight", () => {
+  it("opens the receive scanner from the top-up page", () => {
+    const openReceiveScan = vi.fn();
+    const button = buildTopbarRight({
+      chatEditContactId: null,
+      isProfileEditing: false,
+      openReceiveScan,
+      openScan: vi.fn(),
+      route: { kind: "topup" },
+      t: (key) => key,
+      toggleMenu: vi.fn(),
+    });
+
+    button?.onClick();
+
+    expect(button?.icon).toBe("scan");
+    expect(openReceiveScan).toHaveBeenCalledOnce();
   });
 });

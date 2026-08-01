@@ -18,6 +18,7 @@ import {
   Send as LucideSend,
   Share2,
   SquarePlus,
+  SwitchCamera,
   UserPlus,
   Users,
   Wallet as LucideWallet,
@@ -127,6 +128,10 @@ export function TopupIcon({ size = 24, ...props }: IconProps) {
 
 export function GalleryIcon({ size = 24, ...props }: IconProps) {
   return <Images size={size} {...props} />;
+}
+
+export function SwitchCameraIcon({ size = 22, ...props }: IconProps) {
+  return <SwitchCamera size={size} {...props} />;
 }
 
 export function IssueTokenIcon({ size = 24, ...props }: IconProps) {

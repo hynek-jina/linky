@@ -4,12 +4,13 @@ import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useAdvancedSettingsContext } from "../app/context/SystemSettingsContexts";
 import { AmountDisplay } from "../components/AmountDisplay";
 import { Keypad } from "../components/Keypad";
+import { useAmountInputKeypad } from "../components/useAmountInputKeypad";
 import { useNavigation } from "../hooks/useRouting";
 
 export const AdvancedAutoPayLimitPage: FC = () => {
   const { lightningInvoiceAutoPayLimit, setLightningInvoiceAutoPayLimit } =
     useAdvancedSettingsContext();
-  const { applyAmountInputKey, displayUnit, t } = useAppShellCore();
+  const { displayUnit, t } = useAppShellCore();
   const navigateTo = useNavigation();
   const [amount, setAmount] = useState<string>(() =>
     lightningInvoiceAutoPayLimit > 0
@@ -18,19 +19,28 @@ export const AdvancedAutoPayLimitPage: FC = () => {
   );
   const amountSat = Number.parseInt(amount.trim(), 10);
   const invalid = !Number.isFinite(amountSat) || amountSat <= 0;
+  const amountInput = useAmountInputKeypad({
+    amount,
+    onAmountChange: setAmount,
+  });
 
   return (
     <section className="panel">
-      <AmountDisplay amount={amount} />
+      <AmountDisplay
+        amount={amount}
+        inputDisplayValue={amountInput.inputDisplayValue}
+      />
 
       <Keypad
         ariaLabel={`${t("payAmount")} (${displayUnit})`}
+        decimalKeyEnabled={amountInput.decimalKeyEnabled}
         disabled={false}
         onKeyPress={(key: string) => {
-          setAmount((value) => applyAmountInputKey(value, key));
+          amountInput.onKeyPress(key);
         }}
         translations={{
           clearForm: t("clearForm"),
+          decimalPoint: t("decimalPoint"),
           delete: t("delete"),
         }}
       />

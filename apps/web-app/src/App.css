@@ -310,11 +310,46 @@
   color: #e2e8f0;
 }
 
+.scan-video-wrap {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
 .scan-video {
   width: 100%;
   height: 100%;
   background: #0f172a;
   object-fit: cover;
+}
+
+.scan-camera-switch {
+  position: absolute;
+  right: 12px;
+  bottom: calc(var(--floating-safe-area-bottom) + 104px);
+  z-index: 2;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid rgba(226, 232, 240, 0.28);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.scan-camera-switch:hover,
+.scan-camera-switch:focus {
+  transform: none;
+  background: rgba(30, 41, 59, 0.94);
+}
+
+.scan-camera-switch span {
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .scan-footer {
@@ -1423,6 +1458,17 @@ button.settings-link:hover {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.settings-description {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.settings-label-group-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .settings-right {
@@ -3754,6 +3800,28 @@ button.icon {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chat-add-all-contacts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(20, 184, 166, 0.16);
+  color: #99f6e4;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-add-all-contacts:hover,
+.chat-add-all-contacts:focus-visible {
+  background: rgba(20, 184, 166, 0.24);
 }
 
 .chat-payment-request-card {

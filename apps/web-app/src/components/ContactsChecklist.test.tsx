@@ -1,0 +1,57 @@
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ContactsChecklist } from "./ContactsChecklist";
+
+Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
+  configurable: true,
+  value: true,
+  writable: true,
+});
+
+afterEach(() => {
+  document.body.innerHTML = "";
+});
+
+describe("ContactsChecklist", () => {
+  it("shows only the first incomplete task", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onShowHow = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <ContactsChecklist
+          contactsOnboardingCelebrating={false}
+          dismissContactsOnboarding={() => undefined}
+          onShowHow={onShowHow}
+          progressPercent={20}
+          t={(key) => key}
+          tasks={[
+            { done: true, key: "done", label: "Completed task" },
+            { done: false, key: "next", label: "Next task" },
+            { done: false, key: "later", label: "Later task" },
+          ]}
+          tasksCompleted={1}
+          tasksTotal={3}
+        />,
+      );
+    });
+
+    const items = container.querySelectorAll('[role="listitem"]');
+    expect(items).toHaveLength(1);
+    expect(items[0]?.textContent).toContain("Next task");
+    expect(container.textContent).not.toContain("Completed task");
+    expect(container.textContent).not.toContain("Later task");
+
+    await act(async () => {
+      items[0]
+        ?.querySelector("button")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onShowHow).toHaveBeenCalledWith("next");
+
+    await act(async () => root.unmount());
+  });
+});

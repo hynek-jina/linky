@@ -852,12 +852,12 @@ export const useContactsMessagingComposition = ({
     tokensSnapshot: cashuTokensAll,
     transactionsSnapshot: transactionsBootstrapSnapshot,
   });
-  const canRunNostrNetworkWork =
-    useDeferredOnlineReady() && nostrBootstrapReady;
+  const deferredOnlineReady = useDeferredOnlineReady();
+  const canRunNostrNetworkWork = deferredOnlineReady && nostrBootstrapReady;
 
   usePushRegistrationLifecycle({
     currentNsec,
-    enabled: canRunNostrNetworkWork,
+    enabled: deferredOnlineReady,
   });
 
   const {
@@ -2990,6 +2990,97 @@ export const useContactsMessagingComposition = ({
     ],
   );
 
+  const addNpubMessageContacts = React.useCallback(
+    (rawNpubs: readonly string[]) => {
+      const savedNpubs = new Set(
+        contacts.flatMap((contact) => {
+          const npub = normalizeNpubIdentifier(contact.npub);
+          return npub ? [npub] : [];
+        }),
+      );
+      const myNpub = normalizeNpubIdentifier(currentNpub);
+      if (myNpub) savedNpubs.add(myNpub);
+
+      const newNpubs: string[] = [];
+      for (const rawNpub of rawNpubs) {
+        const npub = normalizeNpubIdentifier(rawNpub);
+        if (!npub || savedNpubs.has(npub)) continue;
+        savedNpubs.add(npub);
+        newNpubs.push(npub);
+      }
+      if (newNpubs.length === 0) return;
+
+      if (
+        activeContactsOwnerContactCount + newNpubs.length >
+        MAX_CONTACTS_PER_OWNER
+      ) {
+        setStatus(
+          t("contactsLimitReached").replace(
+            "{max}",
+            String(MAX_CONTACTS_PER_OWNER),
+          ),
+        );
+        return;
+      }
+
+      const payloads = newNpubs.flatMap((npub) => {
+        const defaultProfile = deriveDefaultProfile(npub, lang);
+        const name = Evolu.NonEmptyString1000.fromUnknown(
+          buildSavedContactName(
+            unknownNameByNpub[npub] ?? defaultProfile.name,
+            npub,
+          ),
+        );
+        const parsedNpub = Evolu.NonEmptyString1000.fromUnknown(npub);
+        if (!name.ok || !parsedNpub.ok) return [];
+
+        return [
+          {
+            name: name.value,
+            npub: parsedNpub.value,
+            lnAddress: null,
+            groupName: null,
+          },
+        ];
+      });
+      if (payloads.length !== newNpubs.length) {
+        setStatus(`${t("errorPrefix")}: ${t("invalidNpub")}`);
+        return;
+      }
+
+      for (const payload of payloads) {
+        const result = contactsOwnerId
+          ? (() => {
+              const scoped = insert("contact", payload, {
+                ownerId: contactsOwnerId,
+              });
+              if (scoped.ok) return scoped;
+              return insert("contact", payload);
+            })()
+          : insert("contact", payload);
+
+        if (!result.ok) {
+          setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
+          return;
+        }
+      }
+
+      setStatus(t("contactsSaved").replace("{count}", String(payloads.length)));
+    },
+    [
+      activeContactsOwnerContactCount,
+      buildSavedContactName,
+      contacts,
+      contactsOwnerId,
+      currentNpub,
+      insert,
+      lang,
+      setStatus,
+      t,
+      unknownNameByNpub,
+    ],
+  );
+
   React.useEffect(() => {
     const pending = pendingUnknownContactAddRef.current;
     if (!pending) return;
@@ -3292,6 +3383,7 @@ export const useContactsMessagingComposition = ({
     activeNostrMessagePublishClientIdsRef,
     addNewContactFromIdentifier,
     addNewContactFromSearchResult,
+    addNpubMessageContacts,
     addUnknownContactFromChat,
     appendLocalNostrMessage,
     appendLocalNostrReaction,

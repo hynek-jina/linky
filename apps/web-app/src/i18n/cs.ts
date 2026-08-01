@@ -492,6 +492,7 @@ export const cs = {
   contactsOnboardingTaskPay: "Zaplatit",
   contactsOnboardingTaskMessage: "Poslat zprávu",
   addContact: "Přidat kontakt",
+  addAllContacts: "Přidat všechny",
   contactLoadQr: "Načíst QR",
   search: "Vyhledat",
   contactSearching: "Hledám...",
@@ -560,6 +561,7 @@ export const cs = {
   fillAtLeastOne: "Vyplňte alespoň jedno pole.",
   contactsLimitReached: "Byl dosažen limit kontaktů ({max}).",
   contactSaved: "Kontakt byl uložen.",
+  contactsSaved: "Kontakty byly uloženy ({count}).",
   contactUpdated: "Kontakt byl upraven.",
   nip05NotFound: "NIP-05 jméno {identifier} nebylo nalezeno.",
   nip05ResolveFailed: "NIP-05 jméno {identifier} se nepodařilo ověřit.",
@@ -728,6 +730,7 @@ export const cs = {
   scanPermissionDenied:
     "Přístup ke kameře byl zamítnut. V Brave klikněte na zámek → Nastavení webu → Kamera → Povolit a stránku obnovte.",
   scanGallery: "Galerie",
+  scanSwitchCamera: "Přepnout kameru",
   scanImageUnsupported: "Ve vybraném obrázku jsem nenašel čitelný QR kód.",
   scanPastePrompt: "Vložte LN fakturu, Cashu token, LNURL nebo npub.",
   scanReceiveUnsupportedPayment:
@@ -750,6 +753,9 @@ export const cs = {
   unitCzkName: "České koruny",
   unitUsdName: "Americké dolary",
   unitHiddenName: "Skryté",
+  decimalInput: "Desetinná místa",
+  decimalInputDescription: "Povolit zadávání haléřů u fiat měn.",
+  decimalPoint: ",",
 
   cashuBalance: "Dostupný zůstatek",
   pasteCashu: "Vložit cashu",

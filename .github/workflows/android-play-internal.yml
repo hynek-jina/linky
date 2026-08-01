@@ -93,6 +93,15 @@ jobs:
           name: android-release-aab
           path: apps/native-shell/android/app/build/outputs/bundle/release/app-release.aab
 
+      - name: Prepare localized release notes
+        run: |
+          workspace_version="$(bun -p 'require("./package.json").version')"
+          whats_new_dir="$RUNNER_TEMP/google-play-whats-new"
+          apps/native-shell/scripts/extract-release-notes.sh \
+            "$workspace_version" "$whats_new_dir/whatsnew-cs-CZ" cs-CZ
+          apps/native-shell/scripts/extract-release-notes.sh \
+            "$workspace_version" "$whats_new_dir/whatsnew-en-US" en-US
+
       - name: Upload to Google Play internal track
         uses: r0adkll/upload-google-play@v1
         with:
@@ -101,3 +110,4 @@ jobs:
           releaseFiles: apps/native-shell/android/app/build/outputs/bundle/release/app-release.aab
           tracks: ${{ env.PLAY_TRACK }}
           status: completed
+          whatsNewDirectory: ${{ runner.temp }}/google-play-whats-new

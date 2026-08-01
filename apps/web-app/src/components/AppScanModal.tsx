@@ -14,12 +14,15 @@ export function AppScanModal(): React.ReactElement | null {
   return (
     <ScanModal
       closeScan={actions.closeScan}
+      cycleScanCamera={actions.cycleScanCamera}
       onIssueToken={actions.openIssueTokenFromScan}
       onPickScanImage={actions.onPickScanImage}
       onScanImageSelected={actions.onScanImageSelected}
       onTypePayment={actions.openManualPayFromScan}
       onTypeManually={actions.openManualContactFromScan}
       pasteScanValue={actions.pasteScanValue}
+      scanCameraLabel={state.scanCameraLabel}
+      scanCanSwitchCamera={state.scanCanSwitchCamera}
       scanEntryPoint={state.scanEntryPoint}
       scanImageInputRef={state.scanImageInputRef}
       scanVideoRef={state.scanVideoRef}

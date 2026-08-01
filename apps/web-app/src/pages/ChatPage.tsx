@@ -102,6 +102,7 @@ interface ChatPageProps {
   onCancelEdit: () => void;
   onCancelReply: () => void;
   onAddUnknownContact: () => Promise<void>;
+  onAddNpubContacts: (npubs: readonly string[]) => void;
   onBlockUnknownContact: () => Promise<void>;
   onCopy: (message: LocalNostrMessage) => void;
   onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
@@ -257,6 +258,7 @@ interface ChatMessageListProps {
   getNpubMessageContactInfo: ChatPageProps["getNpubMessageContactInfo"];
   lang: string;
   onCopy: ChatPageProps["onCopy"];
+  onAddNpubContacts: ChatPageProps["onAddNpubContacts"];
   onDeclinePaymentRequest: ChatPageProps["onDeclinePaymentRequest"];
   onEdit: ChatPageProps["onEdit"];
   onOpenNpubContact: ChatPageProps["onOpenNpubContact"];
@@ -283,6 +285,7 @@ const ChatMessageList = memo(function ChatMessageList({
   getNpubMessageContactInfo,
   lang,
   onCopy,
+  onAddNpubContacts,
   onDeclinePaymentRequest,
   onEdit,
   onOpenNpubContact,
@@ -516,6 +519,7 @@ const ChatMessageList = memo(function ChatMessageList({
             payPaymentRequestBusy={cashuIsBusy}
             replyQuoteText={viewModel.replyQuoteText}
             onCopy={onCopy}
+            onAddNpubContacts={onAddNpubContacts}
             onEdit={onEdit}
             onOpenNpubContact={onOpenNpubContact}
             onReact={onReact}
@@ -1097,6 +1101,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   onCancelEdit,
   onCancelReply,
   onAddUnknownContact,
+  onAddNpubContacts,
   onBlockUnknownContact,
   onCopy,
   onDeclinePaymentRequest,
@@ -1239,6 +1244,7 @@ export const ChatPage: FC<ChatPageProps> = ({
         getNpubMessageContactInfo={getNpubMessageContactInfo}
         lang={lang}
         onCopy={onCopy}
+        onAddNpubContacts={onAddNpubContacts}
         onDeclinePaymentRequest={onDeclinePaymentRequest}
         onEdit={onEdit}
         onOpenNpubContact={onOpenNpubContact}

@@ -225,18 +225,23 @@ export function AdvancedPage(): React.ReactElement {
     let isActive = true;
     void (async () => {
       try {
-        const { arePushNotificationsDisabledByUser } =
-          await import("../utils/pushNotifications");
+        const {
+          arePushNotificationsDisabledByUser,
+          hasNativePushRegistrationForIdentity,
+        } = await import("../utils/pushNotifications");
         if (arePushNotificationsDisabledByUser()) {
           if (isActive) setNotificationsEnabled(false);
           return;
         }
 
         if (isNativePlatform()) {
+          const permissionGranted =
+            getNativeNotificationPermissionState() === "granted";
+          const registrationStored = currentNsec
+            ? await hasNativePushRegistrationForIdentity(currentNsec)
+            : false;
           if (isActive) {
-            setNotificationsEnabled(
-              getNativeNotificationPermissionState() === "granted",
-            );
+            setNotificationsEnabled(permissionGranted && registrationStored);
           }
           return;
         }
@@ -263,7 +268,7 @@ export function AdvancedPage(): React.ReactElement {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [currentNsec]);
 
   const handleNotificationsChange = async (enabled: boolean) => {
     if (!currentNsec) {

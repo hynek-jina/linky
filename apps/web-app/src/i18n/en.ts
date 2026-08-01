@@ -489,6 +489,7 @@ export const en = {
   contactsOnboardingTaskPay: "Pay",
   contactsOnboardingTaskMessage: "Send a message",
   addContact: "Add contact",
+  addAllContacts: "Add all",
   contactLoadQr: "Load QR",
   search: "Search",
   contactSearching: "Searching...",
@@ -557,6 +558,7 @@ export const en = {
   fillAtLeastOne: "Fill in at least one field.",
   contactsLimitReached: "Contact limit reached ({max}).",
   contactSaved: "Contact saved.",
+  contactsSaved: "Contacts saved ({count}).",
   contactUpdated: "Contact updated.",
   nip05NotFound: "NIP-05 name {identifier} was not found.",
   nip05ResolveFailed: "NIP-05 name {identifier} could not be checked.",
@@ -722,6 +724,7 @@ export const en = {
   scanPermissionDenied:
     "Camera permission denied. In Brave: click the lock icon → Site settings → Camera → Allow, then reload.",
   scanGallery: "Gallery",
+  scanSwitchCamera: "Switch camera",
   scanImageUnsupported: "No readable QR code found in the selected image.",
   scanPastePrompt: "Paste an LN invoice, Cashu token, LNURL, or npub.",
   scanReceiveUnsupportedPayment:
@@ -744,6 +747,9 @@ export const en = {
   unitCzkName: "Czech koruna",
   unitUsdName: "US dollars",
   unitHiddenName: "Hidden",
+  decimalInput: "Decimal places",
+  decimalInputDescription: "Allow cents when entering fiat amounts.",
+  decimalPoint: ".",
 
   cashuBalance: "Available balance",
   pasteCashu: "Paste cashu",

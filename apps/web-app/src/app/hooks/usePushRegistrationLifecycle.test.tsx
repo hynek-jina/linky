@@ -231,6 +231,32 @@ describe("usePushRegistrationLifecycle", () => {
     );
   });
 
+  it("revalidates native registration after returning to the foreground", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    platformMocks.isNativePlatform.mockReturnValue(true);
+    Reflect.deleteProperty(window, "Notification");
+    Reflect.deleteProperty(window, "PushManager");
+    Reflect.deleteProperty(navigator, "serviceWorker");
+
+    await renderLifecycle();
+    await flushLifecycle();
+    expect(pushMocks.registerPushNotifications).toHaveBeenCalledOnce();
+
+    pushMocks.registerPushNotifications.mockClear();
+    window.dispatchEvent(new Event("focus"));
+    await flushLifecycle();
+    expect(pushMocks.registerPushNotifications).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    window.dispatchEvent(new Event("focus"));
+    await flushLifecycle();
+    expect(pushMocks.registerPushNotifications).toHaveBeenCalledOnce();
+    expect(pushMocks.registerPushNotifications).toHaveBeenCalledWith(
+      "nsec-test",
+    );
+  });
+
   it("revalidates only while visible and respects the 12-hour cooldown", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));

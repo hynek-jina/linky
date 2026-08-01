@@ -64,6 +64,10 @@ jobs:
           echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
           echo "APK_PATH=apps/native-shell/android/app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_ENV"
           echo "APK_UPLOAD_PATH=$RUNNER_TEMP/linky.apk" >> "$GITHUB_ENV"
+          echo "RELEASE_NOTES_PATH=$RUNNER_TEMP/release-notes.md" >> "$GITHUB_ENV"
+
+      - name: Prepare release notes
+        run: apps/native-shell/scripts/extract-release-notes.sh "$RELEASE_TAG" "$RELEASE_NOTES_PATH"
 
       - name: Restore Android Firebase config
         env:
@@ -129,11 +133,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --notes-file "$RELEASE_NOTES_PATH"
             gh release upload "$RELEASE_TAG" "$APK_UPLOAD_PATH" --clobber
           else
             gh release create "$RELEASE_TAG" "$APK_UPLOAD_PATH" \
               --title "Linky $RELEASE_TAG" \
-              --notes "Signed Android APK release for Linky." \
+              --notes-file "$RELEASE_NOTES_PATH" \
               --target "$GITHUB_SHA"
           fi
 
