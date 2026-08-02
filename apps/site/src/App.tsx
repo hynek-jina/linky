@@ -509,7 +509,7 @@ function App() {
           <div className="closing-visual">
             <img
               className="closing-image"
-              src="/not_personal.png"
+              src="/not_personal.svg"
               alt={activeCopy.closingImageAlt}
             />
           </div>
