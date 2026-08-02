@@ -73,9 +73,11 @@
 
         const markRecoveryAttempt = () => {
           try {
-            sessionStorage.setItem(recoveryKey, String(Date.now()));
+            const value = String(Date.now());
+            sessionStorage.setItem(recoveryKey, value);
+            return sessionStorage.getItem(recoveryKey) === value;
           } catch {
-            // A reload can still recover when sessionStorage is unavailable.
+            return false;
           }
         };
 
@@ -105,8 +107,12 @@
           }
         };
 
-        const recoverAndReload = async () => {
-          markRecoveryAttempt();
+        const recoverAndReload = async (requireRecoveryMarker = false) => {
+          const recoveryWasMarked = markRecoveryAttempt();
+          if (requireRecoveryMarker && !recoveryWasMarked) {
+            renderBootFailure();
+            return;
+          }
           await Promise.race([
             clearAppCaches().catch(() => undefined),
             new Promise((resolve) => window.setTimeout(resolve, 2_500)),
@@ -163,7 +169,7 @@
           const recoveryWasRecent =
             Date.now() - readLastRecoveryAt() < retryCooldownMs;
           if (navigator.onLine !== false && !recoveryWasRecent) {
-            void recoverAndReload();
+            void recoverAndReload(true);
             return;
           }
           renderBootFailure();

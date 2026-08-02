@@ -10,6 +10,7 @@ interface PasswordManagerSaveFormProps {
 }
 
 const PASSWORD_MANAGER_SAVE_TARGET = "linky-password-manager-save-target";
+const PASSWORD_MANAGER_SAVE_ACTION = "/password-save.html";
 
 export const PasswordManagerSaveForm = React.forwardRef<
   PasswordManagerSaveFormHandle,
@@ -52,7 +53,7 @@ export const PasswordManagerSaveForm = React.forwardRef<
         ref={formRef}
         className="onboarding-password-save-form"
         method="post"
-        action="/"
+        action={PASSWORD_MANAGER_SAVE_ACTION}
         target={PASSWORD_MANAGER_SAVE_TARGET}
         autoComplete="on"
         aria-hidden="true"

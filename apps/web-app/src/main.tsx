@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
+import { BootCommitSignal } from "./components/BootCommitSignal";
 import "./index.css";
 import type {
   BroadcastChannelLike,
@@ -581,6 +582,7 @@ const renderBootError = (error: unknown) => {
 
 const bootstrap = async () => {
   let stage = "init";
+  let appCommitRecorded = false;
   // Surface a stuck-loading state with the last completed boot stage so we
   // can tell whether bootstrap froze in dynamic imports, polyfills, or the
   // first render. Mostly catches iOS Safari private-mode quirks where a
@@ -605,24 +607,30 @@ const bootstrap = async () => {
     const { evolu, EvoluProvider } = await import("./evolu.ts");
     console.log("[linky][boot] evolu loaded");
 
-    stage = "render";
+    stage = "await-render-commit";
     const root = createRoot(document.getElementById("root")!);
+    const recordAppCommit = () => {
+      if (appCommitRecorded) return;
+      appCommitRecorded = true;
+      stage = "mounted";
+      window.clearTimeout(stuckTimer);
+      appHasMounted = true;
+      window.dispatchEvent(new Event("linky-app-mounted"));
+      clearDynamicImportFetchRetry();
+    };
     flushSync(() => {
       root.render(
         <StrictMode>
           <EvoluProvider value={evolu}>
             <ErrorBoundary>
+              <BootCommitSignal onCommit={recordAppCommit} />
               <App />
             </ErrorBoundary>
           </EvoluProvider>
         </StrictMode>,
       );
     });
-    console.log("[linky][boot] rendered");
-    window.clearTimeout(stuckTimer);
-    appHasMounted = true;
-    window.dispatchEvent(new Event("linky-app-mounted"));
-    clearDynamicImportFetchRetry();
+    console.log("[linky][boot] render scheduled");
   } catch (error) {
     window.clearTimeout(stuckTimer);
     console.error(`Boot failed at stage ${stage}:`, error);
