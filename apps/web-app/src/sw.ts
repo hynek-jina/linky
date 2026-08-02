@@ -523,7 +523,11 @@ registerRoute(
   async ({ url }) => createSpaydResponse(url),
 );
 
-registerRoute(new NavigationRoute(createHandlerBoundToURL("index.html")));
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL("index.html"), {
+    denylist: [/^\/password-save\.html$/],
+  }),
+);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(logSw("service worker install", { build: SW_BUILD_TAG }));
