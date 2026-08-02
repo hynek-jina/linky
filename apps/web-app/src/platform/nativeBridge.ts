@@ -507,15 +507,18 @@ export const startNativeQrScanStream = (
 
       try {
         const viewport = getViewport?.() ?? null;
-        if (getViewport && bridge.setScanViewport && !viewport) {
-          if (framesRemaining > 1) {
-            startWhenViewportIsReady(framesRemaining - 1);
-            return;
-          }
-
-          throw new Error("Native scanner viewport unavailable");
+        if (
+          !viewport &&
+          getViewport &&
+          bridge.setScanViewport &&
+          framesRemaining > 1
+        ) {
+          startWhenViewportIsReady(framesRemaining - 1);
+          return;
         }
 
+        // Viewport still unavailable after the frame budget: start anyway so a
+        // slow layout degrades to a full-screen preview instead of no scanner.
         if (viewport && bridge.setScanViewport) {
           bridge.setScanViewport(
             viewport.left,
