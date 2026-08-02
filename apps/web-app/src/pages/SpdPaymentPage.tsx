@@ -11,6 +11,7 @@ interface SpdPaymentPageProps {
   initialOfferContactCount: number;
   offerContacts: {
     id?: unknown;
+    lastBankPaymentResponseSec?: unknown;
     name?: unknown;
     npub?: unknown;
     pictureUrl?: unknown;
@@ -24,7 +25,7 @@ interface SpdPaymentPageProps {
       npub?: unknown;
     }[];
     spdPayload: string;
-  }) => Promise<boolean>;
+  }) => Promise<{ chatId: string; offerId: string } | null>;
   spdPayload: string;
   t: (key: string) => string;
 }
@@ -59,6 +60,13 @@ const getInitialOfferContactKeys = (
       .map(getOfferContactKey)
       .filter(Boolean),
   );
+
+const formatResponseDuration = (durationSec: number): string => {
+  const safeDurationSec = Math.max(0, Math.trunc(durationSec));
+  const minutes = Math.floor(safeDurationSec / 60);
+  const seconds = safeDurationSec % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+};
 
 const getRateForCurrency = (
   currency: string,
@@ -227,14 +235,18 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
     setIsRequestingOffer(true);
     setOfferStatus(null);
     try {
-      const sent = await onRequestReimbursement({
+      const offer = await onRequestReimbursement({
         amountSat,
         amountText,
         contacts: selectedOfferContacts,
         spdPayload: payment.payload,
       });
-      if (sent) {
-        navigateTo({ route: "wallet" });
+      if (offer) {
+        navigateTo({
+          route: "bankPaymentOffer",
+          chatId: offer.chatId,
+          offerId: offer.offerId,
+        });
         return;
       }
       setOfferStatus(t("spdPaymentOfferFailed"));
@@ -288,6 +300,12 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
         <div className="bank-payment-offer-contact-list">
           {offerContacts.map((contact) => {
             const key = getOfferContactKey(contact);
+            const lastBankPaymentResponseSec =
+              typeof contact.lastBankPaymentResponseSec === "number" &&
+              Number.isFinite(contact.lastBankPaymentResponseSec) &&
+              contact.lastBankPaymentResponseSec >= 0
+                ? contact.lastBankPaymentResponseSec
+                : null;
             const name = String(contact.name ?? "").trim();
             const npub = String(contact.npub ?? "").trim();
             const pictureUrl = String(contact.pictureUrl ?? "").trim();
@@ -329,6 +347,14 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
                   )}
                 </span>
                 <span className="contact-name">{name || t("contact")}</span>
+                {lastBankPaymentResponseSec !== null ? (
+                  <span className="bank-payment-offer-contact-response">
+                    {t("spdPaymentLastResponseTime").replace(
+                      "{time}",
+                      formatResponseDuration(lastBankPaymentResponseSec),
+                    )}
+                  </span>
+                ) : null}
               </button>
             );
           })}

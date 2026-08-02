@@ -72,6 +72,7 @@ const renderChatMessage = async (
         }}
         bankPaymentOfferInfo={null}
         bankPaymentOfferPeerNotice={null}
+        canOpenBankPaymentOfferDetails={true}
         canActOnPaymentRequest={false}
         canEdit={false}
         canReplyOrReact={false}

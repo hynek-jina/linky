@@ -473,6 +473,39 @@ export const useInboxNotificationsSync = <
           const activeOffer = isOpenBankPaymentOffer(latest.route, offerId);
           if (isTerminalOffer) {
             if (
+              offerInfo?.status === "accepted_by_other" &&
+              !outcome.isOutgoing &&
+              !outcome.isSelfAuthored &&
+              !activeChat &&
+              !activeOffer
+            ) {
+              latest.setContactAttentionById((previous) => ({
+                ...previous,
+                [outcome.contactId]: Date.now(),
+              }));
+              const notificationText = latest.t(
+                "bankPaymentOfferAcceptedByOther",
+              );
+              const label = senderLabel(contact, outcome.peerPubkey);
+              showVisibleToast(
+                latest
+                  .t("chatIncomingMessageToast")
+                  .replace("{name}", label)
+                  .replace("{message}", notificationText),
+                {
+                  onClick: () =>
+                    latest.onOpenInboxMessageToast({
+                      contactId: outcome.contactId,
+                    }),
+                },
+              );
+              void latest.maybeShowPwaNotification(
+                label,
+                notificationText,
+                outcome.wrapId,
+              );
+            }
+            if (
               offerInfo?.status === "declined" &&
               outcome.isOutgoing &&
               !outcome.isSelfAuthored &&

@@ -1,4 +1,5 @@
 import type { UnsignedEvent } from "nostr-tools";
+import type { LocalNostrMessage } from "../types/appTypes";
 
 export const LINKY_BANK_PAYMENT_OFFER_KIND = 24135;
 export const LINKY_BANK_PAYMENT_OFFER_VALUE = "bank_payment_offer";
@@ -16,6 +17,7 @@ export const LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX =
 
 export type LinkyBankPaymentOfferStatus =
   | "accepted"
+  | "accepted_by_other"
   | "bank_details_sent"
   | "bank_paid"
   | "canceled"
@@ -26,6 +28,10 @@ export type LinkyBankPaymentOfferStatus =
 export interface LinkyBankPaymentOfferInfo {
   amountSat: number | null;
   amountText: string;
+  bankPaidAtSec: number | null;
+  expiresAtSec: number | null;
+  extensionSec: number | null;
+  initiatedAtSec: number | null;
   offerId: string;
   offererPublicKey: string | null;
   spdPayload: string | null;
@@ -34,6 +40,27 @@ export interface LinkyBankPaymentOfferInfo {
   text: string;
 }
 
+export const getLinkyBankPaymentOfferExpiresAtSec = (
+  offerInfo: LinkyBankPaymentOfferInfo,
+  createdAtSec: number,
+): number | null => {
+  if (isLinkyBankPaymentOfferTerminalStatus(offerInfo.status)) return null;
+  if (offerInfo.expiresAtSec && offerInfo.expiresAtSec > 0) {
+    return offerInfo.expiresAtSec;
+  }
+
+  const phaseStartedAtSecRaw =
+    offerInfo.statusUpdatedAtSec && offerInfo.statusUpdatedAtSec > 0
+      ? offerInfo.statusUpdatedAtSec
+      : createdAtSec;
+  if (!Number.isFinite(phaseStartedAtSecRaw) || phaseStartedAtSecRaw <= 0) {
+    return null;
+  }
+  return (
+    Math.trunc(phaseStartedAtSecRaw) + LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC
+  );
+};
+
 export const isLinkyBankPaymentOfferExpired = (
   offerInfo: LinkyBankPaymentOfferInfo,
   createdAtSec: number,
@@ -41,17 +68,11 @@ export const isLinkyBankPaymentOfferExpired = (
 ): boolean => {
   if (isLinkyBankPaymentOfferTerminalStatus(offerInfo.status)) return false;
 
-  const phaseStartedAtSecRaw =
-    offerInfo.statusUpdatedAtSec && offerInfo.statusUpdatedAtSec > 0
-      ? offerInfo.statusUpdatedAtSec
-      : createdAtSec;
-  const phaseStartedAtSec =
-    Number.isFinite(phaseStartedAtSecRaw) && phaseStartedAtSecRaw > 0
-      ? Math.trunc(phaseStartedAtSecRaw)
-      : null;
-  if (!phaseStartedAtSec) return false;
-
-  return nowSec - phaseStartedAtSec >= LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC;
+  const expiresAtSec = getLinkyBankPaymentOfferExpiresAtSec(
+    offerInfo,
+    createdAtSec,
+  );
+  return expiresAtSec === null ? false : nowSec >= expiresAtSec;
 };
 
 const getMinimizedOfferStorageKey = (chatId: string, offerId: string): string =>
@@ -252,6 +273,7 @@ const isLinkyBankPaymentOfferStatus = (
   value: unknown,
 ): value is LinkyBankPaymentOfferStatus =>
   value === "accepted" ||
+  value === "accepted_by_other" ||
   value === "bank_details_sent" ||
   value === "bank_paid" ||
   value === "canceled" ||
@@ -262,7 +284,10 @@ const isLinkyBankPaymentOfferStatus = (
 export const isLinkyBankPaymentOfferTerminalStatus = (
   status: LinkyBankPaymentOfferStatus,
 ): boolean =>
-  status === "canceled" || status === "declined" || status === "settled";
+  status === "accepted_by_other" ||
+  status === "canceled" ||
+  status === "declined" ||
+  status === "settled";
 
 // Unlike `declined`, which only ends one recipient's thread, these statuses
 // end the offer for every recipient.
@@ -284,10 +309,12 @@ export const getLinkyBankPaymentOfferStatusRank = (
       return 3;
     case "declined":
       return 4;
-    case "canceled":
+    case "accepted_by_other":
       return 5;
-    case "settled":
+    case "canceled":
       return 6;
+    case "settled":
+      return 7;
   }
 };
 
@@ -298,6 +325,8 @@ const getOfferText = (
   switch (status) {
     case "accepted":
       return "Nabídka byla přijata. Platební údaje se odesílají.";
+    case "accepted_by_other":
+      return "Někdo jiný přijal nabídku rychleji. Pro tebe tedy končí.";
     case "bank_details_sent":
       return `Platební údaje jsou připravené. Zaplať ${amountText} do 5 minut.`;
     case "bank_paid":
@@ -317,6 +346,7 @@ export const shouldPushLinkyBankPaymentOfferStatus = (
   status: LinkyBankPaymentOfferStatus,
 ): boolean =>
   status === "accepted" ||
+  status === "accepted_by_other" ||
   status === "bank_details_sent" ||
   status === "bank_paid" ||
   status === "declined" ||
@@ -325,8 +355,12 @@ export const shouldPushLinkyBankPaymentOfferStatus = (
 export const createLinkyBankPaymentOfferEvent = (args: {
   amountText: string;
   amountSat?: number | null;
+  bankPaidAtSec?: number | null;
   clientId: string;
   createdAt: number;
+  expiresAtSec?: number | null | undefined;
+  extensionSec?: number | null | undefined;
+  initiatedAtSec?: number | null;
   offererPublicKey?: string;
   offerId?: string;
   recipientPublicKey: string;
@@ -349,6 +383,43 @@ export const createLinkyBankPaymentOfferEvent = (args: {
     type: "linky.bank_payment_offer",
     version: 1,
   };
+  const initiatedAtSec =
+    typeof args.initiatedAtSec === "number" &&
+    Number.isFinite(args.initiatedAtSec) &&
+    args.initiatedAtSec > 0
+      ? Math.trunc(args.initiatedAtSec)
+      : status === "offered"
+        ? Math.trunc(args.createdAt)
+        : null;
+  if (initiatedAtSec !== null) {
+    contentPayload.initiatedAtSec = initiatedAtSec;
+  }
+  const bankPaidAtSec =
+    typeof args.bankPaidAtSec === "number" &&
+    Number.isFinite(args.bankPaidAtSec) &&
+    args.bankPaidAtSec > 0
+      ? Math.trunc(args.bankPaidAtSec)
+      : status === "bank_paid"
+        ? Math.trunc(args.createdAt)
+        : null;
+  if (bankPaidAtSec !== null) {
+    contentPayload.bankPaidAtSec = bankPaidAtSec;
+  }
+  if (
+    typeof args.expiresAtSec === "number" &&
+    Number.isFinite(args.expiresAtSec) &&
+    args.expiresAtSec > 0
+  ) {
+    contentPayload.expiresAtSec = Math.trunc(args.expiresAtSec);
+  }
+  if (
+    typeof args.extensionSec === "number" &&
+    Number.isFinite(args.extensionSec) &&
+    args.extensionSec > 0
+  ) {
+    contentPayload.extensionSec = Math.trunc(args.extensionSec);
+    contentPayload.text = `Potřebuji víc času (+${Math.trunc(args.extensionSec)} s).`;
+  }
   if (
     typeof args.amountSat === "number" &&
     Number.isFinite(args.amountSat) &&
@@ -407,6 +478,10 @@ export const getLinkyBankPaymentOfferInfo = (
     const offerId = readObjectField(parsed, "offerId");
     const amountText = readObjectField(parsed, "amountText");
     const amountSat = readObjectField(parsed, "amountSat");
+    const bankPaidAtSec = readObjectField(parsed, "bankPaidAtSec");
+    const expiresAtSec = readObjectField(parsed, "expiresAtSec");
+    const extensionSec = readObjectField(parsed, "extensionSec");
+    const initiatedAtSec = readObjectField(parsed, "initiatedAtSec");
     const status = readObjectField(parsed, "status");
     const statusUpdatedAtSec = readObjectField(parsed, "statusUpdatedAtSec");
     if (typeof offerId !== "string" || !offerId.trim()) return null;
@@ -425,6 +500,30 @@ export const getLinkyBankPaymentOfferInfo = (
           ? Math.round(amountSat)
           : null,
       amountText: amountText.trim(),
+      bankPaidAtSec:
+        typeof bankPaidAtSec === "number" &&
+        Number.isFinite(bankPaidAtSec) &&
+        bankPaidAtSec > 0
+          ? Math.trunc(bankPaidAtSec)
+          : null,
+      expiresAtSec:
+        typeof expiresAtSec === "number" &&
+        Number.isFinite(expiresAtSec) &&
+        expiresAtSec > 0
+          ? Math.trunc(expiresAtSec)
+          : null,
+      extensionSec:
+        typeof extensionSec === "number" &&
+        Number.isFinite(extensionSec) &&
+        extensionSec > 0
+          ? Math.trunc(extensionSec)
+          : null,
+      initiatedAtSec:
+        typeof initiatedAtSec === "number" &&
+        Number.isFinite(initiatedAtSec) &&
+        initiatedAtSec > 0
+          ? Math.trunc(initiatedAtSec)
+          : null,
       offerId: offerId.trim(),
       offererPublicKey:
         typeof offererPublicKey === "string" && offererPublicKey.trim()
@@ -457,4 +556,180 @@ export const getLinkyBankPaymentOfferText = (
   content: string,
 ): string | null => {
   return getLinkyBankPaymentOfferInfo(content)?.text ?? null;
+};
+
+interface BankPaymentOfferContactEntry {
+  info: LinkyBankPaymentOfferInfo;
+  message: LocalNostrMessage;
+}
+
+export interface ActiveBankPaymentOfferContacts {
+  contactIds: ReadonlySet<string>;
+  nextExpiryAtSec: number | null;
+}
+
+const getBankPaymentOfferEntryTime = (
+  entry: BankPaymentOfferContactEntry,
+): number =>
+  entry.info.statusUpdatedAtSec || Number(entry.message.createdAtSec ?? 0) || 0;
+
+const isNewerBankPaymentOfferEntry = (
+  candidate: BankPaymentOfferContactEntry,
+  current: BankPaymentOfferContactEntry,
+): boolean => {
+  const rankDelta =
+    getLinkyBankPaymentOfferStatusRank(candidate.info.status) -
+    getLinkyBankPaymentOfferStatusRank(current.info.status);
+  return (
+    rankDelta > 0 ||
+    (rankDelta === 0 &&
+      getBankPaymentOfferEntryTime(candidate) >
+        getBankPaymentOfferEntryTime(current))
+  );
+};
+
+export const getActiveBankPaymentOfferContacts = (
+  messages: readonly LocalNostrMessage[],
+  nowSec: number,
+): ActiveBankPaymentOfferContacts => {
+  const groups = new Map<string, Map<string, BankPaymentOfferContactEntry>>();
+
+  for (const message of messages) {
+    const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+    const contactId = String(message.contactId ?? "").trim();
+    if (!info || !contactId) continue;
+
+    const entriesByContact =
+      groups.get(info.offerId) ??
+      new Map<string, BankPaymentOfferContactEntry>();
+    const entry = { info, message };
+    const current = entriesByContact.get(contactId);
+    if (!current || isNewerBankPaymentOfferEntry(entry, current)) {
+      entriesByContact.set(contactId, entry);
+    }
+    groups.set(info.offerId, entriesByContact);
+  }
+
+  const contactIds = new Set<string>();
+  let nextExpiryAtSec: number | null = null;
+
+  for (const entriesByContact of groups.values()) {
+    const entries = [...entriesByContact.values()];
+    if (
+      entries.some(({ info }) =>
+        isLinkyBankPaymentOfferWholeOfferTerminalStatus(info.status),
+      )
+    ) {
+      continue;
+    }
+
+    for (const { info, message } of entries) {
+      if (isLinkyBankPaymentOfferTerminalStatus(info.status)) continue;
+
+      const expiresAtSec = getLinkyBankPaymentOfferExpiresAtSec(
+        info,
+        Number(message.createdAtSec ?? 0),
+      );
+      if (expiresAtSec !== null) {
+        if (nowSec >= expiresAtSec) continue;
+        nextExpiryAtSec =
+          nextExpiryAtSec === null
+            ? expiresAtSec
+            : Math.min(nextExpiryAtSec, expiresAtSec);
+      }
+
+      contactIds.add(String(message.contactId ?? "").trim());
+    }
+  }
+
+  return { contactIds, nextExpiryAtSec };
+};
+
+const getLinkyBankPaymentOfferBankPaidAtSec = (
+  info: LinkyBankPaymentOfferInfo,
+): number | null =>
+  info.bankPaidAtSec ??
+  (info.status === "bank_paid" ? info.statusUpdatedAtSec : null);
+
+export const getLinkyBankPaymentOfferResponseDurationSec = (
+  info: LinkyBankPaymentOfferInfo,
+  createdAtSec: number,
+): number | null => {
+  const initiatedAtSec = info.initiatedAtSec ?? Math.trunc(createdAtSec);
+  const bankPaidAtSec = getLinkyBankPaymentOfferBankPaidAtSec(info);
+  if (
+    !Number.isFinite(initiatedAtSec) ||
+    initiatedAtSec <= 0 ||
+    bankPaidAtSec === null ||
+    bankPaidAtSec < initiatedAtSec
+  ) {
+    return null;
+  }
+  return bankPaidAtSec - initiatedAtSec;
+};
+
+interface BankPaymentOfferResponseMessage {
+  contactId?: unknown;
+  content?: unknown;
+  createdAtSec?: unknown;
+  direction?: unknown;
+}
+
+export const getLastBankPaymentOfferResponseSecByContactId = (
+  messages: readonly BankPaymentOfferResponseMessage[],
+): ReadonlyMap<string, number> => {
+  const latestByContactId = new Map<
+    string,
+    { bankPaidAtSec: number; durationSec: number }
+  >();
+
+  for (const message of messages) {
+    if (message.direction !== "out") continue;
+    const contactId = String(message.contactId ?? "").trim();
+    const content = String(message.content ?? "");
+    const createdAtSec = Number(message.createdAtSec ?? 0);
+    if (!contactId || !content || !Number.isFinite(createdAtSec)) continue;
+
+    const info = getLinkyBankPaymentOfferInfo(content);
+    if (!info) continue;
+    const bankPaidAtSec = getLinkyBankPaymentOfferBankPaidAtSec(info);
+    const durationSec = getLinkyBankPaymentOfferResponseDurationSec(
+      info,
+      createdAtSec,
+    );
+    if (bankPaidAtSec === null || durationSec === null) continue;
+
+    const latest = latestByContactId.get(contactId);
+    if (!latest || bankPaidAtSec > latest.bankPaidAtSec) {
+      latestByContactId.set(contactId, { bankPaidAtSec, durationSec });
+    }
+  }
+
+  return new Map(
+    Array.from(latestByContactId, ([contactId, value]) => [
+      contactId,
+      value.durationSec,
+    ]),
+  );
+};
+
+export const mergeBankPaymentOffersIntoLastMessageByContactId = (
+  lastMessageByContactId: ReadonlyMap<string, LocalNostrMessage>,
+  bankPaymentOfferMessages: readonly LocalNostrMessage[],
+): Map<string, LocalNostrMessage> => {
+  const merged = new Map(lastMessageByContactId);
+
+  for (const message of bankPaymentOfferMessages) {
+    const contactId = String(message.contactId ?? "").trim();
+    if (!contactId) continue;
+
+    const current = merged.get(contactId);
+    const currentCreatedAtSec = Number(current?.createdAtSec ?? 0) || 0;
+    const messageCreatedAtSec = Number(message.createdAtSec ?? 0) || 0;
+    if (!current || messageCreatedAtSec >= currentCreatedAtSec) {
+      merged.set(contactId, message);
+    }
+  }
+
+  return merged;
 };

@@ -11,6 +11,7 @@ import { NOSTR_RELAYS } from "../../../nostrProfile";
 import {
   createLinkyBankPaymentOfferEvent,
   LINKY_BANK_PAYMENT_OFFER_KIND,
+  type LinkyBankPaymentOfferStatus,
 } from "../../lib/bankPaymentOffer";
 import { createLinkyPaymentNoticeEvent } from "../../lib/pushWrappedEvent";
 import type {
@@ -1236,7 +1237,13 @@ describe("payment and bank-offer classification", () => {
     expect(pending.status).toBe("sent");
   });
 
-  it.each(["offered", "declined"])(
+  const terminalRoutingStatuses: LinkyBankPaymentOfferStatus[] = [
+    "offered",
+    "declined",
+    "accepted_by_other",
+  ];
+
+  it.each(terminalRoutingStatuses)(
     "routes %s bank-payment offers only through the special outcome",
     (status) => {
       const event = createLinkyBankPaymentOfferEvent({
@@ -1246,7 +1253,7 @@ describe("payment and bank-offer classification", () => {
         offerId: `offer-${status}`,
         recipientPublicKey: recipientPubkey,
         senderPublicKey: senderPubkey,
-        status: status === "declined" ? "declined" : "offered",
+        status,
       });
       expect(event.kind).toBe(LINKY_BANK_PAYMENT_OFFER_KIND);
       const harness = createHarness();

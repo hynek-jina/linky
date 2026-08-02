@@ -2,7 +2,7 @@ import React from "react";
 import { Check, Copy, ImagePlus, Landmark, Share2, X } from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
-  LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
+  getLinkyBankPaymentOfferExpiresAtSec,
   getLinkyBankPaymentOfferInfo,
   getLinkyBankPaymentOfferStatusRank,
   isLinkyBankPaymentOfferExpired,
@@ -21,19 +21,33 @@ import {
   tryParseBankPayment,
   type BankPayment,
 } from "../utils/spdPayment";
+import {
+  parsePrivateImageMessage,
+  type PrivateImageMessagePayload,
+} from "../app/lib/privateImageMessage";
+import { PrivateImageBubble } from "../components/PrivateImageBubble";
 
 interface BankPaymentOfferDetailPageProps {
   bankPaymentOfferMessages: LocalNostrMessage[];
   chatId: string;
+  chatMessages: LocalNostrMessage[];
   chatOwnPubkeyHex: string | null;
   contacts: readonly ContactRowLike[];
   offerId: string;
   onCopyText: (text: string) => void;
   onRespondBankPaymentOffer: (
     message: LocalNostrMessage,
-    nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
+    nextStatus: LinkyBankPaymentOfferStatus,
+    options?: {
+      expiresAtSec?: number | null;
+      extensionSec?: number | null;
+      withPush?: boolean;
+    },
   ) => Promise<boolean>;
-  onSendChatImage: (file: File) => Promise<void>;
+  onSendChatImage: (
+    file: File,
+    replyToMessage?: LocalNostrMessage,
+  ) => Promise<void>;
   onSettleBankPaymentOffer: (message: LocalNostrMessage) => Promise<void>;
   t: (key: string) => string;
 }
@@ -47,6 +61,11 @@ interface BankPaymentFieldRow {
   key: string;
   label: string;
   value: string;
+}
+
+interface BankPaymentConfirmation {
+  message: LocalNostrMessage;
+  payload: PrivateImageMessagePayload;
 }
 
 const getSpdField = (payment: BankPayment, key: string): string =>
@@ -116,6 +135,80 @@ const findOfferEntries = (
   return [...latestByContact.values()];
 };
 
+const findPaymentConfirmation = (
+  offerMessages: readonly LocalNostrMessage[],
+  chatMessages: readonly LocalNostrMessage[],
+  chatId: string,
+  offerId: string,
+): BankPaymentConfirmation | null => {
+  const paymentMessageIds = new Set<string>();
+  for (const message of offerMessages) {
+    if (String(message.contactId ?? "").trim() !== chatId.trim()) continue;
+    const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+    if (
+      !info ||
+      info.offerId !== offerId.trim() ||
+      (info.status !== "bank_paid" && info.status !== "settled")
+    ) {
+      continue;
+    }
+    const rumorId = String(message.rumorId ?? "").trim();
+    if (rumorId) paymentMessageIds.add(rumorId);
+  }
+
+  let confirmation: BankPaymentConfirmation | null = null;
+  for (const message of chatMessages) {
+    if (String(message.contactId ?? "").trim() !== chatId.trim()) continue;
+    const replyToId = String(message.replyToId ?? "").trim();
+    const rootMessageId = String(message.rootMessageId ?? "").trim();
+    if (
+      !paymentMessageIds.has(replyToId) &&
+      !paymentMessageIds.has(rootMessageId)
+    ) {
+      continue;
+    }
+    const payload = parsePrivateImageMessage(message.content);
+    if (!payload) continue;
+    if (
+      !confirmation ||
+      message.createdAtSec >= confirmation.message.createdAtSec
+    ) {
+      confirmation = { message, payload };
+    }
+  }
+  return confirmation;
+};
+
+const PaymentConfirmation = ({
+  confirmation,
+  t,
+}: {
+  confirmation: BankPaymentConfirmation;
+  t: (key: string) => string;
+}) => (
+  <div className="bank-payment-offer-confirmation">
+    <strong>{t("bankPaymentOfferConfirmation")}</strong>
+    <PrivateImageBubble payload={confirmation.payload} t={t} />
+  </div>
+);
+
+const PendingPaymentConfirmation = ({
+  imageUrl,
+  t,
+}: {
+  imageUrl: string;
+  t: (key: string) => string;
+}) => (
+  <div className="bank-payment-offer-confirmation">
+    <strong>{t("bankPaymentOfferConfirmation")}</strong>
+    <img
+      className="chat-private-image"
+      src={imageUrl}
+      alt={t("bankPaymentOfferConfirmation")}
+    />
+  </div>
+);
+
 const getStatusLabel = (
   status: LinkyBankPaymentOfferStatus,
   isIncoming: boolean,
@@ -124,6 +217,8 @@ const getStatusLabel = (
   switch (status) {
     case "accepted":
       return t("bankPaymentOfferStatusAccepted");
+    case "accepted_by_other":
+      return t("bankPaymentOfferStatusAcceptedByOther");
     case "bank_details_sent":
       return isIncoming
         ? t("bankPaymentOfferStatusBankDetailsReceived")
@@ -268,6 +363,8 @@ const hasTimedPhase = (status: LinkyBankPaymentOfferStatus): boolean =>
   status === "bank_paid" ||
   status === "offered";
 
+const BANK_PAYMENT_OFFER_EXTENSION_SEC = 60;
+
 const formatRemainingTime = (
   remainingSec: number,
   t: (key: string) => string,
@@ -286,6 +383,7 @@ export const BankPaymentOfferDetailPage: React.FC<
 > = ({
   bankPaymentOfferMessages,
   chatId,
+  chatMessages,
   chatOwnPubkeyHex,
   contacts,
   offerId,
@@ -304,6 +402,10 @@ export const BankPaymentOfferDetailPage: React.FC<
   const [isSharingJpeg, setIsSharingJpeg] = React.useState(false);
   const [isConfirmingPaid, setIsConfirmingPaid] = React.useState(false);
   const [isSettling, setIsSettling] = React.useState(false);
+  const [pendingConfirmationUrl, setPendingConfirmationUrl] = React.useState<
+    string | null
+  >(null);
+  const [isExtending, setIsExtending] = React.useState(false);
   const [responseStatus, setResponseStatus] = React.useState<
     "accepted" | "canceled" | "declined" | null
   >(null);
@@ -316,6 +418,25 @@ export const BankPaymentOfferDetailPage: React.FC<
   const offerEntries = React.useMemo(
     () => findOfferEntries(bankPaymentOfferMessages, offerId),
     [bankPaymentOfferMessages, offerId],
+  );
+  const confirmation = React.useMemo(
+    () =>
+      findPaymentConfirmation(
+        bankPaymentOfferMessages,
+        chatMessages,
+        chatId,
+        offerId,
+      ),
+    [bankPaymentOfferMessages, chatId, chatMessages, offerId],
+  );
+  React.useEffect(() => {
+    if (confirmation) setPendingConfirmationUrl(null);
+  }, [confirmation]);
+  React.useEffect(
+    () => () => {
+      if (pendingConfirmationUrl) URL.revokeObjectURL(pendingConfirmationUrl);
+    },
+    [pendingConfirmationUrl],
   );
   const payment = React.useMemo(
     () =>
@@ -412,6 +533,59 @@ export const BankPaymentOfferDetailPage: React.FC<
   const requesterName =
     String(requesterContact?.name ?? "").trim() || t("unknownContactTitle");
 
+  const extendTime = async (offerEntry: BankPaymentOfferEntry) => {
+    if (isExtending || !hasTimedPhase(offerEntry.info.status)) return;
+    const currentExpiresAtSec = getLinkyBankPaymentOfferExpiresAtSec(
+      offerEntry.info,
+      Number(offerEntry.message.createdAtSec ?? 0),
+    );
+    if (currentExpiresAtSec === null) return;
+
+    setIsExtending(true);
+    setErrorText(null);
+    try {
+      const sent = await onRespondBankPaymentOffer(
+        offerEntry.message,
+        offerEntry.info.status,
+        {
+          expiresAtSec:
+            Math.max(currentExpiresAtSec, Math.floor(Date.now() / 1_000)) +
+            BANK_PAYMENT_OFFER_EXTENSION_SEC,
+          extensionSec: BANK_PAYMENT_OFFER_EXTENSION_SEC,
+          withPush: true,
+        },
+      );
+      if (!sent) setErrorText(t("spdPaymentOfferFailed"));
+    } finally {
+      setIsExtending(false);
+    }
+  };
+
+  const timerWithExtension = (
+    offerEntry: BankPaymentOfferEntry,
+    remainingSec: number,
+  ) => (
+    <div className="bank-payment-offer-timer-row">
+      <span className="bank-payment-offer-timer">
+        {formatRemainingTime(remainingSec, t)}
+      </span>
+      <button
+        type="button"
+        className="bank-payment-offer-extend"
+        disabled={isExtending || remainingSec <= 0}
+        onClick={() => void extendTime(offerEntry)}
+        aria-label={t("bankPaymentOfferNeedMoreTime")}
+        title={t("bankPaymentOfferNeedMoreTime")}
+      >
+        {isExtending ? (
+          <span className="btn-spinner" aria-hidden="true" />
+        ) : (
+          t("bankPaymentOfferExtendOneMinute")
+        )}
+      </button>
+    </div>
+  );
+
   if (isCreatedByMe) {
     const activeEntry =
       offerEntries
@@ -425,10 +599,12 @@ export const BankPaymentOfferDetailPage: React.FC<
     const activeAmountText = activeEntry.info.amountSat
       ? formatDisplayedAmountText(activeEntry.info.amountSat)
       : activeEntry.info.amountText;
-    const remainingSec = hasTimedPhase(activeEntry.info.status)
-      ? getEntryTime(activeEntry) +
-        LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC -
-        Math.floor(nowMs / 1_000)
+    const activeExpiresAtSec = getLinkyBankPaymentOfferExpiresAtSec(
+      activeEntry.info,
+      Number(activeEntry.message.createdAtSec ?? 0),
+    );
+    const remainingSec = activeExpiresAtSec
+      ? activeExpiresAtSec - Math.floor(nowMs / 1_000)
       : null;
     const canSettle = activeEntry.info.status === "bank_paid";
     const canCancel =
@@ -459,11 +635,9 @@ export const BankPaymentOfferDetailPage: React.FC<
         <div className="bank-payment-offer-owner-summary">
           <div className="bank-payment-amount">{activeAmountText}</div>
           <RecipientProgress status={activeEntry.info.status} t={t} />
-          {remainingSec !== null ? (
-            <div className="bank-payment-offer-timer">
-              {formatRemainingTime(remainingSec, t)}
-            </div>
-          ) : null}
+          {remainingSec !== null
+            ? timerWithExtension(activeEntry, remainingSec)
+            : null}
           {offerEntries.some(
             ({ info }) =>
               info.status === "accepted" ||
@@ -514,6 +688,10 @@ export const BankPaymentOfferDetailPage: React.FC<
           })}
         </div>
 
+        {confirmation ? (
+          <PaymentConfirmation confirmation={confirmation} t={t} />
+        ) : null}
+
         {canSettle ? (
           <button
             type="button"
@@ -556,6 +734,20 @@ export const BankPaymentOfferDetailPage: React.FC<
     );
   }
 
+  if (entry.info.status === "accepted_by_other") {
+    return (
+      <section className="panel panel-plain bank-payment-offer-state-page">
+        <div className="bank-payment-offer-state-copy">
+          <h2>{t("bankPaymentOfferStatusAcceptedByOther")}</h2>
+          <p className="muted">{t("bankPaymentOfferAcceptedByOther")}</p>
+        </div>
+        <button type="button" className="btn-wide" onClick={closeOffer}>
+          {t("close")}
+        </button>
+      </section>
+    );
+  }
+
   if (
     entry.info.status === "offered" &&
     String(entry.message.direction ?? "") === "in"
@@ -580,9 +772,10 @@ export const BankPaymentOfferDetailPage: React.FC<
     };
 
     const remainingSec =
-      getEntryTime(entry) +
-      LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC -
-      Math.floor(nowMs / 1_000);
+      (getLinkyBankPaymentOfferExpiresAtSec(
+        entry.info,
+        Number(entry.message.createdAtSec ?? 0),
+      ) ?? Math.floor(nowMs / 1_000)) - Math.floor(nowMs / 1_000);
 
     return (
       <section className="panel panel-plain bank-payment-offer-state-page">
@@ -593,9 +786,7 @@ export const BankPaymentOfferDetailPage: React.FC<
             status={entry.info.status}
             t={t}
           />
-          <div className="bank-payment-offer-timer">
-            {formatRemainingTime(remainingSec, t)}
-          </div>
+          {timerWithExtension(entry, remainingSec)}
         </div>
 
         {errorText ? <p className="error-text">{errorText}</p> : null}
@@ -642,22 +833,23 @@ export const BankPaymentOfferDetailPage: React.FC<
     );
   }
 
-  const remainingSec = hasTimedPhase(entry.info.status)
-    ? getEntryTime(entry) +
-      LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC -
-      Math.floor(nowMs / 1000)
+  const expiresAtSec = getLinkyBankPaymentOfferExpiresAtSec(
+    entry.info,
+    Number(entry.message.createdAtSec ?? 0),
+  );
+  const remainingSec = expiresAtSec
+    ? expiresAtSec - Math.floor(nowMs / 1_000)
     : null;
-  const remainingTimeText =
-    remainingSec === null ? null : formatRemainingTime(remainingSec, t);
 
   if (entry.info.status === "bank_paid") {
     const attachConfirmation = async (file: File) => {
       if (isAttachingConfirmation) return;
 
+      const localImageUrl = URL.createObjectURL(file);
+      setPendingConfirmationUrl(localImageUrl);
       setIsAttachingConfirmation(true);
       try {
-        await onSendChatImage(file);
-        navigateTo({ route: "chat", id: chatId });
+        await onSendChatImage(file, entry.message);
       } finally {
         setIsAttachingConfirmation(false);
       }
@@ -675,45 +867,53 @@ export const BankPaymentOfferDetailPage: React.FC<
               requesterName,
             )}
           </p>
-          {remainingTimeText ? (
-            <div className="bank-payment-offer-timer">{remainingTimeText}</div>
-          ) : null}
+          {remainingSec !== null
+            ? timerWithExtension(entry, remainingSec)
+            : null}
         </div>
 
-        <input
-          ref={confirmationInputRef}
-          className="chat-image-input"
-          type="file"
-          accept="image/*"
-          onChange={(event) => {
-            const file = event.target.files?.[0] ?? null;
-            event.currentTarget.value = "";
-            if (!file) return;
-            void attachConfirmation(file);
-          }}
-          tabIndex={-1}
-        />
-        <button
-          type="button"
-          className="btn-wide"
-          disabled={isAttachingConfirmation}
-          onClick={() => confirmationInputRef.current?.click()}
-        >
-          <span className="btn-label-with-icon">
-            <span className="btn-label-icon" aria-hidden="true">
-              {isAttachingConfirmation ? (
-                <span className="btn-spinner" />
-              ) : (
-                <ImagePlus />
-              )}
-            </span>
-            <span>
-              {isAttachingConfirmation
-                ? t("chatPendingShort")
-                : t("bankPaymentOfferAttachConfirmation")}
-            </span>
-          </span>
-        </button>
+        {confirmation ? (
+          <PaymentConfirmation confirmation={confirmation} t={t} />
+        ) : pendingConfirmationUrl ? (
+          <PendingPaymentConfirmation imageUrl={pendingConfirmationUrl} t={t} />
+        ) : (
+          <>
+            <input
+              ref={confirmationInputRef}
+              className="chat-image-input"
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                event.currentTarget.value = "";
+                if (!file) return;
+                void attachConfirmation(file);
+              }}
+              tabIndex={-1}
+            />
+            <button
+              type="button"
+              className="btn-wide"
+              disabled={isAttachingConfirmation}
+              onClick={() => confirmationInputRef.current?.click()}
+            >
+              <span className="btn-label-with-icon">
+                <span className="btn-label-icon" aria-hidden="true">
+                  {isAttachingConfirmation ? (
+                    <span className="btn-spinner" />
+                  ) : (
+                    <ImagePlus />
+                  )}
+                </span>
+                <span>
+                  {isAttachingConfirmation
+                    ? t("chatPendingShort")
+                    : t("bankPaymentOfferAttachConfirmation")}
+                </span>
+              </span>
+            </button>
+          </>
+        )}
       </section>
     );
   }
@@ -734,9 +934,9 @@ export const BankPaymentOfferDetailPage: React.FC<
               amountText,
             )}
           </p>
-          {remainingTimeText ? (
-            <div className="bank-payment-offer-timer">{remainingTimeText}</div>
-          ) : null}
+          {remainingSec !== null
+            ? timerWithExtension(entry, remainingSec)
+            : null}
         </div>
       </section>
     );
@@ -798,9 +998,7 @@ export const BankPaymentOfferDetailPage: React.FC<
           status={entry.info.status}
           t={t}
         />
-        {remainingTimeText ? (
-          <div className="bank-payment-offer-timer">{remainingTimeText}</div>
-        ) : null}
+        {remainingSec !== null ? timerWithExtension(entry, remainingSec) : null}
       </div>
 
       <div className="bank-payment-offer-qr-wrap">

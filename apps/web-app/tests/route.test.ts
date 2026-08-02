@@ -67,6 +67,18 @@ describe("parseRouteFromHash", () => {
 
     expect(parseRouteFromHash()).toEqual({ kind: "cashuTokenNew" });
   });
+
+  it("keeps a proxy-payment offer from an unknown sender in message requests", () => {
+    const unknownChatId = `unknown:${"a".repeat(64)}`;
+    replaceHash(
+      `#chat/${encodeURIComponent(unknownChatId)}/bank-payment-offer/offer-1`,
+    );
+
+    expect(parseRouteFromHash()).toEqual({
+      kind: "chat",
+      id: unknownChatId,
+    });
+  });
 });
 
 describe("parseNativeDeepLinkUrl", () => {

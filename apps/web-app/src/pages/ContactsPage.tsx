@@ -26,6 +26,7 @@ interface ContactsPageProps {
     conversations: ContactRowLike[];
     others: ContactRowLike[];
     pinned: ContactRowLike[];
+    proxyPayments: ContactRowLike[];
   };
 }
 
@@ -52,6 +53,7 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
   }) => {
     const totalVisible =
       visibleContacts.pinned.length +
+      visibleContacts.proxyPayments.length +
       visibleContacts.conversations.length +
       visibleContacts.others.length;
     const hasAnyContacts = totalVisible > 0;
@@ -113,13 +115,22 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
           )}
         </div>
 
-        <section className="panel panel-plain">
+        <section className="panel panel-plain contacts-list-panel">
           <div className="contact-list">
             {!hasAnyContacts ? (
               <p className="muted">{t("noContactsYet")}</p>
             ) : (
               <>
                 {visibleContacts.pinned.map(renderContactCard)}
+
+                {visibleContacts.proxyPayments.length > 0 && (
+                  <React.Fragment key="proxy-payments">
+                    <div className="settings-section-title contact-list-section-title">
+                      {t("proxyPayments")}
+                    </div>
+                    {visibleContacts.proxyPayments.map(renderContactCard)}
+                  </React.Fragment>
+                )}
 
                 {visibleContacts.conversations.length > 0 && (
                   <React.Fragment key="conversations">

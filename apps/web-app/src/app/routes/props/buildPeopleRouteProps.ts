@@ -233,6 +233,7 @@ export const buildPeopleRouteProps = ({
       return {
         bankPaymentOfferMessages,
         chatId: route.chatId,
+        chatMessages,
         chatOwnPubkeyHex,
         contacts,
         offerId: route.offerId,

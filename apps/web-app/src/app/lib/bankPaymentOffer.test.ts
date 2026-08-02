@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { LocalNostrMessage } from "../types/appTypes";
 import {
   createLinkyBankPaymentOfferEvent,
   forgetLinkyBankPaymentOfferSpdPayload,
+  getActiveBankPaymentOfferContacts,
+  getLastBankPaymentOfferResponseSecByContactId,
   getLinkyBankPaymentOfferInfo,
+  getLinkyBankPaymentOfferResponseDurationSec,
   isLinkyBankPaymentOfferExpired,
   markLinkyBankPaymentOfferBankDetailsSent,
+  mergeBankPaymentOffersIntoLastMessageByContactId,
   readLinkyBankPaymentOfferSpdRecord,
   rememberLinkyBankPaymentOfferSpdPayload,
   shouldPushLinkyBankPaymentOfferStatus,
@@ -21,11 +26,42 @@ const createOffer = (status: LinkyBankPaymentOfferStatus) =>
     status,
   });
 
+const createOfferMessage = (args: {
+  contactId: string;
+  createdAtSec: number;
+  offerId: string;
+  status: LinkyBankPaymentOfferStatus;
+}): LocalNostrMessage => {
+  const event = createLinkyBankPaymentOfferEvent({
+    amountText: "250 Kč",
+    clientId: `${args.offerId}-${args.contactId}-${args.status}`,
+    createdAt: args.createdAtSec,
+    offerId: args.offerId,
+    recipientPublicKey: "recipient",
+    senderPublicKey: "sender",
+    status: args.status,
+  });
+  return {
+    contactId: args.contactId,
+    content: event.content,
+    createdAtSec: args.createdAtSec,
+    direction: "out",
+    id: `${args.offerId}-${args.contactId}-${args.status}`,
+    pubkey: "sender",
+    rumorId: null,
+    wrapId: `wrap-${args.offerId}-${args.contactId}-${args.status}`,
+  };
+};
+
 describe("bank payment offer notifications", () => {
   const copyCases: readonly (readonly [LinkyBankPaymentOfferStatus, string])[] =
     [
       ["offered", "Zaplatíš za mě bankovní platbu ve výši 250 Kč?"],
       ["accepted", "Nabídka byla přijata. Platební údaje se odesílají."],
+      [
+        "accepted_by_other",
+        "Někdo jiný přijal nabídku rychleji. Pro tebe tedy končí.",
+      ],
       [
         "bank_details_sent",
         "Platební údaje jsou připravené. Zaplať 250 Kč do 5 minut.",
@@ -46,6 +82,9 @@ describe("bank payment offer notifications", () => {
   it("pushes offer states that require the other party's attention", () => {
     expect(shouldPushLinkyBankPaymentOfferStatus("offered")).toBe(true);
     expect(shouldPushLinkyBankPaymentOfferStatus("accepted")).toBe(true);
+    expect(shouldPushLinkyBankPaymentOfferStatus("accepted_by_other")).toBe(
+      true,
+    );
     expect(shouldPushLinkyBankPaymentOfferStatus("bank_details_sent")).toBe(
       true,
     );
@@ -68,14 +107,210 @@ describe("bank payment offer notifications", () => {
     ).toBe(true);
   });
 
-  it("does not label terminal offer states as expired", () => {
-    const info = getLinkyBankPaymentOfferInfo(createOffer("canceled").content);
+  it("returns every contact currently participating in a proxy payment", () => {
+    const messages = [
+      createOfferMessage({
+        contactId: "contact-1",
+        createdAtSec: 1_700_000_000,
+        offerId: "offer-1",
+        status: "offered",
+      }),
+      createOfferMessage({
+        contactId: "contact-2",
+        createdAtSec: 1_700_000_000,
+        offerId: "offer-1",
+        status: "offered",
+      }),
+      createOfferMessage({
+        contactId: "contact-2",
+        createdAtSec: 1_700_000_010,
+        offerId: "offer-1",
+        status: "declined",
+      }),
+      createOfferMessage({
+        contactId: "contact-3",
+        createdAtSec: 1_700_000_020,
+        offerId: "offer-2",
+        status: "accepted",
+      }),
+    ];
+
+    const active = getActiveBankPaymentOfferContacts(messages, 1_700_000_030);
+
+    expect([...active.contactIds]).toEqual(["contact-1", "contact-3"]);
+    expect(active.nextExpiryAtSec).toBe(1_700_000_300);
+  });
+
+  it("removes an expired or globally completed proxy payment", () => {
+    const offered = createOfferMessage({
+      contactId: "contact-1",
+      createdAtSec: 1_700_000_000,
+      offerId: "offer-1",
+      status: "offered",
+    });
+    expect(
+      getActiveBankPaymentOfferContacts([offered], 1_700_000_300).contactIds
+        .size,
+    ).toBe(0);
+
+    const canceled = createOfferMessage({
+      contactId: "contact-2",
+      createdAtSec: 1_700_000_050,
+      offerId: "offer-1",
+      status: "canceled",
+    });
+    expect(
+      getActiveBankPaymentOfferContacts([offered, canceled], 1_700_000_060)
+        .contactIds.size,
+    ).toBe(0);
+  });
+
+  it("includes proxy offers in the latest-message map used for conversations", () => {
+    const existingMessage: LocalNostrMessage = {
+      contactId: "contact-1",
+      content: "newer regular message",
+      createdAtSec: 1_700_000_100,
+      direction: "in",
+      id: "message-1",
+      pubkey: "sender",
+      rumorId: "rumor-1",
+      wrapId: "wrap-1",
+    };
+    const unknownOffer: LocalNostrMessage = {
+      ...createOfferMessage({
+        contactId: `unknown:${"a".repeat(64)}`,
+        createdAtSec: 1_700_000_050,
+        offerId: "offer-unknown",
+        status: "offered",
+      }),
+      direction: "in",
+      pubkey: "a".repeat(64),
+    };
+
+    const merged = mergeBankPaymentOffersIntoLastMessageByContactId(
+      new Map([["contact-1", existingMessage]]),
+      [
+        createOfferMessage({
+          contactId: "contact-1",
+          createdAtSec: 1_700_000_000,
+          offerId: "offer-older",
+          status: "offered",
+        }),
+        unknownOffer,
+      ],
+    );
+
+    expect(merged.get("contact-1")).toBe(existingMessage);
+    expect(merged.get(unknownOffer.contactId)).toBe(unknownOffer);
+  });
+
+  it("uses an explicit extended deadline when present", () => {
+    const event = createLinkyBankPaymentOfferEvent({
+      amountText: "250 Kč",
+      clientId: "client-extended",
+      createdAt: 1_700_000_250,
+      expiresAtSec: 1_700_000_360,
+      extensionSec: 60,
+      offerId: "offer-extended",
+      recipientPublicKey: "recipient",
+      senderPublicKey: "sender",
+      status: "bank_details_sent",
+    });
+    const info = getLinkyBankPaymentOfferInfo(event.content);
     expect(info).not.toBeNull();
     if (!info) return;
 
+    expect(info.expiresAtSec).toBe(1_700_000_360);
+    expect(info.extensionSec).toBe(60);
     expect(
-      isLinkyBankPaymentOfferExpired(info, 1_700_000_000, 1_800_000_000),
+      isLinkyBankPaymentOfferExpired(info, 1_700_000_000, 1_700_000_359),
     ).toBe(false);
+    expect(
+      isLinkyBankPaymentOfferExpired(info, 1_700_000_000, 1_700_000_360),
+    ).toBe(true);
+  });
+
+  it.each(["accepted_by_other", "canceled"] as const)(
+    "does not label the terminal %s state as expired",
+    (status) => {
+      const info = getLinkyBankPaymentOfferInfo(createOffer(status).content);
+      expect(info).not.toBeNull();
+      if (!info) return;
+
+      expect(
+        isLinkyBankPaymentOfferExpired(info, 1_700_000_000, 1_800_000_000),
+      ).toBe(false);
+    },
+  );
+
+  it("keeps initiation and bank-payment confirmation times in later states", () => {
+    const event = createLinkyBankPaymentOfferEvent({
+      amountText: "250 Kč",
+      bankPaidAtSec: 1_700_000_125,
+      clientId: "client-settled",
+      createdAt: 1_700_000_150,
+      initiatedAtSec: 1_700_000_000,
+      offerId: "offer-settled",
+      recipientPublicKey: "recipient",
+      senderPublicKey: "sender",
+      status: "settled",
+    });
+    const info = getLinkyBankPaymentOfferInfo(event.content);
+    expect(info).not.toBeNull();
+    if (!info) return;
+
+    expect(info.initiatedAtSec).toBe(1_700_000_000);
+    expect(info.bankPaidAtSec).toBe(1_700_000_125);
+    expect(getLinkyBankPaymentOfferResponseDurationSec(info, 0)).toBe(125);
+  });
+
+  it("finds the most recent completed response for each outgoing candidate", () => {
+    const createMessage = (args: {
+      bankPaidAtSec: number;
+      contactId: string;
+      durationSec: number;
+      direction?: "in" | "out";
+    }) => {
+      const initiatedAtSec = args.bankPaidAtSec - args.durationSec;
+      const event = createLinkyBankPaymentOfferEvent({
+        amountText: "250 Kč",
+        bankPaidAtSec: args.bankPaidAtSec,
+        clientId: `${args.contactId}-${args.bankPaidAtSec}`,
+        createdAt: args.bankPaidAtSec + 10,
+        initiatedAtSec,
+        recipientPublicKey: "recipient",
+        senderPublicKey: "sender",
+        status: "settled",
+      });
+      return {
+        contactId: args.contactId,
+        content: event.content,
+        createdAtSec: initiatedAtSec,
+        direction: args.direction ?? "out",
+      };
+    };
+
+    const durations = getLastBankPaymentOfferResponseSecByContactId([
+      createMessage({
+        bankPaidAtSec: 1_700_000_100,
+        contactId: "contact-1",
+        durationSec: 45,
+      }),
+      createMessage({
+        bankPaidAtSec: 1_700_000_200,
+        contactId: "contact-1",
+        durationSec: 125,
+      }),
+      createMessage({
+        bankPaidAtSec: 1_700_000_300,
+        contactId: "contact-2",
+        direction: "in",
+        durationSec: 30,
+      }),
+    ]);
+
+    expect(durations.get("contact-1")).toBe(125);
+    expect(durations.has("contact-2")).toBe(false);
   });
 });
 

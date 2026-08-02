@@ -84,8 +84,25 @@ interface AndroidSecretStorageBridge {
 }
 
 interface AndroidScannerBridge {
+  setScanViewport?: (
+    leftCssPx: number,
+    topCssPx: number,
+    widthCssPx: number,
+    heightCssPx: number,
+    viewportWidthCssPx: number,
+    viewportHeightCssPx: number,
+  ) => void;
   startScan?: () => void;
   stopScan?: () => void;
+}
+
+export interface NativeScanViewport {
+  height: number;
+  left: number;
+  top: number;
+  viewportHeight: number;
+  viewportWidth: number;
+  width: number;
 }
 
 interface AndroidNotificationsBridge {
@@ -451,6 +468,7 @@ export const startNativeQrScan = (): Promise<NativeScanResult> | null => {
 
 export const startNativeQrScanStream = (
   onResult: (result: NativeScanResult) => void,
+  getViewport?: () => NativeScanViewport | null,
 ): NativeScanStreamHandle | null => {
   if (supportsIosNativeQrScan()) {
     return null;
@@ -468,31 +486,55 @@ export const startNativeQrScanStream = (
     if (result) onResult(result);
   };
 
+  let animationFrameId: number | null = null;
+  let started = false;
+
   const cleanup = () => {
     window.removeEventListener(eventName, onResultEvent);
+    if (animationFrameId !== null) {
+      window.cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
   };
 
   window.addEventListener(eventName, onResultEvent);
 
-  try {
-    bridge.startScan();
-  } catch (error) {
-    cleanup();
-    onResult({
-      cancelled: false,
-      message: String(error ?? "Native scanner failed"),
-      value: null,
-    });
-    return null;
-  }
+  animationFrameId = window.requestAnimationFrame(() => {
+    animationFrameId = null;
+
+    try {
+      const viewport = getViewport?.() ?? null;
+      if (viewport && bridge.setScanViewport) {
+        bridge.setScanViewport(
+          viewport.left,
+          viewport.top,
+          viewport.width,
+          viewport.height,
+          viewport.viewportWidth,
+          viewport.viewportHeight,
+        );
+      }
+      bridge.startScan?.();
+      started = true;
+    } catch (error) {
+      cleanup();
+      onResult({
+        cancelled: false,
+        message: String(error ?? "Native scanner failed"),
+        value: null,
+      });
+    }
+  });
 
   return {
     stop: () => {
       cleanup();
-      try {
-        bridge.stopScan?.();
-      } catch {
-        // ignore native scanner shutdown failures
+      if (started) {
+        try {
+          bridge.stopScan?.();
+        } catch {
+          // ignore native scanner shutdown failures
+        }
       }
     },
   };

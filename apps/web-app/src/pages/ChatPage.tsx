@@ -108,7 +108,12 @@ interface ChatPageProps {
   onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
   onRespondBankPaymentOffer: (
     message: LocalNostrMessage,
-    nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
+    nextStatus: LinkyBankPaymentOfferStatus,
+    options?: {
+      expiresAtSec?: number | null;
+      extensionSec?: number | null;
+      withPush?: boolean;
+    },
   ) => Promise<boolean>;
   onSettleBankPaymentOffer: (message: LocalNostrMessage) => Promise<void>;
   onEdit: (message: LocalNostrMessage) => void;
@@ -128,7 +133,10 @@ interface ChatPageProps {
   reactionsByMessageId: Map<string, LocalNostrReaction[]>;
   replyContext: ReplyContext | null;
   selectedContact: Contact | null;
-  sendChatImage: (file: File) => Promise<void>;
+  sendChatImage: (
+    file: File,
+    replyToMessage?: LocalNostrMessage,
+  ) => Promise<void>;
   sendChatMessage: () => Promise<void>;
   setChatDraft: (value: string) => void;
   setMintIconUrlByMint: React.Dispatch<
@@ -198,6 +206,7 @@ const getBankPaymentOfferPeerNotice = (
 ): BankPaymentOfferPeerNotice | null => {
   if (!offerInfo || String(message.direction ?? "") !== "out") return null;
   if (
+    offerInfo.status === "accepted_by_other" ||
     offerInfo.status === "bank_details_sent" ||
     offerInfo.status === "bank_paid" ||
     offerInfo.status === "canceled" ||
@@ -246,6 +255,7 @@ const getBankPaymentOfferPeerNotice = (
 
 interface ChatMessageListProps {
   bankPaymentOfferMessages: LocalNostrMessage[];
+  canOpenBankPaymentOfferDetails: boolean;
   cashuBalanceAfterMelt: number;
   cashuIsBusy: boolean;
   chatMessageElByIdRef: React.MutableRefObject<Map<string, HTMLDivElement>>;
@@ -273,6 +283,7 @@ interface ChatMessageListProps {
 
 const ChatMessageList = memo(function ChatMessageList({
   bankPaymentOfferMessages,
+  canOpenBankPaymentOfferDetails,
   cashuBalanceAfterMelt,
   cashuIsBusy,
   chatMessageElByIdRef,
@@ -509,6 +520,7 @@ const ChatMessageList = memo(function ChatMessageList({
             declineInfo={viewModel.declineInfo}
             bankPaymentOfferInfo={viewModel.bankPaymentOfferInfo}
             bankPaymentOfferPeerNotice={viewModel.bankPaymentOfferPeerNotice}
+            canOpenBankPaymentOfferDetails={canOpenBankPaymentOfferDetails}
             onOpenBankPaymentOfferDetails={
               viewModel.onOpenBankPaymentOfferDetails
             }
@@ -1136,6 +1148,8 @@ export const ChatPage: FC<ChatPageProps> = ({
   useChatComposeHeight(composeContainerRef, selectedContactId);
 
   useEffect(() => {
+    if (selectedContact?.isUnknownContact) return;
+
     const chatId = String(selectedContact?.id ?? "").trim();
     if (!chatId) return;
 
@@ -1173,7 +1187,11 @@ export const ChatPage: FC<ChatPageProps> = ({
         offerId: newestOffer.offerId,
       });
     }
-  }, [bankPaymentOfferMessages, selectedContact?.id]);
+  }, [
+    bankPaymentOfferMessages,
+    selectedContact?.id,
+    selectedContact?.isUnknownContact,
+  ]);
 
   const replyPreviewText = useMemo(() => {
     if (replyContext?.replyToContent) {
@@ -1232,6 +1250,7 @@ export const ChatPage: FC<ChatPageProps> = ({
 
       <ChatMessageList
         bankPaymentOfferMessages={bankPaymentOfferMessages}
+        canOpenBankPaymentOfferDetails={!isUnknownContact}
         cashuBalanceAfterMelt={cashuBalanceAfterMelt}
         cashuIsBusy={cashuIsBusy}
         chatMessageElByIdRef={chatMessageElByIdRef}

@@ -2,6 +2,7 @@ import React from "react";
 import {
   startNativeQrScan,
   startNativeQrScanStream,
+  type NativeScanViewport,
   type NativeScanStreamHandle,
   supportsNativeQrScan,
 } from "../../platform/nativeBridge";
@@ -44,6 +45,33 @@ type UseGuideScannerDomainResult = ReturnType<typeof useContactsGuide> & {
 };
 
 const MAX_QR_DECODE_SIDE = 640;
+
+const readNativeScanViewport = (): NativeScanViewport | null => {
+  const header = document.querySelector(".scan-header");
+  const footer = document.querySelector(".scan-footer");
+  if (!(header instanceof HTMLElement) || !(footer instanceof HTMLElement)) {
+    return null;
+  }
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const top = Math.max(0, header.getBoundingClientRect().bottom);
+  const bottom = Math.min(viewportHeight, footer.getBoundingClientRect().top);
+  const height = bottom - top;
+
+  if (viewportWidth <= 0 || viewportHeight <= 0 || height <= 0) {
+    return null;
+  }
+
+  return {
+    height,
+    left: 0,
+    top,
+    viewportHeight,
+    viewportWidth,
+    width: viewportWidth,
+  };
+};
 
 const formatScanDebugDetails = (details?: Record<string, unknown>) => {
   if (!details) {
@@ -247,7 +275,7 @@ export const useGuideScannerDomain = ({
 
         const nativeScanHandle = startNativeQrScanStream((result) => {
           void handleNativeScanResult(requestId, result);
-        });
+        }, readNativeScanViewport);
 
         if (nativeScanHandle) {
           nativeScanHandleRef.current = nativeScanHandle;

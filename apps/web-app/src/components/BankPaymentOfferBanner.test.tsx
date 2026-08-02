@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLinkyBankPaymentOfferEvent } from "../app/lib/bankPaymentOffer";
-import type { LocalNostrMessage } from "../app/types/appTypes";
+import type { ContactRowLike, LocalNostrMessage } from "../app/types/appTypes";
 import { BankPaymentOfferBanner } from "./BankPaymentOfferBanner";
 
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
@@ -45,6 +45,9 @@ const createOfferMessage = (
 const renderBanner = async (
   message: LocalNostrMessage,
   myPubkeyHex: string,
+  contacts: readonly ContactRowLike[] = [
+    { id: "contact-1", name: "Alice", npub: "npub1alice" },
+  ],
 ) => {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -53,7 +56,7 @@ const renderBanner = async (
   await act(async () => {
     root.render(
       <BankPaymentOfferBanner
-        contacts={[{ id: "contact-1", name: "Alice", npub: "npub1alice" }]}
+        contacts={contacts}
         formatDisplayedAmountText={(amountSat) => `${amountSat} sat`}
         messages={[message]}
         myPubkeyHex={myPubkeyHex}
@@ -106,5 +109,24 @@ describe("BankPaymentOfferBanner", () => {
     expect(
       container.querySelector(".bank-payment-offer-banner-avatar"),
     ).not.toBeNull();
+  });
+
+  it("does not surface an incoming offer before the sender is saved", async () => {
+    const container = await renderBanner(
+      createOfferMessage("offered", "in"),
+      "recipient-pubkey",
+      [
+        {
+          id: "contact-1",
+          isUnknownContact: true,
+          name: "Unknown Alice",
+          npub: "npub1alice",
+        },
+      ],
+    );
+
+    expect(
+      container.querySelector(".pwa-update-banner.bank-payment-offer-banner"),
+    ).toBeNull();
   });
 });

@@ -1,4 +1,5 @@
 import * as Evolu from "@evolu/common";
+import { UNKNOWN_CONTACT_ID_PREFIX } from "../utils/constants";
 
 const CashuTokenId = Evolu.id("CashuToken");
 type CashuTokenId = typeof CashuTokenId.Type;
@@ -148,6 +149,9 @@ export const parseRouteFromHash = (): Route => {
     const sub = String(rawSub ?? "").trim();
     const offerId = decodeSegment(rawOfferId ?? "");
     if (id && sub === "bank-payment-offer" && offerId) {
+      if (id.toLowerCase().startsWith(UNKNOWN_CONTACT_ID_PREFIX)) {
+        return { kind: "chat", id };
+      }
       return { kind: "bankPaymentOffer", chatId: id, offerId };
     }
     if (id) return { kind: "chat", id };

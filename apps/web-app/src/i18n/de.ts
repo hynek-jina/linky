@@ -613,9 +613,11 @@ export const de = {
   spdPaymentOfferFailed: "Angebot konnte nicht gesendet werden.",
   spdPaymentOfferMissingAmount: "Der Angebotsbetrag fehlt.",
   spdPaymentNoOfferContact: "Kein Kontakt für dieses Angebot",
+  spdPaymentLastResponseTime: "Letztes Mal {time}",
   bankPaymentOfferTitle: "Zahlungsangebot",
   bankPaymentOfferStatusOffered: "Angeboten",
   bankPaymentOfferStatusAccepted: "Angenommen",
+  bankPaymentOfferStatusAcceptedByOther: "Von jemand anderem angenommen",
   bankPaymentOfferStatusBankDetailsSent: "Details gesendet",
   bankPaymentOfferStatusBankDetailsReceived: "Details erhalten",
   bankPaymentOfferStatusBankPaid: "Per Bank bezahlt",
@@ -629,7 +631,7 @@ export const de = {
   bankPaymentOfferSettle: "Abschluss bestätigen",
   bankPaymentOfferNotPaid: "Nicht bezahlt",
   bankPaymentOfferAcceptedByOther:
-    "Jemand anderes hat dieses Angebot angenommen.",
+    "Jemand anderes hat das Angebot schneller angenommen. Für dich ist es damit beendet.",
   bankPaymentOfferBackupRecipient:
     "Dieser Kontakt bleibt als Reserve erhalten.",
   bankPaymentOfferAllDeclined: "Niemand hat das Angebot angenommen.",
@@ -646,12 +648,18 @@ export const de = {
   bankPaymentOfferWaitingForSatsDescription:
     "{name} prüft die Bankzahlung und sendet dir anschließend die Sats.",
   bankPaymentOfferAttachConfirmation: "Bestätigung anhängen",
+  bankPaymentOfferConfirmation: "Zahlungsbestätigung",
   bankPaymentOfferBannerIncoming:
     "{name} bittet um eine stellvertretende Zahlung über {amount}",
   bankPaymentOfferBannerOutgoing:
     "Du hast eine stellvertretende Zahlung über {amount} angefordert",
   bankPaymentOfferBannerAcceptedBy:
     "{name} hat die stellvertretende Zahlung über {amount} angenommen",
+  bankPaymentOfferPreviewIncoming:
+    "Bittet um eine stellvertretende Zahlung über {amount}",
+  bankPaymentOfferPreviewOutgoing:
+    "Du bittest um eine stellvertretende Zahlung über {amount}",
+  bankPaymentOfferPreviewCanceled: "Stornierte stellvertretende Zahlung",
   bankPaymentOfferProgressTitle: "Fortschritt der stellvertretenden Zahlung",
   bankPaymentOfferProgressAcceptedInfo:
     "Jemand hat das Angebot bereits angenommen.",
@@ -883,6 +891,7 @@ export const de = {
   cashuTokenClaimed: "Token eingelöst",
   cashuTokenClaimedWithAmount: "Dein Token über {amount} wurde eingelöst",
   conversations: "Unterhaltungen",
+  proxyPayments: "Proxy-Zahlungen",
   otherContacts: "Weitere Kontakte",
   today: "Heute",
   yesterday: "Gestern",

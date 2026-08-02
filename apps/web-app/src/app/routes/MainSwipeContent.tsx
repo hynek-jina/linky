@@ -1,16 +1,13 @@
 import React from "react";
 import { BottomTabBar } from "../../components/BottomTabBar";
-import { BankPaymentOfferBanner } from "../../components/BankPaymentOfferBanner";
 import { ContactAddIcon } from "../../components/icons";
 import { ContactsChecklist } from "../../components/ContactsChecklist";
 import { ContactsPage } from "../../pages/ContactsPage";
 import { WalletPage } from "../../pages/WalletPage";
 import { useDesktopSplitView } from "../../hooks/useDesktopSplitView";
 import type { Route } from "../../types/route";
-import {
-  useAppShellCore,
-  useMainSwipeRoutes,
-} from "../context/AppShellContexts";
+import { useMainSwipeRoutes } from "../context/AppShellContexts";
+import { getActiveBankPaymentOfferContacts } from "../lib/bankPaymentOffer";
 import { useMainSwipeProgress } from "../lib/mainSwipeProgressStore";
 import { useShowProfileQrOnTilt } from "../hooks/useShowProfileQrOnTilt";
 import type {
@@ -26,8 +23,6 @@ export interface MainSwipeRouteProps {
   cashuBalance: number;
   cashuTotalBalance: number;
   bankPaymentOfferMessages: readonly LocalNostrMessage[];
-  chatOwnPubkeyHex: string | null;
-  contacts: readonly ContactRowLike[];
   contactsOnboardingCelebrating: boolean;
   contactsOnboardingTasks: {
     done: number;
@@ -46,7 +41,6 @@ export interface MainSwipeRouteProps {
   openProfileQr: () => void;
   openWalletScan: () => void;
   otherContactsLabel: string;
-  nostrPictureByNpub: Readonly<Record<string, string | null>>;
   renderContactCard: (contact: ContactRowLike) => React.ReactNode;
   route: Route;
   scanIsOpen: boolean;
@@ -72,6 +66,59 @@ const isContactsGuideKey = (value: string): value is ContactsGuideKey =>
   value === "pay" ||
   value === "message" ||
   value === "backup_keys";
+
+interface VisibleContactSections {
+  conversations: ContactRowLike[];
+  others: ContactRowLike[];
+  pinned: ContactRowLike[];
+  proxyPayments: ContactRowLike[];
+}
+
+const useVisibleContactSections = (
+  bankPaymentOfferMessages: readonly LocalNostrMessage[],
+  visibleContacts: MainSwipeRouteProps["visibleContacts"],
+): VisibleContactSections => {
+  const [nowSec, setNowSec] = React.useState(() =>
+    Math.floor(Date.now() / 1_000),
+  );
+  const activeOffers = React.useMemo(
+    () => getActiveBankPaymentOfferContacts(bankPaymentOfferMessages, nowSec),
+    [bankPaymentOfferMessages, nowSec],
+  );
+
+  React.useEffect(() => {
+    if (activeOffers.nextExpiryAtSec === null) return;
+    const timeoutId = window.setTimeout(
+      () => setNowSec(Math.floor(Date.now() / 1_000)),
+      Math.max(0, activeOffers.nextExpiryAtSec * 1_000 - Date.now() + 25),
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [activeOffers.nextExpiryAtSec]);
+
+  return React.useMemo(() => {
+    const isProxyPaymentContact = (contact: ContactRowLike): boolean =>
+      contact.isUnknownContact !== true &&
+      activeOffers.contactIds.has(String(contact.id ?? "").trim());
+    const proxyPayments = [
+      ...visibleContacts.pinned,
+      ...visibleContacts.conversations,
+      ...visibleContacts.others,
+    ].filter(isProxyPaymentContact);
+
+    return {
+      conversations: visibleContacts.conversations.filter(
+        (contact) => !isProxyPaymentContact(contact),
+      ),
+      others: visibleContacts.others.filter(
+        (contact) => !isProxyPaymentContact(contact),
+      ),
+      pinned: visibleContacts.pinned.filter(
+        (contact) => !isProxyPaymentContact(contact),
+      ),
+      proxyPayments,
+    };
+  }, [activeOffers.contactIds, visibleContacts]);
+};
 
 // Per-frame swipe progress subscribers are isolated in these two small
 // components so drag updates re-render only the tab bar and the FAB, not the
@@ -145,7 +192,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     cashuBalance,
     cashuTotalBalance,
     bankPaymentOfferMessages,
-    chatOwnPubkeyHex,
     contactsOnboardingCelebrating,
     contactsOnboardingTasks,
     contactsSearch,
@@ -160,7 +206,6 @@ export const MainSwipeContent = (): React.ReactElement => {
     openProfileQr,
     openWalletScan,
     otherContactsLabel,
-    nostrPictureByNpub,
     renderContactCard,
     route,
     scanIsOpen,
@@ -174,8 +219,11 @@ export const MainSwipeContent = (): React.ReactElement => {
     t,
     visibleContacts,
   } = mainSwipeProps;
-  const { formatDisplayedAmountText } = useAppShellCore();
   const isDesktopSplitView = useDesktopSplitView();
+  const visibleContactSections = useVisibleContactSections(
+    bankPaymentOfferMessages,
+    visibleContacts,
+  );
 
   useShowProfileQrOnTilt({
     enabled:
@@ -221,7 +269,7 @@ export const MainSwipeContent = (): React.ReactElement => {
             activeGroup={activeGroup}
             setActiveGroup={setActiveGroup}
             filterOptions={contactFilterOptions}
-            visibleContacts={visibleContacts}
+            visibleContacts={visibleContactSections}
             conversationsLabel={conversationsLabel}
             otherContactsLabel={otherContactsLabel}
             renderContactCard={renderContactCard}
@@ -251,14 +299,6 @@ export const MainSwipeContent = (): React.ReactElement => {
           />
         </div>
       </div>
-      <BankPaymentOfferBanner
-        contacts={mainSwipeProps.contacts}
-        formatDisplayedAmountText={formatDisplayedAmountText}
-        messages={bankPaymentOfferMessages}
-        myPubkeyHex={chatOwnPubkeyHex}
-        nostrPictureByNpub={nostrPictureByNpub}
-        t={t}
-      />
       <MainSwipeBottomTabBar
         activeTab={bottomTabActive}
         contactsLabel={t("contactsTitle")}
@@ -277,12 +317,10 @@ export const MainSwipeContent = (): React.ReactElement => {
 
 export const DesktopContactsPane = (): React.ReactElement => {
   const { mainSwipeProps } = useMainSwipeRoutes();
-  const { formatDisplayedAmountText } = useAppShellCore();
   const {
     activeGroup,
     bankPaymentOfferMessages,
     canAddContact,
-    chatOwnPubkeyHex,
     contactsOnboardingCelebrating,
     contactsOnboardingTasks,
     contactsSearch,
@@ -290,7 +328,6 @@ export const DesktopContactsPane = (): React.ReactElement => {
     contactFilterOptions,
     conversationsLabel,
     dismissContactsOnboarding,
-    nostrPictureByNpub,
     openNewContactPage,
     otherContactsLabel,
     renderContactCard,
@@ -301,6 +338,10 @@ export const DesktopContactsPane = (): React.ReactElement => {
     t,
     visibleContacts,
   } = mainSwipeProps;
+  const visibleContactSections = useVisibleContactSections(
+    bankPaymentOfferMessages,
+    visibleContacts,
+  );
 
   return (
     <div className="desktop-primary-content desktop-contacts-pane">
@@ -329,7 +370,7 @@ export const DesktopContactsPane = (): React.ReactElement => {
         activeGroup={activeGroup}
         setActiveGroup={setActiveGroup}
         filterOptions={contactFilterOptions}
-        visibleContacts={visibleContacts}
+        visibleContacts={visibleContactSections}
         conversationsLabel={conversationsLabel}
         otherContactsLabel={otherContactsLabel}
         renderContactCard={renderContactCard}
@@ -338,14 +379,6 @@ export const DesktopContactsPane = (): React.ReactElement => {
         openNewContactPage={openNewContactPage}
         showBottomTabBar={false}
         showFab={false}
-        t={t}
-      />
-      <BankPaymentOfferBanner
-        contacts={mainSwipeProps.contacts}
-        formatDisplayedAmountText={formatDisplayedAmountText}
-        messages={bankPaymentOfferMessages}
-        myPubkeyHex={chatOwnPubkeyHex}
-        nostrPictureByNpub={nostrPictureByNpub}
         t={t}
       />
       <button
