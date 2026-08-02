@@ -105,6 +105,8 @@ export interface NativeScanViewport {
   width: number;
 }
 
+const NATIVE_SCAN_VIEWPORT_MAX_FRAMES = 30;
+
 interface AndroidNotificationsBridge {
   areSupported?: () => boolean;
   getPermissionState?: () => string;
@@ -499,32 +501,45 @@ export const startNativeQrScanStream = (
 
   window.addEventListener(eventName, onResultEvent);
 
-  animationFrameId = window.requestAnimationFrame(() => {
-    animationFrameId = null;
+  const startWhenViewportIsReady = (framesRemaining: number) => {
+    animationFrameId = window.requestAnimationFrame(() => {
+      animationFrameId = null;
 
-    try {
-      const viewport = getViewport?.() ?? null;
-      if (viewport && bridge.setScanViewport) {
-        bridge.setScanViewport(
-          viewport.left,
-          viewport.top,
-          viewport.width,
-          viewport.height,
-          viewport.viewportWidth,
-          viewport.viewportHeight,
-        );
+      try {
+        const viewport = getViewport?.() ?? null;
+        if (getViewport && bridge.setScanViewport && !viewport) {
+          if (framesRemaining > 1) {
+            startWhenViewportIsReady(framesRemaining - 1);
+            return;
+          }
+
+          throw new Error("Native scanner viewport unavailable");
+        }
+
+        if (viewport && bridge.setScanViewport) {
+          bridge.setScanViewport(
+            viewport.left,
+            viewport.top,
+            viewport.width,
+            viewport.height,
+            viewport.viewportWidth,
+            viewport.viewportHeight,
+          );
+        }
+        bridge.startScan?.();
+        started = true;
+      } catch (error) {
+        cleanup();
+        onResult({
+          cancelled: false,
+          message: String(error ?? "Native scanner failed"),
+          value: null,
+        });
       }
-      bridge.startScan?.();
-      started = true;
-    } catch (error) {
-      cleanup();
-      onResult({
-        cancelled: false,
-        message: String(error ?? "Native scanner failed"),
-        value: null,
-      });
-    }
-  });
+    });
+  };
+
+  startWhenViewportIsReady(NATIVE_SCAN_VIEWPORT_MAX_FRAMES);
 
   return {
     stop: () => {

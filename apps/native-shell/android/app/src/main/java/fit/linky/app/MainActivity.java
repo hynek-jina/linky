@@ -447,23 +447,30 @@ public class MainActivity extends BridgeActivity {
 			return;
 		}
 
-		nativeQrScannerOverlay.post(() -> {
-			int overlayWidth = nativeQrScannerOverlay.getWidth();
-			int overlayHeight = nativeQrScannerOverlay.getHeight();
-			if (overlayWidth <= 0 || overlayHeight <= 0) {
-				return;
+		int overlayWidth = nativeQrScannerOverlay.getWidth();
+		int overlayHeight = nativeQrScannerOverlay.getHeight();
+		WebView webView = getBridgeWebView();
+		if (webView != null) {
+			if (overlayWidth <= 0) {
+				overlayWidth = webView.getWidth();
 			}
+			if (overlayHeight <= 0) {
+				overlayHeight = webView.getHeight();
+			}
+		}
+		if (overlayWidth <= 0 || overlayHeight <= 0) {
+			return;
+		}
 
-			double scaleX = overlayWidth / viewportWidthCssPx;
-			double scaleY = overlayHeight / viewportHeightCssPx;
-			FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
-				Math.max(1, (int) Math.round(widthCssPx * scaleX)),
-				Math.max(1, (int) Math.round(heightCssPx * scaleY))
-			);
-			layoutParams.leftMargin = Math.max(0, (int) Math.round(leftCssPx * scaleX));
-			layoutParams.topMargin = Math.max(0, (int) Math.round(topCssPx * scaleY));
-			nativeQrScannerView.setLayoutParams(layoutParams);
-		});
+		double scaleX = overlayWidth / viewportWidthCssPx;
+		double scaleY = overlayHeight / viewportHeightCssPx;
+		FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
+			Math.max(1, (int) Math.round(widthCssPx * scaleX)),
+			Math.max(1, (int) Math.round(heightCssPx * scaleY))
+		);
+		layoutParams.leftMargin = Math.max(0, (int) Math.round(leftCssPx * scaleX));
+		layoutParams.topMargin = Math.max(0, (int) Math.round(topCssPx * scaleY));
+		nativeQrScannerView.setLayoutParams(layoutParams);
 	}
 
 	private void startNativeQrScannerPreview() {
