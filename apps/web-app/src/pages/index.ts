@@ -18,6 +18,7 @@ export { EvoluServerNewPage } from "./EvoluServerNewPage";
 export { EvoluServerPage } from "./EvoluServerPage";
 export { EvoluServersPage } from "./EvoluServersPage";
 export { LnAddressPayPage } from "./LnAddressPayPage";
+export { LanguagePage } from "./LanguagePage";
 export { ManualPayPage } from "./ManualPayPage";
 export { MasterKeysPage } from "./MasterKeysPage";
 export { MintDetailPage } from "./MintDetailPage";

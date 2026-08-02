@@ -30,6 +30,7 @@ const parseContactId = (value: string): ContactId | null => {
 export type Route =
   | { kind: "contacts" }
   | { kind: "settings" }
+  | { kind: "settingsLanguage" }
   | { kind: "settingsUnits" }
   | { kind: "settingsMasterKeys" }
   | { kind: "advanced" }
@@ -78,6 +79,7 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#") return { kind: "contacts" };
   if (hash === "#contacts") return { kind: "contacts" };
   if (hash === "#settings") return { kind: "settings" };
+  if (hash === "#settings/language") return { kind: "settingsLanguage" };
   if (hash === "#settings/units") return { kind: "settingsUnits" };
   if (hash === "#settings/master-keys") return { kind: "settingsMasterKeys" };
   if (hash === "#advanced") return { kind: "advanced" };

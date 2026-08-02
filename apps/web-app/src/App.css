@@ -1372,6 +1372,39 @@ button.settings-link:hover {
   transform: none;
 }
 
+button.language-option {
+  position: relative;
+}
+
+button.language-option::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: -4px -12px;
+  border-radius: 18px;
+  background: transparent;
+}
+
+button.language-option:hover::before,
+button.language-option:focus-visible::before {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+button.language-option.is-selected::before,
+button.language-option.is-selected:hover::before,
+button.language-option.is-selected:focus-visible::before {
+  background: rgba(45, 213, 190, 0.12);
+}
+
+button.language-option > * {
+  position: relative;
+  z-index: 1;
+}
+
+button.language-option.is-selected .settings-label {
+  color: #99f6e4;
+}
+
 .settings-chevron {
   width: 14px;
   flex: 0 0 14px;

@@ -1,29 +1,20 @@
 import React from "react";
 import { Bitcoin, Languages, Settings } from "lucide-react";
 import { useNavigation } from "../hooks/useRouting";
-import type { Lang } from "../i18n";
 import { FeedbackIcon } from "./icons";
 
 interface MenuModalProps {
   closeMenu: () => void;
-  lang: Lang;
   openFeedbackContact: () => void;
-  setLang: (lang: Lang) => void;
   t: (key: string) => string;
 }
 
 export function MenuModal({
   closeMenu,
-  lang,
   openFeedbackContact,
-  setLang,
   t,
 }: MenuModalProps): React.ReactElement {
   const navigateTo = useNavigation();
-
-  const handleLangChange = (value: string) => {
-    setLang(value === "cs" || value === "de" ? value : "en");
-  };
 
   return (
     <div
@@ -34,7 +25,16 @@ export function MenuModal({
       onClick={closeMenu}
     >
       <div className="menu-modal-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-row">
+        <button
+          type="button"
+          className="settings-row settings-link"
+          onClick={() => {
+            closeMenu();
+            navigateTo({ route: "settingsLanguage" });
+          }}
+          aria-label={t("language")}
+          title={t("language")}
+        >
           <div className="settings-left">
             <span className="settings-icon" aria-hidden="true">
               <Languages size={18} />
@@ -42,25 +42,18 @@ export function MenuModal({
             <span className="settings-label">{t("language")}</span>
           </div>
           <div className="settings-right">
-            <select
-              className="select"
-              value={lang}
-              onChange={(e) => handleLangChange(e.target.value)}
-              aria-label={t("language")}
-            >
-              <option value="cs">{t("czech")}</option>
-              <option value="de">{t("german")}</option>
-              <option value="en">{t("english")}</option>
-            </select>
+            <span className="settings-chevron" aria-hidden="true">
+              &gt;
+            </span>
           </div>
-        </div>
+        </button>
 
         <button
           type="button"
           className="settings-row settings-link"
           onClick={() => {
             closeMenu();
-            navigateTo({ route: "settings" });
+            navigateTo({ route: "settingsUnits" });
           }}
           aria-label={t("unit")}
           title={t("unit")}

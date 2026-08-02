@@ -106,6 +106,7 @@ type NavigationAction =
   | { route: "profile" }
   | { route: "profileEdit" }
   | { route: "settings" }
+  | { route: "settingsLanguage" }
   | { route: "settingsMasterKeys" }
   | { route: "settingsUnits" }
   | { route: "transactions" }
@@ -121,6 +122,9 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "settings":
       window.location.assign("#settings");
+      break;
+    case "settingsLanguage":
+      window.location.assign("#settings/language");
       break;
     case "settingsUnits":
       window.location.assign("#settings/units");

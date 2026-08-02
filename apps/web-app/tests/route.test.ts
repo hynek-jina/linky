@@ -33,9 +33,12 @@ describe("parseRouteFromHash", () => {
     expect(parseRouteFromHash()).toEqual({ kind: "contacts" });
   });
 
-  it("parses settings and its units subpage", () => {
+  it("parses settings and its language and units subpages", () => {
     replaceHash("#settings");
     expect(parseRouteFromHash()).toEqual({ kind: "settings" });
+
+    replaceHash("#settings/language");
+    expect(parseRouteFromHash()).toEqual({ kind: "settingsLanguage" });
 
     replaceHash("#settings/units");
     expect(parseRouteFromHash()).toEqual({ kind: "settingsUnits" });
