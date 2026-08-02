@@ -19,6 +19,7 @@ import {
   EvoluServerPage,
   EvoluServersPage,
   LnAddressPayPage,
+  LanguagePage,
   ManualPayPage,
   MasterKeysPage,
   MintDetailPage,
@@ -101,6 +102,8 @@ const RoutePage = (): React.ReactElement => {
       return <AdvancedPage />;
     case "settingsUnits":
       return <SettingsPage />;
+    case "settingsLanguage":
+      return <LanguagePage />;
     case "settingsMasterKeys":
       return <MasterKeysPage />;
     case "advancedAutoPayLimit":

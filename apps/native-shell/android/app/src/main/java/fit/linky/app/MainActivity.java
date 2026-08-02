@@ -19,6 +19,7 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import android.util.Log;
 import android.view.View;
+import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.activity.OnBackPressedCallback;
@@ -425,6 +426,44 @@ public class MainActivity extends BridgeActivity {
 			new String[] { Manifest.permission.CAMERA },
 			CAMERA_PERMISSION_REQUEST_CODE
 		);
+	}
+
+	private void setNativeQrScannerViewport(
+		double leftCssPx,
+		double topCssPx,
+		double widthCssPx,
+		double heightCssPx,
+		double viewportWidthCssPx,
+		double viewportHeightCssPx
+	) {
+		if (
+			nativeQrScannerOverlay == null ||
+			nativeQrScannerView == null ||
+			viewportWidthCssPx <= 0 ||
+			viewportHeightCssPx <= 0 ||
+			widthCssPx <= 0 ||
+			heightCssPx <= 0
+		) {
+			return;
+		}
+
+		nativeQrScannerOverlay.post(() -> {
+			int overlayWidth = nativeQrScannerOverlay.getWidth();
+			int overlayHeight = nativeQrScannerOverlay.getHeight();
+			if (overlayWidth <= 0 || overlayHeight <= 0) {
+				return;
+			}
+
+			double scaleX = overlayWidth / viewportWidthCssPx;
+			double scaleY = overlayHeight / viewportHeightCssPx;
+			FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
+				Math.max(1, (int) Math.round(widthCssPx * scaleX)),
+				Math.max(1, (int) Math.round(heightCssPx * scaleY))
+			);
+			layoutParams.leftMargin = Math.max(0, (int) Math.round(leftCssPx * scaleX));
+			layoutParams.topMargin = Math.max(0, (int) Math.round(topCssPx * scaleY));
+			nativeQrScannerView.setLayoutParams(layoutParams);
+		});
 	}
 
 	private void startNativeQrScannerPreview() {
@@ -1010,6 +1049,25 @@ public class MainActivity extends BridgeActivity {
 	}
 
 	private final class LinkyNativeScannerBridge {
+		@JavascriptInterface
+		public void setScanViewport(
+			double leftCssPx,
+			double topCssPx,
+			double widthCssPx,
+			double heightCssPx,
+			double viewportWidthCssPx,
+			double viewportHeightCssPx
+		) {
+			runOnUiThread(() -> setNativeQrScannerViewport(
+				leftCssPx,
+				topCssPx,
+				widthCssPx,
+				heightCssPx,
+				viewportWidthCssPx,
+				viewportHeightCssPx
+			));
+		}
+
 		@JavascriptInterface
 		public void startScan() {
 			runOnUiThread(() -> openNativeQrScanner());

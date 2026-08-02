@@ -50,9 +50,7 @@ export function AuthenticatedLayout({
       {state.menuIsOpen ? (
         <MenuModal
           closeMenu={actions.closeMenu}
-          lang={state.lang}
           openFeedbackContact={actions.openFeedbackContact}
-          setLang={actions.setLang}
           t={state.t}
         />
       ) : null}

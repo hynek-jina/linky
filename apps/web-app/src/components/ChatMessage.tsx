@@ -2,7 +2,7 @@ import { Info, Plus, X } from "lucide-react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
-  isLinkyBankPaymentOfferWholeOfferTerminalStatus,
+  isLinkyBankPaymentOfferTerminalStatus,
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
   type LinkyBankPaymentOfferInfo,
   type LinkyBankPaymentOfferStatus,
@@ -64,6 +64,7 @@ interface ChatMessageProps {
   };
   bankPaymentOfferInfo: LinkyBankPaymentOfferInfo | null;
   bankPaymentOfferPeerNotice: BankPaymentOfferPeerNotice | null;
+  canOpenBankPaymentOfferDetails: boolean;
   canEdit: boolean;
   canActOnPaymentRequest: boolean;
   canReplyOrReact: boolean;
@@ -138,19 +139,21 @@ const getBankPaymentOfferDescription = (
       ? isOut
         ? "bankPaymentOfferDescriptionAccepted"
         : "bankPaymentOfferDescriptionAcceptedIncoming"
-      : status === "bank_details_sent"
-        ? ""
-        : status === "bank_paid"
-          ? isOut
-            ? "bankPaymentOfferDescriptionBankPaid"
-            : "bankPaymentOfferDescriptionBankPaidIncoming"
-          : status === "canceled"
-            ? ""
-            : status === "declined"
-              ? "bankPaymentOfferDescriptionDeclined"
-              : status === "settled"
-                ? ""
-                : "bankPaymentOfferDescriptionOffered";
+      : status === "accepted_by_other"
+        ? "bankPaymentOfferAcceptedByOther"
+        : status === "bank_details_sent"
+          ? ""
+          : status === "bank_paid"
+            ? isOut
+              ? "bankPaymentOfferDescriptionBankPaid"
+              : "bankPaymentOfferDescriptionBankPaidIncoming"
+            : status === "canceled"
+              ? ""
+              : status === "declined"
+                ? "bankPaymentOfferDescriptionDeclined"
+                : status === "settled"
+                  ? ""
+                  : "bankPaymentOfferDescriptionOffered";
 
   return key ? t(key).replace("{amount}", amountText) : "";
 };
@@ -159,6 +162,7 @@ function ChatMessageComponent({
   actionLabels,
   bankPaymentOfferInfo,
   bankPaymentOfferPeerNotice,
+  canOpenBankPaymentOfferDetails,
   canEdit,
   canActOnPaymentRequest,
   canReplyOrReact,
@@ -716,19 +720,21 @@ function ChatMessageComponent({
                     >
                       {bankPaymentOfferInfo.status === "accepted"
                         ? t("bankPaymentOfferStatusAccepted")
-                        : bankPaymentOfferInfo.status === "bank_details_sent"
-                          ? isOut
-                            ? t("bankPaymentOfferStatusBankDetailsSent")
-                            : t("bankPaymentOfferStatusBankDetailsReceived")
-                          : bankPaymentOfferInfo.status === "bank_paid"
-                            ? t("bankPaymentOfferStatusBankPaid")
-                            : bankPaymentOfferInfo.status === "canceled"
-                              ? t("bankPaymentOfferStatusCanceled")
-                              : bankPaymentOfferInfo.status === "declined"
-                                ? t("bankPaymentOfferStatusDeclined")
-                                : bankPaymentOfferInfo.status === "settled"
-                                  ? t("bankPaymentOfferStatusSettled")
-                                  : t("bankPaymentOfferStatusOffered")}
+                        : bankPaymentOfferInfo.status === "accepted_by_other"
+                          ? t("bankPaymentOfferStatusAcceptedByOther")
+                          : bankPaymentOfferInfo.status === "bank_details_sent"
+                            ? isOut
+                              ? t("bankPaymentOfferStatusBankDetailsSent")
+                              : t("bankPaymentOfferStatusBankDetailsReceived")
+                            : bankPaymentOfferInfo.status === "bank_paid"
+                              ? t("bankPaymentOfferStatusBankPaid")
+                              : bankPaymentOfferInfo.status === "canceled"
+                                ? t("bankPaymentOfferStatusCanceled")
+                                : bankPaymentOfferInfo.status === "declined"
+                                  ? t("bankPaymentOfferStatusDeclined")
+                                  : bankPaymentOfferInfo.status === "settled"
+                                    ? t("bankPaymentOfferStatusSettled")
+                                    : t("bankPaymentOfferStatusOffered")}
                     </span>
                   </div>
                   <div className="chat-bank-payment-amount-row">
@@ -751,7 +757,8 @@ function ChatMessageComponent({
                       {bankOfferTimeLabel}
                     </div>
                   ) : null}
-                  {!isLinkyBankPaymentOfferWholeOfferTerminalStatus(
+                  {canOpenBankPaymentOfferDetails &&
+                  !isLinkyBankPaymentOfferTerminalStatus(
                     bankPaymentOfferInfo.status,
                   ) ? (
                     <button

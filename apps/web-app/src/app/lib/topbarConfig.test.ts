@@ -53,6 +53,7 @@ describe("resolveBackAction", () => {
   it("returns a handler for every non-root route", () => {
     const nonRootRoutes: Route[] = [
       { kind: "settings" },
+      { kind: "settingsLanguage" },
       { kind: "settingsUnits" },
       { kind: "settingsMasterKeys" },
       { kind: "advanced" },
@@ -99,6 +100,7 @@ describe("resolveBackAction", () => {
   });
 
   it("walks settings sub-pages back up to settings", () => {
+    expect(backHashFor({ kind: "settingsLanguage" })).toBe("#settings");
     expect(backHashFor({ kind: "settingsUnits" })).toBe("#settings");
     expect(backHashFor({ kind: "settingsMasterKeys" })).toBe("#settings");
     expect(backHashFor({ kind: "advancedAutoPayLimit" })).toBe("#settings");

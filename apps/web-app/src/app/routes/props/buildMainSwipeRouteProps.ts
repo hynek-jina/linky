@@ -7,8 +7,6 @@ interface BuildMainSwipeRoutePropsParams {
   cashuBalance: MainSwipeRoutesProps["mainSwipeProps"]["cashuBalance"];
   cashuTotalBalance: MainSwipeRoutesProps["mainSwipeProps"]["cashuTotalBalance"];
   bankPaymentOfferMessages: MainSwipeRoutesProps["mainSwipeProps"]["bankPaymentOfferMessages"];
-  chatOwnPubkeyHex: MainSwipeRoutesProps["mainSwipeProps"]["chatOwnPubkeyHex"];
-  contacts: MainSwipeRoutesProps["mainSwipeProps"]["contacts"];
   contactsOnboardingCelebrating: MainSwipeRoutesProps["mainSwipeProps"]["contactsOnboardingCelebrating"];
   contactsOnboardingTasks: MainSwipeRoutesProps["mainSwipeProps"]["contactsOnboardingTasks"];
   contactsSearch: MainSwipeRoutesProps["mainSwipeProps"]["contactsSearch"];
@@ -23,7 +21,6 @@ interface BuildMainSwipeRoutePropsParams {
   openProfileQr: MainSwipeRoutesProps["mainSwipeProps"]["openProfileQr"];
   openWalletScan: MainSwipeRoutesProps["mainSwipeProps"]["openWalletScan"];
   otherContactsLabel: MainSwipeRoutesProps["mainSwipeProps"]["otherContactsLabel"];
-  nostrPictureByNpub: MainSwipeRoutesProps["mainSwipeProps"]["nostrPictureByNpub"];
   renderContactCard: MainSwipeRoutesProps["mainSwipeProps"]["renderContactCard"];
   route: MainSwipeRoutesProps["mainSwipeProps"]["route"];
   scanIsOpen: MainSwipeRoutesProps["mainSwipeProps"]["scanIsOpen"];
@@ -45,8 +42,6 @@ export const buildMainSwipeRouteProps = ({
   cashuBalance,
   cashuTotalBalance,
   bankPaymentOfferMessages,
-  chatOwnPubkeyHex,
-  contacts,
   contactsOnboardingCelebrating,
   contactsOnboardingTasks,
   contactsSearch,
@@ -61,7 +56,6 @@ export const buildMainSwipeRouteProps = ({
   openProfileQr,
   openWalletScan,
   otherContactsLabel,
-  nostrPictureByNpub,
   renderContactCard,
   route,
   scanIsOpen,
@@ -83,8 +77,6 @@ export const buildMainSwipeRouteProps = ({
       cashuBalance,
       cashuTotalBalance,
       bankPaymentOfferMessages,
-      chatOwnPubkeyHex,
-      contacts,
       contactsOnboardingCelebrating,
       contactsOnboardingTasks,
       contactsSearch,
@@ -99,7 +91,6 @@ export const buildMainSwipeRouteProps = ({
       openProfileQr,
       openWalletScan,
       otherContactsLabel,
-      nostrPictureByNpub,
       renderContactCard,
       route,
       scanIsOpen,

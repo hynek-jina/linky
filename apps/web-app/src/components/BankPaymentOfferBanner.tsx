@@ -45,11 +45,24 @@ const isNewerEntry = (candidate: OfferEntry, current: OfferEntry): boolean => {
 };
 
 const findActiveOffer = (
+  contacts: readonly ContactRowLike[],
   messages: readonly LocalNostrMessage[],
   myPubkeyHex: string | null,
   nowSec: number,
 ): ActiveOffer | null => {
   const groups = new Map<string, Map<string, OfferEntry>>();
+  const savedContactIds = new Set(
+    contacts
+      .filter((contact) => {
+        const archivedAtSec = Number(contact.archivedAtSec ?? 0);
+        return (
+          !contact.isUnknownContact &&
+          (!Number.isFinite(archivedAtSec) || archivedAtSec <= 0)
+        );
+      })
+      .map((contact) => String(contact.id ?? "").trim())
+      .filter(Boolean),
+  );
 
   for (const message of messages) {
     const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
@@ -57,6 +70,9 @@ const findActiveOffer = (
 
     const contactId = String(message.contactId ?? "").trim();
     if (!contactId) continue;
+    if (message.direction !== "out" && !savedContactIds.has(contactId)) {
+      continue;
+    }
     const byContact = groups.get(info.offerId) ?? new Map<string, OfferEntry>();
     const entry = { info, message };
     const current = byContact.get(contactId);
@@ -125,8 +141,8 @@ export const BankPaymentOfferBanner: React.FC<BankPaymentOfferBannerProps> = ({
     Math.floor(Date.now() / 1_000),
   );
   const active = React.useMemo(
-    () => findActiveOffer(messages, myPubkeyHex, nowSec),
-    [messages, myPubkeyHex, nowSec],
+    () => findActiveOffer(contacts, messages, myPubkeyHex, nowSec),
+    [contacts, messages, myPubkeyHex, nowSec],
   );
   const activeOfferId = active?.entry.info.offerId ?? null;
   const activePhaseStartedAtSec = active

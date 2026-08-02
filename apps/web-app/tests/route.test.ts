@@ -33,9 +33,12 @@ describe("parseRouteFromHash", () => {
     expect(parseRouteFromHash()).toEqual({ kind: "contacts" });
   });
 
-  it("parses settings and its units subpage", () => {
+  it("parses settings and its language and units subpages", () => {
     replaceHash("#settings");
     expect(parseRouteFromHash()).toEqual({ kind: "settings" });
+
+    replaceHash("#settings/language");
+    expect(parseRouteFromHash()).toEqual({ kind: "settingsLanguage" });
 
     replaceHash("#settings/units");
     expect(parseRouteFromHash()).toEqual({ kind: "settingsUnits" });
@@ -66,6 +69,18 @@ describe("parseRouteFromHash", () => {
     replaceHash("#wallet/token/new");
 
     expect(parseRouteFromHash()).toEqual({ kind: "cashuTokenNew" });
+  });
+
+  it("keeps a proxy-payment offer from an unknown sender in message requests", () => {
+    const unknownChatId = `unknown:${"a".repeat(64)}`;
+    replaceHash(
+      `#chat/${encodeURIComponent(unknownChatId)}/bank-payment-offer/offer-1`,
+    );
+
+    expect(parseRouteFromHash()).toEqual({
+      kind: "chat",
+      id: unknownChatId,
+    });
   });
 });
 

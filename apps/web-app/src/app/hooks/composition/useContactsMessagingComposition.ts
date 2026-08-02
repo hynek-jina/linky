@@ -89,16 +89,18 @@ import { resolveContactRowOwnerLane } from "../../lib/contactOwnerLane";
 import {
   createLinkyBankPaymentOfferEvent,
   forgetLinkyBankPaymentOfferSpdPayload,
+  getLinkyBankPaymentOfferExpiresAtSec,
   getLinkyBankPaymentOfferInfo,
   getLinkyBankPaymentOfferStatusRank,
+  getLastBankPaymentOfferResponseSecByContactId,
   isLinkyBankPaymentOfferTerminalStatus,
   isLinkyBankPaymentOfferWholeOfferTerminalStatus,
   LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX,
   LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
-  LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
   markLinkyBankPaymentOfferBankDetailsSent,
+  mergeBankPaymentOffersIntoLastMessageByContactId,
   readLinkyBankPaymentOfferSpdRecord,
   rememberLinkyBankPaymentOfferSpdPayload,
   shouldPushLinkyBankPaymentOfferStatus,
@@ -761,7 +763,44 @@ export const useContactsMessagingComposition = ({
     visibleMessageOwnerIds,
   });
 
-  reassignContactMessagesRef.current = reassignLocalNostrMessagesContactId;
+  const reassignNostrConversationContactId = React.useCallback(
+    (fromContactId: string, toContactId: string): number => {
+      const normalizedFrom = String(fromContactId ?? "").trim();
+      const normalizedTo = String(toContactId ?? "").trim();
+      if (!normalizedFrom || !normalizedTo || normalizedFrom === normalizedTo) {
+        return 0;
+      }
+
+      const movedMessageCount = reassignLocalNostrMessagesContactId(
+        normalizedFrom,
+        normalizedTo,
+      );
+      setBankPaymentOfferMessages((previous) => {
+        let changed = false;
+        const next = previous.map((message) => {
+          if (String(message.contactId ?? "").trim() !== normalizedFrom) {
+            return message;
+          }
+          changed = true;
+          return { ...message, contactId: normalizedTo };
+        });
+        return changed ? next : previous;
+      });
+      return movedMessageCount;
+    },
+    [reassignLocalNostrMessagesContactId],
+  );
+
+  reassignContactMessagesRef.current = reassignNostrConversationContactId;
+
+  const lastVisibleMessageByContactId = React.useMemo(
+    () =>
+      mergeBankPaymentOffersIntoLastMessageByContactId(
+        lastMessageByContactId,
+        bankPaymentOfferMessages,
+      ),
+    [bankPaymentOfferMessages, lastMessageByContactId],
+  );
 
   const pendingArchivedContactThreadIdsRef = React.useRef(
     new Map<string, string>(),
@@ -939,7 +978,7 @@ export const useContactsMessagingComposition = ({
 
     const unknownById = new Map<string, UnknownChatContact>();
 
-    for (const [contactId, lastMessage] of lastMessageByContactId.entries()) {
+    for (const [contactId, lastMessage] of lastVisibleMessageByContactId) {
       const normalizedContactId = String(contactId ?? "").trim();
       if (!normalizedContactId) continue;
       if (!isUnknownContactId(normalizedContactId)) continue;
@@ -992,7 +1031,7 @@ export const useContactsMessagingComposition = ({
   }, [
     buildUnknownDisplayName,
     chatOwnPubkeyHex,
-    lastMessageByContactId,
+    lastVisibleMessageByContactId,
     nostrMessagesLocal,
     unknownNameByNpub,
   ]);
@@ -1066,7 +1105,7 @@ export const useContactsMessagingComposition = ({
         if (!result.ok) continue;
       }
 
-      reassignLocalNostrMessagesContactId(unknownContactId, knownContactId);
+      reassignNostrConversationContactId(unknownContactId, knownContactId);
       setContactAttentionById((prev) => {
         if (prev[unknownContactId] === undefined) return prev;
         const next = { ...prev };
@@ -1078,7 +1117,7 @@ export const useContactsMessagingComposition = ({
     contacts,
     contactsOwnerId,
     contactsVisibleOwnerIds,
-    reassignLocalNostrMessagesContactId,
+    reassignNostrConversationContactId,
     setContactAttentionById,
     unknownContacts,
     update,
@@ -1484,6 +1523,21 @@ export const useContactsMessagingComposition = ({
       });
     }
     return options.sort((left, right) => {
+      const leftSpecialOrder =
+        left.value === ARCHIVED_CONTACTS_FILTER
+          ? 2
+          : left.value === NO_GROUP_FILTER
+            ? 1
+            : 0;
+      const rightSpecialOrder =
+        right.value === ARCHIVED_CONTACTS_FILTER
+          ? 2
+          : right.value === NO_GROUP_FILTER
+            ? 1
+            : 0;
+      if (leftSpecialOrder !== rightSpecialOrder) {
+        return leftSpecialOrder - rightSpecialOrder;
+      }
       if (right.count !== left.count) return right.count - left.count;
       return left.label.localeCompare(right.label);
     });
@@ -1518,7 +1572,7 @@ export const useContactsMessagingComposition = ({
     contactNameCollator,
     contactsSearchData: displayContactsSearchData,
     contactsSearchParts,
-    lastMessageByContactId,
+    lastMessageByContactId: lastVisibleMessageByContactId,
     noGroupFilterValue: NO_GROUP_FILTER,
     pinnedContactId: recentlyAddedContactId,
   });
@@ -1527,6 +1581,12 @@ export const useContactsMessagingComposition = ({
     route.kind === "bankPayment"
       ? getBankPaymentOfferCurrency(route.spdPayload)
       : null;
+
+  const lastBankPaymentOfferResponseSecByContactId = React.useMemo(
+    () =>
+      getLastBankPaymentOfferResponseSecByContactId(bankPaymentOfferMessages),
+    [bankPaymentOfferMessages],
+  );
 
   const bankPaymentOfferContacts = React.useMemo(() => {
     if (!bankPaymentOfferCurrency) return [];
@@ -1550,12 +1610,17 @@ export const useContactsMessagingComposition = ({
       return [
         {
           ...contact,
+          lastBankPaymentResponseSec:
+            lastBankPaymentOfferResponseSecByContactId.get(
+              String(contact.id ?? "").trim(),
+            ) ?? null,
           pictureUrl: nostrPictureByNpub[normalizedNpub] ?? null,
         },
       ];
     });
   }, [
     bankPaymentOfferCurrency,
+    lastBankPaymentOfferResponseSecByContactId,
     nostrPictureByNpub,
     nostrStatusByNpub,
     visibleContacts.pinned,
@@ -1680,7 +1745,7 @@ export const useContactsMessagingComposition = ({
       amountText: string;
       contacts: readonly { id?: unknown; name?: unknown; npub?: unknown }[];
       spdPayload?: unknown;
-    }): Promise<boolean> => {
+    }): Promise<{ chatId: string; offerId: string } | null> => {
       const amountSatRaw = Number(args.amountSat ?? 0);
       const amountSat =
         Number.isFinite(amountSatRaw) && amountSatRaw > 0
@@ -1690,15 +1755,15 @@ export const useContactsMessagingComposition = ({
       const spdPayload = String(args.spdPayload ?? "").trim();
       if (!amountText) {
         setStatus(t("spdPaymentOfferMissingAmount"));
-        return false;
+        return null;
       }
       if (args.contacts.length === 0) {
         setStatus(t("spdPaymentOfferFailed"));
-        return false;
+        return null;
       }
       if (!currentNsec) {
         setStatus(t("profileMissingNpub"));
-        return false;
+        return null;
       }
 
       try {
@@ -1736,7 +1801,7 @@ export const useContactsMessagingComposition = ({
 
         if (recipients.length === 0) {
           setStatus(t("chatMissingContactNpub"));
-          return false;
+          return null;
         }
 
         const offerId = makeLocalId();
@@ -1752,6 +1817,7 @@ export const useContactsMessagingComposition = ({
 
         const pool = await getSharedAppNostrPool();
         let sentCount = 0;
+        let firstSentContactId = "";
 
         for (const recipient of recipients) {
           const clientId = makeLocalId();
@@ -1787,6 +1853,9 @@ export const useContactsMessagingComposition = ({
 
           if (!publishOutcome.anySuccess) continue;
           sentCount += 1;
+          if (!firstSentContactId) {
+            firstSentContactId = recipient.contactId;
+          }
 
           const messageWrapId =
             String(wrapForMe.id ?? "").trim() ||
@@ -1809,15 +1878,15 @@ export const useContactsMessagingComposition = ({
 
         if (sentCount === 0) {
           setStatus(t("spdPaymentOfferFailed"));
-          return false;
+          return null;
         }
 
-        return true;
+        return { chatId: firstSentContactId, offerId };
       } catch (error) {
         setStatus(
           `${t("errorPrefix")}: ${getUnknownErrorMessage(error, "publish failed")}`,
         );
-        return false;
+        return null;
       }
     },
     [
@@ -1832,8 +1901,10 @@ export const useContactsMessagingComposition = ({
   const respondToBankPaymentOffer = React.useCallback(
     async (
       message: LocalNostrMessage,
-      nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
+      nextStatus: LinkyBankPaymentOfferStatus,
       options?: {
+        expiresAtSec?: number | null;
+        extensionSec?: number | null;
         requireContactDelivery?: boolean;
         spdPayload?: string | null;
         withPush?: boolean;
@@ -1906,8 +1977,21 @@ export const useContactsMessagingComposition = ({
         const baseEvent = createLinkyBankPaymentOfferEvent({
           amountSat: offerInfo.amountSat,
           amountText: offerInfo.amountText,
+          bankPaidAtSec:
+            offerInfo.bankPaidAtSec ??
+            (offerInfo.status === "bank_paid"
+              ? offerInfo.statusUpdatedAtSec
+              : null),
           clientId,
           createdAt: Math.ceil(Date.now() / 1e3),
+          ...(options?.expiresAtSec !== undefined
+            ? { expiresAtSec: options.expiresAtSec }
+            : {}),
+          ...(options?.extensionSec !== undefined
+            ? { extensionSec: options.extensionSec }
+            : {}),
+          initiatedAtSec:
+            offerInfo.initiatedAtSec ?? Number(message.createdAtSec ?? 0),
           offerId: offerInfo.offerId,
           offererPublicKey,
           recipientPublicKey,
@@ -2052,8 +2136,13 @@ export const useContactsMessagingComposition = ({
   const respondToBankPaymentOfferWithGroupState = React.useCallback(
     async (
       message: LocalNostrMessage,
-      nextStatus: Exclude<LinkyBankPaymentOfferStatus, "offered">,
-      options?: { spdPayload?: string | null; withPush?: boolean },
+      nextStatus: LinkyBankPaymentOfferStatus,
+      options?: {
+        expiresAtSec?: number | null;
+        extensionSec?: number | null;
+        spdPayload?: string | null;
+        withPush?: boolean;
+      },
     ): Promise<boolean> => {
       if (nextStatus !== "canceled" && nextStatus !== "settled") {
         return await respondToBankPaymentOffer(message, nextStatus, options);
@@ -2182,12 +2271,57 @@ export const useContactsMessagingComposition = ({
             continue;
           }
 
-          const hasActiveBankDetails = group.some(
-            (entry) =>
-              entry.info?.status === "bank_details_sent" ||
-              entry.info?.status === "bank_paid",
-          );
-          if (hasActiveBankDetails) continue;
+          const notifyNonWinningCandidates = async (
+            winner: LocalNostrMessage,
+          ): Promise<void> => {
+            const winnerContactId = String(winner.contactId ?? "").trim();
+            for (const entry of group) {
+              const contactId = String(entry.message.contactId ?? "").trim();
+              if (!contactId || contactId === winnerContactId) continue;
+              if (
+                entry.info?.status !== "offered" &&
+                entry.info?.status !== "accepted"
+              ) {
+                continue;
+              }
+
+              await respondToBankPaymentOffer(
+                entry.message,
+                "accepted_by_other",
+                { requireContactDelivery: true },
+              );
+            }
+          };
+
+          const activeBankDetails = group
+            .filter(
+              (entry) =>
+                entry.info?.status === "bank_details_sent" ||
+                entry.info?.status === "bank_paid",
+            )
+            .sort((left, right) => {
+              const leftSec =
+                left.info?.statusUpdatedAtSec ??
+                Number(left.message.createdAtSec ?? 0);
+              const rightSec =
+                right.info?.statusUpdatedAtSec ??
+                Number(right.message.createdAtSec ?? 0);
+              return leftSec - rightSec;
+            })[0];
+          if (activeBankDetails) {
+            try {
+              await withLocalStorageLeaseLock({
+                key: `${LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX}.${offerId}`,
+                timeoutMs: 0,
+                fn: async () => {
+                  await notifyNonWinningCandidates(activeBankDetails.message);
+                },
+              });
+            } catch {
+              // Another tab is already closing the non-winning candidates.
+            }
+            continue;
+          }
 
           const accepted = group
             .filter((entry) => entry.info?.status === "accepted")
@@ -2247,6 +2381,7 @@ export const useContactsMessagingComposition = ({
                     candidateKey,
                     offerId,
                   });
+                  await notifyNonWinningCandidates(candidate.message);
                 }
               },
             });
@@ -2314,21 +2449,20 @@ export const useContactsMessagingComposition = ({
       );
       if (!activeStatus) return [];
 
-      const phaseStartedAtSec = Math.min(
+      const expiresAtSec = Math.max(
         ...group
           .filter((entry) => entry.info.status === activeStatus)
           .map(
             (entry) =>
-              entry.info.statusUpdatedAtSec ||
-              Number(entry.message.createdAtSec ?? 0) ||
-              nowSec,
+              getLinkyBankPaymentOfferExpiresAtSec(
+                entry.info,
+                Number(entry.message.createdAtSec ?? 0),
+              ) ?? nowSec,
           ),
       );
       return [
         {
-          expiresAtMs:
-            (phaseStartedAtSec + LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC) *
-            1_000,
+          expiresAtMs: expiresAtSec * 1_000,
           messages: group.map((entry) => entry.message),
         },
       ];
@@ -2469,7 +2603,7 @@ export const useContactsMessagingComposition = ({
                 decodedContact.data,
               );
               if (unknownContactId) {
-                reassignLocalNostrMessagesContactId(
+                reassignNostrConversationContactId(
                   unknownContactId,
                   String(id),
                 );
@@ -2491,7 +2625,7 @@ export const useContactsMessagingComposition = ({
       contacts,
       contactsOwnerId,
       contactsVisibleOwnerIds,
-      reassignLocalNostrMessagesContactId,
+      reassignNostrConversationContactId,
       setStatus,
       t,
       update,
@@ -2609,10 +2743,10 @@ export const useContactsMessagingComposition = ({
       if (!Number.isFinite(archivedAtSec) || archivedAtSec <= 0) continue;
 
       pendingArchivedContactThreadIdsRef.current.delete(contactId);
-      reassignLocalNostrMessagesContactId(contactId, unknownContactId);
+      reassignNostrConversationContactId(contactId, unknownContactId);
       clearContactAttention(unknownContactId);
     }
-  }, [clearContactAttention, contacts, reassignLocalNostrMessagesContactId]);
+  }, [clearContactAttention, contacts, reassignNostrConversationContactId]);
 
   const blockArchivedContact = React.useCallback(async () => {
     if (route.kind !== "contactEdit") return;
@@ -2759,7 +2893,7 @@ export const useContactsMessagingComposition = ({
     );
 
     if (existing?.id) {
-      reassignLocalNostrMessagesContactId(contactId, existing.id);
+      reassignNostrConversationContactId(contactId, existing.id);
       clearContactAttention(contactId);
       setStatus(t("contactSaved"));
       navigateTo({ route: "chat", id: String(existing.id) });
@@ -2802,7 +2936,7 @@ export const useContactsMessagingComposition = ({
     contacts,
     insert,
     pendingUnknownContactAddRef,
-    reassignLocalNostrMessagesContactId,
+    reassignNostrConversationContactId,
     route.kind,
     selectedChatContact,
     setStatus,
@@ -3093,14 +3227,14 @@ export const useContactsMessagingComposition = ({
     if (!existing?.id) return;
 
     pendingUnknownContactAddRef.current = null;
-    reassignLocalNostrMessagesContactId(pending.sourceContactId, existing.id);
+    reassignNostrConversationContactId(pending.sourceContactId, existing.id);
     clearContactAttention(pending.sourceContactId);
     setStatus(t("contactSaved"));
     navigateTo({ route: "chat", id: String(existing.id) });
   }, [
     clearContactAttention,
     contacts,
-    reassignLocalNostrMessagesContactId,
+    reassignNostrConversationContactId,
     setStatus,
     t,
   ]);
@@ -3186,11 +3320,24 @@ export const useContactsMessagingComposition = ({
   }, [editChatMessage, editContext, sendChatMessage]);
 
   const sendChatImage = React.useCallback(
-    async (file: File) => {
+    async (file: File, replyToMessage?: LocalNostrMessage) => {
       if (editContext) return;
+      const replyToId = String(replyToMessage?.rumorId ?? "").trim();
       await sendChatMessage({
         clearDraft: false,
         imageFile: file,
+        ...(replyToId
+          ? {
+              replyContext: {
+                replyToId,
+                rootMessageId:
+                  String(replyToMessage?.rootMessageId ?? "").trim() ||
+                  replyToId,
+                replyToContent:
+                  String(replyToMessage?.content ?? "").trim() || null,
+              },
+            }
+          : {}),
       });
     },
     [editContext, sendChatMessage],
@@ -3435,7 +3582,7 @@ export const useContactsMessagingComposition = ({
     isBankPaymentOfferCanceled,
     isSavingContact,
     knownNostrMessageIdentityIndex,
-    lastMessageByContactId,
+    lastMessageByContactId: lastVisibleMessageByContactId,
     mentionContacts,
     newRelayUrl,
     nostrBootstrapReady,
@@ -3470,7 +3617,7 @@ export const useContactsMessagingComposition = ({
     publishSingleWrappedWithRetry,
     publishWrappedWithRetry,
     reactionsByMessageId,
-    reassignLocalNostrMessagesContactId,
+    reassignLocalNostrMessagesContactId: reassignNostrConversationContactId,
     refreshContactFromNostr,
     relayStatusByUrl,
     relayUrls,

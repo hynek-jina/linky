@@ -146,9 +146,8 @@ export function AdvancedPage(): React.ReactElement {
     setPayWithCashuEnabled,
   } = useAdvancedSettingsContext();
   const navigateTo = useNavigation();
-  const { currentNsec, formatDisplayedAmountParts, lang, t } =
-    useAppShellCore();
-  const { openFeedbackContact, setLang } = useAppShellActions();
+  const { currentNsec, formatDisplayedAmountParts, t } = useAppShellCore();
+  const { openFeedbackContact } = useAppShellActions();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationsIsBusy, setNotificationsIsBusy] = useState(false);
   const [armedSecurityAction, setArmedSecurityAction] = useState<
@@ -325,32 +324,11 @@ export function AdvancedPage(): React.ReactElement {
       <div className="settings-section">
         <h2 className="settings-section-title">{t("settingsGeneral")}</h2>
 
-        <div className="settings-row">
-          <div className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <Languages size={18} />
-            </span>
-            <span className="settings-label">{t("language")}</span>
-          </div>
-          <div className="settings-right">
-            <select
-              className="select"
-              value={lang}
-              onChange={(event) =>
-                setLang(
-                  event.target.value === "cs" || event.target.value === "de"
-                    ? event.target.value
-                    : "en",
-                )
-              }
-              aria-label={t("language")}
-            >
-              <option value="cs">{t("czech")}</option>
-              <option value="de">{t("german")}</option>
-              <option value="en">{t("english")}</option>
-            </select>
-          </div>
-        </div>
+        <SettingsLinkRow
+          onClick={() => navigateTo({ route: "settingsLanguage" })}
+          icon={<Languages size={18} />}
+          label={t("language")}
+        />
 
         <SettingsLinkRow
           onClick={() => navigateTo({ route: "settingsUnits" })}

@@ -47,6 +47,7 @@ export const resolveBackAction = (
     case "profile":
       return navigateToMainReturn;
 
+    case "settingsLanguage":
     case "settingsUnits":
     case "settingsMasterKeys":
     case "advancedAutoPayLimit":
@@ -230,6 +231,7 @@ export const buildTopbarRight = ({
 
   if (
     route.kind === "settings" ||
+    route.kind === "settingsLanguage" ||
     route.kind === "settingsUnits" ||
     route.kind === "settingsMasterKeys" ||
     route.kind === "advanced" ||
@@ -268,6 +270,7 @@ export const buildTopbarTitle = (
 ): string | null => {
   if (route.kind === "contacts") return t("contactsTitle");
   if (route.kind === "settings") return t("settings");
+  if (route.kind === "settingsLanguage") return t("language");
   if (route.kind === "settingsUnits") return t("unit");
   if (route.kind === "settingsMasterKeys") return t("masterKeys");
   if (route.kind === "wallet") return t("wallet");

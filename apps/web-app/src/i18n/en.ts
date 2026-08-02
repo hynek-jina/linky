@@ -628,9 +628,11 @@ export const en = {
   spdPaymentOfferFailed: "Failed to send the offer.",
   spdPaymentOfferMissingAmount: "Offer amount is missing.",
   spdPaymentNoOfferContact: "No contact to offer this to",
+  spdPaymentLastResponseTime: "Last time {time}",
   bankPaymentOfferTitle: "Payment offer",
   bankPaymentOfferStatusOffered: "Offered",
   bankPaymentOfferStatusAccepted: "Accepted",
+  bankPaymentOfferStatusAcceptedByOther: "Accepted by someone else",
   bankPaymentOfferStatusBankDetailsSent: "Details sent",
   bankPaymentOfferStatusBankDetailsReceived: "Details received",
   bankPaymentOfferStatusBankPaid: "Paid by bank",
@@ -643,7 +645,8 @@ export const en = {
   bankPaymentOfferMarkPaid: "I paid",
   bankPaymentOfferSettle: "Confirm settlement",
   bankPaymentOfferNotPaid: "Not paid",
-  bankPaymentOfferAcceptedByOther: "Someone else accepted this offer.",
+  bankPaymentOfferAcceptedByOther:
+    "Someone else accepted the offer first, so it has ended for you.",
   bankPaymentOfferBackupRecipient: "This contact is kept as a backup.",
   bankPaymentOfferAllDeclined: "Nobody accepted the offer.",
   bankPaymentOfferDeclinedNotification: "Payment was declined.",
@@ -659,10 +662,14 @@ export const en = {
   bankPaymentOfferWaitingForSatsDescription:
     "{name} will verify the bank payment and send you the sats.",
   bankPaymentOfferAttachConfirmation: "Attach confirmation",
+  bankPaymentOfferConfirmation: "Payment confirmation",
   bankPaymentOfferBannerIncoming: "{name} requests a proxy payment {amount}",
   bankPaymentOfferBannerOutgoing: "You requested a proxy payment {amount}",
   bankPaymentOfferBannerAcceptedBy:
     "{name} accepted the proxy payment {amount}",
+  bankPaymentOfferPreviewIncoming: "Requests a proxy payment for {amount}",
+  bankPaymentOfferPreviewOutgoing: "You request a proxy payment for {amount}",
+  bankPaymentOfferPreviewCanceled: "Canceled proxy payment",
   bankPaymentOfferProgressTitle: "Proxy payment progress",
   bankPaymentOfferProgressAcceptedInfo:
     "Someone has already accepted the offer.",
@@ -672,6 +679,8 @@ export const en = {
   bankPaymentOfferProgressSats: "Bitcoin settlement",
   bankPaymentOfferSendFunds: "Send funds",
   bankPaymentOfferTimeRemainingClock: "{minutes}:{seconds} remaining",
+  bankPaymentOfferNeedMoreTime: "I need more time (+1 minute)",
+  bankPaymentOfferExtendOneMinute: "+1 min",
   bankPaymentOfferTimeRemainingHoursMinutes:
     "{hours} h {minutes} min remaining",
   bankPaymentOfferTimeRemainingHours: "{hours} h remaining",
@@ -900,6 +909,7 @@ export const en = {
   cashuTokenClaimed: "Token claimed",
   cashuTokenClaimedWithAmount: "Your token of {amount} has been claimed",
   conversations: "Conversations",
+  proxyPayments: "Proxy payments",
   otherContacts: "Other contacts",
   today: "Today",
   yesterday: "Yesterday",

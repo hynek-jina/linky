@@ -66,7 +66,7 @@ export function ScanModal({
 
   return (
     <div className="scan-overlay" role="dialog" aria-label={title}>
-      <div className="scan-sheet">
+      <div className={`scan-sheet${isSendScan ? " scan-sheet--send" : ""}`}>
         <div className="scan-header">
           <div className="scan-title">{title}</div>
           <button

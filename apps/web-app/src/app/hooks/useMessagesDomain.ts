@@ -423,7 +423,12 @@ export const useMessagesDomain = ({
   visibleMessageOwnerIds,
 }: UseMessagesDomainParams) => {
   const { insert, update } = useEvolu();
-  const activeChatRouteId = route.kind === "chat" ? route.id : null;
+  const activeChatRouteId =
+    route.kind === "chat"
+      ? route.id
+      : route.kind === "bankPaymentOffer"
+        ? route.chatId
+        : null;
   const [overlayMessages, setOverlayMessages] = React.useState<
     LocalNostrMessage[]
   >([]);
@@ -1741,7 +1746,7 @@ export const useMessagesDomain = ({
     [appOwnerIdRef],
   );
 
-  const chatContactId = route.kind === "chat" ? route.id : null;
+  const chatContactId = activeChatRouteId;
 
   const { messagesByContactId, lastMessageByContactId, nostrMessagesRecent } =
     React.useMemo(() => {

@@ -9,6 +9,10 @@ import {
   privateImagePreviewText,
 } from "./privateImageMessage";
 import { extractCashuTokenFromText } from "./tokenText";
+import {
+  getLinkyBankPaymentOfferInfo,
+  type LinkyBankPaymentOfferStatus,
+} from "./bankPaymentOffer";
 
 const PREVIEW_NPUB_PATTERN =
   /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?/gi;
@@ -33,6 +37,28 @@ interface FormatChatMessagePreviewArgs {
   t: (key: string) => string;
 }
 
+const getBankPaymentOfferStatusPreviewKey = (
+  status: LinkyBankPaymentOfferStatus,
+): string => {
+  switch (status) {
+    case "accepted":
+      return "bankPaymentOfferStatusAccepted";
+    case "accepted_by_other":
+      return "bankPaymentOfferStatusAcceptedByOther";
+    case "bank_details_sent":
+      return "bankPaymentOfferStatusBankDetailsSent";
+    case "bank_paid":
+      return "bankPaymentOfferStatusBankPaid";
+    case "declined":
+      return "bankPaymentOfferStatusDeclined";
+    case "settled":
+      return "bankPaymentOfferStatusSettled";
+    case "canceled":
+    case "offered":
+      return "";
+  }
+};
+
 export const formatChatMessagePreviewText = ({
   content,
   direction,
@@ -41,6 +67,25 @@ export const formatChatMessagePreviewText = ({
 }: FormatChatMessagePreviewArgs): string => {
   if (parsePrivateImageMessage(content)) {
     return privateImagePreviewText(t);
+  }
+
+  const bankPaymentOffer = getLinkyBankPaymentOfferInfo(content);
+  if (bankPaymentOffer) {
+    if (bankPaymentOffer.status === "offered") {
+      const key =
+        direction === "out"
+          ? "bankPaymentOfferPreviewOutgoing"
+          : "bankPaymentOfferPreviewIncoming";
+      return t(key).replace("{amount}", bankPaymentOffer.amountText);
+    }
+    if (bankPaymentOffer.status === "canceled") {
+      return t("bankPaymentOfferPreviewCanceled");
+    }
+
+    const statusKey = getBankPaymentOfferStatusPreviewKey(
+      bankPaymentOffer.status,
+    );
+    return `${t("bankPaymentOfferTitle")}: ${t(statusKey)}`;
   }
 
   const paymentRequest = parseCashuPaymentRequestMessage(content);

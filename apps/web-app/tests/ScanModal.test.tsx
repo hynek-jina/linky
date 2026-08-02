@@ -187,6 +187,7 @@ describe("ScanModal", () => {
       (element) => element.textContent?.includes("Issue"),
     );
 
+    expect(container.querySelector(".scan-sheet--send")).toBeTruthy();
     expect(button).toBeTruthy();
 
     await act(async () => {
