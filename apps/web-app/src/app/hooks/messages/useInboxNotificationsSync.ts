@@ -1,4 +1,5 @@
 import type { Event as NostrToolsEvent } from "nostr-tools";
+import { normalizeURL } from "nostr-tools/utils";
 import React from "react";
 import type { PushToastOptions } from "../../../hooks/useToasts";
 import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
@@ -60,6 +61,8 @@ const PAYMENT_NOTICE_MATCH_WINDOW_SECONDS = 120;
 // newest-first limit.
 const INBOX_BACKFILL_SINCE_SEC = 3 * 24 * 60 * 60;
 const INBOX_BACKFILL_LIMIT = 500;
+const INBOX_REFRESH_MIN_INTERVAL_MS = 60_000;
+const INBOX_PERIODIC_REFRESH_MS = 5 * 60_000;
 
 const normalizeText = (value: unknown): string => String(value ?? "").trim();
 
@@ -689,10 +692,7 @@ export const useInboxNotificationsSync = <
         };
 
         const pool = await getSharedAppNostrPool();
-        let backfillInFlight = false;
         const backfill = async () => {
-          if (backfillInFlight) return;
-          backfillInFlight = true;
           try {
             const existing = await pool.querySync(
               relays,
@@ -708,36 +708,74 @@ export const useInboxNotificationsSync = <
             for (const event of existing) processWrap(event, "backfill");
           } catch {
             // Best effort; the live subscription still runs.
-          } finally {
-            backfillInFlight = false;
           }
         };
         await backfill();
         if (cancelled) return;
 
-        const sub = pool.subscribe(
-          relays,
-          { kinds: [1059], "#p": [myPubkey] },
-          {
-            onevent: (event: NostrToolsEvent) => {
-              if (!cancelled) processWrap(event, "live");
+        const subscribeToInbox = () =>
+          pool.subscribe(
+            relays,
+            { kinds: [1059], "#p": [myPubkey] },
+            {
+              onevent: (event: NostrToolsEvent) => {
+                if (!cancelled) processWrap(event, "live");
+              },
             },
-          },
-        );
-        // The pool reconnects dropped sockets, but its resumed subscription
-        // filters by last emitted created_at, which the NIP-59 timestamp
-        // randomization defeats; re-query on foreground/online so wraps
-        // missed offline (e.g. offer acceptances) arrive without a restart.
-        const refreshAfterOffline = () => {
-          if (!cancelled && document.visibilityState === "visible") {
-            void backfill();
+          );
+        let sub = subscribeToInbox();
+
+        // A relay that fails to connect at subscribe time never joins the
+        // subscription (the pool only auto-reconnects sockets that were once
+        // open), so an app started offline stays deaf on that relay until a
+        // fresh subscribe call.
+        const resubscribeIfDisconnected = () => {
+          const connectedByUrl = pool.listConnectionStatus();
+          const allConnected = relays.every(
+            (relayUrl) => connectedByUrl.get(normalizeURL(relayUrl)) === true,
+          );
+          if (allConnected) return;
+          void sub.close("inbox sync resubscribe");
+          sub = subscribeToInbox();
+        };
+
+        // The pool's auto-reconnect resumes subscriptions filtered by last
+        // emitted created_at, which the NIP-59 timestamp randomization
+        // defeats, so wraps published while a socket was down can be skipped
+        // even after a transparent reconnect; periodically re-query the
+        // backfill window (and on foreground/online) to close that gap
+        // without an app restart.
+        let lastRefreshAtMs = Date.now();
+        let refreshInFlight = false;
+        const refresh = async () => {
+          if (cancelled || refreshInFlight) return;
+          if (Date.now() - lastRefreshAtMs < INBOX_REFRESH_MIN_INTERVAL_MS) {
+            return;
+          }
+          refreshInFlight = true;
+          lastRefreshAtMs = Date.now();
+          try {
+            await backfill();
+            if (!cancelled) resubscribeIfDisconnected();
+          } finally {
+            refreshInFlight = false;
           }
         };
-        document.addEventListener("visibilitychange", refreshAfterOffline);
-        window.addEventListener("online", refreshAfterOffline);
+        const refreshWhenVisible = () => {
+          if (!cancelled && document.visibilityState === "visible") {
+            void refresh();
+          }
+        };
+        document.addEventListener("visibilitychange", refreshWhenVisible);
+        window.addEventListener("online", refreshWhenVisible);
+        const periodicRefreshHandle = window.setInterval(
+          refreshWhenVisible,
+          INBOX_PERIODIC_REFRESH_MS,
+        );
         return () => {
-          document.removeEventListener("visibilitychange", refreshAfterOffline);
-          window.removeEventListener("online", refreshAfterOffline);
+          document.removeEventListener("visibilitychange", refreshWhenVisible);
+          window.removeEventListener("online", refreshWhenVisible);
+          window.clearInterval(periodicRefreshHandle);
           void sub.close("inbox sync closed");
         };
       } catch {
