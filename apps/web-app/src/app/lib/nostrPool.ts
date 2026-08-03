@@ -2,7 +2,7 @@ import type { SimplePool as NostrToolsSimplePool } from "nostr-tools";
 
 export type AppNostrPool = Pick<
   NostrToolsSimplePool,
-  "publish" | "querySync" | "subscribe"
+  "listConnectionStatus" | "publish" | "querySync" | "subscribe"
 >;
 
 let sharedAppNostrPoolPromise: Promise<AppNostrPool> | null = null;
