@@ -20,6 +20,20 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 - Zatím bez uživatelských změn.
 
+## [26.8.3] - 2026-08-03
+
+### en-US
+
+- Messages and proxy payment offers now recover more reliably after an internet or relay outage, without requiring an app restart.
+- The Android QR scanner falls back to a full-screen preview when needed.
+- The public website has refreshed privacy icons.
+
+### cs-CZ
+
+- Zprávy a nabídky proxy plateb se po výpadku internetu nebo relay serveru obnoví spolehlivěji, bez nutnosti restartovat aplikaci.
+- QR skener na Androidu v případě potřeby použije náhled přes celou obrazovku.
+- Veřejný web má nové ikony soukromí.
+
 ## [26.8.2] - 2026-08-02
 
 ### en-US
