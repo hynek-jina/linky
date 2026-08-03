@@ -54,6 +54,12 @@ const PAYMENT_NOTICE_SEEN_WRAP_IDS_STORAGE_KEY_PREFIX =
   "linky.nostr.payment_notice_seen_wrap_ids.v1";
 const MAX_PERSISTED_PAYMENT_NOTICE_WRAP_IDS = 200;
 const PAYMENT_NOTICE_MATCH_WINDOW_SECONDS = 120;
+// NIP-59 randomizes outer wrap created_at up to two days into the past, so a
+// fresh wrap can rank below dozens of older-looking ones; backfill needs a
+// since window (matching the push service's catch-up) rather than a small
+// newest-first limit.
+const INBOX_BACKFILL_SINCE_SEC = 3 * 24 * 60 * 60;
+const INBOX_BACKFILL_LIMIT = 500;
 
 const normalizeText = (value: unknown): string => String(value ?? "").trim();
 
@@ -683,14 +689,31 @@ export const useInboxNotificationsSync = <
         };
 
         const pool = await getSharedAppNostrPool();
-        const existing = await pool.querySync(
-          relays,
-          { kinds: [1059], "#p": [myPubkey], limit: 50 },
-          { maxWait: 5000 },
-        );
-        if (!cancelled) {
-          for (const event of existing) processWrap(event, "backfill");
-        }
+        let backfillInFlight = false;
+        const backfill = async () => {
+          if (backfillInFlight) return;
+          backfillInFlight = true;
+          try {
+            const existing = await pool.querySync(
+              relays,
+              {
+                kinds: [1059],
+                "#p": [myPubkey],
+                limit: INBOX_BACKFILL_LIMIT,
+                since: Math.floor(Date.now() / 1e3) - INBOX_BACKFILL_SINCE_SEC,
+              },
+              { maxWait: 5000 },
+            );
+            if (cancelled) return;
+            for (const event of existing) processWrap(event, "backfill");
+          } catch {
+            // Best effort; the live subscription still runs.
+          } finally {
+            backfillInFlight = false;
+          }
+        };
+        await backfill();
+        if (cancelled) return;
 
         const sub = pool.subscribe(
           relays,
@@ -701,7 +724,20 @@ export const useInboxNotificationsSync = <
             },
           },
         );
+        // The pool reconnects dropped sockets, but its resumed subscription
+        // filters by last emitted created_at, which the NIP-59 timestamp
+        // randomization defeats; re-query on foreground/online so wraps
+        // missed offline (e.g. offer acceptances) arrive without a restart.
+        const refreshAfterOffline = () => {
+          if (!cancelled && document.visibilityState === "visible") {
+            void backfill();
+          }
+        };
+        document.addEventListener("visibilitychange", refreshAfterOffline);
+        window.addEventListener("online", refreshAfterOffline);
         return () => {
+          document.removeEventListener("visibilitychange", refreshAfterOffline);
+          window.removeEventListener("online", refreshAfterOffline);
           void sub.close("inbox sync closed");
         };
       } catch {

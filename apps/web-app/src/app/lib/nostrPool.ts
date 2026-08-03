@@ -12,7 +12,10 @@ export const getSharedAppNostrPool = async (): Promise<AppNostrPool> => {
 
   sharedAppNostrPoolPromise = (async () => {
     const { SimplePool } = await import("nostr-tools");
-    return new SimplePool();
+    // Without these, a dropped relay websocket (mobile background, network
+    // switch) permanently kills live subscriptions like the inbox sync; ping
+    // detects half-dead sockets and reconnect resumes subs with since=last+1.
+    return new SimplePool({ enablePing: true, enableReconnect: true });
   })().catch((error) => {
     sharedAppNostrPoolPromise = null;
     throw error;

@@ -93,6 +93,7 @@ import {
   getLinkyBankPaymentOfferInfo,
   getLinkyBankPaymentOfferStatusRank,
   getLastBankPaymentOfferResponseSecByContactId,
+  isLinkyBankPaymentOfferExpired,
   isLinkyBankPaymentOfferTerminalStatus,
   isLinkyBankPaymentOfferWholeOfferTerminalStatus,
   LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX,
@@ -153,6 +154,50 @@ const extractMentionedNpubs = (content: string): string[] => {
   }
 
   return npubs;
+};
+
+const BANK_PAYMENT_OFFER_RESPONDER_RETRY_MS = 30_000;
+
+const hasPendingBankPaymentOfferResponderWork = (
+  messages: readonly LocalNostrMessage[],
+  offererPubkeyHex: string,
+  nowSec: number,
+): boolean => {
+  const entriesByOfferId = new Map<
+    string,
+    { hasPendingAccepted: boolean; wholeOfferTerminal: boolean }
+  >();
+  for (const message of messages) {
+    const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+    if (
+      !info ||
+      String(info.offererPublicKey ?? "").trim() !== offererPubkeyHex
+    ) {
+      continue;
+    }
+
+    const entry = entriesByOfferId.get(info.offerId) ?? {
+      hasPendingAccepted: false,
+      wholeOfferTerminal: false,
+    };
+    if (isLinkyBankPaymentOfferWholeOfferTerminalStatus(info.status)) {
+      entry.wholeOfferTerminal = true;
+    } else if (
+      info.status === "accepted" &&
+      !isLinkyBankPaymentOfferExpired(
+        info,
+        Number(message.createdAtSec ?? 0),
+        nowSec,
+      )
+    ) {
+      entry.hasPendingAccepted = true;
+    }
+    entriesByOfferId.set(info.offerId, entry);
+  }
+
+  return Array.from(entriesByOfferId.values()).some(
+    (entry) => entry.hasPendingAccepted && !entry.wholeOfferTerminal,
+  );
 };
 
 const clampBankPaymentOfferRecipientCount = (value: number): number => {
@@ -2220,6 +2265,7 @@ export const useContactsMessagingComposition = ({
     if (bankPaymentOfferMessages.length === 0) return;
 
     let cancelled = false;
+    let retryTimeoutHandle: number | undefined;
 
     const run = async () => {
       try {
@@ -2389,6 +2435,22 @@ export const useContactsMessagingComposition = ({
             // Another tab holds the send lock for this offer; let it finish.
           }
         }
+
+        if (cancelled) return;
+        // A failed publish or a skipped lease lock leaves the message state
+        // unchanged, so nothing re-runs this effect; keep retrying while an
+        // accepted entry of my own offer is still waiting for bank details.
+        if (
+          hasPendingBankPaymentOfferResponderWork(
+            bankPaymentOfferMessages,
+            myPubHex,
+            Math.floor(Date.now() / 1e3),
+          )
+        ) {
+          retryTimeoutHandle = window.setTimeout(() => {
+            void run();
+          }, BANK_PAYMENT_OFFER_RESPONDER_RETRY_MS);
+        }
       } catch {
         // Best effort; the sender can retry when the accepted event reappears.
       }
@@ -2398,6 +2460,9 @@ export const useContactsMessagingComposition = ({
 
     return () => {
       cancelled = true;
+      if (retryTimeoutHandle !== undefined) {
+        window.clearTimeout(retryTimeoutHandle);
+      }
     };
   }, [bankPaymentOfferMessages, currentNsec, respondToBankPaymentOffer]);
 
