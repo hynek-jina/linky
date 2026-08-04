@@ -13,6 +13,7 @@ apps/push/data
 dist-ssr
 dev-dist
 test-results
+playwright-report
 .capacitor
 local.properties
 *.local

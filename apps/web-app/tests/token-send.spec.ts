@@ -1,51 +1,29 @@
 import { expect, test } from "@playwright/test";
-import { generateMnemonic } from "@scure/bip39";
-import { wordlist } from "@scure/bip39/wordlists/english";
-import { generateSecretKey, nip19 } from "nostr-tools";
+import {
+  MOBILE_VIEWPORT,
+  readBalanceSat as readBalance,
+  setBaseStorage,
+} from "./helpers/appState";
+import { setRandomIdentityStorage } from "./helpers/identity";
 
 const NPUB_RECEIVER =
   "npub12g0qmc3xa4hc9nxca936chppd6zhkr494xyypstcd7wg0gaa2xzswunml3";
 
 test("send token", async ({ page }) => {
-  const senderNsec = nip19.nsecEncode(generateSecretKey());
-  const senderMnemonic = generateMnemonic(wordlist, 128);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ ...MOBILE_VIEWPORT });
 
   const readBalanceSat = async (timeoutMs = 5_000) => {
-    const balance = page.getByLabel("Available balance");
-    await expect(balance).toBeVisible({ timeout: timeoutMs });
-    const text = await balance.innerText();
-    const digits = text.replace(/[^0-9]/g, "");
-    return Number(digits || "0");
+    await expect(page.getByLabel("Available balance")).toBeVisible({
+      timeout: timeoutMs,
+    });
+    return readBalance(page);
   };
 
   try {
-    await page.addInitScript(() => {
-      try {
-        localStorage.clear();
-        sessionStorage.clear();
-        localStorage.setItem("linky.lang", "en");
-      } catch {
-        // ignore
-      }
-    });
-
-    await page.addInitScript(
-      ([nsec, mnemonicValue]) => {
-        try {
-          localStorage.setItem("linky.nostr_nsec", nsec);
-          localStorage.setItem("linky.initialMnemonic", mnemonicValue);
-          localStorage.setItem("linky.display_currency.v1", "sat");
-          localStorage.setItem(
-            "linky.display_allowed_currencies.v1",
-            JSON.stringify(["sat"]),
-          );
-        } catch {
-          // ignore
-        }
-      },
-      [senderNsec, senderMnemonic],
-    );
+    // setBaseStorage also pins the display currency to sat, which this test
+    // relies on when it reads the balance as a plain number.
+    await setBaseStorage(page);
+    await setRandomIdentityStorage(page);
 
     await page.goto("/");
 

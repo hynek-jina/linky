@@ -7,6 +7,17 @@ services:
       - "7777:8080"
     volumes:
       - nostr-relay-data:/usr/src/app/db
+    # Without this, `up -d --wait` returns when the container is running, not when
+    # the port accepts — and a relay that is not connected at subscribe time is
+    # never retried by the app, which strands the E2E status/offer flow.
+    # `bash` explicitly: /dev/tcp is a bash builtin and the image's /bin/sh is dash.
+    # The image ships no curl/wget, so this is the available probe.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 5s
 
   evolu-relay:
     build: docker/evolu-relay
@@ -57,6 +68,32 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+
+  # Production build of the web app, used by the `local-stack` Playwright project
+  # (apps/web-app/playwright.config.ts). Not needed for `bun run dev`, which serves
+  # the app from Vite on :5173 — start it explicitly with:
+  #   docker compose -f docker-compose.dev.yml up -d --build --wait web-app
+  # Endpoints are baked in at build time because Vite inlines import.meta.env; the
+  # browser runs on the host, so these are host-published ports.
+  web-app:
+    profiles: ["e2e"]
+    build:
+      context: .
+      dockerfile: docker/web-app/Dockerfile
+      args:
+        VITE_NOSTR_RELAYS: ws://localhost:7777
+        VITE_EVOLU_SERVER_URLS: ws://localhost:4001
+        VITE_MAIN_MINT_URL: http://localhost:3338
+        VITE_NPUB_CASH_DISABLED: "true"
+        VITE_PUSH_SERVER_URL: http://localhost:8787
+    ports:
+      - "5176:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 3s
 
 volumes:
   nostr-relay-data:
