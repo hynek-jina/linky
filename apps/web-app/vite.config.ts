@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import type { Connect, Plugin, ViteDevServer } from "vite";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+import { inspectorCollector } from "./server/inspectorCollector";
 import { fetchLinkPreview } from "./server/linkPreview";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -275,6 +276,7 @@ export default defineConfig({
   },
   plugins: [
     serveSqliteWasm(),
+    inspectorCollector(),
     linkPreviewApi(),
     lnurlProxy(),
     ...(useHttps ? [basicSsl()] : []),

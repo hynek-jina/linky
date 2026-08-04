@@ -3,6 +3,11 @@ import { createEvolu, SimpleName } from "@evolu/common";
 import { createUseEvolu, EvoluProvider } from "@evolu/react";
 import { evoluReactWebDeps } from "@evolu/react-web";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  emitInspectorEvent,
+  isInspectorEnabled,
+} from "./devtools/inspectorBus";
+import { createEvoluMutationsInstrument } from "./devtools/instrumentEvoluMutations";
 import { useDeferredOnlineReady } from "./hooks/useDeferredOnlineReady";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
 import type { JsonValue } from "./types/json";
@@ -1185,4 +1190,30 @@ export const useEvoluServersManager = (opts?: {
 export { EvoluProvider };
 
 // Vytvoř typovaný React Hook - now using getEvolu() to ensure we get the right instance
-export const useEvolu = createUseEvolu(getEvolu());
+const baseUseEvolu = createUseEvolu(getEvolu());
+
+const instrumentEvoluMutations =
+  createEvoluMutationsInstrument<ReturnType<typeof baseUseEvolu>>();
+
+// Dev inspector: wraps insert/update/upsert so every mutation is emitted to
+// the local collector; returns the plain hook value outside dev.
+export const useEvolu = (): ReturnType<typeof baseUseEvolu> =>
+  instrumentEvoluMutations(baseUseEvolu());
+
+// Dev inspector: coalesced tick whenever evolu_history changes, so
+// sync-applied changes from other devices show up, not just local mutations.
+if (isInspectorEnabled()) {
+  let historyTickScheduled = false;
+  subscribeEvoluHistoryMutationVersion(() => {
+    if (historyTickScheduled) return;
+    historyTickScheduled = true;
+    setTimeout(() => {
+      historyTickScheduled = false;
+      emitInspectorEvent({
+        channel: "evolu",
+        type: "history.changed",
+        summary: "evolu_history changed (local write or applied sync)",
+      });
+    }, 500);
+  });
+}

@@ -61,6 +61,8 @@ For Android native builds: Java 17
 - `bun run dev:prod` — web app only, on :5175, against production services. The separate port keeps browser storage isolated from local-dev sessions.
 - `bun run dev:services` — just the docker stack, attached.
 
+While the dev server runs, `http://localhost:5173/inspector.html` shows a live, filterable timeline of Nostr events, Cashu mint operations, and Evolu mutations. The same stream is machine-readable at `GET /__inspector/events` and in `apps/web-app/.inspector/events.ndjson`.
+
 Android shell currently adds:
 
 - encrypted native secret storage for identity data

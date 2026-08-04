@@ -24,6 +24,14 @@ Architectural decisions and behavioral constraints for Linky. Keep this file up 
 - npub.cash-compatible flows are skipped entirely in local dev (`VITE_NPUB_CASH_DISABLED=true` guards the info/claim/mint-sync entry points via `isNpubCashDisabled()`); running npubcash-server locally is issue #219, a real Lightning backend for the local mint is issue #220
 - Playwright E2E's web server runs `vite --mode prod-services` so tests keep hitting production endpoints regardless of the local stack
 
+### Dev inspector
+
+- The dev inspector makes Nostr relay traffic, Cashu mint operations, and Evolu mutations observable in dev. It taps three existing chokepoints instead of touching call sites: the shared Nostr pool singleton is wrapped in `getSharedAppNostrPool` (`src/devtools/instrumentNostrPool.ts` — publish incl. per-relay results, querySync, subscribe incl. every incoming event), `createLoadedCashuWallet` shadows the base `Wallet` methods that all bolt11/bolt12 variants funnel through (`src/devtools/instrumentCashuWallet.ts` — call + result/error events with duration), and `useEvolu` returns a Proxy that reports `insert`/`update`/`upsert` (`src/devtools/instrumentEvoluMutations.ts`), plus a coalesced `history.changed` tick from `evolu_history` so sync-applied changes surface too
+- Taps emit through `src/devtools/inspectorBus.ts`, which sanitizes payloads (Uint8Array collapsed, strings/arrays/depth capped) and batch-POSTs to the Vite dev-server collector middleware (`server/inspectorCollector.ts`). Everything is guarded by `import.meta.env.DEV` (compiled out of production builds); opt out per browser with `localStorage.setItem("linky.inspector_disabled", "1")` + reload
+- The collector keeps a 5000-event ring, appends every event to `apps/web-app/.inspector/events.ndjson` (gitignored, truncated on each dev-server start), and serves `GET /__inspector/events?since=&limit=&channel=`, an SSE `GET /__inspector/stream` (resumable via SSE ids / `Last-Event-ID`), and `POST /__inspector/clear`. CORS is wide open so a native shell on the LAN can post to it later; the event contract shared by bus, collector, and UI lives in `src/devtools/inspectorEvents.ts`
+- The viewer is a standalone dev-only page at `/inspector.html` (own Vite entry, not part of the app shell or production build), meant to sit in a window next to the app. It is intentionally not an in-app route: a second app tab would run its own pool/Evolu instance and pollute the stream it inspects. The service-worker SPA navigation fallback denylists `/inspector.html` and `/__inspector/` so the dev server keeps serving them
+- The service worker's own `SimplePool` (push wrap fetch) is not instrumented; it keeps using the push debug log
+
 ## Web app (`apps/web-app/`)
 
 ### Routing and shell
