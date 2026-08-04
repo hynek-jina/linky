@@ -51,9 +51,15 @@ The repo also contains a separate public website in `apps/site/` intended for `l
 
 ## Development
 
-Requirements: Bun
+Requirements: Bun; Docker for the local dev service stack
 
 For Android native builds: Java 17
+
+### Local dev vs prod services
+
+- `bun run dev` — full local environment: starts `docker-compose.dev.yml` (local Nostr relay :7777, Evolu sync relay :4001, Cashu Nutshell **FakeWallet** mint :3338 that auto-settles invoices with fake sats), then runs the web app (:5173) and push service (:8787) against it via the committed `.env.development` files. npub.cash flows are disabled locally (#219); the mint has no real Lightning backend (#220).
+- `bun run dev:preview` — web app only, on :5175, against production services. The separate port keeps browser storage isolated from local-dev sessions.
+- `bun run dev:services` — just the docker stack, attached.
 
 Android shell currently adds:
 

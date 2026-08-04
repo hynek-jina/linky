@@ -1,3 +1,8 @@
+// Local dev has no npub.cash-compatible server; hosted lightning-address
+// flows (info/claim/mint sync) are skipped entirely when disabled.
+export const isNpubCashDisabled = (): boolean =>
+  import.meta.env.VITE_NPUB_CASH_DISABLED === "true";
+
 const DEFAULT_NPUB_CASH_SERVER_BASE_URL = "https://npub.cash";
 
 const HOSTED_NPUB_CASH_SERVER_BASE_URLS: Readonly<Record<string, string>> = {

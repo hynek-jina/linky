@@ -9,7 +9,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter @linky/web-app dev",
+    "dev": "docker compose -f docker-compose.dev.yml up -d --wait && bun run --filter @linky/web-app --filter @linky/push dev",
+    "dev:preview": "bun run --filter @linky/web-app dev:preview",
+    "dev:services": "docker compose -f docker-compose.dev.yml up",
     "build": "bun run --filter @linky/web-app build",
     "preview": "bun run --filter @linky/web-app preview",
     "site:dev": "bun run --filter @linky/site dev",

@@ -5,6 +5,7 @@ import {
   isTestMintUrl,
   normalizeMintUrl,
 } from "../../../utils/mint";
+import { isNpubCashDisabled } from "../../../utils/npubCashServer";
 import { safeLocalStorageSet } from "../../../utils/storage";
 
 interface MintSelectionAutoswapPlanArgs {
@@ -153,6 +154,7 @@ export const useNpubCashMintSelection = ({
 
   const updateNpubCashMint = React.useCallback(
     async (mintUrl: string): Promise<void> => {
+      if (isNpubCashDisabled()) return;
       if (!currentNpub) throw new Error("Missing npub");
       if (!currentNsec) throw new Error("Missing nsec");
       const cleaned = normalizeMintUrl(mintUrl);

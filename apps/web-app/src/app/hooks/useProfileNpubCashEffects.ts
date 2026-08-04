@@ -1,6 +1,7 @@
 import React from "react";
 import type { JsonValue } from "../../types/json";
 import { normalizeMintUrl } from "../../utils/mint";
+import { isNpubCashDisabled } from "../../utils/npubCashServer";
 import { optimizeCaseInsensitiveQrPayload } from "../../utils/qrPayload";
 import { asRecord } from "../../utils/validation";
 
@@ -120,6 +121,7 @@ export const useProfileNpubCashEffects = ({
     // - read default mint (preferred mint) for the user
     // - auto-claim pending payments and store them as Cashu tokens
     // Uses the server bound to the current lightning-address domain.
+    if (isNpubCashDisabled()) return;
     if (!networkEnabled) return;
     if (!currentNpub) return;
     if (!currentNsec) return;

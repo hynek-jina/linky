@@ -14,6 +14,16 @@ Architectural decisions and behavioral constraints for Linky. Keep this file up 
 - Vercel rewrites `/.well-known/lnurlp/:user` and `/.well-known/nostr.json` into `apps/site/api/` serverless handlers so apex `linky.fit` can expose LNURL/NIP-05 while forwarding to `NPUBCASH_BASE_URL` (default `https://npub.linky.fit`); LNURL responses rewrite the returned callback back to the apex host
 - The `/cashu` entry page can ingest a token from manual paste, query string, or preferably URL hash, inspect the token client-side, present `Vyzvednout v Linky` / primary Linky-open CTA first, reveal QR-copy plus Lightning-address redeem flow behind a secondary `Další možnosti` toggle, and redeem to a Lightning address; redeem sends the maximum LN-address amount the mint+LNURL flow allows, queues anonymous payment telemetry to the same collector/feed used by the app, and forwards any leftover token value as a private Nostr gift wrap to the configured collector `npub` from a one-time sender identity instead of returning change
 
+## Local dev environment
+
+- All external service endpoints are env-overridable with hardcoded production fallbacks: `VITE_NOSTR_RELAYS`, `VITE_EVOLU_SERVER_URLS` (comma-separated), `VITE_MAIN_MINT_URL`, `VITE_PUSH_SERVER_URL`, `VITE_NPUB_CASH_DISABLED` (declared in `apps/web-app/src/vite-env.d.ts`)
+- Vite mode selects the environment: `development` mode loads the checked-in `apps/web-app/.env.development` pointing at the `docker-compose.dev.yml` stack (Nostr relay :7777, Evolu relay :4001, Nutshell FakeWallet mint :3338, push :8787); `preview` mode (`bun run dev:preview`, port 5175) loads no overrides and hits production. Distinct ports keep localStorage/OPFS/service-worker state origin-isolated between the two modes, so a local-dev identity can never bleed into a prod session
+- Relay and Evolu server lists are user-persisted settings; env vars only change the *defaults* for a fresh origin
+- The local Evolu relay image (`docker/evolu-relay/`) pins `@evolu/nodejs` + `@evolu/common` versions that must stay protocol-compatible with the web app's `@evolu/common` — verify the pairing via the upstream `apps/relay/CHANGELOG.md` before bumping either side (the official `evoluhq/relay` image is not used because it hardcodes a 1MB-per-owner quota)
+- `isTestMintUrl` treats any `localhost`/`127.0.0.1` mint as a test mint (disables autoswap etc.); the FakeWallet mint auto-settles invoices after ~3s and exposes deterministic failure/delay knobs via `FAKEWALLET_*` env vars in `docker-compose.dev.yml` — there is no working stochastic-failure option in Nutshell
+- npub.cash-compatible flows are skipped entirely in local dev (`VITE_NPUB_CASH_DISABLED=true` guards the info/claim/mint-sync entry points via `isNpubCashDisabled()`); running npubcash-server locally is issue #219, a real Lightning backend for the local mint is issue #220
+- Playwright E2E's web server runs `vite --mode preview` so tests keep hitting production endpoints regardless of the local stack
+
 ## Web app (`apps/web-app/`)
 
 ### Routing and shell

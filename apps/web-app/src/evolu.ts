@@ -42,10 +42,15 @@ export type EvoluDatabaseInfo = {
   updatedAtMs: number | null;
 };
 
-export const DEFAULT_EVOLU_SERVER_URLS: ReadonlyArray<string> = [
-  "wss://evolu.linky.fit",
-  "wss://free.evoluhq.com",
-];
+const envEvoluServerUrls = (import.meta.env.VITE_EVOLU_SERVER_URLS ?? "")
+  .split(",")
+  .map((url) => url.trim())
+  .filter((url) => url.startsWith("ws://") || url.startsWith("wss://"));
+
+export const DEFAULT_EVOLU_SERVER_URLS: ReadonlyArray<string> =
+  envEvoluServerUrls.length > 0
+    ? envEvoluServerUrls
+    : ["wss://evolu.linky.fit", "wss://free.evoluhq.com"];
 
 // Generate a valid SimpleName (1-42 chars, alphanumeric + dash) from mnemonic
 // Each user gets their own SQLite database file

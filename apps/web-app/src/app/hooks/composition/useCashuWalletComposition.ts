@@ -35,6 +35,7 @@ import {
   WALLET_WARNING_DISMISSED_STORAGE_KEY,
 } from "../../../utils/constants";
 import { formatDisplayAmountParts } from "../../../utils/displayAmounts";
+import { isNpubCashDisabled } from "../../../utils/npubCashServer";
 import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
@@ -1626,7 +1627,7 @@ export const useCashuWalletComposition = ({
   );
 
   React.useEffect(() => {
-    if (!currentNpub || !currentNsec) {
+    if (isNpubCashDisabled() || !currentNpub || !currentNsec) {
       setOwnedProfileLightningAddresses([]);
       setOwnedProfileLightningAddressesLoading(false);
       return;

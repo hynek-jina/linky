@@ -1,12 +1,18 @@
-export const MAIN_MINT_URL = "https://cashu.cz";
+const envMainMintUrl = (import.meta.env.VITE_MAIN_MINT_URL ?? "").trim();
 
-export const PRESET_MINTS = [
-  "https://cashu.cz",
-  "https://testnut.cashu.space",
-  "https://mint.minibits.cash/Bitcoin",
-  "https://kashu.me",
-  "https://cashu.21m.lol",
-];
+export const MAIN_MINT_URL = envMainMintUrl || "https://cashu.cz";
+
+// With a local dev mint configured, keep only test mints in the presets so
+// dev mode never fetches metadata from (or offers) production mints.
+export const PRESET_MINTS = envMainMintUrl
+  ? [envMainMintUrl, "https://testnut.cashu.space"]
+  : [
+      "https://cashu.cz",
+      "https://testnut.cashu.space",
+      "https://mint.minibits.cash/Bitcoin",
+      "https://kashu.me",
+      "https://cashu.21m.lol",
+    ];
 
 export const TEST_MINTS = ["https://testnut.cashu.space"];
 
@@ -110,6 +116,11 @@ export const getMintOriginAndHost = (
 export const isTestMintUrl = (mint: MintStringInput): boolean => {
   const normalizedMint = normalizeMintUrl(mint).toLowerCase();
   if (!normalizedMint) return false;
+
+  // Local dev mints (docker-compose FakeWallet) behave like test mints.
+  const { host } = getMintOriginAndHost(normalizedMint);
+  const hostname = (host ?? "").replace(/:\d+$/, "");
+  if (hostname === "localhost" || hostname === "127.0.0.1") return true;
 
   return TEST_MINTS.some(
     (testMint) => normalizeMintUrl(testMint).toLowerCase() === normalizedMint,
