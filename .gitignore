@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+apps/push/data
 dist-ssr
 dev-dist
 test-results

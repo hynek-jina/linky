@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:preview": "vite --mode preview --port 5175",
     "build": "tsc -b && vite build",
     "eslint": "eslint --fix .",
     "prettier": "prettier --write .",

@@ -1,0 +1,64 @@
+# Local dev services for `bun run dev` (see apps/web-app/.env.development).
+# Run attached in a separate terminal with `bun run dev:services`.
+services:
+  nostr-relay:
+    image: scsibug/nostr-rs-relay:latest
+    ports:
+      - "7777:8080"
+    volumes:
+      - nostr-relay-data:/usr/src/app/db
+
+  evolu-relay:
+    build: docker/evolu-relay
+    ports:
+      - "4001:4000"
+    volumes:
+      - evolu-relay-data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const s=require('net').connect(4000,'127.0.0.1');s.on('connect',()=>process.exit(0));s.on('error',()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  cashu-mint:
+    image: cashubtc/nutshell:0.20.3
+    command: ["poetry", "run", "mint"]
+    ports:
+      - "3338:3338"
+    volumes:
+      - cashu-mint-data:/app/data
+    environment:
+      MINT_BACKEND_BOLT11_SAT: FakeWallet
+      MINT_LISTEN_HOST: "0.0.0.0"
+      MINT_LISTEN_PORT: "3338"
+      MINT_PRIVATE_KEY: LOCAL_DEV_ONLY_PRIVATE_KEY
+      MINT_DATABASE: data/mint
+      # FakeWallet simulation knobs for payment-timing tests (defaults shown).
+      # FAKEWALLET_BRR: "true"                  # auto-settle created invoices
+      # FAKEWALLET_DELAY_INCOMING_PAYMENT: "3"  # seconds before a top-up invoice settles
+      # FAKEWALLET_DELAY_OUTGOING_PAYMENT: "3"  # seconds before melt/pay returns
+      # FAKEWALLET_PAY_INVOICE_STATE: SETTLED   # or FAILED | PENDING | UNKNOWN
+      # FAKEWALLET_PAYMENT_STATE: SETTLED       # poll result: SETTLED | FAILED | PENDING | UNKNOWN
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:3338/v1/info').status==200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  nostr-relay-data:
+  evolu-relay-data:
+  cashu-mint-data:

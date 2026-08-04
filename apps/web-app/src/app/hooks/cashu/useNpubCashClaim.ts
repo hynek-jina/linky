@@ -9,6 +9,7 @@ import {
 } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { extractUniqueClaimTokens } from "../../../utils/npubCashClaimResponse";
+import { isNpubCashDisabled } from "../../../utils/npubCashServer";
 import type { Route } from "../../../types/route";
 import {
   safeLocalStorageGet,
@@ -289,6 +290,7 @@ export const useNpubCashClaim = ({
   const claimNpubCashOnce = React.useCallback(async () => {
     // Don't claim while we are paying/accepting, otherwise we risk consuming
     // the claim response and then skipping token processing.
+    if (isNpubCashDisabled()) return;
     if (cashuIsBusy) return;
     if (!currentNpub) return;
     if (!currentNsec) return;
