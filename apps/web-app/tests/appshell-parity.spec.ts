@@ -158,13 +158,16 @@ test("restores an account from SLIP-39 without getting stuck", async ({
 }) => {
   const slip39Share = await Effect.runPromise(createSlip39Share());
   await setBaseStorage(page);
+  await page.setViewportSize({ width: 390, height: 844 });
 
   await page.goto("/#wallet");
   await page.getByRole("button", { name: "I'm returning" }).click();
   await page.getByLabel("Keys").fill(slip39Share);
   await page.getByRole("button", { name: "Continue" }).click();
 
+  // Restore intentionally resets the route to the legacy contacts root.
   await page.waitForURL(/#$/, { timeout: 30_000 });
+  await page.goto("/#wallet");
   await expect(page.getByLabel("Available balance")).toBeVisible({
     timeout: 30_000,
   });
@@ -172,6 +175,7 @@ test("restores an account from SLIP-39 without getting stuck", async ({
 
 test("preserves route parity and critical handlers", async ({ page }) => {
   await setAuthenticatedStorage(page);
+  await page.setViewportSize({ width: 390, height: 844 });
 
   await page.goto("/#");
   await expect(
@@ -272,6 +276,7 @@ test("supports chat reply, edit, reaction toggle, and copy actions", async ({
   page,
 }) => {
   await setAuthenticatedStorage(page);
+  await page.setViewportSize({ width: 390, height: 844 });
   const contactId = await createContactAndOpenChat(page);
 
   const chatInput = page.locator("[data-guide='chat-input']");
@@ -332,7 +337,9 @@ test("supports chat reply, edit, reaction toggle, and copy actions", async ({
 
   await editedBubble.locator(".chat-bubble").click({ button: "right" });
   await page.getByRole("button", { name: "Copy", exact: true }).click();
-  await expect(page.locator(".toast")).toContainText("Copied to clipboard");
+  await expect(
+    page.locator(".toast").filter({ hasText: "Copied to clipboard" }),
+  ).toBeVisible();
 
   await page.goto(`/#contact/${encodeURIComponent(contactId)}/edit`);
   const archiveButton = page.getByRole("button", {
