@@ -30,7 +30,7 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 ## Local dev environment
 
 - `bun run dev` starts the local service stack (`docker-compose.dev.yml`: Nostr relay :7777, Evolu relay :4001, FakeWallet mint :3338) detached, then the web app (:5173) and push service (:8787) against it; requires Docker
-- `bun run dev:preview` runs the web app on :5175 against production services (no local stack needed)
+- `bun run dev:prod` runs the web app on :5175 against production services (no local stack needed)
 - `bun run dev:services` runs just the docker stack attached (Ctrl-C stops it)
 - See the "Local dev environment" section in `docs/architecture.md` for how env overrides and vite modes work
 
