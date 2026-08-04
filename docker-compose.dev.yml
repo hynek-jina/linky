@@ -2,7 +2,7 @@
 # Run attached in a separate terminal with `bun run dev:services`.
 services:
   nostr-relay:
-    image: scsibug/nostr-rs-relay:latest
+    image: scsibug/nostr-rs-relay:0.10.0
     ports:
       - "7777:8080"
     volumes:
