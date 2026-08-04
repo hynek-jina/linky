@@ -1,4 +1,5 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import { tagIncomingWrapIntent } from "../../../devtools/nostrIntent";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { normalizeRelayUrls } from "../../../utils/nostrRelays";
 import {
@@ -1069,6 +1070,7 @@ export const processNostrInboxWrap = ({
   if (isInvalidInnerRumorPubkey(rumor.pubkey, wrap.pubkey)) {
     return ignored(delivery, wrapId, "outer-rumor-pubkey");
   }
+  tagIncomingWrapIntent({ wrapId, rumor, myPubkey: identity.pubkey });
   if (policy.isCancelled()) return ignored(delivery, wrapId, "cancelled");
 
   const specialOutcome = resolveSpecialEvent({

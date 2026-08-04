@@ -2,6 +2,7 @@ import { finalizeEvent, generateSecretKey } from "nostr-tools";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import { encrypt, getConversationKey } from "nostr-tools/nip44";
 import { createRumor, createSeal, wrapEvent } from "nostr-tools/nip59";
+import { tagOutgoingWrapIntent } from "../../devtools/nostrIntent";
 
 const GIFT_WRAP_KIND = 1059;
 const TWO_DAYS_SECONDS = 2 * 24 * 60 * 60;
@@ -59,7 +60,14 @@ export function wrapEventWithoutPushMarker(
   senderPrivateKey: Uint8Array,
   recipientPublicKey: string,
 ): NostrToolsEvent {
-  return wrapEvent(event, senderPrivateKey, recipientPublicKey);
+  const wrap = wrapEvent(event, senderPrivateKey, recipientPublicKey);
+  tagOutgoingWrapIntent({
+    wrapId: wrap.id,
+    rumor: event,
+    senderPrivateKey,
+    recipientPublicKey,
+  });
+  return wrap;
 }
 
 export function wrapEventWithPushMarker(
@@ -69,7 +77,14 @@ export function wrapEventWithPushMarker(
 ): NostrToolsEvent {
   const rumor = createRumor(event, senderPrivateKey);
   const seal = createSeal(rumor, senderPrivateKey, recipientPublicKey);
-  return createPushMarkedWrap(seal, recipientPublicKey);
+  const wrap = createPushMarkedWrap(seal, recipientPublicKey);
+  tagOutgoingWrapIntent({
+    wrapId: wrap.id,
+    rumor: event,
+    senderPrivateKey,
+    recipientPublicKey,
+  });
+  return wrap;
 }
 
 export function hasLinkyPushMarker(event: { tags: string[][] }): boolean {

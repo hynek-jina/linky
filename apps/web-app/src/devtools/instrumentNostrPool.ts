@@ -1,6 +1,11 @@
 import type { AppNostrPool } from "../app/lib/nostrPool";
 import { emitInspectorEvent, isInspectorEnabled } from "./inspectorBus";
-import { nostrKindLabel, nostrKindsLabel } from "./inspectorGlossary";
+import {
+  nostrKindLabel,
+  nostrKindsLabel,
+  nostrPublishPurpose,
+} from "./inspectorGlossary";
+import { getNostrEventIntent } from "./nostrIntent";
 
 let nextSubscriptionId = 1;
 
@@ -8,16 +13,38 @@ const describeKinds = (filter: { kinds?: number[] }): string => {
   return nostrKindsLabel(filter.kinds);
 };
 
+// Compact "what were those events" suffix for query results, based on intent
+// tags registered when the app created or decrypted them. Fresh wraps are not
+// tagged until the inbox pipeline decrypts them, so first-time fetches may
+// show fewer intents than events.
+const describeEventIntents = (
+  events: ReadonlyArray<{ id: string }>,
+): string => {
+  const counts = new Map<string, number>();
+  for (const event of events) {
+    const intent = getNostrEventIntent(event.id);
+    if (intent !== undefined) counts.set(intent, (counts.get(intent) ?? 0) + 1);
+  }
+  if (counts.size === 0) return "";
+  const parts = [...counts.entries()].map(([intent, count]) =>
+    count > 1 ? `${count}× ${intent}` : intent,
+  );
+  return ` — ${parts.join(", ")}`;
+};
+
 export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
   if (!isInspectorEnabled()) return pool;
 
   const publish: AppNostrPool["publish"] = (relays, event) => {
+    const intent =
+      getNostrEventIntent(event.id) ?? nostrPublishPurpose(event.kind);
+    const intentSuffix = intent === undefined ? "" : ` — ${intent}`;
     emitInspectorEvent({
       channel: "nostr",
       type: "publish",
       direction: "out",
-      summary: `publish ${nostrKindLabel(event.kind)} → ${relays.length} relay(s)`,
-      data: { relays, event },
+      summary: `publish ${nostrKindLabel(event.kind)} → ${relays.length} relay(s)${intentSuffix}`,
+      data: { relays, event, intent },
     });
     const results = pool.publish(relays, event);
     results.forEach((result, index) => {
@@ -30,8 +57,14 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
             channel: "nostr",
             type: "publish.result",
             direction: "out",
-            summary: `publish ok @ ${relay} (${nostrKindLabel(event.kind)})`,
-            data: { relay, eventId: event.id, kind: event.kind, reason },
+            summary: `publish ok @ ${relay} (${nostrKindLabel(event.kind)})${intentSuffix}`,
+            data: {
+              relay,
+              eventId: event.id,
+              kind: event.kind,
+              reason,
+              intent,
+            },
           });
         },
         (error: unknown) => {
@@ -39,8 +72,8 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
             channel: "nostr",
             type: "publish.result",
             direction: "out",
-            summary: `publish FAILED @ ${relay} (${nostrKindLabel(event.kind)})`,
-            data: { relay, eventId: event.id, kind: event.kind, error },
+            summary: `publish FAILED @ ${relay} (${nostrKindLabel(event.kind)})${intentSuffix}`,
+            data: { relay, eventId: event.id, kind: event.kind, error, intent },
           });
         },
       );
@@ -60,7 +93,7 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
         channel: "nostr",
         type: "query",
         direction: "in",
-        summary: `query ${describeKinds(filter)} → ${events.length} event(s)`,
+        summary: `query ${describeKinds(filter)} → ${events.length} event(s)${describeEventIntents(events)}`,
         data: { relays, filter, durationMs: Date.now() - startedAtMs, events },
       });
       return events;
@@ -87,12 +120,13 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
     return pool.subscribe(relays, filter, {
       ...params,
       onevent: (event) => {
+        const intent = getNostrEventIntent(event.id);
         emitInspectorEvent({
           channel: "nostr",
           type: "event",
           direction: "in",
-          summary: `${nostrKindLabel(event.kind)} event (sub #${subscriptionId})`,
-          data: { subscriptionId, event },
+          summary: `${nostrKindLabel(event.kind)} event (sub #${subscriptionId})${intent === undefined ? "" : ` — ${intent}`}`,
+          data: { subscriptionId, event, intent },
         });
         params.onevent?.(event);
       },

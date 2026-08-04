@@ -36,6 +36,23 @@ export const nostrKindsLabel = (
   return kinds.map(nostrKindLabel).join(", ");
 };
 
+// Static purpose phrases for publishes of self-describing (non-wrapped)
+// kinds; gift wraps get per-event intent tags from nostrIntent.ts instead.
+const NOSTR_PUBLISH_PURPOSES: Record<number, string> = {
+  0: "broadcasting my profile info",
+  3: "publishing my follow list",
+  10000: "publishing my block list",
+  10002: "announcing which relays I use",
+  10050: "announcing where to deliver my DMs",
+  24134: "sending anonymous payment telemetry",
+  27235: "proving key ownership to the push service",
+  30315: "sharing my currency status",
+};
+
+export const nostrPublishPurpose = (kind: number): string | undefined => {
+  return NOSTR_PUBLISH_PURPOSES[kind];
+};
+
 const NOSTR_KIND_EXPLANATIONS: Record<number, string> = {
   0: "Profile metadata: display name, picture, and lightning address. Linky publishes it on onboarding/profile edits and queries it to show contact names and avatars.",
   1059: "NIP-59 gift wrap: an encrypted envelope that hides sender and content. Linky delivers chat messages, Cashu token payments, payment requests, and payment notices this way. Outer timestamps are randomized up to 2 days back, so inbox sync re-queries a 3-day window and the same wraps legitimately reappear on every refresh.",
@@ -100,6 +117,12 @@ const nostrFilterKinds = (event: InspectorEvent): number[] | undefined => {
   return readNumberArray(readRecord(data, "filter"), "kinds");
 };
 
+const nostrIntent = (event: InspectorEvent): string | undefined => {
+  const data = isJsonRecord(event.data) ? event.data : undefined;
+  const value = data?.intent;
+  return typeof value === "string" ? value : undefined;
+};
+
 const describeNostr = (event: InspectorEvent): string => {
   const kindLines = (kinds: readonly number[] | undefined): string => {
     if (!kinds) return "";
@@ -114,12 +137,14 @@ const describeNostr = (event: InspectorEvent): string => {
 
   const eventKind = nostrEventKind(event);
   const eventKinds = eventKind === undefined ? undefined : [eventKind];
+  const intent = nostrIntent(event);
+  const intentLine = intent ? `Purpose: ${intent}.\n\n` : "";
 
   switch (event.type) {
     case "publish":
-      return `Outgoing: the app signed this event and handed it to the listed relays.${kindLines(eventKinds)}`;
+      return `${intentLine}Outgoing: the app signed this event and handed it to the listed relays.${kindLines(eventKinds)}`;
     case "publish.result":
-      return "Per-relay acknowledgement (ok/failed) for the publish with the same event id.";
+      return `${intentLine}Per-relay acknowledgement (ok/failed) for the publish with the same event id.`;
     case "query":
       return `One-off fetch of stored events matching a filter; relays return what they have, then the query ends. Repeated backfills often return the same events again — that is expected, dedupe happens in the app.${kindLines(nostrFilterKinds(event))}`;
     case "subscribe":
@@ -127,7 +152,7 @@ const describeNostr = (event: InspectorEvent): string => {
     case "subscribe.closed":
       return "A live subscription ended (navigation, cleanup, or relay disconnect).";
     case "event":
-      return `Delivered live by an open subscription.${kindLines(eventKinds)}`;
+      return `${intentLine}Delivered live by an open subscription.${kindLines(eventKinds)}`;
     case "inspector.dropped":
       return "The inspector bus dropped events under backpressure — the stream has a gap here.";
     default:
