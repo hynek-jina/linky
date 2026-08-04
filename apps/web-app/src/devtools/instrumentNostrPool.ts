@@ -1,10 +1,11 @@
 import type { AppNostrPool } from "../app/lib/nostrPool";
 import { emitInspectorEvent, isInspectorEnabled } from "./inspectorBus";
+import { nostrKindLabel, nostrKindsLabel } from "./inspectorGlossary";
 
 let nextSubscriptionId = 1;
 
 const describeKinds = (filter: { kinds?: number[] }): string => {
-  return filter.kinds?.join(",") ?? "*";
+  return nostrKindsLabel(filter.kinds);
 };
 
 export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
@@ -15,7 +16,7 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
       channel: "nostr",
       type: "publish",
       direction: "out",
-      summary: `publish kind ${event.kind} → ${relays.length} relay(s)`,
+      summary: `publish ${nostrKindLabel(event.kind)} → ${relays.length} relay(s)`,
       data: { relays, event },
     });
     const results = pool.publish(relays, event);
@@ -29,7 +30,7 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
             channel: "nostr",
             type: "publish.result",
             direction: "out",
-            summary: `publish ok @ ${relay} (kind ${event.kind})`,
+            summary: `publish ok @ ${relay} (${nostrKindLabel(event.kind)})`,
             data: { relay, eventId: event.id, kind: event.kind, reason },
           });
         },
@@ -38,7 +39,7 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
             channel: "nostr",
             type: "publish.result",
             direction: "out",
-            summary: `publish FAILED @ ${relay} (kind ${event.kind})`,
+            summary: `publish FAILED @ ${relay} (${nostrKindLabel(event.kind)})`,
             data: { relay, eventId: event.id, kind: event.kind, error },
           });
         },
@@ -59,7 +60,7 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
         channel: "nostr",
         type: "query",
         direction: "in",
-        summary: `query kinds ${describeKinds(filter)} → ${events.length} event(s)`,
+        summary: `query ${describeKinds(filter)} → ${events.length} event(s)`,
         data: { relays, filter, durationMs: Date.now() - startedAtMs, events },
       });
       return events;
@@ -68,7 +69,7 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
         channel: "nostr",
         type: "query",
         direction: "in",
-        summary: `query FAILED (kinds ${describeKinds(filter)})`,
+        summary: `query FAILED (${describeKinds(filter)})`,
         data: { relays, filter, durationMs: Date.now() - startedAtMs, error },
       });
       throw error;
@@ -80,7 +81,7 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
     emitInspectorEvent({
       channel: "nostr",
       type: "subscribe",
-      summary: `subscribe #${subscriptionId} kinds ${describeKinds(filter)} @ ${relays.length} relay(s)`,
+      summary: `subscribe #${subscriptionId} for ${describeKinds(filter)} @ ${relays.length} relay(s)`,
       data: { subscriptionId, relays, filter },
     });
     return pool.subscribe(relays, filter, {
@@ -90,7 +91,7 @@ export const instrumentAppNostrPool = (pool: AppNostrPool): AppNostrPool => {
           channel: "nostr",
           type: "event",
           direction: "in",
-          summary: `event kind ${event.kind} (sub #${subscriptionId})`,
+          summary: `${nostrKindLabel(event.kind)} event (sub #${subscriptionId})`,
           data: { subscriptionId, event },
         });
         params.onevent?.(event);

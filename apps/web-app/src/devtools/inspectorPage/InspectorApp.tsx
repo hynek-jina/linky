@@ -8,6 +8,7 @@ import {
   type InspectorDirection,
   type InspectorEvent,
 } from "../inspectorEvents";
+import { describeInspectorEvent } from "../inspectorGlossary";
 
 const MAX_EVENTS = 5_000;
 const MAX_RENDERED_EVENTS = 2_000;
@@ -78,6 +79,7 @@ function TimelineRow({
       aria-pressed={isSelected}
       className={`timeline-row channel-${event.channel}${isSelected ? " selected" : ""}`}
       onClick={() => onSelect(event)}
+      title={describeInspectorEvent(event)}
       type="button"
     >
       <time className="event-time" dateTime={event.ts}>
@@ -164,6 +166,11 @@ function DetailPane({ event, onClose }: DetailPaneProps): React.ReactElement {
           <dd>{event.summary || "—"}</dd>
         </div>
       </dl>
+
+      <div className="json-heading">
+        <span>What is this?</span>
+      </div>
+      <p className="event-description">{describeInspectorEvent(event)}</p>
 
       <div className="json-heading">
         <span>Full event JSON</span>

@@ -330,6 +330,14 @@ select:focus-visible {
     minmax(220px, 1.6fr);
 }
 
+.event-description {
+  margin: 0 0 12px;
+  color: #9aa5b8;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
 .client-tag {
   padding: 1px 5px;
   border: 1px solid #3a4354;
