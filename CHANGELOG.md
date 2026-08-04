@@ -20,6 +20,18 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 - Zatím bez uživatelských změn.
 
+## [26.8.4] - 2026-08-04
+
+### en-US
+
+- Fixed a crash when opening the app from a notification while it was closed.
+- Notification setup now reports when push is not supported in the build instead of showing "Denied".
+
+### cs-CZ
+
+- Opraven pád aplikace při otevření z notifikace ve chvíli, kdy byla aplikace vypnutá.
+- Nastavení notifikací nyní hlásí, když build nepodporuje push, místo zobrazení „Zamítnuto".
+
 ## [26.8.3] - 2026-08-03
 
 ### en-US
