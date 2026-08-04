@@ -9,6 +9,7 @@ const NPUB_RECEIVER =
 test("send token", async ({ page }) => {
   const senderNsec = nip19.nsecEncode(generateSecretKey());
   const senderMnemonic = generateMnemonic(wordlist, 128);
+  await page.setViewportSize({ width: 390, height: 844 });
 
   const readBalanceSat = async (timeoutMs = 5_000) => {
     const balance = page.getByLabel("Available balance");
