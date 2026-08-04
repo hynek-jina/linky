@@ -73,6 +73,7 @@ select:focus-visible {
 .brand-block,
 .top-actions,
 .channel-filters,
+.app-filter,
 .direction-filter,
 .json-heading,
 .detail-header {
@@ -113,6 +114,7 @@ select:focus-visible {
 
 .connection-label,
 .event-count,
+.app-filter > span,
 .direction-filter > span {
   color: #8c96a7;
   font-size: 11px;
@@ -212,11 +214,13 @@ select:focus-visible {
   color: #6be0ca;
 }
 
+.app-filter,
 .direction-filter {
   flex: 0 0 auto;
   gap: 6px;
 }
 
+.app-filter select,
 .direction-filter select,
 .text-filter input {
   height: 27px;
@@ -227,8 +231,13 @@ select:focus-visible {
   font-size: 11px;
 }
 
+.app-filter select,
 .direction-filter select {
   padding: 2px 24px 2px 7px;
+}
+
+.app-filter select {
+  max-width: 240px;
 }
 
 .text-filter {
@@ -311,6 +320,25 @@ select:focus-visible {
   color: #778294;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+/* With multiple app instances, rows gain a client-tag column after the time. */
+.timeline.multi-app .timeline-row {
+  min-width: 710px;
+  grid-template-columns:
+    94px 44px 53px 22px minmax(130px, 0.75fr)
+    minmax(220px, 1.6fr);
+}
+
+.client-tag {
+  padding: 1px 5px;
+  border: 1px solid #3a4354;
+  border-radius: 3px;
+  color: #9aa5b8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 9px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .channel-badge {

@@ -74,16 +74,17 @@ While the dev server runs, the dev inspector shows everything the app does over 
    - **cashu** — every mint operation (quotes, mint, melt, send, receive, restore, proof-state checks) with arguments, result/error, and duration
    - **evolu** — every `insert`/`update`/`upsert` with table and payload, plus a `history.changed` tick when sync applies changes from another device
 
-Toolbar: channel chips and direction/text filters narrow the timeline; click a row for the full JSON payload (copyable); **Pause** freezes the view while still buffering; **Clear** resets the collector; the timeline auto-follows the newest event until you scroll up (**Follow ↓** jumps back).
+Toolbar: channel chips and direction/text filters narrow the timeline; click a row for the full JSON payload (copyable); **Pause** freezes the view while still buffering; **Clear** resets the collector; the timeline auto-follows the newest event until you scroll up (**Follow ↓** jumps back). When more than one app tab reports to the same dev server, an **App** selector appears in the filter bar — every tab gets a stable per-tab id, and rows show which app they came from.
 
 **Reading programmatically** (for scripts and agents):
 
 ```bash
 # poll as JSON; lastSeq in the response is the cursor for the next call
+# optional filters: channel=nostr|cashu|evolu, client=<per-tab app id>
 curl "http://localhost:5173/__inspector/events?since=0&limit=500&channel=cashu"
 
 # or tail the append-only file (one JSON event per line, reset on dev-server start)
-tail -f apps/web-app/.inspector/events.ndjson
+tail -f apps/web-app/.inspector/events-5173.ndjson
 
 # live SSE stream / reset between test scenarios
 curl -N "http://localhost:5173/__inspector/stream"

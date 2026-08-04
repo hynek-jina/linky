@@ -104,7 +104,10 @@ export const inspectorCollector = (): Plugin => ({
   apply: "serve",
   async configureServer(server) {
     const inspectorDirectory = path.join(server.config.root, ".inspector");
-    const eventsFile = path.join(inspectorDirectory, "events.ndjson");
+    // Per-port filename so parallel dev servers (dev :5173, dev:prod :5175,
+    // Playwright :5174) don't truncate and interleave each other's file.
+    const port = server.config.server.port ?? 5173;
+    const eventsFile = path.join(inspectorDirectory, `events-${port}.ndjson`);
     const events: InspectorEvent[] = [];
     const clients = new Set<ServerResponse>();
     let nextSeq = 1;
@@ -239,11 +242,13 @@ export const inspectorCollector = (): Plugin => ({
         const channel = isInspectorChannel(requestedChannel)
           ? requestedChannel
           : null;
+        const client = parsedUrl.searchParams.get("client");
         const matchingEvents = events
           .filter(
             (event) =>
               event.seq > since &&
-              (channel === null || event.channel === channel),
+              (channel === null || event.channel === channel) &&
+              (client === null || event.client === client),
           )
           .slice(0, limit);
         const lastSeq = nextSeq - 1;

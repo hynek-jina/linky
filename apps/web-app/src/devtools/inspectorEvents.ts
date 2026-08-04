@@ -23,6 +23,8 @@ export interface InspectorEventInput {
   direction?: InspectorDirection;
   /** One-line human-readable description shown in the timeline. */
   summary: string;
+  /** Per-tab app instance id, so one collector can tell app tabs apart. */
+  client?: string;
   data?: JsonValue;
 }
 
@@ -47,18 +49,20 @@ export const parseInspectorEventInput = (
   value: unknown,
 ): InspectorEventInput | null => {
   if (!isRecord(value)) return null;
-  const { ts, channel, type, direction, summary, data } = value;
+  const { ts, channel, type, direction, summary, client, data } = value;
   if (typeof ts !== "string" || !ts) return null;
   if (!isInspectorChannel(channel)) return null;
   if (typeof type !== "string" || !type) return null;
   if (typeof summary !== "string") return null;
   if (direction !== undefined && !isInspectorDirection(direction)) return null;
+  if (client !== undefined && typeof client !== "string") return null;
   return {
     ts,
     channel,
     type,
     summary,
     ...(direction === undefined ? {} : { direction }),
+    ...(client === undefined ? {} : { client }),
     // Data arrives as parsed JSON, so it is JSON-safe by construction.
     ...(data === undefined ? {} : { data: toJsonValueLenient(data) }),
   };

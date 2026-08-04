@@ -19,6 +19,32 @@ const MAX_ARRAY_LENGTH = 100;
 const MAX_DEPTH = 8;
 
 let cachedEnabled: boolean | null = null;
+let cachedClientId: string | null = null;
+
+// Per-tab app instance id: sessionStorage keeps it stable across reloads of
+// one tab while giving every tab its own value, so the inspector can group
+// events by app instance.
+const getClientId = (): string => {
+  if (cachedClientId !== null) return cachedClientId;
+  try {
+    const existing = sessionStorage.getItem("linky.inspector_client_id");
+    if (existing) {
+      cachedClientId = existing;
+      return existing;
+    }
+    const bytes = new Uint8Array(3);
+    crypto.getRandomValues(bytes);
+    const id = Array.from(bytes, (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+    sessionStorage.setItem("linky.inspector_client_id", id);
+    cachedClientId = id;
+    return id;
+  } catch {
+    cachedClientId = "unknown";
+    return cachedClientId;
+  }
+};
 
 export const isInspectorEnabled = (): boolean => {
   if (cachedEnabled !== null) return cachedEnabled;
@@ -100,6 +126,7 @@ const flushPendingEvents = (): void => {
       channel: "nostr",
       type: "inspector.dropped",
       summary: `inspector dropped ${droppedEventCount} event(s) under backpressure`,
+      client: getClientId(),
     });
     droppedEventCount = 0;
   }
@@ -134,6 +161,7 @@ export const emitInspectorEvent = (args: EmitInspectorEventArgs): void => {
     channel: args.channel,
     type: args.type,
     summary: args.summary,
+    client: getClientId(),
     ...(args.direction === undefined ? {} : { direction: args.direction }),
     ...(args.data === undefined ? {} : { data: toInspectorJson(args.data) }),
   });

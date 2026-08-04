@@ -21,7 +21,15 @@ interface ChannelSelection {
   nostr: boolean;
 }
 
+interface AppClient {
+  id: string;
+  /** First-seen order, used for the friendly "App N" label. */
+  label: string;
+  eventCount: number;
+}
+
 interface TimelineRowProps {
+  clientLabel: string | null;
   event: InspectorEvent;
   isSelected: boolean;
   onSelect: (event: InspectorEvent) => void;
@@ -60,6 +68,7 @@ const dataSearchText = (event: InspectorEvent): string => {
 };
 
 function TimelineRow({
+  clientLabel,
   event,
   isSelected,
   onSelect,
@@ -74,6 +83,9 @@ function TimelineRow({
       <time className="event-time" dateTime={event.ts}>
         {formatTime(event.ts)}
       </time>
+      {clientLabel !== null && (
+        <span className="client-tag">{clientLabel}</span>
+      )}
       <span className="channel-badge">{event.channel}</span>
       <span
         aria-label={event.direction ?? "no direction"}
@@ -144,6 +156,10 @@ function DetailPane({ event, onClose }: DetailPaneProps): React.ReactElement {
           <dd>{event.direction ?? "none"}</dd>
         </div>
         <div>
+          <dt>app</dt>
+          <dd>{event.client ?? "—"}</dd>
+        </div>
+        <div>
           <dt>summary</dt>
           <dd>{event.summary || "—"}</dd>
         </div>
@@ -177,6 +193,7 @@ export function InspectorApp(): React.ReactElement {
   const [direction, setDirection] = React.useState<"all" | InspectorDirection>(
     "all",
   );
+  const [clientFilter, setClientFilter] = React.useState("all");
   const [textFilter, setTextFilter] = React.useState("");
   const [selectedEvent, setSelectedEvent] =
     React.useState<InspectorEvent | null>(null);
@@ -236,18 +253,54 @@ export function InspectorApp(): React.ReactElement {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // App instances observed in the stream, in first-seen order so the friendly
+  // "App N" labels stay stable while events keep arriving.
+  const appClients = React.useMemo((): AppClient[] => {
+    const counts = new Map<string, number>();
+    for (const event of events) {
+      const id = event.client ?? "unknown";
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([id, eventCount], index) => ({
+      id,
+      label: `App ${index + 1}`,
+      eventCount,
+    }));
+  }, [events]);
+
+  const clientLabelById = React.useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const appClient of appClients) {
+      labels.set(appClient.id, appClient.label);
+    }
+    return labels;
+  }, [appClients]);
+
+  // If the selected app's events were cleared away, fall back to all apps so
+  // the select never holds a value that is no longer offered.
+  React.useEffect(() => {
+    if (clientFilter !== "all" && !clientLabelById.has(clientFilter)) {
+      setClientFilter("all");
+    }
+  }, [clientFilter, clientLabelById]);
+
   const matchingEvents = React.useMemo(() => {
     const query = textFilter.trim().toLocaleLowerCase();
     return events.filter((event) => {
       if (!channels[event.channel]) return false;
       if (direction !== "all" && event.direction !== direction) return false;
+      if (
+        clientFilter !== "all" &&
+        (event.client ?? "unknown") !== clientFilter
+      )
+        return false;
       if (!query) return true;
 
       return `${event.type}\n${event.summary}\n${dataSearchText(event)}`
         .toLocaleLowerCase()
         .includes(query);
     });
-  }, [channels, direction, events, textFilter]);
+  }, [channels, clientFilter, direction, events, textFilter]);
 
   const hiddenEventCount = Math.max(
     0,
@@ -344,6 +397,23 @@ export function InspectorApp(): React.ReactElement {
       </header>
 
       <section aria-label="Event filters" className="filter-bar">
+        {appClients.length > 1 && (
+          <label className="app-filter">
+            <span>App</span>
+            <select
+              onChange={(event) => setClientFilter(event.target.value)}
+              value={clientFilter}
+            >
+              <option value="all">all apps</option>
+              {appClients.map((appClient) => (
+                <option key={appClient.id} value={appClient.id}>
+                  {appClient.label} · {appClient.id} ({appClient.eventCount})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <div className="channel-filters">
           {CHANNELS.map((channel) => (
             <button
@@ -387,7 +457,7 @@ export function InspectorApp(): React.ReactElement {
         <section className="timeline-panel">
           <div
             aria-label="Inspector event timeline"
-            className="timeline"
+            className={`timeline${appClients.length > 1 ? " multi-app" : ""}`}
             onScroll={handleTimelineScroll}
             ref={timelineRef}
           >
@@ -405,6 +475,11 @@ export function InspectorApp(): React.ReactElement {
             ) : (
               renderedEvents.map((event) => (
                 <TimelineRow
+                  clientLabel={
+                    appClients.length > 1
+                      ? (clientLabelById.get(event.client ?? "unknown") ?? null)
+                      : null
+                  }
                   event={event}
                   isSelected={selectedEvent?.seq === event.seq}
                   key={event.seq}
