@@ -1,9 +1,9 @@
 import { createSlip39Share } from "@linky/core/identity";
-import { generateMnemonic } from "@scure/bip39";
-import { wordlist } from "@scure/bip39/wordlists/english";
 import { expect, test, type Page } from "@playwright/test";
 import { Effect } from "effect";
-import { generateSecretKey, nip19 } from "nostr-tools";
+import { nip19 } from "nostr-tools";
+import { MOBILE_VIEWPORT, setBaseStorage } from "./helpers/appState";
+import { setRandomIdentityStorage } from "./helpers/identity";
 
 const CONTACT_NPUB =
   "npub12g0qmc3xa4hc9nxca936chppd6zhkr494xyypstcd7wg0gaa2xzswunml3";
@@ -16,46 +16,9 @@ if (
 }
 const CONTACT_PUBKEY_HEX = decodedContactNpub.data;
 
-const setBaseStorage = async (page: Page) => {
-  await page.addInitScript(() => {
-    try {
-      const initializedKey = "linky.test.base-storage-initialized";
-      if (sessionStorage.getItem(initializedKey) !== "1") {
-        localStorage.clear();
-        sessionStorage.clear();
-        sessionStorage.setItem(initializedKey, "1");
-      }
-      localStorage.setItem("linky.lang", "en");
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: {
-          writeText: async () => {},
-        },
-      });
-    } catch {
-      // ignore
-    }
-  });
-};
-
 const setAuthenticatedStorage = async (page: Page) => {
-  const nsec = nip19.nsecEncode(generateSecretKey());
-  const mnemonic = generateMnemonic(wordlist, 128);
-
   await setBaseStorage(page);
-  await page.addInitScript(
-    ([nextNsec, nextMnemonic]) => {
-      try {
-        localStorage.setItem("linky.nostr_nsec", nextNsec);
-        localStorage.setItem("linky.initialMnemonic", nextMnemonic);
-        localStorage.setItem("linky.allow_promises", "1");
-        localStorage.setItem("linky.pay_with_cashu", "1");
-      } catch {
-        // ignore
-      }
-    },
-    [nsec, mnemonic],
-  );
+  await setRandomIdentityStorage(page);
 };
 
 const disableOpfs = async (page: Page) => {
@@ -103,7 +66,7 @@ const createContactAndOpenChat = async (page: Page): Promise<string> => {
 
 test("keeps authenticated screen gutters aligned", async ({ page }) => {
   await setAuthenticatedStorage(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ ...MOBILE_VIEWPORT });
 
   for (const route of [
     "/#settings",
@@ -114,7 +77,9 @@ test("keeps authenticated screen gutters aligned", async ({ page }) => {
     await page.goto(route);
 
     const shell = page.locator(".page.authenticated-page");
-    await expect(shell).toBeVisible();
+    // First navigation of the suite: with parallel workers the dev server may
+    // still be compiling, and the default 5s expect timeout makes this flaky.
+    await expect(shell).toBeVisible({ timeout: 30_000 });
     await expect(shell).toHaveCSS("padding-left", "20px");
     await expect(shell).toHaveCSS("padding-right", "20px");
     await expect(page.locator(".topbar")).toHaveCSS("padding-left", "20px");
@@ -171,7 +136,7 @@ test("restores an account from SLIP-39 without getting stuck", async ({
 }) => {
   const slip39Share = await Effect.runPromise(createSlip39Share());
   await setBaseStorage(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ ...MOBILE_VIEWPORT });
 
   await page.goto("/#wallet");
   await page.getByRole("button", { name: "I'm returning" }).click();
@@ -217,7 +182,7 @@ test("restores an account when private browsing disables OPFS", async ({
 
 test("preserves route parity and critical handlers", async ({ page }) => {
   await setAuthenticatedStorage(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ ...MOBILE_VIEWPORT });
 
   await page.goto("/#");
   await expect(
@@ -318,7 +283,7 @@ test("supports chat reply, edit, reaction toggle, and copy actions", async ({
   page,
 }) => {
   await setAuthenticatedStorage(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ ...MOBILE_VIEWPORT });
   const contactId = await createContactAndOpenChat(page);
 
   const chatInput = page.locator("[data-guide='chat-input']");

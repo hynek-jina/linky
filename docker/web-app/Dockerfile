@@ -1,0 +1,52 @@
+# Production build of the web app, served for the `local-stack` Playwright project.
+#
+# Why a production build rather than a dev server:
+#   - exercises the `manualChunks` splitting (vite.config.ts carries an explicit
+#     comment about an ESM circular-init hazard between the polyfills and vendor
+#     chunks — a bug class that only exists in a real build)
+#   - React double-invokes effects under StrictMode only in development, so the
+#     bank-payment-offer auto-responder runs once here, exactly as it does for users
+#
+# Vite inlines `import.meta.env` at build time, so the endpoints are build args.
+# `vite build` runs in production mode, which does NOT load .env.development —
+# these ARGs are the only source of those values.
+
+FROM oven/bun:1.3.9-alpine AS build
+WORKDIR /app
+
+# Manifests first so editing source does not bust the dependency layer.
+COPY package.json bun.lock ./
+COPY apps/native-shell/package.json apps/native-shell/
+COPY apps/push/package.json apps/push/
+COPY apps/site/package.json apps/site/
+COPY apps/web-app/package.json apps/web-app/
+COPY packages/config/package.json packages/config/
+COPY packages/core/package.json packages/core/
+RUN bun install --frozen-lockfile
+
+COPY . .
+
+ARG VITE_NOSTR_RELAYS
+ARG VITE_EVOLU_SERVER_URLS
+ARG VITE_MAIN_MINT_URL
+ARG VITE_NPUB_CASH_DISABLED
+ARG VITE_PUSH_SERVER_URL
+ENV VITE_NOSTR_RELAYS=$VITE_NOSTR_RELAYS \
+    VITE_EVOLU_SERVER_URLS=$VITE_EVOLU_SERVER_URLS \
+    VITE_MAIN_MINT_URL=$VITE_MAIN_MINT_URL \
+    VITE_NPUB_CASH_DISABLED=$VITE_NPUB_CASH_DISABLED \
+    VITE_PUSH_SERVER_URL=$VITE_PUSH_SERVER_URL
+
+WORKDIR /app/apps/web-app
+# `--sourcemap` is passed on the CLI rather than added to vite.config.ts, so this
+# test setup stays out of production source. Sourcemaps keep Playwright traces readable.
+RUN bun run typecheck && ./node_modules/.bin/vite build --sourcemap
+
+FROM nginx:alpine
+# nginx >= 1.21.2 ships `application/wasm` in mime.types. This is load-bearing:
+# sqlite3.wasm gets its Content-Type from a configureServer-only Vite plugin in dev,
+# so in a container it is a plain static asset. A wrong MIME makes
+# WebAssembly.instantiateStreaming reject and Evolu never initialises.
+COPY --from=build /app/apps/web-app/dist /usr/share/nginx/html
+COPY docker/web-app/nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80

@@ -40,11 +40,41 @@ Exception: August 2026 accidentally shipped as `26.9.0`, so keep releasing as `2
 - `bun run dev:services` runs just the docker stack attached (Ctrl-C stops it)
 - See the "Local dev environment" section in `docs/architecture.md` for how env overrides and vite modes work
 
+## E2E tests
+
+Two Playwright projects in `apps/web-app/playwright.config.ts`:
+
+- `prod-services` — the original suite. Playwright starts `vite --mode prod-services` on :5174 and the tests hit production relays/mints.
+- `local-stack` — `tests/proxy-payment.spec.ts` only, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
+
+```bash
+# once, and again after changing app source (VITE_* values are inlined at build time)
+docker compose -f docker-compose.dev.yml --profile e2e up -d --build --wait
+
+cd apps/web-app
+bunx playwright test --project=local-stack                      # run it
+bunx playwright test --project=local-stack --ui                 # step through by test.step()
+bunx playwright test --project=local-stack --headed             # three live browsers
+bunx playwright show-trace test-results/*local-stack/trace.zip  # after the fact
+bunx playwright show-report
+```
+
+The default reporter prints every `[linky]` console line prefixed with the account label (`[A]`, `[B]`, `[C]`); passing `--reporter=line` suppresses the HTML report. `trace: "on"` for this project, so every run — pass or fail — leaves one trace bundle containing all three accounts (switch between them with the page selector).
+
+The run is ~20s, so `--headed` mostly shows a blur; `--ui` and the trace viewer are the useful tools. Do not reintroduce a slow-motion knob: a per-action delay pushes the top-up quote and the offer's phase timers past their deadlines, so the test fails for reasons unrelated to the code under test.
+
+Playwright starts *every* `webServer` entry regardless of `--project`, so a Vite dev server also boots on :5174 even when running only `local-stack`.
+
+Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test needs a real seed login (deterministic Evolu owner lanes); `setRandomIdentityStorage` is the cheaper "just be logged in" variant and leaves `isSeedLogin` false.
+
 ## Gotchas
 
 - Evolu requires a Worker polyfill in test environments (jsdom + polyfill live in `vitest.setup.ts`)
 - Vitest excludes `tests/**/*.spec.ts` — those are Playwright E2E suites run separately
 - In this workspace/Bun setup, `bunx --cwd apps/web-app playwright test tests` can resolve incorrectly; run `cd apps/web-app && bunx playwright test tests` instead
+- Playwright cannot intercept requests made by a service worker, and `src/sw.ts` has a Workbox `CacheFirst` route for image destinations that matches cross-origin URLs — any test stubbing remote images must use `serviceWorkers: "block"`
+- The local Nutshell mint charges `input_fee_ppk: 100`, so it is **not** fee-free; a receiver nets slightly less than the amount sent
+- The `nostr-rs-relay` image's `/bin/sh` is dash, so its healthcheck must invoke `bash` explicitly for `/dev/tcp`
 - SQLite WASM files served from `public/sqlite-wasm/` with `cache-control: no-store` in dev
 - Debug APKs install side-by-side as `fit.linky.app.debug`; native push in them requires a `fit.linky.app.debug` client in `google-services.json` (register that package in the Firebase console), otherwise the google-services plugin is skipped for debug-only builds and push is unsupported
 - Play upload bundles require release signing via `apps/native-shell/android/keystore.properties` or `LINKY_UPLOAD_STORE_FILE` / `LINKY_UPLOAD_STORE_PASSWORD` / `LINKY_UPLOAD_KEY_ALIAS` / `LINKY_UPLOAD_KEY_PASSWORD`; `bun run native:aab:release` fails fast when those credentials are missing

@@ -120,6 +120,44 @@ Start the push service once:
 bun run push:start
 ```
 
+### Tests
+
+Unit tests (Vitest) across all workspaces:
+
+```bash
+bun run test
+```
+
+End-to-end tests (Playwright) live in `apps/web-app/tests/*.spec.ts` and are split into two
+projects. `prod-services` is the original suite and runs against production relays and mints:
+
+```bash
+cd apps/web-app && bunx playwright test --project=prod-services
+```
+
+`local-stack` runs the proxy-payment flow — three accounts on one machine, talking over the local
+Nostr relay and paying each other with the local Cashu mint. It needs the docker stack up first,
+because the app is served from it as a production build on :5176:
+
+```bash
+docker compose -f docker-compose.dev.yml --profile e2e up -d --build --wait
+cd apps/web-app && bunx playwright test --project=local-stack
+```
+
+Re-run the `up --build` after changing app source; the endpoints are baked into the image.
+
+To watch or debug a run:
+
+```bash
+bunx playwright test --project=local-stack --ui                 # step through it
+bunx playwright test --project=local-stack --headed             # three live browsers
+bunx playwright show-trace test-results/*local-stack/trace.zip  # after the fact
+```
+
+Every run records a trace containing all three accounts, and the console output of each app is
+printed prefixed with its account label (`[A]`, `[B]`, `[C]`). The run takes ~20s, so `--ui` and the
+trace viewer are far more useful than watching it live.
+
 ### Code quality
 
 Always run the full check pipeline after changes:
