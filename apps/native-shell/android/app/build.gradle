@@ -132,10 +132,13 @@ apply from: 'capacitor.build.gradle'
 
 try {
     def servicesJSON = file('google-services.json')
-    if (servicesJSON.text && !isDebugOnlyBuild) {
+    // Debug builds use the fit.linky.app.debug application id; the plugin fails the
+    // build unless google-services.json has a client registered for that package.
+    def hasDebugClient = servicesJSON.text.contains('"fit.linky.app.debug"')
+    if (servicesJSON.text && (!isDebugOnlyBuild || hasDebugClient)) {
         apply plugin: 'com.google.gms.google-services'
     } else if (isDebugOnlyBuild) {
-        logger.info("google-services plugin not applied for debug-only build. Native push notifications are disabled for the side-by-side debug app")
+        logger.info("google-services.json has no fit.linky.app.debug client. Native push notifications are disabled for the side-by-side debug app")
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")

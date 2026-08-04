@@ -289,7 +289,16 @@ export function AdvancedPage(): React.ReactElement {
         const permissionGranted = await requestNotificationPermission();
         if (!permissionGranted) {
           setPushNotificationsDisabledByUser(true);
-          pushToast(t("notificationsDenied"));
+          const isUnsupported =
+            isNativePlatform() &&
+            getNativeNotificationPermissionState() === "unsupported";
+          pushToast(
+            t(
+              isUnsupported
+                ? "notificationsUnsupported"
+                : "notificationsDenied",
+            ),
+          );
           return;
         }
 

@@ -136,12 +136,14 @@ public class MainActivity extends BridgeActivity {
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+		// super.onCreate() re-delivers the launch intent through onNewIntent(), which
+		// writes to bridgePreferences — so it must be initialized first.
+		bridgePreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 		super.onCreate(savedInstanceState);
 		activeInstanceRef = new WeakReference<>(this);
 		getOnBackPressedDispatcher().addCallback(this, appNavigationBackCallback);
 		getOnBackPressedDispatcher().addCallback(this, nativeQrScannerBackCallback);
 
-		bridgePreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 		nfcAdapter = NfcAdapter.getDefaultAdapter(this);
 		cacheIntentDeepLinkUrl(getIntent());
 		cacheIntentNotificationRoute(getIntent());
