@@ -61,7 +61,36 @@ For Android native builds: Java 17
 - `bun run dev:prod` — web app only, on :5175, against production services. The separate port keeps browser storage isolated from local-dev sessions.
 - `bun run dev:services` — just the docker stack, attached.
 
-While the dev server runs, `http://localhost:5173/inspector.html` shows a live, filterable timeline of Nostr events, Cashu mint operations, and Evolu mutations. The same stream is machine-readable at `GET /__inspector/events` and in `apps/web-app/.inspector/events.ndjson`.
+### Dev inspector
+
+While the dev server runs, the dev inspector shows everything the app does over Nostr, Cashu, and Evolu. It is dev-only and compiled out of production builds.
+
+**Watching live:**
+
+1. Start the app (`bun run dev` or `bun run dev:prod`).
+2. Open `http://localhost:5173/inspector.html` (`:5175` for `dev:prod`) in a window next to the app — not as a route inside the app.
+3. Use the app; events appear in real time:
+   - **nostr** — every publish (with per-relay ok/failed results), query, subscription, and incoming event
+   - **cashu** — every mint operation (quotes, mint, melt, send, receive, restore, proof-state checks) with arguments, result/error, and duration
+   - **evolu** — every `insert`/`update`/`upsert` with table and payload, plus a `history.changed` tick when sync applies changes from another device
+
+Toolbar: channel chips and direction/text filters narrow the timeline; click a row for the full JSON payload (copyable); **Pause** freezes the view while still buffering; **Clear** resets the collector; the timeline auto-follows the newest event until you scroll up (**Follow ↓** jumps back).
+
+**Reading programmatically** (for scripts and agents):
+
+```bash
+# poll as JSON; lastSeq in the response is the cursor for the next call
+curl "http://localhost:5173/__inspector/events?since=0&limit=500&channel=cashu"
+
+# or tail the append-only file (one JSON event per line, reset on dev-server start)
+tail -f apps/web-app/.inspector/events.ndjson
+
+# live SSE stream / reset between test scenarios
+curl -N "http://localhost:5173/__inspector/stream"
+curl -X POST "http://localhost:5173/__inspector/clear"
+```
+
+To disable capture in one browser: `localStorage.setItem("linky.inspector_disabled", "1")` and reload. Implementation details are in the "Dev inspector" section of `docs/architecture.md`.
 
 Android shell currently adds:
 
