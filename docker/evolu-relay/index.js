@@ -19,5 +19,9 @@ if (!relay.ok) {
   console.error(relay.error);
   process.exit(1);
 }
-process.once("SIGINT", relay.value[Symbol.dispose]);
-process.once("SIGTERM", relay.value[Symbol.dispose]);
+const shutdown = () => {
+  relay.value[Symbol.dispose]();
+  process.exit(0);
+};
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);
