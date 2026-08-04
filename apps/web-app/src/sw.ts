@@ -523,7 +523,12 @@ registerRoute(
   async ({ url }) => createSpaydResponse(url),
 );
 
-registerRoute(new NavigationRoute(createHandlerBoundToURL("index.html")));
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL("index.html"), {
+    // Dev inspector page and collector endpoints must reach the dev server.
+    denylist: [/^\/inspector\.html/, /^\/__inspector\//],
+  }),
+);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(logSw("service worker install", { build: SW_BUILD_TAG }));

@@ -28,3 +28,4 @@ packages/core/src/**/*.js
 *.njsproj
 *.sln
 *.sw?
+apps/web-app/.inspector/

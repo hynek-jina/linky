@@ -4,6 +4,7 @@ import type {
   MintKeyset,
   Token,
 } from "@cashu/cashu-ts";
+import { instrumentCashuWallet } from "../devtools/instrumentCashuWallet";
 import { getUnknownErrorMessage } from "./unknown";
 
 interface CreateLoadedCashuWalletArgs {
@@ -189,7 +190,7 @@ export const createLoadedCashuWallet = async (
 
   try {
     await wallet.loadMint();
-    return wallet;
+    return instrumentCashuWallet(wallet, args.mintUrl);
   } catch (error) {
     if (!isCashuKeysetVerificationError(error)) throw error;
 
@@ -199,6 +200,9 @@ export const createLoadedCashuWallet = async (
       unit: options.unit ?? "sat",
     });
 
-    return await createWalletFromFallbackMintData(args);
+    return instrumentCashuWallet(
+      await createWalletFromFallbackMintData(args),
+      args.mintUrl,
+    );
   }
 };

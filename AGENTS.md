@@ -33,6 +33,7 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 - `bun run dev:prod` runs the web app on :5175 against production services (no local stack needed)
 - `bun run dev:services` runs just the docker stack attached (Ctrl-C stops it)
 - See the "Local dev environment" section in `docs/architecture.md` for how env overrides and vite modes work
+- Dev inspector: open `http://localhost:5173/inspector.html` next to the app for a live timeline of Nostr events, Cashu mint calls, and Evolu mutations. Agents should read `GET http://localhost:5173/__inspector/events?since=<seq>&channel=<nostr|cashu|evolu>&client=<per-tab app id>` (JSON with a `lastSeq` cursor) or tail `apps/web-app/.inspector/events-<port>.ndjson`; `POST /__inspector/clear` resets between scenarios. Works on any vite dev port (5173/5175); see "Dev inspector" in `docs/architecture.md`
 
 ## Gotchas
 
