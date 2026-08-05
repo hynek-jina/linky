@@ -20,6 +20,22 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 - Zatím bez uživatelských změn.
 
+## [26.8.5] - 2026-08-05
+
+### en-US
+
+- App updates now apply automatically on startup instead of showing an update banner.
+- Short conversations stay scrollable above the keyboard on iOS.
+- The conversation stays visible behind the reaction menu.
+- Fixed a loading loop when creating an incognito profile.
+
+### cs-CZ
+
+- Aktualizace aplikace se nyní při spuštění použijí automaticky místo zobrazení lišty s výzvou.
+- Krátké konverzace jdou na iOS posouvat i nad otevřenou klávesnicí.
+- Konverzace zůstává viditelná za nabídkou reakcí.
+- Opravena smyčka načítání při vytváření inkognito profilu.
+
 ## [26.8.4] - 2026-08-04
 
 ### en-US
