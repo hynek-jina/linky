@@ -901,6 +901,7 @@ const useChatViewport = (
     const pendingRefreshTimeouts = new Set<number>();
     let pendingViewportAnchor: ChatViewportAnchor | null = null;
     let pendingViewportAnchorFrame: number | null = null;
+    let appliedViewportHeight: number | null = null;
     const getWindowScrollTop = () =>
       Math.max(
         window.scrollY,
@@ -920,9 +921,6 @@ const useChatViewport = (
       if (getWindowScrollTop() > 1) {
         window.scrollTo(0, 0);
       }
-      pendingViewportAnchor ??= captureChatViewportAnchor(
-        chatMessagesRef.current,
-      );
       const viewport = window.visualViewport;
       const nextHeight = viewport?.height ?? window.innerHeight;
       const nextOffsetTop = viewport?.offsetTop ?? 0;
@@ -941,10 +939,15 @@ const useChatViewport = (
         viewportKeyboardInset,
         Number.isFinite(nativeKeyboardInset) ? nativeKeyboardInset : 0,
       );
-      root.style.setProperty(
-        "--chat-viewport-height",
-        `${Math.round(window.innerHeight - keyboardInset)}px`,
-      );
+      const viewportHeight = Math.round(window.innerHeight - keyboardInset);
+      const viewportHeightChanged = appliedViewportHeight !== viewportHeight;
+
+      if (viewportHeightChanged) {
+        pendingViewportAnchor ??= captureChatViewportAnchor(
+          chatMessagesRef.current,
+        );
+      }
+      root.style.setProperty("--chat-viewport-height", `${viewportHeight}px`);
       root.style.setProperty(
         "--chat-keyboard-inset",
         `${Math.round(keyboardInset)}px`,
@@ -954,6 +957,9 @@ const useChatViewport = (
       } else {
         delete root.dataset.chatKeyboardOpen;
       }
+
+      appliedViewportHeight = viewportHeight;
+      if (!viewportHeightChanged) return;
 
       if (pendingViewportAnchorFrame !== null) {
         window.cancelAnimationFrame(pendingViewportAnchorFrame);

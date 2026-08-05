@@ -18,8 +18,12 @@ export const restoreChatViewportAnchor = (
 ): void => {
   if (!messages || !anchor) return;
 
-  messages.scrollTop = Math.max(
+  const maxScrollTop = Math.max(
     0,
-    anchor.visibleBottom - messages.clientHeight,
+    messages.scrollHeight - messages.clientHeight,
+  );
+  messages.scrollTop = Math.min(
+    maxScrollTop,
+    Math.max(0, anchor.visibleBottom - messages.clientHeight),
   );
 };
