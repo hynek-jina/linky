@@ -2045,6 +2045,14 @@ button.settings-sensitive-action.is-armed {
   scroll-padding-bottom: var(--chat-compose-height, 116px);
 }
 
+@media (max-width: 960px) {
+  .chat-messages {
+    margin-bottom: var(--chat-compose-height, 116px);
+    padding-bottom: 12px;
+    scroll-padding-bottom: 12px;
+  }
+}
+
 .chat-day-separator {
   align-self: center;
   font-size: 11px;
@@ -5907,10 +5915,6 @@ button.icon {
     padding-bottom: calc(6px + var(--floating-safe-area-bottom));
     background: transparent;
     box-shadow: none;
-  }
-
-  .chat-messages {
-    padding-bottom: var(--chat-compose-height, 116px);
   }
 
   .chat-message-editor {
