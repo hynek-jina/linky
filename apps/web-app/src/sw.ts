@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 /// <reference lib="webworker" />
 
-const SW_BUILD_TAG = "linky-sw-2026-04-29T11:50-bump-2";
+const SW_BUILD_TAG = "linky-sw-2026-08-05T00:00-client-count";
 const NOTIFICATION_OPEN_URL = "/#contacts";
 const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
 
@@ -536,6 +536,19 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
   const data = event.data as { type?: unknown } | null;
   if (data && typeof data === "object" && data.type === "SKIP_WAITING") {
     void self.skipWaiting();
+  }
+  // Lets a freshly loaded tab check whether it is the only open client
+  // before silently applying a pending update (see utils/pwaUpdate.ts).
+  if (data && typeof data === "object" && data.type === "CLIENT_COUNT") {
+    const port = event.ports[0];
+    if (!port) return;
+    event.waitUntil(
+      self.clients
+        .matchAll({ type: "window", includeUncontrolled: true })
+        .then((clientList) => {
+          port.postMessage({ count: clientList.length });
+        }),
+    );
   }
 });
 

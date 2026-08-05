@@ -15,7 +15,8 @@ import type {
 import type { JsonValue } from "./types/json";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
 import {
-  markPwaNeedRefresh,
+  handlePwaUpdateAvailable,
+  isApplyingPwaUpdate,
   recordPwaControllerChange,
   recordPwaRegistered,
 } from "./utils/pwaUpdate";
@@ -152,7 +153,7 @@ const updateSW = registerSW({
   onNeedRefresh() {
     console.log("[linky][pwa] update available");
     void appendPushDebugLog("client", "pwa update available");
-    markPwaNeedRefresh(true);
+    void handlePwaUpdateAvailable();
   },
   onRegisteredSW(swUrl, registration) {
     console.log("[linky][pwa] sw registered", {
@@ -172,10 +173,10 @@ const updateSW = registerSW({
 
     // vite-plugin-pwa does not auto-poll for SW updates when an
     // onRegisteredSW callback is supplied. Trigger manual update checks
-    // on a 30s interval plus on focus/visibility/online so the prompt
-    // banner surfaces shortly after a deploy without forcing a hard
-    // refresh. Detected waiting workers also fire the onNeedRefresh
-    // callback above which flips the banner state.
+    // on a 30s interval plus on focus/visibility/online so an update is
+    // noticed shortly after a deploy. Detected waiting workers fire the
+    // onNeedRefresh callback above, which either auto-applies the update
+    // (fresh untouched single-tab load) or shows the prompt banner.
     if (!registration) return;
     const checkForUpdate = () => {
       if (
@@ -201,7 +202,7 @@ const updateSW = registerSW({
     }
     if (registration.waiting) {
       console.log("[linky][pwa] waiting worker present at registration");
-      markPwaNeedRefresh(true);
+      void handlePwaUpdateAvailable();
     }
   },
   onRegisterError(error) {
@@ -212,11 +213,12 @@ const updateSW = registerSW({
 recordPwaRegistered(updateSW);
 
 if ("serviceWorker" in navigator) {
+  const hadControllerAtLoad = Boolean(navigator.serviceWorker.controller);
   console.log("[linky][pwa] controller", {
-    hasController: Boolean(navigator.serviceWorker.controller),
+    hasController: hadControllerAtLoad,
   });
   void appendPushDebugLog("client", "pwa controller snapshot", {
-    hasController: Boolean(navigator.serviceWorker.controller),
+    hasController: hadControllerAtLoad,
   });
 
   navigator.serviceWorker.addEventListener("message", (event) => {
@@ -234,6 +236,13 @@ if ("serviceWorker" in navigator) {
     void appendPushDebugLog("client", "pwa controller change", {
       hasController: Boolean(navigator.serviceWorker.controller),
     });
+    // An update accepted in another tab activated a new SW for every tab.
+    // Reload so this tab doesn't keep running old assets against the new
+    // SW's purged precache. Skipped on first install (no controller at
+    // load) and in the tab that initiated the update (it reloads itself).
+    if (hadControllerAtLoad && !isApplyingPwaUpdate()) {
+      window.location.reload();
+    }
   });
 
   void navigator.serviceWorker.ready
