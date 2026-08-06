@@ -4,6 +4,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import { BootCommitSignal } from "./components/BootCommitSignal";
+import { installIosViewportHeal } from "./platform/iosViewportHeal";
 import "./index.css";
 import {
   type OpfsProbeIssue,
@@ -680,6 +681,7 @@ const bootstrap = async () => {
     console.log("[linky][boot] start");
     stage = "polyfills";
     applyEvoluWebCompatPolyfills();
+    installIosViewportHeal();
     console.log("[linky][boot] polyfills done");
 
     stage = "storage-compat";

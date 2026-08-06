@@ -932,11 +932,21 @@ const useChatViewport = (
         0,
         window.innerHeight - visibleHeight,
       );
+      const rootStyles = getComputedStyle(root);
       const nativeKeyboardInset = Number.parseFloat(
-        getComputedStyle(root).getPropertyValue("--native-keyboard-inset"),
+        rootStyles.getPropertyValue("--native-keyboard-inset"),
       );
+      // iOS standalone PWAs can report a visualViewport height short of
+      // window.innerHeight even with the keyboard closed, so only trust the
+      // viewport-derived inset while an editable element is focused.
+      const active = document.activeElement;
+      const keyboardCanBeOpen =
+        active instanceof HTMLElement &&
+        (active.isContentEditable ||
+          active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA");
       const keyboardInset = Math.max(
-        viewportKeyboardInset,
+        keyboardCanBeOpen ? viewportKeyboardInset : 0,
         Number.isFinite(nativeKeyboardInset) ? nativeKeyboardInset : 0,
       );
       const viewportHeight = Math.round(window.innerHeight - keyboardInset);

@@ -11,10 +11,13 @@
     <meta name="theme-color" content="#020617" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
+    <!-- No apple-mobile-web-app-status-bar-style on purpose: on iOS 26,
+         black-translucent makes the standalone web app's layout viewport
+         62px short at the bottom (paint- and tap-clipped dead band under
+         bottom-fixed elements). Without the meta, the viewport sits below
+         the status bar and bottom-anchored UI lands on the real screen
+         bottom. -->
+
     <title>Linky</title>
   </head>
   <body>
