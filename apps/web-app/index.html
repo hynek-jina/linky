@@ -163,17 +163,32 @@
           root.replaceChildren(panel);
         };
 
-        const watchdog = window.setTimeout(() => {
-          if (appMounted) return;
+        let watchdog = 0;
+        const armWatchdog = () => {
+          window.clearTimeout(watchdog);
+          watchdog = window.setTimeout(() => {
+            if (appMounted) return;
 
-          const recoveryWasRecent =
-            Date.now() - readLastRecoveryAt() < retryCooldownMs;
-          if (navigator.onLine !== false && !recoveryWasRecent) {
-            void recoverAndReload(true);
-            return;
-          }
-          renderBootFailure();
-        }, watchdogMs);
+            const recoveryWasRecent =
+              Date.now() - readLastRecoveryAt() < retryCooldownMs;
+            if (navigator.onLine !== false && !recoveryWasRecent) {
+              void recoverAndReload(true);
+              return;
+            }
+            renderBootFailure();
+          }, watchdogMs);
+        };
+        armWatchdog();
+
+        // Boot may pause on an explicit user decision (temporary-session
+        // consent when device storage is unavailable); don't reload from
+        // under the prompt.
+        window.addEventListener("linky-boot-decision-pending", () => {
+          window.clearTimeout(watchdog);
+        });
+        window.addEventListener("linky-boot-decision-resolved", () => {
+          if (!appMounted) armWatchdog();
+        });
 
         window.addEventListener(
           "linky-app-mounted",

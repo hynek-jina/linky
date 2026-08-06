@@ -58,6 +58,19 @@ const setAuthenticatedStorage = async (page: Page) => {
   );
 };
 
+const disableOpfs = async (page: Page) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.storage, "getDirectory", {
+      configurable: true,
+      value: () =>
+        Promise.reject(
+          new DOMException("OPFS is unavailable", "NotSupportedError"),
+        ),
+      writable: true,
+    });
+  });
+};
+
 const createContactAndOpenChat = async (page: Page): Promise<string> => {
   await page.goto("/#");
   await page.locator("[data-guide='contact-add-button']").first().click();
@@ -163,9 +176,38 @@ test("restores an account from SLIP-39 without getting stuck", async ({
   await page.goto("/#wallet");
   await page.getByRole("button", { name: "I'm returning" }).click();
   await page.getByLabel("Keys").fill(slip39Share);
+  const reloadFinished = page.waitForEvent("load");
   await page.getByRole("button", { name: "Continue" }).click();
 
   // Restore intentionally resets the route to the legacy contacts root.
+  await reloadFinished;
+  await page.waitForURL(/#$/, { timeout: 30_000 });
+  await page.goto("/#wallet");
+  await expect(page.getByLabel("Available balance")).toBeVisible({
+    timeout: 30_000,
+  });
+});
+
+test("restores an account when private browsing disables OPFS", async ({
+  page,
+}) => {
+  const slip39Share = await Effect.runPromise(createSlip39Share());
+  await setBaseStorage(page);
+  await disableOpfs(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  await page.goto("/#wallet");
+  await page
+    .getByRole("button", { name: "Continue with temporary session" })
+    .click();
+  await page.getByRole("button", { name: "I'm returning" }).click();
+  await page.getByLabel("Keys").fill(slip39Share);
+  const reloadFinished = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  // The consent is remembered in sessionStorage, so the post-restore reload
+  // must boot straight into the in-memory session without re-prompting.
+  await reloadFinished;
   await page.waitForURL(/#$/, { timeout: 30_000 });
   await page.goto("/#wallet");
   await expect(page.getByLabel("Available balance")).toBeVisible({

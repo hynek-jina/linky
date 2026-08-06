@@ -5,6 +5,7 @@ import { evoluReactWebDeps } from "@evolu/react-web";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDeferredOnlineReady } from "./hooks/useDeferredOnlineReady";
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "./mnemonic";
+import { shouldUseInMemoryEvoluStorage } from "./platform/evoluWebStorage";
 import type { JsonValue } from "./types/json";
 import {
   safeLocalStorageGetJson,
@@ -560,6 +561,7 @@ export const createEvoluForUser = (mnemonic: string | null) => {
     name: finalName,
     transports: EVOLU_TRANSPORTS,
     enableLogging: isEvoluLoggingEnabled(),
+    inMemory: shouldUseInMemoryEvoluStorage(),
     ...(externalAppOwner ? { externalAppOwner } : {}),
   });
 };
