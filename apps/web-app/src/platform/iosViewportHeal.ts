@@ -10,17 +10,49 @@ export const installIosViewportHeal = (): void => {
   const nav: Navigator & { standalone?: boolean } = navigator;
   if (nav.standalone !== true) return;
 
-  let maxInnerHeight = window.innerHeight;
-  window.addEventListener("orientationchange", () => {
-    maxInnerHeight = 0;
-  });
-  window.addEventListener("resize", () => {
-    maxInnerHeight = Math.max(maxInnerHeight, window.innerHeight);
-  });
+  const portraitQuery = window.matchMedia("(orientation: portrait)");
+  const currentOrientation = (): "portrait" | "landscape" =>
+    portraitQuery.matches ? "portrait" : "landscape";
+
+  // iOS keeps screen.width/height portrait-fixed, so take max/min instead of
+  // trusting which of the two is "height" in the current orientation.
+  const fullScreenHeight = (orientation: "portrait" | "landscape") =>
+    orientation === "portrait"
+      ? Math.max(window.screen.width, window.screen.height)
+      : Math.min(window.screen.width, window.screen.height);
+
+  const editableFocused = () => {
+    const active = document.activeElement;
+    return (
+      active instanceof HTMLElement &&
+      (active.isContentEditable ||
+        active.tagName === "INPUT" ||
+        active.tagName === "TEXTAREA")
+    );
+  };
+
+  // Baselines are per orientation and only learned while no editable element
+  // is focused, so keyboard-occluded heights never become the reference and
+  // rotating mid-typing cannot destroy a known-good baseline.
+  const maxInnerHeightByOrientation = { portrait: 0, landscape: 0 };
+
+  const recordBaseline = () => {
+    if (editableFocused()) return;
+    const orientation = currentOrientation();
+    maxInnerHeightByOrientation[orientation] = Math.max(
+      maxInnerHeightByOrientation[orientation],
+      Math.min(window.innerHeight, fullScreenHeight(orientation)),
+    );
+  };
+
+  recordBaseline();
+  window.addEventListener("resize", recordBaseline);
 
   const heal = () => {
-    maxInnerHeight = Math.max(maxInnerHeight, window.innerHeight);
-    if (maxInnerHeight - window.innerHeight <= 4) return;
+    if (editableFocused()) return;
+    recordBaseline();
+    const baseline = maxInnerHeightByOrientation[currentOrientation()];
+    if (baseline - window.innerHeight <= 4) return;
     const rootEl = document.getElementById("root");
     if (!rootEl) return;
     const previousDisplay = rootEl.style.display;
