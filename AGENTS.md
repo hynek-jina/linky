@@ -29,7 +29,13 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 
 ## Release Versioning
 
-Versions use the `yy.mm.xx` scheme: `yy` = release year, `mm` = release month (no leading zero), `xx` = zero-based increment of builds released that month. Example: `26.8.3` is the 4th version released in August 2026. `xx` resets to `0` at the start of each month.
+Versions follow [CalVer](https://calver.org) with the `YY.MM.MICRO` scheme, not SemVer:
+
+- `YY` — short year (`26` = 2026)
+- `MM` — month, no leading zero (`8` = August)
+- `MICRO` — zero-based counter of releases within that month; the first release of a month is `.0`, and the counter resets each month
+
+Example: `26.8.3` is the 4th release of August 2026. When cutting a release, derive the version from the current date: reuse `YY.MM` if a release already happened this month and bump `MICRO`, otherwise start a new `YY.MM.0`.
 
 ## Local dev environment
 
