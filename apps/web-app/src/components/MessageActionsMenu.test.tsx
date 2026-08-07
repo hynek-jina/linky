@@ -40,7 +40,8 @@ describe("MessageActionsMenu", () => {
         />,
       );
     });
-    const backdrop = container.querySelector(".message-actions-backdrop");
+    // The menu portals to document.body, so query there rather than the container.
+    const backdrop = document.body.querySelector(".message-actions-backdrop");
 
     expect(backdrop).not.toBeNull();
     if (!backdrop) return;
