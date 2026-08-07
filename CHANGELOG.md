@@ -20,6 +20,22 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 - Zatím bez uživatelských změn.
 
+## [26.9.0] - 2026-08-07
+
+### en-US
+
+- Linky now asks for consent before using temporary in-memory storage when persistent browser storage is unavailable.
+- Improved chat layout and scrolling around the keyboard on iOS.
+- Tapping actions next to an input no longer dismisses the keyboard unnecessarily.
+- Message actions now appear above the chat composer on iOS.
+
+### cs-CZ
+
+- Linky se nyní zeptá na souhlas s použitím dočasné paměti, pokud není dostupné trvalé úložiště prohlížeče.
+- Vylepšeno rozložení a posouvání chatu kolem klávesnice na iOS.
+- Klepnutí na akce vedle vstupního pole už zbytečně nezavírá klávesnici.
+- Akce zpráv se na iOS nyní zobrazují nad polem pro psaní.
+
 ## [26.8.5] - 2026-08-05
 
 ### en-US
