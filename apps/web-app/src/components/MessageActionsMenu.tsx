@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import { createPortal } from "react-dom";
 import { EmojiPicker } from "./EmojiPicker";
 import { CopyIcon, EditIcon, ReplyIcon } from "./icons";
 
@@ -32,7 +33,9 @@ export const MessageActionsMenu: FC<MessageActionsMenuProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  return (
+  // Portaled to <body>: on iOS the chat scroller is a composited layer whose
+  // stacking context would otherwise paint this fixed sheet below the compose bar.
+  return createPortal(
     <>
       <div
         className="message-actions-backdrop"
@@ -94,6 +97,7 @@ export const MessageActionsMenu: FC<MessageActionsMenuProps> = ({
           {labels.copy}
         </button>
       </div>
-    </>
+    </>,
+    document.body,
   );
 };
