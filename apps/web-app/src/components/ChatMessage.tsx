@@ -575,8 +575,31 @@ function ChatMessageComponent({
     privateImageInfo,
   ]);
 
+  const refocusAfterMenuRef = React.useRef<HTMLElement | null>(null);
+
   const openMenu = React.useCallback(() => {
+    // Close the keyboard while the action sheet is up; remember the field so
+    // closeMenu can bring the keyboard back.
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLElement &&
+      (active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active.isContentEditable)
+    ) {
+      refocusAfterMenuRef.current = active;
+      active.blur();
+    }
     setMenuOpen(true);
+  }, []);
+
+  const closeMenu = React.useCallback(() => {
+    setMenuOpen(false);
+    const el = refocusAfterMenuRef.current;
+    refocusAfterMenuRef.current = null;
+    // Must run synchronously inside the dismissing tap's click handler, or iOS
+    // refuses to reopen the keyboard for a programmatic focus.
+    if (el?.isConnected) el.focus();
   }, []);
 
   const clearLongPress = React.useCallback(() => {
@@ -689,7 +712,7 @@ function ChatMessageComponent({
             onEdit={() => onEdit(message)}
             onReact={(emoji) => onReact(message, emoji)}
             onCopy={() => onCopy(message)}
-            onClose={() => setMenuOpen(false)}
+            onClose={closeMenu}
           />
 
           <div className="chat-bubble-wrap">
@@ -697,7 +720,7 @@ function ChatMessageComponent({
               <button
                 type="button"
                 className="chat-message-action-btn"
-                onClick={() => (menuOpen ? setMenuOpen(false) : openMenu())}
+                onClick={() => (menuOpen ? closeMenu() : openMenu())}
                 aria-label="Message actions"
               >
                 ⋯
