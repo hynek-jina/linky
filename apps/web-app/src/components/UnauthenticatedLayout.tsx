@@ -294,6 +294,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
               <button
                 type="button"
                 className="onboarding-return-pasteBtn"
+                onPointerDown={(event) => event.preventDefault()}
                 onClick={() => void pasteReturningSlip39FromClipboard()}
                 disabled={onboardingIsBusy}
                 aria-label={t("onboardingReturnPasteButton")}
@@ -321,6 +322,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
                   key={word}
                   type="button"
                   className="pill pill-muted onboarding-return-suggestion"
+                  onPointerDown={(event) => event.preventDefault()}
                   onClick={() => selectReturningSlip39Suggestion(word)}
                   disabled={onboardingIsBusy}
                 >

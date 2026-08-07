@@ -418,6 +418,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                 <button
                   type="button"
                   className="icon-only-ghost"
+                  onPointerDown={(event) => event.preventDefault()}
                   onClick={() => void pasteSearch()}
                   title={t("paste")}
                   aria-label={t("paste")}
