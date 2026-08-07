@@ -731,7 +731,7 @@ const ChatComposer = memo(function ChatComposer({
                   key={`group-${suggestion.groupName}`}
                   type="button"
                   className="chat-mention-suggestion"
-                  onMouseDown={(event) => event.preventDefault()}
+                  onPointerDown={(event) => event.preventDefault()}
                   onClick={() => selectMentionSuggestion(suggestion)}
                 >
                   <span className="chat-mention-suggestion-label">
@@ -753,7 +753,7 @@ const ChatComposer = memo(function ChatComposer({
                 key={`contact-${suggestion.contact.npub}`}
                 type="button"
                 className="chat-mention-suggestion"
-                onMouseDown={(event) => event.preventDefault()}
+                onPointerDown={(event) => event.preventDefault()}
                 onClick={() => selectMentionSuggestion(suggestion)}
               >
                 <span className="chat-contact-pill-avatar" aria-hidden="true">
@@ -814,6 +814,7 @@ const ChatComposer = memo(function ChatComposer({
           <button
             type="button"
             className="chat-compose-image-button"
+            onPointerDown={(event) => event.preventDefault()}
             onClick={() => imageInputRef.current?.click()}
             disabled={!canSendImage}
             aria-label={t("chatImageAttach")}
@@ -828,10 +829,8 @@ const ChatComposer = memo(function ChatComposer({
           <button
             type="button"
             className="chat-compose-send-button"
-            onClick={() => {
-              requestSend();
-              focusComposeInput();
-            }}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={requestSend}
             disabled={!canSendChat}
             aria-label={editContext ? t("chatSaveAction") : t("send")}
             title={editContext ? t("chatSaveAction") : t("send")}

@@ -76,6 +76,7 @@ export const ContactsPage: FC<ContactsPageProps> = React.memo(
                 type="button"
                 className="contacts-search-clear"
                 aria-label={t("contactsSearchClear")}
+                onPointerDown={(event) => event.preventDefault()}
                 onClick={() => {
                   setContactsSearch("");
                   requestAnimationFrame(() => {
