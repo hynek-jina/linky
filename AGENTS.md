@@ -29,7 +29,9 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 
 ## Release Versioning
 
-Versions use the `yy.mm.xx` scheme: `yy` = release year, `mm` = release month (no leading zero), `xx` = zero-based increment of builds released that month. Example: `26.8.3` is the 4th version released in August 2026. `xx` resets to `0` at the start of each month.
+[CalVer](https://calver.org) `YY.MM.MICRO`: short year, month (no leading zero), release counter starting at `1` that resets monthly — e.g. August 2026: `26.8.1`, `26.8.2`, `26.8.3`.
+
+Exception: August 2026 accidentally shipped as `26.9.0`, so keep releasing as `26.9.MICRO` (bump `MICRO` each release) through both August and September 2026 — do not reset the counter in September. Normal scheme resumes with `26.10` in October 2026; delete this paragraph then.
 
 ## Local dev environment
 
