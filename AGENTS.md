@@ -27,6 +27,10 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 - Prefer sparse Evolu mutation payloads: omit optional fields when empty instead of writing explicit `null` (especially `cashuToken` optional columns like `rawToken`, `mint`, `unit`, `amount`, `error`)
 - Plain CSS in `App.css` - no CSS-in-JS or utility framework
 
+## Release Versioning
+
+Versions use the `yy.mm.xx` scheme: `yy` = release year, `mm` = release month (no leading zero), `xx` = zero-based increment of builds released that month. Example: `26.8.3` is the 4th version released in August 2026. `xx` resets to `0` at the start of each month.
+
 ## Local dev environment
 
 - `bun run dev` starts the local service stack (`docker-compose.dev.yml`: Nostr relay :7777, Evolu relay :4001, FakeWallet mint :3338) detached, then the web app (:5173) and push service (:8787) against it; requires Docker
