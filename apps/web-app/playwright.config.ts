@@ -38,15 +38,19 @@ export default defineConfig({
       },
     },
   ],
-  webServer: [
-    {
-      command:
-        "bun run dev -- --mode prod-services --host 127.0.0.1 --port 5174",
-      url: "http://127.0.0.1:5174",
-      // Unconditional reuse would silently accept a stale server left running in
-      // the wrong vite mode.
-      reuseExistingServer: !process.env.CI,
-      timeout: 120000,
-    },
-  ],
+  // Playwright boots every webServer entry regardless of --project; CI sets
+  // E2E_SKIP_WEBSERVER when it only runs `local-stack` (compose owns that app).
+  webServer: process.env.E2E_SKIP_WEBSERVER
+    ? []
+    : [
+        {
+          command:
+            "bun run dev -- --mode prod-services --host 127.0.0.1 --port 5174",
+          url: "http://127.0.0.1:5174",
+          // Unconditional reuse would silently accept a stale server left running in
+          // the wrong vite mode.
+          reuseExistingServer: !process.env.CI,
+          timeout: 120000,
+        },
+      ],
 });
