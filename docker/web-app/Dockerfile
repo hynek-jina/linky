@@ -35,8 +35,9 @@ ENV VITE_NOSTR_RELAYS=$VITE_NOSTR_RELAYS \
 
 WORKDIR /app/apps/web-app
 # Sourcemaps keep Playwright traces readable; passed on the CLI so this test
-# setup stays out of vite.config.ts.
-RUN bun run typecheck && ./node_modules/.bin/vite build --sourcemap
+# setup stays out of vite.config.ts. No typecheck here — the e2e workflow
+# runs it as a separate step, off the image-build critical path.
+RUN ./node_modules/.bin/vite build --sourcemap
 
 FROM nginx:alpine
 # nginx >= 1.21.2 required: its mime.types maps .wasm to application/wasm,

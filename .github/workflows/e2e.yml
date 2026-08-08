@@ -59,6 +59,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Previously ran inside the web-app image build; here it overlaps the
+      # background image prep while still failing the `e2e` check that gates
+      # deploys.
+      - name: Typecheck web app
+        run: bun run --filter @linky/web-app typecheck
+
       - name: Resolve Playwright version
         id: playwright-version
         working-directory: apps/web-app
