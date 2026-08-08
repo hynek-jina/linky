@@ -180,7 +180,7 @@ Simple health check.
 Returns the build commit SHA as plain text.
 
 - Docker/GitHub Actions builds inject it automatically.
-- Local `bun run` execution returns `unknown` unless `BUILD_COMMIT_SHA` is set in the environment.
+- Local (non-Docker) runs return `unknown` unless `BUILD_COMMIT_SHA` is set in the environment.
 
 ## Push payload
 
@@ -222,7 +222,7 @@ PUSH_CORS_ORIGIN=http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:51
 Generate VAPID keys locally with:
 
 ```bash
-bunx web-push generate-vapid-keys
+pnpm dlx web-push generate-vapid-keys
 ```
 
 `PUSH_FIREBASE_SERVICE_ACCOUNT_JSON` should contain a single-line Firebase service account JSON blob with `project_id`, `client_email`, and `private_key`.
@@ -232,31 +232,31 @@ bunx web-push generate-vapid-keys
 Install dependencies from the repo root:
 
 ```bash
-bun install
+pnpm install
 ```
 
 Start the service in watch mode:
 
 ```bash
-bun run --filter @linky/push dev
+pnpm --filter @linky/push dev
 ```
 
 Run once:
 
 ```bash
-bun run --filter @linky/push start
+pnpm --filter @linky/push start
 ```
 
 Type-check just this workspace:
 
 ```bash
-bun run --filter @linky/push typecheck
+pnpm --filter @linky/push typecheck
 ```
 
 Run the repo-wide checks after changes:
 
 ```bash
-bun run check-code
+pnpm run check-code
 ```
 
 ## Docker

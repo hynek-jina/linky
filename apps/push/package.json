@@ -23,7 +23,7 @@
     "@types/node": "^24.10.1",
     "@types/web-push": "^3.6.4",
     "eslint": "^9.39.1",
-    "prettier": "^3.4.2",
+    "prettier": "3.8.1",
     "typescript": "~5.9.3"
   }
 }

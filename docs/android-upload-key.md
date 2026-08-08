@@ -30,17 +30,17 @@ Nenechavejte tam vychozi placeholder `storeFile=/absolute/path/to/linky-upload-k
 Pak spustte release build:
 
 ```bash
-bun run native:android:release:check
+pnpm run native:android:release:check
 ```
 
 Kdyz kontrola projde, spustte release build:
 
 ```bash
-bun run native:aab:release
+pnpm run native:aab:release
 ```
 
 Poznamky:
 
 - `google-services.json` neni signing key. Je to Firebase konfigurace pro push notifikace.
-- Pokud `bun run native:android:release:check` selze na `keystore.properties`, vytvorte nejdriv lokalni `apps/native-shell/android/keystore.properties` ze vzoru `apps/native-shell/android/keystore.properties.example`.
+- Pokud `pnpm run native:android:release:check` selze na `keystore.properties`, vytvorte nejdriv lokalni `apps/native-shell/android/keystore.properties` ze vzoru `apps/native-shell/android/keystore.properties.example`.
 - `.jks` soubor i hesla zalohujte mimo repozitar.

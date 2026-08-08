@@ -1,40 +1,40 @@
 PODS:
-  - Capacitor (7.6.0):
+  - Capacitor (7.6.8):
     - CapacitorCordova
   - CapacitorClipboard (7.0.4):
     - Capacitor
-  - CapacitorCordova (7.6.0)
-  - CapacitorPushNotifications (7.0.6):
+  - CapacitorCordova (7.6.8)
+  - CapacitorPushNotifications (7.0.7):
     - Capacitor
   - CapacitorShare (7.0.4):
     - Capacitor
 
 DEPENDENCIES:
-  - "Capacitor (from `../../../../node_modules/.bun/@capacitor+ios@7.6.0+49675fcae9c66213/node_modules/@capacitor/ios`)"
-  - "CapacitorClipboard (from `../../../../node_modules/.bun/@capacitor+clipboard@7.0.4+49675fcae9c66213/node_modules/@capacitor/clipboard`)"
-  - "CapacitorCordova (from `../../../../node_modules/.bun/@capacitor+ios@7.6.0+49675fcae9c66213/node_modules/@capacitor/ios`)"
-  - "CapacitorPushNotifications (from `../../../../node_modules/.bun/@capacitor+push-notifications@7.0.6+49675fcae9c66213/node_modules/@capacitor/push-notifications`)"
-  - "CapacitorShare (from `../../../../node_modules/.bun/@capacitor+share@7.0.4+49675fcae9c66213/node_modules/@capacitor/share`)"
+  - "Capacitor (from `../../../../node_modules/.pnpm/@capacitor+ios@7.6.8_@capacitor+core@7.6.8/node_modules/@capacitor/ios`)"
+  - "CapacitorClipboard (from `../../../../node_modules/.pnpm/@capacitor+clipboard@7.0.4_@capacitor+core@7.6.8/node_modules/@capacitor/clipboard`)"
+  - "CapacitorCordova (from `../../../../node_modules/.pnpm/@capacitor+ios@7.6.8_@capacitor+core@7.6.8/node_modules/@capacitor/ios`)"
+  - "CapacitorPushNotifications (from `../../../../node_modules/.pnpm/@capacitor+push-notifications@7.0.7_@capacitor+core@7.6.8/node_modules/@capacitor/push-notifications`)"
+  - "CapacitorShare (from `../../../../node_modules/.pnpm/@capacitor+share@7.0.4_@capacitor+core@7.6.8/node_modules/@capacitor/share`)"
 
 EXTERNAL SOURCES:
   Capacitor:
-    :path: "../../../../node_modules/.bun/@capacitor+ios@7.6.0+49675fcae9c66213/node_modules/@capacitor/ios"
+    :path: "../../../../node_modules/.pnpm/@capacitor+ios@7.6.8_@capacitor+core@7.6.8/node_modules/@capacitor/ios"
   CapacitorClipboard:
-    :path: "../../../../node_modules/.bun/@capacitor+clipboard@7.0.4+49675fcae9c66213/node_modules/@capacitor/clipboard"
+    :path: "../../../../node_modules/.pnpm/@capacitor+clipboard@7.0.4_@capacitor+core@7.6.8/node_modules/@capacitor/clipboard"
   CapacitorCordova:
-    :path: "../../../../node_modules/.bun/@capacitor+ios@7.6.0+49675fcae9c66213/node_modules/@capacitor/ios"
+    :path: "../../../../node_modules/.pnpm/@capacitor+ios@7.6.8_@capacitor+core@7.6.8/node_modules/@capacitor/ios"
   CapacitorPushNotifications:
-    :path: "../../../../node_modules/.bun/@capacitor+push-notifications@7.0.6+49675fcae9c66213/node_modules/@capacitor/push-notifications"
+    :path: "../../../../node_modules/.pnpm/@capacitor+push-notifications@7.0.7_@capacitor+core@7.6.8/node_modules/@capacitor/push-notifications"
   CapacitorShare:
-    :path: "../../../../node_modules/.bun/@capacitor+share@7.0.4+49675fcae9c66213/node_modules/@capacitor/share"
+    :path: "../../../../node_modules/.pnpm/@capacitor+share@7.0.4_@capacitor+core@7.6.8/node_modules/@capacitor/share"
 
 SPEC CHECKSUMS:
-  Capacitor: 6e644e9e3369368ac601c77a0fad57f34b78aaa6
+  Capacitor: ff6bf01336ac353098378828aff465095a89e459
   CapacitorClipboard: d1f123674cf413125db816a45e8f70e8770972fc
-  CapacitorCordova: f163aa2e84b79efc54d6a75b305bc7e05fb80c5d
-  CapacitorPushNotifications: b8e30637549ce91468b8c4dddbef2657be831f4c
+  CapacitorCordova: e61ee8c40101b8cd011d0224261606a290c082cf
+  CapacitorPushNotifications: 0527809a9619ed775439d5ab2c2d996122b48319
   CapacitorShare: 25f7fc5dd0e4edbde5d6801c6de5d14a8b450a41
 
-PODFILE CHECKSUM: d5a820d59c3d14918c29a7b89a277c39be4e9594
+PODFILE CHECKSUM: edd8f5c383437e43ad4cdee721dc6acb94fd29d2
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.17.0

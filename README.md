@@ -51,15 +51,15 @@ The repo also contains a separate public website in `apps/site/` intended for `l
 
 ## Development
 
-Requirements: Bun; Docker for the local dev service stack
+Requirements: Node.js and pnpm; Bun (runtime for the push service); Docker for the local dev service stack
 
 For Android native builds: Java 17
 
 ### Local dev vs prod services
 
-- `bun run dev` — full local environment: starts `docker-compose.dev.yml` (local Nostr relay :7777, Evolu sync relay :4001, Cashu Nutshell **FakeWallet** mint :3338 that auto-settles invoices with fake sats), then runs the web app (:5173) and push service (:8787) against it via the committed `.env.development` files. npub.cash flows are disabled locally (#219); the mint has no real Lightning backend (#220).
-- `bun run dev:prod` — web app only, on :5175, against production services. The separate port keeps browser storage isolated from local-dev sessions.
-- `bun run dev:services` — just the docker stack, attached.
+- `pnpm run dev` — full local environment: starts `docker-compose.dev.yml` (local Nostr relay :7777, Evolu sync relay :4001, Cashu Nutshell **FakeWallet** mint :3338 that auto-settles invoices with fake sats), then runs the web app (:5173) and push service (:8787) against it via the committed `.env.development` files. npub.cash flows are disabled locally (#219); the mint has no real Lightning backend (#220).
+- `pnpm run dev:prod` — web app only, on :5175, against production services. The separate port keeps browser storage isolated from local-dev sessions.
+- `pnpm run dev:services` — just the docker stack, attached.
 
 Android shell currently adds:
 
@@ -73,33 +73,33 @@ Native push delivery now works end-to-end when:
 - `apps/push` is configured with `PUSH_FIREBASE_SERVICE_ACCOUNT_JSON`
 
 ```bash
-bun install
-bun run dev
-bun run site:dev
-bun run push:dev
-bun run native:android:add
-bun run native:apk:debug
-bun run native:apk:release
+pnpm install
+pnpm run dev
+pnpm run site:dev
+pnpm run push:dev
+pnpm run native:android:add
+pnpm run native:apk:debug
+pnpm run native:apk:release
 ```
 
 Build:
 
 ```bash
-bun run build
-bun run site:build
+pnpm run build
+pnpm run site:build
 ```
 
 Android native shell debug APK:
 
 ```bash
-bun run native:android:add
-bun run native:apk:debug
+pnpm run native:android:add
+pnpm run native:apk:debug
 ```
 
 Android signed release APK:
 
 ```bash
-bun run native:apk:release
+pnpm run native:apk:release
 ```
 
 Latest built debug APK ends up at:
@@ -117,7 +117,7 @@ https://github.com/hynek-jina/linky/releases/latest/download/linky.apk
 Start the push service once:
 
 ```bash
-bun run push:start
+pnpm run push:start
 ```
 
 ### Tests
@@ -125,14 +125,14 @@ bun run push:start
 Unit tests (Vitest) across all workspaces:
 
 ```bash
-bun run test
+pnpm run test
 ```
 
 End-to-end tests (Playwright) live in `apps/web-app/tests/*.spec.ts` and are split into two
 projects. `prod-services` is the original suite and runs against production relays and mints:
 
 ```bash
-cd apps/web-app && bunx playwright test --project=prod-services
+cd apps/web-app && pnpm exec playwright test --project=prod-services
 ```
 
 `local-stack` runs the proxy-payment flow — three accounts on one machine, talking over the local
@@ -141,7 +141,7 @@ because the app is served from it as a production build on :5176:
 
 ```bash
 docker compose -f docker-compose.dev.yml --profile e2e up -d --build --wait
-cd apps/web-app && bunx playwright test --project=local-stack
+cd apps/web-app && pnpm exec playwright test --project=local-stack
 ```
 
 Re-run the `up --build` after changing app source; the endpoints are baked into the image.
@@ -149,9 +149,9 @@ Re-run the `up --build` after changing app source; the endpoints are baked into 
 To watch or debug a run:
 
 ```bash
-bunx playwright test --project=local-stack --ui                 # step through it
-bunx playwright test --project=local-stack --headed             # three live browsers
-bunx playwright show-trace test-results/*local-stack/trace.zip  # after the fact
+pnpm exec playwright test --project=local-stack --ui                 # step through it
+pnpm exec playwright test --project=local-stack --headed             # three live browsers
+pnpm exec playwright show-trace test-results/*local-stack/trace.zip  # after the fact
 ```
 
 Every run records a trace containing all three accounts, and the console output of each app is
@@ -167,7 +167,7 @@ workflows.
 Always run the full check pipeline after changes:
 
 ```bash
-bun run check-code
+pnpm run check-code
 ```
 
 This runs:
@@ -179,32 +179,32 @@ This runs:
 Workspace-scoped commands (web app only):
 
 ```bash
-bun run --filter @linky/web-app typecheck
-bun run --filter @linky/web-app eslint
-bun run --filter @linky/web-app prettier
+pnpm run --filter @linky/web-app typecheck
+pnpm run --filter @linky/web-app eslint
+pnpm run --filter @linky/web-app prettier
 ```
 
 Workspace-scoped commands (public site only):
 
 ```bash
-bun run --filter @linky/site dev
-bun run --filter @linky/site build
-bun run --filter @linky/site preview
+pnpm run --filter @linky/site dev
+pnpm run --filter @linky/site build
+pnpm run --filter @linky/site preview
 ```
 
 Workspace-scoped commands (native shell):
 
 ```bash
-bun run --filter @linky/native-shell android:sync
-bun run --filter @linky/native-shell android:open
-bun run --filter @linky/native-shell android:apk:debug
+pnpm run --filter @linky/native-shell android:sync
+pnpm run --filter @linky/native-shell android:open
+pnpm run --filter @linky/native-shell android:apk:debug
 ```
 
 Push service workspace commands:
 
 ```bash
-bun run --filter @linky/push typecheck
-bun run --filter @linky/push start
+pnpm --filter @linky/push typecheck
+pnpm --filter @linky/push start
 ```
 
 Push service container artifacts live in `apps/push/`:

@@ -10,7 +10,8 @@ on:
       - ".github/workflows/push-image.yml"
       - ".dockerignore"
       - "apps/push/**"
-      - "bun.lock"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - "package.json"
   workflow_dispatch:
 

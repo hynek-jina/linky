@@ -45,7 +45,7 @@ export default defineConfig({
     : [
         {
           command:
-            "bun run dev -- --mode prod-services --host 127.0.0.1 --port 5174",
+            "pnpm run dev --mode prod-services --host 127.0.0.1 --port 5174",
           url: "http://127.0.0.1:5174",
           // Unconditional reuse would silently accept a stale server left running in
           // the wrong vite mode.

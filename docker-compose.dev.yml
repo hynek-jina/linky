@@ -1,5 +1,5 @@
-# Local dev services for `bun run dev` (see apps/web-app/.env.development).
-# Run attached in a separate terminal with `bun run dev:services`.
+# Local dev services for `pnpm run dev` (see apps/web-app/.env.development).
+# Run attached in a separate terminal with `pnpm run dev:services`.
 services:
   nostr-relay:
     image: docker.io/scsibug/nostr-rs-relay:0.10.0
@@ -71,7 +71,7 @@ services:
       start_period: 10s
 
   # Production build of the web app for the `local-stack` Playwright project;
-  # not used by `bun run dev`. Endpoints are build args because Vite inlines
+  # not used by `pnpm run dev`. Endpoints are build args because Vite inlines
   # import.meta.env; the browser runs on the host, so these are host-published
   # ports.
   web-app:
