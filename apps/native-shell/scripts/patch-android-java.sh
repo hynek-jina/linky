@@ -22,16 +22,16 @@ patch_file "$root_dir/node_modules/@capacitor/push-notifications/android/build.g
 patch_file "$root_dir/node_modules/@capacitor/share/android/build.gradle"
 
 shopt -s nullglob
-for file_path in "$repo_root"/node_modules/.bun/@capacitor+android@*/node_modules/@capacitor/android/capacitor/build.gradle; do
+for file_path in "$repo_root"/node_modules/.pnpm/@capacitor+android@*/node_modules/@capacitor/android/capacitor/build.gradle; do
   patch_file "$file_path"
 done
-for file_path in "$repo_root"/node_modules/.bun/@capacitor+clipboard@*/node_modules/@capacitor/clipboard/android/build.gradle; do
+for file_path in "$repo_root"/node_modules/.pnpm/@capacitor+clipboard@*/node_modules/@capacitor/clipboard/android/build.gradle; do
   patch_file "$file_path"
 done
-for file_path in "$repo_root"/node_modules/.bun/@capacitor+push-notifications@*/node_modules/@capacitor/push-notifications/android/build.gradle; do
+for file_path in "$repo_root"/node_modules/.pnpm/@capacitor+push-notifications@*/node_modules/@capacitor/push-notifications/android/build.gradle; do
   patch_file "$file_path"
 done
-for file_path in "$repo_root"/node_modules/.bun/@capacitor+share@*/node_modules/@capacitor/share/android/build.gradle; do
+for file_path in "$repo_root"/node_modules/.pnpm/@capacitor+share@*/node_modules/@capacitor/share/android/build.gradle; do
   patch_file "$file_path"
 done
 shopt -u nullglob

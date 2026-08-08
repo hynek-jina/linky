@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  "@firebase/util": true
+  "@swc/core": true
+  cbor-extract: true
+  esbuild: true
+  msgpackr-extract: true
+  protobufjs: true

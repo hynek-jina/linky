@@ -7,18 +7,19 @@
 # Vite inlines `import.meta.env` at build time and `vite build` does not load
 # .env.development, so these ARGs are the only source of the endpoints.
 
-FROM oven/bun:1.3.9-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
+RUN npm install -g pnpm@11.20.0
 
 # Manifests first so editing source does not bust the dependency layer.
-COPY package.json bun.lock ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/native-shell/package.json apps/native-shell/
 COPY apps/push/package.json apps/push/
 COPY apps/site/package.json apps/site/
 COPY apps/web-app/package.json apps/web-app/
 COPY packages/config/package.json packages/config/
 COPY packages/core/package.json packages/core/
-RUN bun install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
@@ -36,7 +37,7 @@ ENV VITE_NOSTR_RELAYS=$VITE_NOSTR_RELAYS \
 WORKDIR /app/apps/web-app
 # Sourcemaps keep Playwright traces readable; passed on the CLI so this test
 # setup stays out of vite.config.ts.
-RUN bun run typecheck && ./node_modules/.bin/vite build --sourcemap
+RUN pnpm run typecheck && ./node_modules/.bin/vite build --sourcemap
 
 FROM nginx:alpine
 # nginx >= 1.21.2 required: its mime.types maps .wasm to application/wasm,

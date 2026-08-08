@@ -15,15 +15,15 @@ Capacitor 7 currently generates Android compile options targeting Java 21 in thi
 ## First-time setup
 
 ```bash
-bun install
-bun run native:android:add
-bun run native:ios:add
+pnpm install
+pnpm run native:android:add
+pnpm run native:ios:add
 ```
 
 ## Android debug APK
 
 ```bash
-bun run native:apk:debug
+pnpm run native:apk:debug
 ```
 
 This will:
@@ -49,7 +49,7 @@ apps/native-shell/android/app/build/outputs/apk/debug/app-debug.apk
 Release APK builds use the same signing setup as the Play bundle build.
 
 ```bash
-bun run native:apk:release
+pnpm run native:apk:release
 ```
 
 The generated APK is expected at:
@@ -96,7 +96,7 @@ export LINKY_UPLOAD_KEY_PASSWORD=...
 Then build the Play upload bundle:
 
 ```bash
-bun run native:aab:release
+pnpm run native:aab:release
 ```
 
 The generated AAB is expected at:
@@ -108,11 +108,11 @@ apps/native-shell/android/app/build/outputs/bundle/release/app-release.aab
 ## Common commands
 
 ```bash
-bun run native:android:sync
-bun run native:android:open
-bun run native:aab:release
-bun run native:ios:sync
-bun run native:ios:open
+pnpm run native:android:sync
+pnpm run native:android:open
+pnpm run native:aab:release
+pnpm run native:ios:sync
+pnpm run native:ios:open
 ```
 
 ## Optional live reload
@@ -138,11 +138,11 @@ The next implementation steps are:
 The iOS shell now includes local Capacitor plugins for Keychain-backed secret storage, native QR scanning, and CoreNFC NDEF writing for `nostr://...` and `cashu://...` payloads. That means seed/material persistence no longer falls back to browser-only storage on iOS devices, the app can use a native camera scanner when WebKit camera APIs are unavailable, and the existing web-app NFC write UI now works on signed physical iPhones as well.
 
 Native Android push is now wired through Capacitor Push Notifications + FCM.
-To make it work in builds, provide `android/app/google-services.json` before running `bun run native:android:sync` or `bun run native:apk:debug`.
+To make it work in builds, provide `android/app/google-services.json` before running `pnpm run native:android:sync` or `pnpm run native:apk:debug`.
 If that file is missing, the app now skips native push registration instead of crashing on startup, but Android notifications stay disabled.
 Android delivery now uses data-only FCM plus a custom `LinkyFirebaseMessagingService`, so closed-app Android notifications still render through the native shell instead of relying on the default Firebase notification renderer.
 
-Play upload bundles also require release signing. `bun run native:aab:release` fails fast unless upload-key credentials are provided through `apps/native-shell/android/keystore.properties` or `LINKY_UPLOAD_*` environment variables.
+Play upload bundles also require release signing. `pnpm run native:aab:release` fails fast unless upload-key credentials are provided through `apps/native-shell/android/keystore.properties` or `LINKY_UPLOAD_*` environment variables.
 
 Android native shell now also registers `nostr://` and `cashu://` and forwards incoming URLs to the web app through the native bridge. The current web-app handler resolves `nostr://npub...` contact links into the saved contact detail, creating the contact first when needed, and imports `cashu://cashu...` tokens into the wallet.
 

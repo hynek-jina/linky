@@ -7,11 +7,11 @@ Workflow je v [.github/workflows/android-play-internal.yml](../.github/workflows
 ## Co to dělá
 
 1. checkoutne repozitář
-2. nainstaluje Bun a Java 17
+2. nainstaluje pnpm, Node a Java 17
 3. obnoví `google-services.json` z GitHub secretu
 4. obnoví upload keystore z GitHub secretu
-5. pustí `bun run check-code`
-6. pustí `bun run native:aab:release`
+5. pustí `pnpm run check-code`
+6. pustí `pnpm run native:aab:release`
 7. nahraje AAB jako workflow artifact
 8. publikuje AAB do Google Play Console na `internal` track
 

@@ -1,13 +1,13 @@
 {
   "name": "CapacitorPushNotifications",
-  "version": "7.0.6",
+  "version": "7.0.7",
   "summary": "The Push Notifications API provides access to native push notifications.",
   "license": "MIT",
   "homepage": "https://capacitorjs.com",
   "authors": "Ionic <hi@ionicframework.com>",
   "source": {
     "git": "https://github.com/ionic-team/capacitor-plugins.git",
-    "tag": "@capacitor/push-notifications@7.0.6"
+    "tag": "@capacitor/push-notifications@7.0.7"
   },
   "source_files": [
     "ios/Sources/**/*.{swift,h,m,c,cc,mm,cpp}",

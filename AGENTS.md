@@ -4,9 +4,9 @@ Mobile-first PWA for contacts, Nostr messaging, and Lightning/Cashu payments. Lo
 
 See @README.md for project overview.
 
-Package manager is **Bun** (not npm/yarn/pnpm); scripts are defined in the root `package.json`. Workspace filter: `bun run --filter @linky/web-app <script>`.
+Package manager is **pnpm**; scripts are defined in the root `package.json`. Workspace filter: `pnpm --filter @linky/web-app <script>`. The push service (`apps/push`) still runs on the **Bun** runtime (`Bun.serve`, `bun:sqlite`), so Bun is needed to run it locally.
 
-IMPORTANT: Always run `bun run check-code` after making changes. It runs typecheck first, then eslint and prettier which autofix what they can. If typecheck or non-autofixable eslint errors remain, fix them manually and re-run until all checks pass.
+IMPORTANT: Always run `pnpm run check-code` after making changes. It runs typecheck first, then eslint and prettier which autofix what they can. If typecheck or non-autofixable eslint errors remain, fix them manually and re-run until all checks pass.
 
 Native Android builds require Java 17. `apps/native-shell/scripts/with-java17.sh` prefers an installed macOS JDK 17 automatically before running Capacitor/Gradle commands, and `apps/native-shell/scripts/patch-android-java.sh` rewrites Capacitor-generated Android compile options from Java 21 to Java 17 after add/sync.
 
@@ -41,9 +41,9 @@ Exception: August 2026 accidentally shipped as `26.9.0`, so keep releasing as `2
 
 ## Local dev environment
 
-- `bun run dev` starts the local service stack (`docker-compose.dev.yml`: Nostr relay :7777, Evolu relay :4001, FakeWallet mint :3338) detached, then the web app (:5173) and push service (:8787) against it; requires Docker
-- `bun run dev:prod` runs the web app on :5175 against production services (no local stack needed)
-- `bun run dev:services` runs just the docker stack attached (Ctrl-C stops it)
+- `pnpm run dev` starts the local service stack (`docker-compose.dev.yml`: Nostr relay :7777, Evolu relay :4001, FakeWallet mint :3338) detached, then the web app (:5173) and push service (:8787) against it; requires Docker
+- `pnpm run dev:prod` runs the web app on :5175 against production services (no local stack needed)
+- `pnpm run dev:services` runs just the docker stack attached (Ctrl-C stops it)
 - See the "Local dev environment" section in `docs/architecture.md` for how env overrides and vite modes work
 
 ## E2E tests
@@ -58,11 +58,11 @@ Two Playwright projects in `apps/web-app/playwright.config.ts`:
 docker compose -f docker-compose.dev.yml --profile e2e up -d --build --wait
 
 cd apps/web-app
-bunx playwright test --project=local-stack                      # run it
-bunx playwright test --project=local-stack --ui                 # step through by test.step()
-bunx playwright test --project=local-stack --headed             # three live browsers
-bunx playwright show-trace test-results/*local-stack/trace.zip  # after the fact
-bunx playwright show-report
+pnpm exec playwright test --project=local-stack                      # run it
+pnpm exec playwright test --project=local-stack --ui                 # step through by test.step()
+pnpm exec playwright test --project=local-stack --headed             # three live browsers
+pnpm exec playwright show-trace test-results/*local-stack/trace.zip  # after the fact
+pnpm exec playwright show-report
 ```
 
 The default reporter prints every `[linky]` console line prefixed with the account label (`[A]`, `[B]`, `[C]`); passing `--reporter=line` suppresses the HTML report. `trace: "on"` for this project, so every run — pass or fail — leaves one trace bundle containing all three accounts (switch between them with the page selector).
@@ -79,13 +79,12 @@ Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test n
 
 - Evolu requires a Worker polyfill in test environments (jsdom + polyfill live in `vitest.setup.ts`)
 - Vitest excludes `tests/**/*.spec.ts` — those are Playwright E2E suites run separately
-- In this workspace/Bun setup, `bunx --cwd apps/web-app playwright test tests` can resolve incorrectly; run `cd apps/web-app && bunx playwright test tests` instead
 - Playwright cannot intercept requests made by a service worker, and `src/sw.ts` has a Workbox `CacheFirst` route for image destinations that matches cross-origin URLs — any test stubbing remote images must use `serviceWorkers: "block"`
 - The local Nutshell mint charges `input_fee_ppk: 100`, so it is **not** fee-free; a receiver nets slightly less than the amount sent
 - The `nostr-rs-relay` image's `/bin/sh` is dash, so its healthcheck must invoke `bash` explicitly for `/dev/tcp`
 - SQLite WASM files served from `public/sqlite-wasm/` with `cache-control: no-store` in dev
 - Debug APKs install side-by-side as `fit.linky.app.debug`; native push in them requires a `fit.linky.app.debug` client in `google-services.json` (register that package in the Firebase console), otherwise the google-services plugin is skipped for debug-only builds and push is unsupported
-- Play upload bundles require release signing via `apps/native-shell/android/keystore.properties` or `LINKY_UPLOAD_STORE_FILE` / `LINKY_UPLOAD_STORE_PASSWORD` / `LINKY_UPLOAD_KEY_ALIAS` / `LINKY_UPLOAD_KEY_PASSWORD`; `bun run native:aab:release` fails fast when those credentials are missing
+- Play upload bundles require release signing via `apps/native-shell/android/keystore.properties` or `LINKY_UPLOAD_STORE_FILE` / `LINKY_UPLOAD_STORE_PASSWORD` / `LINKY_UPLOAD_KEY_ALIAS` / `LINKY_UPLOAD_KEY_PASSWORD`; `pnpm run native:aab:release` fails fast when those credentials are missing
 - Dev mode now keeps the registered PWA service worker alive for push testing; use `#advanced/push-debug` to inspect persistent client/SW push logs and manually reset service workers/caches when needed
 - The pinned versions in `docker/evolu-relay/package.json` must stay protocol-compatible with the web app's `@evolu/common` — check upstream `apps/relay/CHANGELOG.md` when bumping Evolu packages
 - `apps/push/.env.development` and `apps/web-app/.env.development` are intentionally committed (localhost-only config; the VAPID keypair in there is dev-only, never reuse it in production)
