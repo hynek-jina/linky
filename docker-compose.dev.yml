@@ -3,6 +3,9 @@
 services:
   nostr-relay:
     image: docker.io/scsibug/nostr-rs-relay:0.10.0
+    # The image is published amd64-only; declare it so arm64 hosts run it under
+    # emulation without the platform-mismatch warning.
+    platform: linux/amd64
     ports:
       - "7777:8080"
     volumes:
