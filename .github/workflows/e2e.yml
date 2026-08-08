@@ -21,6 +21,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Exposes ACTIONS_RUNTIME_TOKEN / ACTIONS_CACHE_URL so the raw buildx
+      # invocation below can use the type=gha cache backend.
+      - name: Expose Actions cache env to buildx
+        uses: crazy-max/ghaction-github-runtime@v3
+
+      # Image pulls and builds are the long pole (~75s cold), so they run in the
+      # background while Bun and Playwright set up; "Start local stack" joins on
+      # the status file. Distinct cache scopes keep the two images from
+      # overwriting each other's GHA cache index.
+      - name: Prepare stack images (background)
+        run: |
+          {
+            docker compose -f docker-compose.dev.yml pull -q nostr-relay cashu-mint &
+            pull=$!
+            docker buildx bake -f docker-compose.dev.yml \
+              --set 'evolu-relay.cache-from=type=gha,scope=evolu-relay' \
+              --set 'evolu-relay.cache-to=type=gha,scope=evolu-relay,mode=max' \
+              --set 'web-app.cache-from=type=gha,scope=web-app' \
+              --set 'web-app.cache-to=type=gha,scope=web-app,mode=max' \
+              --load &
+            bake=$!
+            status=0
+            wait "$pull" || status=$?
+            wait "$bake" || status=$?
+            echo "$status" > /tmp/prepare-images.status
+          } &> /tmp/prepare-images.log &
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -29,12 +59,29 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Resolve Playwright version
+        id: playwright-version
+        working-directory: apps/web-app
+        run: echo "version=$(bunx playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      # --only-shell: the config runs headless-only, so the full Chromium
+      # download is unnecessary.
       - name: Install Playwright browsers
         working-directory: apps/web-app
-        run: bunx playwright install --with-deps chromium
+        run: bunx playwright install --with-deps --only-shell chromium
 
       - name: Start local stack
-        run: docker compose -f docker-compose.dev.yml --profile e2e up -d --build --wait
+        run: |
+          while [ ! -f /tmp/prepare-images.status ]; do sleep 2; done
+          cat /tmp/prepare-images.log
+          [ "$(cat /tmp/prepare-images.status)" -eq 0 ]
+          docker compose -f docker-compose.dev.yml --profile e2e up -d --wait --no-build
 
       - name: Run e2e tests
         working-directory: apps/web-app
