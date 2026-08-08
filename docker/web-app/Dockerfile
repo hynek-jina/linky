@@ -1,15 +1,11 @@
 # Production build of the web app, served for the `local-stack` Playwright project.
 #
-# Why a production build rather than a dev server:
-#   - exercises the `manualChunks` splitting (vite.config.ts carries an explicit
-#     comment about an ESM circular-init hazard between the polyfills and vendor
-#     chunks — a bug class that only exists in a real build)
-#   - React double-invokes effects under StrictMode only in development, so the
-#     bank-payment-offer auto-responder runs once here, exactly as it does for users
+# A production build rather than a dev server: it exercises the `manualChunks`
+# splitting (a bug class that only exists in a real build) and runs effects
+# once instead of twice under StrictMode — exactly as for users.
 #
-# Vite inlines `import.meta.env` at build time, so the endpoints are build args.
-# `vite build` runs in production mode, which does NOT load .env.development —
-# these ARGs are the only source of those values.
+# Vite inlines `import.meta.env` at build time and `vite build` does not load
+# .env.development, so these ARGs are the only source of the endpoints.
 
 FROM oven/bun:1.3.9-alpine AS build
 WORKDIR /app
@@ -38,15 +34,14 @@ ENV VITE_NOSTR_RELAYS=$VITE_NOSTR_RELAYS \
     VITE_PUSH_SERVER_URL=$VITE_PUSH_SERVER_URL
 
 WORKDIR /app/apps/web-app
-# `--sourcemap` is passed on the CLI rather than added to vite.config.ts, so this
-# test setup stays out of production source. Sourcemaps keep Playwright traces readable.
+# Sourcemaps keep Playwright traces readable; passed on the CLI so this test
+# setup stays out of vite.config.ts.
 RUN bun run typecheck && ./node_modules/.bin/vite build --sourcemap
 
 FROM nginx:alpine
-# nginx >= 1.21.2 ships `application/wasm` in mime.types. This is load-bearing:
-# sqlite3.wasm gets its Content-Type from a configureServer-only Vite plugin in dev,
-# so in a container it is a plain static asset. A wrong MIME makes
-# WebAssembly.instantiateStreaming reject and Evolu never initialises.
+# nginx >= 1.21.2 required: its mime.types maps .wasm to application/wasm,
+# without which instantiateStreaming rejects and Evolu never initialises.
+# (In dev a Vite plugin sets that Content-Type; here it is a plain static asset.)
 COPY --from=build /app/apps/web-app/dist /usr/share/nginx/html
 COPY docker/web-app/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

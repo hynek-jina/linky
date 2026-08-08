@@ -1,41 +1,21 @@
 /**
  * Proxy payment (bank payment offer) — happy path, three real app instances.
  *
- * A (offerer) scans a bank QR they need paid and offers it to two contacts.
- * B accepts first and wins the bank details; C accepts too and must end at
- * accepted_by_other WITHOUT ever seeing the bank details. B pays the bank,
- * marks it paid, A confirms settlement, and B receives sats.
+ * A (offerer) scans a bank QR and offers it to two contacts. B accepts first
+ * and wins the bank details; C accepts too and must end at accepted_by_other
+ * without ever seeing them. B marks the bank payment paid, A confirms
+ * settlement, and B receives sats.
  *
- * Runs against docker-compose.dev.yml (nostr relay :7777, evolu relay :4001,
- * nutshell FakeWallet mint :3338) with the app served as a production build on
- * :5176. Start it with:
- *   docker compose -f docker-compose.dev.yml --profile e2e up -d --build --wait
+ * Needs the docker stack up — see "E2E tests" in CLAUDE.md.
  *
- * Two recipients, not one, is deliberate: with a single recipient the
- * auto-responder's entire reason for existing is dead code. notifyNonWinning-
- * Candidates iterates nothing and the sentCandidateKeys guard is
- * indistinguishable from a per-candidate check, so deleting the lease lock —
- * i.e. broadcasting the payer's bank account to every acceptor — would keep a
- * one-recipient test green.
+ * Two recipients, not one, is deliberate: with a single recipient the lease
+ * lock and the sentCandidateKeys guard are dead code, so broadcasting the bank
+ * details to every acceptor would keep a one-recipient test green.
  *
- * KNOWN GAPS (documented, not covered — do not mistake this for full coverage):
- *  - No induced failures, so requireContactDelivery's contact-wrap-before-self-
- *    copy ordering is invisible; removing it keeps this green. Same for the
- *    settle-then-publish ordering hazard and all multi-relay behaviour.
- *  - The one bug this feature actually shipped (362313d, "offers stalling until
- *    app restart") was a missed-wrap/resubscribe bug. Fresh sockets on a local
- *    relay cannot reproduce it.
- *  - Expiry -> canceled is untested; it needs page.clock or a Date.now seam.
- *    Note the TTL is 5 minutes PER PHASE, restarted at each status change, and
- *    an expired entry renders the expired page ahead of every other branch.
- *  - Service workers are blocked (see below), so src/sw.ts — push decryption,
- *    the "You received money" copy, precaching — is not exercised.
- *  - One mint, so buildCashuMintCandidates' "spend the default mint last" rule
- *    is untestable. isTestMintUrl(localhost) is true, which force-disables
- *    autoswap for the whole run.
- *  - VITE_NPUB_CASH_DISABLED removes the hosted lightning-address layer.
- *  - EUR and bysquare/EPC payloads are unparsed; the kind:24133 payment notice
- *    is not asserted.
+ * Not covered: induced failures (delivery ordering, multi-relay, resubscribe
+ * bugs like 362313d), offer expiry (needs a Date.now seam), src/sw.ts
+ * (service workers are blocked below), multi-mint candidate ordering,
+ * npub.cash flows, EUR/bysquare payloads.
  */
 import { createRequire } from "node:module";
 import {
@@ -80,10 +60,8 @@ import {
 const FUNDING_SAT = 100;
 
 /**
- * The local mint charges input_fee_ppk: 100, so redeeming a token costs the
- * receiver a sat. FakeWallet is NOT fee-free, contrary to what is often assumed
- * — which is good (the fee paths are live), but it means the receiver nets
- * slightly less than the offered amount.
+ * The local mint charges input_fee_ppk: 100 (it is not fee-free), so the
+ * receiver nets slightly less than the offered amount.
  */
 const MAX_REDEEM_FEE_SAT = 2;
 
@@ -101,12 +79,9 @@ const bootAccount = async (
 ): Promise<Account> => {
   const identity = await createSeedIdentity();
   const context = await browser.newContext({
-    // Playwright cannot intercept requests issued by a service worker, and
-    // src/sw.ts registers a Workbox CacheFirst route for image destinations
-    // that matches cross-origin URLs. Once the SW claims clients the
-    // dicebear/blossom stubs below stop applying and the run silently reaches
-    // the real network — and because activation races the first avatar render,
-    // it would only misbehave sometimes.
+    // Playwright cannot intercept service-worker requests, and src/sw.ts
+    // caches cross-origin images — with a SW active the dicebear/blossom stubs
+    // below would silently stop applying.
     serviceWorkers: "block",
     viewport: { ...MOBILE_VIEWPORT },
   });
@@ -186,14 +161,12 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
       await advertiseCzk(c);
     });
 
-    // Ordering is load-bearing: A's status prefetch is keyed on its contact
-    // list, so B and C are not queried until they are contacts — by which point
-    // the status is provably on the relay. A query that came back empty would be
-    // cached as null and never retried, silently removing them as candidates.
+    // Ordering is load-bearing: an empty status query is cached as null and
+    // never retried, so B and C must have their status on the relay before A
+    // adds them as contacts.
     await test.step("A adds B and C", async () => {
-      // One at a time, letting each status fetch settle: adding the second while
-      // the first is still in flight permanently loses the first contact's
-      // status (see waitForContactStatusFetched).
+      // One at a time: adding the second contact while the first's status fetch
+      // is in flight loses that status (see waitForContactStatusFetched).
       await addContactByNpub(a.page, b.identity.npub);
       await waitForContactStatusFetched(a.page, b.identity.npub);
       await addContactByNpub(a.page, c.identity.npub);
@@ -201,9 +174,8 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
     });
 
     await test.step("B and C add A and sit in the chat", async () => {
-      // ChatPage's auto-open effect lives inside ChatPage, needs a selected
-      // contact, and bails on unknown contacts — so A must be a real contact
-      // and the acceptors must actually be on the chat route.
+      // ChatPage's auto-open effect bails on unknown contacts, so A must be a
+      // real contact and the acceptors must sit on the chat route.
       const chatA = await addContactByNpub(b.page, a.identity.npub);
       await b.page.goto(`/#chat/${encodeURIComponent(chatA)}`);
       const chatAForC = await addContactByNpub(c.page, a.identity.npub);
@@ -213,8 +185,8 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
     const offerId =
       await test.step("A scans the bank QR and offers it", async () => {
         await a.page.goto("/#wallet");
-        // The Send entry point is what sets scanEntryPoint === "send", which is
-        // what makes the scanner accept a bank payment at all.
+        // Only the Send entry point (scanEntryPoint === "send") lets the
+        // scanner accept a bank payment.
         await a.page.getByRole("button", { name: "Send" }).click();
 
         // A headless camera failure does not close the scanner (only closeScan
@@ -227,8 +199,8 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
 
         await a.page.waitForURL(/#wallet\/bank-payment\//, { timeout: 30_000 });
 
-        // buildSpdRows emits RN/ACC/BIC/RF/X-VS/X-SS/X-KS/MSG/DT only, so this
-        // fixture yields exactly ACC, X-VS and MSG. AM/CC feed the header.
+        // buildSpdRows renders ACC, X-VS and MSG from this fixture as rows;
+        // AM/CC feed the header.
         await expect(a.page.locator(".bank-payment-row")).toHaveCount(3);
 
         const chips = a.page.locator("button.bank-payment-offer-contact");
@@ -236,8 +208,8 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
         await expect(chips.nth(0)).toHaveAttribute("aria-pressed", "true");
         await expect(chips.nth(1)).toHaveAttribute("aria-pressed", "true");
 
-        // This exact label proves the recipient count AND sufficient balance AND
-        // that the fiat rates parsed — amountSat must be non-null to reach it.
+        // This exact label proves the recipient count, sufficient balance and
+        // parsed fiat rates at once.
         const cta = a.page.getByRole("button", {
           name: "Ask 2 contacts to pay",
         });
@@ -269,8 +241,8 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
         const hasBankDetails = async (account: Account) =>
           (await account.page.locator(".bank-payment-fields").count()) > 0;
 
-        // Time-boxed: if this routinely needs the 30s responder retry, the first
-        // publish attempt is broken and a blanket long wait would hide it.
+        // Time-boxed so a broken first publish attempt is not hidden by the
+        // responder's 30s retry loop.
         await expect
           .poll(
             async () => (await hasBankDetails(b)) || (await hasBankDetails(c)),
@@ -283,8 +255,6 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
       });
 
     await test.step("the loser never sees the bank details", async () => {
-      // The single most valuable assertion here: this is the property the
-      // per-offer lease lock and the sentCandidateKeys guard exist to protect.
       await expect(loser.page.locator(".bank-payment-fields")).toHaveCount(0);
       await expect(loser.page.locator(".bank-payment-offer-qr")).toHaveCount(0);
       await expect(
@@ -322,7 +292,7 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
       await expect(fields).toContainText(SPD_VARIABLE_SYMBOL);
       await expect(fields).toContainText(SPD_MESSAGE);
 
-      // Decode the rendered QR back to the payload: proves it survived
+      // Decode the rendered QR to prove the payload survived
       // offerer -> relay -> acceptor -> re-render byte for byte.
       await winner.page.addScriptTag({
         path: createRequire(import.meta.url).resolve("jsqr"),

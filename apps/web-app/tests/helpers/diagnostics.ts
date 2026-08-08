@@ -1,15 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 
 /**
- * Console messages that indicate a real app fault.
- *
- * This is an allowlist, not a zero-tolerance rule. Playwright funnels
- * Chromium's Log-domain entries into page.on("console") using the entry level
- * as the type, so every "Failed to load resource: net::ERR_*", failed WebSocket
- * handshake and CORS rejection arrives as type "error". Several of those are
- * expected here by design — the local mint has no /favicon.ico (utils/mint.ts
- * deliberately probes it), relays reconnect, and @evolu/common logs errors even
- * with its own logging flag disabled. Failing on all of them would fail always.
+ * Console messages that indicate a real app fault. An allowlist, not zero
+ * tolerance: Playwright reports every failed resource load, WebSocket
+ * handshake and CORS rejection as a console "error", and the local stack
+ * produces several of those by design (mint favicon probe, relay reconnects,
+ * @evolu/common logging).
  */
 const FATAL_CONSOLE_PATTERNS = [
   /^Boot failed at stage /,
@@ -23,14 +19,9 @@ const BOOT_RECOVERY_PATTERN =
   /\[linky\]\[boot\] retrying after dev dynamic import fetch failure/;
 
 /**
- * Expected consequences of the test environment, not app faults.
- *
- * "sw register error" fires because contexts are created with
- * serviceWorkers: "block", so navigator.serviceWorker.register() never yields a
- * registration and workbox-window throws reading `.waiting` on it. main.tsx
- * routes that to onRegisterError and carries on — its own registration handling
- * is correctly guarded — so this is noise we create, not a defect. Hiding it
- * keeps the per-account log readable enough that real problems stand out.
+ * Consequences of the test environment (blocked service workers, no camera in
+ * headless Chromium), not app faults. Filtered out to keep the per-account
+ * logs readable.
  */
 const EXPECTED_NOISE = [
   /\[linky\]\[pwa\] sw register error/,
@@ -38,7 +29,6 @@ const EXPECTED_NOISE = [
 ];
 
 export interface AppErrorWatcher {
-  /** Throws if anything fatal was observed. */
   assertClean: () => void;
 }
 
@@ -85,10 +75,8 @@ export const watchAppErrors = (page: Page, label: string): AppErrorWatcher => {
 };
 
 /**
- * The boot-error panel is the ONLY signal for two failure paths that never log
- * "Boot failed at stage": pre-mount unhandled rejections (main.tsx renders the
- * panel directly) and "Boot stuck after 15s at stage:" — which is exactly how a
- * hung boot surfaces.
+ * The panel is the only signal for pre-mount unhandled rejections and the
+ * "Boot stuck after 15s" watchdog — neither logs "Boot failed at stage".
  */
 export const expectNoBootErrorPanel = async (
   page: Page,
