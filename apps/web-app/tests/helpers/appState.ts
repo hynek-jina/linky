@@ -14,7 +14,7 @@ export const LOAD_COUNTER_KEY = "e2e.loads";
  * we just seeded.
  */
 export const setBaseStorage = async (page: Page): Promise<void> => {
-  await page.addInitScript(() => {
+  await page.addInitScript((loadCounterKey) => {
     try {
       const initializedKey = "linky.test.base-storage-initialized";
       if (sessionStorage.getItem(initializedKey) !== "1") {
@@ -24,8 +24,8 @@ export const setBaseStorage = async (page: Page): Promise<void> => {
       }
 
       sessionStorage.setItem(
-        "e2e.loads",
-        String(Number(sessionStorage.getItem("e2e.loads") ?? "0") + 1),
+        loadCounterKey,
+        String(Number(sessionStorage.getItem(loadCounterKey) ?? "0") + 1),
       );
 
       localStorage.setItem("linky.lang", "en");
@@ -44,7 +44,7 @@ export const setBaseStorage = async (page: Page): Promise<void> => {
     } catch {
       // ignore
     }
-  });
+  }, LOAD_COUNTER_KEY);
 };
 
 /**
