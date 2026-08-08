@@ -371,6 +371,11 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
       // absent before bank_paid rather than merely disabled.
       await expect(settle).toBeVisible({ timeout: 120_000 });
 
+      // Park the winner on the wallet page and stay there: re-mounting the
+      // settled offer detail triggers its auto-return-to-chat effect, which
+      // races with (and can clobber) a subsequent goto to #wallet.
+      await winner.page.goto("/#wallet");
+
       // settleBankPaymentOffer opens with `if (cashuIsBusy) return;` and shows
       // no toast, so a fire-and-forget click can silently do nothing.
       await expect
@@ -379,13 +384,13 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
             if (await settle.isVisible().catch(() => false)) {
               await settle.click().catch(() => {});
             }
-            return walletBalance(winner.page);
+            return readBalanceSat(winner.page);
           },
           { timeout: 240_000 },
         )
         .toBeGreaterThan(0);
 
-      const received = await walletBalance(winner.page);
+      const received = await readBalanceSat(winner.page);
       expect(received).toBeLessThanOrEqual(FIXTURE_AMOUNT_SAT);
       expect(received).toBeGreaterThanOrEqual(
         FIXTURE_AMOUNT_SAT - MAX_REDEEM_FEE_SAT,
