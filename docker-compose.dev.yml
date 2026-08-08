@@ -37,9 +37,9 @@ services:
           "-e",
           "const s=require('net').connect(4000,'127.0.0.1');s.on('connect',()=>process.exit(0));s.on('error',()=>process.exit(1))",
         ]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      interval: 2s
+      timeout: 2s
+      retries: 25
 
   cashu-mint:
     image: docker.io/cashubtc/nutshell:0.20.3
@@ -68,9 +68,11 @@ services:
           "-c",
           "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:3338/v1/info').status==200 else 1)",
         ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      # Fine-grained polling: `up --wait` blocks until healthy, so a coarse
+      # interval directly delays every stack start.
+      interval: 2s
+      timeout: 3s
+      retries: 45
       start_period: 10s
 
   # Production build of the web app for the `local-stack` Playwright project;
