@@ -27,6 +27,12 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 - Prefer sparse Evolu mutation payloads: omit optional fields when empty instead of writing explicit `null` (especially `cashuToken` optional columns like `rawToken`, `mint`, `unit`, `amount`, `error`)
 - Plain CSS in `App.css` - no CSS-in-JS or utility framework
 
+
+### Commenting the code
+- If you need to add comment to a code to justify the code being overcomplicated, the code is bad and you should do it differently - unless instructed otherwise or we specifically agree on going with this implementation. Good comments do not excuse unclear code.
+- Comments should not duplicate the code! The code should be self explanatory, use function names, proper code split into logical chunks
+- Explain unidiomatic code in comments - keep the comments brief and to the point if you need to write it!
+
 ## Release Versioning
 
 [CalVer](https://calver.org) `YY.MM.MICRO`: short year, month (no leading zero), release counter starting at `1` that resets monthly — e.g. August 2026: `26.8.1`, `26.8.2`, `26.8.3`.
