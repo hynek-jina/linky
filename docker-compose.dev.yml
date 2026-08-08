@@ -2,7 +2,7 @@
 # Run attached in a separate terminal with `bun run dev:services`.
 services:
   nostr-relay:
-    image: scsibug/nostr-rs-relay:0.10.0
+    image: docker.io/scsibug/nostr-rs-relay:0.10.0
     ports:
       - "7777:8080"
     volumes:
@@ -27,7 +27,7 @@ services:
       retries: 10
 
   cashu-mint:
-    image: cashubtc/nutshell:0.20.3
+    image: docker.io/cashubtc/nutshell:0.20.3
     command: ["poetry", "run", "mint"]
     ports:
       - "3338:3338"
