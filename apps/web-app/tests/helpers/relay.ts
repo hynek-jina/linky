@@ -78,16 +78,10 @@ const queryRelay = (
   });
 
 /**
- * Block until the account's NIP-38 status is actually on the relay.
- *
- * The status chip flips aria-pressed optimistically (useProfileStatusEditor.ts),
- * so the UI proves nothing about delivery. This matters more than it looks:
- * bankPaymentOfferContacts hard-filters candidates on the fetched status with no
- * fallback, and a status fetch that comes back empty is cached as null and
- * never retried for the life of the page
- * (useContactsNostrPrefetchEffects.ts). Publishing before the offerer adds the
- * contact is what keeps that from happening -- and this is the barrier that
- * makes "before" true rather than hoped for.
+ * Block until the account's NIP-38 status is actually on the relay. The status
+ * chip flips optimistically, so the UI proves nothing about delivery — and the
+ * offerer caches an empty status fetch as null without ever retrying, so the
+ * publish must be complete before the offerer adds the contact.
  */
 export const waitForProfileStatusOnRelay = async (
   npub: string,

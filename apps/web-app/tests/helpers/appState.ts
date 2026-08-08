@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-/** The app renders a different shell at >=961px (useDesktopSplitView.ts:3). */
+/** The app renders a different shell at >=961px (useDesktopSplitView.ts). */
 export const MOBILE_VIEWPORT = { height: 844, width: 390 } as const;
 
 /** Counts page loads so a mid-test reload cannot pass unnoticed. */
@@ -47,15 +47,6 @@ export const setBaseStorage = async (page: Page): Promise<void> => {
   }, LOAD_COUNTER_KEY);
 };
 
-/**
- * Assert the app booted exactly once.
- *
- * Two different bugs show up as a second load and need different fixes:
- *  - the seed/nsec mismatch reload (useProfileAuthDomain.ts:545-585)
- *  - isLocalDevOrigin()'s dynamic-import recovery (main.tsx:340-343, 387-426),
- *    which is gated on hostname, not env, so it is live on localhost even in a
- *    production build.
- */
 export const expectSingleLoad = async (
   page: Page,
   label: string,
@@ -72,7 +63,6 @@ export const expectSingleLoad = async (
   ).toBe("1");
 };
 
-/** Wait until the shell has mounted and Evolu has produced a balance. */
 export const waitForNetworkReady = async (page: Page): Promise<void> => {
   await expect(page.getByLabel("Available balance")).toBeVisible({
     timeout: 60_000,

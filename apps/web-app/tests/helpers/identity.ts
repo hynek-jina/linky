@@ -18,26 +18,17 @@ export interface SeedIdentity {
 }
 
 /**
- * Derive a complete, self-consistent seed-login identity.
+ * Derive a complete, self-consistent seed-login identity. All four secrets
+ * must come from the SAME share and match what production writes:
  *
- * All four secrets must come from the SAME share and match what production
- * writes, for two independent reasons:
+ *  - without `linky.nostr_slip39_seed` there is no seed login and every Evolu
+ *    owner lane collapses to a single `appOwnerId` — a storage layout no real
+ *    user has
+ *  - if the stored nsec differs from the one derived from the share,
+ *    useProfileAuthDomain reloads the page mid-test
  *
- *  1. `isSeedLogin` is driven by `linky.nostr_slip39_seed`
- *     (useProfileAuthDomain.ts:204-222). Without it every Evolu owner lane
- *     collapses to a single `appOwnerId` and `metaOwnerId` becomes null
- *     (useEvoluContactsOwnerRotation.ts:2053-2132) — a storage architecture no
- *     real user has, in which the cross-lane cashu soft-delete bug is
- *     unreachable by construction.
- *  2. If the stored nsec does not equal the one derived from the share, the
- *     mismatch effect at useProfileAuthDomain.ts:545-585 calls
- *     setIdentityFromNsecAndReload(), which reloads the page and destroys the
- *     test's in-memory state.
- *
- * `linky.initialMnemonic` is the "meta" owner lane mnemonic because that is
- * exactly what onboarding does (useProfileAuthDomain.ts:324-341 ->
- * persistIdentitySecrets -> identitySecrets.ts:108), giving
- * `appOwnerId === metaOwnerId`.
+ * `linky.initialMnemonic` holds the "meta" lane mnemonic because that is what
+ * onboarding persists (identitySecrets.ts), giving appOwnerId === metaOwnerId.
  */
 export const createSeedIdentity = async (): Promise<SeedIdentity> => {
   const share = await createSlip39Seed();
@@ -66,7 +57,6 @@ export const createSeedIdentity = async (): Promise<SeedIdentity> => {
   };
 };
 
-/** Seed a full seed-login identity before the app boots. */
 export const setSeedLoginStorage = async (
   page: Page,
   identity: SeedIdentity,
@@ -94,13 +84,10 @@ export const setSeedLoginStorage = async (
 };
 
 /**
- * Seed a throwaway logged-in identity from a random nsec.
- *
- * Deliberately NOT a seed login: `linky.nostr_slip39_seed` is absent, so
- * `isSeedLogin` stays false and the deterministic Evolu owner lanes are not
- * used. That is fine for tests that only need "an authenticated app", and it
- * keeps them fast. Anything that exercises owner lanes, or the cashu row/lane
- * resolution built on them, must use setSeedLoginStorage instead.
+ * Seed a throwaway logged-in identity from a random nsec. Deliberately NOT a
+ * seed login (`isSeedLogin` stays false, no deterministic Evolu owner lanes) —
+ * fine for tests that only need "an authenticated app". Anything exercising
+ * owner lanes must use setSeedLoginStorage instead.
  */
 export const setRandomIdentityStorage = async (page: Page): Promise<void> => {
   const nsec = nip19.nsecEncode(generateSecretKey());

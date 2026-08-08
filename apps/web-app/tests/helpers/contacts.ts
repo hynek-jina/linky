@@ -42,18 +42,11 @@ export const addContactByNpub = async (
 /**
  * Wait until this contact's NIP-38 status has been fetched and stored.
  *
- * This is a workaround for a real race in useContactsNostrPrefetchEffects
- * (:437-475), not just test tidiness. Adding a second contact while the first
- * contact's status fetch is still in flight changes `uniqueNpubsKey`, which
- * cancels the effect and re-runs it. The re-run skips the in-flight npub
- * (`if (nostrStatusInFlight.current.has(npub)) continue`) without marking it
- * complete, and when the original fetch resolves it writes the cache but then
- * bails on `if (cancelled) return` before updating state. Since the deps never
- * change again, that contact's status stays missing from `nostrStatusByNpub`
- * for the life of the page — so it silently disappears from the proxy-payment
- * recipient list even though the value sits in localStorage.
- *
- * Letting each fetch settle before adding the next contact avoids the race.
+ * Works around a race in useContactsNostrPrefetchEffects: adding another
+ * contact while a status fetch is in flight re-runs the effect, which skips
+ * the in-flight npub and then discards its result as cancelled — so that
+ * contact's status stays missing from state for the life of the page. Letting
+ * each fetch settle before adding the next contact avoids it.
  */
 export const waitForContactStatusFetched = async (
   page: Page,

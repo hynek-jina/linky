@@ -1,13 +1,11 @@
 /**
- * A Czech SPD bank-payment QR, as the offerer would scan off a real invoice.
+ * A Czech SPD bank-payment QR, as scanned off a real invoice.
  *
- * The currency must be CZK or EUR: getBankPaymentOfferCurrency (spdPayment.ts)
- * returns null for anything else, which silently empties the offer's recipient
- * list. CC:SAT would skip fiat conversion but is rejected by that same filter.
+ * The currency must be CZK or EUR: getBankPaymentOfferCurrency returns null
+ * for anything else, which silently empties the offer's recipient list.
  *
- * The PNG is generated once from SPD_PAYLOAD with the `qrcode` dependency and
- * committed, so the test feeds a real image through the app's own jsqr decoder
- * rather than faking the scan.
+ * The PNG is generated once from SPD_PAYLOAD (`qrcode` package) and committed,
+ * so the test feeds a real image through the app's own jsqr decoder.
  */
 export const SPD_PAYLOAD =
   "SPD*1.0*ACC:CZ6508000000192000145399*AM:1.00*CC:CZK" +

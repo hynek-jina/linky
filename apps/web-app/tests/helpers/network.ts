@@ -10,14 +10,10 @@ const TRANSPARENT_PNG = Buffer.from(
 );
 
 /**
- * Pin the BTC/fiat rate.
- *
- * Routing rather than seeding `linky.fiat_rates.v1` is deliberate: a fresh
- * `fetchedAtMs` would suppress the fetch entirely (useFiatRates.ts:132-136),
- * leaving parseFetchedRates — the only CZK->sat conversion in production —
- * unexercised. All four of CHF/CZK/EUR/USD must be present and > 0 or
- * parseFetchedRates returns null, which would surface as a misleading
- * "Not enough Cashu tokens." on the offer screen.
+ * Pin the BTC/fiat rate by routing the request rather than seeding the
+ * `linky.fiat_rates.v1` cache, which would suppress the fetch and leave
+ * parseFetchedRates — the only CZK->sat conversion in production —
+ * unexercised. It returns null unless all four currencies are present and > 0.
  */
 export const stubFiatRates = async (page: Page): Promise<void> => {
   await page.route("**/api.coinbase.com/**", (route) =>
@@ -34,8 +30,8 @@ export const stubFiatRates = async (page: Page): Promise<void> => {
         },
       }),
       contentType: "application/json",
-      // Without this the fulfilled cross-origin body is rejected by CORS, the
-      // fetch throws, rates stay null, and the failure looks like a wallet bug.
+      // Without this the fulfilled cross-origin body is rejected by CORS and
+      // rates stay null.
       headers: { "Access-Control-Allow-Origin": "*" },
       status: 200,
     }),
@@ -43,11 +39,9 @@ export const stubFiatRates = async (page: Page): Promise<void> => {
 };
 
 /**
- * Keep third-party asset hosts off the network.
- *
- * fulfill(), never abort(): every contact and the local profile gets a dicebear
- * pictureUrl by default (derivedProfile.ts), so aborting would emit a console
- * error per avatar per page.
+ * Keep third-party asset hosts off the network. fulfill(), never abort():
+ * every contact gets a dicebear pictureUrl by default, and an abort logs a
+ * console error per avatar per page.
  */
 export const stubThirdPartyAssets = async (page: Page): Promise<void> => {
   await page.route("**/api.dicebear.com/**", (route) =>
