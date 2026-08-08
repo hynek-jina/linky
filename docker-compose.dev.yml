@@ -21,6 +21,9 @@ services:
       start_period: 5s
 
   evolu-relay:
+    # Explicit image name so CI can `buildx bake` this service and compose
+    # finds the result without rebuilding.
+    image: linky-evolu-relay
     build: docker/evolu-relay
     ports:
       - "4001:4000"
@@ -76,6 +79,7 @@ services:
   # ports.
   web-app:
     profiles: ["e2e"]
+    image: linky-web-app
     build:
       context: .
       dockerfile: docker/web-app/Dockerfile
