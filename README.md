@@ -158,6 +158,10 @@ Every run records a trace containing all three accounts, and the console output 
 printed prefixed with its account label (`[A]`, `[B]`, `[C]`). The run takes ~20s, so `--ui` and the
 trace viewer are far more useful than watching it live.
 
+In CI, `local-stack` gates every release: it runs on each push to main (Vercel Deployment Checks
+holds the production promotion until it passes) and as a required job in both Android release
+workflows.
+
 ### Code quality
 
 Always run the full check pipeline after changes:
