@@ -7,7 +7,7 @@ const NOTIFICATION_OPEN_URL = "/#contacts";
 const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
 
 import type { Event as NostrEvent } from "nostr-tools";
-import { getPublicKey, nip19, SimplePool } from "nostr-tools";
+import { getPublicKey, nip19 } from "nostr-tools";
 import { unwrapEvent } from "nostr-tools/nip17";
 import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { ExpirationPlugin } from "workbox-expiration";
@@ -22,6 +22,7 @@ import {
   getLinkyBankPaymentOfferText,
   isLinkyBankPaymentOfferEvent,
 } from "./app/lib/bankPaymentOffer";
+import { createNostrPool } from "./app/lib/createNostrPool";
 import {
   getBankPaymentReimbursementCopyForLanguage,
   getReceivedMoneyCopyForLanguage,
@@ -292,7 +293,7 @@ async function fetchOuterWrapEvent(
     relays,
   });
 
-  const pool = new SimplePool({ enableReconnect: false });
+  const pool = createNostrPool({ enableReconnect: false });
   try {
     const events = await pool.querySync(
       relays,
