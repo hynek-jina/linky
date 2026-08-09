@@ -46,12 +46,12 @@ The repo also contains a separate public website in `apps/site/` intended for `l
 - Payments:
   - Lightning invoice and LN address payment
   - contact payment via Cashu message flow
-- Push: optional Bun push service in `apps/push/` for generic Web Push notifications on new outer inbox `kind: 1059` events
+- Push: optional Node push service in `apps/push/` for generic Web Push notifications on new outer inbox `kind: 1059` events
 - Debug pages for Evolu current/history data and owner/rotation diagnostics
 
 ## Development
 
-Requirements: Node.js and pnpm; Bun (runtime for the push service); Docker for the local dev service stack
+Requirements: Node.js 22.18+ and pnpm; Docker for the local dev service stack
 
 For Android native builds: Java 17
 
@@ -209,7 +209,7 @@ pnpm --filter @linky/push start
 
 Push service container artifacts live in `apps/push/`:
 
-- `Dockerfile` builds a production Bun image
+- `Dockerfile` builds a production Node image
 - `docker-compose.example.yml` shows a persistent SQLite `/data` volume for prod-style deployment
 - `.env.production.example` lists the runtime env vars expected by that compose setup
 

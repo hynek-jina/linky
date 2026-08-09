@@ -5,17 +5,17 @@ import {
   type Messaging,
 } from "firebase-admin/messaging";
 import { createHash } from "node:crypto";
-import * as webpush from "web-push";
+import webpush from "web-push";
 
-import { isRecord } from "./guards";
-import { PushStorage } from "./storage";
+import { isRecord } from "./guards.ts";
+import { PushStorage } from "./storage.ts";
 import type {
   PushNotificationData,
   PushNotificationEnvelope,
   StoredNativeSubscription,
   StoredSubscription,
   WebPushSubscriptionData,
-} from "./types";
+} from "./types.ts";
 
 interface PushDeliveryServiceOptions {
   firebaseServiceAccountJson: string | null;

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { PushServiceConfig } from "./config";
+import type { PushServiceConfig } from "./config.ts";
 import {
   isRecord,
   readNativeSubscribeRequest,
@@ -9,15 +9,15 @@ import {
   readSubscribeRequest,
   readUnsubscribeRequest,
   RequestError,
-} from "./guards";
-import { OwnershipVerifier } from "./ownership";
-import { InMemoryRateLimiter, RateLimitError } from "./rateLimit";
+} from "./guards.ts";
+import { OwnershipVerifier } from "./ownership.ts";
+import { InMemoryRateLimiter, RateLimitError } from "./rateLimit.ts";
 import {
   PushStorage,
   StorageConflictError,
   StorageLimitError,
-} from "./storage";
-import type { OwnershipProofInput, ProofAction } from "./types";
+} from "./storage.ts";
+import type { OwnershipProofInput, ProofAction } from "./types.ts";
 
 interface HttpHandlerDependencies {
   config: PushServiceConfig;
@@ -85,10 +85,7 @@ function jsonResponse(
   });
 }
 
-function ipFromRequest(
-  request: Request,
-  server: Bun.Server<undefined>,
-): string {
+function ipFromRequest(request: Request, clientAddress: string | null): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
     const [first] = forwarded.split(",");
@@ -97,7 +94,7 @@ function ipFromRequest(
     }
   }
 
-  return server.requestIP(request)?.address ?? "unknown";
+  return clientAddress ?? "unknown";
 }
 
 async function readJsonBody(
@@ -179,7 +176,7 @@ export function createHttpHandler({
 }: HttpHandlerDependencies) {
   return async (
     request: Request,
-    server: Bun.Server<undefined>,
+    clientAddress: string | null,
   ): Promise<Response> => {
     const url = new URL(request.url);
     const nowMs = Date.now();
@@ -213,7 +210,7 @@ export function createHttpHandler({
         });
       }
 
-      const ip = ipFromRequest(request, server);
+      const ip = ipFromRequest(request, clientAddress);
 
       if (request.method === "POST" && url.pathname === "/auth/challenge") {
         rateLimiter.check(

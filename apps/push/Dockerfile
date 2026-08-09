@@ -1,10 +1,10 @@
-# pnpm installs dependencies; Bun stays as the service runtime (Bun.serve,
-# bun:sqlite) and as the bundler, so the build stage carries both.
+# The service runs its TypeScript sources directly on Node's built-in type
+# stripping (Node 22.18+), so there is no build step — just a pruned install.
 FROM node:22-slim AS build
 
 WORKDIR /app
 
-RUN npm install -g pnpm@11.20.0 bun@1.3.9
+RUN npm install -g pnpm@11.20.0
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/native-shell/package.json apps/native-shell/package.json
@@ -18,15 +18,17 @@ RUN pnpm install --frozen-lockfile
 
 COPY apps/push apps/push
 
-RUN pnpm --filter @linky/push build
+# --legacy: no injected workspace packages here (production deps only, none
+# of them workspace-local), which is what pnpm v10+ deploy otherwise requires.
+RUN pnpm --filter @linky/push deploy --prod --legacy /srv/push
 
-FROM oven/bun:1.3.9-alpine AS runtime
+FROM node:22-slim AS runtime
 
 WORKDIR /app
 
-RUN mkdir -p /data && chown bun:bun /data
+RUN mkdir -p /data && chown node:node /data
 
-COPY --from=build /app/apps/push/dist/index.js /app/index.js
+COPY --from=build /srv/push /app
 
 ARG GIT_COMMIT_SHA=unknown
 
@@ -35,10 +37,10 @@ ENV PUSH_PORT=8787
 ENV PUSH_STORAGE_PATH=/data/linky-push.sqlite
 ENV BUILD_COMMIT_SHA=${GIT_COMMIT_SHA}
 
-USER bun
+USER node
 
 EXPOSE 8787
 
 VOLUME ["/data"]
 
-CMD ["bun", "/app/index.js"]
+CMD ["node", "src/index.ts"]

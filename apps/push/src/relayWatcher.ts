@@ -4,11 +4,11 @@ import { nip19, SimplePool, verifyEvent } from "nostr-tools";
 import {
   CATCH_UP_LOOKBACK_SECONDS,
   SEEN_EVENT_RETENTION_MARGIN_MS,
-} from "./config";
-import { isHexString } from "./guards";
-import { PushDeliveryService } from "./push";
-import { PushStorage } from "./storage";
-import type { PushNotificationData } from "./types";
+} from "./config.ts";
+import { isHexString } from "./guards.ts";
+import { PushDeliveryService } from "./push.ts";
+import { PushStorage } from "./storage.ts";
+import type { PushNotificationData } from "./types.ts";
 
 interface RelayWatcherOptions {
   relayUrls: string[];

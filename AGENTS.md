@@ -4,7 +4,7 @@ Mobile-first PWA for contacts, Nostr messaging, and Lightning/Cashu payments. Lo
 
 See @README.md for project overview.
 
-Package manager is **pnpm**; scripts are defined in the root `package.json`. Workspace filter: `pnpm --filter @linky/web-app <script>`. The push service (`apps/push`) still runs on the **Bun** runtime (`Bun.serve`, `bun:sqlite`), so Bun is needed to run it locally.
+Package manager is **pnpm**; scripts are defined in the root `package.json`. Workspace filter: `pnpm --filter @linky/web-app <script>`. Node 22.18+ is required: the push service (`apps/push`) runs its TypeScript directly via Node's type stripping and uses `node:sqlite`.
 
 IMPORTANT: Always run `pnpm run check-code` after making changes. It runs typecheck first, then eslint and prettier which autofix what they can. If typecheck or non-autofixable eslint errors remain, fix them manually and re-run until all checks pass.
 

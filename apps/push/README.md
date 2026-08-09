@@ -1,6 +1,6 @@
 # Linky Push Service
 
-Bun HTTP service for Web Push and Android FCM delivery on top of outer NIP-17 inbox events (`kind: 1059`).
+Node HTTP service for Web Push and Android FCM delivery on top of outer NIP-17 inbox events (`kind: 1059`).
 
 ## What it does
 

@@ -9,7 +9,7 @@ import type {
   SubscribeRequestBody,
   UnsubscribeRequestBody,
   WebPushSubscriptionData,
-} from "./types";
+} from "./types.ts";
 
 export class RequestError extends Error {
   readonly status: number;

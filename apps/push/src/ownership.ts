@@ -1,11 +1,11 @@
 import { verifyEvent } from "nostr-tools";
 
-import { RequestError } from "./guards";
+import { RequestError } from "./guards.ts";
 import type {
   ChallengeRecord,
   OwnershipProofInput,
   ProofAction,
-} from "./types";
+} from "./types.ts";
 
 interface OwnershipVerifierOptions {
   proofMaxAgeSeconds: number;

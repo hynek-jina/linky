@@ -1,9 +1,9 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-import { Database } from "bun:sqlite";
+import { DatabaseSync, type StatementSync } from "node:sqlite";
 
-import { isRecord } from "./guards";
+import { isRecord } from "./guards.ts";
 import type {
   ChallengeRecord,
   NativePushSubscriptionData,
@@ -11,7 +11,7 @@ import type {
   StoredNativeSubscription,
   StoredSubscription,
   WebPushSubscriptionData,
-} from "./types";
+} from "./types.ts";
 
 interface RegisterSubscriptionParams {
   cleanupLegacySubscriptions: boolean;
@@ -124,7 +124,7 @@ function createNonce(): string {
 }
 
 export class PushStorage {
-  private readonly db: Database;
+  private readonly db: DatabaseSync;
   private readonly registerSubscriptionTransaction;
   private readonly unregisterSubscriptionPubkeysTransaction;
   private readonly registerNativeSubscriptionTransaction;
@@ -133,7 +133,7 @@ export class PushStorage {
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
 
-    this.db = new Database(path, { create: true });
+    this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA foreign_keys = ON;");
     this.db.exec(`
@@ -210,26 +210,26 @@ export class PushStorage {
       WHERE installation_id IS NOT NULL;
     `);
 
-    this.registerSubscriptionTransaction = this.db.transaction(
+    this.registerSubscriptionTransaction = this.transaction(
       (params: RegisterSubscriptionParams) =>
         this.registerSubscriptionInternal(params),
     );
-    this.unregisterSubscriptionPubkeysTransaction = this.db.transaction(
+    this.unregisterSubscriptionPubkeysTransaction = this.transaction(
       (params: UnregisterSubscriptionPubkeysParams) =>
         this.unregisterSubscriptionPubkeysInternal(params),
     );
-    this.registerNativeSubscriptionTransaction = this.db.transaction(
+    this.registerNativeSubscriptionTransaction = this.transaction(
       (params: RegisterNativeSubscriptionParams) =>
         this.registerNativeSubscriptionInternal(params),
     );
-    this.unregisterNativeSubscriptionPubkeysTransaction = this.db.transaction(
+    this.unregisterNativeSubscriptionPubkeysTransaction = this.transaction(
       (params: UnregisterNativeSubscriptionPubkeysParams) =>
         this.unregisterNativeSubscriptionPubkeysInternal(params),
     );
   }
 
   private ensureSubscriptionsInstallationIdColumn(): void {
-    const rows = this.db.query("PRAGMA table_info(subscriptions)").all();
+    const rows = this.db.prepare("PRAGMA table_info(subscriptions)").all();
     const hasColumn = rows.some((row) => {
       if (!isRecord(row)) {
         return false;
@@ -246,6 +246,31 @@ export class PushStorage {
     this.db.close();
   }
 
+  private transaction<Params, Result>(
+    fn: (params: Params) => Result,
+  ): (params: Params) => Result {
+    return (params) => {
+      this.db.exec("BEGIN");
+      try {
+        const result = fn(params);
+        this.db.exec("COMMIT");
+        return result;
+      } catch (error) {
+        this.db.exec("ROLLBACK");
+        throw error;
+      }
+    };
+  }
+
+  // For statements reading rowids: node:sqlite throws on integers above
+  // Number.MAX_SAFE_INTEGER unless they are read as bigint, and readSafeInteger
+  // must be the one to reject those rows.
+  private prepareBigIntReads(sql: string): StatementSync {
+    const statement = this.db.prepare(sql);
+    statement.setReadBigInts(true);
+    return statement;
+  }
+
   createChallenge(
     pubkey: string,
     action: ProofAction,
@@ -257,7 +282,7 @@ export class PushStorage {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const nonce = createNonce();
       const result = this.db
-        .query(
+        .prepare(
           `
             INSERT OR IGNORE INTO challenges (
               nonce,
@@ -283,7 +308,7 @@ export class PushStorage {
 
   getChallenge(nonce: string): ChallengeRecord | null {
     const row = this.db
-      .query(
+      .prepare(
         `
           SELECT nonce, pubkey, action, expires_at AS expiresAt, used_at AS usedAt
           FROM challenges
@@ -341,18 +366,20 @@ export class PushStorage {
   }
 
   removeSubscriptionById(subscriptionId: number): void {
-    this.db.query("DELETE FROM subscriptions WHERE id = ?").run(subscriptionId);
+    this.db
+      .prepare("DELETE FROM subscriptions WHERE id = ?")
+      .run(subscriptionId);
   }
 
   removeNativeSubscriptionById(subscriptionId: number): void {
     this.db
-      .query("DELETE FROM native_subscriptions WHERE id = ?")
+      .prepare("DELETE FROM native_subscriptions WHERE id = ?")
       .run(subscriptionId);
   }
 
   recordSeenEvent(eventId: string, firstSeenAt: number): boolean {
     const result = this.db
-      .query(
+      .prepare(
         `
           INSERT OR IGNORE INTO seen_events (
             event_id,
@@ -366,7 +393,7 @@ export class PushStorage {
 
   pruneSeenEvents(nowMs: number, maxAgeMs: number): void {
     this.db
-      .query(
+      .prepare(
         `
           DELETE FROM seen_events
           WHERE first_seen_at <= ?
@@ -385,9 +412,8 @@ export class PushStorage {
     }
 
     const placeholders = uniquePubkeys.map(() => "?").join(", ");
-    const rows = this.db
-      .query(
-        `
+    const rows = this.prepareBigIntReads(
+      `
           SELECT
             sp.pubkey AS pubkey,
             s.id AS id,
@@ -399,8 +425,7 @@ export class PushStorage {
           INNER JOIN subscriptions s ON s.id = sp.subscription_id
           WHERE sp.pubkey IN (${placeholders})
         `,
-      )
-      .all(...uniquePubkeys);
+    ).all(...uniquePubkeys);
 
     for (const row of rows) {
       if (!isRecord(row)) {
@@ -455,9 +480,8 @@ export class PushStorage {
     }
 
     const placeholders = uniquePubkeys.map(() => "?").join(", ");
-    const rows = this.db
-      .query(
-        `
+    const rows = this.prepareBigIntReads(
+      `
           SELECT
             sp.pubkey AS pubkey,
             s.id AS id,
@@ -468,8 +492,7 @@ export class PushStorage {
           INNER JOIN native_subscriptions s ON s.id = sp.subscription_id
           WHERE sp.pubkey IN (${placeholders})
         `,
-      )
-      .all(...uniquePubkeys);
+    ).all(...uniquePubkeys);
 
     for (const row of rows) {
       if (!isRecord(row)) {
@@ -510,7 +533,7 @@ export class PushStorage {
 
   pruneChallenges(nowMs: number): void {
     this.db
-      .query(
+      .prepare(
         `
           DELETE FROM challenges
           WHERE expires_at <= ? OR (used_at IS NOT NULL AND used_at <= ?)
@@ -648,12 +671,12 @@ export class PushStorage {
 
     const tables = this.getSubscriptionTables(transport);
     this.db
-      .query(`DELETE FROM ${tables.association} WHERE subscription_id = ?`)
+      .prepare(`DELETE FROM ${tables.association} WHERE subscription_id = ?`)
       .run(subscriptionId);
 
     for (const pubkey of params.recipientPubkeys) {
       this.db
-        .query(
+        .prepare(
           `
             INSERT INTO ${tables.association} (
               subscription_id,
@@ -682,14 +705,14 @@ export class PushStorage {
     let removedPubkeys = 0;
     for (const pubkey of params.recipientPubkeys) {
       const result = this.db
-        .query(
+        .prepare(
           `
             DELETE FROM ${tables.association}
             WHERE subscription_id = ? AND pubkey = ?
           `,
         )
         .run(subscriptionId, pubkey);
-      removedPubkeys += result.changes;
+      removedPubkeys += Number(result.changes);
     }
 
     if (
@@ -702,7 +725,7 @@ export class PushStorage {
     }
 
     this.db
-      .query(`DELETE FROM ${tables.subscription} WHERE id = ?`)
+      .prepare(`DELETE FROM ${tables.subscription} WHERE id = ?`)
       .run(subscriptionId);
     return {
       removedPubkeys,
@@ -713,7 +736,7 @@ export class PushStorage {
   private consumeChallengesInternal(nonces: string[], nowMs: number): void {
     for (const nonce of nonces) {
       const result = this.db
-        .query(
+        .prepare(
           `
             UPDATE challenges
             SET used_at = ?
@@ -739,7 +762,7 @@ export class PushStorage {
         : this.getSubscriptionIdByInstallationId(installationId));
     if (existingId !== null) {
       this.db
-        .query(
+        .prepare(
           `
             UPDATE subscriptions
             SET
@@ -765,7 +788,7 @@ export class PushStorage {
     }
 
     const result = this.db
-      .query(
+      .prepare(
         `
           INSERT INTO subscriptions (
             endpoint,
@@ -796,9 +819,9 @@ export class PushStorage {
   }
 
   private getSubscriptionIdByEndpoint(endpoint: string): number | null {
-    const row = this.db
-      .query("SELECT id AS id FROM subscriptions WHERE endpoint = ?")
-      .get(endpoint);
+    const row = this.prepareBigIntReads(
+      "SELECT id AS id FROM subscriptions WHERE endpoint = ?",
+    ).get(endpoint);
     if (!isRecord(row)) {
       return null;
     }
@@ -808,9 +831,9 @@ export class PushStorage {
   private getSubscriptionIdByInstallationId(
     installationId: string,
   ): number | null {
-    const row = this.db
-      .query("SELECT id AS id FROM subscriptions WHERE installation_id = ?")
-      .get(installationId);
+    const row = this.prepareBigIntReads(
+      "SELECT id AS id FROM subscriptions WHERE installation_id = ?",
+    ).get(installationId);
     if (!isRecord(row)) {
       return null;
     }
@@ -818,9 +841,9 @@ export class PushStorage {
   }
 
   private getNativeSubscriptionIdByToken(token: string): number | null {
-    const row = this.db
-      .query("SELECT id AS id FROM native_subscriptions WHERE token = ?")
-      .get(token);
+    const row = this.prepareBigIntReads(
+      "SELECT id AS id FROM native_subscriptions WHERE token = ?",
+    ).get(token);
     if (!isRecord(row)) {
       return null;
     }
@@ -830,11 +853,9 @@ export class PushStorage {
   private getNativeSubscriptionIdByInstallationId(
     installationId: string,
   ): number | null {
-    const row = this.db
-      .query(
-        "SELECT id AS id FROM native_subscriptions WHERE installation_id = ?",
-      )
-      .get(installationId);
+    const row = this.prepareBigIntReads(
+      "SELECT id AS id FROM native_subscriptions WHERE installation_id = ?",
+    ).get(installationId);
     if (!isRecord(row)) {
       return null;
     }
@@ -861,7 +882,7 @@ export class PushStorage {
   ): Set<string> {
     const tables = this.getSubscriptionTables(transport);
     const rows = this.db
-      .query(
+      .prepare(
         `
           SELECT pubkey AS pubkey
           FROM ${tables.association}
@@ -892,9 +913,8 @@ export class PushStorage {
     const affectedSubscriptionIds = new Set<number>();
 
     for (const pubkey of pubkeys) {
-      const rows = this.db
-        .query(
-          `
+      const rows = this.prepareBigIntReads(
+        `
             SELECT sp.subscription_id AS subscriptionId
             FROM ${tables.association} sp
             INNER JOIN ${tables.subscription} s ON s.id = sp.subscription_id
@@ -902,8 +922,7 @@ export class PushStorage {
               AND sp.subscription_id != ?
               AND s.installation_id IS NULL
           `,
-        )
-        .all(pubkey, keepSubscriptionId);
+      ).all(pubkey, keepSubscriptionId);
 
       for (const row of rows) {
         if (!isRecord(row)) {
@@ -914,7 +933,7 @@ export class PushStorage {
           continue;
         }
         const result = this.db
-          .query(
+          .prepare(
             `
               DELETE FROM ${tables.association}
               WHERE subscription_id = ? AND pubkey = ?
@@ -934,7 +953,7 @@ export class PushStorage {
         continue;
       }
       this.db
-        .query(`DELETE FROM ${tables.subscription} WHERE id = ?`)
+        .prepare(`DELETE FROM ${tables.subscription} WHERE id = ?`)
         .run(subscriptionId);
     }
   }
@@ -951,7 +970,7 @@ export class PushStorage {
         : this.getNativeSubscriptionIdByInstallationId(installationId));
     if (existingId !== null) {
       this.db
-        .query(
+        .prepare(
           `
             UPDATE native_subscriptions
             SET
@@ -967,7 +986,7 @@ export class PushStorage {
     }
 
     const result = this.db
-      .query(
+      .prepare(
         `
           INSERT INTO native_subscriptions (
             token,
@@ -996,7 +1015,7 @@ export class PushStorage {
   ): number {
     const tables = this.getSubscriptionTables(transport);
     const row = this.db
-      .query(
+      .prepare(
         `
           SELECT COUNT(*) AS total
           FROM ${tables.association}
@@ -1017,7 +1036,7 @@ export class PushStorage {
   ): number {
     const tables = this.getSubscriptionTables(transport);
     const row = this.db
-      .query(
+      .prepare(
         `
           SELECT COUNT(*) AS total
           FROM ${tables.association}

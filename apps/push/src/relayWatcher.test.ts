@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
-import { SeenEventIdCache } from "./relayWatcher";
+import { SeenEventIdCache } from "./relayWatcher.ts";
 
 describe("SeenEventIdCache", () => {
   it("drops expired entries on direct lookup", () => {

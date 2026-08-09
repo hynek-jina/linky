@@ -2,10 +2,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "bun:test";
-import { Database } from "bun:sqlite";
+import { DatabaseSync } from "node:sqlite";
 
-import { PushStorage } from "./storage";
+import { describe, expect, it } from "vitest";
+
+import { PushStorage } from "./storage.ts";
 
 const unsafeInteger = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
 
@@ -25,9 +26,9 @@ describe("PushStorage", () => {
   it("skips subscriptions whose ids exceed Number.MAX_SAFE_INTEGER", () => {
     const storagePath = createStoragePath();
     const storage = new PushStorage(storagePath);
-    const db = new Database(storagePath);
+    const db = new DatabaseSync(storagePath);
 
-    db.query(
+    db.prepare(
       `
         INSERT INTO subscriptions (
           id,
@@ -48,7 +49,7 @@ describe("PushStorage", () => {
       1,
       1,
     );
-    db.query(
+    db.prepare(
       `
         INSERT INTO subscription_pubkeys (
           subscription_id,
@@ -70,9 +71,9 @@ describe("PushStorage", () => {
   it("throws when a new subscription rowid exceeds Number.MAX_SAFE_INTEGER", () => {
     const storagePath = createStoragePath();
     const storage = new PushStorage(storagePath);
-    const db = new Database(storagePath);
+    const db = new DatabaseSync(storagePath);
 
-    db.query(
+    db.prepare(
       `
         INSERT INTO subscriptions (
           endpoint,
@@ -85,10 +86,10 @@ describe("PushStorage", () => {
         ) VALUES (?, NULL, ?, ?, NULL, ?, ?)
       `,
     ).run("https://example.com/bootstrap", "p256dh", "auth", 1, 1);
-    db.query("DELETE FROM subscriptions WHERE endpoint = ?").run(
+    db.prepare("DELETE FROM subscriptions WHERE endpoint = ?").run(
       "https://example.com/bootstrap",
     );
-    db.query(
+    db.prepare(
       `
         UPDATE sqlite_sequence
         SET seq = ?

@@ -73,7 +73,7 @@ Architectural decisions and behavioral constraints for Linky. Keep this file up 
 - Owner rotations are now pointer-only for contacts, cashu, messages, and transactions; historical lanes stay visible for reads instead of being pruned or copy-forwarded, and cashu duplicate prevention now guards new inserts by token/raw-token identity instead of mirroring rows into a legacy lane
 - Contacts are capped per active contacts owner at `MAX_CONTACTS_PER_OWNER` (currently 100); when the active contacts owner fills up, Linky rotates to the next contacts owner while still reading older contacts owners
 - Evolu debug views (`#evolu-current-data`, `#evolu-history-data`) scope contacts/history to active owner lanes, with history retaining one previous contacts lane as backup
-- Core app remains local-first/client-side; optional background notifications are handled by the separate `apps/push` Bun service
+- Core app remains local-first/client-side; optional background notifications are handled by the separate `apps/push` Node service (runs TypeScript directly via Node's type stripping; storage on `node:sqlite`)
 - Cashu token soft-deletes MUST target the row's OWN owner lane, not the active write lane: Evolu materializes rows keyed by `(ownerId, id)`, so `update("cashuToken", {id, isDeleted}, {ownerId: activeLane})` silently no-ops on a row that lives in an older `cashu-n` lane (it writes a phantom row in the active lane and leaves the real spent token spendable, blocking later payments). Resolve the row's owner from the visible cashu owner ids via `resolveCashuRowOwnerLane` (`apps/web-app/src/app/lib/cashuOwnerLane.ts`) before deleting — used by the contact-pay swap delete, the pending-token cleanup effect, and `deleteSpentCashuTokens`
 
 ### Nostr messaging
