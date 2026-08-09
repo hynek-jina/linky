@@ -25,6 +25,14 @@ Architectural decisions and behavioral constraints for Linky. Keep this file up 
 - Playwright E2E is split into two projects. `prod-services` runs `vite --mode prod-services` so the original suite keeps hitting production endpoints regardless of the local stack. `local-stack` runs `tests/proxy-payment.spec.ts` against the docker stack, with the app served from the `web-app` compose service (profile `e2e`, port 5176) as a **production build** — that build is what exercises `manualChunks` and makes effects run once rather than twice under StrictMode, neither of which any dev-server project reaches. It declares no `webServer`; compose owns the app, which is also why no Vite dep-optimizer cache is shared between the two projects
 - The `local-stack` project blocks service workers, because Playwright cannot intercept requests a service worker makes and `src/sw.ts` caches cross-origin images; the trade-off is that `src/sw.ts` itself stays uncovered there
 
+## Linkstr protocol package (`packages/linkstr/`)
+
+- `@linky/linkstr` is the single home for Linky's app-level Nostr protocol: every operation the app publishes and every inbound action it expects will be defined here as Effect `Schema` types, with raw nostr events confined to per-vertical codec modules and `internal/`. Consumers (web app, service worker, push service) are meant to import typed drafts/receipts/inbox facts, never `nostr-tools`
+- Environment-agnostic by rule: no React, no Evolu, no `window`/`localStorage`. Capabilities enter via Effect services — `LinkstrIdentity` (pubkey + secret key), `NostrTransport` (per-relay publish outcomes, no hidden retries; retry policy belongs to the future outbox), `RelayPolicy` (one source of truth for read and write relay sets)
+- Delivery semantics are explicit: NIP-17 sends wrap one rumor twice (self copy + recipient copy) and success requires the *recipient* copy to be accepted by ≥1 relay; "only my self copy landed" is the typed `RecipientNotReached` error, never a silent success
+- Errors use `Schema.TaggedError` (serializable by policy, so outbox rows can persist failures); inbound wraps decode to a tagged union of app-level facts (`ReactionAdded`, `OwnReactionConfirmed`, …) or a `WrapDropped` with a typed reason — consumers `Match.exhaustive` over the union
+- The reactions vertical (kind 7 + kind 5 retraction inside kind-1059 gift wraps) is the reference implementation; chat messages, payment notices, bank offers, profile/status/relay lists migrate in behind the same shapes. The app is not wired to the package yet
+
 ## Web app (`apps/web-app/`)
 
 ### Routing and shell
