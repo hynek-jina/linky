@@ -1,5 +1,7 @@
 import { Either } from "effect";
-import { generateSecretKey, getPublicKey } from "nostr-tools";
+import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
+import { encrypt, getConversationKey } from "nostr-tools/nip44";
+import { createWrap } from "nostr-tools/nip59";
 import { decodeReactionWrap } from "../inbox/decodeReactionWrap";
 import { wrapRumorFor } from "../internal/giftWrap";
 import { Rumor } from "../internal/nostrEvent";
@@ -139,6 +141,90 @@ describe("dropped wraps", () => {
     const readdressed = overWire({ ...wrap, tags: [["p", mallory.pubkey]] });
     expect(decodeReactionWrap(readdressed, mallory)).toEqual(
       expect.objectContaining({ reason: "unwrap-failed" }),
+    );
+  });
+});
+
+describe("forged wraps", () => {
+  // Hand-rolled NIP-59 so tests can produce envelopes wrapEvent never would.
+  const sealFor = (
+    rumorJson: unknown,
+    sealAuthor: LinkstrIdentityService,
+    recipient: Pubkey,
+  ) =>
+    finalizeEvent(
+      {
+        kind: 13,
+        created_at: sentAt,
+        tags: [],
+        content: encrypt(
+          JSON.stringify(rumorJson),
+          getConversationKey(sealAuthor.secretKey, recipient),
+        ),
+      },
+      sealAuthor.secretKey,
+    );
+
+  const honestRumor = encodeReactionRumor(
+    draft,
+    alice.pubkey,
+    sentAt,
+    clientId,
+  );
+
+  it("drops a rumor whose id is not its hash", () => {
+    const forged = { ...honestRumor, id: "11".repeat(32) };
+    const wrap = createWrap(sealFor(forged, alice, bob.pubkey), bob.pubkey);
+    expect(decodeReactionWrap(overWire(wrap), bob)).toEqual(
+      expect.objectContaining({ reason: "forged-rumor-id" }),
+    );
+  });
+
+  it("drops a rumor claiming another author than the seal's", () => {
+    const mallory = makeIdentity();
+    // Mallory seals a rumor that pretends to come from Alice.
+    const wrap = createWrap(
+      sealFor(honestRumor, mallory, bob.pubkey),
+      bob.pubkey,
+    );
+    expect(decodeReactionWrap(overWire(wrap), bob)).toEqual(
+      expect.objectContaining({ reason: "sender-forged" }),
+    );
+  });
+
+  it("drops a wrap whose seal signature does not verify", () => {
+    const seal = sealFor(honestRumor, alice, bob.pubkey);
+    const lastChar = seal.sig.endsWith("0") ? "1" : "0";
+    const tampered = { ...seal, sig: seal.sig.slice(0, -1) + lastChar };
+    const wrap = createWrap(tampered, bob.pubkey);
+    expect(decodeReactionWrap(overWire(wrap), bob)).toEqual(
+      expect.objectContaining({ reason: "invalid-seal" }),
+    );
+  });
+});
+
+describe("own retraction echo", () => {
+  it("decodes the self copy to OwnRetractionConfirmed", () => {
+    const retraction = new RetractionDraft({
+      to: bob.pubkey,
+      reactionIds: [targetId],
+    });
+    const rumor = encodeRetractionRumor(
+      retraction,
+      alice.pubkey,
+      sentAt,
+      clientId,
+    );
+    const wrap = wrapRumorFor(rumor, alice.secretKey, alice.pubkey);
+
+    expect(decodeReactionWrap(overWire(wrap), alice)).toEqual(
+      expect.objectContaining({
+        _tag: "OwnRetractionConfirmed",
+        retractionId: rumor.id,
+        reactionIds: [targetId],
+        clientId,
+        sentAt,
+      }),
     );
   });
 });

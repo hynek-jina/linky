@@ -1,4 +1,4 @@
-import { Effect, Exit, Layer } from "effect";
+import { Effect, Either, Exit, Layer } from "effect";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import {
   ClientId,
@@ -112,7 +112,7 @@ describe("Reactions.react", () => {
     for (const { wrap } of published) {
       const key =
         recipientOf(wrap) === alice.pubkey ? alice.secretKey : bob.secretKey;
-      const rumor = unwrapToRumor(wrap, key);
+      const rumor = Either.getOrThrow(unwrapToRumor(wrap, key));
       expect(rumor.id).toBe(receipt.reactionId);
       expect(rumor.kind).toBe(7);
       expect(rumor.content).toBe("🔥");
@@ -165,7 +165,9 @@ describe("Reactions.react", () => {
       Exit.fail(
         expect.objectContaining({
           _tag: "NoRelayReachable",
-          relays: [relayA, relayB],
+          clientId: "client-42",
+          selfCopy: expect.objectContaining({ acceptedBy: [] }),
+          recipientCopy: expect.objectContaining({ acceptedBy: [] }),
         }),
       ),
     );
@@ -198,7 +200,9 @@ describe("Reactions.retract", () => {
     );
     expect(selfPublished).toBeDefined();
     if (!selfPublished) return;
-    const rumor = unwrapToRumor(selfPublished.wrap, alice.secretKey);
+    const rumor = Either.getOrThrow(
+      unwrapToRumor(selfPublished.wrap, alice.secretKey),
+    );
     expect(rumor.kind).toBe(5);
     expect(rumor.content).toBe("");
     expect(tagValues(rumor.tags, "e")).toEqual(reactionIds);
