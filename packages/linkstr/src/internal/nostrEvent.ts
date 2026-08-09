@@ -21,6 +21,22 @@ export class SignedWrapEvent extends Schema.Class<SignedWrapEvent>(
 }) {}
 
 /**
+ * The NIP-59 seal: signed by the real sender, carried encrypted inside the
+ * wrap. Its signature is the only authentication a gift-wrapped message has.
+ */
+export class SignedSealEvent extends Schema.Class<SignedSealEvent>(
+  "SignedSealEvent",
+)({
+  id: Schema.String,
+  pubkey: Pubkey,
+  created_at: Schema.Int,
+  kind: Schema.Literal(13),
+  tags: NostrTags,
+  content: Schema.NonEmptyString,
+  sig: Schema.String,
+}) {}
+
+/**
  * The decrypted inner event. Unsigned by design (NIP-59); `id` is the hash of
  * the unsigned form and is required here because it is the reaction identity.
  */

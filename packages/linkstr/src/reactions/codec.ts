@@ -6,12 +6,14 @@ import { firstTagValue, Rumor, tagValues } from "../internal/nostrEvent";
 import type { NostrTags } from "../internal/nostrEvent";
 import { Emoji } from "./domain";
 import type { ReactionDraft, RetractionDraft, TargetKind } from "./domain";
+import type { DropReason } from "../inbox/events";
 import {
   OwnReactionConfirmed,
+  OwnRetractionConfirmed,
   ReactionAdded,
   ReactionRetracted,
 } from "./events";
-import type { DropReason, ReactionInboxEvent } from "./events";
+import type { ReactionInboxEvent } from "./events";
 
 export const REACTION_KIND = 7;
 export const RETRACTION_KIND = 5;
@@ -120,12 +122,32 @@ const decodeAddedOrConfirmed = (
 
 const decodeRetracted = (
   rumor: Rumor,
+  me: Pubkey,
 ): Either.Either<ReactionInboxEvent, DropReason> => {
+  // Foreign clients may reference non-rumor ids in a deletion; retract what we
+  // can identify instead of rejecting the whole rumor (matches NIP-09 usage).
   const [head, ...tail] = tagValues(rumor.tags, "e").filter(isRumorId);
   if (head === undefined) return Either.left("invalid-retraction");
+  const reactionIds: [typeof head, ...typeof tail] = [head, ...tail];
+
+  if (rumor.pubkey === me) {
+    const retractionId = rumor.id;
+    if (!isRumorId(retractionId)) return Either.left("invalid-retraction");
+    const clientTag = firstTagValue(rumor.tags, "client");
+    return Either.right(
+      new OwnRetractionConfirmed({
+        retractionId,
+        reactionIds,
+        clientId:
+          clientTag !== null && isClientId(clientTag) ? clientTag : null,
+        sentAt: rumor.created_at,
+      }),
+    );
+  }
+
   return Either.right(
     new ReactionRetracted({
-      reactionIds: [head, ...tail],
+      reactionIds,
       from: rumor.pubkey,
       sentAt: rumor.created_at,
     }),
@@ -140,7 +162,7 @@ export const decodeReactionRumor = (
     case REACTION_KIND:
       return decodeAddedOrConfirmed(rumor, me);
     case RETRACTION_KIND:
-      return decodeRetracted(rumor);
+      return decodeRetracted(rumor, me);
     default:
       return Either.left("unsupported-kind");
   }

@@ -29,6 +29,11 @@ inside NIP-59 gift wraps) as the reference for all other verticals.
   error, never a silent success.
 - **No hidden retries.** `NostrTransport.publish` reports per-relay outcomes;
   retry/backoff policy belongs to the outbox (not built yet).
+- **Authenticated inbound.** Incoming wraps are unwrapped by hand, not with
+  nostr-tools' `unwrapEvent` (which verifies nothing): the seal signature must
+  verify, the rumor author must equal the seal author (and not the ephemeral
+  wrap key), and the rumor id must be the hash of the rumor. Anything else is
+  a `WrapDropped` with a typed reason.
 - **Serializable errors.** All errors are `Schema.TaggedError`, so failures can
   be persisted (e.g. on future outbox rows) without ad-hoc stringification.
 

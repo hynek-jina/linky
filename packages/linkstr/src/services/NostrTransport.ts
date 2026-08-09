@@ -1,5 +1,6 @@
 import { Context, Duration, Effect, Layer, Schema } from "effect";
 import { SimplePool } from "nostr-tools";
+import type { Event as NostrToolsEvent } from "nostr-tools";
 import { RelayUrl } from "../domain/primitives";
 import type { SignedWrapEvent } from "../internal/nostrEvent";
 
@@ -28,61 +29,78 @@ export class NostrTransport extends Context.Tag("linkstr/NostrTransport")<
   NostrTransportService
 >() {}
 
-const PUBLISH_TIMEOUT = Duration.seconds(10);
+/** The slice of a nostr-tools pool the transport needs; fakeable in tests. */
+export interface RelayPool {
+  readonly ensureRelay: (
+    url: string,
+    params?: { connectionTimeout?: number },
+  ) => Promise<{ publish: (event: NostrToolsEvent) => Promise<string> }>;
+}
 
-const settleRelayPublish = (
-  relay: RelayUrl,
-  attempt: Promise<string> | undefined,
-): Effect.Effect<RelayPublishResult> => {
-  if (attempt === undefined) {
-    return Effect.succeed(
-      new RelayPublishResult({ relay, accepted: false, detail: "no attempt" }),
+const CONNECTION_TIMEOUT_MS = 6_000;
+const DEFAULT_PUBLISH_TIMEOUT = Duration.seconds(10);
+
+/**
+ * `SimplePool.publish` resolves — not rejects — with a "connection failure: …"
+ * string for unreachable relays, so it cannot distinguish acceptance from
+ * failure. Going through `ensureRelay().publish()` keeps the pool's connection
+ * reuse while only an actual relay OK resolves the promise.
+ */
+export const makeRelayPoolTransport = (
+  pool: RelayPool,
+  options?: { publishTimeout?: Duration.Duration },
+): NostrTransportService => {
+  const publishTimeout = options?.publishTimeout ?? DEFAULT_PUBLISH_TIMEOUT;
+
+  const publishToRelay = (
+    relay: RelayUrl,
+    event: SignedWrapEvent,
+  ): Effect.Effect<RelayPublishResult> =>
+    Effect.tryPromise({
+      try: async () => {
+        const connection = await pool.ensureRelay(relay, {
+          connectionTimeout: CONNECTION_TIMEOUT_MS,
+        });
+        return await connection.publish(event);
+      },
+      catch: (reason) => String(reason),
+    }).pipe(
+      Effect.timeoutFail({
+        duration: publishTimeout,
+        onTimeout: () => "publish timed out",
+      }),
+      Effect.match({
+        onSuccess: (detail) =>
+          new RelayPublishResult({
+            relay,
+            accepted: true,
+            detail: detail || null,
+          }),
+        onFailure: (detail) =>
+          new RelayPublishResult({ relay, accepted: false, detail }),
+      }),
     );
-  }
-  return Effect.tryPromise({
-    try: () => attempt,
-    catch: (reason) => String(reason),
-  }).pipe(
-    Effect.timeoutFail({
-      duration: PUBLISH_TIMEOUT,
-      onTimeout: () => "publish timed out",
-    }),
-    Effect.match({
-      onSuccess: (detail) =>
-        new RelayPublishResult({
-          relay,
-          accepted: true,
-          detail: detail || null,
-        }),
-      onFailure: (detail) =>
-        new RelayPublishResult({ relay, accepted: false, detail }),
-    }),
-  );
+
+  return {
+    publish: (relays, event) =>
+      Effect.forEach(relays, (relay) => publishToRelay(relay, event), {
+        concurrency: "unbounded",
+      }),
+  };
 };
 
 export const NostrTransportSimplePool: Layer.Layer<NostrTransport> =
   Layer.scoped(
     NostrTransport,
-    Effect.gen(function* () {
-      const pool = yield* Effect.acquireRelease(
+    Effect.map(
+      Effect.acquireRelease(
         // Ping + reconnect: without them a dropped websocket (mobile
         // background, network switch) permanently kills the connection.
         Effect.sync(
           () => new SimplePool({ enablePing: true, enableReconnect: true }),
         ),
-        (p) => Effect.sync(() => p.destroy()),
-      );
-
-      const publish: NostrTransportService["publish"] = (relays, event) =>
-        Effect.suspend(() => {
-          const attempts = pool.publish([...relays], event);
-          return Effect.forEach(
-            relays,
-            (relay, index) => settleRelayPublish(relay, attempts[index]),
-            { concurrency: "unbounded" },
-          );
-        });
-
-      return { publish };
-    }),
+        (pool) => Effect.sync(() => pool.destroy()),
+      ),
+      makeRelayPoolTransport,
+    ),
   );

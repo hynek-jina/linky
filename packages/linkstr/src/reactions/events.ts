@@ -1,11 +1,5 @@
 import { Schema } from "effect";
-import {
-  ClientId,
-  Pubkey,
-  RumorId,
-  UnixSeconds,
-  WrapId,
-} from "../domain/primitives";
+import { ClientId, Pubkey, RumorId, UnixSeconds } from "../domain/primitives";
 import { Emoji } from "./domain";
 
 export class ReactionAdded extends Schema.TaggedClass<ReactionAdded>()(
@@ -44,30 +38,21 @@ export class ReactionRetracted extends Schema.TaggedClass<ReactionRetracted>()(
   },
 ) {}
 
+/** Echo of our own retraction; carries what the store needs to reconcile it. */
+export class OwnRetractionConfirmed extends Schema.TaggedClass<OwnRetractionConfirmed>()(
+  "OwnRetractionConfirmed",
+  {
+    retractionId: RumorId,
+    reactionIds: Schema.NonEmptyArray(RumorId),
+    clientId: Schema.NullOr(ClientId),
+    sentAt: UnixSeconds,
+  },
+) {}
+
 export const ReactionInboxEvent = Schema.Union(
   ReactionAdded,
   OwnReactionConfirmed,
   ReactionRetracted,
+  OwnRetractionConfirmed,
 );
 export type ReactionInboxEvent = typeof ReactionInboxEvent.Type;
-
-export const DropReason = Schema.Literal(
-  "malformed-wrap",
-  "not-addressed-to-me",
-  "unwrap-failed",
-  "malformed-rumor",
-  "sender-is-wrap-key",
-  "unsupported-kind",
-  "invalid-reaction",
-  "invalid-retraction",
-);
-export type DropReason = typeof DropReason.Type;
-
-/** A wrap we chose not to surface, with a typed, observable reason. */
-export class WrapDropped extends Schema.TaggedClass<WrapDropped>()(
-  "WrapDropped",
-  {
-    wrapId: Schema.NullOr(WrapId),
-    reason: DropReason,
-  },
-) {}

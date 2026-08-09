@@ -1,11 +1,19 @@
 import { Schema } from "effect";
 import { WrapDelivery } from "./delivery";
-import { ClientId, RelayUrl, RumorId } from "./primitives";
+import { ClientId, RumorId, UnixSeconds } from "./primitives";
+
+const deliveryFailureFields = {
+  rumorId: RumorId,
+  clientId: ClientId,
+  sentAt: UnixSeconds,
+  selfCopy: WrapDelivery,
+  recipientCopy: WrapDelivery,
+};
 
 /** No relay accepted anything — not even the self copy. */
 export class NoRelayReachable extends Schema.TaggedError<NoRelayReachable>()(
   "NoRelayReachable",
-  { relays: Schema.Array(RelayUrl) },
+  deliveryFailureFields,
 ) {}
 
 /**
@@ -14,12 +22,7 @@ export class NoRelayReachable extends Schema.TaggedError<NoRelayReachable>()(
  */
 export class RecipientNotReached extends Schema.TaggedError<RecipientNotReached>()(
   "RecipientNotReached",
-  {
-    rumorId: RumorId,
-    clientId: ClientId,
-    selfCopy: WrapDelivery,
-    recipientCopy: WrapDelivery,
-  },
+  deliveryFailureFields,
 ) {}
 
 export const WrapSendError = Schema.Union(
