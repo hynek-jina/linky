@@ -4,6 +4,9 @@
   "version": "26.9.0",
   "license": "0BSD",
   "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "docker compose -f docker-compose.dev.yml up -d --wait && pnpm --parallel --filter @linky/web-app --filter @linky/push dev",
     "dev:prod": "pnpm --filter @linky/web-app dev:prod",

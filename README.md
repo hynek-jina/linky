@@ -51,7 +51,7 @@ The repo also contains a separate public website in `apps/site/` intended for `l
 
 ## Development
 
-Requirements: Node.js 22.18+ and pnpm; Docker for the local dev service stack
+Requirements: Node.js 24 (see `.node-version`) and pnpm; Docker for the local dev service stack
 
 For Android native builds: Java 17
 

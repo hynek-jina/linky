@@ -1,6 +1,6 @@
 # The service runs its TypeScript sources directly on Node's built-in type
-# stripping (Node 22.18+), so there is no build step — just a pruned install.
-FROM node:22-slim AS build
+# stripping, so there is no build step — just a pruned install.
+FROM node:24-slim AS build
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ COPY apps/push apps/push
 # of them workspace-local), which is what pnpm v10+ deploy otherwise requires.
 RUN pnpm --filter @linky/push deploy --prod --legacy /srv/push
 
-FROM node:22-slim AS runtime
+FROM node:24-slim AS runtime
 
 WORKDIR /app
 

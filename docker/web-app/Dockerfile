@@ -7,7 +7,7 @@
 # Vite inlines `import.meta.env` at build time and `vite build` does not load
 # .env.development, so these ARGs are the only source of the endpoints.
 
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 RUN npm install -g pnpm@11.20.0
 
