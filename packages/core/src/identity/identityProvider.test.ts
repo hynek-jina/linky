@@ -31,6 +31,9 @@ const EXPECTED = {
   storageCashuOwnerKey1: "1371639e7119e3a1e3c02aba9a494eb9",
   storageMessagesOwnerKey0: "54c22ce286e79d6f580d569d443e4a8c",
   storageMessagesOwnerKey1: "5457f8344ed636177013e64144a20090",
+  storageTransactionsOwnerKey0: "a6ce5d7e745db50747d4999661c85d7b",
+  storageTransactionsOwnerKey1: "7a6c62e84719fb5b0ece4a4807853cd0",
+  storageIdentityOwnerKey: "8a48493e2a52d923b01666897957fe52",
 } as const;
 
 const testLayer = Layer.provideMerge(
@@ -67,6 +70,15 @@ describe("IdentityProvider", () => {
     );
     expect(hex(id.storageMessagesOwnerKey(lane(1)))).toBe(
       EXPECTED.storageMessagesOwnerKey1,
+    );
+    expect(hex(id.storageTransactionsOwnerKey(lane(0)))).toBe(
+      EXPECTED.storageTransactionsOwnerKey0,
+    );
+    expect(hex(id.storageTransactionsOwnerKey(lane(1)))).toBe(
+      EXPECTED.storageTransactionsOwnerKey1,
+    );
+    expect(hex(id.storageIdentityOwnerKey)).toBe(
+      EXPECTED.storageIdentityOwnerKey,
     );
   });
 
