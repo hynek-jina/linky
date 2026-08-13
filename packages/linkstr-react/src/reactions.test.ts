@@ -67,6 +67,7 @@ const makeStubService = (
           }),
       );
     }),
+  subscribe: () => Effect.die("subscribe not under test"),
 });
 
 /** Transport stub with an observable scope, to prove runtime rebuilds dispose it. */

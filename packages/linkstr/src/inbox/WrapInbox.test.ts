@@ -1,0 +1,426 @@
+import { Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect";
+import { generateSecretKey, getEventHash, getPublicKey } from "nostr-tools";
+import type { Event as NostrToolsEvent, Filter } from "nostr-tools";
+import {
+  ClientId,
+  NostrSecretKey,
+  Pubkey,
+  RelayUrl,
+  RumorId,
+  UnixSeconds,
+} from "../domain/primitives";
+import { wrapRumorFor } from "../internal/giftWrap";
+import { Rumor } from "../internal/nostrEvent";
+import type { NostrTags } from "../internal/nostrEvent";
+import { encodeReactionRumor } from "../reactions/codec";
+import { Emoji, ReactionDraft } from "../reactions/domain";
+import { LinkstrIdentity } from "../services/LinkstrIdentity";
+import type { LinkstrIdentityService } from "../services/LinkstrIdentity";
+import {
+  makeRelayPoolTransport,
+  NostrTransport,
+} from "../services/NostrTransport";
+import type {
+  RelayConnection,
+  RelayPool,
+  RelaySubscriptionParams,
+} from "../services/NostrTransport";
+import { RelayPolicy } from "../services/RelayPolicy";
+import { NIP59_BACKDATE_MARGIN_SECONDS, WrapInbox } from "./WrapInbox";
+import type { WrapInboxEvent, WrapInboxFeed } from "./WrapInbox";
+
+const makeIdentity = (): LinkstrIdentityService => {
+  const secretKey = NostrSecretKey.make(generateSecretKey());
+  return { pubkey: Pubkey.make(getPublicKey(secretKey)), secretKey };
+};
+
+const alice = makeIdentity();
+const bob = makeIdentity();
+const carol = makeIdentity();
+
+const relayA = RelayUrl.make("wss://relay-a.test");
+const relayB = RelayUrl.make("wss://relay-b.test");
+
+const sentAt = UnixSeconds.make(1_754_000_000);
+
+const reactionWrap = (emoji: string, recipient = alice.pubkey) => {
+  const rumor = encodeReactionRumor(
+    new ReactionDraft({
+      to: alice.pubkey,
+      target: RumorId.make("ab".repeat(32)),
+      targetKind: "text",
+      targetAuthor: alice.pubkey,
+      emoji: Emoji.make(emoji),
+    }),
+    bob.pubkey,
+    sentAt,
+    ClientId.make("client-1"),
+  );
+  return wrapRumorFor(rumor, bob.secretKey, recipient);
+};
+
+const chatWrap = () => {
+  const fields = {
+    pubkey: bob.pubkey,
+    created_at: sentAt,
+    kind: 14,
+    tags: [["p", alice.pubkey]] satisfies NostrTags,
+    content: "hello",
+  };
+  const rumor = new Rumor({ ...fields, id: getEventHash(fields) });
+  return wrapRumorFor(rumor, bob.secretKey, alice.pubkey);
+};
+
+interface FakeSubscription {
+  readonly filters: Array<Filter>;
+  readonly params: RelaySubscriptionParams;
+  closed: boolean;
+}
+
+class FakeRelay {
+  readonly subs: Array<FakeSubscription> = [];
+  connectAttempts = 0;
+  down = false;
+
+  readonly connection: RelayConnection = {
+    publish: () => Promise.resolve("stored"),
+    subscribe: (filters, params) => {
+      const subscription: FakeSubscription = { filters, params, closed: false };
+      this.subs.push(subscription);
+      return {
+        close: () => {
+          subscription.closed = true;
+        },
+      };
+    },
+  };
+
+  emit(event: NostrToolsEvent): void {
+    for (const subscription of this.subs) {
+      if (!subscription.closed) subscription.params.onevent(event);
+    }
+  }
+
+  closeFromRelay(reason: string): void {
+    for (const subscription of this.subs) {
+      if (!subscription.closed) {
+        subscription.closed = true;
+        subscription.params.onclose?.(reason);
+      }
+    }
+  }
+}
+
+const poolFor = (fakes: ReadonlyMap<string, FakeRelay>): RelayPool => ({
+  ensureRelay: (url) => {
+    const relay = fakes.get(url);
+    if (relay === undefined) return Promise.reject(new Error("unknown relay"));
+    relay.connectAttempts++;
+    if (relay.down) return Promise.reject(new Error("connection refused"));
+    return Promise.resolve(relay.connection);
+  },
+});
+
+const dependenciesFor = (fakes: Array<[RelayUrl, FakeRelay]>) =>
+  WrapInbox.Default.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        LinkstrIdentity.fromSecretKey(alice.secretKey),
+        RelayPolicy.fixed({
+          readRelays: fakes.map(([url]) => url),
+          writeRelays: [],
+        }),
+        Layer.succeed(
+          NostrTransport,
+          makeRelayPoolTransport(poolFor(new Map(fakes))),
+        ),
+      ),
+    ),
+  );
+
+const eventually = (predicate: () => boolean): Effect.Effect<void, Error> => {
+  const poll: Effect.Effect<void> = Effect.suspend(() =>
+    predicate()
+      ? Effect.void
+      : Effect.sleep(Duration.millis(2)).pipe(Effect.andThen(() => poll)),
+  );
+  return poll.pipe(
+    Effect.timeoutFail({
+      duration: Duration.seconds(2),
+      onTimeout: () => new Error("condition not met within 2s"),
+    }),
+  );
+};
+
+interface Harness {
+  readonly feed: WrapInboxFeed;
+  readonly collected: Array<WrapInboxEvent>;
+}
+
+const runOpen = <A, E>(
+  fakes: Array<[RelayUrl, FakeRelay]>,
+  options: { since?: UnixSeconds },
+  body: (harness: Harness) => Effect.Effect<A, E>,
+): Promise<A> =>
+  Effect.gen(function* () {
+    const inbox = yield* WrapInbox;
+    const feed = yield* inbox.open({
+      resubscribeDelay: Duration.millis(10),
+      ...options,
+    });
+    const collected: Array<WrapInboxEvent> = [];
+    yield* Effect.forkScoped(
+      Stream.runForEach(feed.events, (event) =>
+        Effect.sync(() => collected.push(event)),
+      ),
+    );
+    return yield* body({ feed, collected });
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(dependenciesFor(fakes)),
+    Effect.runPromise,
+  );
+
+describe("WrapInbox", () => {
+  it("fails to open when no read relays are configured", async () => {
+    const exit = await Effect.gen(function* () {
+      const inbox = yield* WrapInbox;
+      return yield* inbox.open();
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(dependenciesFor([])),
+      Effect.runPromiseExit,
+    );
+
+    expect(exit).toEqual(
+      Exit.fail(expect.objectContaining({ _tag: "NoReadRelaysConfigured" })),
+    );
+  });
+
+  it("subscribes with the gift-wrap filter and emits ReactionAdded", async () => {
+    const fakeA = new FakeRelay();
+    const wrap = reactionWrap("👍");
+
+    await runOpen([[relayA, fakeA]], {}, ({ collected, feed }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        expect(fakeA.subs[0]?.filters).toEqual([
+          { kinds: [1059], "#p": [alice.pubkey] },
+        ]);
+
+        fakeA.emit(wrap);
+        yield* eventually(() => collected.length === 1);
+        expect(collected[0]).toEqual(
+          expect.objectContaining({
+            _tag: "ReactionAdded",
+            from: bob.pubkey,
+            emoji: "👍",
+            sentAt,
+          }),
+        );
+        expect(yield* feed.cursor).toBe(wrap.created_at);
+      }),
+    );
+  });
+
+  it("dedupes the same wrap arriving on two relays", async () => {
+    const fakeA = new FakeRelay();
+    const fakeB = new FakeRelay();
+    const wrap = reactionWrap("👍");
+    const laterWrap = reactionWrap("🔥");
+
+    await runOpen(
+      [
+        [relayA, fakeA],
+        [relayB, fakeB],
+      ],
+      {},
+      ({ collected }) =>
+        Effect.gen(function* () {
+          yield* eventually(
+            () => fakeA.subs.length === 1 && fakeB.subs.length === 1,
+          );
+          fakeA.emit(wrap);
+          fakeB.emit(wrap);
+          fakeB.emit(laterWrap);
+          yield* eventually(() => collected.length === 2);
+          expect(collected).toEqual([
+            expect.objectContaining({ _tag: "ReactionAdded", emoji: "👍" }),
+            expect.objectContaining({ _tag: "ReactionAdded", emoji: "🔥" }),
+          ]);
+        }),
+    );
+  });
+
+  it("surfaces misaddressed, forged and malformed wraps as WrapDropped", async () => {
+    const fakeA = new FakeRelay();
+    const misaddressed = reactionWrap("👍", carol.pubkey);
+    const authentic = reactionWrap("🔥");
+    const forged = { ...authentic, id: authentic.id, content: "not-a-seal" };
+
+    await runOpen([[relayA, fakeA]], {}, ({ collected }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        fakeA.emit(misaddressed);
+        fakeA.emit(forged);
+        fakeA.emit({
+          id: "not-hex",
+          pubkey: alice.pubkey,
+          created_at: 1,
+          kind: 1059,
+          tags: [],
+          content: "x",
+          sig: "x",
+        });
+        yield* eventually(() => collected.length === 3);
+        expect(collected).toEqual([
+          expect.objectContaining({
+            _tag: "WrapDropped",
+            wrapId: misaddressed.id,
+            reason: "not-addressed-to-me",
+          }),
+          expect.objectContaining({
+            _tag: "WrapDropped",
+            wrapId: authentic.id,
+            reason: "unwrap-failed",
+          }),
+          expect.objectContaining({
+            _tag: "WrapDropped",
+            wrapId: null,
+            reason: "malformed-wrap",
+          }),
+        ]);
+      }),
+    );
+  });
+
+  it("does not let a tampered copy suppress the honest wrap from another relay", async () => {
+    const fakeA = new FakeRelay();
+    const fakeB = new FakeRelay();
+    const wrap = reactionWrap("👍");
+    const tampered = { ...wrap, content: "not-a-seal" };
+
+    await runOpen(
+      [
+        [relayA, fakeA],
+        [relayB, fakeB],
+      ],
+      {},
+      ({ collected }) =>
+        Effect.gen(function* () {
+          yield* eventually(
+            () => fakeA.subs.length === 1 && fakeB.subs.length === 1,
+          );
+          fakeA.emit(tampered);
+          yield* eventually(() => collected.length === 1);
+          fakeB.emit(wrap);
+          yield* eventually(() => collected.length === 2);
+          expect(collected).toEqual([
+            expect.objectContaining({
+              _tag: "WrapDropped",
+              wrapId: wrap.id,
+              reason: "unwrap-failed",
+            }),
+            expect.objectContaining({ _tag: "ReactionAdded", emoji: "👍" }),
+          ]);
+        }),
+    );
+  });
+
+  it("surfaces rumor kinds without a vertical as unsupported-kind", async () => {
+    const fakeA = new FakeRelay();
+    const wrap = chatWrap();
+
+    await runOpen([[relayA, fakeA]], {}, ({ collected }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        fakeA.emit(wrap);
+        yield* eventually(() => collected.length === 1);
+        expect(collected[0]).toEqual(
+          expect.objectContaining({
+            _tag: "WrapDropped",
+            wrapId: wrap.id,
+            reason: "unsupported-kind",
+          }),
+        );
+      }),
+    );
+  });
+
+  it("resubscribes after a relay-side close, backfilling from the cursor", async () => {
+    const fakeA = new FakeRelay();
+    const since = UnixSeconds.make(1_755_000_000);
+    const firstWrap = reactionWrap("👍");
+    const secondWrap = reactionWrap("🔥");
+
+    await runOpen([[relayA, fakeA]], { since }, ({ collected }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        expect(fakeA.subs[0]?.filters[0]?.since).toBe(
+          since - NIP59_BACKDATE_MARGIN_SECONDS,
+        );
+
+        fakeA.emit(firstWrap);
+        yield* eventually(() => collected.length === 1);
+
+        fakeA.closeFromRelay("connection reset");
+        yield* eventually(() => fakeA.subs.length === 2);
+        expect(fakeA.subs[1]?.filters[0]?.since).toBe(
+          firstWrap.created_at - NIP59_BACKDATE_MARGIN_SECONDS,
+        );
+
+        fakeA.emit(firstWrap);
+        fakeA.emit(secondWrap);
+        yield* eventually(() => collected.length === 2);
+        expect(collected[1]).toEqual(
+          expect.objectContaining({ _tag: "ReactionAdded", emoji: "🔥" }),
+        );
+      }),
+    );
+  });
+
+  it("keeps retrying a relay it cannot reach", async () => {
+    const fakeA = new FakeRelay();
+    fakeA.down = true;
+
+    await runOpen([[relayA, fakeA]], {}, () =>
+      eventually(() => fakeA.connectAttempts >= 2),
+    );
+    expect(fakeA.subs).toHaveLength(0);
+  });
+
+  it("closes relay subscriptions and ends the stream when the scope closes", async () => {
+    const fakeA = new FakeRelay();
+    const fakeB = new FakeRelay();
+
+    await Effect.gen(function* () {
+      const inbox = yield* WrapInbox;
+      const scope = yield* Scope.make();
+      const feed = yield* inbox
+        .open({ resubscribeDelay: Duration.millis(10) })
+        .pipe(Scope.extend(scope));
+      const consumer = yield* Effect.fork(Stream.runDrain(feed.events));
+      yield* eventually(
+        () => fakeA.subs.length === 1 && fakeB.subs.length === 1,
+      );
+
+      yield* Scope.close(scope, Exit.void);
+      yield* Fiber.join(consumer);
+
+      expect(fakeA.subs.every((subscription) => subscription.closed)).toBe(
+        true,
+      );
+      expect(fakeB.subs.every((subscription) => subscription.closed)).toBe(
+        true,
+      );
+    }).pipe(
+      Effect.provide(
+        dependenciesFor([
+          [relayA, fakeA],
+          [relayB, fakeB],
+        ]),
+      ),
+      Effect.runPromise,
+    );
+  });
+});
