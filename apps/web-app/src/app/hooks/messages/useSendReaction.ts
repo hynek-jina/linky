@@ -1,30 +1,46 @@
-import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import {
+  ClientId,
+  Emoji,
+  Pubkey,
+  ReactionDraft,
+  RetractionDraft,
+  RumorId,
+} from "@linky/linkstr";
+import {
+  retractReactionAtom,
+  sendReactionAtom,
+  useAtomSet,
+} from "@linky/linkstr-react";
+import { Cause, Exit, Option, Schema } from "effect";
 import React from "react";
-import { NOSTR_RELAYS } from "../../../nostrProfile";
 import { makeLocalId } from "../../../utils/validation";
-import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
-import { wrapEventWithoutPushMarker } from "../../lib/pushWrappedEvent";
 import type {
   ContactIdentityRowLike,
   LocalNostrReaction,
   NewLocalNostrReaction,
-  PublishWrappedResult,
   UpdateLocalNostrReaction,
 } from "../../types/appTypes";
 import { resolveNostrChatIdentity } from "./contactIdentity";
+
+const isPubkey = Schema.is(Pubkey);
+const isRumorId = Schema.is(RumorId);
+const isEmoji = Schema.is(Emoji);
+
+type AppendLocalNostrReaction = (reaction: NewLocalNostrReaction) => string;
+
+interface SendReactionArgs {
+  emoji: string;
+  messageAuthorPubkey: string;
+  messageKind?: 14 | 15;
+  messageRumorId: string;
+}
 
 interface UseSendReactionParams<
   TRoute extends { kind: string },
   TContact extends ContactIdentityRowLike,
 > {
-  appendLocalNostrReaction: (reaction: NewLocalNostrReaction) => string;
+  appendLocalNostrReaction: AppendLocalNostrReaction;
   currentNsec: string | null;
-  publishWrappedWithRetry: (
-    pool: AppNostrPool,
-    relays: string[],
-    wrapForMe: NostrToolsEvent,
-    wrapForContact: NostrToolsEvent,
-  ) => Promise<PublishWrappedResult>;
   reactionsByMessageId: Map<string, LocalNostrReaction[]>;
   route: TRoute;
   selectedContact: TContact | null;
@@ -34,22 +50,12 @@ interface UseSendReactionParams<
   updateLocalNostrReaction: UpdateLocalNostrReaction;
 }
 
-interface SendReactionArgs {
-  emoji: string;
-  messageAuthorPubkey: string;
-  messageKind?: 14 | 15;
-  messageRumorId: string;
-}
-
-const toTrimmedText = (value: unknown): string => String(value ?? "").trim();
-
 export const useSendReaction = <
   TRoute extends { kind: string },
   TContact extends ContactIdentityRowLike,
 >({
   appendLocalNostrReaction,
   currentNsec,
-  publishWrappedWithRetry,
   reactionsByMessageId,
   route,
   selectedContact,
@@ -58,6 +64,11 @@ export const useSendReaction = <
   t,
   updateLocalNostrReaction,
 }: UseSendReactionParams<TRoute, TContact>) => {
+  const linkstrReact = useAtomSet(sendReactionAtom, { mode: "promiseExit" });
+  const linkstrRetract = useAtomSet(retractReactionAtom, {
+    mode: "promiseExit",
+  });
+
   return React.useCallback(
     async (args: SendReactionArgs) => {
       if (route.kind !== "chat") return;
@@ -67,157 +78,123 @@ export const useSendReaction = <
         return;
       }
 
-      const messageRumorId = toTrimmedText(args.messageRumorId);
+      const messageRumorId = args.messageRumorId.trim();
       const emoji = String(args.emoji ?? "").trim();
-      const messageAuthorPubkey = toTrimmedText(args.messageAuthorPubkey);
-      const messageKind = args.messageKind === 15 ? 15 : 14;
-      if (!messageRumorId || !emoji || !messageAuthorPubkey) return;
+      const messageAuthorPubkey = args.messageAuthorPubkey.trim();
+      if (
+        !isRumorId(messageRumorId) ||
+        !isEmoji(emoji) ||
+        !isPubkey(messageAuthorPubkey)
+      ) {
+        return;
+      }
 
       try {
-        const { getEventHash } = await import("nostr-tools");
         const identity = await resolveNostrChatIdentity(
           currentNsec,
           selectedContact,
         );
-        if (!identity) {
+        if (!identity || !isPubkey(identity.contactPubHex)) {
           setStatus(t("chatMissingContactNpub"));
           return;
         }
-        const { contactPubHex, myPubHex, privBytes } = identity;
+        const { contactPubHex, myPubHex } = identity;
+        const isOffline =
+          typeof navigator !== "undefined" && navigator.onLine === false;
 
-        // One reaction per user per message: find all my reactions
+        // One reaction per user per message: replace mine, or toggle off on
+        // the same emoji. UX policy lives here, not in linkstr.
         const myReactions = (
           reactionsByMessageId.get(messageRumorId) ?? []
         ).filter(
-          (reaction) => toTrimmedText(reaction.reactorPubkey) === myPubHex,
+          (reaction) =>
+            String(reaction.reactorPubkey ?? "").trim() === myPubHex,
         );
-
         const hasSameEmoji = myReactions.some(
-          (reaction) => toTrimmedText(reaction.emoji) === emoji,
+          (reaction) => String(reaction.emoji ?? "").trim() === emoji,
         );
 
-        const pool = await getSharedAppNostrPool();
-
-        // Delete existing reactions if any (toggle-off or replace)
         if (myReactions.length > 0) {
           for (const reaction of myReactions) {
             softDeleteLocalNostrReaction(reaction.id);
           }
-
-          const clientId = makeLocalId();
-          const deleteTags: string[][] = [
-            ["p", contactPubHex],
-            ["p", myPubHex],
-            ["p", messageAuthorPubkey],
-          ];
-          for (const reaction of myReactions) {
-            const reactionId = toTrimmedText(reaction.wrapId);
-            if (!reactionId) continue;
-            deleteTags.push(["e", reactionId]);
+          const [head, ...tail] = myReactions
+            .map((reaction) => String(reaction.wrapId ?? "").trim())
+            .filter(isRumorId);
+          if (head !== undefined && !isOffline) {
+            const exit = await linkstrRetract(
+              new RetractionDraft({
+                to: contactPubHex,
+                reactionIds: [head, ...tail],
+              }),
+            );
+            if (Exit.isFailure(exit)) setStatus(t("chatQueued"));
           }
-          deleteTags.push(["client", clientId]);
-
-          const deleteEvent = {
-            created_at: Math.ceil(Date.now() / 1e3),
-            kind: 5,
-            pubkey: myPubHex,
-            tags: deleteTags,
-            content: "",
-          } satisfies UnsignedEvent;
-
-          const wrapForMe = wrapEventWithoutPushMarker(
-            deleteEvent,
-            privBytes,
-            myPubHex,
-          );
-          const wrapForContact = wrapEventWithoutPushMarker(
-            deleteEvent,
-            privBytes,
-            contactPubHex,
-          );
-
-          const publishOutcome = await publishWrappedWithRetry(
-            pool,
-            NOSTR_RELAYS,
-            wrapForMe,
-            wrapForContact,
-          );
-          if (!publishOutcome.anySuccess) setStatus(t("chatQueued"));
-
-          // Same emoji clicked → toggle off (remove reaction), done
           if (hasSameEmoji) return;
         }
 
-        const clientId = makeLocalId();
-        const reactionEvent = {
-          created_at: Math.ceil(Date.now() / 1e3),
-          kind: 7,
-          pubkey: myPubHex,
-          tags: [
-            ["p", messageAuthorPubkey],
-            ["p", contactPubHex],
-            ["p", myPubHex],
-            ["e", messageRumorId],
-            ["k", String(messageKind)],
-            ["client", clientId],
-          ],
-          content: emoji,
-        } satisfies UnsignedEvent;
-        const reactionRumorId = getEventHash(reactionEvent);
-
+        const clientId = ClientId.make(makeLocalId());
         const pendingReactionId = appendLocalNostrReaction({
           messageId: messageRumorId,
           reactorPubkey: myPubHex,
           emoji,
-          createdAtSec: reactionEvent.created_at,
-          wrapId: reactionRumorId,
+          createdAtSec: Math.ceil(Date.now() / 1e3),
+          wrapId: `pending:${clientId}`,
           clientId,
           status: "pending",
         });
 
-        const isOffline =
-          typeof navigator !== "undefined" && navigator.onLine === false;
         if (isOffline) {
           setStatus(t("chatQueued"));
           return;
         }
 
-        const wrapForMe = wrapEventWithoutPushMarker(
-          reactionEvent,
-          privBytes,
-          myPubHex,
-        );
-        const wrapForContact = wrapEventWithoutPushMarker(
-          reactionEvent,
-          privBytes,
-          contactPubHex,
-        );
-
-        const publishOutcome = await publishWrappedWithRetry(
-          pool,
-          NOSTR_RELAYS,
-          wrapForMe,
-          wrapForContact,
+        const exit = await linkstrReact(
+          new ReactionDraft({
+            to: contactPubHex,
+            target: messageRumorId,
+            targetKind: args.messageKind === 15 ? "image" : "text",
+            targetAuthor: messageAuthorPubkey,
+            emoji,
+            clientId,
+          }),
         );
 
-        if (!pendingReactionId) return;
-        if (!publishOutcome.anySuccess) {
-          setStatus(t("chatQueued"));
+        if (Exit.isSuccess(exit)) {
+          if (pendingReactionId) {
+            updateLocalNostrReaction(pendingReactionId, {
+              status: "sent",
+              wrapId: exit.value.reactionId,
+            });
+          }
           return;
         }
 
-        updateLocalNostrReaction(pendingReactionId, {
-          status: "sent",
-          wrapId: reactionRumorId,
-        });
-      } catch (error) {
-        setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
+        const failure = Cause.failureOption(exit.cause);
+        if (
+          Option.isSome(failure) &&
+          failure.value._tag !== "LinkstrNotConfigured"
+        ) {
+          // Row stays pending for the flush; remember the rumor id so the
+          // relay echo can still reconcile by wrapId.
+          if (pendingReactionId) {
+            updateLocalNostrReaction(pendingReactionId, {
+              wrapId: failure.value.rumorId,
+            });
+          }
+          setStatus(t("chatQueued"));
+          return;
+        }
+        setStatus(`${t("errorPrefix")}: ${Cause.pretty(exit.cause)}`);
+      } catch (e) {
+        setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
       }
     },
     [
       appendLocalNostrReaction,
       currentNsec,
-      publishWrappedWithRetry,
+      linkstrReact,
+      linkstrRetract,
       reactionsByMessageId,
       route.kind,
       selectedContact,
