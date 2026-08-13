@@ -61,6 +61,40 @@ For Android native builds: Java 17
 - `bun run dev:prod` — web app only, on :5175, against production services. The separate port keeps browser storage isolated from local-dev sessions.
 - `bun run dev:services` — just the docker stack, attached.
 
+### Dev inspector
+
+While the dev server runs, the dev inspector shows Linky's Nostr traffic on two channels:
+`operation` (linky-level linkstr operations and routed inbox facts) and `wire` (raw relay traffic —
+publishes, subscriptions, incoming events). Rows are correlated by shared ids in their `links`
+(gift-wrap ids, rumor ids, optimistic-update client ids). Dev-only, compiled out of production
+builds.
+
+1. Start the app (`bun run dev` or `bun run dev:prod`).
+2. Open `http://localhost:5173/inspector.html` (`:5175` for `dev:prod`) in a window next to the app
+   — not as a route inside the app.
+3. Use the app; rows stream in live. Selecting a row highlights every related row and the detail
+   pane lists them (click to jump) — e.g. one `reactions.react` operation and the two
+   `WirePublished` wraps it produced.
+
+Toolbar: channel chips and a text filter narrow the timeline; **Pause** freezes the view while
+still buffering; **Clear** resets the collector; the timeline auto-follows the newest row until you
+scroll up (**Follow ↓** jumps back). When several app tabs report, an **App** selector appears.
+
+Programmatic access:
+
+```bash
+# poll as JSON; cursor in the response resumes the next call
+# optional filters: channel=operation|wire, client=<per-tab app id>
+curl "http://localhost:5173/__inspector/events?cursor=0&channel=wire"
+
+# live SSE stream / reset between scenarios
+curl -N "http://localhost:5173/__inspector/stream"
+curl -X POST "http://localhost:5173/__inspector/clear"
+
+# or tail the append-only file (one JSON row per line, reset on dev-server start)
+tail -f apps/web-app/.inspector/rows-5173.ndjson
+```
+
 Android shell currently adds:
 
 - encrypted native secret storage for identity data
