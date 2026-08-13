@@ -1,5 +1,7 @@
 import { Atom } from "@effect-atom/atom-react";
 import {
+  Inspector,
+  inspectTransport,
   LinkstrIdentity,
   NostrTransportSimplePool,
   Reactions,
@@ -18,7 +20,7 @@ const baseServices = (config: LinkstrConfig) =>
       readRelays: config.readRelays,
       writeRelays: config.writeRelays,
     }),
-    config.transport ?? NostrTransportSimplePool,
+    inspectTransport(config.transport ?? NostrTransportSimplePool),
   );
 
 /**
@@ -37,6 +39,9 @@ export const linkstrRuntimeAtom = Atom.runtime((get) => {
     : Layer.fresh(
         Layer.mergeAll(Reactions.Default, WrapInbox.Default).pipe(
           Layer.provideMerge(baseServices(config)),
+          Layer.provideMerge(
+            config.inspector === true ? Inspector.live : Inspector.disabled,
+          ),
         ),
       );
 });

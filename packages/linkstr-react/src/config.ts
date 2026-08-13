@@ -8,6 +8,8 @@ export interface LinkstrConfig {
   readonly writeRelays: ReadonlyArray<RelayUrl>;
   /** Test/e2e seam: replaces the real websocket transport when provided. */
   readonly transport?: Layer.Layer<NostrTransport>;
+  /** Streams diagnostics through `inspectorEventsAtom` when true. */
+  readonly inspector?: boolean;
 }
 
 /** Null while logged out; every linkstr action then fails with LinkstrNotConfigured. */

@@ -13,6 +13,8 @@ import type { Scope } from "effect";
 import type { Filter } from "nostr-tools";
 import { UnixSeconds, WrapId } from "../domain/primitives";
 import type { RelayUrl } from "../domain/primitives";
+import { Inspector } from "../inspector/Inspector";
+import { InboxRouted, InboxWrapDeduped } from "../inspector/events";
 import type { Rumor, SignedWrapEvent } from "../internal/nostrEvent";
 import {
   decodeReactionRumor,
@@ -85,7 +87,7 @@ const decodeWrapIdField = Schema.decodeUnknownEither(
   Schema.Struct({ id: WrapId }),
 );
 
-const wrapIdOf = (raw: unknown): string | null =>
+const wrapIdOf = (raw: unknown): WrapId | null =>
   Either.match(decodeWrapIdField(raw), {
     onLeft: () => null,
     onRight: ({ id }) => id,
@@ -124,6 +126,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
       const identity = yield* LinkstrIdentity;
       const transport = yield* NostrTransport;
       const relayPolicy = yield* RelayPolicy;
+      const inspector = yield* Inspector.orNoop;
 
       const open = (
         options?: WrapInboxOptions,
@@ -195,15 +198,37 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
             Effect.suspend(() => {
               const wrapId = wrapIdOf(raw);
               if (wrapId !== null && seenWrapIds.has(wrapId)) {
-                return Effect.succeedNone;
+                return Effect.sync(() => {
+                  inspector.emit(new InboxWrapDeduped({ wrapId }));
+                  return Option.none<WrapInboxEvent>();
+                });
               }
               return Either.match(authenticateWrap(raw, identity), {
                 onLeft: (dropped) =>
-                  Effect.succeedSome<WrapInboxEvent>(dropped),
+                  Effect.sync(() => {
+                    inspector.emit(
+                      new InboxRouted({
+                        wrapId: dropped.wrapId,
+                        rumorKind: null,
+                        event: dropped,
+                      }),
+                    );
+                    return Option.some<WrapInboxEvent>(dropped);
+                  }),
                 onRight: ({ rumor, wrap }) =>
                   Effect.sync(() => seenWrapIds.add(wrap.id)).pipe(
                     Effect.andThen(advanceCursor(wrap.created_at)),
-                    Effect.as(Option.some(routeRumor(wrap, rumor, identity))),
+                    Effect.map(() => {
+                      const routed = routeRumor(wrap, rumor, identity);
+                      inspector.emit(
+                        new InboxRouted({
+                          wrapId: wrap.id,
+                          rumorKind: rumor.kind,
+                          event: routed,
+                        }),
+                      );
+                      return Option.some(routed);
+                    }),
                   ),
               });
             });
