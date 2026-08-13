@@ -10,15 +10,11 @@ import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
 import { isLinkyPaymentNoticeEvent } from "../../lib/pushWrappedEvent";
 import type {
   LocalNostrMessage,
-  LocalNostrReaction,
   NewLocalNostrMessage,
-  NewLocalNostrReaction,
   UpdateLocalNostrMessage,
-  UpdateLocalNostrReaction,
 } from "../../types/appTypes";
 import {
   extractClientTag,
-  extractDeleteReferencedIds,
   extractEditedFromTag,
   extractReplyContextFromTags,
   isInvalidInnerRumorPubkey,
@@ -97,45 +93,23 @@ export const resolveNostrInboxRelays = (
 
 export type NostrInboxDelivery = "backfill" | "live";
 
-interface DeferredNostrInboxReaction {
-  delivery: NostrInboxDelivery;
-  reactionId: string;
-  reactorPubkey: string;
-  wrap: NostrToolsEvent;
-}
-
 interface NostrInboxMessageReference {
   contactId: string;
-  // Persisted rows store the stable rumor id, so reactions resolved through
+  // Persisted rows store the stable rumor id, so consumers resolving through
   // this reference must join on it rather than the raw e-tag value.
   messageRumorId: string;
   pubkey: string;
 }
 
-interface NostrInboxReactionReference {
-  emoji: string;
-  messageId: string;
-  reactorPubkey: string;
-  wrapId: string;
-}
-
 export interface NostrInboxSeenState {
-  deferredReactions: Map<string, DeferredNostrInboxReaction>;
-  deletedReactionWrapIds: Set<string>;
   messageIdentities: Set<string>;
   messageReferences: Map<string, NostrInboxMessageReference>;
-  reactionIdentities: Set<string>;
-  reactionReferences: Map<string, NostrInboxReactionReference>;
   wrapIds: Set<string>;
 }
 
 export const createNostrInboxSeenState = (): NostrInboxSeenState => ({
-  deferredReactions: new Map(),
-  deletedReactionWrapIds: new Set(),
   messageIdentities: new Set(),
   messageReferences: new Map(),
-  reactionIdentities: new Set(),
-  reactionReferences: new Map(),
   wrapIds: new Set(),
 });
 
@@ -149,8 +123,6 @@ export interface NostrInboxSnapshot {
   knownMessageIdentities: KnownNostrMessageIdentityIndex;
   messageWrapIds: ReadonlySet<string>;
   messages: readonly LocalNostrMessage[];
-  reactionWrapIds: ReadonlySet<string>;
-  reactions: readonly LocalNostrReaction[];
 }
 
 export interface NostrInboxConversation {
@@ -185,10 +157,7 @@ export interface NostrInboxEffects {
     acknowledgement: NostrInboxAcknowledgement,
   ) => void;
   appendMessage: (message: NewLocalNostrMessage) => string;
-  appendReaction: (reaction: NewLocalNostrReaction) => string;
-  deleteReactionsByWrapIds: (wrapIds: readonly string[]) => void;
   updateMessage: UpdateLocalNostrMessage;
-  updateReaction: UpdateLocalNostrReaction;
 }
 
 interface NostrInboxBaseOutcome {
@@ -236,10 +205,7 @@ export type NostrInboxOutcome =
         | "backfilled-original"
         | "edited-message"
         | "ignored"
-        | "reconciled-message"
-        | "reconciled-reaction"
-        | "inserted-reaction"
-        | "deleted-reactions";
+        | "reconciled-message";
       reason?: string;
     });
 
@@ -330,12 +296,6 @@ const findMatchingMessage = ({
     ) ?? null
   );
 };
-
-const buildReactionIdentity = (
-  messageId: string,
-  reactorPubkey: string,
-  emoji: string,
-): string => `${messageId}|${reactorPubkey}|${emoji}`;
 
 const resolveMessageConversation = ({
   identityPubkey,
@@ -658,278 +618,6 @@ const processMessage = ({
   };
 };
 
-const processReaction = ({
-  delivery,
-  effects,
-  identity,
-  policy,
-  rumor,
-  seen,
-  snapshot,
-  wrap,
-}: Omit<ProcessNostrInboxWrapParams, "unwrapEvent"> & {
-  rumor: DecodedNostrInboxRumor;
-}): NostrInboxOutcome => {
-  const wrapId = wrap.id;
-  if (isInvalidInnerRumorPubkey(rumor.pubkey, wrap.pubkey)) {
-    return ignored(delivery, wrapId, "outer-rumor-pubkey");
-  }
-  if (
-    rumor.pubkey !== identity.pubkey &&
-    policy.isBlockedIncomingPubkey(rumor.pubkey)
-  ) {
-    return ignored(delivery, wrapId, "blocked");
-  }
-
-  const referencedMessageId = readTagValues(rumor.tags, "e")[0] ?? "";
-  if (!isEventId(referencedMessageId)) {
-    return ignored(delivery, wrapId, "invalid-reaction-reference");
-  }
-  const snapshotMessage =
-    snapshot.messages.find(
-      (message) => normalizeText(message.rumorId) === referencedMessageId,
-    ) ?? null;
-  const messageReference = snapshotMessage
-    ? null
-    : (seen.messageReferences.get(referencedMessageId) ?? null);
-  const knownMessage = snapshotMessage ?? messageReference;
-  if (!knownMessage) return ignored(delivery, wrapId, "unknown-message");
-  const resolvedMessageId =
-    messageReference?.messageRumorId || referencedMessageId;
-
-  const contactId = normalizeText(knownMessage.contactId);
-  const peerPubkey =
-    rumor.pubkey === identity.pubkey
-      ? (normalizePubkeyHex(knownMessage.pubkey) ?? "")
-      : rumor.pubkey;
-  const direction = rumor.pubkey === identity.pubkey ? "out" : "in";
-  if (
-    !contactId ||
-    !policy.ownsConversation({ contactId, direction, peerPubkey })
-  ) {
-    return ignored(delivery, wrapId, "conversation-scope");
-  }
-
-  const kindTag = readTagValues(rumor.tags, "k")[0] ?? "";
-  if (kindTag && kindTag !== "14" && kindTag !== "15") {
-    return ignored(delivery, wrapId, "unsupported-reaction-kind");
-  }
-  const emoji = rumor.content.trim();
-  if (!emoji) return ignored(delivery, wrapId, "empty-reaction");
-
-  const reactionWrapId = normalizeText(rumor.id) || wrapId;
-  if (seen.deletedReactionWrapIds.has(reactionWrapId)) {
-    return ignored(delivery, wrapId, "deleted-reaction");
-  }
-  if (snapshot.reactionWrapIds.has(reactionWrapId)) {
-    return ignored(delivery, wrapId, "known-reaction-wrap");
-  }
-  const clientId = extractClientTag(rumor.tags);
-  const reactionIdentity = buildReactionIdentity(
-    resolvedMessageId,
-    rumor.pubkey,
-    emoji,
-  );
-  const rememberReactionReference = (): void => {
-    seen.reactionReferences.set(reactionWrapId, {
-      emoji,
-      messageId: resolvedMessageId,
-      reactorPubkey: rumor.pubkey,
-      wrapId: reactionWrapId,
-    });
-  };
-  if (seen.reactionIdentities.has(reactionIdentity)) {
-    return ignored(delivery, wrapId, "seen-reaction-identity");
-  }
-
-  const existingByWrap = snapshot.reactions.find(
-    (reaction) => normalizeText(reaction.wrapId) === reactionWrapId,
-  );
-  if (existingByWrap) {
-    effects.updateReaction(existingByWrap.id, {
-      status: "sent",
-      wrapId: reactionWrapId,
-      ...(clientId ? { clientId } : {}),
-    });
-    seen.reactionIdentities.add(reactionIdentity);
-    rememberReactionReference();
-    return { delivery, kind: "reconciled-reaction", wrapId };
-  }
-  const existingByClient = clientId
-    ? snapshot.reactions.find(
-        (reaction) => normalizeText(reaction.clientId) === clientId,
-      )
-    : null;
-  if (existingByClient) {
-    effects.updateReaction(existingByClient.id, {
-      status: "sent",
-      wrapId: reactionWrapId,
-      messageId: resolvedMessageId,
-      reactorPubkey: rumor.pubkey,
-      emoji,
-      ...(clientId ? { clientId } : {}),
-    });
-    seen.reactionIdentities.add(reactionIdentity);
-    rememberReactionReference();
-    return { delivery, kind: "reconciled-reaction", wrapId };
-  }
-  const duplicate = snapshot.reactions.some(
-    (reaction) =>
-      !seen.deletedReactionWrapIds.has(normalizeText(reaction.wrapId)) &&
-      normalizeText(reaction.messageId) === resolvedMessageId &&
-      normalizeText(reaction.reactorPubkey) === rumor.pubkey &&
-      normalizeText(reaction.emoji) === emoji,
-  );
-  if (duplicate) return ignored(delivery, wrapId, "duplicate-reaction");
-
-  effects.appendReaction({
-    messageId: resolvedMessageId,
-    reactorPubkey: rumor.pubkey,
-    emoji,
-    createdAtSec: Math.trunc(rumor.created_at),
-    wrapId: reactionWrapId,
-    status: "sent",
-    ...(clientId ? { clientId } : {}),
-  });
-  seen.reactionIdentities.add(reactionIdentity);
-  rememberReactionReference();
-  return { delivery, kind: "inserted-reaction", wrapId };
-};
-
-const processReactionDelete = ({
-  delivery,
-  effects,
-  identity,
-  policy,
-  rumor,
-  seen,
-  snapshot,
-  wrap,
-}: Omit<ProcessNostrInboxWrapParams, "unwrapEvent"> & {
-  rumor: DecodedNostrInboxRumor;
-}): NostrInboxOutcome => {
-  const wrapId = wrap.id;
-  if (!isEventId(rumor.id)) {
-    return ignored(delivery, wrapId, "invalid-delete-id");
-  }
-  if (isInvalidInnerRumorPubkey(rumor.pubkey, wrap.pubkey)) {
-    return ignored(delivery, wrapId, "outer-rumor-pubkey");
-  }
-  if (
-    rumor.pubkey !== identity.pubkey &&
-    policy.isBlockedIncomingPubkey(rumor.pubkey)
-  ) {
-    return ignored(delivery, wrapId, "blocked");
-  }
-
-  const referencedIds = extractDeleteReferencedIds(rumor.tags).filter(
-    isEventId,
-  );
-  const deferredReactionIds = new Set<string>();
-  for (const [deferredWrapId, deferred] of seen.deferredReactions) {
-    if (
-      !referencedIds.includes(deferred.reactionId) ||
-      normalizePubkeyHex(deferred.reactorPubkey) !==
-        normalizePubkeyHex(rumor.pubkey)
-    ) {
-      continue;
-    }
-    seen.deferredReactions.delete(deferredWrapId);
-    seen.deletedReactionWrapIds.add(deferred.reactionId);
-    seen.wrapIds.add(deferredWrapId);
-    deferredReactionIds.add(deferred.reactionId);
-  }
-  const ownedReactions = referencedIds.flatMap((referencedId) => {
-    const reaction =
-      snapshot.reactions.find(
-        (candidate) => normalizeText(candidate.wrapId) === referencedId,
-      ) ??
-      seen.reactionReferences.get(referencedId) ??
-      null;
-    if (
-      !reaction ||
-      normalizePubkeyHex(reaction.reactorPubkey) !==
-        normalizePubkeyHex(rumor.pubkey)
-    ) {
-      return [];
-    }
-    const message =
-      snapshot.messages.find(
-        (candidate) =>
-          normalizeText(candidate.rumorId) ===
-          normalizeText(reaction.messageId),
-      ) ??
-      seen.messageReferences.get(normalizeText(reaction.messageId)) ??
-      null;
-    if (
-      !message ||
-      !policy.ownsConversation({
-        contactId: message.contactId,
-        direction: rumor.pubkey === identity.pubkey ? "out" : "in",
-        peerPubkey: rumor.pubkey,
-      })
-    ) {
-      return [];
-    }
-    return [reaction];
-  });
-  if (ownedReactions.length === 0 && deferredReactionIds.size === 0) {
-    return ignored(delivery, wrapId, "unknown-reaction-delete");
-  }
-  const ownedIds = ownedReactions.map((reaction) =>
-    normalizeText(reaction.wrapId),
-  );
-  for (const reaction of ownedReactions) {
-    seen.deletedReactionWrapIds.add(normalizeText(reaction.wrapId));
-    seen.reactionReferences.delete(normalizeText(reaction.wrapId));
-    seen.reactionIdentities.delete(
-      buildReactionIdentity(
-        normalizeText(reaction.messageId),
-        normalizeText(reaction.reactorPubkey),
-        normalizeText(reaction.emoji),
-      ),
-    );
-  }
-  if (ownedIds.length > 0) effects.deleteReactionsByWrapIds(ownedIds);
-  return { delivery, kind: "deleted-reactions", wrapId };
-};
-
-const MAX_DEFERRED_REACTIONS = 100;
-
-const deferReaction = (
-  seen: NostrInboxSeenState,
-  delivery: NostrInboxDelivery,
-  rumor: DecodedNostrInboxRumor,
-  wrap: NostrToolsEvent,
-): void => {
-  if (!isEventId(rumor.id)) return;
-  seen.wrapIds.delete(wrap.id);
-  seen.deferredReactions.set(wrap.id, {
-    delivery,
-    reactionId: rumor.id,
-    reactorPubkey: rumor.pubkey,
-    wrap,
-  });
-  if (seen.deferredReactions.size <= MAX_DEFERRED_REACTIONS) return;
-  const oldestWrapId = seen.deferredReactions.keys().next().value;
-  if (typeof oldestWrapId === "string") {
-    seen.deferredReactions.delete(oldestWrapId);
-  }
-};
-
-const retryDeferredReactions = (params: ProcessNostrInboxWrapParams): void => {
-  for (const [wrapId, deferred] of Array.from(
-    params.seen.deferredReactions.entries(),
-  )) {
-    params.seen.deferredReactions.delete(wrapId);
-    processNostrInboxWrap({
-      ...params,
-      delivery: deferred.delivery,
-      wrap: deferred.wrap,
-    });
-  }
-};
-
 const resolveSpecialEvent = ({
   delivery,
   identity,
@@ -1084,48 +772,7 @@ export const processNostrInboxWrap = ({
     if (snapshot.messageWrapIds.has(wrapId)) {
       return ignored(delivery, wrapId, "known-message-wrap");
     }
-    const outcome = processMessage({
-      delivery,
-      effects,
-      identity,
-      policy,
-      rumor,
-      seen,
-      snapshot,
-      wrap,
-    });
-    retryDeferredReactions({
-      delivery,
-      effects,
-      identity,
-      policy,
-      seen,
-      snapshot,
-      unwrapEvent,
-      wrap,
-    });
-    return outcome;
-  }
-  if (rumor.kind === 7) {
-    const outcome = processReaction({
-      delivery,
-      effects,
-      identity,
-      policy,
-      rumor,
-      seen,
-      snapshot,
-      wrap,
-    });
-    if (outcome.kind === "ignored" && outcome.reason === "unknown-message") {
-      deferReaction(seen, delivery, rumor, wrap);
-    } else {
-      seen.deferredReactions.delete(wrapId);
-    }
-    return outcome;
-  }
-  if (rumor.kind === 5) {
-    return processReactionDelete({
+    return processMessage({
       delivery,
       effects,
       identity,

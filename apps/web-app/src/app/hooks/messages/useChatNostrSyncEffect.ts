@@ -8,12 +8,9 @@ import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import type {
   ContactIdentityRowLike,
   LocalNostrMessage,
-  LocalNostrReaction,
   NewLocalNostrMessage,
-  NewLocalNostrReaction,
   PaymentLogData,
   UpdateLocalNostrMessage,
-  UpdateLocalNostrReaction,
 } from "../../types/appTypes";
 import {
   normalizePubkeyHex,
@@ -31,7 +28,6 @@ const normalizeText = (value: unknown): string => String(value ?? "").trim();
 
 interface UseChatNostrSyncEffectParams {
   appendLocalNostrMessage: (message: NewLocalNostrMessage) => string;
-  appendLocalNostrReaction: (reaction: NewLocalNostrReaction) => string;
   chatMessages: readonly LocalNostrMessage[];
   chatMessagesLatestRef: React.MutableRefObject<LocalNostrMessage[]>;
   currentNsec: string | null;
@@ -40,18 +36,13 @@ interface UseChatNostrSyncEffectParams {
   logPayStep: (step: string, data?: PaymentLogData) => void;
   nostrFetchRelays: string[];
   nostrMessageWrapIdsRef: React.MutableRefObject<Set<string>>;
-  nostrReactionWrapIdsRef: React.MutableRefObject<Set<string>>;
-  nostrReactionsLatestRef: React.MutableRefObject<LocalNostrReaction[]>;
   route: { kind: string };
   selectedContact: ContactIdentityRowLike | null;
-  softDeleteLocalNostrReactionsByWrapIds: (wrapIds: readonly string[]) => void;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
-  updateLocalNostrReaction: UpdateLocalNostrReaction;
 }
 
 export const useChatNostrSyncEffect = ({
   appendLocalNostrMessage,
-  appendLocalNostrReaction,
   chatMessages,
   chatMessagesLatestRef,
   currentNsec,
@@ -60,60 +51,41 @@ export const useChatNostrSyncEffect = ({
   logPayStep,
   nostrFetchRelays,
   nostrMessageWrapIdsRef,
-  nostrReactionWrapIdsRef,
-  nostrReactionsLatestRef,
   route,
   selectedContact,
-  softDeleteLocalNostrReactionsByWrapIds,
   updateLocalNostrMessage,
-  updateLocalNostrReaction,
 }: UseChatNostrSyncEffectParams) => {
   const latestValuesRef = React.useRef({
     appendLocalNostrMessage,
-    appendLocalNostrReaction,
     chatMessages,
     chatMessagesLatestRef,
     knownNostrMessageIdentityIndex,
     logPayStep,
     nostrMessageWrapIdsRef,
-    nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
     selectedContact,
-    softDeleteLocalNostrReactionsByWrapIds,
     updateLocalNostrMessage,
-    updateLocalNostrReaction,
   });
 
   React.useEffect(() => {
     latestValuesRef.current = {
       appendLocalNostrMessage,
-      appendLocalNostrReaction,
       chatMessages,
       chatMessagesLatestRef,
       knownNostrMessageIdentityIndex,
       logPayStep,
       nostrMessageWrapIdsRef,
-      nostrReactionWrapIdsRef,
-      nostrReactionsLatestRef,
       selectedContact,
-      softDeleteLocalNostrReactionsByWrapIds,
       updateLocalNostrMessage,
-      updateLocalNostrReaction,
     };
   }, [
     appendLocalNostrMessage,
-    appendLocalNostrReaction,
     chatMessages,
     chatMessagesLatestRef,
     knownNostrMessageIdentityIndex,
     logPayStep,
     nostrMessageWrapIdsRef,
-    nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
     selectedContact,
-    softDeleteLocalNostrReactionsByWrapIds,
     updateLocalNostrMessage,
-    updateLocalNostrReaction,
   ]);
 
   const selectedContactId = normalizeText(selectedContact?.id);
@@ -168,11 +140,7 @@ export const useChatNostrSyncEffect = ({
                   });
                 },
                 appendMessage: latest.appendLocalNostrMessage,
-                appendReaction: latest.appendLocalNostrReaction,
-                deleteReactionsByWrapIds:
-                  latest.softDeleteLocalNostrReactionsByWrapIds,
                 updateMessage: latest.updateLocalNostrMessage,
-                updateReaction: latest.updateLocalNostrReaction,
               },
               identity: {
                 identitySinceSec,
@@ -196,8 +164,6 @@ export const useChatNostrSyncEffect = ({
                 knownMessageIdentities: latest.knownNostrMessageIdentityIndex,
                 messageWrapIds: latest.nostrMessageWrapIdsRef.current,
                 messages: latest.chatMessagesLatestRef.current,
-                reactionWrapIds: latest.nostrReactionWrapIdsRef.current,
-                reactions: latest.nostrReactionsLatestRef.current,
               },
               unwrapEvent,
               wrap,
