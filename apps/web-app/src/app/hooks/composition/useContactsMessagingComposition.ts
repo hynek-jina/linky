@@ -78,6 +78,7 @@ import {
 } from "../messages/useSendChatMessage";
 import { useLinkstrReactionInboxSync } from "../messages/useLinkstrReactionInboxSync";
 import { useSendReaction } from "../messages/useSendReaction";
+import { useLinkstrInspectorBridge } from "../../../devtools/inspector/useLinkstrInspectorBridge";
 import { useLinkstrConfigSync } from "../useLinkstrConfigSync";
 import { useContactsDomain } from "../useContactsDomain";
 import { useContactsNostrPrefetchEffects } from "../useContactsNostrPrefetchEffects";
@@ -968,6 +969,7 @@ export const useContactsMessagingComposition = ({
   });
 
   useLinkstrConfigSync({ currentNsec, nostrFetchRelays });
+  useLinkstrInspectorBridge();
 
   useLinkstrReactionInboxSync({
     appendLocalNostrReaction,

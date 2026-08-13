@@ -32,6 +32,7 @@ const buildLinkstrConfig = (
     // Writes stay on the default relay set for now, matching the legacy
     // publish paths; widening writes to user relays is a separate decision.
     writeRelays: NOSTR_RELAYS.filter(isRelayUrl),
+    inspector: import.meta.env.DEV,
   };
 };
 
