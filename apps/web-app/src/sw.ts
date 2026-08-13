@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 /// <reference lib="webworker" />
 
-const SW_BUILD_TAG = "linky-sw-2026-08-05T00:00-client-count";
+const SW_BUILD_TAG = "linky-sw-2026-08-13T00:00-inspector-denylist";
 const NOTIFICATION_OPEN_URL = "/#contacts";
 const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
 
@@ -525,7 +525,12 @@ registerRoute(
 
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL("index.html"), {
-    denylist: [/^\/password-save\.html$/],
+    // Dev inspector page and collector endpoints must reach the dev server.
+    denylist: [
+      /^\/password-save\.html$/,
+      /^\/inspector\.html/,
+      /^\/__inspector\//,
+    ],
   }),
 );
 

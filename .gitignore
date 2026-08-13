@@ -18,6 +18,7 @@ playwright-report
 local.properties
 *.local
 packages/core/src/**/*.js
+apps/web-app/.inspector/
 
 # Editor directories and files
 .vscode/*
