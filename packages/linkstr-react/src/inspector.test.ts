@@ -15,7 +15,7 @@ import { generateSecretKey, getPublicKey } from "nostr-tools";
 import type { LinkstrConfig } from "./config";
 import { linkstrConfigAtom } from "./config";
 import { Registry } from "./index";
-import { inspectorEventsAtom, inspectorSinkAtom } from "./inspector";
+import { inspectorEventsAtom, inspectorHandlerAtom } from "./inspector";
 import { sendReactionAtom } from "./reactions";
 
 const aliceKey = NostrSecretKey.make(generateSecretKey());
@@ -65,8 +65,10 @@ describe("inspectorEventsAtom", () => {
     const seen: Array<InspectorEvent> = [];
 
     registry.set(linkstrConfigAtom, configWith(true));
-    registry.set(inspectorSinkAtom, (event) => {
-      seen.push(event);
+    registry.set(inspectorHandlerAtom, {
+      onEvent: (event) => {
+        seen.push(event);
+      },
     });
     const unmount = registry.mount(inspectorEventsAtom);
 
@@ -93,8 +95,10 @@ describe("inspectorEventsAtom", () => {
     const seen: Array<InspectorEvent> = [];
 
     registry.set(linkstrConfigAtom, configWith(false));
-    registry.set(inspectorSinkAtom, (event) => {
-      seen.push(event);
+    registry.set(inspectorHandlerAtom, {
+      onEvent: (event) => {
+        seen.push(event);
+      },
     });
     const unmount = registry.mount(inspectorEventsAtom);
 
