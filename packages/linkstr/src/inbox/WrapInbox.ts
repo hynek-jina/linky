@@ -134,9 +134,9 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
           const resubscribeDelay =
             options?.resubscribeDelay ?? DEFAULT_RESUBSCRIBE_DELAY;
 
-          // TODO(durable cursor): when a persistence service exists, load
-          // `since` and checkpoint the cursor there instead of leaving both
-          // to the caller.
+          // TODO(#243, durable cursor): when a persistence service exists,
+          // load `since` and checkpoint the cursor there instead of leaving
+          // both to the caller.
           const cursor = yield* Ref.make<UnixSeconds | null>(
             options?.since ?? null,
           );
