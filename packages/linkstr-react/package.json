@@ -1,0 +1,37 @@
+{
+  "name": "@linky/linkstr-react",
+  "private": true,
+  "version": "0.1.0",
+  "license": "0BSD",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "eslint": "eslint --fix .",
+    "prettier": "prettier --write .",
+    "typecheck": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@effect-atom/atom-react": "^0.5.0",
+    "@linky/linkstr": "workspace:*",
+    "effect": "^3.19.19"
+  },
+  "peerDependencies": {
+    "react": "^19.2.3"
+  },
+  "devDependencies": {
+    "@linky/config": "workspace:*",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.0.0",
+    "eslint": "^9.39.1",
+    "nostr-tools": "^2.23.3",
+    "prettier": "^3.4.2",
+    "react": "^19.2.3",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
