@@ -76,6 +76,7 @@ import {
   useSendChatMessage,
   type ReplyContext,
 } from "../messages/useSendChatMessage";
+import { useLinkstrReactionInboxSync } from "../messages/useLinkstrReactionInboxSync";
 import { useSendReaction } from "../messages/useSendReaction";
 import { useLinkstrConfigSync } from "../useLinkstrConfigSync";
 import { useContactsDomain } from "../useContactsDomain";
@@ -787,7 +788,6 @@ export const useContactsMessagingComposition = ({
     nostrMessagesLocal,
     nostrMessagesRecent,
     nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
     nostrReactionsLocal,
     pendingPayments,
     reactionsByMessageId,
@@ -968,6 +968,17 @@ export const useContactsMessagingComposition = ({
   });
 
   useLinkstrConfigSync({ currentNsec, nostrFetchRelays });
+
+  useLinkstrReactionInboxSync({
+    appendLocalNostrReaction,
+    currentNsec,
+    enabled: nostrBootstrapReady,
+    nostrMessagesLocal,
+    nostrReactionWrapIdsRef,
+    nostrReactionsLocal,
+    softDeleteLocalNostrReactionsByWrapIds,
+    updateLocalNostrReaction,
+  });
 
   const [contactNewPrefill, setContactNewPrefill] = React.useState<null | {
     lnAddress: string;
@@ -3309,7 +3320,6 @@ export const useContactsMessagingComposition = ({
 
   useChatNostrSyncEffect({
     appendLocalNostrMessage,
-    appendLocalNostrReaction,
     chatMessages,
     chatMessagesLatestRef,
     currentNsec,
@@ -3318,13 +3328,9 @@ export const useContactsMessagingComposition = ({
     logPayStep,
     nostrFetchRelays,
     nostrMessageWrapIdsRef,
-    nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
     route,
     selectedContact: selectedChatContact,
-    softDeleteLocalNostrReactionsByWrapIds,
     updateLocalNostrMessage,
-    updateLocalNostrReaction,
   });
 
   const sendChatMessage = useSendChatMessage({
@@ -3511,7 +3517,6 @@ export const useContactsMessagingComposition = ({
 
   useInboxNotificationsSync({
     appendLocalNostrMessage,
-    appendLocalNostrReaction,
     bankPaymentOfferMessages,
     contacts,
     currentNsec,
@@ -3523,17 +3528,13 @@ export const useContactsMessagingComposition = ({
     nostrMessageWrapIdsRef,
     nostrMessagesLatestRef,
     nostrMessagesRecent,
-    nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
     onBankPaymentOfferMessage: upsertBankPaymentOfferMessage,
     onOpenInboxMessageToast: openInboxMessageToast,
     pushToast,
     route,
     setContactAttentionById,
-    softDeleteLocalNostrReactionsByWrapIds,
     t,
     updateLocalNostrMessage,
-    updateLocalNostrReaction,
   });
 
   const chatMessagesWithBankPaymentOffers = React.useMemo(() => {
@@ -3660,7 +3661,6 @@ export const useContactsMessagingComposition = ({
     nostrMessagesRecent,
     nostrPictureByNpub,
     nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
     nostrReactionsLocal,
     nostrRelayOverallStatus,
     nostrStatusByNpub,

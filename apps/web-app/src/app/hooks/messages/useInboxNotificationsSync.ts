@@ -32,13 +32,10 @@ import {
 import type {
   ContactNameRowLike,
   LocalNostrMessage,
-  LocalNostrReaction,
   NewLocalNostrMessage,
-  NewLocalNostrReaction,
   NostrMessageSummaryRow,
   RouteWithOptionalId,
   UpdateLocalNostrMessage,
-  UpdateLocalNostrReaction,
 } from "../../types/appTypes";
 import { buildUnknownContactId, normalizePubkeyHex } from "./contactIdentity";
 import type { KnownNostrMessageIdentityIndex } from "./messageHelpers";
@@ -91,7 +88,6 @@ const persistSeenPaymentNoticeWrapIds = (
 };
 
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
-type AppendLocalNostrReaction = (reaction: NewLocalNostrReaction) => string;
 
 interface OpenInboxMessageToastParams {
   contactId: string;
@@ -109,7 +105,6 @@ interface UseInboxNotificationsSyncParams<
   TRoute extends RouteWithOptionalId,
 > {
   appendLocalNostrMessage: AppendLocalNostrMessage;
-  appendLocalNostrReaction: AppendLocalNostrReaction;
   bankPaymentOfferMessages?: readonly LocalNostrMessage[];
   contacts: readonly TContact[];
   currentNsec: string | null;
@@ -125,8 +120,6 @@ interface UseInboxNotificationsSyncParams<
   nostrMessageWrapIdsRef: React.MutableRefObject<Set<string>>;
   nostrMessagesLatestRef: React.MutableRefObject<LocalNostrMessage[]>;
   nostrMessagesRecent: readonly NostrMessageSummaryRow[];
-  nostrReactionWrapIdsRef: React.MutableRefObject<Set<string>>;
-  nostrReactionsLatestRef: React.MutableRefObject<LocalNostrReaction[]>;
   onBankPaymentOfferMessage?: (message: LocalNostrMessage) => void;
   onOpenInboxMessageToast?: (params: OpenInboxMessageToastParams) => void;
   pushToast: (message: string, options?: PushToastOptions) => void;
@@ -134,10 +127,8 @@ interface UseInboxNotificationsSyncParams<
   setContactAttentionById: React.Dispatch<
     React.SetStateAction<Record<string, number>>
   >;
-  softDeleteLocalNostrReactionsByWrapIds: (wrapIds: readonly string[]) => void;
   t: (key: string) => string;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
-  updateLocalNostrReaction: UpdateLocalNostrReaction;
 }
 
 export const useInboxNotificationsSync = <
@@ -145,7 +136,6 @@ export const useInboxNotificationsSync = <
   TRoute extends RouteWithOptionalId,
 >({
   appendLocalNostrMessage,
-  appendLocalNostrReaction,
   bankPaymentOfferMessages = [],
   contacts,
   currentNsec,
@@ -161,23 +151,18 @@ export const useInboxNotificationsSync = <
   nostrMessageWrapIdsRef,
   nostrMessagesLatestRef,
   nostrMessagesRecent,
-  nostrReactionWrapIdsRef,
-  nostrReactionsLatestRef,
   onBankPaymentOfferMessage = () => {},
   onOpenInboxMessageToast = () => {},
   pushToast,
   route,
   setContactAttentionById,
-  softDeleteLocalNostrReactionsByWrapIds,
   t,
   updateLocalNostrMessage,
-  updateLocalNostrReaction,
 }: UseInboxNotificationsSyncParams<TContact, TRoute>) => {
   const paymentNoticeWrapIdsRef = React.useRef<Set<string>>(new Set());
   const bankPaymentOfferWrapIdsRef = React.useRef<Set<string>>(new Set());
   const latestValuesRef = React.useRef({
     appendLocalNostrMessage,
-    appendLocalNostrReaction,
     bankPaymentOfferMessages,
     contacts,
     formatDisplayedAmountText,
@@ -186,21 +171,16 @@ export const useInboxNotificationsSync = <
     nostrMessageWrapIdsRef,
     nostrMessagesLatestRef,
     nostrMessagesRecent,
-    nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
     onBankPaymentOfferMessage,
     onOpenInboxMessageToast,
     pushToast,
     route,
     setContactAttentionById,
-    softDeleteLocalNostrReactionsByWrapIds,
     t,
     updateLocalNostrMessage,
-    updateLocalNostrReaction,
   });
   latestValuesRef.current = {
     appendLocalNostrMessage,
-    appendLocalNostrReaction,
     bankPaymentOfferMessages,
     contacts,
     formatDisplayedAmountText,
@@ -209,17 +189,13 @@ export const useInboxNotificationsSync = <
     nostrMessageWrapIdsRef,
     nostrMessagesLatestRef,
     nostrMessagesRecent,
-    nostrReactionWrapIdsRef,
-    nostrReactionsLatestRef,
     onBankPaymentOfferMessage,
     onOpenInboxMessageToast,
     pushToast,
     route,
     setContactAttentionById,
-    softDeleteLocalNostrReactionsByWrapIds,
     t,
     updateLocalNostrMessage,
-    updateLocalNostrReaction,
   };
   const relaySignature = resolveNostrInboxRelays(nostrFetchRelays).join("\n");
 
@@ -638,11 +614,7 @@ export const useInboxNotificationsSync = <
               delivery,
               effects: {
                 appendMessage: latest.appendLocalNostrMessage,
-                appendReaction: latest.appendLocalNostrReaction,
-                deleteReactionsByWrapIds:
-                  latest.softDeleteLocalNostrReactionsByWrapIds,
                 updateMessage: latest.updateLocalNostrMessage,
-                updateReaction: latest.updateLocalNostrReaction,
               },
               identity: {
                 identitySinceSec,
@@ -672,8 +644,6 @@ export const useInboxNotificationsSync = <
                 knownMessageIdentities: latest.knownNostrMessageIdentityIndex,
                 messageWrapIds: latest.nostrMessageWrapIdsRef.current,
                 messages: latest.nostrMessagesLatestRef.current,
-                reactionWrapIds: latest.nostrReactionWrapIdsRef.current,
-                reactions: latest.nostrReactionsLatestRef.current,
               },
               unwrapEvent,
               wrap,

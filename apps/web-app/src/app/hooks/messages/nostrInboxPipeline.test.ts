@@ -16,9 +16,7 @@ import {
 import { createLinkyPaymentNoticeEvent } from "../../lib/pushWrappedEvent";
 import type {
   LocalNostrMessage,
-  LocalNostrReaction,
   NewLocalNostrMessage,
-  NewLocalNostrReaction,
 } from "../../types/appTypes";
 import { buildUnknownContactId } from "./contactIdentity";
 import { buildKnownNostrMessageIdentityIndex } from "./messageHelpers";
@@ -44,7 +42,6 @@ const otherPrivateKey = createSecretKey(4);
 const otherPubkey = getPublicKey(otherPrivateKey);
 const CONTACT_ID = "contact-1";
 const RUMOR_ID = "a".repeat(64);
-const REACTION_ID = "b".repeat(64);
 
 const createMessageWrap = (
   content: string,
@@ -130,20 +127,14 @@ interface HarnessOptions {
   messages?: LocalNostrMessage[];
   ownsConversation?: NostrInboxPolicy["ownsConversation"];
   persistAppendedMessages?: boolean;
-  persistAppendedReactions?: boolean;
-  reactions?: LocalNostrReaction[];
   resolveConversation?: NostrInboxPolicy["resolveConversation"];
   resolveUnknownConversation?: NostrInboxPolicy["resolveUnknownConversation"];
 }
 
 const createHarness = (options: HarnessOptions = {}) => {
   const messages = options.messages ?? [];
-  const reactions = options.reactions ?? [];
   const messageWrapIds = new Set(
     messages.map((message) => message.wrapId).filter(Boolean),
-  );
-  const reactionWrapIds = new Set(
-    reactions.map((reaction) => reaction.wrapId).filter(Boolean),
   );
   const seen = createNostrInboxSeenState();
   const acknowledgements: {
@@ -151,7 +142,6 @@ const createHarness = (options: HarnessOptions = {}) => {
     contactId: string;
     wrapId: string;
   }[] = [];
-  const deletedReactionIds: string[][] = [];
   const blockedPubkeys = new Set(options.blockedPubkeys ?? []);
   const appendMessage = vi.fn((message: NewLocalNostrMessage): string => {
     const id = `message-${messages.length + 1}`;
@@ -159,14 +149,6 @@ const createHarness = (options: HarnessOptions = {}) => {
       messages.push({ ...message, id, status: message.status ?? "sent" });
     }
     messageWrapIds.add(message.wrapId);
-    return id;
-  });
-  const appendReaction = vi.fn((reaction: NewLocalNostrReaction): string => {
-    const id = `reaction-${reactions.length + 1}`;
-    if (options.persistAppendedReactions !== false) {
-      reactions.push({ ...reaction, id, status: reaction.status ?? "sent" });
-    }
-    reactionWrapIds.add(reaction.wrapId);
     return id;
   });
   const updateMessage = vi.fn(
@@ -186,26 +168,6 @@ const createHarness = (options: HarnessOptions = {}) => {
       if (updates.wrapId) messageWrapIds.add(updates.wrapId);
     },
   );
-  const updateReaction = vi.fn(
-    (
-      id: string,
-      updates: Parameters<
-        typeof processNostrInboxWrap
-      >[0]["effects"]["updateReaction"] extends (
-        id: string,
-        updates: infer T,
-      ) => void
-        ? T
-        : never,
-    ) => {
-      const reaction = reactions.find((candidate) => candidate.id === id);
-      if (reaction) Object.assign(reaction, updates);
-      if (updates.wrapId) reactionWrapIds.add(updates.wrapId);
-    },
-  );
-  const deleteReactionsByWrapIds = vi.fn((wrapIds: readonly string[]) => {
-    deletedReactionIds.push([...wrapIds]);
-  });
   const resolveConversation =
     options.resolveConversation ??
     ((peerPubkey: string) =>
@@ -228,10 +190,7 @@ const createHarness = (options: HarnessOptions = {}) => {
           acknowledgements.push(acknowledgement);
         },
         appendMessage,
-        appendReaction,
-        deleteReactionsByWrapIds,
         updateMessage,
-        updateReaction,
       },
       identity: {
         identitySinceSec: options.identitySinceSec ?? null,
@@ -251,8 +210,6 @@ const createHarness = (options: HarnessOptions = {}) => {
         knownMessageIdentities: buildKnownNostrMessageIdentityIndex(messages),
         messageWrapIds,
         messages,
-        reactionWrapIds,
-        reactions,
       },
       unwrapEvent,
       wrap,
@@ -261,14 +218,10 @@ const createHarness = (options: HarnessOptions = {}) => {
   return {
     acknowledgements,
     appendMessage,
-    appendReaction,
-    deletedReactionIds,
     messages,
     process,
-    reactions,
     seen,
     updateMessage,
-    updateReaction,
   };
 };
 
@@ -330,7 +283,7 @@ describe("message decoding and persistence", () => {
     ]);
   });
 
-  it("persists valid kind-15 messages and accepts k=15 reactions", () => {
+  it("persists valid kind-15 messages", () => {
     const imageWrap = createMessageWrap(
       "https://cdn.example/image.enc",
       [
@@ -345,34 +298,10 @@ describe("message decoding and persistence", () => {
       ],
       15,
     );
-    const imageRumor = unwrapEvent(imageWrap, recipientPrivateKey);
     const harness = createHarness();
 
     expect(harness.process(imageWrap).kind).toBe("inserted-message");
     expect(harness.messages[0]?.content).toMatch(/^linky:image:v1:/);
-
-    const reactionWrap = wrapEvent(
-      {
-        kind: 7,
-        created_at: 1_700_000_010,
-        content: "👍",
-        tags: [
-          ["p", recipientPubkey],
-          ["e", imageRumor.id],
-          ["k", "15"],
-        ],
-      },
-      senderPrivateKey,
-      recipientPubkey,
-    );
-    expect(harness.process(reactionWrap).kind).toBe("inserted-reaction");
-    expect(harness.reactions[0]).toEqual(
-      expect.objectContaining({
-        emoji: "👍",
-        messageId: imageRumor.id,
-        reactorPubkey: senderPubkey,
-      }),
-    );
   });
 
   it("persists backfill and live deliveries identically", () => {
@@ -832,330 +761,6 @@ describe("message reconciliation and edits", () => {
     expect(harness.process(originalWrap).kind).toBe("backfilled-original");
     expect(edited.content).toBe("edited");
     expect(edited.originalContent).toBe("hello");
-  });
-});
-
-describe("reaction persistence", () => {
-  const createReactionWrap = (
-    emoji: string,
-    kindTag: string,
-    createdAt = 1_700_000_010,
-    clientId?: string,
-  ): NostrToolsEvent =>
-    wrapEvent(
-      {
-        kind: 7,
-        created_at: createdAt,
-        content: emoji,
-        tags: [
-          ["p", recipientPubkey],
-          ["e", RUMOR_ID],
-          ["k", kindTag],
-          ...(clientId ? [["client", clientId]] : []),
-        ],
-      },
-      senderPrivateKey,
-      recipientPubkey,
-    );
-
-  it.each(["14", "15"])("persists reactions with k=%s", (kindTag) => {
-    const harness = createHarness({ messages: [createStoredMessage()] });
-    expect(harness.process(createReactionWrap("👍", kindTag)).kind).toBe(
-      "inserted-reaction",
-    );
-    expect(harness.reactions).toHaveLength(1);
-  });
-
-  it("stores reactions referencing an edit event id under the stable rumor id", () => {
-    const original = createStoredMessage();
-    const harness = createHarness({ messages: [original] });
-
-    expect(
-      harness.process(createMessageWrap("edited", [["edited_from", RUMOR_ID]]))
-        .kind,
-    ).toBe("edited-message");
-    const editRumorId = [...harness.seen.messageReferences.keys()].find(
-      (id) => id !== RUMOR_ID,
-    );
-    if (!editRumorId) throw new Error("missing edit rumor reference");
-
-    const reactionWrap = wrapEvent(
-      {
-        kind: 7,
-        created_at: 1_700_000_010,
-        content: "👍",
-        tags: [
-          ["p", recipientPubkey],
-          ["e", editRumorId],
-          ["k", "14"],
-        ],
-      },
-      senderPrivateKey,
-      recipientPubkey,
-    );
-    expect(harness.process(reactionWrap).kind).toBe("inserted-reaction");
-    expect(harness.reactions[0]?.messageId).toBe(RUMOR_ID);
-  });
-
-  it("persists reactions and deletes whose inner rumor lacks a recipient p tag", () => {
-    const harness = createHarness({ messages: [createStoredMessage()] });
-    const reactionWrap = wrapEvent(
-      {
-        kind: 7,
-        created_at: 1_700_000_010,
-        content: "👍",
-        tags: [
-          ["e", RUMOR_ID],
-          ["k", "14"],
-        ],
-      },
-      senderPrivateKey,
-      recipientPubkey,
-    );
-    expect(harness.process(reactionWrap).kind).toBe("inserted-reaction");
-
-    const reactionWrapId = harness.reactions[0]?.wrapId ?? "";
-    const deleteWrap = wrapEvent(
-      {
-        kind: 5,
-        created_at: 1_700_000_020,
-        content: "",
-        tags: [["e", reactionWrapId]],
-      },
-      senderPrivateKey,
-      recipientPubkey,
-    );
-    expect(harness.process(deleteWrap).kind).toBe("deleted-reactions");
-  });
-
-  it("uses the outer wrap id when a reaction has no inner id", () => {
-    const harness = createHarness({ messages: [createStoredMessage()] });
-    const wrap = createControlledWrap({
-      ...validRumor({
-        content: "👍",
-        kind: 7,
-        tags: [
-          ["p", recipientPubkey],
-          ["e", RUMOR_ID],
-          ["k", "14"],
-        ],
-      }),
-      id: undefined,
-    });
-
-    expect(harness.process(wrap).kind).toBe("inserted-reaction");
-    expect(harness.reactions[0]?.wrapId).toBe(wrap.id);
-  });
-
-  it("ignores unsupported k tags", () => {
-    const harness = createHarness({ messages: [createStoredMessage()] });
-    expect(harness.process(createReactionWrap("👍", "1"))).toMatchObject({
-      kind: "ignored",
-      reason: "unsupported-reaction-kind",
-    });
-    expect(harness.reactions).toHaveLength(0);
-  });
-
-  it("reconciles pending reactions by client ID", () => {
-    const pending: LocalNostrReaction = {
-      clientId: "reaction-client",
-      createdAtSec: 1_700_000_000,
-      emoji: "👍",
-      id: "pending-reaction",
-      messageId: RUMOR_ID,
-      reactorPubkey: senderPubkey,
-      status: "pending",
-      wrapId: "pending:reaction",
-    };
-    const harness = createHarness({
-      messages: [createStoredMessage()],
-      reactions: [pending],
-    });
-    const wrap = createReactionWrap(
-      "👍",
-      "14",
-      1_700_000_010,
-      pending.clientId,
-    );
-
-    expect(harness.process(wrap).kind).toBe("reconciled-reaction");
-    expect(harness.reactions).toHaveLength(1);
-    expect(pending.status).toBe("sent");
-    expect(pending.wrapId).toBe(unwrapEvent(wrap, recipientPrivateKey).id);
-  });
-
-  it("suppresses duplicate reaction identity across different rumor IDs", () => {
-    const harness = createHarness({ messages: [createStoredMessage()] });
-    const first = createReactionWrap("👍", "14", 1_700_000_010);
-    const second = createReactionWrap("👍", "14", 1_700_000_011);
-
-    expect(harness.process(first).kind).toBe("inserted-reaction");
-    expect(harness.process(second).kind).toBe("ignored");
-    expect(harness.reactions).toHaveLength(1);
-  });
-
-  it("deletes all unique referenced reaction IDs", () => {
-    const reactionOne = createStoredMessage({
-      id: "message-for-reaction",
-    });
-    const reactions: LocalNostrReaction[] = [
-      {
-        createdAtSec: 1,
-        emoji: "👍",
-        id: "reaction-one",
-        messageId: RUMOR_ID,
-        reactorPubkey: senderPubkey,
-        wrapId: REACTION_ID,
-      },
-      {
-        createdAtSec: 2,
-        emoji: "❤️",
-        id: "reaction-two",
-        messageId: RUMOR_ID,
-        reactorPubkey: senderPubkey,
-        wrapId: "c".repeat(64),
-      },
-    ];
-    const harness = createHarness({
-      messages: [reactionOne],
-      reactions,
-    });
-    const deleteWrap = wrapEvent(
-      {
-        kind: 5,
-        created_at: 1_700_000_020,
-        content: "",
-        tags: [
-          ["p", recipientPubkey],
-          ["e", REACTION_ID],
-          ["e", REACTION_ID],
-          ["e", "c".repeat(64)],
-        ],
-      },
-      senderPrivateKey,
-      recipientPubkey,
-    );
-
-    expect(harness.process(deleteWrap).kind).toBe("deleted-reactions");
-    expect(harness.deletedReactionIds).toEqual([[REACTION_ID, "c".repeat(64)]]);
-  });
-
-  it("does not delete reactions authored by another participant", () => {
-    const harness = createHarness({
-      messages: [createStoredMessage()],
-      reactions: [
-        {
-          createdAtSec: 1,
-          emoji: "👍",
-          id: "reaction-one",
-          messageId: RUMOR_ID,
-          reactorPubkey: senderPubkey,
-          wrapId: REACTION_ID,
-        },
-      ],
-    });
-    const deleteWrap = wrapEvent(
-      {
-        kind: 5,
-        created_at: 1_700_000_020,
-        content: "",
-        tags: [
-          ["p", recipientPubkey],
-          ["e", REACTION_ID],
-        ],
-      },
-      otherPrivateKey,
-      recipientPubkey,
-    );
-
-    expect(harness.process(deleteWrap)).toMatchObject({
-      kind: "ignored",
-      reason: "unknown-reaction-delete",
-    });
-    expect(harness.deletedReactionIds).toHaveLength(0);
-  });
-
-  it("accepts the same reaction again after its author deletes it", () => {
-    const harness = createHarness({
-      messages: [createStoredMessage()],
-      persistAppendedReactions: false,
-    });
-    const first = createReactionWrap("👍", "14", 1_700_000_010);
-
-    expect(harness.process(first).kind).toBe("inserted-reaction");
-    const firstRumor = unwrapEvent(first, recipientPrivateKey);
-    const deleteWrap = wrapEvent(
-      {
-        kind: 5,
-        created_at: 1_700_000_020,
-        content: "",
-        tags: [
-          ["p", recipientPubkey],
-          ["e", firstRumor.id],
-        ],
-      },
-      senderPrivateKey,
-      recipientPubkey,
-    );
-    expect(harness.process(deleteWrap).kind).toBe("deleted-reactions");
-
-    const second = createReactionWrap("👍", "14", 1_700_000_030);
-    expect(harness.process(second).kind).toBe("inserted-reaction");
-    expect(harness.appendReaction).toHaveBeenCalledTimes(2);
-  });
-
-  it("retries a reaction that arrives before its referenced message", () => {
-    const harness = createHarness({ persistAppendedMessages: false });
-    const reaction = createReactionWrap("👍", "14");
-
-    expect(harness.process(reaction)).toMatchObject({
-      kind: "ignored",
-      reason: "unknown-message",
-    });
-    expect(harness.appendReaction).not.toHaveBeenCalled();
-
-    expect(
-      harness.process(createControlledWrap(validRumor()), "backfill").kind,
-    ).toBe("inserted-message");
-    expect(harness.appendReaction).toHaveBeenCalledTimes(1);
-    expect(harness.reactions[0]).toEqual(
-      expect.objectContaining({
-        emoji: "👍",
-        messageId: RUMOR_ID,
-        reactorPubkey: senderPubkey,
-      }),
-    );
-  });
-
-  it("does not retry a deferred reaction deleted before its message arrives", () => {
-    const harness = createHarness({ persistAppendedMessages: false });
-    const reaction = createReactionWrap("👍", "14");
-
-    expect(harness.process(reaction)).toMatchObject({
-      kind: "ignored",
-      reason: "unknown-message",
-    });
-    const reactionRumor = unwrapEvent(reaction, recipientPrivateKey);
-    const deleteWrap = wrapEvent(
-      {
-        kind: 5,
-        created_at: 1_700_000_020,
-        content: "",
-        tags: [
-          ["p", recipientPubkey],
-          ["e", reactionRumor.id],
-        ],
-      },
-      senderPrivateKey,
-      recipientPubkey,
-    );
-
-    expect(harness.process(deleteWrap).kind).toBe("deleted-reactions");
-    expect(
-      harness.process(createControlledWrap(validRumor()), "backfill").kind,
-    ).toBe("inserted-message");
-    expect(harness.appendReaction).not.toHaveBeenCalled();
-    expect(harness.seen.deferredReactions).toHaveLength(0);
   });
 });
 

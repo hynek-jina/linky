@@ -54,10 +54,7 @@ import {
   createLinkyBankPaymentOfferEvent,
   LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
 } from "../src/app/lib/bankPaymentOffer";
-import type {
-  LocalNostrMessage,
-  LocalNostrReaction,
-} from "../src/app/types/appTypes";
+import type { LocalNostrMessage } from "../src/app/types/appTypes";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -114,7 +111,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage: vi.fn(() => "message-1"),
-        appendLocalNostrReaction: vi.fn(() => "reaction-1"),
         contacts: [],
         currentNsec: "nsec-test",
         enabled: false,
@@ -123,15 +119,11 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast: vi.fn(),
         route: { kind: "contacts" },
         setContactAttentionById: vi.fn(),
-        softDeleteLocalNostrReactionsByWrapIds: vi.fn(),
         t: (key: string) => key,
         updateLocalNostrMessage: vi.fn(),
-        updateLocalNostrReaction: vi.fn(),
       });
       return null;
     };
@@ -166,12 +158,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-1");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -179,7 +168,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [],
         currentNsec: "nsec-test",
         maybeShowPwaNotification,
@@ -187,15 +175,11 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) => key,
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -264,7 +248,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction: vi.fn(() => "reaction-1"),
         contacts: [
           {
             id: "contact-bob",
@@ -278,15 +261,11 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast: vi.fn(),
         route: { kind: "contacts" },
         setContactAttentionById: vi.fn(),
-        softDeleteLocalNostrReactionsByWrapIds: vi.fn(),
         t: (key: string) => key,
         updateLocalNostrMessage: vi.fn(),
-        updateLocalNostrReaction: vi.fn(),
       });
       return null;
     };
@@ -318,12 +297,9 @@ describe("useInboxNotificationsSync", () => {
     nip44DecryptMock.mockReturnValue('{"kind":14}');
 
     const appendLocalNostrMessage = vi.fn(() => "message-1");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -331,7 +307,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [],
         currentNsec: "nsec-test",
         maybeShowPwaNotification,
@@ -339,15 +314,11 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) => key,
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -404,12 +375,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-1");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -418,7 +386,6 @@ describe("useInboxNotificationsSync", () => {
       const Harness = () => {
         useInboxNotificationsSync({
           appendLocalNostrMessage,
-          appendLocalNostrReaction,
           contacts: [
             {
               id: "contact-bob",
@@ -432,16 +399,12 @@ describe("useInboxNotificationsSync", () => {
           nostrMessageWrapIdsRef: { current: new Set<string>() },
           nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
           nostrMessagesRecent: [],
-          nostrReactionWrapIdsRef: { current: new Set<string>() },
-          nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
           pushToast,
           route: { kind: "chat", id: routeId },
           setContactAttentionById,
-          softDeleteLocalNostrReactionsByWrapIds,
           t: (key: string) =>
             key === "chatIncomingMessageToast" ? "{name}: {message}" : key,
           updateLocalNostrMessage,
-          updateLocalNostrReaction,
         });
 
         return null;
@@ -530,13 +493,10 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-1");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const onBankPaymentOfferMessage = vi.fn();
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -544,7 +504,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [
           {
             id: "known-contact",
@@ -558,16 +517,12 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         onBankPaymentOfferMessage,
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) => key,
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -619,7 +574,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage: vi.fn(() => "message-1"),
-        appendLocalNostrReaction: vi.fn(() => "reaction-1"),
         contacts: [
           {
             id: "contact-bob",
@@ -633,16 +587,12 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         onBankPaymentOfferMessage,
         pushToast: vi.fn(),
         route: { kind: "contacts" },
         setContactAttentionById: vi.fn(),
-        softDeleteLocalNostrReactionsByWrapIds: vi.fn(),
         t: (key: string) => key,
         updateLocalNostrMessage: vi.fn(),
-        updateLocalNostrReaction: vi.fn(),
       });
       return null;
     };
@@ -733,7 +683,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage: vi.fn(() => "message-1"),
-        appendLocalNostrReaction: vi.fn(() => "reaction-1"),
         bankPaymentOfferMessages: [knownOfferMessage],
         contacts: [
           {
@@ -748,14 +697,11 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         onBankPaymentOfferMessage,
         onOpenInboxMessageToast,
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds: vi.fn(),
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "bankPaymentOfferDeclinedNotification") {
@@ -764,7 +710,6 @@ describe("useInboxNotificationsSync", () => {
           return key;
         },
         updateLocalNostrMessage: vi.fn(),
-        updateLocalNostrReaction: vi.fn(),
       });
       return null;
     };
@@ -824,12 +769,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-append");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -837,7 +779,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [
           {
             id: "contact-bob",
@@ -874,15 +815,11 @@ describe("useInboxNotificationsSync", () => {
           ] satisfies LocalNostrMessage[],
         },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) => key,
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -938,12 +875,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-known-via-ptag");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -951,7 +885,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [
           {
             id: "contact-bob",
@@ -965,16 +898,12 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) =>
           key === "chatIncomingMessageToast" ? "{name}: {message}" : key,
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -1044,12 +973,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-cashu");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -1057,7 +983,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [
           {
             id: "contact-bob",
@@ -1071,19 +996,15 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "notificationReceivedMoney") return "You received money";
           return key;
         },
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -1139,12 +1060,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-stored");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -1152,7 +1070,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [
           {
             id: "contact-bob",
@@ -1187,16 +1104,12 @@ describe("useInboxNotificationsSync", () => {
           ] satisfies LocalNostrMessage[],
         },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) =>
           key === "chatIncomingMessageToast" ? "{name}: {message}" : key,
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -1254,12 +1167,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-deleted");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -1267,7 +1177,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [],
         currentNsec: "nsec-test",
         maybeShowPwaNotification,
@@ -1296,16 +1205,12 @@ describe("useInboxNotificationsSync", () => {
           ] satisfies LocalNostrMessage[],
         },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) =>
           key === "chatIncomingMessageToast" ? "{name}: {message}" : key,
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -1374,12 +1279,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-payment-notice");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -1387,7 +1289,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [
           {
             id: "contact-bob",
@@ -1401,19 +1302,15 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "notificationReceivedMoney") return "You received money";
           return key;
         },
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -1480,12 +1377,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-payment-notice");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -1497,7 +1391,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = ({ routeKind }: HarnessProps) => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [
           {
             id: "contact-bob",
@@ -1511,19 +1404,15 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: routeKind },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "notificationReceivedMoney") return "You received money";
           return key;
         },
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -1610,12 +1499,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-payment-notice");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -1623,7 +1509,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [
           {
             id: "contact-bob",
@@ -1637,19 +1522,15 @@ describe("useInboxNotificationsSync", () => {
         nostrMessageWrapIdsRef: { current: new Set<string>() },
         nostrMessagesLatestRef: { current: [] as LocalNostrMessage[] },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "notificationReceivedMoney") return "You received money";
           return key;
         },
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
@@ -1720,12 +1601,9 @@ describe("useInboxNotificationsSync", () => {
     });
 
     const appendLocalNostrMessage = vi.fn(() => "message-payment-notice");
-    const appendLocalNostrReaction = vi.fn(() => "reaction-1");
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const updateLocalNostrReaction = vi.fn();
-    const softDeleteLocalNostrReactionsByWrapIds = vi.fn();
     const setContactAttentionById: React.Dispatch<
       React.SetStateAction<Record<string, number>>
     > = vi.fn();
@@ -1733,7 +1611,6 @@ describe("useInboxNotificationsSync", () => {
     const Harness = () => {
       useInboxNotificationsSync({
         appendLocalNostrMessage,
-        appendLocalNostrReaction,
         contacts: [
           {
             id: "contact-bob",
@@ -1769,19 +1646,15 @@ describe("useInboxNotificationsSync", () => {
           ] satisfies LocalNostrMessage[],
         },
         nostrMessagesRecent: [],
-        nostrReactionWrapIdsRef: { current: new Set<string>() },
-        nostrReactionsLatestRef: { current: [] as LocalNostrReaction[] },
         pushToast,
         route: { kind: "contacts" },
         setContactAttentionById,
-        softDeleteLocalNostrReactionsByWrapIds,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "notificationReceivedMoney") return "You received money";
           return key;
         },
         updateLocalNostrMessage,
-        updateLocalNostrReaction,
       });
 
       return null;
