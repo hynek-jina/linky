@@ -63,6 +63,7 @@ const stubTransport = (
             }),
         );
       }),
+    subscribe: () => Effect.die("subscribe not under test"),
   });
 
 const runWith = <A, E>(

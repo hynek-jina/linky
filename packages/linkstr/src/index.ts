@@ -4,6 +4,7 @@ export * from "./domain/primitives";
 export * from "./inbox/authenticateWrap";
 export * from "./inbox/decodeReactionWrap";
 export * from "./inbox/events";
+export * from "./inbox/WrapInbox";
 export * from "./reactions/domain";
 export * from "./reactions/events";
 export * from "./reactions/Reactions";

@@ -1,6 +1,6 @@
 import { Context, Duration, Effect, Layer, Schema } from "effect";
 import { SimplePool } from "nostr-tools";
-import type { Event as NostrToolsEvent } from "nostr-tools";
+import type { Event as NostrToolsEvent, Filter } from "nostr-tools";
 import { RelayUrl } from "../domain/primitives";
 import type { SignedWrapEvent } from "../internal/nostrEvent";
 
@@ -12,16 +12,34 @@ export class RelayPublishResult extends Schema.Class<RelayPublishResult>(
   detail: Schema.NullOr(Schema.String),
 }) {}
 
+export class RelayUnreachable extends Schema.TaggedError<RelayUnreachable>()(
+  "RelayUnreachable",
+  {
+    relay: RelayUrl,
+    detail: Schema.NullOr(Schema.String),
+  },
+) {}
+
 /**
  * Publishing never fails as an Effect: it reports a per-relay outcome and the
  * caller derives delivery semantics. Retry policy deliberately does not live
  * here — it belongs to the outbox.
+ *
+ * Subscribing runs one live subscription on one relay: raw events flow through
+ * `onEvent` until the relay ends the subscription, which resolves the effect
+ * with the close reason. Interruption closes the subscription. Resubscribe and
+ * backfill policy live in the inbox machine, not here.
  */
 export interface NostrTransportService {
   readonly publish: (
     relays: ReadonlyArray<RelayUrl>,
     event: SignedWrapEvent,
   ) => Effect.Effect<ReadonlyArray<RelayPublishResult>>;
+  readonly subscribe: (
+    relay: RelayUrl,
+    filter: Filter,
+    onEvent: (event: NostrToolsEvent) => void,
+  ) => Effect.Effect<string, RelayUnreachable>;
 }
 
 export class NostrTransport extends Context.Tag("linkstr/NostrTransport")<
@@ -29,12 +47,29 @@ export class NostrTransport extends Context.Tag("linkstr/NostrTransport")<
   NostrTransportService
 >() {}
 
+export interface RelaySubscriptionParams {
+  readonly onevent: (event: NostrToolsEvent) => void;
+  readonly onclose?: (reason: string) => void;
+}
+
+export interface RelaySubscriptionHandle {
+  readonly close: (reason?: string) => void;
+}
+
+export interface RelayConnection {
+  readonly publish: (event: NostrToolsEvent) => Promise<string>;
+  readonly subscribe: (
+    filters: Array<Filter>,
+    params: RelaySubscriptionParams,
+  ) => RelaySubscriptionHandle;
+}
+
 /** The slice of a nostr-tools pool the transport needs; fakeable in tests. */
 export interface RelayPool {
   readonly ensureRelay: (
     url: string,
     params?: { connectionTimeout?: number },
-  ) => Promise<{ publish: (event: NostrToolsEvent) => Promise<string> }>;
+  ) => Promise<RelayConnection>;
 }
 
 const CONNECTION_TIMEOUT_MS = 6_000;
@@ -81,11 +116,39 @@ export const makeRelayPoolTransport = (
       }),
     );
 
+  const subscribeToRelay = (
+    relay: RelayUrl,
+    filter: Filter,
+    onEvent: (event: NostrToolsEvent) => void,
+  ): Effect.Effect<string, RelayUnreachable> =>
+    Effect.async<string, RelayUnreachable>((resume) => {
+      let handle: RelaySubscriptionHandle | null = null;
+      let interrupted = false;
+      pool
+        .ensureRelay(relay, { connectionTimeout: CONNECTION_TIMEOUT_MS })
+        .then(
+          (connection) => {
+            if (interrupted) return;
+            handle = connection.subscribe([filter], {
+              onevent: onEvent,
+              onclose: (reason) => resume(Effect.succeed(reason)),
+            });
+          },
+          (reason) =>
+            resume(new RelayUnreachable({ relay, detail: String(reason) })),
+        );
+      return Effect.sync(() => {
+        interrupted = true;
+        handle?.close();
+      });
+    });
+
   return {
     publish: (relays, event) =>
       Effect.forEach(relays, (relay) => publishToRelay(relay, event), {
         concurrency: "unbounded",
       }),
+    subscribe: subscribeToRelay,
   };
 };
 

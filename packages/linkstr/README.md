@@ -19,6 +19,18 @@ inside NIP-59 gift wraps) as the reference for all other verticals.
 - `reactions/Reactions.ts` — the operation service (`react`, `retract`)
 - `inbox/decodeReactionWrap.ts` — pure pipeline for one incoming kind-1059 wrap
 
+## Inbound subscription
+
+`WrapInbox` owns the single kind-1059 subscription. `inbox.open({ since })` is
+a scoped resource: it subscribes on every `RelayPolicy.readRelays` entry with
+its own resubscribe loop and returns a single-consumer `Stream` of typed inbox
+facts (`ReactionAdded`, `WrapDropped`, …) plus a `cursor` effect. Persist the
+cursor after handling delivered events and pass it back as `since` on the next
+session; the machine widens it by the NIP-59 two-day backdate margin itself.
+Rumor kinds without a vertical surface as `WrapDropped("unsupported-kind")` —
+the dispatch point in `WrapInbox` is where future verticals plug in. Closing
+the scope tears down all relay subscriptions and ends the stream.
+
 ## Rules
 
 - **Environment-agnostic.** No React, no Evolu, no `window`. Capabilities come
