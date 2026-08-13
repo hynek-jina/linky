@@ -1,3 +1,12 @@
+import {
+  ClientId,
+  Emoji,
+  Pubkey,
+  ReactionDraft,
+  RumorId,
+} from "@linky/linkstr";
+import { sendReactionAtom, useAtomSet } from "@linky/linkstr-react";
+import { Exit, Schema } from "effect";
 import React from "react";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import { NOSTR_RELAYS } from "../../../nostrProfile";
@@ -21,6 +30,11 @@ import type {
   LocalNostrMessage,
 } from "../../types/appTypes";
 import { resolveNostrChatIdentity } from "./contactIdentity";
+
+const isPubkey = Schema.is(Pubkey);
+const isRumorId = Schema.is(RumorId);
+const isEmoji = Schema.is(Emoji);
+const isClientId = Schema.is(ClientId);
 
 interface UseNostrPendingFlushParams<TContact extends ContactIdentityRowLike> {
   activePublishClientIdsRef: React.MutableRefObject<Set<string>>;
@@ -51,6 +65,7 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
   updateLocalNostrMessage,
 }: UseNostrPendingFlushParams<TContact>) => {
   const nostrPendingFlushRef = React.useRef<Promise<void> | null>(null);
+  const linkstrReact = useAtomSet(sendReactionAtom, { mode: "promiseExit" });
 
   const flushPendingNostrMessages = React.useCallback(async () => {
     if (!enabled) return;
@@ -77,7 +92,6 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
 
     const run = (async () => {
       try {
-        const { getEventHash } = await import("nostr-tools");
         const pool = await getSharedAppNostrPool();
 
         for (const message of pending) {
@@ -185,7 +199,7 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
 
         for (const reaction of pendingReactions) {
           const messageRumorId = String(reaction.messageId ?? "").trim();
-          if (!messageRumorId) continue;
+          if (!isRumorId(messageRumorId)) continue;
 
           const targetMessage = nostrMessagesLocal.find(
             (message) =>
@@ -200,54 +214,33 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
           );
           if (!contact) continue;
           const identity = await resolveNostrChatIdentity(currentNsec, contact);
-          if (!identity) continue;
-          const { contactPubHex, myPubHex, privBytes } = identity;
+          if (!identity || !isPubkey(identity.contactPubHex)) continue;
+          const { contactPubHex } = identity;
 
           const emoji = String(reaction.emoji ?? "").trim();
-          if (!emoji) continue;
+          if (!isEmoji(emoji)) continue;
 
+          const targetAuthor = String(targetMessage.pubkey ?? "").trim();
           const clientId = String(reaction.clientId ?? "").trim();
-          const tags: string[][] = [
-            ["p", String(targetMessage.pubkey ?? "").trim() || contactPubHex],
-            ["p", contactPubHex],
-            ["p", myPubHex],
-            ["e", messageRumorId],
-            ["k", "14"],
-          ];
-          if (clientId) tags.push(["client", clientId]);
-
-          const createdAt = Number(reaction.createdAtSec ?? 0) || 0;
-          const reactionEvent = {
-            created_at: createdAt > 0 ? createdAt : Math.ceil(Date.now() / 1e3),
-            kind: 7,
-            pubkey: myPubHex,
-            tags,
-            content: emoji,
-          } satisfies UnsignedEvent;
-          const reactionRumorId = getEventHash(reactionEvent);
-
-          const wrapForMe = wrapEventWithoutPushMarker(
-            reactionEvent,
-            privBytes,
-            myPubHex,
+          const exit = await linkstrReact(
+            new ReactionDraft({
+              to: contactPubHex,
+              target: messageRumorId,
+              targetKind: parsePrivateImageMessage(targetMessage.content)
+                ? "image"
+                : "text",
+              targetAuthor: isPubkey(targetAuthor)
+                ? targetAuthor
+                : contactPubHex,
+              emoji,
+              ...(isClientId(clientId) ? { clientId } : {}),
+            }),
           );
-          const wrapForContact = wrapEventWithoutPushMarker(
-            reactionEvent,
-            privBytes,
-            contactPubHex,
-          );
-
-          const publishOutcome = await publishWrappedWithRetry(
-            pool,
-            NOSTR_RELAYS,
-            wrapForMe,
-            wrapForContact,
-          );
-          if (!publishOutcome.anySuccess) continue;
+          if (Exit.isFailure(exit)) continue;
 
           updateLocalNostrReaction(String(reaction.id ?? ""), {
             status: "sent",
-            wrapId: reactionRumorId,
+            wrapId: exit.value.reactionId,
           });
         }
       } catch {
@@ -264,6 +257,7 @@ export const useNostrPendingFlush = <TContact extends ContactIdentityRowLike>({
     contacts,
     currentNsec,
     enabled,
+    linkstrReact,
     nostrMessagesLocal,
     nostrReactionsLocal,
     publishWrappedWithRetry,

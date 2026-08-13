@@ -77,6 +77,7 @@ import {
   type ReplyContext,
 } from "../messages/useSendChatMessage";
 import { useSendReaction } from "../messages/useSendReaction";
+import { useLinkstrConfigSync } from "../useLinkstrConfigSync";
 import { useContactsDomain } from "../useContactsDomain";
 import { useContactsNostrPrefetchEffects } from "../useContactsNostrPrefetchEffects";
 import { useEvoluNostrBootstrapReady } from "../useEvoluNostrBootstrapReady";
@@ -965,6 +966,8 @@ export const useContactsMessagingComposition = ({
     setStatus,
     t,
   });
+
+  useLinkstrConfigSync({ currentNsec, nostrFetchRelays });
 
   const [contactNewPrefill, setContactNewPrefill] = React.useState<null | {
     lnAddress: string;
@@ -3366,7 +3369,6 @@ export const useContactsMessagingComposition = ({
   const sendReaction = useSendReaction({
     appendLocalNostrReaction,
     currentNsec,
-    publishWrappedWithRetry,
     reactionsByMessageId,
     route,
     selectedContact: selectedChatContact,
