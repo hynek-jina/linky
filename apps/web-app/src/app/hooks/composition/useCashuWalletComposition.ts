@@ -144,7 +144,6 @@ import {
   parseCashuPaymentRequestMessage,
   type CashuPaymentRequestMessageInfo,
 } from "../../lib/paymentRequestMessage";
-import { LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER } from "../../lib/pushWrappedEvent";
 import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "../../lib/tokenMessageInfo";
 import {
   enrichCashuTokenRow,
@@ -1862,7 +1861,7 @@ export const useCashuWalletComposition = ({
           contact,
           amountSat: offerInfo.amountSat,
           logCompletedOnly: true,
-          paymentNoticeContext: LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
+          paymentNoticeContext: "bank_payment_offer",
           paymentNoticeOfferId: offerInfo.offerId,
         });
         if (!result.ok) return;

@@ -376,6 +376,32 @@ describe("WrapInbox.fetchWrapEvent", () => {
     );
   });
 
+  it("resolves null when the fetch outlasts the timeout option", async () => {
+    const transport: NostrTransportService = {
+      publish: () => Effect.succeed([]),
+      subscribe: () => Effect.never,
+      fetch: () => Effect.never,
+    };
+    const dependencies = WrapInbox.Default.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          LinkstrIdentity.fromSecretKey(alice.secretKey),
+          RelayPolicy.fixed({ readRelays: [relayA], writeRelays: [] }),
+          Layer.succeed(NostrTransport, transport),
+        ),
+      ),
+    );
+
+    const event = await Effect.gen(function* () {
+      const inbox = yield* WrapInbox;
+      return yield* inbox.fetchWrapEvent(WrapId.make("ab".repeat(32)), {
+        timeout: Duration.millis(20),
+      });
+    }).pipe(Effect.provide(dependencies), Effect.runPromise);
+
+    expect(event).toBeNull();
+  });
+
   it("returns WrapDropped for a forged wrap", async () => {
     const wrap = chatWrap();
     const forged = { ...wrap, content: `${wrap.content}forged` };

@@ -1,9 +1,7 @@
-import { decrypt, getConversationKey } from "nostr-tools/nip44";
 import type {
   ChatReactionChip,
   LocalNostrReaction,
 } from "../../types/appTypes";
-import { normalizePubkeyHex } from "./contactIdentity";
 
 type NostrTag = readonly string[];
 
@@ -71,60 +69,6 @@ export const extractEditedFromTag = (tags: unknown): string | null => {
     if (messageId) return messageId;
   }
   return null;
-};
-
-const isNestedEncryptedNip44Payload = (
-  content: unknown,
-  participantPubkey: unknown,
-  recipientPrivateKey: Uint8Array,
-): boolean => {
-  const payload = normalizeText(content);
-  const pubkey = normalizePubkeyHex(participantPubkey);
-
-  if (!payload || !pubkey || !(recipientPrivateKey instanceof Uint8Array)) {
-    return false;
-  }
-
-  try {
-    decrypt(payload, getConversationKey(recipientPrivateKey, pubkey));
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-export const isNestedEncryptedNip44PayloadForAnyPubkey = (
-  content: unknown,
-  participantPubkeys: readonly (string | null | undefined)[],
-  recipientPrivateKey: Uint8Array,
-): boolean => {
-  const normalizedPubkeys = new Set<string>();
-
-  for (const candidate of participantPubkeys) {
-    const pubkey = normalizePubkeyHex(candidate);
-    if (!pubkey || normalizedPubkeys.has(pubkey)) continue;
-    normalizedPubkeys.add(pubkey);
-
-    if (isNestedEncryptedNip44Payload(content, pubkey, recipientPrivateKey)) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-export const isInvalidInnerRumorPubkey = (
-  innerPubkey: unknown,
-  wrapPubkey: unknown,
-): boolean => {
-  const normalizedInnerPubkey = normalizePubkeyHex(innerPubkey);
-  const normalizedWrapPubkey = normalizePubkeyHex(wrapPubkey);
-
-  if (!normalizedInnerPubkey || !normalizedWrapPubkey) {
-    return false;
-  }
-
-  return normalizedInnerPubkey === normalizedWrapPubkey;
 };
 
 export const aggregateReactions = (
