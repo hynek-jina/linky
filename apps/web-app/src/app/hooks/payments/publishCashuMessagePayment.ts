@@ -1,25 +1,26 @@
 import {
-  getPublicKey,
-  nip19,
-  type Event as NostrToolsEvent,
-  type UnsignedEvent,
-} from "nostr-tools";
+  CashuTokenText,
+  ClientId,
+  PaymentNoticeDraft,
+  Pubkey,
+  RumorId,
+  TokenMessageDraft,
+} from "@linky/linkstr";
+import type {
+  ChatMessageReceipt,
+  PaymentNoticeContext,
+  PaymentNoticeReceipt,
+} from "@linky/linkstr";
+import { Cause, Either, Exit, Option, Schema } from "effect";
+import { nip19 } from "nostr-tools";
 import type { ContactId } from "../../../evolu";
 import { previewTokenText } from "../../../utils/formatting";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
-import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
-import {
-  createLinkyPaymentNoticeEvent,
-  LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
-  wrapEventWithPushMarker,
-  wrapEventWithoutPushMarker,
-} from "../../lib/pushWrappedEvent";
 import type {
   LocalNostrMessage,
   NewLocalNostrMessage,
   PaymentLogData,
-  PublishWrappedResult,
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
 import type { ReplyContext } from "../messages/useSendChatMessage";
@@ -28,15 +29,19 @@ import type {
   CashuMessagePaymentSendBatch,
 } from "./cashuMessagePaymentTypes";
 
+type SendExit<A> = Exit.Exit<A, { readonly _tag: string }>;
+
+export type SendTokenMessage = (
+  draft: TokenMessageDraft,
+) => Promise<SendExit<ChatMessageReceipt>>;
+
+export type SendPaymentNotice = (
+  draft: PaymentNoticeDraft,
+) => Promise<SendExit<PaymentNoticeReceipt>>;
+
 interface PublishCashuMessagePaymentDependencies {
-  createPaymentNoticeEvent?: typeof createLinkyPaymentNoticeEvent;
-  decodeNip19?: typeof nip19.decode;
-  getPool?: () => Promise<AppNostrPool>;
-  getPublicKey?: typeof getPublicKey;
   makeId?: () => string;
   nowSec?: () => number;
-  wrapWithPushMarker?: typeof wrapEventWithPushMarker;
-  wrapWithoutPushMarker?: typeof wrapEventWithoutPushMarker;
 }
 
 interface PublishCashuMessagePaymentArgs {
@@ -45,28 +50,38 @@ interface PublishCashuMessagePaymentArgs {
   batches: readonly CashuMessagePaymentSendBatch[];
   contactId: ContactId;
   contactNpub: string;
-  currentNsec: string;
+  currentNpub: string;
   dependencies?: PublishCashuMessagePaymentDependencies;
   logPayStep: (step: string, data?: PaymentLogData) => void;
   nostrMessagesLocal: readonly LocalNostrMessage[];
-  paymentNoticeContext?: typeof LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER;
+  paymentNoticeContext?: PaymentNoticeContext;
   paymentNoticeOfferId?: string;
   pendingMessageId: string | null;
-  publishSingleWrappedWithRetry: (
-    pool: AppNostrPool,
-    relays: string[],
-    event: NostrToolsEvent,
-  ) => Promise<{ anySuccess: boolean; error: string | null }>;
-  publishWrappedWithRetry: (
-    pool: AppNostrPool,
-    relays: string[],
-    wrapForMe: NostrToolsEvent,
-    wrapForContact: NostrToolsEvent,
-  ) => Promise<PublishWrappedResult>;
-  relays: string[];
   replyContext?: ReplyContext | null;
+  sendPaymentNotice: SendPaymentNotice;
+  sendTokenMessage: SendTokenMessage;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
 }
+
+const isPubkey = Schema.is(Pubkey);
+const isRumorId = Schema.is(RumorId);
+const decodeCashuTokenText = Schema.decodeUnknownEither(CashuTokenText);
+
+const decodeNpub = (npub: string): Pubkey => {
+  const decoded = nip19.decode(npub);
+  if (decoded.type !== "npub" || !isPubkey(decoded.data)) {
+    throw new Error("invalid npub");
+  }
+  return decoded.data;
+};
+
+const failureMessage = (
+  cause: Cause.Cause<{ readonly _tag: string }>,
+): string =>
+  Option.match(Cause.failureOption(cause), {
+    onNone: () => Cause.pretty(cause),
+    onSome: (failure) => failure._tag,
+  });
 
 export const publishCashuMessagePayment = async ({
   activePublishClientIds,
@@ -74,39 +89,23 @@ export const publishCashuMessagePayment = async ({
   batches,
   contactId,
   contactNpub,
-  currentNsec,
+  currentNpub,
   dependencies,
   logPayStep,
   nostrMessagesLocal,
   paymentNoticeContext,
   paymentNoticeOfferId,
   pendingMessageId,
-  publishSingleWrappedWithRetry,
-  publishWrappedWithRetry,
-  relays,
   replyContext,
+  sendPaymentNotice,
+  sendTokenMessage,
   updateLocalNostrMessage,
 }: PublishCashuMessagePaymentArgs): Promise<CashuMessagePaymentPublishingOutcome> => {
-  const decodeNip19 = dependencies?.decodeNip19 ?? nip19.decode;
-  const decodedMe = decodeNip19(currentNsec);
-  if (decodedMe.type !== "nsec") throw new Error("invalid nsec");
-  const privateKey = decodedMe.data;
-  const derivePublicKey = dependencies?.getPublicKey ?? getPublicKey;
-  const myPublicKey = derivePublicKey(privateKey);
+  const myPublicKey = decodeNpub(currentNpub);
+  const contactPublicKey = decodeNpub(contactNpub);
 
-  const decodedContact = decodeNip19(contactNpub);
-  if (decodedContact.type !== "npub") throw new Error("invalid npub");
-  const contactPublicKey = decodedContact.data;
-
-  const pool = await (dependencies?.getPool ?? getSharedAppNostrPool)();
   const createId = dependencies?.makeId ?? makeLocalId;
   const nowSec = dependencies?.nowSec ?? (() => Math.ceil(Date.now() / 1_000));
-  const wrapWithoutPush =
-    dependencies?.wrapWithoutPushMarker ?? wrapEventWithoutPushMarker;
-  const wrapWithPush =
-    dependencies?.wrapWithPushMarker ?? wrapEventWithPushMarker;
-  const createPaymentNotice =
-    dependencies?.createPaymentNoticeEvent ?? createLinkyPaymentNoticeEvent;
 
   const publishedTokenTexts = new Set<string>();
   const unpublishedTokenTexts = new Set<string>();
@@ -122,6 +121,12 @@ export const publishCashuMessagePayment = async ({
     ),
   );
 
+  const replyToRaw = String(replyContext?.replyToId ?? "").trim();
+  const replyTo = isRumorId(replyToRaw) ? replyToRaw : undefined;
+  const rootRaw = String(replyContext?.rootMessageId ?? "").trim();
+  const root =
+    replyTo !== undefined && isRumorId(rootRaw) ? rootRaw : undefined;
+
   for (const batch of [...batches].reverse()) {
     const messageText = String(batch.token ?? "").trim();
     logPayStep("plan-send-token", {
@@ -130,7 +135,7 @@ export const publishCashuMessagePayment = async ({
       token: previewTokenText(batch.token),
     });
 
-    const clientId = createId();
+    const clientId = ClientId.make(createId());
     activePublishClientIds.add(clientId);
     logPayStep("publish-pending", {
       clientId,
@@ -138,100 +143,76 @@ export const publishCashuMessagePayment = async ({
     });
 
     let localMessageId = "";
-    let wrapForMe: NostrToolsEvent | null = null;
-    let publishOutcome: PublishWrappedResult = {
-      anySuccess: false,
-      error: "publish failed",
-    };
+    let selfWrapId: string | null = null;
+    let sendError: string | null = null;
     try {
-      const tags: string[][] = [
-        ["p", contactPublicKey],
-        ["p", myPublicKey],
-        ["client", clientId],
-      ];
-      if (replyContext?.replyToId) {
-        const rootId =
-          String(replyContext.rootMessageId ?? "").trim() ||
-          String(replyContext.replyToId ?? "").trim();
-        const replyId = String(replyContext.replyToId ?? "").trim();
-        if (rootId) tags.push(["e", rootId, "", "root"]);
-        if (replyId) tags.push(["e", replyId, "", "reply"]);
-      }
-      const baseEvent: UnsignedEvent = {
-        content: messageText,
-        created_at: nowSec(),
-        kind: 14,
-        pubkey: myPublicKey,
-        tags,
-      };
-
-      if (canReusePendingMessage && !reusedPendingMessage) {
-        localMessageId = pendingMessageId ?? "";
-        reusedPendingMessage = true;
-        updateLocalNostrMessage(localMessageId, {
-          clientId,
-          content: messageText,
-          localOnly: false,
-          pubkey: myPublicKey,
-          status: "pending",
-          wrapId: `pending:${clientId}`,
-        });
+      const token = decodeCashuTokenText(messageText);
+      if (Either.isLeft(token)) {
+        sendError = "invalid cashu token";
       } else {
-        localMessageId = appendLocalNostrMessage({
-          ...(replyContext?.replyToId
-            ? {
-                replyToContent: replyContext.replyToContent,
-                replyToId: replyContext.replyToId,
-                rootMessageId:
-                  String(replyContext.rootMessageId ?? "").trim() ||
-                  replyContext.replyToId,
-              }
-            : {}),
-          clientId,
-          contactId: String(contactId),
-          content: messageText,
-          createdAtSec: baseEvent.created_at,
-          direction: "out",
-          pubkey: myPublicKey,
-          rumorId: null,
-          status: "pending",
-          wrapId: `pending:${clientId}`,
-        });
-      }
+        if (canReusePendingMessage && !reusedPendingMessage) {
+          localMessageId = pendingMessageId ?? "";
+          reusedPendingMessage = true;
+          updateLocalNostrMessage(localMessageId, {
+            clientId,
+            content: messageText,
+            localOnly: false,
+            pubkey: myPublicKey,
+            status: "pending",
+            wrapId: `pending:${clientId}`,
+          });
+        } else {
+          localMessageId = appendLocalNostrMessage({
+            ...(replyContext?.replyToId
+              ? {
+                  replyToContent: replyContext.replyToContent,
+                  replyToId: replyContext.replyToId,
+                  rootMessageId:
+                    String(replyContext.rootMessageId ?? "").trim() ||
+                    replyContext.replyToId,
+                }
+              : {}),
+            clientId,
+            contactId: String(contactId),
+            content: messageText,
+            createdAtSec: nowSec(),
+            direction: "out",
+            pubkey: myPublicKey,
+            rumorId: null,
+            status: "pending",
+            wrapId: `pending:${clientId}`,
+          });
+        }
 
-      wrapForMe = wrapWithoutPush(baseEvent, privateKey, myPublicKey);
-      const wrapForContact = wrapWithoutPush(
-        baseEvent,
-        privateKey,
-        contactPublicKey,
-      );
-      publishOutcome = await publishWrappedWithRetry(
-        pool,
-        relays,
-        wrapForMe,
-        wrapForContact,
-      );
+        const exit = await sendTokenMessage(
+          new TokenMessageDraft({
+            to: contactPublicKey,
+            token: token.right,
+            clientId,
+            ...(replyTo === undefined ? {} : { replyTo }),
+            ...(root === undefined ? {} : { root }),
+          }),
+        );
+        if (Exit.isSuccess(exit)) {
+          selfWrapId = exit.value.selfCopy.wrapId;
+        } else {
+          sendError = failureMessage(exit.cause);
+        }
+      }
     } catch (error) {
-      publishOutcome = {
-        anySuccess: false,
-        error: getUnknownErrorMessage(error, "publish failed"),
-      };
+      sendError = getUnknownErrorMessage(error, "publish failed");
     } finally {
       activePublishClientIds.delete(clientId);
     }
 
-    if (!publishOutcome.anySuccess || !wrapForMe) {
-      const error = getUnknownErrorMessage(
-        publishOutcome.error,
-        "publish failed",
-      );
+    if (selfWrapId === null) {
+      const error = sendError ?? "publish failed";
       logPayStep("publish-failed", { clientId, error });
       unpublishedTokenTexts.add(messageText);
       publishErrors.push({ clientId, error, token: messageText });
       continue;
     }
 
-    const selfWrapId = String(wrapForMe.id ?? "");
     if (localMessageId) {
       updateLocalNostrMessage(localMessageId, {
         pubkey: myPublicKey,
@@ -246,33 +227,37 @@ export const publishCashuMessagePayment = async ({
 
   let paymentNoticeError: string | null = null;
   if (publishedAnyTokenMessage) {
-    const clientId = createId();
-    const event = createPaymentNotice({
-      clientId,
-      ...(paymentNoticeContext ? { context: paymentNoticeContext } : {}),
-      createdAt: nowSec(),
-      ...(paymentNoticeOfferId ? { offerId: paymentNoticeOfferId } : {}),
-      recipientPublicKey: contactPublicKey,
-      senderPublicKey: myPublicKey,
-    });
-    const wrap = wrapWithPush(event, privateKey, contactPublicKey);
-    let outcome: { anySuccess: boolean; error: string | null };
+    const clientId = ClientId.make(createId());
+    const offerId = String(paymentNoticeOfferId ?? "").trim();
+    let anySuccess = false;
+    let error: string | null = null;
+    let wrapId: string | null = null;
     try {
-      outcome = await publishSingleWrappedWithRetry(pool, relays, wrap);
-    } catch (error) {
-      outcome = {
-        anySuccess: false,
-        error: getUnknownErrorMessage(error, "publish failed"),
-      };
+      const exit = await sendPaymentNotice(
+        new PaymentNoticeDraft({
+          to: contactPublicKey,
+          clientId,
+          ...(paymentNoticeContext === undefined
+            ? {}
+            : { context: paymentNoticeContext }),
+          ...(offerId === "" ? {} : { offerId }),
+        }),
+      );
+      if (Exit.isSuccess(exit)) {
+        anySuccess = true;
+        wrapId = exit.value.recipientCopy.wrapId;
+      } else {
+        error = failureMessage(exit.cause);
+      }
+    } catch (caught) {
+      error = getUnknownErrorMessage(caught, "publish failed");
     }
-    paymentNoticeError = outcome.anySuccess
-      ? null
-      : getUnknownErrorMessage(outcome.error, "publish failed");
+    paymentNoticeError = anySuccess ? null : (error ?? "publish failed");
     logPayStep("payment-notice-publish", {
-      anySuccess: outcome.anySuccess,
+      anySuccess,
       clientId,
-      error: outcome.error,
-      wrapId: String(wrap.id ?? ""),
+      error,
+      wrapId,
     });
   }
 

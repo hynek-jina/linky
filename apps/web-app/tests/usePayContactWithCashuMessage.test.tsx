@@ -1,4 +1,17 @@
 import * as Evolu from "@evolu/common";
+import {
+  ChatMessageReceipt,
+  ClientId,
+  NoRelayReachable,
+  PaymentNoticeReceipt,
+  RelayUrl,
+  RumorId,
+  UnixSeconds,
+  WrapDelivery,
+  WrapId,
+} from "@linky/linkstr";
+import { Exit } from "effect";
+import { getPublicKey, nip19 } from "nostr-tools";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +21,10 @@ import type {
   CashuTokenUpsert,
 } from "../src/app/hooks/payments/persistCashuMessagePayment";
 import type {
+  SendPaymentNotice,
+  SendTokenMessage,
+} from "../src/app/hooks/payments/publishCashuMessagePayment";
+import type {
   CashuTokenRowLike,
   ContactRowLike,
   LocalNostrMessage,
@@ -15,53 +32,30 @@ import type {
 } from "../src/app/types/appTypes";
 
 const {
-  createLinkyPaymentNoticeEventMock,
   createSendTokenWithTokensAtMintMock,
-  getSharedAppNostrPoolMock,
   navigateToMock,
-  wrapEventWithPushMarkerMock,
-  wrapEventWithoutPushMarkerMock,
+  sendPaymentNoticeMock,
+  sendTokenMessageMock,
 } = vi.hoisted(() => ({
-  createLinkyPaymentNoticeEventMock: vi.fn(),
   createSendTokenWithTokensAtMintMock: vi.fn(),
-  getSharedAppNostrPoolMock: vi.fn(),
   navigateToMock: vi.fn(),
-  wrapEventWithPushMarkerMock: vi.fn(),
-  wrapEventWithoutPushMarkerMock: vi.fn(),
+  sendPaymentNoticeMock: vi.fn<SendPaymentNotice>(),
+  sendTokenMessageMock: vi.fn<SendTokenMessage>(),
 }));
 
 vi.mock("../src/cashuSend", () => ({
   createSendTokenWithTokensAtMint: createSendTokenWithTokensAtMintMock,
 }));
 
-vi.mock("../src/app/lib/nostrPool", () => ({
-  getSharedAppNostrPool: getSharedAppNostrPoolMock,
-}));
-
 vi.mock("../src/hooks/useRouting", () => ({
   navigateTo: navigateToMock,
 }));
 
-vi.mock("nostr-tools", () => ({
-  getPublicKey: vi.fn(() => "my-pubkey-hex"),
-  nip19: {
-    decode: vi.fn((value: string) => {
-      if (value === "nsec-test") {
-        return { data: new Uint8Array([1, 2, 3]), type: "nsec" };
-      }
-      if (value === "npub-test") {
-        return { data: "contact-pubkey-hex", type: "npub" };
-      }
-      throw new Error(`Unexpected decode value: ${value}`);
-    }),
-  },
-}));
-
-vi.mock("../src/app/lib/pushWrappedEvent", () => ({
-  createLinkyPaymentNoticeEvent: createLinkyPaymentNoticeEventMock,
-  LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER: "bank_payment_offer",
-  wrapEventWithPushMarker: wrapEventWithPushMarkerMock,
-  wrapEventWithoutPushMarker: wrapEventWithoutPushMarkerMock,
+vi.mock("@linky/linkstr-react", () => ({
+  sendChatTokenAtom: "sendChatTokenAtom",
+  sendPaymentNoticeAtom: "sendPaymentNoticeAtom",
+  useAtomSet: (atom: unknown) =>
+    atom === "sendChatTokenAtom" ? sendTokenMessageMock : sendPaymentNoticeMock,
 }));
 
 import { usePayContactWithCashuMessage } from "../src/app/hooks/payments/usePayContactWithCashuMessage";
@@ -82,6 +76,52 @@ const withOwner = (row: CashuTokenRowLike, ownerId: Evolu.OwnerId) => ({
   ownerId,
 });
 
+const currentNpub = nip19.npubEncode(getPublicKey(new Uint8Array(32).fill(1)));
+const contactNpub = nip19.npubEncode(getPublicKey(new Uint8Array(32).fill(2)));
+
+const sendTokenText = `cashuA${btoa(
+  JSON.stringify({
+    token: [
+      {
+        mint: "https://mint.example",
+        proofs: [{ amount: 600, C: "c", id: "i", secret: "s" }],
+      },
+    ],
+    unit: "sat",
+  }),
+)
+  .replace(/\+/g, "-")
+  .replace(/\//g, "_")
+  .replace(/=+$/g, "")}`;
+
+const sentAt = UnixSeconds.make(1_730_000_000);
+
+const delivery = (wrapIdHex: string, accepted: boolean): WrapDelivery =>
+  new WrapDelivery({
+    wrapId: WrapId.make(wrapIdHex),
+    acceptedBy: accepted ? [RelayUrl.make("wss://relay.example")] : [],
+    rejectedBy: [],
+  });
+
+const tokenReceipt = (clientId: ClientId): ChatMessageReceipt =>
+  new ChatMessageReceipt({
+    messageId: RumorId.make("12".repeat(32)),
+    clientId,
+    sentAt,
+    selfCopy: delivery("aa".repeat(32), true),
+    recipientCopy: delivery("bb".repeat(32), true),
+  });
+
+const noticeReceipt = (clientId: ClientId): PaymentNoticeReceipt =>
+  new PaymentNoticeReceipt({
+    noticeId: RumorId.make("34".repeat(32)),
+    clientId,
+    sentAt,
+    recipientCopy: delivery("cc".repeat(32), true),
+  });
+
+const fallbackClientId = ClientId.make("fallback-client");
+
 type PayContact = ReturnType<
   typeof usePayContactWithCashuMessage<ContactRowLike>
 >;
@@ -93,8 +133,6 @@ interface SetupOptions {
   enqueuePendingPayment?: ReturnType<typeof vi.fn>;
   logPaymentEvent?: ReturnType<typeof vi.fn>;
   nostrMessagesLocal?: LocalNostrMessage[];
-  publishSingleWrappedWithRetry?: ReturnType<typeof vi.fn>;
-  publishWrappedWithRetry?: ReturnType<typeof vi.fn>;
   pushToast?: ReturnType<typeof vi.fn>;
   showPaidOverlay?: ReturnType<typeof vi.fn>;
   update?: CashuTokenUpdate;
@@ -106,12 +144,6 @@ const setup = async (options: SetupOptions = {}) => {
   let payContact: PayContact | null = null;
   const enqueuePendingPayment = options.enqueuePendingPayment ?? vi.fn();
   const logPaymentEvent = options.logPaymentEvent ?? vi.fn();
-  const publishSingleWrappedWithRetry =
-    options.publishSingleWrappedWithRetry ??
-    vi.fn(async () => ({ anySuccess: true, error: null }));
-  const publishWrappedWithRetry =
-    options.publishWrappedWithRetry ??
-    vi.fn(async () => ({ anySuccess: true, error: null }));
   const pushToast = options.pushToast ?? vi.fn();
   const showPaidOverlay = options.showPaidOverlay ?? vi.fn();
   const update =
@@ -152,7 +184,7 @@ const setup = async (options: SetupOptions = {}) => {
           OLD_OWNER_ID,
         ),
       ],
-      currentNpub: "npub-test",
+      currentNpub,
       currentNsec: "nsec-test",
       defaultMintUrl: "https://mint.example",
       enqueuePendingPayment,
@@ -165,8 +197,6 @@ const setup = async (options: SetupOptions = {}) => {
       logPaymentEvent,
       nostrMessagesLocal: options.nostrMessagesLocal ?? [],
       payWithCashuEnabled: true,
-      publishSingleWrappedWithRetry,
-      publishWrappedWithRetry,
       pushToast,
       resolveOwnerIdForWrite: vi.fn(async () => ACTIVE_OWNER_ID),
       setContactsOnboardingHasPaid: vi.fn(),
@@ -193,8 +223,6 @@ const setup = async (options: SetupOptions = {}) => {
     enqueuePendingPayment,
     getPay: () => payContact,
     logPaymentEvent,
-    publishSingleWrappedWithRetry,
-    publishWrappedWithRetry,
     pushToast,
     root,
     showPaidOverlay,
@@ -206,12 +234,10 @@ const setup = async (options: SetupOptions = {}) => {
 
 describe("usePayContactWithCashuMessage", () => {
   afterEach(() => {
-    createLinkyPaymentNoticeEventMock.mockReset();
     createSendTokenWithTokensAtMintMock.mockReset();
-    getSharedAppNostrPoolMock.mockReset();
     navigateToMock.mockReset();
-    wrapEventWithPushMarkerMock.mockReset();
-    wrapEventWithoutPushMarkerMock.mockReset();
+    sendPaymentNoticeMock.mockReset();
+    sendTokenMessageMock.mockReset();
     vi.restoreAllMocks();
     localStorage.clear();
   });
@@ -227,24 +253,17 @@ describe("usePayContactWithCashuMessage", () => {
         remainingToken: "cashu-change-token",
         sendAmount: 600,
         sendProofs: [],
-        sendToken: "cashu-send-token",
+        sendToken: sendTokenText,
         unit: "sat",
       };
     });
-    getSharedAppNostrPoolMock.mockResolvedValue({});
-    wrapEventWithoutPushMarkerMock
-      .mockReturnValueOnce({ id: "wrap-me" })
-      .mockReturnValueOnce({ id: "wrap-contact" });
-    createLinkyPaymentNoticeEventMock.mockReturnValue({
-      content: "payment_notice",
-      created_at: 1_730_000_000,
-      kind: 24133,
-      pubkey: "my-pubkey-hex",
-      tags: [],
+    sendTokenMessageMock.mockImplementation(async (draft) => {
+      operations.push("publish");
+      return Exit.succeed(tokenReceipt(draft.clientId ?? fallbackClientId));
     });
-    wrapEventWithPushMarkerMock.mockReturnValue({
-      id: "wrap-payment-notice",
-    });
+    sendPaymentNoticeMock.mockImplementation(async (draft) =>
+      Exit.succeed(noticeReceipt(draft.clientId ?? fallbackClientId)),
+    );
 
     const update = vi.fn<CashuTokenUpdate>((_table, payload, options) => {
       if (typeof payload === "object" && payload !== null) {
@@ -262,16 +281,11 @@ describe("usePayContactWithCashuMessage", () => {
       }
       return { ok: true };
     });
-    const publishWrappedWithRetry = vi.fn(async () => {
-      operations.push("publish");
-      return { anySuccess: true, error: null };
-    });
     const logPaymentEvent = vi.fn(() => {
       operations.push("transaction");
     });
     const harness = await setup({
       logPaymentEvent,
-      publishWrappedWithRetry,
       update,
       upsert,
     });
@@ -284,7 +298,7 @@ describe("usePayContactWithCashuMessage", () => {
           contact: {
             id: CONTACT_ID,
             name: "Alice",
-            npub: "npub-test",
+            npub: contactNpub,
           },
         })) ?? null;
     });
@@ -300,6 +314,7 @@ describe("usePayContactWithCashuMessage", () => {
     expect(operations).not.toContain(
       `delete:${String(OLD_TOKEN_ID)}:${String(ACTIVE_OWNER_ID)}`,
     );
+    expect(sendPaymentNoticeMock).toHaveBeenCalledOnce();
 
     await act(async () => harness.root.unmount());
   });
@@ -317,15 +332,15 @@ describe("usePayContactWithCashuMessage", () => {
           contact: {
             id: CONTACT_ID,
             name: "Alice",
-            npub: "npub-test",
+            npub: contactNpub,
           },
         })) ?? null;
     });
 
     expect(result).toEqual({ ok: true, queued: true });
     expect(createSendTokenWithTokensAtMintMock).not.toHaveBeenCalled();
-    expect(harness.publishWrappedWithRetry).not.toHaveBeenCalled();
-    expect(harness.publishSingleWrappedWithRetry).not.toHaveBeenCalled();
+    expect(sendTokenMessageMock).not.toHaveBeenCalled();
+    expect(sendPaymentNoticeMock).not.toHaveBeenCalled();
     expect(harness.enqueuePendingPayment).toHaveBeenCalledWith({
       amountSat: 600,
       contactId: CONTACT_ID,
@@ -344,21 +359,24 @@ describe("usePayContactWithCashuMessage", () => {
       remainingToken: null,
       sendAmount: 600,
       sendProofs: [],
-      sendToken: "cashu-send-token",
+      sendToken: sendTokenText,
       unit: "sat",
     });
-    getSharedAppNostrPoolMock.mockResolvedValue({});
-    wrapEventWithoutPushMarkerMock
-      .mockReturnValueOnce({ id: "wrap-me" })
-      .mockReturnValueOnce({ id: "wrap-contact" });
+    sendTokenMessageMock.mockImplementation(async (draft) =>
+      Exit.fail(
+        new NoRelayReachable({
+          rumorId: RumorId.make("12".repeat(32)),
+          clientId: draft.clientId ?? fallbackClientId,
+          sentAt,
+          selfCopy: delivery("aa".repeat(32), false),
+          recipientCopy: delivery("bb".repeat(32), false),
+        }),
+      ),
+    );
     const pushToast = vi.fn();
     const showPaidOverlay = vi.fn();
     const upsert = vi.fn<CashuTokenUpsert>(() => ({ ok: true }));
     const harness = await setup({
-      publishWrappedWithRetry: vi.fn(async () => ({
-        anySuccess: false,
-        error: "relay unavailable",
-      })),
       pushToast,
       showPaidOverlay,
       upsert,
@@ -372,7 +390,7 @@ describe("usePayContactWithCashuMessage", () => {
           contact: {
             id: CONTACT_ID,
             name: "Alice",
-            npub: "npub-test",
+            npub: contactNpub,
           },
         })) ?? null;
     });
@@ -382,11 +400,12 @@ describe("usePayContactWithCashuMessage", () => {
       "cashuToken",
       expect.objectContaining({
         state: "pending",
-        token: "cashu-send-token",
+        token: sendTokenText,
       }),
       { ownerId: ACTIVE_OWNER_ID },
     );
-    expect(pushToast).toHaveBeenCalledWith("payFailed: relay unavailable");
+    expect(sendPaymentNoticeMock).not.toHaveBeenCalled();
+    expect(pushToast).toHaveBeenCalledWith("payFailed: NoRelayReachable");
     expect(showPaidOverlay).toHaveBeenCalledWith("paidQueuedTo");
 
     await act(async () => harness.root.unmount());
