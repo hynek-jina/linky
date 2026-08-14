@@ -11,6 +11,15 @@ export * from "./domain/delivery";
 export * from "./domain/errors";
 export * from "./domain/primitives";
 export * from "./headless";
+export {
+  BLOSSOM_AUTH_EXPIRATION_SECONDS,
+  BLOSSOM_AUTH_KIND,
+  HTTP_AUTH_KIND,
+  makeBlossomUploadAuthHeader,
+  makeNip98AuthHeader,
+  makePushOwnershipProof,
+} from "./httpAuth/codec";
+export * from "./httpAuth/domain";
 export * from "./inbox/authenticateWrap";
 export * from "./inbox/decodeReactionWrap";
 export * from "./inbox/events";
@@ -22,6 +31,7 @@ export {
   LINKY_PUSH_MARKER_TAG,
   LINKY_PUSH_MARKER_VALUE,
 } from "./internal/giftWrap";
+export { SignedPlainEvent } from "./internal/nostrEvent";
 export * from "./muteList/MuteList";
 export * from "./outbox/domain";
 export * from "./outbox/Outbox";
