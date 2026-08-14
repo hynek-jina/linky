@@ -4,12 +4,13 @@ import { useQuery } from "@evolu/react";
 import {
   CashuTokenText,
   ClientId,
+  OutboxRef,
   PaymentNoticeDraft,
   Pubkey,
   TokenMessageDraft,
 } from "@linky/linkstr";
 import {
-  sendChatTokenAtom,
+  enqueueOutboxAtom,
   sendPaymentNoticeAtom,
   useAtomSet,
 } from "@linky/linkstr-react";
@@ -228,7 +229,6 @@ interface UseCashuWalletCompositionParams {
   contactsMessaging: Pick<
     ContactsMessagingCompositionResult,
     | "activeContactsOwnerContactCount"
-    | "activeNostrMessagePublishClientIdsRef"
     | "appendLocalNostrMessage"
     | "buildSavedContactName"
     | "chatMessages"
@@ -333,7 +333,7 @@ export const useCashuWalletComposition = ({
   update,
   upsert,
 }: UseCashuWalletCompositionParams) => {
-  const sendTokenMessage = useAtomSet(sendChatTokenAtom, {
+  const enqueueOutbox = useAtomSet(enqueueOutboxAtom, {
     mode: "promiseExit",
   });
   const sendPaymentNotice = useAtomSet(sendPaymentNoticeAtom, {
@@ -354,7 +354,6 @@ export const useCashuWalletComposition = ({
   } = identity;
   const {
     activeContactsOwnerContactCount,
-    activeNostrMessagePublishClientIdsRef,
     appendLocalNostrMessage,
     buildSavedContactName,
     chatMessages,
@@ -1802,7 +1801,6 @@ export const useCashuWalletComposition = ({
 
   const payContactWithCashuMessage =
     usePayContactWithCashuMessage<ContactRowLike>({
-      activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
       appendLocalNostrMessage,
       buildCashuMintCandidates,
       cashuBalance,
@@ -3046,8 +3044,6 @@ export const useCashuWalletComposition = ({
         });
       };
 
-      let activeClientId: string | null = null;
-
       try {
         const { getPublicKey } = await import("nostr-tools");
 
@@ -3065,8 +3061,6 @@ export const useCashuWalletComposition = ({
           throw new Error("invalid cashu token");
         }
         const clientId = ClientId.make(makeLocalId());
-        activeClientId = clientId;
-        activeNostrMessagePublishClientIdsRef.current.add(clientId);
         const pendingId = appendLocalNostrMessage({
           contactId,
           direction: "out",
@@ -3078,6 +3072,7 @@ export const useCashuWalletComposition = ({
           status: "pending",
           clientId,
         });
+        if (!pendingId) throw new Error("failed to persist message");
 
         const deleted = await deleteCashuToken(tokenId);
         if (!deleted) {
@@ -3086,35 +3081,32 @@ export const useCashuWalletComposition = ({
 
         navigateTo({ route: "chat", id: contactId });
 
+        const draft = new TokenMessageDraft({
+          to: contactPubHex,
+          token: token.right,
+          clientId,
+        });
+        const exit = await enqueueOutbox({
+          op: { _tag: "chat.token", draft },
+          ref: OutboxRef.make(`message:${pendingId}`),
+        });
+
+        if (Exit.isFailure(exit)) {
+          setStatus(`${t("errorPrefix")}: ${Cause.pretty(exit.cause)}`);
+          return;
+        }
+
+        updateLocalNostrMessage(pendingId, {
+          createdAtSec: exit.value.sentAt,
+          rumorId: exit.value.messageId,
+        });
+
         const isOffline =
           typeof navigator !== "undefined" && navigator.onLine === false;
         if (isOffline) {
           logIssuedTokenSendTransaction("publish");
           setStatus(t("chatQueued"));
           return;
-        }
-
-        const exit = await sendTokenMessage(
-          new TokenMessageDraft({
-            to: contactPubHex,
-            token: token.right,
-            clientId,
-          }),
-        );
-
-        if (Exit.isFailure(exit)) {
-          logIssuedTokenSendTransaction("publish");
-          setStatus(t("chatQueued"));
-          return;
-        }
-
-        if (pendingId) {
-          updateLocalNostrMessage(pendingId, {
-            status: "sent",
-            wrapId: exit.value.selfCopy.wrapId,
-            pubkey: myPubHex,
-            rumorId: exit.value.messageId,
-          });
         }
 
         const noticeClientId = ClientId.make(makeLocalId());
@@ -3148,21 +3140,16 @@ export const useCashuWalletComposition = ({
         logIssuedTokenSendTransaction("complete");
       } catch (error) {
         setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
-      } finally {
-        if (activeClientId) {
-          activeNostrMessagePublishClientIdsRef.current.delete(activeClientId);
-        }
       }
     },
     [
-      activeNostrMessagePublishClientIdsRef,
       appendLocalNostrMessage,
       cashuTokensAllFiltered,
       currentNsec,
+      enqueueOutbox,
       logPaymentEvent,
       deleteCashuToken,
       sendPaymentNotice,
-      sendTokenMessage,
       setStatus,
       t,
       updateLocalNostrMessage,

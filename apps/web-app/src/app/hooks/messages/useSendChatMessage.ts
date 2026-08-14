@@ -2,24 +2,20 @@ import {
   ClientId,
   ImageMessageDraft,
   MessageText,
+  OutboxRef,
   PrivateImage,
   Pubkey,
   RumorId,
   TextMessageDraft,
 } from "@linky/linkstr";
-import {
-  sendChatImageAtom,
-  sendChatTextAtom,
-  useAtomSet,
-} from "@linky/linkstr-react";
-import { Cause, Either, Exit, Option, Schema } from "effect";
+import { enqueueOutboxAtom, useAtomSet } from "@linky/linkstr-react";
+import { Cause, Either, Exit, Schema } from "effect";
 import React from "react";
 import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { makeLocalId } from "../../../utils/validation";
 import {
   createPrivateImageSendPayload,
   parsePrivateImageMessage,
-  privateImageUploadDebugPayload,
 } from "../../lib/privateImageMessage";
 import type {
   ContactIdentityRowLike,
@@ -52,7 +48,6 @@ interface UseSendChatMessageParams<
   TRoute extends { kind: string },
   TContact extends ContactIdentityRowLike,
 > {
-  activePublishClientIdsRef: React.MutableRefObject<Set<string>>;
   appendLocalNostrMessage: AppendLocalNostrMessage;
   chatDraft: string;
   chatSendIsBusy: boolean;
@@ -74,7 +69,6 @@ export const useSendChatMessage = <
   TRoute extends { kind: string },
   TContact extends ContactIdentityRowLike,
 >({
-  activePublishClientIdsRef,
   appendLocalNostrMessage,
   chatDraft,
   chatSendIsBusy,
@@ -91,10 +85,7 @@ export const useSendChatMessage = <
   triggerChatScrollToBottom,
   updateLocalNostrMessage,
 }: UseSendChatMessageParams<TRoute, TContact>) => {
-  const sendTextMessage = useAtomSet(sendChatTextAtom, {
-    mode: "promiseExit",
-  });
-  const sendImageMessage = useAtomSet(sendChatImageAtom, {
+  const enqueueOutbox = useAtomSet(enqueueOutboxAtom, {
     mode: "promiseExit",
   });
 
@@ -120,8 +111,6 @@ export const useSendChatMessage = <
       if (chatSendIsBusy) return;
       setChatSendIsBusy(true);
 
-      let activeClientId: string | null = null;
-
       try {
         const identity = await resolveNostrChatIdentity(
           currentNsec,
@@ -134,8 +123,6 @@ export const useSendChatMessage = <
         const { contactPubHex, myPubHex, privBytes } = identity;
 
         const clientId = ClientId.make(makeLocalId());
-        activeClientId = clientId;
-        activePublishClientIdsRef.current.add(clientId);
         const imagePayload = imageFile
           ? await createPrivateImageSendPayload(imageFile, {
               privateKey: privBytes,
@@ -215,70 +202,45 @@ export const useSendChatMessage = <
               }
             : {}),
         });
+        if (!pendingId) throw new Error("failed to persist message");
         triggerChatScrollToBottom(pendingId);
         if (options?.clearDraft !== false) {
           setChatDraft("");
           clearReplyContextIfCurrent();
         }
 
-        const isOffline =
-          typeof navigator !== "undefined" && navigator.onLine === false;
-        if (isOffline) {
-          setStatus(t("chatQueued"));
-          return;
-        }
-
-        void appendPushDebugLog("client", "chat send draft created", {
-          clientId,
-          contactPubHex,
-          media: mediaInfo ? privateImageUploadDebugPayload(mediaInfo) : null,
-          myPubHex,
-          replyToId: activeReplyToId || null,
+        const exit = await enqueueOutbox({
+          op:
+            draft instanceof ImageMessageDraft
+              ? { _tag: "chat.image", draft }
+              : { _tag: "chat.text", draft },
+          ref: OutboxRef.make(`message:${pendingId}`),
         });
-
-        const exit =
-          draft instanceof ImageMessageDraft
-            ? await sendImageMessage(draft)
-            : await sendTextMessage(draft);
-        const failure = Exit.isFailure(exit)
-          ? Cause.failureOption(exit.cause)
-          : Option.none();
-
-        void appendPushDebugLog("client", "chat send publish outcome", {
-          clientId,
-          failureTag: Option.isSome(failure) ? failure.value._tag : null,
-          messageId: Exit.isSuccess(exit) ? exit.value.messageId : null,
-          recipientWrapId: Exit.isSuccess(exit)
-            ? exit.value.recipientCopy.wrapId
-            : null,
-          selfWrapId: Exit.isSuccess(exit) ? exit.value.selfCopy.wrapId : null,
-          success: Exit.isSuccess(exit),
-        });
-
         if (Exit.isFailure(exit)) {
-          setStatus(t("chatQueued"));
+          setStatus(`${t("errorPrefix")}: ${Cause.pretty(exit.cause)}`);
           return;
         }
 
-        if (pendingId) {
-          updateLocalNostrMessage(pendingId, {
-            status: "sent",
-            wrapId: exit.value.selfCopy.wrapId,
-            pubkey: myPubHex,
-            rumorId: exit.value.messageId,
-          });
+        updateLocalNostrMessage(pendingId, {
+          createdAtSec: exit.value.sentAt,
+          rumorId: exit.value.messageId,
+        });
+
+        void appendPushDebugLog("client", "chat send enqueued", {
+          clientId,
+          messageId: exit.value.messageId,
+        });
+
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          setStatus(t("chatQueued"));
         }
       } catch (e) {
         setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
       } finally {
-        if (activeClientId) {
-          activePublishClientIdsRef.current.delete(activeClientId);
-        }
         setChatSendIsBusy(false);
       }
     },
     [
-      activePublishClientIdsRef,
       appendLocalNostrMessage,
       chatDraft,
       chatSendIsBusy,
@@ -287,8 +249,7 @@ export const useSendChatMessage = <
       replyContextRef,
       route.kind,
       selectedContact,
-      sendImageMessage,
-      sendTextMessage,
+      enqueueOutbox,
       setReplyContext,
       setChatDraft,
       setChatSendIsBusy,

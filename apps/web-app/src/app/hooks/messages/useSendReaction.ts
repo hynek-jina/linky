@@ -1,17 +1,18 @@
 import {
   ClientId,
   Emoji,
+  OutboxRef,
   Pubkey,
   ReactionDraft,
   RetractionDraft,
   RumorId,
 } from "@linky/linkstr";
 import {
+  enqueueOutboxAtom,
   retractReactionAtom,
-  sendReactionAtom,
   useAtomSet,
 } from "@linky/linkstr-react";
-import { Cause, Exit, Option, Schema } from "effect";
+import { Cause, Exit, Schema } from "effect";
 import React from "react";
 import { makeLocalId } from "../../../utils/validation";
 import type {
@@ -64,7 +65,7 @@ export const useSendReaction = <
   t,
   updateLocalNostrReaction,
 }: UseSendReactionParams<TRoute, TContact>) => {
-  const linkstrReact = useAtomSet(sendReactionAtom, { mode: "promiseExit" });
+  const enqueueOutbox = useAtomSet(enqueueOutboxAtom, { mode: "promiseExit" });
   const linkstrRetract = useAtomSet(retractReactionAtom, {
     mode: "promiseExit",
   });
@@ -143,49 +144,33 @@ export const useSendReaction = <
           clientId,
           status: "pending",
         });
+        if (!pendingReactionId) throw new Error("failed to persist reaction");
+
+        const draft = new ReactionDraft({
+          to: contactPubHex,
+          target: messageRumorId,
+          targetKind: args.messageKind === 15 ? "image" : "text",
+          targetAuthor: messageAuthorPubkey,
+          emoji,
+          clientId,
+        });
+        const exit = await enqueueOutbox({
+          op: { _tag: "reaction", draft },
+          ref: OutboxRef.make(`reaction:${pendingReactionId}`),
+        });
+
+        if (Exit.isFailure(exit)) {
+          setStatus(`${t("errorPrefix")}: ${Cause.pretty(exit.cause)}`);
+          return;
+        }
+
+        updateLocalNostrReaction(pendingReactionId, {
+          wrapId: exit.value.messageId,
+        });
 
         if (isOffline) {
           setStatus(t("chatQueued"));
-          return;
         }
-
-        const exit = await linkstrReact(
-          new ReactionDraft({
-            to: contactPubHex,
-            target: messageRumorId,
-            targetKind: args.messageKind === 15 ? "image" : "text",
-            targetAuthor: messageAuthorPubkey,
-            emoji,
-            clientId,
-          }),
-        );
-
-        if (Exit.isSuccess(exit)) {
-          if (pendingReactionId) {
-            updateLocalNostrReaction(pendingReactionId, {
-              status: "sent",
-              wrapId: exit.value.reactionId,
-            });
-          }
-          return;
-        }
-
-        const failure = Cause.failureOption(exit.cause);
-        if (
-          Option.isSome(failure) &&
-          failure.value._tag !== "LinkstrNotConfigured"
-        ) {
-          // Row stays pending for the flush; remember the rumor id so the
-          // relay echo can still reconcile by wrapId.
-          if (pendingReactionId) {
-            updateLocalNostrReaction(pendingReactionId, {
-              wrapId: failure.value.rumorId,
-            });
-          }
-          setStatus(t("chatQueued"));
-          return;
-        }
-        setStatus(`${t("errorPrefix")}: ${Cause.pretty(exit.cause)}`);
       } catch (e) {
         setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
       }
@@ -193,7 +178,7 @@ export const useSendReaction = <
     [
       appendLocalNostrReaction,
       currentNsec,
-      linkstrReact,
+      enqueueOutbox,
       linkstrRetract,
       reactionsByMessageId,
       route.kind,

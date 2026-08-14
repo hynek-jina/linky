@@ -1,8 +1,9 @@
 import * as Evolu from "@evolu/common";
 import {
-  ChatMessageReceipt,
   ClientId,
-  NoRelayReachable,
+  EnqueueReceipt,
+  OutboxJobId,
+  OutboxRef,
   PaymentNoticeReceipt,
   RelayUrl,
   RumorId,
@@ -21,8 +22,8 @@ import type {
   CashuTokenUpsert,
 } from "../src/app/hooks/payments/persistCashuMessagePayment";
 import type {
+  EnqueueOutbox,
   SendPaymentNotice,
-  SendTokenMessage,
 } from "../src/app/hooks/payments/publishCashuMessagePayment";
 import type {
   CashuTokenRowLike,
@@ -33,14 +34,14 @@ import type {
 
 const {
   createSendTokenWithTokensAtMintMock,
+  enqueueOutboxMock,
   navigateToMock,
   sendPaymentNoticeMock,
-  sendTokenMessageMock,
 } = vi.hoisted(() => ({
   createSendTokenWithTokensAtMintMock: vi.fn(),
+  enqueueOutboxMock: vi.fn<EnqueueOutbox>(),
   navigateToMock: vi.fn(),
   sendPaymentNoticeMock: vi.fn<SendPaymentNotice>(),
-  sendTokenMessageMock: vi.fn<SendTokenMessage>(),
 }));
 
 vi.mock("../src/cashuSend", () => ({
@@ -52,10 +53,10 @@ vi.mock("../src/hooks/useRouting", () => ({
 }));
 
 vi.mock("@linky/linkstr-react", () => ({
-  sendChatTokenAtom: "sendChatTokenAtom",
+  enqueueOutboxAtom: "enqueueOutboxAtom",
   sendPaymentNoticeAtom: "sendPaymentNoticeAtom",
   useAtomSet: (atom: unknown) =>
-    atom === "sendChatTokenAtom" ? sendTokenMessageMock : sendPaymentNoticeMock,
+    atom === "enqueueOutboxAtom" ? enqueueOutboxMock : sendPaymentNoticeMock,
 }));
 
 import { usePayContactWithCashuMessage } from "../src/app/hooks/payments/usePayContactWithCashuMessage";
@@ -103,13 +104,13 @@ const delivery = (wrapIdHex: string, accepted: boolean): WrapDelivery =>
     rejectedBy: [],
   });
 
-const tokenReceipt = (clientId: ClientId): ChatMessageReceipt =>
-  new ChatMessageReceipt({
+const enqueueReceipt = (clientId: ClientId, ref: OutboxRef): EnqueueReceipt =>
+  new EnqueueReceipt({
+    jobId: OutboxJobId.make("job-1"),
+    ref,
     messageId: RumorId.make("12".repeat(32)),
     clientId,
     sentAt,
-    selfCopy: delivery("aa".repeat(32), true),
-    recipientCopy: delivery("bb".repeat(32), true),
   });
 
 const noticeReceipt = (clientId: ClientId): PaymentNoticeReceipt =>
@@ -154,7 +155,6 @@ const setup = async (options: SetupOptions = {}) => {
 
   const Harness = () => {
     const pay = usePayContactWithCashuMessage<ContactRowLike>({
-      activePublishClientIdsRef: { current: new Set<string>() },
       appendLocalNostrMessage:
         options.appendLocalNostrMessage ?? (() => "local-message"),
       buildCashuMintCandidates: (mintGroups) => {
@@ -235,9 +235,9 @@ const setup = async (options: SetupOptions = {}) => {
 describe("usePayContactWithCashuMessage", () => {
   afterEach(() => {
     createSendTokenWithTokensAtMintMock.mockReset();
+    enqueueOutboxMock.mockReset();
     navigateToMock.mockReset();
     sendPaymentNoticeMock.mockReset();
-    sendTokenMessageMock.mockReset();
     vi.restoreAllMocks();
     localStorage.clear();
   });
@@ -257,9 +257,11 @@ describe("usePayContactWithCashuMessage", () => {
         unit: "sat",
       };
     });
-    sendTokenMessageMock.mockImplementation(async (draft) => {
-      operations.push("publish");
-      return Exit.succeed(tokenReceipt(draft.clientId ?? fallbackClientId));
+    enqueueOutboxMock.mockImplementation(async (input) => {
+      operations.push("enqueue");
+      return Exit.succeed(
+        enqueueReceipt(input.op.draft.clientId ?? fallbackClientId, input.ref),
+      );
     });
     sendPaymentNoticeMock.mockImplementation(async (draft) =>
       Exit.succeed(noticeReceipt(draft.clientId ?? fallbackClientId)),
@@ -308,7 +310,7 @@ describe("usePayContactWithCashuMessage", () => {
       "swap",
       `delete:${String(OLD_TOKEN_ID)}:${String(OLD_OWNER_ID)}`,
       "insert:cashu-change-token:accepted",
-      "publish",
+      "enqueue",
       "transaction",
     ]);
     expect(operations).not.toContain(
@@ -339,7 +341,7 @@ describe("usePayContactWithCashuMessage", () => {
 
     expect(result).toEqual({ ok: true, queued: true });
     expect(createSendTokenWithTokensAtMintMock).not.toHaveBeenCalled();
-    expect(sendTokenMessageMock).not.toHaveBeenCalled();
+    expect(enqueueOutboxMock).not.toHaveBeenCalled();
     expect(sendPaymentNoticeMock).not.toHaveBeenCalled();
     expect(harness.enqueuePendingPayment).toHaveBeenCalledWith({
       amountSat: 600,
@@ -351,7 +353,7 @@ describe("usePayContactWithCashuMessage", () => {
     await act(async () => harness.root.unmount());
   });
 
-  it("stores an unpublished send token and returns queued on relay failure", async () => {
+  it("stores an unpublished send token and returns queued on enqueue failure", async () => {
     createSendTokenWithTokensAtMintMock.mockResolvedValue({
       mint: "https://mint.example",
       ok: true,
@@ -362,16 +364,8 @@ describe("usePayContactWithCashuMessage", () => {
       sendToken: sendTokenText,
       unit: "sat",
     });
-    sendTokenMessageMock.mockImplementation(async (draft) =>
-      Exit.fail(
-        new NoRelayReachable({
-          rumorId: RumorId.make("12".repeat(32)),
-          clientId: draft.clientId ?? fallbackClientId,
-          sentAt,
-          selfCopy: delivery("aa".repeat(32), false),
-          recipientCopy: delivery("bb".repeat(32), false),
-        }),
-      ),
+    enqueueOutboxMock.mockResolvedValue(
+      Exit.fail({ _tag: "LinkstrNotConfigured" }),
     );
     const pushToast = vi.fn();
     const showPaidOverlay = vi.fn();
@@ -405,7 +399,7 @@ describe("usePayContactWithCashuMessage", () => {
       { ownerId: ACTIVE_OWNER_ID },
     );
     expect(sendPaymentNoticeMock).not.toHaveBeenCalled();
-    expect(pushToast).toHaveBeenCalledWith("payFailed: NoRelayReachable");
+    expect(pushToast).toHaveBeenCalledWith("payFailed: LinkstrNotConfigured");
     expect(showPaidOverlay).toHaveBeenCalledWith("paidQueuedTo");
 
     await act(async () => harness.root.unmount());

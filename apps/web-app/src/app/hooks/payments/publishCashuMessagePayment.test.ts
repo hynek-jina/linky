@@ -1,11 +1,12 @@
 import * as Evolu from "@evolu/common";
 import {
-  ChatMessageReceipt,
   ClientId,
+  EnqueueReceipt,
   NoRelayReachable,
+  OutboxJobId,
+  OutboxRef,
   PaymentNoticeDraft,
   PaymentNoticeReceipt,
-  RecipientNotReached,
   RelayUrl,
   RumorId,
   TokenMessageDraft,
@@ -19,8 +20,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { LocalNostrMessage } from "../../types/appTypes";
 import { publishCashuMessagePayment } from "./publishCashuMessagePayment";
 import type {
+  EnqueueOutbox,
   SendPaymentNotice,
-  SendTokenMessage,
 } from "./publishCashuMessagePayment";
 
 const privateKey = new Uint8Array(32).fill(1);
@@ -58,13 +59,13 @@ const delivery = (wrapIdHex: string): WrapDelivery =>
     rejectedBy: [],
   });
 
-const tokenReceipt = (clientId: ClientId): ChatMessageReceipt =>
-  new ChatMessageReceipt({
+const enqueueReceipt = (clientId: ClientId, ref: OutboxRef): EnqueueReceipt =>
+  new EnqueueReceipt({
+    jobId: OutboxJobId.make("job-1"),
+    ref,
     messageId: RumorId.make("12".repeat(32)),
     clientId,
     sentAt,
-    selfCopy: delivery("aa".repeat(32)),
-    recipientCopy: delivery("bb".repeat(32)),
   });
 
 const noticeReceipt = (clientId: ClientId): PaymentNoticeReceipt =>
@@ -79,7 +80,6 @@ const createArgs = () => {
   const ids = ["token-client", "notice-client"];
   const nostrMessagesLocal: LocalNostrMessage[] = [];
   return {
-    activePublishClientIds: new Set<string>(),
     appendLocalNostrMessage: vi.fn(() => "new-local-message"),
     batches: [
       {
@@ -96,6 +96,18 @@ const createArgs = () => {
       makeId: () => ids.shift() ?? "unexpected-client",
       nowSec: () => 1_730_000_000,
     },
+    enqueueOutbox: vi
+      .fn<EnqueueOutbox>()
+      .mockImplementation((input) =>
+        Promise.resolve(
+          Exit.succeed(
+            enqueueReceipt(
+              input.op.draft.clientId ?? ClientId.make("token-client"),
+              input.ref,
+            ),
+          ),
+        ),
+      ),
     logPayStep: vi.fn(),
     nostrMessagesLocal,
     pendingMessageId: null,
@@ -108,21 +120,12 @@ const createArgs = () => {
           ),
         ),
       ),
-    sendTokenMessage: vi
-      .fn<SendTokenMessage>()
-      .mockImplementation((draft) =>
-        Promise.resolve(
-          Exit.succeed(
-            tokenReceipt(draft.clientId ?? ClientId.make("token-client")),
-          ),
-        ),
-      ),
     updateLocalNostrMessage: vi.fn(),
   };
 };
 
 describe("publishCashuMessagePayment", () => {
-  it("sends the token draft with reply context and reuses one pending message", async () => {
+  it("enqueues the token draft with reply context and reuses one pending message", async () => {
     const args = createArgs();
     const pendingMessage: LocalNostrMessage = {
       contactId: String(contactId),
@@ -160,14 +163,18 @@ describe("publishCashuMessagePayment", () => {
     expect(args.updateLocalNostrMessage).toHaveBeenNthCalledWith(
       2,
       "pending-message",
-      expect.objectContaining({
-        pubkey: myPublicKey,
-        status: "sent",
-        wrapId: "aa".repeat(32),
-      }),
+      {
+        createdAtSec: sentAt,
+        rumorId: "12".repeat(32),
+      },
     );
 
-    const draft = args.sendTokenMessage.mock.calls[0]?.[0];
+    const input = args.enqueueOutbox.mock.calls[0]?.[0];
+    expect(input).toMatchObject({
+      op: { _tag: "chat.token" },
+      ref: "message:pending-message",
+    });
+    const draft = input?.op._tag === "chat.token" ? input.op.draft : undefined;
     expect(draft).toBeInstanceOf(TokenMessageDraft);
     expect(draft).toMatchObject({
       to: contactPublicKey,
@@ -187,31 +194,17 @@ describe("publishCashuMessagePayment", () => {
 
   it.each([
     [
-      "RecipientNotReached",
+      "LinkstrNotConfigured",
       (args: ReturnType<typeof createArgs>) => {
-        args.sendTokenMessage.mockImplementation((draft) =>
-          Promise.resolve(
-            Exit.fail(
-              new RecipientNotReached({
-                rumorId: RumorId.make("12".repeat(32)),
-                clientId: draft.clientId ?? ClientId.make("token-client"),
-                sentAt,
-                selfCopy: delivery("aa".repeat(32)),
-                recipientCopy: new WrapDelivery({
-                  wrapId: WrapId.make("bb".repeat(32)),
-                  acceptedBy: [],
-                  rejectedBy: [],
-                }),
-              }),
-            ),
-          ),
+        args.enqueueOutbox.mockResolvedValue(
+          Exit.fail({ _tag: "LinkstrNotConfigured" }),
         );
       },
     ],
     [
       "Error: relay unavailable",
       (args: ReturnType<typeof createArgs>) => {
-        args.sendTokenMessage.mockRejectedValue(new Error("relay unavailable"));
+        args.enqueueOutbox.mockRejectedValue(new Error("relay unavailable"));
       },
     ],
   ])(
@@ -224,7 +217,6 @@ describe("publishCashuMessagePayment", () => {
 
       expect(args.appendLocalNostrMessage).toHaveBeenCalledOnce();
       expect(args.updateLocalNostrMessage).not.toHaveBeenCalled();
-      expect(args.activePublishClientIds).toEqual(new Set());
       expect(args.sendPaymentNotice).not.toHaveBeenCalled();
       expect(result).toMatchObject({
         hasPendingMessages: true,

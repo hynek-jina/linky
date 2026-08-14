@@ -1,15 +1,14 @@
 import {
-  ChatMessageReceipt,
   ClientId,
+  EnqueueReceipt,
   ImageMessageDraft,
-  RecipientNotReached,
-  RelayUrl,
+  OutboxJobId,
+  OutboxRef,
   RumorId,
   TextMessageDraft,
   UnixSeconds,
-  WrapDelivery,
-  WrapId,
 } from "@linky/linkstr";
+import type { EnqueueOutboxInput } from "@linky/linkstr-react";
 import { Exit } from "effect";
 import { getPublicKey, nip19 } from "nostr-tools";
 import React, { act } from "react";
@@ -24,29 +23,24 @@ import type {
 } from "../../types/appTypes";
 import type { ReplyContext } from "./useSendChatMessage";
 
-type SendExit = Exit.Exit<ChatMessageReceipt, { readonly _tag: string }>;
-type SendTextMessage = (draft: TextMessageDraft) => Promise<SendExit>;
-type SendImageMessage = (draft: ImageMessageDraft) => Promise<SendExit>;
+type EnqueueOutbox = (
+  input: EnqueueOutboxInput,
+) => Promise<Exit.Exit<EnqueueReceipt, { readonly _tag: string }>>;
 type CreatePrivateImageSendPayload = (
   file: File,
   auth: { privateKey: Uint8Array; pubkey: string },
 ) => Promise<{ content: string }>;
 
-const {
-  createPrivateImageSendPayloadMock,
-  sendImageMessageMock,
-  sendTextMessageMock,
-} = vi.hoisted(() => ({
-  createPrivateImageSendPayloadMock: vi.fn<CreatePrivateImageSendPayload>(),
-  sendImageMessageMock: vi.fn<SendImageMessage>(),
-  sendTextMessageMock: vi.fn<SendTextMessage>(),
-}));
+const { createPrivateImageSendPayloadMock, enqueueOutboxMock } = vi.hoisted(
+  () => ({
+    createPrivateImageSendPayloadMock: vi.fn<CreatePrivateImageSendPayload>(),
+    enqueueOutboxMock: vi.fn<EnqueueOutbox>(),
+  }),
+);
 
 vi.mock("@linky/linkstr-react", () => ({
-  sendChatImageAtom: "sendChatImageAtom",
-  sendChatTextAtom: "sendChatTextAtom",
-  useAtomSet: (atom: unknown) =>
-    atom === "sendChatImageAtom" ? sendImageMessageMock : sendTextMessageMock,
+  enqueueOutboxAtom: "enqueueOutboxAtom",
+  useAtomSet: () => enqueueOutboxMock,
 }));
 
 vi.mock("../../lib/privateImageMessage", async (importOriginal) => {
@@ -73,29 +67,13 @@ const ROOT = RumorId.make("22".repeat(32));
 const MESSAGE_ID = RumorId.make("33".repeat(32));
 const SENT_AT = UnixSeconds.make(1_730_000_000);
 
-const delivery = (id: string, accepted = true): WrapDelivery =>
-  new WrapDelivery({
-    wrapId: WrapId.make(id),
-    acceptedBy: accepted ? [RelayUrl.make("wss://relay.example")] : [],
-    rejectedBy: [],
-  });
-
-const receipt = (clientId: ClientId): ChatMessageReceipt =>
-  new ChatMessageReceipt({
+const receipt = (clientId: ClientId, ref: OutboxRef): EnqueueReceipt =>
+  new EnqueueReceipt({
+    jobId: OutboxJobId.make("job-1"),
+    ref,
     messageId: MESSAGE_ID,
     clientId,
     sentAt: SENT_AT,
-    selfCopy: delivery("aa".repeat(32)),
-    recipientCopy: delivery("bb".repeat(32)),
-  });
-
-const failure = (clientId: ClientId): RecipientNotReached =>
-  new RecipientNotReached({
-    rumorId: MESSAGE_ID,
-    clientId,
-    sentAt: SENT_AT,
-    selfCopy: delivery("aa".repeat(32)),
-    recipientCopy: delivery("bb".repeat(32), false),
   });
 
 interface SendOptions {
@@ -115,7 +93,6 @@ interface SetupOptions {
 const setup = async (options: SetupOptions = {}) => {
   let sendChatMessage: SendChatMessage | null = null;
   const operations: string[] = [];
-  const activePublishClientIdsRef = { current: new Set<string>() };
   const appendLocalNostrMessage = vi.fn<
     (message: NewLocalNostrMessage) => string
   >(() => {
@@ -134,7 +111,6 @@ const setup = async (options: SetupOptions = {}) => {
 
   const Harness = () => {
     const send = useSendChatMessage({
-      activePublishClientIdsRef,
       appendLocalNostrMessage,
       chatDraft: options.chatDraft ?? "hello",
       chatSendIsBusy: false,
@@ -167,7 +143,6 @@ const setup = async (options: SetupOptions = {}) => {
   });
 
   return {
-    activePublishClientIdsRef,
     appendLocalNostrMessage,
     getSend: () => sendChatMessage,
     operations,
@@ -184,12 +159,11 @@ const setup = async (options: SetupOptions = {}) => {
 describe("useSendChatMessage", () => {
   afterEach(() => {
     createPrivateImageSendPayloadMock.mockReset();
-    sendImageMessageMock.mockReset();
-    sendTextMessageMock.mockReset();
+    enqueueOutboxMock.mockReset();
     vi.restoreAllMocks();
   });
 
-  it("sends text with reply context and marks the pending row sent", async () => {
+  it("enqueues text with reply context and stores receipt fields", async () => {
     const harness = await setup({
       replyContext: {
         replyToContent: "parent",
@@ -197,15 +171,26 @@ describe("useSendChatMessage", () => {
         rootMessageId: ROOT,
       },
     });
-    sendTextMessageMock.mockImplementation(async (draft) =>
-      Exit.succeed(receipt(draft.clientId ?? ClientId.make("fallback"))),
-    );
+    enqueueOutboxMock.mockImplementation(async (input) => {
+      harness.operations.push("enqueue");
+      return Exit.succeed(
+        receipt(
+          input.op.draft.clientId ?? ClientId.make("fallback"),
+          input.ref,
+        ),
+      );
+    });
 
     await act(async () => {
       await harness.getSend()?.();
     });
 
-    const draft = sendTextMessageMock.mock.calls[0]?.[0];
+    const input = enqueueOutboxMock.mock.calls[0]?.[0];
+    expect(input).toMatchObject({
+      op: { _tag: "chat.text" },
+      ref: "message:pending-message",
+    });
+    const draft = input?.op._tag === "chat.text" ? input.op.draft : undefined;
     expect(draft).toBeInstanceOf(TextMessageDraft);
     expect(draft).toMatchObject({
       to: CONTACT_PUBKEY,
@@ -232,17 +217,14 @@ describe("useSendChatMessage", () => {
     expect(harness.updateLocalNostrMessage).toHaveBeenCalledWith(
       "pending-message",
       {
-        pubkey: MY_PUBKEY,
+        createdAtSec: SENT_AT,
         rumorId: MESSAGE_ID,
-        status: "sent",
-        wrapId: "aa".repeat(32),
       },
     );
-    expect(harness.operations).toEqual(["append", "update"]);
+    expect(harness.operations).toEqual(["append", "enqueue", "update"]);
     expect(harness.setChatDraft).toHaveBeenCalledWith("");
     expect(harness.setChatSendIsBusy).toHaveBeenNthCalledWith(1, true);
     expect(harness.setChatSendIsBusy).toHaveBeenLastCalledWith(false);
-    expect(harness.activePublishClientIdsRef.current).toEqual(new Set());
 
     await act(async () => harness.root.unmount());
   });
@@ -266,8 +248,13 @@ describe("useSendChatMessage", () => {
     createPrivateImageSendPayloadMock.mockResolvedValue({
       content: compactContent,
     });
-    sendImageMessageMock.mockImplementation(async (draft) =>
-      Exit.succeed(receipt(draft.clientId ?? ClientId.make("fallback"))),
+    enqueueOutboxMock.mockImplementation(async (input) =>
+      Exit.succeed(
+        receipt(
+          input.op.draft.clientId ?? ClientId.make("fallback"),
+          input.ref,
+        ),
+      ),
     );
     const harness = await setup({ chatDraft: "caption ignored" });
     const file = new File(["image"], "photo.jpg", { type: "image/jpeg" });
@@ -276,7 +263,12 @@ describe("useSendChatMessage", () => {
       await harness.getSend()?.({ imageFile: file });
     });
 
-    const draft = sendImageMessageMock.mock.calls[0]?.[0];
+    const input = enqueueOutboxMock.mock.calls[0]?.[0];
+    expect(input).toMatchObject({
+      op: { _tag: "chat.image" },
+      ref: "message:pending-message",
+    });
+    const draft = input?.op._tag === "chat.image" ? input.op.draft : undefined;
     expect(draft).toBeInstanceOf(ImageMessageDraft);
     expect(draft?.to).toBe(CONTACT_PUBKEY);
     expect(draft?.image).toMatchObject({
@@ -295,18 +287,17 @@ describe("useSendChatMessage", () => {
     expect(harness.updateLocalNostrMessage).toHaveBeenCalledWith(
       "pending-message",
       expect.objectContaining({
+        createdAtSec: SENT_AT,
         rumorId: MESSAGE_ID,
-        status: "sent",
-        wrapId: "aa".repeat(32),
       }),
     );
 
     await act(async () => harness.root.unmount());
   });
 
-  it("keeps the row pending when the recipient is not reached", async () => {
-    sendTextMessageMock.mockImplementation(async (draft) =>
-      Exit.fail(failure(draft.clientId ?? ClientId.make("fallback"))),
+  it("keeps the row pending when enqueue fails", async () => {
+    enqueueOutboxMock.mockResolvedValue(
+      Exit.fail({ _tag: "LinkstrNotConfigured" }),
     );
     const harness = await setup();
 
@@ -316,15 +307,25 @@ describe("useSendChatMessage", () => {
 
     expect(harness.appendLocalNostrMessage).toHaveBeenCalledOnce();
     expect(harness.updateLocalNostrMessage).not.toHaveBeenCalled();
-    expect(harness.setStatus).toHaveBeenCalledWith("chatQueued");
+    expect(harness.setStatus).toHaveBeenCalledWith(
+      expect.stringContaining("errorPrefix"),
+    );
     expect(harness.setChatSendIsBusy).toHaveBeenLastCalledWith(false);
 
     await act(async () => harness.root.unmount());
   });
 
-  it("queues offline without invoking a linkstr dispatcher", async () => {
+  it("enqueues offline and shows the queued status", async () => {
     vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
     const harness = await setup();
+    enqueueOutboxMock.mockImplementation(async (input) =>
+      Exit.succeed(
+        receipt(
+          input.op.draft.clientId ?? ClientId.make("fallback"),
+          input.ref,
+        ),
+      ),
+    );
 
     await act(async () => {
       await harness.getSend()?.();
@@ -339,9 +340,13 @@ describe("useSendChatMessage", () => {
         status: "pending",
       }),
     );
-    expect(sendTextMessageMock).not.toHaveBeenCalled();
-    expect(sendImageMessageMock).not.toHaveBeenCalled();
-    expect(harness.updateLocalNostrMessage).not.toHaveBeenCalled();
+    expect(enqueueOutboxMock).toHaveBeenCalledWith(
+      expect.objectContaining({ ref: "message:pending-message" }),
+    );
+    expect(harness.updateLocalNostrMessage).toHaveBeenCalledWith(
+      "pending-message",
+      { createdAtSec: SENT_AT, rumorId: MESSAGE_ID },
+    );
     expect(harness.setStatus).toHaveBeenCalledWith("chatQueued");
 
     await act(async () => harness.root.unmount());

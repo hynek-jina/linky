@@ -454,7 +454,6 @@ export const useAppShellComposition = ({
   const {
     activeContactsOwnerContactCount,
     activeGroup,
-    activeNostrMessagePublishClientIdsRef,
     addNewContactFromIdentifier,
     addNewContactFromSearchResult,
     addNpubMessageContacts,
@@ -825,7 +824,6 @@ export const useAppShellComposition = ({
     contactPayBackToChatRef,
     contactsMessaging: {
       activeContactsOwnerContactCount,
-      activeNostrMessagePublishClientIdsRef,
       appendLocalNostrMessage,
       buildSavedContactName,
       chatMessages,
