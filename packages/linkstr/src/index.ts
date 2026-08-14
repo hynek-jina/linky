@@ -1,3 +1,7 @@
+export { BANK_OFFER_KIND, BANK_OFFER_VALUE } from "./bankOffers/codec";
+export * from "./bankOffers/domain";
+export * from "./bankOffers/events";
+export * from "./bankOffers/BankOffers";
 export * from "./chat/Chat";
 export * from "./chat/cashuToken";
 export * from "./chat/domain";
