@@ -11,6 +11,7 @@ import {
   RelayUrl,
   RumorId,
   UnixSeconds,
+  WrapId,
 } from "@linky/linkstr";
 import type { NostrTransportService, WrapInboxEvent } from "@linky/linkstr";
 import { Effect, Exit, Layer } from "effect";
@@ -18,7 +19,11 @@ import { generateSecretKey, getPublicKey } from "nostr-tools";
 import type { Event as NostrToolsEvent, Filter } from "nostr-tools";
 import type { LinkstrConfig } from "./config";
 import { linkstrConfigAtom } from "./config";
-import { wrapInboxAtom, wrapInboxHandlerAtom } from "./inbox";
+import {
+  fetchWrapEventAtom,
+  wrapInboxAtom,
+  wrapInboxHandlerAtom,
+} from "./inbox";
 import { sendReactionAtom } from "./reactions";
 
 type PublishedWrap = Parameters<NostrTransportService["publish"]>[1];
@@ -51,6 +56,7 @@ interface FakeSubscription {
 const makeFakeTransport = (
   published: Array<PublishedWrap>,
   subscriptions: Array<FakeSubscription>,
+  stored: ReadonlyArray<NostrToolsEvent> = [],
 ): NostrTransportService => ({
   publish: (relays, wrap) =>
     Effect.sync(() => {
@@ -72,7 +78,36 @@ const makeFakeTransport = (
         ),
       );
     }),
-  fetch: () => Effect.die("fetch not under test"),
+  fetch: () => Effect.succeed(stored),
+});
+
+describe("fetchWrapEventAtom", () => {
+  it("returns a typed inbox event", async () => {
+    const wrap = await wrapFromBob("🔥");
+    const registry = Registry.make();
+    registry.set(
+      linkstrConfigAtom,
+      configWith(alice, makeFakeTransport([], [], [wrap])),
+    );
+    registry.set(fetchWrapEventAtom, { wrapId: WrapId.make(wrap.id) });
+
+    const exit = await Effect.runPromiseExit(
+      Registry.getResult(registry, fetchWrapEventAtom, {
+        suspendOnWaiting: true,
+      }),
+    );
+
+    expect(exit).toEqual(
+      Exit.succeed(
+        expect.objectContaining({
+          _tag: "ReactionAdded",
+          from: bob.pubkey,
+          emoji: "🔥",
+        }),
+      ),
+    );
+    registry.dispose();
+  });
 });
 
 const configWith = (

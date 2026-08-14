@@ -52,7 +52,7 @@ export class PlainOperationSucceeded extends Schema.TaggedClass<PlainOperationSu
   {
     name: Schema.String,
     params: Schema.Unknown,
-    eventIds: Schema.Array(EventId),
+    eventIds: Schema.Array(Schema.Union(EventId, WrapId)),
     result: Schema.Unknown,
   },
 ) {}

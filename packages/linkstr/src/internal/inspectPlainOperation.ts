@@ -1,12 +1,12 @@
 import { Effect } from "effect";
-import type { EventId } from "../domain/primitives";
+import type { EventId, WrapId } from "../domain/primitives";
 import type { InspectorService } from "../inspector/Inspector";
 import { OperationFailed, PlainOperationSucceeded } from "../inspector/events";
 
 export interface InspectedPlainResult<A> {
   readonly result: A;
   /** Signed events the operation published or read, for wire-row correlation. */
-  readonly eventIds: ReadonlyArray<EventId>;
+  readonly eventIds: ReadonlyArray<EventId | WrapId>;
 }
 
 /** Plain-event sibling of the reactions inspector tap. */

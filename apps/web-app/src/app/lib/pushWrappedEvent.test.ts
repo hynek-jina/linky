@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  getLinkyBankPaymentOfferPaymentNoticeOfferId,
   isLinkyBankPaymentOfferPaymentNoticeEvent,
   LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
   LINKY_PAYMENT_NOTICE_KIND,
@@ -26,14 +25,8 @@ describe("payment notice context", () => {
     const ordinaryNotice = paymentNotice();
 
     expect(isLinkyBankPaymentOfferPaymentNoticeEvent(proxyNotice)).toBe(true);
-    expect(getLinkyBankPaymentOfferPaymentNoticeOfferId(proxyNotice)).toBe(
-      "offer-123",
-    );
     expect(isLinkyBankPaymentOfferPaymentNoticeEvent(ordinaryNotice)).toBe(
       false,
-    );
-    expect(getLinkyBankPaymentOfferPaymentNoticeOfferId(ordinaryNotice)).toBe(
-      null,
     );
   });
 });

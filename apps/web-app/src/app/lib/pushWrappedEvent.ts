@@ -26,18 +26,6 @@ export function hasLinkyPushMarker(event: { tags: string[][] }): boolean {
   );
 }
 
-export function getLinkyBankPaymentOfferPaymentNoticeOfferId(event: {
-  kind: number;
-  tags: string[][];
-}): string | null {
-  if (!isLinkyBankPaymentOfferPaymentNoticeEvent(event)) return null;
-
-  const offerId = event.tags.find(
-    (tag) => Array.isArray(tag) && tag[0] === "offer" && tag[1]?.trim(),
-  )?.[1];
-  return offerId?.trim() || null;
-}
-
 export function isLinkyBankPaymentOfferPaymentNoticeEvent(event: {
   kind: number;
   tags: string[][];

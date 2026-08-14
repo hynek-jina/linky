@@ -1,9 +1,12 @@
 import { Share } from "@capacitor/share";
+import { RelayUrl, WrapId } from "@linky/linkstr";
+import type { WrapInboxEvent } from "@linky/linkstr";
+import { fetchWrapEventAtom, useAtomSet } from "@linky/linkstr-react";
+import { Exit, Schema } from "effect";
 import { nip19 } from "nostr-tools";
 import React from "react";
 import type { CashuTokenId, useEvolu } from "../../../evolu";
 import { navigateTo, useRouting } from "../../../hooks/useRouting";
-import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import {
   cancelNativeNfcWrite,
   consumePendingIosNativeDeepLinkUrl,
@@ -30,25 +33,13 @@ import {
 } from "../../../utils/storage";
 import { useContactsOnboardingProgress } from "../guide/useContactsOnboardingProgress";
 import {
-  extractClientTag,
-  extractEditedFromTag,
-  extractReplyContextFromTags,
-  isInvalidInnerRumorPubkey,
-  isNestedEncryptedNip44PayloadForAnyPubkey,
-} from "../messages/chatNostrProtocol";
-import {
   buildUnknownContactId,
   normalizePubkeyHex,
 } from "../messages/contactIdentity";
-import { hasKnownNostrMessageIdentity } from "../messages/messageHelpers";
+import type { DispatchInboxEvent } from "../messages/useLinkstrInboxSync";
 import { useGuideScannerDomain } from "../useGuideScannerDomain";
 import { useScannedTextHandler } from "../useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "../useScannedTextHandlerRefBridge";
-import {
-  getLinkyBankPaymentOfferInfo,
-  isLinkyBankPaymentOfferEvent,
-  setLinkyBankPaymentOfferMinimized,
-} from "../../lib/bankPaymentOffer";
 import {
   CASHU_TOKEN_STATE_EXTERNALIZED,
   isCashuTokenAcceptedState,
@@ -58,17 +49,10 @@ import {
   readNotificationOpenRoute,
   readNotificationOpenTarget,
 } from "../../lib/notificationOpenTarget";
-import { getSharedAppNostrPool } from "../../lib/nostrPool";
-import { privateImageMessageFromEvent } from "../../lib/privateImageMessage";
-import {
-  getLinkyBankPaymentOfferPaymentNoticeOfferId,
-  isLinkyBankPaymentOfferPaymentNoticeEvent,
-} from "../../lib/pushWrappedEvent";
 import {
   extractCashuTokenFromText,
   extractCashuTokenFromText as extractCashuTokenFromTextFromUrl,
 } from "../../lib/tokenText";
-import type { LocalNostrMessage } from "../../types/appTypes";
 import type { useCashuWalletComposition } from "./useCashuWalletComposition";
 import type { useContactsMessagingComposition } from "./useContactsMessagingComposition";
 import type { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
@@ -84,14 +68,33 @@ type IdentityOwnersCompositionResult = ReturnType<
   typeof useIdentityOwnersComposition
 >;
 
+const isRelayUrl = Schema.is(RelayUrl);
+const isWrapId = Schema.is(WrapId);
+
+const inboxPeerPubkey = (event: WrapInboxEvent): string | null => {
+  switch (event._tag) {
+    case "ChatMessageReceived":
+    case "ReactionAdded":
+    case "ReactionRetracted":
+    case "PaymentNoticeReceived":
+    case "BankOfferSnapshotReceived":
+      return event.from;
+    case "OwnChatMessageConfirmed":
+    case "OwnBankOfferSnapshotConfirmed":
+      return event.to;
+    case "OwnReactionConfirmed":
+    case "OwnRetractionConfirmed":
+    case "WrapDropped":
+      return null;
+  }
+};
+
 interface QueuedNotificationOpenDetail {
   value: unknown;
 }
 
 interface UseScanNativeCompositionParams {
   addNewContactFromIdentifier: ContactsMessagingCompositionResult["addNewContactFromIdentifier"];
-  appendLocalNostrMessage: ContactsMessagingCompositionResult["appendLocalNostrMessage"];
-  bankPaymentOfferMessages: ContactsMessagingCompositionResult["bankPaymentOfferMessages"];
   cashuBalance: CashuWalletCompositionResult["cashuBalance"];
   cashuOwnerId: IdentityOwnersCompositionResult["cashuOwnerId"];
   cashuTokensAllFiltered: CashuWalletCompositionResult["cashuTokensAllFiltered"];
@@ -105,14 +108,11 @@ interface UseScanNativeCompositionParams {
   copyText: (value: string) => Promise<void>;
   currentNpub: string | null;
   currentNsec: string | null;
+  dispatchInboxEvent: DispatchInboxEvent;
   insert: EvoluMutations["insert"];
-  knownNostrMessageIdentityIndex: ContactsMessagingCompositionResult["knownNostrMessageIdentityIndex"];
   lightningInvoiceAutoPayLimit: CashuWalletCompositionResult["lightningInvoiceAutoPayLimit"];
   markCashuTokenIssued: CashuWalletCompositionResult["markCashuTokenIssued"];
   nostrBootstrapReady: ContactsMessagingCompositionResult["nostrBootstrapReady"];
-  nostrFetchRelays: ContactsMessagingCompositionResult["nostrFetchRelays"];
-  nostrMessagesLatestRef: ContactsMessagingCompositionResult["nostrMessagesLatestRef"];
-  nostrMessageWrapIdsRef: ContactsMessagingCompositionResult["nostrMessageWrapIdsRef"];
   openNewContactPage: ContactsMessagingCompositionResult["openNewContactPage"];
   openScannedContactPendingNpubRef: ContactsMessagingCompositionResult["openScannedContactPendingNpubRef"];
   payCashuPaymentRequest: CashuWalletCompositionResult["payCashuPaymentRequest"];
@@ -126,16 +126,11 @@ interface UseScanNativeCompositionParams {
   setPendingLnurlWithdrawConfirmation: CashuWalletCompositionResult["setPendingLnurlWithdrawConfirmation"];
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
-  triggerChatScrollToBottom: ContactsMessagingCompositionResult["triggerChatScrollToBottom"];
   update: EvoluMutations["update"];
-  updateLocalNostrMessage: ContactsMessagingCompositionResult["updateLocalNostrMessage"];
-  upsertBankPaymentOfferMessage: ContactsMessagingCompositionResult["upsertBankPaymentOfferMessage"];
 }
 
 export const useScanNativeComposition = ({
   addNewContactFromIdentifier,
-  appendLocalNostrMessage,
-  bankPaymentOfferMessages,
   cashuBalance,
   cashuOwnerId,
   cashuTokensAllFiltered,
@@ -149,14 +144,11 @@ export const useScanNativeComposition = ({
   copyText,
   currentNpub,
   currentNsec,
+  dispatchInboxEvent,
   insert,
-  knownNostrMessageIdentityIndex,
   lightningInvoiceAutoPayLimit,
   markCashuTokenIssued,
   nostrBootstrapReady,
-  nostrFetchRelays,
-  nostrMessagesLatestRef,
-  nostrMessageWrapIdsRef,
   openNewContactPage,
   openScannedContactPendingNpubRef,
   payCashuPaymentRequest,
@@ -170,11 +162,11 @@ export const useScanNativeComposition = ({
   setPendingLnurlWithdrawConfirmation,
   setStatus,
   t,
-  triggerChatScrollToBottom,
   update,
-  updateLocalNostrMessage,
-  upsertBankPaymentOfferMessage,
 }: UseScanNativeCompositionParams) => {
+  const fetchWrapEvent = useAtomSet(fetchWrapEventAtom, {
+    mode: "promiseExit",
+  });
   const pendingNotificationOpenDetailsRef = React.useRef<
     QueuedNotificationOpenDetail[]
   >([]);
@@ -551,10 +543,7 @@ export const useScanNativeComposition = ({
         }
 
         const { getPublicKey } = await import("nostr-tools");
-        const { unwrapEvent } = await import("nostr-tools/nip17");
-
-        const privBytes = decoded.data;
-        const myPubHex = getPublicKey(privBytes);
+        const myPubHex = getPublicKey(decoded.data);
         if (target.recipientPubkey !== myPubHex) {
           return false;
         }
@@ -594,22 +583,19 @@ export const useScanNativeComposition = ({
           ? openKnownNotificationContact(target.senderPubkey)
           : false;
 
-        const relays = Array.from(
-          new Set([...target.relayHints, ...nostrFetchRelays, ...NOSTR_RELAYS]),
-        );
-        const pool = await getSharedAppNostrPool();
-        const wraps = await pool.querySync(
-          relays,
-          {
-            ids: [target.outerEventId],
-            kinds: [1059],
-            "#p": [myPubHex],
-            limit: 1,
-          },
-          { maxWait: 2500 },
-        );
-        const wrap = wraps[0] ?? null;
-        if (!wrap) {
+        if (!isWrapId(target.outerEventId)) {
+          return openedFromNotificationData;
+        }
+        const extraRelays = target.relayHints.filter(isRelayUrl);
+        const fetched = await fetchWrapEvent({
+          wrapId: target.outerEventId,
+          ...(extraRelays.length === 0 ? {} : { extraRelays }),
+        });
+        if (
+          Exit.isFailure(fetched) ||
+          fetched.value === null ||
+          fetched.value._tag === "WrapDropped"
+        ) {
           return (
             openedFromNotificationData ||
             (target.senderPubkey
@@ -618,27 +604,9 @@ export const useScanNativeComposition = ({
           );
         }
 
-        const wrapId = String(wrap.id ?? "").trim();
-        if (!wrapId) {
-          return openedFromNotificationData;
-        }
-
-        const inner = unwrapEvent(wrap, privBytes);
-        if (!inner) {
-          return openedFromNotificationData;
-        }
-
-        const senderPub = normalizePubkeyHex(inner.pubkey);
-        const tags = Array.isArray(inner.tags) ? inner.tags : [];
-        const pTags = tags
-          .filter((tag) => Array.isArray(tag) && tag[0] === "p")
-          .map((tag) => normalizePubkeyHex(tag[1]))
-          .filter((pubkey): pubkey is string => Boolean(pubkey));
-
-        const peerPubkey =
-          senderPub && senderPub !== myPubHex
-            ? senderPub
-            : (pTags.find((pubkey) => pubkey !== myPubHex) ?? null);
+        const event = fetched.value;
+        dispatchInboxEvent(event, "backfill");
+        const peerPubkey = inboxPeerPubkey(event);
         if (!peerPubkey) {
           return openedFromNotificationData;
         }
@@ -652,349 +620,19 @@ export const useScanNativeComposition = ({
           return false;
         }
 
-        let insertedMessageId: string | null = null;
-
-        if (isLinkyBankPaymentOfferPaymentNoticeEvent(inner)) {
-          const taggedOfferId =
-            getLinkyBankPaymentOfferPaymentNoticeOfferId(inner);
-          const matchingOffer = taggedOfferId
-            ? null
-            : bankPaymentOfferMessages.reduce<{
-                createdAtSec: number;
-                offerId: string;
-              } | null>((latest, message) => {
-                if (String(message.contactId ?? "").trim() !== contactId) {
-                  return latest;
-                }
-
-                const info = getLinkyBankPaymentOfferInfo(
-                  String(message.content ?? ""),
-                );
-                if (!info) return latest;
-
-                const createdAtSec = Number(message.createdAtSec ?? 0);
-                if (latest && latest.createdAtSec >= createdAtSec) {
-                  return latest;
-                }
-                return { createdAtSec, offerId: info.offerId };
-              }, null);
-          const offerId =
-            taggedOfferId ?? matchingOffer?.offerId ?? `expired:${wrapId}`;
-
-          if (taggedOfferId || matchingOffer) {
-            setLinkyBankPaymentOfferMinimized(contactId, offerId, false);
-          }
-          setPendingDeleteId(null);
-          navigateTo({
-            route: "bankPaymentOffer",
-            chatId: contactId,
-            offerId,
-          });
-          return true;
-        }
-
-        if (isLinkyBankPaymentOfferEvent(inner)) {
-          const content = String(inner.content ?? "");
-          const offerInfo = getLinkyBankPaymentOfferInfo(content);
-          if (!offerInfo || !pTags.includes(myPubHex)) {
-            return openedFromNotificationData;
-          }
-
-          const offererPubkey =
-            String(offerInfo.offererPublicKey ?? "").trim() ||
-            senderPub ||
-            peerPubkey;
-          const isOutgoing = offererPubkey === myPubHex;
-          const tagClientId = extractClientTag(tags);
-          const createdAtSecRaw = Number(inner.created_at ?? 0);
-          const createdAtSec =
-            Number.isFinite(createdAtSecRaw) && createdAtSecRaw > 0
-              ? Math.trunc(createdAtSecRaw)
-              : Math.floor(Date.now() / 1_000);
-          const offerMessage: LocalNostrMessage = {
-            contactId,
-            content,
-            createdAtSec,
-            direction: isOutgoing ? "out" : "in",
-            id: `bank-payment-offer:${wrapId}`,
-            localOnly: true,
-            pubkey: isOutgoing ? myPubHex : offererPubkey,
-            rumorId: null,
-            status: "sent",
-            wrapId,
-          };
-          if (tagClientId) {
-            offerMessage.clientId = tagClientId;
-          }
-          upsertBankPaymentOfferMessage(offerMessage);
-          setLinkyBankPaymentOfferMinimized(
-            contactId,
-            offerInfo.offerId,
-            false,
-          );
-          setPendingDeleteId(null);
-          navigateTo({
-            route: "bankPaymentOffer",
-            chatId: contactId,
-            offerId: offerInfo.offerId,
-          });
-          return true;
-        }
-
-        if (inner.kind === 14 || inner.kind === 15) {
-          const existingByWrap = nostrMessagesLatestRef.current.find(
-            (message) => String(message.wrapId ?? "").trim() === wrapId,
-          );
-          if (existingByWrap) {
-            insertedMessageId = String(existingByWrap.id ?? "").trim() || null;
-          } else if (
-            !hasKnownNostrMessageIdentity(knownNostrMessageIdentityIndex, {
-              wrapId,
-            }) &&
-            !isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)
-          ) {
-            const content =
-              inner.kind === 15
-                ? (privateImageMessageFromEvent(inner) ?? "")
-                : String(inner.content ?? "");
-
-            if (content.trim()) {
-              const taggedPeerPub =
-                pTags.find((pubkey) => pubkey !== myPubHex) ?? "";
-              const nestedEncryptedPayload =
-                inner.kind === 14 &&
-                isNestedEncryptedNip44PayloadForAnyPubkey(
-                  content,
-                  [senderPub, taggedPeerPub, wrap.pubkey],
-                  privBytes,
-                );
-
-              if (!nestedEncryptedPayload) {
-                const tagClientId = extractClientTag(tags);
-                const rumorId = inner.id ? String(inner.id).trim() : "";
-                const matchedOutgoingMessage =
-                  senderPub === myPubHex
-                    ? null
-                    : (nostrMessagesLatestRef.current.find((message) => {
-                        if (String(message.direction ?? "").trim() !== "out") {
-                          return false;
-                        }
-                        if (
-                          tagClientId &&
-                          String(message.clientId ?? "").trim() ===
-                            String(tagClientId).trim()
-                        ) {
-                          return true;
-                        }
-                        return (
-                          rumorId &&
-                          String(message.rumorId ?? "").trim() === rumorId
-                        );
-                      }) ?? null);
-
-                const addressesMe = pTags.includes(myPubHex);
-                const isOutgoing =
-                  senderPub === myPubHex ||
-                  (addressesMe && Boolean(matchedOutgoingMessage));
-
-                if (addressesMe || isOutgoing) {
-                  const messageDirection = isOutgoing ? "out" : "in";
-                  const { replyToId, rootMessageId } =
-                    extractReplyContextFromTags(tags);
-                  const editedFromId = extractEditedFromTag(tags);
-                  const effectivePubkey = isOutgoing ? myPubHex : peerPubkey;
-                  const normalizedIncomingPeerPubkey = isOutgoing
-                    ? null
-                    : normalizePubkeyHex(effectivePubkey);
-                  const createdAtSecRaw = Number(inner.created_at ?? 0);
-                  const createdAtSec =
-                    Number.isFinite(createdAtSecRaw) && createdAtSecRaw > 0
-                      ? Math.trunc(createdAtSecRaw)
-                      : Math.ceil(Date.now() / 1e3);
-
-                  const matchesStoredIncomingPeer = (
-                    message: LocalNostrMessage,
-                  ): boolean => {
-                    if (isOutgoing || !normalizedIncomingPeerPubkey) {
-                      return false;
-                    }
-
-                    return (
-                      normalizePubkeyHex(message.pubkey) ===
-                      normalizedIncomingPeerPubkey
-                    );
-                  };
-
-                  if (
-                    !hasKnownNostrMessageIdentity(
-                      knownNostrMessageIdentityIndex,
-                      {
-                        contactId,
-                        direction: messageDirection,
-                        ...(tagClientId ? { clientId: tagClientId } : {}),
-                        ...(rumorId ? { rumorId } : {}),
-                        wrapId,
-                      },
-                    )
-                  ) {
-                    if (editedFromId) {
-                      const targetMessage = nostrMessagesLatestRef.current.find(
-                        (message) => {
-                          const matchesContactId =
-                            String(message.contactId ?? "") ===
-                            String(contactId);
-                          if (
-                            !matchesContactId &&
-                            !matchesStoredIncomingPeer(message)
-                          ) {
-                            return false;
-                          }
-                          if (
-                            String(message.direction ?? "") !== messageDirection
-                          ) {
-                            return false;
-                          }
-                          return (
-                            String(message.rumorId ?? "").trim() ===
-                              editedFromId ||
-                            String(message.editedFromId ?? "").trim() ===
-                              editedFromId
-                          );
-                        },
-                      );
-
-                      if (targetMessage) {
-                        const targetMessageId = String(
-                          targetMessage.id ?? "",
-                        ).trim();
-                        if (targetMessageId) {
-                          const existingOriginal =
-                            String(
-                              targetMessage.originalContent ?? "",
-                            ).trim() || String(targetMessage.content ?? "");
-                          updateLocalNostrMessage(targetMessageId, {
-                            content,
-                            status: "sent",
-                            wrapId,
-                            pubkey: effectivePubkey,
-                            ...(tagClientId ? { clientId: tagClientId } : {}),
-                            ...(rumorId ? { rumorId } : {}),
-                            editedAtSec: createdAtSec,
-                            editedFromId,
-                            isEdited: true,
-                            originalContent: existingOriginal || null,
-                          });
-                          insertedMessageId = targetMessageId;
-                        }
-                      }
-                    }
-
-                    if (!insertedMessageId) {
-                      const existingMessage =
-                        nostrMessagesLatestRef.current.find((message) => {
-                          const matchesContactId =
-                            String(message.contactId ?? "") ===
-                            String(contactId);
-                          if (
-                            !matchesContactId &&
-                            !matchesStoredIncomingPeer(message)
-                          ) {
-                            return false;
-                          }
-                          if (
-                            String(message.direction ?? "") !== messageDirection
-                          ) {
-                            return false;
-                          }
-                          if (
-                            rumorId &&
-                            String(message.rumorId ?? "").trim() === rumorId
-                          ) {
-                            return true;
-                          }
-                          if (tagClientId) {
-                            return (
-                              String(message.clientId ?? "").trim() ===
-                              String(tagClientId).trim()
-                            );
-                          }
-                          return (
-                            String(message.content ?? "").trim() ===
-                            content.trim()
-                          );
-                        });
-
-                      if (existingMessage) {
-                        const existingMessageId = String(
-                          existingMessage.id ?? "",
-                        ).trim();
-                        if (existingMessageId) {
-                          updateLocalNostrMessage(existingMessageId, {
-                            status: "sent",
-                            wrapId,
-                            pubkey: effectivePubkey,
-                            ...(tagClientId ? { clientId: tagClientId } : {}),
-                            ...(rumorId ? { rumorId } : {}),
-                            ...(replyToId ? { replyToId } : {}),
-                            ...(rootMessageId ? { rootMessageId } : {}),
-                            ...(editedFromId ? { editedFromId } : {}),
-                          });
-                          insertedMessageId = existingMessageId;
-                        }
-                      } else {
-                        insertedMessageId = appendLocalNostrMessage({
-                          contactId,
-                          content,
-                          createdAtSec,
-                          direction: messageDirection,
-                          pubkey: effectivePubkey,
-                          rumorId: rumorId || null,
-                          wrapId,
-                          ...(tagClientId ? { clientId: tagClientId } : {}),
-                          ...(replyToId ? { replyToId } : {}),
-                          ...(rootMessageId ? { rootMessageId } : {}),
-                          ...(editedFromId
-                            ? {
-                                editedAtSec: createdAtSec,
-                                editedFromId,
-                                isEdited: true,
-                              }
-                            : {}),
-                        });
-                      }
-
-                      nostrMessageWrapIdsRef.current.add(wrapId);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
         setPendingDeleteId(null);
         navigateTo({ route: "chat", id: contactId });
-        if (insertedMessageId) {
-          triggerChatScrollToBottom(insertedMessageId);
-        }
         return true;
       } catch {
         return openedFromNotificationData;
       }
     },
     [
-      appendLocalNostrMessage,
-      bankPaymentOfferMessages,
       contactsLatestRef,
       currentNsec,
-      knownNostrMessageIdentityIndex,
-      nostrFetchRelays,
-      nostrMessagesLatestRef,
-      nostrMessageWrapIdsRef,
+      dispatchInboxEvent,
+      fetchWrapEvent,
       setPendingDeleteId,
-      triggerChatScrollToBottom,
-      updateLocalNostrMessage,
-      upsertBankPaymentOfferMessage,
     ],
   );
 

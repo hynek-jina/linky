@@ -10,6 +10,7 @@ import {
   RelayUrl,
   RumorId,
   UnixSeconds,
+  WrapId,
 } from "../domain/primitives";
 import { wrapRumorFor } from "../internal/giftWrap";
 import { Rumor } from "../internal/nostrEvent";
@@ -28,6 +29,7 @@ import type {
   RelayConnection,
   RelayPool,
   RelaySubscriptionParams,
+  NostrTransportService,
 } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
 import { NIP59_BACKDATE_MARGIN_SECONDS, WrapInbox } from "./WrapInbox";
@@ -241,6 +243,159 @@ const runOpen = <A, E>(
     Effect.provide(dependenciesFor(fakes)),
     Effect.runPromise,
   );
+
+interface FetchCall {
+  readonly filter: Filter;
+  readonly relay: RelayUrl;
+}
+
+const fetchDependenciesFor = (
+  readRelays: ReadonlyArray<RelayUrl>,
+  stored: ReadonlyMap<RelayUrl, ReadonlyArray<NostrToolsEvent>>,
+  calls: Array<FetchCall>,
+) => {
+  const transport: NostrTransportService = {
+    publish: () => Effect.succeed([]),
+    subscribe: () => Effect.never,
+    fetch: (relay, filter) =>
+      Effect.sync(() => {
+        calls.push({ filter, relay });
+        return stored.get(relay) ?? [];
+      }),
+  };
+  return WrapInbox.Default.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        LinkstrIdentity.fromSecretKey(alice.secretKey),
+        RelayPolicy.fixed({ readRelays, writeRelays: [] }),
+        Layer.succeed(NostrTransport, transport),
+      ),
+    ),
+  );
+};
+
+const runFetch = (
+  wrapId: WrapId,
+  readRelays: ReadonlyArray<RelayUrl>,
+  stored: ReadonlyMap<RelayUrl, ReadonlyArray<NostrToolsEvent>>,
+  calls: Array<FetchCall>,
+  extraRelays?: ReadonlyArray<RelayUrl>,
+) =>
+  Effect.gen(function* () {
+    const inbox = yield* WrapInbox;
+    return yield* inbox.fetchWrapEvent(
+      wrapId,
+      extraRelays === undefined ? undefined : { extraRelays },
+    );
+  }).pipe(
+    Effect.provide(fetchDependenciesFor(readRelays, stored, calls)),
+    Effect.runPromise,
+  );
+
+describe("WrapInbox.fetchWrapEvent", () => {
+  it("fetches and decodes a chat wrap addressed to the identity", async () => {
+    const wrap = chatWrap();
+    const calls: Array<FetchCall> = [];
+
+    const event = await runFetch(
+      wrap.id,
+      [relayA],
+      new Map([[relayA, [wrap]]]),
+      calls,
+    );
+
+    expect(calls).toEqual([
+      {
+        relay: relayA,
+        filter: {
+          ids: [wrap.id],
+          kinds: [1059],
+          "#p": [alice.pubkey],
+          limit: 1,
+        },
+      },
+    ]);
+    expect(event).toEqual(
+      expect.objectContaining({
+        _tag: "ChatMessageReceived",
+        from: bob.pubkey,
+        body: expect.objectContaining({ _tag: "TextBody", text: "hello" }),
+      }),
+    );
+  });
+
+  it("returns null when reachable relays have no matching wrap", async () => {
+    const event = await runFetch(
+      WrapId.make("ab".repeat(32)),
+      [relayA],
+      new Map(),
+      [],
+    );
+
+    expect(event).toBeNull();
+  });
+
+  it("queries extra relays in addition to configured read relays", async () => {
+    const wrap = chatWrap();
+    const calls: Array<FetchCall> = [];
+
+    await runFetch(wrap.id, [relayA], new Map([[relayB, [wrap]]]), calls, [
+      relayB,
+    ]);
+
+    expect(calls.map(({ relay }) => relay)).toEqual([relayA, relayB]);
+  });
+
+  it("uses extra relays when no read relays are configured", async () => {
+    const wrap = chatWrap();
+    const calls: Array<FetchCall> = [];
+
+    const event = await runFetch(
+      wrap.id,
+      [],
+      new Map([[relayB, [wrap]]]),
+      calls,
+      [relayB],
+    );
+
+    expect(event?._tag).toBe("ChatMessageReceived");
+    expect(calls.map(({ relay }) => relay)).toEqual([relayB]);
+  });
+
+  it("fails only when configured and extra relay sets are both empty", async () => {
+    const exit = await Effect.gen(function* () {
+      const inbox = yield* WrapInbox;
+      return yield* inbox.fetchWrapEvent(WrapId.make("ab".repeat(32)));
+    }).pipe(
+      Effect.provide(fetchDependenciesFor([], new Map(), [])),
+      Effect.runPromiseExit,
+    );
+
+    expect(exit).toEqual(
+      Exit.fail(expect.objectContaining({ _tag: "NoReadRelaysConfigured" })),
+    );
+  });
+
+  it("returns WrapDropped for a forged wrap", async () => {
+    const wrap = chatWrap();
+    const forged = { ...wrap, content: `${wrap.content}forged` };
+
+    const event = await runFetch(
+      wrap.id,
+      [relayA],
+      new Map([[relayA, [forged]]]),
+      [],
+    );
+
+    expect(event).toEqual(
+      expect.objectContaining({
+        _tag: "WrapDropped",
+        wrapId: wrap.id,
+        reason: "unwrap-failed",
+      }),
+    );
+  });
+});
 
 describe("WrapInbox", () => {
   it("fails to open when no read relays are configured", async () => {
