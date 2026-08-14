@@ -12,7 +12,7 @@ import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 const isNostrSecretKey = Schema.is(NostrSecretKey);
 const isRelayUrl = Schema.is(RelayUrl);
 
-const buildLinkstrConfig = (
+export const buildLinkstrConfig = (
   currentNsec: string | null,
   fetchRelays: readonly string[],
 ): LinkstrConfig | null => {
