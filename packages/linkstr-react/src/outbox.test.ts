@@ -5,8 +5,8 @@ import {
   MessageText,
   NostrSecretKey,
   NostrTransport,
-  OUTBOX_STORE_DEFAULT_KEY,
   OutboxRef,
+  OutboxStore,
   Pubkey,
   RelayPublishResult,
   RelayUrl,
@@ -60,11 +60,17 @@ const stubTransport = (
     fetch: () => Effect.die("fetch not under test"),
   });
 
-const configWith = (transport: Layer.Layer<NostrTransport>): LinkstrConfig => ({
+const storageKey = "test.outbox";
+
+const configWith = (
+  transport: Layer.Layer<NostrTransport>,
+  storage: StubStorage,
+): LinkstrConfig => ({
   secretKey: alice.secretKey,
   readRelays: [relay],
   writeRelays: [relay],
   transport,
+  outboxStore: OutboxStore.fromStringStorage(storage, storageKey),
 });
 
 const settle = <A, E>(
@@ -108,17 +114,15 @@ const textInput = (ref: string) => ({
   ref: OutboxRef.make(ref),
 });
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("outbox atoms", () => {
   it("enqueues, delivers, and acks only after the handler resolves", async () => {
     const storage = stubStorage();
-    vi.stubGlobal("localStorage", storage);
     const registry = Registry.make();
     const published: Array<PublishedWrap> = [];
-    registry.set(linkstrConfigAtom, configWith(stubTransport(published)));
+    registry.set(
+      linkstrConfigAtom,
+      configWith(stubTransport(published), storage),
+    );
 
     const handled: Array<OutboxResult> = [];
     registry.set(outboxResultsHandlerAtom, {
@@ -149,18 +153,15 @@ describe("outbox atoms", () => {
 
     // Acked after the handler resolved: the durable job list is empty again.
     await expect
-      .poll(() =>
-        decodeStoredJobs(storage.map.get(OUTBOX_STORE_DEFAULT_KEY) ?? "[]"),
-      )
+      .poll(() => decodeStoredJobs(storage.map.get(storageKey) ?? "[]"))
       .toEqual([]);
     unmount();
   });
 
   it("does not ack when the handler rejects", async () => {
     const storage = stubStorage();
-    vi.stubGlobal("localStorage", storage);
     const registry = Registry.make();
-    registry.set(linkstrConfigAtom, configWith(stubTransport([])));
+    registry.set(linkstrConfigAtom, configWith(stubTransport([]), storage));
 
     let calls = 0;
     registry.set(outboxResultsHandlerAtom, {
@@ -176,9 +177,7 @@ describe("outbox atoms", () => {
     expect(Exit.isSuccess(exit)).toBe(true);
 
     await expect.poll(() => calls).toBe(1);
-    const jobs = decodeStoredJobs(
-      storage.map.get(OUTBOX_STORE_DEFAULT_KEY) ?? "[]",
-    );
+    const jobs = decodeStoredJobs(storage.map.get(storageKey) ?? "[]");
     expect(jobs).toHaveLength(1);
     expect(jobs[0]?.state._tag).toBe("awaiting-ack");
     unmount();

@@ -1,5 +1,10 @@
 import { Atom } from "@effect-atom/atom-react";
-import type { NostrSecretKey, NostrTransport, RelayUrl } from "@linky/linkstr";
+import type {
+  NostrSecretKey,
+  NostrTransport,
+  OutboxStore,
+  RelayUrl,
+} from "@linky/linkstr";
 import type { Layer } from "effect";
 
 export interface LinkstrConfig {
@@ -8,6 +13,12 @@ export interface LinkstrConfig {
   readonly writeRelays: ReadonlyArray<RelayUrl>;
   /** Test/e2e seam: replaces the real websocket transport when provided. */
   readonly transport?: Layer.Layer<NostrTransport>;
+  /**
+   * Durable outbox job storage — platform code supplies it (web:
+   * `OutboxStore.fromStringStorage(localStorage, ...)`). Defaults to
+   * non-durable in-memory storage.
+   */
+  readonly outboxStore?: Layer.Layer<OutboxStore>;
   /** Streams diagnostics through `inspectorEventsAtom` when true. */
   readonly inspector?: boolean;
 }

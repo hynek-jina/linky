@@ -59,7 +59,7 @@ export const linkstrRuntimeAtom = Atom.runtime((get) => {
             Layer.provide([
               Chat.Default,
               Reactions.Default,
-              OutboxStore.localStorage(),
+              config.outboxStore ?? OutboxStore.inMemory,
             ]),
           ),
           PaymentNotices.Default,
