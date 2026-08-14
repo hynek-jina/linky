@@ -3,7 +3,9 @@ import { WrapInbox } from "@linky/linkstr";
 import type {
   DeliveredInboxEvent,
   InboxDelivery,
+  RelayUrl,
   UnixSeconds,
+  WrapId,
   WrapInboxEvent,
 } from "@linky/linkstr";
 import { Effect, Stream } from "effect";
@@ -27,6 +29,23 @@ export interface WrapInboxHandler {
 
 /** Null keeps the inbox closed; the app registers a handler to open it. */
 export const wrapInboxHandlerAtom = Atom.make<WrapInboxHandler | null>(null);
+
+export interface FetchWrapEventParams {
+  readonly wrapId: WrapId;
+  readonly extraRelays?: ReadonlyArray<RelayUrl>;
+}
+
+export const fetchWrapEventAtom = linkstrRuntimeAtom.fn<FetchWrapEventParams>()(
+  (params) =>
+    Effect.flatMap(WrapInbox, (inbox) =>
+      inbox.fetchWrapEvent(
+        params.wrapId,
+        params.extraRelays === undefined
+          ? undefined
+          : { extraRelays: params.extraRelays },
+      ),
+    ),
+);
 
 /**
  * While mounted (and a handler is registered), runs the single kind-1059

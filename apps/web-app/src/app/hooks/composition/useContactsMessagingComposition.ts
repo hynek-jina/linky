@@ -3274,7 +3274,7 @@ export const useContactsMessagingComposition = ({
     [triggerChatScrollToBottom],
   );
 
-  useLinkstrInboxSync({
+  const dispatchInboxEvent = useLinkstrInboxSync({
     appendLocalNostrMessage,
     appendLocalNostrReaction,
     bankPaymentOfferMessages,
@@ -3405,6 +3405,7 @@ export const useContactsMessagingComposition = ({
     contactsSearchInputRef,
     dedupeContacts,
     dedupeContactsIsBusy,
+    dispatchInboxEvent,
     displayContactById,
     displayContacts,
     editContext,

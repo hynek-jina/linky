@@ -31,6 +31,11 @@ Rumor kinds without a vertical surface as `WrapDropped("unsupported-kind")` —
 the dispatch point in `WrapInbox` is where future verticals plug in. Closing
 the scope tears down all relay subscriptions and ends the stream.
 
+`inbox.fetchWrapEvent(wrapId, { extraRelays })` is the one-shot counterpart
+for notification opens. It unions relay hints with configured read relays and
+returns the same decoded `WrapInboxEvent`, or `null` when no matching wrap is
+found, without adding subscription delivery metadata.
+
 ## Rules
 
 - **Environment-agnostic.** No React, no Evolu, no `window`. Capabilities come

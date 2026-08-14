@@ -11,36 +11,22 @@ import {
 } from "effect";
 import type { Scope } from "effect";
 import type { Filter } from "nostr-tools";
-import { BANK_OFFER_KIND, decodeBankOfferRumor } from "../bankOffers/codec";
 import type { BankOfferInboxEvent } from "../bankOffers/events";
-import {
-  CHAT_IMAGE_KIND,
-  CHAT_TEXT_KIND,
-  decodeChatRumor,
-} from "../chat/codec";
 import type { ChatInboxEvent } from "../chat/events";
+import type { AllRelaysUnreachable } from "../domain/errors";
 import { NoReadRelaysConfigured } from "../domain/errors";
 import { UnixSeconds, WrapId } from "../domain/primitives";
 import type { RelayUrl } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { InboxRouted, InboxWrapDeduped } from "../inspector/events";
-import type { Rumor, SignedWrapEvent } from "../internal/nostrEvent";
-import {
-  decodePaymentNoticeRumor,
-  PAYMENT_NOTICE_KIND,
-} from "../paymentNotices/codec";
+import { inspectPlainOperation } from "../internal/inspectPlainOperation";
+import { fetchRawEvents } from "../internal/plainFetch";
 import type { PaymentNoticeInboxEvent } from "../paymentNotices/events";
-import {
-  decodeReactionRumor,
-  REACTION_KIND,
-  RETRACTION_KIND,
-} from "../reactions/codec";
 import type { ReactionInboxEvent } from "../reactions/events";
 import { LinkstrIdentity } from "../services/LinkstrIdentity";
-import type { LinkstrIdentityService } from "../services/LinkstrIdentity";
 import { NostrTransport } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
-import { authenticateWrap } from "./authenticateWrap";
+import { decodeWrapEvent } from "./decodeWrapEvent";
 import { WrapDropped } from "./events";
 import type { InboxDelivery } from "./events";
 
@@ -66,6 +52,10 @@ export interface WrapInboxOptions {
   /** Cursor persisted by the caller from a previous session's `cursor`. */
   readonly since?: UnixSeconds;
   readonly resubscribeDelay?: Duration.Duration;
+}
+
+export interface WrapFetchOptions {
+  readonly extraRelays?: ReadonlyArray<RelayUrl>;
 }
 
 export interface WrapInboxFeed {
@@ -124,40 +114,6 @@ const wrapIdOf = (raw: unknown): WrapId | null =>
     onRight: ({ id }) => id,
   });
 
-const routeRumor = (
-  wrap: SignedWrapEvent,
-  rumor: Rumor,
-  identity: LinkstrIdentityService,
-): WrapInboxEvent => {
-  switch (rumor.kind) {
-    case CHAT_TEXT_KIND:
-    case CHAT_IMAGE_KIND:
-      return Either.match(decodeChatRumor(rumor, identity, wrap.pubkey), {
-        onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
-        onRight: (event) => event,
-      });
-    case REACTION_KIND:
-    case RETRACTION_KIND:
-      return Either.match(decodeReactionRumor(rumor, identity.pubkey), {
-        onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
-        onRight: (event) => event,
-      });
-    case PAYMENT_NOTICE_KIND:
-      return Either.match(decodePaymentNoticeRumor(rumor, identity), {
-        onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
-        onRight: (event) => event,
-      });
-    case BANK_OFFER_KIND:
-      return Either.match(decodeBankOfferRumor(rumor, identity.pubkey), {
-        onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
-        onRight: (event) => event,
-      });
-    // TODO: payment telemetry (24134) remains.
-    default:
-      return new WrapDropped({ wrapId: wrap.id, reason: "unsupported-kind" });
-  }
-};
-
 /**
  * Owns the app's single kind-1059 subscription: one filter per read relay,
  * wraps deduped across relays, authenticated and routed by rumor kind into
@@ -173,6 +129,46 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
       const transport = yield* NostrTransport;
       const relayPolicy = yield* RelayPolicy;
       const inspector = yield* Inspector.orNoop;
+
+      const fetchWrapEvent = (
+        wrapId: WrapId,
+        options?: WrapFetchOptions,
+      ): Effect.Effect<
+        WrapInboxEvent | null,
+        AllRelaysUnreachable | NoReadRelaysConfigured
+      > =>
+        Effect.gen(function* () {
+          const relays = Array.from(
+            new Set([
+              ...relayPolicy.readRelays,
+              ...(options?.extraRelays ?? []),
+            ]),
+          );
+          if (relays.length === 0) return yield* new NoReadRelaysConfigured();
+          const raws = yield* fetchRawEvents(transport, relays, {
+            ids: [wrapId],
+            kinds: [GIFT_WRAP_KIND],
+            "#p": [identity.pubkey],
+            limit: 1,
+          });
+          const candidates = raws.filter((raw) => wrapIdOf(raw) === wrapId);
+          const decoded = candidates.map((raw) =>
+            decodeWrapEvent(raw, identity),
+          );
+          const routed =
+            decoded.find(({ event }) => event._tag !== "WrapDropped") ??
+            decoded[0] ??
+            null;
+          return {
+            result: routed?.event ?? null,
+            eventIds: routed === null ? [] : [wrapId],
+          };
+        }).pipe(
+          inspectPlainOperation(inspector, "inbox.fetchWrapEvent", {
+            wrapId,
+            ...options,
+          }),
+        );
 
       const open = (
         options?: WrapInboxOptions,
@@ -266,42 +262,41 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
                   return Option.none<DeliveredInboxEvent>();
                 });
               }
-              return Either.match(authenticateWrap(raw, identity), {
-                onLeft: (dropped) =>
-                  Effect.sync(() => {
-                    inspector.emit(
-                      new InboxRouted({
-                        wrapId: dropped.wrapId,
-                        rumorKind: null,
-                        delivery,
-                        event: dropped,
-                      }),
-                    );
-                    return Option.some<DeliveredInboxEvent>({
+              const decoded = decodeWrapEvent(raw, identity);
+              if (decoded.wrap === null) {
+                return Effect.sync(() => {
+                  inspector.emit(
+                    new InboxRouted({
+                      wrapId: decoded.event.wrapId,
+                      rumorKind: null,
                       delivery,
-                      event: dropped,
-                    });
-                  }),
-                onRight: ({ rumor, wrap }) =>
-                  Effect.sync(() => seenWrapIds.add(wrap.id)).pipe(
-                    Effect.andThen(advanceCursor(wrap.created_at)),
-                    Effect.map(() => {
-                      const routed = routeRumor(wrap, rumor, identity);
-                      inspector.emit(
-                        new InboxRouted({
-                          wrapId: wrap.id,
-                          rumorKind: rumor.kind,
-                          delivery,
-                          event: routed,
-                        }),
-                      );
-                      return Option.some<DeliveredInboxEvent>({
-                        delivery,
-                        event: routed,
-                      });
+                      event: decoded.event,
                     }),
-                  ),
-              });
+                  );
+                  return Option.some<DeliveredInboxEvent>({
+                    delivery,
+                    event: decoded.event,
+                  });
+                });
+              }
+              const { wrap } = decoded;
+              return Effect.sync(() => seenWrapIds.add(wrap.id)).pipe(
+                Effect.andThen(advanceCursor(wrap.created_at)),
+                Effect.map(() => {
+                  inspector.emit(
+                    new InboxRouted({
+                      wrapId: wrap.id,
+                      rumorKind: decoded.rumorKind,
+                      delivery,
+                      event: decoded.event,
+                    }),
+                  );
+                  return Option.some<DeliveredInboxEvent>({
+                    delivery,
+                    event: decoded.event,
+                  });
+                }),
+              );
             });
 
           const events = Stream.fromQueue(rawWraps).pipe(
@@ -312,7 +307,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
           return { events, cursor: Ref.get(cursor) };
         });
 
-      return { open } as const;
+      return { fetchWrapEvent, open } as const;
     }),
   },
 ) {}

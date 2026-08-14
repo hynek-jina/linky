@@ -1,5 +1,6 @@
 import { Effect, Either } from "effect";
 import type { Filter } from "nostr-tools";
+import type { Event as NostrToolsEvent } from "nostr-tools";
 import { RelayRejection } from "../domain/delivery";
 import { AllRelaysUnreachable } from "../domain/errors";
 import type { RelayUrl } from "../domain/primitives";
@@ -9,14 +10,13 @@ import { decodeVerifiedPlainEvent } from "./plainEvent";
 
 /**
  * One-shot fetch fanned out across relays: merge what the reachable relays
- * returned (malformed or forged events dropped), newest first so callers pick
- * a winner with `find`. Fails only when no relay answered at all.
+ * returned, unvalidated. Fails only when no relay answered at all.
  */
-export const fetchPlainEvents = (
+export const fetchRawEvents = (
   transport: NostrTransportService,
   relays: ReadonlyArray<RelayUrl>,
   filter: Filter,
-): Effect.Effect<Array<SignedPlainEvent>, AllRelaysUnreachable> =>
+): Effect.Effect<Array<NostrToolsEvent>, AllRelaysUnreachable> =>
   Effect.gen(function* () {
     const outcomes = yield* Effect.forEach(
       relays,
@@ -34,13 +34,27 @@ export const fetchPlainEvents = (
           ),
       });
     }
-    return answered
-      .flatMap(({ right }) => right)
-      .flatMap((raw) =>
-        Either.match(decodeVerifiedPlainEvent(raw), {
-          onLeft: () => [],
-          onRight: (event) => [event],
-        }),
-      )
-      .sort((a, b) => b.created_at - a.created_at);
+    return answered.flatMap(({ right }) => right);
   });
+
+/**
+ * `fetchRawEvents` narrowed to plain events: malformed or forged events are
+ * dropped, newest first so callers pick a winner with `find`.
+ */
+export const fetchPlainEvents = (
+  transport: NostrTransportService,
+  relays: ReadonlyArray<RelayUrl>,
+  filter: Filter,
+): Effect.Effect<Array<SignedPlainEvent>, AllRelaysUnreachable> =>
+  fetchRawEvents(transport, relays, filter).pipe(
+    Effect.map((raws) =>
+      raws
+        .flatMap((raw) =>
+          Either.match(decodeVerifiedPlainEvent(raw), {
+            onLeft: () => [],
+            onRight: (event) => [event],
+          }),
+        )
+        .sort((a, b) => b.created_at - a.created_at),
+    ),
+  );

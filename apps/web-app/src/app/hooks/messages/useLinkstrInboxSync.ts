@@ -147,6 +147,11 @@ interface UseLinkstrInboxSyncParams {
   updateLocalNostrReaction: UpdateLocalNostrReaction;
 }
 
+export type DispatchInboxEvent = (
+  event: WrapInboxEvent,
+  delivery: InboxDelivery,
+) => void;
+
 /**
  * The app's single wrap-inbox consumer: applies every typed linkstr inbox
  * event — chat messages, own-message confirmations, reactions, payment
@@ -233,21 +238,9 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
     return { chatCtx, notificationsCtx, reactionCtx };
   }, []);
 
-  React.useEffect(() => {
-    if (!enabled || !currentNsec || myPubkey === null) return;
-    reactionSessionStateRef.current = createReactionInboxSessionState();
-    identitySinceSecRef.current =
-      getInitialNostrIdentitySource() === "custom"
-        ? getInitialNostrIdentitySwitchedAtSec()
-        : null;
-
-    const cursorKey = inboxCursorStorageKey(myPubkey);
-    let persistedCursor = readStoredInboxCursor(myPubkey);
-    const since =
-      persistedCursor ??
-      Math.floor(Date.now() / 1e3) - INBOX_BACKFILL_SINCE_SEC;
-
-    const onEvent = (event: WrapInboxEvent, delivery: InboxDelivery): void => {
+  const dispatchInboxEvent = React.useCallback<DispatchInboxEvent>(
+    (event, delivery) => {
+      if (!enabled || myPubkey === null) return;
       const { chatCtx, notificationsCtx, reactionCtx } =
         buildHandlers(myPubkey);
       const cutoff = identitySinceSecRef.current;
@@ -312,13 +305,29 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
         case "WrapDropped":
           return;
       }
-    };
+    },
+    [buildHandlers, enabled, myPubkey],
+  );
+
+  React.useEffect(() => {
+    if (!enabled || !currentNsec || myPubkey === null) return;
+    reactionSessionStateRef.current = createReactionInboxSessionState();
+    identitySinceSecRef.current =
+      getInitialNostrIdentitySource() === "custom"
+        ? getInitialNostrIdentitySwitchedAtSec()
+        : null;
+
+    const cursorKey = inboxCursorStorageKey(myPubkey);
+    let persistedCursor = readStoredInboxCursor(myPubkey);
+    const since =
+      persistedCursor ??
+      Math.floor(Date.now() / 1e3) - INBOX_BACKFILL_SINCE_SEC;
 
     // One handler object per identity session: a handler swap reopens the
     // relay subscriptions, so per-render state is reached through refs.
     setWrapInboxHandler({
       since: UnixSeconds.make(since),
-      onEvent,
+      onEvent: dispatchInboxEvent,
       onCursor: (cursor) => {
         if (cursor === persistedCursor) return;
         persistedCursor = cursor;
@@ -326,10 +335,12 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
       },
     });
     return () => setWrapInboxHandler(null);
-  }, [buildHandlers, currentNsec, enabled, myPubkey, setWrapInboxHandler]);
+  }, [currentNsec, dispatchInboxEvent, enabled, myPubkey, setWrapInboxHandler]);
 
   React.useEffect(() => {
     if (myPubkey === null) return;
     retryDeferredReactions(buildHandlers(myPubkey).reactionCtx);
   }, [buildHandlers, myPubkey, nostrMessagesLocal]);
+
+  return dispatchInboxEvent;
 };
