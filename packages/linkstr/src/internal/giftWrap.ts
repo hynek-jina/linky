@@ -1,7 +1,12 @@
 import { Either, Schema } from "effect";
-import { getEventHash, verifyEvent } from "nostr-tools";
-import { decrypt, getConversationKey } from "nostr-tools/nip44";
-import { wrapEvent } from "nostr-tools/nip59";
+import {
+  finalizeEvent,
+  generateSecretKey,
+  getEventHash,
+  verifyEvent,
+} from "nostr-tools";
+import { decrypt, encrypt, getConversationKey } from "nostr-tools/nip44";
+import { createSeal, wrapEvent } from "nostr-tools/nip59";
 import type { NostrSecretKey, Pubkey } from "../domain/primitives";
 import { Rumor, SignedSealEvent, SignedWrapEvent } from "./nostrEvent";
 
@@ -16,11 +21,53 @@ const decodeWrap = Schema.decodeUnknownSync(SignedWrapEvent);
 const decodeSealEither = Schema.decodeUnknownEither(SignedSealEvent);
 const decodeRumorEither = Schema.decodeUnknownEither(Rumor);
 
+const TWO_DAYS_SECONDS = 2 * 24 * 60 * 60;
+
+export const LINKY_PUSH_MARKER_TAG = "linky";
+export const LINKY_PUSH_MARKER_VALUE = "push";
+
+export interface WrapRumorOptions {
+  readonly pushMarker?: boolean;
+}
+
+const randomTimestampSeconds = (): number =>
+  Math.round(Math.round(Date.now() / 1000) - Math.random() * TWO_DAYS_SECONDS);
+
+const createPushMarkedWrap = (
+  rumor: Rumor,
+  senderSecretKey: NostrSecretKey,
+  recipient: Pubkey,
+): SignedWrapEvent => {
+  const seal = createSeal(rumor, senderSecretKey, recipient);
+  const randomKey = generateSecretKey();
+  return decodeWrap(
+    finalizeEvent(
+      {
+        kind: 1059,
+        content: encrypt(
+          JSON.stringify(seal),
+          getConversationKey(randomKey, recipient),
+        ),
+        created_at: randomTimestampSeconds(),
+        tags: [
+          ["p", recipient],
+          [LINKY_PUSH_MARKER_TAG, LINKY_PUSH_MARKER_VALUE],
+        ],
+      },
+      randomKey,
+    ),
+  );
+};
+
 export const wrapRumorFor = (
   rumor: Rumor,
   senderSecretKey: NostrSecretKey,
   recipient: Pubkey,
-): SignedWrapEvent => decodeWrap(wrapEvent(rumor, senderSecretKey, recipient));
+  options?: WrapRumorOptions,
+): SignedWrapEvent =>
+  options?.pushMarker === true
+    ? createPushMarkedWrap(rumor, senderSecretKey, recipient)
+    : decodeWrap(wrapEvent(rumor, senderSecretKey, recipient));
 
 const decryptJson = (
   payload: string,

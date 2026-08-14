@@ -327,7 +327,7 @@ describe("WrapInbox", () => {
     );
   });
 
-  it("surfaces rumor kinds without a vertical as unsupported-kind", async () => {
+  it("routes a wrapped kind-14 rumor to ChatMessageReceived", async () => {
     const fakeA = new FakeRelay();
     const wrap = chatWrap();
 
@@ -338,9 +338,10 @@ describe("WrapInbox", () => {
         yield* eventually(() => collected.length === 1);
         expect(collected[0]).toEqual(
           expect.objectContaining({
-            _tag: "WrapDropped",
-            wrapId: wrap.id,
-            reason: "unsupported-kind",
+            _tag: "ChatMessageReceived",
+            from: bob.pubkey,
+            body: expect.objectContaining({ _tag: "TextBody", text: "hello" }),
+            sentAt,
           }),
         );
       }),

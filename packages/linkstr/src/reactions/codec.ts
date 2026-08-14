@@ -1,9 +1,12 @@
 import { Either, Schema } from "effect";
-import { getEventHash } from "nostr-tools";
 import { ClientId, RumorId } from "../domain/primitives";
 import type { Pubkey, UnixSeconds } from "../domain/primitives";
-import { firstTagValue, Rumor, tagValues } from "../internal/nostrEvent";
-import type { NostrTags } from "../internal/nostrEvent";
+import {
+  firstTagValue,
+  Rumor,
+  rumorWithHash,
+  tagValues,
+} from "../internal/nostrEvent";
 import { Emoji } from "./domain";
 import type { ReactionDraft, RetractionDraft, TargetKind } from "./domain";
 import type { DropReason } from "../inbox/events";
@@ -26,14 +29,6 @@ const targetKindTag: Record<TargetKind, "14" | "15"> = {
 const isRumorId = Schema.is(RumorId);
 const isClientId = Schema.is(ClientId);
 const isEmoji = Schema.is(Emoji);
-
-const rumorWithHash = (fields: {
-  pubkey: Pubkey;
-  created_at: UnixSeconds;
-  kind: number;
-  tags: NostrTags;
-  content: string;
-}): Rumor => new Rumor({ ...fields, id: getEventHash(fields) });
 
 export const encodeReactionRumor = (
   draft: ReactionDraft,

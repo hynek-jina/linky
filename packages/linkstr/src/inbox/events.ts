@@ -12,6 +12,11 @@ export const DropReason = Schema.Literal(
   "unsupported-kind",
   "invalid-reaction",
   "invalid-retraction",
+  "invalid-message",
+  "invalid-image",
+  "invalid-edit",
+  "empty-message",
+  "nested-payload",
 );
 export type DropReason = typeof DropReason.Type;
 

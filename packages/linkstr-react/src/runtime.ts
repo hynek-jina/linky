@@ -1,5 +1,6 @@
 import { Atom } from "@effect-atom/atom-react";
 import {
+  Chat,
   Inspector,
   inspectTransport,
   LinkstrIdentity,
@@ -48,6 +49,7 @@ export const linkstrRuntimeAtom = Atom.runtime((get) => {
     ? Layer.fail(new LinkstrNotConfigured())
     : Layer.fresh(
         Layer.mergeAll(
+          Chat.Default,
           Reactions.Default,
           WrapInbox.Default,
           Profiles.Default,

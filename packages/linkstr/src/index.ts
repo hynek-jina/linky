@@ -1,3 +1,6 @@
+export * from "./chat/Chat";
+export * from "./chat/domain";
+export * from "./chat/events";
 export * from "./domain/delivery";
 export * from "./domain/errors";
 export * from "./domain/primitives";
@@ -8,6 +11,10 @@ export * from "./inbox/WrapInbox";
 export * from "./inspector/events";
 export * from "./inspector/Inspector";
 export * from "./inspector/inspectTransport";
+export {
+  LINKY_PUSH_MARKER_TAG,
+  LINKY_PUSH_MARKER_VALUE,
+} from "./internal/giftWrap";
 export * from "./muteList/MuteList";
 export * from "./profiles/domain";
 export * from "./profiles/events";

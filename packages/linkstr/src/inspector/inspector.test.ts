@@ -65,11 +65,11 @@ const reactionWrapForAlice = (emoji: string) => {
   return wrapRumorFor(rumor, bob.secretKey, alice.pubkey);
 };
 
-const chatWrapForAlice = () => {
+const unknownWrapForAlice = () => {
   const fields = {
     pubkey: bob.pubkey,
     created_at: sentAt,
-    kind: 14,
+    kind: 16,
     tags: [["p", alice.pubkey]] satisfies NostrTags,
     content: "hello",
   };
@@ -263,10 +263,10 @@ describe("Inspector", () => {
         yield* eventually(() => handlers.length === 1);
 
         const wrap = reactionWrapForAlice("👍");
-        const chat = chatWrapForAlice();
+        const unknown = unknownWrapForAlice();
         handlers[0]?.(wrap);
         handlers[0]?.(wrap);
-        handlers[0]?.(chat);
+        handlers[0]?.(unknown);
         yield* eventually(
           () =>
             collected.filter((event) => event._tag === "InboxRouted").length ===
@@ -296,8 +296,8 @@ describe("Inspector", () => {
             }),
           }),
           expect.objectContaining({
-            wrapId: chat.id,
-            rumorKind: 14,
+            wrapId: unknown.id,
+            rumorKind: 16,
             event: expect.objectContaining({
               _tag: "WrapDropped",
               reason: "unsupported-kind",
