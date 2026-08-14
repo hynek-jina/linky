@@ -72,6 +72,7 @@ const makeFakeTransport = (
         ),
       );
     }),
+  fetch: () => Effect.die("fetch not under test"),
 });
 
 const configWith = (

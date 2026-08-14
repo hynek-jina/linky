@@ -1,11 +1,17 @@
 import {
   ClientId,
   Emoji,
+  EventId,
   InboxRouted,
   InboxWrapDeduped,
   NoRelayReachable,
   OperationFailed,
   OperationSucceeded,
+  PlainOperationSucceeded,
+  ProfileEventDropped,
+  ProfileMetadata,
+  ProfileUpdated,
+  ProfileWatchRouted,
   Pubkey,
   ReactionAdded,
   ReactionDraft,
@@ -14,6 +20,8 @@ import {
   RumorId,
   UnixSeconds,
   WireEventReceived,
+  WireFetched,
+  WirePlainPublished,
   WirePublished,
   WrapDelivery,
   WrapDropped,
@@ -174,5 +182,94 @@ describe("linkstrEventToRow", () => {
     );
     expect(row.summary).toContain("deduped");
     expect(row.links).toEqual({ wrapIds: [selfWrapId] });
+  });
+
+  it("links a plain operation to its published events", () => {
+    const eventId = EventId.make("33".repeat(32));
+    const row = linkstrEventToRow(
+      new PlainOperationSucceeded({
+        name: "profiles.publishProfile",
+        params: new ProfileMetadata({ name: "alice" }),
+        eventIds: [eventId],
+        result: null,
+      }),
+      1000,
+    );
+
+    expect(row).toMatchObject({
+      channel: "operation",
+      tag: "profiles.publishProfile",
+      links: { wrapIds: [eventId] },
+    });
+  });
+
+  it("summarizes plain publishes with kind names and acceptance counts", () => {
+    const eventId = EventId.make("44".repeat(32));
+    const row = linkstrEventToRow(
+      new WirePlainPublished({
+        eventId,
+        kind: 10002,
+        event: { id: eventId },
+        results: [
+          new RelayPublishResult({ relay, accepted: true, detail: null }),
+        ],
+      }),
+      1000,
+    );
+
+    expect(row.channel).toBe("wire");
+    expect(row.summary).toContain("relay list (10002)");
+    expect(row.summary).toContain("1/1 relays accepted");
+    expect(row.links).toEqual({ wrapIds: [eventId] });
+  });
+
+  it("links fetched events and names fetched kinds", () => {
+    const eventId = EventId.make("55".repeat(32));
+    const row = linkstrEventToRow(
+      new WireFetched({
+        relay,
+        filter: { kinds: [0, 30315] },
+        events: [{ id: eventId, kind: 0 }],
+        detail: null,
+      }),
+      1000,
+    );
+
+    expect(row.summary).toContain("profile (0), status (30315)");
+    expect(row.summary).toContain("1 event(s)");
+    expect(row.links).toEqual({ relay, wrapIds: [eventId] });
+  });
+
+  it("names profile watch facts and drops", () => {
+    const eventId = EventId.make("66".repeat(32));
+    const fact = linkstrEventToRow(
+      new ProfileWatchRouted({
+        eventId,
+        kind: 0,
+        event: new ProfileUpdated({
+          pubkey,
+          metadata: new ProfileMetadata({ name: "alice" }),
+          updatedAt: sentAt,
+        }),
+      }),
+      1000,
+    );
+    expect(fact.summary).toContain("ProfileUpdated");
+    expect(fact.links).toEqual({ wrapIds: [eventId] });
+
+    const dropped = linkstrEventToRow(
+      new ProfileWatchRouted({
+        eventId,
+        kind: 0,
+        event: new ProfileEventDropped({
+          eventId,
+          reason: "malformed-profile",
+        }),
+      }),
+      1000,
+    );
+    expect(dropped.summary).toBe(
+      "ProfileEventDropped malformed-profile (profile (0))",
+    );
   });
 });

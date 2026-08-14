@@ -1,10 +1,13 @@
 import { Effect, Layer, Option } from "effect";
+import { SignedWrapEvent } from "../internal/nostrEvent";
 import { NostrTransport } from "../services/NostrTransport";
 import type { NostrTransportService } from "../services/NostrTransport";
 import { Inspector } from "./Inspector";
 import type { InspectorService } from "./Inspector";
 import {
   WireEventReceived,
+  WireFetched,
+  WirePlainPublished,
   WirePublished,
   WireSubscribed,
   WireSubscriptionEnded,
@@ -15,17 +18,22 @@ const tapWire = (
   inspector: InspectorService,
 ): NostrTransportService => ({
   publish: (relays, event) =>
-    inner
-      .publish(relays, event)
-      .pipe(
-        Effect.tap((results) =>
-          Effect.sync(() =>
-            inspector.emit(
-              new WirePublished({ wrapId: event.id, wrap: event, results }),
-            ),
+    inner.publish(relays, event).pipe(
+      Effect.tap((results) =>
+        Effect.sync(() =>
+          inspector.emit(
+            event instanceof SignedWrapEvent
+              ? new WirePublished({ wrapId: event.id, wrap: event, results })
+              : new WirePlainPublished({
+                  eventId: event.id,
+                  kind: event.kind,
+                  event,
+                  results,
+                }),
           ),
         ),
       ),
+    ),
   subscribe: (relay, filter, onEvent) =>
     Effect.suspend(() => {
       inspector.emit(new WireSubscribed({ relay, filter }));
@@ -43,6 +51,28 @@ const tapWire = (
         Effect.sync(() =>
           inspector.emit(
             new WireSubscriptionEnded({ relay, detail: error.detail }),
+          ),
+        ),
+      ),
+    ),
+  fetch: (relay, filter) =>
+    inner.fetch(relay, filter).pipe(
+      Effect.tap((events) =>
+        Effect.sync(() =>
+          inspector.emit(
+            new WireFetched({ relay, filter, events, detail: null }),
+          ),
+        ),
+      ),
+      Effect.tapError((error) =>
+        Effect.sync(() =>
+          inspector.emit(
+            new WireFetched({
+              relay,
+              filter,
+              events: [],
+              detail: error.detail,
+            }),
           ),
         ),
       ),

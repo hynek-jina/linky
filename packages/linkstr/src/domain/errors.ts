@@ -1,6 +1,7 @@
 import { Schema } from "effect";
-import { WrapDelivery } from "./delivery";
-import { ClientId, RumorId, UnixSeconds } from "./primitives";
+import { RelayPublishResult } from "../services/NostrTransport";
+import { RelayRejection, WrapDelivery } from "./delivery";
+import { ClientId, EventId, RumorId, UnixSeconds } from "./primitives";
 
 const deliveryFailureFields = {
   rumorId: RumorId,
@@ -30,3 +31,27 @@ export const WrapSendError = Schema.Union(
   NoRelayReachable,
 );
 export type WrapSendError = typeof WrapSendError.Type;
+
+/** Plain-publish sibling of `NoRelayReachable`: no write relay accepted the event. */
+export class NoRelayAcceptedEvent extends Schema.TaggedError<NoRelayAcceptedEvent>()(
+  "NoRelayAcceptedEvent",
+  {
+    eventId: EventId,
+    kind: Schema.Int,
+    sentAt: UnixSeconds,
+    results: Schema.Array(RelayPublishResult),
+  },
+) {}
+
+/** A one-shot fetch reached no relay at all; partial reachability succeeds instead. */
+export class AllRelaysUnreachable extends Schema.TaggedError<AllRelaysUnreachable>()(
+  "AllRelaysUnreachable",
+  {
+    failures: Schema.Array(RelayRejection),
+  },
+) {}
+
+export class NoReadRelaysConfigured extends Schema.TaggedError<NoReadRelaysConfigured>()(
+  "NoReadRelaysConfigured",
+  {},
+) {}

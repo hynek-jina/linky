@@ -212,3 +212,63 @@ describe("makeRelayPoolTransport subscribe", () => {
     expect(subscriptions[0]?.closedByClient).toBe(true);
   });
 });
+
+describe("makeRelayPoolTransport fetch", () => {
+  it("collects until EOSE, then closes and resolves", async () => {
+    const { pool, subscriptions } = makeSubscribingPool();
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.fork(
+          makeRelayPoolTransport(pool).fetch(relayOk, { kinds: [0] }),
+        );
+        yield* eventually(() => subscriptions.length === 1);
+        const [subscription] = subscriptions;
+        if (subscription === undefined) throw new Error("never subscribed");
+        subscription.params.onevent(event);
+        subscription.params.oneose?.();
+        return yield* Fiber.join(fiber);
+      }),
+    );
+
+    expect(result.map((received) => received.id)).toEqual([event.id]);
+    expect(subscriptions[0]?.closedByClient).toBe(true);
+  });
+
+  it("resolves with what was collected when EOSE never arrives", async () => {
+    const { pool, subscriptions } = makeSubscribingPool();
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.fork(
+          makeRelayPoolTransport(pool, {
+            fetchEoseTimeout: Duration.millis(50),
+          }).fetch(relayOk, { kinds: [0] }),
+        );
+        yield* eventually(() => subscriptions.length === 1);
+        subscriptions[0]?.params.onevent(event);
+        return yield* Fiber.join(fiber);
+      }),
+    );
+
+    expect(result.map((received) => received.id)).toEqual([event.id]);
+    expect(subscriptions[0]?.closedByClient).toBe(true);
+  });
+
+  it("fails with RelayUnreachable when the relay cannot be reached", async () => {
+    const { pool } = makeSubscribingPool();
+
+    const exit = await Effect.runPromiseExit(
+      makeRelayPoolTransport(pool).fetch(relayDown, { kinds: [0] }),
+    );
+
+    expect(exit).toEqual(
+      Exit.fail(
+        expect.objectContaining({
+          _tag: "RelayUnreachable",
+          relay: relayDown,
+        }),
+      ),
+    );
+  });
+});

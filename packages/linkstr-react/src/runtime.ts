@@ -3,8 +3,12 @@ import {
   Inspector,
   inspectTransport,
   LinkstrIdentity,
+  MuteList,
   NostrTransportSimplePool,
+  Profiles,
+  ProfileWatch,
   Reactions,
+  RelayLists,
   RelayPolicy,
   WrapInbox,
 } from "@linky/linkstr";
@@ -37,7 +41,14 @@ export const linkstrRuntimeAtom = Atom.runtime((get) => {
   return config === null
     ? Layer.fail(new LinkstrNotConfigured())
     : Layer.fresh(
-        Layer.mergeAll(Reactions.Default, WrapInbox.Default).pipe(
+        Layer.mergeAll(
+          Reactions.Default,
+          WrapInbox.Default,
+          Profiles.Default,
+          ProfileWatch.Default,
+          RelayLists.Default,
+          MuteList.Default,
+        ).pipe(
           Layer.provideMerge(baseServices(config)),
           Layer.provideMerge(
             config.inspector === true ? Inspector.live : Inspector.disabled,

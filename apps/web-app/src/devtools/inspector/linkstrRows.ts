@@ -3,11 +3,14 @@ import {
   NoRelayReachable,
   OwnReactionConfirmed,
   OwnRetractionConfirmed,
+  ProfileEventDropped,
+  ProfileUpdated,
   ReactionAdded,
   ReactionDraft,
   ReactionRetracted,
   RecipientNotReached,
   RetractionDraft,
+  StatusUpdated,
   WrapDropped,
 } from "@linky/linkstr";
 import { Option, Schema } from "effect";
@@ -22,6 +25,10 @@ const NOSTR_KIND_NAMES: Record<number, string> = {
   14: "chat message",
   15: "chat media",
   1059: "gift wrap",
+  10000: "mute list",
+  10002: "relay list",
+  10050: "dm relays",
+  30315: "status",
 };
 
 const kindLabel = (kind: number): string => {
@@ -32,6 +39,16 @@ const kindLabel = (kind: number): string => {
 const decodeRawEventSummary = Schema.decodeUnknownOption(
   Schema.Struct({ id: Schema.String, kind: Schema.Number }),
 );
+
+const decodeFilterKinds = Schema.decodeUnknownOption(
+  Schema.Struct({ kinds: Schema.Array(Schema.Number) }),
+);
+
+const filterKindsLabel = (filter: unknown): string =>
+  Option.match(decodeFilterKinds(filter), {
+    onNone: () => "events",
+    onSome: ({ kinds }) => kinds.map(kindLabel).join(", "),
+  });
 
 const operationSummary = (name: string, params: unknown): string => {
   if (params instanceof ReactionDraft) {
@@ -102,6 +119,19 @@ const routedSummaryAndLinks = (
   return { summary: `InboxRouted${kindSuffix}`, links: {} };
 };
 
+const profileWatchSummary = (routed: unknown, kind: number | null): string => {
+  if (routed instanceof ProfileUpdated) {
+    return `ProfileUpdated ${short(routed.pubkey)}`;
+  }
+  if (routed instanceof StatusUpdated) {
+    return `StatusUpdated "${routed.content}" ${short(routed.pubkey)}`;
+  }
+  if (routed instanceof ProfileEventDropped) {
+    return `ProfileEventDropped ${routed.reason}${kind === null ? "" : ` (${kindLabel(kind)})`}`;
+  }
+  return "ProfileWatchRouted";
+};
+
 export const linkstrEventToRow = (
   event: InspectorEvent,
   at: number,
@@ -147,10 +177,40 @@ export const linkstrEventToRow = (
         at,
         channel: "wire",
         tag: event._tag,
-        summary: `subscribe gift wraps @ ${event.relay}`,
+        summary: `subscribe ${filterKindsLabel(event.filter)} @ ${event.relay}`,
         links: { relay: event.relay },
         payload: event,
       };
+    case "WirePlainPublished": {
+      const accepted = event.results.filter((result) => result.accepted);
+      return {
+        at,
+        channel: "wire",
+        tag: event._tag,
+        summary: `publish ${kindLabel(event.kind)} ${short(event.eventId)} → ${accepted.length}/${event.results.length} relays accepted`,
+        links: { wrapIds: [event.eventId] },
+        payload: event,
+      };
+    }
+    case "WireFetched": {
+      const ids = event.events.flatMap((fetched) =>
+        Option.match(decodeRawEventSummary(fetched), {
+          onNone: () => [],
+          onSome: ({ id }) => [id],
+        }),
+      );
+      return {
+        at,
+        channel: "wire",
+        tag: event._tag,
+        summary: `fetch ${filterKindsLabel(event.filter)} ← ${event.relay}: ${event.events.length} event(s)${event.detail === null ? "" : ` — ${event.detail}`}`,
+        links: {
+          relay: event.relay,
+          ...(ids.length === 0 ? {} : { wrapIds: ids }),
+        },
+        payload: event,
+      };
+    }
     case "WireSubscriptionEnded":
       return {
         at,
@@ -205,5 +265,24 @@ export const linkstrEventToRow = (
         payload: event,
       };
     }
+    case "PlainOperationSucceeded":
+      return {
+        at,
+        channel: "operation",
+        tag: event.name,
+        summary: event.name,
+        links:
+          event.eventIds.length === 0 ? {} : { wrapIds: [...event.eventIds] },
+        payload: event,
+      };
+    case "ProfileWatchRouted":
+      return {
+        at,
+        channel: "operation",
+        tag: event._tag,
+        summary: profileWatchSummary(event.event, event.kind),
+        links: event.eventId === null ? {} : { wrapIds: [event.eventId] },
+        payload: event,
+      };
   }
 };

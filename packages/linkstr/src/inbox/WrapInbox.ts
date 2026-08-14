@@ -11,6 +11,7 @@ import {
 } from "effect";
 import type { Scope } from "effect";
 import type { Filter } from "nostr-tools";
+import { NoReadRelaysConfigured } from "../domain/errors";
 import { UnixSeconds, WrapId } from "../domain/primitives";
 import type { RelayUrl } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
@@ -30,11 +31,6 @@ import { authenticateWrap } from "./authenticateWrap";
 import { WrapDropped } from "./events";
 
 export type WrapInboxEvent = ReactionInboxEvent | WrapDropped;
-
-export class NoReadRelaysConfigured extends Schema.TaggedError<NoReadRelaysConfigured>()(
-  "NoReadRelaysConfigured",
-  {},
-) {}
 
 export interface WrapInboxOptions {
   /** Cursor persisted by the caller from a previous session's `cursor`. */

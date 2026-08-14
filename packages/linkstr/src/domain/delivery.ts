@@ -1,5 +1,6 @@
 import { Schema } from "effect";
-import { RelayUrl, WrapId } from "./primitives";
+import { RelayPublishResult } from "../services/NostrTransport";
+import { EventId, RelayUrl, UnixSeconds, WrapId } from "./primitives";
 
 export class RelayRejection extends Schema.Class<RelayRejection>(
   "RelayRejection",
@@ -16,5 +17,19 @@ export class WrapDelivery extends Schema.Class<WrapDelivery>("WrapDelivery")({
 }) {
   get accepted(): boolean {
     return this.acceptedBy.length > 0;
+  }
+}
+
+/** Outcome of publishing one signed plain event to the write relays. */
+export class PlainEventReceipt extends Schema.Class<PlainEventReceipt>(
+  "PlainEventReceipt",
+)({
+  eventId: EventId,
+  kind: Schema.Int,
+  sentAt: UnixSeconds,
+  results: Schema.Array(RelayPublishResult),
+}) {
+  get accepted(): boolean {
+    return this.results.some((result) => result.accepted);
   }
 }

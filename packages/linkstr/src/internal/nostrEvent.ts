@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { Pubkey, UnixSeconds, WrapId } from "../domain/primitives";
+import { EventId, Pubkey, UnixSeconds, WrapId } from "../domain/primitives";
 
 // Mutable so values are structurally assignable to nostr-tools' Event type.
 export const NostrTags = Schema.mutable(
@@ -17,6 +17,19 @@ export class SignedWrapEvent extends Schema.Class<SignedWrapEvent>(
   kind: Schema.Literal(1059),
   tags: NostrTags,
   content: Schema.NonEmptyString,
+  sig: Schema.String,
+}) {}
+
+/** A signed plain (non-gift-wrapped) event: profile, status, relay lists, … */
+export class SignedPlainEvent extends Schema.Class<SignedPlainEvent>(
+  "SignedPlainEvent",
+)({
+  id: EventId,
+  pubkey: Pubkey,
+  created_at: UnixSeconds,
+  kind: Schema.Int,
+  tags: NostrTags,
+  content: Schema.String,
   sig: Schema.String,
 }) {}
 
