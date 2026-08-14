@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { WrapDelivery } from "../domain/delivery";
 import { ClientId, Pubkey, RumorId, UnixSeconds } from "../domain/primitives";
+import { parseCashuToken } from "./cashuToken";
 
 const LOWERCASE_HEX_64 = /^[0-9a-f]{64}$/;
 const LOWERCASE_HEX_24 = /^[0-9a-f]{24}$/;
@@ -9,6 +10,14 @@ export const MessageText = Schema.NonEmptyTrimmedString.pipe(
   Schema.brand("MessageText"),
 );
 export type MessageText = typeof MessageText.Type;
+
+export const CashuTokenText = Schema.NonEmptyTrimmedString.pipe(
+  Schema.filter((value) => parseCashuToken(value) !== null, {
+    description: "a parseable cashu token",
+  }),
+  Schema.brand("CashuTokenText"),
+);
+export type CashuTokenText = typeof CashuTokenText.Type;
 
 export class PrivateImage extends Schema.Class<PrivateImage>("PrivateImage")({
   url: Schema.NonEmptyTrimmedString,
@@ -29,6 +38,16 @@ export class TextMessageDraft extends Schema.Class<TextMessageDraft>(
 )({
   to: Pubkey,
   content: MessageText,
+  replyTo: Schema.optional(RumorId),
+  root: Schema.optional(RumorId),
+  clientId: Schema.optional(ClientId),
+}) {}
+
+export class TokenMessageDraft extends Schema.Class<TokenMessageDraft>(
+  "TokenMessageDraft",
+)({
+  to: Pubkey,
+  token: CashuTokenText,
   replyTo: Schema.optional(RumorId),
   root: Schema.optional(RumorId),
   clientId: Schema.optional(ClientId),

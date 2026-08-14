@@ -1,4 +1,5 @@
 export * from "./chat/Chat";
+export * from "./chat/cashuToken";
 export * from "./chat/domain";
 export * from "./chat/events";
 export * from "./domain/delivery";
@@ -16,6 +17,13 @@ export {
   LINKY_PUSH_MARKER_VALUE,
 } from "./internal/giftWrap";
 export * from "./muteList/MuteList";
+export {
+  PAYMENT_NOTICE_KIND,
+  PAYMENT_NOTICE_VALUE,
+} from "./paymentNotices/codec";
+export * from "./paymentNotices/domain";
+export * from "./paymentNotices/events";
+export * from "./paymentNotices/PaymentNotices";
 export * from "./profiles/domain";
 export * from "./profiles/events";
 export * from "./profiles/Profiles";

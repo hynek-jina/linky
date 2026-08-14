@@ -7,6 +7,7 @@ import {
   MuteList,
   NostrTransportSimplePool,
   observeTransport,
+  PaymentNotices,
   Profiles,
   ProfileWatch,
   Reactions,
@@ -50,6 +51,7 @@ export const linkstrRuntimeAtom = Atom.runtime((get) => {
     : Layer.fresh(
         Layer.mergeAll(
           Chat.Default,
+          PaymentNotices.Default,
           Reactions.Default,
           WrapInbox.Default,
           Profiles.Default,

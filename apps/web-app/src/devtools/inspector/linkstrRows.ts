@@ -146,7 +146,10 @@ export const linkstrEventToRow = (
         links: {
           rumorId: event.rumorId,
           clientId: event.clientId,
-          wrapIds: [event.selfCopy.wrapId, event.recipientCopy.wrapId],
+          wrapIds:
+            event.selfCopy === null
+              ? [event.recipientCopy.wrapId]
+              : [event.selfCopy.wrapId, event.recipientCopy.wrapId],
         },
         payload: event,
       };

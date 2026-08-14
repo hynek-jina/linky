@@ -16,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@cashu/cashu-ts": "^4.0.0",
     "@noble/curves": "^1.4.1",
     "effect": "^3.19.19",
     "nostr-tools": "^2.23.3"

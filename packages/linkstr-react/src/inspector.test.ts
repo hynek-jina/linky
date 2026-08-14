@@ -83,6 +83,9 @@ describe("inspectorEventsAtom", () => {
     }
     expect(operation.name).toBe("reactions.react");
     expect(operation.clientId).toBe(draft.clientId);
+    if (operation.selfCopy === null) {
+      throw new Error("reaction operation lost its self copy");
+    }
     expect(wires.map((event) => event.wrapId).sort()).toEqual(
       [operation.selfCopy.wrapId, operation.recipientCopy.wrapId].sort(),
     );

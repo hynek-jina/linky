@@ -11,17 +11,21 @@ import {
 } from "../internal/nostrEvent";
 import type { NostrTags } from "../internal/nostrEvent";
 import type { LinkstrIdentityService } from "../services/LinkstrIdentity";
+import { extractWholeCashuToken } from "./cashuToken";
 import {
+  CashuTokenText,
   EditMessageDraft,
   ImageMessageDraft,
   PrivateImage,
   TextMessageDraft,
+  TokenMessageDraft,
 } from "./domain";
 import {
   ChatMessageReceived,
   ImageBody,
   OwnChatMessageConfirmed,
   TextBody,
+  TokenBody,
 } from "./events";
 import type { ChatInboxEvent, MessageBody } from "./events";
 
@@ -32,6 +36,7 @@ const isPubkey = Schema.is(Pubkey);
 const isRumorId = Schema.is(RumorId);
 const isClientId = Schema.is(ClientId);
 const decodePrivateImage = Schema.decodeUnknownEither(PrivateImage);
+const isCashuTokenText = Schema.is(CashuTokenText);
 
 const replyTags = (
   replyTo: RumorId | undefined,
@@ -44,8 +49,13 @@ const replyTags = (
   ];
 };
 
-export const encodeTextMessageRumor = (
-  draft: TextMessageDraft,
+const encodeTextKindRumor = (
+  draft: {
+    readonly to: Pubkey;
+    readonly content: string;
+    readonly replyTo?: RumorId | undefined;
+    readonly root?: RumorId | undefined;
+  },
   author: Pubkey,
   sentAt: UnixSeconds,
   clientId: ClientId,
@@ -62,6 +72,31 @@ export const encodeTextMessageRumor = (
     ],
     content: draft.content,
   });
+
+export const encodeTextMessageRumor = (
+  draft: TextMessageDraft,
+  author: Pubkey,
+  sentAt: UnixSeconds,
+  clientId: ClientId,
+): Rumor => encodeTextKindRumor(draft, author, sentAt, clientId);
+
+export const encodeTokenMessageRumor = (
+  draft: TokenMessageDraft,
+  author: Pubkey,
+  sentAt: UnixSeconds,
+  clientId: ClientId,
+): Rumor =>
+  encodeTextKindRumor(
+    {
+      to: draft.to,
+      content: draft.token,
+      ...(draft.replyTo === undefined ? {} : { replyTo: draft.replyTo }),
+      ...(draft.root === undefined ? {} : { root: draft.root }),
+    },
+    author,
+    sentAt,
+    clientId,
+  );
 
 export const encodeImageMessageRumor = (
   draft: ImageMessageDraft,
@@ -209,6 +244,10 @@ const decodeTextBody = (
     isNestedPayload(rumor.content, identity, [rumor.pubkey, peer, wrapPubkey])
   ) {
     return Either.left("nested-payload");
+  }
+  const candidate = extractWholeCashuToken(rumor.content);
+  if (candidate !== null && isCashuTokenText(candidate)) {
+    return Either.right(new TokenBody({ token: candidate }));
   }
   return Either.right(new TextBody({ text: rumor.content }));
 };

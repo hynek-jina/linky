@@ -19,11 +19,13 @@ import { NostrTransport, RelayPublishResult } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
 import { Chat } from "./Chat";
 import {
+  CashuTokenText,
   EditMessageDraft,
   ImageMessageDraft,
   MessageText,
   PrivateImage,
   TextMessageDraft,
+  TokenMessageDraft,
 } from "./domain";
 
 const makeIdentity = (): LinkstrIdentityService => {
@@ -36,6 +38,14 @@ const bob = makeIdentity();
 const relayA = RelayUrl.make("wss://relay-a.test");
 const relayB = RelayUrl.make("wss://relay-b.test");
 const clientId = ClientId.make("client-42");
+const cashuToken = CashuTokenText.make(
+  `cashuA${Buffer.from(
+    JSON.stringify({
+      token: [{ mint: "https://mint.test", proofs: [{ amount: 8 }] }],
+      unit: "sat",
+    }),
+  ).toString("base64url")}`,
+);
 
 const image = new PrivateImage({
   url: "https://blossom.test/image",
@@ -195,6 +205,40 @@ describe("Chat sends", () => {
     expect(published.every(({ wrap }) => !hasPushMarker(wrap))).toBe(true);
   });
 
+  it("publishes two unmarked token wraps with the token rumor", async () => {
+    const published: Array<PublishedWrap> = [];
+    const exit = await runWith(
+      stubTransport(published, () => true),
+      Effect.gen(function* () {
+        const chat = yield* Chat;
+        return yield* chat.sendToken(
+          new TokenMessageDraft({
+            to: bob.pubkey,
+            token: cashuToken,
+            clientId,
+          }),
+        );
+      }),
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value.clientId).toBe(clientId);
+    expect(exit.value.selfCopy.acceptedBy).toEqual([relayA, relayB]);
+    expect(exit.value.recipientCopy.acceptedBy).toEqual([relayA, relayB]);
+    expect(published).toHaveLength(2);
+    expect(published.every(({ wrap }) => !hasPushMarker(wrap))).toBe(true);
+
+    for (const { wrap } of published) {
+      const key =
+        recipientOf(wrap) === alice.pubkey ? alice.secretKey : bob.secretKey;
+      const rumor = Either.getOrThrow(unwrapToRumor(wrap, key));
+      expect(rumor.id).toBe(exit.value.messageId);
+      expect(rumor.kind).toBe(14);
+      expect(rumor.content).toBe(cashuToken);
+    }
+  });
+
   it("fails with RecipientNotReached when only the self copy lands", async () => {
     const exit = await runWith(
       stubTransport([], (recipient) => recipient === alice.pubkey),
@@ -245,6 +289,32 @@ describe("Chat sends", () => {
           recipientCopy: expect.objectContaining({ acceptedBy: [] }),
         }),
       ),
+    );
+  });
+
+  it.each([
+    {
+      name: "RecipientNotReached",
+      acceptFor: (recipient: string | null) => recipient === alice.pubkey,
+    },
+    { name: "NoRelayReachable", acceptFor: () => false },
+  ])("maps token delivery failure to $name", async ({ name, acceptFor }) => {
+    const exit = await runWith(
+      stubTransport([], acceptFor),
+      Effect.gen(function* () {
+        const chat = yield* Chat;
+        return yield* chat.sendToken(
+          new TokenMessageDraft({
+            to: bob.pubkey,
+            token: cashuToken,
+            clientId,
+          }),
+        );
+      }),
+    );
+
+    expect(exit).toEqual(
+      Exit.fail(expect.objectContaining({ _tag: name, clientId })),
     );
   });
 });

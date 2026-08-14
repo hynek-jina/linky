@@ -25,7 +25,8 @@ export class OperationSucceeded extends Schema.TaggedClass<OperationSucceeded>()
     rumorId: RumorId,
     clientId: ClientId,
     sentAt: UnixSeconds,
-    selfCopy: WrapDelivery,
+    /** Null for single-copy deliveries (payment notices have no self copy). */
+    selfCopy: Schema.NullOr(WrapDelivery),
     recipientCopy: WrapDelivery,
   },
 ) {}

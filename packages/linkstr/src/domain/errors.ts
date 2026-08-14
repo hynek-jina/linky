@@ -32,6 +32,16 @@ export const WrapSendError = Schema.Union(
 );
 export type WrapSendError = typeof WrapSendError.Type;
 
+export class PaymentNoticeNotDelivered extends Schema.TaggedError<PaymentNoticeNotDelivered>()(
+  "PaymentNoticeNotDelivered",
+  {
+    noticeId: RumorId,
+    clientId: ClientId,
+    sentAt: UnixSeconds,
+    recipientCopy: WrapDelivery,
+  },
+) {}
+
 /** Plain-publish sibling of `NoRelayReachable`: no write relay accepted the event. */
 export class NoRelayAcceptedEvent extends Schema.TaggedError<NoRelayAcceptedEvent>()(
   "NoRelayAcceptedEvent",
