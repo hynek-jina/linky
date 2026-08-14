@@ -1,18 +1,20 @@
 import * as Evolu from "@evolu/common";
-import type { Event as NostrToolsEvent } from "nostr-tools";
+import type { PaymentNoticeContext } from "@linky/linkstr";
+import {
+  sendChatTokenAtom,
+  sendPaymentNoticeAtom,
+  useAtomSet,
+} from "@linky/linkstr-react";
 import React from "react";
 import { createSendTokenWithTokensAtMint } from "../../../cashuSend";
 import type { CashuTokenRow, ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
-import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { normalizeMintUrl } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
-import type { AppNostrPool } from "../../lib/nostrPool";
-import { LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER } from "../../lib/pushWrappedEvent";
 import type { CashuTokenWithMeta } from "../../lib/tokenText";
 import type {
   ContactRowLike,
@@ -20,7 +22,6 @@ import type {
   LoggedPaymentEventParams,
   NewLocalNostrMessage,
   PaymentLogData,
-  PublishWrappedResult,
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
 import type { ReplyContext } from "../messages/useSendChatMessage";
@@ -67,17 +68,6 @@ interface UsePayContactWithCashuMessageParams {
   logPaymentEvent: (event: LoggedPaymentEventParams) => void;
   nostrMessagesLocal: LocalNostrMessage[];
   payWithCashuEnabled: boolean;
-  publishSingleWrappedWithRetry: (
-    pool: AppNostrPool,
-    relays: string[],
-    event: NostrToolsEvent,
-  ) => Promise<{ anySuccess: boolean; error: string | null }>;
-  publishWrappedWithRetry: (
-    pool: AppNostrPool,
-    relays: string[],
-    wrapForMe: NostrToolsEvent,
-    wrapForContact: NostrToolsEvent,
-  ) => Promise<PublishWrappedResult>;
   pushToast: (message: string) => void;
   resolveOwnerIdForWrite: () => Promise<Evolu.OwnerId | null>;
   setContactsOnboardingHasPaid: React.Dispatch<React.SetStateAction<boolean>>;
@@ -105,8 +95,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   logPaymentEvent,
   nostrMessagesLocal,
   payWithCashuEnabled,
-  publishSingleWrappedWithRetry,
-  publishWrappedWithRetry,
   pushToast,
   resolveOwnerIdForWrite,
   setContactsOnboardingHasPaid,
@@ -117,13 +105,20 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   updateLocalNostrMessage,
   upsert,
 }: UsePayContactWithCashuMessageParams) => {
+  const sendTokenMessage = useAtomSet(sendChatTokenAtom, {
+    mode: "promiseExit",
+  });
+  const sendPaymentNotice = useAtomSet(sendPaymentNoticeAtom, {
+    mode: "promiseExit",
+  });
+
   return React.useCallback(
     async (args: {
       amountSat: number;
       contact: TContact;
       fromQueue?: boolean;
       logCompletedOnly?: boolean;
-      paymentNoticeContext?: typeof LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER;
+      paymentNoticeContext?: PaymentNoticeContext;
       paymentNoticeOfferId?: string;
       paymentRequestId?: string | null;
       pendingMessageId?: string;
@@ -292,16 +287,15 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           batches: [swap.batch],
           contactId,
           contactNpub,
-          currentNsec,
+          currentNpub,
           logPayStep,
           nostrMessagesLocal,
           ...(paymentNoticeContext ? { paymentNoticeContext } : {}),
           ...(paymentNoticeOfferId ? { paymentNoticeOfferId } : {}),
           pendingMessageId: normalizedPendingMessageId,
-          publishSingleWrappedWithRetry,
-          publishWrappedWithRetry,
-          relays: NOSTR_RELAYS,
           ...(replyContext ? { replyContext } : {}),
+          sendPaymentNotice,
+          sendTokenMessage,
           updateLocalNostrMessage,
         });
       } catch (error) {
@@ -391,9 +385,9 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       logPaymentEvent,
       nostrMessagesLocal,
       payWithCashuEnabled,
-      publishSingleWrappedWithRetry,
-      publishWrappedWithRetry,
       pushToast,
+      sendPaymentNotice,
+      sendTokenMessage,
       resolveOwnerIdForWrite,
       setContactsOnboardingHasPaid,
       setStatus,

@@ -230,7 +230,6 @@ interface UseCashuWalletCompositionParams {
     | "nostrPictureByNpub"
     | "openScannedContactPendingNpubRef"
     | "pendingPayments"
-    | "publishSingleWrappedWithRetry"
     | "publishWrappedWithRetry"
     | "removePendingPayment"
     | "respondToBankPaymentOfferWithGroupState"
@@ -352,7 +351,6 @@ export const useCashuWalletComposition = ({
     nostrPictureByNpub,
     openScannedContactPendingNpubRef,
     pendingPayments,
-    publishSingleWrappedWithRetry,
     publishWrappedWithRetry,
     removePendingPayment,
     respondToBankPaymentOfferWithGroupState,
@@ -1805,8 +1803,6 @@ export const useCashuWalletComposition = ({
       logPaymentEvent,
       nostrMessagesLocal,
       payWithCashuEnabled,
-      publishSingleWrappedWithRetry,
-      publishWrappedWithRetry,
       pushToast,
       resolveOwnerIdForWrite,
       setContactsOnboardingHasPaid,
