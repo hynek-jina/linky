@@ -1,27 +1,29 @@
 import { describe, expect, it } from "vitest";
 import {
-  createLinkyPaymentNoticeEvent,
   getLinkyBankPaymentOfferPaymentNoticeOfferId,
   isLinkyBankPaymentOfferPaymentNoticeEvent,
   LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
+  LINKY_PAYMENT_NOTICE_KIND,
 } from "./pushWrappedEvent";
+
+const paymentNotice = (extraTags: string[][] = []) => ({
+  kind: LINKY_PAYMENT_NOTICE_KIND,
+  tags: [
+    ["p", "recipient"],
+    ["p", "sender"],
+    ["client", "notice-client"],
+    ["linky", "payment_notice"],
+    ...extraTags,
+  ],
+});
 
 describe("payment notice context", () => {
   it("marks proxy-payment reimbursements separately from ordinary payments", () => {
-    const proxyNotice = createLinkyPaymentNoticeEvent({
-      clientId: "proxy-notice",
-      context: LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
-      createdAt: 1_700_000_000,
-      offerId: "offer-123",
-      recipientPublicKey: "recipient",
-      senderPublicKey: "sender",
-    });
-    const ordinaryNotice = createLinkyPaymentNoticeEvent({
-      clientId: "ordinary-notice",
-      createdAt: 1_700_000_000,
-      recipientPublicKey: "recipient",
-      senderPublicKey: "sender",
-    });
+    const proxyNotice = paymentNotice([
+      ["context", LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER],
+      ["offer", "offer-123"],
+    ]);
+    const ordinaryNotice = paymentNotice();
 
     expect(isLinkyBankPaymentOfferPaymentNoticeEvent(proxyNotice)).toBe(true);
     expect(getLinkyBankPaymentOfferPaymentNoticeOfferId(proxyNotice)).toBe(

@@ -1,7 +1,6 @@
 import { decrypt, getConversationKey } from "nostr-tools/nip44";
 import type {
   ChatReactionChip,
-  LocalNostrMessage,
   LocalNostrReaction,
 } from "../../types/appTypes";
 import { normalizePubkeyHex } from "./contactIdentity";
@@ -74,26 +73,7 @@ export const extractEditedFromTag = (tags: unknown): string | null => {
   return null;
 };
 
-export const resolveStableMessageRumorId = (
-  rumorId: unknown,
-  editedFromId: unknown,
-): string | null =>
-  normalizeText(editedFromId) || normalizeText(rumorId) || null;
-
-export const extractDeleteReferencedIds = (tags: unknown): string[] => {
-  const ids: string[] = [];
-  const seen = new Set<string>();
-  for (const tag of getTags(tags)) {
-    if (tag[0] !== "e") continue;
-    const id = readTagValue(tag, 1);
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    ids.push(id);
-  }
-  return ids;
-};
-
-export const isNestedEncryptedNip44Payload = (
+const isNestedEncryptedNip44Payload = (
   content: unknown,
   participantPubkey: unknown,
   recipientPrivateKey: Uint8Array,
@@ -147,26 +127,6 @@ export const isInvalidInnerRumorPubkey = (
   return normalizedInnerPubkey === normalizedWrapPubkey;
 };
 
-export const applyEditToMessage = (
-  message: LocalNostrMessage,
-  nextContent: string,
-  editedAtSec: number,
-  editedFromId: string,
-): LocalNostrMessage => {
-  const currentOriginal = normalizeText(message.originalContent);
-  const currentContent = String(message.content ?? "");
-  const originalContent = currentOriginal || currentContent || null;
-
-  return {
-    ...message,
-    content: nextContent,
-    isEdited: true,
-    editedAtSec,
-    editedFromId,
-    originalContent,
-  };
-};
-
 export const aggregateReactions = (
   reactions: readonly LocalNostrReaction[],
   ownPubkey: string | null,
@@ -213,18 +173,4 @@ export const aggregateReactions = (
       reactedByMe: value.reactedByMe,
     }))
     .sort((a, b) => b.count - a.count || a.emoji.localeCompare(b.emoji));
-};
-
-export const applyReactionDeletes = (
-  reactions: readonly LocalNostrReaction[],
-  deletedReactionIds: readonly string[],
-): LocalNostrReaction[] => {
-  const deleted = new Set(
-    deletedReactionIds.map((id) => normalizeText(id)).filter(Boolean),
-  );
-  if (deleted.size === 0) return [...reactions];
-
-  return reactions.filter(
-    (reaction) => !deleted.has(normalizeText(reaction.wrapId)),
-  );
 };

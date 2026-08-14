@@ -1,0 +1,338 @@
+import { UnixSeconds } from "@linky/linkstr";
+import type { InboxDelivery, WrapInboxEvent } from "@linky/linkstr";
+import {
+  useAtomMount,
+  useAtomSet,
+  wrapInboxAtom,
+  wrapInboxHandlerAtom,
+} from "@linky/linkstr-react";
+import { getPublicKey, nip19 } from "nostr-tools";
+import React from "react";
+import type { PushToastOptions } from "../../../hooks/useToasts";
+import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
+import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import {
+  getInitialNostrIdentitySource,
+  getInitialNostrIdentitySwitchedAtSec,
+  safeLocalStorageGet,
+  safeLocalStorageGetJson,
+  safeLocalStorageSet,
+} from "../../../utils/storage";
+import type {
+  ContactNameRowLike,
+  LocalNostrMessage,
+  LocalNostrReaction,
+  NewLocalNostrMessage,
+  NewLocalNostrReaction,
+  OptionalText,
+  PaymentLogData,
+  RouteWithOptionalId,
+  UpdateLocalNostrMessage,
+  UpdateLocalNostrReaction,
+} from "../../types/appTypes";
+import {
+  applyChatMessageReceived,
+  applyOwnChatMessageConfirmed,
+  type ChatInboxContext,
+} from "./chatInbox";
+import { buildUnknownContactId, normalizePubkeyHex } from "./contactIdentity";
+import {
+  handleBankOfferSnapshotReceived,
+  handlePaymentNoticeReceived,
+  notifyInsertedChatMessage,
+  type InboxContact,
+  type InboxNotificationsContext,
+} from "./inboxNotifications";
+import {
+  createReactionInboxSessionState,
+  processReactionInboxEvent,
+  retryDeferredReactions,
+  type ReactionInboxContext,
+} from "./reactionInbox";
+
+// Fallback backfill window for a first session without a persisted cursor.
+const INBOX_BACKFILL_SINCE_SEC = 3 * 24 * 60 * 60;
+
+const INBOX_CURSOR_STORAGE_KEY_PREFIX = "linky.inbox_cursor";
+
+const inboxCursorStorageKey = (pubkey: string): string =>
+  `${INBOX_CURSOR_STORAGE_KEY_PREFIX}.${pubkey}`;
+
+const readStoredInboxCursor = (pubkey: string): number | null => {
+  const value = Number(safeLocalStorageGet(inboxCursorStorageKey(pubkey)));
+  return Number.isInteger(value) && value > 0 ? value : null;
+};
+
+const isBlockedPubkey = (pubkey: string): boolean => {
+  const normalizedPubkey = normalizePubkeyHex(pubkey);
+  if (!normalizedPubkey) return false;
+  return safeLocalStorageGetJson(BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY, [])
+    .map(normalizePubkeyHex)
+    .filter((entry): entry is string => Boolean(entry))
+    .includes(normalizedPubkey);
+};
+
+const deriveMyPubkey = (currentNsec: string | null): string | null => {
+  if (!currentNsec) return null;
+  try {
+    const decoded = nip19.decode(currentNsec.trim());
+    if (decoded.type !== "nsec") return null;
+    return getPublicKey(decoded.data);
+  } catch {
+    return null;
+  }
+};
+
+type InboxContactRowLike = ContactNameRowLike & { npub?: OptionalText };
+
+const normalizeText = (value: unknown): string => String(value ?? "").trim();
+
+const buildContactIndex = (
+  contacts: readonly InboxContactRowLike[],
+): Map<string, InboxContact> => {
+  const contactByPubkey = new Map<string, InboxContact>();
+  for (const contact of contacts) {
+    const archivedAtSec = Number(contact.archivedAtSec ?? 0);
+    if (Number.isFinite(archivedAtSec) && archivedAtSec > 0) continue;
+    const npub = normalizeNpubIdentifier(contact.npub);
+    if (!npub) continue;
+    try {
+      const decoded = nip19.decode(npub);
+      if (decoded.type !== "npub" || typeof decoded.data !== "string") {
+        continue;
+      }
+      const pubkey = normalizePubkeyHex(decoded.data);
+      const id = normalizeText(contact.id);
+      if (!pubkey || !id) continue;
+      contactByPubkey.set(pubkey, {
+        id,
+        name: normalizeText(contact.name) || null,
+        npub,
+      });
+    } catch {
+      // ignore invalid contact keys
+    }
+  }
+  return contactByPubkey;
+};
+
+interface UseLinkstrInboxSyncParams {
+  appendLocalNostrMessage: (message: NewLocalNostrMessage) => string;
+  appendLocalNostrReaction: (reaction: NewLocalNostrReaction) => string;
+  bankPaymentOfferMessages: readonly LocalNostrMessage[];
+  contacts: readonly InboxContactRowLike[];
+  currentNsec: string | null;
+  enabled: boolean;
+  formatDisplayedAmountText: (amountSat: number) => string;
+  logPayStep: (step: string, data?: PaymentLogData) => void;
+  maybeShowPwaNotification: (
+    title: string,
+    body: string,
+    tag?: string,
+  ) => Promise<void>;
+  nostrMessagesLatestRef: React.MutableRefObject<LocalNostrMessage[]>;
+  nostrMessagesLocal: readonly LocalNostrMessage[];
+  nostrReactionWrapIdsRef: React.MutableRefObject<Set<string>>;
+  nostrReactionsLocal: readonly LocalNostrReaction[];
+  onBankPaymentOfferMessage: (message: LocalNostrMessage) => void;
+  onOpenInboxMessageToast: (params: {
+    contactId: string;
+    messageId?: string;
+  }) => void;
+  pushToast: (message: string, options?: PushToastOptions) => void;
+  route: RouteWithOptionalId;
+  softDeleteLocalNostrReactionsByWrapIds: (wrapIds: readonly string[]) => void;
+  t: (key: string) => string;
+  updateLocalNostrMessage: UpdateLocalNostrMessage;
+  updateLocalNostrReaction: UpdateLocalNostrReaction;
+}
+
+/**
+ * The app's single wrap-inbox consumer: applies every typed linkstr inbox
+ * event — chat messages, own-message confirmations, reactions, payment
+ * notices, bank-offer snapshots — to local state, and fires interruptions
+ * (toasts, PWA notifications) for live deliveries only.
+ */
+export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
+  const setWrapInboxHandler = useAtomSet(wrapInboxHandlerAtom);
+  useAtomMount(wrapInboxAtom);
+
+  const { currentNsec, enabled, nostrMessagesLocal } = params;
+  const myPubkey = React.useMemo(
+    () => deriveMyPubkey(currentNsec),
+    [currentNsec],
+  );
+
+  const reactionSessionStateRef = React.useRef(
+    createReactionInboxSessionState(),
+  );
+  const identitySinceSecRef = React.useRef<number | null>(null);
+  const contactIndexRef = React.useRef<{
+    contacts: readonly InboxContactRowLike[] | null;
+    index: Map<string, InboxContact>;
+  }>({ contacts: null, index: new Map() });
+
+  const paramsRef = React.useRef(params);
+  React.useEffect(() => {
+    paramsRef.current = params;
+  });
+
+  const buildHandlers = React.useCallback((myPubkeyHex: string) => {
+    const latest = paramsRef.current;
+
+    const findContact = (pubkey: string): InboxContact | null => {
+      if (contactIndexRef.current.contacts !== paramsRef.current.contacts) {
+        contactIndexRef.current = {
+          contacts: paramsRef.current.contacts,
+          index: buildContactIndex(paramsRef.current.contacts),
+        };
+      }
+      const normalizedPubkey = normalizePubkeyHex(pubkey);
+      return normalizedPubkey
+        ? (contactIndexRef.current.index.get(normalizedPubkey) ?? null)
+        : null;
+    };
+
+    const reactionCtx: ReactionInboxContext = {
+      appendLocalNostrReaction: latest.appendLocalNostrReaction,
+      identitySinceSec: identitySinceSecRef.current,
+      isBlockedPubkey,
+      knownReactionWrapIds: latest.nostrReactionWrapIdsRef.current,
+      messages: latest.nostrMessagesLatestRef.current,
+      myPubkey: myPubkeyHex,
+      reactions: latest.nostrReactionsLocal,
+      softDeleteLocalNostrReactionsByWrapIds:
+        latest.softDeleteLocalNostrReactionsByWrapIds,
+      state: reactionSessionStateRef.current,
+      updateLocalNostrReaction: latest.updateLocalNostrReaction,
+    };
+
+    const chatCtx: ChatInboxContext = {
+      appendLocalNostrMessage: latest.appendLocalNostrMessage,
+      identitySinceSec: identitySinceSecRef.current,
+      isBlockedPubkey,
+      logPayStep: latest.logPayStep,
+      messages: latest.nostrMessagesLatestRef.current,
+      resolveContactId: (peerPubkey) => findContact(peerPubkey)?.id ?? null,
+      updateLocalNostrMessage: latest.updateLocalNostrMessage,
+    };
+
+    const notificationsCtx: InboxNotificationsContext = {
+      bankPaymentOfferMessages: latest.bankPaymentOfferMessages,
+      findContact,
+      formatDisplayedAmountText: latest.formatDisplayedAmountText,
+      maybeShowPwaNotification: latest.maybeShowPwaNotification,
+      messages: latest.nostrMessagesLatestRef.current,
+      onBankPaymentOfferMessage: latest.onBankPaymentOfferMessage,
+      onOpenInboxMessageToast: latest.onOpenInboxMessageToast,
+      pushToast: latest.pushToast,
+      route: latest.route,
+      t: latest.t,
+    };
+
+    return { chatCtx, notificationsCtx, reactionCtx };
+  }, []);
+
+  React.useEffect(() => {
+    if (!enabled || !currentNsec || myPubkey === null) return;
+    reactionSessionStateRef.current = createReactionInboxSessionState();
+    identitySinceSecRef.current =
+      getInitialNostrIdentitySource() === "custom"
+        ? getInitialNostrIdentitySwitchedAtSec()
+        : null;
+
+    const cursorKey = inboxCursorStorageKey(myPubkey);
+    let persistedCursor = readStoredInboxCursor(myPubkey);
+    const since =
+      persistedCursor ??
+      Math.floor(Date.now() / 1e3) - INBOX_BACKFILL_SINCE_SEC;
+
+    const onEvent = (event: WrapInboxEvent, delivery: InboxDelivery): void => {
+      const { chatCtx, notificationsCtx, reactionCtx } =
+        buildHandlers(myPubkey);
+      const cutoff = identitySinceSecRef.current;
+      switch (event._tag) {
+        case "ReactionAdded":
+        case "OwnReactionConfirmed":
+        case "ReactionRetracted":
+        case "OwnRetractionConfirmed":
+          processReactionInboxEvent(event, reactionCtx);
+          return;
+        case "ChatMessageReceived": {
+          const inserted = applyChatMessageReceived(event, chatCtx);
+          if (inserted && delivery === "live") {
+            notifyInsertedChatMessage(inserted, notificationsCtx);
+          }
+          return;
+        }
+        case "OwnChatMessageConfirmed":
+          applyOwnChatMessageConfirmed(event, chatCtx);
+          return;
+        case "PaymentNoticeReceived": {
+          if (isBlockedPubkey(event.from)) return;
+          if (cutoff !== null && event.sentAt < cutoff) return;
+          const contactId =
+            notificationsCtx.findContact(event.from)?.id ??
+            buildUnknownContactId(event.from);
+          if (!contactId) return;
+          handlePaymentNoticeReceived(
+            event,
+            contactId,
+            delivery,
+            notificationsCtx,
+          );
+          return;
+        }
+        case "BankOfferSnapshotReceived": {
+          if (cutoff !== null && event.sentAt < cutoff) return;
+          // Self-authored snapshots where I am also the offerer carry no
+          // recipient, so the conversation cannot be resolved; the send path
+          // already upserted them locally.
+          const peerPubkey =
+            event.from !== myPubkey
+              ? event.from
+              : event.offerer !== myPubkey
+                ? event.offerer
+                : null;
+          if (!peerPubkey || isBlockedPubkey(peerPubkey)) return;
+          const contactId =
+            notificationsCtx.findContact(peerPubkey)?.id ??
+            buildUnknownContactId(peerPubkey);
+          if (!contactId) return;
+          handleBankOfferSnapshotReceived(
+            event,
+            {
+              contactId,
+              delivery,
+              isOutgoing: event.offerer === myPubkey,
+              isSelfAuthored: event.from === myPubkey,
+              peerPubkey,
+            },
+            notificationsCtx,
+          );
+          return;
+        }
+        case "WrapDropped":
+          return;
+      }
+    };
+
+    // One handler object per identity session: a handler swap reopens the
+    // relay subscriptions, so per-render state is reached through refs.
+    setWrapInboxHandler({
+      since: UnixSeconds.make(since),
+      onEvent,
+      onCursor: (cursor) => {
+        if (cursor === persistedCursor) return;
+        persistedCursor = cursor;
+        safeLocalStorageSet(cursorKey, String(cursor));
+      },
+    });
+    return () => setWrapInboxHandler(null);
+  }, [buildHandlers, currentNsec, enabled, myPubkey, setWrapInboxHandler]);
+
+  React.useEffect(() => {
+    if (myPubkey === null) return;
+    retryDeferredReactions(buildHandlers(myPubkey).reactionCtx);
+  }, [buildHandlers, myPubkey, nostrMessagesLocal]);
+};

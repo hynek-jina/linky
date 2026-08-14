@@ -1,0 +1,336 @@
+import type {
+  BankOfferSnapshotReceived,
+  PaymentNoticeReceived,
+} from "@linky/linkstr";
+import { nip19 } from "nostr-tools";
+import type { PushToastOptions } from "../../../hooks/useToasts";
+import { formatShortNpub } from "../../../utils/formatting";
+import {
+  getLinkyBankPaymentOfferInfo,
+  getLinkyBankPaymentOfferMessageText,
+  getLinkyBankPaymentOfferText,
+  isLinkyBankPaymentOfferExpired,
+  isLinkyBankPaymentOfferTerminalStatus,
+  isLinkyBankPaymentOfferWholeOfferTerminalStatus,
+} from "../../lib/bankPaymentOffer";
+import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
+import { formatChatMessagePreviewText } from "../../lib/chatMessageDisplay";
+import {
+  isOpenBankPaymentOffer,
+  isOpenChatForContact,
+} from "../../lib/inboxNotificationRoute";
+import type {
+  LocalNostrMessage,
+  RouteWithOptionalId,
+} from "../../types/appTypes";
+import type { InsertedChatMessage } from "./chatInbox";
+
+const PAYMENT_NOTICE_MATCH_WINDOW_SECONDS = 120;
+
+const normalizeText = (value: unknown): string => String(value ?? "").trim();
+
+export interface InboxContact {
+  id: string;
+  name: string | null;
+  npub: string | null;
+}
+
+export interface InboxNotificationsContext {
+  bankPaymentOfferMessages: readonly LocalNostrMessage[];
+  findContact: (pubkey: string) => InboxContact | null;
+  formatDisplayedAmountText: (amountSat: number) => string;
+  maybeShowPwaNotification: (
+    title: string,
+    body: string,
+    tag?: string,
+  ) => Promise<void>;
+  messages: readonly LocalNostrMessage[];
+  onBankPaymentOfferMessage: (message: LocalNostrMessage) => void;
+  onOpenInboxMessageToast: (params: {
+    contactId: string;
+    messageId?: string;
+  }) => void;
+  pushToast: (message: string, options?: PushToastOptions) => void;
+  route: RouteWithOptionalId;
+  t: (key: string) => string;
+}
+
+const senderLabel = (
+  ctx: InboxNotificationsContext,
+  peerPubkey: string,
+): string => {
+  const contact = ctx.findContact(peerPubkey);
+  return (
+    contact?.name ??
+    formatShortNpub(contact?.npub ?? nip19.npubEncode(peerPubkey)) ??
+    ctx.t("unknownContactTitle")
+  );
+};
+
+const notificationTitle = (
+  ctx: InboxNotificationsContext,
+  peerPubkey: string,
+): string => {
+  const contact = ctx.findContact(peerPubkey);
+  return (
+    contact?.name ??
+    (contact ? ctx.t("appTitle") : ctx.t("unknownContactTitle"))
+  );
+};
+
+const showVisibleToast = (
+  ctx: InboxNotificationsContext,
+  message: string,
+  options?: PushToastOptions,
+): void => {
+  try {
+    if (document.visibilityState === "visible") {
+      if (options) ctx.pushToast(message, options);
+      else ctx.pushToast(message);
+    }
+  } catch {
+    // No document in non-browser environments.
+  }
+};
+
+export const notifyInsertedChatMessage = (
+  inserted: InsertedChatMessage,
+  ctx: InboxNotificationsContext,
+): void => {
+  if (isCashuNotificationMessage(inserted.content)) return;
+  if (isOpenChatForContact(ctx.route, inserted.contactId)) return;
+
+  const formattedPreview = formatChatMessagePreviewText({
+    content: inserted.content,
+    direction: "in",
+    formatDisplayedAmountText: ctx.formatDisplayedAmountText,
+    t: ctx.t,
+  });
+  const preview =
+    formattedPreview.length > 80
+      ? `${formattedPreview.slice(0, 80)}…`
+      : formattedPreview;
+  showVisibleToast(
+    ctx,
+    ctx
+      .t("chatIncomingMessageToast")
+      .replace("{name}", senderLabel(ctx, inserted.peerPubkey))
+      .replace("{message}", preview),
+    {
+      onClick: () =>
+        ctx.onOpenInboxMessageToast({
+          contactId: inserted.contactId,
+          ...(inserted.messageId ? { messageId: inserted.messageId } : {}),
+        }),
+    },
+  );
+  void ctx.maybeShowPwaNotification(
+    notificationTitle(ctx, inserted.peerPubkey),
+    formattedPreview,
+    `msg_${inserted.peerPubkey}`,
+  );
+};
+
+const hasStoredIncomingCashuToken = (
+  ctx: InboxNotificationsContext,
+  contactId: string,
+  createdAtSec: number,
+): boolean =>
+  ctx.messages.some(
+    (message) =>
+      normalizeText(message.contactId) === contactId &&
+      normalizeText(message.direction) === "in" &&
+      Number.isFinite(message.createdAtSec) &&
+      Math.abs(message.createdAtSec - createdAtSec) <=
+        PAYMENT_NOTICE_MATCH_WINDOW_SECONDS &&
+      isCashuNotificationMessage(message.content),
+  );
+
+export const handlePaymentNoticeReceived = (
+  event: PaymentNoticeReceived,
+  contactId: string,
+  delivery: "backfill" | "live",
+  ctx: InboxNotificationsContext,
+): void => {
+  if (hasStoredIncomingCashuToken(ctx, contactId, event.sentAt)) return;
+  if (delivery !== "live") return;
+
+  const paymentNoticeText =
+    event.context === "bank_payment_offer"
+      ? ctx.t("notificationReceivedBankPaymentReimbursement")
+      : ctx.t("notificationReceivedMoney");
+  const isActiveChat = isOpenChatForContact(ctx.route, contactId);
+  const isActiveOffer = isOpenBankPaymentOffer(ctx.route, event.offerId ?? "");
+  if (!isActiveChat && !isActiveOffer) {
+    showVisibleToast(
+      ctx,
+      ctx
+        .t("chatIncomingMessageToast")
+        .replace("{name}", senderLabel(ctx, event.from))
+        .replace("{message}", paymentNoticeText),
+    );
+  }
+  void ctx.maybeShowPwaNotification(
+    notificationTitle(ctx, event.from),
+    paymentNoticeText,
+    event.noticeId,
+  );
+};
+
+/** Snapshot JSON in the exact shape the outbox encoder publishes, so every
+ * consumer of offer-message `content` keeps parsing unchanged. */
+export const bankOfferContentFromSnapshot = (
+  snapshot: BankOfferSnapshotReceived,
+): string =>
+  JSON.stringify({
+    amountText: snapshot.amountText,
+    offerId: snapshot.offerId,
+    offererPublicKey: snapshot.offerer,
+    status: snapshot.status,
+    ...(snapshot.statusUpdatedAtSec !== null
+      ? { statusUpdatedAtSec: snapshot.statusUpdatedAtSec }
+      : {}),
+    text:
+      snapshot.text ??
+      getLinkyBankPaymentOfferMessageText(
+        snapshot.amountText,
+        snapshot.status,
+        snapshot.extensionSec,
+      ),
+    type: "linky.bank_payment_offer",
+    version: 1,
+    ...(snapshot.initiatedAtSec !== null
+      ? { initiatedAtSec: snapshot.initiatedAtSec }
+      : {}),
+    ...(snapshot.bankPaidAtSec !== null
+      ? { bankPaidAtSec: snapshot.bankPaidAtSec }
+      : {}),
+    ...(snapshot.expiresAtSec !== null
+      ? { expiresAtSec: snapshot.expiresAtSec }
+      : {}),
+    ...(snapshot.extensionSec !== null
+      ? { extensionSec: snapshot.extensionSec }
+      : {}),
+    ...(snapshot.amountSat !== null ? { amountSat: snapshot.amountSat } : {}),
+    ...(snapshot.spdPayload !== null
+      ? { spdPayload: snapshot.spdPayload }
+      : {}),
+  });
+
+export interface BankOfferSnapshotScope {
+  contactId: string;
+  delivery: "backfill" | "live";
+  isOutgoing: boolean;
+  isSelfAuthored: boolean;
+  peerPubkey: string;
+}
+
+export const handleBankOfferSnapshotReceived = (
+  event: BankOfferSnapshotReceived,
+  scope: BankOfferSnapshotScope,
+  ctx: InboxNotificationsContext,
+): void => {
+  const content = bankOfferContentFromSnapshot(event);
+  const offerInfo = getLinkyBankPaymentOfferInfo(content);
+  const offerText = getLinkyBankPaymentOfferText(content);
+  if (!offerText) return;
+  const offerId = normalizeText(offerInfo?.offerId);
+  const isTerminalOffer = offerInfo
+    ? isLinkyBankPaymentOfferTerminalStatus(offerInfo.status)
+    : false;
+  // Whole-offer statuses only: one recipient's declined thread must not
+  // swallow another recipient's later acceptance of the offer.
+  const hasTerminalKnownOffer = offerId
+    ? ctx.bankPaymentOfferMessages.some((message) => {
+        const knownInfo = getLinkyBankPaymentOfferInfo(message.content);
+        return (
+          knownInfo?.offerId === offerId &&
+          isLinkyBankPaymentOfferWholeOfferTerminalStatus(knownInfo.status)
+        );
+      })
+    : false;
+  const isExpiredOffer =
+    offerInfo && !isTerminalOffer
+      ? isLinkyBankPaymentOfferExpired(
+          offerInfo,
+          event.sentAt,
+          Math.floor(Date.now() / 1e3),
+        )
+      : false;
+  if (isExpiredOffer || (!isTerminalOffer && hasTerminalKnownOffer)) return;
+
+  ctx.onBankPaymentOfferMessage({
+    contactId: scope.contactId,
+    content,
+    createdAtSec: event.sentAt,
+    direction: scope.isOutgoing ? "out" : "in",
+    id: `bank-payment-offer:${event.snapshotId}`,
+    localOnly: true,
+    pubkey: event.offerer,
+    rumorId: null,
+    status: "sent",
+    wrapId: event.snapshotId,
+    ...(event.clientId !== null ? { clientId: event.clientId } : {}),
+  });
+  if (scope.delivery !== "live") return;
+
+  const activeChat = isOpenChatForContact(ctx.route, scope.contactId);
+  const activeOffer = isOpenBankPaymentOffer(ctx.route, offerId);
+  const notifyOffer = (notificationText: string): void => {
+    const label = senderLabel(ctx, scope.peerPubkey);
+    showVisibleToast(
+      ctx,
+      ctx
+        .t("chatIncomingMessageToast")
+        .replace("{name}", label)
+        .replace("{message}", notificationText),
+      {
+        onClick: () =>
+          ctx.onOpenInboxMessageToast({ contactId: scope.contactId }),
+      },
+    );
+    void ctx.maybeShowPwaNotification(
+      label,
+      notificationText,
+      event.snapshotId,
+    );
+  };
+  if (isTerminalOffer) {
+    if (
+      offerInfo?.status === "accepted_by_other" &&
+      !scope.isOutgoing &&
+      !scope.isSelfAuthored &&
+      !activeChat &&
+      !activeOffer
+    ) {
+      notifyOffer(ctx.t("bankPaymentOfferAcceptedByOther"));
+    }
+    if (
+      offerInfo?.status === "declined" &&
+      scope.isOutgoing &&
+      !scope.isSelfAuthored &&
+      !activeChat &&
+      !activeOffer
+    ) {
+      notifyOffer(ctx.t("bankPaymentOfferDeclinedNotification"));
+    }
+    return;
+  }
+
+  if (!activeChat && !activeOffer && !scope.isSelfAuthored) {
+    showVisibleToast(
+      ctx,
+      ctx
+        .t("chatIncomingMessageToast")
+        .replace("{name}", senderLabel(ctx, scope.peerPubkey))
+        .replace("{message}", offerText),
+    );
+  }
+  if (!scope.isSelfAuthored) {
+    void ctx.maybeShowPwaNotification(
+      notificationTitle(ctx, scope.peerPubkey),
+      offerText,
+      event.snapshotId,
+    );
+  }
+};
