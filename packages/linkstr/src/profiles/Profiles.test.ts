@@ -589,6 +589,43 @@ describe("Profiles.discoverActiveProfiles", () => {
     expect(overrideSince - defaultSince).toBeLessThanOrEqual(windowDelta + 5);
   });
 
+  it("chunks the profile lookup when the activity scan spans many authors", async () => {
+    const identities = Array.from(
+      { length: AUTHOR_FILTER_LIMIT + 1 },
+      makeIdentity,
+    );
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        relayA,
+        identities.map((identity, index) =>
+          noteEvent(identity, base + index + 1),
+        ),
+      ],
+    ]);
+    const fetchLog: Array<Filter> = [];
+
+    const exit = await runWith(
+      stubTransport([], { stored, fetchLog }),
+      Effect.flatMap(Profiles, (profiles) => profiles.discoverActiveProfiles()),
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    const lookupFilters = fetchLog.filter((filter) => filter.authors);
+    const authorCounts = lookupFilters
+      .map((filter) => filter.authors?.length ?? 0)
+      .sort((a, b) => a - b);
+    // Two chunks, each queried on both relays, per-chunk limit preserved.
+    expect(authorCounts).toEqual([
+      1,
+      1,
+      AUTHOR_FILTER_LIMIT,
+      AUTHOR_FILTER_LIMIT,
+    ]);
+    for (const filter of lookupFilters) {
+      expect(filter.limit).toBe((filter.authors?.length ?? 0) * 2);
+    }
+  });
+
   it("returns an empty list when no recent activity is found", async () => {
     const fetchLog: Array<Filter> = [];
     const exit = await runWith(

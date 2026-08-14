@@ -248,15 +248,16 @@ export class Profiles extends Effect.Service<Profiles>()("linkstr/Profiles", {
         }
 
         const authors = [...lastActiveByAuthor.keys()];
-        const profileEvents = yield* fetchPlainEvents(
-          context.transport,
-          relays,
-          {
-            authors,
-            kinds: [PROFILE_KIND],
-            limit: authors.length * 2,
-          },
-        );
+        const profileEvents = (yield* Effect.forEach(
+          chunkAuthors(authors),
+          (chunk) =>
+            fetchPlainEvents(context.transport, relays, {
+              authors: chunk,
+              kinds: [PROFILE_KIND],
+              limit: chunk.length * 2,
+            }),
+          { concurrency: 4 },
+        )).flat();
 
         const discovered: Array<DiscoveredProfile> = [];
         const eventIds: Array<EventId> = [];
