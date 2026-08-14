@@ -1,7 +1,12 @@
 import { Effect } from "effect";
 import { RelayRejection, WrapDelivery } from "../domain/delivery";
 import { NoRelayReachable, RecipientNotReached } from "../domain/errors";
-import type { ClientId, Pubkey, UnixSeconds } from "../domain/primitives";
+import type {
+  ClientId,
+  NostrSecretKey,
+  Pubkey,
+  UnixSeconds,
+} from "../domain/primitives";
 import { RumorId } from "../domain/primitives";
 import type { LinkstrIdentityService } from "../services/LinkstrIdentity";
 import type {
@@ -41,13 +46,14 @@ export const deliverRumorToRecipient = (
     readonly rumor: Rumor;
     readonly recipient: Pubkey;
     readonly pushMark?: boolean;
+    readonly senderSecretKey?: NostrSecretKey;
   },
 ): Effect.Effect<WrapDelivery> =>
   Effect.gen(function* () {
     const wrap = yield* Effect.sync(() =>
       wrapRumorFor(
         params.rumor,
-        identity.secretKey,
+        params.senderSecretKey ?? identity.secretKey,
         params.recipient,
         params.pushMark === true ? { pushMarker: true } : undefined,
       ),

@@ -31,6 +31,12 @@ export {
 export * from "./paymentNotices/domain";
 export * from "./paymentNotices/events";
 export * from "./paymentNotices/PaymentNotices";
+export {
+  PAYMENT_TELEMETRY_KIND,
+  PAYMENT_TELEMETRY_VALUE,
+} from "./paymentTelemetry/codec";
+export * from "./paymentTelemetry/domain";
+export * from "./paymentTelemetry/PaymentTelemetry";
 export * from "./profiles/domain";
 export * from "./profiles/events";
 export * from "./profiles/Profiles";

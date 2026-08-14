@@ -42,6 +42,16 @@ export class PaymentNoticeNotDelivered extends Schema.TaggedError<PaymentNoticeN
   },
 ) {}
 
+export class PaymentTelemetryNotDelivered extends Schema.TaggedError<PaymentTelemetryNotDelivered>()(
+  "PaymentTelemetryNotDelivered",
+  {
+    telemetryId: RumorId,
+    clientId: ClientId,
+    sentAt: UnixSeconds,
+    recipientCopy: WrapDelivery,
+  },
+) {}
+
 /** Plain-publish sibling of `NoRelayReachable`: no write relay accepted the event. */
 export class NoRelayAcceptedEvent extends Schema.TaggedError<NoRelayAcceptedEvent>()(
   "NoRelayAcceptedEvent",

@@ -1,7 +1,14 @@
 import type { OwnerId } from "@evolu/common";
-import { generateSecretKey, nip19 } from "nostr-tools";
+import {
+  ClientId,
+  PaymentTelemetryDraft,
+  Pubkey,
+  UnixSeconds,
+} from "@linky/linkstr";
+import { publishPaymentTelemetryAtom, useAtomSet } from "@linky/linkstr-react";
+import { Exit, Schema } from "effect";
+import { nip19 } from "nostr-tools";
 import React from "react";
-import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 import {
   LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY_PREFIX,
   LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX,
@@ -12,12 +19,7 @@ import {
   safeLocalStorageSetJson,
   withLocalStorageLeaseLock,
 } from "../../utils/storage";
-import { getSharedAppNostrPool } from "../lib/nostrPool";
-import { publishSingleWrappedWithRetry } from "../lib/nostrPublishRetry";
-import {
-  createPaymentTelemetryWrappedEvent,
-  getPaymentTelemetryRetryDelaySec,
-} from "../lib/paymentTelemetry";
+import { getPaymentTelemetryRetryDelaySec } from "../lib/paymentTelemetry";
 import type { LocalPaymentTelemetryEvent } from "../types/appTypes";
 
 interface UseAnonymousPaymentTelemetryParams {
@@ -27,6 +29,9 @@ interface UseAnonymousPaymentTelemetryParams {
 
 const PAYMENT_TELEMETRY_FLUSH_INTERVAL_MS = 45_000;
 const MAX_ITEMS_PER_FLUSH = 10;
+const isClientId = Schema.is(ClientId);
+const isPubkey = Schema.is(Pubkey);
+const isUnixSeconds = Schema.is(UnixSeconds);
 
 const isTelemetryDirection = (value: unknown): value is "in" | "out" => {
   return value === "in" || value === "out";
@@ -154,11 +159,37 @@ const writeQueue = (
   safeLocalStorageSetJson(storageKey, Array.from(items));
 };
 
+const toPaymentTelemetryDraft = (
+  item: LocalPaymentTelemetryEvent,
+): PaymentTelemetryDraft | null => {
+  if (!isClientId(item.id) || !isUnixSeconds(item.createdAtSec)) return null;
+  return new PaymentTelemetryDraft({
+    id: item.id,
+    createdAtSec: item.createdAtSec,
+    direction: item.direction,
+    status: item.status,
+    method: item.method,
+    phase: item.phase,
+    mint: item.mint,
+    amountBucket: item.amountBucket,
+    feeBucket: item.feeBucket,
+    errorCode: item.errorCode,
+    errorDetail: item.errorDetail,
+    appHost: item.appHost ?? null,
+    devicePlatform: item.devicePlatform ?? null,
+    appRuntime: item.appRuntime ?? null,
+    appVersion: item.appVersion,
+  });
+};
+
 export const useAnonymousPaymentTelemetry = ({
   appOwnerId,
   makeLocalStorageKey,
 }: UseAnonymousPaymentTelemetryParams): void => {
   const flushRef = React.useRef<Promise<void> | null>(null);
+  const publishPaymentTelemetry = useAtomSet(publishPaymentTelemetryAtom, {
+    mode: "promiseExit",
+  });
 
   const flushQueue = React.useCallback(async () => {
     if (!appOwnerId) return;
@@ -185,27 +216,21 @@ export const useAnonymousPaymentTelemetry = ({
         if (dueItems.length === 0) return;
 
         const decoded = nip19.decode(PAYMENT_ANALYTICS_RECIPIENT_NPUB);
-        if (decoded.type !== "npub" || typeof decoded.data !== "string") {
+        if (decoded.type !== "npub" || !isPubkey(decoded.data)) {
           return;
         }
 
-        const recipientPublicKey = decoded.data;
-        const pool = await getSharedAppNostrPool();
+        const recipient = decoded.data;
         const remainingById = new Map(queue.map((item) => [item.id, item]));
 
         for (const item of dueItems) {
-          const wrappedEvent = createPaymentTelemetryWrappedEvent({
-            item,
-            recipientPublicKey,
-            senderPrivateKey: generateSecretKey(),
-          });
-          const outcome = await publishSingleWrappedWithRetry({
-            pool,
-            relays: NOSTR_RELAYS,
-            event: wrappedEvent,
-          });
+          const draft = toPaymentTelemetryDraft(item);
+          const outcome =
+            draft === null
+              ? null
+              : await publishPaymentTelemetry({ draft, recipient });
 
-          if (outcome.anySuccess) {
+          if (outcome !== null && Exit.isSuccess(outcome)) {
             remainingById.delete(item.id);
             continue;
           }
@@ -230,7 +255,7 @@ export const useAnonymousPaymentTelemetry = ({
 
     flushRef.current = run;
     await run;
-  }, [appOwnerId, makeLocalStorageKey]);
+  }, [appOwnerId, makeLocalStorageKey, publishPaymentTelemetry]);
 
   React.useEffect(() => {
     void flushQueue();
