@@ -1,15 +1,23 @@
-import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import {
+  ClientId,
+  EditMessageDraft,
+  MessageText,
+  Pubkey,
+  RumorId,
+} from "@linky/linkstr";
+import { editChatMessageAtom, useAtomSet } from "@linky/linkstr-react";
+import { Either, Exit, Schema } from "effect";
 import React from "react";
-import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { makeLocalId } from "../../../utils/validation";
-import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
-import { wrapEventWithoutPushMarker } from "../../lib/pushWrappedEvent";
 import type {
   ContactIdentityRowLike,
-  PublishWrappedResult,
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
 import { resolveNostrChatIdentity } from "./contactIdentity";
+
+const isPubkey = Schema.is(Pubkey);
+const isRumorId = Schema.is(RumorId);
+const decodeMessageText = Schema.decodeUnknownEither(MessageText);
 
 export interface EditChatContext {
   messageId: string;
@@ -25,12 +33,6 @@ interface UseEditChatMessageParams<
   chatSendIsBusy: boolean;
   currentNsec: string | null;
   editContext: EditChatContext | null;
-  publishWrappedWithRetry: (
-    pool: AppNostrPool,
-    relays: string[],
-    wrapForMe: NostrToolsEvent,
-    wrapForContact: NostrToolsEvent,
-  ) => Promise<PublishWrappedResult>;
   route: TRoute;
   selectedContact: TContact | null;
   setChatDraft: React.Dispatch<React.SetStateAction<string>>;
@@ -49,7 +51,6 @@ export const useEditChatMessage = <
   chatSendIsBusy,
   currentNsec,
   editContext,
-  publishWrappedWithRetry,
   route,
   selectedContact,
   setChatDraft,
@@ -59,13 +60,17 @@ export const useEditChatMessage = <
   t,
   updateLocalNostrMessage,
 }: UseEditChatMessageParams<TRoute, TContact>) => {
+  const editMessage = useAtomSet(editChatMessageAtom, {
+    mode: "promiseExit",
+  });
+
   return React.useCallback(async () => {
     if (route.kind !== "chat") return;
     if (!selectedContact) return;
     if (!editContext) return;
 
     const editedFromId = String(editContext.rumorId ?? "").trim();
-    if (!editedFromId) return;
+    if (!isRumorId(editedFromId)) return;
 
     const text = chatDraft.trim();
     if (!text) return;
@@ -83,25 +88,18 @@ export const useEditChatMessage = <
         currentNsec,
         selectedContact,
       );
-      if (!identity) {
+      if (!identity || !isPubkey(identity.contactPubHex)) {
         setStatus(t("chatMissingContactNpub"));
         return;
       }
-      const { contactPubHex, myPubHex, privBytes } = identity;
+      const { contactPubHex, myPubHex } = identity;
+      const content = decodeMessageText(text);
+      if (Either.isLeft(content)) {
+        throw new Error("invalid message text");
+      }
 
-      const clientId = makeLocalId();
-      const baseEvent = {
-        created_at: Math.ceil(Date.now() / 1e3),
-        kind: 14,
-        pubkey: myPubHex,
-        tags: [
-          ["p", contactPubHex],
-          ["p", myPubHex],
-          ["edited_from", editedFromId],
-          ["client", clientId],
-        ],
-        content: text,
-      } satisfies UnsignedEvent;
+      const clientId = ClientId.make(makeLocalId());
+      const editedAtSec = Math.ceil(Date.now() / 1e3);
 
       updateLocalNostrMessage(String(editContext.messageId ?? ""), {
         content: text,
@@ -111,7 +109,7 @@ export const useEditChatMessage = <
         clientId,
         rumorId: editedFromId,
         isEdited: true,
-        editedAtSec: baseEvent.created_at,
+        editedAtSec,
         editedFromId,
         originalContent: String(editContext.originalContent ?? "").trim()
           ? editContext.originalContent
@@ -127,33 +125,23 @@ export const useEditChatMessage = <
         return;
       }
 
-      const wrapForMe = wrapEventWithoutPushMarker(
-        baseEvent,
-        privBytes,
-        myPubHex,
-      );
-      const wrapForContact = wrapEventWithoutPushMarker(
-        baseEvent,
-        privBytes,
-        contactPubHex,
+      const exit = await editMessage(
+        new EditMessageDraft({
+          to: contactPubHex,
+          editOf: editedFromId,
+          content: content.right,
+          clientId,
+        }),
       );
 
-      const pool = await getSharedAppNostrPool();
-      const publishOutcome = await publishWrappedWithRetry(
-        pool,
-        NOSTR_RELAYS,
-        wrapForMe,
-        wrapForContact,
-      );
-
-      if (!publishOutcome.anySuccess) {
+      if (Exit.isFailure(exit)) {
         setStatus(t("chatQueued"));
         return;
       }
 
       updateLocalNostrMessage(String(editContext.messageId ?? ""), {
         status: "sent",
-        wrapId: String(wrapForMe.id ?? ""),
+        wrapId: exit.value.selfCopy.wrapId,
         pubkey: myPubHex,
         rumorId: editedFromId,
       });
@@ -167,7 +155,7 @@ export const useEditChatMessage = <
     chatSendIsBusy,
     currentNsec,
     editContext,
-    publishWrappedWithRetry,
+    editMessage,
     route.kind,
     selectedContact,
     setChatDraft,

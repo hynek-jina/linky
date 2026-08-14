@@ -1,28 +1,39 @@
-import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import {
+  ClientId,
+  ImageMessageDraft,
+  MessageText,
+  PrivateImage,
+  Pubkey,
+  RumorId,
+  TextMessageDraft,
+} from "@linky/linkstr";
+import {
+  sendChatImageAtom,
+  sendChatTextAtom,
+  useAtomSet,
+} from "@linky/linkstr-react";
+import { Cause, Either, Exit, Option, Schema } from "effect";
 import React from "react";
-import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { makeLocalId } from "../../../utils/validation";
-import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import {
-  buildPrivateImageEventTags,
   createPrivateImageSendPayload,
   parsePrivateImageMessage,
   privateImageUploadDebugPayload,
 } from "../../lib/privateImageMessage";
-import {
-  wrapEventWithPushMarker,
-  wrapEventWithoutPushMarker,
-} from "../../lib/pushWrappedEvent";
 import type {
   ContactIdentityRowLike,
   NewLocalNostrMessage,
-  PublishWrappedResult,
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
 import { resolveNostrChatIdentity } from "./contactIdentity";
 
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
+
+const isPubkey = Schema.is(Pubkey);
+const isRumorId = Schema.is(RumorId);
+const decodeMessageText = Schema.decodeUnknownEither(MessageText);
+const decodePrivateImage = Schema.decodeUnknownEither(PrivateImage);
 
 export interface ReplyContext {
   rootMessageId: string | null;
@@ -46,12 +57,6 @@ interface UseSendChatMessageParams<
   chatDraft: string;
   chatSendIsBusy: boolean;
   currentNsec: string | null;
-  publishWrappedWithRetry: (
-    pool: AppNostrPool,
-    relays: string[],
-    wrapForMe: NostrToolsEvent,
-    wrapForContact: NostrToolsEvent,
-  ) => Promise<PublishWrappedResult>;
   route: TRoute;
   replyContext: ReplyContext | null;
   replyContextRef: React.MutableRefObject<ReplyContext | null>;
@@ -74,7 +79,6 @@ export const useSendChatMessage = <
   chatDraft,
   chatSendIsBusy,
   currentNsec,
-  publishWrappedWithRetry,
   route,
   replyContext,
   replyContextRef,
@@ -87,6 +91,13 @@ export const useSendChatMessage = <
   triggerChatScrollToBottom,
   updateLocalNostrMessage,
 }: UseSendChatMessageParams<TRoute, TContact>) => {
+  const sendTextMessage = useAtomSet(sendChatTextAtom, {
+    mode: "promiseExit",
+  });
+  const sendImageMessage = useAtomSet(sendChatImageAtom, {
+    mode: "promiseExit",
+  });
+
   return React.useCallback(
     async (options?: SendChatMessageOptions) => {
       if (
@@ -112,18 +123,17 @@ export const useSendChatMessage = <
       let activeClientId: string | null = null;
 
       try {
-        const { getEventHash } = await import("nostr-tools");
         const identity = await resolveNostrChatIdentity(
           currentNsec,
           selectedContact,
         );
-        if (!identity) {
+        if (!identity || !isPubkey(identity.contactPubHex)) {
           setStatus(t("chatMissingContactNpub"));
           return;
         }
         const { contactPubHex, myPubHex, privBytes } = identity;
 
-        const clientId = makeLocalId();
+        const clientId = ClientId.make(makeLocalId());
         activeClientId = clientId;
         activePublishClientIdsRef.current.add(clientId);
         const imagePayload = imageFile
@@ -142,6 +152,13 @@ export const useSendChatMessage = <
         const activeReplyToId = String(
           activeReplyContext?.replyToId ?? "",
         ).trim();
+        const replyTo = isRumorId(activeReplyToId)
+          ? activeReplyToId
+          : undefined;
+        const rootId =
+          String(activeReplyContext?.rootMessageId ?? "").trim() || replyTo;
+        const root =
+          replyTo !== undefined && isRumorId(rootId) ? rootId : undefined;
         const clearReplyContextIfCurrent = () => {
           if (!activeReplyToId) return;
           setReplyContext((previous) => {
@@ -149,41 +166,43 @@ export const useSendChatMessage = <
             return previousReplyToId === activeReplyToId ? null : previous;
           });
         };
-        const tags: string[][] = [
-          ["p", contactPubHex],
-          ["p", myPubHex],
-          ["client", clientId],
-        ];
-        if (mediaInfo) {
-          tags.push(...buildPrivateImageEventTags(mediaInfo));
-        }
+        const createdAtSec = Math.ceil(Date.now() / 1e3);
 
-        if (activeReplyContext?.replyToId) {
-          const rootId =
-            String(activeReplyContext.rootMessageId ?? "").trim() ||
-            String(activeReplyContext.replyToId ?? "").trim();
-          const replyId = String(activeReplyContext.replyToId ?? "").trim();
-          if (rootId) tags.push(["e", rootId, "", "root"]);
-          if (replyId) tags.push(["e", replyId, "", "reply"]);
+        let draft: TextMessageDraft | ImageMessageDraft;
+        if (imageFile) {
+          const image = decodePrivateImage(mediaInfo);
+          if (Either.isLeft(image)) {
+            throw new Error("invalid private image");
+          }
+          draft = new ImageMessageDraft({
+            to: contactPubHex,
+            image: image.right,
+            clientId,
+            ...(replyTo === undefined ? {} : { replyTo }),
+            ...(root === undefined ? {} : { root }),
+          });
+        } else {
+          const content = decodeMessageText(text);
+          if (Either.isLeft(content)) {
+            throw new Error("invalid message text");
+          }
+          draft = new TextMessageDraft({
+            to: contactPubHex,
+            content: content.right,
+            clientId,
+            ...(replyTo === undefined ? {} : { replyTo }),
+            ...(root === undefined ? {} : { root }),
+          });
         }
-
-        const baseEvent = {
-          created_at: Math.ceil(Date.now() / 1e3),
-          kind: mediaInfo ? 15 : 14,
-          pubkey: myPubHex,
-          tags,
-          content: mediaInfo ? mediaInfo.url : text,
-        } satisfies UnsignedEvent;
-        const rumorId = getEventHash(baseEvent);
 
         const pendingId = appendLocalNostrMessage({
           contactId: String(selectedContact.id),
           direction: "out",
           content: messageContent,
           wrapId: `pending:${clientId}`,
-          rumorId,
+          rumorId: null,
           pubkey: myPubHex,
-          createdAtSec: baseEvent.created_at,
+          createdAtSec,
           status: "pending",
           clientId,
           ...(activeReplyContext?.replyToId
@@ -209,54 +228,34 @@ export const useSendChatMessage = <
           return;
         }
 
-        const wrapForMe = wrapEventWithoutPushMarker(
-          baseEvent,
-          privBytes,
-          myPubHex,
-        );
-        const wrapForContact = wrapEventWithPushMarker(
-          baseEvent,
-          privBytes,
-          contactPubHex,
-        );
-
-        void appendPushDebugLog("client", "chat send wraps created", {
+        void appendPushDebugLog("client", "chat send draft created", {
           clientId,
           contactPubHex,
           media: mediaInfo ? privateImageUploadDebugPayload(mediaInfo) : null,
           myPubHex,
           replyToId: activeReplyToId || null,
-          rumorId,
-          wrapForContactId: String(wrapForContact.id ?? "").trim() || null,
-          wrapForContactPtags: wrapForContact.tags
-            .filter((tag) => Array.isArray(tag) && tag[0] === "p")
-            .map((tag) => String(tag[1] ?? "").trim())
-            .filter(Boolean),
-          wrapForMeId: String(wrapForMe.id ?? "").trim() || null,
-          wrapForMePtags: wrapForMe.tags
-            .filter((tag) => Array.isArray(tag) && tag[0] === "p")
-            .map((tag) => String(tag[1] ?? "").trim())
-            .filter(Boolean),
         });
 
-        const pool = await getSharedAppNostrPool();
-        const publishOutcome = await publishWrappedWithRetry(
-          pool,
-          NOSTR_RELAYS,
-          wrapForMe,
-          wrapForContact,
-        );
+        const exit =
+          draft instanceof ImageMessageDraft
+            ? await sendImageMessage(draft)
+            : await sendTextMessage(draft);
+        const failure = Exit.isFailure(exit)
+          ? Cause.failureOption(exit.cause)
+          : Option.none();
 
         void appendPushDebugLog("client", "chat send publish outcome", {
-          anySuccess: publishOutcome.anySuccess,
           clientId,
-          error: publishOutcome.error,
-          rumorId,
-          wrapForContactId: String(wrapForContact.id ?? "").trim() || null,
-          wrapForMeId: String(wrapForMe.id ?? "").trim() || null,
+          failureTag: Option.isSome(failure) ? failure.value._tag : null,
+          messageId: Exit.isSuccess(exit) ? exit.value.messageId : null,
+          recipientWrapId: Exit.isSuccess(exit)
+            ? exit.value.recipientCopy.wrapId
+            : null,
+          selfWrapId: Exit.isSuccess(exit) ? exit.value.selfCopy.wrapId : null,
+          success: Exit.isSuccess(exit),
         });
 
-        if (!publishOutcome.anySuccess) {
+        if (Exit.isFailure(exit)) {
           setStatus(t("chatQueued"));
           return;
         }
@@ -264,9 +263,9 @@ export const useSendChatMessage = <
         if (pendingId) {
           updateLocalNostrMessage(pendingId, {
             status: "sent",
-            wrapId: String(wrapForMe.id ?? ""),
+            wrapId: exit.value.selfCopy.wrapId,
             pubkey: myPubHex,
-            rumorId,
+            rumorId: exit.value.messageId,
           });
         }
       } catch (e) {
@@ -284,11 +283,12 @@ export const useSendChatMessage = <
       chatDraft,
       chatSendIsBusy,
       currentNsec,
-      publishWrappedWithRetry,
       replyContext,
       replyContextRef,
       route.kind,
       selectedContact,
+      sendImageMessage,
+      sendTextMessage,
       setReplyContext,
       setChatDraft,
       setChatSendIsBusy,

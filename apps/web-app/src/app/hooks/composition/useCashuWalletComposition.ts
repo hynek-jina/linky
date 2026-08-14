@@ -1,7 +1,20 @@
 import type { Proof } from "@cashu/cashu-ts";
 import * as Evolu from "@evolu/common";
 import { useQuery } from "@evolu/react";
-import { nip19, type UnsignedEvent } from "nostr-tools";
+import {
+  CashuTokenText,
+  ClientId,
+  PaymentNoticeDraft,
+  Pubkey,
+  TokenMessageDraft,
+} from "@linky/linkstr";
+import {
+  sendChatTokenAtom,
+  sendPaymentNoticeAtom,
+  useAtomSet,
+} from "@linky/linkstr-react";
+import { Cause, Either, Exit, Option, Schema } from "effect";
+import { nip19 } from "nostr-tools";
 import React, { useMemo, useState } from "react";
 import { createSendTokenWithTokensAtMint } from "../../../cashuSend";
 import { deriveDefaultProfile } from "../../../derivedProfile";
@@ -111,7 +124,6 @@ import {
   isCashuTokenIssuedState,
   isCashuTokenReservedState,
 } from "../../lib/cashuTokenState";
-import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import {
   buildPaymentAmountAttempts,
   buildPaymentFailureAmountAttempts,
@@ -131,11 +143,7 @@ import {
   parseCashuPaymentRequestMessage,
   type CashuPaymentRequestMessageInfo,
 } from "../../lib/paymentRequestMessage";
-import {
-  LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER,
-  wrapEventWithoutPushMarker,
-  wrapEventWithPushMarker,
-} from "../../lib/pushWrappedEvent";
+import { LINKY_PAYMENT_NOTICE_CONTEXT_BANK_PAYMENT_OFFER } from "../../lib/pushWrappedEvent";
 import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "../../lib/tokenMessageInfo";
 import {
   enrichCashuTokenRow,
@@ -167,6 +175,9 @@ import { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
 import { useProfileComposition } from "./useProfileComposition";
 
 type LoadedCashuWallet = Awaited<ReturnType<typeof createLoadedCashuWallet>>;
+
+const isPubkey = Schema.is(Pubkey);
+const decodeCashuTokenText = Schema.decodeUnknownEither(CashuTokenText);
 
 type CashuProofPayload = Record<string, unknown> & {
   C: string;
@@ -230,7 +241,6 @@ interface UseCashuWalletCompositionParams {
     | "nostrPictureByNpub"
     | "openScannedContactPendingNpubRef"
     | "pendingPayments"
-    | "publishWrappedWithRetry"
     | "removePendingPayment"
     | "respondToBankPaymentOfferWithGroupState"
     | "selectedChatContact"
@@ -323,6 +333,12 @@ export const useCashuWalletComposition = ({
   update,
   upsert,
 }: UseCashuWalletCompositionParams) => {
+  const sendTokenMessage = useAtomSet(sendChatTokenAtom, {
+    mode: "promiseExit",
+  });
+  const sendPaymentNotice = useAtomSet(sendPaymentNoticeAtom, {
+    mode: "promiseExit",
+  });
   const {
     appOwnerId,
     appOwnerIdRef,
@@ -351,7 +367,6 @@ export const useCashuWalletComposition = ({
     nostrPictureByNpub,
     openScannedContactPendingNpubRef,
     pendingPayments,
-    publishWrappedWithRetry,
     removePendingPayment,
     respondToBankPaymentOfferWithGroupState,
     selectedChatContact,
@@ -3003,7 +3018,7 @@ export const useCashuWalletComposition = ({
         }
       }
 
-      if (!contactPubHex) {
+      if (!contactPubHex || !isPubkey(contactPubHex)) {
         setStatus(t("chatMissingContactNpub"));
         return;
       }
@@ -3015,7 +3030,7 @@ export const useCashuWalletComposition = ({
       const logIssuedTokenSendTransaction = (phase: "complete" | "publish") => {
         logPaymentEvent({
           amount: tokenMeta?.amount ?? null,
-          contactId: contact.id as ContactId,
+          contactId,
           details: {
             usedInputTokens: [tokenText],
           },
@@ -3034,7 +3049,7 @@ export const useCashuWalletComposition = ({
       let activeClientId: string | null = null;
 
       try {
-        const { getEventHash, getPublicKey } = await import("nostr-tools");
+        const { getPublicKey } = await import("nostr-tools");
 
         const decodedMe = nip19.decode(currentNsec);
         if (
@@ -3044,33 +3059,22 @@ export const useCashuWalletComposition = ({
           throw new Error("invalid nsec");
         }
 
-        const privBytes = decodedMe.data;
-        const myPubHex = getPublicKey(privBytes);
-        const clientId = makeLocalId();
+        const myPubHex = getPublicKey(decodedMe.data);
+        const token = decodeCashuTokenText(tokenText);
+        if (Either.isLeft(token)) {
+          throw new Error("invalid cashu token");
+        }
+        const clientId = ClientId.make(makeLocalId());
         activeClientId = clientId;
         activeNostrMessagePublishClientIdsRef.current.add(clientId);
-
-        const baseEvent = {
-          created_at: Math.ceil(Date.now() / 1e3),
-          kind: 14,
-          pubkey: myPubHex,
-          tags: [
-            ["p", contactPubHex],
-            ["p", myPubHex],
-            ["client", clientId],
-          ],
-          content: tokenText,
-        } satisfies UnsignedEvent;
-
-        const rumorId = getEventHash(baseEvent);
         const pendingId = appendLocalNostrMessage({
           contactId,
           direction: "out",
           content: tokenText,
           wrapId: `pending:${clientId}`,
-          rumorId,
+          rumorId: null,
           pubkey: myPubHex,
-          createdAtSec: baseEvent.created_at,
+          createdAtSec: Math.ceil(Date.now() / 1e3),
           status: "pending",
           clientId,
         });
@@ -3090,26 +3094,15 @@ export const useCashuWalletComposition = ({
           return;
         }
 
-        const wrapForMe = wrapEventWithoutPushMarker(
-          baseEvent,
-          privBytes,
-          myPubHex,
-        );
-        const wrapForContact = wrapEventWithPushMarker(
-          baseEvent,
-          privBytes,
-          contactPubHex,
+        const exit = await sendTokenMessage(
+          new TokenMessageDraft({
+            to: contactPubHex,
+            token: token.right,
+            clientId,
+          }),
         );
 
-        const pool = await getSharedAppNostrPool();
-        const publishOutcome = await publishWrappedWithRetry(
-          pool,
-          NOSTR_RELAYS,
-          wrapForMe,
-          wrapForContact,
-        );
-
-        if (!publishOutcome.anySuccess) {
+        if (Exit.isFailure(exit)) {
           logIssuedTokenSendTransaction("publish");
           setStatus(t("chatQueued"));
           return;
@@ -3118,9 +3111,37 @@ export const useCashuWalletComposition = ({
         if (pendingId) {
           updateLocalNostrMessage(pendingId, {
             status: "sent",
-            wrapId: String(wrapForMe.id ?? ""),
+            wrapId: exit.value.selfCopy.wrapId,
             pubkey: myPubHex,
-            rumorId,
+            rumorId: exit.value.messageId,
+          });
+        }
+
+        const noticeClientId = ClientId.make(makeLocalId());
+        try {
+          const noticeExit = await sendPaymentNotice(
+            new PaymentNoticeDraft({
+              to: contactPubHex,
+              clientId: noticeClientId,
+            }),
+          );
+          const failure = Exit.isFailure(noticeExit)
+            ? Cause.failureOption(noticeExit.cause)
+            : Option.none();
+          logPayStep("payment-notice-publish", {
+            anySuccess: Exit.isSuccess(noticeExit),
+            clientId: noticeClientId,
+            error: Option.isSome(failure) ? failure.value._tag : null,
+            wrapId: Exit.isSuccess(noticeExit)
+              ? noticeExit.value.recipientCopy.wrapId
+              : null,
+          });
+        } catch (error) {
+          logPayStep("payment-notice-publish", {
+            anySuccess: false,
+            clientId: noticeClientId,
+            error: getUnknownErrorMessage(error, "publish failed"),
+            wrapId: null,
           });
         }
 
@@ -3140,7 +3161,8 @@ export const useCashuWalletComposition = ({
       currentNsec,
       logPaymentEvent,
       deleteCashuToken,
-      publishWrappedWithRetry,
+      sendPaymentNotice,
+      sendTokenMessage,
       setStatus,
       t,
       updateLocalNostrMessage,
