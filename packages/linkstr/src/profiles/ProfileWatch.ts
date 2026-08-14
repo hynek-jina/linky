@@ -5,6 +5,7 @@ import { NoReadRelaysConfigured } from "../domain/errors";
 import type { Pubkey, RelayUrl } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { ProfileWatchRouted } from "../inspector/events";
+import { chunkAuthors } from "../internal/authorChunks";
 import type { SignedPlainEvent } from "../internal/nostrEvent";
 import { firstTagValue } from "../internal/nostrEvent";
 import { decodeVerifiedPlainEvent } from "../internal/plainEvent";
@@ -28,12 +29,14 @@ export interface ProfileWatchOptions {
 const DEFAULT_RESUBSCRIBE_DELAY = Duration.seconds(5);
 
 /**
- * Long-lived profile subscription: one `{ kinds: [0, 30315], authors }` filter
- * per read relay for a fixed pubkey set. Newest-wins per (pubkey, kind) —
- * in-session only, so a lagging relay can never downgrade what a faster one
- * already delivered; kind 30315 tracks the `d=general` slot only. `watch` is a
- * scoped resource; watching a different set means closing the scope and
- * calling it again (the react boundary does exactly that).
+ * Long-lived profile subscription: `{ kinds: [0, 30315], authors }` filters
+ * on every read relay for a fixed pubkey set, authors split at
+ * `AUTHOR_FILTER_LIMIT` so no filter exceeds what relays accept. Newest-wins
+ * per (pubkey, kind) — in-session only, so a lagging relay can never
+ * downgrade what a faster one already delivered; kind 30315 tracks the
+ * `d=general` slot only. `watch` is a scoped resource; watching a different
+ * set means closing the scope and calling it again (the react boundary does
+ * exactly that).
  */
 export class ProfileWatch extends Effect.Service<ProfileWatch>()(
   "linkstr/ProfileWatch",
@@ -59,16 +62,18 @@ export class ProfileWatch extends Effect.Service<ProfileWatch>()(
             options?.resubscribeDelay ?? DEFAULT_RESUBSCRIBE_DELAY;
 
           const watched = new Set<string>(pubkeys);
-          const filter: Filter = {
-            kinds: [PROFILE_KIND, STATUS_KIND],
-            authors: [...pubkeys],
-          };
+          const filters: Array<Filter> = chunkAuthors([...watched]).map(
+            (authors) => ({
+              kinds: [PROFILE_KIND, STATUS_KIND],
+              authors,
+            }),
+          );
           const rawEvents = yield* Effect.acquireRelease(
             Queue.unbounded<unknown>(),
             Queue.shutdown,
           );
 
-          const keepSubscribed = (relay: RelayUrl) =>
+          const keepSubscribed = (relay: RelayUrl, filter: Filter) =>
             transport
               .subscribe(relay, filter, (event) => {
                 Queue.unsafeOffer(rawEvents, event);
@@ -79,7 +84,9 @@ export class ProfileWatch extends Effect.Service<ProfileWatch>()(
                 Effect.forever,
               );
           yield* Effect.forEach(relays, (relay) =>
-            Effect.forkScoped(keepSubscribed(relay)),
+            Effect.forEach(filters, (filter) =>
+              Effect.forkScoped(keepSubscribed(relay, filter)),
+            ),
           );
 
           const newestSeen = new Map<string, number>();

@@ -9,6 +9,7 @@ import {
 } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import type { InspectorEvent } from "../inspector/events";
+import { AUTHOR_FILTER_LIMIT } from "../internal/authorChunks";
 import { NostrTransport } from "../services/NostrTransport";
 import type { NostrTransportService } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
@@ -109,7 +110,9 @@ const withWatch = <A>(
     yield* Effect.forkScoped(
       Stream.runForEach(stream, (fact) => Effect.sync(() => facts.push(fact))),
     );
-    yield* eventually(() => subscriptions.length === 2);
+    const expectedSubscriptions =
+      Math.ceil(new Set(pubkeys).size / AUTHOR_FILTER_LIMIT) * 2;
+    yield* eventually(() => subscriptions.length === expectedSubscriptions);
     return yield* body({ subscriptions, facts, inspected });
   }).pipe(
     Effect.scoped,
@@ -194,6 +197,43 @@ describe("ProfileWatch", () => {
         ).toHaveLength(2);
       }),
     ));
+
+  it("splits a large pubkey set into filter chunks on every relay", () => {
+    const extras = Array.from({ length: AUTHOR_FILTER_LIMIT }, makeIdentity);
+    const overflow = extras[extras.length - 1];
+    if (overflow === undefined) throw new Error("no extras generated");
+
+    return withWatch(
+      [alice.pubkey, ...extras.map((identity) => identity.pubkey)],
+      ({ facts, subscriptions }) =>
+        Effect.gen(function* () {
+          expect(subscriptions).toHaveLength(4);
+          for (const relay of [relayA, relayB]) {
+            const authorCounts = subscriptions
+              .filter((subscription) => subscription.relay === relay)
+              .map((subscription) => subscription.filter.authors?.length ?? 0)
+              .sort((a, b) => a - b);
+            expect(authorCounts).toEqual([1, AUTHOR_FILTER_LIMIT]);
+          }
+
+          // An author from the overflow chunk still routes to a fact.
+          const overflowSubscription = subscriptions.find((subscription) =>
+            subscription.filter.authors?.includes(overflow.pubkey),
+          );
+          expect(overflowSubscription).toBeDefined();
+          overflowSubscription?.onEvent(
+            profileEvent(overflow, JSON.stringify({ name: "overflow" }), base),
+          );
+          yield* eventually(() => facts.length === 1);
+          expect(facts[0]).toEqual(
+            expect.objectContaining({
+              _tag: "ProfileUpdated",
+              pubkey: overflow.pubkey,
+            }),
+          );
+        }),
+    );
+  });
 
   it("drops malformed kind-0 content without ending the stream", () =>
     withWatch([alice.pubkey], ({ facts, inspected, subscriptions }) =>
