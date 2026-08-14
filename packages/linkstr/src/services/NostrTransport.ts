@@ -34,7 +34,11 @@ export class RelayUnreachable extends Schema.TaggedError<RelayUnreachable>()(
  * EOSE (or a bounded timeout, returning what arrived), then close.
  */
 export interface SubscribeOptions {
-  /** Invoked when the relay signals end-of-stored-events for the subscription. */
+  /**
+   * Invoked when the relay signals end-of-stored-events for the subscription.
+   * nostr-tools synthesizes EOSE after its eose timeout (~4.4s default) when
+   * a relay never sends one, so with the pool transport this always fires.
+   */
   readonly onEose?: () => void;
 }
 

@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { WrapDelivery } from "../domain/delivery";
+import { InboxDelivery } from "../inbox/events";
 import {
   ClientId,
   EventId,
@@ -131,6 +132,7 @@ export class InboxRouted extends Schema.TaggedClass<InboxRouted>()(
   {
     wrapId: Schema.NullOr(WrapId),
     rumorKind: Schema.NullOr(Schema.Int),
+    delivery: InboxDelivery,
     event: Schema.Unknown,
   },
 ) {}

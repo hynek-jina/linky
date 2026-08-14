@@ -31,7 +31,11 @@ import type {
 } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
 import { NIP59_BACKDATE_MARGIN_SECONDS, WrapInbox } from "./WrapInbox";
-import type { WrapInboxEvent, WrapInboxFeed } from "./WrapInbox";
+import type {
+  DeliveredInboxEvent,
+  WrapInboxEvent,
+  WrapInboxFeed,
+} from "./WrapInbox";
 
 const makeIdentity = (): LinkstrIdentityService => {
   const secretKey = NostrSecretKey.make(generateSecretKey());
@@ -148,6 +152,12 @@ class FakeRelay {
     }
   }
 
+  eose(): void {
+    for (const subscription of this.subs) {
+      if (!subscription.closed) subscription.params.oneose?.();
+    }
+  }
+
   closeFromRelay(reason: string): void {
     for (const subscription of this.subs) {
       if (!subscription.closed) {
@@ -201,8 +211,12 @@ const eventually = (predicate: () => boolean): Effect.Effect<void, Error> => {
 
 interface Harness {
   readonly feed: WrapInboxFeed;
-  readonly collected: Array<WrapInboxEvent>;
+  readonly collected: Array<DeliveredInboxEvent>;
 }
+
+const eventsOf = (
+  collected: ReadonlyArray<DeliveredInboxEvent>,
+): Array<WrapInboxEvent> => collected.map((delivered) => delivered.event);
 
 const runOpen = <A, E>(
   fakes: Array<[RelayUrl, FakeRelay]>,
@@ -215,7 +229,7 @@ const runOpen = <A, E>(
       resubscribeDelay: Duration.millis(10),
       ...options,
     });
-    const collected: Array<WrapInboxEvent> = [];
+    const collected: Array<DeliveredInboxEvent> = [];
     yield* Effect.forkScoped(
       Stream.runForEach(feed.events, (event) =>
         Effect.sync(() => collected.push(event)),
@@ -257,7 +271,7 @@ describe("WrapInbox", () => {
 
         fakeA.emit(wrap);
         yield* eventually(() => collected.length === 1);
-        expect(collected[0]).toEqual(
+        expect(collected[0]?.event).toEqual(
           expect.objectContaining({
             _tag: "ReactionAdded",
             from: bob.pubkey,
@@ -291,7 +305,7 @@ describe("WrapInbox", () => {
           fakeB.emit(wrap);
           fakeB.emit(laterWrap);
           yield* eventually(() => collected.length === 2);
-          expect(collected).toEqual([
+          expect(eventsOf(collected)).toEqual([
             expect.objectContaining({ _tag: "ReactionAdded", emoji: "👍" }),
             expect.objectContaining({ _tag: "ReactionAdded", emoji: "🔥" }),
           ]);
@@ -320,7 +334,7 @@ describe("WrapInbox", () => {
           sig: "x",
         });
         yield* eventually(() => collected.length === 3);
-        expect(collected).toEqual([
+        expect(eventsOf(collected)).toEqual([
           expect.objectContaining({
             _tag: "WrapDropped",
             wrapId: misaddressed.id,
@@ -362,7 +376,7 @@ describe("WrapInbox", () => {
           yield* eventually(() => collected.length === 1);
           fakeB.emit(wrap);
           yield* eventually(() => collected.length === 2);
-          expect(collected).toEqual([
+          expect(eventsOf(collected)).toEqual([
             expect.objectContaining({
               _tag: "WrapDropped",
               wrapId: wrap.id,
@@ -383,7 +397,7 @@ describe("WrapInbox", () => {
         yield* eventually(() => fakeA.subs.length === 1);
         fakeA.emit(wrap);
         yield* eventually(() => collected.length === 1);
-        expect(collected[0]).toEqual(
+        expect(collected[0]?.event).toEqual(
           expect.objectContaining({
             _tag: "ChatMessageReceived",
             from: bob.pubkey,
@@ -404,7 +418,7 @@ describe("WrapInbox", () => {
         yield* eventually(() => fakeA.subs.length === 1);
         fakeA.emit(wrap);
         yield* eventually(() => collected.length === 1);
-        expect(collected[0]).toEqual(
+        expect(collected[0]?.event).toEqual(
           expect.objectContaining({
             _tag: "PaymentNoticeReceived",
             from: bob.pubkey,
@@ -426,7 +440,7 @@ describe("WrapInbox", () => {
         yield* eventually(() => fakeA.subs.length === 1);
         fakeA.emit(wrap);
         yield* eventually(() => collected.length === 1);
-        expect(collected[0]).toEqual(
+        expect(collected[0]?.event).toEqual(
           expect.objectContaining({
             _tag: "BankOfferSnapshotReceived",
             from: bob.pubkey,
@@ -451,7 +465,7 @@ describe("WrapInbox", () => {
         yield* eventually(() => fakeA.subs.length === 1);
         fakeA.emit(wrap);
         yield* eventually(() => collected.length === 1);
-        expect(collected[0]).toEqual(
+        expect(collected[0]?.event).toEqual(
           expect.objectContaining({
             _tag: "WrapDropped",
             wrapId: wrap.id,
@@ -471,7 +485,7 @@ describe("WrapInbox", () => {
         yield* eventually(() => fakeA.subs.length === 1);
         fakeA.emit(wrap);
         yield* eventually(() => collected.length === 1);
-        expect(collected[0]).toEqual(
+        expect(collected[0]?.event).toEqual(
           expect.objectContaining({
             _tag: "BankOfferSnapshotReceived",
             from: alice.pubkey,
@@ -507,7 +521,7 @@ describe("WrapInbox", () => {
         fakeA.emit(firstWrap);
         fakeA.emit(secondWrap);
         yield* eventually(() => collected.length === 2);
-        expect(collected[1]).toEqual(
+        expect(collected[1]?.event).toEqual(
           expect.objectContaining({ _tag: "ReactionAdded", emoji: "🔥" }),
         );
       }),
@@ -522,6 +536,114 @@ describe("WrapInbox", () => {
       eventually(() => fakeA.connectAttempts >= 2),
     );
     expect(fakeA.subs).toHaveLength(0);
+  });
+
+  it("tags wraps backfill before EOSE and live after", async () => {
+    const fakeA = new FakeRelay();
+    const storedWrap = reactionWrap("👍");
+    const liveWrap = reactionWrap("🔥");
+
+    await runOpen([[relayA, fakeA]], {}, ({ collected }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        fakeA.emit(storedWrap);
+        fakeA.eose();
+        fakeA.emit(liveWrap);
+        yield* eventually(() => collected.length === 2);
+        expect(collected).toEqual([
+          expect.objectContaining({
+            delivery: "backfill",
+            event: expect.objectContaining({ emoji: "👍" }),
+          }),
+          expect.objectContaining({
+            delivery: "live",
+            event: expect.objectContaining({ emoji: "🔥" }),
+          }),
+        ]);
+      }),
+    );
+  });
+
+  it("returns to the backfill phase on every resubscription", async () => {
+    const fakeA = new FakeRelay();
+    const firstWrap = reactionWrap("👍");
+    const secondWrap = reactionWrap("🔥");
+
+    await runOpen([[relayA, fakeA]], {}, ({ collected }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        fakeA.eose();
+        fakeA.emit(firstWrap);
+        yield* eventually(() => collected.length === 1);
+        expect(collected[0]?.delivery).toBe("live");
+
+        // The reconnected relay replays its stored window: backfill again.
+        fakeA.closeFromRelay("connection reset");
+        yield* eventually(() => fakeA.subs.length === 2);
+        fakeA.emit(secondWrap);
+        yield* eventually(() => collected.length === 2);
+        expect(collected[1]?.delivery).toBe("backfill");
+      }),
+    );
+  });
+
+  it("keeps the first arrival's phase for a wrap duplicated across relays", async () => {
+    const fakeA = new FakeRelay();
+    const fakeB = new FakeRelay();
+    const wrap = reactionWrap("👍");
+    const chaser = reactionWrap("🔥");
+
+    await runOpen(
+      [
+        [relayA, fakeA],
+        [relayB, fakeB],
+      ],
+      {},
+      ({ collected }) =>
+        Effect.gen(function* () {
+          yield* eventually(
+            () => fakeA.subs.length === 1 && fakeB.subs.length === 1,
+          );
+          fakeA.eose();
+          fakeB.emit(wrap);
+          yield* eventually(() => collected.length === 1);
+          fakeA.emit(wrap);
+          fakeA.emit(chaser);
+          yield* eventually(() => collected.length === 2);
+          expect(collected).toEqual([
+            expect.objectContaining({
+              delivery: "backfill",
+              event: expect.objectContaining({ emoji: "👍" }),
+            }),
+            expect.objectContaining({
+              delivery: "live",
+              event: expect.objectContaining({ emoji: "🔥" }),
+            }),
+          ]);
+        }),
+    );
+  });
+
+  // Conservative failure mode: a mis-tagged backfill only costs a missed
+  // interruption, never a spurious one. The pool transport bounds this by
+  // synthesizing EOSE after nostr-tools' eose timeout.
+  it("keeps tagging backfill when a relay never sends EOSE", async () => {
+    const fakeA = new FakeRelay();
+    const firstWrap = reactionWrap("👍");
+    const secondWrap = reactionWrap("🔥");
+
+    await runOpen([[relayA, fakeA]], {}, ({ collected }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        fakeA.emit(firstWrap);
+        fakeA.emit(secondWrap);
+        yield* eventually(() => collected.length === 2);
+        expect(collected.map((delivered) => delivered.delivery)).toEqual([
+          "backfill",
+          "backfill",
+        ]);
+      }),
+    );
   });
 
   it("closes relay subscriptions and ends the stream when the scope closes", async () => {

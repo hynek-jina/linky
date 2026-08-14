@@ -42,6 +42,7 @@ import { NostrTransport } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
 import { authenticateWrap } from "./authenticateWrap";
 import { WrapDropped } from "./events";
+import type { InboxDelivery } from "./events";
 
 export type WrapInboxEvent =
   | BankOfferInboxEvent
@@ -49,6 +50,17 @@ export type WrapInboxEvent =
   | ChatInboxEvent
   | PaymentNoticeInboxEvent
   | WrapDropped;
+
+/**
+ * Stream element of `WrapInboxFeed`: the routed inbox fact plus the receive
+ * phase captured when the wrap first arrived — the first relay to deliver a
+ * wrap decides its phase, cross-relay duplicates are dropped either way. The
+ * codecs stay delivery-agnostic; only the inbox machine knows the boundary.
+ */
+export interface DeliveredInboxEvent {
+  readonly delivery: InboxDelivery;
+  readonly event: WrapInboxEvent;
+}
 
 export interface WrapInboxOptions {
   /** Cursor persisted by the caller from a previous session's `cursor`. */
@@ -58,13 +70,18 @@ export interface WrapInboxOptions {
 
 export interface WrapInboxFeed {
   /** Single-consumer: fan out downstream if multiple listeners are needed. */
-  readonly events: Stream.Stream<WrapInboxEvent>;
+  readonly events: Stream.Stream<DeliveredInboxEvent>;
   /**
    * Latest authenticated wrap timestamp delivered through `events`. Persist it
    * after handling the delivered events and pass it back as `since` on the
    * next session; the machine widens it by the NIP-59 backdate margin itself.
    */
   readonly cursor: Effect.Effect<UnixSeconds | null>;
+}
+
+interface RawArrival {
+  readonly delivery: InboxDelivery;
+  readonly raw: unknown;
 }
 
 const GIFT_WRAP_KIND = 1059;
@@ -173,7 +190,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
             options?.since ?? null,
           );
           const rawWraps = yield* Effect.acquireRelease(
-            Queue.unbounded<unknown>(),
+            Queue.unbounded<RawArrival>(),
             Queue.shutdown,
           );
           const seenWrapIds = makeSeenWrapIds();
@@ -188,12 +205,28 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
                 }),
           });
 
+          // The phase is scoped to one subscription attempt: after a
+          // reconnect the relay replays its stored window, which is backfill
+          // again until its next EOSE.
           const subscribeFromCursor = (relay: RelayUrl) =>
             Effect.gen(function* () {
               const filter = filterFrom(yield* Ref.get(cursor));
-              yield* transport.subscribe(relay, filter, (event) => {
-                Queue.unsafeOffer(rawWraps, event);
-              });
+              let eoseSeen = false;
+              yield* transport.subscribe(
+                relay,
+                filter,
+                (event) => {
+                  Queue.unsafeOffer(rawWraps, {
+                    delivery: eoseSeen ? "live" : "backfill",
+                    raw: event,
+                  });
+                },
+                {
+                  onEose: () => {
+                    eoseSeen = true;
+                  },
+                },
+              );
             });
 
           const keepSubscribed = (relay: RelayUrl) =>
@@ -221,15 +254,16 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
               );
             });
 
-          const processRaw = (
-            raw: unknown,
-          ): Effect.Effect<Option.Option<WrapInboxEvent>> =>
+          const processRaw = ({
+            delivery,
+            raw,
+          }: RawArrival): Effect.Effect<Option.Option<DeliveredInboxEvent>> =>
             Effect.suspend(() => {
               const wrapId = wrapIdOf(raw);
               if (wrapId !== null && seenWrapIds.has(wrapId)) {
                 return Effect.sync(() => {
                   inspector.emit(new InboxWrapDeduped({ wrapId }));
-                  return Option.none<WrapInboxEvent>();
+                  return Option.none<DeliveredInboxEvent>();
                 });
               }
               return Either.match(authenticateWrap(raw, identity), {
@@ -239,10 +273,14 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
                       new InboxRouted({
                         wrapId: dropped.wrapId,
                         rumorKind: null,
+                        delivery,
                         event: dropped,
                       }),
                     );
-                    return Option.some<WrapInboxEvent>(dropped);
+                    return Option.some<DeliveredInboxEvent>({
+                      delivery,
+                      event: dropped,
+                    });
                   }),
                 onRight: ({ rumor, wrap }) =>
                   Effect.sync(() => seenWrapIds.add(wrap.id)).pipe(
@@ -253,10 +291,14 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
                         new InboxRouted({
                           wrapId: wrap.id,
                           rumorKind: rumor.kind,
+                          delivery,
                           event: routed,
                         }),
                       );
-                      return Option.some(routed);
+                      return Option.some<DeliveredInboxEvent>({
+                        delivery,
+                        event: routed,
+                      });
                     }),
                   ),
               });
