@@ -144,6 +144,83 @@ describe("pwaUpdate", () => {
     expect(values).toEqual([false, true]);
   });
 
+  // A pending worker that answers APP_VERSION, alongside a controller that
+  // reports enough open tabs to keep the silent auto-apply path out of the way.
+  const stubPendingWorker = (pendingVersion: string | null) => {
+    const replyWith = (message: unknown, transfer: Transferable[]) => {
+      const port = transfer[0];
+      if (port instanceof MessagePort) port.postMessage(message);
+    };
+    vi.stubGlobal("navigator", {
+      serviceWorker: {
+        controller: {
+          postMessage: (_message: unknown, transfer: Transferable[]) => {
+            replyWith({ count: 2 }, transfer);
+          },
+        },
+        getRegistration: () =>
+          Promise.resolve({
+            waiting: {
+              postMessage: (_message: unknown, transfer: Transferable[]) => {
+                // null models a worker built before the APP_VERSION handler:
+                // it never replies and the caller times out.
+                if (pendingVersion === null) return;
+                replyWith({ version: pendingVersion }, transfer);
+              },
+            },
+          }),
+      },
+    });
+  };
+
+  it("does not prompt when the pending worker is the running version", async () => {
+    vi.stubGlobal("__APP_VERSION__", "26.9.0");
+    stubPendingWorker("26.9.0");
+    const pwaUpdate = await loadPwaUpdate();
+    const values: boolean[] = [];
+    const updateSW = vi.fn(() => Promise.resolve());
+
+    pwaUpdate.subscribePwaNeedRefresh((value) => {
+      values.push(value);
+    });
+    pwaUpdate.recordPwaRegistered(updateSW);
+
+    await pwaUpdate.handlePwaUpdateAvailable();
+
+    expect(updateSW).not.toHaveBeenCalled();
+    expect(values).toEqual([false]);
+  });
+
+  it("prompts when the pending worker is a different version", async () => {
+    vi.stubGlobal("__APP_VERSION__", "26.9.0");
+    stubPendingWorker("26.9.1");
+    const pwaUpdate = await loadPwaUpdate();
+    const values: boolean[] = [];
+
+    pwaUpdate.subscribePwaNeedRefresh((value) => {
+      values.push(value);
+    });
+
+    await pwaUpdate.handlePwaUpdateAvailable();
+
+    expect(values).toEqual([false, true]);
+  });
+
+  it("prompts when the pending worker does not report a version", async () => {
+    vi.stubGlobal("__APP_VERSION__", "26.9.0");
+    stubPendingWorker(null);
+    const pwaUpdate = await loadPwaUpdate();
+    const values: boolean[] = [];
+
+    pwaUpdate.subscribePwaNeedRefresh((value) => {
+      values.push(value);
+    });
+
+    await pwaUpdate.handlePwaUpdateAvailable();
+
+    expect(values).toEqual([false, true]);
+  });
+
   it("keeps the prompt available when applying the update fails", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const pwaUpdate = await loadPwaUpdate();

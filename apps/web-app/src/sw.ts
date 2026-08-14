@@ -2,7 +2,7 @@
 /// <reference lib="dom" />
 /// <reference lib="webworker" />
 
-const SW_BUILD_TAG = "linky-sw-2026-08-05T00:00-client-count";
+const SW_BUILD_TAG = "linky-sw-2026-08-14T00:00-app-version";
 const NOTIFICATION_OPEN_URL = "/#contacts";
 const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
 
@@ -553,6 +553,12 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
           port.postMessage({ count: clientList.length });
         }),
     );
+  }
+  // A waiting worker answers this so the page can tell a real release apart
+  // from a redeploy of the same version before claiming "a new version is
+  // available" (see utils/pwaUpdate.ts).
+  if (data && typeof data === "object" && data.type === "APP_VERSION") {
+    event.ports[0]?.postMessage({ version: __APP_VERSION__ });
   }
 });
 
