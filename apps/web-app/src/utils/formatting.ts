@@ -128,6 +128,29 @@ export const formatInteger = (value: number, lang?: string): string => {
   );
 };
 
+const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+
+export const formatRelativeTime = (
+  unixSeconds: number,
+  lang?: string,
+): string => {
+  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) return "";
+  const locale = normalizeLocale(lang);
+  let formatter = relativeTimeFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    relativeTimeFormatters.set(locale, formatter);
+  }
+  const deltaSeconds = Math.round(unixSeconds - Date.now() / 1000);
+  const abs = Math.abs(deltaSeconds);
+  if (abs < 60) return formatter.format(deltaSeconds, "second");
+  if (abs < 3600)
+    return formatter.format(Math.trunc(deltaSeconds / 60), "minute");
+  if (abs < 86400)
+    return formatter.format(Math.trunc(deltaSeconds / 3600), "hour");
+  return formatter.format(Math.trunc(deltaSeconds / 86400), "day");
+};
+
 export const formatContactMessageTimestamp = (
   createdAtSec: number,
   lang?: string,

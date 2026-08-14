@@ -1,10 +1,12 @@
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useRelaySettingsContext } from "../app/context/SystemSettingsContexts";
+import { relayDotState, useRelayHealth } from "../app/hooks/useRelayHealth";
 import { NostrRelayRow } from "../components/NostrRelayRow";
 
 export function NostrRelaysPage(): React.ReactElement {
-  const { relayUrls, relayStatusByUrl } = useRelaySettingsContext();
+  const { relayUrls } = useRelaySettingsContext();
+  const relayHealth = useRelayHealth();
   const { t } = useAppShellCore();
   return (
     <section className="panel">
@@ -13,8 +15,15 @@ export function NostrRelaysPage(): React.ReactElement {
       ) : (
         <div>
           {relayUrls.map((url) => {
-            const state = relayStatusByUrl[url] ?? "checking";
-            return <NostrRelayRow key={url} url={url} state={state} />;
+            const health = relayHealth.get(url);
+            return (
+              <NostrRelayRow
+                key={url}
+                url={url}
+                state={relayDotState(health)}
+                detail={health?.state === "unreachable" ? health.detail : null}
+              />
+            );
           })}
         </div>
       )}

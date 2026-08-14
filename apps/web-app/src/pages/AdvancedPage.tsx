@@ -28,6 +28,11 @@ import {
 } from "../app/context/AppShellContexts";
 import { useAdvancedSettingsContext } from "../app/context/SystemSettingsContexts";
 import {
+  countConnectedRelays,
+  overallRelayStatus,
+  useRelayHealth,
+} from "../app/hooks/useRelayHealth";
+import {
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
 } from "../app/lib/bankPaymentOffer";
@@ -120,7 +125,6 @@ export function AdvancedPage(): React.ReactElement {
   const {
     bankPaymentOfferRecipientCount,
     cashuAutoswapEnabled,
-    connectedRelayCount,
     copyNostrKeys,
     dedupeContacts,
     dedupeContactsIsBusy,
@@ -133,7 +137,6 @@ export function AdvancedPage(): React.ReactElement {
     importDataFileInputRef,
     lightningInvoiceAutoPayLimit,
     logoutArmed,
-    nostrRelayOverallStatus,
     payWithCashuEnabled,
     pushToast,
     relayUrls,
@@ -145,6 +148,9 @@ export function AdvancedPage(): React.ReactElement {
     setCashuAutoswapEnabled,
     setPayWithCashuEnabled,
   } = useAdvancedSettingsContext();
+  const relayHealth = useRelayHealth();
+  const connectedRelayCount = countConnectedRelays(relayUrls, relayHealth);
+  const nostrRelayOverallStatus = overallRelayStatus(relayUrls, relayHealth);
   const navigateTo = useNavigation();
   const { currentNsec, formatDisplayedAmountParts, t } = useAppShellCore();
   const { openFeedbackContact } = useAppShellActions();

@@ -33,6 +33,11 @@ export class RelayUnreachable extends Schema.TaggedError<RelayUnreachable>()(
  * Fetching is the one-shot variant: collect stored events from one relay until
  * EOSE (or a bounded timeout, returning what arrived), then close.
  */
+export interface SubscribeOptions {
+  /** Invoked when the relay signals end-of-stored-events for the subscription. */
+  readonly onEose?: () => void;
+}
+
 export interface NostrTransportService {
   readonly publish: (
     relays: ReadonlyArray<RelayUrl>,
@@ -42,6 +47,7 @@ export interface NostrTransportService {
     relay: RelayUrl,
     filter: Filter,
     onEvent: (event: NostrToolsEvent) => void,
+    options?: SubscribeOptions,
   ) => Effect.Effect<string, RelayUnreachable>;
   readonly fetch: (
     relay: RelayUrl,
@@ -134,10 +140,12 @@ export const makeRelayPoolTransport = (
     relay: RelayUrl,
     filter: Filter,
     onEvent: (event: NostrToolsEvent) => void,
+    options?: SubscribeOptions,
   ): Effect.Effect<string, RelayUnreachable> =>
     Effect.async<string, RelayUnreachable>((resume) => {
       let handle: RelaySubscriptionHandle | null = null;
       let interrupted = false;
+      const onEose = options?.onEose;
       pool
         .ensureRelay(relay, { connectionTimeout: CONNECTION_TIMEOUT_MS })
         .then(
@@ -145,6 +153,7 @@ export const makeRelayPoolTransport = (
             if (interrupted) return;
             handle = connection.subscribe([filter], {
               onevent: onEvent,
+              ...(onEose === undefined ? {} : { oneose: onEose }),
               onclose: (reason) => resume(Effect.succeed(reason)),
             });
           },

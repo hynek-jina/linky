@@ -21,12 +21,9 @@ interface UseRelayDomainParams {
 
 interface UseRelayDomainResult {
   canSaveNewRelay: boolean;
-  connectedRelayCount: number;
   newRelayUrl: string;
   nostrFetchRelays: string[];
-  nostrRelayOverallStatus: "connected" | "checking" | "disconnected";
   pendingRelayDeleteUrl: string | null;
-  relayStatusByUrl: Record<string, "checking" | "connected" | "disconnected">;
   relayUrls: string[];
   requestDeleteSelectedRelay: () => void;
   saveNewRelay: () => void;
@@ -58,9 +55,6 @@ export const useRelayDomain = ({
   t,
 }: UseRelayDomainParams): UseRelayDomainResult => {
   const [newRelayUrl, setNewRelayUrl] = React.useState<string>("");
-  const [relayStatusByUrl, setRelayStatusByUrl] = React.useState<
-    Record<string, "checking" | "connected" | "disconnected">
-  >(() => ({}));
   const [relayUrls, setRelayUrls] = React.useState<string[]>(() => [
     ...NOSTR_RELAYS,
   ]);
@@ -89,112 +83,6 @@ export const useRelayDomain = ({
     }
     return out;
   }, [relayUrls]);
-
-  const checkRelayConnection = React.useCallback(
-    (url: string, timeoutMs = 2500) => {
-      return new Promise<boolean>((resolve) => {
-        let ws: WebSocket | null = null;
-        let done = false;
-
-        const finish = (ok: boolean) => {
-          if (done) return;
-          done = true;
-          try {
-            ws?.close();
-          } catch {
-            // ignore
-          }
-          resolve(ok);
-        };
-
-        try {
-          ws = new WebSocket(url);
-        } catch {
-          finish(false);
-          return;
-        }
-
-        const timer = window.setTimeout(() => finish(false), timeoutMs);
-
-        ws.addEventListener("open", () => {
-          window.clearTimeout(timer);
-          finish(true);
-        });
-
-        ws.addEventListener("error", () => {
-          window.clearTimeout(timer);
-          finish(false);
-        });
-
-        ws.addEventListener("close", () => {
-          window.clearTimeout(timer);
-          finish(false);
-        });
-      });
-    },
-    [],
-  );
-
-  React.useEffect(() => {
-    if (relayUrls.length === 0) return;
-    if (!networkEnabled) return;
-
-    let cancelled = false;
-    setRelayStatusByUrl((prev) => {
-      const next = { ...prev };
-      for (const url of relayUrls) next[url] = "checking";
-      return next;
-    });
-
-    (async () => {
-      const results = await Promise.all(
-        relayUrls.map(async (url) => {
-          const ok = await checkRelayConnection(url);
-          return [url, ok] as const;
-        }),
-      );
-
-      if (cancelled) return;
-      setRelayStatusByUrl((prev) => {
-        const next = { ...prev };
-        for (const [url, ok] of results) {
-          next[url] = ok ? "connected" : "disconnected";
-        }
-        return next;
-      });
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [checkRelayConnection, networkEnabled, relayUrls]);
-
-  const effectiveRelayStatusByUrl = React.useMemo(() => {
-    if (networkEnabled) return relayStatusByUrl;
-
-    const next = { ...relayStatusByUrl };
-    for (const url of relayUrls) {
-      next[url] = "disconnected";
-    }
-    return next;
-  }, [networkEnabled, relayStatusByUrl, relayUrls]);
-
-  const connectedRelayCount = React.useMemo(() => {
-    return relayUrls.reduce((sum, url) => {
-      return sum + (effectiveRelayStatusByUrl[url] === "connected" ? 1 : 0);
-    }, 0);
-  }, [effectiveRelayStatusByUrl, relayUrls]);
-
-  const nostrRelayOverallStatus = React.useMemo<
-    "connected" | "checking" | "disconnected"
-  >(() => {
-    if (relayUrls.length === 0) return "disconnected";
-    if (connectedRelayCount > 0) return "connected";
-    const anyChecking = relayUrls.some(
-      (url) => (effectiveRelayStatusByUrl[url] ?? "checking") === "checking",
-    );
-    return anyChecking ? "checking" : "disconnected";
-  }, [connectedRelayCount, effectiveRelayStatusByUrl, relayUrls]);
 
   const selectedRelayUrl = React.useMemo(() => {
     if (route.kind !== "nostrRelay") return null;
@@ -398,12 +286,9 @@ export const useRelayDomain = ({
 
   return {
     canSaveNewRelay,
-    connectedRelayCount,
     newRelayUrl,
     nostrFetchRelays,
-    nostrRelayOverallStatus,
     pendingRelayDeleteUrl,
-    relayStatusByUrl: effectiveRelayStatusByUrl,
     relayUrls,
     requestDeleteSelectedRelay,
     saveNewRelay,

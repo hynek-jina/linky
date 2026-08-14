@@ -16,6 +16,8 @@ export * from "./profiles/ProfileWatch";
 export * from "./reactions/domain";
 export * from "./reactions/events";
 export * from "./reactions/Reactions";
+export * from "./relayHealth/observeTransport";
+export * from "./relayHealth/RelayHealth";
 export * from "./relayLists/domain";
 export * from "./relayLists/RelayLists";
 export * from "./services/LinkstrIdentity";

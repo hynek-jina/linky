@@ -1448,6 +1448,19 @@ button.language-option.is-selected .settings-label {
   word-break: break-word;
 }
 
+.relay-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.relay-detail {
+  color: #94a3b8;
+  font-size: 12px;
+  word-break: break-word;
+}
+
 .debug-json {
   margin: 10px 0 0;
   padding: 10px 12px;

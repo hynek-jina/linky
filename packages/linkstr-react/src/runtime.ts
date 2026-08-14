@@ -5,9 +5,11 @@ import {
   LinkstrIdentity,
   MuteList,
   NostrTransportSimplePool,
+  observeTransport,
   Profiles,
   ProfileWatch,
   Reactions,
+  RelayHealth,
   RelayLists,
   RelayPolicy,
   WrapInbox,
@@ -24,7 +26,11 @@ const baseServices = (config: LinkstrConfig) =>
       readRelays: config.readRelays,
       writeRelays: config.writeRelays,
     }),
-    inspectTransport(config.transport ?? NostrTransportSimplePool),
+    // Both decorators are transparent taps over the same raw transport:
+    // health folds connection state, the inspector streams diagnostics.
+    inspectTransport(
+      observeTransport(config.transport ?? NostrTransportSimplePool),
+    ),
   );
 
 /**
@@ -53,6 +59,9 @@ export const linkstrRuntimeAtom = Atom.runtime((get) => {
           Layer.provideMerge(
             config.inspector === true ? Inspector.live : Inspector.disabled,
           ),
+          // Unlike the inspector, relay health is not dev-gated: it is the
+          // production source of the relay settings status UI.
+          Layer.provideMerge(RelayHealth.live),
         ),
       );
 });
