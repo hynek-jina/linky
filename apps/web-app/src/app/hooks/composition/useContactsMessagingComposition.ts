@@ -1596,7 +1596,6 @@ export const useContactsMessagingComposition = ({
     contacts,
     currentNpub,
     insert,
-    nostrFetchRelays,
     route,
     selectedContact,
     setContactNewPrefill,

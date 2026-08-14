@@ -5,7 +5,8 @@ import type {
   NoRelayAcceptedEvent,
 } from "../domain/errors";
 import { NoReadRelaysConfigured } from "../domain/errors";
-import type { EventId, Pubkey, UnixSeconds } from "../domain/primitives";
+import type { EventId } from "../domain/primitives";
+import { Pubkey, UnixSeconds } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { inspectPlainOperation } from "../internal/inspectPlainOperation";
 import type { NostrTags, SignedPlainEvent } from "../internal/nostrEvent";
@@ -23,7 +24,8 @@ import {
   STATUS_D_GENERAL,
   STATUS_KIND,
 } from "./codec";
-import type { ProfileMetadata, StatusDraft } from "./domain";
+import { ProfileMetadata } from "./domain";
+import type { StatusDraft } from "./domain";
 import { ProfileUpdated, StatusUpdated } from "./events";
 
 export class ProfileFetchResult extends Schema.Class<ProfileFetchResult>(
@@ -31,6 +33,26 @@ export class ProfileFetchResult extends Schema.Class<ProfileFetchResult>(
 )({
   profile: Schema.NullOr(ProfileUpdated),
   status: Schema.NullOr(StatusUpdated),
+}) {}
+
+export const DISCOVERY_ACTIVITY_KINDS: ReadonlyArray<number> = [
+  0, 1, 6, 7, 9735, 30315,
+];
+export const DISCOVERY_ACTIVE_WINDOW_SECONDS = 45 * 24 * 60 * 60;
+export const DISCOVERY_AUTHOR_SCAN_LIMIT = 64;
+
+export interface DiscoverActiveProfilesOptions {
+  readonly activityKinds?: ReadonlyArray<number>;
+  readonly activeWindowSeconds?: number;
+  readonly authorScanLimit?: number;
+}
+
+export class DiscoveredProfile extends Schema.Class<DiscoveredProfile>(
+  "DiscoveredProfile",
+)({
+  pubkey: Pubkey,
+  lastActiveAt: UnixSeconds,
+  metadata: ProfileMetadata,
 }) {}
 
 /** Newest event of `kind` that decodes; `events` arrive newest-first. */
@@ -128,6 +150,82 @@ export class Profiles extends Effect.Service<Profiles>()("linkstr/Profiles", {
         inspectPlainOperation(inspector, "profiles.fetchProfile", pubkey),
       );
 
-    return { publishProfile, publishStatus, fetchProfile } as const;
+    const discoverActiveProfiles = (
+      options: DiscoverActiveProfilesOptions = {},
+    ): Effect.Effect<
+      ReadonlyArray<DiscoveredProfile>,
+      AllRelaysUnreachable | NoReadRelaysConfigured
+    > =>
+      Effect.gen(function* () {
+        const relays = context.relayPolicy.readRelays;
+        if (relays.length === 0) return yield* new NoReadRelaysConfigured();
+        const now: UnixSeconds = yield* nowUnixSeconds;
+        const activityEvents = yield* fetchPlainEvents(
+          context.transport,
+          relays,
+          {
+            kinds: [...(options.activityKinds ?? DISCOVERY_ACTIVITY_KINDS)],
+            limit: options.authorScanLimit ?? DISCOVERY_AUTHOR_SCAN_LIMIT,
+            since:
+              now -
+              (options.activeWindowSeconds ?? DISCOVERY_ACTIVE_WINDOW_SECONDS),
+          },
+        );
+
+        // Activity arrives newest-first, so first sight of an author is their
+        // latest activity and map order is newest-activity-first.
+        const lastActiveByAuthor = new Map<Pubkey, UnixSeconds>();
+        for (const event of activityEvents) {
+          if (!lastActiveByAuthor.has(event.pubkey)) {
+            lastActiveByAuthor.set(event.pubkey, event.created_at);
+          }
+        }
+        if (lastActiveByAuthor.size === 0) {
+          return { result: [], eventIds: [] };
+        }
+
+        const authors = [...lastActiveByAuthor.keys()];
+        const profileEvents = yield* fetchPlainEvents(
+          context.transport,
+          relays,
+          {
+            authors,
+            kinds: [PROFILE_KIND],
+            limit: authors.length * 2,
+          },
+        );
+
+        const discovered: Array<DiscoveredProfile> = [];
+        const eventIds: Array<EventId> = [];
+        for (const [pubkey, lastActiveAt] of lastActiveByAuthor) {
+          const ofAuthor = profileEvents.filter(
+            (event) => event.pubkey === pubkey,
+          );
+          const picked = pickNewest(ofAuthor, PROFILE_KIND, decodeProfileEvent);
+          if (picked === null) continue;
+          discovered.push(
+            new DiscoveredProfile({
+              pubkey,
+              lastActiveAt,
+              metadata: picked.fact.metadata,
+            }),
+          );
+          eventIds.push(picked.eventId);
+        }
+        return { result: discovered, eventIds };
+      }).pipe(
+        inspectPlainOperation(
+          inspector,
+          "profiles.discoverActiveProfiles",
+          options,
+        ),
+      );
+
+    return {
+      publishProfile,
+      publishStatus,
+      fetchProfile,
+      discoverActiveProfiles,
+    } as const;
   }),
 }) {}

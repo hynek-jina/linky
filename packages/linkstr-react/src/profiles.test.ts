@@ -17,6 +17,7 @@ import type { Event as NostrToolsEvent, Filter } from "nostr-tools";
 import type { LinkstrConfig } from "./config";
 import { linkstrConfigAtom } from "./config";
 import {
+  discoverActiveProfilesAtom,
   fetchProfileAtom,
   profileWatchAtom,
   profileWatchHandlerAtom,
@@ -188,6 +189,42 @@ describe("fetchProfileAtom", () => {
         status: null,
       }),
     );
+  });
+});
+
+describe("discoverActiveProfilesAtom", () => {
+  it("returns recently active authors with decoded profiles", async () => {
+    const registry = Registry.make();
+    registry.set(
+      linkstrConfigAtom,
+      configWith(
+        alice,
+        makeFakeTransport(
+          [],
+          [],
+          [
+            finalizeEvent(
+              { kind: 1, tags: [], content: "note", created_at: base + 5 },
+              bob.secretKey,
+            ),
+            profileEvent(bob, JSON.stringify({ display_name: "Bob" }), base),
+          ],
+        ),
+      ),
+    );
+
+    registry.set(discoverActiveProfilesAtom, undefined);
+    const exit = await settle(registry, discoverActiveProfilesAtom);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value).toEqual([
+      expect.objectContaining({
+        pubkey: bob.pubkey,
+        lastActiveAt: base + 5,
+        metadata: expect.objectContaining({ displayName: "Bob" }),
+      }),
+    ]);
   });
 });
 

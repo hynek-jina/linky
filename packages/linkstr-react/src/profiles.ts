@@ -46,6 +46,10 @@ export const fetchProfileAtom = linkstrRuntimeAtom.fn<Pubkey>()((pubkey) =>
   Effect.flatMap(Profiles, (profiles) => profiles.fetchProfile(pubkey)),
 );
 
+export const discoverActiveProfilesAtom = linkstrRuntimeAtom.fn<void>()(() =>
+  Effect.flatMap(Profiles, (profiles) => profiles.discoverActiveProfiles()),
+);
+
 export const publishProfileAtom = linkstrRuntimeAtom.fn<ProfileMetadata>()(
   (metadata) =>
     Effect.flatMap(Profiles, (profiles) => profiles.publishProfile(metadata)),
