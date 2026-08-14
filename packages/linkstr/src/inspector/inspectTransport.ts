@@ -34,13 +34,18 @@ const tapWire = (
         ),
       ),
     ),
-  subscribe: (relay, filter, onEvent) =>
+  subscribe: (relay, filter, onEvent, options) =>
     Effect.suspend(() => {
       inspector.emit(new WireSubscribed({ relay, filter }));
-      return inner.subscribe(relay, filter, (event) => {
-        inspector.emit(new WireEventReceived({ relay, event }));
-        onEvent(event);
-      });
+      return inner.subscribe(
+        relay,
+        filter,
+        (event) => {
+          inspector.emit(new WireEventReceived({ relay, event }));
+          onEvent(event);
+        },
+        options,
+      );
     }).pipe(
       Effect.tap((reason) =>
         Effect.sync(() =>

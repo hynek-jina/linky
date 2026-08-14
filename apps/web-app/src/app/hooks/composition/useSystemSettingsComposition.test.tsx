@@ -27,7 +27,6 @@ const createAdvancedSettings = (
 ): AdvancedSettingsContextValue => ({
   bankPaymentOfferRecipientCount: 1,
   cashuAutoswapEnabled: true,
-  connectedRelayCount: 0,
   copyNostrKeys: noopAsync,
   copySeed: noopAsync,
   dedupeContacts: noopAsync,
@@ -41,7 +40,6 @@ const createAdvancedSettings = (
   importDataFileInputRef: React.createRef<HTMLInputElement>(),
   lightningInvoiceAutoPayLimit: 1,
   logoutArmed: false,
-  nostrRelayOverallStatus: "checking",
   passwordManagerSeedUsername: "",
   payWithCashuEnabled: true,
   pushToast,
@@ -143,7 +141,6 @@ const relaySettings: RelaySettingsContextValue = {
   canSaveNewRelay: false,
   newRelayUrl: "",
   pendingRelayDeleteUrl: null,
-  relayStatusByUrl: {},
   relayUrls: [],
   requestDeleteSelectedRelay: noop,
   saveNewRelay: noop,

@@ -8,7 +8,6 @@ import type { LocalMintInfoRow, MintUrlInput } from "../types/appTypes";
 export interface AdvancedSettingsContextValue {
   bankPaymentOfferRecipientCount: number;
   cashuAutoswapEnabled: boolean;
-  connectedRelayCount: number;
   copyNostrKeys: () => Promise<void>;
   copySeed: () => Promise<void>;
   dedupeContacts: () => Promise<void>;
@@ -22,7 +21,6 @@ export interface AdvancedSettingsContextValue {
   importDataFileInputRef: React.RefObject<HTMLInputElement | null>;
   lightningInvoiceAutoPayLimit: number;
   logoutArmed: boolean;
-  nostrRelayOverallStatus: EvoluServerStatus;
   passwordManagerSeedUsername: string;
   payWithCashuEnabled: boolean;
   pushToast: (message: string) => void;
@@ -121,7 +119,6 @@ export interface RelaySettingsContextValue {
   canSaveNewRelay: boolean;
   newRelayUrl: string;
   pendingRelayDeleteUrl: string | null;
-  relayStatusByUrl: Record<string, EvoluServerStatus>;
   relayUrls: string[];
   requestDeleteSelectedRelay: () => void;
   saveNewRelay: () => void;
