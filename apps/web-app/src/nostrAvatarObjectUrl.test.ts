@@ -1,0 +1,145 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  cacheProfileAvatarFromUrl,
+  loadCachedProfileAvatarObjectUrl,
+  peekAvatarObjectUrl,
+  releaseAllAvatarObjectUrls,
+  releaseAvatarObjectUrl,
+} from "./nostrProfile";
+
+const TEST_NPUB =
+  "npub180cvv07tqw7jwr9wnh4hp24w3wl74x64l0n6ms4qxp2vj8qz9c8sv96q8j";
+
+const OTHER_NPUB =
+  "npub1sn0wdenkukak0d9dfczzeacvhkrgz92ak56egt7vdgzn8pv2wfqqhrjdv9";
+
+let created: string[] = [];
+let revoked: string[] = [];
+let cacheEntries: Map<string, Blob>;
+
+const makeBlob = (body: string): Blob => new Blob([body]);
+
+beforeEach(() => {
+  created = [];
+  revoked = [];
+  cacheEntries = new Map();
+
+  // Only the two object-url statics are faked; `new URL(...)` must keep working
+  // because nostrProfile builds its cache-key requests with it.
+  let counter = 0;
+  URL.createObjectURL ??= () => "";
+  URL.revokeObjectURL ??= () => undefined;
+  vi.spyOn(URL, "createObjectURL").mockImplementation(() => {
+    counter += 1;
+    const url = `blob:mock/${counter}`;
+    created.push(url);
+    return url;
+  });
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation((url: string) => {
+    revoked.push(url);
+  });
+
+  const cache = {
+    match: (req: Request) =>
+      Promise.resolve(
+        cacheEntries.has(req.url)
+          ? new Response(cacheEntries.get(req.url))
+          : undefined,
+      ),
+    put: (req: Request, res: Response) =>
+      res.blob().then((blob) => {
+        cacheEntries.set(req.url, blob);
+      }),
+    delete: (req: Request) =>
+      Promise.resolve(cacheEntries.delete(req.url) || false),
+  };
+  vi.stubGlobal("caches", { open: () => Promise.resolve(cache) });
+});
+
+afterEach(() => {
+  releaseAllAvatarObjectUrls();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+const seedCachedAvatar = async (npub: string, body: string) => {
+  vi.stubGlobal("fetch", () => Promise.resolve(new Response(makeBlob(body))));
+  const url = await cacheProfileAvatarFromUrl(
+    npub,
+    `${globalThis.location.origin}/avatar.png`,
+  );
+  expect(url).toBeTruthy();
+  return url;
+};
+
+describe("avatar object url identity", () => {
+  it("hands out one stable object url per npub across repeated loads", async () => {
+    await seedCachedAvatar(TEST_NPUB, "avatar-bytes");
+    const mintedByCaching = created.length;
+
+    const first = await loadCachedProfileAvatarObjectUrl(TEST_NPUB);
+    const second = await loadCachedProfileAvatarObjectUrl(TEST_NPUB);
+    const third = await loadCachedProfileAvatarObjectUrl(TEST_NPUB);
+
+    expect(first).toBeTruthy();
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+    // Re-reading a cached avatar must not mint a second object url, because a
+    // changed <img> src identity forces the browser to reload the image.
+    expect(created.length).toBe(mintedByCaching);
+    expect(revoked).toEqual([]);
+  });
+
+  it("keeps separate object urls per npub", async () => {
+    await seedCachedAvatar(TEST_NPUB, "one");
+    await seedCachedAvatar(OTHER_NPUB, "two");
+
+    const a = await loadCachedProfileAvatarObjectUrl(TEST_NPUB);
+    const b = await loadCachedProfileAvatarObjectUrl(OTHER_NPUB);
+
+    expect(a).toBeTruthy();
+    expect(b).toBeTruthy();
+    expect(a).not.toBe(b);
+    expect(peekAvatarObjectUrl(TEST_NPUB)).toBe(a);
+    expect(peekAvatarObjectUrl(OTHER_NPUB)).toBe(b);
+  });
+
+  it("peek reports nothing before an avatar is loaded", () => {
+    expect(peekAvatarObjectUrl(TEST_NPUB)).toBeNull();
+  });
+
+  it("revokes the previous url only when the avatar bytes are replaced", async () => {
+    await seedCachedAvatar(TEST_NPUB, "old-bytes");
+    const first = await loadCachedProfileAvatarObjectUrl(TEST_NPUB);
+
+    const replaced = await seedCachedAvatar(TEST_NPUB, "new-bytes");
+
+    expect(replaced).not.toBe(first);
+    expect(revoked).toEqual([first]);
+    expect(peekAvatarObjectUrl(TEST_NPUB)).toBe(replaced);
+  });
+
+  it("releases a single npub without touching the others", async () => {
+    await seedCachedAvatar(TEST_NPUB, "one");
+    await seedCachedAvatar(OTHER_NPUB, "two");
+    const a = peekAvatarObjectUrl(TEST_NPUB);
+    const b = peekAvatarObjectUrl(OTHER_NPUB);
+
+    releaseAvatarObjectUrl(TEST_NPUB);
+
+    expect(revoked).toEqual([a]);
+    expect(peekAvatarObjectUrl(TEST_NPUB)).toBeNull();
+    expect(peekAvatarObjectUrl(OTHER_NPUB)).toBe(b);
+  });
+
+  it("releases every npub on identity change", async () => {
+    await seedCachedAvatar(TEST_NPUB, "one");
+    await seedCachedAvatar(OTHER_NPUB, "two");
+
+    releaseAllAvatarObjectUrls();
+
+    expect(revoked.length).toBe(2);
+    expect(peekAvatarObjectUrl(TEST_NPUB)).toBeNull();
+    expect(peekAvatarObjectUrl(OTHER_NPUB)).toBeNull();
+  });
+});

@@ -65,11 +65,61 @@ const makeAvatarCacheRequest = (npub: string): Request | null => {
   }
 };
 
+/**
+ * The single live `blob:` URL per npub that is currently handed to `<img src>`.
+ *
+ * Minting a second object URL for an avatar we already display changes the
+ * `src` identity, so the browser drops the decoded image and reloads it; and
+ * revoking the previous URL while that reload is still in flight fails the load
+ * outright. Every object URL for a cached avatar must therefore come from here.
+ */
+const avatarObjectUrlByNpub = new Map<string, string>();
+
+const revokeObjectUrl = (url: string): void => {
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    // ignore
+  }
+};
+
+export const peekAvatarObjectUrl = (npub: string): string | null => {
+  const trimmed = String(npub ?? "").trim();
+  if (!trimmed) return null;
+  return avatarObjectUrlByNpub.get(trimmed) ?? null;
+};
+
+export const releaseAvatarObjectUrl = (npub: string): void => {
+  const trimmed = String(npub ?? "").trim();
+  if (!trimmed) return;
+  const existing = avatarObjectUrlByNpub.get(trimmed);
+  if (!existing) return;
+  avatarObjectUrlByNpub.delete(trimmed);
+  revokeObjectUrl(existing);
+};
+
+export const releaseAllAvatarObjectUrls = (): void => {
+  for (const url of avatarObjectUrlByNpub.values()) revokeObjectUrl(url);
+  avatarObjectUrlByNpub.clear();
+};
+
+/** Replaces the live object URL for `npub`; only called when bytes changed. */
+const replaceAvatarObjectUrl = (npub: string, blob: Blob): string => {
+  releaseAvatarObjectUrl(npub);
+  const url = URL.createObjectURL(blob);
+  avatarObjectUrlByNpub.set(npub, url);
+  return url;
+};
+
 export const loadCachedProfileAvatarObjectUrl = async (
   npub: string,
 ): Promise<string | null> => {
   const trimmed = String(npub ?? "").trim();
   if (!trimmed) return null;
+
+  const live = avatarObjectUrlByNpub.get(trimmed);
+  if (live) return live;
+
   if (!canUseCacheStorage()) return null;
 
   const req = makeAvatarCacheRequest(trimmed);
@@ -81,7 +131,12 @@ export const loadCachedProfileAvatarObjectUrl = async (
     if (!match) return null;
     const blob = await match.blob();
     if (!blob || blob.size <= 0) return null;
-    return URL.createObjectURL(blob);
+
+    // A concurrent caller may have claimed the URL while we awaited the cache.
+    const claimed = avatarObjectUrlByNpub.get(trimmed);
+    if (claimed) return claimed;
+
+    return replaceAvatarObjectUrl(trimmed, blob);
   } catch {
     return null;
   }
@@ -113,7 +168,7 @@ export const cacheProfileAvatarFromUrl = async (
 
     const blob = await res.blob();
     if (!blob || blob.size <= 0) return null;
-    return URL.createObjectURL(blob);
+    return replaceAvatarObjectUrl(trimmed, blob);
   } catch {
     return null;
   }
@@ -124,6 +179,7 @@ export const deleteCachedProfileAvatar = async (
 ): Promise<void> => {
   const trimmed = String(npub ?? "").trim();
   if (!trimmed) return;
+  releaseAvatarObjectUrl(trimmed);
   if (!canUseCacheStorage()) return;
   const req = makeAvatarCacheRequest(trimmed);
   if (!req) return;
@@ -271,6 +327,37 @@ export const saveCachedProfileMetadata = (
   }
 };
 
+/*
+ * A relay set that answers with nothing is ambiguous: a profile that does not
+ * exist and relays that never replied are indistinguishable from the client.
+ * Background prefetches therefore record a miss only when they have nothing
+ * cached yet, so one slow or unreachable relay round cannot blank an avatar
+ * that is already on screen.
+ */
+export const recordProfileMetadataLookup = (
+  npub: string,
+  metadata: NostrProfileMetadata | null,
+): void => {
+  if (metadata) {
+    saveCachedProfileMetadata(npub, metadata);
+    return;
+  }
+  if (loadCachedProfileMetadata(npub)?.metadata) return;
+  saveCachedProfileMetadata(npub, null);
+};
+
+export const recordProfilePictureLookup = (
+  npub: string,
+  url: string | null,
+): void => {
+  if (url) {
+    saveCachedProfilePicture(npub, url);
+    return;
+  }
+  if (loadCachedProfilePicture(npub)?.url) return;
+  saveCachedProfilePicture(npub, null);
+};
+
 const asTrimmedNonEmptyString = (value: unknown): string | undefined => {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -357,11 +444,32 @@ export const fetchNostrProfileMetadata = async (
         (b.created_at ?? 0) - (a.created_at ?? 0),
     )[0];
 
-  if (!newest?.content) return null;
+  return parseProfileMetadataEvent(newest);
+};
+
+const newestEventPerAuthor = (
+  events: readonly NostrToolsEvent[],
+): Map<string, NostrToolsEvent> => {
+  const newest = new Map<string, NostrToolsEvent>();
+  for (const event of events) {
+    const author = event.pubkey;
+    if (typeof author !== "string" || !author) continue;
+    const current = newest.get(author);
+    if (!current || (event.created_at ?? 0) > (current.created_at ?? 0)) {
+      newest.set(author, event);
+    }
+  }
+  return newest;
+};
+
+const parseProfileMetadataEvent = (
+  event: NostrToolsEvent | undefined,
+): NostrProfileMetadata | null => {
+  if (!event?.content) return null;
 
   let raw: unknown;
   try {
-    raw = JSON.parse(newest.content);
+    raw = JSON.parse(event.content);
   } catch {
     return null;
   }
@@ -393,6 +501,119 @@ export const fetchNostrProfileMetadata = async (
   // If nothing useful, treat as null so we can TTL it.
   if (Object.keys(metadata).length === 0) return null;
   return metadata;
+};
+
+/**
+ * Relays cap how many authors they accept in one filter; 50 is widely safe.
+ */
+const PROFILE_BATCH_SIZE = 50;
+
+const decodeNpubs = async (
+  npubs: readonly string[],
+): Promise<Map<string, string>> => {
+  const { nip19 } = await getNostrTools();
+  const npubByPubkey = new Map<string, string>();
+
+  for (const npub of npubs) {
+    const trimmed = String(npub ?? "").trim();
+    if (!trimmed) continue;
+    try {
+      const decoded = nip19.decode(trimmed);
+      if (decoded.type !== "npub") continue;
+      if (typeof decoded.data !== "string") continue;
+      npubByPubkey.set(decoded.data, trimmed);
+    } catch {
+      continue;
+    }
+  }
+
+  return npubByPubkey;
+};
+
+const primeInFlight = new Map<string, Promise<void>>();
+
+/**
+ * Warms the metadata cache for many profiles using as few relay round trips as
+ * possible.
+ *
+ * kind:0 is a replaceable event, so one filter can carry many authors and the
+ * relay answers with the newest event for each. Asking per npub instead
+ * serialises a round trip — and its 8s `maxWait` — for every single contact,
+ * which is why avatars trickle in one by one on a cold start.
+ */
+export const primeProfileMetadataCache = (
+  npubs: readonly string[],
+  options?: { relays?: string[]; signal?: AbortSignal },
+): Promise<void> => {
+  const pending = npubs.filter((npub) => !loadCachedProfileMetadata(npub));
+  if (pending.length === 0) return Promise.resolve();
+
+  const relays = normalizeRelayUrls(
+    options?.relays && options.relays.length > 0
+      ? options.relays
+      : NOSTR_RELAYS,
+  );
+  if (relays.length === 0) return Promise.resolve();
+
+  const key = `${[...pending].sort().join(",")}|${[...relays].sort().join(",")}`;
+  const existing = primeInFlight.get(key);
+  if (existing) return existing;
+
+  const run = runProfileMetadataPrime(pending, relays, options).finally(() => {
+    primeInFlight.delete(key);
+  });
+  primeInFlight.set(key, run);
+  return run;
+};
+
+const runProfileMetadataPrime = async (
+  pending: readonly string[],
+  relays: string[],
+  options?: { signal?: AbortSignal },
+): Promise<void> => {
+  if (options?.signal?.aborted) return;
+
+  const npubByPubkey = await decodeNpubs(pending);
+  if (npubByPubkey.size === 0) return;
+
+  const pubkeys = Array.from(npubByPubkey.keys());
+  const chunks: string[][] = [];
+  for (let i = 0; i < pubkeys.length; i += PROFILE_BATCH_SIZE) {
+    chunks.push(pubkeys.slice(i, i + PROFILE_BATCH_SIZE));
+  }
+
+  const pool = await getSharedAppNostrPool();
+
+  await Promise.all(
+    chunks.map(async (authors) => {
+      let events: NostrToolsEvent[] = [];
+      try {
+        events = await pool.querySync(
+          relays,
+          { authors, kinds: [0] },
+          { maxWait: 8000 },
+        );
+      } catch {
+        return;
+      }
+
+      if (options?.signal?.aborted) return;
+
+      // Nothing at all came back: unreachable relays and absent profiles are
+      // indistinguishable, so record no misses rather than blanking avatars.
+      if (events.length === 0) return;
+
+      const newestByAuthor = newestEventPerAuthor(events);
+      for (const author of authors) {
+        const npub = npubByPubkey.get(author);
+        if (!npub) continue;
+        recordProfileMetadataLookup(
+          npub,
+          parseProfileMetadataEvent(newestByAuthor.get(author)),
+        );
+      }
+    }),
+  );
 };
 
 export const fetchNostrProfilePicture = async (

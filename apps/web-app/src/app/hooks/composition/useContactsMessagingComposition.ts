@@ -24,6 +24,11 @@ import {
   loadCachedProfileMetadata,
   loadCachedProfilePicture,
   NOSTR_RELAYS,
+  primeProfileMetadataCache,
+  recordProfileMetadataLookup,
+  recordProfilePictureLookup,
+  releaseAllAvatarObjectUrls,
+  releaseAvatarObjectUrl,
   saveCachedProfileMetadata,
   saveCachedProfilePicture,
   type NostrProfileMetadata,
@@ -422,54 +427,18 @@ export const useContactsMessagingComposition = ({
     Record<string, string | null>
   >({});
 
-  const avatarObjectUrlsByNpubRef = React.useRef<Map<string, string>>(
-    new Map(),
-  );
-
   React.useEffect(() => {
-    const objectUrls = avatarObjectUrlsByNpubRef.current;
     return () => {
-      for (const url of objectUrls.values()) {
-        if (!url.startsWith("blob:")) continue;
-        try {
-          URL.revokeObjectURL(url);
-        } catch {
-          // ignore
-        }
-      }
-      objectUrls.clear();
+      releaseAllAvatarObjectUrls();
       inMemoryNostrPictureCache.clear();
     };
   }, [currentNsec]);
 
+  // Object-url lifetime is owned by nostrProfile; blob urls arrive already
+  // registered there, so this only has to drop the entry for a cleared avatar.
   const rememberBlobAvatarUrl = React.useCallback(
     (npub: string, url: string | null): string | null => {
-      const key = String(npub ?? "").trim();
-      if (!key) return url;
-
-      const existing = avatarObjectUrlsByNpubRef.current.get(key);
-
-      if (url && url.startsWith("blob:")) {
-        if (existing && existing !== url) {
-          try {
-            URL.revokeObjectURL(existing);
-          } catch {
-            // ignore
-          }
-        }
-        avatarObjectUrlsByNpubRef.current.set(key, url);
-        return url;
-      }
-
-      if (existing && existing.startsWith("blob:")) {
-        try {
-          URL.revokeObjectURL(existing);
-        } catch {
-          // ignore
-        }
-      }
-
-      avatarObjectUrlsByNpubRef.current.delete(key);
+      if (!(url && url.startsWith("blob:"))) releaseAvatarObjectUrl(npub);
       return url;
     },
     [],
@@ -1222,6 +1191,14 @@ export const useContactsMessagingComposition = ({
     let cancelled = false;
 
     const run = async () => {
+      if (nostrBootstrapReady) {
+        await primeProfileMetadataCache(prefetchedMessageNpubs, {
+          relays: nostrFetchRelays,
+          signal: controller.signal,
+        });
+        if (cancelled) return;
+      }
+
       for (const npub of prefetchedMessageNpubs) {
         if (unknownNameByNpub[npub] !== undefined) continue;
 
@@ -1248,14 +1225,14 @@ export const useContactsMessagingComposition = ({
             signal: controller.signal,
             relays: nostrFetchRelays,
           });
-          saveCachedProfileMetadata(npub, metadata);
+          recordProfileMetadataLookup(npub, metadata);
           if (cancelled) return;
           setUnknownNameByNpub((prev) => ({
             ...prev,
             [npub]: metadata ? getBestNostrName(metadata) : null,
           }));
         } catch {
-          saveCachedProfileMetadata(npub, null);
+          recordProfileMetadataLookup(npub, null);
           if (cancelled) return;
           setUnknownNameByNpub((prev) => ({
             ...prev,
@@ -1286,6 +1263,14 @@ export const useContactsMessagingComposition = ({
     let cancelled = false;
 
     const run = async () => {
+      if (nostrBootstrapReady) {
+        await primeProfileMetadataCache(prefetchedMessageNpubs, {
+          relays: nostrFetchRelays,
+          signal: controller.signal,
+        });
+        if (cancelled) return;
+      }
+
       for (const npub of prefetchedMessageNpubs) {
         const cached = loadCachedProfilePicture(npub);
         const shouldRefreshCachedPicture = isCachedProfilePictureStale(cached);
@@ -1300,10 +1285,12 @@ export const useContactsMessagingComposition = ({
           const blobUrl = await loadCachedProfileAvatarObjectUrl(npub);
           if (cancelled) return;
           if (blobUrl) {
-            setNostrPictureByNpub((prev) => ({
-              ...prev,
-              [npub]: rememberBlobAvatarUrl(npub, blobUrl),
-            }));
+            const remembered = rememberBlobAvatarUrl(npub, blobUrl);
+            setNostrPictureByNpub((prev) =>
+              prev[npub] === remembered
+                ? prev
+                : { ...prev, [npub]: remembered },
+            );
             if (!shouldRefreshCachedPicture) continue;
           }
         } catch {
@@ -1356,7 +1343,7 @@ export const useContactsMessagingComposition = ({
               signal: controller.signal,
               relays: nostrFetchRelays,
             });
-            saveCachedProfilePicture(npub, url);
+            recordProfilePictureLookup(npub, url);
             if (cancelled) return;
 
             if (url) {
@@ -1381,7 +1368,7 @@ export const useContactsMessagingComposition = ({
         } catch {
           if (cancelled) return;
           if (!cached) {
-            saveCachedProfilePicture(npub, null);
+            recordProfilePictureLookup(npub, null);
             setNostrPictureByNpub((prev) => {
               const existing = prev[npub];
               if (typeof existing === "string" && existing.trim()) return prev;
