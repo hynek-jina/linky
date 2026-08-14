@@ -5,7 +5,7 @@ import {
   getPublicKey,
   verifyEvent,
 } from "nostr-tools";
-import type { Event as NostrToolsEvent } from "nostr-tools";
+import type { Event as NostrToolsEvent, Filter } from "nostr-tools";
 import {
   NostrSecretKey,
   Pubkey,
@@ -29,6 +29,7 @@ const makeIdentity = (): LinkstrIdentityService => {
 
 const alice = makeIdentity();
 const bob = makeIdentity();
+const carol = makeIdentity();
 
 const relayA = RelayUrl.make("wss://relay-a.test");
 const relayB = RelayUrl.make("wss://relay-b.test");
@@ -42,6 +43,15 @@ const profileEvent = (
 ): NostrToolsEvent =>
   finalizeEvent(
     { kind: 0, tags: [], content, created_at: createdAt },
+    identity.secretKey,
+  );
+
+const noteEvent = (
+  identity: LinkstrIdentityService,
+  createdAt: number,
+): NostrToolsEvent =>
+  finalizeEvent(
+    { kind: 1, tags: [], content: "note", created_at: createdAt },
     identity.secretKey,
   );
 
@@ -60,6 +70,7 @@ const stubTransport = (
   published: Array<SignedPlainEvent>,
   options?: {
     accept?: (event: SignedPlainEvent, relay: RelayUrl) => boolean;
+    fetchLog?: Array<Filter>;
     stored?: ReadonlyMap<RelayUrl, ReadonlyArray<NostrToolsEvent>>;
     unreachable?: ReadonlyArray<RelayUrl>;
   },
@@ -81,10 +92,13 @@ const stubTransport = (
         });
       }),
     subscribe: () => Effect.die("subscribe not under test"),
-    fetch: (relay) =>
-      options?.unreachable?.includes(relay) === true
-        ? new RelayUnreachable({ relay, detail: "down" })
-        : Effect.succeed(options?.stored?.get(relay) ?? []),
+    fetch: (relay, filter) =>
+      Effect.suspend(() => {
+        options?.fetchLog?.push(filter);
+        return options?.unreachable?.includes(relay) === true
+          ? new RelayUnreachable({ relay, detail: "down" })
+          : Effect.succeed(options?.stored?.get(relay) ?? []);
+      }),
   });
 
 const runWith = <A, E>(
@@ -316,6 +330,149 @@ describe("Profiles.fetchProfile", () => {
     const exit = await runWith(
       stubTransport([]),
       Effect.flatMap(Profiles, (profiles) => profiles.fetchProfile(bob.pubkey)),
+      [],
+    );
+    expect(exit).toEqual(
+      Exit.fail(expect.objectContaining({ _tag: "NoReadRelaysConfigured" })),
+    );
+  });
+});
+
+describe("Profiles.discoverActiveProfiles", () => {
+  it("returns authors newest-activity-first with their newest decodable profile", async () => {
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        relayA,
+        [
+          noteEvent(bob, base + 10),
+          profileEvent(bob, JSON.stringify({ name: "bob" }), base + 1),
+        ],
+      ],
+      [
+        relayB,
+        [
+          noteEvent(carol, base + 5),
+          profileEvent(carol, JSON.stringify({ name: "carol" }), base + 2),
+          // Newest kind 0 for bob is malformed: the older valid one must win.
+          profileEvent(bob, "not json", base + 3),
+        ],
+      ],
+    ]);
+    const fetchLog: Array<Filter> = [];
+
+    const exit = await runWith(
+      stubTransport([], { stored, fetchLog }),
+      Effect.flatMap(Profiles, (profiles) => profiles.discoverActiveProfiles()),
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value).toEqual([
+      expect.objectContaining({
+        pubkey: bob.pubkey,
+        lastActiveAt: base + 10,
+        metadata: expect.objectContaining({ name: "bob" }),
+      }),
+      expect.objectContaining({
+        pubkey: carol.pubkey,
+        lastActiveAt: base + 5,
+        metadata: expect.objectContaining({ name: "carol" }),
+      }),
+    ]);
+
+    const profileFilters = fetchLog.filter((filter) => filter.authors);
+    expect(profileFilters).toEqual([
+      { authors: [bob.pubkey, carol.pubkey], kinds: [0], limit: 4 },
+      { authors: [bob.pubkey, carol.pubkey], kinds: [0], limit: 4 },
+    ]);
+  });
+
+  it("omits authors without a decodable kind-0 profile", async () => {
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        relayA,
+        [
+          noteEvent(carol, base + 9),
+          noteEvent(bob, base + 4),
+          profileEvent(bob, JSON.stringify({ name: "bob" }), base + 1),
+        ],
+      ],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { stored }),
+      Effect.flatMap(Profiles, (profiles) => profiles.discoverActiveProfiles()),
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value).toEqual([
+      expect.objectContaining({ pubkey: bob.pubkey }),
+    ]);
+  });
+
+  it("scans with the default activity filter and honors option overrides", async () => {
+    const defaultLog: Array<Filter> = [];
+    await runWith(
+      stubTransport([], { fetchLog: defaultLog }),
+      Effect.flatMap(Profiles, (profiles) => profiles.discoverActiveProfiles()),
+    );
+    expect(defaultLog[0]).toEqual({
+      kinds: [0, 1, 6, 7, 9735, 30315],
+      limit: 64,
+      since: expect.any(Number),
+    });
+
+    const overrideLog: Array<Filter> = [];
+    await runWith(
+      stubTransport([], { fetchLog: overrideLog }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.discoverActiveProfiles({
+          activityKinds: [1],
+          activeWindowSeconds: 3600,
+          authorScanLimit: 5,
+        }),
+      ),
+    );
+    const overrideFilter = overrideLog[0];
+    expect(overrideFilter).toEqual({
+      kinds: [1],
+      limit: 5,
+      since: expect.any(Number),
+    });
+    const defaultSince = defaultLog[0]?.since ?? 0;
+    const overrideSince = overrideFilter?.since ?? 0;
+    // Runs moments apart, so the windows differ by 45 days minus one hour.
+    const windowDelta = 45 * 24 * 60 * 60 - 3600;
+    expect(overrideSince - defaultSince).toBeGreaterThanOrEqual(windowDelta);
+    expect(overrideSince - defaultSince).toBeLessThanOrEqual(windowDelta + 5);
+  });
+
+  it("returns an empty list when no recent activity is found", async () => {
+    const fetchLog: Array<Filter> = [];
+    const exit = await runWith(
+      stubTransport([], { fetchLog }),
+      Effect.flatMap(Profiles, (profiles) => profiles.discoverActiveProfiles()),
+    );
+    expect(exit).toEqual(Exit.succeed([]));
+    // No authors, so the kind-0 stage is skipped: one activity fetch per relay.
+    expect(fetchLog).toHaveLength(2);
+  });
+
+  it("fails with AllRelaysUnreachable when no relay answers", async () => {
+    const exit = await runWith(
+      stubTransport([], { unreachable: [relayA, relayB] }),
+      Effect.flatMap(Profiles, (profiles) => profiles.discoverActiveProfiles()),
+    );
+    expect(exit).toEqual(
+      Exit.fail(expect.objectContaining({ _tag: "AllRelaysUnreachable" })),
+    );
+  });
+
+  it("fails with NoReadRelaysConfigured without read relays", async () => {
+    const exit = await runWith(
+      stubTransport([]),
+      Effect.flatMap(Profiles, (profiles) => profiles.discoverActiveProfiles()),
       [],
     );
     expect(exit).toEqual(

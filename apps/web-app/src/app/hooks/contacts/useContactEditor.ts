@@ -1,15 +1,15 @@
 import * as Evolu from "@evolu/common";
-import { fetchProfileAtom, useAtomSet } from "@linky/linkstr-react";
-import type { Event as NostrToolsEvent } from "nostr-tools";
+import {
+  discoverActiveProfilesAtom,
+  fetchProfileAtom,
+  useAtomSet,
+} from "@linky/linkstr-react";
+import { Exit } from "effect";
 import React from "react";
 import { omitSyntheticContactLightningAddress } from "../../../derivedProfile";
 import { evolu, type ContactId, type TransactionId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
-import {
-  getProfilePictureUrl,
-  isDisplayableProfilePictureUrl,
-  loadCachedProfile,
-} from "../../../profileCache";
+import { getProfilePictureUrl, loadCachedProfile } from "../../../profileCache";
 import type { Route } from "../../../types/route";
 import { MAX_CONTACTS_PER_OWNER } from "../../../utils/constants";
 import { getBestNostrName } from "../../../utils/formatting";
@@ -20,7 +20,6 @@ import {
 } from "../../../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { getContactQueryPrefill } from "../../lib/contactQueryPrefill";
-import { getSharedAppNostrPool } from "../../lib/nostrPool";
 import { fetchAndCacheProfile } from "../useLinkstrProfileSync";
 import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
 import {
@@ -75,7 +74,6 @@ interface UseContactEditorParams {
   contacts: readonly ContactRow[];
   currentNpub: string | null;
   insert: EvoluMutations["insert"];
-  nostrFetchRelays: string[];
   route: Route;
   selectedContact: SelectedContactRow | null;
   setContactNewPrefill: React.Dispatch<
@@ -137,116 +135,10 @@ const decodeDirectNpubIdentifier = async (
 };
 
 const CONTACT_SUGGESTION_LIMIT = 3;
-const CONTACT_SUGGESTION_AUTHOR_SCAN_LIMIT = 64;
-const CONTACT_SUGGESTION_ACTIVE_WINDOW_SEC = 45 * 24 * 60 * 60;
-const CONTACT_SUGGESTION_RECENT_EVENT_KINDS = [0, 1, 6, 7, 9735, 30315];
 const LINKY_LIGHTNING_ADDRESS_SUFFIX = "@linky.fit";
-
-const isHexPubkey = (value: string): boolean => /^[0-9a-f]{64}$/i.test(value);
-
-const readProfileText = (value: unknown): string | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
-
-/** Raw kind-0 fields the discovery scan reads straight off pool events. */
-interface DiscoveredProfileMetadata {
-  displayName?: string;
-  image?: string;
-  lud06?: string;
-  lud16?: string;
-  name?: string;
-  nip05?: string;
-  picture?: string;
-}
-
-const discoveredPictureUrl = (
-  metadata: DiscoveredProfileMetadata,
-): string | null => {
-  if (isDisplayableProfilePictureUrl(metadata.picture)) {
-    return metadata.picture.trim();
-  }
-  if (isDisplayableProfilePictureUrl(metadata.image)) {
-    return metadata.image.trim();
-  }
-  return null;
-};
-
-const parseProfileMetadataEvent = (
-  event: NostrToolsEvent,
-): DiscoveredProfileMetadata | null => {
-  if (!event.content) return null;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(event.content);
-  } catch {
-    return null;
-  }
-
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return null;
-  }
-
-  const metadata: DiscoveredProfileMetadata = {};
-
-  if ("name" in parsed) {
-    const name = readProfileText(parsed.name);
-    if (name) metadata.name = name;
-  }
-  if ("display_name" in parsed) {
-    const displayName = readProfileText(parsed.display_name);
-    if (displayName) metadata.displayName = displayName;
-  }
-  if ("displayName" in parsed && !metadata.displayName) {
-    const displayName = readProfileText(parsed.displayName);
-    if (displayName) metadata.displayName = displayName;
-  }
-  if ("lud16" in parsed) {
-    const lud16 = readProfileText(parsed.lud16);
-    if (lud16) metadata.lud16 = lud16;
-  }
-  if ("lud06" in parsed) {
-    const lud06 = readProfileText(parsed.lud06);
-    if (lud06) metadata.lud06 = lud06;
-  }
-  if ("nip05" in parsed) {
-    const nip05 = readProfileText(parsed.nip05);
-    if (nip05) metadata.nip05 = nip05;
-  }
-  if ("picture" in parsed) {
-    const picture = readProfileText(parsed.picture);
-    if (picture) metadata.picture = picture;
-  }
-  if ("image" in parsed) {
-    const image = readProfileText(parsed.image);
-    if (image) metadata.image = image;
-  }
-
-  return Object.keys(metadata).length > 0 ? metadata : null;
-};
 
 const isLinkyLightningAddress = (value: string): boolean =>
   value.trim().toLowerCase().endsWith(LINKY_LIGHTNING_ADDRESS_SUFFIX);
-
-const getNewestEventByPubkey = (
-  events: readonly NostrToolsEvent[],
-): Map<string, NostrToolsEvent> => {
-  const newestByPubkey = new Map<string, NostrToolsEvent>();
-
-  for (const event of events) {
-    const pubkey = String(event.pubkey ?? "").trim();
-    if (!isHexPubkey(pubkey)) continue;
-
-    const existing = newestByPubkey.get(pubkey);
-    if (!existing || event.created_at > existing.created_at) {
-      newestByPubkey.set(pubkey, event);
-    }
-  }
-
-  return newestByPubkey;
-};
 
 export const makeEmptyContactForm = (): ContactFormState => ({
   name: "",
@@ -262,7 +154,6 @@ export const useContactEditor = ({
   contacts,
   currentNpub,
   insert,
-  nostrFetchRelays,
   route,
   selectedContact,
   setContactNewPrefill,
@@ -308,6 +199,10 @@ export const useContactEditor = ({
     mode: "promiseExit",
   });
 
+  const discoverActiveProfiles = useAtomSet(discoverActiveProfilesAtom, {
+    mode: "promiseExit",
+  });
+
   const clearContactForm = React.useCallback(() => {
     setForm(makeEmptyContactForm());
     setEditingId(null);
@@ -317,10 +212,6 @@ export const useContactEditor = ({
   const clearContactSuggestions = React.useCallback(() => {
     setContactSuggestions((current) => (current.length === 0 ? current : []));
   }, []);
-  const contactSuggestionRelayKey = nostrFetchRelays
-    .map((relay) => relay.trim())
-    .filter(Boolean)
-    .join("\n");
   const contactSuggestionKnownNpubsKey = Array.from(
     new Set(
       [
@@ -343,14 +234,6 @@ export const useContactEditor = ({
       return;
     }
 
-    const relays = contactSuggestionRelayKey
-      ? contactSuggestionRelayKey.split("\n")
-      : [];
-    if (relays.length === 0) {
-      clearContactSuggestions();
-      return;
-    }
-
     const knownNpubs = new Set(
       contactSuggestionKnownNpubsKey
         ? contactSuggestionKnownNpubsKey.split("\n")
@@ -361,78 +244,41 @@ export const useContactEditor = ({
 
     const loadSuggestions = async () => {
       try {
-        const since =
-          Math.floor(Date.now() / 1000) - CONTACT_SUGGESTION_ACTIVE_WINDOW_SEC;
-        const pool = await getSharedAppNostrPool();
-        const recentEvents = await pool.querySync(
-          relays,
-          {
-            kinds: CONTACT_SUGGESTION_RECENT_EVENT_KINDS,
-            limit: CONTACT_SUGGESTION_AUTHOR_SCAN_LIMIT,
-            since,
-          },
-          { maxWait: 3500 },
-        );
+        const exit = await discoverActiveProfiles();
         if (cancelled) return;
-
-        const activityByPubkey = getNewestEventByPubkey(recentEvents);
-        const authors = Array.from(activityByPubkey.entries())
-          .sort((a, b) => b[1].created_at - a[1].created_at)
-          .map((entry) => entry[0]);
-
-        if (authors.length === 0) {
+        if (Exit.isFailure(exit)) {
           clearContactSuggestions();
           return;
         }
 
-        const profileEvents = await pool.querySync(
-          relays,
-          {
-            authors,
-            kinds: [0],
-            limit: authors.length * 2,
-          },
-          { maxWait: 4500 },
-        );
-        if (cancelled) return;
-
-        const newestProfileByPubkey = getNewestEventByPubkey(profileEvents);
         const { nip19 } = await import("nostr-tools");
         const nextSuggestions: ContactSuggestionCandidate[] = [];
 
-        for (const pubkey of authors) {
+        for (const discovered of exit.value) {
           if (nextSuggestions.length >= CONTACT_SUGGESTION_LIMIT) break;
 
           let npub = "";
           try {
-            npub = nip19.npubEncode(pubkey);
+            npub = nip19.npubEncode(discovered.pubkey);
           } catch {
             continue;
           }
 
           if (knownNpubs.has(npub)) continue;
 
-          const profileEvent = newestProfileByPubkey.get(pubkey);
-          if (!profileEvent) continue;
-
-          const metadata = parseProfileMetadataEvent(profileEvent);
-          if (!metadata) continue;
-
+          const metadata = discovered.metadata;
           const lnAddress = omitSyntheticContactLightningAddress(
-            String(metadata.lud16 ?? "").trim() ||
-              String(metadata.lud06 ?? "").trim(),
+            (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
             npub,
           );
           if (!isLinkyLightningAddress(lnAddress)) continue;
 
-          const pictureUrl = discoveredPictureUrl(metadata);
-
           nextSuggestions.push({
-            lastSeenAtSec: activityByPubkey.get(pubkey)?.created_at ?? since,
+            lastSeenAtSec: discovered.lastActiveAt,
             lnAddress,
             name: getBestNostrName(metadata) ?? lnAddress,
             npub,
-            pictureUrl,
+            pictureUrl: getProfilePictureUrl(metadata),
             query: lnAddress,
           });
         }
@@ -451,7 +297,7 @@ export const useContactEditor = ({
   }, [
     clearContactSuggestions,
     contactSuggestionKnownNpubsKey,
-    contactSuggestionRelayKey,
+    discoverActiveProfiles,
     form.npub,
     route.kind,
   ]);
