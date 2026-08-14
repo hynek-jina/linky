@@ -1,4 +1,4 @@
-import React, { act } from "react";
+import { act } from "react";
 import { createRoot } from "react-dom/client";
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -119,7 +119,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast: vi.fn(),
         route: { kind: "contacts" },
-        setContactAttentionById: vi.fn(),
         t: (key: string) => key,
         updateLocalNostrMessage: vi.fn(),
       });
@@ -159,9 +158,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -175,7 +171,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) => key,
         updateLocalNostrMessage,
       });
@@ -261,7 +256,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast: vi.fn(),
         route: { kind: "contacts" },
-        setContactAttentionById: vi.fn(),
         t: (key: string) => key,
         updateLocalNostrMessage: vi.fn(),
       });
@@ -298,9 +292,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -314,7 +305,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) => key,
         updateLocalNostrMessage,
       });
@@ -376,9 +366,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const renderHarness = async (routeId: string) => {
       const Harness = () => {
@@ -399,7 +386,6 @@ describe("useInboxNotificationsSync", () => {
           nostrMessagesRecent: [],
           pushToast,
           route: { kind: "chat", id: routeId },
-          setContactAttentionById,
           t: (key: string) =>
             key === "chatIncomingMessageToast" ? "{name}: {message}" : key,
           updateLocalNostrMessage,
@@ -495,9 +481,6 @@ describe("useInboxNotificationsSync", () => {
     const onBankPaymentOfferMessage = vi.fn();
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -518,7 +501,6 @@ describe("useInboxNotificationsSync", () => {
         onBankPaymentOfferMessage,
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) => key,
         updateLocalNostrMessage,
       });
@@ -538,7 +520,6 @@ describe("useInboxNotificationsSync", () => {
     expect(onBankPaymentOfferMessage).not.toHaveBeenCalled();
     expect(pushToast).not.toHaveBeenCalled();
     expect(maybeShowPwaNotification).not.toHaveBeenCalled();
-    expect(setContactAttentionById).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -588,7 +569,6 @@ describe("useInboxNotificationsSync", () => {
         onBankPaymentOfferMessage,
         pushToast: vi.fn(),
         route: { kind: "contacts" },
-        setContactAttentionById: vi.fn(),
         t: (key: string) => key,
         updateLocalNostrMessage: vi.fn(),
       });
@@ -661,9 +641,6 @@ describe("useInboxNotificationsSync", () => {
         options?.onClick?.();
       },
     );
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
     const knownOfferMessage: LocalNostrMessage = {
       clientId: "offer-client",
       contactId: "contact-bob",
@@ -699,7 +676,6 @@ describe("useInboxNotificationsSync", () => {
         onOpenInboxMessageToast,
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "bankPaymentOfferDeclinedNotification") {
@@ -738,8 +714,6 @@ describe("useInboxNotificationsSync", () => {
       "Payment was declined.",
       eventId("wrap-declined-offer"),
     );
-    expect(setContactAttentionById).toHaveBeenCalledOnce();
-
     await act(async () => root.unmount());
   });
 
@@ -770,9 +744,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -815,7 +786,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) => key,
         updateLocalNostrMessage,
       });
@@ -835,7 +805,6 @@ describe("useInboxNotificationsSync", () => {
     expect(appendLocalNostrMessage).not.toHaveBeenCalled();
     expect(pushToast).not.toHaveBeenCalled();
     expect(maybeShowPwaNotification).not.toHaveBeenCalled();
-    expect(setContactAttentionById).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -876,9 +845,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -898,7 +864,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) =>
           key === "chatIncomingMessageToast" ? "{name}: {message}" : key,
         updateLocalNostrMessage,
@@ -974,9 +939,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -996,7 +958,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "notificationReceivedMoney") return "You received money";
@@ -1019,7 +980,6 @@ describe("useInboxNotificationsSync", () => {
 
     expect(pushToast).not.toHaveBeenCalled();
     expect(maybeShowPwaNotification).not.toHaveBeenCalled();
-    expect(setContactAttentionById).not.toHaveBeenCalled();
     expect(appendLocalNostrMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         contactId: "contact-bob",
@@ -1061,9 +1021,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -1104,7 +1061,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) =>
           key === "chatIncomingMessageToast" ? "{name}: {message}" : key,
         updateLocalNostrMessage,
@@ -1125,7 +1081,6 @@ describe("useInboxNotificationsSync", () => {
     expect(appendLocalNostrMessage).not.toHaveBeenCalled();
     expect(pushToast).not.toHaveBeenCalled();
     expect(maybeShowPwaNotification).not.toHaveBeenCalled();
-    expect(setContactAttentionById).not.toHaveBeenCalled();
     expect(updateLocalNostrMessage).toHaveBeenCalledWith("stored-message-1", {
       status: "sent",
       wrapId: eventId("wrap-stored-1"),
@@ -1168,9 +1123,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -1205,7 +1157,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) =>
           key === "chatIncomingMessageToast" ? "{name}: {message}" : key,
         updateLocalNostrMessage,
@@ -1280,9 +1231,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -1302,7 +1250,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "notificationReceivedMoney") return "You received money";
@@ -1378,9 +1325,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     interface HarnessProps {
       routeKind: "contacts" | "wallet";
@@ -1404,7 +1348,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: routeKind },
-        setContactAttentionById,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "notificationReceivedMoney") return "You received money";
@@ -1500,9 +1443,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -1522,7 +1462,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "notificationReceivedMoney") return "You received money";
@@ -1564,7 +1503,6 @@ describe("useInboxNotificationsSync", () => {
 
     expect(pushToast).toHaveBeenCalledTimes(1);
     expect(maybeShowPwaNotification).toHaveBeenCalledTimes(1);
-    expect(setContactAttentionById).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       secondRoot.unmount();
@@ -1602,9 +1540,6 @@ describe("useInboxNotificationsSync", () => {
     const maybeShowPwaNotification = vi.fn(async () => {});
     const pushToast = vi.fn();
     const updateLocalNostrMessage = vi.fn();
-    const setContactAttentionById: React.Dispatch<
-      React.SetStateAction<Record<string, number>>
-    > = vi.fn();
 
     const Harness = () => {
       useInboxNotificationsSync({
@@ -1646,7 +1581,6 @@ describe("useInboxNotificationsSync", () => {
         nostrMessagesRecent: [],
         pushToast,
         route: { kind: "contacts" },
-        setContactAttentionById,
         t: (key: string) => {
           if (key === "chatIncomingMessageToast") return "{name}: {message}";
           if (key === "notificationReceivedMoney") return "You received money";
@@ -1667,7 +1601,6 @@ describe("useInboxNotificationsSync", () => {
 
     expect(pushToast).not.toHaveBeenCalled();
     expect(maybeShowPwaNotification).not.toHaveBeenCalled();
-    expect(setContactAttentionById).not.toHaveBeenCalled();
     expect(appendLocalNostrMessage).not.toHaveBeenCalled();
 
     await act(async () => {

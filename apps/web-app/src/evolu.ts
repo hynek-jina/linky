@@ -434,6 +434,9 @@ export const Schema = {
     groupName: Evolu.nullOr(Evolu.NonEmptyString1000),
     groupNamesJson: Evolu.nullOr(Evolu.NonEmptyString1000),
     archivedAtSec: Evolu.nullOr(Evolu.PositiveInt),
+    // Read cursor: created_at (seconds) of the newest chat message the user
+    // has seen in this conversation.
+    chatLastSeenAtSec: Evolu.nullOr(Evolu.PositiveInt),
   },
   nostrIdentity: {
     id: NostrIdentityId,
