@@ -1,6 +1,7 @@
 import * as Evolu from "@evolu/common";
 import { Pubkey } from "@linky/linkstr";
 import type {
+  ProfileFetchEntry,
   ProfileFetchResult,
   ProfileMetadata,
   ProfileUpdated,
@@ -56,6 +57,17 @@ const encodePubkeyToNpub = (pubkey: string): string | null => {
   }
 };
 
+const cacheFetchedProfile = (
+  npub: string,
+  profile: ProfileUpdated | null,
+): ProfileMetadata | null => {
+  if (!profile) return null;
+  const cached = loadCachedProfile(npub);
+  if (cached && profile.updatedAt <= cached.updatedAt) return cached.metadata;
+  saveCachedProfile(npub, profile.metadata, profile.updatedAt);
+  return profile.metadata;
+};
+
 /**
  * One-shot profile fetch for pubkeys that are not (yet) watched: contact
  * search and unknown-sender previews. Feeds the same v2 cache as the watch.
@@ -70,12 +82,43 @@ export const fetchAndCacheProfile = async (
   if (!pubkey) return null;
   const exit = await fetchProfile(pubkey);
   if (Exit.isFailure(exit)) return null;
-  const profile = exit.value.profile;
-  if (!profile) return null;
-  const cached = loadCachedProfile(npub);
-  if (cached && profile.updatedAt <= cached.updatedAt) return cached.metadata;
-  saveCachedProfile(npub, profile.metadata, profile.updatedAt);
-  return profile.metadata;
+  return cacheFetchedProfile(npub, exit.value.profile);
+};
+
+/**
+ * Batched variant for many unwatched npubs at once: one chunked multi-author
+ * relay query through `Profiles.fetchProfiles`. Undecodable npubs and failed
+ * fetches map to null, mirroring the single-npub behavior.
+ */
+export const fetchAndCacheProfiles = async (
+  fetchProfiles: (
+    pubkeys: ReadonlyArray<Pubkey>,
+  ) => Promise<Exit.Exit<ReadonlyArray<ProfileFetchEntry>, unknown>>,
+  npubs: ReadonlyArray<string>,
+): Promise<Map<string, ProfileMetadata | null>> => {
+  const metadataByNpub = new Map<string, ProfileMetadata | null>();
+  const npubByPubkey = new Map<Pubkey, string>();
+  for (const npub of npubs) {
+    const pubkey = decodeNpubToPubkey(npub);
+    if (pubkey) npubByPubkey.set(pubkey, npub);
+    else metadataByNpub.set(npub, null);
+  }
+  if (npubByPubkey.size === 0) return metadataByNpub;
+
+  const exit = await fetchProfiles([...npubByPubkey.keys()]);
+  const profileByPubkey = new Map<Pubkey, ProfileUpdated | null>();
+  if (Exit.isSuccess(exit)) {
+    for (const entry of exit.value) {
+      profileByPubkey.set(entry.pubkey, entry.profile);
+    }
+  }
+  for (const [pubkey, npub] of npubByPubkey) {
+    metadataByNpub.set(
+      npub,
+      cacheFetchedProfile(npub, profileByPubkey.get(pubkey) ?? null),
+    );
+  }
+  return metadataByNpub;
 };
 
 type SetByNpub<T> = React.Dispatch<
