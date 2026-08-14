@@ -23,13 +23,14 @@ interface LastMessageRow {
 
 interface UseVisibleContactsParams<TContact extends ContactRow> {
   activeGroup: string | null;
-  contactAttentionById: Record<string, number>;
   contactNameCollator: Intl.Collator;
   contactsSearchData: readonly ContactsSearchItem<TContact>[];
   contactsSearchParts: readonly string[];
   lastMessageByContactId: ReadonlyMap<string, LastMessageRow>;
   noGroupFilterValue: string;
   pinnedContactId: ContactIdLike;
+  // Unread conversations only; the value is the newest incoming message time.
+  unreadByContactId: ReadonlyMap<string, number>;
 }
 
 interface VisibleContactsResult<TContact extends ContactRow> {
@@ -40,13 +41,13 @@ interface VisibleContactsResult<TContact extends ContactRow> {
 
 export const useVisibleContacts = <TContact extends ContactRow>({
   activeGroup,
-  contactAttentionById,
   contactNameCollator,
   contactsSearchData,
   contactsSearchParts,
   lastMessageByContactId,
   noGroupFilterValue,
   pinnedContactId,
+  unreadByContactId,
 }: UseVisibleContactsParams<TContact>): VisibleContactsResult<TContact> => {
   return React.useMemo(() => {
     const isArchivedContact = (contact: TContact): boolean => {
@@ -123,9 +124,9 @@ export const useVisibleContacts = <TContact extends ContactRow>({
     const sortWithConversation = (a: TContact, b: TContact) => {
       const aKey = String(a.id ?? "");
       const bKey = String(b.id ?? "");
-      const aAttention = aKey ? (contactAttentionById[aKey] ?? 0) : 0;
-      const bAttention = bKey ? (contactAttentionById[bKey] ?? 0) : 0;
-      if (aAttention !== bAttention) return bAttention - aAttention;
+      const aUnreadAt = aKey ? (unreadByContactId.get(aKey) ?? 0) : 0;
+      const bUnreadAt = bKey ? (unreadByContactId.get(bKey) ?? 0) : 0;
+      if (aUnreadAt !== bUnreadAt) return bUnreadAt - aUnreadAt;
 
       const aMsg = aKey ? lastMessageByContactId.get(aKey) : null;
       const bMsg = bKey ? lastMessageByContactId.get(bKey) : null;
@@ -142,9 +143,9 @@ export const useVisibleContacts = <TContact extends ContactRow>({
     const sortWithoutConversation = (a: TContact, b: TContact) => {
       const aKey = String(a.id ?? "");
       const bKey = String(b.id ?? "");
-      const aAttention = aKey ? (contactAttentionById[aKey] ?? 0) : 0;
-      const bAttention = bKey ? (contactAttentionById[bKey] ?? 0) : 0;
-      if (aAttention !== bAttention) return bAttention - aAttention;
+      const aUnreadAt = aKey ? (unreadByContactId.get(aKey) ?? 0) : 0;
+      const bUnreadAt = bKey ? (unreadByContactId.get(bKey) ?? 0) : 0;
+      if (aUnreadAt !== bUnreadAt) return bUnreadAt - aUnreadAt;
 
       const aCreatedAt = Number(a.createdAt ?? 0) || 0;
       const bCreatedAt = Number(b.createdAt ?? 0) || 0;
@@ -163,12 +164,12 @@ export const useVisibleContacts = <TContact extends ContactRow>({
     };
   }, [
     activeGroup,
-    contactAttentionById,
     contactNameCollator,
     contactsSearchData,
     contactsSearchParts,
     lastMessageByContactId,
     noGroupFilterValue,
     pinnedContactId,
+    unreadByContactId,
   ]);
 };

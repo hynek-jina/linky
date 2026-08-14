@@ -480,7 +480,6 @@ export const useAppShellComposition = ({
     chatScrollTargetIdRef,
     chatSendIsBusy,
     closeContactDetail,
-    contactAttentionById,
     contactEditsSavable,
     contactFilterOptions,
     contactSuggestions,
@@ -564,6 +563,7 @@ export const useAppShellComposition = ({
     triggerChatScrollToBottom,
     ungroupedCount,
     unknownNameByNpub,
+    unreadByContactId,
     updateLocalNostrMessage,
     upsertBankPaymentOfferMessage,
     visibleContacts,
@@ -1051,9 +1051,7 @@ export const useAppShellComposition = ({
         lastText && !parsePrivateImageMessage(lastText)
           ? getCashuTokenMessageInfo(lastText)
           : null;
-      const hasAttention = Boolean(
-        contactAttentionById[String(contact.id ?? "")],
-      );
+      const hasAttention = contactId ? unreadByContactId.has(contactId) : false;
 
       return (
         <ContactCard
@@ -1077,7 +1075,6 @@ export const useAppShellComposition = ({
       );
     },
     [
-      contactAttentionById,
       getCashuTokenMessageInfo,
       getMintIconUrl,
       getNpubMessageContactInfo,
@@ -1088,6 +1085,7 @@ export const useAppShellComposition = ({
       nostrPictureByNpub,
       nostrStatusByNpub,
       route,
+      unreadByContactId,
     ],
   );
 

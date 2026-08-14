@@ -124,9 +124,6 @@ interface UseInboxNotificationsSyncParams<
   onOpenInboxMessageToast?: (params: OpenInboxMessageToastParams) => void;
   pushToast: (message: string, options?: PushToastOptions) => void;
   route: TRoute;
-  setContactAttentionById: React.Dispatch<
-    React.SetStateAction<Record<string, number>>
-  >;
   t: (key: string) => string;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
 }
@@ -155,7 +152,6 @@ export const useInboxNotificationsSync = <
   onOpenInboxMessageToast = () => {},
   pushToast,
   route,
-  setContactAttentionById,
   t,
   updateLocalNostrMessage,
 }: UseInboxNotificationsSyncParams<TContact, TRoute>) => {
@@ -175,7 +171,6 @@ export const useInboxNotificationsSync = <
     onOpenInboxMessageToast,
     pushToast,
     route,
-    setContactAttentionById,
     t,
     updateLocalNostrMessage,
   });
@@ -193,7 +188,6 @@ export const useInboxNotificationsSync = <
     onOpenInboxMessageToast,
     pushToast,
     route,
-    setContactAttentionById,
     t,
     updateLocalNostrMessage,
   };
@@ -365,10 +359,6 @@ export const useInboxNotificationsSync = <
             getLinkyBankPaymentOfferPaymentNoticeOfferId(outcome.rumor) ?? "";
           const isActiveOffer = isOpenBankPaymentOffer(latest.route, offerId);
           if (!isActiveChat && !isActiveOffer) {
-            latest.setContactAttentionById((previous) => ({
-              ...previous,
-              [outcome.contactId]: Date.now(),
-            }));
             showVisibleToast(
               latest
                 .t("chatIncomingMessageToast")
@@ -464,10 +454,6 @@ export const useInboxNotificationsSync = <
               !activeChat &&
               !activeOffer
             ) {
-              latest.setContactAttentionById((previous) => ({
-                ...previous,
-                [outcome.contactId]: Date.now(),
-              }));
               const notificationText = latest.t(
                 "bankPaymentOfferAcceptedByOther",
               );
@@ -497,10 +483,6 @@ export const useInboxNotificationsSync = <
               !activeChat &&
               !activeOffer
             ) {
-              latest.setContactAttentionById((previous) => ({
-                ...previous,
-                [outcome.contactId]: Date.now(),
-              }));
               const notificationText = latest.t(
                 "bankPaymentOfferDeclinedNotification",
               );
@@ -527,10 +509,6 @@ export const useInboxNotificationsSync = <
           }
 
           if (!activeChat && !activeOffer && !outcome.isSelfAuthored) {
-            latest.setContactAttentionById((previous) => ({
-              ...previous,
-              [outcome.contactId]: Date.now(),
-            }));
             showVisibleToast(
               latest
                 .t("chatIncomingMessageToast")
@@ -565,10 +543,6 @@ export const useInboxNotificationsSync = <
           const latest = latestValuesRef.current;
           if (isOpenChatForContact(latest.route, outcome.contactId)) return;
           const contact = findContact(outcome.peerPubkey);
-          latest.setContactAttentionById((previous) => ({
-            ...previous,
-            [outcome.contactId]: Date.now(),
-          }));
           const formattedPreview = formatChatMessagePreviewText({
             content: outcome.content,
             direction: outcome.direction,

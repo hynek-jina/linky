@@ -70,6 +70,7 @@ import {
   readUnknownContactIdPubkey,
 } from "../messages/contactIdentity";
 import { useChatNostrSyncEffect } from "../messages/useChatNostrSyncEffect";
+import { useChatReadCursorSync } from "../messages/useChatReadCursorSync";
 import {
   useEditChatMessage,
   type EditChatContext,
@@ -115,6 +116,7 @@ import {
   rememberLinkyBankPaymentOfferSpdPayload,
   type LinkyBankPaymentOfferStatus,
 } from "../../lib/bankPaymentOffer";
+import { collectUnreadNewestIncomingByContactId } from "../../lib/chatUnread";
 import { buildLinkyPaymentRequestDeclineMessage } from "../../lib/paymentRequestMessage";
 import {
   parsePrivateImageMessage,
@@ -390,13 +392,6 @@ export const useContactsMessagingComposition = ({
       safeLocalStorageGet(CONTACTS_ONBOARDING_HAS_BACKUPED_KEYS_STORAGE_KEY) ===
       "1",
   );
-
-  // Ephemeral per-contact activity indicator.
-  // When a message/payment arrives, we show a dot and temporarily bump the
-  // contact to the top until the user opens it.
-  const [contactAttentionById, setContactAttentionById] = useState<
-    Record<string, number>
-  >(() => ({}));
 
   const [
     bankPaymentOfferRecipientCount,
@@ -1186,19 +1181,12 @@ export const useContactsMessagingComposition = ({
       }
 
       reassignNostrConversationContactId(unknownContactId, knownContactId);
-      setContactAttentionById((prev) => {
-        if (prev[unknownContactId] === undefined) return prev;
-        const next = { ...prev };
-        delete next[unknownContactId];
-        return next;
-      });
     }
   }, [
     contacts,
     contactsOwnerId,
     contactsVisibleOwnerIds,
     reassignNostrConversationContactId,
-    setContactAttentionById,
     unknownContacts,
     update,
   ]);
@@ -1512,15 +1500,41 @@ export const useContactsMessagingComposition = ({
     }
   }, [activeGroup, setActiveGroup, statusFilterCurrencies]);
 
+  const chatLastSeenAtSecByContactId = React.useMemo(() => {
+    const byContactId = new Map<string, number>();
+    for (const contact of contacts) {
+      const contactId = String(contact.id ?? "").trim();
+      const lastSeenAtSec = Number(contact.chatLastSeenAtSec ?? 0);
+      if (!contactId || !Number.isFinite(lastSeenAtSec) || lastSeenAtSec <= 0) {
+        continue;
+      }
+      byContactId.set(contactId, lastSeenAtSec);
+    }
+    return byContactId;
+  }, [contacts]);
+
+  const unreadByContactId = React.useMemo(
+    () =>
+      collectUnreadNewestIncomingByContactId(
+        [...nostrMessagesLocal, ...bankPaymentOfferMessages],
+        chatLastSeenAtSecByContactId,
+      ),
+    [
+      bankPaymentOfferMessages,
+      chatLastSeenAtSecByContactId,
+      nostrMessagesLocal,
+    ],
+  );
+
   const visibleContacts = useVisibleContacts<DisplayContact>({
     activeGroup,
-    contactAttentionById,
     contactNameCollator,
     contactsSearchData: displayContactsSearchData,
     contactsSearchParts,
     lastMessageByContactId: lastVisibleMessageByContactId,
     noGroupFilterValue: NO_GROUP_FILTER,
     pinnedContactId: recentlyAddedContactId,
+    unreadByContactId,
   });
 
   const bankPaymentOfferCurrency =
@@ -2602,18 +2616,6 @@ export const useContactsMessagingComposition = ({
     },
   );
 
-  const clearContactAttention = React.useCallback((contactId: string) => {
-    const normalizedContactId = String(contactId ?? "").trim();
-    if (!normalizedContactId) return;
-
-    setContactAttentionById((prev) => {
-      if (prev[normalizedContactId] === undefined) return prev;
-      const next = { ...prev };
-      delete next[normalizedContactId];
-      return next;
-    });
-  }, []);
-
   React.useEffect(() => {
     for (const contact of contacts) {
       const contactId = String(contact.id ?? "").trim();
@@ -2627,9 +2629,8 @@ export const useContactsMessagingComposition = ({
 
       pendingArchivedContactThreadIdsRef.current.delete(contactId);
       reassignNostrConversationContactId(contactId, unknownContactId);
-      clearContactAttention(unknownContactId);
     }
-  }, [clearContactAttention, contacts, reassignNostrConversationContactId]);
+  }, [contacts, reassignNostrConversationContactId]);
 
   const blockArchivedContact = React.useCallback(async () => {
     if (route.kind !== "contactEdit") return;
@@ -2664,7 +2665,6 @@ export const useContactsMessagingComposition = ({
     const contactId = String(selectedContact.id ?? "").trim();
     if (contactId) {
       removeLocalNostrMessagesByContactId(contactId);
-      clearContactAttention(contactId);
     }
 
     const result = contactsOwnerId
@@ -2694,7 +2694,6 @@ export const useContactsMessagingComposition = ({
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
   }, [
     blockPubkeyAndPublishMuteList,
-    clearContactAttention,
     closeContactDetail,
     contactsOwnerId,
     removeLocalNostrMessagesByContactId,
@@ -2729,7 +2728,6 @@ export const useContactsMessagingComposition = ({
       if (!contactId) return;
 
       setPendingDeleteId(null);
-      clearContactAttention(contactId);
       contactPayBackToChatRef.current = null;
 
       if (contact.isUnknownContact) {
@@ -2757,7 +2755,7 @@ export const useContactsMessagingComposition = ({
       }
       navigateTo({ route: "chat", id: String(knownContact.id) });
     },
-    [clearContactAttention, contactPayBackToChatRef, contacts, openContactPay],
+    [contactPayBackToChatRef, contacts, openContactPay],
   );
 
   const addUnknownContactFromChat = React.useCallback(async () => {
@@ -2777,7 +2775,6 @@ export const useContactsMessagingComposition = ({
 
     if (existing?.id) {
       reassignNostrConversationContactId(contactId, existing.id);
-      clearContactAttention(contactId);
       setStatus(t("contactSaved"));
       navigateTo({ route: "chat", id: String(existing.id) });
       return;
@@ -2813,7 +2810,6 @@ export const useContactsMessagingComposition = ({
       return;
     }
   }, [
-    clearContactAttention,
     contactsOwnerId,
     buildSavedContactName,
     contacts,
@@ -2862,12 +2858,10 @@ export const useContactsMessagingComposition = ({
     await blockPubkeyAndPublishMuteList(unknownPubkeyHex);
 
     removeLocalNostrMessagesByContactId(contactId);
-    clearContactAttention(contactId);
     setStatus(t("chatUnknownContactBlocked"));
     navigateTo({ route: "contacts" });
   }, [
     blockPubkeyAndPublishMuteList,
-    clearContactAttention,
     removeLocalNostrMessagesByContactId,
     route.kind,
     selectedChatContact,
@@ -3111,16 +3105,9 @@ export const useContactsMessagingComposition = ({
 
     pendingUnknownContactAddRef.current = null;
     reassignNostrConversationContactId(pending.sourceContactId, existing.id);
-    clearContactAttention(pending.sourceContactId);
     setStatus(t("contactSaved"));
     navigateTo({ route: "chat", id: String(existing.id) });
-  }, [
-    clearContactAttention,
-    contacts,
-    reassignNostrConversationContactId,
-    setStatus,
-    t,
-  ]);
+  }, [contacts, reassignNostrConversationContactId, setStatus, t]);
 
   useChatNostrSyncEffect({
     appendLocalNostrMessage,
@@ -3333,7 +3320,6 @@ export const useContactsMessagingComposition = ({
     onOpenInboxMessageToast: openInboxMessageToast,
     pushToast,
     route,
-    setContactAttentionById,
     t,
     updateLocalNostrMessage,
   });
@@ -3393,6 +3379,15 @@ export const useContactsMessagingComposition = ({
     return merged;
   }, [bankPaymentOfferMessages, chatMessages, route]);
 
+  useChatReadCursorSync({
+    chatMessages: chatMessagesWithBankPaymentOffers,
+    contactsOwnerId,
+    contactsVisibleOwnerIds,
+    route,
+    selectedContact,
+    update,
+  });
+
   return {
     activeContactsOwnerContactCount,
     activeGroup,
@@ -3424,7 +3419,6 @@ export const useContactsMessagingComposition = ({
     chatScrollTargetIdRef,
     chatSendIsBusy,
     closeContactDetail,
-    contactAttentionById,
     contactEditsSavable,
     contactFilterOptions,
     contactSuggestions,
@@ -3516,6 +3510,7 @@ export const useContactsMessagingComposition = ({
     triggerChatScrollToBottom,
     ungroupedCount,
     unknownNameByNpub,
+    unreadByContactId,
     updateLocalNostrMessage,
     updateLocalNostrReaction,
     upsertBankPaymentOfferMessage,
