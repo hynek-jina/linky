@@ -1,9 +1,14 @@
-import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import { RelayListsDraft, RelayUrl } from "@linky/linkstr";
+import {
+  fetchOwnRelayListsAtom,
+  publishRelayListsAtom,
+  useAtomSet,
+} from "@linky/linkstr-react";
+import { Exit, Schema } from "effect";
 import React from "react";
 import { navigateTo } from "../../hooks/useRouting";
-import { NOSTR_RELAYS } from "../../nostrProfile";
 import type { Route } from "../../types/route";
-import { getSharedAppNostrPool } from "../lib/nostrPool";
+import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 
 interface UseRelayDomainParams {
   currentNpub: string | null;
@@ -29,29 +34,7 @@ interface UseRelayDomainResult {
   setNewRelayUrl: React.Dispatch<React.SetStateAction<string>>;
 }
 
-function extractUniqueRelayTags(
-  event: NostrToolsEvent | undefined,
-  tagName: string,
-): string[] {
-  const tags = Array.isArray(event?.tags) ? event.tags : [];
-  const extracted: string[] = [];
-  for (const tag of tags) {
-    if (!Array.isArray(tag)) continue;
-    if (tag[0] !== tagName) continue;
-    const url = String(tag[1] ?? "").trim();
-    if (!url) continue;
-    extracted.push(url);
-  }
-
-  const unique: string[] = [];
-  const seen = new Set<string>();
-  for (const url of extracted) {
-    if (seen.has(url)) continue;
-    seen.add(url);
-    unique.push(url);
-  }
-  return unique;
-}
+const isRelayUrl = Schema.is(RelayUrl);
 
 function haveSameRelayUrls(left: string[], right: string[]): boolean {
   if (left.length !== right.length) return false;
@@ -219,103 +202,45 @@ export const useRelayDomain = ({
     return url || null;
   }, [route]);
 
+  const publishRelayLists = useAtomSet(publishRelayListsAtom, {
+    mode: "promiseExit",
+  });
+
   const publishNostrRelayLists = React.useCallback(
     async (urls: string[]) => {
       if (!currentNsec) throw new Error("Missing nsec");
 
-      const { finalizeEvent, getPublicKey, nip19 } =
-        await import("nostr-tools");
-
-      const decoded = nip19.decode(currentNsec);
-      if (decoded.type !== "nsec") throw new Error("Invalid nsec");
-      const privBytes = decoded.data;
-      const pubkey = getPublicKey(privBytes);
-
-      const cleanUrls = urls.map((u) => String(u ?? "").trim()).filter(Boolean);
-      const unique: string[] = [];
-      const seen = new Set<string>();
-      for (const u of cleanUrls) {
-        if (seen.has(u)) continue;
-        seen.add(u);
-        unique.push(u);
-      }
+      const unique = Array.from(
+        new Set(urls.map((url) => String(url ?? "").trim())),
+      ).filter(isRelayUrl);
 
       console.log("[linky][nostr] publish relay list", {
         count: unique.length,
         urls: unique,
       });
 
-      const relaysToUse = (() => {
-        const combined = [...NOSTR_RELAYS, ...unique];
-        const out: string[] = [];
-        const seen2 = new Set<string>();
-        for (const u of combined) {
-          const s = String(u ?? "").trim();
-          if (!s) continue;
-          if (seen2.has(s)) continue;
-          seen2.add(s);
-          out.push(s);
-        }
-        return out;
-      })();
-
-      const relayEvents = [
-        {
-          kind: 10002,
-          logLabel: "relay list",
-          tags: unique.map((u) => ["r", u] as string[]),
-        },
-        {
-          kind: 10050,
-          logLabel: "dm inbox relay list",
-          tags: unique.map((u) => ["relay", u] as string[]),
-        },
-      ] satisfies Array<{
-        kind: 10002 | 10050;
-        logLabel: string;
-        tags: string[][];
-      }>;
-
-      const pool = await getSharedAppNostrPool();
-
-      await Promise.all(
-        relayEvents.map(async ({ kind, logLabel, tags }) => {
-          const baseEvent = {
-            kind,
-            created_at: Math.floor(Date.now() / 1000),
-            tags,
-            content: "",
-            pubkey,
-          } satisfies UnsignedEvent;
-
-          const signed: NostrToolsEvent = finalizeEvent(baseEvent, privBytes);
-          const publishResults = await Promise.allSettled(
-            pool.publish(relaysToUse, signed),
-          );
-          const anySuccess = publishResults.some(
-            (result) => result.status === "fulfilled",
-          );
-
-          if (!anySuccess) {
-            const firstError = publishResults.find(
-              (result): result is PromiseRejectedResult =>
-                result.status === "rejected",
-            )?.reason;
-            throw new Error(
-              `${logLabel}: ${String(firstError ?? "publish failed")}`,
-            );
-          }
+      const exit = await publishRelayLists(
+        new RelayListsDraft({
+          relays: unique.map((relay) => ({ relay, marker: null })),
+          dmRelays: unique,
         }),
       );
+      if (Exit.isFailure(exit)) {
+        throw new Error("relay list publish failed");
+      }
     },
-    [currentNsec],
+    [currentNsec, publishRelayLists],
   );
+
+  const fetchOwnRelayLists = useAtomSet(fetchOwnRelayListsAtom, {
+    mode: "promiseExit",
+  });
 
   const relayProfileSyncForNpubRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (!networkEnabled) return;
-    if (!currentNpub) return;
+    if (!currentNpub || !currentNsec) return;
 
     const relaySyncKey = relayProfileSyncKey(currentNpub, relayUrls);
     if (relayProfileSyncForNpubRef.current === relaySyncKey) return;
@@ -324,57 +249,21 @@ export const useRelayDomain = ({
 
     const run = async () => {
       try {
-        const { nip19 } = await import("nostr-tools");
+        const exit = await fetchOwnRelayLists();
+        if (Exit.isFailure(exit)) {
+          throw new Error("relay list fetch failed");
+        }
+        const lists = exit.value;
 
-        const decoded = nip19.decode(currentNpub);
-        if (decoded.type !== "npub") return;
-        const pubkey = decoded.data;
-
-        const pool = await getSharedAppNostrPool();
-        const queryRelays = (() => {
-          const combined = [...NOSTR_RELAYS, ...relayUrls];
-          const out: string[] = [];
-          const seen = new Set<string>();
-          for (const u of combined) {
-            const s = String(u ?? "").trim();
-            if (!s) continue;
-            if (seen.has(s)) continue;
-            seen.add(s);
-            out.push(s);
-          }
-          return out;
-        })();
-
-        const events = await pool.querySync(
-          queryRelays,
-          { kinds: [10002, 10050], authors: [pubkey], limit: 10 },
-          { maxWait: 5000 },
+        const relayListUrls = Array.from(
+          new Set((lists.relays ?? []).map((entry) => entry.relay)),
         );
-
-        const relayMetadataEvents = Array.isArray(events) ? events : [];
-
-        const newestRelayList = relayMetadataEvents
-          .filter((event) => event.kind === 10002)
-          .slice()
-          .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0];
-
-        const newestInboxRelayList = relayMetadataEvents
-          .filter((event) => event.kind === 10050)
-          .slice()
-          .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0];
-
-        const relayListUrls = extractUniqueRelayTags(newestRelayList, "r");
-        const inboxRelayUrls = extractUniqueRelayTags(
-          newestInboxRelayList,
-          "relay",
-        );
+        const inboxRelayUrls = Array.from(new Set(lists.dmRelays ?? []));
         const urls = relayListUrls.length > 0 ? relayListUrls : inboxRelayUrls;
 
         console.log("[linky][nostr] relay list", {
-          inboxEventId: String(newestInboxRelayList?.id ?? ""),
           inboxUrls: inboxRelayUrls,
-          relayEventId: String(newestRelayList?.id ?? ""),
-          relayCreatedAt: newestRelayList?.created_at ?? null,
+          relayCreatedAt: lists.relaysUpdatedAt,
           relayUrls: relayListUrls,
         });
 
@@ -421,6 +310,7 @@ export const useRelayDomain = ({
   }, [
     currentNpub,
     currentNsec,
+    fetchOwnRelayLists,
     networkEnabled,
     publishNostrRelayLists,
     relayUrls,

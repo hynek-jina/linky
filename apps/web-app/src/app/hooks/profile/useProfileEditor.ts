@@ -1,3 +1,10 @@
+import { ProfileMetadata, StatusDraft } from "@linky/linkstr";
+import {
+  publishProfileAtom,
+  publishStatusAtom,
+  useAtomSet,
+} from "@linky/linkstr-react";
+import { Exit } from "effect";
 import React from "react";
 import {
   cycleGeneratedAvatar,
@@ -7,23 +14,17 @@ import {
 } from "../../../derivedProfile";
 import { navigateTo } from "../../../hooks/useRouting";
 import {
-  deleteCachedProfileAvatar,
-  fetchNostrProfileMetadata,
-  loadCachedProfileMetadata,
-  NOSTR_RELAYS,
-  saveCachedProfileMetadata,
-  saveCachedProfilePicture,
-  type NostrProfileMetadata,
-} from "../../../nostrProfile";
-import { publishKind0ProfileMetadata } from "../../../nostrPublish";
-import {
   buildProfileGeneralStatus,
   parseProfileExchangeStatusCurrencies,
   parseProfileGeneralStatusText,
-  publishNostrGeneralStatus,
-  saveCachedNostrGeneralStatus,
 } from "../../../nostrStatus";
-import type { JsonRecord } from "../../../types/json";
+import {
+  cacheProfileAvatarFromUrl,
+  deleteCachedProfileAvatar,
+  loadCachedProfile,
+  saveCachedProfile,
+  saveCachedStatus,
+} from "../../../profileCache";
 import { getBestNostrName } from "../../../utils/formatting";
 import { getDefaultNip05IdentifierFromAddress } from "../../../utils/nostrNip05";
 import {
@@ -31,10 +32,7 @@ import {
   type OwnLightningAddressInputCandidate,
 } from "../../../utils/npubCashUsernameClaim";
 import { isHttpUrl } from "../../../utils/validation";
-import {
-  applyLightningAddressToProfileMetadata,
-  buildKind0ProfileContent,
-} from "../../lib/profileMetadata";
+import { applyLightningAddressToProfileMetadata } from "../../lib/profileMetadata";
 
 interface UseProfileEditorParams {
   currentNpub: string | null;
@@ -43,14 +41,13 @@ interface UseProfileEditorParams {
   effectiveMyLightningAddress: string | null;
   effectiveProfileName: string | null;
   effectiveProfilePicture: string | null;
-  myProfileMetadata: NostrProfileMetadata | null;
+  myProfileMetadata: ProfileMetadata | null;
   myProfileStatus: string | null;
-  nostrFetchRelays: string[];
   ownedLightningAddresses: readonly string[];
   ownedLightningAddressesLoading: boolean;
   setMyProfileLnAddress: React.Dispatch<React.SetStateAction<string | null>>;
   setMyProfileMetadata: React.Dispatch<
-    React.SetStateAction<NostrProfileMetadata | null>
+    React.SetStateAction<ProfileMetadata | null>
   >;
   setMyProfileName: React.Dispatch<React.SetStateAction<string | null>>;
   setMyProfilePicture: React.Dispatch<React.SetStateAction<string | null>>;
@@ -76,7 +73,6 @@ export const useProfileEditor = ({
   effectiveProfilePicture,
   myProfileMetadata,
   myProfileStatus,
-  nostrFetchRelays,
   ownedLightningAddresses,
   ownedLightningAddressesLoading,
   setMyProfileLnAddress,
@@ -122,10 +118,7 @@ export const useProfileEditor = ({
     const initialLn = effectiveMyLightningAddress ?? "";
 
     const metaPic = String(
-      myProfileMetadata?.picture ??
-        myProfileMetadata?.image ??
-        effectiveProfilePicture ??
-        "",
+      myProfileMetadata?.picture ?? effectiveProfilePicture ?? "",
     ).trim();
 
     const generatedAvatar = deriveGeneratedAvatar(currentNpub ?? initialName);
@@ -250,6 +243,11 @@ export const useProfileEditor = ({
     profileEditLnAddress,
   ]);
 
+  const publishProfile = useAtomSet(publishProfileAtom, {
+    mode: "promiseExit",
+  });
+  const publishStatus = useAtomSet(publishStatusAtom, { mode: "promiseExit" });
+
   const persistProfileValues = React.useCallback(
     async ({
       lightningAddress,
@@ -276,119 +274,44 @@ export const useProfileEditor = ({
           text: status,
         });
 
-        const { nip19 } = await import("nostr-tools");
+        // The own pubkey is watched, so cache/state carry the newest profile.
+        const prev =
+          myProfileMetadata ?? loadCachedProfile(currentNpub)?.metadata ?? null;
+        const keptNip05 =
+          nextNip05 ??
+          (getDefaultNip05IdentifierFromAddress(prev?.nip05)
+            ? undefined
+            : prev?.nip05);
 
-        const decoded = nip19.decode(currentNsec);
-        if (decoded.type !== "nsec") throw new Error("Invalid nsec");
-        const privBytes = decoded.data as Uint8Array;
-
-        const cachedPrev =
-          loadCachedProfileMetadata(currentNpub)?.metadata ?? null;
-        const livePrev = await Promise.race([
-          fetchNostrProfileMetadata(currentNpub, {
-            relays: nostrFetchRelays,
-          }).catch(() => null),
-          new Promise<null>((resolve) =>
-            window.setTimeout(() => resolve(null), 2000),
-          ),
-        ]);
-
-        const prev = (livePrev ??
-          cachedPrev ??
-          myProfileMetadata ??
-          {}) as NostrProfileMetadata;
-
-        const contentObj: JsonRecord = {
-          ...(prev.name ? { name: prev.name } : {}),
-          ...(prev.displayName ? { display_name: prev.displayName } : {}),
-          ...(prev.picture ? { picture: prev.picture } : {}),
-          ...(prev.image ? { image: prev.image } : {}),
-          ...(prev.lud16 ? { lud16: prev.lud16 } : {}),
-          ...(prev.lud06 ? { lud06: prev.lud06 } : {}),
-          ...(prev.nip05 ? { nip05: prev.nip05 } : {}),
-        };
-
-        if (trimmedName) {
-          contentObj.name = trimmedName;
-          contentObj.display_name = trimmedName;
-        } else {
-          delete contentObj.name;
-          delete contentObj.display_name;
-        }
-
-        if (trimmedLightningAddress) {
-          contentObj.lud16 = trimmedLightningAddress;
-        } else {
-          delete contentObj.lud16;
-          delete contentObj.lud06;
-        }
-
-        if (nextNip05) {
-          contentObj.nip05 = nextNip05;
-        } else if (getDefaultNip05IdentifierFromAddress(prev.nip05)) {
-          delete contentObj.nip05;
-        }
-
-        if (trimmedPicture) {
-          contentObj.picture = trimmedPicture;
-          contentObj.image = trimmedPicture;
-        } else {
-          delete contentObj.picture;
-          delete contentObj.image;
-        }
-
-        const relaysToUse =
-          nostrFetchRelays.length > 0 ? nostrFetchRelays : NOSTR_RELAYS;
-
-        const statusPublish = await publishNostrGeneralStatus({
-          privBytes,
-          relays: relaysToUse,
-          status: nextStatus,
+        const nextMetadata = new ProfileMetadata({
+          ...(trimmedName
+            ? { name: trimmedName, displayName: trimmedName }
+            : {}),
+          ...(trimmedLightningAddress
+            ? {
+                lud16: trimmedLightningAddress,
+                ...(prev?.lud06 ? { lud06: prev.lud06 } : {}),
+              }
+            : {}),
+          ...(keptNip05 ? { nip05: keptNip05 } : {}),
+          ...(trimmedPicture ? { picture: trimmedPicture } : {}),
+          ...(prev?.about ? { about: prev.about } : {}),
         });
-        if (!statusPublish.anySuccess) throw new Error("status publish failed");
 
-        const publish = await publishKind0ProfileMetadata({
-          privBytes,
-          relays: relaysToUse,
-          content: contentObj,
-        });
-        if (!publish.anySuccess) throw new Error("publish failed");
-
-        const updatedMeta: NostrProfileMetadata = { ...prev };
-
-        if (trimmedName) {
-          updatedMeta.name = trimmedName;
-          updatedMeta.displayName = trimmedName;
-        } else {
-          delete updatedMeta.name;
-          delete updatedMeta.displayName;
+        const statusExit = await publishStatus(
+          new StatusDraft({ content: nextStatus ?? "" }),
+        );
+        if (Exit.isFailure(statusExit)) {
+          throw new Error("status publish failed");
         }
 
-        if (trimmedLightningAddress) {
-          updatedMeta.lud16 = trimmedLightningAddress;
-        } else {
-          delete updatedMeta.lud16;
-          delete updatedMeta.lud06;
-        }
+        const profileExit = await publishProfile(nextMetadata);
+        if (Exit.isFailure(profileExit)) throw new Error("publish failed");
 
-        if (nextNip05) {
-          updatedMeta.nip05 = nextNip05;
-        } else if (getDefaultNip05IdentifierFromAddress(prev.nip05)) {
-          delete updatedMeta.nip05;
-        }
-
-        if (trimmedPicture) {
-          updatedMeta.picture = trimmedPicture;
-          updatedMeta.image = trimmedPicture;
-        } else {
-          delete updatedMeta.picture;
-          delete updatedMeta.image;
-        }
-
-        saveCachedProfileMetadata(currentNpub, updatedMeta);
-        saveCachedProfilePicture(currentNpub, trimmedPicture || null);
-        saveCachedNostrGeneralStatus(currentNpub, nextStatus);
-        setMyProfileMetadata(updatedMeta);
+        const nowSec = Math.floor(Date.now() / 1000);
+        saveCachedProfile(currentNpub, nextMetadata, nowSec);
+        saveCachedStatus(currentNpub, nextStatus ?? "", nowSec);
+        setMyProfileMetadata(nextMetadata);
         setMyProfileName(trimmedName || null);
         setMyProfileLnAddress(trimmedLightningAddress || null);
         setMyProfilePicture(trimmedPicture || null);
@@ -407,6 +330,8 @@ export const useProfileEditor = ({
 
         if (!trimmedPicture || !isHttpUrl(trimmedPicture)) {
           void deleteCachedProfileAvatar(currentNpub);
+        } else {
+          void cacheProfileAvatarFromUrl(currentNpub, trimmedPicture);
         }
 
         if (navigateToProfile) {
@@ -426,7 +351,8 @@ export const useProfileEditor = ({
       currentNsec,
       myProfileMetadata,
       myProfileStatus,
-      nostrFetchRelays,
+      publishProfile,
+      publishStatus,
       setMyProfileLnAddress,
       setMyProfileMetadata,
       setMyProfileName,
@@ -466,51 +392,29 @@ export const useProfileEditor = ({
           return false;
         }
 
-        const { nip19 } = await import("nostr-tools");
-        const decoded = nip19.decode(currentNsec);
-        if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
-          throw new Error("Invalid nsec");
-        }
-        const privBytes = decoded.data;
-
-        const cachedPrev =
-          loadCachedProfileMetadata(currentNpub)?.metadata ?? null;
-        const livePrev = await Promise.race([
-          fetchNostrProfileMetadata(currentNpub, {
-            relays: nostrFetchRelays,
-          }).catch(() => null),
-          new Promise<null>((resolve) =>
-            window.setTimeout(() => resolve(null), 2000),
-          ),
-        ]);
-
-        const emptyMetadata: NostrProfileMetadata = {};
         const prev =
-          livePrev ?? cachedPrev ?? myProfileMetadata ?? emptyMetadata;
+          myProfileMetadata ??
+          loadCachedProfile(currentNpub)?.metadata ??
+          new ProfileMetadata({});
         const next = applyLightningAddressToProfileMetadata(
           prev,
           lightningAddress,
         );
-        const relaysToUse =
-          nostrFetchRelays.length > 0 ? nostrFetchRelays : NOSTR_RELAYS;
 
-        const publish = await publishKind0ProfileMetadata({
-          privBytes,
-          relays: relaysToUse,
-          content: buildKind0ProfileContent(next.metadata),
-        });
-        if (!publish.anySuccess) throw new Error("publish failed");
+        const publishExit = await publishProfile(next.metadata);
+        if (Exit.isFailure(publishExit)) throw new Error("publish failed");
 
         const bestName = getBestNostrName(next.metadata);
         const picture = String(
-          next.metadata.picture ??
-            next.metadata.image ??
-            effectiveProfilePicture ??
-            "",
+          next.metadata.picture ?? effectiveProfilePicture ?? "",
         ).trim();
         const statusText = parseProfileGeneralStatusText(myProfileStatus) ?? "";
 
-        saveCachedProfileMetadata(currentNpub, next.metadata);
+        saveCachedProfile(
+          currentNpub,
+          next.metadata,
+          Math.floor(Date.now() / 1000),
+        );
         setMyProfileMetadata(next.metadata);
         setMyProfileLnAddress(next.lightningAddress || null);
         setMyProfileName(bestName ?? effectiveProfileName);
@@ -540,7 +444,7 @@ export const useProfileEditor = ({
       effectiveProfilePicture,
       myProfileMetadata,
       myProfileStatus,
-      nostrFetchRelays,
+      publishProfile,
       setMyProfileLnAddress,
       setMyProfileMetadata,
       setMyProfileName,

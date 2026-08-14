@@ -40,10 +40,6 @@ interface UseScannedTextHandlerParams<TContact extends ContactRowLike> {
     requestInfo: CashuPaymentRequestMessageInfo,
   ) => Promise<void>;
   payLightningInvoiceWithCashu: (invoice: string) => Promise<boolean>;
-  refreshContactFromNostr: (
-    id: ContactId,
-    npubOverride: string,
-  ) => Promise<void>;
   requestLightningInvoiceConfirmation: (
     preview: LightningInvoicePreview,
   ) => void;
@@ -72,7 +68,6 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
   openScannedContactPendingNpubRef,
   payCashuPaymentRequest,
   payLightningInvoiceWithCashu,
-  refreshContactFromNostr,
   requestLightningInvoiceConfirmation,
   requestLnurlWithdrawConfirmation,
   saveCashuFromText,
@@ -193,10 +188,6 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
             closeScan();
             if (existing?.id) {
               navigateTo({ route: "contact", id: existing.id as ContactId });
-              void refreshContactFromNostr(
-                existing.id as ContactId,
-                normalized,
-              );
             }
             return;
           }
@@ -353,7 +344,6 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       lightningInvoiceAutoPayLimit,
       onContactIdentifierScanned,
       payLightningInvoiceWithCashu,
-      refreshContactFromNostr,
       requestLightningInvoiceConfirmation,
       requestLnurlWithdrawConfirmation,
       saveCashuFromText,

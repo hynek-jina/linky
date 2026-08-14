@@ -1,5 +1,5 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
-import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { normalizeRelayUrls } from "../../../utils/nostrRelays";
 import {
   isLinkyBankPaymentOfferEvent,

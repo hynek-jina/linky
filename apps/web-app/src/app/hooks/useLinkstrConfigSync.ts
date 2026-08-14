@@ -7,7 +7,7 @@ import {
 import { Schema } from "effect";
 import { nip19 } from "nostr-tools";
 import React from "react";
-import { NOSTR_RELAYS } from "../../nostrProfile";
+import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 
 const isNostrSecretKey = Schema.is(NostrSecretKey);
 const isRelayUrl = Schema.is(RelayUrl);

@@ -427,6 +427,8 @@ export const Schema = {
   contact: {
     id: ContactId,
     name: Evolu.nullOr(Evolu.NonEmptyString1000),
+    // "1" once the user typed a custom name; profile updates then leave `name` alone.
+    nameSetByUser: Evolu.nullOr(Evolu.SqliteBoolean),
     npub: Evolu.nullOr(Evolu.NonEmptyString1000),
     lnAddress: Evolu.nullOr(Evolu.NonEmptyString1000),
     groupName: Evolu.nullOr(Evolu.NonEmptyString1000),

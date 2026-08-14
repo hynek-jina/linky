@@ -4,7 +4,7 @@ import React from "react";
 import { createSendTokenWithTokensAtMint } from "../../../cashuSend";
 import type { CashuTokenRow, ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
-import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { normalizeMintUrl } from "../../../utils/mint";

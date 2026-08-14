@@ -57,8 +57,8 @@ export const formatDurationShort = (seconds: number): string => {
 };
 
 export const getBestNostrName = (metadata: {
-  displayName?: string;
-  name?: string;
+  displayName?: string | undefined;
+  name?: string | undefined;
 }): string | null => {
   const display = String(metadata.displayName ?? "").trim();
   if (display) return display;

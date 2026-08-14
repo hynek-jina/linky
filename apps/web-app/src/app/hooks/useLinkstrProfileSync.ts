@@ -1,0 +1,316 @@
+import * as Evolu from "@evolu/common";
+import { Pubkey } from "@linky/linkstr";
+import type {
+  ProfileFetchResult,
+  ProfileMetadata,
+  ProfileUpdated,
+  ProfileWatchEvent,
+  StatusUpdated,
+} from "@linky/linkstr";
+import {
+  profileWatchAtom,
+  profileWatchHandlerAtom,
+  useAtomMount,
+  useAtomSet,
+  watchedProfilesAtom,
+} from "@linky/linkstr-react";
+import { Exit, Schema } from "effect";
+import { nip19 } from "nostr-tools";
+import React from "react";
+import { omitSyntheticContactLightningAddress } from "../../derivedProfile";
+import {
+  cacheProfileAvatarFromUrl,
+  deleteCachedProfileAvatar,
+  getProfilePictureUrl,
+  loadCachedProfile,
+  loadCachedProfileAvatarObjectUrl,
+  loadCachedStatus,
+  saveCachedProfile,
+  saveCachedStatus,
+} from "../../profileCache";
+import { getBestNostrName } from "../../utils/formatting";
+import { normalizeNpubIdentifier } from "../../utils/nostrNpub";
+import { resolveContactRowOwnerLane } from "../lib/contactOwnerLane";
+import type { ContactRowLike } from "../types/appTypes";
+
+type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
+
+const isPubkey = Schema.is(Pubkey);
+
+export const decodeNpubToPubkey = (npub: string): Pubkey | null => {
+  try {
+    const decoded = nip19.decode(npub);
+    return decoded.type === "npub" && isPubkey(decoded.data)
+      ? decoded.data
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const encodePubkeyToNpub = (pubkey: string): string | null => {
+  try {
+    return nip19.npubEncode(pubkey);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * One-shot profile fetch for pubkeys that are not (yet) watched: contact
+ * search and unknown-sender previews. Feeds the same v2 cache as the watch.
+ */
+export const fetchAndCacheProfile = async (
+  fetchProfile: (
+    pubkey: Pubkey,
+  ) => Promise<Exit.Exit<ProfileFetchResult, unknown>>,
+  npub: string,
+): Promise<ProfileMetadata | null> => {
+  const pubkey = decodeNpubToPubkey(npub);
+  if (!pubkey) return null;
+  const exit = await fetchProfile(pubkey);
+  if (Exit.isFailure(exit)) return null;
+  const profile = exit.value.profile;
+  if (!profile) return null;
+  const cached = loadCachedProfile(npub);
+  if (cached && profile.updatedAt <= cached.updatedAt) return cached.metadata;
+  saveCachedProfile(npub, profile.metadata, profile.updatedAt);
+  return profile.metadata;
+};
+
+type SetByNpub<T> = React.Dispatch<
+  React.SetStateAction<Record<string, T | null>>
+>;
+
+interface ProfileSyncContext {
+  contacts: readonly (ContactRowLike & { id: string })[];
+  contactsOwnerId: Evolu.OwnerId | null;
+  contactsVisibleOwnerIds: readonly Evolu.OwnerId[];
+  rememberBlobAvatarUrl: (npub: string, url: string | null) => string | null;
+  routeKind: string;
+  setNostrMetadataByNpub: SetByNpub<ProfileMetadata>;
+  setNostrPictureByNpub: SetByNpub<string>;
+  setNostrStatusByNpub: SetByNpub<string>;
+  update: EvoluMutations["update"];
+}
+
+const syncContactsFromProfile = (
+  npub: string,
+  metadata: ProfileMetadata,
+  ctx: ProfileSyncContext,
+): void => {
+  // Never rewrite rows under an open contact form.
+  if (ctx.routeKind === "contactEdit" || ctx.routeKind === "contactNew") {
+    return;
+  }
+
+  const bestName = getBestNostrName(metadata);
+  const profileLn = omitSyntheticContactLightningAddress(
+    (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
+    npub,
+  );
+
+  for (const contact of ctx.contacts) {
+    if (normalizeNpubIdentifier(contact.npub) !== npub) continue;
+
+    const patch: Partial<
+      Record<"lnAddress" | "name", typeof Evolu.NonEmptyString1000.Type>
+    > = {};
+
+    const currentName = String(contact.name ?? "").trim();
+    if (!contact.nameSetByUser && bestName && bestName !== currentName) {
+      const parsedName = Evolu.NonEmptyString1000.fromUnknown(bestName);
+      if (parsedName.ok) patch.name = parsedName.value;
+    }
+
+    const currentLn = String(contact.lnAddress ?? "")
+      .trim()
+      .toLowerCase();
+    if (profileLn && profileLn.toLowerCase() !== currentLn) {
+      const parsedLn = Evolu.NonEmptyString1000.fromUnknown(profileLn);
+      if (parsedLn.ok) patch.lnAddress = parsedLn.value;
+    }
+
+    if (Object.keys(patch).length === 0) continue;
+    const ownerId =
+      resolveContactRowOwnerLane(contact, ctx.contactsVisibleOwnerIds) ??
+      ctx.contactsOwnerId;
+    const payload = { id: contact.id, ...patch };
+    if (ownerId) ctx.update("contact", payload, { ownerId });
+    else ctx.update("contact", payload);
+  }
+};
+
+const applyProfileUpdated = (
+  npub: string,
+  fact: ProfileUpdated,
+  ctx: ProfileSyncContext,
+): void => {
+  const cached = loadCachedProfile(npub);
+  if (cached && fact.updatedAt <= cached.updatedAt) return;
+  saveCachedProfile(npub, fact.metadata, fact.updatedAt);
+
+  ctx.setNostrMetadataByNpub((prev) => ({ ...prev, [npub]: fact.metadata }));
+
+  const previousUrl = getProfilePictureUrl(cached?.metadata);
+  const url = getProfilePictureUrl(fact.metadata);
+  if (url === null) {
+    void deleteCachedProfileAvatar(npub);
+    ctx.rememberBlobAvatarUrl(npub, null);
+    ctx.setNostrPictureByNpub((prev) => ({ ...prev, [npub]: null }));
+  } else if (url !== previousUrl) {
+    ctx.setNostrPictureByNpub((prev) => ({ ...prev, [npub]: url }));
+    void cacheProfileAvatarFromUrl(npub, url).then((blobUrl) => {
+      if (blobUrl) {
+        ctx.setNostrPictureByNpub((prev) => ({
+          ...prev,
+          [npub]: ctx.rememberBlobAvatarUrl(npub, blobUrl),
+        }));
+      } else {
+        void deleteCachedProfileAvatar(npub);
+        ctx.rememberBlobAvatarUrl(npub, null);
+      }
+    });
+  }
+
+  syncContactsFromProfile(npub, fact.metadata, ctx);
+};
+
+const applyStatusUpdated = (
+  npub: string,
+  fact: StatusUpdated,
+  ctx: ProfileSyncContext,
+): void => {
+  const cached = loadCachedStatus(npub);
+  if (cached && fact.updatedAt <= cached.updatedAt) return;
+  saveCachedStatus(npub, fact.content, fact.updatedAt);
+  ctx.setNostrStatusByNpub((prev) => ({
+    ...prev,
+    [npub]: fact.content || null,
+  }));
+};
+
+export const applyProfileWatchEvent = (
+  event: ProfileWatchEvent,
+  ctx: ProfileSyncContext,
+): void => {
+  const npub = encodePubkeyToNpub(event.pubkey);
+  if (!npub) return;
+  if (event._tag === "ProfileUpdated") applyProfileUpdated(npub, event, ctx);
+  else applyStatusUpdated(npub, event, ctx);
+};
+
+interface UseLinkstrProfileSyncParams extends ProfileSyncContext {
+  currentNpub: string | null;
+  enabled: boolean;
+}
+
+/**
+ * Watches kind 0/30315 for every contact plus the own pubkey through the
+ * linkstr `ProfileWatch`, feeding the v2 caches, the per-npub UI maps, and
+ * the contact-row name/lnAddress policy. Seeds the maps from cache so a
+ * fresh launch renders instantly.
+ */
+export const useLinkstrProfileSync = ({
+  currentNpub,
+  enabled,
+  ...context
+}: UseLinkstrProfileSyncParams) => {
+  const setWatchedProfiles = useAtomSet(watchedProfilesAtom);
+  const setProfileWatchHandler = useAtomSet(profileWatchHandlerAtom);
+  useAtomMount(profileWatchAtom);
+
+  const { contacts, rememberBlobAvatarUrl } = context;
+  const {
+    setNostrMetadataByNpub,
+    setNostrPictureByNpub,
+    setNostrStatusByNpub,
+  } = context;
+
+  const watchedNpubsKey = React.useMemo(() => {
+    const npubs = new Set<string>();
+    for (const contact of contacts) {
+      const npub = normalizeNpubIdentifier(contact.npub);
+      if (npub) npubs.add(npub);
+    }
+    const ownNpub = normalizeNpubIdentifier(currentNpub);
+    if (ownNpub) npubs.add(ownNpub);
+    return [...npubs].sort().join("|");
+  }, [contacts, currentNpub]);
+
+  const watchedNpubs = React.useMemo(
+    () => (watchedNpubsKey ? watchedNpubsKey.split("|") : []),
+    [watchedNpubsKey],
+  );
+
+  React.useEffect(() => {
+    if (!enabled) return;
+    const pubkeys = watchedNpubs
+      .map(decodeNpubToPubkey)
+      .filter((pubkey): pubkey is Pubkey => pubkey !== null);
+    setWatchedProfiles(pubkeys);
+    return () => setWatchedProfiles([]);
+  }, [enabled, setWatchedProfiles, watchedNpubs]);
+
+  const contextRef = React.useRef(context);
+  React.useEffect(() => {
+    contextRef.current = context;
+  });
+
+  React.useEffect(() => {
+    if (!enabled) return;
+    // One handler object per session: swapping the handler reopens the relay
+    // subscriptions, so per-render context is reached through a ref.
+    setProfileWatchHandler({
+      onEvent: (event) => applyProfileWatchEvent(event, contextRef.current),
+    });
+    return () => setProfileWatchHandler(null);
+  }, [enabled, setProfileWatchHandler]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    for (const npub of watchedNpubs) {
+      const cachedProfile = loadCachedProfile(npub);
+      if (cachedProfile) {
+        const metadata = cachedProfile.metadata;
+        setNostrMetadataByNpub((prev) =>
+          prev[npub] ? prev : { ...prev, [npub]: metadata },
+        );
+        const url = getProfilePictureUrl(metadata);
+        setNostrPictureByNpub((prev) =>
+          npub in prev ? prev : { ...prev, [npub]: url },
+        );
+        if (url) {
+          void loadCachedProfileAvatarObjectUrl(npub).then((blobUrl) => {
+            if (cancelled || !blobUrl) return;
+            setNostrPictureByNpub((prev) =>
+              prev[npub] === url
+                ? { ...prev, [npub]: rememberBlobAvatarUrl(npub, blobUrl) }
+                : prev,
+            );
+          });
+        }
+      }
+
+      const cachedStatus = loadCachedStatus(npub);
+      if (cachedStatus) {
+        setNostrStatusByNpub((prev) =>
+          npub in prev
+            ? prev
+            : { ...prev, [npub]: cachedStatus.content || null },
+        );
+      }
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    rememberBlobAvatarUrl,
+    setNostrMetadataByNpub,
+    setNostrPictureByNpub,
+    setNostrStatusByNpub,
+    watchedNpubs,
+  ]);
+};

@@ -18,6 +18,7 @@ import type { LinkstrIdentityService } from "../services/LinkstrIdentity";
 import { NostrTransport, RelayPublishResult } from "../services/NostrTransport";
 import { RelayUnreachable } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
+import { decodeProfileMetadata } from "./codec";
 import { ProfileMetadata, StatusDraft } from "./domain";
 import { Profiles } from "./Profiles";
 
@@ -106,6 +107,23 @@ const runWith = <A, E>(
       ),
     ),
   );
+
+describe("decodeProfileMetadata", () => {
+  it("falls back to the legacy image field when picture is missing", () => {
+    const metadata = decodeProfileMetadata(
+      JSON.stringify({ image: "https://pic.test/a.png" }),
+    );
+    expect(metadata._tag).toBe("Some");
+    if (metadata._tag !== "Some") return;
+    expect(metadata.value.picture).toBe("https://pic.test/a.png");
+
+    const both = decodeProfileMetadata(
+      JSON.stringify({ picture: "https://pic.test/p.png", image: "x" }),
+    );
+    if (both._tag !== "Some") throw new Error("expected Some");
+    expect(both.value.picture).toBe("https://pic.test/p.png");
+  });
+});
 
 describe("Profiles.publishProfile", () => {
   it("publishes a signed kind 0 with wire field names, omitting empties", async () => {

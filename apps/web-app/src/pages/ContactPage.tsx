@@ -8,11 +8,8 @@ import {
 } from "../components/icons";
 import type { ContactId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
-import {
-  fetchNostrProfileMetadata,
-  loadCachedProfileMetadata,
-} from "../nostrProfile";
 import { formatDisplayGeneralStatus } from "../nostrStatus";
+import { loadCachedProfile } from "../profileCache";
 import { formatShortLightningAddress, getInitials } from "../utils/formatting";
 import { getContactGroups } from "../utils/contactGroups";
 import { resolveVerifiedNip05Identifier } from "../utils/nostrNip05";
@@ -88,28 +85,21 @@ const useVerifiedNip05 = (npub: string | null): string | null => {
   useEffect(() => {
     if (!npub) return;
 
+    // Contact pubkeys are watched, so the cached profile is authoritative.
+    const nip05 = loadCachedProfile(npub)?.metadata.nip05;
+    if (!nip05) return;
+
     const controller = new AbortController();
     let cancelled = false;
 
     const load = async () => {
       try {
-        const cachedMetadata =
-          loadCachedProfileMetadata(npub)?.metadata ?? null;
-        const metadata =
-          cachedMetadata ??
-          (await fetchNostrProfileMetadata(npub, {
-            signal: controller.signal,
-          }));
-        if (cancelled || !metadata?.nip05) return;
-
-        const identifier = await resolveVerifiedNip05Identifier(
-          metadata.nip05,
-          npub,
-          { signal: controller.signal },
-        );
+        const identifier = await resolveVerifiedNip05Identifier(nip05, npub, {
+          signal: controller.signal,
+        });
         if (!cancelled && identifier) setVerifiedNip05({ identifier, npub });
       } catch {
-        // A profile remains usable when its metadata or NIP-05 server is offline.
+        // A profile remains usable when its NIP-05 server is offline.
       }
     };
 

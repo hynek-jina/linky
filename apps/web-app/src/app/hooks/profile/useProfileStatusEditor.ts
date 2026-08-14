@@ -1,20 +1,20 @@
+import { StatusDraft } from "@linky/linkstr";
+import { publishStatusAtom, useAtomSet } from "@linky/linkstr-react";
+import { Exit } from "effect";
 import React from "react";
-import { NOSTR_RELAYS } from "../../../nostrProfile";
 import {
   buildProfileGeneralStatus,
   parseProfileExchangeStatusCurrencies,
   parseProfileGeneralStatusText,
   PROFILE_STATUS_CURRENCIES,
-  publishNostrGeneralStatus,
-  saveCachedNostrGeneralStatus,
   type ProfileStatusCurrency,
 } from "../../../nostrStatus";
+import { saveCachedStatus } from "../../../profileCache";
 
 interface UseProfileStatusEditorParams {
   currentNpub: string | null;
   currentNsec: string | null;
   myProfileStatus: string | null;
-  nostrFetchRelays: string[];
   setMyProfileStatus: React.Dispatch<React.SetStateAction<string | null>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
@@ -34,13 +34,14 @@ export const useProfileStatusEditor = ({
   currentNpub,
   currentNsec,
   myProfileStatus,
-  nostrFetchRelays,
   setMyProfileStatus,
   setStatus,
   t,
 }: UseProfileStatusEditorParams): UseProfileStatusEditorResult => {
   const [profileStatusIsSaving, setProfileStatusIsSaving] =
     React.useState(false);
+
+  const publishStatus = useAtomSet(publishStatusAtom, { mode: "promiseExit" });
 
   const selectedProfileStatusCurrencies = React.useMemo(
     () => parseProfileExchangeStatusCurrencies(myProfileStatus),
@@ -75,23 +76,15 @@ export const useProfileStatusEditor = ({
       setProfileStatusIsSaving(true);
 
       try {
-        const { nip19 } = await import("nostr-tools");
-        const decoded = nip19.decode(currentNsec);
-        if (decoded.type !== "nsec") throw new Error("Invalid nsec");
-        if (!(decoded.data instanceof Uint8Array)) {
-          throw new Error("Invalid nsec payload");
-        }
-
-        const relaysToUse =
-          nostrFetchRelays.length > 0 ? nostrFetchRelays : NOSTR_RELAYS;
-        const publish = await publishNostrGeneralStatus({
-          privBytes: decoded.data,
-          relays: relaysToUse,
-          status: nextStatus,
-        });
-
-        if (!publish.anySuccess) throw new Error("publish failed");
-        saveCachedNostrGeneralStatus(currentNpub, nextStatus);
+        const exit = await publishStatus(
+          new StatusDraft({ content: nextStatus ?? "" }),
+        );
+        if (Exit.isFailure(exit)) throw new Error("publish failed");
+        saveCachedStatus(
+          currentNpub,
+          nextStatus ?? "",
+          Math.floor(Date.now() / 1000),
+        );
       } catch (error) {
         setMyProfileStatus(previousStatus);
         setStatus(`${t("errorPrefix")}: ${String(error ?? "unknown")}`);
@@ -103,8 +96,8 @@ export const useProfileStatusEditor = ({
       currentNpub,
       currentNsec,
       myProfileStatus,
-      nostrFetchRelays,
       profileStatusIsSaving,
+      publishStatus,
       setMyProfileStatus,
       setStatus,
       t,
