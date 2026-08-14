@@ -6,6 +6,7 @@ import {
   Pubkey,
   RelayUrl,
   RumorId,
+  UnixSeconds,
 } from "../domain/primitives";
 import { unwrapToRumor } from "../internal/giftWrap";
 import {
@@ -132,6 +133,32 @@ describe("Reactions.react", () => {
         alice.pubkey,
       ]);
     }
+  });
+
+  it("honors the draft sentAt override", async () => {
+    const published: Array<PublishedWrap> = [];
+    const sentAt = UnixSeconds.make(1_699_999_999);
+    const exit = await runWith(
+      stubTransport(published, () => true),
+      Effect.gen(function* () {
+        const reactions = yield* Reactions;
+        return yield* reactions.react(new ReactionDraft({ ...draft, sentAt }));
+      }),
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value.sentAt).toBe(sentAt);
+    const recipient = published.find(
+      ({ wrap }) => recipientOf(wrap) === bob.pubkey,
+    );
+    expect(recipient).toBeDefined();
+    if (recipient === undefined) return;
+    const rumor = Either.getOrThrow(
+      unwrapToRumor(recipient.wrap, bob.secretKey),
+    );
+    expect(rumor.created_at).toBe(sentAt);
+    expect(rumor.id).toBe(exit.value.reactionId);
   });
 
   it("fails with RecipientNotReached when only the self copy lands", async () => {

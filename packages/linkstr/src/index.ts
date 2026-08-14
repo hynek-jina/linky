@@ -21,6 +21,9 @@ export {
   LINKY_PUSH_MARKER_VALUE,
 } from "./internal/giftWrap";
 export * from "./muteList/MuteList";
+export * from "./outbox/domain";
+export * from "./outbox/Outbox";
+export * from "./outbox/OutboxStore";
 export {
   PAYMENT_NOTICE_KIND,
   PAYMENT_NOTICE_VALUE,

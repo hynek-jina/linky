@@ -8,6 +8,8 @@ import {
   MuteList,
   NostrTransportSimplePool,
   observeTransport,
+  Outbox,
+  OutboxStore,
   PaymentNotices,
   Profiles,
   ProfileWatch,
@@ -53,6 +55,13 @@ export const linkstrRuntimeAtom = Atom.runtime((get) => {
         Layer.mergeAll(
           BankOffers.Default,
           Chat.Default,
+          Outbox.Default.pipe(
+            Layer.provide([
+              Chat.Default,
+              Reactions.Default,
+              OutboxStore.localStorage(),
+            ]),
+          ),
           PaymentNotices.Default,
           Reactions.Default,
           WrapInbox.Default,

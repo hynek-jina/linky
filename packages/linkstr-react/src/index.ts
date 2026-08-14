@@ -9,6 +9,7 @@ export * from "./errors";
 export * from "./inbox";
 export * from "./inspector";
 export * from "./muteList";
+export * from "./outbox";
 export * from "./paymentNotices";
 export * from "./profiles";
 export * from "./reactions";
