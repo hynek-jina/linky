@@ -1,12 +1,19 @@
 import * as Evolu from "@evolu/common";
-import { Pubkey } from "@linky/linkstr";
+import {
+  BankOfferDraft,
+  BankOfferId,
+  ClientId,
+  Pubkey,
+  UnixSeconds,
+} from "@linky/linkstr";
 import type { ProfileMetadata } from "@linky/linkstr";
 import {
   fetchProfileAtom,
   publishMuteListAtom,
+  sendBankOfferAtom,
   useAtomSet,
 } from "@linky/linkstr-react";
-import { Schema } from "effect";
+import { Exit, Schema } from "effect";
 import { nip19, type Event as NostrToolsEvent } from "nostr-tools";
 import React, { useMemo, useState } from "react";
 import {
@@ -18,7 +25,6 @@ import { navigateTo, useRouting } from "../../../hooks/useRouting";
 import { useDeferredOnlineReady } from "../../../hooks/useDeferredOnlineReady";
 import { type Lang } from "../../../i18n";
 import { getProfilePictureUrl, loadCachedProfile } from "../../../profileCache";
-import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import {
   buildStatusFilterValue,
   extractStatusFilterCurrencies,
@@ -84,10 +90,10 @@ import { useRelayDomain } from "../useRelayDomain";
 import { findUniqueContactByLightningAddress } from "../../lib/contactIdentity";
 import { resolveContactRowOwnerLane } from "../../lib/contactOwnerLane";
 import {
-  createLinkyBankPaymentOfferEvent,
   forgetLinkyBankPaymentOfferSpdPayload,
   getLinkyBankPaymentOfferExpiresAtSec,
   getLinkyBankPaymentOfferInfo,
+  getLinkyBankPaymentOfferMessageText,
   getLinkyBankPaymentOfferStatusRank,
   getLastBankPaymentOfferResponseSecByContactId,
   isLinkyBankPaymentOfferExpired,
@@ -101,24 +107,15 @@ import {
   mergeBankPaymentOffersIntoLastMessageByContactId,
   readLinkyBankPaymentOfferSpdRecord,
   rememberLinkyBankPaymentOfferSpdPayload,
-  shouldPushLinkyBankPaymentOfferStatus,
   type LinkyBankPaymentOfferStatus,
 } from "../../lib/bankPaymentOffer";
 import type { AppNostrPool } from "../../lib/nostrPool";
-import { getSharedAppNostrPool } from "../../lib/nostrPool";
-import {
-  publishSingleWrappedWithRetry as publishSingleWrappedWithRetryBase,
-  publishWrappedWithRetry as publishWrappedWithRetryBase,
-} from "../../lib/nostrPublishRetry";
+import { publishWrappedWithRetry as publishWrappedWithRetryBase } from "../../lib/nostrPublishRetry";
 import { buildLinkyPaymentRequestDeclineMessage } from "../../lib/paymentRequestMessage";
 import {
   parsePrivateImageMessage,
   privateImagePreviewText,
 } from "../../lib/privateImageMessage";
-import {
-  wrapEventWithoutPushMarker,
-  wrapEventWithPushMarker,
-} from "../../lib/pushWrappedEvent";
 import type {
   ContactRowLike,
   LocalNostrMessage,
@@ -129,6 +126,23 @@ import type {
 const inMemoryNostrPictureCache = new Map<string, string | null>();
 
 const isPubkey = Schema.is(Pubkey);
+const isBankOfferId = Schema.is(BankOfferId);
+const isNonEmptyTrimmedString = Schema.is(Schema.NonEmptyTrimmedString);
+const isPositiveInt = Schema.is(Schema.Int.pipe(Schema.positive()));
+const isUnixSeconds = Schema.is(UnixSeconds);
+
+const positiveInt = (value: unknown): number | undefined => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  const integer = Math.trunc(value);
+  return isPositiveInt(integer) ? integer : undefined;
+};
+
+const positiveUnixSeconds = (value: unknown): UnixSeconds | undefined => {
+  const integer = positiveInt(value);
+  return integer !== undefined && isUnixSeconds(integer) ? integer : undefined;
+};
 
 const INLINE_NPUB_PATTERN =
   /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?/gi;
@@ -335,6 +349,9 @@ export const useContactsMessagingComposition = ({
   update,
   upsert,
 }: UseContactsMessagingCompositionParams) => {
+  const sendBankOffer = useAtomSet(sendBankOfferAtom, {
+    mode: "promiseExit",
+  });
   const [pendingDeleteId, setPendingDeleteId] = useState<ContactId | null>(
     null,
   );
@@ -1639,21 +1656,6 @@ export const useContactsMessagingComposition = ({
     [],
   );
 
-  const publishSingleWrappedWithRetry = React.useCallback(
-    async (
-      pool: AppNostrPool,
-      relays: string[],
-      event: NostrToolsEvent,
-    ): Promise<{ anySuccess: boolean; error: string | null }> => {
-      return await publishSingleWrappedWithRetryBase({
-        event,
-        pool,
-        relays,
-      });
-    },
-    [],
-  );
-
   const requestBankPaymentOffer = React.useCallback(
     async (args: {
       amountSat?: unknown;
@@ -1690,8 +1692,8 @@ export const useContactsMessagingComposition = ({
         ) {
           throw new Error("invalid nsec");
         }
-        const privBytes = decodedMe.data;
-        const myPubHex = getPublicKey(privBytes);
+        const myPubHex = getPublicKey(decodedMe.data);
+        if (!isPubkey(myPubHex)) throw new Error("invalid public key");
 
         const recipients: {
           contactId: string;
@@ -1720,6 +1722,10 @@ export const useContactsMessagingComposition = ({
         }
 
         const offerId = makeLocalId();
+        if (!isBankOfferId(offerId)) {
+          setStatus(t("spdPaymentOfferFailed"));
+          return null;
+        }
         if (spdPayload) {
           // Persisted so the offer survives an app reload: the auto-responder
           // needs this payload when a recipient's acceptance arrives later.
@@ -1730,64 +1736,52 @@ export const useContactsMessagingComposition = ({
           });
         }
 
-        const pool = await getSharedAppNostrPool();
         let sentCount = 0;
         let firstSentContactId = "";
 
         for (const recipient of recipients) {
-          const clientId = makeLocalId();
-          const baseEvent = createLinkyBankPaymentOfferEvent({
-            amountSat,
+          if (!isPubkey(recipient.contactPubHex)) continue;
+
+          const clientId = ClientId.make(makeLocalId());
+          const text = getLinkyBankPaymentOfferMessageText(
             amountText,
-            clientId,
-            createdAt: Math.ceil(Date.now() / 1e3),
-            offerId,
-            offererPublicKey: myPubHex,
-            recipientPublicKey: recipient.contactPubHex,
-            senderPublicKey: myPubHex,
-            status: "offered",
-          });
-
-          const wrapForMe = wrapEventWithoutPushMarker(
-            baseEvent,
-            privBytes,
-            myPubHex,
+            "offered",
           );
-          const wrapForContact = wrapEventWithPushMarker(
-            baseEvent,
-            privBytes,
-            recipient.contactPubHex,
-          );
+          if (!isNonEmptyTrimmedString(text)) continue;
 
-          const publishOutcome = await publishWrappedWithRetry(
-            pool,
-            NOSTR_RELAYS,
-            wrapForMe,
-            wrapForContact,
+          const exit = await sendBankOffer(
+            new BankOfferDraft({
+              to: recipient.contactPubHex,
+              offerId,
+              offerer: myPubHex,
+              status: "offered",
+              amountText,
+              text,
+              ...(amountSat !== null && isPositiveInt(amountSat)
+                ? { amountSat }
+                : {}),
+              clientId,
+            }),
           );
 
-          if (!publishOutcome.anySuccess) continue;
+          if (!Exit.isSuccess(exit)) continue;
           sentCount += 1;
           if (!firstSentContactId) {
             firstSentContactId = recipient.contactId;
           }
 
-          const messageWrapId =
-            String(wrapForMe.id ?? "").trim() ||
-            String(wrapForContact.id ?? "").trim() ||
-            `bank-payment-offer:${clientId}`;
           upsertBankPaymentOfferMessage({
             clientId,
             contactId: recipient.contactId,
-            content: baseEvent.content,
-            createdAtSec: baseEvent.created_at,
+            content: exit.value.content,
+            createdAtSec: exit.value.sentAt,
             direction: "out",
             id: `bank-payment-offer:${recipient.contactId}:${offerId}`,
             localOnly: true,
             pubkey: myPubHex,
             rumorId: null,
             status: "sent",
-            wrapId: messageWrapId,
+            wrapId: exit.value.selfCopy.wrapId,
           });
         }
 
@@ -1804,13 +1798,7 @@ export const useContactsMessagingComposition = ({
         return null;
       }
     },
-    [
-      currentNsec,
-      publishWrappedWithRetry,
-      setStatus,
-      t,
-      upsertBankPaymentOfferMessage,
-    ],
+    [currentNsec, sendBankOffer, setStatus, t, upsertBankPaymentOfferMessage],
   );
 
   const respondToBankPaymentOffer = React.useCallback(
@@ -1820,7 +1808,6 @@ export const useContactsMessagingComposition = ({
       options?: {
         expiresAtSec?: number | null;
         extensionSec?: number | null;
-        requireContactDelivery?: boolean;
         spdPayload?: string | null;
         withPush?: boolean;
       },
@@ -1846,8 +1833,8 @@ export const useContactsMessagingComposition = ({
         ) {
           throw new Error("invalid nsec");
         }
-        const privBytes = decodedMe.data;
-        const myPubHex = getPublicKey(privBytes);
+        const myPubHex = getPublicKey(decodedMe.data);
+        if (!isPubkey(myPubHex)) throw new Error("invalid public key");
         const messageDirection = String(message.direction ?? "").trim();
         const offererPublicKey =
           String(offerInfo.offererPublicKey ?? "").trim() ||
@@ -1855,7 +1842,7 @@ export const useContactsMessagingComposition = ({
             ? myPubHex
             : String(message.pubkey ?? "").trim());
 
-        if (!offererPublicKey) {
+        if (!isPubkey(offererPublicKey)) {
           setStatus(t("spdPaymentOfferFailed"));
           return false;
         }
@@ -1883,104 +1870,81 @@ export const useContactsMessagingComposition = ({
             ? (contactPubkey ??
               (messagePubkey !== myPubHex ? messagePubkey : ""))
             : offererPublicKey;
-        if (!recipientPublicKey || recipientPublicKey === myPubHex) {
+        if (!isPubkey(recipientPublicKey) || recipientPublicKey === myPubHex) {
           setStatus(t("spdPaymentOfferFailed"));
           return false;
         }
 
-        const clientId = makeLocalId();
-        const baseEvent = createLinkyBankPaymentOfferEvent({
-          amountSat: offerInfo.amountSat,
-          amountText: offerInfo.amountText,
-          bankPaidAtSec:
-            offerInfo.bankPaidAtSec ??
+        const offerId = offerInfo.offerId;
+        const amountText = offerInfo.amountText;
+        if (!isBankOfferId(offerId) || !isNonEmptyTrimmedString(amountText)) {
+          setStatus(t("spdPaymentOfferFailed"));
+          return false;
+        }
+
+        const clientId = ClientId.make(makeLocalId());
+        const initiatedAtSec = positiveUnixSeconds(
+          offerInfo.initiatedAtSec ?? Number(message.createdAtSec ?? 0),
+        );
+        const bankPaidAtSec = positiveUnixSeconds(
+          offerInfo.bankPaidAtSec ??
             (offerInfo.status === "bank_paid"
               ? offerInfo.statusUpdatedAtSec
               : null),
-          clientId,
-          createdAt: Math.ceil(Date.now() / 1e3),
-          ...(options?.expiresAtSec !== undefined
-            ? { expiresAtSec: options.expiresAtSec }
-            : {}),
-          ...(options?.extensionSec !== undefined
-            ? { extensionSec: options.extensionSec }
-            : {}),
-          initiatedAtSec:
-            offerInfo.initiatedAtSec ?? Number(message.createdAtSec ?? 0),
-          offerId: offerInfo.offerId,
-          offererPublicKey,
-          recipientPublicKey,
-          senderPublicKey: myPubHex,
-          spdPayload: options?.spdPayload ?? offerInfo.spdPayload,
-          status: nextStatus,
-        });
-
-        const wrapForMe = wrapEventWithoutPushMarker(
-          baseEvent,
-          privBytes,
-          myPubHex,
         );
-        const withPush =
-          options?.withPush ??
-          shouldPushLinkyBankPaymentOfferStatus(nextStatus);
-        const wrapForContact = withPush
-          ? wrapEventWithPushMarker(baseEvent, privBytes, recipientPublicKey)
-          : wrapEventWithoutPushMarker(
-              baseEvent,
-              privBytes,
-              recipientPublicKey,
-            );
-
-        const pool = await getSharedAppNostrPool();
-        if (options?.requireContactDelivery) {
-          // Publish the contact wrap first and treat its failure as the whole
-          // send failing: publishing only the self copy would sync a
-          // bank_details_sent status the recipient never received, which
-          // suppresses every retry.
-          const contactOutcome = await publishSingleWrappedWithRetry(
-            pool,
-            NOSTR_RELAYS,
-            wrapForContact,
-          );
-          if (!contactOutcome.anySuccess) {
-            setStatus(t("spdPaymentOfferFailed"));
-            return false;
-          }
-          try {
-            await publishSingleWrappedWithRetry(pool, NOSTR_RELAYS, wrapForMe);
-          } catch {
-            // Self copy is best effort; the contact already has the details.
-          }
-        } else {
-          const publishOutcome = await publishWrappedWithRetry(
-            pool,
-            NOSTR_RELAYS,
-            wrapForMe,
-            wrapForContact,
-          );
-
-          if (!publishOutcome.anySuccess) {
-            setStatus(t("spdPaymentOfferFailed"));
-            return false;
-          }
+        const expiresAtSec = positiveUnixSeconds(options?.expiresAtSec);
+        const extensionSec = positiveInt(options?.extensionSec);
+        const amountSat = positiveInt(offerInfo.amountSat);
+        const spdPayload = String(
+          options?.spdPayload ?? offerInfo.spdPayload ?? "",
+        ).trim();
+        const text = getLinkyBankPaymentOfferMessageText(
+          amountText,
+          nextStatus,
+          extensionSec,
+        );
+        if (!isNonEmptyTrimmedString(text)) {
+          setStatus(t("spdPaymentOfferFailed"));
+          return false;
         }
 
-        const messageWrapId =
-          String(wrapForMe.id ?? "").trim() ||
-          String(wrapForContact.id ?? "").trim() ||
-          `bank-payment-offer:${clientId}`;
+        const exit = await sendBankOffer(
+          new BankOfferDraft({
+            to: recipientPublicKey,
+            offerId,
+            offerer: offererPublicKey,
+            status: nextStatus,
+            amountText,
+            text,
+            ...(amountSat === undefined ? {} : { amountSat }),
+            ...(initiatedAtSec === undefined ? {} : { initiatedAtSec }),
+            ...(bankPaidAtSec === undefined ? {} : { bankPaidAtSec }),
+            ...(expiresAtSec === undefined ? {} : { expiresAtSec }),
+            ...(extensionSec === undefined ? {} : { extensionSec }),
+            ...(isNonEmptyTrimmedString(spdPayload) ? { spdPayload } : {}),
+            ...(options?.withPush === undefined
+              ? {}
+              : { pushMark: options.withPush }),
+            clientId,
+          }),
+        );
+        if (!Exit.isSuccess(exit)) {
+          setStatus(t("spdPaymentOfferFailed"));
+          return false;
+        }
+
         upsertBankPaymentOfferMessage({
           clientId,
           contactId: String(message.contactId ?? "").trim(),
-          content: baseEvent.content,
-          createdAtSec: baseEvent.created_at,
+          content: exit.value.content,
+          createdAtSec: exit.value.sentAt,
           direction: offererPublicKey === myPubHex ? "out" : "in",
           id: `bank-payment-offer:${offerInfo.offerId}`,
           localOnly: true,
           pubkey: offererPublicKey === myPubHex ? myPubHex : offererPublicKey,
           rumorId: null,
           status: "sent",
-          wrapId: messageWrapId,
+          wrapId: exit.value.selfCopy.wrapId,
         });
 
         return true;
@@ -1994,8 +1958,7 @@ export const useContactsMessagingComposition = ({
     [
       currentNsec,
       contacts,
-      publishSingleWrappedWithRetry,
-      publishWrappedWithRetry,
+      sendBankOffer,
       setStatus,
       t,
       upsertBankPaymentOfferMessage,
@@ -2204,7 +2167,6 @@ export const useContactsMessagingComposition = ({
               await respondToBankPaymentOffer(
                 entry.message,
                 "accepted_by_other",
-                { requireContactDelivery: true },
               );
             }
           };
@@ -2286,7 +2248,6 @@ export const useContactsMessagingComposition = ({
                   candidate.message,
                   "bank_details_sent",
                   {
-                    requireContactDelivery: true,
                     spdPayload: lockedRecord.spdPayload,
                   },
                 );
@@ -3501,7 +3462,6 @@ export const useContactsMessagingComposition = ({
     pendingDeleteId,
     pendingPayments,
     pendingRelayDeleteUrl,
-    publishSingleWrappedWithRetry,
     publishWrappedWithRetry,
     reactionsByMessageId,
     reassignLocalNostrMessagesContactId: reassignNostrConversationContactId,

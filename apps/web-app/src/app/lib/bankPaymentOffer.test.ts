@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createLinkyBankPaymentOfferEvent } from "../../testUtils/bankPaymentOfferEvent";
 import type { LocalNostrMessage } from "../types/appTypes";
 import {
-  createLinkyBankPaymentOfferEvent,
   forgetLinkyBankPaymentOfferSpdPayload,
   getActiveBankPaymentOfferContacts,
   getLastBankPaymentOfferResponseSecByContactId,

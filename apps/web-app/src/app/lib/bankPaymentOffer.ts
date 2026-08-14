@@ -1,4 +1,3 @@
-import type { UnsignedEvent } from "nostr-tools";
 import type { LocalNostrMessage } from "../types/appTypes";
 
 export const LINKY_BANK_PAYMENT_OFFER_KIND = 24135;
@@ -342,6 +341,21 @@ const getOfferText = (
   }
 };
 
+export const getLinkyBankPaymentOfferMessageText = (
+  amountText: string,
+  status: LinkyBankPaymentOfferStatus,
+  extensionSec?: number | null,
+): string => {
+  if (
+    typeof extensionSec === "number" &&
+    Number.isFinite(extensionSec) &&
+    extensionSec > 0
+  ) {
+    return `Potřebuji víc času (+${Math.trunc(extensionSec)} s).`;
+  }
+  return getOfferText(amountText, status);
+};
+
 export const shouldPushLinkyBankPaymentOfferStatus = (
   status: LinkyBankPaymentOfferStatus,
 ): boolean =>
@@ -351,104 +365,6 @@ export const shouldPushLinkyBankPaymentOfferStatus = (
   status === "bank_paid" ||
   status === "declined" ||
   status === "offered";
-
-export const createLinkyBankPaymentOfferEvent = (args: {
-  amountText: string;
-  amountSat?: number | null;
-  bankPaidAtSec?: number | null;
-  clientId: string;
-  createdAt: number;
-  expiresAtSec?: number | null | undefined;
-  extensionSec?: number | null | undefined;
-  initiatedAtSec?: number | null;
-  offererPublicKey?: string;
-  offerId?: string;
-  recipientPublicKey: string;
-  senderPublicKey: string;
-  spdPayload?: string | null;
-  status?: LinkyBankPaymentOfferStatus;
-}): UnsignedEvent => {
-  const status = args.status ?? "offered";
-  const offerId = String(args.offerId ?? args.clientId).trim();
-  const offererPublicKey =
-    String(args.offererPublicKey ?? "").trim() || args.senderPublicKey;
-  const text = getOfferText(args.amountText, status);
-  const contentPayload: Record<string, unknown> = {
-    amountText: args.amountText,
-    offerId,
-    offererPublicKey,
-    status,
-    statusUpdatedAtSec: args.createdAt,
-    text,
-    type: "linky.bank_payment_offer",
-    version: 1,
-  };
-  const initiatedAtSec =
-    typeof args.initiatedAtSec === "number" &&
-    Number.isFinite(args.initiatedAtSec) &&
-    args.initiatedAtSec > 0
-      ? Math.trunc(args.initiatedAtSec)
-      : status === "offered"
-        ? Math.trunc(args.createdAt)
-        : null;
-  if (initiatedAtSec !== null) {
-    contentPayload.initiatedAtSec = initiatedAtSec;
-  }
-  const bankPaidAtSec =
-    typeof args.bankPaidAtSec === "number" &&
-    Number.isFinite(args.bankPaidAtSec) &&
-    args.bankPaidAtSec > 0
-      ? Math.trunc(args.bankPaidAtSec)
-      : status === "bank_paid"
-        ? Math.trunc(args.createdAt)
-        : null;
-  if (bankPaidAtSec !== null) {
-    contentPayload.bankPaidAtSec = bankPaidAtSec;
-  }
-  if (
-    typeof args.expiresAtSec === "number" &&
-    Number.isFinite(args.expiresAtSec) &&
-    args.expiresAtSec > 0
-  ) {
-    contentPayload.expiresAtSec = Math.trunc(args.expiresAtSec);
-  }
-  if (
-    typeof args.extensionSec === "number" &&
-    Number.isFinite(args.extensionSec) &&
-    args.extensionSec > 0
-  ) {
-    contentPayload.extensionSec = Math.trunc(args.extensionSec);
-    contentPayload.text = `Potřebuji víc času (+${Math.trunc(args.extensionSec)} s).`;
-  }
-  if (
-    typeof args.amountSat === "number" &&
-    Number.isFinite(args.amountSat) &&
-    args.amountSat > 0
-  ) {
-    contentPayload.amountSat = Math.round(args.amountSat);
-  }
-  const spdPayload = String(args.spdPayload ?? "").trim();
-  if (spdPayload) {
-    contentPayload.spdPayload = spdPayload;
-  }
-  const content = JSON.stringify(contentPayload);
-
-  return {
-    created_at: args.createdAt,
-    kind: LINKY_BANK_PAYMENT_OFFER_KIND,
-    pubkey: args.senderPublicKey,
-    tags: [
-      ["p", args.recipientPublicKey],
-      ["p", args.senderPublicKey],
-      ["client", args.clientId],
-      ["offer", offerId],
-      ["offerer", offererPublicKey],
-      ["linky", LINKY_BANK_PAYMENT_OFFER_VALUE],
-      ["status", status],
-    ],
-    content,
-  };
-};
 
 export const isLinkyBankPaymentOfferEvent = (event: {
   kind: number;
