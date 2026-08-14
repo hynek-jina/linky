@@ -30,7 +30,11 @@ import { useEvolu, type ContactId } from "../../../evolu";
 import { navigateTo, useRouting } from "../../../hooks/useRouting";
 import { useDeferredOnlineReady } from "../../../hooks/useDeferredOnlineReady";
 import { type Lang } from "../../../i18n";
-import { getProfilePictureUrl, loadCachedProfile } from "../../../profileCache";
+import {
+  getProfilePictureUrl,
+  loadCachedProfile,
+  releaseAllAvatarObjectUrls,
+} from "../../../profileCache";
 import {
   buildStatusFilterValue,
   extractStatusFilterCurrencies,
@@ -452,58 +456,12 @@ export const useContactsMessagingComposition = ({
     Record<string, ProfileMetadata | null>
   >({});
 
-  const avatarObjectUrlsByNpubRef = React.useRef<Map<string, string>>(
-    new Map(),
-  );
-
   React.useEffect(() => {
-    const objectUrls = avatarObjectUrlsByNpubRef.current;
     return () => {
-      for (const url of objectUrls.values()) {
-        if (!url.startsWith("blob:")) continue;
-        try {
-          URL.revokeObjectURL(url);
-        } catch {
-          // ignore
-        }
-      }
-      objectUrls.clear();
+      releaseAllAvatarObjectUrls();
       inMemoryNostrPictureCache.clear();
     };
   }, [currentNsec]);
-
-  const rememberBlobAvatarUrl = React.useCallback(
-    (npub: string, url: string | null): string | null => {
-      const key = String(npub ?? "").trim();
-      if (!key) return url;
-
-      const existing = avatarObjectUrlsByNpubRef.current.get(key);
-
-      if (url && url.startsWith("blob:")) {
-        if (existing && existing !== url) {
-          try {
-            URL.revokeObjectURL(existing);
-          } catch {
-            // ignore
-          }
-        }
-        avatarObjectUrlsByNpubRef.current.set(key, url);
-        return url;
-      }
-
-      if (existing && existing.startsWith("blob:")) {
-        try {
-          URL.revokeObjectURL(existing);
-        } catch {
-          // ignore
-        }
-      }
-
-      avatarObjectUrlsByNpubRef.current.delete(key);
-      return url;
-    },
-    [],
-  );
 
   const [chatDraft, setChatDraft] = useState<string>("");
 
@@ -993,7 +951,6 @@ export const useContactsMessagingComposition = ({
     contactsVisibleOwnerIds,
     currentNpub,
     enabled: nostrBootstrapReady,
-    rememberBlobAvatarUrl,
     routeKind: route.kind,
     setNostrMetadataByNpub,
     setNostrPictureByNpub,

@@ -129,7 +129,6 @@ interface ProfileSyncContext {
   contacts: readonly (ContactRowLike & { id: string })[];
   contactsOwnerId: Evolu.OwnerId | null;
   contactsVisibleOwnerIds: readonly Evolu.OwnerId[];
-  rememberBlobAvatarUrl: (npub: string, url: string | null) => string | null;
   routeKind: string;
   setNostrMetadataByNpub: SetByNpub<ProfileMetadata>;
   setNostrPictureByNpub: SetByNpub<string>;
@@ -199,19 +198,14 @@ const applyProfileUpdated = (
   const url = getProfilePictureUrl(fact.metadata);
   if (url === null) {
     void deleteCachedProfileAvatar(npub);
-    ctx.rememberBlobAvatarUrl(npub, null);
     ctx.setNostrPictureByNpub((prev) => ({ ...prev, [npub]: null }));
   } else if (url !== previousUrl) {
     ctx.setNostrPictureByNpub((prev) => ({ ...prev, [npub]: url }));
     void cacheProfileAvatarFromUrl(npub, url).then((blobUrl) => {
       if (blobUrl) {
-        ctx.setNostrPictureByNpub((prev) => ({
-          ...prev,
-          [npub]: ctx.rememberBlobAvatarUrl(npub, blobUrl),
-        }));
+        ctx.setNostrPictureByNpub((prev) => ({ ...prev, [npub]: blobUrl }));
       } else {
         void deleteCachedProfileAvatar(npub);
-        ctx.rememberBlobAvatarUrl(npub, null);
       }
     });
   }
@@ -263,7 +257,7 @@ export const useLinkstrProfileSync = ({
   const setProfileWatchHandler = useAtomSet(profileWatchHandlerAtom);
   useAtomMount(profileWatchAtom);
 
-  const { contacts, rememberBlobAvatarUrl } = context;
+  const { contacts } = context;
   const {
     setNostrMetadataByNpub,
     setNostrPictureByNpub,
@@ -328,9 +322,7 @@ export const useLinkstrProfileSync = ({
           void loadCachedProfileAvatarObjectUrl(npub).then((blobUrl) => {
             if (cancelled || !blobUrl) return;
             setNostrPictureByNpub((prev) =>
-              prev[npub] === url
-                ? { ...prev, [npub]: rememberBlobAvatarUrl(npub, blobUrl) }
-                : prev,
+              prev[npub] === url ? { ...prev, [npub]: blobUrl } : prev,
             );
           });
         }
@@ -350,7 +342,6 @@ export const useLinkstrProfileSync = ({
       cancelled = true;
     };
   }, [
-    rememberBlobAvatarUrl,
     setNostrMetadataByNpub,
     setNostrPictureByNpub,
     setNostrStatusByNpub,
