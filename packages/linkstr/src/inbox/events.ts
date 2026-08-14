@@ -1,6 +1,15 @@
 import { Schema } from "effect";
 import { WrapId } from "../domain/primitives";
 
+/**
+ * Receive phase of a wrap: "backfill" until its relay signals EOSE, "live"
+ * after. Only live events should interrupt the user; a relay that never sends
+ * EOSE conservatively stays in backfill (a missed interruption, never a
+ * spurious one).
+ */
+export const InboxDelivery = Schema.Literal("backfill", "live");
+export type InboxDelivery = typeof InboxDelivery.Type;
+
 export const DropReason = Schema.Literal(
   "malformed-wrap",
   "not-addressed-to-me",

@@ -141,6 +141,7 @@ describe("linkstrEventToRow", () => {
       new InboxRouted({
         wrapId: recipientWrapId,
         rumorKind: 7,
+        delivery: "live",
         event: new ReactionAdded({
           reactionId: rumorId,
           target: rumorId,
@@ -161,6 +162,7 @@ describe("linkstrEventToRow", () => {
       new InboxRouted({
         wrapId: recipientWrapId,
         rumorKind: 14,
+        delivery: "backfill",
         event: new WrapDropped({
           wrapId: recipientWrapId,
           reason: "unsupported-kind",

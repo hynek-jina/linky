@@ -1,14 +1,26 @@
 import { Atom } from "@effect-atom/atom-react";
 import { WrapInbox } from "@linky/linkstr";
-import type { UnixSeconds, WrapInboxEvent } from "@linky/linkstr";
+import type {
+  DeliveredInboxEvent,
+  InboxDelivery,
+  UnixSeconds,
+  WrapInboxEvent,
+} from "@linky/linkstr";
 import { Effect, Stream } from "effect";
 import { linkstrRuntimeAtom } from "./runtime";
 
 export interface WrapInboxHandler {
   /** Backfill cursor persisted by a previous session, if any. */
   readonly since?: UnixSeconds;
-  /** Called once per inbox event, in order; the next event waits for it. */
-  readonly onEvent: (event: WrapInboxEvent) => void | Promise<void>;
+  /**
+   * Called once per inbox event, in order; the next event waits for it.
+   * `delivery` is "live" only for events published after the relay's EOSE —
+   * the ones worth interrupting the user for.
+   */
+  readonly onEvent: (
+    event: WrapInboxEvent,
+    delivery: InboxDelivery,
+  ) => void | Promise<void>;
   /** Called after `onEvent` settles; persist as the next session's `since`. */
   readonly onCursor?: (cursor: UnixSeconds) => void;
 }
@@ -31,9 +43,9 @@ export const wrapInboxAtom = linkstrRuntimeAtom.atom((get) => {
       const feed = yield* inbox.open(
         handler.since === undefined ? {} : { since: handler.since },
       );
-      const handle = (event: WrapInboxEvent) =>
+      const handle = (delivered: DeliveredInboxEvent) =>
         Effect.promise(async () => {
-          await handler.onEvent(event);
+          await handler.onEvent(delivered.event, delivered.delivery);
         }).pipe(
           Effect.andThen(feed.cursor),
           Effect.tap((cursor) =>
@@ -41,7 +53,7 @@ export const wrapInboxAtom = linkstrRuntimeAtom.atom((get) => {
               if (cursor !== null) handler.onCursor?.(cursor);
             }),
           ),
-          Effect.as(event),
+          Effect.as(delivered),
         );
       return Stream.mapEffect(feed.events, handle);
     }),
