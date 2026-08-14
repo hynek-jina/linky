@@ -1,6 +1,11 @@
+import {
+  makeBlossomUploadAuthHeader,
+  NostrSecretKey,
+  UnixSeconds,
+} from "@linky/linkstr";
 import { sha256 } from "@noble/hashes/sha2.js";
-import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
-import { finalizeEvent } from "nostr-tools";
+import { Schema } from "effect";
+import type { Event as NostrToolsEvent } from "nostr-tools";
 
 const PRIVATE_IMAGE_MESSAGE_TYPE = "linky.private_image.v1";
 const PRIVATE_IMAGE_COMPACT_PREFIX = "linky:image:v1:";
@@ -64,7 +69,6 @@ interface UploadDescriptor {
 
 interface BlossomUploadAuth {
   privateKey: Uint8Array;
-  pubkey: string;
 }
 
 export interface PrivateImageSendResult {
@@ -73,6 +77,7 @@ export interface PrivateImageSendResult {
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const isNostrSecretKey = Schema.is(NostrSecretKey);
 
 const bytesToHex = (bytes: Uint8Array): string =>
   Array.from(bytes)
@@ -302,28 +307,20 @@ const uploadToBlossom = async (
   prepared: PreparedPrivateImage,
   auth: BlossomUploadAuth,
 ): Promise<UploadDescriptor> => {
+  if (!isNostrSecretKey(auth.privateKey)) {
+    throw new Error("chat-image-auth-failed");
+  }
   let lastError: unknown = null;
 
   for (const server of BLOSSOM_UPLOAD_SERVERS) {
     try {
       const baseUrl = server.replace(/\/+$/, "");
       const serverDomain = new URL(baseUrl).hostname.toLowerCase();
-      const authEvent = {
-        kind: 24242,
-        created_at: Math.floor(Date.now() / 1000),
-        pubkey: auth.pubkey,
-        tags: [
-          ["t", "upload"],
-          ["expiration", String(Math.floor(Date.now() / 1000) + 10 * 60)],
-          ["x", prepared.encryptedSha256],
-          ["server", serverDomain],
-        ],
-        content: "Upload Blob",
-      } satisfies UnsignedEvent;
-      const signedAuthEvent = finalizeEvent(authEvent, auth.privateKey);
-      const authHeader = `Nostr ${bytesToBase64Url(
-        textEncoder.encode(JSON.stringify(signedAuthEvent)),
-      )}`;
+      const authHeader = makeBlossomUploadAuthHeader(
+        { sha256: prepared.encryptedSha256, serverDomain },
+        auth.privateKey,
+        UnixSeconds.make(Math.floor(Date.now() / 1000)),
+      );
       const uploadBody = copyToArrayBuffer(prepared.encryptedBytes);
       let response: Response;
       try {

@@ -4,7 +4,13 @@ import {
   type PushNotificationSchema,
   type Token,
 } from "@capacitor/push-notifications";
-import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
+import {
+  makePushOwnershipProof,
+  NostrSecretKey,
+  UnixSeconds,
+  type SignedPlainEvent,
+} from "@linky/linkstr";
+import { Schema } from "effect";
 import {
   getNativeNotificationPermissionState,
   NATIVE_PUSH_ACTION_EVENT,
@@ -26,6 +32,7 @@ const REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY = "linky.push_native_token";
 const REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY = "linky.push_native_pubkey";
 const PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY =
   "linky.push_notifications_disabled";
+const isNostrSecretKey = Schema.is(NostrSecretKey);
 
 let nativePushListenersPromise: Promise<void> | null = null;
 const pendingNativePushTokenWaiters = new Set<{
@@ -183,7 +190,7 @@ type ChallengeResponse = {
 };
 
 type OwnershipProof = {
-  event: NostrToolsEvent;
+  event: SignedPlainEvent;
   pubkey: string;
 };
 
@@ -294,13 +301,13 @@ async function readErrorMessage(response: Response): Promise<string> {
 }
 
 async function derivePushIdentity(currentNsec: string): Promise<{
-  privBytes: Uint8Array;
+  privBytes: NostrSecretKey;
   pubkey: string;
 }> {
   const { getPublicKey, nip19 } = await import("nostr-tools");
 
   const decoded = nip19.decode(currentNsec);
-  if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
+  if (decoded.type !== "nsec" || !isNostrSecretKey(decoded.data)) {
     throw new Error("Invalid nsec");
   }
 
@@ -367,28 +374,14 @@ async function createOwnershipProof(params: {
   challenge: string;
   currentNsec: string;
 }): Promise<OwnershipProof> {
-  const { finalizeEvent } = await import("nostr-tools");
   const { privBytes, pubkey } = await derivePushIdentity(params.currentNsec);
 
-  const content =
-    params.action === "subscribe"
-      ? "linky-push-subscribe"
-      : "linky-push-unsubscribe";
-
-  const baseEvent = {
-    kind: 27235,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [
-      ["challenge", params.challenge],
-      ["action", params.action],
-      ["pubkey", pubkey],
-    ],
-    content,
-    pubkey,
-  } satisfies UnsignedEvent;
-
   return {
-    event: finalizeEvent(baseEvent, privBytes),
+    event: makePushOwnershipProof(
+      { action: params.action, challenge: params.challenge },
+      privBytes,
+      UnixSeconds.make(Math.floor(Date.now() / 1000)),
+    ),
     pubkey,
   };
 }

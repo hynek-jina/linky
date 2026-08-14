@@ -126,7 +126,6 @@ export const useSendChatMessage = <
         const imagePayload = imageFile
           ? await createPrivateImageSendPayload(imageFile, {
               privateKey: privBytes,
-              pubkey: myPubHex,
             })
           : null;
         const messageContent = imagePayload?.content ?? text;

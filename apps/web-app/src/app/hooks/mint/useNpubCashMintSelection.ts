@@ -1,3 +1,9 @@
+import {
+  makeNip98AuthHeader as makeLinkstrNip98AuthHeader,
+  NostrSecretKey,
+  UnixSeconds,
+} from "@linky/linkstr";
+import { Schema } from "effect";
 import React from "react";
 import { CASHU_AUTOSWAP_MIN_SOURCE_SUM } from "../../../utils/constants";
 import {
@@ -7,6 +13,8 @@ import {
 } from "../../../utils/mint";
 import { isNpubCashDisabled } from "../../../utils/npubCashServer";
 import { safeLocalStorageSet } from "../../../utils/storage";
+
+const isNostrSecretKey = Schema.is(NostrSecretKey);
 
 interface MintSelectionAutoswapPlanArgs {
   cashuAutoswapEnabled: boolean;
@@ -135,19 +143,17 @@ export const useNpubCashMintSelection = ({
   const makeNip98AuthHeader = React.useCallback(
     async (url: string, method: string, payload?: Record<string, string>) => {
       if (!currentNsec) throw new Error("Missing nsec");
-      const { nip19, nip98, finalizeEvent } = await import("nostr-tools");
+      const { nip19 } = await import("nostr-tools");
       const decoded = nip19.decode(currentNsec);
-      if (decoded.type !== "nsec") throw new Error("Invalid nsec");
-      const privBytes = decoded.data as Uint8Array;
+      if (decoded.type !== "nsec" || !isNostrSecretKey(decoded.data)) {
+        throw new Error("Invalid nsec");
+      }
 
-      const token = await nip98.getToken(
-        url,
-        method,
-        async (event) => finalizeEvent(event, privBytes),
-        true,
-        payload,
+      return makeLinkstrNip98AuthHeader(
+        payload === undefined ? { url, method } : { url, method, payload },
+        decoded.data,
+        UnixSeconds.make(Math.floor(Date.now() / 1000)),
       );
-      return token;
     },
     [currentNsec],
   );
