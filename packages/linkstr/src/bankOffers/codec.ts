@@ -5,7 +5,11 @@ import { Rumor, rumorWithHash, tagValues } from "../internal/nostrEvent";
 import type { NostrTags } from "../internal/nostrEvent";
 import { BankOfferId, BankOfferStatus } from "./domain";
 import type { BankOfferDraft } from "./domain";
-import { BankOfferSnapshotReceived } from "./events";
+import {
+  BankOfferSnapshotReceived,
+  OwnBankOfferSnapshotConfirmed,
+} from "./events";
+import type { BankOfferInboxEvent } from "./events";
 
 export const BANK_OFFER_KIND = 24135;
 export const BANK_OFFER_VALUE = "bank_payment_offer";
@@ -131,7 +135,7 @@ const decodeContent = (content: string) =>
 export const decodeBankOfferRumor = (
   rumor: Rumor,
   me: Pubkey,
-): Either.Either<BankOfferSnapshotReceived, DropReason> => {
+): Either.Either<BankOfferInboxEvent, DropReason> => {
   const snapshotId = rumor.id;
   if (
     rumor.kind !== BANK_OFFER_KIND ||
@@ -152,25 +156,35 @@ export const decodeBankOfferRumor = (
       if (offerer === null || !isPubkey(offerer)) {
         return Either.left<DropReason>("invalid-bank-offer");
       }
+      const snapshot = {
+        snapshotId,
+        offerId,
+        offerer,
+        status,
+        amountText,
+        text: trimmedString(record.text),
+        amountSat: positiveInt(record.amountSat),
+        initiatedAtSec: unixSeconds(record.initiatedAtSec),
+        bankPaidAtSec: unixSeconds(record.bankPaidAtSec),
+        expiresAtSec: unixSeconds(record.expiresAtSec),
+        extensionSec: positiveInt(record.extensionSec),
+        spdPayload: trimmedString(record.spdPayload),
+        statusUpdatedAtSec: unixSeconds(record.statusUpdatedAtSec),
+        clientId: clientIdOf(rumor.tags),
+        sentAt: rumor.created_at,
+      };
+      if (rumor.pubkey !== me) {
+        return Either.right(
+          new BankOfferSnapshotReceived({ from: rumor.pubkey, ...snapshot }),
+        );
+      }
+      const to =
+        tagValues(rumor.tags, "p")
+          .filter((value) => value !== rumor.pubkey)
+          .find(isPubkey) ?? null;
+      if (to === null) return Either.left<DropReason>("invalid-bank-offer");
       return Either.right(
-        new BankOfferSnapshotReceived({
-          snapshotId,
-          from: rumor.pubkey,
-          offerId,
-          offerer,
-          status,
-          amountText,
-          text: trimmedString(record.text),
-          amountSat: positiveInt(record.amountSat),
-          initiatedAtSec: unixSeconds(record.initiatedAtSec),
-          bankPaidAtSec: unixSeconds(record.bankPaidAtSec),
-          expiresAtSec: unixSeconds(record.expiresAtSec),
-          extensionSec: positiveInt(record.extensionSec),
-          spdPayload: trimmedString(record.spdPayload),
-          statusUpdatedAtSec: unixSeconds(record.statusUpdatedAtSec),
-          clientId: clientIdOf(rumor.tags),
-          sentAt: rumor.created_at,
-        }),
+        new OwnBankOfferSnapshotConfirmed({ to, ...snapshot }),
       );
     },
   });

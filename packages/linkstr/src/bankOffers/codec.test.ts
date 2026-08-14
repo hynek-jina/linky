@@ -177,6 +177,20 @@ describe("bank offer rumor decoding", () => {
     );
   });
 
+  it("decodes the offerer's own self copy as a confirmation addressed to the recipient", () => {
+    const rumor = encodeBankOfferRumor(draft, alice.pubkey, sentAt, clientId);
+
+    expect(decodeBankOfferRumor(rumor, alice.pubkey)).toEqual(
+      Either.right(
+        expect.objectContaining({
+          _tag: "OwnBankOfferSnapshotConfirmed",
+          to: bob.pubkey,
+          offerer: alice.pubkey,
+        }),
+      ),
+    );
+  });
+
   it("decodes a legacy-built fixture", () => {
     const rumor = legacyRumor();
 

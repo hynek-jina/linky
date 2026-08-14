@@ -1,5 +1,5 @@
 import type {
-  BankOfferSnapshotReceived,
+  BankOfferInboxEvent,
   PaymentNoticeReceived,
 } from "@linky/linkstr";
 import { nip19 } from "nostr-tools";
@@ -180,7 +180,7 @@ export const handlePaymentNoticeReceived = (
 /** Snapshot JSON in the exact shape the outbox encoder publishes, so every
  * consumer of offer-message `content` keeps parsing unchanged. */
 export const bankOfferContentFromSnapshot = (
-  snapshot: BankOfferSnapshotReceived,
+  snapshot: BankOfferInboxEvent,
 ): string =>
   JSON.stringify({
     amountText: snapshot.amountText,
@@ -226,7 +226,7 @@ export interface BankOfferSnapshotScope {
 }
 
 export const handleBankOfferSnapshotReceived = (
-  event: BankOfferSnapshotReceived,
+  event: BankOfferInboxEvent,
   scope: BankOfferSnapshotScope,
   ctx: InboxNotificationsContext,
 ): void => {
