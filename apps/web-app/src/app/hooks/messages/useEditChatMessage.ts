@@ -2,11 +2,12 @@ import {
   ClientId,
   EditMessageDraft,
   MessageText,
+  OutboxRef,
   Pubkey,
   RumorId,
 } from "@linky/linkstr";
-import { editChatMessageAtom, useAtomSet } from "@linky/linkstr-react";
-import { Either, Exit, Schema } from "effect";
+import { enqueueOutboxAtom, useAtomSet } from "@linky/linkstr-react";
+import { Cause, Either, Exit, Schema } from "effect";
 import React from "react";
 import { makeLocalId } from "../../../utils/validation";
 import type {
@@ -60,7 +61,7 @@ export const useEditChatMessage = <
   t,
   updateLocalNostrMessage,
 }: UseEditChatMessageParams<TRoute, TContact>) => {
-  const editMessage = useAtomSet(editChatMessageAtom, {
+  const enqueueOutbox = useAtomSet(enqueueOutboxAtom, {
     mode: "promiseExit",
   });
 
@@ -118,33 +119,30 @@ export const useEditChatMessage = <
       setChatDraft("");
       setEditContext(null);
 
-      const isOffline =
-        typeof navigator !== "undefined" && navigator.onLine === false;
-      if (isOffline) {
-        setStatus(t("chatQueued"));
-        return;
-      }
-
-      const exit = await editMessage(
-        new EditMessageDraft({
-          to: contactPubHex,
-          editOf: editedFromId,
-          content: content.right,
-          clientId,
-        }),
-      );
+      const draft = new EditMessageDraft({
+        to: contactPubHex,
+        editOf: editedFromId,
+        content: content.right,
+        clientId,
+      });
+      const exit = await enqueueOutbox({
+        op: { _tag: "chat.edit", draft },
+        ref: OutboxRef.make(`message:${editContext.messageId}`),
+      });
 
       if (Exit.isFailure(exit)) {
-        setStatus(t("chatQueued"));
+        setStatus(`${t("errorPrefix")}: ${Cause.pretty(exit.cause)}`);
         return;
       }
 
       updateLocalNostrMessage(String(editContext.messageId ?? ""), {
-        status: "sent",
-        wrapId: exit.value.selfCopy.wrapId,
-        pubkey: myPubHex,
-        rumorId: editedFromId,
+        createdAtSec: exit.value.sentAt,
+        rumorId: exit.value.messageId,
       });
+
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        setStatus(t("chatQueued"));
+      }
     } catch (e) {
       setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
     } finally {
@@ -155,7 +153,7 @@ export const useEditChatMessage = <
     chatSendIsBusy,
     currentNsec,
     editContext,
-    editMessage,
+    enqueueOutbox,
     route.kind,
     selectedContact,
     setChatDraft,

@@ -289,6 +289,7 @@ export type UpdateLocalNostrMessageFields = Pick<
   LocalNostrMessage,
   | "clientId"
   | "content"
+  | "createdAtSec"
   | "editedAtSec"
   | "editedFromId"
   | "isEdited"

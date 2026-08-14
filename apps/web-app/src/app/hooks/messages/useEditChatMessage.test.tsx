@@ -1,14 +1,13 @@
 import {
   ClientId,
   EditMessageDraft,
-  MessageEditReceipt,
-  RecipientNotReached,
-  RelayUrl,
+  EnqueueReceipt,
+  OutboxJobId,
+  OutboxRef,
   RumorId,
   UnixSeconds,
-  WrapDelivery,
-  WrapId,
 } from "@linky/linkstr";
+import type { EnqueueOutboxInput } from "@linky/linkstr-react";
 import { Exit } from "effect";
 import { getPublicKey, nip19 } from "nostr-tools";
 import React, { act } from "react";
@@ -19,17 +18,17 @@ import type {
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
 
-type EditMessage = (
-  draft: EditMessageDraft,
-) => Promise<Exit.Exit<MessageEditReceipt, { readonly _tag: string }>>;
+type EnqueueOutbox = (
+  input: EnqueueOutboxInput,
+) => Promise<Exit.Exit<EnqueueReceipt, { readonly _tag: string }>>;
 
-const { editMessageMock } = vi.hoisted(() => ({
-  editMessageMock: vi.fn<EditMessage>(),
+const { enqueueOutboxMock } = vi.hoisted(() => ({
+  enqueueOutboxMock: vi.fn<EnqueueOutbox>(),
 }));
 
 vi.mock("@linky/linkstr-react", () => ({
-  editChatMessageAtom: "editChatMessageAtom",
-  useAtomSet: () => editMessageMock,
+  enqueueOutboxAtom: "enqueueOutboxAtom",
+  useAtomSet: () => enqueueOutboxMock,
 }));
 
 import { useEditChatMessage } from "./useEditChatMessage";
@@ -38,7 +37,6 @@ Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 const MY_PRIVATE_KEY = new Uint8Array(32).fill(3);
 const CONTACT_PRIVATE_KEY = new Uint8Array(32).fill(4);
-const MY_PUBKEY = getPublicKey(MY_PRIVATE_KEY);
 const CONTACT_PUBKEY = getPublicKey(CONTACT_PRIVATE_KEY);
 const CURRENT_NSEC = nip19.nsecEncode(MY_PRIVATE_KEY);
 const CONTACT_NPUB = nip19.npubEncode(CONTACT_PUBKEY);
@@ -46,30 +44,13 @@ const EDITED_FROM = RumorId.make("11".repeat(32));
 const EDIT_MESSAGE_ID = RumorId.make("22".repeat(32));
 const SENT_AT = UnixSeconds.make(1_730_000_000);
 
-const delivery = (id: string, accepted = true): WrapDelivery =>
-  new WrapDelivery({
-    wrapId: WrapId.make(id),
-    acceptedBy: accepted ? [RelayUrl.make("wss://relay.example")] : [],
-    rejectedBy: [],
-  });
-
-const receipt = (clientId: ClientId): MessageEditReceipt =>
-  new MessageEditReceipt({
+const receipt = (clientId: ClientId, ref: OutboxRef): EnqueueReceipt =>
+  new EnqueueReceipt({
+    jobId: OutboxJobId.make("job-1"),
+    ref,
     messageId: EDIT_MESSAGE_ID,
-    editOf: EDITED_FROM,
     clientId,
     sentAt: SENT_AT,
-    selfCopy: delivery("aa".repeat(32)),
-    recipientCopy: delivery("bb".repeat(32)),
-  });
-
-const failure = (clientId: ClientId): RecipientNotReached =>
-  new RecipientNotReached({
-    rumorId: EDIT_MESSAGE_ID,
-    clientId,
-    sentAt: SENT_AT,
-    selfCopy: delivery("aa".repeat(32)),
-    recipientCopy: delivery("bb".repeat(32), false),
   });
 
 const setup = async () => {
@@ -127,13 +108,18 @@ const setup = async () => {
 
 describe("useEditChatMessage", () => {
   afterEach(() => {
-    editMessageMock.mockReset();
+    enqueueOutboxMock.mockReset();
     vi.restoreAllMocks();
   });
 
-  it("sends an edit and keeps the original rumor id on the local row", async () => {
-    editMessageMock.mockImplementation(async (draft) =>
-      Exit.succeed(receipt(draft.clientId ?? ClientId.make("fallback"))),
+  it("enqueues an edit and stores the enqueue receipt on the pending row", async () => {
+    enqueueOutboxMock.mockImplementation(async (input) =>
+      Exit.succeed(
+        receipt(
+          input.op.draft.clientId ?? ClientId.make("fallback"),
+          input.ref,
+        ),
+      ),
     );
     const harness = await setup();
 
@@ -141,7 +127,12 @@ describe("useEditChatMessage", () => {
       await harness.getEdit()?.();
     });
 
-    const draft = editMessageMock.mock.calls[0]?.[0];
+    const input = enqueueOutboxMock.mock.calls[0]?.[0];
+    expect(input).toMatchObject({
+      op: { _tag: "chat.edit" },
+      ref: "message:local-message",
+    });
+    const draft = input?.op._tag === "chat.edit" ? input.op.draft : undefined;
     expect(draft).toBeInstanceOf(EditMessageDraft);
     expect(draft).toMatchObject({
       to: CONTACT_PUBKEY,
@@ -168,10 +159,8 @@ describe("useEditChatMessage", () => {
       2,
       "local-message",
       {
-        pubkey: MY_PUBKEY,
-        rumorId: EDITED_FROM,
-        status: "sent",
-        wrapId: "aa".repeat(32),
+        createdAtSec: SENT_AT,
+        rumorId: EDIT_MESSAGE_ID,
       },
     );
     expect(harness.setChatDraft).toHaveBeenCalledWith("");
@@ -182,9 +171,9 @@ describe("useEditChatMessage", () => {
     await act(async () => harness.root.unmount());
   });
 
-  it("leaves the edit pending when the recipient is not reached", async () => {
-    editMessageMock.mockImplementation(async (draft) =>
-      Exit.fail(failure(draft.clientId ?? ClientId.make("fallback"))),
+  it("leaves the edit pending when enqueue fails", async () => {
+    enqueueOutboxMock.mockResolvedValue(
+      Exit.fail({ _tag: "LinkstrNotConfigured" }),
     );
     const harness = await setup();
 
@@ -200,7 +189,9 @@ describe("useEditChatMessage", () => {
         status: "pending",
       }),
     );
-    expect(harness.setStatus).toHaveBeenCalledWith("chatQueued");
+    expect(harness.setStatus).toHaveBeenCalledWith(
+      expect.stringContaining("errorPrefix"),
+    );
     expect(harness.setChatSendIsBusy).toHaveBeenLastCalledWith(false);
 
     await act(async () => harness.root.unmount());

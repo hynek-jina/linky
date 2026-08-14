@@ -359,6 +359,7 @@ interface NostrMessageUpdatePayload {
   clientId?: string | null;
   contactId?: string;
   content?: string;
+  createdAtSec?: number;
   editedAtSec?: number | null;
   editedFromId?: string | null;
   id: string;
@@ -389,6 +390,7 @@ interface NostrReactionUpdatePayload {
 interface NostrMessageShadowState {
   clientId?: string | null;
   content?: string;
+  createdAtSec?: number;
   editedAtSec?: number | null;
   editedFromId?: string | null;
   isEdited?: boolean;
@@ -995,6 +997,19 @@ export const useMessagesDomain = ({
           shadow.content = content;
         }
       }
+      if (updates.createdAtSec !== undefined) {
+        const nextCreatedAtSec = toPositiveInt(
+          updates.createdAtSec,
+          Math.ceil(Date.now() / 1000),
+        );
+        const previousCreatedAtSec =
+          shadow.createdAtSec ?? current?.createdAtSec ?? 0;
+        if (nextCreatedAtSec !== previousCreatedAtSec) {
+          payload.createdAtSec = nextCreatedAtSec;
+          hasChanges = true;
+          shadow.createdAtSec = nextCreatedAtSec;
+        }
+      }
       if (updates.clientId !== undefined) {
         const nextClientId = toOptionalText(updates.clientId);
         if (
@@ -1154,6 +1169,8 @@ export const useMessagesDomain = ({
             }
             if (payload.content !== undefined)
               nextMessage.content = payload.content;
+            if (payload.createdAtSec !== undefined)
+              nextMessage.createdAtSec = payload.createdAtSec;
             if (payload.editedAtSec !== undefined)
               nextMessage.editedAtSec = payload.editedAtSec;
             if (payload.editedFromId !== undefined)

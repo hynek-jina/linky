@@ -1,7 +1,7 @@
 import * as Evolu from "@evolu/common";
 import type { PaymentNoticeContext } from "@linky/linkstr";
 import {
-  sendChatTokenAtom,
+  enqueueOutboxAtom,
   sendPaymentNoticeAtom,
   useAtomSet,
 } from "@linky/linkstr-react";
@@ -46,7 +46,6 @@ type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 const ContactIdSchema = Evolu.id("Contact");
 
 interface UsePayContactWithCashuMessageParams {
-  activePublishClientIdsRef: React.MutableRefObject<Set<string>>;
   appendLocalNostrMessage: AppendLocalNostrMessage;
   buildCashuMintCandidates: (
     mintGroups: Map<string, { sum: number; tokens: string[] }>,
@@ -80,7 +79,6 @@ interface UsePayContactWithCashuMessageParams {
 }
 
 export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
-  activePublishClientIdsRef,
   appendLocalNostrMessage,
   buildCashuMintCandidates,
   cashuBalance,
@@ -105,7 +103,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   updateLocalNostrMessage,
   upsert,
 }: UsePayContactWithCashuMessageParams) => {
-  const sendTokenMessage = useAtomSet(sendChatTokenAtom, {
+  const enqueueOutbox = useAtomSet(enqueueOutboxAtom, {
     mode: "promiseExit",
   });
   const sendPaymentNotice = useAtomSet(sendPaymentNoticeAtom, {
@@ -282,12 +280,12 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       let publishing: CashuMessagePaymentPublishingOutcome;
       try {
         publishing = await publishCashuMessagePayment({
-          activePublishClientIds: activePublishClientIdsRef.current,
           appendLocalNostrMessage,
           batches: [swap.batch],
           contactId,
           contactNpub,
           currentNpub,
+          enqueueOutbox,
           logPayStep,
           nostrMessagesLocal,
           ...(paymentNoticeContext ? { paymentNoticeContext } : {}),
@@ -295,7 +293,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           pendingMessageId: normalizedPendingMessageId,
           ...(replyContext ? { replyContext } : {}),
           sendPaymentNotice,
-          sendTokenMessage,
           updateLocalNostrMessage,
         });
       } catch (error) {
@@ -370,7 +367,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       return { ok: true, queued: publishing.hasPendingMessages };
     },
     [
-      activePublishClientIdsRef,
       appendLocalNostrMessage,
       buildCashuMintCandidates,
       cashuBalance,
@@ -379,6 +375,7 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       currentNpub,
       currentNsec,
       defaultMintUrl,
+      enqueueOutbox,
       enqueuePendingPayment,
       formatDisplayedAmountParts,
       logPayStep,
@@ -387,7 +384,6 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       payWithCashuEnabled,
       pushToast,
       sendPaymentNotice,
-      sendTokenMessage,
       resolveOwnerIdForWrite,
       setContactsOnboardingHasPaid,
       setStatus,

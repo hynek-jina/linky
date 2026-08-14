@@ -1,16 +1,18 @@
 import {
   CashuTokenText,
   ClientId,
+  OutboxRef,
   PaymentNoticeDraft,
   Pubkey,
   RumorId,
   TokenMessageDraft,
 } from "@linky/linkstr";
 import type {
-  ChatMessageReceipt,
+  EnqueueReceipt,
   PaymentNoticeContext,
   PaymentNoticeReceipt,
 } from "@linky/linkstr";
+import type { EnqueueOutboxInput } from "@linky/linkstr-react";
 import { Cause, Either, Exit, Option, Schema } from "effect";
 import { nip19 } from "nostr-tools";
 import type { ContactId } from "../../../evolu";
@@ -31,9 +33,9 @@ import type {
 
 type SendExit<A> = Exit.Exit<A, { readonly _tag: string }>;
 
-export type SendTokenMessage = (
-  draft: TokenMessageDraft,
-) => Promise<SendExit<ChatMessageReceipt>>;
+export type EnqueueOutbox = (
+  input: EnqueueOutboxInput,
+) => Promise<SendExit<EnqueueReceipt>>;
 
 export type SendPaymentNotice = (
   draft: PaymentNoticeDraft,
@@ -45,13 +47,13 @@ interface PublishCashuMessagePaymentDependencies {
 }
 
 interface PublishCashuMessagePaymentArgs {
-  activePublishClientIds: Set<string>;
   appendLocalNostrMessage: (message: NewLocalNostrMessage) => string;
   batches: readonly CashuMessagePaymentSendBatch[];
   contactId: ContactId;
   contactNpub: string;
   currentNpub: string;
   dependencies?: PublishCashuMessagePaymentDependencies;
+  enqueueOutbox: EnqueueOutbox;
   logPayStep: (step: string, data?: PaymentLogData) => void;
   nostrMessagesLocal: readonly LocalNostrMessage[];
   paymentNoticeContext?: PaymentNoticeContext;
@@ -59,7 +61,6 @@ interface PublishCashuMessagePaymentArgs {
   pendingMessageId: string | null;
   replyContext?: ReplyContext | null;
   sendPaymentNotice: SendPaymentNotice;
-  sendTokenMessage: SendTokenMessage;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
 }
 
@@ -84,13 +85,13 @@ const failureMessage = (
   });
 
 export const publishCashuMessagePayment = async ({
-  activePublishClientIds,
   appendLocalNostrMessage,
   batches,
   contactId,
   contactNpub,
   currentNpub,
   dependencies,
+  enqueueOutbox,
   logPayStep,
   nostrMessagesLocal,
   paymentNoticeContext,
@@ -98,7 +99,6 @@ export const publishCashuMessagePayment = async ({
   pendingMessageId,
   replyContext,
   sendPaymentNotice,
-  sendTokenMessage,
   updateLocalNostrMessage,
 }: PublishCashuMessagePaymentArgs): Promise<CashuMessagePaymentPublishingOutcome> => {
   const myPublicKey = decodeNpub(currentNpub);
@@ -136,14 +136,13 @@ export const publishCashuMessagePayment = async ({
     });
 
     const clientId = ClientId.make(createId());
-    activePublishClientIds.add(clientId);
     logPayStep("publish-pending", {
       clientId,
       token: previewTokenText(messageText),
     });
 
     let localMessageId = "";
-    let selfWrapId: string | null = null;
+    let messageId: RumorId | null = null;
     let sendError: string | null = null;
     try {
       const token = decodeCashuTokenText(messageText);
@@ -183,29 +182,34 @@ export const publishCashuMessagePayment = async ({
             wrapId: `pending:${clientId}`,
           });
         }
+        if (!localMessageId) throw new Error("failed to persist message");
 
-        const exit = await sendTokenMessage(
-          new TokenMessageDraft({
-            to: contactPublicKey,
-            token: token.right,
-            clientId,
-            ...(replyTo === undefined ? {} : { replyTo }),
-            ...(root === undefined ? {} : { root }),
-          }),
-        );
+        const draft = new TokenMessageDraft({
+          to: contactPublicKey,
+          token: token.right,
+          clientId,
+          ...(replyTo === undefined ? {} : { replyTo }),
+          ...(root === undefined ? {} : { root }),
+        });
+        const exit = await enqueueOutbox({
+          op: { _tag: "chat.token", draft },
+          ref: OutboxRef.make(`message:${localMessageId}`),
+        });
         if (Exit.isSuccess(exit)) {
-          selfWrapId = exit.value.selfCopy.wrapId;
+          messageId = exit.value.messageId;
+          updateLocalNostrMessage(localMessageId, {
+            createdAtSec: exit.value.sentAt,
+            rumorId: exit.value.messageId,
+          });
         } else {
           sendError = failureMessage(exit.cause);
         }
       }
     } catch (error) {
       sendError = getUnknownErrorMessage(error, "publish failed");
-    } finally {
-      activePublishClientIds.delete(clientId);
     }
 
-    if (selfWrapId === null) {
+    if (messageId === null) {
       const error = sendError ?? "publish failed";
       logPayStep("publish-failed", { clientId, error });
       unpublishedTokenTexts.add(messageText);
@@ -213,14 +217,7 @@ export const publishCashuMessagePayment = async ({
       continue;
     }
 
-    if (localMessageId) {
-      updateLocalNostrMessage(localMessageId, {
-        pubkey: myPublicKey,
-        status: "sent",
-        wrapId: selfWrapId,
-      });
-    }
-    logPayStep("publish-ok", { clientId, wrapId: selfWrapId });
+    logPayStep("publish-ok", { clientId, messageId });
     publishedAnyTokenMessage = true;
     publishedTokenTexts.add(messageText);
   }

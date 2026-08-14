@@ -2,8 +2,13 @@ import * as Evolu from "@evolu/common";
 import {
   BankOfferDraft,
   BankOfferId,
+  ChatMessageReceipt,
   ClientId,
+  MessageEditReceipt,
+  OutboxJobFailed,
+  OutboxJobSucceeded,
   Pubkey,
+  ReactionReceipt,
   UnixSeconds,
 } from "@linky/linkstr";
 import type { ProfileMetadata } from "@linky/linkstr";
@@ -12,9 +17,10 @@ import {
   publishMuteListAtom,
   sendBankOfferAtom,
   useAtomSet,
+  useOutboxResults,
 } from "@linky/linkstr-react";
 import { Exit, Schema } from "effect";
-import { nip19, type Event as NostrToolsEvent } from "nostr-tools";
+import { nip19 } from "nostr-tools";
 import React, { useMemo, useState } from "react";
 import {
   deriveDefaultProfile,
@@ -52,6 +58,7 @@ import {
   withLocalStorageLeaseLock,
 } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
+import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { makeLocalId } from "../../../utils/validation";
 import { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
 import { useContactEditor } from "../contacts/useContactEditor";
@@ -68,7 +75,6 @@ import {
   type EditChatContext,
 } from "../messages/useEditChatMessage";
 import { useInboxNotificationsSync } from "../messages/useInboxNotificationsSync";
-import { useNostrPendingFlush } from "../messages/useNostrPendingFlush";
 import {
   useSendChatMessage,
   type ReplyContext,
@@ -109,8 +115,6 @@ import {
   rememberLinkyBankPaymentOfferSpdPayload,
   type LinkyBankPaymentOfferStatus,
 } from "../../lib/bankPaymentOffer";
-import type { AppNostrPool } from "../../lib/nostrPool";
-import { publishWrappedWithRetry as publishWrappedWithRetryBase } from "../../lib/nostrPublishRetry";
 import { buildLinkyPaymentRequestDeclineMessage } from "../../lib/paymentRequestMessage";
 import {
   parsePrivateImageMessage,
@@ -120,7 +124,6 @@ import type {
   ContactRowLike,
   LocalNostrMessage,
   PaymentLogData,
-  PublishWrappedResult,
 } from "../../types/appTypes";
 
 const inMemoryNostrPictureCache = new Map<string, string | null>();
@@ -130,6 +133,20 @@ const isBankOfferId = Schema.is(BankOfferId);
 const isNonEmptyTrimmedString = Schema.is(Schema.NonEmptyTrimmedString);
 const isPositiveInt = Schema.is(Schema.Int.pipe(Schema.positive()));
 const isUnixSeconds = Schema.is(UnixSeconds);
+
+type ParsedOutboxRef =
+  | { id: string; kind: "message" }
+  | { id: string; kind: "reaction" };
+
+const parseOutboxRef = (ref: string): ParsedOutboxRef | null => {
+  for (const kind of ["message", "reaction"] as const) {
+    const prefix = `${kind}:`;
+    if (!ref.startsWith(prefix)) continue;
+    const id = ref.slice(prefix.length).trim();
+    return id ? { id, kind } : null;
+  }
+  return null;
+};
 
 const positiveInt = (value: unknown): number | undefined => {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
@@ -504,10 +521,6 @@ export const useContactsMessagingComposition = ({
   const replyContextRef = React.useRef<ReplyContext | null>(null);
 
   const [editContext, setEditContext] = useState<EditChatContext | null>(null);
-
-  const activeNostrMessagePublishClientIdsRef = React.useRef<Set<string>>(
-    new Set(),
-  );
 
   const autoAcceptedChatMessageIdsRef = React.useRef<Set<string>>(new Set());
 
@@ -1639,23 +1652,6 @@ export const useContactsMessagingComposition = ({
   const canAddContact =
     activeContactsOwnerContactCount < MAX_CONTACTS_PER_OWNER;
 
-  const publishWrappedWithRetry = React.useCallback(
-    async (
-      pool: AppNostrPool,
-      relays: string[],
-      wrapForMe: NostrToolsEvent,
-      wrapForContact: NostrToolsEvent,
-    ): Promise<PublishWrappedResult> => {
-      return await publishWrappedWithRetryBase({
-        pool,
-        relays,
-        wrapForMe,
-        wrapForContact,
-      });
-    },
-    [],
-  );
-
   const requestBankPaymentOffer = React.useCallback(
     async (args: {
       amountSat?: unknown;
@@ -2407,16 +2403,40 @@ export const useContactsMessagingComposition = ({
     };
   }, [bankPaymentOfferExpiryGroups, respondToBankPaymentOffer]);
 
-  useNostrPendingFlush({
-    activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
-    contacts,
-    currentNsec,
-    enabled: nostrBootstrapReady,
-    nostrMessagesLocal,
-    nostrReactionsLocal,
-    publishWrappedWithRetry,
-    updateLocalNostrReaction,
-    updateLocalNostrMessage,
+  useOutboxResults(async (result) => {
+    const ref = String(result.ref);
+    const parsedRef = parseOutboxRef(ref);
+    if (!parsedRef) return;
+
+    if (result instanceof OutboxJobFailed) {
+      void appendPushDebugLog("client", "outbox job failed", {
+        detail: result.detail,
+        reason: result.reason,
+        ref,
+      });
+      return;
+    }
+    if (!(result instanceof OutboxJobSucceeded)) return;
+
+    const receipt = result.receipt;
+    if (
+      parsedRef.kind === "message" &&
+      (receipt instanceof ChatMessageReceipt ||
+        receipt instanceof MessageEditReceipt)
+    ) {
+      updateLocalNostrMessage(parsedRef.id, {
+        rumorId: receipt.messageId,
+        status: "sent",
+        wrapId: receipt.selfCopy.wrapId,
+      });
+      return;
+    }
+    if (parsedRef.kind === "reaction" && receipt instanceof ReactionReceipt) {
+      updateLocalNostrReaction(parsedRef.id, {
+        status: "sent",
+        wrapId: receipt.reactionId,
+      });
+    }
   });
 
   const contactsOnboardingHasSentMessage = useMemo(() => {
@@ -3118,7 +3138,6 @@ export const useContactsMessagingComposition = ({
   });
 
   const sendChatMessage = useSendChatMessage({
-    activePublishClientIdsRef: activeNostrMessagePublishClientIdsRef,
     appendLocalNostrMessage,
     chatDraft,
     chatSendIsBusy,
@@ -3377,7 +3396,6 @@ export const useContactsMessagingComposition = ({
   return {
     activeContactsOwnerContactCount,
     activeGroup,
-    activeNostrMessagePublishClientIdsRef,
     addNewContactFromIdentifier,
     addNewContactFromSearchResult,
     addNpubMessageContacts,
@@ -3462,7 +3480,6 @@ export const useContactsMessagingComposition = ({
     pendingDeleteId,
     pendingPayments,
     pendingRelayDeleteUrl,
-    publishWrappedWithRetry,
     reactionsByMessageId,
     reassignLocalNostrMessagesContactId: reassignNostrConversationContactId,
     relayUrls,
