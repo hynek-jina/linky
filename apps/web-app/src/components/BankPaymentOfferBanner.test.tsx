@@ -1,8 +1,8 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { createLinkyBankPaymentOfferEvent } from "../app/lib/bankPaymentOffer";
 import type { ContactRowLike, LocalNostrMessage } from "../app/types/appTypes";
+import { createLinkyBankPaymentOfferEvent } from "../testUtils/bankPaymentOfferEvent";
 import { BankPaymentOfferBanner } from "./BankPaymentOfferBanner";
 
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {

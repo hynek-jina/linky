@@ -9,10 +9,10 @@ import { unwrapEvent, wrapEvent } from "nostr-tools/nip59";
 import { describe, expect, it, vi } from "vitest";
 import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import {
-  createLinkyBankPaymentOfferEvent,
   LINKY_BANK_PAYMENT_OFFER_KIND,
   type LinkyBankPaymentOfferStatus,
 } from "../../lib/bankPaymentOffer";
+import { createLinkyBankPaymentOfferEvent } from "../../../testUtils/bankPaymentOfferEvent";
 import { createLinkyPaymentNoticeEvent } from "../../lib/pushWrappedEvent";
 import type {
   LocalNostrMessage,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createLinkyBankPaymentOfferEvent } from "./bankPaymentOffer";
+import { createLinkyBankPaymentOfferEvent } from "../../testUtils/bankPaymentOfferEvent";
 import { formatChatMessagePreviewText } from "./chatMessageDisplay";
 
 const translatePreview = (key: string): string => {

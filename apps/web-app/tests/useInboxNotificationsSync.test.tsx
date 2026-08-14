@@ -50,11 +50,9 @@ vi.mock("../src/app/lib/nostrPool", () => ({
 }));
 
 import { useInboxNotificationsSync } from "../src/app/hooks/messages/useInboxNotificationsSync";
-import {
-  createLinkyBankPaymentOfferEvent,
-  LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
-} from "../src/app/lib/bankPaymentOffer";
+import { LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC } from "../src/app/lib/bankPaymentOffer";
 import type { LocalNostrMessage } from "../src/app/types/appTypes";
+import { createLinkyBankPaymentOfferEvent } from "../src/testUtils/bankPaymentOfferEvent";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 

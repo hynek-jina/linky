@@ -1,11 +1,9 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  createLinkyBankPaymentOfferEvent,
-  type LinkyBankPaymentOfferStatus,
-} from "../app/lib/bankPaymentOffer";
+import type { LinkyBankPaymentOfferStatus } from "../app/lib/bankPaymentOffer";
 import type { LocalNostrMessage } from "../app/types/appTypes";
+import { createLinkyBankPaymentOfferEvent } from "../testUtils/bankPaymentOfferEvent";
 import { BankPaymentOfferDetailPage } from "./BankPaymentOfferDetailPage";
 
 vi.mock("../app/context/AppShellContexts", () => ({
