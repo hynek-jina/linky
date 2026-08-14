@@ -1,6 +1,8 @@
 import { Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect";
 import { generateSecretKey, getEventHash, getPublicKey } from "nostr-tools";
 import type { Event as NostrToolsEvent, Filter } from "nostr-tools";
+import { encodeBankOfferRumor } from "../bankOffers/codec";
+import { BankOfferDraft, BankOfferId } from "../bankOffers/domain";
 import {
   ClientId,
   NostrSecretKey,
@@ -83,6 +85,37 @@ const paymentNoticeWrap = () => {
   return wrapRumorFor(rumor, bob.secretKey, alice.pubkey, {
     pushMarker: true,
   });
+};
+
+const bankOfferWrap = (own: boolean, invalid = false) => {
+  const author = own ? alice : bob;
+  const peer = own ? bob : alice;
+  const encoded = encodeBankOfferRumor(
+    new BankOfferDraft({
+      to: peer.pubkey,
+      offerId: BankOfferId.make("offer-inbox"),
+      offerer: author.pubkey,
+      status: "offered",
+      amountText: "1 000 Kč",
+      text: "Zaplatíš za mě bankovní platbu?",
+    }),
+    author.pubkey,
+    sentAt,
+    ClientId.make("bank-offer-client"),
+  );
+  const rumor = invalid ? withRumorContent(encoded, "{}") : encoded;
+  return wrapRumorFor(rumor, author.secretKey, alice.pubkey);
+};
+
+const withRumorContent = (rumor: Rumor, content: string): Rumor => {
+  const fields = {
+    pubkey: rumor.pubkey,
+    created_at: rumor.created_at,
+    kind: rumor.kind,
+    tags: rumor.tags,
+    content,
+  };
+  return new Rumor({ ...fields, id: getEventHash(fields) });
 };
 
 interface FakeSubscription {
@@ -378,6 +411,71 @@ describe("WrapInbox", () => {
             context: null,
             offerId: null,
             sentAt,
+          }),
+        );
+      }),
+    );
+  });
+
+  it("routes a wrapped kind-24135 rumor to BankOfferSnapshotReceived", async () => {
+    const fakeA = new FakeRelay();
+    const wrap = bankOfferWrap(false);
+
+    await runOpen([[relayA, fakeA]], {}, ({ collected }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        fakeA.emit(wrap);
+        yield* eventually(() => collected.length === 1);
+        expect(collected[0]).toEqual(
+          expect.objectContaining({
+            _tag: "BankOfferSnapshotReceived",
+            from: bob.pubkey,
+            offerId: "offer-inbox",
+            offerer: bob.pubkey,
+            status: "offered",
+            amountText: "1 000 Kč",
+            clientId: "bank-offer-client",
+            sentAt,
+          }),
+        );
+      }),
+    );
+  });
+
+  it("drops an invalid wrapped bank offer with its vertical reason", async () => {
+    const fakeA = new FakeRelay();
+    const wrap = bankOfferWrap(false, true);
+
+    await runOpen([[relayA, fakeA]], {}, ({ collected }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        fakeA.emit(wrap);
+        yield* eventually(() => collected.length === 1);
+        expect(collected[0]).toEqual(
+          expect.objectContaining({
+            _tag: "WrapDropped",
+            wrapId: wrap.id,
+            reason: "invalid-bank-offer",
+          }),
+        );
+      }),
+    );
+  });
+
+  it("routes an own bank offer snapshot instead of dropping it", async () => {
+    const fakeA = new FakeRelay();
+    const wrap = bankOfferWrap(true);
+
+    await runOpen([[relayA, fakeA]], {}, ({ collected }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        fakeA.emit(wrap);
+        yield* eventually(() => collected.length === 1);
+        expect(collected[0]).toEqual(
+          expect.objectContaining({
+            _tag: "BankOfferSnapshotReceived",
+            from: alice.pubkey,
+            offerId: "offer-inbox",
           }),
         );
       }),

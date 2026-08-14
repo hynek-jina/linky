@@ -2,6 +2,7 @@
 // below via useAtomSet/useAtomValue without depending on the 0.x library.
 export * from "@effect-atom/atom-react";
 
+export * from "./bankOffers";
 export * from "./chat";
 export * from "./config";
 export * from "./errors";

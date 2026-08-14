@@ -11,6 +11,8 @@ import {
 } from "effect";
 import type { Scope } from "effect";
 import type { Filter } from "nostr-tools";
+import { BANK_OFFER_KIND, decodeBankOfferRumor } from "../bankOffers/codec";
+import type { BankOfferInboxEvent } from "../bankOffers/events";
 import {
   CHAT_IMAGE_KIND,
   CHAT_TEXT_KIND,
@@ -42,6 +44,7 @@ import { authenticateWrap } from "./authenticateWrap";
 import { WrapDropped } from "./events";
 
 export type WrapInboxEvent =
+  | BankOfferInboxEvent
   | ReactionInboxEvent
   | ChatInboxEvent
   | PaymentNoticeInboxEvent
@@ -127,7 +130,12 @@ const routeRumor = (
         onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
         onRight: (event) => event,
       });
-    // TODO: bank offers (24135) and payment telemetry (24134) remain.
+    case BANK_OFFER_KIND:
+      return Either.match(decodeBankOfferRumor(rumor, identity.pubkey), {
+        onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
+        onRight: (event) => event,
+      });
+    // TODO: payment telemetry (24134) remains.
     default:
       return new WrapDropped({ wrapId: wrap.id, reason: "unsupported-kind" });
   }
