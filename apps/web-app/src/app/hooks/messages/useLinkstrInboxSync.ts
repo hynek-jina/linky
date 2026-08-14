@@ -283,18 +283,15 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
           );
           return;
         }
-        case "BankOfferSnapshotReceived": {
+        case "BankOfferSnapshotReceived":
+        case "OwnBankOfferSnapshotConfirmed": {
           if (cutoff !== null && event.sentAt < cutoff) return;
-          // Self-authored snapshots where I am also the offerer carry no
-          // recipient, so the conversation cannot be resolved; the send path
-          // already upserted them locally.
+          const isSelfAuthored = event._tag === "OwnBankOfferSnapshotConfirmed";
           const peerPubkey =
-            event.from !== myPubkey
-              ? event.from
-              : event.offerer !== myPubkey
-                ? event.offerer
-                : null;
-          if (!peerPubkey || isBlockedPubkey(peerPubkey)) return;
+            event._tag === "OwnBankOfferSnapshotConfirmed"
+              ? event.to
+              : event.from;
+          if (isBlockedPubkey(peerPubkey)) return;
           const contactId =
             notificationsCtx.findContact(peerPubkey)?.id ??
             buildUnknownContactId(peerPubkey);
@@ -305,7 +302,7 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
               contactId,
               delivery,
               isOutgoing: event.offerer === myPubkey,
-              isSelfAuthored: event.from === myPubkey,
+              isSelfAuthored,
               peerPubkey,
             },
             notificationsCtx,

@@ -476,7 +476,7 @@ describe("WrapInbox", () => {
     );
   });
 
-  it("routes an own bank offer snapshot instead of dropping it", async () => {
+  it("routes an own bank offer snapshot as a confirmation instead of dropping it", async () => {
     const fakeA = new FakeRelay();
     const wrap = bankOfferWrap(true);
 
@@ -487,8 +487,8 @@ describe("WrapInbox", () => {
         yield* eventually(() => collected.length === 1);
         expect(collected[0]?.event).toEqual(
           expect.objectContaining({
-            _tag: "BankOfferSnapshotReceived",
-            from: alice.pubkey,
+            _tag: "OwnBankOfferSnapshotConfirmed",
+            to: bob.pubkey,
             offerId: "offer-inbox",
           }),
         );
