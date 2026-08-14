@@ -1,4 +1,4 @@
-import { RelayListsDraft, RelayUrl } from "@linky/linkstr";
+import { RelayListEntry, RelayListsDraft, RelayUrl } from "@linky/linkstr";
 import {
   fetchOwnRelayListsAtom,
   publishRelayListsAtom,
@@ -109,7 +109,9 @@ export const useRelayDomain = ({
 
       const exit = await publishRelayLists(
         new RelayListsDraft({
-          relays: unique.map((relay) => ({ relay, marker: null })),
+          relays: unique.map(
+            (relay) => new RelayListEntry({ relay, marker: null }),
+          ),
           dmRelays: unique,
         }),
       );
