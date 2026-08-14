@@ -8,6 +8,7 @@ import { NoReadRelaysConfigured } from "../domain/errors";
 import type { EventId } from "../domain/primitives";
 import { Pubkey, UnixSeconds } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
+import { chunkAuthors } from "../internal/authorChunks";
 import { inspectPlainOperation } from "../internal/inspectPlainOperation";
 import type { NostrTags, SignedPlainEvent } from "../internal/nostrEvent";
 import { deliverPlainEvent } from "../internal/plainDelivery";
@@ -31,6 +32,14 @@ import { ProfileUpdated, StatusUpdated } from "./events";
 export class ProfileFetchResult extends Schema.Class<ProfileFetchResult>(
   "ProfileFetchResult",
 )({
+  profile: Schema.NullOr(ProfileUpdated),
+  status: Schema.NullOr(StatusUpdated),
+}) {}
+
+export class ProfileFetchEntry extends Schema.Class<ProfileFetchEntry>(
+  "ProfileFetchEntry",
+)({
+  pubkey: Pubkey,
   profile: Schema.NullOr(ProfileUpdated),
   status: Schema.NullOr(StatusUpdated),
 }) {}
@@ -118,36 +127,90 @@ export class Profiles extends Effect.Service<Profiles>()("linkstr/Profiles", {
         inspectPlainOperation(inspector, "profiles.publishStatus", draft),
       );
 
+    const fetchProfileEntries = (
+      pubkeys: ReadonlyArray<Pubkey>,
+    ): Effect.Effect<
+      { result: Array<ProfileFetchEntry>; eventIds: Array<EventId> },
+      AllRelaysUnreachable | NoReadRelaysConfigured
+    > =>
+      Effect.gen(function* () {
+        const relays = context.relayPolicy.readRelays;
+        if (relays.length === 0) return yield* new NoReadRelaysConfigured();
+        const authors = [...new Set(pubkeys)];
+        if (authors.length === 0) return { result: [], eventIds: [] };
+
+        const eventsPerChunk = yield* Effect.forEach(
+          chunkAuthors(authors),
+          (chunk) =>
+            fetchPlainEvents(context.transport, relays, {
+              kinds: [PROFILE_KIND, STATUS_KIND],
+              authors: chunk,
+            }),
+          // Bounded: each chunk already fans out to every read relay.
+          { concurrency: 4 },
+        );
+        const now: UnixSeconds = yield* nowUnixSeconds;
+
+        // Chunks hold disjoint authors, so concatenation keeps each author's
+        // events newest-first (fetchPlainEvents sorts within a chunk).
+        const eventsByAuthor = new Map<Pubkey, Array<SignedPlainEvent>>();
+        for (const event of eventsPerChunk.flat()) {
+          const ofAuthor = eventsByAuthor.get(event.pubkey);
+          if (ofAuthor === undefined) eventsByAuthor.set(event.pubkey, [event]);
+          else ofAuthor.push(event);
+        }
+
+        const result: Array<ProfileFetchEntry> = [];
+        const eventIds: Array<EventId> = [];
+        for (const pubkey of authors) {
+          const ofAuthor = eventsByAuthor.get(pubkey) ?? [];
+          const profile = pickNewest(
+            ofAuthor,
+            PROFILE_KIND,
+            decodeProfileEvent,
+          );
+          const status = pickNewest(ofAuthor, STATUS_KIND, (event) =>
+            decodeStatusEvent(event, now),
+          );
+          result.push(
+            new ProfileFetchEntry({
+              pubkey,
+              profile: profile?.fact ?? null,
+              status: status?.fact ?? null,
+            }),
+          );
+          for (const picked of [profile, status]) {
+            if (picked !== null) eventIds.push(picked.eventId);
+          }
+        }
+        return { result, eventIds };
+      });
+
     const fetchProfile = (
       pubkey: Pubkey,
     ): Effect.Effect<
       ProfileFetchResult,
       AllRelaysUnreachable | NoReadRelaysConfigured
     > =>
-      Effect.gen(function* () {
-        const relays = context.relayPolicy.readRelays;
-        if (relays.length === 0) return yield* new NoReadRelaysConfigured();
-        const events = yield* fetchPlainEvents(context.transport, relays, {
-          kinds: [PROFILE_KIND, STATUS_KIND],
-          authors: [pubkey],
-        });
-        const now: UnixSeconds = yield* nowUnixSeconds;
-        const ofAuthor = events.filter((event) => event.pubkey === pubkey);
-        const profile = pickNewest(ofAuthor, PROFILE_KIND, decodeProfileEvent);
-        const status = pickNewest(ofAuthor, STATUS_KIND, (event) =>
-          decodeStatusEvent(event, now),
-        );
-        return {
+      fetchProfileEntries([pubkey]).pipe(
+        Effect.map(({ result, eventIds }) => ({
           result: new ProfileFetchResult({
-            profile: profile?.fact ?? null,
-            status: status?.fact ?? null,
+            profile: result[0]?.profile ?? null,
+            status: result[0]?.status ?? null,
           }),
-          eventIds: [profile, status].flatMap((picked) =>
-            picked === null ? [] : [picked.eventId],
-          ),
-        };
-      }).pipe(
+          eventIds,
+        })),
         inspectPlainOperation(inspector, "profiles.fetchProfile", pubkey),
+      );
+
+    const fetchProfiles = (
+      pubkeys: ReadonlyArray<Pubkey>,
+    ): Effect.Effect<
+      ReadonlyArray<ProfileFetchEntry>,
+      AllRelaysUnreachable | NoReadRelaysConfigured
+    > =>
+      fetchProfileEntries(pubkeys).pipe(
+        inspectPlainOperation(inspector, "profiles.fetchProfiles", pubkeys),
       );
 
     const discoverActiveProfiles = (
@@ -225,6 +288,7 @@ export class Profiles extends Effect.Service<Profiles>()("linkstr/Profiles", {
       publishProfile,
       publishStatus,
       fetchProfile,
+      fetchProfiles,
       discoverActiveProfiles,
     } as const;
   }),

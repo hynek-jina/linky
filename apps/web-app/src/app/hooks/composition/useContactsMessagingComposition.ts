@@ -13,7 +13,7 @@ import {
 } from "@linky/linkstr";
 import type { ProfileMetadata } from "@linky/linkstr";
 import {
-  fetchProfileAtom,
+  fetchProfilesAtom,
   publishMuteListAtom,
   sendBankOfferAtom,
   useAtomSet,
@@ -83,7 +83,7 @@ import { useSendReaction } from "../messages/useSendReaction";
 import { useLinkstrInspectorBridge } from "../../../devtools/inspector/useLinkstrInspectorBridge";
 import { useLinkstrConfigSync } from "../useLinkstrConfigSync";
 import {
-  fetchAndCacheProfile,
+  fetchAndCacheProfiles,
   useLinkstrProfileSync,
 } from "../useLinkstrProfileSync";
 import { useContactsDomain } from "../useContactsDomain";
@@ -1227,12 +1227,12 @@ export const useContactsMessagingComposition = ({
     return npubs;
   }, [chatMentionedNpubs, unknownContactNpubs]);
 
-  const fetchProfileOneShot = useAtomSet(fetchProfileAtom, {
+  const fetchProfilesOneShot = useAtomSet(fetchProfilesAtom, {
     mode: "promiseExit",
   });
 
-  // Unknown senders and mentioned npubs are not watched; one cached or
-  // one-shot profile read feeds both their display name and avatar.
+  // Unknown senders and mentioned npubs are not watched; a cached read or one
+  // batched profile fetch feeds both their display name and avatar.
   React.useEffect(() => {
     let cancelled = false;
 
@@ -1251,6 +1251,7 @@ export const useContactsMessagingComposition = ({
     };
 
     const run = async () => {
+      const uncached: string[] = [];
       for (const npub of prefetchedMessageNpubs) {
         if (unknownNameByNpub[npub] !== undefined) continue;
 
@@ -1262,15 +1263,19 @@ export const useContactsMessagingComposition = ({
 
         if (!nostrBootstrapReady) continue;
         if (nostrMetadataInFlight.current.has(npub)) continue;
-        nostrMetadataInFlight.current.add(npub);
-        try {
-          applyMetadata(
-            npub,
-            await fetchAndCacheProfile(fetchProfileOneShot, npub),
-          );
-        } finally {
-          nostrMetadataInFlight.current.delete(npub);
-        }
+        uncached.push(npub);
+      }
+      if (uncached.length === 0) return;
+
+      for (const npub of uncached) nostrMetadataInFlight.current.add(npub);
+      try {
+        const fetched = await fetchAndCacheProfiles(
+          fetchProfilesOneShot,
+          uncached,
+        );
+        for (const [npub, metadata] of fetched) applyMetadata(npub, metadata);
+      } finally {
+        for (const npub of uncached) nostrMetadataInFlight.current.delete(npub);
       }
     };
 
@@ -1280,7 +1285,7 @@ export const useContactsMessagingComposition = ({
       cancelled = true;
     };
   }, [
-    fetchProfileOneShot,
+    fetchProfilesOneShot,
     nostrBootstrapReady,
     prefetchedMessageNpubs,
     unknownNameByNpub,

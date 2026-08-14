@@ -18,6 +18,7 @@ import type { LinkstrIdentityService } from "../services/LinkstrIdentity";
 import { NostrTransport, RelayPublishResult } from "../services/NostrTransport";
 import { RelayUnreachable } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
+import { AUTHOR_FILTER_LIMIT } from "../internal/authorChunks";
 import { decodeProfileMetadata } from "./codec";
 import { ProfileMetadata, StatusDraft } from "./domain";
 import { Profiles } from "./Profiles";
@@ -330,6 +331,146 @@ describe("Profiles.fetchProfile", () => {
     const exit = await runWith(
       stubTransport([]),
       Effect.flatMap(Profiles, (profiles) => profiles.fetchProfile(bob.pubkey)),
+      [],
+    );
+    expect(exit).toEqual(
+      Exit.fail(expect.objectContaining({ _tag: "NoReadRelaysConfigured" })),
+    );
+  });
+});
+
+describe("Profiles.fetchProfiles", () => {
+  it("returns one entry per pubkey in input order, each resolved newest-wins", async () => {
+    const inOneHour = Math.floor(Date.now() / 1000) + 3600;
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        relayA,
+        [
+          profileEvent(bob, JSON.stringify({ name: "bob-old" }), base + 1),
+          statusEvent(bob, "listening", base + 2, [
+            ["d", "general"],
+            ["expiration", String(inOneHour)],
+          ]),
+        ],
+      ],
+      [
+        relayB,
+        [
+          // Newest kind 0 for bob is malformed: the older valid one must win.
+          profileEvent(bob, "not json", base + 9),
+          profileEvent(carol, JSON.stringify({ name: "carol" }), base + 3),
+        ],
+      ],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { stored }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.fetchProfiles([bob.pubkey, carol.pubkey, alice.pubkey]),
+      ),
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value).toEqual([
+      expect.objectContaining({
+        pubkey: bob.pubkey,
+        profile: expect.objectContaining({
+          updatedAt: base + 1,
+          metadata: expect.objectContaining({ name: "bob-old" }),
+        }),
+        status: expect.objectContaining({ content: "listening" }),
+      }),
+      expect.objectContaining({
+        pubkey: carol.pubkey,
+        profile: expect.objectContaining({
+          metadata: expect.objectContaining({ name: "carol" }),
+        }),
+        status: null,
+      }),
+      expect.objectContaining({
+        pubkey: alice.pubkey,
+        profile: null,
+        status: null,
+      }),
+    ]);
+  });
+
+  it("dedupes input and issues one multi-author filter per relay", async () => {
+    const fetchLog: Array<Filter> = [];
+    const exit = await runWith(
+      stubTransport([], { fetchLog }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.fetchProfiles([bob.pubkey, carol.pubkey, bob.pubkey]),
+      ),
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value).toHaveLength(2);
+    expect(fetchLog).toEqual([
+      { kinds: [0, 30315], authors: [bob.pubkey, carol.pubkey] },
+      { kinds: [0, 30315], authors: [bob.pubkey, carol.pubkey] },
+    ]);
+  });
+
+  it("splits authors into filter chunks at the author cap", async () => {
+    const pubkeys = Array.from({ length: AUTHOR_FILTER_LIMIT + 1 }, () =>
+      Pubkey.make(getPublicKey(generateSecretKey())),
+    );
+    const fetchLog: Array<Filter> = [];
+
+    const exit = await runWith(
+      stubTransport([], { fetchLog }),
+      Effect.flatMap(Profiles, (profiles) => profiles.fetchProfiles(pubkeys)),
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value).toHaveLength(pubkeys.length);
+
+    // Two chunks, each queried on both relays.
+    const authorCounts = fetchLog
+      .map((filter) => filter.authors?.length ?? 0)
+      .sort((a, b) => a - b);
+    expect(authorCounts).toEqual([
+      1,
+      1,
+      AUTHOR_FILTER_LIMIT,
+      AUTHOR_FILTER_LIMIT,
+    ]);
+    const queried = new Set(fetchLog.flatMap((filter) => filter.authors ?? []));
+    expect(queried.size).toBe(pubkeys.length);
+  });
+
+  it("returns an empty list without touching the transport", async () => {
+    const fetchLog: Array<Filter> = [];
+    const exit = await runWith(
+      stubTransport([], { fetchLog }),
+      Effect.flatMap(Profiles, (profiles) => profiles.fetchProfiles([])),
+    );
+    expect(exit).toEqual(Exit.succeed([]));
+    expect(fetchLog).toHaveLength(0);
+  });
+
+  it("fails with AllRelaysUnreachable when no relay answers", async () => {
+    const exit = await runWith(
+      stubTransport([], { unreachable: [relayA, relayB] }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.fetchProfiles([bob.pubkey]),
+      ),
+    );
+    expect(exit).toEqual(
+      Exit.fail(expect.objectContaining({ _tag: "AllRelaysUnreachable" })),
+    );
+  });
+
+  it("fails with NoReadRelaysConfigured without read relays", async () => {
+    const exit = await runWith(
+      stubTransport([]),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.fetchProfiles([bob.pubkey]),
+      ),
       [],
     );
     expect(exit).toEqual(
