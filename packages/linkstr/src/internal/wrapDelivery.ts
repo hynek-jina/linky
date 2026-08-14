@@ -48,16 +48,24 @@ export const deliverRumorToPeer = (
     readonly peer: Pubkey;
     readonly clientId: ClientId;
     readonly sentAt: UnixSeconds;
+    readonly pushMarkRecipientCopy?: boolean;
   },
 ): Effect.Effect<DeliveredCopies, RecipientNotReached | NoRelayReachable> =>
   Effect.gen(function* () {
-    const { clientId, peer, rumor, sentAt } = params;
+    const { clientId, peer, pushMarkRecipientCopy, rumor, sentAt } = params;
     const relays = relayPolicy.writeRelays;
     const [selfWrap, recipientWrap] = yield* Effect.all([
       Effect.sync(() =>
         wrapRumorFor(rumor, identity.secretKey, identity.pubkey),
       ),
-      Effect.sync(() => wrapRumorFor(rumor, identity.secretKey, peer)),
+      Effect.sync(() =>
+        wrapRumorFor(
+          rumor,
+          identity.secretKey,
+          peer,
+          pushMarkRecipientCopy === true ? { pushMarker: true } : undefined,
+        ),
+      ),
     ]);
     const [selfResults, recipientResults] = yield* Effect.all(
       [

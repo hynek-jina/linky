@@ -11,6 +11,12 @@ import {
 } from "effect";
 import type { Scope } from "effect";
 import type { Filter } from "nostr-tools";
+import {
+  CHAT_IMAGE_KIND,
+  CHAT_TEXT_KIND,
+  decodeChatRumor,
+} from "../chat/codec";
+import type { ChatInboxEvent } from "../chat/events";
 import { NoReadRelaysConfigured } from "../domain/errors";
 import { UnixSeconds, WrapId } from "../domain/primitives";
 import type { RelayUrl } from "../domain/primitives";
@@ -30,7 +36,7 @@ import { RelayPolicy } from "../services/RelayPolicy";
 import { authenticateWrap } from "./authenticateWrap";
 import { WrapDropped } from "./events";
 
-export type WrapInboxEvent = ReactionInboxEvent | WrapDropped;
+export type WrapInboxEvent = ReactionInboxEvent | ChatInboxEvent | WrapDropped;
 
 export interface WrapInboxOptions {
   /** Cursor persisted by the caller from a previous session's `cursor`. */
@@ -95,14 +101,19 @@ const routeRumor = (
   identity: LinkstrIdentityService,
 ): WrapInboxEvent => {
   switch (rumor.kind) {
+    case CHAT_TEXT_KIND:
+    case CHAT_IMAGE_KIND:
+      return Either.match(decodeChatRumor(rumor, identity, wrap.pubkey), {
+        onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
+        onRight: (event) => event,
+      });
     case REACTION_KIND:
     case RETRACTION_KIND:
       return Either.match(decodeReactionRumor(rumor, identity.pubkey), {
         onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
         onRight: (event) => event,
       });
-    // TODO: future verticals (kind 14/15 chat, payment notices, …) dispatch
-    // on rumor.kind here.
+    // TODO: future verticals (payment notices, …) dispatch on rumor.kind here.
     default:
       return new WrapDropped({ wrapId: wrap.id, reason: "unsupported-kind" });
   }

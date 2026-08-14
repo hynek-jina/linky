@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { getEventHash } from "nostr-tools";
 import { EventId, Pubkey, UnixSeconds, WrapId } from "../domain/primitives";
 
 // Mutable so values are structurally assignable to nostr-tools' Event type.
@@ -61,6 +62,14 @@ export class Rumor extends Schema.Class<Rumor>("Rumor")({
   tags: NostrTags,
   content: Schema.String,
 }) {}
+
+export const rumorWithHash = (fields: {
+  readonly pubkey: Pubkey;
+  readonly created_at: UnixSeconds;
+  readonly kind: number;
+  readonly tags: NostrTags;
+  readonly content: string;
+}): Rumor => new Rumor({ ...fields, id: getEventHash(fields) });
 
 export const firstTagValue = (tags: NostrTags, name: string): string | null => {
   for (const tag of tags) {
