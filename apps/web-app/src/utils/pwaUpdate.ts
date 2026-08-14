@@ -2,7 +2,6 @@ type Listener = (needRefresh: boolean) => void;
 
 const STARTUP_AUTO_UPDATE_WINDOW_MS = 5_000;
 const CLIENT_COUNT_TIMEOUT_MS = 1_000;
-const APP_VERSION_TIMEOUT_MS = 1_000;
 
 const listeners = new Set<Listener>();
 let needRefresh = false;
@@ -94,69 +93,21 @@ const countSwClients = (): Promise<number | null> => {
   });
 };
 
-const readAppVersion = (data: unknown): string | null => {
-  if (typeof data === "object" && data !== null && "version" in data) {
-    const { version } = data;
-    if (typeof version === "string" && version) return version;
-  }
-  return null;
-};
-
-// Asks the pending worker which app version it carries. Resolves null when
-// there is no pending worker, the browser exposes no registration, or the
-// pending worker predates the APP_VERSION handler (the reply then never
-// arrives and the timeout fires) — callers treat null as "assume a release".
-const readPendingSwVersion = async (): Promise<string | null> => {
-  const container =
-    typeof navigator !== "undefined" && "serviceWorker" in navigator
-      ? navigator.serviceWorker
-      : null;
-  if (typeof container?.getRegistration !== "function") return null;
-  const registration = await container.getRegistration();
-  const pending = registration?.waiting ?? registration?.installing ?? null;
-  if (!pending) return null;
-  return new Promise((resolve) => {
-    const channel = new MessageChannel();
-    const timer = setTimeout(() => resolve(null), APP_VERSION_TIMEOUT_MS);
-    channel.port1.onmessage = (event: MessageEvent<unknown>) => {
-      clearTimeout(timer);
-      resolve(readAppVersion(event.data));
-    };
-    pending.postMessage({ type: "APP_VERSION" }, [channel.port2]);
-  });
-};
-
-// A rebuilt service worker means "the assets changed", not "the app was
-// released". Any deploy rewrites the precache manifest, so without this check
-// a same-version redeploy tells the user a new version is available and the
-// version in Settings is identical after they accept it.
-const isSameVersionRedeploy = async () => {
-  const pendingVersion = await readPendingSwVersion();
-  return pendingVersion !== null && pendingVersion === __APP_VERSION__;
-};
-
 // Hybrid update flow: a fresh, untouched, single-tab load applies a pending
 // service worker update silently (one reload before the user does anything);
-// a genuine new version otherwise falls back to the update banner. Auto-
-// applying is skipped whenever other tabs are open because SKIP_WAITING
-// reloads all of them. A same-version redeploy never prompts — the pending
-// worker just activates on the next natural load, and the old assets it keeps
-// serving until then are all still in its own precache.
+// every other case falls back to the update banner. Auto-applying is skipped
+// whenever other tabs are open because SKIP_WAITING reloads all of them.
 export const handlePwaUpdateAvailable = async () => {
   const withinStartupWindow =
     Date.now() - appStartTime < STARTUP_AUTO_UPDATE_WINDOW_MS;
-  if (withinStartupWindow && !userHasInteracted) {
-    const clientCount = await countSwClients();
-    if (clientCount === 1 && !userHasInteracted) {
-      console.log("[linky][pwa] auto-applying update on fresh load");
-      await applyPwaUpdate();
-      return;
-    }
+  if (!withinStartupWindow || userHasInteracted) {
+    markPwaNeedRefresh(true);
+    return;
   }
-  if (await isSameVersionRedeploy()) {
-    console.log(
-      "[linky][pwa] pending worker is the running version, no prompt",
-    );
+  const clientCount = await countSwClients();
+  if (clientCount === 1 && !userHasInteracted) {
+    console.log("[linky][pwa] auto-applying update on fresh load");
+    await applyPwaUpdate();
     return;
   }
   markPwaNeedRefresh(true);
