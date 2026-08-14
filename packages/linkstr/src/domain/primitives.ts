@@ -40,6 +40,13 @@ export const WrapId = Schema.String.pipe(
 );
 export type WrapId = typeof WrapId.Type;
 
+/** Id of a signed plain (non-gift-wrapped) event: profile, status, relay lists, … */
+export const EventId = Schema.String.pipe(
+  Schema.pattern(HEX_64),
+  Schema.brand("EventId"),
+);
+export type EventId = typeof EventId.Type;
+
 /**
  * Locally generated id travelling in the ["client", …] tag; the key used to
  * reconcile an optimistic local row with its relay echo.

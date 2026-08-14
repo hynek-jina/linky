@@ -14,6 +14,8 @@ import { WrapInbox } from "../inbox/WrapInbox";
 import { wrapRumorFor } from "../internal/giftWrap";
 import { Rumor } from "../internal/nostrEvent";
 import type { NostrTags } from "../internal/nostrEvent";
+import { ProfileMetadata } from "../profiles/domain";
+import { Profiles } from "../profiles/Profiles";
 import { Reactions } from "../reactions/Reactions";
 import { encodeReactionRumor } from "../reactions/codec";
 import { Emoji, ReactionDraft, RetractionDraft } from "../reactions/domain";
@@ -78,7 +80,7 @@ const chatWrapForAlice = () => {
 // Mirrors the linkstr-react runtime composition: vertical services over base
 // services, the transport tapped, Inspector.live provided beneath everything.
 const servicesWith = (transport: NostrTransportService) =>
-  Layer.mergeAll(Reactions.Default, WrapInbox.Default).pipe(
+  Layer.mergeAll(Reactions.Default, WrapInbox.Default, Profiles.Default).pipe(
     Layer.provideMerge(
       Layer.mergeAll(
         LinkstrIdentity.fromSecretKey(alice.secretKey),
@@ -107,7 +109,7 @@ const withInspected = <A, E>(
   transport: NostrTransportService,
   body: (
     collected: Array<InspectorEvent>,
-  ) => Effect.Effect<A, E, Reactions | WrapInbox | Scope.Scope>,
+  ) => Effect.Effect<A, E, Reactions | WrapInbox | Profiles | Scope.Scope>,
 ): Promise<A> =>
   Effect.gen(function* () {
     const inspector = yield* Inspector;
@@ -136,6 +138,7 @@ const acceptingTransport = (
       );
     }),
   subscribe: () => Effect.die("subscribe not under test"),
+  fetch: () => Effect.die("fetch not under test"),
 });
 
 describe("Inspector", () => {
@@ -215,6 +218,7 @@ describe("Inspector", () => {
           ),
         ),
       subscribe: () => Effect.die("subscribe not under test"),
+      fetch: () => Effect.die("fetch not under test"),
     };
     const draft = draftFor("🔥");
 
@@ -248,6 +252,7 @@ describe("Inspector", () => {
           handlers.push(onEvent);
           return Effect.never;
         }),
+      fetch: () => Effect.die("fetch not under test"),
     };
 
     await withInspected(transport, (collected) =>
@@ -306,6 +311,80 @@ describe("Inspector", () => {
     );
   });
 
+  it("emits the plain operation and its wire publish, linked by event id", async () => {
+    const published: Array<string> = [];
+    const metadata = new ProfileMetadata({ name: "alice" });
+
+    await withInspected(acceptingTransport(published), (collected) =>
+      Effect.gen(function* () {
+        const profiles = yield* Profiles;
+        const receipt = yield* profiles.publishProfile(metadata);
+        yield* eventually(() => collected.length === 2);
+
+        expect(
+          collected.find((event) => event._tag === "WirePlainPublished"),
+        ).toEqual(
+          expect.objectContaining({
+            eventId: receipt.eventId,
+            kind: 0,
+            results: [
+              expect.objectContaining({ relay: relayA, accepted: true }),
+            ],
+          }),
+        );
+        expect(
+          collected.find((event) => event._tag === "PlainOperationSucceeded"),
+        ).toEqual(
+          expect.objectContaining({
+            name: "profiles.publishProfile",
+            params: metadata,
+            eventIds: [receipt.eventId],
+            result: receipt,
+          }),
+        );
+        expect(published).toEqual([receipt.eventId]);
+      }),
+    );
+  });
+
+  it("emits WireFetched for one-shot fetches and OperationFailed on fetch errors", async () => {
+    const fetchingTransport: NostrTransportService = {
+      publish: () => Effect.die("publish not under test"),
+      subscribe: () => Effect.die("subscribe not under test"),
+      fetch: (relay, filter) =>
+        Effect.suspend(() => {
+          expect(filter).toEqual({ kinds: [0, 30315], authors: [bob.pubkey] });
+          return relay === relayA
+            ? Effect.succeed([])
+            : Effect.die("only relayA configured");
+        }),
+    };
+
+    await withInspected(fetchingTransport, (collected) =>
+      Effect.gen(function* () {
+        const profiles = yield* Profiles;
+        const result = yield* profiles.fetchProfile(bob.pubkey);
+        yield* eventually(() =>
+          collected.some((event) => event._tag === "PlainOperationSucceeded"),
+        );
+
+        expect(collected.find((event) => event._tag === "WireFetched")).toEqual(
+          expect.objectContaining({ relay: relayA, events: [], detail: null }),
+        );
+        expect(
+          collected.find((event) => event._tag === "PlainOperationSucceeded"),
+        ).toEqual(
+          expect.objectContaining({
+            name: "profiles.fetchProfile",
+            params: bob.pubkey,
+            eventIds: [],
+            result,
+          }),
+        );
+      }),
+    );
+  });
+
   it("reports authentication failures with a null rumor kind", async () => {
     const handlers: Array<(event: NostrToolsEvent) => void> = [];
     const transport: NostrTransportService = {
@@ -315,6 +394,7 @@ describe("Inspector", () => {
           handlers.push(onEvent);
           return Effect.never;
         }),
+      fetch: () => Effect.die("fetch not under test"),
     };
 
     await withInspected(transport, (collected) =>

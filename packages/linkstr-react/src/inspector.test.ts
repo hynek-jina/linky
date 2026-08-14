@@ -32,6 +32,7 @@ const acceptingTransport: NostrTransportService = {
       ),
     ),
   subscribe: () => Effect.die("subscribe not under test"),
+  fetch: () => Effect.die("fetch not under test"),
 };
 
 const configWith = (inspector: boolean): LinkstrConfig => ({

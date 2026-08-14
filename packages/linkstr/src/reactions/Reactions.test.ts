@@ -8,8 +8,11 @@ import {
   RumorId,
 } from "../domain/primitives";
 import { unwrapToRumor } from "../internal/giftWrap";
-import { firstTagValue, tagValues } from "../internal/nostrEvent";
-import type { SignedWrapEvent } from "../internal/nostrEvent";
+import {
+  firstTagValue,
+  SignedWrapEvent,
+  tagValues,
+} from "../internal/nostrEvent";
 import { LinkstrIdentity } from "../services/LinkstrIdentity";
 import type { LinkstrIdentityService } from "../services/LinkstrIdentity";
 import { NostrTransport, RelayPublishResult } from "../services/NostrTransport";
@@ -53,6 +56,9 @@ const stubTransport = (
   Layer.succeed(NostrTransport, {
     publish: (relays, wrap) =>
       Effect.sync(() => {
+        if (!(wrap instanceof SignedWrapEvent)) {
+          throw new Error("reactions publish only gift wraps");
+        }
         published.push({ relays, wrap });
         return relays.map(
           (relay) =>
@@ -64,6 +70,7 @@ const stubTransport = (
         );
       }),
     subscribe: () => Effect.die("subscribe not under test"),
+    fetch: () => Effect.die("fetch not under test"),
   });
 
 const runWith = <A, E>(

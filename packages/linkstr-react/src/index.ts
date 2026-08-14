@@ -6,5 +6,8 @@ export * from "./config";
 export * from "./errors";
 export * from "./inbox";
 export * from "./inspector";
+export * from "./muteList";
+export * from "./profiles";
 export * from "./reactions";
+export * from "./relayLists";
 export * from "./runtime";

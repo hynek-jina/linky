@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { WrapDelivery } from "../domain/delivery";
 import {
   ClientId,
+  EventId,
   RelayUrl,
   RumorId,
   UnixSeconds,
@@ -38,6 +39,22 @@ export class OperationFailed extends Schema.TaggedClass<OperationFailed>()(
   },
 ) {}
 
+/**
+ * A plain-event vertical finished, e.g. `name: "profiles.publishProfile"`.
+ * `eventIds` are the signed events published — or, for fetches, the events the
+ * result was read from — correlating the operation with its wire rows.
+ * Failures reuse `OperationFailed`, which is not wrap-shaped.
+ */
+export class PlainOperationSucceeded extends Schema.TaggedClass<PlainOperationSucceeded>()(
+  "PlainOperationSucceeded",
+  {
+    name: Schema.String,
+    params: Schema.Unknown,
+    eventIds: Schema.Array(EventId),
+    result: Schema.Unknown,
+  },
+) {}
+
 /** One signed wrap pushed to the write relays, with per-relay outcomes. */
 export class WirePublished extends Schema.TaggedClass<WirePublished>()(
   "WirePublished",
@@ -45,6 +62,28 @@ export class WirePublished extends Schema.TaggedClass<WirePublished>()(
     wrapId: WrapId,
     wrap: Schema.Unknown,
     results: Schema.Array(RelayPublishResult),
+  },
+) {}
+
+/** One signed plain (non-gift-wrapped) event pushed to the write relays. */
+export class WirePlainPublished extends Schema.TaggedClass<WirePlainPublished>()(
+  "WirePlainPublished",
+  {
+    eventId: EventId,
+    kind: Schema.Int,
+    event: Schema.Unknown,
+    results: Schema.Array(RelayPublishResult),
+  },
+) {}
+
+/** A one-shot EOSE-bounded fetch; `detail` names the failure when the relay was unreachable. */
+export class WireFetched extends Schema.TaggedClass<WireFetched>()(
+  "WireFetched",
+  {
+    relay: RelayUrl,
+    filter: Schema.Unknown,
+    events: Schema.Array(Schema.Unknown),
+    detail: Schema.NullOr(Schema.String),
   },
 ) {}
 
@@ -95,12 +134,31 @@ export class InboxRouted extends Schema.TaggedClass<InboxRouted>()(
   },
 ) {}
 
+/**
+ * ProfileWatch turned a relay event into a typed fact — or dropped it, in
+ * which case `event` is a `ProfileEventDropped` naming the reason. Sibling of
+ * `InboxRouted`; `eventId`/`kind` are null when decoding failed before either
+ * was known.
+ */
+export class ProfileWatchRouted extends Schema.TaggedClass<ProfileWatchRouted>()(
+  "ProfileWatchRouted",
+  {
+    eventId: Schema.NullOr(EventId),
+    kind: Schema.NullOr(Schema.Int),
+    event: Schema.Unknown,
+  },
+) {}
+
 export type InspectorEvent =
   | OperationSucceeded
   | OperationFailed
+  | PlainOperationSucceeded
   | WirePublished
+  | WirePlainPublished
+  | WireFetched
   | WireSubscribed
   | WireSubscriptionEnded
   | WireEventReceived
   | InboxWrapDeduped
-  | InboxRouted;
+  | InboxRouted
+  | ProfileWatchRouted;
