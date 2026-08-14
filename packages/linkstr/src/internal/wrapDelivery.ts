@@ -61,6 +61,12 @@ export const deliverRumorToRecipient = (
  * once to self (cross-device echo), once to the peer — so both copies share
  * one rumor id. Success requires the recipient copy to be accepted by at
  * least one relay.
+ *
+ * With `order: "recipientFirst"` the copies publish sequentially: the self
+ * copy is only attempted after a relay accepted the recipient copy, for
+ * rumors whose self copy must never sync a state the recipient did not
+ * receive. A failure then reports the self copy as built but unattempted
+ * (no accepting or rejecting relays).
  */
 export const deliverRumorToPeer = (
   { identity, relayPolicy, transport }: GiftWrapDeliveryContext,
@@ -70,6 +76,7 @@ export const deliverRumorToPeer = (
     readonly clientId: ClientId;
     readonly sentAt: UnixSeconds;
     readonly pushMarkRecipientCopy?: boolean;
+    readonly order?: "parallel" | "recipientFirst";
   },
 ): Effect.Effect<DeliveredCopies, RecipientNotReached | NoRelayReachable> =>
   Effect.gen(function* () {
@@ -88,6 +95,43 @@ export const deliverRumorToPeer = (
         ),
       ),
     ]);
+
+    const fail = (copies: DeliveredCopies) => {
+      const failure = {
+        rumorId: RumorId.make(rumor.id),
+        clientId,
+        sentAt,
+        ...copies,
+      };
+      return copies.selfCopy.accepted
+        ? new RecipientNotReached(failure)
+        : new NoRelayReachable(failure);
+    };
+
+    if (params.order === "recipientFirst") {
+      const recipientCopy = toWrapDelivery(
+        recipientWrap.id,
+        yield* transport.publish(relays, recipientWrap),
+      );
+      if (!recipientCopy.accepted) {
+        return yield* fail({
+          selfCopy: new WrapDelivery({
+            wrapId: selfWrap.id,
+            acceptedBy: [],
+            rejectedBy: [],
+          }),
+          recipientCopy,
+        });
+      }
+      return {
+        selfCopy: toWrapDelivery(
+          selfWrap.id,
+          yield* transport.publish(relays, selfWrap),
+        ),
+        recipientCopy,
+      };
+    }
+
     const [selfResults, recipientResults] = yield* Effect.all(
       [
         transport.publish(relays, selfWrap),
@@ -100,14 +144,5 @@ export const deliverRumorToPeer = (
       recipientCopy: toWrapDelivery(recipientWrap.id, recipientResults),
     };
     if (copies.recipientCopy.accepted) return copies;
-
-    const failure = {
-      rumorId: RumorId.make(rumor.id),
-      clientId,
-      sentAt,
-      ...copies,
-    };
-    return yield* copies.selfCopy.accepted
-      ? new RecipientNotReached(failure)
-      : new NoRelayReachable(failure);
+    return yield* fail(copies);
   });
