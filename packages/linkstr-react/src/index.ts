@@ -11,6 +11,7 @@ export * from "./inspector";
 export * from "./muteList";
 export * from "./outbox";
 export * from "./paymentNotices";
+export * from "./paymentTelemetry";
 export * from "./profiles";
 export * from "./reactions";
 export * from "./relayHealth";

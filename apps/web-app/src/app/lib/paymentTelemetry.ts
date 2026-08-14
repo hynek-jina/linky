@@ -1,5 +1,3 @@
-import type { Event as NostrToolsEvent } from "nostr-tools";
-import { getPublicKey, type UnsignedEvent } from "nostr-tools";
 import {
   getTelemetryAppHost,
   getTelemetryAppRuntime,
@@ -14,10 +12,6 @@ import type {
   PaymentTelemetryPhase,
   PaymentTelemetryStatus,
 } from "../types/appTypes";
-import {
-  LINKY_PAYMENT_TELEMETRY_KIND,
-  wrapEventWithoutPushMarker,
-} from "./pushWrappedEvent";
 
 const AMOUNT_BUCKETS = [1, 10, 100, 1_000, 10_000, 100_000];
 const FEE_BUCKETS = [1, 5, 10, 25, 100, 500];
@@ -179,46 +173,4 @@ export const getPaymentTelemetryRetryDelaySec = (
   const baseDelay = 15 * 2 ** safeAttempts;
   const jitter = Math.floor(Math.random() * 10);
   return baseDelay + jitter;
-};
-
-export const createPaymentTelemetryWrappedEvent = (args: {
-  item: LocalPaymentTelemetryEvent;
-  recipientPublicKey: string;
-  senderPrivateKey: Uint8Array;
-}): NostrToolsEvent => {
-  const senderPublicKey = getPublicKey(args.senderPrivateKey);
-  const baseEvent: UnsignedEvent = {
-    created_at: Math.ceil(Date.now() / 1e3),
-    kind: LINKY_PAYMENT_TELEMETRY_KIND,
-    pubkey: senderPublicKey,
-    tags: [
-      ["p", args.recipientPublicKey],
-      ["client", args.item.id],
-      ["linky", "payment_telemetry"],
-    ],
-    content: JSON.stringify({
-      v: 1,
-      id: args.item.id,
-      createdAtSec: args.item.createdAtSec,
-      direction: args.item.direction,
-      status: args.item.status,
-      method: args.item.method,
-      phase: args.item.phase,
-      mint: args.item.mint,
-      amountBucket: args.item.amountBucket,
-      feeBucket: args.item.feeBucket,
-      errorCode: args.item.errorCode,
-      errorDetail: args.item.errorDetail,
-      appHost: args.item.appHost ?? null,
-      devicePlatform: args.item.devicePlatform ?? null,
-      appRuntime: args.item.appRuntime ?? null,
-      appVersion: args.item.appVersion,
-    }),
-  };
-
-  return wrapEventWithoutPushMarker(
-    baseEvent,
-    args.senderPrivateKey,
-    args.recipientPublicKey,
-  );
 };
