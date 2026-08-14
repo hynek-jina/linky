@@ -1,18 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { encrypt, getConversationKey } from "nostr-tools/nip44";
-import { generateSecretKey, getPublicKey } from "nostr-tools";
 import type {
   LocalNostrMessage,
   LocalNostrReaction,
 } from "../src/app/types/appTypes";
 import {
   aggregateReactions,
-  applyEditToMessage,
-  applyReactionDeletes,
-  extractDeleteReferencedIds,
   extractReplyContextFromTags,
-  isNestedEncryptedNip44Payload,
-  resolveStableMessageRumorId,
 } from "../src/app/hooks/messages/chatNostrProtocol";
 import {
   buildKnownNostrMessageIdentityIndex,
@@ -70,69 +63,6 @@ describe("extractReplyContextFromTags", () => {
   });
 });
 
-describe("applyEditToMessage", () => {
-  it("keeps original content and marks edited metadata", () => {
-    const next = applyEditToMessage(
-      makeMessage("1", { content: "hello", originalContent: null }),
-      "hello edited",
-      200,
-      "rumor-1",
-    );
-
-    expect(next.content).toBe("hello edited");
-    expect(next.originalContent).toBe("hello");
-    expect(next.isEdited).toBe(true);
-    expect(next.editedAtSec).toBe(200);
-    expect(next.editedFromId).toBe("rumor-1");
-    expect(next.rumorId).toBe("rumor-1");
-  });
-});
-
-describe("resolveStableMessageRumorId", () => {
-  it("keeps the original message id for edits", () => {
-    expect(resolveStableMessageRumorId("edit-event", "original-message")).toBe(
-      "original-message",
-    );
-  });
-
-  it("uses the event id for unedited messages", () => {
-    expect(resolveStableMessageRumorId("message-event", null)).toBe(
-      "message-event",
-    );
-  });
-});
-
-describe("isNestedEncryptedNip44Payload", () => {
-  it("detects payloads that are still encrypted for the sender/recipient pair", () => {
-    const senderPrivateKey = generateSecretKey();
-    const recipientPrivateKey = generateSecretKey();
-    const senderPubkey = getPublicKey(senderPrivateKey);
-    const recipientPubkey = getPublicKey(recipientPrivateKey);
-    const encryptedPayload = encrypt(
-      JSON.stringify({ kind: 14, content: "hello" }),
-      getConversationKey(senderPrivateKey, recipientPubkey),
-    );
-
-    expect(
-      isNestedEncryptedNip44Payload(
-        encryptedPayload,
-        senderPubkey,
-        recipientPrivateKey,
-      ),
-    ).toBe(true);
-  });
-
-  it("ignores normal plaintext chat messages", () => {
-    expect(
-      isNestedEncryptedNip44Payload(
-        "hello from chat",
-        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        generateSecretKey(),
-      ),
-    ).toBe(false);
-  });
-});
-
 describe("reactions", () => {
   it("aggregates counts and own highlight", () => {
     const chips = aggregateReactions(
@@ -148,24 +78,6 @@ describe("reactions", () => {
       { emoji: "❤️", count: 1, reactedByMe: false },
       { emoji: "👍", count: 1, reactedByMe: true },
     ]);
-  });
-
-  it("removes deleted reactions referenced by kind-5 e tags", () => {
-    const deleteIds = extractDeleteReferencedIds([
-      ["e", "reaction-2"],
-      ["e", "reaction-3"],
-    ]);
-    const remaining = applyReactionDeletes(
-      [
-        makeReaction("1", { wrapId: "reaction-1" }),
-        makeReaction("2", { wrapId: "reaction-2" }),
-        makeReaction("3", { wrapId: "reaction-3" }),
-      ],
-      deleteIds,
-    );
-
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0]?.wrapId).toBe("reaction-1");
   });
 });
 

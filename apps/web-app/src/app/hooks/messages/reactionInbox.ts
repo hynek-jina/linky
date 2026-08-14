@@ -1,36 +1,23 @@
-import { UnixSeconds } from "@linky/linkstr";
 import type {
   OwnReactionConfirmed,
+  OwnRetractionConfirmed,
   ReactionAdded,
-  WrapInboxEvent,
+  ReactionRetracted,
 } from "@linky/linkstr";
-import {
-  useAtomMount,
-  useAtomSet,
-  wrapInboxAtom,
-  wrapInboxHandlerAtom,
-} from "@linky/linkstr-react";
-import { getPublicKey, nip19 } from "nostr-tools";
-import React from "react";
-import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
-import {
-  getInitialNostrIdentitySource,
-  getInitialNostrIdentitySwitchedAtSec,
-  safeLocalStorageGetJson,
-} from "../../../utils/storage";
 import type {
   LocalNostrMessage,
   LocalNostrReaction,
   NewLocalNostrReaction,
   UpdateLocalNostrReaction,
 } from "../../types/appTypes";
-import { normalizePubkeyHex } from "./contactIdentity";
-
-// Mirrors the legacy inbox backfill window; a persisted cursor replaces this
-// in #243.
-const INBOX_BACKFILL_SINCE_SEC = 3 * 24 * 60 * 60;
 
 const MAX_DEFERRED_REACTIONS = 100;
+
+export type ReactionInboxEvent =
+  | ReactionAdded
+  | OwnReactionConfirmed
+  | ReactionRetracted
+  | OwnRetractionConfirmed;
 
 type DeferrableReactionEvent = ReactionAdded | OwnReactionConfirmed;
 
@@ -177,7 +164,7 @@ const applyRetraction = (
 };
 
 export const processReactionInboxEvent = (
-  event: WrapInboxEvent,
+  event: ReactionInboxEvent,
   ctx: ReactionInboxContext,
 ): void => {
   switch (event._tag) {
@@ -193,8 +180,6 @@ export const processReactionInboxEvent = (
     case "OwnRetractionConfirmed":
       applyRetraction(event.reactionIds, ctx.myPubkey, ctx);
       return;
-    case "WrapDropped":
-      return;
   }
 };
 
@@ -207,105 +192,4 @@ export const retryDeferredReactions = (ctx: ReactionInboxContext): void => {
       deferReaction(ctx.state, event);
     }
   }
-};
-
-const isBlockedPubkey = (pubkey: string): boolean => {
-  const normalizedPubkey = normalizePubkeyHex(pubkey);
-  if (!normalizedPubkey) return false;
-  return safeLocalStorageGetJson(BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY, [])
-    .map(normalizePubkeyHex)
-    .filter((entry): entry is string => Boolean(entry))
-    .includes(normalizedPubkey);
-};
-
-const deriveMyPubkey = (currentNsec: string | null): string | null => {
-  if (!currentNsec) return null;
-  try {
-    const decoded = nip19.decode(currentNsec.trim());
-    if (decoded.type !== "nsec") return null;
-    return getPublicKey(decoded.data);
-  } catch {
-    return null;
-  }
-};
-
-interface UseLinkstrReactionInboxSyncParams {
-  appendLocalNostrReaction: (reaction: NewLocalNostrReaction) => string;
-  currentNsec: string | null;
-  enabled: boolean;
-  nostrMessagesLocal: readonly LocalNostrMessage[];
-  nostrReactionWrapIdsRef: React.MutableRefObject<Set<string>>;
-  nostrReactionsLocal: readonly LocalNostrReaction[];
-  softDeleteLocalNostrReactionsByWrapIds: (wrapIds: readonly string[]) => void;
-  updateLocalNostrReaction: UpdateLocalNostrReaction;
-}
-
-/** Applies typed reaction inbox events from the linkstr `WrapInbox` to the
- * local reaction rows. */
-export const useLinkstrReactionInboxSync = ({
-  appendLocalNostrReaction,
-  currentNsec,
-  enabled,
-  nostrMessagesLocal,
-  nostrReactionWrapIdsRef,
-  nostrReactionsLocal,
-  softDeleteLocalNostrReactionsByWrapIds,
-  updateLocalNostrReaction,
-}: UseLinkstrReactionInboxSyncParams) => {
-  const setWrapInboxHandler = useAtomSet(wrapInboxHandlerAtom);
-  useAtomMount(wrapInboxAtom);
-
-  const myPubkey = React.useMemo(
-    () => deriveMyPubkey(currentNsec),
-    [currentNsec],
-  );
-
-  const sessionStateRef = React.useRef(createReactionInboxSessionState());
-  const identitySinceSecRef = React.useRef<number | null>(null);
-
-  const buildContext = (): ReactionInboxContext | null =>
-    myPubkey === null
-      ? null
-      : {
-          appendLocalNostrReaction,
-          identitySinceSec: identitySinceSecRef.current,
-          isBlockedPubkey,
-          knownReactionWrapIds: nostrReactionWrapIdsRef.current,
-          messages: nostrMessagesLocal,
-          myPubkey,
-          reactions: nostrReactionsLocal,
-          softDeleteLocalNostrReactionsByWrapIds,
-          state: sessionStateRef.current,
-          updateLocalNostrReaction,
-        };
-  const buildContextRef = React.useRef(buildContext);
-  React.useEffect(() => {
-    buildContextRef.current = buildContext;
-  });
-
-  React.useEffect(() => {
-    if (!enabled || !currentNsec || myPubkey === null) return;
-    sessionStateRef.current = createReactionInboxSessionState();
-    identitySinceSecRef.current =
-      getInitialNostrIdentitySource() === "custom"
-        ? getInitialNostrIdentitySwitchedAtSec()
-        : null;
-    // One handler object per identity session: a handler swap reopens the
-    // relay subscriptions, so per-render state is reached through a ref.
-    setWrapInboxHandler({
-      since: UnixSeconds.make(
-        Math.floor(Date.now() / 1e3) - INBOX_BACKFILL_SINCE_SEC,
-      ),
-      onEvent: (event) => {
-        const ctx = buildContextRef.current();
-        if (ctx) processReactionInboxEvent(event, ctx);
-      },
-    });
-    return () => setWrapInboxHandler(null);
-  }, [currentNsec, enabled, myPubkey, setWrapInboxHandler]);
-
-  React.useEffect(() => {
-    const ctx = buildContextRef.current();
-    if (ctx) retryDeferredReactions(ctx);
-  }, [nostrMessagesLocal]);
 };

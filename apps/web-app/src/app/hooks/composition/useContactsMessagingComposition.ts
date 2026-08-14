@@ -69,18 +69,16 @@ import {
   normalizePubkeyHex,
   readUnknownContactIdPubkey,
 } from "../messages/contactIdentity";
-import { useChatNostrSyncEffect } from "../messages/useChatNostrSyncEffect";
 import { useChatReadCursorSync } from "../messages/useChatReadCursorSync";
 import {
   useEditChatMessage,
   type EditChatContext,
 } from "../messages/useEditChatMessage";
-import { useInboxNotificationsSync } from "../messages/useInboxNotificationsSync";
 import {
   useSendChatMessage,
   type ReplyContext,
 } from "../messages/useSendChatMessage";
-import { useLinkstrReactionInboxSync } from "../messages/useLinkstrReactionInboxSync";
+import { useLinkstrInboxSync } from "../messages/useLinkstrInboxSync";
 import { useSendReaction } from "../messages/useSendReaction";
 import { useLinkstrInspectorBridge } from "../../../devtools/inspector/useLinkstrInspectorBridge";
 import { useLinkstrConfigSync } from "../useLinkstrConfigSync";
@@ -988,17 +986,6 @@ export const useContactsMessagingComposition = ({
 
   useLinkstrConfigSync({ currentNsec, nostrFetchRelays });
   useLinkstrInspectorBridge();
-
-  useLinkstrReactionInboxSync({
-    appendLocalNostrReaction,
-    currentNsec,
-    enabled: nostrBootstrapReady,
-    nostrMessagesLocal,
-    nostrReactionWrapIdsRef,
-    nostrReactionsLocal,
-    softDeleteLocalNostrReactionsByWrapIds,
-    updateLocalNostrReaction,
-  });
 
   useLinkstrProfileSync({
     contacts,
@@ -3109,21 +3096,6 @@ export const useContactsMessagingComposition = ({
     navigateTo({ route: "chat", id: String(existing.id) });
   }, [contacts, reassignNostrConversationContactId, setStatus, t]);
 
-  useChatNostrSyncEffect({
-    appendLocalNostrMessage,
-    chatMessages,
-    chatMessagesLatestRef,
-    currentNsec,
-    enabled: nostrBootstrapReady,
-    knownNostrMessageIdentityIndex,
-    logPayStep,
-    nostrFetchRelays,
-    nostrMessageWrapIdsRef,
-    route,
-    selectedContact: selectedChatContact,
-    updateLocalNostrMessage,
-  });
-
   const sendChatMessage = useSendChatMessage({
     appendLocalNostrMessage,
     chatDraft,
@@ -3303,25 +3275,28 @@ export const useContactsMessagingComposition = ({
     [triggerChatScrollToBottom],
   );
 
-  useInboxNotificationsSync({
+  useLinkstrInboxSync({
     appendLocalNostrMessage,
+    appendLocalNostrReaction,
     bankPaymentOfferMessages,
     contacts,
     currentNsec,
     enabled: nostrBootstrapReady,
     formatDisplayedAmountText,
+    logPayStep,
     maybeShowPwaNotification,
-    nostrFetchRelays,
-    knownNostrMessageIdentityIndex,
-    nostrMessageWrapIdsRef,
     nostrMessagesLatestRef,
-    nostrMessagesRecent,
+    nostrMessagesLocal,
+    nostrReactionWrapIdsRef,
+    nostrReactionsLocal,
     onBankPaymentOfferMessage: upsertBankPaymentOfferMessage,
     onOpenInboxMessageToast: openInboxMessageToast,
     pushToast,
     route,
+    softDeleteLocalNostrReactionsByWrapIds,
     t,
     updateLocalNostrMessage,
+    updateLocalNostrReaction,
   });
 
   const chatMessagesWithBankPaymentOffers = React.useMemo(() => {

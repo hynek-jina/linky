@@ -8,7 +8,6 @@ import {
   ReactionRetracted,
   RumorId,
   UnixSeconds,
-  WrapDropped,
 } from "@linky/linkstr";
 import { getPublicKey } from "nostr-tools";
 import { describe, expect, it, vi } from "vitest";
@@ -22,7 +21,7 @@ import {
   processReactionInboxEvent,
   retryDeferredReactions,
   type ReactionInboxContext,
-} from "./useLinkstrReactionInboxSync";
+} from "./reactionInbox";
 
 const createSecretKey = (lastByte: number): Uint8Array => {
   const secretKey = new Uint8Array(32);
@@ -420,17 +419,5 @@ describe("processReactionInboxEvent", () => {
     processReactionInboxEvent(reactionAdded(), harness.ctx);
 
     expect(harness.appendLocalNostrReaction).not.toHaveBeenCalled();
-  });
-
-  it("ignores dropped wraps", () => {
-    const harness = createHarness({ messages: [createStoredMessage()] });
-
-    processReactionInboxEvent(
-      new WrapDropped({ wrapId: null, reason: "unsupported-kind" }),
-      harness.ctx,
-    );
-
-    expect(harness.appendLocalNostrReaction).not.toHaveBeenCalled();
-    expect(harness.updateLocalNostrReaction).not.toHaveBeenCalled();
   });
 });
