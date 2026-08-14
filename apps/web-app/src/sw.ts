@@ -2,41 +2,45 @@
 /// <reference lib="dom" />
 /// <reference lib="webworker" />
 
-const SW_BUILD_TAG = "linky-sw-2026-08-13T00:00-inspector-denylist";
+const SW_BUILD_TAG = "linky-sw-2026-08-14T00:00-linkstr-wrap-fetch";
 const NOTIFICATION_OPEN_URL = "/#contacts";
 const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
 
-import type { Event as NostrEvent } from "nostr-tools";
-import { getPublicKey, nip19, SimplePool } from "nostr-tools";
-import { unwrapEvent } from "nostr-tools/nip17";
+import {
+  NostrSecretKey,
+  RelayUrl,
+  runLinkstr,
+  WrapId,
+  WrapInbox,
+} from "@linky/linkstr";
+import type { ChatMessageReceived, WrapInboxEvent } from "@linky/linkstr";
+import { Effect, Schema } from "effect";
+import { getPublicKey, nip19 } from "nostr-tools";
 import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { ExpirationPlugin } from "workbox-expiration";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst } from "workbox-strategies";
-import {
-  isInvalidInnerRumorPubkey,
-  isNestedEncryptedNip44PayloadForAnyPubkey,
-} from "./app/hooks/messages/chatNostrProtocol";
 import { normalizePubkeyHex } from "./app/hooks/messages/contactIdentity";
-import {
-  getLinkyBankPaymentOfferText,
-  isLinkyBankPaymentOfferEvent,
-} from "./app/lib/bankPaymentOffer";
+import { getLinkyBankPaymentOfferMessageText } from "./app/lib/bankPaymentOffer";
 import {
   getBankPaymentReimbursementCopyForLanguage,
   getReceivedMoneyCopyForLanguage,
   isCashuNotificationMessage,
 } from "./app/lib/cashuNotificationCopy";
-import {
-  isLinkyBankPaymentOfferPaymentNoticeEvent,
-  isLinkyPaymentNoticeEvent,
-} from "./app/lib/pushWrappedEvent";
-import { NOSTR_RELAYS, normalizeRelayUrls } from "./utils/nostrRelays";
+import { NOSTR_RELAYS } from "./utils/nostrRelays";
 import { getStoredPushContactName } from "./utils/pushContactNamesStorage";
 import { appendPushDebugLog } from "./utils/pushDebugLog";
 import { getStoredPushNsec } from "./utils/pushNsecStorage";
 
 declare const self: ServiceWorkerGlobalScope;
+
+// The OS push-event deadline is short: a silent relay must not hold the
+// wrap fetch past it.
+const WRAP_FETCH_TIMEOUT_MS = 5000;
+
+const isNostrSecretKey = Schema.is(NostrSecretKey);
+const isRelayUrl = Schema.is(RelayUrl);
+const isWrapId = Schema.is(WrapId);
 
 type PushNotificationData = {
   createdAt?: number;
@@ -249,36 +253,21 @@ function createSpaydResponse(url: URL): Response {
   });
 }
 
-function getPTagPubkeys(inner: { tags: string[][] }): string[] {
-  const out: string[] = [];
-
-  for (const tag of inner.tags) {
-    if (!Array.isArray(tag) || tag[0] !== "p") continue;
-    const pubkey = String(tag[1] ?? "").trim();
-    if (pubkey) {
-      out.push(pubkey);
-    }
-  }
-
-  return out;
-}
-
-async function fetchOuterWrapEvent(
+async function fetchWrapInboxEvent(
   envelope: PushNotificationEnvelope,
-): Promise<NostrEvent | null> {
+  secretKey: NostrSecretKey,
+): Promise<WrapInboxEvent | null> {
   const outerEventId = String(envelope.data?.outerEventId ?? "").trim();
-  const recipientPubkey = String(envelope.data?.recipientPubkey ?? "").trim();
-  if (!outerEventId || !recipientPubkey) {
+  if (!isWrapId(outerEventId)) {
     void logSw("sw decrypt fetch skipped because push envelope is incomplete", {
       data: readEnvelopeDebugMeta(envelope),
     });
     return null;
   }
 
-  const relays = normalizeRelayUrls([
-    ...(envelope.data?.relayHints ?? []),
-    ...NOSTR_RELAYS,
-  ]);
+  const readRelays = NOSTR_RELAYS.filter(isRelayUrl);
+  const extraRelays = (envelope.data?.relayHints ?? []).filter(isRelayUrl);
+  const relays = Array.from(new Set([...readRelays, ...extraRelays]));
   if (relays.length === 0) {
     void logSw("sw decrypt fetch skipped because no relays were available", {
       data: readEnvelopeDebugMeta(envelope),
@@ -292,28 +281,86 @@ async function fetchOuterWrapEvent(
     relays,
   });
 
-  const pool = new SimplePool({ enableReconnect: false });
   try {
-    const events = await pool.querySync(
-      relays,
-      { ids: [outerEventId], kinds: [1059], "#p": [recipientPubkey], limit: 1 },
-      { maxWait: 5000 },
+    const event = await runLinkstr(
+      { secretKey, readRelays },
+      Effect.flatMap(WrapInbox, (inbox) =>
+        inbox.fetchWrapEvent(outerEventId, {
+          extraRelays,
+          timeout: WRAP_FETCH_TIMEOUT_MS,
+        }),
+      ),
     );
-    const wrap = events[0] ?? null;
     void logSw("sw decrypt outer wrap fetch completed", {
       data: readEnvelopeDebugMeta(envelope),
-      found: Boolean(wrap),
-      resultCount: events.length,
+      found: event !== null,
+      routedTag: event?._tag ?? null,
     });
-    return wrap;
+    return event;
   } catch (error) {
     void logSw("sw decrypt outer wrap fetch failed", {
       data: readEnvelopeDebugMeta(envelope),
       error: describeError(error),
     });
     return null;
-  } finally {
-    pool.close(relays);
+  }
+}
+
+function buildChatPushMessage(
+  event: ChatMessageReceived,
+): DecryptedPushMessage | null {
+  const { body } = event;
+  if (
+    body._tag === "TokenBody" ||
+    (body._tag === "TextBody" && isCashuNotificationMessage(body.text))
+  ) {
+    return {
+      body: getReceivedMoneyCopyForLanguage(self.navigator.language),
+      isCashu: true,
+      isPaymentNotice: false,
+      senderPub: event.from,
+    };
+  }
+  if (body._tag !== "TextBody") return null;
+  return {
+    body: truncateNotificationBody(body.text),
+    isCashu: false,
+    isPaymentNotice: false,
+    senderPub: event.from,
+  };
+}
+
+function buildDecryptedPushMessage(
+  event: WrapInboxEvent,
+): DecryptedPushMessage | null {
+  switch (event._tag) {
+    case "PaymentNoticeReceived":
+      return {
+        body:
+          event.context === "bank_payment_offer"
+            ? getBankPaymentReimbursementCopyForLanguage(
+                self.navigator.language,
+              )
+            : getReceivedMoneyCopyForLanguage(self.navigator.language),
+        isCashu: false,
+        isPaymentNotice: true,
+        senderPub: event.from,
+      };
+    case "BankOfferSnapshotReceived":
+      return {
+        body:
+          event.text ??
+          getLinkyBankPaymentOfferMessageText(event.amountText, event.status),
+        isCashu: false,
+        isPaymentNotice: false,
+        senderPub: event.from,
+      };
+    case "ChatMessageReceived":
+      return buildChatPushMessage(event);
+    // Own-copy confirmations, reactions and dropped wraps fall back to the
+    // caller's generic notification, like every undecryptable push.
+    default:
+      return null;
   }
 }
 
@@ -333,15 +380,15 @@ async function decryptIncomingMessageBody(
   }
 
   const decoded = nip19.decode(nsec);
-  if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
+  if (decoded.type !== "nsec" || !isNostrSecretKey(decoded.data)) {
     void logSw("sw decrypt failed because stored nsec is invalid", {
       data: readEnvelopeDebugMeta(envelope),
     });
     return null;
   }
 
-  const privBytes = decoded.data;
-  const myPubHex = getPublicKey(privBytes);
+  const secretKey = decoded.data;
+  const myPubHex = getPublicKey(secretKey);
   const recipientPubkey = normalizePubkeyHex(envelope.data?.recipientPubkey);
   if (!recipientPubkey || recipientPubkey !== myPubHex) {
     void logSw("sw decrypt failed because recipient pubkey did not match", {
@@ -352,153 +399,30 @@ async function decryptIncomingMessageBody(
     return null;
   }
 
-  const wrap = await fetchOuterWrapEvent(envelope);
-  if (!wrap) {
+  const event = await fetchWrapInboxEvent(envelope, secretKey);
+  if (event === null) {
     void logSw("sw decrypt failed because outer wrap event was not fetched", {
       data: readEnvelopeDebugMeta(envelope),
     });
     return null;
   }
 
-  let inner: ReturnType<typeof unwrapEvent> | null = null;
-  try {
-    inner = unwrapEvent(wrap, privBytes);
-  } catch (error) {
-    void logSw("sw decrypt failed because unwrapEvent threw", {
+  const message = buildDecryptedPushMessage(event);
+  if (message === null) {
+    void logSw("sw decrypt produced no notification copy for routed event", {
       data: readEnvelopeDebugMeta(envelope),
-      error: describeError(error),
-      wrapPubkey: wrap.pubkey,
-    });
-    return null;
-  }
-  if (!inner) {
-    void logSw("sw decrypt failed because inner rumor was missing or invalid", {
-      data: readEnvelopeDebugMeta(envelope),
-      hasInner: Boolean(inner),
-      innerKind: null,
-    });
-    return null;
-  }
-
-  const senderPub = String(inner.pubkey ?? "").trim();
-  const content = String(inner.content ?? "").trim();
-  if (!senderPub) {
-    void logSw(
-      "sw decrypt failed because inner rumor lacked sender or content",
-      {
-        contentLength: content.length,
-        data: readEnvelopeDebugMeta(envelope),
-        hasSenderPubkey: Boolean(senderPub),
-      },
-    );
-    return null;
-  }
-  if (isInvalidInnerRumorPubkey(senderPub, wrap.pubkey)) {
-    void logSw(
-      "sw decrypt rejected inner rumor because it reused wrap pubkey",
-      {
-        data: readEnvelopeDebugMeta(envelope),
-        senderPub,
-        wrapPubkey: wrap.pubkey,
-      },
-    );
-    return null;
-  }
-
-  const pTags = getPTagPubkeys(inner);
-  if (!pTags.includes(myPubHex)) {
-    void logSw(
-      "sw decrypt failed because inner rumor did not address this recipient",
-      {
-        data: readEnvelopeDebugMeta(envelope),
-        pTagCount: pTags.length,
-      },
-    );
-    return null;
-  }
-
-  if (isLinkyPaymentNoticeEvent(inner)) {
-    const isBankPaymentReimbursement =
-      isLinkyBankPaymentOfferPaymentNoticeEvent(inner);
-    void logSw("sw decrypt succeeded", {
-      contentLength: content.length,
-      data: readEnvelopeDebugMeta(envelope),
-      isPaymentNotice: true,
-      senderPub,
-    });
-    return {
-      body: isBankPaymentReimbursement
-        ? getBankPaymentReimbursementCopyForLanguage(self.navigator.language)
-        : getReceivedMoneyCopyForLanguage(self.navigator.language),
-      isCashu: false,
-      isPaymentNotice: true,
-      senderPub,
-    };
-  }
-
-  if (isLinkyBankPaymentOfferEvent(inner)) {
-    const offerText = getLinkyBankPaymentOfferText(content);
-    if (!offerText) return null;
-
-    void logSw("sw decrypt succeeded", {
-      contentLength: content.length,
-      data: readEnvelopeDebugMeta(envelope),
-      isBankPaymentOffer: true,
-      senderPub,
-    });
-    return {
-      body: offerText,
-      isCashu: false,
-      isPaymentNotice: false,
-      senderPub,
-    };
-  }
-
-  if (inner.kind !== 14 || !content) {
-    void logSw("sw decrypt failed because inner rumor was missing or invalid", {
-      data: readEnvelopeDebugMeta(envelope),
-      hasInner: Boolean(inner),
-      innerKind: inner.kind,
-    });
-    return null;
-  }
-
-  const taggedPeerPub = pTags.find((pubkey) => pubkey !== myPubHex) ?? "";
-  if (
-    isNestedEncryptedNip44PayloadForAnyPubkey(
-      content,
-      [senderPub, taggedPeerPub, wrap.pubkey],
-      privBytes,
-    )
-  ) {
-    void logSw("sw decrypt rejected nested encrypted payload", {
-      data: readEnvelopeDebugMeta(envelope),
-      hasTaggedPeerPub: Boolean(taggedPeerPub),
-      senderPub,
-      wrapPubkey: wrap.pubkey,
+      routedTag: event._tag,
     });
     return null;
   }
 
   void logSw("sw decrypt succeeded", {
-    contentLength: content.length,
     data: readEnvelopeDebugMeta(envelope),
-    senderPub,
+    isCashuMessage: message.isCashu,
+    isPaymentNotice: message.isPaymentNotice,
+    senderPub: message.senderPub,
   });
-  if (isCashuNotificationMessage(content)) {
-    return {
-      body: getReceivedMoneyCopyForLanguage(self.navigator.language),
-      isCashu: true,
-      isPaymentNotice: false,
-      senderPub,
-    };
-  }
-  return {
-    body: truncateNotificationBody(content),
-    isCashu: false,
-    isPaymentNotice: false,
-    senderPub,
-  };
+  return message;
 }
 
 precacheAndRoute(self.__WB_MANIFEST || []);

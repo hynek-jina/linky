@@ -20,6 +20,7 @@ import type { RelayUrl } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { InboxRouted, InboxWrapDeduped } from "../inspector/events";
 import { inspectPlainOperation } from "../internal/inspectPlainOperation";
+import type { InspectedPlainResult } from "../internal/inspectPlainOperation";
 import { fetchRawEvents } from "../internal/plainFetch";
 import type { PaymentNoticeInboxEvent } from "../paymentNotices/events";
 import type { ReactionInboxEvent } from "../reactions/events";
@@ -56,6 +57,12 @@ export interface WrapInboxOptions {
 
 export interface WrapFetchOptions {
   readonly extraRelays?: ReadonlyArray<RelayUrl>;
+  /**
+   * Bounds the whole fan-out; on timeout the fetch resolves null instead of
+   * failing. For callers on an external deadline (push events), since a
+   * reachable-but-silent relay can hold the fetch for ~11s otherwise.
+   */
+  readonly timeout?: Duration.DurationInput;
 }
 
 export interface WrapInboxFeed {
@@ -136,8 +143,8 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
       ): Effect.Effect<
         WrapInboxEvent | null,
         AllRelaysUnreachable | NoReadRelaysConfigured
-      > =>
-        Effect.gen(function* () {
+      > => {
+        const fetched = Effect.gen(function* () {
           const relays = Array.from(
             new Set([
               ...relayPolicy.readRelays,
@@ -163,12 +170,25 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
             result: routed?.event ?? null,
             eventIds: routed === null ? [] : [wrapId],
           };
-        }).pipe(
+        });
+        const bounded =
+          options?.timeout === undefined
+            ? fetched
+            : Effect.timeoutTo(fetched, {
+                duration: options.timeout,
+                onTimeout: (): InspectedPlainResult<WrapInboxEvent | null> => ({
+                  result: null,
+                  eventIds: [],
+                }),
+                onSuccess: (value) => value,
+              });
+        return bounded.pipe(
           inspectPlainOperation(inspector, "inbox.fetchWrapEvent", {
             wrapId,
             ...options,
           }),
         );
+      };
 
       const open = (
         options?: WrapInboxOptions,

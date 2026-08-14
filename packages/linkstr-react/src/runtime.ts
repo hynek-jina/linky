@@ -1,43 +1,15 @@
 import { Atom } from "@effect-atom/atom-react";
 import {
-  BankOffers,
-  Chat,
   Inspector,
   inspectTransport,
-  LinkstrIdentity,
-  MuteList,
+  linkstrServices,
   NostrTransportSimplePool,
   observeTransport,
-  Outbox,
-  OutboxStore,
-  PaymentNotices,
-  PaymentTelemetry,
-  Profiles,
-  ProfileWatch,
-  Reactions,
   RelayHealth,
-  RelayLists,
-  RelayPolicy,
-  WrapInbox,
 } from "@linky/linkstr";
 import { Layer } from "effect";
-import type { LinkstrConfig } from "./config";
 import { linkstrConfigAtom } from "./config";
 import { LinkstrNotConfigured } from "./errors";
-
-const baseServices = (config: LinkstrConfig) =>
-  Layer.mergeAll(
-    LinkstrIdentity.fromSecretKey(config.secretKey),
-    RelayPolicy.fixed({
-      readRelays: config.readRelays,
-      writeRelays: config.writeRelays,
-    }),
-    // Both decorators are transparent taps over the same raw transport:
-    // health folds connection state, the inspector streams diagnostics.
-    inspectTransport(
-      observeTransport(config.transport ?? NostrTransportSimplePool),
-    ),
-  );
 
 /**
  * Rebuilds whenever `linkstrConfigAtom` changes, finalizing the previous
@@ -53,26 +25,17 @@ export const linkstrRuntimeAtom = Atom.runtime((get) => {
   return config === null
     ? Layer.fail(new LinkstrNotConfigured())
     : Layer.fresh(
-        Layer.mergeAll(
-          BankOffers.Default,
-          Chat.Default,
-          Outbox.Default.pipe(
-            Layer.provide([
-              Chat.Default,
-              Reactions.Default,
-              config.outboxStore ?? OutboxStore.inMemory,
-            ]),
+        linkstrServices({
+          secretKey: config.secretKey,
+          readRelays: config.readRelays,
+          writeRelays: config.writeRelays,
+          // Both decorators are transparent taps over the same raw transport:
+          // health folds connection state, the inspector streams diagnostics.
+          transport: inspectTransport(
+            observeTransport(config.transport ?? NostrTransportSimplePool),
           ),
-          PaymentNotices.Default,
-          PaymentTelemetry.Default,
-          Reactions.Default,
-          WrapInbox.Default,
-          Profiles.Default,
-          ProfileWatch.Default,
-          RelayLists.Default,
-          MuteList.Default,
-        ).pipe(
-          Layer.provideMerge(baseServices(config)),
+          outboxStore: config.outboxStore,
+        }).pipe(
           Layer.provideMerge(
             config.inspector === true ? Inspector.live : Inspector.disabled,
           ),
