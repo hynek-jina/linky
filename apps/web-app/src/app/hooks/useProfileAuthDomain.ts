@@ -9,8 +9,13 @@ import {
   type DerivedGeneratedAvatar,
 } from "../../derivedProfile";
 import { ProfileMetadata } from "@linky/linkstr";
+import {
+  linkstrConfigAtom,
+  publishProfileAtom,
+  useAtomSet,
+} from "@linky/linkstr-react";
+import { Cause, Exit, Option } from "effect";
 import type { Lang } from "../../i18n";
-import { publishKind0ProfileMetadata } from "../../nostrPublish";
 import { saveCachedProfile } from "../../profileCache";
 import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 import { readClipboardText } from "../../platform/clipboard";
@@ -22,7 +27,6 @@ import {
   writeStoredCashuMnemonic,
 } from "../../platform/identitySecrets";
 import { triggerPasswordManagerSeedSave } from "../../platform/passwordManager";
-import type { JsonRecord } from "../../types/json";
 import {
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
   EVOLU_CASHU_OWNER_BASELINE_COUNT_STORAGE_KEY,
@@ -57,6 +61,7 @@ import {
   safeLocalStorageSet,
 } from "../../utils/storage";
 import type { IdentityChangeMessageSource } from "../lib/identityChangeMessage";
+import { buildLinkstrConfig } from "./useLinkstrConfigSync";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
@@ -199,6 +204,10 @@ export const useProfileAuthDomain = ({
   const [logoutArmed, setLogoutArmed] = React.useState(false);
   const onboardingPhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isSeedLogin, setIsSeedLogin] = React.useState(false);
+  const setLinkstrConfig = useAtomSet(linkstrConfigAtom);
+  const publishProfile = useAtomSet(publishProfileAtom, {
+    mode: "promiseExit",
+  });
 
   React.useEffect(() => {
     let cancelled = false;
@@ -395,8 +404,7 @@ export const useProfileAuthDomain = ({
       nsec,
       pictureUrl,
     }: PersistNewProfileParams) => {
-      const privBytes = await decodeNsecPrivateBytes(nsec);
-      if (!privBytes) {
+      if (currentNsec) {
         throw new Error(t("onboardingCreateFailed"));
       }
 
@@ -404,41 +412,30 @@ export const useProfileAuthDomain = ({
       const nip05 = getDefaultNip05IdentifierFromAddress(trimmedLnAddress);
       const trimmedName = name.trim();
       const trimmedPicture = pictureUrl.trim();
-      const content: JsonRecord = {
-        ...(trimmedName
-          ? { name: trimmedName, display_name: trimmedName }
-          : {}),
+      const metadata = new ProfileMetadata({
+        ...(trimmedName ? { name: trimmedName, displayName: trimmedName } : {}),
         ...(trimmedLnAddress ? { lud16: trimmedLnAddress } : {}),
         ...(nip05 ? { nip05 } : {}),
-        ...(trimmedPicture
-          ? { picture: trimmedPicture, image: trimmedPicture }
-          : {}),
-      };
-
-      const result = await publishKind0ProfileMetadata({
-        privBytes,
-        relays: NOSTR_RELAYS,
-        content,
+        ...(trimmedPicture ? { picture: trimmedPicture } : {}),
       });
 
-      if (!result.anySuccess) {
-        throw new Error("nostr publish failed");
+      const config = buildLinkstrConfig(nsec, NOSTR_RELAYS);
+      if (config === null) {
+        throw new Error(t("onboardingCreateFailed"));
       }
 
-      saveCachedProfile(
-        npub,
-        new ProfileMetadata({
-          ...(trimmedName
-            ? { name: trimmedName, displayName: trimmedName }
-            : {}),
-          ...(trimmedLnAddress ? { lud16: trimmedLnAddress } : {}),
-          ...(nip05 ? { nip05 } : {}),
-          ...(trimmedPicture ? { picture: trimmedPicture } : {}),
-        }),
-        Math.floor(Date.now() / 1000),
-      );
+      setLinkstrConfig(config);
+      const publishExit = await publishProfile(metadata);
+      if (Exit.isFailure(publishExit)) {
+        const failure = Cause.failureOption(publishExit.cause);
+        throw new Error("nostr publish failed", {
+          cause: Option.isSome(failure) ? failure.value : publishExit.cause,
+        });
+      }
+
+      saveCachedProfile(npub, metadata, Math.floor(Date.now() / 1000));
     },
-    [decodeNsecPrivateBytes, t],
+    [currentNsec, publishProfile, setLinkstrConfig, t],
   );
 
   const setIdentityFromNsecAndReload = React.useCallback(
