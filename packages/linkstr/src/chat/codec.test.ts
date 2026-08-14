@@ -16,13 +16,16 @@ import {
   encodeEditRumor,
   encodeImageMessageRumor,
   encodeTextMessageRumor,
+  encodeTokenMessageRumor,
 } from "./codec";
 import {
+  CashuTokenText,
   EditMessageDraft,
   ImageMessageDraft,
   MessageText,
   PrivateImage,
   TextMessageDraft,
+  TokenMessageDraft,
 } from "./domain";
 
 const makeIdentity = (): LinkstrIdentityService => {
@@ -38,6 +41,14 @@ const clientId = ClientId.make("client-1");
 const rootId = RumorId.make("ab".repeat(32));
 const replyId = RumorId.make("cd".repeat(32));
 const editId = RumorId.make("ef".repeat(32));
+const cashuToken = `cashuA${Buffer.from(
+  JSON.stringify({
+    token: [{ mint: "https://mint.test", proofs: [{ amount: 8 }] }],
+    unit: "sat",
+  }),
+)
+  .toString("base64url")
+  .replace(/=+$/g, "")}`;
 
 const image = new PrivateImage({
   url: "https://blossom.test/image",
@@ -116,6 +127,44 @@ describe("chat rumor encoding", () => {
     ]);
     expect(fallbackRoot.tags.slice(3)).toEqual([
       ["e", replyId, "", "root"],
+      ["e", replyId, "", "reply"],
+    ]);
+  });
+
+  it("encodes token content and tags with and without reply context", () => {
+    const bare = encodeTokenMessageRumor(
+      new TokenMessageDraft({
+        to: bob.pubkey,
+        token: CashuTokenText.make(cashuToken),
+      }),
+      alice.pubkey,
+      sentAt,
+      clientId,
+    );
+    const reply = encodeTokenMessageRumor(
+      new TokenMessageDraft({
+        to: bob.pubkey,
+        token: CashuTokenText.make(cashuToken),
+        replyTo: replyId,
+        root: rootId,
+      }),
+      alice.pubkey,
+      sentAt,
+      clientId,
+    );
+
+    expect(bare.content).toBe(cashuToken);
+    expect(bare.tags).toEqual([
+      ["p", bob.pubkey],
+      ["p", alice.pubkey],
+      ["client", clientId],
+    ]);
+    expect(reply.content).toBe(cashuToken);
+    expect(reply.tags).toEqual([
+      ["p", bob.pubkey],
+      ["p", alice.pubkey],
+      ["client", clientId],
+      ["e", rootId, "", "root"],
       ["e", replyId, "", "reply"],
     ]);
   });
@@ -243,6 +292,74 @@ describe("chat rumor decoding", () => {
       Either.right(
         expect.objectContaining({
           body: expect.objectContaining({ _tag: "ImageBody", image }),
+        }),
+      ),
+    );
+  });
+
+  it.each([
+    { name: "bare token", content: cashuToken },
+    { name: "cashu URI", content: `cashu:${cashuToken}` },
+  ])("classifies a $name as TokenBody", ({ content }) => {
+    const rumor = withHash({
+      pubkey: bob.pubkey,
+      created_at: sentAt,
+      kind: 14,
+      tags: [["p", alice.pubkey]],
+      content,
+    });
+
+    expect(decodeChatRumor(rumor, alice, wrapAuthor.pubkey)).toEqual(
+      Either.right(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            _tag: "TokenBody",
+            token: cashuToken,
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("keeps an embedded token as TextBody", () => {
+    const content = `here is ${cashuToken} thanks`;
+    const rumor = withHash({
+      pubkey: bob.pubkey,
+      created_at: sentAt,
+      kind: 14,
+      tags: [["p", alice.pubkey]],
+      content,
+    });
+
+    expect(decodeChatRumor(rumor, alice, wrapAuthor.pubkey)).toEqual(
+      Either.right(
+        expect.objectContaining({
+          body: expect.objectContaining({ _tag: "TextBody", text: content }),
+        }),
+      ),
+    );
+  });
+
+  it("classifies token edit content and preserves editOf", () => {
+    const rumor = encodeEditRumor(
+      new EditMessageDraft({
+        to: alice.pubkey,
+        editOf: editId,
+        content: MessageText.make(cashuToken),
+      }),
+      bob.pubkey,
+      sentAt,
+      clientId,
+    );
+
+    expect(decodeChatRumor(rumor, alice, wrapAuthor.pubkey)).toEqual(
+      Either.right(
+        expect.objectContaining({
+          editOf: editId,
+          body: expect.objectContaining({
+            _tag: "TokenBody",
+            token: cashuToken,
+          }),
         }),
       ),
     );

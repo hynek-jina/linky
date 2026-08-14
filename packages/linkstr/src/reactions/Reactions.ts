@@ -1,9 +1,13 @@
-import { Clock, Effect } from "effect";
+import { Effect } from "effect";
 import type { NoRelayReachable, RecipientNotReached } from "../domain/errors";
-import { ClientId, RumorId, UnixSeconds } from "../domain/primitives";
+import { RumorId } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
-import type { InspectorService } from "../inspector/Inspector";
-import { OperationFailed, OperationSucceeded } from "../inspector/events";
+import {
+  freshClientId,
+  inspectOperation,
+  nowSeconds,
+} from "../internal/operations";
+import type { OperationReceiptSummary } from "../internal/operations";
 import { deliverRumorToPeer } from "../internal/wrapDelivery";
 import { LinkstrIdentity } from "../services/LinkstrIdentity";
 import { NostrTransport } from "../services/NostrTransport";
@@ -16,42 +20,18 @@ import {
   type RetractionDraft,
 } from "./domain";
 
-const freshClientId = Effect.sync(() => ClientId.make(crypto.randomUUID()));
-
-const nowSeconds = Clock.currentTimeMillis.pipe(
-  Effect.map((millis) => UnixSeconds.make(Math.floor(millis / 1000))),
-);
-
-const inspectOperation =
-  (inspector: InspectorService, name: string, params: unknown) =>
-  <A extends ReactionReceipt | RetractionReceipt, E>(
-    operation: Effect.Effect<A, E>,
-  ): Effect.Effect<A, E> =>
-    operation.pipe(
-      Effect.tap((receipt) =>
-        Effect.sync(() =>
-          inspector.emit(
-            new OperationSucceeded({
-              name,
-              params,
-              rumorId:
-                receipt instanceof ReactionReceipt
-                  ? receipt.reactionId
-                  : receipt.retractionId,
-              clientId: receipt.clientId,
-              sentAt: receipt.sentAt,
-              selfCopy: receipt.selfCopy,
-              recipientCopy: receipt.recipientCopy,
-            }),
-          ),
-        ),
-      ),
-      Effect.tapError((error) =>
-        Effect.sync(() =>
-          inspector.emit(new OperationFailed({ name, params, error })),
-        ),
-      ),
-    );
+const summarizeReceipt = (
+  receipt: ReactionReceipt | RetractionReceipt,
+): OperationReceiptSummary => ({
+  rumorId:
+    receipt instanceof ReactionReceipt
+      ? receipt.reactionId
+      : receipt.retractionId,
+  clientId: receipt.clientId,
+  sentAt: receipt.sentAt,
+  selfCopy: receipt.selfCopy,
+  recipientCopy: receipt.recipientCopy,
+});
 
 export class Reactions extends Effect.Service<Reactions>()(
   "linkstr/Reactions",
@@ -91,7 +71,14 @@ export class Reactions extends Effect.Service<Reactions>()(
             sentAt,
             ...copies,
           });
-        }).pipe(inspectOperation(inspector, "reactions.react", draft));
+        }).pipe(
+          inspectOperation(
+            inspector,
+            "reactions.react",
+            draft,
+            summarizeReceipt,
+          ),
+        );
 
       const retract = (
         draft: RetractionDraft,
@@ -120,7 +107,14 @@ export class Reactions extends Effect.Service<Reactions>()(
             sentAt,
             ...copies,
           });
-        }).pipe(inspectOperation(inspector, "reactions.retract", draft));
+        }).pipe(
+          inspectOperation(
+            inspector,
+            "reactions.retract",
+            draft,
+            summarizeReceipt,
+          ),
+        );
 
       return { react, retract } as const;
     }),

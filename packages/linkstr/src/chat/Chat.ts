@@ -1,9 +1,13 @@
-import { Clock, Effect } from "effect";
+import { Effect } from "effect";
 import type { NoRelayReachable, RecipientNotReached } from "../domain/errors";
-import { ClientId, RumorId, UnixSeconds } from "../domain/primitives";
+import { RumorId } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
-import type { InspectorService } from "../inspector/Inspector";
-import { OperationFailed, OperationSucceeded } from "../inspector/events";
+import {
+  freshClientId,
+  inspectOperation,
+  nowSeconds,
+} from "../internal/operations";
+import type { OperationReceiptSummary } from "../internal/operations";
 import { deliverRumorToPeer } from "../internal/wrapDelivery";
 import { LinkstrIdentity } from "../services/LinkstrIdentity";
 import { NostrTransport } from "../services/NostrTransport";
@@ -12,6 +16,7 @@ import {
   encodeEditRumor,
   encodeImageMessageRumor,
   encodeTextMessageRumor,
+  encodeTokenMessageRumor,
 } from "./codec";
 import {
   ChatMessageReceipt,
@@ -19,41 +24,18 @@ import {
   type EditMessageDraft,
   type ImageMessageDraft,
   type TextMessageDraft,
+  type TokenMessageDraft,
 } from "./domain";
 
-const freshClientId = Effect.sync(() => ClientId.make(crypto.randomUUID()));
-
-const nowSeconds = Clock.currentTimeMillis.pipe(
-  Effect.map((millis) => UnixSeconds.make(Math.floor(millis / 1000))),
-);
-
-const inspectOperation =
-  (inspector: InspectorService, name: string, params: unknown) =>
-  <A extends ChatMessageReceipt | MessageEditReceipt, E>(
-    operation: Effect.Effect<A, E>,
-  ): Effect.Effect<A, E> =>
-    operation.pipe(
-      Effect.tap((receipt) =>
-        Effect.sync(() =>
-          inspector.emit(
-            new OperationSucceeded({
-              name,
-              params,
-              rumorId: receipt.messageId,
-              clientId: receipt.clientId,
-              sentAt: receipt.sentAt,
-              selfCopy: receipt.selfCopy,
-              recipientCopy: receipt.recipientCopy,
-            }),
-          ),
-        ),
-      ),
-      Effect.tapError((error) =>
-        Effect.sync(() =>
-          inspector.emit(new OperationFailed({ name, params, error })),
-        ),
-      ),
-    );
+const summarizeReceipt = (
+  receipt: ChatMessageReceipt | MessageEditReceipt,
+): OperationReceiptSummary => ({
+  rumorId: receipt.messageId,
+  clientId: receipt.clientId,
+  sentAt: receipt.sentAt,
+  selfCopy: receipt.selfCopy,
+  recipientCopy: receipt.recipientCopy,
+});
 
 export class Chat extends Effect.Service<Chat>()("linkstr/Chat", {
   effect: Effect.gen(function* () {
@@ -92,7 +74,9 @@ export class Chat extends Effect.Service<Chat>()("linkstr/Chat", {
           sentAt,
           ...copies,
         });
-      }).pipe(inspectOperation(inspector, "chat.sendText", draft));
+      }).pipe(
+        inspectOperation(inspector, "chat.sendText", draft, summarizeReceipt),
+      );
 
     const sendImage = (
       draft: ImageMessageDraft,
@@ -122,7 +106,40 @@ export class Chat extends Effect.Service<Chat>()("linkstr/Chat", {
           sentAt,
           ...copies,
         });
-      }).pipe(inspectOperation(inspector, "chat.sendImage", draft));
+      }).pipe(
+        inspectOperation(inspector, "chat.sendImage", draft, summarizeReceipt),
+      );
+
+    const sendToken = (
+      draft: TokenMessageDraft,
+    ): Effect.Effect<
+      ChatMessageReceipt,
+      RecipientNotReached | NoRelayReachable
+    > =>
+      Effect.gen(function* () {
+        const clientId = draft.clientId ?? (yield* freshClientId);
+        const sentAt = yield* nowSeconds;
+        const rumor = encodeTokenMessageRumor(
+          draft,
+          context.identity.pubkey,
+          sentAt,
+          clientId,
+        );
+        const copies = yield* deliverRumorToPeer(context, {
+          rumor,
+          peer: draft.to,
+          clientId,
+          sentAt,
+        });
+        return new ChatMessageReceipt({
+          messageId: RumorId.make(rumor.id),
+          clientId,
+          sentAt,
+          ...copies,
+        });
+      }).pipe(
+        inspectOperation(inspector, "chat.sendToken", draft, summarizeReceipt),
+      );
 
     const edit = (
       draft: EditMessageDraft,
@@ -152,8 +169,10 @@ export class Chat extends Effect.Service<Chat>()("linkstr/Chat", {
           sentAt,
           ...copies,
         });
-      }).pipe(inspectOperation(inspector, "chat.edit", draft));
+      }).pipe(
+        inspectOperation(inspector, "chat.edit", draft, summarizeReceipt),
+      );
 
-    return { sendText, sendImage, edit } as const;
+    return { sendText, sendImage, sendToken, edit } as const;
   }),
 }) {}

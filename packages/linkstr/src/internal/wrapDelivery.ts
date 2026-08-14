@@ -35,6 +35,27 @@ const toWrapDelivery = (
       .map((r) => new RelayRejection({ relay: r.relay, detail: r.detail })),
   });
 
+export const deliverRumorToRecipient = (
+  { identity, relayPolicy, transport }: GiftWrapDeliveryContext,
+  params: {
+    readonly rumor: Rumor;
+    readonly recipient: Pubkey;
+    readonly pushMark?: boolean;
+  },
+): Effect.Effect<WrapDelivery> =>
+  Effect.gen(function* () {
+    const wrap = yield* Effect.sync(() =>
+      wrapRumorFor(
+        params.rumor,
+        identity.secretKey,
+        params.recipient,
+        params.pushMark === true ? { pushMarker: true } : undefined,
+      ),
+    );
+    const results = yield* transport.publish(relayPolicy.writeRelays, wrap);
+    return toWrapDelivery(wrap.id, results);
+  });
+
 /**
  * NIP-17 delivery, shared by all verticals: the same rumor is wrapped twice —
  * once to self (cross-device echo), once to the peer — so both copies share

@@ -172,6 +172,9 @@ describe("Inspector", () => {
         expect(operation.params).toBe(draft);
         expect(operation.rumorId).toBe(receipt.reactionId);
         expect(operation.clientId).toBe(receipt.clientId);
+        if (operation.selfCopy === null) {
+          throw new Error("reaction operation lost its self copy");
+        }
         expect(
           [operation.selfCopy.wrapId, operation.recipientCopy.wrapId].sort(),
         ).toEqual([...published].sort());

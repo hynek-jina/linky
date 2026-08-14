@@ -24,6 +24,11 @@ import { Inspector } from "../inspector/Inspector";
 import { InboxRouted, InboxWrapDeduped } from "../inspector/events";
 import type { Rumor, SignedWrapEvent } from "../internal/nostrEvent";
 import {
+  decodePaymentNoticeRumor,
+  PAYMENT_NOTICE_KIND,
+} from "../paymentNotices/codec";
+import type { PaymentNoticeInboxEvent } from "../paymentNotices/events";
+import {
   decodeReactionRumor,
   REACTION_KIND,
   RETRACTION_KIND,
@@ -36,7 +41,11 @@ import { RelayPolicy } from "../services/RelayPolicy";
 import { authenticateWrap } from "./authenticateWrap";
 import { WrapDropped } from "./events";
 
-export type WrapInboxEvent = ReactionInboxEvent | ChatInboxEvent | WrapDropped;
+export type WrapInboxEvent =
+  | ReactionInboxEvent
+  | ChatInboxEvent
+  | PaymentNoticeInboxEvent
+  | WrapDropped;
 
 export interface WrapInboxOptions {
   /** Cursor persisted by the caller from a previous session's `cursor`. */
@@ -113,7 +122,12 @@ const routeRumor = (
         onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
         onRight: (event) => event,
       });
-    // TODO: future verticals (payment notices, …) dispatch on rumor.kind here.
+    case PAYMENT_NOTICE_KIND:
+      return Either.match(decodePaymentNoticeRumor(rumor, identity), {
+        onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
+        onRight: (event) => event,
+      });
+    // TODO: bank offers (24135) and payment telemetry (24134) remain.
     default:
       return new WrapDropped({ wrapId: wrap.id, reason: "unsupported-kind" });
   }

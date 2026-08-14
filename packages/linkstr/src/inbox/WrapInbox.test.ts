@@ -12,6 +12,8 @@ import {
 import { wrapRumorFor } from "../internal/giftWrap";
 import { Rumor } from "../internal/nostrEvent";
 import type { NostrTags } from "../internal/nostrEvent";
+import { encodePaymentNoticeRumor } from "../paymentNotices/codec";
+import { PaymentNoticeDraft } from "../paymentNotices/domain";
 import { encodeReactionRumor } from "../reactions/codec";
 import { Emoji, ReactionDraft } from "../reactions/domain";
 import { LinkstrIdentity } from "../services/LinkstrIdentity";
@@ -69,6 +71,18 @@ const chatWrap = () => {
   };
   const rumor = new Rumor({ ...fields, id: getEventHash(fields) });
   return wrapRumorFor(rumor, bob.secretKey, alice.pubkey);
+};
+
+const paymentNoticeWrap = () => {
+  const rumor = encodePaymentNoticeRumor(
+    new PaymentNoticeDraft({ to: alice.pubkey }),
+    bob.pubkey,
+    sentAt,
+    ClientId.make("payment-client"),
+  );
+  return wrapRumorFor(rumor, bob.secretKey, alice.pubkey, {
+    pushMarker: true,
+  });
 };
 
 interface FakeSubscription {
@@ -341,6 +355,28 @@ describe("WrapInbox", () => {
             _tag: "ChatMessageReceived",
             from: bob.pubkey,
             body: expect.objectContaining({ _tag: "TextBody", text: "hello" }),
+            sentAt,
+          }),
+        );
+      }),
+    );
+  });
+
+  it("routes a wrapped kind-24133 rumor to PaymentNoticeReceived", async () => {
+    const fakeA = new FakeRelay();
+    const wrap = paymentNoticeWrap();
+
+    await runOpen([[relayA, fakeA]], {}, ({ collected }) =>
+      Effect.gen(function* () {
+        yield* eventually(() => fakeA.subs.length === 1);
+        fakeA.emit(wrap);
+        yield* eventually(() => collected.length === 1);
+        expect(collected[0]).toEqual(
+          expect.objectContaining({
+            _tag: "PaymentNoticeReceived",
+            from: bob.pubkey,
+            context: null,
+            offerId: null,
             sentAt,
           }),
         );

@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { ClientId, Pubkey, RumorId, UnixSeconds } from "../domain/primitives";
-import { PrivateImage } from "./domain";
+import { CashuTokenText, PrivateImage } from "./domain";
 
 export class TextBody extends Schema.TaggedClass<TextBody>()("TextBody", {
   text: Schema.String,
@@ -10,7 +10,11 @@ export class ImageBody extends Schema.TaggedClass<ImageBody>()("ImageBody", {
   image: PrivateImage,
 }) {}
 
-export const MessageBody = Schema.Union(TextBody, ImageBody);
+export class TokenBody extends Schema.TaggedClass<TokenBody>()("TokenBody", {
+  token: CashuTokenText,
+}) {}
+
+export const MessageBody = Schema.Union(TextBody, ImageBody, TokenBody);
 export type MessageBody = typeof MessageBody.Type;
 
 export class ChatMessageReceived extends Schema.TaggedClass<ChatMessageReceived>()(
