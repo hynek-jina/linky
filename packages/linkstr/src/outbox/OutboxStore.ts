@@ -2,8 +2,6 @@ import { Context, Effect, Either, Layer, Schema } from "effect";
 import { StoredOutboxJob } from "./domain";
 import type { OutboxJobId } from "./domain";
 
-export const OUTBOX_STORE_DEFAULT_KEY = "linkstr.outbox";
-
 export interface OutboxStoreService {
   readonly insert: (job: StoredOutboxJob) => Effect.Effect<void>;
   readonly update: (job: StoredOutboxJob) => Effect.Effect<void>;
@@ -12,18 +10,14 @@ export interface OutboxStoreService {
   readonly loadAll: Effect.Effect<ReadonlyArray<StoredOutboxJob>>;
 }
 
-interface StringStorage {
+/**
+ * Minimal synchronous string key-value storage. The web `localStorage`
+ * satisfies it as-is; other platforms adapt their own storage.
+ */
+export interface OutboxStringStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
 }
-
-const isStringStorage = (value: unknown): value is StringStorage =>
-  typeof value === "object" &&
-  value !== null &&
-  "getItem" in value &&
-  typeof value.getItem === "function" &&
-  "setItem" in value &&
-  typeof value.setItem === "function";
 
 const StoredJobsJson = Schema.parseJson(Schema.Array(StoredOutboxJob));
 const decodeJobs = Schema.decodeUnknownEither(StoredJobsJson);
@@ -46,8 +40,8 @@ const makeInMemory = (): OutboxStoreService => {
   };
 };
 
-const makeLocalStorage = (
-  storage: StringStorage,
+const makeStringStorage = (
+  storage: OutboxStringStorage,
   key: string,
 ): OutboxStoreService => {
   const load = (): ReadonlyArray<StoredOutboxJob> => {
@@ -79,25 +73,21 @@ export class OutboxStore extends Context.Tag("linkstr/OutboxStore")<
   OutboxStore,
   OutboxStoreService
 >() {
+  /** Non-durable; for tests and as the platform-agnostic default. */
   static readonly inMemory: Layer.Layer<OutboxStore> = Layer.sync(
     OutboxStore,
     makeInMemory,
   );
 
   /**
-   * One localStorage key holding the JSON-encoded job array. Falls back to
-   * in-memory (non-durable) when the environment has no localStorage; an
-   * unreadable stored value decodes as an empty list.
+   * One storage key holding the JSON-encoded job array; an unreadable stored
+   * value decodes as an empty list. Platform code supplies the storage
+   * (web: `localStorage`).
    */
-  static localStorage(options?: {
-    readonly key?: string;
-  }): Layer.Layer<OutboxStore> {
-    return Layer.sync(OutboxStore, () => {
-      const candidate =
-        "localStorage" in globalThis ? globalThis.localStorage : null;
-      return isStringStorage(candidate)
-        ? makeLocalStorage(candidate, options?.key ?? OUTBOX_STORE_DEFAULT_KEY)
-        : makeInMemory();
-    });
+  static fromStringStorage(
+    storage: OutboxStringStorage,
+    key: string,
+  ): Layer.Layer<OutboxStore> {
+    return Layer.sync(OutboxStore, () => makeStringStorage(storage, key));
   }
 }

@@ -33,6 +33,7 @@ const relay = RelayUrl.make("wss://relay.test");
 const messageId = RumorId.make("ab".repeat(32));
 const clientId = ClientId.make("client-42");
 const sentAt = UnixSeconds.make(1_700_000_000);
+const storageKey = "test.outbox";
 
 const delivery = (suffix: string): WrapDelivery =>
   new WrapDelivery({
@@ -90,16 +91,13 @@ const buildStore = (layer: Layer.Layer<OutboxStore>): OutboxStoreService =>
 
 const run = <A>(effect: Effect.Effect<A>): A => Effect.runSync(effect);
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-describe("OutboxStore.localStorage", () => {
-  it("persists jobs under the default key across store rebuilds", () => {
+describe("OutboxStore.fromStringStorage", () => {
+  it("persists jobs under the given key across store rebuilds", () => {
     const storage = stubStorage();
-    vi.stubGlobal("localStorage", storage);
 
-    const store = buildStore(OutboxStore.localStorage());
+    const store = buildStore(
+      OutboxStore.fromStringStorage(storage, storageKey),
+    );
     run(store.insert(makeJob("job-1")));
     run(store.insert(makeJob("job-2")));
     run(
@@ -117,9 +115,11 @@ describe("OutboxStore.localStorage", () => {
     );
     run(store.remove(OutboxJobId.make("job-2")));
 
-    expect([...storage.map.keys()]).toEqual(["linkstr.outbox"]);
+    expect([...storage.map.keys()]).toEqual([storageKey]);
 
-    const rebuilt = buildStore(OutboxStore.localStorage());
+    const rebuilt = buildStore(
+      OutboxStore.fromStringStorage(storage, storageKey),
+    );
     const jobs = run(rebuilt.loadAll);
     expect(jobs).toHaveLength(1);
     const job = jobs[0];
@@ -132,7 +132,6 @@ describe("OutboxStore.localStorage", () => {
 
   it("revives receipt classes through the JSON roundtrip", () => {
     const storage = stubStorage();
-    vi.stubGlobal("localStorage", storage);
 
     const chatReceipt = new ChatMessageReceipt({
       messageId,
@@ -150,12 +149,14 @@ describe("OutboxStore.localStorage", () => {
       recipientCopy: delivery("ef"),
     });
 
-    const store = buildStore(OutboxStore.localStorage());
+    const store = buildStore(
+      OutboxStore.fromStringStorage(storage, storageKey),
+    );
     run(store.insert(makeJob("chat", succeededWith("chat", chatReceipt))));
     run(store.insert(makeJob("edit", succeededWith("edit", editReceipt))));
 
     const [chatJob, editJob] = run(
-      buildStore(OutboxStore.localStorage()).loadAll,
+      buildStore(OutboxStore.fromStringStorage(storage, storageKey)).loadAll,
     );
     if (
       chatJob?.state._tag !== "awaiting-ack" ||
@@ -169,34 +170,16 @@ describe("OutboxStore.localStorage", () => {
     expect(editJob.state.result.receipt).toBeInstanceOf(MessageEditReceipt);
   });
 
-  it("uses the configured key", () => {
-    const storage = stubStorage();
-    vi.stubGlobal("localStorage", storage);
-
-    const store = buildStore(OutboxStore.localStorage({ key: "custom.key" }));
-    run(store.insert(makeJob("job-1")));
-    expect([...storage.map.keys()]).toEqual(["custom.key"]);
-  });
-
   it("treats an unreadable stored value as empty", () => {
     const storage = stubStorage();
-    storage.map.set("linkstr.outbox", "not json at all");
-    vi.stubGlobal("localStorage", storage);
+    storage.map.set(storageKey, "not json at all");
 
-    const store = buildStore(OutboxStore.localStorage());
+    const store = buildStore(
+      OutboxStore.fromStringStorage(storage, storageKey),
+    );
     expect(run(store.loadAll)).toEqual([]);
     run(store.insert(makeJob("job-1")));
     expect(run(store.loadAll)).toHaveLength(1);
-  });
-
-  it("falls back to in-memory when localStorage is unavailable", () => {
-    vi.stubGlobal("localStorage", undefined);
-
-    const store = buildStore(OutboxStore.localStorage());
-    run(store.insert(makeJob("job-1")));
-    expect(run(store.loadAll)).toHaveLength(1);
-    run(store.remove(OutboxJobId.make("job-1")));
-    expect(run(store.loadAll)).toEqual([]);
   });
 });
 

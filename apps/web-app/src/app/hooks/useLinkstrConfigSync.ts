@@ -1,4 +1,4 @@
-import { NostrSecretKey, RelayUrl } from "@linky/linkstr";
+import { NostrSecretKey, OutboxStore, RelayUrl } from "@linky/linkstr";
 import {
   linkstrConfigAtom,
   useAtomSet,
@@ -11,6 +11,8 @@ import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 
 const isNostrSecretKey = Schema.is(NostrSecretKey);
 const isRelayUrl = Schema.is(RelayUrl);
+
+const OUTBOX_STORAGE_KEY = "linky.outbox";
 
 export const buildLinkstrConfig = (
   currentNsec: string | null,
@@ -32,6 +34,10 @@ export const buildLinkstrConfig = (
     // Writes stay on the default relay set for now, matching the legacy
     // publish paths; widening writes to user relays is a separate decision.
     writeRelays: NOSTR_RELAYS.filter(isRelayUrl),
+    outboxStore: OutboxStore.fromStringStorage(
+      localStorage,
+      OUTBOX_STORAGE_KEY,
+    ),
     inspector: import.meta.env.DEV,
   };
 };
