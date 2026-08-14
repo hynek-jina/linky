@@ -1,7 +1,7 @@
 import type { OwnerId } from "@evolu/common";
 import { generateSecretKey, nip19 } from "nostr-tools";
 import React from "react";
-import { NOSTR_RELAYS } from "../../nostrProfile";
+import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 import {
   LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY_PREFIX,
   LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX,

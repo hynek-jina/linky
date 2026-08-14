@@ -1,18 +1,15 @@
 import * as Evolu from "@evolu/common";
+import { fetchProfileAtom, useAtomSet } from "@linky/linkstr-react";
 import type { Event as NostrToolsEvent } from "nostr-tools";
 import React from "react";
 import { omitSyntheticContactLightningAddress } from "../../../derivedProfile";
 import { evolu, type ContactId, type TransactionId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import {
-  cacheProfileAvatarFromUrl,
-  deleteCachedProfileAvatar,
-  fetchNostrProfileMetadata,
-  getNostrProfilePictureUrl,
-  saveCachedProfileMetadata,
-  saveCachedProfilePicture,
-  type NostrProfileMetadata,
-} from "../../../nostrProfile";
+  getProfilePictureUrl,
+  isDisplayableProfilePictureUrl,
+  loadCachedProfile,
+} from "../../../profileCache";
 import type { Route } from "../../../types/route";
 import { MAX_CONTACTS_PER_OWNER } from "../../../utils/constants";
 import { getBestNostrName } from "../../../utils/formatting";
@@ -24,6 +21,7 @@ import {
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { getContactQueryPrefill } from "../../lib/contactQueryPrefill";
 import { getSharedAppNostrPool } from "../../lib/nostrPool";
+import { fetchAndCacheProfile } from "../useLinkstrProfileSync";
 import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
 import {
   getContactGroups,
@@ -59,6 +57,16 @@ export type ContactSearchResult =
 
 type ContactRow = ContactRowLike;
 type SelectedContactRow = ContactRowLike & { id: ContactId };
+
+type ContactFieldsPatch = {
+  id: ContactId;
+  nameSetByUser?: typeof Evolu.SqliteBoolean.Type | null;
+} & Partial<
+  Record<
+    "groupName" | "groupNamesJson" | "lnAddress" | "name" | "npub",
+    typeof Evolu.NonEmptyString1000.Type | null
+  >
+>;
 
 interface UseContactEditorParams {
   activeOwnerContactsCount: number;
@@ -142,9 +150,32 @@ const readProfileText = (value: unknown): string | null => {
   return trimmed ? trimmed : null;
 };
 
+/** Raw kind-0 fields the discovery scan reads straight off pool events. */
+interface DiscoveredProfileMetadata {
+  displayName?: string;
+  image?: string;
+  lud06?: string;
+  lud16?: string;
+  name?: string;
+  nip05?: string;
+  picture?: string;
+}
+
+const discoveredPictureUrl = (
+  metadata: DiscoveredProfileMetadata,
+): string | null => {
+  if (isDisplayableProfilePictureUrl(metadata.picture)) {
+    return metadata.picture.trim();
+  }
+  if (isDisplayableProfilePictureUrl(metadata.image)) {
+    return metadata.image.trim();
+  }
+  return null;
+};
+
 const parseProfileMetadataEvent = (
   event: NostrToolsEvent,
-): NostrProfileMetadata | null => {
+): DiscoveredProfileMetadata | null => {
   if (!event.content) return null;
 
   let parsed: unknown;
@@ -158,7 +189,7 @@ const parseProfileMetadataEvent = (
     return null;
   }
 
-  const metadata: NostrProfileMetadata = {};
+  const metadata: DiscoveredProfileMetadata = {};
 
   if ("name" in parsed) {
     const name = readProfileText(parsed.name);
@@ -272,6 +303,10 @@ export const useContactEditor = ({
   );
 
   const openScannedContactPendingNpubRef = React.useRef<string | null>(null);
+
+  const fetchProfileOneShot = useAtomSet(fetchProfileAtom, {
+    mode: "promiseExit",
+  });
 
   const clearContactForm = React.useCallback(() => {
     setForm(makeEmptyContactForm());
@@ -390,9 +425,7 @@ export const useContactEditor = ({
           );
           if (!isLinkyLightningAddress(lnAddress)) continue;
 
-          const pictureUrl = getNostrProfilePictureUrl(metadata);
-          saveCachedProfileMetadata(npub, metadata);
-          saveCachedProfilePicture(npub, pictureUrl);
+          const pictureUrl = discoveredPictureUrl(metadata);
 
           nextSuggestions.push({
             lastSeenAtSec: activityByPubkey.get(pubkey)?.created_at ?? since,
@@ -424,16 +457,7 @@ export const useContactEditor = ({
   ]);
 
   const buildFullContactOverridePayload = React.useCallback(
-    (
-      payload: {
-        id: ContactId;
-      } & Partial<
-        Record<
-          "groupName" | "groupNamesJson" | "lnAddress" | "name" | "npub",
-          typeof Evolu.NonEmptyString1000.Type | null
-        >
-      >,
-    ) => {
+    (payload: ContactFieldsPatch) => {
       const currentOwnerId = readText(appOwnerId);
       if (!currentOwnerId) return null;
 
@@ -444,7 +468,17 @@ export const useContactEditor = ({
         return null;
       }
 
+      const sourceNameSetByUser = Evolu.SqliteBoolean.fromUnknown(
+        source.nameSetByUser,
+      );
+
       return {
+        nameSetByUser:
+          payload.nameSetByUser !== undefined
+            ? payload.nameSetByUser
+            : sourceNameSetByUser.ok
+              ? sourceNameSetByUser.value
+              : null,
         id: payload.id,
         name:
           payload.name !== undefined
@@ -482,16 +516,7 @@ export const useContactEditor = ({
   );
 
   const updateContactFields = React.useCallback(
-    (
-      payload: {
-        id: ContactId;
-      } & Partial<
-        Record<
-          "lnAddress" | "name" | "npub",
-          typeof Evolu.NonEmptyString1000.Type | null
-        >
-      >,
-    ) => {
+    (payload: ContactFieldsPatch) => {
       const fullOverridePayload = buildFullContactOverridePayload(payload);
       if (fullOverridePayload && appOwnerId) {
         return upsert("contact", fullOverridePayload, { ownerId: appOwnerId });
@@ -624,35 +649,6 @@ export const useContactEditor = ({
     setPendingDeleteId,
   ]);
 
-  const refreshContactAvatarFromNostr = React.useCallback(
-    async (npub: string) => {
-      const normalized = normalizeNpubIdentifier(String(npub ?? "").trim());
-      if (!normalized) return;
-
-      try {
-        const metadata = await fetchNostrProfileMetadata(normalized, {
-          relays: nostrFetchRelays,
-        });
-
-        saveCachedProfileMetadata(normalized, metadata);
-        if (!metadata) return;
-
-        const pictureUrl = getNostrProfilePictureUrl(metadata);
-        if (pictureUrl) {
-          saveCachedProfilePicture(normalized, pictureUrl);
-          void cacheProfileAvatarFromUrl(normalized, pictureUrl);
-          return;
-        }
-
-        saveCachedProfilePicture(normalized, null);
-        void deleteCachedProfileAvatar(normalized);
-      } catch {
-        // ignore
-      }
-    },
-    [nostrFetchRelays],
-  );
-
   const handleSaveContact = React.useCallback(async () => {
     if (isSavingContact) return; // Prevent double-click
 
@@ -755,9 +751,13 @@ export const useContactEditor = ({
       groupNamesJson: typeof Evolu.NonEmptyString1000.Type;
       lnAddress: typeof Evolu.NonEmptyString1000.Type;
       name: typeof Evolu.NonEmptyString1000.Type;
+      nameSetByUser: typeof Evolu.SqliteBoolean.Type;
       npub: typeof Evolu.NonEmptyString1000.Type;
     }> = {};
-    if (payload.name) createPayload.name = payload.name;
+    if (payload.name) {
+      createPayload.name = payload.name;
+      createPayload.nameSetByUser = Evolu.sqliteTrue;
+    }
     if (payload.npub) createPayload.npub = payload.npub;
     if (payload.lnAddress) createPayload.lnAddress = payload.lnAddress;
     if (payload.groupName) createPayload.groupName = payload.groupName;
@@ -767,14 +767,7 @@ export const useContactEditor = ({
     if (editingId) {
       // Build update payload with only changed fields to minimize history entries.
       const initial = contactEditInitial;
-      const changedFields: {
-        id: typeof editingId;
-      } & Partial<
-        Record<
-          "groupName" | "groupNamesJson" | "lnAddress" | "name" | "npub",
-          typeof Evolu.NonEmptyString1000.Type | null
-        >
-      > = { id: editingId };
+      const changedFields: ContactFieldsPatch = { id: editingId };
 
       if (initial?.id === editingId) {
         const nextName = payload.name ? String(payload.name) : null;
@@ -813,6 +806,12 @@ export const useContactEditor = ({
         Object.assign(changedFields, payload);
       }
 
+      // A typed name is user-set; clearing it hands the name back to the profile.
+      if (changedFields.name !== undefined) {
+        changedFields.nameSetByUser =
+          changedFields.name === null ? null : Evolu.sqliteTrue;
+      }
+
       // Only update if there are actual changes (besides just the id).
       if (Object.keys(changedFields).length > 1) {
         const result = updateContactFields(changedFields);
@@ -843,10 +842,6 @@ export const useContactEditor = ({
 
     if (savedContactId && lnAddress) {
       await backfillLightningAddressTransactions(savedContactId, lnAddress);
-    }
-
-    if (npub) {
-      void refreshContactAvatarFromNostr(npub);
     }
 
     if (route.kind === "contactEdit" && editingId) {
@@ -880,55 +875,7 @@ export const useContactEditor = ({
     setStatus,
     t,
     updateContactFields,
-    refreshContactAvatarFromNostr,
   ]);
-
-  const refreshContactFromNostr = React.useCallback(
-    async (contactId: ContactId, npub: string) => {
-      const source = String(npub ?? "").trim();
-      const normalized = normalizeNpubIdentifier(source);
-      if (!normalized) return;
-
-      try {
-        const metadata = await fetchNostrProfileMetadata(normalized, {
-          relays: nostrFetchRelays,
-        });
-
-        saveCachedProfileMetadata(normalized, metadata);
-        if (!metadata) return;
-
-        const bestName = getBestNostrName(metadata);
-        const ln = omitSyntheticContactLightningAddress(
-          String(metadata.lud16 ?? "").trim() ||
-            String(metadata.lud06 ?? "").trim(),
-          normalized,
-        );
-
-        const patch: Partial<{
-          name: typeof Evolu.NonEmptyString1000.Type;
-          lnAddress: typeof Evolu.NonEmptyString1000.Type;
-          npub: typeof Evolu.NonEmptyString1000.Type;
-        }> = {};
-
-        if (bestName) {
-          patch.name = bestName as typeof Evolu.NonEmptyString1000.Type;
-        }
-        if (ln) {
-          patch.lnAddress = ln as typeof Evolu.NonEmptyString1000.Type;
-        }
-        if (source !== normalized) {
-          patch.npub = normalized as typeof Evolu.NonEmptyString1000.Type;
-        }
-
-        if (Object.keys(patch).length > 0) {
-          updateContactFields({ id: contactId, ...patch });
-        }
-      } catch {
-        // ignore
-      }
-    },
-    [nostrFetchRelays, updateContactFields],
-  );
 
   const searchNewContact = React.useCallback(
     async (query?: string): Promise<ContactSearchResult> => {
@@ -979,51 +926,31 @@ export const useContactEditor = ({
         ? String(existingContact.id)
         : "";
 
-      try {
-        const metadata = await fetchNostrProfileMetadata(resolvedNpub, {
-          relays: nostrFetchRelays,
-        });
-        saveCachedProfileMetadata(resolvedNpub, metadata);
+      const metadata = await fetchAndCacheProfile(
+        fetchProfileOneShot,
+        resolvedNpub,
+      );
+      const bestName = metadata ? (getBestNostrName(metadata) ?? "") : "";
+      const metadataLn = metadata
+        ? omitSyntheticContactLightningAddress(
+            (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
+            resolvedNpub,
+          )
+        : "";
 
-        const bestName = metadata ? (getBestNostrName(metadata) ?? "") : "";
-        const metadataLn = metadata
-          ? omitSyntheticContactLightningAddress(
-              String(metadata.lud16 ?? "").trim() ||
-                String(metadata.lud06 ?? "").trim(),
-              resolvedNpub,
-            )
-          : "";
-        const pictureUrl = metadata
-          ? getNostrProfilePictureUrl(metadata)
-          : null;
-        saveCachedProfilePicture(resolvedNpub, pictureUrl);
-
-        return {
-          contact: {
-            ...(existingContactId ? { existingContactId } : {}),
-            lnAddress: metadataLn || fallbackLnAddress,
-            name: bestName || fallbackName,
-            npub: resolvedNpub,
-            pictureUrl,
-            query: rawQuery,
-          },
-          kind: "found",
-        };
-      } catch {
-        return {
-          contact: {
-            ...(existingContactId ? { existingContactId } : {}),
-            lnAddress: fallbackLnAddress,
-            name: fallbackName,
-            npub: resolvedNpub,
-            pictureUrl: null,
-            query: rawQuery,
-          },
-          kind: "found",
-        };
-      }
+      return {
+        contact: {
+          ...(existingContactId ? { existingContactId } : {}),
+          lnAddress: metadataLn || fallbackLnAddress,
+          name: bestName || fallbackName,
+          npub: resolvedNpub,
+          pictureUrl: getProfilePictureUrl(metadata),
+          query: rawQuery,
+        },
+        kind: "found",
+      };
     },
-    [contacts, form.npub, nostrFetchRelays, route.kind],
+    [contacts, fetchProfileOneShot, form.npub, route.kind],
   );
 
   const addNewContactFromSearchResult = React.useCallback(
@@ -1094,10 +1021,6 @@ export const useContactEditor = ({
       if (lnAddress) {
         await backfillLightningAddressTransactions(result.value.id, lnAddress);
       }
-      if (candidate.pictureUrl) {
-        saveCachedProfilePicture(npub, candidate.pictureUrl);
-      }
-      void refreshContactAvatarFromNostr(npub);
       clearContactForm();
       setPendingDeleteId(null);
       navigateTo({ route: "contacts" });
@@ -1112,7 +1035,6 @@ export const useContactEditor = ({
       currentNpub,
       insert,
       isSavingContact,
-      refreshContactAvatarFromNostr,
       setPendingDeleteId,
       setRecentlyAddedContactId,
       setStatus,
@@ -1153,72 +1075,48 @@ export const useContactEditor = ({
     if (!existing?.id) return;
     openScannedContactPendingNpubRef.current = null;
     navigateTo({ route: "contact", id: existing.id as ContactId });
-    void refreshContactFromNostr(existing.id as ContactId, normalizedTarget);
-  }, [contacts, refreshContactFromNostr]);
+  }, [contacts]);
 
+  // Resets the field to the watch-fed cached profile value; the pubkey is
+  // watched, so the cache is as fresh as the relays.
   const resetEditedContactFieldFromNostr = React.useCallback(
-    async (field: "name" | "lnAddress") => {
+    (field: "name" | "lnAddress") => {
       if (route.kind !== "contactEdit") return;
       if (!editingId) return;
 
-      const rawNpub = String(form.npub ?? "").trim();
-      const npub = normalizeNpubIdentifier(rawNpub);
+      const npub = normalizeNpubIdentifier(form.npub);
+      const metadata = npub
+        ? (loadCachedProfile(npub)?.metadata ?? null)
+        : null;
 
-      // First clear the custom value.
       if (field === "name") {
-        setForm((prev) => ({ ...prev, name: "" }));
-        updateContactFields({ id: editingId, name: null });
-      } else {
-        setForm((prev) => ({ ...prev, lnAddress: "" }));
-        updateContactFields({ id: editingId, lnAddress: null });
-      }
-
-      if (!npub) return;
-
-      // Then fetch Nostr metadata and repopulate.
-      try {
-        const metadata = await fetchNostrProfileMetadata(npub, {
-          relays: nostrFetchRelays,
+        const bestName = metadata ? getBestNostrName(metadata) : null;
+        const parsedName = bestName
+          ? Evolu.NonEmptyString1000.fromUnknown(bestName)
+          : null;
+        setForm((prev) => ({ ...prev, name: bestName ?? "" }));
+        updateContactFields({
+          id: editingId,
+          name: parsedName?.ok ? parsedName.value : null,
+          nameSetByUser: null,
         });
-        saveCachedProfileMetadata(npub, metadata);
-        if (!metadata) return;
-
-        const bestName = getBestNostrName(metadata);
-        const ln = omitSyntheticContactLightningAddress(
-          String(metadata.lud16 ?? "").trim() ||
-            String(metadata.lud06 ?? "").trim(),
-          npub,
-        );
-
-        if (bestName) {
-          setForm((prev) => ({ ...prev, name: bestName }));
-        }
-        if (ln) {
-          setForm((prev) => ({ ...prev, lnAddress: ln }));
-        }
-
-        const patch: Partial<{
-          name: typeof Evolu.NonEmptyString1000.Type;
-          lnAddress: typeof Evolu.NonEmptyString1000.Type;
-          npub: typeof Evolu.NonEmptyString1000.Type;
-        }> = {};
-        if (bestName) {
-          patch.name = bestName as typeof Evolu.NonEmptyString1000.Type;
-        }
-        if (ln) {
-          patch.lnAddress = ln as typeof Evolu.NonEmptyString1000.Type;
-        }
-        if (rawNpub !== npub) {
-          patch.npub = npub as typeof Evolu.NonEmptyString1000.Type;
-        }
-        if (Object.keys(patch).length > 0) {
-          updateContactFields({ id: editingId, ...patch });
-        }
-      } catch {
-        // ignore
+        return;
       }
+
+      const ln = metadata
+        ? omitSyntheticContactLightningAddress(
+            (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
+            npub ?? "",
+          )
+        : "";
+      const parsedLn = ln ? Evolu.NonEmptyString1000.fromUnknown(ln) : null;
+      setForm((prev) => ({ ...prev, lnAddress: ln }));
+      updateContactFields({
+        id: editingId,
+        lnAddress: parsedLn?.ok ? parsedLn.value : null,
+      });
     },
-    [editingId, form.npub, nostrFetchRelays, route.kind, updateContactFields],
+    [editingId, form.npub, route.kind, updateContactFields],
   );
 
   const contactEditsSavable = React.useMemo(() => {
@@ -1263,7 +1161,6 @@ export const useContactEditor = ({
     handleSaveContact,
     isSavingContact,
     openScannedContactPendingNpubRef,
-    refreshContactFromNostr,
     resetEditedContactFieldFromNostr,
     searchNewContact,
     setEditingId,

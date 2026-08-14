@@ -20,9 +20,7 @@ interface ContactEditPageProps {
   pendingDeleteId: ContactId | null;
   restoreArchivedContact: () => void;
   requestDeleteCurrentContact: () => void;
-  resetEditedContactFieldFromNostr: (
-    field: "name" | "lnAddress",
-  ) => Promise<void>;
+  resetEditedContactFieldFromNostr: (field: "name" | "lnAddress") => void;
   selectedContact: Contact | null;
   setForm: (value: ContactFormData) => void;
   t: (key: string) => string;

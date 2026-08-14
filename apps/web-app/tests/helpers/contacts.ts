@@ -40,13 +40,8 @@ export const addContactByNpub = async (
 };
 
 /**
- * Wait until this contact's NIP-38 status has been fetched and stored.
- *
- * Works around a race in useContactsNostrPrefetchEffects: adding another
- * contact while a status fetch is in flight re-runs the effect, which skips
- * the in-flight npub and then discards its result as cancelled — so that
- * contact's status stays missing from state for the life of the page. Letting
- * each fetch settle before adding the next contact avoids it.
+ * Wait until this contact's NIP-38 status has arrived through the linkstr
+ * profile watch and landed in the cache, so the next step can rely on it.
  */
 export const waitForContactStatusFetched = async (
   page: Page,
@@ -57,7 +52,7 @@ export const waitForContactStatusFetched = async (
       () =>
         page.evaluate(
           (key) => localStorage.getItem(key),
-          `linky_nostr_status_v1:${npub}`,
+          `linky_nostr_status_v2:${npub}`,
         ),
       { timeout: 60_000 },
     )

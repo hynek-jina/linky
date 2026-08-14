@@ -1,3 +1,4 @@
+import type { ProfileMetadata } from "@linky/linkstr";
 import React from "react";
 import {
   DEFAULT_LIGHTNING_ADDRESS_DOMAIN,
@@ -5,23 +6,23 @@ import {
   deriveDefaultProfile,
 } from "../../../derivedProfile";
 import type { Lang } from "../../../i18n";
-import type { NostrProfileMetadata } from "../../../nostrProfile";
 import { navigateTo, type useRouting } from "../../../hooks/useRouting";
+import { getBestNostrName } from "../../../utils/formatting";
+import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { resolveNpubCashServerBaseUrl } from "../../../utils/npubCashServer";
 import { getInitialShowProfileQrOnTiltEnabled } from "../../../utils/storage";
 import { usePortraitOrientationLock } from "../usePortraitOrientationLock";
 import { useProfileEditor } from "../profile/useProfileEditor";
-import { useProfileMetadataSyncEffect } from "../profile/useProfileMetadataSyncEffect";
 import { useProfileStatusEditor } from "../profile/useProfileStatusEditor";
-import { useProfileStatusSyncEffect } from "../profile/useProfileStatusSyncEffect";
 
 interface UseProfileCompositionParams {
   currentNpub: string | null;
   currentNsec: string | null;
   lang: Lang;
-  nostrBootstrapReady: boolean;
-  nostrFetchRelays: string[];
-  rememberBlobAvatarUrl: (npub: string, url: string | null) => string | null;
+  /** Watch-fed per-npub maps from the messaging composition. */
+  nostrMetadataByNpub: Record<string, ProfileMetadata | null>;
+  nostrPictureByNpub: Record<string, string | null>;
+  nostrStatusByNpub: Record<string, string | null>;
   route: ReturnType<typeof useRouting>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
@@ -31,9 +32,9 @@ export const useProfileComposition = ({
   currentNpub,
   currentNsec,
   lang,
-  nostrBootstrapReady,
-  nostrFetchRelays,
-  rememberBlobAvatarUrl,
+  nostrMetadataByNpub,
+  nostrPictureByNpub,
+  nostrStatusByNpub,
   route,
   setStatus,
   t,
@@ -59,7 +60,7 @@ export const useProfileComposition = ({
     null,
   );
   const [myProfileMetadata, setMyProfileMetadata] =
-    React.useState<NostrProfileMetadata | null>(null);
+    React.useState<ProfileMetadata | null>(null);
 
   const npubCashInfoInFlightRef = React.useRef(false);
   const npubCashInfoLoadedForNpubRef = React.useRef<string | null>(null);
@@ -126,7 +127,6 @@ export const useProfileComposition = ({
     effectiveProfilePicture,
     myProfileMetadata,
     myProfileStatus,
-    nostrFetchRelays,
     ownedLightningAddresses: ownedProfileLightningAddresses,
     ownedLightningAddressesLoading: ownedProfileLightningAddressesLoading,
     setMyProfileLnAddress,
@@ -138,23 +138,49 @@ export const useProfileComposition = ({
     t,
   });
 
-  useProfileMetadataSyncEffect({
-    canFetchFromNostr: nostrBootstrapReady,
-    currentNpub,
-    nostrFetchRelays,
-    rememberBlobAvatarUrl,
+  // The own pubkey is part of the profile watch; mirror its map entries into
+  // the my-profile state the editor also writes optimistically.
+  const ownNpub = React.useMemo(
+    () => normalizeNpubIdentifier(currentNpub),
+    [currentNpub],
+  );
+  const watchedMetadata = ownNpub
+    ? (nostrMetadataByNpub[ownNpub] ?? null)
+    : null;
+  const watchedPicture =
+    ownNpub && ownNpub in nostrPictureByNpub
+      ? (nostrPictureByNpub[ownNpub] ?? null)
+      : undefined;
+  const watchedStatus =
+    ownNpub && ownNpub in nostrStatusByNpub
+      ? (nostrStatusByNpub[ownNpub] ?? null)
+      : undefined;
+
+  React.useEffect(() => {
+    if (!watchedMetadata) return;
+    setMyProfileMetadata(watchedMetadata);
+    const bestName = getBestNostrName(watchedMetadata);
+    if (bestName) setMyProfileName(bestName);
+    const ln =
+      (watchedMetadata.lud16 ?? "").trim() ||
+      (watchedMetadata.lud06 ?? "").trim();
+    setMyProfileLnAddress(ln || null);
+  }, [
     setMyProfileLnAddress,
     setMyProfileMetadata,
     setMyProfileName,
-    setMyProfilePicture,
-  });
+    watchedMetadata,
+  ]);
 
-  useProfileStatusSyncEffect({
-    canFetchFromNostr: nostrBootstrapReady,
-    currentNpub,
-    nostrFetchRelays,
-    setMyProfileStatus,
-  });
+  React.useEffect(() => {
+    if (watchedPicture === undefined) return;
+    setMyProfilePicture(watchedPicture);
+  }, [setMyProfilePicture, watchedPicture]);
+
+  React.useEffect(() => {
+    if (watchedStatus === undefined) return;
+    setMyProfileStatus(watchedStatus);
+  }, [setMyProfileStatus, watchedStatus]);
 
   const {
     profileStatusCurrencies,
@@ -165,7 +191,6 @@ export const useProfileComposition = ({
     currentNpub,
     currentNsec,
     myProfileStatus,
-    nostrFetchRelays,
     setMyProfileStatus,
     setStatus,
     t,

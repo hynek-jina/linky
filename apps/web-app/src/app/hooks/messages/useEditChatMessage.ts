@@ -1,6 +1,6 @@
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
 import React from "react";
-import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { makeLocalId } from "../../../utils/validation";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";
 import { wrapEventWithoutPushMarker } from "../../lib/pushWrappedEvent";

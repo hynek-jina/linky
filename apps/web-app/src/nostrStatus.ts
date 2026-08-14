@@ -1,7 +1,8 @@
-import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
-import { getSharedAppNostrPool } from "./app/lib/nostrPool";
-import { NOSTR_RELAYS } from "./nostrProfile";
-import { normalizeRelayUrls } from "./utils/nostrRelays";
+/**
+ * Linky's kind-30315 status conventions: the last status line may carry a
+ * comma-separated exchange-currency list; everything transport-level lives in
+ * `@linky/linkstr`.
+ */
 
 export const PROFILE_STATUS_CURRENCIES = ["BTC", "CZK", "EUR"] as const;
 const LEGACY_PROFILE_STATUS_CURRENCIES = ["USD"] as const;
@@ -13,27 +14,6 @@ export interface ParsedProfileGeneralStatus {
   currencies: ProfileStatusCurrency[];
   text: string | null;
 }
-
-type CachedStatusValue = {
-  fetchedAt: number;
-  status: string | null;
-};
-
-let nostrToolsPromise: Promise<typeof import("nostr-tools")> | null = null;
-
-const STORAGE_STATUS_PREFIX = "linky_nostr_status_v1:";
-const STATUS_NONE_TTL_MS = 2 * 60 * 1000;
-
-const now = () => Date.now();
-
-const getNostrTools = () => {
-  if (!nostrToolsPromise) nostrToolsPromise = import("nostr-tools");
-  return nostrToolsPromise;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-};
 
 const normalizeStatusText = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
@@ -110,29 +90,6 @@ export const parseProfileGeneralStatus = (
     currencies: [],
     text: normalizedStatus,
   };
-};
-
-const getExpirationTimestamp = (event: NostrToolsEvent): number | null => {
-  for (const tag of event.tags) {
-    if (tag[0] !== "expiration") continue;
-    const expiration = Number(tag[1] ?? "");
-    if (!Number.isFinite(expiration) || expiration <= 0) return null;
-    return expiration;
-  }
-
-  return null;
-};
-
-const isExpiredStatusEvent = (event: NostrToolsEvent): boolean => {
-  const expiration = getExpirationTimestamp(event);
-  if (expiration === null) return false;
-  return expiration <= Math.floor(Date.now() / 1000);
-};
-
-const hasGeneralStatusIdentifier = (event: NostrToolsEvent): boolean => {
-  return event.tags.some(
-    (tag) => Array.isArray(tag) && tag[0] === "d" && tag[1] === "general",
-  );
 };
 
 export const parseProfileExchangeStatusCurrencies = (
@@ -213,123 +170,4 @@ export const buildProfileExchangeStatus = (
   currencies: readonly ProfileStatusCurrency[],
 ): string | null => {
   return buildProfileGeneralStatus({ currencies, text: null });
-};
-
-export const loadCachedNostrGeneralStatus = (
-  npub: string,
-): CachedStatusValue | undefined => {
-  try {
-    const raw = localStorage.getItem(STORAGE_STATUS_PREFIX + npub);
-    if (!raw) return undefined;
-
-    const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed)) return undefined;
-
-    const fetchedAt = parsed.fetchedAt;
-    if (typeof fetchedAt !== "number") return undefined;
-
-    const status =
-      parsed.status === undefined ? null : normalizeStatusText(parsed.status);
-    if (status === null && now() - fetchedAt > STATUS_NONE_TTL_MS) {
-      return undefined;
-    }
-
-    return { fetchedAt, status };
-  } catch {
-    return undefined;
-  }
-};
-
-export const saveCachedNostrGeneralStatus = (
-  npub: string,
-  status: string | null,
-) => {
-  try {
-    const value: CachedStatusValue = {
-      fetchedAt: now(),
-      status: normalizeStatusText(status),
-    };
-    localStorage.setItem(STORAGE_STATUS_PREFIX + npub, JSON.stringify(value));
-  } catch {
-    // ignore
-  }
-};
-
-export const fetchNostrGeneralStatus = async (
-  npub: string,
-  options?: { signal?: AbortSignal; relays?: string[] },
-): Promise<string | null> => {
-  const trimmed = npub.trim();
-  if (!trimmed) return null;
-  if (options?.signal?.aborted) return null;
-
-  const relays = normalizeRelayUrls(
-    options?.relays && options.relays.length > 0
-      ? options.relays
-      : NOSTR_RELAYS,
-  );
-  if (relays.length === 0) return null;
-
-  const { nip19 } = await getNostrTools();
-
-  let pubkey: string;
-  try {
-    const decoded = nip19.decode(trimmed);
-    if (decoded.type !== "npub") return null;
-    if (typeof decoded.data !== "string") return null;
-    pubkey = decoded.data;
-  } catch {
-    return null;
-  }
-
-  const pool = await getSharedAppNostrPool();
-
-  let events: NostrToolsEvent[] = [];
-  try {
-    events = await pool.querySync(
-      relays,
-      { kinds: [30315], authors: [pubkey], limit: 20 },
-      { maxWait: 8000 },
-    );
-  } catch {
-    return null;
-  }
-
-  const newest = events
-    .slice()
-    .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
-    .find(
-      (event) =>
-        hasGeneralStatusIdentifier(event) && !isExpiredStatusEvent(event),
-    );
-
-  if (!newest) return null;
-  return normalizeStatusText(newest.content);
-};
-
-export const publishNostrGeneralStatus = async (params: {
-  privBytes: Uint8Array;
-  relays: string[];
-  status: string | null;
-}): Promise<{ anySuccess: boolean }> => {
-  const { privBytes, relays, status } = params;
-  const { finalizeEvent, getPublicKey } = await getNostrTools();
-  const pubkey = getPublicKey(privBytes);
-
-  const baseEvent = {
-    kind: 30315,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [["d", "general"]],
-    content: normalizeStatusText(status) ?? "",
-    pubkey,
-  } satisfies UnsignedEvent;
-
-  const signed = finalizeEvent(baseEvent, privBytes);
-  const pool = await getSharedAppNostrPool();
-  const publishResults = await Promise.allSettled(pool.publish(relays, signed));
-  const anySuccess = publishResults.some(
-    (result) => result.status === "fulfilled",
-  );
-
-  return { anySuccess };
 };

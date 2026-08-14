@@ -19,7 +19,7 @@ import {
   redeemLnurlWithdraw,
   type LnurlWithdrawPreview,
 } from "../../../lnurlPay";
-import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { getCashuDeterministicSeedFromStorage } from "../../../utils/cashuDeterministic";
 import { isCashuOutputsAlreadySignedError } from "../../../utils/cashuErrors";
 import { getCashuLib } from "../../../utils/cashuLib";

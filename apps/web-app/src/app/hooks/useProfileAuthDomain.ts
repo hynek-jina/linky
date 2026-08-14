@@ -8,13 +8,11 @@ import {
   type AvatarEditorControlId,
   type DerivedGeneratedAvatar,
 } from "../../derivedProfile";
+import { ProfileMetadata } from "@linky/linkstr";
 import type { Lang } from "../../i18n";
-import {
-  NOSTR_RELAYS,
-  saveCachedProfileMetadata,
-  saveCachedProfilePicture,
-} from "../../nostrProfile";
 import { publishKind0ProfileMetadata } from "../../nostrPublish";
+import { saveCachedProfile } from "../../profileCache";
+import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 import { readClipboardText } from "../../platform/clipboard";
 import {
   clearIdentitySecrets,
@@ -427,15 +425,18 @@ export const useProfileAuthDomain = ({
         throw new Error("nostr publish failed");
       }
 
-      saveCachedProfileMetadata(npub, {
-        ...(trimmedName ? { name: trimmedName, displayName: trimmedName } : {}),
-        ...(trimmedLnAddress ? { lud16: trimmedLnAddress } : {}),
-        ...(nip05 ? { nip05 } : {}),
-        ...(trimmedPicture
-          ? { picture: trimmedPicture, image: trimmedPicture }
-          : {}),
-      });
-      saveCachedProfilePicture(npub, trimmedPicture || null);
+      saveCachedProfile(
+        npub,
+        new ProfileMetadata({
+          ...(trimmedName
+            ? { name: trimmedName, displayName: trimmedName }
+            : {}),
+          ...(trimmedLnAddress ? { lud16: trimmedLnAddress } : {}),
+          ...(nip05 ? { nip05 } : {}),
+          ...(trimmedPicture ? { picture: trimmedPicture } : {}),
+        }),
+        Math.floor(Date.now() / 1000),
+      );
     },
     [decodeNsecPrivateBytes, t],
   );

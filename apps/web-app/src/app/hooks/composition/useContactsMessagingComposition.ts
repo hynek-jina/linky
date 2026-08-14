@@ -1,9 +1,13 @@
 import * as Evolu from "@evolu/common";
+import { Pubkey } from "@linky/linkstr";
+import type { ProfileMetadata } from "@linky/linkstr";
 import {
-  nip19,
-  type Event as NostrToolsEvent,
-  type UnsignedEvent,
-} from "nostr-tools";
+  fetchProfileAtom,
+  publishMuteListAtom,
+  useAtomSet,
+} from "@linky/linkstr-react";
+import { Schema } from "effect";
+import { nip19, type Event as NostrToolsEvent } from "nostr-tools";
 import React, { useMemo, useState } from "react";
 import {
   deriveDefaultProfile,
@@ -13,21 +17,8 @@ import { useEvolu, type ContactId } from "../../../evolu";
 import { navigateTo, useRouting } from "../../../hooks/useRouting";
 import { useDeferredOnlineReady } from "../../../hooks/useDeferredOnlineReady";
 import { type Lang } from "../../../i18n";
-import {
-  cacheProfileAvatarFromUrl,
-  deleteCachedProfileAvatar,
-  fetchNostrProfileMetadata,
-  fetchNostrProfilePicture,
-  getNostrProfilePictureUrl,
-  isCachedProfilePictureStale,
-  loadCachedProfileAvatarObjectUrl,
-  loadCachedProfileMetadata,
-  loadCachedProfilePicture,
-  NOSTR_RELAYS,
-  saveCachedProfileMetadata,
-  saveCachedProfilePicture,
-  type NostrProfileMetadata,
-} from "../../../nostrProfile";
+import { getProfilePictureUrl, loadCachedProfile } from "../../../profileCache";
+import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import {
   buildStatusFilterValue,
   extractStatusFilterCurrencies,
@@ -80,8 +71,11 @@ import { useLinkstrReactionInboxSync } from "../messages/useLinkstrReactionInbox
 import { useSendReaction } from "../messages/useSendReaction";
 import { useLinkstrInspectorBridge } from "../../../devtools/inspector/useLinkstrInspectorBridge";
 import { useLinkstrConfigSync } from "../useLinkstrConfigSync";
+import {
+  fetchAndCacheProfile,
+  useLinkstrProfileSync,
+} from "../useLinkstrProfileSync";
 import { useContactsDomain } from "../useContactsDomain";
-import { useContactsNostrPrefetchEffects } from "../useContactsNostrPrefetchEffects";
 import { useEvoluNostrBootstrapReady } from "../useEvoluNostrBootstrapReady";
 import { useFeedbackContact } from "../useFeedbackContact";
 import { useMessagesDomain } from "../useMessagesDomain";
@@ -133,6 +127,8 @@ import type {
 } from "../../types/appTypes";
 
 const inMemoryNostrPictureCache = new Map<string, string | null>();
+
+const isPubkey = Schema.is(Pubkey);
 
 const INLINE_NPUB_PATTERN =
   /(?:nostr:)?npub1[023456789acdefghjklmnpqrstuvwxyz]+(?:@npub\.cash)?/gi;
@@ -425,6 +421,10 @@ export const useContactsMessagingComposition = ({
     Record<string, string | null>
   >({});
 
+  const [nostrMetadataByNpub, setNostrMetadataByNpub] = useState<
+    Record<string, ProfileMetadata | null>
+  >({});
+
   const avatarObjectUrlsByNpubRef = React.useRef<Map<string, string>>(
     new Map(),
   );
@@ -678,11 +678,7 @@ export const useContactsMessagingComposition = ({
     [],
   );
 
-  const nostrInFlight = React.useRef<Set<string>>(new Set());
-
   const nostrMetadataInFlight = React.useRef<Set<string>>(new Set());
-
-  const nostrStatusInFlight = React.useRef<Set<string>>(new Set());
 
   const pendingUnknownContactAddRef = React.useRef<{
     sourceContactId: string;
@@ -982,28 +978,25 @@ export const useContactsMessagingComposition = ({
     updateLocalNostrReaction,
   });
 
+  useLinkstrProfileSync({
+    contacts,
+    contactsOwnerId,
+    contactsVisibleOwnerIds,
+    currentNpub,
+    enabled: nostrBootstrapReady,
+    rememberBlobAvatarUrl,
+    routeKind: route.kind,
+    setNostrMetadataByNpub,
+    setNostrPictureByNpub,
+    setNostrStatusByNpub,
+    update,
+  });
+
   const [contactNewPrefill, setContactNewPrefill] = React.useState<null | {
     lnAddress: string;
     npub: string | null;
     suggestedName: string | null;
   }>(null);
-
-  useContactsNostrPrefetchEffects({
-    appOwnerId: contactsOwnerId,
-    canFetchFromNostr: nostrBootstrapReady,
-    contacts,
-    nostrFetchRelays,
-    nostrInFlight,
-    nostrMetadataInFlight,
-    nostrStatusByNpub,
-    nostrStatusInFlight,
-    rememberBlobAvatarUrl,
-    routeKind: route.kind,
-    setNostrPictureByNpub,
-    setNostrStatusByNpub,
-    update,
-    visibleOwnerIds: contactsVisibleOwnerIds,
-  });
 
   const [unknownNameByNpub, setUnknownNameByNpub] = useState<
     Record<string, string | null>
@@ -1117,10 +1110,9 @@ export const useContactsMessagingComposition = ({
       });
 
       let matchedByLightningAddress = false;
-      let matchedMetadata: NostrProfileMetadata | null = null;
+      let matchedMetadata: ProfileMetadata | null = null;
       if (!knownContact) {
-        matchedMetadata =
-          loadCachedProfileMetadata(unknownNpub)?.metadata ?? null;
+        matchedMetadata = loadCachedProfile(unknownNpub)?.metadata ?? null;
         const profileLightningAddress = matchedMetadata
           ? omitSyntheticContactLightningAddress(
               String(matchedMetadata.lud16 ?? "").trim() ||
@@ -1233,50 +1225,47 @@ export const useContactsMessagingComposition = ({
     return npubs;
   }, [chatMentionedNpubs, unknownContactNpubs]);
 
+  const fetchProfileOneShot = useAtomSet(fetchProfileAtom, {
+    mode: "promiseExit",
+  });
+
+  // Unknown senders and mentioned npubs are not watched; one cached or
+  // one-shot profile read feeds both their display name and avatar.
   React.useEffect(() => {
-    const controller = new AbortController();
     let cancelled = false;
+
+    const applyMetadata = (npub: string, metadata: ProfileMetadata | null) => {
+      if (cancelled) return;
+      const name = metadata ? getBestNostrName(metadata) : null;
+      setUnknownNameByNpub((prev) =>
+        prev[npub] !== undefined ? prev : { ...prev, [npub]: name },
+      );
+      const url = getProfilePictureUrl(metadata);
+      if (url) {
+        setNostrPictureByNpub((prev) =>
+          npub in prev ? prev : { ...prev, [npub]: url },
+        );
+      }
+    };
 
     const run = async () => {
       for (const npub of prefetchedMessageNpubs) {
         if (unknownNameByNpub[npub] !== undefined) continue;
 
-        const cached = loadCachedProfileMetadata(npub);
+        const cached = loadCachedProfile(npub);
         if (cached) {
-          const cachedName = cached.metadata
-            ? getBestNostrName(cached.metadata)
-            : null;
-          if (!cancelled) {
-            setUnknownNameByNpub((prev) =>
-              prev[npub] !== undefined ? prev : { ...prev, [npub]: cachedName },
-            );
-          }
+          applyMetadata(npub, cached.metadata);
           continue;
         }
 
         if (!nostrBootstrapReady) continue;
-
         if (nostrMetadataInFlight.current.has(npub)) continue;
         nostrMetadataInFlight.current.add(npub);
-
         try {
-          const metadata = await fetchNostrProfileMetadata(npub, {
-            signal: controller.signal,
-            relays: nostrFetchRelays,
-          });
-          saveCachedProfileMetadata(npub, metadata);
-          if (cancelled) return;
-          setUnknownNameByNpub((prev) => ({
-            ...prev,
-            [npub]: metadata ? getBestNostrName(metadata) : null,
-          }));
-        } catch {
-          saveCachedProfileMetadata(npub, null);
-          if (cancelled) return;
-          setUnknownNameByNpub((prev) => ({
-            ...prev,
-            [npub]: null,
-          }));
+          applyMetadata(
+            npub,
+            await fetchAndCacheProfile(fetchProfileOneShot, npub),
+          );
         } finally {
           nostrMetadataInFlight.current.delete(npub);
         }
@@ -1287,143 +1276,12 @@ export const useContactsMessagingComposition = ({
 
     return () => {
       cancelled = true;
-      controller.abort();
     };
   }, [
+    fetchProfileOneShot,
     nostrBootstrapReady,
-    nostrFetchRelays,
-    nostrMetadataInFlight,
     prefetchedMessageNpubs,
     unknownNameByNpub,
-  ]);
-
-  React.useEffect(() => {
-    const controller = new AbortController();
-    let cancelled = false;
-
-    const run = async () => {
-      for (const npub of prefetchedMessageNpubs) {
-        const cached = loadCachedProfilePicture(npub);
-        const shouldRefreshCachedPicture = isCachedProfilePictureStale(cached);
-
-        if (cached) {
-          setNostrPictureByNpub((prev) =>
-            prev[npub] === cached.url ? prev : { ...prev, [npub]: cached.url },
-          );
-        }
-
-        try {
-          const blobUrl = await loadCachedProfileAvatarObjectUrl(npub);
-          if (cancelled) return;
-          if (blobUrl) {
-            setNostrPictureByNpub((prev) => ({
-              ...prev,
-              [npub]: rememberBlobAvatarUrl(npub, blobUrl),
-            }));
-            if (!shouldRefreshCachedPicture) continue;
-          }
-        } catch {
-          // ignore
-        }
-
-        if (cached && !shouldRefreshCachedPicture) continue;
-
-        if (!nostrBootstrapReady) continue;
-
-        if (nostrInFlight.current.has(npub)) continue;
-        nostrInFlight.current.add(npub);
-
-        try {
-          if (cached && shouldRefreshCachedPicture) {
-            const metadata = await fetchNostrProfileMetadata(npub, {
-              signal: controller.signal,
-              relays: nostrFetchRelays,
-            });
-            if (cancelled) return;
-            if (!metadata) continue;
-
-            saveCachedProfileMetadata(npub, metadata);
-            const refreshedUrl = getNostrProfilePictureUrl(metadata);
-            if (refreshedUrl) {
-              saveCachedProfilePicture(npub, refreshedUrl);
-              const blobUrl = await cacheProfileAvatarFromUrl(
-                npub,
-                refreshedUrl,
-                {
-                  signal: controller.signal,
-                },
-              );
-              if (cancelled) return;
-              setNostrPictureByNpub((prev) => ({
-                ...prev,
-                [npub]: rememberBlobAvatarUrl(npub, blobUrl || refreshedUrl),
-              }));
-            } else {
-              saveCachedProfilePicture(npub, null);
-              void deleteCachedProfileAvatar(npub);
-              rememberBlobAvatarUrl(npub, null);
-              setNostrPictureByNpub((prev) => ({
-                ...prev,
-                [npub]: null,
-              }));
-            }
-          } else {
-            const url = await fetchNostrProfilePicture(npub, {
-              signal: controller.signal,
-              relays: nostrFetchRelays,
-            });
-            saveCachedProfilePicture(npub, url);
-            if (cancelled) return;
-
-            if (url) {
-              const blobUrl = await cacheProfileAvatarFromUrl(npub, url, {
-                signal: controller.signal,
-              });
-              if (cancelled) return;
-              setNostrPictureByNpub((prev) => ({
-                ...prev,
-                [npub]: rememberBlobAvatarUrl(npub, blobUrl || url),
-              }));
-            } else {
-              setNostrPictureByNpub((prev) => {
-                const existing = prev[npub];
-                if (typeof existing === "string" && existing.trim())
-                  return prev;
-                if (existing === null) return prev;
-                return { ...prev, [npub]: null };
-              });
-            }
-          }
-        } catch {
-          if (cancelled) return;
-          if (!cached) {
-            saveCachedProfilePicture(npub, null);
-            setNostrPictureByNpub((prev) => {
-              const existing = prev[npub];
-              if (typeof existing === "string" && existing.trim()) return prev;
-              if (existing === null) return prev;
-              return { ...prev, [npub]: null };
-            });
-          }
-        } finally {
-          nostrInFlight.current.delete(npub);
-        }
-      }
-    };
-
-    void run();
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [
-    nostrBootstrapReady,
-    nostrFetchRelays,
-    nostrInFlight,
-    prefetchedMessageNpubs,
-    rememberBlobAvatarUrl,
-    setNostrPictureByNpub,
   ]);
 
   const unknownContactById = React.useMemo(() => {
@@ -1700,7 +1558,6 @@ export const useContactsMessagingComposition = ({
     handleSaveContact,
     isSavingContact,
     openScannedContactPendingNpubRef,
-    refreshContactFromNostr,
     resetEditedContactFieldFromNostr,
     searchNewContact,
     setForm,
@@ -2713,6 +2570,10 @@ export const useContactsMessagingComposition = ({
     ],
   );
 
+  const publishMuteList = useAtomSet(publishMuteListAtom, {
+    mode: "promiseExit",
+  });
+
   const blockPubkeyAndPublishMuteList = React.useCallback(
     async (pubkeyHex: string): Promise<boolean> => {
       const normalizedPubkey = normalizePubkeyHex(pubkeyHex);
@@ -2732,51 +2593,14 @@ export const useContactsMessagingComposition = ({
         mergedBlockedPubkeys,
       );
 
-      if (!currentNsec) return true;
-
-      try {
-        const { finalizeEvent, getPublicKey } = await import("nostr-tools");
-
-        const decodedMe = nip19.decode(currentNsec);
-        if (
-          decodedMe.type !== "nsec" ||
-          !(decodedMe.data instanceof Uint8Array)
-        ) {
-          return true;
-        }
-
-        const relays = Array.from(
-          new Set(
-            nostrFetchRelays
-              .map((relay) => String(relay ?? "").trim())
-              .filter(Boolean),
-          ),
-        );
-        if (relays.length === 0) return true;
-
-        const privBytes = decodedMe.data;
-        const pubkey = getPublicKey(privBytes);
-        const baseEvent = {
-          kind: 10000,
-          created_at: Math.ceil(Date.now() / 1e3),
-          tags: mergedBlockedPubkeys.map((blockedPubkey) => [
-            "p",
-            blockedPubkey,
-          ]),
-          content: "",
-          pubkey,
-        } satisfies UnsignedEvent;
-
-        const signed = finalizeEvent(baseEvent, privBytes);
-        const pool = await getSharedAppNostrPool();
-        void Promise.allSettled(pool.publish(relays, signed));
-      } catch {
-        // Local blocklist still applies even if mute-list publish fails.
+      // Local blocklist applies either way; the mute list is best effort.
+      if (currentNsec) {
+        void publishMuteList(mergedBlockedPubkeys.filter(isPubkey));
       }
 
       return true;
     },
-    [currentNsec, nostrFetchRelays],
+    [currentNsec, publishMuteList],
   );
 
   const requestDeleteCurrentContact = () => {
@@ -3661,6 +3485,7 @@ export const useContactsMessagingComposition = ({
     nostrMessagesLatestRef,
     nostrMessagesLocal,
     nostrMessagesRecent,
+    nostrMetadataByNpub,
     nostrPictureByNpub,
     nostrReactionWrapIdsRef,
     nostrReactionsLocal,
@@ -3687,10 +3512,8 @@ export const useContactsMessagingComposition = ({
     publishWrappedWithRetry,
     reactionsByMessageId,
     reassignLocalNostrMessagesContactId: reassignNostrConversationContactId,
-    refreshContactFromNostr,
     relayStatusByUrl,
     relayUrls,
-    rememberBlobAvatarUrl,
     removeLocalNostrMessagesByContactId,
     removePendingPayment,
     replyContext,

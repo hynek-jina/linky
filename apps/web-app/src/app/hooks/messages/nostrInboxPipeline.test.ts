@@ -7,7 +7,7 @@ import {
 import { encrypt, getConversationKey } from "nostr-tools/nip44";
 import { unwrapEvent, wrapEvent } from "nostr-tools/nip59";
 import { describe, expect, it, vi } from "vitest";
-import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import {
   createLinkyBankPaymentOfferEvent,
   LINKY_BANK_PAYMENT_OFFER_KIND,

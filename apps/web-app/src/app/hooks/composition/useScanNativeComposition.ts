@@ -3,7 +3,7 @@ import { nip19 } from "nostr-tools";
 import React from "react";
 import type { CashuTokenId, useEvolu } from "../../../evolu";
 import { navigateTo, useRouting } from "../../../hooks/useRouting";
-import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import {
   cancelNativeNfcWrite,
   consumePendingIosNativeDeepLinkUrl,
@@ -119,7 +119,6 @@ interface UseScanNativeCompositionParams {
   payLightningInvoiceWithCashu: CashuWalletCompositionResult["payLightningInvoiceWithCashu"];
   persistContactsOnboardingDismissed: () => void;
   pushToast: (message: string) => void;
-  refreshContactFromNostr: ContactsMessagingCompositionResult["refreshContactFromNostr"];
   route: ReturnType<typeof useRouting>;
   saveCashuFromText: CashuWalletCompositionResult["saveCashuFromText"];
   setPendingDeleteId: ContactsMessagingCompositionResult["setPendingDeleteId"];
@@ -164,7 +163,6 @@ export const useScanNativeComposition = ({
   payLightningInvoiceWithCashu,
   persistContactsOnboardingDismissed,
   pushToast,
-  refreshContactFromNostr,
   route,
   saveCashuFromText,
   setPendingDeleteId,
@@ -1020,7 +1018,6 @@ export const useScanNativeComposition = ({
     openScannedContactPendingNpubRef,
     payCashuPaymentRequest,
     payLightningInvoiceWithCashu,
-    refreshContactFromNostr,
     requestLightningInvoiceConfirmation: setPendingLightningInvoiceConfirmation,
     requestLnurlWithdrawConfirmation: setPendingLnurlWithdrawConfirmation,
     saveCashuFromText,

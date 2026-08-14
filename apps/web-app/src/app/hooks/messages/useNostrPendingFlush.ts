@@ -9,7 +9,7 @@ import { sendReactionAtom, useAtomSet } from "@linky/linkstr-react";
 import { Exit, Schema } from "effect";
 import React from "react";
 import type { Event as NostrToolsEvent, UnsignedEvent } from "nostr-tools";
-import { NOSTR_RELAYS } from "../../../nostrProfile";
+import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { isCashuNotificationMessage } from "../../lib/cashuNotificationCopy";
 import { getSharedAppNostrPool, type AppNostrPool } from "../../lib/nostrPool";

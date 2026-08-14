@@ -27,7 +27,8 @@ const stringField = (
 
 /**
  * Tolerant kind-0 decode: unknown fields ignored, non-string fields dropped.
- * The wire's `display_name` wins over the nonstandard `displayName` spelling.
+ * The wire's `display_name` wins over the nonstandard `displayName` spelling,
+ * and the legacy `image` field stands in for a missing `picture`.
  */
 export const decodeProfileMetadata = (
   content: string,
@@ -41,7 +42,7 @@ export const decodeProfileMetadata = (
   return Option.map(decodeJsonRecord(parsed), (record) => {
     const name = stringField(record, "name");
     const displayName = stringField(record, "display_name", "displayName");
-    const picture = stringField(record, "picture");
+    const picture = stringField(record, "picture", "image");
     const lud16 = stringField(record, "lud16");
     const lud06 = stringField(record, "lud06");
     const nip05 = stringField(record, "nip05");
