@@ -143,11 +143,54 @@ const canFetchAvatarAsBlob = (avatarUrl: string): boolean => {
   }
 };
 
+/**
+ * Single owner of avatar `blob:` URL lifetime, one live URL per npub.
+ * Re-loading a cached avatar returns the URL already handed out — a changed
+ * <img> src identity would force the browser to reload the image — and a URL
+ * is revoked only when its avatar bytes are replaced or released.
+ */
+const avatarObjectUrlByNpub = new Map<string, string>();
+
+const revokeObjectUrl = (url: string): void => {
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    // ignore
+  }
+};
+
+const registerAvatarObjectUrl = (npub: string, blob: Blob): string => {
+  const url = URL.createObjectURL(blob);
+  const previous = avatarObjectUrlByNpub.get(npub);
+  if (previous !== undefined && previous !== url) revokeObjectUrl(previous);
+  avatarObjectUrlByNpub.set(npub, url);
+  return url;
+};
+
+export const peekAvatarObjectUrl = (npub: string): string | null =>
+  avatarObjectUrlByNpub.get(npub.trim()) ?? null;
+
+export const releaseAvatarObjectUrl = (npub: string): void => {
+  const trimmed = npub.trim();
+  const url = avatarObjectUrlByNpub.get(trimmed);
+  if (url === undefined) return;
+  revokeObjectUrl(url);
+  avatarObjectUrlByNpub.delete(trimmed);
+};
+
+export const releaseAllAvatarObjectUrls = (): void => {
+  for (const url of avatarObjectUrlByNpub.values()) revokeObjectUrl(url);
+  avatarObjectUrlByNpub.clear();
+};
+
 export const loadCachedProfileAvatarObjectUrl = async (
   npub: string,
 ): Promise<string | null> => {
   const trimmed = npub.trim();
   if (!trimmed || !canUseCacheStorage()) return null;
+
+  const existing = avatarObjectUrlByNpub.get(trimmed);
+  if (existing !== undefined) return existing;
 
   const req = makeAvatarCacheRequest(trimmed);
   if (!req) return null;
@@ -158,7 +201,11 @@ export const loadCachedProfileAvatarObjectUrl = async (
     if (!match) return null;
     const blob = await match.blob();
     if (!blob || blob.size <= 0) return null;
-    return URL.createObjectURL(blob);
+    // A concurrent load may have registered while this one awaited.
+    return (
+      avatarObjectUrlByNpub.get(trimmed) ??
+      registerAvatarObjectUrl(trimmed, blob)
+    );
   } catch {
     return null;
   }
@@ -186,7 +233,7 @@ export const cacheProfileAvatarFromUrl = async (
 
     const blob = await res.blob();
     if (!blob || blob.size <= 0) return null;
-    return URL.createObjectURL(blob);
+    return registerAvatarObjectUrl(trimmed, blob);
   } catch {
     return null;
   }
@@ -196,7 +243,9 @@ export const deleteCachedProfileAvatar = async (
   npub: string,
 ): Promise<void> => {
   const trimmed = npub.trim();
-  if (!trimmed || !canUseCacheStorage()) return;
+  if (!trimmed) return;
+  releaseAvatarObjectUrl(trimmed);
+  if (!canUseCacheStorage()) return;
   const req = makeAvatarCacheRequest(trimmed);
   if (!req) return;
 
