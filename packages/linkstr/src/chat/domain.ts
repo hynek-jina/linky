@@ -41,6 +41,7 @@ export class TextMessageDraft extends Schema.Class<TextMessageDraft>(
   replyTo: Schema.optional(RumorId),
   root: Schema.optional(RumorId),
   clientId: Schema.optional(ClientId),
+  sentAt: Schema.optional(UnixSeconds),
 }) {}
 
 export class TokenMessageDraft extends Schema.Class<TokenMessageDraft>(
@@ -51,6 +52,7 @@ export class TokenMessageDraft extends Schema.Class<TokenMessageDraft>(
   replyTo: Schema.optional(RumorId),
   root: Schema.optional(RumorId),
   clientId: Schema.optional(ClientId),
+  sentAt: Schema.optional(UnixSeconds),
 }) {}
 
 export class ImageMessageDraft extends Schema.Class<ImageMessageDraft>(
@@ -61,6 +63,7 @@ export class ImageMessageDraft extends Schema.Class<ImageMessageDraft>(
   replyTo: Schema.optional(RumorId),
   root: Schema.optional(RumorId),
   clientId: Schema.optional(ClientId),
+  sentAt: Schema.optional(UnixSeconds),
 }) {}
 
 export class EditMessageDraft extends Schema.Class<EditMessageDraft>(
@@ -70,6 +73,7 @@ export class EditMessageDraft extends Schema.Class<EditMessageDraft>(
   editOf: RumorId,
   content: MessageText,
   clientId: Schema.optional(ClientId),
+  sentAt: Schema.optional(UnixSeconds),
 }) {}
 
 export class ChatMessageReceipt extends Schema.Class<ChatMessageReceipt>(

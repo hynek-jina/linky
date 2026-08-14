@@ -52,7 +52,7 @@ export class Reactions extends Effect.Service<Reactions>()(
       > =>
         Effect.gen(function* () {
           const clientId = draft.clientId ?? (yield* freshClientId);
-          const sentAt = yield* nowSeconds;
+          const sentAt = draft.sentAt ?? (yield* nowSeconds);
           const rumor = encodeReactionRumor(
             draft,
             context.identity.pubkey,

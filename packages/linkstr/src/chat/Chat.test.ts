@@ -6,6 +6,7 @@ import {
   Pubkey,
   RelayUrl,
   RumorId,
+  UnixSeconds,
 } from "../domain/primitives";
 import {
   LINKY_PUSH_MARKER_TAG,
@@ -237,6 +238,39 @@ describe("Chat sends", () => {
       expect(rumor.kind).toBe(14);
       expect(rumor.content).toBe(cashuToken);
     }
+  });
+
+  it("honors the draft sentAt override", async () => {
+    const published: Array<PublishedWrap> = [];
+    const sentAt = UnixSeconds.make(1_699_999_999);
+    const exit = await runWith(
+      stubTransport(published, () => true),
+      Effect.gen(function* () {
+        const chat = yield* Chat;
+        return yield* chat.sendText(
+          new TextMessageDraft({
+            to: bob.pubkey,
+            content: MessageText.make("hello"),
+            clientId,
+            sentAt,
+          }),
+        );
+      }),
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value.sentAt).toBe(sentAt);
+    const recipient = published.find(
+      ({ wrap }) => recipientOf(wrap) === bob.pubkey,
+    );
+    expect(recipient).toBeDefined();
+    if (recipient === undefined) return;
+    const rumor = Either.getOrThrow(
+      unwrapToRumor(recipient.wrap, bob.secretKey),
+    );
+    expect(rumor.created_at).toBe(sentAt);
+    expect(rumor.id).toBe(exit.value.messageId);
   });
 
   it("fails with RecipientNotReached when only the self copy lands", async () => {

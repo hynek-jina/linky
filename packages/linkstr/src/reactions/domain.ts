@@ -23,6 +23,7 @@ export class ReactionDraft extends Schema.Class<ReactionDraft>("ReactionDraft")(
     emoji: Emoji,
     /** Generated when omitted; pass it when an optimistic local row already exists. */
     clientId: Schema.optional(ClientId),
+    sentAt: Schema.optional(UnixSeconds),
   },
 ) {}
 

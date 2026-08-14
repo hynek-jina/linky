@@ -54,7 +54,7 @@ export class Chat extends Effect.Service<Chat>()("linkstr/Chat", {
     > =>
       Effect.gen(function* () {
         const clientId = draft.clientId ?? (yield* freshClientId);
-        const sentAt = yield* nowSeconds;
+        const sentAt = draft.sentAt ?? (yield* nowSeconds);
         const rumor = encodeTextMessageRumor(
           draft,
           context.identity.pubkey,
@@ -86,7 +86,7 @@ export class Chat extends Effect.Service<Chat>()("linkstr/Chat", {
     > =>
       Effect.gen(function* () {
         const clientId = draft.clientId ?? (yield* freshClientId);
-        const sentAt = yield* nowSeconds;
+        const sentAt = draft.sentAt ?? (yield* nowSeconds);
         const rumor = encodeImageMessageRumor(
           draft,
           context.identity.pubkey,
@@ -118,7 +118,7 @@ export class Chat extends Effect.Service<Chat>()("linkstr/Chat", {
     > =>
       Effect.gen(function* () {
         const clientId = draft.clientId ?? (yield* freshClientId);
-        const sentAt = yield* nowSeconds;
+        const sentAt = draft.sentAt ?? (yield* nowSeconds);
         const rumor = encodeTokenMessageRumor(
           draft,
           context.identity.pubkey,
@@ -149,7 +149,7 @@ export class Chat extends Effect.Service<Chat>()("linkstr/Chat", {
     > =>
       Effect.gen(function* () {
         const clientId = draft.clientId ?? (yield* freshClientId);
-        const sentAt = yield* nowSeconds;
+        const sentAt = draft.sentAt ?? (yield* nowSeconds);
         const rumor = encodeEditRumor(
           draft,
           context.identity.pubkey,
