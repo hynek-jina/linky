@@ -1,5 +1,6 @@
 import { Atom } from "@effect-atom/atom-react";
 import type {
+  InboxCursorStore,
   NostrSecretKey,
   NostrTransport,
   OutboxStore,
@@ -19,6 +20,12 @@ export interface LinkstrConfig {
    * non-durable in-memory storage.
    */
   readonly outboxStore?: Layer.Layer<OutboxStore>;
+  /**
+   * Durable wrap-inbox cursor storage — platform code supplies it (web:
+   * `InboxCursorStore.fromStringStorage(localStorage, ...)`). Defaults to
+   * non-durable in-memory storage.
+   */
+  readonly inboxCursorStore?: Layer.Layer<InboxCursorStore>;
   /** Streams diagnostics through `inspectorEventsAtom` when true. */
   readonly inspector?: boolean;
 }

@@ -32,6 +32,7 @@ import type {
   NostrTransportService,
 } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
+import { InboxCursorStore } from "./InboxCursorStore";
 import { NIP59_BACKDATE_MARGIN_SECONDS, WrapInbox } from "./WrapInbox";
 import type {
   DeliveredInboxEvent,
@@ -180,7 +181,24 @@ const poolFor = (fakes: ReadonlyMap<string, FakeRelay>): RelayPool => ({
   },
 });
 
-const dependenciesFor = (fakes: Array<[RelayUrl, FakeRelay]>) =>
+const recordingCursorStore = (initial: UnixSeconds | null = null) => {
+  const saved: Array<UnixSeconds> = [];
+  let cursor = initial;
+  const layer = Layer.succeed(InboxCursorStore, {
+    load: Effect.sync(() => cursor),
+    save: (next: UnixSeconds) =>
+      Effect.sync(() => {
+        cursor = next;
+        saved.push(next);
+      }),
+  });
+  return { layer, saved };
+};
+
+const dependenciesFor = (
+  fakes: Array<[RelayUrl, FakeRelay]>,
+  cursorStore: Layer.Layer<InboxCursorStore> = InboxCursorStore.inMemory,
+) =>
   WrapInbox.Default.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -193,6 +211,7 @@ const dependenciesFor = (fakes: Array<[RelayUrl, FakeRelay]>) =>
           NostrTransport,
           makeRelayPoolTransport(poolFor(new Map(fakes))),
         ),
+        cursorStore,
       ),
     ),
   );
@@ -222,14 +241,14 @@ const eventsOf = (
 
 const runOpen = <A, E>(
   fakes: Array<[RelayUrl, FakeRelay]>,
-  options: { since?: UnixSeconds },
+  options: { since?: UnixSeconds; cursorStore?: Layer.Layer<InboxCursorStore> },
   body: (harness: Harness) => Effect.Effect<A, E>,
 ): Promise<A> =>
   Effect.gen(function* () {
     const inbox = yield* WrapInbox;
     const feed = yield* inbox.open({
       resubscribeDelay: Duration.millis(10),
-      ...options,
+      ...(options.since === undefined ? {} : { since: options.since }),
     });
     const collected: Array<DeliveredInboxEvent> = [];
     yield* Effect.forkScoped(
@@ -240,7 +259,7 @@ const runOpen = <A, E>(
     return yield* body({ feed, collected });
   }).pipe(
     Effect.scoped,
-    Effect.provide(dependenciesFor(fakes)),
+    Effect.provide(dependenciesFor(fakes, options.cursorStore)),
     Effect.runPromise,
   );
 
@@ -269,6 +288,7 @@ const fetchDependenciesFor = (
         LinkstrIdentity.fromSecretKey(alice.secretKey),
         RelayPolicy.fixed({ readRelays, writeRelays: [] }),
         Layer.succeed(NostrTransport, transport),
+        InboxCursorStore.inMemory,
       ),
     ),
   );
@@ -388,6 +408,7 @@ describe("WrapInbox.fetchWrapEvent", () => {
           LinkstrIdentity.fromSecretKey(alice.secretKey),
           RelayPolicy.fixed({ readRelays: [relayA], writeRelays: [] }),
           Layer.succeed(NostrTransport, transport),
+          InboxCursorStore.inMemory,
         ),
       ),
     );
@@ -442,26 +463,48 @@ describe("WrapInbox", () => {
   it("subscribes with the gift-wrap filter and emits ReactionAdded", async () => {
     const fakeA = new FakeRelay();
     const wrap = reactionWrap("👍");
+    const store = recordingCursorStore();
 
-    await runOpen([[relayA, fakeA]], {}, ({ collected, feed }) =>
-      Effect.gen(function* () {
-        yield* eventually(() => fakeA.subs.length === 1);
-        expect(fakeA.subs[0]?.filters).toEqual([
-          { kinds: [1059], "#p": [alice.pubkey] },
-        ]);
+    await runOpen(
+      [[relayA, fakeA]],
+      { cursorStore: store.layer },
+      ({ collected }) =>
+        Effect.gen(function* () {
+          yield* eventually(() => fakeA.subs.length === 1);
+          expect(fakeA.subs[0]?.filters).toEqual([
+            { kinds: [1059], "#p": [alice.pubkey] },
+          ]);
 
-        fakeA.emit(wrap);
-        yield* eventually(() => collected.length === 1);
-        expect(collected[0]?.event).toEqual(
-          expect.objectContaining({
-            _tag: "ReactionAdded",
-            from: bob.pubkey,
-            emoji: "👍",
-            sentAt,
-          }),
-        );
-        expect(yield* feed.cursor).toBe(wrap.created_at);
-      }),
+          fakeA.emit(wrap);
+          yield* eventually(() => collected.length === 1);
+          expect(collected[0]?.event).toEqual(
+            expect.objectContaining({
+              _tag: "ReactionAdded",
+              from: bob.pubkey,
+              emoji: "👍",
+              sentAt,
+            }),
+          );
+          expect(store.saved).toEqual([wrap.created_at]);
+        }),
+    );
+  });
+
+  it("prefers the stored cursor over the since fallback", async () => {
+    const fakeA = new FakeRelay();
+    const stored = UnixSeconds.make(1_756_000_000);
+    const store = recordingCursorStore(stored);
+
+    await runOpen(
+      [[relayA, fakeA]],
+      { since: UnixSeconds.make(1_755_000_000), cursorStore: store.layer },
+      () =>
+        Effect.gen(function* () {
+          yield* eventually(() => fakeA.subs.length === 1);
+          expect(fakeA.subs[0]?.filters[0]?.since).toBe(
+            stored - NIP59_BACKDATE_MARGIN_SECONDS,
+          );
+        }),
     );
   });
 

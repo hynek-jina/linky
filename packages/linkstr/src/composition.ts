@@ -2,6 +2,7 @@ import { Layer } from "effect";
 import { BankOffers } from "./bankOffers/BankOffers";
 import { Chat } from "./chat/Chat";
 import type { NostrSecretKey, RelayUrl } from "./domain/primitives";
+import { InboxCursorStore } from "./inbox/InboxCursorStore";
 import { WrapInbox } from "./inbox/WrapInbox";
 import { MuteList } from "./muteList/MuteList";
 import { Outbox } from "./outbox/Outbox";
@@ -27,6 +28,8 @@ export interface LinkstrServicesConfig {
   readonly transport: Layer.Layer<NostrTransport>;
   /** Durable outbox job storage; defaults to non-durable in-memory storage. */
   readonly outboxStore?: Layer.Layer<OutboxStore> | undefined;
+  /** Durable inbox cursor storage; defaults to non-durable in-memory storage. */
+  readonly inboxCursorStore?: Layer.Layer<InboxCursorStore> | undefined;
 }
 
 /**
@@ -50,7 +53,9 @@ export const linkstrServices = (config: LinkstrServicesConfig) =>
     PaymentNotices.Default,
     PaymentTelemetry.Default,
     Reactions.Default,
-    WrapInbox.Default,
+    WrapInbox.Default.pipe(
+      Layer.provide(config.inboxCursorStore ?? InboxCursorStore.inMemory),
+    ),
     Profiles.Default,
     ProfileWatch.Default,
     RelayLists.Default,

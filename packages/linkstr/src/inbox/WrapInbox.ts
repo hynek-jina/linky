@@ -28,6 +28,7 @@ import { LinkstrIdentity } from "../services/LinkstrIdentity";
 import { NostrTransport } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
 import { decodeWrapEvent } from "./decodeWrapEvent";
+import { InboxCursorStore } from "./InboxCursorStore";
 import { WrapDropped } from "./events";
 import type { InboxDelivery } from "./events";
 
@@ -50,7 +51,7 @@ export interface DeliveredInboxEvent {
 }
 
 export interface WrapInboxOptions {
-  /** Cursor persisted by the caller from a previous session's `cursor`. */
+  /** Backfill start when the `InboxCursorStore` holds no cursor yet. */
   readonly since?: UnixSeconds;
   readonly resubscribeDelay?: Duration.Duration;
 }
@@ -68,12 +69,6 @@ export interface WrapFetchOptions {
 export interface WrapInboxFeed {
   /** Single-consumer: fan out downstream if multiple listeners are needed. */
   readonly events: Stream.Stream<DeliveredInboxEvent>;
-  /**
-   * Latest authenticated wrap timestamp delivered through `events`. Persist it
-   * after handling the delivered events and pass it back as `since` on the
-   * next session; the machine widens it by the NIP-59 backdate margin itself.
-   */
-  readonly cursor: Effect.Effect<UnixSeconds | null>;
 }
 
 interface RawArrival {
@@ -126,7 +121,10 @@ const wrapIdOf = (raw: unknown): WrapId | null =>
  * wraps deduped across relays, authenticated and routed by rumor kind into
  * typed inbox facts. Each relay runs its own resubscribe loop, so one dead
  * relay never stalls the others; every (re)subscription backfills from the
- * cursor minus the NIP-59 backdate margin.
+ * cursor minus the NIP-59 backdate margin. The cursor is loaded from and
+ * checkpointed to `InboxCursorStore` — the backdate margin makes eager
+ * checkpointing safe, since the next session refetches everything the
+ * current one could still deliver.
  */
 export class WrapInbox extends Effect.Service<WrapInbox>()(
   "linkstr/WrapInbox",
@@ -135,6 +133,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
       const identity = yield* LinkstrIdentity;
       const transport = yield* NostrTransport;
       const relayPolicy = yield* RelayPolicy;
+      const cursorStore = yield* InboxCursorStore;
       const inspector = yield* Inspector.orNoop;
 
       const fetchWrapEvent = (
@@ -199,11 +198,8 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
           const resubscribeDelay =
             options?.resubscribeDelay ?? DEFAULT_RESUBSCRIBE_DELAY;
 
-          // TODO(#243, durable cursor): when a persistence service exists,
-          // load `since` and checkpoint the cursor there instead of leaving
-          // both to the caller.
           const cursor = yield* Ref.make<UnixSeconds | null>(
-            options?.since ?? null,
+            (yield* cursorStore.load) ?? options?.since ?? null,
           );
           const rawWraps = yield* Effect.acquireRelease(
             Queue.unbounded<RawArrival>(),
@@ -265,9 +261,12 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
               // the cursor past real time, or restarts would skip everything
               // published before it.
               const next = Math.min(wrapCreatedAt, nowSeconds);
-              yield* Ref.update(cursor, (current) =>
-                next > (current ?? 0) ? UnixSeconds.make(next) : current,
+              const advanced = yield* Ref.modify(cursor, (current) =>
+                next > (current ?? 0)
+                  ? [UnixSeconds.make(next), UnixSeconds.make(next)]
+                  : [null, current],
               );
+              if (advanced !== null) yield* cursorStore.save(advanced);
             });
 
           const processRaw = ({
@@ -324,7 +323,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
             Stream.filterMap((event) => event),
           );
 
-          return { events, cursor: Ref.get(cursor) };
+          return { events };
         });
 
       return { fetchWrapEvent, open } as const;
