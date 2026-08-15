@@ -263,14 +263,21 @@ export const getInitialDecimalAmountInputEnabled = (): boolean => {
   }
 };
 
+// Default ON: an absent key self-initializes to "enabled now", so both fresh
+// installs and updated ones start sending receipts with a baseline of first
+// launch — history older than the feature is still never reported. "0" is the
+// explicit off state.
 export const getInitialSeenReceiptsEnabledAtSec = (): number | null => {
+  const nowSec = Math.floor(Date.now() / 1e3);
   try {
-    const parsed = Number(
-      localStorage.getItem(SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY) ?? "",
-    );
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    const raw = (
+      localStorage.getItem(SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY) ?? ""
+    ).trim();
+    if (raw === "0") return null;
+    const parsed = Number(raw);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : nowSec;
   } catch {
-    return null;
+    return nowSec;
   }
 };
 
