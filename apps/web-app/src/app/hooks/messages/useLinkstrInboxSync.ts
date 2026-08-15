@@ -46,6 +46,12 @@ import {
   retryDeferredReactions,
   type ReactionInboxContext,
 } from "./reactionInbox";
+import {
+  applyOwnSeenReceiptConfirmed,
+  applySeenReceiptReceived,
+  type PeerSeenWindow,
+  type SeenReceiptInboxContext,
+} from "./seenReceiptInbox";
 
 // Fallback backfill window for a first session without a persisted cursor.
 const INBOX_BACKFILL_SINCE_SEC = 3 * 24 * 60 * 60;
@@ -90,6 +96,7 @@ const buildContactIndex = (
 };
 
 interface UseLinkstrInboxSyncParams {
+  advanceContactPeerSeen: (contactId: string, window: PeerSeenWindow) => void;
   appendLocalNostrMessage: (message: NewLocalNostrMessage) => string;
   appendLocalNostrReaction: (reaction: NewLocalNostrReaction) => string;
   bankPaymentOfferMessages: readonly LocalNostrMessage[];
@@ -97,6 +104,7 @@ interface UseLinkstrInboxSyncParams {
   currentNsec: string | null;
   enabled: boolean;
   formatDisplayedAmountText: (amountSat: number) => string;
+  getPeerSeenWindow: (contactId: string) => PeerSeenWindow | null;
   logPayStep: (step: string, data?: PaymentLogData) => void;
   maybeShowPwaNotification: (
     title: string,
@@ -113,6 +121,7 @@ interface UseLinkstrInboxSyncParams {
     messageId?: string;
   }) => void;
   pushToast: (message: string, options?: PushToastOptions) => void;
+  recordSentSeenReceipt: (peerPubkey: string, seenUpToSec: number) => void;
   route: RouteWithOptionalId;
   softDeleteLocalNostrReactionsByWrapIds: (wrapIds: readonly string[]) => void;
   t: (key: string) => string;
@@ -195,6 +204,16 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
       updateLocalNostrMessage: latest.updateLocalNostrMessage,
     };
 
+    const seenReceiptCtx: SeenReceiptInboxContext = {
+      advanceContactPeerSeen: latest.advanceContactPeerSeen,
+      findContactId: (peerPubkey) => findContact(peerPubkey)?.id ?? null,
+      getPeerSeenWindow: latest.getPeerSeenWindow,
+      identitySinceSec: identitySinceSecRef.current,
+      isBlockedPubkey,
+      nowSec: Math.floor(Date.now() / 1e3),
+      recordSentSeenReceipt: latest.recordSentSeenReceipt,
+    };
+
     const notificationsCtx: InboxNotificationsContext = {
       bankPaymentOfferMessages: latest.bankPaymentOfferMessages,
       findContact,
@@ -208,13 +227,13 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
       t: latest.t,
     };
 
-    return { chatCtx, notificationsCtx, reactionCtx };
+    return { chatCtx, notificationsCtx, reactionCtx, seenReceiptCtx };
   }, []);
 
   const dispatchInboxEvent = React.useCallback<DispatchInboxEvent>(
     (event, delivery) => {
       if (!enabled || myPubkey === null) return;
-      const { chatCtx, notificationsCtx, reactionCtx } =
+      const { chatCtx, notificationsCtx, reactionCtx, seenReceiptCtx } =
         buildHandlers(myPubkey);
       const cutoff = identitySinceSecRef.current;
       switch (event._tag) {
@@ -275,6 +294,12 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
           );
           return;
         }
+        case "SeenReceiptReceived":
+          applySeenReceiptReceived(event, seenReceiptCtx);
+          return;
+        case "OwnSeenReceiptConfirmed":
+          applyOwnSeenReceiptConfirmed(event, seenReceiptCtx);
+          return;
         case "WrapDropped":
           return;
       }

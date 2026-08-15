@@ -24,6 +24,7 @@ interface UseChatReadCursorSyncParams {
   chatMessages: readonly LocalNostrMessage[];
   contactsOwnerId: OwnerId | null;
   contactsVisibleOwnerIds: readonly OwnerId[];
+  documentVisible: boolean;
   route: RouteWithOptionalId;
   selectedContact: ChatReadCursorContact | null;
   update: EvoluUpdate;
@@ -37,6 +38,7 @@ export const useChatReadCursorSync = ({
   chatMessages,
   contactsOwnerId,
   contactsVisibleOwnerIds,
+  documentVisible,
   route,
   selectedContact,
   update,
@@ -46,6 +48,8 @@ export const useChatReadCursorSync = ({
   );
 
   React.useEffect(() => {
+    // A chat open in a background tab does not count as read.
+    if (!documentVisible) return;
     if (route.kind !== "chat" || !selectedContact) return;
     const contactId = String(selectedContact.id).trim();
     if (!contactId || contactId !== String(route.id ?? "").trim()) return;
@@ -76,6 +80,7 @@ export const useChatReadCursorSync = ({
     chatMessages,
     contactsOwnerId,
     contactsVisibleOwnerIds,
+    documentVisible,
     route,
     selectedContact,
     update,

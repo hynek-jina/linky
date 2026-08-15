@@ -15,6 +15,10 @@ import {
   REACTION_KIND,
   RETRACTION_KIND,
 } from "../reactions/codec";
+import {
+  decodeSeenReceiptRumor,
+  SEEN_RECEIPT_KIND,
+} from "../seenReceipts/codec";
 import type { LinkstrIdentityService } from "../services/LinkstrIdentity";
 import { authenticateWrap } from "./authenticateWrap";
 import { WrapDropped } from "./events";
@@ -52,6 +56,11 @@ const routeRumor = (
       });
     case PAYMENT_NOTICE_KIND:
       return Either.match(decodePaymentNoticeRumor(rumor, identity), {
+        onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
+        onRight: (event) => event,
+      });
+    case SEEN_RECEIPT_KIND:
+      return Either.match(decodeSeenReceiptRumor(rumor, identity.pubkey), {
         onLeft: (reason) => new WrapDropped({ wrapId: wrap.id, reason }),
         onRight: (event) => event,
       });

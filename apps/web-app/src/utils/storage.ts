@@ -14,6 +14,7 @@ import {
   NOSTR_IDENTITY_SWITCHED_AT_SEC_STORAGE_KEY,
   NOSTR_NSEC_STORAGE_KEY,
   PAY_WITH_CASHU_STORAGE_KEY,
+  SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY,
   SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "./constants";
@@ -259,6 +260,17 @@ export const getInitialDecimalAmountInputEnabled = (): boolean => {
     return localStorage.getItem(DECIMAL_AMOUNT_INPUT_STORAGE_KEY) === "1";
   } catch {
     return false;
+  }
+};
+
+export const getInitialSeenReceiptsEnabledAtSec = (): number | null => {
+  try {
+    const parsed = Number(
+      localStorage.getItem(SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY) ?? "",
+    );
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  } catch {
+    return null;
   }
 };
 

@@ -396,6 +396,7 @@ export const en = {
   chatUnknownContactAddFailed: "Cannot add this contact yet.",
   chatQueued: "Queued for delivery.",
   chatPendingShort: "pending",
+  chatSeenShort: "seen",
   chatImageAttach: "Add image",
   chatImageDecrypting: "Decrypting image…",
   chatImageLoadFailed: "Could not load image.",
@@ -767,6 +768,9 @@ export const en = {
   unitHiddenName: "Hidden",
   decimalInput: "Decimal places",
   decimalInputDescription: "Allow cents when entering fiat amounts.",
+  sendReadReceipts: "Send read receipts",
+  sendReadReceiptsDescription:
+    "Let contacts see when you have read their messages. You always see their receipts.",
   decimalPoint: ".",
 
   cashuBalance: "Available balance",

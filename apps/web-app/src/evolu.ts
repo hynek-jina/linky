@@ -437,6 +437,10 @@ export const Schema = {
     // Read cursor: created_at (seconds) of the newest chat message the user
     // has seen in this conversation.
     chatLastSeenAtSec: Evolu.nullOr(Evolu.PositiveInt),
+    // Peer's reported seen window (createdAtSec bounds from their latest
+    // read receipt): our outgoing messages in (since, upTo] render as seen.
+    chatPeerSeenSinceSec: Evolu.nullOr(Evolu.PositiveInt),
+    chatPeerSeenAtSec: Evolu.nullOr(Evolu.PositiveInt),
   },
   nostrIdentity: {
     id: NostrIdentityId,

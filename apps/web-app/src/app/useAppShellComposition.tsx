@@ -40,6 +40,7 @@ import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
   getInitialAllowedDisplayCurrencies,
   getInitialDecimalAmountInputEnabled,
+  getInitialSeenReceiptsEnabledAtSec,
   getInitialDisplayCurrency,
   safeLocalStorageGet,
   safeLocalStorageSet,
@@ -209,6 +210,9 @@ export const useAppShellComposition = ({
   );
   const [decimalAmountInputEnabled, setDecimalAmountInputEnabled] =
     useState<boolean>(getInitialDecimalAmountInputEnabled);
+  const [seenReceiptsEnabledAtSec, setSeenReceiptsEnabledAtSec] = useState<
+    number | null
+  >(getInitialSeenReceiptsEnabledAtSec);
 
   React.useEffect(() => {
     if (allowedDisplayCurrencies.includes(displayCurrency)) return;
@@ -248,6 +252,14 @@ export const useAppShellComposition = ({
 
   const toggleDecimalAmountInput = React.useCallback(() => {
     setDecimalAmountInputEnabled((current) => !current);
+  }, []);
+
+  // Enabling records the baseline: only messages newer than it are ever
+  // reported as seen, so pre-enable history stays unreported.
+  const toggleSendReadReceipts = React.useCallback(() => {
+    setSeenReceiptsEnabledAtSec((current) =>
+      current === null ? Math.floor(Date.now() / 1e3) : null,
+    );
   }, []);
 
   const fiatRates = useFiatRates();
@@ -593,6 +605,7 @@ export const useAppShellComposition = ({
     nostrIdentityRows,
     pushToast,
     route,
+    seenReceiptsEnabledAtSec,
     setContactPaymentIntent,
     setPayAmount,
     setStatus,
@@ -917,6 +930,7 @@ export const useAppShellComposition = ({
     bankPaymentOfferRecipientCount,
     lightningInvoiceAutoPayLimit,
     payWithCashuEnabled,
+    seenReceiptsEnabledAtSec,
     showProfileQrOnTiltEnabled,
   });
 
@@ -1662,6 +1676,7 @@ export const useAppShellComposition = ({
       currentNsec,
       decimalAmountInputEnabled,
       decimalAmountInputKeyVisible,
+      sendReadReceiptsEnabled: seenReceiptsEnabledAtSec !== null,
       displayCurrency,
       derivedProfile,
       displayUnit,
@@ -1730,6 +1745,7 @@ export const useAppShellComposition = ({
       currentNsec,
       decimalAmountInputEnabled,
       decimalAmountInputKeyVisible,
+      seenReceiptsEnabledAtSec,
       derivedProfile,
       displayCurrency,
       displayUnit,
@@ -1833,6 +1849,7 @@ export const useAppShellComposition = ({
       toggleDecimalAmountInput,
       toggleProfileEditing,
       toggleProfileStatusCurrency,
+      toggleSendReadReceipts,
       writeCurrentNpubToNfc,
     }),
     [
@@ -1885,6 +1902,7 @@ export const useAppShellComposition = ({
       toggleDecimalAmountInput,
       toggleProfileEditing,
       toggleProfileStatusCurrency,
+      toggleSendReadReceipts,
       writeCurrentNpubToNfc,
     ],
   );

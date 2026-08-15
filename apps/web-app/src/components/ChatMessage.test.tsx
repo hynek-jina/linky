@@ -77,6 +77,7 @@ const renderChatMessage = async (
         canEdit={false}
         canReplyOrReact={false}
         chatPendingLabel="pending"
+        chatSeenLabel="seen"
         declineInfo={null}
         formatChatDayLabel={() => "day"}
         getCashuTokenMessageInfo={() => null}
@@ -89,6 +90,7 @@ const renderChatMessage = async (
         getNpubMessageContactInfo={
           options.getNpubMessageContactInfo ?? ((npub) => contactInfo(npub))
         }
+        isSeen={false}
         locale="en"
         message={makeMessage(content, options.direction)}
         nextMessage={null}

@@ -75,7 +75,10 @@ import {
   normalizePubkeyHex,
   readUnknownContactIdPubkey,
 } from "../messages/contactIdentity";
+import { useDocumentVisible } from "../../../hooks/useDocumentVisible";
+import type { PeerSeenWindow } from "../messages/seenReceiptInbox";
 import { useChatReadCursorSync } from "../messages/useChatReadCursorSync";
+import { useChatSeenReceiptSync } from "../messages/useChatSeenReceiptSync";
 import {
   useEditChatMessage,
   type EditChatContext,
@@ -259,6 +262,8 @@ export type DisplayContact = ContactRowLike & {
 };
 
 interface ChatSelectedContact {
+  chatPeerSeenAtSec?: number | null;
+  chatPeerSeenSinceSec?: number | null;
   groupName?: string | null;
   id: string;
   isUnknownContact?: boolean;
@@ -314,6 +319,8 @@ interface UseContactsMessagingCompositionParams {
   nostrIdentityRows: NostrBootstrapParams["identitiesSnapshot"];
   pushToast: (message: string) => void;
   route: ReturnType<typeof useRouting>;
+  /** Receipts-enabled baseline; null means "send read receipts" is off. */
+  seenReceiptsEnabledAtSec: number | null;
   setContactPaymentIntent: React.Dispatch<
     React.SetStateAction<"pay" | "request">
   >;
@@ -358,6 +365,7 @@ export const useContactsMessagingComposition = ({
   nostrIdentityRows,
   pushToast,
   route,
+  seenReceiptsEnabledAtSec,
   setContactPaymentIntent,
   setPayAmount,
   setStatus,
@@ -1271,6 +1279,13 @@ export const useContactsMessagingComposition = ({
         ? { unknownPubkeyHex: normalizedUnknownPubkeyHex }
         : {}),
       ...(isUnknownContact ? { isUnknownContact: true } : {}),
+      ...(selectedContact?.chatPeerSeenSinceSec != null &&
+      selectedContact.chatPeerSeenAtSec != null
+        ? {
+            chatPeerSeenSinceSec: Number(selectedContact.chatPeerSeenSinceSec),
+            chatPeerSeenAtSec: Number(selectedContact.chatPeerSeenAtSec),
+          }
+        : {}),
     };
   }, [route, selectedContact, unknownContactById]);
 
@@ -3133,7 +3148,69 @@ export const useContactsMessagingComposition = ({
     [triggerChatScrollToBottom],
   );
 
+  const peerSeenWrittenByContactIdRef = React.useRef(
+    new Map<string, PeerSeenWindow>(),
+  );
+  const peerSeenSentUpToSecByPubkeyRef = React.useRef(
+    new Map<string, number>(),
+  );
+
+  const recordSentSeenReceipt = React.useCallback(
+    (peerPubkey: string, seenUpToSec: number) => {
+      const key = String(peerPubkey).trim();
+      if (!key) return;
+      const sent = peerSeenSentUpToSecByPubkeyRef.current;
+      if (seenUpToSec > (sent.get(key) ?? 0)) sent.set(key, seenUpToSec);
+    },
+    [],
+  );
+
+  const getPeerSeenWindow = React.useCallback(
+    (contactId: string): PeerSeenWindow | null => {
+      const row = contactsLatestRef.current.find(
+        (contact) => String(contact.id).trim() === contactId,
+      );
+      const sinceSec = Number(row?.chatPeerSeenSinceSec ?? 0);
+      const seenUpToSec = Number(row?.chatPeerSeenAtSec ?? 0);
+      const stored =
+        sinceSec > 0 && seenUpToSec > sinceSec
+          ? { sinceSec, seenUpToSec }
+          : null;
+      // The session-written window covers the gap until Evolu re-emits the row.
+      const written = peerSeenWrittenByContactIdRef.current.get(contactId);
+      if (!written) return stored;
+      if (!stored) return written;
+      return written.seenUpToSec >= stored.seenUpToSec ? written : stored;
+    },
+    [],
+  );
+
+  const advanceContactPeerSeen = React.useCallback(
+    (contactId: string, seenWindow: PeerSeenWindow) => {
+      const row = contactsLatestRef.current.find(
+        (contact) => String(contact.id).trim() === contactId,
+      );
+      if (!row) return;
+      const ownerId =
+        resolveContactRowOwnerLane(row, contactsVisibleOwnerIds) ??
+        contactsOwnerId;
+      const payload = {
+        id: row.id,
+        chatPeerSeenSinceSec: seenWindow.sinceSec,
+        chatPeerSeenAtSec: seenWindow.seenUpToSec,
+      };
+      const result = ownerId
+        ? update("contact", payload, { ownerId })
+        : update("contact", payload);
+      if (result.ok) {
+        peerSeenWrittenByContactIdRef.current.set(contactId, seenWindow);
+      }
+    },
+    [contactsOwnerId, contactsVisibleOwnerIds, update],
+  );
+
   const dispatchInboxEvent = useLinkstrInboxSync({
+    advanceContactPeerSeen,
     appendLocalNostrMessage,
     appendLocalNostrReaction,
     bankPaymentOfferMessages,
@@ -3141,6 +3218,7 @@ export const useContactsMessagingComposition = ({
     currentNsec,
     enabled: nostrBootstrapReady,
     formatDisplayedAmountText,
+    getPeerSeenWindow,
     logPayStep,
     maybeShowPwaNotification,
     nostrMessagesLatestRef,
@@ -3150,6 +3228,7 @@ export const useContactsMessagingComposition = ({
     onBankPaymentOfferMessage: upsertBankPaymentOfferMessage,
     onOpenInboxMessageToast: openInboxMessageToast,
     pushToast,
+    recordSentSeenReceipt,
     route,
     softDeleteLocalNostrReactionsByWrapIds,
     t,
@@ -3212,13 +3291,25 @@ export const useContactsMessagingComposition = ({
     return merged;
   }, [bankPaymentOfferMessages, chatMessages, route]);
 
+  const documentVisible = useDocumentVisible();
+
   useChatReadCursorSync({
     chatMessages: chatMessagesWithBankPaymentOffers,
     contactsOwnerId,
     contactsVisibleOwnerIds,
+    documentVisible,
     route,
     selectedContact,
     update,
+  });
+
+  useChatSeenReceiptSync({
+    chatMessages: chatMessagesWithBankPaymentOffers,
+    documentVisible,
+    seenReceiptsEnabledAtSec,
+    route,
+    selectedContact,
+    sentUpToSecByPubkeyRef: peerSeenSentUpToSecByPubkeyRef,
   });
 
   return {
