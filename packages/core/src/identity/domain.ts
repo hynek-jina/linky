@@ -1,7 +1,6 @@
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { Schema } from "effect";
-import { nip19 } from "nostr-tools";
 import { Slip39 } from "slip39-ts";
 import { Unit8ArraySchema } from "../utils/schemas";
 
@@ -21,9 +20,6 @@ const toWords = (value: string): ReadonlyArray<string> =>
     .split(/\s+/)
     .map((word) => word.trim())
     .filter((word) => word.length > 0);
-
-const isHex64 = (value: unknown): value is string =>
-  typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 
 const isNormalizedShare = (value: unknown): value is string => {
   if (typeof value !== "string") return false;
@@ -56,42 +52,11 @@ const isOwnerLaneIndex = (value: unknown): value is number => {
   return value >= 0;
 };
 
-const isNostrNsec = (value: unknown): value is string => {
-  if (typeof value !== "string") return false;
-  try {
-    const decoded = nip19.decode(value);
-    return decoded.type === "nsec" && decoded.data instanceof Uint8Array;
-  } catch {
-    return false;
-  }
-};
-
-const isNostrNpub = (value: unknown): value is string => {
-  if (typeof value !== "string") return false;
-  try {
-    const decoded = nip19.decode(value);
-    return decoded.type === "npub" && typeof decoded.data === "string";
-  } catch {
-    return false;
-  }
-};
-
 export const MasterSecret = Unit8ArraySchema.pipe(
   Schema.filter(hasLengthBetween(16, 64)),
   Schema.brand("MasterSecret"),
 );
 export type MasterSecret = typeof MasterSecret.Type;
-
-export const NostrPrivateKey = Unit8ArraySchema.pipe(
-  Schema.filter(hasLength(32)),
-  Schema.brand("NostrPrivateKey"),
-);
-export type NostrPrivateKey = typeof NostrPrivateKey.Type;
-
-export const NostrPublicKeyHex = Schema.String.pipe(
-  Schema.filter(isHex64),
-).pipe(Schema.brand("NostrPublicKeyHex"));
-export type NostrPublicKeyHex = typeof NostrPublicKeyHex.Type;
 
 export const CashuSeed = Unit8ArraySchema.pipe(
   Schema.filter(hasLength(64)),
@@ -126,16 +91,6 @@ export const OwnerLaneIndex = Schema.Number.pipe(
   Schema.brand("OwnerLaneIndex"),
 );
 export type OwnerLaneIndex = typeof OwnerLaneIndex.Type;
-
-export const NostrNsec = Schema.String.pipe(Schema.filter(isNostrNsec)).pipe(
-  Schema.brand("NostrNsec"),
-);
-export type NostrNsec = typeof NostrNsec.Type;
-
-export const NostrNpub = Schema.String.pipe(Schema.filter(isNostrNpub)).pipe(
-  Schema.brand("NostrNpub"),
-);
-export type NostrNpub = typeof NostrNpub.Type;
 
 export const Bip39Mnemonic12 = Schema.String.pipe(
   Schema.filter(isBip39MnemonicWithWordCount(12)),
