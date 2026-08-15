@@ -4,8 +4,13 @@ import { useQuery } from "@evolu/react";
 import {
   CashuTokenText,
   ClientId,
+  decodeNpub,
+  encodeNprofile,
+  encodeNpub,
+  identityFromNsec,
   OutboxRef,
   PaymentNoticeDraft,
+  parsePubkey,
   Pubkey,
   TokenMessageDraft,
 } from "@linky/linkstr";
@@ -15,7 +20,6 @@ import {
   useAtomSet,
 } from "@linky/linkstr-react";
 import { Cause, Either, Exit, Option, Schema } from "effect";
-import { nip19 } from "nostr-tools";
 import React, { useMemo, useState } from "react";
 import { createSendTokenWithTokensAtMint } from "../../../cashuSend";
 import { deriveDefaultProfile } from "../../../derivedProfile";
@@ -782,18 +786,8 @@ export const useCashuWalletComposition = ({
   });
 
   const topupRecipientNprofile = React.useMemo(() => {
-    try {
-      const decoded = nip19.decode(currentNpub ?? "");
-      if (decoded.type !== "npub" || typeof decoded.data !== "string") {
-        return null;
-      }
-      return nip19.nprofileEncode({
-        pubkey: decoded.data,
-        relays: NOSTR_RELAYS,
-      });
-    } catch {
-      return null;
-    }
+    const pubkey = decodeNpub(currentNpub ?? "");
+    return pubkey ? encodeNprofile(pubkey, NOSTR_RELAYS) : null;
   }, [currentNpub]);
 
   const activeCashuOwnerId = String(cashuOwnerId ?? "").trim();
@@ -1965,14 +1959,7 @@ export const useCashuWalletComposition = ({
         const normalizedNpub = normalizeNpubIdentifier(contact.npub);
         if (!normalizedNpub) continue;
 
-        try {
-          const decoded = nip19.decode(normalizedNpub);
-          if (decoded.type !== "npub") continue;
-          if (typeof decoded.data !== "string") continue;
-          if (decoded.data === requestPubkeyHex) return contact;
-        } catch {
-          // ignore malformed contact npubs
-        }
+        if (decodeNpub(normalizedNpub) === requestPubkeyHex) return contact;
       }
 
       return null;
@@ -1990,12 +1977,9 @@ export const useCashuWalletComposition = ({
       );
       if (!requestPubkeyHex) return null;
 
-      let npub: string | null = null;
-      try {
-        npub = nip19.npubEncode(requestPubkeyHex);
-      } catch {
-        return null;
-      }
+      const pubkey = parsePubkey(requestPubkeyHex);
+      if (!pubkey) return null;
+      const npub = encodeNpub(pubkey);
 
       const normalizedNpub = normalizeNpubIdentifier(npub);
       if (!normalizedNpub) return null;
@@ -3000,19 +2984,7 @@ export const useCashuWalletComposition = ({
       const contactNpub = normalizeNpubIdentifier(contact.npub);
 
       if (!contactPubHex && contactNpub) {
-        let decodedContact: ReturnType<typeof nip19.decode> | null = null;
-        try {
-          decodedContact = nip19.decode(contactNpub);
-        } catch {
-          decodedContact = null;
-        }
-        if (
-          decodedContact &&
-          decodedContact.type === "npub" &&
-          typeof decodedContact.data === "string"
-        ) {
-          contactPubHex = decodedContact.data;
-        }
+        contactPubHex = decodeNpub(contactNpub);
       }
 
       if (!contactPubHex || !isPubkey(contactPubHex)) {
@@ -3044,17 +3016,9 @@ export const useCashuWalletComposition = ({
       };
 
       try {
-        const { getPublicKey } = await import("nostr-tools");
-
-        const decodedMe = nip19.decode(currentNsec);
-        if (
-          decodedMe.type !== "nsec" ||
-          !(decodedMe.data instanceof Uint8Array)
-        ) {
-          throw new Error("invalid nsec");
-        }
-
-        const myPubHex = getPublicKey(decodedMe.data);
+        const identity = identityFromNsec(currentNsec);
+        if (!identity) throw new Error("invalid nsec");
+        const myPubHex = identity.pubkey;
         const token = decodeCashuTokenText(tokenText);
         if (Either.isLeft(token)) {
           throw new Error("invalid cashu token");
@@ -4159,25 +4123,14 @@ export const useCashuWalletComposition = ({
       return;
     }
 
-    let recipientPubkeyHex: string | null = null;
-    try {
-      const decoded = nip19.decode(currentNpub ?? "");
-      if (decoded.type === "npub" && typeof decoded.data === "string") {
-        recipientPubkeyHex = decoded.data;
-      }
-    } catch {
-      recipientPubkeyHex = null;
-    }
+    const recipientPubkeyHex = decodeNpub(currentNpub ?? "");
 
     if (!recipientPubkeyHex) {
       setStatus(t("profileMissingNpub"));
       return;
     }
 
-    const recipientNprofile = nip19.nprofileEncode({
-      pubkey: recipientPubkeyHex,
-      relays: NOSTR_RELAYS,
-    });
+    const recipientNprofile = encodeNprofile(recipientPubkeyHex, NOSTR_RELAYS);
     const preferredMint =
       normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ?? MAIN_MINT_URL;
     const requestId = makeLocalId();

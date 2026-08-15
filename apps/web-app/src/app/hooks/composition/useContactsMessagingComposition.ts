@@ -4,6 +4,9 @@ import {
   BankOfferId,
   ChatMessageReceipt,
   ClientId,
+  decodeNpub,
+  encodeNpub,
+  identityFromNsec,
   MessageEditReceipt,
   OutboxJobFailed,
   OutboxJobSucceeded,
@@ -20,7 +23,6 @@ import {
   useOutboxResults,
 } from "@linky/linkstr-react";
 import { Exit, Schema } from "effect";
-import { nip19 } from "nostr-tools";
 import React, { useMemo, useState } from "react";
 import {
   deriveDefaultProfile,
@@ -268,11 +270,8 @@ interface ChatSelectedContact {
 
 const encodeUnknownNpub = (pubkeyHex: string | null): string | null => {
   if (!pubkeyHex) return null;
-  try {
-    return nip19.npubEncode(pubkeyHex);
-  } catch {
-    return null;
-  }
+  const pubkey = normalizePubkeyHex(pubkeyHex);
+  return pubkey ? encodeNpub(Pubkey.make(pubkey)) : null;
 };
 
 type IdentityOwnersCompositionResult = ReturnType<
@@ -424,20 +423,8 @@ export const useContactsMessagingComposition = ({
     }
 
     let cancelled = false;
-    void import("nostr-tools")
-      .then(({ getPublicKey, nip19 }) => {
-        const decoded = nip19.decode(currentNsec);
-        if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
-          if (!cancelled) setChatOwnPubkeyHex(null);
-          return;
-        }
-        if (!cancelled) {
-          setChatOwnPubkeyHex(getPublicKey(decoded.data));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setChatOwnPubkeyHex(null);
-      });
+    const identity = identityFromNsec(currentNsec);
+    if (!cancelled) setChatOwnPubkeyHex(identity?.pubkey ?? null);
 
     return () => {
       cancelled = true;
@@ -734,18 +721,9 @@ export const useContactsMessagingComposition = ({
       const npub = normalizeNpubIdentifier(contact.npub);
       if (!name || !npub) continue;
 
-      try {
-        const decoded = nip19.decode(npub);
-        if (decoded.type !== "npub" || typeof decoded.data !== "string") {
-          continue;
-        }
-
-        const pubkey = decoded.data.trim();
-        if (!pubkey) continue;
-        records.push({ name, npub, pubkey });
-      } catch {
-        // ignore invalid contact npubs
-      }
+      const pubkey = decodeNpub(npub);
+      if (!pubkey) continue;
+      records.push({ name, npub, pubkey });
     }
 
     void setStoredPushContactNames(records);
@@ -1642,16 +1620,9 @@ export const useContactsMessagingComposition = ({
       }
 
       try {
-        const { getPublicKey } = await import("nostr-tools");
-        const decodedMe = nip19.decode(currentNsec);
-        if (
-          decodedMe.type !== "nsec" ||
-          !(decodedMe.data instanceof Uint8Array)
-        ) {
-          throw new Error("invalid nsec");
-        }
-        const myPubHex = getPublicKey(decodedMe.data);
-        if (!isPubkey(myPubHex)) throw new Error("invalid public key");
+        const identity = identityFromNsec(currentNsec);
+        if (!identity) throw new Error("invalid nsec");
+        const myPubHex = identity.pubkey;
 
         const recipients: {
           contactId: string;
@@ -1662,14 +1633,7 @@ export const useContactsMessagingComposition = ({
           const contactNpub = normalizeNpubIdentifier(contact.npub);
           if (!contactId || !contactNpub) continue;
 
-          const decodedContact = nip19.decode(contactNpub);
-          if (
-            decodedContact.type !== "npub" ||
-            typeof decodedContact.data !== "string"
-          ) {
-            continue;
-          }
-          const contactPubHex = decodedContact.data.trim();
+          const contactPubHex = decodeNpub(contactNpub);
           if (!contactPubHex) continue;
           recipients.push({ contactId, contactPubHex });
         }
@@ -1783,16 +1747,9 @@ export const useContactsMessagingComposition = ({
       }
 
       try {
-        const { getPublicKey } = await import("nostr-tools");
-        const decodedMe = nip19.decode(currentNsec);
-        if (
-          decodedMe.type !== "nsec" ||
-          !(decodedMe.data instanceof Uint8Array)
-        ) {
-          throw new Error("invalid nsec");
-        }
-        const myPubHex = getPublicKey(decodedMe.data);
-        if (!isPubkey(myPubHex)) throw new Error("invalid public key");
+        const identity = identityFromNsec(currentNsec);
+        if (!identity) throw new Error("invalid nsec");
+        const myPubHex = identity.pubkey;
         const messageDirection = String(message.direction ?? "").trim();
         const offererPublicKey =
           String(offerInfo.offererPublicKey ?? "").trim() ||
@@ -1813,13 +1770,7 @@ export const useContactsMessagingComposition = ({
         const contactNpub = normalizeNpubIdentifier(messageContact?.npub);
         let contactPubkey: string | null = null;
         if (contactNpub) {
-          const decodedContact = nip19.decode(contactNpub);
-          if (
-            decodedContact.type === "npub" &&
-            typeof decodedContact.data === "string"
-          ) {
-            contactPubkey = decodedContact.data.trim() || null;
-          }
+          contactPubkey = decodeNpub(contactNpub);
         }
 
         const messagePubkey = String(message.pubkey ?? "").trim();
@@ -2060,16 +2011,9 @@ export const useContactsMessagingComposition = ({
 
     const run = async () => {
       try {
-        const { getPublicKey } = await import("nostr-tools");
-        const decodedMe = nip19.decode(currentNsec);
-        if (
-          decodedMe.type !== "nsec" ||
-          !(decodedMe.data instanceof Uint8Array)
-        ) {
-          return;
-        }
-
-        const myPubHex = getPublicKey(decodedMe.data);
+        const identity = identityFromNsec(currentNsec);
+        if (!identity) return;
+        const myPubHex = identity.pubkey;
         const groups = new Map<
           string,
           {
@@ -2258,16 +2202,8 @@ export const useContactsMessagingComposition = ({
   const bankPaymentOfferExpiryGroups = React.useMemo(() => {
     if (!currentNpub || bankPaymentOfferMessages.length === 0) return [];
 
-    let myPubHex: string;
-    try {
-      const decoded = nip19.decode(currentNpub);
-      if (decoded.type !== "npub" || typeof decoded.data !== "string") {
-        return [];
-      }
-      myPubHex = decoded.data;
-    } catch {
-      return [];
-    }
+    const myPubHex = decodeNpub(currentNpub);
+    if (!myPubHex) return [];
 
     const groups = new Map<
       string,
@@ -2414,17 +2350,9 @@ export const useContactsMessagingComposition = ({
     const archivedContactNpub = normalizeNpubIdentifier(contactToArchive?.npub);
     let unknownThreadContactId: string | null = null;
     if (archivedContactNpub) {
-      try {
-        const decodedContact = nip19.decode(archivedContactNpub);
-        if (
-          decodedContact.type === "npub" &&
-          typeof decodedContact.data === "string"
-        ) {
-          unknownThreadContactId = buildUnknownContactId(decodedContact.data);
-        }
-      } catch {
-        unknownThreadContactId = null;
-      }
+      unknownThreadContactId = buildUnknownContactId(
+        decodeNpub(archivedContactNpub),
+      );
     }
 
     const archivedAtSec = Math.ceil(Date.now() / 1e3);
@@ -2471,24 +2399,11 @@ export const useContactsMessagingComposition = ({
       if (result.ok) {
         const restoredNpub = normalizeNpubIdentifier(contactToRestore?.npub);
         if (restoredNpub) {
-          try {
-            const decodedContact = nip19.decode(restoredNpub);
-            if (
-              decodedContact.type === "npub" &&
-              typeof decodedContact.data === "string"
-            ) {
-              const unknownContactId = buildUnknownContactId(
-                decodedContact.data,
-              );
-              if (unknownContactId) {
-                reassignNostrConversationContactId(
-                  unknownContactId,
-                  String(id),
-                );
-              }
-            }
-          } catch {
-            // Ignore malformed archived contact identifiers.
+          const unknownContactId = buildUnknownContactId(
+            decodeNpub(restoredNpub),
+          );
+          if (unknownContactId) {
+            reassignNostrConversationContactId(unknownContactId, String(id));
           }
         }
         setStatus(t("contactRestored"));
@@ -2593,15 +2508,7 @@ export const useContactsMessagingComposition = ({
     const confirmed = window.confirm(t("chatUnknownContactBlockConfirm"));
     if (!confirmed) return;
 
-    let blockedPubkey: string | null = null;
-    try {
-      const decoded = nip19.decode(normalizedNpub);
-      if (decoded.type === "npub" && typeof decoded.data === "string") {
-        blockedPubkey = normalizePubkeyHex(decoded.data);
-      }
-    } catch {
-      blockedPubkey = null;
-    }
+    const blockedPubkey = decodeNpub(normalizedNpub);
 
     if (!blockedPubkey) {
       setStatus(t("chatMissingContactNpub"));
@@ -2790,15 +2697,7 @@ export const useContactsMessagingComposition = ({
       const normalizedNpub = normalizeNpubIdentifier(selectedChatContact.npub);
       if (!normalizedNpub) return null;
 
-      try {
-        const decoded = nip19.decode(normalizedNpub);
-        if (decoded.type !== "npub" || typeof decoded.data !== "string") {
-          return null;
-        }
-        return normalizePubkeyHex(decoded.data);
-      } catch {
-        return null;
-      }
+      return decodeNpub(normalizedNpub);
     })();
 
     if (!unknownPubkeyHex) return;

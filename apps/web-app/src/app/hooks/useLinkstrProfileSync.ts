@@ -1,5 +1,5 @@
 import * as Evolu from "@evolu/common";
-import { Pubkey } from "@linky/linkstr";
+import { decodeNpub, encodeNpub, Pubkey } from "@linky/linkstr";
 import type {
   ProfileFetchEntry,
   ProfileFetchResult,
@@ -15,8 +15,7 @@ import {
   useAtomSet,
   watchedProfilesAtom,
 } from "@linky/linkstr-react";
-import { Exit, Schema } from "effect";
-import { nip19 } from "nostr-tools";
+import { Exit } from "effect";
 import React from "react";
 import { omitSyntheticContactLightningAddress } from "../../derivedProfile";
 import {
@@ -36,26 +35,11 @@ import type { ContactRowLike } from "../types/appTypes";
 
 type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
-const isPubkey = Schema.is(Pubkey);
-
 export const decodeNpubToPubkey = (npub: string): Pubkey | null => {
-  try {
-    const decoded = nip19.decode(npub);
-    return decoded.type === "npub" && isPubkey(decoded.data)
-      ? decoded.data
-      : null;
-  } catch {
-    return null;
-  }
+  return decodeNpub(npub);
 };
 
-const encodePubkeyToNpub = (pubkey: string): string | null => {
-  try {
-    return nip19.npubEncode(pubkey);
-  } catch {
-    return null;
-  }
-};
+const encodePubkeyToNpub = (pubkey: Pubkey): string => encodeNpub(pubkey);
 
 const cacheFetchedProfile = (
   npub: string,

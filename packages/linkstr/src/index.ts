@@ -11,6 +11,7 @@ export * from "./domain/delivery";
 export * from "./domain/errors";
 export * from "./domain/primitives";
 export * from "./headless";
+export * from "./identity/codec";
 export {
   BLOSSOM_AUTH_EXPIRATION_SECONDS,
   BLOSSOM_AUTH_KIND,

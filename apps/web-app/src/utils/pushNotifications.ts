@@ -5,12 +5,12 @@ import {
   type Token,
 } from "@capacitor/push-notifications";
 import {
+  identityFromNsec,
   makePushOwnershipProof,
-  NostrSecretKey,
   UnixSeconds,
+  type NostrSecretKey,
   type SignedPlainEvent,
 } from "@linky/linkstr";
-import { Schema } from "effect";
 import {
   getNativeNotificationPermissionState,
   NATIVE_PUSH_ACTION_EVENT,
@@ -32,8 +32,6 @@ const REGISTERED_NATIVE_PUSH_TOKEN_STORAGE_KEY = "linky.push_native_token";
 const REGISTERED_NATIVE_PUSH_PUBKEY_STORAGE_KEY = "linky.push_native_pubkey";
 const PUSH_NOTIFICATIONS_DISABLED_STORAGE_KEY =
   "linky.push_notifications_disabled";
-const isNostrSecretKey = Schema.is(NostrSecretKey);
-
 let nativePushListenersPromise: Promise<void> | null = null;
 const pendingNativePushTokenWaiters = new Set<{
   reject: (error: Error) => void;
@@ -304,16 +302,12 @@ async function derivePushIdentity(currentNsec: string): Promise<{
   privBytes: NostrSecretKey;
   pubkey: string;
 }> {
-  const { getPublicKey, nip19 } = await import("nostr-tools");
-
-  const decoded = nip19.decode(currentNsec);
-  if (decoded.type !== "nsec" || !isNostrSecretKey(decoded.data)) {
-    throw new Error("Invalid nsec");
-  }
+  const identity = identityFromNsec(currentNsec);
+  if (!identity) throw new Error("Invalid nsec");
 
   return {
-    privBytes: decoded.data,
-    pubkey: getPublicKey(decoded.data),
+    privBytes: identity.secretKey,
+    pubkey: identity.pubkey,
   };
 }
 

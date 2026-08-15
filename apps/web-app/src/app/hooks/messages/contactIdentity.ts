@@ -1,15 +1,17 @@
+import {
+  identityFromNsec,
+  parsePubkey,
+  type NostrSecretKey,
+} from "@linky/linkstr";
 import { UNKNOWN_CONTACT_ID_PREFIX } from "../../../utils/constants";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import type { ContactIdentityRowLike } from "../../types/appTypes";
-
-const HEX_PUBKEY_RE = /^[a-f0-9]{64}$/;
 
 export const normalizePubkeyHex = (value: unknown): string | null => {
   const normalized = String(value ?? "")
     .trim()
     .toLowerCase();
-  if (!HEX_PUBKEY_RE.test(normalized)) return null;
-  return normalized;
+  return parsePubkey(normalized);
 };
 
 export const buildUnknownContactId = (pubkeyHex: unknown): string | null => {
@@ -47,45 +49,33 @@ export const readUnknownContactIdPubkey = (id: unknown): string | null => {
 export interface ResolvedNostrChatIdentity {
   contactPubHex: string;
   myPubHex: string;
-  privBytes: Uint8Array;
+  privBytes: NostrSecretKey;
 }
 
 export const resolveNostrChatIdentity = async (
   currentNsec: string,
   contact: ContactIdentityRowLike,
 ): Promise<ResolvedNostrChatIdentity | null> => {
-  const { getPublicKey, nip19 } = await import("nostr-tools");
-  const decodedMe = nip19.decode(currentNsec);
-  if (decodedMe.type !== "nsec" || !(decodedMe.data instanceof Uint8Array)) {
-    throw new Error("invalid nsec");
-  }
+  const identity = identityFromNsec(currentNsec);
+  if (!identity) throw new Error("invalid nsec");
 
   const unknownPubkeyHex = readUnknownPubkeyHex(contact);
   if (unknownPubkeyHex) {
     return {
       contactPubHex: unknownPubkeyHex,
-      myPubHex: getPublicKey(decodedMe.data),
-      privBytes: decodedMe.data,
+      myPubHex: identity.pubkey,
+      privBytes: identity.secretKey,
     };
   }
 
   const contactNpub = normalizeNpubIdentifier(contact.npub);
   if (!contactNpub) return null;
 
-  try {
-    const decodedContact = nip19.decode(contactNpub);
-    if (
-      decodedContact.type !== "npub" ||
-      typeof decodedContact.data !== "string"
-    ) {
-      return null;
-    }
-    return {
-      contactPubHex: decodedContact.data,
-      myPubHex: getPublicKey(decodedMe.data),
-      privBytes: decodedMe.data,
-    };
-  } catch {
-    return null;
-  }
+  const contactPubkey = parsePubkey(contactNpub);
+  if (!contactPubkey) return null;
+  return {
+    contactPubHex: contactPubkey,
+    myPubHex: identity.pubkey,
+    privBytes: identity.secretKey,
+  };
 };

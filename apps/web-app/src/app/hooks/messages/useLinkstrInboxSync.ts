@@ -1,4 +1,4 @@
-import { UnixSeconds } from "@linky/linkstr";
+import { decodeNpub, identityFromNsec, UnixSeconds } from "@linky/linkstr";
 import type { InboxDelivery, WrapInboxEvent } from "@linky/linkstr";
 import {
   useAtomMount,
@@ -6,7 +6,6 @@ import {
   wrapInboxAtom,
   wrapInboxHandlerAtom,
 } from "@linky/linkstr-react";
-import { getPublicKey, nip19 } from "nostr-tools";
 import React from "react";
 import type { PushToastOptions } from "../../../hooks/useToasts";
 import { BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY } from "../../../utils/constants";
@@ -74,13 +73,7 @@ const isBlockedPubkey = (pubkey: string): boolean => {
 
 const deriveMyPubkey = (currentNsec: string | null): string | null => {
   if (!currentNsec) return null;
-  try {
-    const decoded = nip19.decode(currentNsec.trim());
-    if (decoded.type !== "nsec") return null;
-    return getPublicKey(decoded.data);
-  } catch {
-    return null;
-  }
+  return identityFromNsec(currentNsec.trim())?.pubkey ?? null;
 };
 
 type InboxContactRowLike = ContactNameRowLike & { npub?: OptionalText };
@@ -96,22 +89,14 @@ const buildContactIndex = (
     if (Number.isFinite(archivedAtSec) && archivedAtSec > 0) continue;
     const npub = normalizeNpubIdentifier(contact.npub);
     if (!npub) continue;
-    try {
-      const decoded = nip19.decode(npub);
-      if (decoded.type !== "npub" || typeof decoded.data !== "string") {
-        continue;
-      }
-      const pubkey = normalizePubkeyHex(decoded.data);
-      const id = normalizeText(contact.id);
-      if (!pubkey || !id) continue;
-      contactByPubkey.set(pubkey, {
-        id,
-        name: normalizeText(contact.name) || null,
-        npub,
-      });
-    } catch {
-      // ignore invalid contact keys
-    }
+    const pubkey = decodeNpub(npub);
+    const id = normalizeText(contact.id);
+    if (!pubkey || !id) continue;
+    contactByPubkey.set(pubkey, {
+      id,
+      name: normalizeText(contact.name) || null,
+      npub,
+    });
   }
   return contactByPubkey;
 };

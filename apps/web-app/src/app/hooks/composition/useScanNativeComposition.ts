@@ -1,9 +1,8 @@
 import { Share } from "@capacitor/share";
-import { RelayUrl, WrapId } from "@linky/linkstr";
+import { decodeNpub, identityFromNsec, RelayUrl, WrapId } from "@linky/linkstr";
 import type { WrapInboxEvent } from "@linky/linkstr";
 import { fetchWrapEventAtom, useAtomSet } from "@linky/linkstr-react";
 import { Exit, Schema } from "effect";
-import { nip19 } from "nostr-tools";
 import React from "react";
 import type { CashuTokenId, useEvolu } from "../../../evolu";
 import { navigateTo, useRouting } from "../../../hooks/useRouting";
@@ -32,10 +31,7 @@ import {
   safeLocalStorageSet,
 } from "../../../utils/storage";
 import { useContactsOnboardingProgress } from "../guide/useContactsOnboardingProgress";
-import {
-  buildUnknownContactId,
-  normalizePubkeyHex,
-} from "../messages/contactIdentity";
+import { buildUnknownContactId } from "../messages/contactIdentity";
 import type { DispatchInboxEvent } from "../messages/useLinkstrInboxSync";
 import { useGuideScannerDomain } from "../useGuideScannerDomain";
 import { useScannedTextHandler } from "../useScannedTextHandler";
@@ -537,13 +533,9 @@ export const useScanNativeComposition = ({
 
       let openedFromNotificationData = false;
       try {
-        const decoded = nip19.decode(currentNsec);
-        if (decoded.type !== "nsec" || !(decoded.data instanceof Uint8Array)) {
-          return false;
-        }
-
-        const { getPublicKey } = await import("nostr-tools");
-        const myPubHex = getPublicKey(decoded.data);
+        const identity = identityFromNsec(currentNsec);
+        if (!identity) return false;
+        const myPubHex = identity.pubkey;
         if (target.recipientPubkey !== myPubHex) {
           return false;
         }
@@ -555,16 +547,7 @@ export const useScanNativeComposition = ({
               return false;
             }
 
-            try {
-              const decodedContact = nip19.decode(normalizedNpub);
-              return (
-                decodedContact.type === "npub" &&
-                typeof decodedContact.data === "string" &&
-                normalizePubkeyHex(decodedContact.data) === peerPubkey
-              );
-            } catch {
-              return false;
-            }
+            return decodeNpub(normalizedNpub) === peerPubkey;
           }) ?? null;
 
         const openKnownNotificationContact = (peerPubkey: string): boolean => {

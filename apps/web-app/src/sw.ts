@@ -7,7 +7,10 @@ const NOTIFICATION_OPEN_URL = "/#contacts";
 const NOTIFICATION_OPEN_HASH_PARAM = "notificationOpen";
 
 import {
+  encodeNpub,
+  identityFromNsec,
   NostrSecretKey,
+  parsePubkey,
   RelayUrl,
   runLinkstr,
   WrapId,
@@ -15,7 +18,6 @@ import {
 } from "@linky/linkstr";
 import type { ChatMessageReceived, WrapInboxEvent } from "@linky/linkstr";
 import { Effect, Schema } from "effect";
-import { getPublicKey, nip19 } from "nostr-tools";
 import { createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { ExpirationPlugin } from "workbox-expiration";
 import { NavigationRoute, registerRoute } from "workbox-routing";
@@ -38,7 +40,6 @@ declare const self: ServiceWorkerGlobalScope;
 // wrap fetch past it.
 const WRAP_FETCH_TIMEOUT_MS = 5000;
 
-const isNostrSecretKey = Schema.is(NostrSecretKey);
 const isRelayUrl = Schema.is(RelayUrl);
 const isWrapId = Schema.is(WrapId);
 
@@ -199,11 +200,8 @@ function formatNotificationPeerLabel(pubkeyHex: string): string {
   const normalized = String(pubkeyHex ?? "").trim();
   if (!normalized) return "";
 
-  try {
-    return formatShortNpub(nip19.npubEncode(normalized));
-  } catch {
-    return formatShortNpub(normalized);
-  }
+  const pubkey = parsePubkey(normalized);
+  return formatShortNpub(pubkey ? encodeNpub(pubkey) : normalized);
 }
 
 function buildNotificationTitle(
@@ -379,16 +377,15 @@ async function decryptIncomingMessageBody(
     return null;
   }
 
-  const decoded = nip19.decode(nsec);
-  if (decoded.type !== "nsec" || !isNostrSecretKey(decoded.data)) {
+  const identity = identityFromNsec(nsec);
+  if (!identity) {
     void logSw("sw decrypt failed because stored nsec is invalid", {
       data: readEnvelopeDebugMeta(envelope),
     });
     return null;
   }
 
-  const secretKey = decoded.data;
-  const myPubHex = getPublicKey(secretKey);
+  const { pubkey: myPubHex, secretKey } = identity;
   const recipientPubkey = normalizePubkeyHex(envelope.data?.recipientPubkey);
   if (!recipientPubkey || recipientPubkey !== myPubHex) {
     void logSw("sw decrypt failed because recipient pubkey did not match", {

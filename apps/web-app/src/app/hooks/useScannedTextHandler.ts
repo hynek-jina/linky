@@ -1,5 +1,6 @@
 import type { OwnerId } from "@evolu/common";
 import * as Evolu from "@evolu/common";
+import { decodeNpub } from "@linky/linkstr";
 import React from "react";
 import type { ContactId } from "../../evolu";
 import { navigateTo } from "../../hooks/useRouting";
@@ -166,9 +167,8 @@ export const useScannedTextHandler = <TContact extends ContactRowLike>({
       }
 
       try {
-        const { nip19 } = await import("nostr-tools");
-        const decoded = nip19.decode(normalized);
-        if (decoded.type === "npub") {
+        const pubkey = decodeNpub(normalized);
+        if (pubkey) {
           const ownNpub = String(currentNpub ?? "").trim();
           if (ownNpub && ownNpub === normalized) {
             setStatus(t("contactIsYou"));

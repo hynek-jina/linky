@@ -1,9 +1,8 @@
 import {
+  decodeNsec,
   makeNip98AuthHeader as makeLinkstrNip98AuthHeader,
-  NostrSecretKey,
   UnixSeconds,
 } from "@linky/linkstr";
-import { Schema } from "effect";
 import React from "react";
 import { CASHU_AUTOSWAP_MIN_SOURCE_SUM } from "../../../utils/constants";
 import {
@@ -13,8 +12,6 @@ import {
 } from "../../../utils/mint";
 import { isNpubCashDisabled } from "../../../utils/npubCashServer";
 import { safeLocalStorageSet } from "../../../utils/storage";
-
-const isNostrSecretKey = Schema.is(NostrSecretKey);
 
 interface MintSelectionAutoswapPlanArgs {
   cashuAutoswapEnabled: boolean;
@@ -143,15 +140,12 @@ export const useNpubCashMintSelection = ({
   const makeNip98AuthHeader = React.useCallback(
     async (url: string, method: string, payload?: Record<string, string>) => {
       if (!currentNsec) throw new Error("Missing nsec");
-      const { nip19 } = await import("nostr-tools");
-      const decoded = nip19.decode(currentNsec);
-      if (decoded.type !== "nsec" || !isNostrSecretKey(decoded.data)) {
-        throw new Error("Invalid nsec");
-      }
+      const secretKey = decodeNsec(currentNsec);
+      if (!secretKey) throw new Error("Invalid nsec");
 
       return makeLinkstrNip98AuthHeader(
         payload === undefined ? { url, method } : { url, method, payload },
-        decoded.data,
+        secretKey,
         UnixSeconds.make(Math.floor(Date.now() / 1000)),
       );
     },
