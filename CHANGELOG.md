@@ -20,6 +20,20 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 - Zatím bez uživatelských změn.
 
+## [26.9.1] - 2026-08-15
+
+### en-US
+
+- Messages and payment offers now recover more reliably after relay interruptions.
+- Archived contacts keep their chat history and return automatically when a new message arrives.
+- Fixed competing proxy-payment acceptances and profile updates after changing Nostr keys.
+
+### cs-CZ
+
+- Zprávy a nabídky plateb se nyní po výpadku relay serveru obnovují spolehlivěji.
+- Archivované kontakty si zachovají historii chatu a po nové zprávě se automaticky obnoví.
+- Opraveny souběžné příjmy proxy plateb a aktualizace profilu po změně Nostr klíčů.
+
 ## [26.9.0] - 2026-08-07
 
 ### en-US
