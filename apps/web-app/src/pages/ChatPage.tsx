@@ -8,7 +8,7 @@ import {
   type FC,
 } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
-import { aggregateReactions } from "../app/hooks/messages/chatNostrProtocol";
+import { aggregateReactions } from "../app/hooks/messages/chatReactions";
 import type { EditChatContext } from "../app/hooks/messages/useEditChatMessage";
 import type { ReplyContext } from "../app/hooks/messages/useSendChatMessage";
 import {

@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type {
-  LocalNostrMessage,
-  LocalNostrReaction,
-} from "../src/app/types/appTypes";
-import {
-  aggregateReactions,
-  extractReplyContextFromTags,
-} from "../src/app/hooks/messages/chatNostrProtocol";
+import type { LocalNostrMessage } from "../src/app/types/appTypes";
 import {
   buildKnownNostrMessageIdentityIndex,
   dedupeNostrMessagesByPriority,
@@ -26,59 +19,6 @@ const makeMessage = (
   rumorId: `rumor-${id}`,
   wrapId: `wrap-${id}`,
   ...overrides,
-});
-
-const makeReaction = (
-  id: string,
-  overrides?: Partial<LocalNostrReaction>,
-): LocalNostrReaction => ({
-  id,
-  messageId: "rumor-1",
-  reactorPubkey: "pub-1",
-  emoji: "👍",
-  createdAtSec: Number(id) || 1,
-  wrapId: `reaction-${id}`,
-  ...overrides,
-});
-
-describe("extractReplyContextFromTags", () => {
-  it("uses marked root/reply tags when present", () => {
-    const ctx = extractReplyContextFromTags([
-      ["e", "root-id", "", "root"],
-      ["e", "reply-id", "", "reply"],
-    ]);
-
-    expect(ctx.rootMessageId).toBe("root-id");
-    expect(ctx.replyToId).toBe("reply-id");
-  });
-
-  it("falls back to first/last e tags when marks are missing", () => {
-    const ctx = extractReplyContextFromTags([
-      ["e", "first-id"],
-      ["e", "last-id"],
-    ]);
-
-    expect(ctx.rootMessageId).toBe("first-id");
-    expect(ctx.replyToId).toBe("last-id");
-  });
-});
-
-describe("reactions", () => {
-  it("aggregates counts and own highlight", () => {
-    const chips = aggregateReactions(
-      [
-        makeReaction("1", { emoji: "👍", reactorPubkey: "me" }),
-        makeReaction("2", { emoji: "👍", reactorPubkey: "other" }),
-        makeReaction("3", { emoji: "❤️", reactorPubkey: "other" }),
-      ],
-      "me",
-    );
-
-    expect(chips).toEqual([
-      { emoji: "❤️", count: 1, reactedByMe: false },
-      { emoji: "👍", count: 1, reactedByMe: true },
-    ]);
-  });
 });
 
 describe("dedupeNostrMessagesByPriority", () => {

@@ -2,7 +2,7 @@ import { Either } from "effect";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import { encrypt, getConversationKey } from "nostr-tools/nip44";
 import { createWrap } from "nostr-tools/nip59";
-import { decodeReactionWrap } from "../inbox/decodeReactionWrap";
+import { decodeWrapEvent } from "../inbox/decodeWrapEvent";
 import { wrapRumorFor } from "../internal/giftWrap";
 import { Rumor } from "../internal/nostrEvent";
 import {
@@ -24,6 +24,9 @@ const makeIdentity = (): LinkstrIdentityService => {
   const secretKey = NostrSecretKey.make(generateSecretKey());
   return { pubkey: Pubkey.make(getPublicKey(secretKey)), secretKey };
 };
+
+const decodeWrap = (input: unknown, identity: LinkstrIdentityService) =>
+  decodeWrapEvent(input, identity).event;
 
 const alice = makeIdentity();
 const bob = makeIdentity();
@@ -49,7 +52,7 @@ describe("reaction roundtrip", () => {
 
   it("recipient copy decodes to ReactionAdded", () => {
     const wrap = wrapRumorFor(rumor, alice.secretKey, bob.pubkey);
-    const outcome = decodeReactionWrap(overWire(wrap), bob);
+    const outcome = decodeWrap(overWire(wrap), bob);
 
     expect(outcome).toEqual(
       expect.objectContaining({
@@ -65,7 +68,7 @@ describe("reaction roundtrip", () => {
 
   it("self copy decodes to OwnReactionConfirmed carrying the clientId", () => {
     const wrap = wrapRumorFor(rumor, alice.secretKey, alice.pubkey);
-    const outcome = decodeReactionWrap(overWire(wrap), alice);
+    const outcome = decodeWrap(overWire(wrap), alice);
 
     expect(outcome).toEqual(
       expect.objectContaining({
@@ -82,8 +85,8 @@ describe("reaction roundtrip", () => {
   it("self and recipient copies share the rumor id", () => {
     const selfWrap = wrapRumorFor(rumor, alice.secretKey, alice.pubkey);
     const recipientWrap = wrapRumorFor(rumor, alice.secretKey, bob.pubkey);
-    const selfOutcome = decodeReactionWrap(overWire(selfWrap), alice);
-    const recipientOutcome = decodeReactionWrap(overWire(recipientWrap), bob);
+    const selfOutcome = decodeWrap(overWire(selfWrap), alice);
+    const recipientOutcome = decodeWrap(overWire(recipientWrap), bob);
 
     expect(selfOutcome).toHaveProperty("reactionId", rumor.id);
     expect(recipientOutcome).toHaveProperty("reactionId", rumor.id);
@@ -105,7 +108,7 @@ describe("retraction roundtrip", () => {
     );
     const wrap = wrapRumorFor(rumor, alice.secretKey, bob.pubkey);
 
-    expect(decodeReactionWrap(overWire(wrap), bob)).toEqual(
+    expect(decodeWrap(overWire(wrap), bob)).toEqual(
       expect.objectContaining({
         _tag: "ReactionRetracted",
         reactionIds: [targetId, otherReactionId],
@@ -120,7 +123,7 @@ describe("dropped wraps", () => {
   const rumor = encodeReactionRumor(draft, alice.pubkey, sentAt, clientId);
 
   it("drops garbage input as malformed-wrap", () => {
-    expect(decodeReactionWrap({ hello: "world" }, bob)).toEqual(
+    expect(decodeWrap({ hello: "world" }, bob)).toEqual(
       expect.objectContaining({
         _tag: "WrapDropped",
         reason: "malformed-wrap",
@@ -130,7 +133,7 @@ describe("dropped wraps", () => {
 
   it("drops a wrap addressed to someone else", () => {
     const wrap = wrapRumorFor(rumor, alice.secretKey, bob.pubkey);
-    expect(decodeReactionWrap(overWire(wrap), alice)).toEqual(
+    expect(decodeWrap(overWire(wrap), alice)).toEqual(
       expect.objectContaining({ reason: "not-addressed-to-me" }),
     );
   });
@@ -139,7 +142,7 @@ describe("dropped wraps", () => {
     const wrap = wrapRumorFor(rumor, alice.secretKey, bob.pubkey);
     const mallory = makeIdentity();
     const readdressed = overWire({ ...wrap, tags: [["p", mallory.pubkey]] });
-    expect(decodeReactionWrap(readdressed, mallory)).toEqual(
+    expect(decodeWrap(readdressed, mallory)).toEqual(
       expect.objectContaining({ reason: "unwrap-failed" }),
     );
   });
@@ -175,7 +178,7 @@ describe("forged wraps", () => {
   it("drops a rumor whose id is not its hash", () => {
     const forged = { ...honestRumor, id: "11".repeat(32) };
     const wrap = createWrap(sealFor(forged, alice, bob.pubkey), bob.pubkey);
-    expect(decodeReactionWrap(overWire(wrap), bob)).toEqual(
+    expect(decodeWrap(overWire(wrap), bob)).toEqual(
       expect.objectContaining({ reason: "forged-rumor-id" }),
     );
   });
@@ -187,7 +190,7 @@ describe("forged wraps", () => {
       sealFor(honestRumor, mallory, bob.pubkey),
       bob.pubkey,
     );
-    expect(decodeReactionWrap(overWire(wrap), bob)).toEqual(
+    expect(decodeWrap(overWire(wrap), bob)).toEqual(
       expect.objectContaining({ reason: "sender-forged" }),
     );
   });
@@ -197,7 +200,7 @@ describe("forged wraps", () => {
     const lastChar = seal.sig.endsWith("0") ? "1" : "0";
     const tampered = { ...seal, sig: seal.sig.slice(0, -1) + lastChar };
     const wrap = createWrap(tampered, bob.pubkey);
-    expect(decodeReactionWrap(overWire(wrap), bob)).toEqual(
+    expect(decodeWrap(overWire(wrap), bob)).toEqual(
       expect.objectContaining({ reason: "invalid-seal" }),
     );
   });
@@ -217,7 +220,7 @@ describe("own retraction echo", () => {
     );
     const wrap = wrapRumorFor(rumor, alice.secretKey, alice.pubkey);
 
-    expect(decodeReactionWrap(overWire(wrap), alice)).toEqual(
+    expect(decodeWrap(overWire(wrap), alice)).toEqual(
       expect.objectContaining({
         _tag: "OwnRetractionConfirmed",
         retractionId: rumor.id,

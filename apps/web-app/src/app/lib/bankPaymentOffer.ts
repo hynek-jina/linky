@@ -366,23 +366,6 @@ export const shouldPushLinkyBankPaymentOfferStatus = (
   status === "declined" ||
   status === "offered";
 
-export const isLinkyBankPaymentOfferEvent = (event: {
-  kind: number;
-  tags?: unknown;
-}): boolean => {
-  const tags = Array.isArray(event.tags) ? event.tags : [];
-
-  return (
-    event.kind === LINKY_BANK_PAYMENT_OFFER_KIND &&
-    tags.some(
-      (tag) =>
-        Array.isArray(tag) &&
-        tag[0] === "linky" &&
-        tag[1] === LINKY_BANK_PAYMENT_OFFER_VALUE,
-    )
-  );
-};
-
 export const getLinkyBankPaymentOfferInfo = (
   content: string,
 ): LinkyBankPaymentOfferInfo | null => {
