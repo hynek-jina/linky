@@ -11,7 +11,6 @@ import {
 } from "@linky/linkstr-react";
 import { Schema } from "effect";
 import React from "react";
-import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 
 const isRelayUrl = Schema.is(RelayUrl);
 
@@ -25,12 +24,11 @@ export const buildLinkstrConfig = (
   if (!currentNsec) return null;
   const identity = identityFromNsec(currentNsec.trim());
   if (!identity) return null;
+  const relays = fetchRelays.filter(isRelayUrl);
   return {
     secretKey: identity.secretKey,
-    readRelays: fetchRelays.filter(isRelayUrl),
-    // Writes stay on the default relay set for now, matching the legacy
-    // publish paths; widening writes to user relays is a separate decision.
-    writeRelays: NOSTR_RELAYS.filter(isRelayUrl),
+    readRelays: relays,
+    writeRelays: relays,
     outboxStore: OutboxStore.fromStringStorage(
       localStorage,
       OUTBOX_STORAGE_KEY,

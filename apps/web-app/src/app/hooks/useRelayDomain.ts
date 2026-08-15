@@ -1,4 +1,9 @@
-import { RelayListEntry, RelayListsDraft, RelayUrl } from "@linky/linkstr";
+import {
+  identityFromNsec,
+  RelayListEntry,
+  RelayListsDraft,
+  RelayUrl,
+} from "@linky/linkstr";
 import {
   fetchOwnRelayListsAtom,
   publishRelayListsAtom,
@@ -8,7 +13,11 @@ import { Exit, Schema } from "effect";
 import React from "react";
 import { navigateTo } from "../../hooks/useRouting";
 import type { Route } from "../../types/route";
-import { NOSTR_RELAYS } from "../../utils/nostrRelays";
+import {
+  loadCachedRelayLists,
+  NOSTR_RELAYS,
+  saveCachedRelayLists,
+} from "../../utils/nostrRelays";
 
 interface UseRelayDomainParams {
   currentNpub: string | null;
@@ -33,9 +42,20 @@ interface UseRelayDomainResult {
 
 const isRelayUrl = Schema.is(RelayUrl);
 
-function haveSameRelayUrls(left: string[], right: string[]): boolean {
+function haveSameRelayUrls(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
   if (left.length !== right.length) return false;
-  return left.every((url, index) => url === right[index]);
+  const sortedRight = [...right].sort();
+  return [...left].sort().every((url, index) => url === sortedRight[index]);
+}
+
+function newestUpdatedAt(lists: {
+  relaysUpdatedAt: number | null;
+  dmRelaysUpdatedAt: number | null;
+}): number {
+  return Math.max(lists.relaysUpdatedAt ?? 0, lists.dmRelaysUpdatedAt ?? 0);
 }
 
 function relayProfileSyncKey(npub: string, urls: readonly string[]): string {
@@ -55,9 +75,42 @@ export const useRelayDomain = ({
   t,
 }: UseRelayDomainParams): UseRelayDomainResult => {
   const [newRelayUrl, setNewRelayUrl] = React.useState<string>("");
-  const [relayUrls, setRelayUrls] = React.useState<string[]>(() => [
-    ...NOSTR_RELAYS,
-  ]);
+
+  // Hex pubkey derived synchronously from the nsec (currentNpub arrives a
+  // render later), so the cache below is usable from the very first render.
+  const cachePubkey = React.useMemo(() => {
+    const nsec = String(currentNsec ?? "").trim();
+    if (!nsec) return null;
+    return identityFromNsec(nsec)?.pubkey ?? null;
+  }, [currentNsec]);
+
+  const [relayUrls, setRelayUrls] = React.useState<string[]>(() => {
+    const cached =
+      cachePubkey === null ? null : loadCachedRelayLists(cachePubkey);
+    return cached === null ? [...NOSTR_RELAYS] : [...cached.relayUrls];
+  });
+
+  React.useEffect(() => {
+    const cached =
+      cachePubkey === null ? null : loadCachedRelayLists(cachePubkey);
+    const next = cached === null ? NOSTR_RELAYS : cached.relayUrls;
+    setRelayUrls((current) =>
+      haveSameRelayUrls(current, next) ? current : [...next],
+    );
+  }, [cachePubkey]);
+
+  const persistLocalRelayUrls = React.useCallback(
+    (urls: readonly string[]) => {
+      if (cachePubkey === null) return;
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      saveCachedRelayLists(cachePubkey, {
+        relayUrls: urls,
+        relaysUpdatedAt: nowSeconds,
+        dmRelaysUpdatedAt: nowSeconds,
+      });
+    },
+    [cachePubkey],
+  );
   const [pendingRelayDeleteUrl, setPendingRelayDeleteUrl] = React.useState<
     string | null
   >(null);
@@ -158,14 +211,36 @@ export const useRelayDomain = ({
 
         if (cancelled) return;
 
+        const cached =
+          cachePubkey === null ? null : loadCachedRelayLists(cachePubkey);
+
         if (urls.length > 0) {
+          if (
+            cached !== null &&
+            newestUpdatedAt(lists) < newestUpdatedAt(cached)
+          ) {
+            // A relay served events older than what we already synced; keep
+            // the newer cached list and mark this state as synced.
+            relayProfileSyncForNpubRef.current = relaySyncKey;
+            return;
+          }
+
           // Record before setRelayUrls: the state change re-runs this effect,
           // and the recorded key makes that follow-up run a no-op.
           relayProfileSyncForNpubRef.current = relayProfileSyncKey(
             currentNpub,
             urls,
           );
-          setRelayUrls(urls);
+          setRelayUrls((current) =>
+            haveSameRelayUrls(current, urls) ? current : urls,
+          );
+          if (cachePubkey !== null) {
+            saveCachedRelayLists(cachePubkey, {
+              relayUrls: urls,
+              relaysUpdatedAt: lists.relaysUpdatedAt,
+              dmRelaysUpdatedAt: lists.dmRelaysUpdatedAt,
+            });
+          }
 
           if (
             currentNsec &&
@@ -176,13 +251,18 @@ export const useRelayDomain = ({
           return;
         }
 
+        // No published list found: republish the last known list so relays
+        // regain it, falling back to the defaults for a fresh identity.
+        const fallback = cached === null ? NOSTR_RELAYS : cached.relayUrls;
         relayProfileSyncForNpubRef.current = relayProfileSyncKey(
           currentNpub,
-          NOSTR_RELAYS,
+          fallback,
         );
-        setRelayUrls([...NOSTR_RELAYS]);
+        setRelayUrls((current) =>
+          haveSameRelayUrls(current, fallback) ? current : [...fallback],
+        );
         if (currentNsec) {
-          await publishNostrRelayLists(NOSTR_RELAYS);
+          await publishNostrRelayLists([...fallback]);
         }
       } catch (e) {
         relayProfileSyncForNpubRef.current = null;
@@ -197,6 +277,7 @@ export const useRelayDomain = ({
       cancelled = true;
     };
   }, [
+    cachePubkey,
     currentNpub,
     currentNsec,
     fetchOwnRelayLists,
@@ -226,6 +307,7 @@ export const useRelayDomain = ({
       );
     }
     setRelayUrls(nextUrls);
+    persistLocalRelayUrls(nextUrls);
     void publishNostrRelayLists(nextUrls).catch((e) => {
       console.log("[linky][nostr] publish relay list failed", {
         error: String(e ?? "unknown"),
@@ -237,6 +319,7 @@ export const useRelayDomain = ({
   }, [
     currentNpub,
     newRelayUrl,
+    persistLocalRelayUrls,
     publishNostrRelayLists,
     relayUrls,
     setStatus,
@@ -260,6 +343,7 @@ export const useRelayDomain = ({
         );
       }
       setRelayUrls(nextUrls);
+      persistLocalRelayUrls(nextUrls);
       setPendingRelayDeleteUrl(null);
       void publishNostrRelayLists(nextUrls).catch((e) => {
         console.log("[linky][nostr] publish relay list failed", {
@@ -275,6 +359,7 @@ export const useRelayDomain = ({
   }, [
     currentNpub,
     pendingRelayDeleteUrl,
+    persistLocalRelayUrls,
     publishNostrRelayLists,
     relayUrls,
     route.kind,
