@@ -6,6 +6,7 @@ import {
   ReactionDraft,
   RetractionDraft,
   RumorId,
+  TargetKind,
 } from "@linky/linkstr";
 import {
   enqueueOutboxAtom,
@@ -32,8 +33,8 @@ type AppendLocalNostrReaction = (reaction: NewLocalNostrReaction) => string;
 interface SendReactionArgs {
   emoji: string;
   messageAuthorPubkey: string;
-  messageKind?: 14 | 15;
   messageRumorId: string;
+  targetKind: TargetKind;
 }
 
 interface UseSendReactionParams<
@@ -149,7 +150,7 @@ export const useSendReaction = <
         const draft = new ReactionDraft({
           to: contactPubHex,
           target: messageRumorId,
-          targetKind: args.messageKind === 15 ? "image" : "text",
+          targetKind: args.targetKind,
           targetAuthor: messageAuthorPubkey,
           emoji,
           clientId,

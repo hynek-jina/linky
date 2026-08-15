@@ -1,24 +1,8 @@
 import type { CollectedInspectorRow } from "../inspector/inspectorRows";
+import { nostrKindLabel } from "../nostrKindNames";
 
-// Human vocabulary for inspector rows: nostr kind names plus per-tag
-// explanations shown by the inspector UI.
-
-const NOSTR_KIND_NAMES: Record<number, string> = {
-  0: "profile",
-  1: "note",
-  5: "delete",
-  7: "reaction",
-  14: "chat message",
-  1059: "gift wrap",
-  10002: "relay list",
-  10050: "DM inbox relays",
-  30315: "status",
-};
-
-export const nostrKindLabel = (kind: number): string => {
-  const name = NOSTR_KIND_NAMES[kind];
-  return name ? `${name} (${kind})` : `kind ${kind}`;
-};
+// Human vocabulary for inspector rows: per-tag and per-kind explanations shown
+// by the inspector UI.
 
 const NOSTR_KIND_EXPLANATIONS: Record<number, string> = {
   0: "Profile metadata: display name, picture, and lightning address.",

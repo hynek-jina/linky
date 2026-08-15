@@ -75,8 +75,7 @@ export const useRelayDomain = ({
     const out: string[] = [];
     for (const raw of merged) {
       const url = String(raw ?? "").trim();
-      if (!url) continue;
-      if (!(url.startsWith("wss://") || url.startsWith("ws://"))) continue;
+      if (!isRelayUrl(url)) continue;
       if (seen.has(url)) continue;
       seen.add(url);
       out.push(url);

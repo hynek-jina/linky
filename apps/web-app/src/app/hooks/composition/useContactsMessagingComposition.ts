@@ -3077,8 +3077,10 @@ export const useContactsMessagingComposition = ({
       void sendReaction({
         emoji,
         messageAuthorPubkey,
-        messageKind: parsePrivateImageMessage(message.content) ? 15 : 14,
         messageRumorId,
+        targetKind: parsePrivateImageMessage(message.content)
+          ? "image"
+          : "text",
       });
     },
     [sendReaction],
