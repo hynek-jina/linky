@@ -1,4 +1,4 @@
-import { Effect, Either, Schema } from "effect";
+import { Duration, Effect, Either, Schema } from "effect";
 import type {
   AllRelaysUnreachable,
   NoRelayAcceptedEvent,
@@ -18,6 +18,12 @@ import type { RelayListsDraft } from "./domain";
 
 export const RELAY_LIST_KIND = 10002;
 export const DM_RELAY_LIST_KIND = 10050;
+
+/**
+ * The fetched lists gate the app's relay configuration, so one slow relay
+ * must not hold the fan-out for the transport's full ~11s worst case.
+ */
+const FETCH_PER_RELAY_TIMEOUT = Duration.seconds(8);
 
 const isRelayUrl = Schema.is(RelayUrl);
 const isMarker = (value: string): value is "read" | "write" =>
@@ -114,10 +120,15 @@ export class RelayLists extends Effect.Service<RelayLists>()(
         Effect.gen(function* () {
           const relays = context.relayPolicy.readRelays;
           if (relays.length === 0) return yield* new NoReadRelaysConfigured();
-          const events = yield* fetchPlainEvents(context.transport, relays, {
-            kinds: [RELAY_LIST_KIND, DM_RELAY_LIST_KIND],
-            authors: [context.identity.pubkey],
-          });
+          const events = yield* fetchPlainEvents(
+            context.transport,
+            relays,
+            {
+              kinds: [RELAY_LIST_KIND, DM_RELAY_LIST_KIND],
+              authors: [context.identity.pubkey],
+            },
+            { perRelayTimeout: FETCH_PER_RELAY_TIMEOUT },
+          );
           const own = events.filter(
             (event) => event.pubkey === context.identity.pubkey,
           );

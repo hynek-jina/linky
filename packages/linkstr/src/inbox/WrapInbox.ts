@@ -22,6 +22,7 @@ import { InboxRouted, InboxWrapDeduped } from "../inspector/events";
 import { inspectPlainOperation } from "../internal/inspectPlainOperation";
 import type { InspectedPlainResult } from "../internal/inspectPlainOperation";
 import { fetchRawEvents } from "../internal/plainFetch";
+import { resubscribeForever } from "../internal/resubscribe";
 import type { PaymentNoticeInboxEvent } from "../paymentNotices/events";
 import type { ReactionInboxEvent } from "../reactions/events";
 import { LinkstrIdentity } from "../services/LinkstrIdentity";
@@ -53,6 +54,7 @@ export interface DeliveredInboxEvent {
 export interface WrapInboxOptions {
   /** Backfill start when the `InboxCursorStore` holds no cursor yet. */
   readonly since?: UnixSeconds;
+  /** Base delay of the per-relay resubscribe backoff. */
   readonly resubscribeDelay?: Duration.Duration;
 }
 
@@ -242,11 +244,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
             });
 
           const keepSubscribed = (relay: RelayUrl) =>
-            subscribeFromCursor(relay).pipe(
-              Effect.ignore,
-              Effect.andThen(Effect.sleep(resubscribeDelay)),
-              Effect.forever,
-            );
+            resubscribeForever(subscribeFromCursor(relay), resubscribeDelay);
 
           yield* Effect.forEach(relays, (relay) =>
             Effect.forkScoped(keepSubscribed(relay)),

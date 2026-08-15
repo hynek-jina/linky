@@ -9,6 +9,7 @@ import { chunkAuthors } from "../internal/authorChunks";
 import type { SignedPlainEvent } from "../internal/nostrEvent";
 import { firstTagValue } from "../internal/nostrEvent";
 import { decodeVerifiedPlainEvent } from "../internal/plainEvent";
+import { resubscribeForever } from "../internal/resubscribe";
 import { nowUnixSeconds } from "../internal/time";
 import { NostrTransport } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
@@ -23,6 +24,7 @@ import { ProfileEventDropped } from "./events";
 import type { ProfileDropReason, ProfileWatchEvent } from "./events";
 
 export interface ProfileWatchOptions {
+  /** Base delay of the per-relay resubscribe backoff. */
   readonly resubscribeDelay?: Duration.Duration;
 }
 
@@ -74,15 +76,12 @@ export class ProfileWatch extends Effect.Service<ProfileWatch>()(
           );
 
           const keepSubscribed = (relay: RelayUrl, filter: Filter) =>
-            transport
-              .subscribe(relay, filter, (event) => {
+            resubscribeForever(
+              transport.subscribe(relay, filter, (event) => {
                 Queue.unsafeOffer(rawEvents, event);
-              })
-              .pipe(
-                Effect.ignore,
-                Effect.andThen(Effect.sleep(resubscribeDelay)),
-                Effect.forever,
-              );
+              }),
+              resubscribeDelay,
+            );
           yield* Effect.forEach(relays, (relay) =>
             Effect.forEach(filters, (filter) =>
               Effect.forkScoped(keepSubscribed(relay, filter)),
