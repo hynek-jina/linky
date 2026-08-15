@@ -92,6 +92,8 @@ import {
   fetchAndCacheProfiles,
   useLinkstrProfileSync,
 } from "../useLinkstrProfileSync";
+// ONE-TIME MIGRATION import — remove together with src/app/migrations/.
+import { useRestoreClobberedContactNames } from "../../migrations/useRestoreClobberedContactNames";
 import { useContactsDomain } from "../useContactsDomain";
 import { useEvoluNostrBootstrapReady } from "../useEvoluNostrBootstrapReady";
 import { useFeedbackContact } from "../useFeedbackContact";
@@ -929,6 +931,14 @@ export const useContactsMessagingComposition = ({
     setNostrMetadataByNpub,
     setNostrPictureByNpub,
     setNostrStatusByNpub,
+    update,
+  });
+
+  // ONE-TIME MIGRATION — remove together with src/app/migrations/.
+  useRestoreClobberedContactNames({
+    contacts,
+    contactsOwnerId,
+    contactsVisibleOwnerIds,
     update,
   });
 
