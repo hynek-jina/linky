@@ -1,4 +1,9 @@
-export { BANK_OFFER_KIND, BANK_OFFER_VALUE } from "./bankOffers/codec";
+export {
+  BANK_OFFER_KIND,
+  BANK_OFFER_VALUE,
+  encodeBankOfferContent,
+} from "./bankOffers/codec";
+export type { BankOfferContent } from "./bankOffers/codec";
 export * from "./bankOffers/domain";
 export * from "./bankOffers/events";
 export * from "./bankOffers/BankOffers";

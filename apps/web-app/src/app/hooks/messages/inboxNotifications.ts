@@ -2,7 +2,11 @@ import type {
   BankOfferInboxEvent,
   PaymentNoticeReceived,
 } from "@linky/linkstr";
-import { encodeNpub, parsePubkey } from "@linky/linkstr";
+import {
+  encodeBankOfferContent,
+  encodeNpub,
+  parsePubkey,
+} from "@linky/linkstr";
 import type { PushToastOptions } from "../../../hooks/useToasts";
 import { formatShortNpub } from "../../../utils/formatting";
 import {
@@ -180,19 +184,14 @@ export const handlePaymentNoticeReceived = (
   );
 };
 
-/** Snapshot JSON in the exact shape the outbox encoder publishes, so every
- * consumer of offer-message `content` keeps parsing unchanged. */
 export const bankOfferContentFromSnapshot = (
   snapshot: BankOfferInboxEvent,
 ): string =>
-  JSON.stringify({
-    amountText: snapshot.amountText,
+  encodeBankOfferContent({
     offerId: snapshot.offerId,
-    offererPublicKey: snapshot.offerer,
+    offerer: snapshot.offerer,
     status: snapshot.status,
-    ...(snapshot.statusUpdatedAtSec !== null
-      ? { statusUpdatedAtSec: snapshot.statusUpdatedAtSec }
-      : {}),
+    amountText: snapshot.amountText,
     text:
       snapshot.text ??
       getLinkyBankPaymentOfferMessageText(
@@ -200,24 +199,13 @@ export const bankOfferContentFromSnapshot = (
         snapshot.status,
         snapshot.extensionSec,
       ),
-    type: "linky.bank_payment_offer",
-    version: 1,
-    ...(snapshot.initiatedAtSec !== null
-      ? { initiatedAtSec: snapshot.initiatedAtSec }
-      : {}),
-    ...(snapshot.bankPaidAtSec !== null
-      ? { bankPaidAtSec: snapshot.bankPaidAtSec }
-      : {}),
-    ...(snapshot.expiresAtSec !== null
-      ? { expiresAtSec: snapshot.expiresAtSec }
-      : {}),
-    ...(snapshot.extensionSec !== null
-      ? { extensionSec: snapshot.extensionSec }
-      : {}),
-    ...(snapshot.amountSat !== null ? { amountSat: snapshot.amountSat } : {}),
-    ...(snapshot.spdPayload !== null
-      ? { spdPayload: snapshot.spdPayload }
-      : {}),
+    statusUpdatedAtSec: snapshot.statusUpdatedAtSec,
+    initiatedAtSec: snapshot.initiatedAtSec,
+    bankPaidAtSec: snapshot.bankPaidAtSec,
+    expiresAtSec: snapshot.expiresAtSec,
+    extensionSec: snapshot.extensionSec,
+    amountSat: snapshot.amountSat,
+    spdPayload: snapshot.spdPayload,
   });
 
 export interface BankOfferSnapshotScope {
