@@ -10,10 +10,9 @@ import { describe, expect, test } from "vitest";
 import { IdentityProvider } from "./IdentityProvider";
 import { MasterSecretProvider } from "./MasterSecretProvider";
 import { OwnerLaneIndex, type OwnerRole } from "./domain";
+import { encodeNpub, encodeNsec } from "@linky/linkstr";
 import {
   deriveOwnerMnemonicFromMasterSecret,
-  encodeNostrNpub,
-  encodeNostrNsec,
   parseSlip39Share,
   recoverMasterSecretFromSlip39Share,
 } from "./utils";
@@ -222,12 +221,12 @@ describe("@linky/core identity API matches the cross-app vectors", () => {
   test("derives the pinned nostr identity", async () => {
     const { identity } = await loadIdentity();
     expect(hex(identity.nostrSigningKey)).toBe(NOSTR_VECTOR.privateKeyHex);
-    expect(
-      await Effect.runPromise(encodeNostrNsec(identity.nostrSigningKey)),
-    ).toBe("nsec13lzw09lv9pd6zqtfxykleu8ny8hh0ux37r7qedcghz82m7mmwqjsaj430k");
-    expect(
-      await Effect.runPromise(encodeNostrNpub(identity.nostrPublicKey)),
-    ).toBe("npub1emlla45qgkxa0n6yj243m0uygv6332atrxckg7z5c4226lg3ke2qxdfpgk");
+    expect(encodeNsec(identity.nostrSigningKey)).toBe(
+      "nsec13lzw09lv9pd6zqtfxykleu8ny8hh0ux37r7qedcghz82m7mmwqjsaj430k",
+    );
+    expect(encodeNpub(identity.nostrPublicKey)).toBe(
+      "npub1emlla45qgkxa0n6yj243m0uygv6332atrxckg7z5c4226lg3ke2qxdfpgk",
+    );
   });
 
   test("derives the cashu wallet seed from the shared cashu mnemonic", async () => {
