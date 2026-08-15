@@ -1,17 +1,7 @@
-export const normalizeRelayUrls = (urls: readonly string[]): string[] => {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
+import { RelayUrl } from "@linky/linkstr";
+import { Schema } from "effect";
 
-  for (const value of urls) {
-    const url = value.trim();
-    if (!url.startsWith("wss://") && !url.startsWith("ws://")) continue;
-    if (seen.has(url)) continue;
-    seen.add(url);
-    normalized.push(url);
-  }
-
-  return normalized;
-};
+const isRelayUrl = Schema.is(RelayUrl);
 
 const DEFAULT_NOSTR_RELAYS = [
   "wss://relay.damus.io",
@@ -19,8 +9,13 @@ const DEFAULT_NOSTR_RELAYS = [
   "wss://relay.0xchat.com",
 ];
 
-const envRelays = normalizeRelayUrls(
-  (import.meta.env.VITE_NOSTR_RELAYS ?? "").split(","),
+const envRelays = Array.from(
+  new Set(
+    (import.meta.env.VITE_NOSTR_RELAYS ?? "")
+      .split(",")
+      .map((url) => url.trim())
+      .filter(isRelayUrl),
+  ),
 );
 
 export const NOSTR_RELAYS =

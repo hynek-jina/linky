@@ -1,4 +1,5 @@
-import { encodeNpub, parsePubkey } from "@linky/linkstr";
+import { encodeNpub, parsePubkey, RelayUrl } from "@linky/linkstr";
+import { Schema } from "effect";
 import type { JsonRecord } from "../types/json";
 
 export const DEFAULT_NIP05_DOMAIN = "linky.fit";
@@ -6,6 +7,8 @@ export const DEFAULT_NIP05_DOMAIN = "linky.fit";
 const NOSTR_URI_PREFIX = "nostr:";
 const NIP05_LOCAL_PART_RE = /^[a-z0-9._-]+$/i;
 const NIP05_DOMAIN_RE = /^[a-z0-9.-]+$/i;
+
+const isRelayUrl = Schema.is(RelayUrl);
 
 const isJsonRecord = (value: unknown): value is JsonRecord => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -128,8 +131,7 @@ const readRelays = (value: unknown, pubkeyHex: string): string[] => {
 
   for (const item of rawList) {
     const relay = readText(item);
-    if (!relay) continue;
-    if (!(relay.startsWith("wss://") || relay.startsWith("ws://"))) continue;
+    if (!relay || !isRelayUrl(relay)) continue;
     if (seen.has(relay)) continue;
     seen.add(relay);
     out.push(relay);

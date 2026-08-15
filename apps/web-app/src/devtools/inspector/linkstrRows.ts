@@ -14,27 +14,10 @@ import {
   WrapDropped,
 } from "@linky/linkstr";
 import { Option, Schema } from "effect";
+import { nostrKindLabel } from "../nostrKindNames";
 import type { InspectorRow, InspectorRowLinks } from "./inspectorRows";
 
 const short = (id: string): string => id.slice(0, 8) + "…";
-
-const NOSTR_KIND_NAMES: Record<number, string> = {
-  0: "profile",
-  5: "delete",
-  7: "reaction",
-  14: "chat message",
-  15: "chat media",
-  1059: "gift wrap",
-  10000: "mute list",
-  10002: "relay list",
-  10050: "dm relays",
-  30315: "status",
-};
-
-const kindLabel = (kind: number): string => {
-  const name = NOSTR_KIND_NAMES[kind];
-  return name === undefined ? `kind ${kind}` : `${name} (${kind})`;
-};
 
 const decodeRawEventSummary = Schema.decodeUnknownOption(
   Schema.Struct({ id: Schema.String, kind: Schema.Number }),
@@ -47,7 +30,7 @@ const decodeFilterKinds = Schema.decodeUnknownOption(
 const filterKindsLabel = (filter: unknown): string =>
   Option.match(decodeFilterKinds(filter), {
     onNone: () => "events",
-    onSome: ({ kinds }) => kinds.map(kindLabel).join(", "),
+    onSome: ({ kinds }) => kinds.map(nostrKindLabel).join(", "),
   });
 
 const operationSummary = (name: string, params: unknown): string => {
@@ -82,7 +65,7 @@ const routedSummaryAndLinks = (
   rumorKind: number | null,
 ): { summary: string; links: InspectorRowLinks } => {
   const kindSuffix =
-    rumorKind === null ? "" : ` (rumor ${kindLabel(rumorKind)})`;
+    rumorKind === null ? "" : ` (rumor ${nostrKindLabel(rumorKind)})`;
   if (routed instanceof ReactionAdded) {
     return {
       summary: `ReactionAdded ${routed.emoji} from ${short(routed.from)}`,
@@ -127,7 +110,7 @@ const profileWatchSummary = (routed: unknown, kind: number | null): string => {
     return `StatusUpdated "${routed.content}" ${short(routed.pubkey)}`;
   }
   if (routed instanceof ProfileEventDropped) {
-    return `ProfileEventDropped ${routed.reason}${kind === null ? "" : ` (${kindLabel(kind)})`}`;
+    return `ProfileEventDropped ${routed.reason}${kind === null ? "" : ` (${nostrKindLabel(kind)})`}`;
   }
   return "ProfileWatchRouted";
 };
@@ -170,7 +153,7 @@ export const linkstrEventToRow = (
         at,
         channel: "wire",
         tag: event._tag,
-        summary: `publish ${kindLabel(1059)} ${short(event.wrapId)} → ${accepted.length}/${event.results.length} relays accepted`,
+        summary: `publish ${nostrKindLabel(1059)} ${short(event.wrapId)} → ${accepted.length}/${event.results.length} relays accepted`,
         links: { wrapIds: [event.wrapId] },
         payload: event,
       };
@@ -190,7 +173,7 @@ export const linkstrEventToRow = (
         at,
         channel: "wire",
         tag: event._tag,
-        summary: `publish ${kindLabel(event.kind)} ${short(event.eventId)} → ${accepted.length}/${event.results.length} relays accepted`,
+        summary: `publish ${nostrKindLabel(event.kind)} ${short(event.eventId)} → ${accepted.length}/${event.results.length} relays accepted`,
         links: { wrapIds: [event.eventId] },
         payload: event,
       };
@@ -231,7 +214,7 @@ export const linkstrEventToRow = (
         summary: Option.match(decodeRawEventSummary(event.event), {
           onNone: () => `event ← ${event.relay}`,
           onSome: ({ id, kind }) =>
-            `${kindLabel(kind)} ${short(id)} ← ${event.relay}`,
+            `${nostrKindLabel(kind)} ${short(id)} ← ${event.relay}`,
         }),
         links: {
           relay: event.relay,
