@@ -2,6 +2,7 @@ import { Registry } from "./index";
 import {
   ClientId,
   Emoji,
+  InboxCursorStore,
   NIP59_BACKDATE_MARGIN_SECONDS,
   NostrSecretKey,
   NostrTransport,
@@ -152,12 +153,11 @@ const wrapFromBob = async (emoji: string): Promise<NostrToolsEvent> => {
 };
 
 describe("wrapInboxAtom", () => {
-  it("feeds inbound wraps through the handler and reports the cursor", async () => {
+  it("feeds inbound wraps through the handler", async () => {
     const wrap = await wrapFromBob("🔥");
     const registry = Registry.make();
     const subscriptions: Array<FakeSubscription> = [];
     const handled: Array<WrapInboxEvent> = [];
-    const cursors: Array<UnixSeconds> = [];
 
     registry.set(
       linkstrConfigAtom,
@@ -166,9 +166,6 @@ describe("wrapInboxAtom", () => {
     registry.set(wrapInboxHandlerAtom, {
       onEvent: (event) => {
         handled.push(event);
-      },
-      onCursor: (cursor) => {
-        cursors.push(cursor);
       },
     });
     const unmount = registry.mount(wrapInboxAtom);
@@ -188,7 +185,6 @@ describe("wrapInboxAtom", () => {
         emoji: "🔥",
       }),
     );
-    expect(cursors).toEqual([wrap.created_at]);
 
     // The same wrap from the second relay is deduped, not re-handled.
     subscriptions[1]?.onEvent(wrap);
@@ -217,6 +213,32 @@ describe("wrapInboxAtom", () => {
     await expect.poll(() => subscriptions.length).toBe(2);
     expect(subscriptions[0]?.filter.since).toBe(
       since - NIP59_BACKDATE_MARGIN_SECONDS,
+    );
+
+    unmount();
+  });
+
+  it("prefers the configured cursor store over the handler's since", async () => {
+    const registry = Registry.make();
+    const subscriptions: Array<FakeSubscription> = [];
+    const stored = UnixSeconds.make(1_756_000_000);
+
+    registry.set(linkstrConfigAtom, {
+      ...configWith(alice, makeFakeTransport([], subscriptions)),
+      inboxCursorStore: Layer.succeed(InboxCursorStore, {
+        load: Effect.succeed(stored),
+        save: () => Effect.void,
+      }),
+    });
+    registry.set(wrapInboxHandlerAtom, {
+      since: UnixSeconds.make(1_755_000_000),
+      onEvent: () => {},
+    });
+    const unmount = registry.mount(wrapInboxAtom);
+
+    await expect.poll(() => subscriptions.length).toBe(2);
+    expect(subscriptions[0]?.filter.since).toBe(
+      stored - NIP59_BACKDATE_MARGIN_SECONDS,
     );
 
     unmount();

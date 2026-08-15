@@ -28,6 +28,7 @@ export {
 export * from "./httpAuth/domain";
 export * from "./inbox/authenticateWrap";
 export * from "./inbox/events";
+export * from "./inbox/InboxCursorStore";
 export * from "./inbox/WrapInbox";
 export * from "./inspector/events";
 export * from "./inspector/Inspector";

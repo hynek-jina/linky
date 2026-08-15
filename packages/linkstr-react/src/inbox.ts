@@ -12,7 +12,7 @@ import { Effect, Stream } from "effect";
 import { linkstrRuntimeAtom } from "./runtime";
 
 export interface WrapInboxHandler {
-  /** Backfill cursor persisted by a previous session, if any. */
+  /** Backfill start when the configured cursor store holds no cursor yet. */
   readonly since?: UnixSeconds;
   /**
    * Called once per inbox event, in order; the next event waits for it.
@@ -23,8 +23,6 @@ export interface WrapInboxHandler {
     event: WrapInboxEvent,
     delivery: InboxDelivery,
   ) => void | Promise<void>;
-  /** Called after `onEvent` settles; persist as the next session's `since`. */
-  readonly onCursor?: (cursor: UnixSeconds) => void;
 }
 
 /** Null keeps the inbox closed; the app registers a handler to open it. */
@@ -65,15 +63,7 @@ export const wrapInboxAtom = linkstrRuntimeAtom.atom((get) => {
       const handle = (delivered: DeliveredInboxEvent) =>
         Effect.promise(async () => {
           await handler.onEvent(delivered.event, delivered.delivery);
-        }).pipe(
-          Effect.andThen(feed.cursor),
-          Effect.tap((cursor) =>
-            Effect.sync(() => {
-              if (cursor !== null) handler.onCursor?.(cursor);
-            }),
-          ),
-          Effect.as(delivered),
-        );
+        }).pipe(Effect.as(delivered));
       return Stream.mapEffect(feed.events, handle);
     }),
   );

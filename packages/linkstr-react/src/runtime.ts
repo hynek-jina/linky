@@ -35,6 +35,7 @@ export const linkstrRuntimeAtom = Atom.runtime((get) => {
             observeTransport(config.transport ?? NostrTransportSimplePool),
           ),
           outboxStore: config.outboxStore,
+          inboxCursorStore: config.inboxCursorStore,
         }).pipe(
           Layer.provideMerge(
             config.inspector === true ? Inspector.live : Inspector.disabled,

@@ -10,6 +10,7 @@ import {
   RumorId,
   UnixSeconds,
 } from "../domain/primitives";
+import { InboxCursorStore } from "../inbox/InboxCursorStore";
 import { WrapInbox } from "../inbox/WrapInbox";
 import { wrapRumorFor } from "../internal/giftWrap";
 import { Rumor } from "../internal/nostrEvent";
@@ -86,6 +87,7 @@ const servicesWith = (transport: NostrTransportService) =>
         LinkstrIdentity.fromSecretKey(alice.secretKey),
         RelayPolicy.fixed({ readRelays: [relayA], writeRelays: [relayA] }),
         inspectTransport(Layer.succeed(NostrTransport, transport)),
+        InboxCursorStore.inMemory,
       ),
     ),
     Layer.provideMerge(Inspector.live),

@@ -1,4 +1,9 @@
-import { decodeNsec, OutboxStore, RelayUrl } from "@linky/linkstr";
+import {
+  identityFromNsec,
+  InboxCursorStore,
+  OutboxStore,
+  RelayUrl,
+} from "@linky/linkstr";
 import {
   linkstrConfigAtom,
   useAtomSet,
@@ -11,16 +16,17 @@ import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 const isRelayUrl = Schema.is(RelayUrl);
 
 const OUTBOX_STORAGE_KEY = "linky.outbox";
+const INBOX_CURSOR_STORAGE_KEY_PREFIX = "linky.inbox_cursor";
 
 export const buildLinkstrConfig = (
   currentNsec: string | null,
   fetchRelays: readonly string[],
 ): LinkstrConfig | null => {
   if (!currentNsec) return null;
-  const secretKey = decodeNsec(currentNsec.trim());
-  if (!secretKey) return null;
+  const identity = identityFromNsec(currentNsec.trim());
+  if (!identity) return null;
   return {
-    secretKey,
+    secretKey: identity.secretKey,
     readRelays: fetchRelays.filter(isRelayUrl),
     // Writes stay on the default relay set for now, matching the legacy
     // publish paths; widening writes to user relays is a separate decision.
@@ -28,6 +34,10 @@ export const buildLinkstrConfig = (
     outboxStore: OutboxStore.fromStringStorage(
       localStorage,
       OUTBOX_STORAGE_KEY,
+    ),
+    inboxCursorStore: InboxCursorStore.fromStringStorage(
+      localStorage,
+      `${INBOX_CURSOR_STORAGE_KEY_PREFIX}.${identity.pubkey}`,
     ),
     inspector: import.meta.env.DEV,
   };

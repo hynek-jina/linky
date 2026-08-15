@@ -13,9 +13,7 @@ import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import {
   getInitialNostrIdentitySource,
   getInitialNostrIdentitySwitchedAtSec,
-  safeLocalStorageGet,
   safeLocalStorageGetJson,
-  safeLocalStorageSet,
 } from "../../../utils/storage";
 import type {
   ContactNameRowLike,
@@ -51,16 +49,6 @@ import {
 
 // Fallback backfill window for a first session without a persisted cursor.
 const INBOX_BACKFILL_SINCE_SEC = 3 * 24 * 60 * 60;
-
-const INBOX_CURSOR_STORAGE_KEY_PREFIX = "linky.inbox_cursor";
-
-const inboxCursorStorageKey = (pubkey: string): string =>
-  `${INBOX_CURSOR_STORAGE_KEY_PREFIX}.${pubkey}`;
-
-const readStoredInboxCursor = (pubkey: string): number | null => {
-  const value = Number(safeLocalStorageGet(inboxCursorStorageKey(pubkey)));
-  return Number.isInteger(value) && value > 0 ? value : null;
-};
 
 const isBlockedPubkey = (pubkey: string): boolean => {
   const normalizedPubkey = normalizePubkeyHex(pubkey);
@@ -302,22 +290,15 @@ export const useLinkstrInboxSync = (params: UseLinkstrInboxSyncParams) => {
         ? getInitialNostrIdentitySwitchedAtSec()
         : null;
 
-    const cursorKey = inboxCursorStorageKey(myPubkey);
-    let persistedCursor = readStoredInboxCursor(myPubkey);
-    const since =
-      persistedCursor ??
-      Math.floor(Date.now() / 1e3) - INBOX_BACKFILL_SINCE_SEC;
-
     // One handler object per identity session: a handler swap reopens the
     // relay subscriptions, so per-render state is reached through refs.
+    // The cursor store (configured in useLinkstrConfigSync) wins over `since`
+    // once it holds a checkpoint.
     setWrapInboxHandler({
-      since: UnixSeconds.make(since),
+      since: UnixSeconds.make(
+        Math.floor(Date.now() / 1e3) - INBOX_BACKFILL_SINCE_SEC,
+      ),
       onEvent: dispatchInboxEvent,
-      onCursor: (cursor) => {
-        if (cursor === persistedCursor) return;
-        persistedCursor = cursor;
-        safeLocalStorageSet(cursorKey, String(cursor));
-      },
     });
     return () => setWrapInboxHandler(null);
   }, [currentNsec, dispatchInboxEvent, enabled, myPubkey, setWrapInboxHandler]);
