@@ -2,7 +2,6 @@ import { HDKey } from "@scure/bip32";
 import { entropyToMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { Effect, Schema, Match } from "effect";
-import { nip19 } from "nostr-tools";
 import { Slip39 } from "slip39-ts";
 import { deriveBip85Entropy, deriveOwnerKey } from "./bip85";
 import {
@@ -18,10 +17,6 @@ import {
   Bip39Mnemonic12,
   Bip39Mnemonic24,
   MasterSecret,
-  NostrNpub,
-  NostrNsec,
-  NostrPrivateKey,
-  NostrPublicKeyHex,
   OwnerKey,
   OwnerLaneIndex,
   OwnerRole,
@@ -233,24 +228,6 @@ export const createSlip39Share = (
         message: "Failed to create SLIP-39 share",
       }),
   });
-
-export const encodeNostrNsec = (
-  privateKey: NostrPrivateKey,
-): Effect.Effect<NostrNsec, IdentityUtilsError> =>
-  decodeUnknown(
-    NostrNsec,
-    nip19.nsecEncode(privateKey),
-    "Failed to encode nsec",
-  );
-
-export const encodeNostrNpub = (
-  publicKeyHex: NostrPublicKeyHex,
-): Effect.Effect<NostrNpub, IdentityUtilsError> =>
-  decodeUnknown(
-    NostrNpub,
-    nip19.npubEncode(publicKeyHex),
-    "Failed to encode npub",
-  );
 
 export const deriveOwnerKeyFromMasterSecret = (
   masterSecret: MasterSecret,

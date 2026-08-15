@@ -1,8 +1,8 @@
+import { derivePubkey, NostrSecretKey, type Pubkey } from "@linky/linkstr";
 import { HDKey } from "@scure/bip32";
 import { entropyToMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { Context, Effect, Layer, Schema } from "effect";
-import { getPublicKey } from "nostr-tools";
 import { deriveBip85Entropy, deriveOwnerKey } from "./bip85";
 import {
   CASHU_SEED_PATH,
@@ -14,13 +14,7 @@ import {
   NOSTR_PATH,
   transactionsOwnerPath,
 } from "./derivationPaths";
-import {
-  CashuSeed,
-  NostrPrivateKey,
-  NostrPublicKeyHex,
-  OwnerKey,
-  OwnerLaneIndex,
-} from "./domain";
+import { CashuSeed, OwnerKey, OwnerLaneIndex } from "./domain";
 import { MasterSecretProvider } from "./MasterSecretProvider";
 
 export class IdentityProviderError extends Schema.TaggedError<IdentityProviderError>()(
@@ -29,8 +23,8 @@ export class IdentityProviderError extends Schema.TaggedError<IdentityProviderEr
 ) {}
 
 interface Identities {
-  readonly nostrSigningKey: NostrPrivateKey;
-  readonly nostrPublicKey: NostrPublicKeyHex;
+  readonly nostrSigningKey: NostrSecretKey;
+  readonly nostrPublicKey: Pubkey;
 
   readonly cashuWalletSeed: CashuSeed;
 
@@ -62,10 +56,8 @@ export class IdentityProvider extends Context.Tag("IdentityProvider")<
           message: "Nostr key derivation failed",
         });
       }
-      const nostrSigningKey = NostrPrivateKey.make(nostrNode.privateKey);
-      const nostrPublicKey = NostrPublicKeyHex.make(
-        getPublicKey(nostrSigningKey),
-      );
+      const nostrSigningKey = NostrSecretKey.make(nostrNode.privateKey);
+      const nostrPublicKey = derivePubkey(nostrSigningKey);
 
       const cashuEntropy = deriveBip85Entropy(root, CASHU_SEED_PATH, 32);
       const cashuMnemonic = entropyToMnemonic(cashuEntropy, wordlist);

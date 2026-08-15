@@ -2,8 +2,6 @@ import {
   createSlip39Share,
   deriveCashuMnemonicFromMasterSecret,
   deriveOwnerMnemonicsFromMasterSecret,
-  encodeNostrNpub,
-  encodeNostrNsec,
   IdentityProvider,
   looksLikeSlip39Share,
   MasterSecretProvider,
@@ -12,6 +10,7 @@ import {
   recoverMasterSecretFromSlip39Share,
   type OwnerRole,
 } from "@linky/core/identity";
+import { encodeNpub, encodeNsec } from "@linky/linkstr";
 import { Effect, Layer } from "effect";
 
 interface DerivedNostrKeys {
@@ -54,10 +53,8 @@ export const deriveNostrKeysFromSlip39 = async (
     const identity = await Effect.runPromise(
       Effect.provide(IdentityProvider, identityLayer),
     );
-    const [nsec, npub] = await Promise.all([
-      Effect.runPromise(encodeNostrNsec(identity.nostrSigningKey)),
-      Effect.runPromise(encodeNostrNpub(identity.nostrPublicKey)),
-    ]);
+    const nsec = encodeNsec(identity.nostrSigningKey);
+    const npub = encodeNpub(identity.nostrPublicKey);
     return { npub, nsec };
   } catch {
     return null;

@@ -1,15 +1,14 @@
-import { Effect, Layer, Schema } from "effect";
+import { decodeNpub, decodeNsec, encodeNpub, encodeNsec } from "@linky/linkstr";
+import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 import { IdentityProvider } from "./IdentityProvider";
 import { MasterSecretProvider } from "./MasterSecretProvider";
-import { MasterSecret, NostrNpub, NostrNsec } from "./domain";
+import { MasterSecret } from "./domain";
 import {
   createSlip39Share,
   deriveCashuMnemonicFromMasterSecret,
   deriveOwnerKeyFromMasterSecret,
   deriveOwnerMnemonicFromMasterSecret,
-  encodeNostrNpub,
-  encodeNostrNsec,
   looksLikeSlip39Share,
   normalizeSlip39Share,
   parseOwnerLaneIndex,
@@ -119,17 +118,11 @@ describe("identity utils", () => {
   it("encodes valid bech32 nsec/npub", async () => {
     const identity = await runIdentity(MasterSecretProvider.make(TEST_SEED));
 
-    const nsec = await Effect.runPromise(
-      encodeNostrNsec(identity.nostrSigningKey),
-    );
-    const npub = await Effect.runPromise(
-      encodeNostrNpub(identity.nostrPublicKey),
-    );
+    const nsec = encodeNsec(identity.nostrSigningKey);
+    const npub = encodeNpub(identity.nostrPublicKey);
 
-    const parsedNsec = Schema.decodeUnknownSync(NostrNsec)(nsec);
-    const parsedNpub = Schema.decodeUnknownSync(NostrNpub)(npub);
-    expect(parsedNsec).toBe(nsec);
-    expect(parsedNpub).toBe(npub);
+    expect(decodeNsec(nsec)).toEqual(identity.nostrSigningKey);
+    expect(decodeNpub(npub)).toBe(identity.nostrPublicKey);
     expect(nsec.startsWith("nsec1")).toBe(true);
     expect(npub.startsWith("npub1")).toBe(true);
   });
