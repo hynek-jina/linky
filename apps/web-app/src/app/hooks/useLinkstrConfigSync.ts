@@ -1,15 +1,13 @@
-import { NostrSecretKey, OutboxStore, RelayUrl } from "@linky/linkstr";
+import { decodeNsec, OutboxStore, RelayUrl } from "@linky/linkstr";
 import {
   linkstrConfigAtom,
   useAtomSet,
   type LinkstrConfig,
 } from "@linky/linkstr-react";
 import { Schema } from "effect";
-import { nip19 } from "nostr-tools";
 import React from "react";
 import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 
-const isNostrSecretKey = Schema.is(NostrSecretKey);
 const isRelayUrl = Schema.is(RelayUrl);
 
 const OUTBOX_STORAGE_KEY = "linky.outbox";
@@ -19,15 +17,8 @@ export const buildLinkstrConfig = (
   fetchRelays: readonly string[],
 ): LinkstrConfig | null => {
   if (!currentNsec) return null;
-  let secretKey: Uint8Array;
-  try {
-    const decoded = nip19.decode(currentNsec.trim());
-    if (decoded.type !== "nsec") return null;
-    secretKey = decoded.data;
-  } catch {
-    return null;
-  }
-  if (!isNostrSecretKey(secretKey)) return null;
+  const secretKey = decodeNsec(currentNsec.trim());
+  if (!secretKey) return null;
   return {
     secretKey,
     readRelays: fetchRelays.filter(isRelayUrl),

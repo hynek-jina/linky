@@ -1,6 +1,7 @@
 import {
   CashuTokenText,
   ClientId,
+  decodeNpub,
   OutboxRef,
   PaymentNoticeDraft,
   Pubkey,
@@ -14,7 +15,6 @@ import type {
 } from "@linky/linkstr";
 import type { EnqueueOutboxInput } from "@linky/linkstr-react";
 import { Cause, Either, Exit, Option, Schema } from "effect";
-import { nip19 } from "nostr-tools";
 import type { ContactId } from "../../../evolu";
 import { previewTokenText } from "../../../utils/formatting";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
@@ -64,16 +64,13 @@ interface PublishCashuMessagePaymentArgs {
   updateLocalNostrMessage: UpdateLocalNostrMessage;
 }
 
-const isPubkey = Schema.is(Pubkey);
 const isRumorId = Schema.is(RumorId);
 const decodeCashuTokenText = Schema.decodeUnknownEither(CashuTokenText);
 
-const decodeNpub = (npub: string): Pubkey => {
-  const decoded = nip19.decode(npub);
-  if (decoded.type !== "npub" || !isPubkey(decoded.data)) {
-    throw new Error("invalid npub");
-  }
-  return decoded.data;
+const decodeRequiredNpub = (npub: string): Pubkey => {
+  const pubkey = decodeNpub(npub);
+  if (!pubkey) throw new Error("invalid npub");
+  return pubkey;
 };
 
 const failureMessage = (
@@ -101,8 +98,8 @@ export const publishCashuMessagePayment = async ({
   sendPaymentNotice,
   updateLocalNostrMessage,
 }: PublishCashuMessagePaymentArgs): Promise<CashuMessagePaymentPublishingOutcome> => {
-  const myPublicKey = decodeNpub(currentNpub);
-  const contactPublicKey = decodeNpub(contactNpub);
+  const myPublicKey = decodeRequiredNpub(currentNpub);
+  const contactPublicKey = decodeRequiredNpub(contactNpub);
 
   const createId = dependencies?.makeId ?? makeLocalId;
   const nowSec = dependencies?.nowSec ?? (() => Math.ceil(Date.now() / 1_000));

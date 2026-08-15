@@ -22,8 +22,12 @@ const bytesToBase64Url = (bytes: Uint8Array): string => {
 
 describe("paymentRequestMessage", () => {
   it("round-trips a cashu payment request message", () => {
+    // parseCashuPaymentRequestMessage validates the pubkey is on-curve, so the
+    // fixture must be a real one (getPublicKey of the all-ones secret key).
+    const recipientPubkey =
+      "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f";
     const recipientNprofile = nip19.nprofileEncode({
-      pubkey: "f".repeat(64),
+      pubkey: recipientPubkey,
       relays: ["wss://relay.damus.io"],
     });
 
@@ -43,7 +47,7 @@ describe("paymentRequestMessage", () => {
     expect(parsed?.mintUrls).toEqual(["https://mint.example"]);
     expect(parsed?.requestId).toBe("request-1");
     expect(parsed?.transportNprofile).toBe(recipientNprofile);
-    expect(parsed?.transportPubkeyHex).toBe("f".repeat(64));
+    expect(parsed?.transportPubkeyHex).toBe(recipientPubkey);
     expect(parsed?.unit).toBe("sat");
   });
 

@@ -1,13 +1,12 @@
 import type { OwnerId } from "@evolu/common";
 import {
   ClientId,
+  decodeNpub,
   PaymentTelemetryDraft,
-  Pubkey,
   UnixSeconds,
 } from "@linky/linkstr";
 import { publishPaymentTelemetryAtom, useAtomSet } from "@linky/linkstr-react";
 import { Exit, Schema } from "effect";
-import { nip19 } from "nostr-tools";
 import React from "react";
 import {
   LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY_PREFIX,
@@ -30,7 +29,6 @@ interface UseAnonymousPaymentTelemetryParams {
 const PAYMENT_TELEMETRY_FLUSH_INTERVAL_MS = 45_000;
 const MAX_ITEMS_PER_FLUSH = 10;
 const isClientId = Schema.is(ClientId);
-const isPubkey = Schema.is(Pubkey);
 const isUnixSeconds = Schema.is(UnixSeconds);
 
 const isTelemetryDirection = (value: unknown): value is "in" | "out" => {
@@ -215,12 +213,8 @@ export const useAnonymousPaymentTelemetry = ({
           .slice(0, MAX_ITEMS_PER_FLUSH);
         if (dueItems.length === 0) return;
 
-        const decoded = nip19.decode(PAYMENT_ANALYTICS_RECIPIENT_NPUB);
-        if (decoded.type !== "npub" || !isPubkey(decoded.data)) {
-          return;
-        }
-
-        const recipient = decoded.data;
+        const recipient = decodeNpub(PAYMENT_ANALYTICS_RECIPIENT_NPUB);
+        if (!recipient) return;
         const remainingById = new Map(queue.map((item) => [item.id, item]));
 
         for (const item of dueItems) {

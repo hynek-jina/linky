@@ -1,5 +1,5 @@
+import { decodeNprofilePubkey } from "@linky/linkstr";
 import { decode, encode } from "cbor-x";
-import { nip19 } from "nostr-tools";
 
 type PaymentRequestTransport = {
   a: string;
@@ -98,17 +98,6 @@ const base64UrlToBytes = (input: string): Uint8Array | null => {
       bytes[idx] = binary.charCodeAt(idx);
     }
     return bytes;
-  } catch {
-    return null;
-  }
-};
-
-const decodeNprofilePubkey = (value: string): string | null => {
-  try {
-    const decoded = nip19.decode(value);
-    if (decoded.type !== "nprofile") return null;
-    if (!isRecord(decoded.data)) return null;
-    return toTrimmedString(decoded.data.pubkey) || null;
   } catch {
     return null;
   }

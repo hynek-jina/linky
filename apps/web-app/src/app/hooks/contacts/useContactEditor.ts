@@ -1,4 +1,5 @@
 import * as Evolu from "@evolu/common";
+import { decodeNpub, encodeNpub } from "@linky/linkstr";
 import {
   discoverActiveProfilesAtom,
   fetchProfileAtom,
@@ -124,14 +125,7 @@ const decodeDirectNpubIdentifier = async (
   const normalized = normalizeNpubIdentifier(value);
   if (!normalized || !/^npub1/i.test(normalized)) return null;
 
-  try {
-    const { nip19 } = await import("nostr-tools");
-    const decoded = nip19.decode(normalized);
-    if (decoded.type !== "npub") return null;
-    return normalized;
-  } catch {
-    return null;
-  }
+  return decodeNpub(normalized) ? normalized : null;
 };
 
 const CONTACT_SUGGESTION_LIMIT = 3;
@@ -251,18 +245,12 @@ export const useContactEditor = ({
           return;
         }
 
-        const { nip19 } = await import("nostr-tools");
         const nextSuggestions: ContactSuggestionCandidate[] = [];
 
         for (const discovered of exit.value) {
           if (nextSuggestions.length >= CONTACT_SUGGESTION_LIMIT) break;
 
-          let npub = "";
-          try {
-            npub = nip19.npubEncode(discovered.pubkey);
-          } catch {
-            continue;
-          }
+          const npub = encodeNpub(discovered.pubkey);
 
           if (knownNpubs.has(npub)) continue;
 

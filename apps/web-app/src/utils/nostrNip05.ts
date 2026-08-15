@@ -1,3 +1,4 @@
+import { encodeNpub, parsePubkey } from "@linky/linkstr";
 import type { JsonRecord } from "../types/json";
 
 export const DEFAULT_NIP05_DOMAIN = "linky.fit";
@@ -5,14 +6,6 @@ export const DEFAULT_NIP05_DOMAIN = "linky.fit";
 const NOSTR_URI_PREFIX = "nostr:";
 const NIP05_LOCAL_PART_RE = /^[a-z0-9._-]+$/i;
 const NIP05_DOMAIN_RE = /^[a-z0-9.-]+$/i;
-const PUBKEY_HEX_RE = /^[a-f0-9]{64}$/;
-
-let nostrToolsPromise: Promise<typeof import("nostr-tools")> | null = null;
-
-const getNostrTools = () => {
-  if (!nostrToolsPromise) nostrToolsPromise = import("nostr-tools");
-  return nostrToolsPromise;
-};
 
 const isJsonRecord = (value: unknown): value is JsonRecord => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -173,16 +166,15 @@ export const resolveNip05Identifier = async (
     if (!isJsonRecord(names)) return { identifier, kind: "not_found" };
 
     const rawPubkey = readText(names[identifier.localPart]);
-    const pubkeyHex = rawPubkey?.toLowerCase() ?? "";
-    if (!PUBKEY_HEX_RE.test(pubkeyHex)) {
+    const pubkeyHex = parsePubkey(rawPubkey?.toLowerCase() ?? "");
+    if (!pubkeyHex) {
       return { identifier, kind: "not_found" };
     }
 
-    const { nip19 } = await getNostrTools();
     return {
       identifier,
       kind: "resolved",
-      npub: nip19.npubEncode(pubkeyHex),
+      npub: encodeNpub(pubkeyHex),
       relays: readRelays(body.relays, pubkeyHex),
     };
   } catch (error) {

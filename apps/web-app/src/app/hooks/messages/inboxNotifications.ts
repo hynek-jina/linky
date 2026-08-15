@@ -2,7 +2,7 @@ import type {
   BankOfferInboxEvent,
   PaymentNoticeReceived,
 } from "@linky/linkstr";
-import { nip19 } from "nostr-tools";
+import { encodeNpub, parsePubkey } from "@linky/linkstr";
 import type { PushToastOptions } from "../../../hooks/useToasts";
 import { formatShortNpub } from "../../../utils/formatting";
 import {
@@ -60,9 +60,12 @@ const senderLabel = (
   peerPubkey: string,
 ): string => {
   const contact = ctx.findContact(peerPubkey);
+  const parsedPubkey = parsePubkey(peerPubkey);
   return (
     contact?.name ??
-    formatShortNpub(contact?.npub ?? nip19.npubEncode(peerPubkey)) ??
+    formatShortNpub(
+      contact?.npub ?? (parsedPubkey ? encodeNpub(parsedPubkey) : peerPubkey),
+    ) ??
     ctx.t("unknownContactTitle")
   );
 };

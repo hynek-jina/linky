@@ -5,7 +5,6 @@ import {
 } from "@linky/linkstr";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { Schema } from "effect";
-import type { Event as NostrToolsEvent } from "nostr-tools";
 
 const PRIVATE_IMAGE_MESSAGE_TYPE = "linky.private_image.v1";
 const PRIVATE_IMAGE_COMPACT_PREFIX = "linky:image:v1:";
@@ -73,6 +72,12 @@ interface BlossomUploadAuth {
 
 export interface PrivateImageSendResult {
   content: string;
+}
+
+interface PrivateImageEvent {
+  content: string;
+  kind: number;
+  tags: string[][];
 }
 
 const textEncoder = new TextEncoder();
@@ -534,7 +539,7 @@ export const parsePrivateImageMessage = (
 };
 
 export const privateImageMessageFromEvent = (
-  event: Pick<NostrToolsEvent, "content" | "kind" | "tags">,
+  event: PrivateImageEvent,
 ): string | null => {
   if (event.kind !== 15) return null;
   const tags = Array.isArray(event.tags) ? event.tags : [];

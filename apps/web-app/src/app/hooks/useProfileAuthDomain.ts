@@ -8,7 +8,12 @@ import {
   type AvatarEditorControlId,
   type DerivedGeneratedAvatar,
 } from "../../derivedProfile";
-import { ProfileMetadata } from "@linky/linkstr";
+import {
+  decodeNsec,
+  derivePubkey,
+  encodeNpub,
+  ProfileMetadata,
+} from "@linky/linkstr";
 import {
   linkstrConfigAtom,
   publishProfileAtom,
@@ -232,27 +237,13 @@ export const useProfileAuthDomain = ({
     const raw = String(nsec ?? "").trim();
     if (!raw) return null;
 
-    try {
-      const { nip19 } = await import("nostr-tools");
-      const decoded = nip19.decode(raw);
-      if (decoded.type !== "nsec") return null;
-      if (!(decoded.data instanceof Uint8Array)) return null;
-      return decoded.data;
-    } catch {
-      return null;
-    }
+    return decodeNsec(raw);
   }, []);
 
   const deriveNpubFromNsec = React.useCallback(
     async (nsec: string): Promise<string | null> => {
-      try {
-        const { nip19, getPublicKey } = await import("nostr-tools");
-        const privBytes = await decodeNsecPrivateBytes(nsec);
-        if (!privBytes) return null;
-        return nip19.npubEncode(getPublicKey(privBytes));
-      } catch {
-        return null;
-      }
+      const privBytes = await decodeNsecPrivateBytes(nsec);
+      return privBytes ? encodeNpub(derivePubkey(privBytes)) : null;
     },
     [decodeNsecPrivateBytes],
   );
@@ -307,19 +298,12 @@ export const useProfileAuthDomain = ({
 
     let cancelled = false;
     const run = async () => {
-      try {
-        const { nip19, getPublicKey } = await import("nostr-tools");
-        const privBytes = await decodeNsecPrivateBytes(nsec);
-        if (!privBytes) return;
-        const pubHex = getPublicKey(privBytes);
-        const npub = nip19.npubEncode(pubHex);
+      const privBytes = await decodeNsecPrivateBytes(nsec);
+      if (!privBytes) return;
+      const npub = encodeNpub(derivePubkey(privBytes));
 
-        if (cancelled) return;
-        setCurrentNpub(npub);
-      } catch {
-        if (cancelled) return;
-        setCurrentNpub(null);
-      }
+      if (cancelled) return;
+      setCurrentNpub(npub);
     };
 
     void run();
