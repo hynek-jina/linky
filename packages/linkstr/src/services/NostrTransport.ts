@@ -230,10 +230,15 @@ export const NostrTransportSimplePool: Layer.Layer<NostrTransport> =
     NostrTransport,
     Effect.map(
       Effect.acquireRelease(
-        // Ping + reconnect: without them a dropped websocket (mobile
-        // background, network switch) permanently kills the connection.
+        // Ping detects dropped websockets (mobile background, network
+        // switch). Reconnect must stay OFF: nostr-tools re-fires
+        // subscriptions with `since = lastEmitted + 1`, which strips the
+        // NIP-59 backdate margin from gift-wrap filters and silently drops
+        // backdated wraps for the rest of the session. A hard close instead
+        // lets the inbox machine resubscribe with correct cursor-based
+        // filters — resubscribe policy lives there, not in the transport.
         Effect.sync(
-          () => new SimplePool({ enablePing: true, enableReconnect: true }),
+          () => new SimplePool({ enablePing: true, enableReconnect: false }),
         ),
         (pool) => Effect.sync(() => pool.destroy()),
       ),
