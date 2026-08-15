@@ -109,14 +109,14 @@ export const useAppPreferences = ({
 
   React.useEffect(() => {
     try {
-      if (seenReceiptsEnabledAtSec === null) {
-        localStorage.removeItem(SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY);
-      } else {
-        localStorage.setItem(
-          SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY,
-          String(seenReceiptsEnabledAtSec),
-        );
-      }
+      // "0" (not key removal) persists the off state: an absent key means
+      // "never decided" and re-enables by default on the next launch.
+      localStorage.setItem(
+        SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY,
+        seenReceiptsEnabledAtSec === null
+          ? "0"
+          : String(seenReceiptsEnabledAtSec),
+      );
     } catch {
       // ignore
     }
