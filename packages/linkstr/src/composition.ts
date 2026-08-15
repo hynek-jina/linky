@@ -13,6 +13,7 @@ import { Profiles } from "./profiles/Profiles";
 import { ProfileWatch } from "./profiles/ProfileWatch";
 import { Reactions } from "./reactions/Reactions";
 import { RelayLists } from "./relayLists/RelayLists";
+import { SeenReceipts } from "./seenReceipts/SeenReceipts";
 import { LinkstrIdentity } from "./services/LinkstrIdentity";
 import type { NostrTransport } from "./services/NostrTransport";
 import { RelayPolicy } from "./services/RelayPolicy";
@@ -53,6 +54,7 @@ export const linkstrServices = (config: LinkstrServicesConfig) =>
     PaymentNotices.Default,
     PaymentTelemetry.Default,
     Reactions.Default,
+    SeenReceipts.Default,
     WrapInbox.Default.pipe(
       Layer.provide(config.inboxCursorStore ?? InboxCursorStore.inMemory),
     ),

@@ -25,6 +25,7 @@ import { fetchRawEvents } from "../internal/plainFetch";
 import { resubscribeForever } from "../internal/resubscribe";
 import type { PaymentNoticeInboxEvent } from "../paymentNotices/events";
 import type { ReactionInboxEvent } from "../reactions/events";
+import type { SeenReceiptInboxEvent } from "../seenReceipts/events";
 import { LinkstrIdentity } from "../services/LinkstrIdentity";
 import { NostrTransport } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
@@ -38,6 +39,7 @@ export type WrapInboxEvent =
   | ReactionInboxEvent
   | ChatInboxEvent
   | PaymentNoticeInboxEvent
+  | SeenReceiptInboxEvent
   | WrapDropped;
 
 /**

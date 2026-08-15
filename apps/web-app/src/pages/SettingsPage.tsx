@@ -14,10 +14,14 @@ export function SettingsPage(): React.ReactElement {
     decimalAmountInputEnabled,
     displayCurrency,
     lang,
+    sendReadReceiptsEnabled,
     t,
   } = useAppShellCore();
-  const { toggleAllowedDisplayCurrency, toggleDecimalAmountInput } =
-    useAppShellActions();
+  const {
+    toggleAllowedDisplayCurrency,
+    toggleDecimalAmountInput,
+    toggleSendReadReceipts,
+  } = useAppShellActions();
 
   return (
     <section className="panel">
@@ -77,6 +81,29 @@ export function SettingsPage(): React.ReactElement {
               checked={decimalAmountInputEnabled}
               aria-label={t("decimalInput")}
               onChange={toggleDecimalAmountInput}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="settings-row">
+        <div className="settings-left">
+          <span className="settings-label-group settings-label-group-stacked">
+            <span className="settings-label">{t("sendReadReceipts")}</span>
+            <span className="settings-description">
+              {t("sendReadReceiptsDescription")}
+            </span>
+          </span>
+        </div>
+
+        <div className="settings-right">
+          <label className="switch">
+            <input
+              className="switch-input"
+              type="checkbox"
+              checked={sendReadReceiptsEnabled}
+              aria-label={t("sendReadReceipts")}
+              onChange={toggleSendReadReceipts}
             />
           </label>
         </div>

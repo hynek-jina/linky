@@ -28,6 +28,7 @@ export const DropReason = Schema.Literal(
   "nested-payload",
   "invalid-notice",
   "invalid-bank-offer",
+  "invalid-seen-receipt",
 );
 export type DropReason = typeof DropReason.Type;
 

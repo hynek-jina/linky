@@ -399,6 +399,7 @@ export const cs = {
   chatUnknownContactAddFailed: "Tento kontakt se zatím nepodařilo přidat.",
   chatQueued: "Zpráva zařazena do fronty.",
   chatPendingShort: "čeká",
+  chatSeenShort: "přečteno",
   chatImageAttach: "Přidat obrázek",
   chatImageDecrypting: "Dešifruji obrázek…",
   chatImageLoadFailed: "Obrázek se nepodařilo načíst.",
@@ -773,6 +774,9 @@ export const cs = {
   unitHiddenName: "Skryté",
   decimalInput: "Desetinná místa",
   decimalInputDescription: "Povolit zadávání haléřů u fiat měn.",
+  sendReadReceipts: "Odesílat potvrzení o přečtení",
+  sendReadReceiptsDescription:
+    "Kontakty uvidí, kdy sis jejich zprávy přečetl(a). Jejich potvrzení vidíš vždy.",
   decimalPoint: ",",
 
   cashuBalance: "Dostupný zůstatek",

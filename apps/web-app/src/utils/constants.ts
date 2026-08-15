@@ -3,6 +3,9 @@ export const DISPLAY_CURRENCY_STORAGE_KEY = "linky.display_currency.v1";
 export const DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY =
   "linky.display_allowed_currencies.v1";
 export const DECIMAL_AMOUNT_INPUT_STORAGE_KEY = "linky.decimal_amount_input.v1";
+// Epoch seconds when "send read receipts" was enabled; absent = off.
+export const SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY =
+  "linky.seen_receipts_enabled_at_sec.v1";
 export const FIAT_RATES_CACHE_STORAGE_KEY = "linky.fiat_rates.v1";
 export const FIAT_RATES_TTL_MS = 10 * 60 * 1000;
 export const NOSTR_NSEC_STORAGE_KEY = "linky.nostr_nsec";

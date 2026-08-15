@@ -1,4 +1,4 @@
-import { Info, Plus, X } from "lucide-react";
+import { CheckCheck, Info, Plus, X } from "lucide-react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
@@ -69,11 +69,13 @@ interface ChatMessageProps {
   canActOnPaymentRequest: boolean;
   canReplyOrReact: boolean;
   chatPendingLabel: string;
+  chatSeenLabel: string;
   declineInfo: { requestRumorId: string | null } | null;
   formatChatDayLabel: (ms: number) => string;
   getCashuTokenMessageInfo: (text: string) => CashuTokenMessageInfo | null;
   getMintIconUrl: (mint: MintUrlInput) => MintIcon;
   getNpubMessageContactInfo: (npub: string) => NpubMessageContactInfo | null;
+  isSeen: boolean;
   locale: string;
   message: LocalNostrMessage;
   messageElRef?: (el: HTMLDivElement | null, messageId: string) => void;
@@ -167,11 +169,13 @@ function ChatMessageComponent({
   canActOnPaymentRequest,
   canReplyOrReact,
   chatPendingLabel,
+  chatSeenLabel,
   declineInfo,
   formatChatDayLabel,
   getCashuTokenMessageInfo,
   getMintIconUrl,
   getNpubMessageContactInfo,
+  isSeen,
   locale,
   message,
   messageElRef,
@@ -683,7 +687,7 @@ function ChatMessageComponent({
 
       {isIdentityChangeMessage ? null : (
         <div
-          className={`chat-message ${isOut ? "out" : "in"}${isPending ? " pending" : ""}`}
+          className={`chat-message ${isOut ? "out" : "in"}${isPending ? " pending" : ""}${isSeen ? " seen" : ""}`}
           data-message-id={messageId || undefined}
           data-rumor-id={rumorId ?? undefined}
           data-reply-to-id={replyToId ?? undefined}
@@ -883,6 +887,15 @@ function ChatMessageComponent({
               ) : null}
               {previewUrl ? (
                 <LinkPreviewCard key={previewUrl} url={previewUrl} />
+              ) : null}
+              {isSeen ? (
+                <CheckCheck
+                  className="chat-seen-check"
+                  size={13}
+                  strokeWidth={2.5}
+                  role="img"
+                  aria-label={chatSeenLabel}
+                />
               ) : null}
             </div>
           </div>

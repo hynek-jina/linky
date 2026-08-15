@@ -393,6 +393,7 @@ export const de = {
     "Dieser Kontakt kann noch nicht hinzugefügt werden.",
   chatQueued: "Zum Senden vorgemerkt.",
   chatPendingShort: "ausstehend",
+  chatSeenShort: "gelesen",
   chatImageAttach: "Bild hinzufügen",
   chatImageDecrypting: "Bild wird entschlüsselt…",
   chatImageLoadFailed: "Bild konnte nicht geladen werden.",
@@ -756,6 +757,9 @@ export const de = {
   unitHiddenName: "Ausgeblendet",
   decimalInput: "Dezimalstellen",
   decimalInputDescription: "Cent-Beträge bei Fiatwährungen erlauben.",
+  sendReadReceipts: "Lesebestätigungen senden",
+  sendReadReceiptsDescription:
+    "Kontakte sehen, wann du ihre Nachrichten gelesen hast. Ihre Bestätigungen siehst du immer.",
   decimalPoint: ",",
 
   cashuBalance: "Verfügbares Guthaben",

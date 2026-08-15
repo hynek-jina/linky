@@ -73,6 +73,8 @@ interface Contact {
   npub?: string | null;
   unknownPubkeyHex?: string | null;
   lnAddress?: string | null;
+  chatPeerSeenSinceSec?: number | null;
+  chatPeerSeenAtSec?: number | null;
 }
 
 interface ChatPageProps {
@@ -164,6 +166,7 @@ interface ChatMessageViewModel extends ParsedChatMessage {
   canActOnPaymentRequest: boolean;
   canEdit: boolean;
   canReplyOrReact: boolean;
+  isSeen: boolean;
   message: LocalNostrMessage;
   nextMessage: LocalNostrMessage | null;
   onDeclinePaymentRequest: () => void;
@@ -275,6 +278,9 @@ interface ChatMessageListProps {
   onPayPaymentRequest: ChatPageProps["onPayPaymentRequest"];
   onReact: ChatPageProps["onReact"];
   onReply: ChatPageProps["onReply"];
+  /** Peer's reported seen window; 0 bounds mean no receipt yet. */
+  peerSeenSinceSec: number;
+  peerSeenUpToSec: number;
   reactionsByMessageId: Map<string, LocalNostrReaction[]>;
   selectedContactId: string;
   setMintIconUrlByMint: ChatPageProps["setMintIconUrlByMint"];
@@ -303,6 +309,8 @@ const ChatMessageList = memo(function ChatMessageList({
   onPayPaymentRequest,
   onReact,
   onReply,
+  peerSeenSinceSec,
+  peerSeenUpToSec,
   reactionsByMessageId,
   selectedContactId,
   setMintIconUrlByMint,
@@ -319,6 +327,7 @@ const ChatMessageList = memo(function ChatMessageList({
     [t],
   );
   const chatPendingLabel = t("chatPendingShort");
+  const chatSeenLabel = t("chatSeenShort");
   const locale = normalizeLocale(lang);
   const formatChatDayLabelForLang = useCallback(
     (timestamp: number) => formatChatDayLabel(timestamp, lang, t),
@@ -395,6 +404,11 @@ const ChatMessageList = memo(function ChatMessageList({
         privateImageInfo: null,
       };
       const rumorId = String(message.rumorId ?? "").trim();
+      const createdAtSec = Number(message.createdAtSec ?? 0) || 0;
+      const isSeen =
+        String(message.direction ?? "") === "out" &&
+        createdAtSec > peerSeenSinceSec &&
+        createdAtSec <= peerSeenUpToSec;
       const paymentRequestStatus = rumorId
         ? (latestRequestResponseByRumorId.get(rumorId)?.status ?? "requested")
         : "requested";
@@ -438,6 +452,7 @@ const ChatMessageList = memo(function ChatMessageList({
           !parsed.bankPaymentOfferInfo &&
           !parsed.declineInfo,
         canReplyOrReact: Boolean(rumorId),
+        isSeen,
         message,
         nextMessage:
           index + 1 < chatMessages.length ? chatMessages[index + 1] : null,
@@ -483,6 +498,8 @@ const ChatMessageList = memo(function ChatMessageList({
     getCashuTokenMessageInfo,
     onDeclinePaymentRequest,
     onPayPaymentRequest,
+    peerSeenSinceSec,
+    peerSeenUpToSec,
     reactionsByMessageId,
     selectedContactId,
     t,
@@ -537,6 +554,8 @@ const ChatMessageList = memo(function ChatMessageList({
             onReact={onReact}
             onReply={onReply}
             chatPendingLabel={chatPendingLabel}
+            chatSeenLabel={chatSeenLabel}
+            isSeen={viewModel.isSeen}
             messageElRef={messageElRef}
           />
         ))
@@ -1285,6 +1304,8 @@ export const ChatPage: FC<ChatPageProps> = ({
         onPayPaymentRequest={onPayPaymentRequest}
         onReact={onReact}
         onReply={onReply}
+        peerSeenSinceSec={Number(selectedContact.chatPeerSeenSinceSec ?? 0)}
+        peerSeenUpToSec={Number(selectedContact.chatPeerSeenAtSec ?? 0)}
         reactionsByMessageId={reactionsByMessageId}
         selectedContactId={selectedContact.id}
         setMintIconUrlByMint={setMintIconUrlByMint}

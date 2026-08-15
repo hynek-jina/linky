@@ -58,6 +58,7 @@ export interface AppShellCoreContextValue {
   currentNsec: string | null;
   decimalAmountInputEnabled: boolean;
   decimalAmountInputKeyVisible: boolean;
+  sendReadReceiptsEnabled: boolean;
   displayCurrency: DisplayCurrency;
   derivedProfile: DerivedProfileDefaults | null;
   displayUnit: string;
@@ -188,6 +189,7 @@ export interface AppShellActionsContextValue {
   shareOptionsViaWhatsApp: () => void;
   toggleAllowedDisplayCurrency: (currency: DisplayCurrency) => void;
   toggleDecimalAmountInput: () => void;
+  toggleSendReadReceipts: () => void;
   toggleProfileEditing: () => void;
   toggleProfileStatusCurrency: (
     currency: ProfileStatusCurrency,

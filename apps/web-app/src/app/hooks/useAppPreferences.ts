@@ -7,6 +7,7 @@ import {
   DISPLAY_CURRENCY_STORAGE_KEY,
   LIGHTNING_INVOICE_AUTO_PAY_LIMIT_STORAGE_KEY,
   PAY_WITH_CASHU_STORAGE_KEY,
+  SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY,
   SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY,
   UNIT_TOGGLE_STORAGE_KEY,
 } from "../../utils/constants";
@@ -20,6 +21,7 @@ interface UseAppPreferencesParams {
   bankPaymentOfferRecipientCount: number;
   lightningInvoiceAutoPayLimit: number;
   payWithCashuEnabled: boolean;
+  seenReceiptsEnabledAtSec: number | null;
   showProfileQrOnTiltEnabled: boolean;
 }
 
@@ -31,6 +33,7 @@ export const useAppPreferences = ({
   bankPaymentOfferRecipientCount,
   lightningInvoiceAutoPayLimit,
   payWithCashuEnabled,
+  seenReceiptsEnabledAtSec,
   showProfileQrOnTiltEnabled,
 }: UseAppPreferencesParams): void => {
   React.useEffect(() => {
@@ -103,6 +106,21 @@ export const useAppPreferences = ({
       // ignore
     }
   }, [cashuAutoswapEnabled]);
+
+  React.useEffect(() => {
+    try {
+      if (seenReceiptsEnabledAtSec === null) {
+        localStorage.removeItem(SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY);
+      } else {
+        localStorage.setItem(
+          SEEN_RECEIPTS_ENABLED_AT_SEC_STORAGE_KEY,
+          String(seenReceiptsEnabledAtSec),
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }, [seenReceiptsEnabledAtSec]);
 
   React.useEffect(() => {
     try {

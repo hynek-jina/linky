@@ -2128,6 +2128,7 @@ button.settings-sensitive-action.is-armed {
 }
 
 .chat-bubble {
+  position: relative;
   padding: 10px 12px;
   border-radius: 14px;
   border: none;
@@ -2136,6 +2137,18 @@ button.settings-sensitive-action.is-armed {
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.chat-message.seen .chat-bubble.out {
+  padding-right: 28px;
+}
+
+.chat-seen-check {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  color: #2dd4bf;
+  opacity: 0.9;
 }
 
 .chat-bubble.in {
