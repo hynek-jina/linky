@@ -1,12 +1,16 @@
 import { Atom, useAtomMount, useAtomSet } from "@effect-atom/atom-react";
 import { Outbox } from "@linky/linkstr";
-import type { OutboxOperation, OutboxRef, OutboxResult } from "@linky/linkstr";
+import type {
+  OutboxRef,
+  OutboxResult,
+  RumorFixedOperation,
+} from "@linky/linkstr";
 import { Effect, Stream } from "effect";
 import { useEffect, useRef } from "react";
 import { linkstrRuntimeAtom } from "./runtime";
 
 export interface EnqueueOutboxInput {
-  readonly op: OutboxOperation;
+  readonly op: RumorFixedOperation;
   readonly ref: OutboxRef;
 }
 

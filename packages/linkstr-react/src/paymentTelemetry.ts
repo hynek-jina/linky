@@ -1,16 +1,18 @@
-import { PaymentTelemetry } from "@linky/linkstr";
-import type { PaymentTelemetryDraft, Pubkey } from "@linky/linkstr";
+import { Outbox } from "@linky/linkstr";
+import type { OutboxRef, PaymentTelemetryDraft, Pubkey } from "@linky/linkstr";
 import { Effect } from "effect";
 import { linkstrRuntimeAtom } from "./runtime";
 
-export interface PublishPaymentTelemetryParams {
+export interface EnqueuePaymentTelemetryParams {
   readonly draft: PaymentTelemetryDraft;
   readonly recipient: Pubkey;
+  readonly ref: OutboxRef;
 }
 
-export const publishPaymentTelemetryAtom =
-  linkstrRuntimeAtom.fn<PublishPaymentTelemetryParams>()((params) =>
-    Effect.flatMap(PaymentTelemetry, (paymentTelemetry) =>
-      paymentTelemetry.publishPaymentTelemetry(params.draft, params.recipient),
+/** Durable send: the outbox owns delivery, retries and the terminal result. */
+export const enqueuePaymentTelemetryAtom =
+  linkstrRuntimeAtom.fn<EnqueuePaymentTelemetryParams>()((params) =>
+    Effect.flatMap(Outbox, (outbox) =>
+      outbox.enqueueTelemetry(params.draft, params.recipient, params.ref),
     ),
   );

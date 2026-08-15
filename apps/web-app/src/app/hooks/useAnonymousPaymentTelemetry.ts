@@ -2,10 +2,11 @@ import type { OwnerId } from "@evolu/common";
 import {
   ClientId,
   decodeNpub,
+  OutboxRef,
   PaymentTelemetryDraft,
   UnixSeconds,
 } from "@linky/linkstr";
-import { publishPaymentTelemetryAtom, useAtomSet } from "@linky/linkstr-react";
+import { enqueuePaymentTelemetryAtom, useAtomSet } from "@linky/linkstr-react";
 import { Exit, Schema } from "effect";
 import React from "react";
 import {
@@ -18,7 +19,6 @@ import {
   safeLocalStorageSetJson,
   withLocalStorageLeaseLock,
 } from "../../utils/storage";
-import { getPaymentTelemetryRetryDelaySec } from "../lib/paymentTelemetry";
 import type { LocalPaymentTelemetryEvent } from "../types/appTypes";
 
 interface UseAnonymousPaymentTelemetryParams {
@@ -27,6 +27,8 @@ interface UseAnonymousPaymentTelemetryParams {
 }
 
 const PAYMENT_TELEMETRY_FLUSH_INTERVAL_MS = 45_000;
+/** Telemetry shares the outbox's FIFO lane with chat, so it is drained in
+ * small batches rather than all at once. */
 const MAX_ITEMS_PER_FLUSH = 10;
 const isClientId = Schema.is(ClientId);
 const isUnixSeconds = Schema.is(UnixSeconds);
@@ -99,9 +101,6 @@ const isLocalPaymentTelemetryEvent = (
 
   const id = Reflect.get(value, "id");
   const createdAtSec = Reflect.get(value, "createdAtSec");
-  const attemptCount = Reflect.get(value, "attemptCount");
-  const lastAttemptAtSec = Reflect.get(value, "lastAttemptAtSec");
-  const nextAttemptAtSec = Reflect.get(value, "nextAttemptAtSec");
   const direction = Reflect.get(value, "direction");
   const status = Reflect.get(value, "status");
   const method = Reflect.get(value, "method");
@@ -119,9 +118,6 @@ const isLocalPaymentTelemetryEvent = (
   return (
     typeof id === "string" &&
     typeof createdAtSec === "number" &&
-    typeof attemptCount === "number" &&
-    (typeof lastAttemptAtSec === "number" || lastAttemptAtSec === null) &&
-    typeof nextAttemptAtSec === "number" &&
     isTelemetryDirection(direction) &&
     isTelemetryStatus(status) &&
     isTelemetryMethod(method) &&
@@ -180,19 +176,23 @@ const toPaymentTelemetryDraft = (
   });
 };
 
+/**
+ * Payment events are recorded into a per-owner localStorage buffer before the
+ * linkstr runtime is necessarily ready; this hook hands them to the outbox,
+ * which owns delivery and retries from that moment on.
+ */
 export const useAnonymousPaymentTelemetry = ({
   appOwnerId,
   makeLocalStorageKey,
 }: UseAnonymousPaymentTelemetryParams): void => {
   const flushRef = React.useRef<Promise<void> | null>(null);
-  const publishPaymentTelemetry = useAtomSet(publishPaymentTelemetryAtom, {
+  const enqueuePaymentTelemetry = useAtomSet(enqueuePaymentTelemetryAtom, {
     mode: "promiseExit",
   });
 
   const flushQueue = React.useCallback(async () => {
     if (!appOwnerId) return;
     if (flushRef.current) return;
-    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 
     const storageKey = makeLocalStorageKey(
       LOCAL_PENDING_PAYMENT_TELEMETRY_STORAGE_KEY_PREFIX,
@@ -201,44 +201,31 @@ export const useAnonymousPaymentTelemetry = ({
       LOCAL_PENDING_PAYMENT_TELEMETRY_LOCK_STORAGE_KEY_PREFIX,
     );
 
+    // The lock is what keeps two tabs from enqueueing the same pending item
+    // twice: the outbox does not dedupe across tabs.
     const run = withLocalStorageLeaseLock({
       key: lockKey,
       fn: async () => {
-        const queue = readQueue(storageKey);
-        if (queue.length === 0) return;
-
-        const nowSec = Math.floor(Date.now() / 1000);
-        const dueItems = queue
-          .filter((item) => item.nextAttemptAtSec <= nowSec)
-          .slice(0, MAX_ITEMS_PER_FLUSH);
-        if (dueItems.length === 0) return;
+        const pending = readQueue(storageKey);
+        if (pending.length === 0) return;
 
         const recipient = decodeNpub(PAYMENT_ANALYTICS_RECIPIENT_NPUB);
         if (!recipient) return;
-        const remainingById = new Map(queue.map((item) => [item.id, item]));
+        const remainingById = new Map(pending.map((item) => [item.id, item]));
 
-        for (const item of dueItems) {
+        for (const item of pending.slice(0, MAX_ITEMS_PER_FLUSH)) {
           const draft = toPaymentTelemetryDraft(item);
-          const outcome =
-            draft === null
-              ? null
-              : await publishPaymentTelemetry({ draft, recipient });
-
-          if (outcome !== null && Exit.isSuccess(outcome)) {
-            remainingById.delete(item.id);
+          if (draft === null) {
+            remainingById.delete(item.id); // unencodable: it can never be sent
             continue;
           }
 
-          const current = remainingById.get(item.id);
-          if (!current) continue;
-          const nextAttemptCount = current.attemptCount + 1;
-          remainingById.set(item.id, {
-            ...current,
-            attemptCount: nextAttemptCount,
-            lastAttemptAtSec: nowSec,
-            nextAttemptAtSec:
-              nowSec + getPaymentTelemetryRetryDelaySec(nextAttemptCount),
+          const outcome = await enqueuePaymentTelemetry({
+            draft,
+            recipient,
+            ref: OutboxRef.make(`telemetry:${item.id}`),
           });
+          if (Exit.isSuccess(outcome)) remainingById.delete(item.id);
         }
 
         writeQueue(storageKey, Array.from(remainingById.values()));
@@ -249,7 +236,7 @@ export const useAnonymousPaymentTelemetry = ({
 
     flushRef.current = run;
     await run;
-  }, [appOwnerId, makeLocalStorageKey, publishPaymentTelemetry]);
+  }, [appOwnerId, makeLocalStorageKey, enqueuePaymentTelemetry]);
 
   React.useEffect(() => {
     void flushQueue();

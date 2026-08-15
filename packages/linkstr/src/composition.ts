@@ -43,6 +43,7 @@ export const linkstrServices = (config: LinkstrServicesConfig) =>
       Layer.provide([
         Chat.Default,
         Reactions.Default,
+        PaymentTelemetry.Default,
         config.outboxStore ?? OutboxStore.inMemory,
       ]),
     ),
