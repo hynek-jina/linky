@@ -4,6 +4,7 @@ import {
   Bean,
   Bitcoin,
   BrushCleaning,
+  CheckCheck,
   Cloud,
   Coins,
   Copy,
@@ -86,6 +87,7 @@ function SettingsLinkRow({
 
 interface SettingsToggleRowProps {
   checked: boolean;
+  description?: string;
   disabled?: boolean;
   icon: React.ReactNode;
   label: string;
@@ -94,6 +96,7 @@ interface SettingsToggleRowProps {
 
 function SettingsToggleRow({
   checked,
+  description,
   disabled,
   icon,
   label,
@@ -105,7 +108,14 @@ function SettingsToggleRow({
         <span className="settings-icon" aria-hidden="true">
           {icon}
         </span>
-        <span className="settings-label">{label}</span>
+        {description ? (
+          <span className="settings-label-group settings-label-group-stacked">
+            <span className="settings-label">{label}</span>
+            <span className="settings-description">{description}</span>
+          </span>
+        ) : (
+          <span className="settings-label">{label}</span>
+        )}
       </div>
       <label className="switch">
         <input
@@ -152,8 +162,13 @@ export function AdvancedPage(): React.ReactElement {
   const connectedRelayCount = countConnectedRelays(relayUrls, relayHealth);
   const nostrRelayOverallStatus = overallRelayStatus(relayUrls, relayHealth);
   const navigateTo = useNavigation();
-  const { currentNsec, formatDisplayedAmountParts, t } = useAppShellCore();
-  const { openFeedbackContact } = useAppShellActions();
+  const {
+    currentNsec,
+    formatDisplayedAmountParts,
+    sendReadReceiptsEnabled,
+    t,
+  } = useAppShellCore();
+  const { openFeedbackContact, toggleSendReadReceipts } = useAppShellActions();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationsIsBusy, setNotificationsIsBusy] = useState(false);
   const [armedSecurityAction, setArmedSecurityAction] = useState<
@@ -363,6 +378,14 @@ export function AdvancedPage(): React.ReactElement {
           checked={notificationsEnabled}
           disabled={!currentNsec || notificationsIsBusy}
           onChange={(checked) => void handleNotificationsChange(checked)}
+        />
+
+        <SettingsToggleRow
+          icon={<CheckCheck size={18} />}
+          label={t("sendReadReceipts")}
+          description={t("sendReadReceiptsDescription")}
+          checked={sendReadReceiptsEnabled}
+          onChange={toggleSendReadReceipts}
         />
       </div>
 
