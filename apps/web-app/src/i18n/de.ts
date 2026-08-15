@@ -185,6 +185,8 @@ export const de = {
   nostrDeriveArmedHint:
     "Beim Ableiten werden die Nostr-Schlüssel neu erzeugt. Klicke zum Bestätigen noch einmal.",
   nostrPasteInvalid: "Ungültiger Nostr-Schlüssel (nsec… erwartet).",
+  nostrKeySwitchProfilePublishFailed:
+    "Profil konnte nicht unter dem neuen Schlüssel veröffentlicht werden. Schlüssel wurden nicht gewechselt — bitte erneut versuchen.",
 
   nostrRelay: "Nostr-Relay",
   evoluServer: "Evolu-Server",

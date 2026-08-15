@@ -1,5 +1,6 @@
 import * as Evolu from "@evolu/common";
 import { useOwner, useQuery } from "@evolu/react";
+import type { ProfileMetadata } from "@linky/linkstr";
 import React from "react";
 import type { evolu, useEvolu } from "../../../evolu";
 import { useEvoluSyncOwner } from "../../../evolu";
@@ -61,10 +62,13 @@ export const useIdentityOwnersComposition = ({
     | null
   >(null);
 
+  const myProfileMetadataRef = React.useRef<ProfileMetadata | null>(null);
+
   const profileAuth = useProfileAuthComposition({
     appendIdentityChangeNoticesRef,
     currentNsec,
     lang,
+    myProfileMetadataRef,
     pushToast,
     t,
     upsert,
@@ -247,6 +251,7 @@ export const useIdentityOwnersComposition = ({
     currentNsec,
     historicalOwnerSetsReady,
     messagesOwnerIdRef,
+    myProfileMetadataRef,
     nostrIdentityRows,
     setCurrentNsec,
     syncedNostrIdentityMatchesLocal,

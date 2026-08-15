@@ -189,6 +189,8 @@ export const cs = {
   nostrDeriveArmedHint:
     "Derivace znovu vygeneruje Nostr klíče z klíčů. Klikněte ještě jednou pro potvrzení.",
   nostrPasteInvalid: "Neplatný Nostr klíč (očekávám nsec…).",
+  nostrKeySwitchProfilePublishFailed:
+    "Profil se nepodařilo publikovat pod novým klíčem. Klíče nebyly změněny — zkuste to znovu.",
 
   nostrRelay: "Nostr relay",
   evoluServer: "Evolu server",

@@ -185,6 +185,8 @@ export const en = {
   nostrDeriveArmedHint:
     "Derive will regenerate Nostr keys from your keys. Click once more to confirm.",
   nostrPasteInvalid: "Invalid Nostr key (expected nsec…).",
+  nostrKeySwitchProfilePublishFailed:
+    "Could not publish your profile under the new key. Keys were not switched — try again.",
 
   nostrRelay: "Nostr relay",
   evoluServer: "Evolu server",

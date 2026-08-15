@@ -1,3 +1,4 @@
+import type { ProfileMetadata } from "@linky/linkstr";
 import React from "react";
 import { useEvolu } from "../evolu";
 import { useToasts } from "../hooks/useToasts";
@@ -16,10 +17,12 @@ export const useUnauthenticatedAppShellComposition = () => {
       }) => void)
     | null
   >(null);
+  const myProfileMetadataRef = React.useRef<ProfileMetadata | null>(null);
   const onboarding = useProfileAuthComposition({
     appendIdentityChangeNoticesRef,
     currentNsec: null,
     lang,
+    myProfileMetadataRef,
     pushToast,
     t,
     upsert,
