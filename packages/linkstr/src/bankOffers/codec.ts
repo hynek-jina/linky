@@ -28,35 +28,74 @@ const decodeJsonRecord = Schema.decodeUnknownOption(
   ),
 );
 
+/** The offer-message payload; `null` fields are omitted from the JSON. `text`
+ * is the display copy, which the app owns and templates. */
+export interface BankOfferContent {
+  offerId: BankOfferId;
+  offerer: Pubkey;
+  status: BankOfferStatus;
+  amountText: string;
+  text: string;
+  statusUpdatedAtSec: UnixSeconds | null;
+  initiatedAtSec: UnixSeconds | null;
+  bankPaidAtSec: UnixSeconds | null;
+  expiresAtSec: UnixSeconds | null;
+  extensionSec: number | null;
+  amountSat: number | null;
+  spdPayload: string | null;
+}
+
+/** The single definition of the offer-message wire shape; key order is part of
+ * the format, so keep the literal in this order. */
+export const encodeBankOfferContent = (content: BankOfferContent): string =>
+  JSON.stringify({
+    amountText: content.amountText,
+    offerId: content.offerId,
+    offererPublicKey: content.offerer,
+    status: content.status,
+    ...(content.statusUpdatedAtSec === null
+      ? {}
+      : { statusUpdatedAtSec: content.statusUpdatedAtSec }),
+    text: content.text,
+    type: "linky.bank_payment_offer",
+    version: 1,
+    ...(content.initiatedAtSec === null
+      ? {}
+      : { initiatedAtSec: content.initiatedAtSec }),
+    ...(content.bankPaidAtSec === null
+      ? {}
+      : { bankPaidAtSec: content.bankPaidAtSec }),
+    ...(content.expiresAtSec === null
+      ? {}
+      : { expiresAtSec: content.expiresAtSec }),
+    ...(content.extensionSec === null
+      ? {}
+      : { extensionSec: content.extensionSec }),
+    ...(content.amountSat === null ? {} : { amountSat: content.amountSat }),
+    ...(content.spdPayload === null ? {} : { spdPayload: content.spdPayload }),
+  });
+
 export const encodeBankOfferRumor = (
   draft: BankOfferDraft,
   author: Pubkey,
   sentAt: UnixSeconds,
   clientId: ClientId,
 ): Rumor => {
-  const initiatedAtSec =
-    draft.initiatedAtSec ?? (draft.status === "offered" ? sentAt : undefined);
-  const bankPaidAtSec =
-    draft.bankPaidAtSec ?? (draft.status === "bank_paid" ? sentAt : undefined);
-  const content = JSON.stringify({
-    amountText: draft.amountText,
+  const content = encodeBankOfferContent({
     offerId: draft.offerId,
-    offererPublicKey: draft.offerer,
+    offerer: draft.offerer,
     status: draft.status,
-    statusUpdatedAtSec: sentAt,
+    amountText: draft.amountText,
     text: draft.text,
-    type: "linky.bank_payment_offer",
-    version: 1,
-    ...(initiatedAtSec === undefined ? {} : { initiatedAtSec }),
-    ...(bankPaidAtSec === undefined ? {} : { bankPaidAtSec }),
-    ...(draft.expiresAtSec === undefined
-      ? {}
-      : { expiresAtSec: draft.expiresAtSec }),
-    ...(draft.extensionSec === undefined
-      ? {}
-      : { extensionSec: draft.extensionSec }),
-    ...(draft.amountSat === undefined ? {} : { amountSat: draft.amountSat }),
-    ...(draft.spdPayload === undefined ? {} : { spdPayload: draft.spdPayload }),
+    statusUpdatedAtSec: sentAt,
+    initiatedAtSec:
+      draft.initiatedAtSec ?? (draft.status === "offered" ? sentAt : null),
+    bankPaidAtSec:
+      draft.bankPaidAtSec ?? (draft.status === "bank_paid" ? sentAt : null),
+    expiresAtSec: draft.expiresAtSec ?? null,
+    extensionSec: draft.extensionSec ?? null,
+    amountSat: draft.amountSat ?? null,
+    spdPayload: draft.spdPayload ?? null,
   });
 
   return rumorWithHash({
