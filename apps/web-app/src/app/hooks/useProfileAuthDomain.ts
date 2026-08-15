@@ -21,7 +21,7 @@ import {
 } from "@linky/linkstr-react";
 import { Cause, Exit, Option } from "effect";
 import type { Lang } from "../../i18n";
-import { saveCachedProfile } from "../../profileCache";
+import { loadCachedProfile, saveCachedProfile } from "../../profileCache";
 import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 import { readClipboardText } from "../../platform/clipboard";
 import {
@@ -122,6 +122,7 @@ interface UseProfileAuthDomainParams {
   >;
   currentNsec: string | null;
   lang: Lang;
+  myProfileMetadataRef: React.MutableRefObject<ProfileMetadata | null>;
   pushToast: (message: string) => void;
   t: (key: string) => string;
   upsert: EvoluMutations["upsert"];
@@ -191,6 +192,7 @@ export const useProfileAuthDomain = ({
   appendIdentityChangeNoticesRef,
   currentNsec,
   lang,
+  myProfileMetadataRef,
   pushToast,
   t,
   upsert,
@@ -422,6 +424,45 @@ export const useProfileAuthDomain = ({
     [currentNsec, publishProfile, setLinkstrConfig, t],
   );
 
+  const republishProfileForNewKey = React.useCallback(
+    async (newNsec: string): Promise<boolean> => {
+      const previousNsec = String(currentNsec ?? "").trim();
+      if (!previousNsec || previousNsec === newNsec) return true;
+
+      const previousNpub = await deriveNpubFromNsec(previousNsec);
+      const metadata =
+        myProfileMetadataRef.current ??
+        (previousNpub
+          ? (loadCachedProfile(previousNpub)?.metadata ?? null)
+          : null);
+      if (!metadata) return true;
+
+      const config = buildLinkstrConfig(newNsec, NOSTR_RELAYS);
+      if (config === null) return false;
+
+      setLinkstrConfig(config);
+      const publishExit = await publishProfile(metadata);
+      if (Exit.isFailure(publishExit)) {
+        // Hand the runtime back to the still-active identity before bailing.
+        setLinkstrConfig(buildLinkstrConfig(previousNsec, NOSTR_RELAYS));
+        return false;
+      }
+
+      const newNpub = await deriveNpubFromNsec(newNsec);
+      if (newNpub) {
+        saveCachedProfile(newNpub, metadata, Math.floor(Date.now() / 1000));
+      }
+      return true;
+    },
+    [
+      currentNsec,
+      deriveNpubFromNsec,
+      myProfileMetadataRef,
+      publishProfile,
+      setLinkstrConfig,
+    ],
+  );
+
   const setIdentityFromNsecAndReload = React.useCallback(
     async (
       nsec: string,
@@ -473,6 +514,12 @@ export const useProfileAuthDomain = ({
         Boolean(previousNsec) &&
         previousNsec !== raw;
 
+      const republished = await republishProfileForNewKey(raw);
+      if (!republished) {
+        pushToast(t("nostrKeySwitchProfilePublishFailed"));
+        return;
+      }
+
       await persistIdentitySecrets({
         appMnemonic,
         cashuMnemonic: derivedCashuMnemonic,
@@ -521,6 +568,7 @@ export const useProfileAuthDomain = ({
       currentNsec,
       deriveAppMnemonicFromSlip39,
       pushToast,
+      republishProfileForNewKey,
       t,
       upsertActiveNostrIdentity,
     ],

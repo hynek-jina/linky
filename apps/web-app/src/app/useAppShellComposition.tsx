@@ -136,6 +136,7 @@ export const useAppShellComposition = ({
     messagesOwnerIndex,
     messagesVisibleOwnerIds,
     metaOwnerId,
+    myProfileMetadataRef,
     nostrIdentityRows,
     requestLogout,
     requestManualRotateCashuOwner,
@@ -652,6 +653,7 @@ export const useAppShellComposition = ({
     effectiveProfileName,
     effectiveProfilePicture,
     isProfileEditing,
+    myProfileMetadata,
     myProfileName,
     myProfileQr,
     myProfileStatus,
@@ -701,6 +703,12 @@ export const useAppShellComposition = ({
     setStatus,
     t,
   });
+
+  // The identity-owners composition runs before the profile composition, so
+  // the key-switch flow reaches the current profile through this ref.
+  React.useEffect(() => {
+    myProfileMetadataRef.current = myProfileMetadata;
+  }, [myProfileMetadata, myProfileMetadataRef]);
 
   const {
     applyDefaultMintSelection,

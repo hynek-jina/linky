@@ -1,3 +1,4 @@
+import type { ProfileMetadata } from "@linky/linkstr";
 import type { useEvolu } from "../../../evolu";
 import type { Lang } from "../../../i18n";
 import type { IdentityChangeMessageSource } from "../../lib/identityChangeMessage";
@@ -13,6 +14,7 @@ interface UseProfileAuthCompositionParams {
   >;
   currentNsec: string | null;
   lang: Lang;
+  myProfileMetadataRef: React.MutableRefObject<ProfileMetadata | null>;
   pushToast: (message: string) => void;
   t: (key: string) => string;
   upsert: ReturnType<typeof useEvolu>["upsert"];
@@ -26,6 +28,7 @@ export const useProfileAuthComposition = ({
   appendIdentityChangeNoticesRef,
   currentNsec,
   lang,
+  myProfileMetadataRef,
   pushToast,
   t,
   upsert,
@@ -34,6 +37,7 @@ export const useProfileAuthComposition = ({
     appendIdentityChangeNoticesRef,
     currentNsec,
     lang,
+    myProfileMetadataRef,
     pushToast,
     t,
     upsert,
