@@ -804,10 +804,6 @@ export const useContactsMessagingComposition = ({
     [bankPaymentOfferMessages, lastMessageByContactId],
   );
 
-  const pendingArchivedContactThreadIdsRef = React.useRef(
-    new Map<string, string>(),
-  );
-
   const evoluOwnersReadyForNostr = isSeedLogin
     ? Boolean(
         cashuOwnerId &&
@@ -1035,6 +1031,9 @@ export const useContactsMessagingComposition = ({
   ]);
 
   React.useEffect(() => {
+    // The lightning-address match guesses identity and writes an npub, so it
+    // only considers active contacts; a direct npub match also reclaims
+    // threads of archived contacts.
     const activeContacts = contacts.filter((contact) => {
       const archivedAtSec = Number(contact.archivedAtSec ?? 0);
       return !Number.isFinite(archivedAtSec) || archivedAtSec <= 0;
@@ -1045,7 +1044,7 @@ export const useContactsMessagingComposition = ({
       const unknownNpub = normalizeNpubIdentifier(unknownContact.npub);
       if (!unknownContactId || !unknownNpub) continue;
 
-      let knownContact = activeContacts.find((contact) => {
+      let knownContact = contacts.find((contact) => {
         const knownContactId = String(contact.id ?? "").trim();
         if (!knownContactId || knownContactId === unknownContactId) {
           return false;
@@ -2347,32 +2346,26 @@ export const useContactsMessagingComposition = ({
       contacts.find(
         (contact) => String(contact.id ?? "").trim() === normalizedContactId,
       ) ?? null;
-    const archivedContactNpub = normalizeNpubIdentifier(contactToArchive?.npub);
-    let unknownThreadContactId: string | null = null;
-    if (archivedContactNpub) {
-      unknownThreadContactId = buildUnknownContactId(
-        decodeNpub(archivedContactNpub),
-      );
-    }
 
     const archivedAtSec = Math.ceil(Date.now() / 1e3);
     const storedContactOwnerId = contactToArchive
       ? resolveContactRowOwnerLane(contactToArchive, contactsVisibleOwnerIds)
       : null;
     const archiveOwnerId = storedContactOwnerId ?? contactsOwnerId;
+    // Archiving marks the conversation read; the messages stay on this contact
+    // and a newer incoming message restores it from the archive.
+    const payload = {
+      id,
+      archivedAtSec,
+      chatLastSeenAtSec: Math.max(
+        archivedAtSec,
+        Number(contactToArchive?.chatLastSeenAtSec ?? 0) || 0,
+      ),
+    };
     const result = archiveOwnerId
-      ? update("contact", { id, archivedAtSec }, { ownerId: archiveOwnerId })
-      : update("contact", { id, archivedAtSec });
+      ? update("contact", payload, { ownerId: archiveOwnerId })
+      : update("contact", payload);
     if (result.ok) {
-      if (
-        unknownThreadContactId &&
-        unknownThreadContactId !== normalizedContactId
-      ) {
-        pendingArchivedContactThreadIdsRef.current.set(
-          normalizedContactId,
-          unknownThreadContactId,
-        );
-      }
       setStatus(t("contactArchived"));
       closeContactDetail();
       return;
@@ -2380,7 +2373,7 @@ export const useContactsMessagingComposition = ({
     setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
   };
 
-  const restoreArchivedContact = React.useCallback(
+  const unarchiveContact = React.useCallback(
     (id: ContactId) => {
       const contactToRestore =
         contacts.find((contact) => contact.id === id) ?? null;
@@ -2406,23 +2399,29 @@ export const useContactsMessagingComposition = ({
             reassignNostrConversationContactId(unknownContactId, String(id));
           }
         }
-        setStatus(t("contactRestored"));
-        closeContactDetail();
-        return;
       }
-
-      setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+      return result;
     },
     [
-      closeContactDetail,
       contacts,
       contactsOwnerId,
       contactsVisibleOwnerIds,
       reassignNostrConversationContactId,
-      setStatus,
-      t,
       update,
     ],
+  );
+
+  const restoreArchivedContact = React.useCallback(
+    (id: ContactId) => {
+      const result = unarchiveContact(id);
+      if (result.ok) {
+        setStatus(t("contactRestored"));
+        closeContactDetail();
+        return;
+      }
+      setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+    },
+    [closeContactDetail, setStatus, t, unarchiveContact],
   );
 
   const publishMuteList = useAtomSet(publishMuteListAtom, {
@@ -2479,21 +2478,18 @@ export const useContactsMessagingComposition = ({
     },
   );
 
+  // An incoming message newer than the archive brings the contact back.
   React.useEffect(() => {
     for (const contact of contacts) {
-      const contactId = String(contact.id ?? "").trim();
-      if (!contactId) continue;
-      const unknownContactId =
-        pendingArchivedContactThreadIdsRef.current.get(contactId);
-      if (!unknownContactId) continue;
-
       const archivedAtSec = Number(contact.archivedAtSec ?? 0);
       if (!Number.isFinite(archivedAtSec) || archivedAtSec <= 0) continue;
-
-      pendingArchivedContactThreadIdsRef.current.delete(contactId);
-      reassignNostrConversationContactId(contactId, unknownContactId);
+      const contactId = String(contact.id ?? "").trim();
+      if (!contactId) continue;
+      const newestIncomingAtSec = unreadByContactId.get(contactId) ?? 0;
+      if (newestIncomingAtSec <= archivedAtSec) continue;
+      unarchiveContact(contact.id);
     }
-  }, [contacts, reassignNostrConversationContactId]);
+  }, [contacts, unarchiveContact, unreadByContactId]);
 
   const blockArchivedContact = React.useCallback(async () => {
     if (route.kind !== "contactEdit") return;
