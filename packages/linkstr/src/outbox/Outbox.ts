@@ -12,13 +12,20 @@ import {
   TextMessageDraft,
   TokenMessageDraft,
 } from "../chat/domain";
-import type { NoRelayReachable, RecipientNotReached } from "../domain/errors";
+import type {
+  NoRelayReachable,
+  PaymentTelemetryNotDelivered,
+  RecipientNotReached,
+} from "../domain/errors";
 import { EventId, RumorId } from "../domain/primitives";
 import type { ClientId, Pubkey, UnixSeconds } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { OperationFailed, PlainOperationSucceeded } from "../inspector/events";
 import type { Rumor } from "../internal/nostrEvent";
 import { freshClientId, nowSeconds } from "../internal/operations";
+import type { PaymentTelemetryDraft } from "../paymentTelemetry/domain";
+import { PaymentTelemetryReceipt } from "../paymentTelemetry/domain";
+import { PaymentTelemetry } from "../paymentTelemetry/PaymentTelemetry";
 import { encodeReactionRumor } from "../reactions/codec";
 import { ReactionDraft, ReactionReceipt } from "../reactions/domain";
 import { Reactions } from "../reactions/Reactions";
@@ -35,6 +42,7 @@ import type {
   OutboxReceipt,
   OutboxRef,
   OutboxResult,
+  RumorFixedOperation,
 } from "./domain";
 import { OutboxStore } from "./OutboxStore";
 
@@ -47,10 +55,10 @@ const fifo = (jobs: ReadonlyArray<StoredOutboxJob>): Array<StoredOutboxJob> =>
   [...jobs].sort((a, b) => a.enqueuedAt - b.enqueuedAt);
 
 const normalizeOperation = (
-  operation: OutboxOperation,
+  operation: RumorFixedOperation,
   clientId: ClientId,
   sentAt: UnixSeconds,
-): OutboxOperation => {
+): RumorFixedOperation => {
   switch (operation._tag) {
     case "chat.text":
       return {
@@ -81,7 +89,7 @@ const normalizeOperation = (
 };
 
 const encodeOperationRumor = (
-  operation: OutboxOperation,
+  operation: RumorFixedOperation,
   author: Pubkey,
   sentAt: UnixSeconds,
   clientId: ClientId,
@@ -100,8 +108,11 @@ const encodeOperationRumor = (
   }
 };
 
-const receiptRumorId = (receipt: OutboxReceipt): RumorId =>
-  receipt instanceof ReactionReceipt ? receipt.reactionId : receipt.messageId;
+const receiptRumorId = (receipt: OutboxReceipt): RumorId => {
+  if (receipt instanceof ReactionReceipt) return receipt.reactionId;
+  if (receipt instanceof PaymentTelemetryReceipt) return receipt.telemetryId;
+  return receipt.messageId;
+};
 
 interface OnlineEventTarget {
   addEventListener(type: string, listener: () => void): void;
@@ -117,7 +128,8 @@ const isOnlineEventTarget = (value: unknown): value is OnlineEventTarget =>
   typeof value.removeEventListener === "function";
 
 /**
- * Durable send queue over the Chat and Reactions verticals. `enqueue` persists
+ * Durable send queue over the Chat, Reactions and PaymentTelemetry verticals.
+ * `enqueue` persists
  * a normalized job and precomputes its rumor, so the returned `messageId` is
  * what every delivery retry publishes; a background worker delivers jobs
  * strictly FIFO with invisible backoff retries on delivery errors. Terminal
@@ -132,6 +144,7 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
     const store = yield* OutboxStore;
     const chat = yield* Chat;
     const reactions = yield* Reactions;
+    const paymentTelemetry = yield* PaymentTelemetry;
     const identity = yield* LinkstrIdentity;
     const inspector = yield* Inspector.orNoop;
 
@@ -157,7 +170,10 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
 
     const dispatch = (
       operation: OutboxOperation,
-    ): Effect.Effect<OutboxReceipt, RecipientNotReached | NoRelayReachable> => {
+    ): Effect.Effect<
+      OutboxReceipt,
+      RecipientNotReached | NoRelayReachable | PaymentTelemetryNotDelivered
+    > => {
       switch (operation._tag) {
         case "chat.text":
           return chat.sendText(operation.draft);
@@ -169,6 +185,11 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
           return chat.edit(operation.draft);
         case "reaction":
           return reactions.react(operation.draft);
+        case "paymentTelemetry":
+          return paymentTelemetry.publishPaymentTelemetry(
+            operation.draft,
+            operation.recipient,
+          );
       }
     };
 
@@ -267,8 +288,26 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
       }),
     );
 
-    const enqueue = (
+    const insertJob = (
       operation: OutboxOperation,
+      ref: OutboxRef,
+    ): Effect.Effect<StoredOutboxJob> =>
+      Effect.gen(function* () {
+        const job = new StoredOutboxJob({
+          jobId: yield* freshJobId,
+          ref,
+          operation,
+          pubkey: identity.pubkey,
+          enqueuedAt: yield* nowSeconds,
+          state: { _tag: "queued" },
+        });
+        yield* store.insert(job);
+        yield* Queue.offer(wake, undefined);
+        return job;
+      });
+
+    const enqueue = (
+      operation: RumorFixedOperation,
       ref: OutboxRef,
     ): Effect.Effect<EnqueueReceipt> =>
       Effect.gen(function* () {
@@ -281,16 +320,7 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
           sentAt,
           clientId,
         );
-        const job = new StoredOutboxJob({
-          jobId: yield* freshJobId,
-          ref,
-          operation: normalized,
-          pubkey: identity.pubkey,
-          enqueuedAt: yield* nowSeconds,
-          state: { _tag: "queued" },
-        });
-        yield* store.insert(job);
-        yield* Queue.offer(wake, undefined);
+        const job = yield* insertJob(normalized, ref);
         const receipt = new EnqueueReceipt({
           jobId: job.jobId,
           ref,
@@ -309,11 +339,40 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
         return receipt;
       });
 
+    /**
+     * Separate from `enqueue` because delivery signs telemetry with a fresh
+     * ephemeral author every attempt: there is no rumor id to precompute, and
+     * the draft carries its own id and timestamp.
+     */
+    const enqueueTelemetry = (
+      draft: PaymentTelemetryDraft,
+      recipient: Pubkey,
+      ref: OutboxRef,
+    ): Effect.Effect<OutboxJobId> =>
+      Effect.gen(function* () {
+        const operation: OutboxOperation = {
+          _tag: "paymentTelemetry",
+          draft,
+          recipient,
+        };
+        const job = yield* insertJob(operation, ref);
+        inspector.emit(
+          new PlainOperationSucceeded({
+            name: "outbox.enqueue",
+            params: { ref, operation },
+            eventIds: [],
+            result: { jobId: job.jobId },
+          }),
+        );
+        return job.jobId;
+      });
+
     const ack = (jobId: OutboxJobId): Effect.Effect<void> =>
       store.remove(jobId);
 
     return {
       enqueue,
+      enqueueTelemetry,
       /** Terminal outcomes only; single-consumer — fan out downstream. */
       results: Stream.fromQueue(terminals),
       ack,

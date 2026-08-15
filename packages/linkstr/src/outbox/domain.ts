@@ -8,6 +8,10 @@ import {
   TokenMessageDraft,
 } from "../chat/domain";
 import { ClientId, Pubkey, RumorId, UnixSeconds } from "../domain/primitives";
+import {
+  PaymentTelemetryDraft,
+  PaymentTelemetryReceipt,
+} from "../paymentTelemetry/domain";
 import { ReactionDraft, ReactionReceipt } from "../reactions/domain";
 
 export const OutboxJobId = Schema.NonEmptyTrimmedString.pipe(
@@ -46,14 +50,34 @@ export const ReactionOperation = Schema.TaggedStruct("reaction", {
 });
 export type ReactionOperation = typeof ReactionOperation.Type;
 
+export const PaymentTelemetryOperation = Schema.TaggedStruct(
+  "paymentTelemetry",
+  {
+    draft: PaymentTelemetryDraft,
+    recipient: Pubkey,
+  },
+);
+export type PaymentTelemetryOperation = typeof PaymentTelemetryOperation.Type;
+
 export const OutboxOperation = Schema.Union(
   ChatTextOperation,
   ChatTokenOperation,
   ChatImageOperation,
   ChatEditOperation,
   ReactionOperation,
+  PaymentTelemetryOperation,
 );
 export type OutboxOperation = typeof OutboxOperation.Type;
+
+/**
+ * Operations whose rumor is fully determined at enqueue time, so every retry
+ * republishes the same rumor id. Telemetry is the exception: it mints a fresh
+ * ephemeral author per attempt.
+ */
+export type RumorFixedOperation = Exclude<
+  OutboxOperation,
+  PaymentTelemetryOperation
+>;
 
 export class EnqueueReceipt extends Schema.Class<EnqueueReceipt>(
   "EnqueueReceipt",
@@ -68,10 +92,13 @@ export class EnqueueReceipt extends Schema.Class<EnqueueReceipt>(
 
 // MessageEditReceipt before ChatMessageReceipt: the union decodes
 // structurally and the edit receipt is a field superset of the chat one.
+// PaymentTelemetryReceipt is unambiguous anywhere: it is the only member with
+// `telemetryId` and the only one without `selfCopy`.
 export const OutboxReceipt = Schema.Union(
   MessageEditReceipt,
   ChatMessageReceipt,
   ReactionReceipt,
+  PaymentTelemetryReceipt,
 );
 export type OutboxReceipt = typeof OutboxReceipt.Type;
 

@@ -4,18 +4,21 @@ import {
   ClientId,
   NostrSecretKey,
   NostrTransport,
+  OutboxRef,
   PaymentTelemetryDraft,
+  PaymentTelemetryReceipt,
   Pubkey,
   RelayPublishResult,
   RelayUrl,
   UnixSeconds,
 } from "@linky/linkstr";
-import type { NostrTransportService } from "@linky/linkstr";
+import type { NostrTransportService, OutboxResult } from "@linky/linkstr";
 import { Effect, Exit, Layer } from "effect";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import type { LinkstrConfig } from "./config";
 import { linkstrConfigAtom } from "./config";
-import { publishPaymentTelemetryAtom } from "./paymentTelemetry";
+import { outboxResultsAtom, outboxResultsHandlerAtom } from "./outbox";
+import { enqueuePaymentTelemetryAtom } from "./paymentTelemetry";
 
 type PublishedEvent = Parameters<NostrTransportService["publish"]>[1];
 
@@ -32,8 +35,26 @@ const settle = <A, E>(
     Registry.getResult(registry, atom, { suspendOnWaiting: true }),
   );
 
-describe("publishPaymentTelemetryAtom", () => {
-  it("publishes through the configured linkstr runtime", async () => {
+const draft = new PaymentTelemetryDraft({
+  id: ClientId.make("telemetry-react"),
+  createdAtSec: UnixSeconds.make(1_754_000_000),
+  direction: "out",
+  status: "ok",
+  method: "lightning_invoice",
+  phase: "complete",
+  mint: null,
+  amountBucket: "lte_100",
+  feeBucket: null,
+  errorCode: null,
+  errorDetail: null,
+  appHost: null,
+  devicePlatform: null,
+  appRuntime: null,
+  appVersion: "26.9.0",
+});
+
+describe("enqueuePaymentTelemetryAtom", () => {
+  it("delivers through the outbox and reports a telemetry receipt", async () => {
     const published: Array<PublishedEvent> = [];
     const transport = Layer.succeed(NostrTransport, {
       publish: (relays, event) =>
@@ -59,30 +80,37 @@ describe("publishPaymentTelemetryAtom", () => {
     };
     const registry = Registry.make();
     registry.set(linkstrConfigAtom, config);
-    registry.set(publishPaymentTelemetryAtom, {
-      draft: new PaymentTelemetryDraft({
-        id: ClientId.make("telemetry-react"),
-        createdAtSec: UnixSeconds.make(1_754_000_000),
-        direction: "out",
-        status: "ok",
-        method: "lightning_invoice",
-        phase: "complete",
-        mint: null,
-        amountBucket: "lte_100",
-        feeBucket: null,
-        errorCode: null,
-        errorDetail: null,
-        appHost: null,
-        devicePlatform: null,
-        appRuntime: null,
-        appVersion: "26.9.0",
-      }),
-      recipient,
-    });
 
-    const exit = await settle(registry, publishPaymentTelemetryAtom);
+    const handled: Array<OutboxResult> = [];
+    registry.set(outboxResultsHandlerAtom, {
+      onResult: async (result) => {
+        handled.push(result);
+      },
+    });
+    const unmount = registry.mount(outboxResultsAtom);
+
+    registry.set(enqueuePaymentTelemetryAtom, {
+      draft,
+      recipient,
+      ref: OutboxRef.make("telemetry:telemetry-react"),
+    });
+    const exit = await settle(registry, enqueuePaymentTelemetryAtom);
 
     expect(Exit.isSuccess(exit)).toBe(true);
+    await expect.poll(() => handled.length).toBe(1);
     expect(published).toHaveLength(1);
+
+    const result = handled[0];
+    expect(result).toEqual(
+      expect.objectContaining({
+        _tag: "OutboxJobSucceeded",
+        ref: "telemetry:telemetry-react",
+      }),
+    );
+    if (result?._tag !== "OutboxJobSucceeded") return;
+    expect(result.receipt).toBeInstanceOf(PaymentTelemetryReceipt);
+    if (!(result.receipt instanceof PaymentTelemetryReceipt)) return;
+    expect(result.receipt.clientId).toBe(draft.id);
+    unmount();
   });
 });

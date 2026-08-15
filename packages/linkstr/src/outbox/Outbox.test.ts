@@ -16,6 +16,11 @@ import {
 } from "../domain/primitives";
 import { unwrapToRumor } from "../internal/giftWrap";
 import { firstTagValue, SignedWrapEvent } from "../internal/nostrEvent";
+import {
+  PaymentTelemetryDraft,
+  PaymentTelemetryReceipt,
+} from "../paymentTelemetry/domain";
+import { PaymentTelemetry } from "../paymentTelemetry/PaymentTelemetry";
 import { Emoji, ReactionDraft, ReactionReceipt } from "../reactions/domain";
 import { Reactions } from "../reactions/Reactions";
 import { LinkstrIdentity } from "../services/LinkstrIdentity";
@@ -23,7 +28,7 @@ import type { LinkstrIdentityService } from "../services/LinkstrIdentity";
 import { NostrTransport, RelayPublishResult } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
 import { OutboxRef } from "./domain";
-import type { OutboxOperation } from "./domain";
+import type { RumorFixedOperation } from "./domain";
 import { Outbox } from "./Outbox";
 import { OutboxStore } from "./OutboxStore";
 import type { OutboxStoreService } from "./OutboxStore";
@@ -73,6 +78,7 @@ const outboxLayer = (
     Layer.provide([
       Chat.Default,
       Reactions.Default,
+      PaymentTelemetry.Default,
       Layer.succeed(OutboxStore, store),
     ]),
     Layer.provide([
@@ -97,7 +103,7 @@ const waitFor = (predicate: () => boolean): Effect.Effect<void> =>
 const textOp = (
   content: string,
   options?: { readonly clientId?: ClientId; readonly sentAt?: UnixSeconds },
-): OutboxOperation => ({
+): RumorFixedOperation => ({
   _tag: "chat.text",
   draft: new TextMessageDraft({
     to: bob.pubkey,
@@ -107,7 +113,7 @@ const textOp = (
   }),
 });
 
-const reactionOp = (): OutboxOperation => ({
+const reactionOp = (): RumorFixedOperation => ({
   _tag: "reaction",
   draft: new ReactionDraft({
     to: bob.pubkey,
@@ -117,6 +123,25 @@ const reactionOp = (): OutboxOperation => ({
     emoji: Emoji.make("🔥"),
   }),
 });
+
+const telemetryDraft = (id: string): PaymentTelemetryDraft =>
+  new PaymentTelemetryDraft({
+    id: ClientId.make(id),
+    createdAtSec: UnixSeconds.make(1_700_000_000),
+    direction: "out",
+    status: "ok",
+    method: "lightning_invoice",
+    phase: "complete",
+    mint: null,
+    amountBucket: "lte_100",
+    feeBucket: null,
+    errorCode: null,
+    errorDetail: null,
+    appHost: null,
+    devicePlatform: null,
+    appRuntime: null,
+    appVersion: "26.9.0",
+  });
 
 const rumorsForBob = (published: ReadonlyArray<SignedWrapEvent>) =>
   published
@@ -322,5 +347,88 @@ describe("Outbox", () => {
     expect(reaction.receipt).toBeInstanceOf(ReactionReceipt);
     if (!(reaction.receipt instanceof ReactionReceipt)) return;
     expect(reaction.receipt.reactionId).toBe(receipts[1]?.messageId);
+  });
+
+  it("delivers payment telemetry and forgets the job once acked", async () => {
+    const published: Array<SignedWrapEvent> = [];
+    const store = makeStore();
+
+    const { jobId, result } = await runOutbox(
+      outboxLayer(alice, store, stubTransport(published, { accept: true })),
+      Effect.gen(function* () {
+        const outbox = yield* Outbox;
+        const jobId = yield* outbox.enqueueTelemetry(
+          telemetryDraft("telemetry-1"),
+          bob.pubkey,
+          OutboxRef.make("telemetry:1"),
+        );
+        const result = yield* Stream.runHead(outbox.results);
+        yield* outbox.ack(jobId);
+        return { jobId, result };
+      }),
+    );
+
+    const terminal = Option.getOrThrow(result);
+    expect(terminal._tag).toBe("OutboxJobSucceeded");
+    if (terminal._tag !== "OutboxJobSucceeded") return;
+    expect(terminal.jobId).toBe(jobId);
+    expect(terminal.ref).toBe("telemetry:1");
+    expect(terminal.receipt).toBeInstanceOf(PaymentTelemetryReceipt);
+    if (!(terminal.receipt instanceof PaymentTelemetryReceipt)) return;
+    expect(terminal.receipt.clientId).toBe("telemetry-1");
+
+    // Telemetry has no self copy: one wrap, and it is not signed by alice.
+    expect(published).toHaveLength(1);
+    const rumors = rumorsForBob(published);
+    expect(rumors).toHaveLength(1);
+    expect(rumors[0]?.pubkey).not.toBe(alice.pubkey);
+    expect(await Effect.runPromise(store.loadAll)).toEqual([]);
+  });
+
+  it("retries undelivered telemetry, minting a fresh rumor per attempt", async () => {
+    const published: Array<SignedWrapEvent> = [];
+    const behavior = { accept: false };
+    const store = makeStore();
+
+    const results = await runOutbox(
+      outboxLayer(alice, store, stubTransport(published, behavior)),
+      Effect.gen(function* () {
+        const outbox = yield* Outbox;
+        yield* outbox.enqueueTelemetry(
+          telemetryDraft("telemetry-1"),
+          bob.pubkey,
+          OutboxRef.make("telemetry:1"),
+        );
+        yield* waitFor(() => published.length >= 1);
+        behavior.accept = true;
+        // A new enqueue cuts the backoff sleep short.
+        yield* outbox.enqueueTelemetry(
+          telemetryDraft("telemetry-2"),
+          bob.pubkey,
+          OutboxRef.make("telemetry:2"),
+        );
+        return yield* outbox.results.pipe(
+          Stream.take(2),
+          Stream.runCollect,
+          Effect.map(Chunk.toReadonlyArray),
+        );
+      }),
+    );
+
+    expect(results.map((result) => result.ref)).toEqual([
+      "telemetry:1",
+      "telemetry:2",
+    ]);
+    expect(
+      results.every((result) => result._tag === "OutboxJobSucceeded"),
+    ).toBe(true);
+
+    const firstRumors = rumorsForBob(published).filter((rumor) =>
+      rumor.content.includes("telemetry-1"),
+    );
+    expect(firstRumors.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(firstRumors.map((rumor) => rumor.id)).size).toBe(
+      firstRumors.length,
+    );
   });
 });

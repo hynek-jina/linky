@@ -17,6 +17,10 @@ import {
   WrapId,
 } from "../domain/primitives";
 import {
+  PaymentTelemetryDraft,
+  PaymentTelemetryReceipt,
+} from "../paymentTelemetry/domain";
+import {
   OutboxJobFailed,
   OutboxJobId,
   OutboxJobSucceeded,
@@ -59,6 +63,24 @@ const makeJob = (id: string, state?: OutboxJobState): StoredOutboxJob =>
     enqueuedAt: sentAt,
     state: state ?? { _tag: "queued" },
   });
+
+const telemetryDraft = new PaymentTelemetryDraft({
+  id: clientId,
+  createdAtSec: sentAt,
+  direction: "out",
+  status: "ok",
+  method: "lightning_invoice",
+  phase: "complete",
+  mint: null,
+  amountBucket: "lte_100",
+  feeBucket: null,
+  errorCode: null,
+  errorDetail: null,
+  appHost: null,
+  devicePlatform: null,
+  appRuntime: null,
+  appVersion: "26.9.0",
+});
 
 const succeededWith = (id: string, receipt: OutboxReceipt): OutboxJobState => ({
   _tag: "awaiting-ack",
@@ -168,6 +190,42 @@ describe("OutboxStore.fromStringStorage", () => {
     }
     expect(chatJob.state.result.receipt).toBeInstanceOf(ChatMessageReceipt);
     expect(editJob.state.result.receipt).toBeInstanceOf(MessageEditReceipt);
+  });
+
+  it("revives a telemetry job with its operation and receipt", () => {
+    const storage = stubStorage();
+    const telemetryReceipt = new PaymentTelemetryReceipt({
+      telemetryId: messageId,
+      clientId,
+      sentAt,
+      recipientCopy: delivery("ef"),
+    });
+    const job = new StoredOutboxJob({
+      ...makeJob("telemetry", succeededWith("telemetry", telemetryReceipt)),
+      operation: {
+        _tag: "paymentTelemetry",
+        draft: telemetryDraft,
+        recipient: pubkey,
+      },
+    });
+
+    run(
+      buildStore(OutboxStore.fromStringStorage(storage, storageKey)).insert(
+        job,
+      ),
+    );
+
+    const [stored] = run(
+      buildStore(OutboxStore.fromStringStorage(storage, storageKey)).loadAll,
+    );
+    if (
+      stored?.state._tag !== "awaiting-ack" ||
+      !(stored.state.result instanceof OutboxJobSucceeded)
+    ) {
+      throw new Error("expected an awaiting-ack success");
+    }
+    expect(stored.operation).toEqual(job.operation);
+    expect(stored.state.result.receipt).toBeInstanceOf(PaymentTelemetryReceipt);
   });
 
   it("treats an unreadable stored value as empty", () => {

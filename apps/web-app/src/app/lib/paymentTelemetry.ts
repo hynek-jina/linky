@@ -141,9 +141,6 @@ export const createLocalPaymentTelemetryEvent = (
   return {
     id: makeLocalId(),
     createdAtSec,
-    attemptCount: 0,
-    lastAttemptAtSec: null,
-    nextAttemptAtSec: createdAtSec,
     direction: event.direction,
     status: normalizePaymentTelemetryStatus({
       error: event.error,
@@ -161,16 +158,4 @@ export const createLocalPaymentTelemetryEvent = (
     appRuntime: getTelemetryAppRuntime(),
     appVersion: __APP_VERSION__,
   };
-};
-
-export const getPaymentTelemetryRetryDelaySec = (
-  attemptCount: number,
-): number => {
-  const safeAttempts =
-    Number.isFinite(attemptCount) && attemptCount > 0
-      ? Math.min(Math.floor(attemptCount), 6)
-      : 0;
-  const baseDelay = 15 * 2 ** safeAttempts;
-  const jitter = Math.floor(Math.random() * 10);
-  return baseDelay + jitter;
 };

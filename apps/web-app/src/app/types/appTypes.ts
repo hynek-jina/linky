@@ -60,7 +60,6 @@ export type LocalPaymentTelemetryEvent = {
   appHost?: string | null;
   appRuntime?: TelemetryAppRuntime | null;
   appVersion: string;
-  attemptCount: number;
   createdAtSec: number;
   devicePlatform?: TelemetryDevicePlatform | null;
   direction: "in" | "out";
@@ -68,10 +67,8 @@ export type LocalPaymentTelemetryEvent = {
   errorDetail: string | null;
   feeBucket: string | null;
   id: string;
-  lastAttemptAtSec: number | null;
   method: PaymentTelemetryMethod;
   mint: string | null;
-  nextAttemptAtSec: number;
   phase: PaymentTelemetryPhase;
   status: PaymentTelemetryStatus;
 };
