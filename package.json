@@ -35,5 +35,8 @@
     "typecheck": "bun run --workspaces --if-present typecheck",
     "test": "bun run --workspaces --if-present test",
     "check-code": "bun run typecheck && bun run eslint && bun run prettier"
+  },
+  "patchedDependencies": {
+    "nostr-tools@2.23.3": "patches/nostr-tools@2.23.3.patch"
   }
 }
