@@ -225,11 +225,19 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
       });
 
     await test.step("B accepts first, then C", async () => {
+      // Both acceptors must be on the offer page before the first accept:
+      // A's auto-responder terminates every other candidate the moment one
+      // accept arrives, so an acceptor whose offer delivery lags the winner's
+      // accept round-trip would (correctly) never auto-open and never get to
+      // accept — the concurrent second accept this test exists for would
+      // silently not happen.
       for (const account of [b, c]) {
         await account.page.waitForURL(
           new RegExp(`bank-payment-offer/${offerId}$`),
           { timeout: 120_000 },
         );
+      }
+      for (const account of [b, c]) {
         await account.page
           .getByRole("button", { name: "Accept", exact: true })
           .click();
