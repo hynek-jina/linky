@@ -72,9 +72,9 @@ const buildContactIndex = (
   contacts: readonly InboxContactRowLike[],
 ): Map<string, InboxContact> => {
   const contactByPubkey = new Map<string, InboxContact>();
+  // Archived contacts stay in the index: their incoming messages land on the
+  // contact itself, which then restores it from the archive.
   for (const contact of contacts) {
-    const archivedAtSec = Number(contact.archivedAtSec ?? 0);
-    if (Number.isFinite(archivedAtSec) && archivedAtSec > 0) continue;
     const npub = normalizeNpubIdentifier(contact.npub);
     if (!npub) continue;
     const pubkey = decodeNpub(npub);
