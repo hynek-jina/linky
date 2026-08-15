@@ -27,6 +27,11 @@ HTTP auth (`httpAuth/`) — pure codecs for signed events used as HTTP
 credentials, never published to relays: Blossom upload auth (kind 24242),
 push-server ownership proofs, and NIP-98 `Authorization` headers (kind 27235).
 
+Key codecs (`identity/codec.ts`) — pure nip19/derivation helpers returning the
+branded types (`decodeNsec`, `parsePubkey`, `identityFromNsec`, …), so
+consumers never import `nostr-tools` even for key encoding. `parsePubkey` and
+friends enforce the `Pubkey` brand's on-curve check at parse time.
+
 Shared machinery: `inbox/WrapInbox` (the single kind-1059 subscription),
 `outbox/Outbox` (durable send queue with retry/backoff over a pluggable
 `OutboxStore`), `relayHealth/` (traffic-derived per-relay status, always on),
