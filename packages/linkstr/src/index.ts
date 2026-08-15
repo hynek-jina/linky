@@ -22,7 +22,6 @@ export {
 } from "./httpAuth/codec";
 export * from "./httpAuth/domain";
 export * from "./inbox/authenticateWrap";
-export * from "./inbox/decodeReactionWrap";
 export * from "./inbox/events";
 export * from "./inbox/WrapInbox";
 export * from "./inspector/events";

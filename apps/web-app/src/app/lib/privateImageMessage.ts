@@ -74,12 +74,6 @@ export interface PrivateImageSendResult {
   content: string;
 }
 
-interface PrivateImageEvent {
-  content: string;
-  kind: number;
-  tags: string[][];
-}
-
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const isNostrSecretKey = Schema.is(NostrSecretKey);
@@ -165,19 +159,6 @@ const getBlossomUploadProxyUrl = (): string => {
   }
 
   return `${LINKY_WEB_APP_ORIGIN}/api/blossom-upload`;
-};
-
-const readTagValue = (
-  tags: readonly string[][],
-  tagName: string,
-): string | null => {
-  for (const tag of tags) {
-    if (!Array.isArray(tag)) continue;
-    if (tag[0] !== tagName) continue;
-    const value = String(tag[1] ?? "").trim();
-    if (value) return value;
-  }
-  return null;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -371,25 +352,6 @@ const uploadToBlossom = async (
   throw lastError instanceof Error ? lastError : new Error("upload-failed");
 };
 
-export const buildPrivateImageEventTags = (
-  payload: PrivateImageMessagePayload,
-): string[][] => {
-  const tags = [
-    ["file-type", payload.fileType],
-    ["encryption-algorithm", payload.encryptionAlgorithm],
-    ["decryption-key", payload.key],
-    ["decryption-nonce", payload.nonce],
-    ["x", payload.encryptedSha256],
-    ["ox", payload.originalSha256],
-    ["size", String(payload.encryptedSize)],
-    ["dim", `${payload.width}x${payload.height}`],
-  ];
-  if (payload.storageEncoding === "base64") {
-    tags.push(["encoding", "base64"]);
-  }
-  return tags;
-};
-
 export const serializePrivateImageMessage = (
   payload: PrivateImageMessagePayload,
 ): string => {
@@ -536,63 +498,6 @@ export const parsePrivateImageMessage = (
   }
   if (!isRecord(parsed)) return null;
   return parsePrivateImageRecord(parsed);
-};
-
-export const privateImageMessageFromEvent = (
-  event: PrivateImageEvent,
-): string | null => {
-  if (event.kind !== 15) return null;
-  const tags = Array.isArray(event.tags) ? event.tags : [];
-  const url = readString(event.content);
-  const fileType = readTagValue(tags, "file-type");
-  const encryptionAlgorithm = readTagValue(tags, "encryption-algorithm");
-  const key = readTagValue(tags, "decryption-key");
-  const nonce = readTagValue(tags, "decryption-nonce");
-  const encryptedSha256 = readTagValue(tags, "x");
-  const originalSha256 = readTagValue(tags, "ox");
-  const encoding = readTagValue(tags, "encoding");
-  const storageEncoding =
-    encoding === "base64" ? "base64" : encoding === null ? "raw" : null;
-  const sizeText = readTagValue(tags, "size");
-  const dimText = readTagValue(tags, "dim");
-  const size = Number.parseInt(String(sizeText ?? ""), 10);
-  const dimMatch = /^(\d+)x(\d+)$/i.exec(String(dimText ?? ""));
-  const width = dimMatch ? Number.parseInt(dimMatch[1] ?? "", 10) : 0;
-  const height = dimMatch ? Number.parseInt(dimMatch[2] ?? "", 10) : 0;
-
-  if (
-    !url ||
-    !fileType ||
-    encryptionAlgorithm !== "aes-gcm" ||
-    !key ||
-    !nonce ||
-    !encryptedSha256 ||
-    !originalSha256 ||
-    !storageEncoding ||
-    !Number.isFinite(size) ||
-    size <= 0 ||
-    !Number.isFinite(width) ||
-    width <= 0 ||
-    !Number.isFinite(height) ||
-    height <= 0
-  ) {
-    return null;
-  }
-
-  return serializePrivateImageMessage({
-    encryptedSha256: encryptedSha256.toLowerCase(),
-    encryptedSize: Math.trunc(size),
-    encryptionAlgorithm,
-    fileType,
-    height: Math.trunc(height),
-    key: key.toLowerCase(),
-    nonce: nonce.toLowerCase(),
-    originalSha256: originalSha256.toLowerCase(),
-    storageEncoding,
-    type: PRIVATE_IMAGE_MESSAGE_TYPE,
-    url,
-    width: Math.trunc(width),
-  });
 };
 
 export const decryptPrivateImageMessage = async (

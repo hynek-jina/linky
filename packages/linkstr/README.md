@@ -45,7 +45,8 @@ and `inspector/` (optional dev diagnostics bus).
 - `reactions/codec.ts` — the only place the wire format (kinds, tags) exists;
   encode and decode roundtrip by construction
 - `reactions/Reactions.ts` — the operation service (`react`, `retract`)
-- `inbox/decodeReactionWrap.ts` — pure pipeline for one incoming kind-1059 wrap
+- `inbox/decodeWrapEvent.ts` — pure pipeline for one incoming kind-1059 wrap,
+  routing the decoded rumor to the owning vertical's codec
 
 ## Inbound subscription
 
