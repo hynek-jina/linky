@@ -34,6 +34,7 @@ export class RelayUnreachable extends Schema.TaggedError<RelayUnreachable>()(
  * EOSE (or a bounded timeout, returning what arrived), then close.
  */
 export interface SubscribeOptions {
+  readonly alreadyHaveEvent?: (id: string) => boolean;
   /**
    * Invoked when the relay signals end-of-stored-events for the subscription.
    * nostr-tools synthesizes EOSE after its eose timeout (~4.4s default) when
@@ -66,6 +67,7 @@ export class NostrTransport extends Context.Tag("linkstr/NostrTransport")<
 
 export interface RelaySubscriptionParams {
   readonly onevent: (event: NostrToolsEvent) => void;
+  readonly alreadyHaveEvent?: (id: string) => boolean;
   readonly oneose?: () => void;
   readonly onclose?: (reason: string) => void;
 }
@@ -149,6 +151,7 @@ export const makeRelayPoolTransport = (
     Effect.async<string, RelayUnreachable>((resume) => {
       let handle: RelaySubscriptionHandle | null = null;
       let interrupted = false;
+      const alreadyHaveEvent = options?.alreadyHaveEvent;
       const onEose = options?.onEose;
       pool
         .ensureRelay(relay, { connectionTimeout: CONNECTION_TIMEOUT_MS })
@@ -157,6 +160,7 @@ export const makeRelayPoolTransport = (
             if (interrupted) return;
             handle = connection.subscribe([filter], {
               onevent: onEvent,
+              ...(alreadyHaveEvent === undefined ? {} : { alreadyHaveEvent }),
               ...(onEose === undefined ? {} : { oneose: onEose }),
               onclose: (reason) => resume(Effect.succeed(reason)),
             });
