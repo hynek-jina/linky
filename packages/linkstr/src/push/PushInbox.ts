@@ -127,6 +127,7 @@ export class PushInbox extends Effect.Service<PushInbox>()(
                     });
                   },
                   {
+                    alreadyHaveEvent: (id) => seenWrapIds.has(id),
                     onEose: () => {
                       if (eoseSeen) return;
                       eoseSeen = true;

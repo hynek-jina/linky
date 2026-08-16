@@ -43,6 +43,7 @@ const hasMultiLetterTagFilter = (filters: ReadonlyArray<Filter>): boolean =>
 
 class FakeRelay {
   readonly subscriptions: Array<FakeSubscription> = [];
+  readonly alreadyHaveChecks: Array<string> = [];
 
   readonly connection: RelayConnection = {
     publish: () => Promise.resolve("stored"),
@@ -59,7 +60,13 @@ class FakeRelay {
 
   emit(event: NostrToolsEvent): void {
     for (const subscription of this.subscriptions) {
-      if (!subscription.closed) subscription.params.onevent(event);
+      if (subscription.closed) continue;
+      const alreadyHaveEvent = subscription.params.alreadyHaveEvent;
+      if (alreadyHaveEvent !== undefined) {
+        this.alreadyHaveChecks.push(event.id);
+        if (alreadyHaveEvent(event.id)) continue;
+      }
+      subscription.params.onevent(event);
     }
   }
 
@@ -225,6 +232,62 @@ describe("PushInbox", () => {
           relayHints: ["wss://hint.test"],
         },
       });
+    }).pipe(Effect.scoped, Effect.provide(layer), Effect.runPromise);
+  });
+
+  it("filters a live cross-relay duplicate before transport delivery", async () => {
+    const relayA = RelayUrl.make("wss://relay-a.test");
+    const relayB = RelayUrl.make("wss://relay-b.test");
+    const fakeA = new FakeRelay();
+    const fakeB = new FakeRelay();
+    const relays = new Map<string, FakeRelay>([
+      [relayA, fakeA],
+      [relayB, fakeB],
+    ]);
+    const pool: RelayPool = {
+      ensureRelay: (url) => {
+        const relay = relays.get(url);
+        return relay === undefined
+          ? Promise.reject(new Error("unknown relay"))
+          : Promise.resolve(relay.connection);
+      },
+    };
+    const layer = PushInbox.Default.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          RelayPolicy.fixed({ readRelays: [relayA, relayB], writeRelays: [] }),
+          Layer.succeed(NostrTransport, makeRelayPoolTransport(pool)),
+        ),
+      ),
+    );
+
+    await Effect.gen(function* () {
+      const inbox = yield* PushInbox;
+      const events = yield* inbox.open({
+        lookback: Duration.days(3),
+        resubscribeDelay: Duration.millis(10),
+      });
+      const collected: Array<DeliveredPushWrap> = [];
+      yield* Effect.forkScoped(
+        Stream.runForEach(events, (event) =>
+          Effect.sync(() => collected.push(event)),
+        ),
+      );
+      yield* eventually(
+        () =>
+          fakeA.subscriptions.length === 1 && fakeB.subscriptions.length === 1,
+      );
+      fakeA.eose();
+      fakeB.eose();
+
+      const wrap = pushWrap("cross-relay duplicate");
+      fakeA.emit(wrap);
+      yield* eventually(() => collected.length === 1);
+      fakeB.emit(wrap);
+      yield* Effect.sleep(Duration.millis(10));
+
+      expect(fakeB.alreadyHaveChecks).toContain(wrap.id);
+      expect(collected).toHaveLength(1);
     }).pipe(Effect.scoped, Effect.provide(layer), Effect.runPromise);
   });
 
