@@ -1,6 +1,2 @@
-export type {
-  InspectorChannel,
-  InspectorRow,
-  InspectorRowLinks,
-} from "./inspectorRows";
+export type { InspectorRow } from "./inspectorRows";
 export { reportInspectorRows } from "./reportInspectorRows";

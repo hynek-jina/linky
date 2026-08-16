@@ -15,7 +15,7 @@ const DAY_MS = 24 * 60 * 60 * 1_000;
 
 const row = (at: number, tag: string): InspectorRow => ({
   at,
-  channel: "operation",
+  channel: "nostr.operation",
   tag,
   summary: tag,
   links: {},
@@ -105,5 +105,26 @@ describe("persistent inspector log buffer", () => {
     expect(imported.skippedLineCount).toBe(0);
     expect(imported.truncatedRowCount).toBe(0);
     expect(imported.rows).toEqual([rows[1], rows[0]]);
+  });
+
+  it("round-trips novel channels and link labels unchanged", () => {
+    const cashuRow: CollectedInspectorRow = {
+      id: 1,
+      client: "tab-cashu",
+      at: NOW,
+      channel: "cashu.wire",
+      tag: "QuoteCreated",
+      summary: "created mint quote",
+      links: { quote: "quote-1", proof: ["proof-1", "proof-2"] },
+      context: { mint: "https://mint.test" },
+      payload: { amount: 21 },
+    };
+
+    const imported = parseInspectorNdjson(
+      serializeInspectorLogsNdjson([cashuRow]),
+    );
+
+    expect(imported.rows).toEqual([cashuRow]);
+    expect(imported.skippedLineCount).toBe(0);
   });
 });

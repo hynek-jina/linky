@@ -8,10 +8,10 @@ const row = (id: number): CollectedInspectorRow => ({
   id,
   client: id % 2 === 0 ? "tab-b" : "tab-a",
   at: 1_700_000_000_000 + id,
-  channel: id % 2 === 0 ? "wire" : "operation",
+  channel: id % 2 === 0 ? "nostr.wire" : "nostr.operation",
   tag: `row-${id}`,
   summary: `summary ${id}`,
-  links: { clientId: `client-${id}` },
+  links: { client: `client-${id}` },
   payload: { id },
 });
 

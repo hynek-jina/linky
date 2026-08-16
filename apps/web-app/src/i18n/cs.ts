@@ -9,12 +9,12 @@ export const cs = {
   settingsNetwork: "Síť",
   settingsSecurity: "Zabezpečení",
   settingsDebug: "Debug",
-  nostrInspector: "Nostr inspector",
+  nostrInspector: "Inspector",
   nostrInspectorDescription:
-    "Zobrazuje dešifrovaný obsah zpráv jako prostý text. Data zůstávají jen v paměti a po obnovení stránky se smažou.",
-  nostrInspectorLogs: "Ukládat logy Nostr inspectoru",
+    "Zobrazuje podrobnosti událostí včetně dešifrovaného obsahu zpráv jako prostého textu. Data zůstávají jen v paměti a po obnovení stránky se smažou.",
+  nostrInspectorLogs: "Ukládat logy inspectoru",
   nostrInspectorLogsDescription:
-    "Obsahují dešifrované zprávy jako prostý text. Neukládají se šifrovaně, ale do úložiště prohlížeče na tomto zařízení až na 24 hodin.",
+    "Mohou obsahovat dešifrované zprávy jako prostý text. Neukládají se šifrovaně, ale do úložiště prohlížeče na tomto zařízení až na 24 hodin.",
   nostrInspectorLogsStats:
     "{count} řádků · {size} · nejstarší řádek je starý {age}",
   nostrInspectorLogsLoading: "Načítám statistiky logů…",
@@ -23,7 +23,7 @@ export const cs = {
   nostrInspectorLogsDownloaded: "Logy inspectoru byly staženy.",
   nostrInspectorLogsCleared: "Logy inspectoru byly smazány.",
   nostrInspectorLogsError: "K logům inspectoru se nepodařilo přistoupit.",
-  openNostrInspector: "Otevřít Nostr inspector",
+  openNostrInspector: "Otevřít inspector",
   back: "Zpět",
   menu: "Menu",
   advanced: "Pokročilé",

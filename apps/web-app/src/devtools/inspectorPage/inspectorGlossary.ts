@@ -28,12 +28,11 @@ const TAG_DESCRIPTIONS: Record<string, string> = {
 };
 
 const describeTag = (row: CollectedInspectorRow): string => {
-  const known = TAG_DESCRIPTIONS[row.tag];
+  const known = row.channel.startsWith("nostr.")
+    ? TAG_DESCRIPTIONS[row.tag]
+    : undefined;
   if (known) return known;
-  if (row.channel === "operation") {
-    return `A linky-level "${row.tag}" operation emitted by @linky/linkstr; the wire rows it produced share its link ids.`;
-  }
-  return "Raw nostr relay traffic observed by linkstr.";
+  return `An inspector event tagged "${row.tag}" on the "${row.channel}" channel. Rows sharing any of its link ids are related.`;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -75,7 +74,9 @@ export const collectNostrKinds = (payload: unknown): number[] => {
 };
 
 export const describeInspectorRow = (row: CollectedInspectorRow): string => {
-  const kindLines = collectNostrKinds(row.payload)
+  const kindLines = (
+    row.channel.startsWith("nostr.") ? collectNostrKinds(row.payload) : []
+  )
     .map((kind) => {
       const explanation = NOSTR_KIND_EXPLANATIONS[kind];
       return explanation ? `${nostrKindLabel(kind)}: ${explanation}` : null;

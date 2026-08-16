@@ -8,33 +8,18 @@ export const INSPECTOR_EVENTS_PATH = "/__inspector/events";
 export const INSPECTOR_STREAM_PATH = "/__inspector/stream";
 export const INSPECTOR_CLEAR_PATH = "/__inspector/clear";
 
-/** Linky-level operation vs raw nostr traffic. */
-export type InspectorChannel = "operation" | "wire";
-
-/**
- * Correlation ids shared between an operation and the wire events it produced
- * (or was produced from). Rows sharing any id belong to the same story.
- */
-export interface InspectorRowLinks {
-  /** Nostr event ids of gift wraps involved. */
-  wrapIds?: string[];
-  /** Inner rumor id (e.g. a reaction id). */
-  rumorId?: string;
-  /** Optimistic-update correlation id. */
-  clientId?: string;
-  /** Relay url, when relay-specific. */
-  relay?: string;
-}
-
 export interface InspectorRow {
   /** Wall-clock ms, stamped by the reporting app. */
   at: number;
-  channel: InspectorChannel;
+  channel: string;
   /** Event type, e.g. "reactions.react", "WirePublished", "InboxRouted". */
   tag: string;
   /** One-line human description, prebuilt by the reporter. */
   summary: string;
-  links: InspectorRowLinks;
+  /** Correlating ids grouped by domain-defined labels. */
+  links: Record<string, string | string[]>;
+  /** Non-correlating location and environment metadata. */
+  context?: Record<string, string>;
   /** Full serialized event, shown in the detail pane. */
   payload: unknown;
 }
@@ -50,48 +35,93 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 };
 
-export const isInspectorChannel = (
-  value: unknown,
-): value is InspectorChannel => {
-  return value === "operation" || value === "wire";
-};
+export const isInspectorChannel = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$/.test(value);
 
-const readStringArray = (value: unknown): string[] | null => {
+const parseLinkValue = (value: unknown): string | string[] | null => {
+  if (typeof value === "string") return value.length > 0 ? value : null;
   if (!Array.isArray(value)) return null;
-  const strings = value.filter((entry) => typeof entry === "string");
+  const strings = value.filter(
+    (entry): entry is string => typeof entry === "string" && entry.length > 0,
+  );
   return strings.length > 0 ? strings : null;
 };
 
-const parseInspectorRowLinks = (value: unknown): InspectorRowLinks => {
+const appendLinkValue = (
+  links: Record<string, string | string[]>,
+  label: string,
+  value: string | string[],
+): void => {
+  const existing = links[label];
+  if (existing === undefined) {
+    links[label] = value;
+    return;
+  }
+  links[label] = [
+    ...(typeof existing === "string" ? [existing] : existing),
+    ...(typeof value === "string" ? [value] : value),
+  ];
+};
+
+const legacyLinkLabel = (label: string): string => {
+  if (label === "wrapIds") return "wrap";
+  if (label === "rumorId") return "rumor";
+  if (label === "clientId") return "client";
+  return label;
+};
+
+const parseInspectorRowLinks = (
+  value: unknown,
+): Record<string, string | string[]> => {
   if (!isRecord(value)) return {};
-  const links: InspectorRowLinks = {};
-  const wrapIds = readStringArray(value.wrapIds);
-  if (wrapIds) links.wrapIds = wrapIds;
-  if (typeof value.rumorId === "string" && value.rumorId) {
-    links.rumorId = value.rumorId;
-  }
-  if (typeof value.clientId === "string" && value.clientId) {
-    links.clientId = value.clientId;
-  }
-  if (typeof value.relay === "string" && value.relay) {
-    links.relay = value.relay;
+  const links: Record<string, string | string[]> = {};
+  for (const [label, rawValue] of Object.entries(value)) {
+    if (label === "relay") continue;
+    const parsedValue = parseLinkValue(rawValue);
+    if (parsedValue !== null) {
+      appendLinkValue(links, legacyLinkLabel(label), parsedValue);
+    }
   }
   return links;
 };
 
+const parseInspectorRowContext = (
+  value: unknown,
+  legacyLinks: unknown,
+): Record<string, string> | undefined => {
+  const context: Record<string, string> = {};
+  if (isRecord(value)) {
+    for (const [label, entry] of Object.entries(value)) {
+      if (typeof entry === "string") context[label] = entry;
+    }
+  }
+  if (
+    context.relay === undefined &&
+    isRecord(legacyLinks) &&
+    typeof legacyLinks.relay === "string" &&
+    legacyLinks.relay.length > 0
+  ) {
+    context.relay = legacyLinks.relay;
+  }
+  return Object.keys(context).length > 0 ? context : undefined;
+};
+
 export const parseInspectorRow = (value: unknown): InspectorRow | null => {
   if (!isRecord(value)) return null;
-  const { at, channel, tag, summary, links, payload } = value;
+  const { at, channel, tag, summary, links, context, payload } = value;
   if (typeof at !== "number" || !Number.isFinite(at)) return null;
   if (!isInspectorChannel(channel)) return null;
   if (typeof tag !== "string" || !tag) return null;
   if (typeof summary !== "string") return null;
+  const parsedContext = parseInspectorRowContext(context, links);
   return {
     at,
     channel,
     tag,
     summary,
     links: parseInspectorRowLinks(links),
+    ...(parsedContext === undefined ? {} : { context: parsedContext }),
     payload,
   };
 };
@@ -108,13 +138,9 @@ export const parseCollectedInspectorRow = (
   return { ...row, id, client };
 };
 
-/**
- * Ids that correlate rows with each other. The relay url is deliberately not
- * one: it is location metadata and would link most wire rows to each other.
- */
-export const inspectorLinkIds = (links: InspectorRowLinks): string[] => {
-  const ids = links.wrapIds ? [...links.wrapIds] : [];
-  if (links.rumorId) ids.push(links.rumorId);
-  if (links.clientId) ids.push(links.clientId);
-  return ids;
-};
+export const inspectorLinkIds = (
+  links: Record<string, string | string[]>,
+): string[] =>
+  Object.values(links).flatMap((value) =>
+    typeof value === "string" ? [value] : value,
+  );

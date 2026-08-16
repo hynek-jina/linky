@@ -63,11 +63,12 @@ For Android native builds: Java 17
 
 ### Dev inspector
 
-While the dev server runs, the dev inspector shows Linky's Nostr traffic on two channels:
-`operation` (linky-level linkstr operations and routed inbox facts) and `wire` (raw relay traffic —
-publishes, subscriptions, incoming events). Rows are correlated by shared ids in their `links`
-(gift-wrap ids, rumor ids, optimistic-update client ids). Development builds collect automatically
-until the setting is explicitly turned off.
+While the dev server runs, the domain-agnostic inspector shows events on open, namespaced channels.
+Current Nostr emitters use `nostr.operation` (linky-level linkstr operations and routed inbox facts)
+and `nostr.wire` (raw relay traffic — publishes, subscriptions, incoming events). Rows are
+correlated by shared ids in their `links` (gift-wrap ids, rumor ids, optimistic-update client ids),
+while non-correlating location metadata such as relay urls lives in `context`. Development builds
+collect automatically until the setting is explicitly turned off.
 
 1. Start the app (`bun run dev` or `bun run dev:prod`).
 2. Open `http://localhost:5173/inspector.html` (`:5175` for `dev:prod`) in a window next to the app
@@ -77,7 +78,7 @@ until the setting is explicitly turned off.
    `WirePublished` wraps it produced.
 
 The same timeline is available in-app at `#advanced/inspector`. Production builds collect only
-after enabling **Nostr inspector** in Advanced settings. The in-app buffer can contain decrypted
+after enabling **Inspector** in Advanced settings. The in-app buffer can contain decrypted
 message payloads in plain text, stays in browser memory only, and is cleared on reload or when the
 setting is turned off. Production collection never sends inspector rows to a server.
 An independent Advanced toggle can retain the same plain-text rows in on-device browser storage
@@ -93,8 +94,8 @@ Programmatic access:
 
 ```bash
 # poll as JSON; cursor in the response resumes the next call
-# optional filters: channel=operation|wire, client=<per-tab app id>
-curl "http://localhost:5173/__inspector/events?cursor=0&channel=wire"
+# optional filters: channel=<lowercase dotted token>, client=<per-tab app id>
+curl "http://localhost:5173/__inspector/events?cursor=0&channel=nostr.wire"
 
 # live SSE stream / reset between scenarios
 curl -N "http://localhost:5173/__inspector/stream"
