@@ -23,7 +23,6 @@ export interface PushServiceConfig {
   proofMaxAgeSeconds: number;
   maxPubkeysPerSubscription: number;
   maxSubscriptionsPerPubkey: number;
-  eventDedupeTtlMs: number;
   authRateLimitMax: number;
   authRateLimitWindowMs: number;
   subscribeRateLimitMax: number;
@@ -209,11 +208,6 @@ export function loadConfig(
       env,
       "PUSH_MAX_SUBSCRIPTIONS_PER_PUBKEY",
       16,
-    ),
-    eventDedupeTtlMs: readEnvInteger(
-      env,
-      "PUSH_EVENT_DEDUPE_TTL_MS",
-      24 * 60 * 60 * 1000,
     ),
     authRateLimitMax: readEnvInteger(env, "PUSH_RATE_LIMIT_AUTH_MAX", 30),
     authRateLimitWindowMs: readEnvInteger(

@@ -27,7 +27,6 @@ const relayWatcher = new RelayWatcher({
   relayUrls: config.defaultRelays,
   storage,
   pushDelivery,
-  eventDedupeTtlMs: config.eventDedupeTtlMs,
 });
 
 relayWatcher.start();
