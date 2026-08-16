@@ -1,4 +1,5 @@
-import { verifyEvent } from "nostr-tools";
+import { verifyPushOwnershipProof } from "@linky/linkstr";
+import type { PushOwnershipProofFailure } from "@linky/linkstr";
 
 import { RequestError } from "./guards";
 import type {
@@ -12,46 +13,8 @@ interface OwnershipVerifierOptions {
   loadChallenge: (nonce: string) => ChallengeRecord | null;
 }
 
-function requiredTagValue(tags: string[][], key: string): string {
-  let value: string | null = null;
-
-  for (const tag of tags) {
-    if (tag[0] !== key) {
-      continue;
-    }
-    if (tag.length < 2 || tag[1].length === 0) {
-      throw new RequestError(
-        400,
-        "invalid_proof",
-        `Proof event tag ${key} must include a value`,
-      );
-    }
-    if (value !== null) {
-      throw new RequestError(
-        400,
-        "invalid_proof",
-        `Proof event tag ${key} must only appear once`,
-      );
-    }
-    value = tag[1];
-  }
-
-  if (value === null) {
-    throw new RequestError(
-      400,
-      "invalid_proof",
-      `Proof event is missing the ${key} tag`,
-    );
-  }
-
-  return value;
-}
-
-function expectedProofContent(action: ProofAction): string {
-  return action === "subscribe"
-    ? "linky-push-subscribe"
-    : "linky-push-unsubscribe";
-}
+const failureStatus = (failure: PushOwnershipProofFailure): number =>
+  failure === "invalid-signature" || failure === "invalid-pubkey" ? 401 : 400;
 
 export class OwnershipVerifier {
   private readonly proofMaxAgeSeconds: number;
@@ -102,41 +65,33 @@ export class OwnershipVerifier {
         );
       }
 
-      if (!verifyEvent(proof.event)) {
+      const decoded = verifyPushOwnershipProof(proof.event);
+      if (decoded._tag === "Left") {
         throw new RequestError(
-          401,
+          failureStatus(decoded.left),
           "invalid_proof",
-          `Invalid signature for pubkey ${pubkey}`,
+          `Invalid ownership proof: ${decoded.left}`,
         );
       }
+      const verified = decoded.right;
 
-      if (proof.event.pubkey !== pubkey) {
+      if (verified.event.pubkey !== pubkey) {
         throw new RequestError(
           401,
           "invalid_proof",
           `Proof event pubkey does not match requested pubkey ${pubkey}`,
         );
       }
-
-      if (proof.event.kind !== 27235) {
+      if (verified.action !== action) {
         throw new RequestError(
-          400,
+          401,
           "invalid_proof",
-          "Proof events must use kind 27235",
+          `Proof action tag must be ${action}`,
         );
       }
-
-      const expectedContent = expectedProofContent(action);
-      if (proof.event.content !== expectedContent) {
-        throw new RequestError(
-          400,
-          "invalid_proof",
-          `Proof content must be ${expectedContent}`,
-        );
-      }
-
       if (
-        Math.abs(nowSeconds - proof.event.created_at) > this.proofMaxAgeSeconds
+        Math.abs(nowSeconds - verified.event.created_at) >
+        this.proofMaxAgeSeconds
       ) {
         throw new RequestError(
           401,
@@ -145,27 +100,7 @@ export class OwnershipVerifier {
         );
       }
 
-      const challenge = requiredTagValue(proof.event.tags, "challenge");
-      const actionTag = requiredTagValue(proof.event.tags, "action");
-      const pubkeyTag = requiredTagValue(proof.event.tags, "pubkey");
-
-      if (actionTag !== action) {
-        throw new RequestError(
-          401,
-          "invalid_proof",
-          `Proof action tag must be ${action}`,
-        );
-      }
-
-      if (pubkeyTag !== pubkey) {
-        throw new RequestError(
-          401,
-          "invalid_proof",
-          `Proof pubkey tag must match ${pubkey}`,
-        );
-      }
-
-      const storedChallenge = this.loadChallenge(challenge);
+      const storedChallenge = this.loadChallenge(verified.challenge);
       if (!storedChallenge) {
         throw new RequestError(
           401,
@@ -173,7 +108,6 @@ export class OwnershipVerifier {
           "Challenge was not issued by this server",
         );
       }
-
       if (storedChallenge.pubkey !== pubkey) {
         throw new RequestError(
           401,
@@ -181,7 +115,6 @@ export class OwnershipVerifier {
           "Challenge pubkey does not match the requested pubkey",
         );
       }
-
       if (storedChallenge.action !== action) {
         throw new RequestError(
           401,
@@ -189,11 +122,9 @@ export class OwnershipVerifier {
           "Challenge action does not match the request action",
         );
       }
-
       if (storedChallenge.expiresAt <= nowMs) {
         throw new RequestError(401, "invalid_proof", "Challenge has expired");
       }
-
       if (storedChallenge.usedAt !== null) {
         throw new RequestError(
           401,
@@ -202,7 +133,7 @@ export class OwnershipVerifier {
         );
       }
 
-      challengeNonces.push(challenge);
+      challengeNonces.push(verified.challenge);
     }
 
     return challengeNonces;

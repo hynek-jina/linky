@@ -1,5 +1,3 @@
-import type { Event as NostrEvent } from "nostr-tools";
-
 import type {
   NativePushSubscriptionData,
   NativeSubscribeRequestBody,
@@ -172,67 +170,6 @@ export function readPubkey(value: unknown, fieldName = "pubkey"): string {
   return pubkey;
 }
 
-function readTagList(value: unknown): string[][] {
-  if (!Array.isArray(value)) {
-    throw new RequestError(
-      400,
-      "invalid_request",
-      "event.tags must be an array",
-    );
-  }
-
-  const out: string[][] = [];
-  for (const tag of value) {
-    if (!Array.isArray(tag)) {
-      throw new RequestError(
-        400,
-        "invalid_request",
-        "event.tags entries must be arrays",
-      );
-    }
-    const normalizedTag: string[] = [];
-    for (const part of tag) {
-      normalizedTag.push(readString(part, "event.tags[]"));
-    }
-    out.push(normalizedTag);
-  }
-  return out;
-}
-
-export function readNostrEvent(value: unknown): NostrEvent {
-  if (!isRecord(value)) {
-    throw new RequestError(400, "invalid_request", "event must be an object");
-  }
-
-  const id = readString(value.id, "event.id");
-  if (!isHexString(id, 64)) {
-    throw new RequestError(
-      400,
-      "invalid_request",
-      "event.id must be a 64-character lowercase hex string",
-    );
-  }
-
-  const sig = readString(value.sig, "event.sig");
-  if (!isHexString(sig, 128)) {
-    throw new RequestError(
-      400,
-      "invalid_request",
-      "event.sig must be a 128-character lowercase hex string",
-    );
-  }
-
-  return {
-    id,
-    pubkey: readPubkey(value.pubkey, "event.pubkey"),
-    created_at: readNumber(value.created_at, "event.created_at"),
-    kind: readNumber(value.kind, "event.kind"),
-    tags: readTagList(value.tags),
-    content: readString(value.content, "event.content"),
-    sig,
-  };
-}
-
 export function readWebPushSubscription(
   value: unknown,
 ): WebPushSubscriptionData {
@@ -308,7 +245,7 @@ export function readOwnershipProofs(value: unknown): OwnershipProofInput[] {
     }
     out.push({
       pubkey: readPubkey(proofValue.pubkey, "proof.pubkey"),
-      event: readNostrEvent(proofValue.event),
+      event: proofValue.event,
     });
   }
   return out;

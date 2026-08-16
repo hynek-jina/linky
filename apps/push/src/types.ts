@@ -1,5 +1,3 @@
-import type { Event as NostrEvent } from "nostr-tools";
-
 export type ProofAction = "subscribe" | "unsubscribe";
 
 export type NativePushPlatform = "android";
@@ -22,7 +20,7 @@ export interface NativePushSubscriptionData {
 
 export interface OwnershipProofInput {
   pubkey: string;
-  event: NostrEvent;
+  event: unknown;
 }
 
 export interface ChallengeRecord {

@@ -5,9 +5,9 @@ Bun HTTP service for Web Push and Android FCM delivery on top of outer NIP-17 in
 ## What it does
 
 - Issues short-lived ownership challenges per recipient pubkey
-- Verifies signed Nostr proof events before storing subscriptions
+- Verifies signed Nostr proof events through Linkstr's shared ownership codec before storing subscriptions
 - Persists web subscriptions, native Android tokens, and challenges in SQLite
-- Watches configured Nostr relays for new outer `1059` inbox events
+- Watches configured Nostr relays through Linkstr's identity-free `PushInbox` for new push-marked outer `1059` events
 - Sends a generic Web Push or Android FCM notification for every matching subscribed recipient pubkey
 - Removes permanently invalid subscriptions when push delivery returns `404` or `410`, or when the push provider reports a VAPID public key mismatch
 - Removes permanently invalid Android registration tokens when Firebase reports them as invalid or unregistered

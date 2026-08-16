@@ -1,8 +1,11 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { Either } from "effect";
 import { getPublicKey } from "nostr-tools";
 import type { NostrSecretKey, UnixSeconds } from "../domain/primitives";
 import type { SignedPlainEvent } from "../internal/nostrEvent";
+import { firstTagValue } from "../internal/nostrEvent";
+import { decodeVerifiedPlainEvent } from "../internal/plainEvent";
 import { signPlainEvent } from "../internal/plainEvent";
 import type {
   BlossomUploadAuthDraft,
@@ -13,6 +16,21 @@ import type {
 export const BLOSSOM_AUTH_KIND = 24242;
 export const BLOSSOM_AUTH_EXPIRATION_SECONDS = 600;
 export const HTTP_AUTH_KIND = 27235;
+
+export type PushOwnershipProofFailure =
+  | "malformed-event"
+  | "invalid-signature"
+  | "wrong-kind"
+  | "invalid-challenge"
+  | "invalid-action"
+  | "invalid-pubkey"
+  | "wrong-content";
+
+export interface VerifiedPushOwnershipProof {
+  readonly event: SignedPlainEvent;
+  readonly action: PushOwnershipProofDraft["action"];
+  readonly challenge: string;
+}
 
 const utf8Encoder = new TextEncoder();
 
@@ -74,6 +92,43 @@ export const makePushOwnershipProof = (
     secretKey,
   );
 };
+
+const singleTagValue = (
+  event: SignedPlainEvent,
+  name: string,
+): string | null => {
+  const values = event.tags.filter((tag) => tag[0] === name);
+  if (values.length !== 1) return null;
+  return firstTagValue(values, name);
+};
+
+/** Verifies the complete kind-27235 wire contract shared by client and server. */
+export const verifyPushOwnershipProof = (
+  input: unknown,
+): Either.Either<VerifiedPushOwnershipProof, PushOwnershipProofFailure> =>
+  Either.gen(function* () {
+    const event = yield* decodeVerifiedPlainEvent(input).pipe(
+      Either.mapLeft((failure): PushOwnershipProofFailure => failure),
+    );
+    if (event.kind !== HTTP_AUTH_KIND) {
+      return yield* Either.left<PushOwnershipProofFailure>("wrong-kind");
+    }
+    const challenge = singleTagValue(event, "challenge");
+    if (challenge === null || challenge.length === 0) {
+      return yield* Either.left<PushOwnershipProofFailure>("invalid-challenge");
+    }
+    const action = singleTagValue(event, "action");
+    if (action !== "subscribe" && action !== "unsubscribe") {
+      return yield* Either.left<PushOwnershipProofFailure>("invalid-action");
+    }
+    if (singleTagValue(event, "pubkey") !== event.pubkey) {
+      return yield* Either.left<PushOwnershipProofFailure>("invalid-pubkey");
+    }
+    if (event.content !== `linky-push-${action}`) {
+      return yield* Either.left<PushOwnershipProofFailure>("wrong-content");
+    }
+    return { event, action, challenge };
+  });
 
 export const makeNip98AuthHeader = (
   draft: Nip98AuthDraft,

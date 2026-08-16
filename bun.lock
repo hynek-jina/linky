@@ -29,8 +29,8 @@
       "name": "@linky/push",
       "version": "0.1.0",
       "dependencies": {
+        "@linky/linkstr": "workspace:*",
         "firebase-admin": "^13.7.0",
-        "nostr-tools": "^2.23.3",
         "web-push": "^3.6.7",
       },
       "devDependencies": {

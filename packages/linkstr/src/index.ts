@@ -24,6 +24,11 @@ export {
   makeBlossomUploadAuthHeader,
   makeNip98AuthHeader,
   makePushOwnershipProof,
+  verifyPushOwnershipProof,
+} from "./httpAuth/codec";
+export type {
+  PushOwnershipProofFailure,
+  VerifiedPushOwnershipProof,
 } from "./httpAuth/codec";
 export * from "./httpAuth/domain";
 export * from "./inbox/authenticateWrap";
@@ -59,6 +64,9 @@ export * from "./profiles/domain";
 export * from "./profiles/events";
 export * from "./profiles/Profiles";
 export * from "./profiles/ProfileWatch";
+export * from "./push/codec";
+export * from "./push/headless";
+export * from "./push/PushInbox";
 export * from "./reactions/domain";
 export * from "./reactions/events";
 export * from "./reactions/Reactions";
