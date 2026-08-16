@@ -10,6 +10,7 @@ export interface PushInboxConfig {
   readonly readRelays: ReadonlyArray<RelayUrl>;
   readonly lookbackSeconds: number;
   readonly transport?: Layer.Layer<NostrTransport> | undefined;
+  readonly refreshInterval?: Duration.Duration | undefined;
   readonly resubscribeDelay?: Duration.Duration | undefined;
 }
 
@@ -26,6 +27,9 @@ export const watchPushInbox = (
     const inbox = yield* PushInbox;
     const events = yield* inbox.open({
       lookback: Duration.seconds(config.lookbackSeconds),
+      ...(config.refreshInterval === undefined
+        ? {}
+        : { refreshInterval: config.refreshInterval }),
       ...(config.resubscribeDelay === undefined
         ? {}
         : { resubscribeDelay: config.resubscribeDelay }),
