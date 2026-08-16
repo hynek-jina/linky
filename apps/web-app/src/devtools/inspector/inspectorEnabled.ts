@@ -3,12 +3,12 @@ import React from "react";
 import { clientInspectorStore } from "./clientInspectorStore";
 
 export const INSPECTOR_ENABLED_STORAGE_KEY = "linky.inspector_enabled";
+export const INSPECTOR_LOGS_ENABLED_STORAGE_KEY =
+  "linky.inspector_logs_enabled";
 
-const readPreference = (): boolean | null => {
+const readPreference = (key: string): boolean | null => {
   try {
-    const stored = globalThis.localStorage.getItem(
-      INSPECTOR_ENABLED_STORAGE_KEY,
-    );
+    const stored = globalThis.localStorage.getItem(key);
     if (stored === "true") return true;
     if (stored === "false") return false;
     return null;
@@ -17,8 +17,11 @@ const readPreference = (): boolean | null => {
   }
 };
 
-let preference = readPreference();
+let preference = readPreference(INSPECTOR_ENABLED_STORAGE_KEY);
+let logsPreference =
+  readPreference(INSPECTOR_LOGS_ENABLED_STORAGE_KEY) ?? false;
 const listeners = new Set<() => void>();
+const logsListeners = new Set<() => void>();
 
 export const resolveInspectorEnabled = (
   storedPreference: boolean | null,
@@ -27,6 +30,21 @@ export const resolveInspectorEnabled = (
 
 export const getInspectorEnabled = (): boolean =>
   resolveInspectorEnabled(preference, import.meta.env.DEV);
+
+export const getInspectorLogsEnabled = (): boolean => logsPreference;
+
+export const resolveInspectorEmissionEnabled = (
+  isDev: boolean,
+  liveEnabled: boolean,
+  logsEnabled: boolean,
+): boolean => isDev || liveEnabled || logsEnabled;
+
+export const getInspectorEmissionEnabled = (): boolean =>
+  resolveInspectorEmissionEnabled(
+    import.meta.env.DEV,
+    getInspectorEnabled(),
+    getInspectorLogsEnabled(),
+  );
 
 export const setInspectorEnabled = (enabled: boolean): void => {
   const changed = preference !== enabled;
@@ -46,10 +64,56 @@ export const setInspectorEnabled = (enabled: boolean): void => {
   }
 };
 
+export const setInspectorLogsEnabled = (enabled: boolean): void => {
+  const changed = logsPreference !== enabled;
+  logsPreference = enabled;
+  try {
+    globalThis.localStorage.setItem(
+      INSPECTOR_LOGS_ENABLED_STORAGE_KEY,
+      String(enabled),
+    );
+  } catch {
+    // The setting still applies for this session when storage is unavailable.
+  }
+
+  if (!enabled) {
+    void import("./persistentInspectorLogSink")
+      .then(({ clearPersistentInspectorLogs }) =>
+        clearPersistentInspectorLogs(),
+      )
+      .catch(() => undefined);
+  }
+  if (changed) {
+    for (const listener of logsListeners) listener();
+  }
+};
+
 const subscribe = (listener: () => void): (() => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
 };
 
+const subscribeLogs = (listener: () => void): (() => void) => {
+  logsListeners.add(listener);
+  return () => logsListeners.delete(listener);
+};
+
 export const useInspectorEnabled = (): boolean =>
   React.useSyncExternalStore(subscribe, getInspectorEnabled, () => false);
+
+export const useInspectorLogsEnabled = (): boolean =>
+  React.useSyncExternalStore(
+    subscribeLogs,
+    getInspectorLogsEnabled,
+    () => false,
+  );
+
+export const useInspectorEmissionEnabled = (): boolean => {
+  const inspectorEnabled = useInspectorEnabled();
+  const inspectorLogsEnabled = useInspectorLogsEnabled();
+  return resolveInspectorEmissionEnabled(
+    import.meta.env.DEV,
+    inspectorEnabled,
+    inspectorLogsEnabled,
+  );
+};

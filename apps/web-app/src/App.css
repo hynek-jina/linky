@@ -1515,6 +1515,12 @@ button.language-option.is-selected .settings-label {
   font-size: 13px;
 }
 
+.inspector-log-stats {
+  margin: -6px 0 12px 28px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
 .settings-label-group-stacked {
   flex-direction: column;
   align-items: flex-start;

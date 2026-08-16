@@ -20,6 +20,7 @@ import {
   RefreshCw,
   RotateCw,
   ShieldCheck,
+  Trash2,
   Upload,
   UserRound,
   Zap,
@@ -31,8 +32,11 @@ import {
 import { useAdvancedSettingsContext } from "../app/context/SystemSettingsContexts";
 import {
   setInspectorEnabled,
+  setInspectorLogsEnabled,
   useInspectorEnabled,
+  useInspectorLogsEnabled,
 } from "../devtools/inspector/inspectorEnabled";
+import type { PersistentInspectorLogStats } from "../devtools/inspector/persistentInspectorLogBuffer";
 import {
   countConnectedRelays,
   overallRelayStatus,
@@ -136,8 +140,27 @@ function SettingsToggleRow({
   );
 }
 
+const formatInspectorLogSize = (size: number): string => {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KiB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MiB`;
+};
+
+const formatInspectorLogAge = (
+  oldestAt: number | null,
+  now: number,
+): string => {
+  if (oldestAt === null) return "—";
+  const ageSeconds = Math.max(0, Math.floor((now - oldestAt) / 1_000));
+  if (ageSeconds < 60) return `${ageSeconds}s`;
+  const ageMinutes = Math.floor(ageSeconds / 60);
+  if (ageMinutes < 60) return `${ageMinutes}m`;
+  return `${Math.floor(ageMinutes / 60)}h`;
+};
+
 export function AdvancedPage(): React.ReactElement {
   const inspectorEnabled = useInspectorEnabled();
+  const inspectorLogsEnabled = useInspectorLogsEnabled();
   const {
     bankPaymentOfferRecipientCount,
     cashuAutoswapEnabled,
@@ -177,6 +200,10 @@ export function AdvancedPage(): React.ReactElement {
   const { openFeedbackContact, toggleSendReadReceipts } = useAppShellActions();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationsIsBusy, setNotificationsIsBusy] = useState(false);
+  const [inspectorLogStats, setInspectorLogStats] =
+    useState<PersistentInspectorLogStats | null>(null);
+  const [inspectorLogActionIsBusy, setInspectorLogActionIsBusy] =
+    useState(false);
   const [armedSecurityAction, setArmedSecurityAction] = useState<
     "copyNostr" | "pasteNostr" | null
   >(null);
@@ -186,6 +213,16 @@ export function AdvancedPage(): React.ReactElement {
   const appVersionLabel = __APP_COMMIT_SHA__
     ? `${__APP_VERSION__} (${__APP_COMMIT_SHA__})`
     : `${__APP_VERSION__}`;
+
+  const inspectorLogStatsLabel = inspectorLogStats
+    ? t("nostrInspectorLogsStats")
+        .replace("{count}", String(inspectorLogStats.rowCount))
+        .replace("{size}", formatInspectorLogSize(inspectorLogStats.totalSize))
+        .replace(
+          "{age}",
+          formatInspectorLogAge(inspectorLogStats.oldestAt, Date.now()),
+        )
+    : t("nostrInspectorLogsLoading");
 
   const getAutoPayLimitLabel = useCallback(
     (limit: number) => {
@@ -246,6 +283,66 @@ export function AdvancedPage(): React.ReactElement {
       clearArmTimeout();
     };
   }, [clearArmTimeout]);
+
+  useEffect(() => {
+    if (!inspectorLogsEnabled) {
+      setInspectorLogStats(null);
+      return;
+    }
+
+    let active = true;
+    let unsubscribe = (): void => undefined;
+    void import("../devtools/inspector/persistentInspectorLogSink")
+      .then(
+        async ({
+          initializePersistentInspectorLogs,
+          subscribePersistentInspectorLogs,
+        }) => {
+          if (!active) return;
+          unsubscribe = subscribePersistentInspectorLogs((stats) => {
+            if (active) setInspectorLogStats(stats);
+          });
+          const stats = await initializePersistentInspectorLogs();
+          if (active) setInspectorLogStats(stats);
+        },
+      )
+      .catch(() => {
+        if (active) pushToast(t("nostrInspectorLogsError"));
+      });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [inspectorLogsEnabled, pushToast, t]);
+
+  const downloadInspectorLogs = async (): Promise<void> => {
+    setInspectorLogActionIsBusy(true);
+    try {
+      const { downloadPersistentInspectorLogs } =
+        await import("../devtools/inspector/persistentInspectorLogSink");
+      await downloadPersistentInspectorLogs();
+      pushToast(t("nostrInspectorLogsDownloaded"));
+    } catch {
+      pushToast(t("nostrInspectorLogsError"));
+    } finally {
+      setInspectorLogActionIsBusy(false);
+    }
+  };
+
+  const clearInspectorLogs = async (): Promise<void> => {
+    setInspectorLogActionIsBusy(true);
+    try {
+      const { clearPersistentInspectorLogs } =
+        await import("../devtools/inspector/persistentInspectorLogSink");
+      await clearPersistentInspectorLogs();
+      pushToast(t("nostrInspectorLogsCleared"));
+    } catch {
+      pushToast(t("nostrInspectorLogsError"));
+    } finally {
+      setInspectorLogActionIsBusy(false);
+    }
+  };
 
   useEffect(() => {
     let isActive = true;
@@ -574,6 +671,42 @@ export function AdvancedPage(): React.ReactElement {
           description={t("nostrInspectorDescription")}
           checked={inspectorEnabled}
           onChange={setInspectorEnabled}
+        />
+
+        <SettingsToggleRow
+          icon={<Bug size={18} />}
+          label={t("nostrInspectorLogs")}
+          description={t("nostrInspectorLogsDescription")}
+          checked={inspectorLogsEnabled}
+          onChange={setInspectorLogsEnabled}
+        />
+
+        {inspectorLogsEnabled ? (
+          <div className="inspector-log-stats" aria-live="polite">
+            {inspectorLogStatsLabel}
+          </div>
+        ) : null}
+
+        <SettingsLinkRow
+          onClick={() => void downloadInspectorLogs()}
+          disabled={
+            !inspectorLogsEnabled ||
+            inspectorLogActionIsBusy ||
+            !inspectorLogStats?.rowCount
+          }
+          icon={<Download size={18} />}
+          label={t("downloadNostrInspectorLogs")}
+        />
+
+        <SettingsLinkRow
+          onClick={() => void clearInspectorLogs()}
+          disabled={
+            !inspectorLogsEnabled ||
+            inspectorLogActionIsBusy ||
+            !inspectorLogStats?.rowCount
+          }
+          icon={<Trash2 size={18} />}
+          label={t("clearNostrInspectorLogs")}
         />
 
         <SettingsLinkRow

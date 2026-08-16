@@ -12,6 +12,17 @@ export const cs = {
   nostrInspector: "Nostr inspector",
   nostrInspectorDescription:
     "Zobrazuje dešifrovaný obsah zpráv jako prostý text. Data zůstávají jen v paměti a po obnovení stránky se smažou.",
+  nostrInspectorLogs: "Ukládat logy Nostr inspectoru",
+  nostrInspectorLogsDescription:
+    "Obsahují dešifrované zprávy jako prostý text. Neukládají se šifrovaně, ale do úložiště prohlížeče na tomto zařízení až na 24 hodin.",
+  nostrInspectorLogsStats:
+    "{count} řádků · {size} · nejstarší řádek je starý {age}",
+  nostrInspectorLogsLoading: "Načítám statistiky logů…",
+  downloadNostrInspectorLogs: "Stáhnout logy",
+  clearNostrInspectorLogs: "Smazat logy",
+  nostrInspectorLogsDownloaded: "Logy inspectoru byly staženy.",
+  nostrInspectorLogsCleared: "Logy inspectoru byly smazány.",
+  nostrInspectorLogsError: "K logům inspectoru se nepodařilo přistoupit.",
   openNostrInspector: "Otevřít Nostr inspector",
   back: "Zpět",
   menu: "Menu",

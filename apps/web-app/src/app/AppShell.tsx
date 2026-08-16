@@ -6,6 +6,7 @@ import { InstallPwaBanner } from "../components/InstallPwaBanner";
 import { PwaUpdateBanner } from "../components/PwaUpdateBanner";
 import { ToastNotifications } from "../components/ToastNotifications";
 import { UnauthenticatedLayout } from "../components/UnauthenticatedLayout";
+import { usePersistentInspectorLogStartup } from "../devtools/inspector/usePersistentInspectorLogStartup";
 import {
   AppShellContextsProvider,
   type AppShellActionsContextValue,
@@ -165,6 +166,7 @@ const UnauthenticatedAppShell = () => {
 const AppShell = () => {
   if (import.meta.env.DEV) console.log("[linky][render] AppShell");
   const { currentNsec, isResolved, setCurrentNsec } = useCurrentNsec();
+  usePersistentInspectorLogStartup();
 
   if (!isResolved) return <div className="page" />;
   if (!currentNsec) return <UnauthenticatedAppShell />;

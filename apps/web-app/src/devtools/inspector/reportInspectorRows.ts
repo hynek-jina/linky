@@ -1,13 +1,14 @@
 import type { JsonRecord, JsonValue } from "../../types/json";
 import { clientInspectorStore } from "./clientInspectorStore";
-import { getInspectorEnabled } from "./inspectorEnabled";
+import {
+  getInspectorEnabled,
+  getInspectorLogsEnabled,
+} from "./inspectorEnabled";
 import { INSPECTOR_REPORT_PATH } from "./inspectorRows";
 import type { InspectorRow } from "./inspectorRows";
 
-// App side of the dev inspector: the linkstr bridge builds InspectorRow
-// envelopes and hands them here; this module batches them and POSTs to the
-// Vite dev-server collector. No-ops entirely outside dev (the import.meta.env
-// guard compiles the reporting path out of production builds).
+// App side of the inspector: prepare each row once, then fan it out to every
+// active sink. Production builds have no HTTP reporting path.
 
 const FLUSH_DELAY_MS = 250;
 const MAX_PENDING_ROWS = 1_000;
@@ -105,7 +106,7 @@ const scheduleFlush = (): void => {
 };
 
 export const reportInspectorRows = (rows: InspectorRow[]): void => {
-  if (!getInspectorEnabled() || rows.length === 0) return;
+  if (rows.length === 0) return;
 
   const preparedRows = rows.map(
     (row): InspectorRow => ({
@@ -114,7 +115,17 @@ export const reportInspectorRows = (rows: InspectorRow[]): void => {
     }),
   );
   const clientId = getClientId();
-  clientInspectorStore.append(clientId, preparedRows);
+  if (getInspectorEnabled()) {
+    clientInspectorStore.append(clientId, preparedRows);
+  }
+
+  if (getInspectorLogsEnabled()) {
+    void import("./persistentInspectorLogSink")
+      .then(({ appendPersistentInspectorLogs }) =>
+        appendPersistentInspectorLogs(clientId, preparedRows),
+      )
+      .catch(() => undefined);
+  }
 
   if (!import.meta.env.DEV) return;
 

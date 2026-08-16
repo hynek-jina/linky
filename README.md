@@ -80,6 +80,8 @@ The same timeline is available in-app at `#advanced/inspector`. Production build
 after enabling **Nostr inspector** in Advanced settings. The in-app buffer can contain decrypted
 message payloads in plain text, stays in browser memory only, and is cleared on reload or when the
 setting is turned off. Production collection never sends inspector rows to a server.
+An independent Advanced toggle can retain the same plain-text rows in on-device browser storage
+for up to 24 hours (about 25 MiB) and download them as import-compatible `.ndjson`.
 
 Toolbar: channel chips and a text filter narrow the timeline; **Pause** freezes the view while
 still buffering; **Clear** resets the collector; the timeline auto-follows the newest row until you
