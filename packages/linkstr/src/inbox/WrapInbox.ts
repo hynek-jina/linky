@@ -17,7 +17,7 @@ import type { AllRelaysUnreachable } from "../domain/errors";
 import { NoReadRelaysConfigured } from "../domain/errors";
 import { UnixSeconds, WrapId } from "../domain/primitives";
 import type { RelayUrl } from "../domain/primitives";
-import { emitSilently, Inspector } from "../inspector/Inspector";
+import { Inspector } from "../inspector/Inspector";
 import { InboxRouted, InboxWrapDeduped } from "../inspector/events";
 import { inspectPlainOperation } from "../internal/inspectPlainOperation";
 import type { InspectedPlainResult } from "../internal/inspectPlainOperation";
@@ -277,8 +277,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
               const wrapId = wrapIdOf(raw);
               if (wrapId !== null && seenWrapIds.has(wrapId)) {
                 return Effect.sync(() => {
-                  emitSilently(
-                    inspector,
+                  inspector.emit(
                     () =>
                       new InboxWrapDeduped(
                         { wrapId },
@@ -291,8 +290,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
               const decoded = decodeWrapEvent(raw, identity);
               if (decoded.wrap === null) {
                 return Effect.sync(() => {
-                  emitSilently(
-                    inspector,
+                  inspector.emit(
                     () =>
                       new InboxRouted(
                         {
@@ -314,8 +312,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
               return Effect.sync(() => seenWrapIds.add(wrap.id)).pipe(
                 Effect.andThen(advanceCursor(wrap.created_at)),
                 Effect.map(() => {
-                  emitSilently(
-                    inspector,
+                  inspector.emit(
                     () =>
                       new InboxRouted(
                         {

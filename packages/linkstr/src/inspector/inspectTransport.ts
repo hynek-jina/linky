@@ -2,7 +2,7 @@ import { Effect, Layer, Option } from "effect";
 import { SignedWrapEvent } from "../internal/nostrEvent";
 import { NostrTransport } from "../services/NostrTransport";
 import type { NostrTransportService } from "../services/NostrTransport";
-import { emitSilently, Inspector } from "./Inspector";
+import { Inspector } from "./Inspector";
 import type { InspectorService } from "./Inspector";
 import {
   WireEventReceived,
@@ -23,7 +23,7 @@ const tapWire = (
       .pipe(
         Effect.tap((results) =>
           Effect.sync(() =>
-            emitSilently(inspector, () =>
+            inspector.emit(() =>
               event instanceof SignedWrapEvent
                 ? new WirePublished(
                     { wrapId: event.id, wrap: event, results },
@@ -39,8 +39,7 @@ const tapWire = (
       ),
   subscribe: (relay, filter, onEvent, options) =>
     Effect.suspend(() => {
-      emitSilently(
-        inspector,
+      inspector.emit(
         () =>
           new WireSubscribed({ relay, filter }, { disableValidation: true }),
       );
@@ -48,8 +47,7 @@ const tapWire = (
         relay,
         filter,
         (event) => {
-          emitSilently(
-            inspector,
+          inspector.emit(
             () =>
               new WireEventReceived(
                 { relay, event },
@@ -63,8 +61,7 @@ const tapWire = (
     }).pipe(
       Effect.tap((reason) =>
         Effect.sync(() =>
-          emitSilently(
-            inspector,
+          inspector.emit(
             () =>
               new WireSubscriptionEnded(
                 { relay, detail: reason },
@@ -75,8 +72,7 @@ const tapWire = (
       ),
       Effect.tapError((error) =>
         Effect.sync(() =>
-          emitSilently(
-            inspector,
+          inspector.emit(
             () =>
               new WireSubscriptionEnded(
                 { relay, detail: error.detail },
@@ -90,8 +86,7 @@ const tapWire = (
     inner.fetch(relay, filter).pipe(
       Effect.tap((events) =>
         Effect.sync(() =>
-          emitSilently(
-            inspector,
+          inspector.emit(
             () =>
               new WireFetched(
                 { relay, filter, events, detail: null },
@@ -102,8 +97,7 @@ const tapWire = (
       ),
       Effect.tapError((error) =>
         Effect.sync(() =>
-          emitSilently(
-            inspector,
+          inspector.emit(
             () =>
               new WireFetched(
                 { relay, filter, events: [], detail: error.detail },

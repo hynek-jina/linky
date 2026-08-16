@@ -3,7 +3,7 @@ import type { Scope } from "effect";
 import type { Filter } from "nostr-tools";
 import { NoReadRelaysConfigured } from "../domain/errors";
 import type { Pubkey, RelayUrl } from "../domain/primitives";
-import { emitSilently, Inspector } from "../inspector/Inspector";
+import { Inspector } from "../inspector/Inspector";
 import { ProfileWatchRouted } from "../inspector/events";
 import { chunkAuthors } from "../internal/authorChunks";
 import type { SignedPlainEvent } from "../internal/nostrEvent";
@@ -126,8 +126,7 @@ export class ProfileWatch extends Effect.Service<ProfileWatch>()(
             Either.match(decodeVerifiedPlainEvent(raw), {
               onLeft: (reason) =>
                 Effect.sync(() => {
-                  emitSilently(
-                    inspector,
+                  inspector.emit(
                     () =>
                       new ProfileWatchRouted(
                         {
@@ -147,8 +146,7 @@ export class ProfileWatch extends Effect.Service<ProfileWatch>()(
                 Effect.map(route(event), (routed) =>
                   Either.match(routed, {
                     onLeft: (reason) => {
-                      emitSilently(
-                        inspector,
+                      inspector.emit(
                         () =>
                           new ProfileWatchRouted(
                             {
@@ -169,8 +167,7 @@ export class ProfileWatch extends Effect.Service<ProfileWatch>()(
                         `${event.pubkey}:${event.kind}`,
                         event.created_at,
                       );
-                      emitSilently(
-                        inspector,
+                      inspector.emit(
                         () =>
                           new ProfileWatchRouted(
                             {

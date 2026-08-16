@@ -1,6 +1,5 @@
 import { Effect } from "effect";
 import type { EventId, WrapId } from "../domain/primitives";
-import { emitSilently } from "../inspector/Inspector";
 import type { InspectorService } from "../inspector/Inspector";
 import { OperationFailed, PlainOperationSucceeded } from "../inspector/events";
 
@@ -19,8 +18,7 @@ export const inspectPlainOperation =
     operation.pipe(
       Effect.tap(({ eventIds, result }) =>
         Effect.sync(() =>
-          emitSilently(
-            inspector,
+          inspector.emit(
             () =>
               new PlainOperationSucceeded(
                 { name, params, eventIds, result },
@@ -32,8 +30,7 @@ export const inspectPlainOperation =
       Effect.map(({ result }) => result),
       Effect.tapError((error) =>
         Effect.sync(() =>
-          emitSilently(
-            inspector,
+          inspector.emit(
             () =>
               new OperationFailed(
                 { name, params, error },

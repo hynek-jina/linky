@@ -6,30 +6,17 @@ import type { InspectorEvent } from "./events";
 const BUFFER_CAPACITY = 1024;
 
 export interface InspectorService {
-  /** Sync so transport callbacks can emit without running Effects. */
-  readonly emit: (event: InspectorEvent) => void;
+  /**
+   * Sync so transport callbacks can emit without running Effects, lazy so the
+   * builder is not invoked when nobody consumes, and total so a throwing
+   * builder is logged and dropped, never a defect of the observed operation.
+   */
+  readonly emit: (build: () => InspectorEvent) => void;
   /** Single-consumer, like `WrapInboxFeed.events`; fan out downstream. */
   readonly events: Stream.Stream<InspectorEvent>;
 }
 
 const noop: InspectorService = { emit: () => {}, events: Stream.empty };
-
-/**
- * The only way emission sites should emit: diagnostics must never disturb the
- * operation they observe, so a throwing event builder (e.g. a schema
- * constructor rejecting an off-brand field) is logged and dropped instead of
- * becoming a defect of the observed effect.
- */
-export const emitSilently = (
-  inspector: InspectorService,
-  build: () => InspectorEvent,
-): void => {
-  try {
-    inspector.emit(build());
-  } catch (error) {
-    console.warn("linkstr inspector emission failed", error);
-  }
-};
 
 /**
  * Optional diagnostics bus. Services emit through `Inspector.orNoop`, so
@@ -48,8 +35,12 @@ export class Inspector extends Context.Tag("linkstr/Inspector")<
         Queue.shutdown,
       ),
       (queue) => ({
-        emit: (event) => {
-          Queue.unsafeOffer(queue, event);
+        emit: (build) => {
+          try {
+            Queue.unsafeOffer(queue, build());
+          } catch (error) {
+            console.warn("linkstr inspector emission failed", error);
+          }
         },
         events: Stream.fromQueue(queue),
       }),

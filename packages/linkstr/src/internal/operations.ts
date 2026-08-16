@@ -2,7 +2,6 @@ import { Clock, Effect } from "effect";
 import type { WrapDelivery } from "../domain/delivery";
 import { ClientId, UnixSeconds } from "../domain/primitives";
 import type { RumorId } from "../domain/primitives";
-import { emitSilently } from "../inspector/Inspector";
 import type { InspectorService } from "../inspector/Inspector";
 import { OperationFailed, OperationSucceeded } from "../inspector/events";
 
@@ -33,8 +32,7 @@ export const inspectOperation =
     operation.pipe(
       Effect.tap((receipt) =>
         Effect.sync(() =>
-          emitSilently(
-            inspector,
+          inspector.emit(
             () =>
               new OperationSucceeded(
                 { name, params, ...summarize(receipt) },
@@ -45,8 +43,7 @@ export const inspectOperation =
       ),
       Effect.tapError((error) =>
         Effect.sync(() =>
-          emitSilently(
-            inspector,
+          inspector.emit(
             () =>
               new OperationFailed(
                 { name, params, error },
