@@ -6,14 +6,21 @@ import { createInMemoryInspectorDataSource } from "../devtools/inspectorPage/ins
 import "../devtools/inspectorPage/inspector.css";
 
 export default function InspectorPage(): React.ReactElement {
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
   const dataSource = React.useMemo(
     () => createInMemoryInspectorDataSource(clientInspectorStore),
     [],
   );
 
   return (
-    <div className="in-app-inspector-page">
-      <InspectorApp dataSource={dataSource} />
+    <div
+      className={`in-app-inspector-page${isFullscreen ? " fullscreen" : ""}`}
+    >
+      <InspectorApp
+        dataSource={dataSource}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={() => setIsFullscreen((current) => !current)}
+      />
     </div>
   );
 }
