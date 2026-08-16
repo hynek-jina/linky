@@ -36,6 +36,21 @@ export class RelayWatcher {
       {
         readRelays: this.relayUrls,
         lookbackSeconds: CATCH_UP_LOOKBACK_SECONDS,
+        onInvalidWrap: (failure) =>
+          console.warn(`[push] invalid push wrap failure=${failure}`),
+        onRelayStatus: (event) => {
+          if (event.type === "eose") {
+            console.info(
+              `[push] relay caught up; live delivery enabled relay=${event.relay}`,
+            );
+            return;
+          }
+          console.warn(
+            `[push] relay subscription attempt ended relay=${event.relay} reason=${event.reason}`,
+          );
+        },
+        onFatal: (message) =>
+          console.error(`[push] relay watcher failed\n${message}`),
       },
       (event) => void this.handleEvent(event),
     );
