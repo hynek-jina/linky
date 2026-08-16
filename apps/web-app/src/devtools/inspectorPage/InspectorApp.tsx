@@ -50,6 +50,8 @@ interface DetailPaneProps {
 
 interface InspectorAppProps {
   dataSource: InspectorDataSource;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 interface OfflineImport {
@@ -259,6 +261,8 @@ function DetailPane({
 
 export function InspectorApp({
   dataSource,
+  isFullscreen = false,
+  onToggleFullscreen,
 }: InspectorAppProps): React.ReactElement {
   const [rows, setRows] = React.useState<CollectedInspectorRow[]>([]);
   const [isConnected, setIsConnected] = React.useState(false);
@@ -524,6 +528,18 @@ export function InspectorApp({
           <span className="connection-label">{statusLabel}</span>
         </div>
         <div className="top-actions">
+          {onToggleFullscreen && (
+            <button
+              aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              aria-pressed={isFullscreen}
+              className="icon-button"
+              onClick={onToggleFullscreen}
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              type="button"
+            >
+              {isFullscreen ? "⤡" : "⤢"}
+            </button>
+          )}
           <span className="row-count">
             {renderedRows.length.toLocaleString()} shown /{" "}
             {rows.length.toLocaleString()} total
