@@ -9,7 +9,7 @@ import {
 
 const row = (tag: string): InspectorRow => ({
   at: 1_700_000_000_000,
-  channel: "wire",
+  channel: "nostr.wire",
   tag,
   summary: tag,
   links: {},

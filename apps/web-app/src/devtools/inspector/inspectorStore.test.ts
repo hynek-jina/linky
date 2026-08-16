@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { InspectorChannel, InspectorRow } from "./inspectorRows";
+import type { InspectorRow } from "./inspectorRows";
 import { createInspectorStore } from "./inspectorStore";
 
-const row = (
-  tag: string,
-  channel: InspectorChannel = "wire",
-): InspectorRow => ({
+const row = (tag: string, channel: string = "nostr.wire"): InspectorRow => ({
   at: 1_700_000_000_000,
   channel,
   tag,
@@ -72,12 +69,12 @@ describe("createInspectorStore", () => {
   it("filters by channel", () => {
     const store = createInspectorStore();
     store.append("tab", [
-      row("react", "operation"),
-      row("published", "wire"),
-      row("routed", "operation"),
+      row("react", "nostr.operation"),
+      row("published", "nostr.wire"),
+      row("routed", "nostr.operation"),
     ]);
 
-    const operations = store.query({ channel: "operation" });
+    const operations = store.query({ channel: "nostr.operation" });
     expect(operations.rows.map((entry) => entry.tag)).toEqual([
       "react",
       "routed",

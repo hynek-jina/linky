@@ -1,8 +1,4 @@
-import type {
-  CollectedInspectorRow,
-  InspectorChannel,
-  InspectorRow,
-} from "./inspectorRows";
+import type { CollectedInspectorRow, InspectorRow } from "./inspectorRows";
 
 // In-memory core of the dev inspector collector: a ring buffer with monotonic
 // row ids and cursor-based queries. Kept free of node/vite imports so the
@@ -12,7 +8,7 @@ export const INSPECTOR_MAX_ROWS = 5_000;
 export const INSPECTOR_QUERY_DEFAULT_LIMIT = 500;
 
 export interface InspectorQuery {
-  channel?: InspectorChannel;
+  channel?: string;
   client?: string;
   /** Return rows with id greater than this. */
   cursor?: number;

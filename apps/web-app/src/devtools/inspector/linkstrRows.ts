@@ -15,7 +15,7 @@ import {
 } from "@linky/linkstr";
 import { Option, Schema } from "effect";
 import { nostrKindLabel } from "../nostrKindNames";
-import type { InspectorRow, InspectorRowLinks } from "./inspectorRows";
+import type { InspectorRow } from "./inspectorRows";
 
 const short = (id: string): string => id.slice(0, 8) + "…";
 
@@ -51,33 +51,33 @@ const errorTag = (error: unknown): string | null =>
     ? error._tag
     : null;
 
-const failedOperationLinks = (error: unknown): InspectorRowLinks =>
+const failedOperationLinks = (error: unknown): InspectorRow["links"] =>
   error instanceof NoRelayReachable || error instanceof RecipientNotReached
     ? {
-        rumorId: error.rumorId,
-        clientId: error.clientId,
-        wrapIds: [error.selfCopy.wrapId, error.recipientCopy.wrapId],
+        rumor: error.rumorId,
+        client: error.clientId,
+        wrap: [error.selfCopy.wrapId, error.recipientCopy.wrapId],
       }
     : {};
 
 const routedSummaryAndLinks = (
   routed: unknown,
   rumorKind: number | null,
-): { summary: string; links: InspectorRowLinks } => {
+): { summary: string; links: InspectorRow["links"] } => {
   const kindSuffix =
     rumorKind === null ? "" : ` (rumor ${nostrKindLabel(rumorKind)})`;
   if (routed instanceof ReactionAdded) {
     return {
       summary: `ReactionAdded ${routed.emoji} from ${short(routed.from)}`,
-      links: { rumorId: routed.reactionId },
+      links: { rumor: routed.reactionId },
     };
   }
   if (routed instanceof OwnReactionConfirmed) {
     return {
       summary: `OwnReactionConfirmed ${routed.emoji} (own copy)`,
       links: {
-        rumorId: routed.reactionId,
-        ...(routed.clientId === null ? {} : { clientId: routed.clientId }),
+        rumor: routed.reactionId,
+        ...(routed.clientId === null ? {} : { client: routed.clientId }),
       },
     };
   }
@@ -91,8 +91,8 @@ const routedSummaryAndLinks = (
     return {
       summary: `OwnRetractionConfirmed ${routed.reactionIds.length} reaction(s) (own copy)`,
       links: {
-        rumorId: routed.retractionId,
-        ...(routed.clientId === null ? {} : { clientId: routed.clientId }),
+        rumor: routed.retractionId,
+        ...(routed.clientId === null ? {} : { client: routed.clientId }),
       },
     };
   }
@@ -123,13 +123,13 @@ export const linkstrEventToRow = (
     case "OperationSucceeded":
       return {
         at,
-        channel: "operation",
+        channel: "nostr.operation",
         tag: event.name,
         summary: operationSummary(event.name, event.params),
         links: {
-          rumorId: event.rumorId,
-          clientId: event.clientId,
-          wrapIds:
+          rumor: event.rumorId,
+          client: event.clientId,
+          wrap:
             event.selfCopy === null
               ? [event.recipientCopy.wrapId]
               : [event.selfCopy.wrapId, event.recipientCopy.wrapId],
@@ -140,7 +140,7 @@ export const linkstrEventToRow = (
       const reason = errorTag(event.error);
       return {
         at,
-        channel: "operation",
+        channel: "nostr.operation",
         tag: event.name,
         summary: `${operationSummary(event.name, event.params)} — failed${reason === null ? "" : `: ${reason}`}`,
         links: failedOperationLinks(event.error),
@@ -151,30 +151,31 @@ export const linkstrEventToRow = (
       const accepted = event.results.filter((result) => result.accepted);
       return {
         at,
-        channel: "wire",
+        channel: "nostr.wire",
         tag: event._tag,
         summary: `publish ${nostrKindLabel(1059)} ${short(event.wrapId)} → ${accepted.length}/${event.results.length} relays accepted`,
-        links: { wrapIds: [event.wrapId] },
+        links: { wrap: [event.wrapId] },
         payload: event,
       };
     }
     case "WireSubscribed":
       return {
         at,
-        channel: "wire",
+        channel: "nostr.wire",
         tag: event._tag,
         summary: `subscribe ${filterKindsLabel(event.filter)} @ ${event.relay}`,
-        links: { relay: event.relay },
+        links: {},
+        context: { relay: event.relay },
         payload: event,
       };
     case "WirePlainPublished": {
       const accepted = event.results.filter((result) => result.accepted);
       return {
         at,
-        channel: "wire",
+        channel: "nostr.wire",
         tag: event._tag,
         summary: `publish ${nostrKindLabel(event.kind)} ${short(event.eventId)} → ${accepted.length}/${event.results.length} relays accepted`,
-        links: { wrapIds: [event.eventId] },
+        links: { wrap: [event.eventId] },
         payload: event,
       };
     }
@@ -187,51 +188,48 @@ export const linkstrEventToRow = (
       );
       return {
         at,
-        channel: "wire",
+        channel: "nostr.wire",
         tag: event._tag,
         summary: `fetch ${filterKindsLabel(event.filter)} ← ${event.relay}: ${event.events.length} event(s)${event.detail === null ? "" : ` — ${event.detail}`}`,
-        links: {
-          relay: event.relay,
-          ...(ids.length === 0 ? {} : { wrapIds: ids }),
-        },
+        links: ids.length === 0 ? {} : { wrap: ids },
+        context: { relay: event.relay },
         payload: event,
       };
     }
     case "WireSubscriptionEnded":
       return {
         at,
-        channel: "wire",
+        channel: "nostr.wire",
         tag: event._tag,
         summary: `subscription ended @ ${event.relay}${event.detail === null ? "" : ` — ${event.detail}`}`,
-        links: { relay: event.relay },
+        links: {},
+        context: { relay: event.relay },
         payload: event,
       };
     case "WireEventReceived":
       return {
         at,
-        channel: "wire",
+        channel: "nostr.wire",
         tag: event._tag,
         summary: Option.match(decodeRawEventSummary(event.event), {
           onNone: () => `event ← ${event.relay}`,
           onSome: ({ id, kind }) =>
             `${nostrKindLabel(kind)} ${short(id)} ← ${event.relay}`,
         }),
-        links: {
-          relay: event.relay,
-          ...Option.match(decodeRawEventSummary(event.event), {
-            onNone: () => ({}),
-            onSome: ({ id }) => ({ wrapIds: [id] }),
-          }),
-        },
+        links: Option.match(decodeRawEventSummary(event.event), {
+          onNone: () => ({}),
+          onSome: ({ id }) => ({ wrap: [id] }),
+        }),
+        context: { relay: event.relay },
         payload: event,
       };
     case "InboxWrapDeduped":
       return {
         at,
-        channel: "operation",
+        channel: "nostr.operation",
         tag: event._tag,
         summary: `gift wrap ${short(event.wrapId)} deduped (already handled)`,
-        links: { wrapIds: [event.wrapId] },
+        links: { wrap: [event.wrapId] },
         payload: event,
       };
     case "InboxRouted": {
@@ -241,12 +239,12 @@ export const linkstrEventToRow = (
       );
       return {
         at,
-        channel: "operation",
+        channel: "nostr.operation",
         tag: event._tag,
         summary,
         links: {
           ...links,
-          ...(event.wrapId === null ? {} : { wrapIds: [event.wrapId] }),
+          ...(event.wrapId === null ? {} : { wrap: [event.wrapId] }),
         },
         payload: event,
       };
@@ -254,20 +252,19 @@ export const linkstrEventToRow = (
     case "PlainOperationSucceeded":
       return {
         at,
-        channel: "operation",
+        channel: "nostr.operation",
         tag: event.name,
         summary: event.name,
-        links:
-          event.eventIds.length === 0 ? {} : { wrapIds: [...event.eventIds] },
+        links: event.eventIds.length === 0 ? {} : { wrap: [...event.eventIds] },
         payload: event,
       };
     case "ProfileWatchRouted":
       return {
         at,
-        channel: "operation",
+        channel: "nostr.operation",
         tag: event._tag,
         summary: profileWatchSummary(event.event, event.kind),
-        links: event.eventId === null ? {} : { wrapIds: [event.eventId] },
+        links: event.eventId === null ? {} : { wrap: [event.eventId] },
         payload: event,
       };
   }

@@ -67,9 +67,13 @@ describe("linkstrEventToRow", () => {
 
     expect(row).toMatchObject({
       at: 1000,
-      channel: "operation",
+      channel: "nostr.operation",
       tag: "reactions.react",
-      links: { rumorId, clientId, wrapIds: [selfWrapId, recipientWrapId] },
+      links: {
+        rumor: rumorId,
+        client: clientId,
+        wrap: [selfWrapId, recipientWrapId],
+      },
     });
     expect(row.summary).toContain("react 🔥");
   });
@@ -92,9 +96,9 @@ describe("linkstrEventToRow", () => {
 
     expect(row.summary).toContain("failed: NoRelayReachable");
     expect(row.links).toEqual({
-      rumorId,
-      clientId,
-      wrapIds: [selfWrapId, recipientWrapId],
+      rumor: rumorId,
+      client: clientId,
+      wrap: [selfWrapId, recipientWrapId],
     });
   });
 
@@ -111,9 +115,9 @@ describe("linkstrEventToRow", () => {
       1000,
     );
 
-    expect(row.channel).toBe("wire");
+    expect(row.channel).toBe("nostr.wire");
     expect(row.summary).toContain("1/2 relays accepted");
-    expect(row.links).toEqual({ wrapIds: [selfWrapId] });
+    expect(row.links).toEqual({ wrap: [selfWrapId] });
   });
 
   it("reads id and kind out of a raw received event", () => {
@@ -126,14 +130,16 @@ describe("linkstrEventToRow", () => {
     );
 
     expect(row.summary).toContain("gift wrap (1059)");
-    expect(row.links).toEqual({ relay, wrapIds: [selfWrapId] });
+    expect(row.links).toEqual({ wrap: [selfWrapId] });
+    expect(row.context).toEqual({ relay });
 
     const malformed = linkstrEventToRow(
       new WireEventReceived({ relay, event: "garbage" }),
       1000,
     );
     expect(malformed.summary).toBe(`event ← ${relay}`);
-    expect(malformed.links).toEqual({ relay });
+    expect(malformed.links).toEqual({});
+    expect(malformed.context).toEqual({ relay });
   });
 
   it("names the routed fact and its rumor id", () => {
@@ -154,7 +160,7 @@ describe("linkstrEventToRow", () => {
     );
 
     expect(row.summary).toContain("ReactionAdded 👍");
-    expect(row.links).toEqual({ rumorId, wrapIds: [recipientWrapId] });
+    expect(row.links).toEqual({ rumor: rumorId, wrap: [recipientWrapId] });
   });
 
   it("surfaces unknown rumor kinds by name on the drop path", () => {
@@ -174,7 +180,7 @@ describe("linkstrEventToRow", () => {
     expect(row.summary).toBe(
       "WrapDropped unsupported-kind (rumor chat message (14))",
     );
-    expect(row.links).toEqual({ wrapIds: [recipientWrapId] });
+    expect(row.links).toEqual({ wrap: [recipientWrapId] });
   });
 
   it("marks cross-relay dedupes", () => {
@@ -183,7 +189,7 @@ describe("linkstrEventToRow", () => {
       1000,
     );
     expect(row.summary).toContain("deduped");
-    expect(row.links).toEqual({ wrapIds: [selfWrapId] });
+    expect(row.links).toEqual({ wrap: [selfWrapId] });
   });
 
   it("links a plain operation to its published events", () => {
@@ -199,9 +205,9 @@ describe("linkstrEventToRow", () => {
     );
 
     expect(row).toMatchObject({
-      channel: "operation",
+      channel: "nostr.operation",
       tag: "profiles.publishProfile",
-      links: { wrapIds: [eventId] },
+      links: { wrap: [eventId] },
     });
   });
 
@@ -219,10 +225,10 @@ describe("linkstrEventToRow", () => {
       1000,
     );
 
-    expect(row.channel).toBe("wire");
+    expect(row.channel).toBe("nostr.wire");
     expect(row.summary).toContain("relay list (10002)");
     expect(row.summary).toContain("1/1 relays accepted");
-    expect(row.links).toEqual({ wrapIds: [eventId] });
+    expect(row.links).toEqual({ wrap: [eventId] });
   });
 
   it("links fetched events and names fetched kinds", () => {
@@ -239,7 +245,8 @@ describe("linkstrEventToRow", () => {
 
     expect(row.summary).toContain("profile (0), status (30315)");
     expect(row.summary).toContain("1 event(s)");
-    expect(row.links).toEqual({ relay, wrapIds: [eventId] });
+    expect(row.links).toEqual({ wrap: [eventId] });
+    expect(row.context).toEqual({ relay });
   });
 
   it("names profile watch facts and drops", () => {
@@ -257,7 +264,7 @@ describe("linkstrEventToRow", () => {
       1000,
     );
     expect(fact.summary).toContain("ProfileUpdated");
-    expect(fact.links).toEqual({ wrapIds: [eventId] });
+    expect(fact.links).toEqual({ wrap: [eventId] });
 
     const dropped = linkstrEventToRow(
       new ProfileWatchRouted({

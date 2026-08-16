@@ -3,7 +3,6 @@ import React from "react";
 import {
   inspectorLinkIds,
   type CollectedInspectorRow,
-  type InspectorChannel,
 } from "../inspector/inspectorRows";
 import { INSPECTOR_MAX_ROWS } from "../inspector/inspectorStore";
 import {
@@ -19,12 +18,6 @@ import {
 const MAX_RENDERED_ROWS = 2_000;
 const FLUSH_INTERVAL_MS = 100;
 const FOLLOW_THRESHOLD_PX = 32;
-const CHANNELS: InspectorChannel[] = ["operation", "wire"];
-
-interface ChannelSelection {
-  operation: boolean;
-  wire: boolean;
-}
 
 interface AppClient {
   id: string;
@@ -60,6 +53,8 @@ interface OfflineImport {
 }
 
 const timelineRowDomId = (id: number): string => `inspector-row-${id}`;
+const channelClassName = (channel: string): string =>
+  `channel-${channel.replaceAll(".", "-")}`;
 
 const formatTime = (at: number): string => {
   const date = new Date(at);
@@ -75,7 +70,7 @@ const formatTime = (at: number): string => {
 const rowSearchText = (row: CollectedInspectorRow): string => {
   const payloadText =
     row.payload === undefined ? "" : JSON.stringify(row.payload);
-  return `${row.tag}\n${row.summary}\n${JSON.stringify(row.links)}\n${payloadText}`;
+  return `${row.tag}\n${row.summary}\n${JSON.stringify(row.links)}\n${JSON.stringify(row.context)}\n${payloadText}`;
 };
 
 function TimelineRow({
@@ -88,7 +83,7 @@ function TimelineRow({
   return (
     <button
       aria-pressed={isSelected}
-      className={`timeline-row channel-${row.channel}${isSelected ? " selected" : ""}${isRelated ? " related" : ""}`}
+      className={`timeline-row ${channelClassName(row.channel)}${isSelected ? " selected" : ""}${isRelated ? " related" : ""}`}
       id={timelineRowDomId(row.id)}
       onClick={() => onSelect(row)}
       type="button"
@@ -106,21 +101,22 @@ function TimelineRow({
   );
 }
 
-interface LinkEntry {
+interface DetailEntry {
   label: string;
   value: string;
 }
 
-const linkEntries = (row: CollectedInspectorRow): LinkEntry[] => {
-  const entries: LinkEntry[] = [];
-  for (const wrapId of row.links.wrapIds ?? []) {
-    entries.push({ label: "wrap", value: wrapId });
+const detailEntries = (
+  record: Record<string, string | string[]>,
+): DetailEntry[] => {
+  const entries: DetailEntry[] = [];
+  for (const [label, value] of Object.entries(record)) {
+    if (typeof value === "string") {
+      entries.push({ label, value });
+      continue;
+    }
+    for (const entry of value) entries.push({ label, value: entry });
   }
-  if (row.links.rumorId)
-    entries.push({ label: "rumor", value: row.links.rumorId });
-  if (row.links.clientId)
-    entries.push({ label: "client", value: row.links.clientId });
-  if (row.links.relay) entries.push({ label: "relay", value: row.links.relay });
   return entries;
 };
 
@@ -139,7 +135,8 @@ function DetailPane({
       row.payload === undefined ? null : JSON.stringify(row.payload, null, 2),
     [row],
   );
-  const links = linkEntries(row);
+  const links = detailEntries(row.links);
+  const context = detailEntries(row.context ?? {});
   const hasLinkIds = inspectorLinkIds(row.links).length > 0;
 
   React.useEffect(() => {
@@ -180,7 +177,7 @@ function DetailPane({
         </div>
         <div>
           <dt>channel</dt>
-          <dd className={`detail-channel channel-${row.channel}`}>
+          <dd className={`detail-channel ${channelClassName(row.channel)}`}>
             {row.channel}
           </dd>
         </div>
@@ -210,6 +207,22 @@ function DetailPane({
         </>
       )}
 
+      {context.length > 0 && (
+        <>
+          <div className="json-heading">
+            <span>Context</span>
+          </div>
+          <dl className="context-list">
+            {context.map((entry, index) => (
+              <div key={`${entry.label}-${index}`}>
+                <dt>{entry.label}</dt>
+                <dd>{entry.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </>
+      )}
+
       <div className="json-heading">
         <span>Related rows ({relatedRows.length})</span>
       </div>
@@ -224,7 +237,7 @@ function DetailPane({
           {relatedRows.map((relatedRow) => (
             <li key={relatedRow.id}>
               <button
-                className={`related-row channel-${relatedRow.channel}`}
+                className={`related-row ${channelClassName(relatedRow.channel)}`}
                 onClick={() => onJumpToRow(relatedRow)}
                 title="Jump to row"
                 type="button"
@@ -268,10 +281,9 @@ export function InspectorApp({
   const [isConnected, setIsConnected] = React.useState(false);
   const [isPaused, setIsPaused] = React.useState(false);
   const [isClearing, setIsClearing] = React.useState(false);
-  const [channels, setChannels] = React.useState<ChannelSelection>({
-    operation: true,
-    wire: true,
-  });
+  const [hiddenChannels, setHiddenChannels] = React.useState<Set<string>>(
+    () => new Set(),
+  );
   const [clientFilter, setClientFilter] = React.useState("all");
   const [textFilter, setTextFilter] = React.useState("");
   const [selectedRow, setSelectedRow] =
@@ -363,6 +375,12 @@ export function InspectorApp({
     }));
   }, [rows]);
 
+  const observedChannels = React.useMemo((): string[] => {
+    const channels = new Set<string>();
+    for (const row of rows) channels.add(row.channel);
+    return [...channels];
+  }, [rows]);
+
   const clientLabelById = React.useMemo(() => {
     const labels = new Map<string, string>();
     for (const appClient of appClients) {
@@ -400,12 +418,12 @@ export function InspectorApp({
   const matchingRows = React.useMemo(() => {
     const query = textFilter.trim().toLocaleLowerCase();
     return rows.filter((row) => {
-      if (!channels[row.channel]) return false;
+      if (hiddenChannels.has(row.channel)) return false;
       if (clientFilter !== "all" && row.client !== clientFilter) return false;
       if (!query) return true;
       return rowSearchText(row).toLocaleLowerCase().includes(query);
     });
-  }, [channels, clientFilter, rows, textFilter]);
+  }, [clientFilter, hiddenChannels, rows, textFilter]);
 
   const hiddenRowCount = Math.max(0, matchingRows.length - MAX_RENDERED_ROWS);
   const renderedRows = React.useMemo(
@@ -440,11 +458,13 @@ export function InspectorApp({
     if (!nextPaused) flushIncomingRows();
   }, [flushIncomingRows, isPaused]);
 
-  const handleChannelToggle = React.useCallback((channel: InspectorChannel) => {
-    setChannels((current) => ({
-      ...current,
-      [channel]: !current[channel],
-    }));
+  const handleChannelToggle = React.useCallback((channel: string) => {
+    setHiddenChannels((current) => {
+      const next = new Set(current);
+      if (next.has(channel)) next.delete(channel);
+      else next.add(channel);
+      return next;
+    });
   }, []);
 
   const handleJumpToRow = React.useCallback((row: CollectedInspectorRow) => {
@@ -615,10 +635,10 @@ export function InspectorApp({
         )}
 
         <div className="channel-filters">
-          {CHANNELS.map((channel) => (
+          {observedChannels.map((channel) => (
             <button
-              aria-pressed={channels[channel]}
-              className={`filter-chip channel-${channel}${channels[channel] ? " enabled" : ""}`}
+              aria-pressed={!hiddenChannels.has(channel)}
+              className={`filter-chip ${channelClassName(channel)}${hiddenChannels.has(channel) ? "" : " enabled"}`}
               key={channel}
               onClick={() => handleChannelToggle(channel)}
               type="button"
