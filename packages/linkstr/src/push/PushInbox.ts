@@ -4,10 +4,6 @@ import type { Filter } from "nostr-tools";
 import { NoReadRelaysConfigured } from "../domain/errors";
 import type { RelayUrl } from "../domain/primitives";
 import type { InboxDelivery } from "../inbox/events";
-import {
-  LINKY_PUSH_MARKER_TAG,
-  LINKY_PUSH_MARKER_VALUE,
-} from "../internal/giftWrap";
 import { resubscribeForever } from "../internal/resubscribe";
 import { NostrTransport } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
@@ -87,7 +83,6 @@ export class PushInbox extends Effect.Service<PushInbox>()(
               );
               const filter: Filter = {
                 kinds: [GIFT_WRAP_KIND],
-                [`#${LINKY_PUSH_MARKER_TAG}`]: [LINKY_PUSH_MARKER_VALUE],
                 since: Math.max(nowSeconds - lookbackSeconds, 0),
               };
               let eoseSeen = false;
