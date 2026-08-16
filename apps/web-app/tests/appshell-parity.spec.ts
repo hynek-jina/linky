@@ -279,6 +279,54 @@ test("preserves route parity and critical handlers", async ({ page }) => {
   await expect(paySend).toBeDisabled();
 });
 
+test("keeps long chat drafts visible above iPhone 8 and iPhone 16 keyboards", async ({
+  page,
+}) => {
+  await setAuthenticatedStorage(page);
+  await page.setViewportSize({ height: 667, width: 375 });
+  await createContactAndOpenChat(page);
+
+  const chatInput = page.locator("[data-guide='chat-input']");
+  await chatInput.fill(
+    Array.from({ length: 20 }, (_, index) => `Draft line ${index + 1}`).join(
+      "\n",
+    ),
+  );
+  await chatInput.evaluate((element) => element.blur());
+  await page.waitForTimeout(300);
+
+  for (const device of [
+    { height: 667, keyboardTop: 330, width: 375 },
+    { height: 852, keyboardTop: 430, width: 393 },
+  ]) {
+    await page.setViewportSize({ height: device.height, width: device.width });
+    await page.waitForTimeout(50);
+    await page.evaluate(({ height, keyboardTop }) => {
+      document.documentElement.style.setProperty(
+        "--chat-viewport-height",
+        `${keyboardTop}px`,
+      );
+      document.documentElement.style.setProperty(
+        "--chat-keyboard-inset",
+        `${height - keyboardTop}px`,
+      );
+    }, device);
+
+    const topbarBox = await page.locator(".topbar").boundingBox();
+    const chatInputBox = await chatInput.boundingBox();
+    expect(topbarBox).not.toBeNull();
+    expect(chatInputBox).not.toBeNull();
+    if (!topbarBox || !chatInputBox) throw new Error("Missing chat geometry");
+    expect(chatInputBox.height).toBeLessThanOrEqual(160);
+    expect(chatInputBox.y).toBeGreaterThanOrEqual(
+      topbarBox.y + topbarBox.height,
+    );
+    expect(chatInputBox.y + chatInputBox.height).toBeLessThanOrEqual(
+      device.keyboardTop,
+    );
+  }
+});
+
 test("supports chat reply, edit, reaction toggle, and copy actions", async ({
   page,
 }) => {
@@ -288,7 +336,6 @@ test("supports chat reply, edit, reaction toggle, and copy actions", async ({
 
   const chatInput = page.locator("[data-guide='chat-input']");
   const sendButton = page.locator("[data-guide='chat-send']");
-
   await chatInput.fill("First message");
   await sendButton.click();
   await expect(

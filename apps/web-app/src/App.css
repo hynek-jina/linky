@@ -2755,6 +2755,10 @@ button.settings-sensitive-action.is-armed {
 
 .chat-message-editor {
   min-height: 64px;
+  max-height: min(
+    160px,
+    calc(var(--chat-viewport-height, 100dvh) - var(--topbar-height) - 120px)
+  );
   padding: 12px 56px 12px 12px;
   font-size: 16px;
   line-height: 1.45;
@@ -2762,6 +2766,7 @@ button.settings-sensitive-action.is-armed {
   border: none;
   border-radius: 10px;
   outline: none;
+  overflow-y: auto;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
