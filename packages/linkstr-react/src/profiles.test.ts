@@ -56,6 +56,7 @@ const makeFakeTransport = (
   published: Array<PublishedEvent>,
   subscriptions: Array<FakeSubscription>,
   stored: ReadonlyArray<NostrToolsEvent> = [],
+  fetchedFilters: Array<Filter> = [],
 ): NostrTransportService => ({
   publish: (relays, event) =>
     Effect.sync(() => {
@@ -77,7 +78,11 @@ const makeFakeTransport = (
         ),
       );
     }),
-  fetch: () => Effect.succeed(stored),
+  fetch: (_relay, filter) =>
+    Effect.sync(() => {
+      fetchedFilters.push(filter);
+      return [...stored];
+    }),
 });
 
 const configWith = (
@@ -225,6 +230,26 @@ describe("discoverActiveProfilesAtom", () => {
         metadata: expect.objectContaining({ displayName: "Bob" }),
       }),
     ]);
+  });
+
+  it("forwards discovery options into the activity scan filter", async () => {
+    const registry = Registry.make();
+    const fetchedFilters: Array<Filter> = [];
+    registry.set(
+      linkstrConfigAtom,
+      configWith(alice, makeFakeTransport([], [], [], fetchedFilters)),
+    );
+
+    registry.set(discoverActiveProfilesAtom, {
+      activityKinds: [30315],
+      authorScanLimit: 200,
+    });
+    const exit = await settle(registry, discoverActiveProfilesAtom);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    expect(fetchedFilters[0]).toEqual(
+      expect.objectContaining({ kinds: [30315], limit: 200 }),
+    );
   });
 });
 

@@ -1,6 +1,7 @@
 import { Atom } from "@effect-atom/atom-react";
 import { Profiles, ProfileWatch } from "@linky/linkstr";
 import type {
+  DiscoverActiveProfilesOptions,
   ProfileMetadata,
   ProfileWatchEvent,
   Pubkey,
@@ -51,8 +52,12 @@ export const fetchProfilesAtom = linkstrRuntimeAtom.fn<ReadonlyArray<Pubkey>>()(
     Effect.flatMap(Profiles, (profiles) => profiles.fetchProfiles(pubkeys)),
 );
 
-export const discoverActiveProfilesAtom = linkstrRuntimeAtom.fn<void>()(() =>
-  Effect.flatMap(Profiles, (profiles) => profiles.discoverActiveProfiles()),
+export const discoverActiveProfilesAtom = linkstrRuntimeAtom.fn<
+  DiscoverActiveProfilesOptions | undefined
+>()((options) =>
+  Effect.flatMap(Profiles, (profiles) =>
+    profiles.discoverActiveProfiles(options),
+  ),
 );
 
 export const publishProfileAtom = linkstrRuntimeAtom.fn<ProfileMetadata>()(

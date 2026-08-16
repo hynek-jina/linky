@@ -1,11 +1,6 @@
 import * as Evolu from "@evolu/common";
-import { decodeNpub, encodeNpub } from "@linky/linkstr";
-import {
-  discoverActiveProfilesAtom,
-  fetchProfileAtom,
-  useAtomSet,
-} from "@linky/linkstr-react";
-import { Exit } from "effect";
+import { decodeNpub } from "@linky/linkstr";
+import { fetchProfileAtom, useAtomSet } from "@linky/linkstr-react";
 import React from "react";
 import { omitSyntheticContactLightningAddress } from "../../../derivedProfile";
 import { evolu, type ContactId, type TransactionId } from "../../../evolu";
@@ -27,6 +22,7 @@ import {
   getContactGroups,
   serializeContactGroups,
 } from "../../../utils/contactGroups";
+import { useContactSuggestions } from "./useContactSuggestions";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
 
@@ -43,10 +39,6 @@ export interface ContactSearchCandidate {
   npub: string;
   pictureUrl: string | null;
   query: string;
-}
-
-export interface ContactSuggestionCandidate extends ContactSearchCandidate {
-  lastSeenAtSec: number;
 }
 
 export type ContactSearchResult =
@@ -128,12 +120,6 @@ const decodeDirectNpubIdentifier = async (
   return decodeNpub(normalized) ? normalized : null;
 };
 
-const CONTACT_SUGGESTION_LIMIT = 3;
-const LINKY_LIGHTNING_ADDRESS_SUFFIX = "@linky.fit";
-
-const isLinkyLightningAddress = (value: string): boolean =>
-  value.trim().toLowerCase().endsWith(LINKY_LIGHTNING_ADDRESS_SUFFIX);
-
 export const makeEmptyContactForm = (): ContactFormState => ({
   name: "",
   npub: "",
@@ -164,9 +150,6 @@ export const useContactEditor = ({
   );
   const [editingId, setEditingId] = React.useState<ContactId | null>(null);
   const [isSavingContact, setIsSavingContact] = React.useState(false);
-  const [contactSuggestions, setContactSuggestions] = React.useState<
-    ContactSuggestionCandidate[]
-  >([]);
   const [contactEditInitial, setContactEditInitial] = React.useState<{
     groups: string[];
     id: ContactId;
@@ -193,19 +176,12 @@ export const useContactEditor = ({
     mode: "promiseExit",
   });
 
-  const discoverActiveProfiles = useAtomSet(discoverActiveProfilesAtom, {
-    mode: "promiseExit",
-  });
-
   const clearContactForm = React.useCallback(() => {
     setForm(makeEmptyContactForm());
     setEditingId(null);
     setContactEditInitial(null);
   }, []);
 
-  const clearContactSuggestions = React.useCallback(() => {
-    setContactSuggestions((current) => (current.length === 0 ? current : []));
-  }, []);
   const contactSuggestionKnownNpubsKey = Array.from(
     new Set(
       [
@@ -216,79 +192,10 @@ export const useContactEditor = ({
   )
     .sort()
     .join("\n");
-
-  React.useEffect(() => {
-    if (route.kind !== "contactNew") {
-      clearContactSuggestions();
-      return;
-    }
-
-    if (form.npub.trim()) {
-      clearContactSuggestions();
-      return;
-    }
-
-    const knownNpubs = new Set(
-      contactSuggestionKnownNpubsKey
-        ? contactSuggestionKnownNpubsKey.split("\n")
-        : [],
-    );
-
-    let cancelled = false;
-
-    const loadSuggestions = async () => {
-      try {
-        const exit = await discoverActiveProfiles();
-        if (cancelled) return;
-        if (Exit.isFailure(exit)) {
-          clearContactSuggestions();
-          return;
-        }
-
-        const nextSuggestions: ContactSuggestionCandidate[] = [];
-
-        for (const discovered of exit.value) {
-          if (nextSuggestions.length >= CONTACT_SUGGESTION_LIMIT) break;
-
-          const npub = encodeNpub(discovered.pubkey);
-
-          if (knownNpubs.has(npub)) continue;
-
-          const metadata = discovered.metadata;
-          const lnAddress = omitSyntheticContactLightningAddress(
-            (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
-            npub,
-          );
-          if (!isLinkyLightningAddress(lnAddress)) continue;
-
-          nextSuggestions.push({
-            lastSeenAtSec: discovered.lastActiveAt,
-            lnAddress,
-            name: getBestNostrName(metadata) ?? lnAddress,
-            npub,
-            pictureUrl: getProfilePictureUrl(metadata),
-            query: lnAddress,
-          });
-        }
-
-        setContactSuggestions(nextSuggestions);
-      } catch {
-        if (!cancelled) clearContactSuggestions();
-      }
-    };
-
-    void loadSuggestions();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    clearContactSuggestions,
+  const contactSuggestions = useContactSuggestions(
+    route.kind === "contactNew",
     contactSuggestionKnownNpubsKey,
-    discoverActiveProfiles,
-    form.npub,
-    route.kind,
-  ]);
+  );
 
   const buildFullContactOverridePayload = React.useCallback(
     (payload: ContactFieldsPatch) => {
