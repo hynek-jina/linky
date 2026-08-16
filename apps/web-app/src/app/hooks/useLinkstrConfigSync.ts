@@ -12,8 +12,8 @@ import {
 import { Schema } from "effect";
 import React from "react";
 import {
-  getInspectorEnabled,
-  useInspectorEnabled,
+  getInspectorEmissionEnabled,
+  useInspectorEmissionEnabled,
 } from "../../devtools/inspector/inspectorEnabled";
 
 const isRelayUrl = Schema.is(RelayUrl);
@@ -24,7 +24,7 @@ const INBOX_CURSOR_STORAGE_KEY_PREFIX = "linky.inbox_cursor";
 export const buildLinkstrConfig = (
   currentNsec: string | null,
   fetchRelays: readonly string[],
-  inspectorEnabled: boolean = getInspectorEnabled(),
+  inspectorEnabled: boolean = getInspectorEmissionEnabled(),
 ): LinkstrConfig | null => {
   if (!currentNsec) return null;
   const identity = identityFromNsec(currentNsec.trim());
@@ -54,7 +54,7 @@ export const useLinkstrConfigSync = ({
   currentNsec: string | null;
   nostrFetchRelays: readonly string[];
 }) => {
-  const inspectorEnabled = useInspectorEnabled();
+  const inspectorEnabled = useInspectorEmissionEnabled();
   const setLinkstrConfig = useAtomSet(linkstrConfigAtom);
   React.useEffect(() => {
     setLinkstrConfig(

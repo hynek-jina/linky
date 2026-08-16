@@ -13,6 +13,17 @@ export const de = {
   nostrInspector: "Nostr-Inspektor",
   nostrInspectorDescription:
     "Zeigt entschlüsselte Nachrichteninhalte im Klartext. Die Daten bleiben nur im Arbeitsspeicher und werden beim Neuladen gelöscht.",
+  nostrInspectorLogs: "Nostr-Inspektorprotokolle sammeln",
+  nostrInspectorLogsDescription:
+    "Enthält entschlüsselte Nachrichten im Klartext. Wird unverschlüsselt bis zu 24 Stunden im Browserspeicher dieses Geräts abgelegt.",
+  nostrInspectorLogsStats: "{count} Zeilen · {size} · älteste Zeile {age} alt",
+  nostrInspectorLogsLoading: "Protokollstatistik wird geladen…",
+  downloadNostrInspectorLogs: "Protokolle herunterladen",
+  clearNostrInspectorLogs: "Protokolle löschen",
+  nostrInspectorLogsDownloaded: "Inspektorprotokolle heruntergeladen.",
+  nostrInspectorLogsCleared: "Inspektorprotokolle gelöscht.",
+  nostrInspectorLogsError:
+    "Auf die Inspektorprotokolle konnte nicht zugegriffen werden.",
   openNostrInspector: "Nostr-Inspektor öffnen",
   back: "Zurück",
   advanced: "Erweitert",

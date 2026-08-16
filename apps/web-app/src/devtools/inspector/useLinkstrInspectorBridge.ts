@@ -5,21 +5,21 @@ import {
   useAtomSet,
 } from "@linky/linkstr-react";
 import React from "react";
-import { useInspectorEnabled } from "./inspectorEnabled";
+import { useInspectorEmissionEnabled } from "./inspectorEnabled";
 import { linkstrEventToRow } from "./linkstrRows";
 import { reportInspectorRows } from "./reportInspectorRows";
 
 export const useLinkstrInspectorBridge = () => {
-  const inspectorEnabled = useInspectorEnabled();
+  const inspectorEmissionEnabled = useInspectorEmissionEnabled();
   const setHandler = useAtomSet(inspectorHandlerAtom);
   useAtomMount(inspectorEventsAtom);
 
   React.useEffect(() => {
-    if (!inspectorEnabled) return;
+    if (!inspectorEmissionEnabled) return;
     setHandler({
       onEvent: (event) =>
         reportInspectorRows([linkstrEventToRow(event, Date.now())]),
     });
     return () => setHandler(null);
-  }, [inspectorEnabled, setHandler]);
+  }, [inspectorEmissionEnabled, setHandler]);
 };

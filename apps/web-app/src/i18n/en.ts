@@ -12,6 +12,16 @@ export const en = {
   nostrInspector: "Nostr inspector",
   nostrInspectorDescription:
     "Shows decrypted message payloads in plain text. Data stays in memory only and is cleared on reload.",
+  nostrInspectorLogs: "Collect Nostr inspector logs",
+  nostrInspectorLogsDescription:
+    "Includes decrypted message payloads in plain text. Stored unencrypted in this device's browser storage for up to 24 hours.",
+  nostrInspectorLogsStats: "{count} rows · {size} · oldest row {age} old",
+  nostrInspectorLogsLoading: "Loading log statistics…",
+  downloadNostrInspectorLogs: "Download logs",
+  clearNostrInspectorLogs: "Clear logs",
+  nostrInspectorLogsDownloaded: "Inspector logs downloaded.",
+  nostrInspectorLogsCleared: "Inspector logs cleared.",
+  nostrInspectorLogsError: "Inspector logs could not be accessed.",
   openNostrInspector: "Open Nostr inspector",
   back: "Back",
   menu: "Menu",
