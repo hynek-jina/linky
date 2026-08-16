@@ -5,6 +5,10 @@ import { NoReadRelaysConfigured } from "../domain/errors";
 import type { RelayUrl } from "../domain/primitives";
 import type { InboxDelivery } from "../inbox/events";
 import { resubscribeForever } from "../internal/resubscribe";
+import {
+  DEFAULT_SEEN_WRAP_IDS_CAPACITY,
+  makeSeenWrapIds,
+} from "../internal/seenWrapIds";
 import { NostrTransport } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
 import { decodePushWrap } from "./codec";
@@ -44,21 +48,6 @@ interface RawArrival {
 const GIFT_WRAP_KIND = 1059;
 const DEFAULT_REFRESH_INTERVAL = Duration.minutes(10);
 const DEFAULT_RESUBSCRIBE_DELAY = Duration.seconds(5);
-const SEEN_WRAPS_CAPACITY = 4096;
-
-const makeSeenWrapIds = () => {
-  const seen = new Set<string>();
-  return {
-    has: (wrapId: string): boolean => seen.has(wrapId),
-    add: (wrapId: string): void => {
-      seen.add(wrapId);
-      if (seen.size > SEEN_WRAPS_CAPACITY) {
-        const oldest = seen.values().next().value;
-        if (oldest !== undefined) seen.delete(oldest);
-      }
-    },
-  };
-};
 
 /**
  * Identity-free kind-1059 watcher for push infrastructure. It owns one honest
@@ -87,12 +76,15 @@ export class PushInbox extends Effect.Service<PushInbox>()(
             Queue.unbounded<RawArrival>(),
             Queue.shutdown,
           );
-          const seenWrapIds = makeSeenWrapIds();
+          const seenWrapIds = makeSeenWrapIds(
+            DEFAULT_SEEN_WRAP_IDS_CAPACITY,
+          );
           const refreshInterval =
             options.refreshInterval ?? DEFAULT_REFRESH_INTERVAL;
           const resubscribeDelay =
             options.resubscribeDelay ?? DEFAULT_RESUBSCRIBE_DELAY;
 
+          // WrapInbox's sibling loop intentionally diverges on cursor behavior versus these refreshes/status callbacks.
           const subscribe = (relay: RelayUrl) =>
             Effect.gen(function* () {
               const nowSeconds = Math.floor(

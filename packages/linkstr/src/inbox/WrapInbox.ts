@@ -23,6 +23,10 @@ import { inspectPlainOperation } from "../internal/inspectPlainOperation";
 import type { InspectedPlainResult } from "../internal/inspectPlainOperation";
 import { fetchRawEvents } from "../internal/plainFetch";
 import { resubscribeForever } from "../internal/resubscribe";
+import {
+  DEFAULT_SEEN_WRAP_IDS_CAPACITY,
+  makeSeenWrapIds,
+} from "../internal/seenWrapIds";
 import type { PaymentNoticeInboxEvent } from "../paymentNotices/events";
 import type { ReactionInboxEvent } from "../reactions/events";
 import type { SeenReceiptInboxEvent } from "../seenReceipts/events";
@@ -86,29 +90,6 @@ const GIFT_WRAP_KIND = 1059;
 export const NIP59_BACKDATE_MARGIN_SECONDS = 2 * 24 * 60 * 60;
 
 const DEFAULT_RESUBSCRIBE_DELAY = Duration.seconds(5);
-
-const SEEN_WRAPS_CAPACITY = 4096;
-
-// FIFO eviction via Set insertion order; an evicted id can only re-emit a
-// wrap consumers already reconciled (inbox facts are idempotent by rumor id).
-// Only authenticated wraps are recorded: a tampered copy of a wrap must not
-// mark its id as seen, or it would suppress the honest copy from another relay.
-const makeSeenWrapIds = (): {
-  has: (wrapId: string) => boolean;
-  add: (wrapId: string) => void;
-} => {
-  const seen = new Set<string>();
-  return {
-    has: (wrapId) => seen.has(wrapId),
-    add: (wrapId) => {
-      seen.add(wrapId);
-      if (seen.size > SEEN_WRAPS_CAPACITY) {
-        const oldest = seen.values().next().value;
-        if (oldest !== undefined) seen.delete(oldest);
-      }
-    },
-  };
-};
 
 const decodeWrapIdField = Schema.decodeUnknownEither(
   Schema.Struct({ id: WrapId }),
@@ -209,7 +190,9 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
             Queue.unbounded<RawArrival>(),
             Queue.shutdown,
           );
-          const seenWrapIds = makeSeenWrapIds();
+          const seenWrapIds = makeSeenWrapIds(
+            DEFAULT_SEEN_WRAP_IDS_CAPACITY,
+          );
 
           const filterFrom = (since: UnixSeconds | null): Filter => ({
             kinds: [GIFT_WRAP_KIND],
@@ -221,6 +204,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
                 }),
           });
 
+          // PushInbox's sibling loop intentionally diverges on refreshes/status callbacks versus this cursor.
           // The phase is scoped to one subscription attempt: after a
           // reconnect the relay replays its stored window, which is backfill
           // again until its next EOSE.
