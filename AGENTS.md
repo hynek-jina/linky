@@ -33,6 +33,10 @@ IMPORTANT: When you make or change an architectural decision, document it in `do
 - Comments should not duplicate the code! The code should be self explanatory, use function names, proper code split into logical chunks
 - Explain unidiomatic code in comments - keep the comments brief and to the point if you need to write it!
 
+## Inspector events
+
+When implementing or refactoring a meaningful operation — user-initiated actions, network/relay/mint traffic, sync, push, notable state transitions — emit an inspector event for it. Follow the `adding-inspector-events` skill (`.agents/skills/adding-inspector-events/`) for row design, correlation links, and the no-key-material rule.
+
 ## Release Versioning
 
 [CalVer](https://calver.org) `YY.MM.MICRO`: short year, month (no leading zero), release counter starting at `1` that resets monthly — e.g. August 2026: `26.8.1`, `26.8.2`, `26.8.3`.
