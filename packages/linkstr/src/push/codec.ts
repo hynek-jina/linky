@@ -5,10 +5,11 @@ import {
   LINKY_PUSH_MARKER_TAG,
   LINKY_PUSH_MARKER_VALUE,
 } from "../internal/giftWrap";
-import { SignedWrapEvent } from "../internal/nostrEvent";
+import { SignedWrapEvent, tagValues } from "../internal/nostrEvent";
 
 export type PushWrapFailure =
-  | "malformed-wrap"
+  | "malformed-event"
+  | "wrong-kind"
   | "invalid-signature"
   | "missing-push-marker"
   | "unexpected-recipient-count";
@@ -20,10 +21,27 @@ export interface PushWrap {
   readonly relayHints: ReadonlyArray<string>;
 }
 
-const decodeWrap = Schema.decodeUnknownEither(SignedWrapEvent);
+const PushWrapEvent = Schema.Struct({
+  ...SignedWrapEvent.fields,
+  kind: Schema.Int,
+});
+
+const decodeWrap = Schema.decodeUnknownEither(PushWrapEvent);
 const decodePubkey = Schema.decodeUnknownEither(Pubkey);
 
 const unique = <A>(values: ReadonlyArray<A>): Array<A> => [...new Set(values)];
+
+const hasPushMarker = (raw: unknown): boolean =>
+  typeof raw === "object" &&
+  raw !== null &&
+  "tags" in raw &&
+  Array.isArray(raw.tags) &&
+  raw.tags.some(
+    (tag) =>
+      Array.isArray(tag) &&
+      tag[0] === LINKY_PUSH_MARKER_TAG &&
+      tag[1] === LINKY_PUSH_MARKER_VALUE,
+  );
 
 /**
  * Validates the identity-free portion of a push-marked gift wrap. The push
@@ -34,36 +52,29 @@ export const decodePushWrap = (
   input: unknown,
 ): Either.Either<PushWrap, PushWrapFailure> =>
   Either.gen(function* () {
+    if (!hasPushMarker(input)) {
+      return yield* Either.left<PushWrapFailure>("missing-push-marker");
+    }
     const wrap = yield* decodeWrap(input).pipe(
-      Either.mapLeft((): PushWrapFailure => "malformed-wrap"),
+      Either.mapLeft((): PushWrapFailure => "malformed-event"),
     );
+    if (wrap.kind !== 1059) {
+      return yield* Either.left<PushWrapFailure>("wrong-kind");
+    }
     if (!verifyEvent(wrap)) {
       return yield* Either.left<PushWrapFailure>("invalid-signature");
     }
-    if (
-      !wrap.tags.some(
-        (tag) =>
-          tag[0] === LINKY_PUSH_MARKER_TAG &&
-          tag[1] === LINKY_PUSH_MARKER_VALUE,
-      )
-    ) {
-      return yield* Either.left<PushWrapFailure>("missing-push-marker");
-    }
 
     const recipients = unique(
-      wrap.tags.flatMap((tag) => {
-        if (tag[0] !== "p" || tag[1] === undefined) return [];
-        return Either.match(decodePubkey(tag[1]), {
+      tagValues(wrap.tags, "p").flatMap((value) =>
+        Either.match(decodePubkey(value), {
           onLeft: () => [],
           onRight: (pubkey) => [pubkey],
-        });
-      }),
+        }),
+      ),
     );
-    if (recipients.length !== 1) {
-      return yield* Either.left<PushWrapFailure>("unexpected-recipient-count");
-    }
     const recipient = recipients[0];
-    if (recipient === undefined) {
+    if (recipients.length !== 1 || recipient === undefined) {
       return yield* Either.left<PushWrapFailure>("unexpected-recipient-count");
     }
 
