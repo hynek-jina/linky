@@ -35,6 +35,7 @@ export type Route =
   | { kind: "settingsMasterKeys" }
   | { kind: "advanced" }
   | { kind: "advancedAutoPayLimit" }
+  | { kind: "advancedInspector" }
   | { kind: "advancedPushDebug" }
   | { kind: "mints" }
   | { kind: "mint"; mintUrl: string }
@@ -85,6 +86,9 @@ export const parseRouteFromHash = (): Route => {
   if (hash === "#advanced") return { kind: "advanced" };
   if (hash === "#advanced/auto-pay-limit") {
     return { kind: "advancedAutoPayLimit" };
+  }
+  if (hash === "#advanced/inspector") {
+    return { kind: "advancedInspector" };
   }
   if (hash === "#advanced/push-debug") {
     return { kind: "advancedPushDebug" };

@@ -58,6 +58,7 @@ describe("resolveBackAction", () => {
       { kind: "settingsMasterKeys" },
       { kind: "advanced" },
       { kind: "advancedAutoPayLimit" },
+      { kind: "advancedInspector" },
       { kind: "advancedPushDebug" },
       { kind: "mints" },
       { kind: "mint", mintUrl: "https://mint.example" },
@@ -104,6 +105,7 @@ describe("resolveBackAction", () => {
     expect(backHashFor({ kind: "settingsUnits" })).toBe("#settings");
     expect(backHashFor({ kind: "settingsMasterKeys" })).toBe("#settings");
     expect(backHashFor({ kind: "advancedAutoPayLimit" })).toBe("#settings");
+    expect(backHashFor({ kind: "advancedInspector" })).toBe("#settings");
     expect(backHashFor({ kind: "advancedPushDebug" })).toBe("#settings");
     expect(backHashFor({ kind: "mints" })).toBe("#settings");
     expect(backHashFor({ kind: "nostrRelays" })).toBe("#settings");

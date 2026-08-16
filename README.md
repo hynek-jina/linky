@@ -66,8 +66,8 @@ For Android native builds: Java 17
 While the dev server runs, the dev inspector shows Linky's Nostr traffic on two channels:
 `operation` (linky-level linkstr operations and routed inbox facts) and `wire` (raw relay traffic —
 publishes, subscriptions, incoming events). Rows are correlated by shared ids in their `links`
-(gift-wrap ids, rumor ids, optimistic-update client ids). Dev-only, compiled out of production
-builds.
+(gift-wrap ids, rumor ids, optimistic-update client ids). Development builds collect automatically
+until the setting is explicitly turned off.
 
 1. Start the app (`bun run dev` or `bun run dev:prod`).
 2. Open `http://localhost:5173/inspector.html` (`:5175` for `dev:prod`) in a window next to the app
@@ -75,6 +75,11 @@ builds.
 3. Use the app; rows stream in live. Selecting a row highlights every related row and the detail
    pane lists them (click to jump) — e.g. one `reactions.react` operation and the two
    `WirePublished` wraps it produced.
+
+The same timeline is available in-app at `#advanced/inspector`. Production builds collect only
+after enabling **Nostr inspector** in Advanced settings. The in-app buffer can contain decrypted
+message payloads in plain text, stays in browser memory only, and is cleared on reload or when the
+setting is turned off. Production collection never sends inspector rows to a server.
 
 Toolbar: channel chips and a text filter narrow the timeline; **Pause** freezes the view while
 still buffering; **Clear** resets the collector; the timeline auto-follows the newest row until you

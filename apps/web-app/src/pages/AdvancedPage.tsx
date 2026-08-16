@@ -4,6 +4,7 @@ import {
   Bean,
   Bitcoin,
   BrushCleaning,
+  Bug,
   CheckCheck,
   Cloud,
   Coins,
@@ -28,6 +29,10 @@ import {
   useAppShellCore,
 } from "../app/context/AppShellContexts";
 import { useAdvancedSettingsContext } from "../app/context/SystemSettingsContexts";
+import {
+  setInspectorEnabled,
+  useInspectorEnabled,
+} from "../devtools/inspector/inspectorEnabled";
 import {
   countConnectedRelays,
   overallRelayStatus,
@@ -132,6 +137,7 @@ function SettingsToggleRow({
 }
 
 export function AdvancedPage(): React.ReactElement {
+  const inspectorEnabled = useInspectorEnabled();
   const {
     bankPaymentOfferRecipientCount,
     cashuAutoswapEnabled,
@@ -560,6 +566,21 @@ export function AdvancedPage(): React.ReactElement {
           onClick={() => void handleReloadApp()}
           icon={<RotateCw size={18} />}
           label={t("reloadApp")}
+        />
+
+        <SettingsToggleRow
+          icon={<Bug size={18} />}
+          label={t("nostrInspector")}
+          description={t("nostrInspectorDescription")}
+          checked={inspectorEnabled}
+          onChange={setInspectorEnabled}
+        />
+
+        <SettingsLinkRow
+          onClick={() => navigateTo({ route: "advancedInspector" })}
+          disabled={!inspectorEnabled}
+          icon={<Bug size={18} />}
+          label={t("openNostrInspector")}
         />
 
         <SettingsLinkRow

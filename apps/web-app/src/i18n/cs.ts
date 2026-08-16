@@ -9,6 +9,10 @@ export const cs = {
   settingsNetwork: "Síť",
   settingsSecurity: "Zabezpečení",
   settingsDebug: "Debug",
+  nostrInspector: "Nostr inspector",
+  nostrInspectorDescription:
+    "Zobrazuje dešifrovaný obsah zpráv jako prostý text. Data zůstávají jen v paměti a po obnovení stránky se smažou.",
+  openNostrInspector: "Otevřít Nostr inspector",
   back: "Zpět",
   menu: "Menu",
   advanced: "Pokročilé",

@@ -1,4 +1,6 @@
 import type { JsonRecord, JsonValue } from "../../types/json";
+import { clientInspectorStore } from "./clientInspectorStore";
+import { getInspectorEnabled } from "./inspectorEnabled";
 import { INSPECTOR_REPORT_PATH } from "./inspectorRows";
 import type { InspectorRow } from "./inspectorRows";
 
@@ -103,11 +105,20 @@ const scheduleFlush = (): void => {
 };
 
 export const reportInspectorRows = (rows: InspectorRow[]): void => {
-  if (!import.meta.env.DEV || rows.length === 0) return;
+  if (!getInspectorEnabled() || rows.length === 0) return;
 
-  for (const row of rows) {
-    pendingRows.push({ ...row, payload: toJsonSafe(row.payload, 0) });
-  }
+  const preparedRows = rows.map(
+    (row): InspectorRow => ({
+      ...row,
+      payload: toJsonSafe(row.payload, 0),
+    }),
+  );
+  const clientId = getClientId();
+  clientInspectorStore.append(clientId, preparedRows);
+
+  if (!import.meta.env.DEV) return;
+
+  pendingRows.push(...preparedRows);
   if (pendingRows.length > MAX_PENDING_ROWS) {
     pendingRows.splice(0, pendingRows.length - MAX_PENDING_ROWS);
   }

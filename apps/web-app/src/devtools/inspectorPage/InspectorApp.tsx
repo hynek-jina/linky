@@ -1,13 +1,11 @@
 import React from "react";
 
 import {
-  INSPECTOR_CLEAR_PATH,
-  INSPECTOR_STREAM_PATH,
   inspectorLinkIds,
-  parseCollectedInspectorRow,
   type CollectedInspectorRow,
   type InspectorChannel,
 } from "../inspector/inspectorRows";
+import type { InspectorDataSource } from "./inspectorDataSource";
 import { describeInspectorRow } from "./inspectorGlossary";
 
 const MAX_ROWS = 5_000;
@@ -41,6 +39,10 @@ interface DetailPaneProps {
   onJumpToRow: (row: CollectedInspectorRow) => void;
   relatedRows: CollectedInspectorRow[];
   row: CollectedInspectorRow;
+}
+
+interface InspectorAppProps {
+  dataSource: InspectorDataSource;
 }
 
 const timelineRowDomId = (id: number): string => `inspector-row-${id}`;
@@ -243,7 +245,9 @@ function DetailPane({
   );
 }
 
-export function InspectorApp(): React.ReactElement {
+export function InspectorApp({
+  dataSource,
+}: InspectorAppProps): React.ReactElement {
   const [rows, setRows] = React.useState<CollectedInspectorRow[]>([]);
   const [isConnected, setIsConnected] = React.useState(false);
   const [isPaused, setIsPaused] = React.useState(false);
@@ -274,32 +278,31 @@ export function InspectorApp(): React.ReactElement {
   }, []);
 
   React.useEffect(() => {
-    const source = new EventSource(INSPECTOR_STREAM_PATH);
     const flushTimer = window.setInterval(flushIncomingRows, FLUSH_INTERVAL_MS);
-
-    source.onopen = () => setIsConnected(true);
-    source.onerror = () => setIsConnected(false);
-    source.onmessage = (message) => {
-      try {
-        const parsedJson: unknown = JSON.parse(message.data);
-        const row = parseCollectedInspectorRow(parsedJson);
-        if (!row || row.id <= lastSeenIdRef.current) return;
-
-        lastSeenIdRef.current = row.id;
-        incomingRowsRef.current.push(row);
-        if (incomingRowsRef.current.length > MAX_ROWS) {
-          incomingRowsRef.current.shift();
+    const disconnect = dataSource.connect({
+      onClear: () => {
+        incomingRowsRef.current = [];
+        setRows([]);
+        setSelectedRow(null);
+      },
+      onConnectionChange: setIsConnected,
+      onRows: (incomingRows) => {
+        for (const row of incomingRows) {
+          if (row.id <= lastSeenIdRef.current) continue;
+          lastSeenIdRef.current = row.id;
+          incomingRowsRef.current.push(row);
+          if (incomingRowsRef.current.length > MAX_ROWS) {
+            incomingRowsRef.current.shift();
+          }
         }
-      } catch {
-        // Malformed frames are ignored; the shared parser validates all fields.
-      }
-    };
+      },
+    });
 
     return () => {
-      source.close();
+      disconnect();
       window.clearInterval(flushTimer);
     };
-  }, [flushIncomingRows]);
+  }, [dataSource, flushIncomingRows]);
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -420,7 +423,7 @@ export function InspectorApp(): React.ReactElement {
   const handleClear = React.useCallback(async () => {
     setIsClearing(true);
     try {
-      await fetch(INSPECTOR_CLEAR_PATH, { method: "POST" });
+      await dataSource.clear();
     } catch {
       // The local view can still be cleared while the collector reconnects.
     } finally {
@@ -429,7 +432,7 @@ export function InspectorApp(): React.ReactElement {
       setSelectedRow(null);
       setIsClearing(false);
     }
-  }, []);
+  }, [dataSource]);
 
   return (
     <main className="inspector-app">
