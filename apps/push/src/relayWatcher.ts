@@ -13,21 +13,18 @@ interface RelayWatcherOptions {
   relayUrls: string[];
   storage: PushStorage;
   pushDelivery: PushDeliveryService;
-  eventDedupeTtlMs: number;
 }
 
 export class RelayWatcher {
   private readonly relayUrls: ReadonlyArray<RelayUrl>;
   private readonly storage: PushStorage;
   private readonly pushDelivery: PushDeliveryService;
-  private readonly eventDedupeTtlMs: number;
   private subscription: PushInboxSubscription | null = null;
 
   constructor(options: RelayWatcherOptions) {
     this.relayUrls = options.relayUrls.map((url) => RelayUrl.make(url));
     this.storage = options.storage;
     this.pushDelivery = options.pushDelivery;
-    this.eventDedupeTtlMs = options.eventDedupeTtlMs;
   }
 
   start(): void {
@@ -52,10 +49,7 @@ export class RelayWatcher {
   pruneSeen(nowMs: number): void {
     this.storage.pruneSeenEvents(
       nowMs,
-      Math.max(
-        this.eventDedupeTtlMs,
-        CATCH_UP_LOOKBACK_SECONDS * 1000 + SEEN_EVENT_RETENTION_MARGIN_MS,
-      ),
+      CATCH_UP_LOOKBACK_SECONDS * 1000 + SEEN_EVENT_RETENTION_MARGIN_MS,
     );
   }
 
