@@ -190,9 +190,7 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
             Queue.unbounded<RawArrival>(),
             Queue.shutdown,
           );
-          const seenWrapIds = makeSeenWrapIds(
-            DEFAULT_SEEN_WRAP_IDS_CAPACITY,
-          );
+          const seenWrapIds = makeSeenWrapIds(DEFAULT_SEEN_WRAP_IDS_CAPACITY);
 
           const filterFrom = (since: UnixSeconds | null): Filter => ({
             kinds: [GIFT_WRAP_KIND],

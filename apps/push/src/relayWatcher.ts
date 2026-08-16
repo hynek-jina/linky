@@ -82,10 +82,7 @@ export class RelayWatcher {
     );
   }
 
-  async handleDelivered({
-    delivery,
-    wrap,
-  }: DeliveredPushWrap): Promise<void> {
+  async handleDelivered({ delivery, wrap }: DeliveredPushWrap): Promise<void> {
     const recipient = wrap.recipient;
     const subscriptions =
       this.storage.getSubscriptionsForPubkeys([recipient]).get(recipient) ?? [];

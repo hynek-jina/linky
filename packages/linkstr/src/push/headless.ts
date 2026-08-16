@@ -17,9 +17,7 @@ export interface PushInboxConfig {
   readonly refreshInterval?: Duration.Duration | undefined;
   readonly resubscribeDelay?: Duration.Duration | undefined;
   readonly onInvalidWrap?: ((failure: PushWrapFailure) => void) | undefined;
-  readonly onRelayStatus?:
-    | ((event: PushRelayStatusEvent) => void)
-    | undefined;
+  readonly onRelayStatus?: ((event: PushRelayStatusEvent) => void) | undefined;
   readonly onFatal?: ((message: string) => void) | undefined;
 }
 
