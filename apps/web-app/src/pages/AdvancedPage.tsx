@@ -711,7 +711,6 @@ export function AdvancedPage(): React.ReactElement {
 
         <SettingsLinkRow
           onClick={() => navigateTo({ route: "advancedInspector" })}
-          disabled={!inspectorEnabled}
           icon={<Bug size={18} />}
           label={t("openNostrInspector")}
         />

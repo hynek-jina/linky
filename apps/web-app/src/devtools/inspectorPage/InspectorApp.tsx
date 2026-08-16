@@ -43,6 +43,8 @@ interface DetailPaneProps {
 
 interface InspectorAppProps {
   dataSource: InspectorDataSource;
+  /** False when the app is not collecting events, so waiting is pointless. */
+  isCollecting?: boolean;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
 }
@@ -274,6 +276,7 @@ function DetailPane({
 
 export function InspectorApp({
   dataSource,
+  isCollecting = true,
   isFullscreen = false,
   onToggleFullscreen,
 }: InspectorAppProps): React.ReactElement {
@@ -682,7 +685,9 @@ export function InspectorApp({
                 {rows.length === 0
                   ? offlineImport
                     ? "No valid inspector rows were imported."
-                    : "Waiting for inspector rows…"
+                    : isCollecting
+                      ? "Waiting for inspector rows…"
+                      : "The inspector is off — enable it in Advanced settings, or use Import to view a log file."
                   : "No rows match the current filters."}
               </div>
             ) : (
