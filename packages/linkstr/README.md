@@ -33,6 +33,7 @@ consumers never import `nostr-tools` even for key encoding. `parsePubkey` and
 friends enforce the `Pubkey` brand's on-curve check at parse time.
 
 Shared machinery: `inbox/WrapInbox` (the single kind-1059 subscription),
+`push/PushInbox` (identity-free outer-wrap routing for push infrastructure),
 `outbox/Outbox` (durable send queue with retry/backoff over a pluggable
 `OutboxStore`), `relayHealth/` (traffic-derived per-relay status, always on),
 and `inspector/` (optional dev diagnostics bus).
@@ -60,6 +61,12 @@ two-day backdate margin itself. Rumor kinds without a vertical surface as
 `WrapDropped("unsupported-kind")` — the dispatch point in `WrapInbox` is where
 future verticals plug in. Closing the scope tears down all relay
 subscriptions and ends the stream.
+
+`PushInbox` is the non-decrypting sibling for the push server. It subscribes
+only to `#linky=push` wraps, verifies their outer signatures, extracts the one
+recipient and relay hints, dedupes across relays, and marks each delivery as
+backfill or live. `watchPushInbox` supplies the long-lived Promise-facing
+composition without requiring a `LinkstrIdentity`.
 
 `inbox.fetchWrapEvent(wrapId, { extraRelays })` is the one-shot counterpart
 for notification opens. It unions relay hints with configured read relays and

@@ -16,6 +16,7 @@ COPY packages/linkstr-react/package.json packages/linkstr-react/package.json
 RUN bun install --frozen-lockfile
 
 COPY apps/push apps/push
+COPY packages/linkstr packages/linkstr
 
 RUN bun run --filter @linky/push build
 

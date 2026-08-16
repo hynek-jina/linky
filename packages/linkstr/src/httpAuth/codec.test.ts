@@ -9,6 +9,7 @@ import {
   makeBlossomUploadAuthHeader,
   makeNip98AuthHeader,
   makePushOwnershipProof,
+  verifyPushOwnershipProof,
 } from "./codec";
 
 const secretKey = NostrSecretKey.make(new Uint8Array(32).fill(1));
@@ -103,6 +104,59 @@ describe("HTTP auth encoding", () => {
     expect(unsubscribe.content).toBe("linky-push-unsubscribe");
     expectValidEvent(subscribe);
     expectValidEvent(unsubscribe);
+  });
+
+  it("verifies the shared push ownership proof contract", () => {
+    const event = makePushOwnershipProof(
+      { action: "subscribe", challenge: "challenge-1" },
+      secretKey,
+      now,
+    );
+    const verified = verifyPushOwnershipProof(event);
+
+    expect(verified._tag).toBe("Right");
+    if (verified._tag === "Right") {
+      expect(verified.right).toEqual(
+        expect.objectContaining({
+          action: "subscribe",
+          challenge: "challenge-1",
+        }),
+      );
+      expect(verified.right.event.id).toBe(event.id);
+    }
+  });
+
+  it("rejects ownership proofs whose signed wire shape drifts", () => {
+    const event = makePushOwnershipProof(
+      { action: "subscribe", challenge: "challenge-1" },
+      secretKey,
+      now,
+    );
+    const wrongContent = finalizeEvent(
+      {
+        kind: event.kind,
+        created_at: event.created_at,
+        tags: event.tags,
+        content: "wrong",
+      },
+      secretKey,
+    );
+    const duplicateChallenge = finalizeEvent(
+      {
+        kind: event.kind,
+        created_at: event.created_at,
+        tags: [...event.tags, ["challenge", "challenge-2"]],
+        content: event.content,
+      },
+      secretKey,
+    );
+
+    expect(verifyPushOwnershipProof(wrongContent)).toEqual(
+      expect.objectContaining({ _tag: "Left", left: "wrong-content" }),
+    );
+    expect(verifyPushOwnershipProof(duplicateChallenge)).toEqual(
+      expect.objectContaining({ _tag: "Left", left: "invalid-challenge" }),
+    );
   });
 
   it("preserves the NIP-98 wire shape and standard base64 encoding", () => {
