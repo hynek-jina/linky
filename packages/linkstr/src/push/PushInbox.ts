@@ -46,7 +46,8 @@ const makeSeenWrapIds = () => {
 /**
  * Identity-free kind-1059 watcher for push infrastructure. It owns one honest
  * subscription per relay, reconnects with a fresh rolling lookback, validates
- * outer events, and dedupes authenticated wraps across relays.
+ * outer events, and dedupes authenticated live wraps across relays. Backfill
+ * arrivals are re-emitted per copy for the consumer to suppress.
  */
 export class PushInbox extends Effect.Service<PushInbox>()(
   "linkstr/PushInbox",
@@ -108,15 +109,30 @@ export class PushInbox extends Effect.Service<PushInbox>()(
           const processRaw = ({
             delivery,
             raw,
-          }: RawArrival): Option.Option<DeliveredPushWrap> =>
-            Either.match(decodePushWrap(raw), {
+          }: RawArrival): Option.Option<DeliveredPushWrap> => {
+            if (
+              typeof raw === "object" &&
+              raw !== null &&
+              "id" in raw &&
+              typeof raw.id === "string" &&
+              seenWrapIds.has(raw.id)
+            ) {
+              return Option.none();
+            }
+
+            return Either.match(decodePushWrap(raw), {
               onLeft: () => Option.none(),
               onRight: (wrap) => {
-                if (seenWrapIds.has(wrap.wrapId)) return Option.none();
-                seenWrapIds.add(wrap.wrapId);
+                // Only authenticated wraps emitted live are recorded; a tampered
+                // copy must not mark its id as seen.
+                if (delivery === "live") {
+                  if (seenWrapIds.has(wrap.wrapId)) return Option.none();
+                  seenWrapIds.add(wrap.wrapId);
+                }
                 return Option.some({ delivery, wrap });
               },
             });
+          };
 
           return Stream.fromQueue(rawWraps).pipe(Stream.filterMap(processRaw));
         });

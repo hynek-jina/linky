@@ -114,7 +114,7 @@ describe("PushInbox", () => {
     expect(delivered).toBe(0);
   });
 
-  it("validates, phases and dedupes push wraps across relays", async () => {
+  it("validates, phases and dedupes only live push wraps across relays", async () => {
     const relayA = RelayUrl.make("wss://relay-a.test");
     const relayB = RelayUrl.make("wss://relay-b.test");
     const fakeA = new FakeRelay();
@@ -172,18 +172,32 @@ describe("PushInbox", () => {
       const historical = pushWrap("historical");
       fakeA.emit(historical);
       yield* eventually(() => collected.length === 1);
+      fakeB.emit(historical);
+      yield* eventually(() => collected.length === 2);
+      expect(collected.map(({ delivery }) => delivery)).toEqual([
+        "backfill",
+        "backfill",
+      ]);
+
       fakeB.eose();
       fakeB.emit(historical);
-      yield* Effect.sleep(Duration.millis(10));
-      expect(collected).toHaveLength(1);
-      expect(collected[0]?.delivery).toBe("backfill");
+      yield* eventually(() => collected.length === 3);
+      expect(collected[2]?.delivery).toBe("live");
 
       fakeA.eose();
+      const duplicatedLive = pushWrap("duplicated live");
+      fakeA.emit(duplicatedLive);
+      fakeB.emit(duplicatedLive);
+      yield* eventually(() => collected.length === 4);
+      yield* Effect.sleep(Duration.millis(10));
+      expect(collected).toHaveLength(4);
+      expect(collected[3]?.wrap.wrapId).toBe(duplicatedLive.id);
+
       const live = pushWrap("live");
       fakeA.emit({ ...live, content: "tampered" });
       fakeB.emit(live);
-      yield* eventually(() => collected.length === 2);
-      expect(collected[1]).toEqual({
+      yield* eventually(() => collected.length === 5);
+      expect(collected[4]).toEqual({
         delivery: "live",
         wrap: {
           wrapId: live.id,
