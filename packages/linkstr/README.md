@@ -62,11 +62,13 @@ two-day backdate margin itself. Rumor kinds without a vertical surface as
 future verticals plug in. Closing the scope tears down all relay
 subscriptions and ends the stream.
 
-`PushInbox` is the non-decrypting sibling for the push server. It subscribes
-only to `#linky=push` wraps, verifies their outer signatures, extracts the one
-recipient and relay hints, dedupes across relays, and marks each delivery as
-backfill or live. `watchPushInbox` supplies the long-lived Promise-facing
-composition without requiring a `LinkstrIdentity`.
+`PushInbox` is the non-decrypting sibling for the push server. Each relay
+subscription uses only `kinds: [1059]` plus `since`; the codec enforces the
+`["linky", "push"]` marker client-side because multi-letter tag filters are
+nonstandard. It verifies outer signatures, extracts the one recipient and
+relay hints, marks each delivery as backfill or live, dedupes live emissions
+across relays, and re-emits every backfill copy. `watchPushInbox` supplies the
+long-lived Promise-facing composition without requiring a `LinkstrIdentity`.
 
 `inbox.fetchWrapEvent(wrapId, { extraRelays })` is the one-shot counterpart
 for notification opens. It unions relay hints with configured read relays and
