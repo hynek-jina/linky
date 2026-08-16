@@ -8,6 +8,8 @@ export const NostrTags = Schema.mutable(
 );
 export type NostrTags = typeof NostrTags.Type;
 
+const NostrSignature = Schema.String.pipe(Schema.pattern(/^[0-9a-f]{128}$/));
+
 /** A signed event as it travels over the wire (here always a kind-1059 wrap). */
 export class SignedWrapEvent extends Schema.Class<SignedWrapEvent>(
   "SignedWrapEvent",
@@ -18,7 +20,7 @@ export class SignedWrapEvent extends Schema.Class<SignedWrapEvent>(
   kind: Schema.Literal(1059),
   tags: NostrTags,
   content: Schema.NonEmptyString,
-  sig: Schema.String,
+  sig: NostrSignature,
 }) {}
 
 /** A signed plain (non-gift-wrapped) event: profile, status, relay lists, … */
@@ -31,7 +33,7 @@ export class SignedPlainEvent extends Schema.Class<SignedPlainEvent>(
   kind: Schema.Int,
   tags: NostrTags,
   content: Schema.String,
-  sig: Schema.String,
+  sig: NostrSignature,
 }) {}
 
 /**
