@@ -19,7 +19,7 @@ import type {
 } from "../domain/errors";
 import { EventId, RumorId } from "../domain/primitives";
 import type { ClientId, Pubkey, UnixSeconds } from "../domain/primitives";
-import { emitSilently, Inspector } from "../inspector/Inspector";
+import { Inspector } from "../inspector/Inspector";
 import { OperationFailed, PlainOperationSucceeded } from "../inspector/events";
 import type { Rumor } from "../internal/nostrEvent";
 import { freshClientId, nowSeconds } from "../internal/operations";
@@ -205,7 +205,7 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
           }),
         );
         yield* Queue.offer(terminals, result);
-        emitSilently(inspector, () =>
+        inspector.emit(() =>
           result._tag === "OutboxJobSucceeded"
             ? new PlainOperationSucceeded(
                 {
@@ -334,8 +334,7 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
           clientId,
           sentAt,
         });
-        emitSilently(
-          inspector,
+        inspector.emit(
           () =>
             new PlainOperationSucceeded(
               {
@@ -367,8 +366,7 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
           recipient,
         };
         const job = yield* insertJob(operation, ref);
-        emitSilently(
-          inspector,
+        inspector.emit(
           () =>
             new PlainOperationSucceeded(
               {

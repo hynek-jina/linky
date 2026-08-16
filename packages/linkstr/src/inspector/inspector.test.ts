@@ -144,6 +144,38 @@ const acceptingTransport = (
 });
 
 describe("Inspector", () => {
+  it("does not build events when disabled", async () => {
+    let built = false;
+
+    await Effect.gen(function* () {
+      const inspector = yield* Inspector;
+      inspector.emit(() => {
+        built = true;
+        throw new Error("builder should not run");
+      });
+    }).pipe(Effect.provide(Inspector.disabled), Effect.runPromise);
+
+    expect(built).toBe(false);
+  });
+
+  it("logs and drops a throwing builder", async () => {
+    const error = new Error("invalid diagnostic event");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await Effect.gen(function* () {
+      const inspector = yield* Inspector;
+      inspector.emit(() => {
+        throw error;
+      });
+    }).pipe(Effect.provide(Inspector.live), Effect.scoped, Effect.runPromise);
+
+    expect(warn).toHaveBeenCalledWith(
+      "linkstr inspector emission failed",
+      error,
+    );
+    warn.mockRestore();
+  });
+
   it("emits the operation and its wire publishes, linked by wrap ids", async () => {
     const published: Array<string> = [];
     const draft = draftFor("👍");
