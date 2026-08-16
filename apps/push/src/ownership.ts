@@ -13,8 +13,43 @@ interface OwnershipVerifierOptions {
   loadChallenge: (nonce: string) => ChallengeRecord | null;
 }
 
-const failureStatus = (failure: PushOwnershipProofFailure): number =>
-  failure === "invalid-signature" || failure === "invalid-pubkey" ? 401 : 400;
+const failureResponses: Record<
+  PushOwnershipProofFailure,
+  { readonly status: number; readonly message: string }
+> = {
+  "malformed-event": {
+    status: 400,
+    message: "Ownership proof event is malformed",
+  },
+  "invalid-signature": {
+    status: 401,
+    message: "Proof signature is invalid",
+  },
+  "wrong-kind": {
+    status: 400,
+    message: "Ownership proof event kind is invalid",
+  },
+  "invalid-challenge": {
+    status: 400,
+    message: "Proof challenge tag must appear exactly once and be non-empty",
+  },
+  "invalid-action": {
+    status: 400,
+    message: "Proof action tag must appear exactly once and be valid",
+  },
+  "invalid-pubkey-tag": {
+    status: 400,
+    message: "Proof pubkey tag must appear exactly once",
+  },
+  "invalid-pubkey": {
+    status: 401,
+    message: "Proof pubkey tag does not match event pubkey",
+  },
+  "wrong-content": {
+    status: 400,
+    message: "Ownership proof content is invalid",
+  },
+};
 
 export class OwnershipVerifier {
   private readonly proofMaxAgeSeconds: number;
@@ -67,10 +102,11 @@ export class OwnershipVerifier {
 
       const decoded = verifyPushOwnershipProof(proof.event);
       if (decoded._tag === "Left") {
+        const response = failureResponses[decoded.left];
         throw new RequestError(
-          failureStatus(decoded.left),
+          response.status,
           "invalid_proof",
-          `Invalid ownership proof: ${decoded.left}`,
+          response.message,
         );
       }
       const verified = decoded.right;

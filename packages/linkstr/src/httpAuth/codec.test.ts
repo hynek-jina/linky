@@ -159,6 +159,96 @@ describe("HTTP auth encoding", () => {
     );
   });
 
+  it("rejects non-hex signatures as malformed events", () => {
+    const event = makePushOwnershipProof(
+      { action: "subscribe", challenge: "challenge-1" },
+      secretKey,
+      now,
+    );
+
+    expect(verifyPushOwnershipProof({ ...event, sig: "not-hex" })).toEqual(
+      expect.objectContaining({ _tag: "Left", left: "malformed-event" }),
+    );
+  });
+
+  it("rejects valid-hex incorrect signatures as invalid signatures", () => {
+    const event = makePushOwnershipProof(
+      { action: "subscribe", challenge: "challenge-1" },
+      secretKey,
+      now,
+    );
+
+    expect(
+      verifyPushOwnershipProof({ ...event, sig: "00".repeat(64) }),
+    ).toEqual(
+      expect.objectContaining({ _tag: "Left", left: "invalid-signature" }),
+    );
+  });
+
+  it("distinguishes invalid pubkey tag shape from a pubkey mismatch", () => {
+    const event = makePushOwnershipProof(
+      { action: "subscribe", challenge: "challenge-1" },
+      secretKey,
+      now,
+    );
+    const duplicatePubkey = finalizeEvent(
+      {
+        kind: event.kind,
+        created_at: event.created_at,
+        tags: [...event.tags, ["pubkey", event.pubkey]],
+        content: event.content,
+      },
+      secretKey,
+    );
+    const missingPubkey = finalizeEvent(
+      {
+        kind: event.kind,
+        created_at: event.created_at,
+        tags: event.tags.filter((tag) => tag[0] !== "pubkey"),
+        content: event.content,
+      },
+      secretKey,
+    );
+    const valuelessPubkey = finalizeEvent(
+      {
+        kind: event.kind,
+        created_at: event.created_at,
+        tags: event.tags.map((tag) => (tag[0] === "pubkey" ? ["pubkey"] : tag)),
+        content: event.content,
+      },
+      secretKey,
+    );
+    const mismatchedPubkey = finalizeEvent(
+      {
+        kind: event.kind,
+        created_at: event.created_at,
+        tags: event.tags.map((tag) =>
+          tag[0] === "pubkey"
+            ? ["pubkey", getPublicKey(new Uint8Array(32).fill(2))]
+            : tag,
+        ),
+        content: event.content,
+      },
+      secretKey,
+    );
+
+    for (const malformedTagEvent of [
+      duplicatePubkey,
+      missingPubkey,
+      valuelessPubkey,
+    ]) {
+      expect(verifyPushOwnershipProof(malformedTagEvent)).toEqual(
+        expect.objectContaining({
+          _tag: "Left",
+          left: "invalid-pubkey-tag",
+        }),
+      );
+    }
+    expect(verifyPushOwnershipProof(mismatchedPubkey)).toEqual(
+      expect.objectContaining({ _tag: "Left", left: "invalid-pubkey" }),
+    );
+  });
+
   it("preserves the NIP-98 wire shape and standard base64 encoding", () => {
     const payload = { mintUrl: "https://mint.example" };
     const header = makeNip98AuthHeader(

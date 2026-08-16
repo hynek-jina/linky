@@ -4,7 +4,6 @@ import { Either } from "effect";
 import { getPublicKey } from "nostr-tools";
 import type { NostrSecretKey, UnixSeconds } from "../domain/primitives";
 import type { SignedPlainEvent } from "../internal/nostrEvent";
-import { firstTagValue } from "../internal/nostrEvent";
 import { decodeVerifiedPlainEvent } from "../internal/plainEvent";
 import { signPlainEvent } from "../internal/plainEvent";
 import type {
@@ -23,6 +22,7 @@ export type PushOwnershipProofFailure =
   | "wrong-kind"
   | "invalid-challenge"
   | "invalid-action"
+  | "invalid-pubkey-tag"
   | "invalid-pubkey"
   | "wrong-content";
 
@@ -99,7 +99,7 @@ const singleTagValue = (
 ): string | null => {
   const values = event.tags.filter((tag) => tag[0] === name);
   if (values.length !== 1) return null;
-  return firstTagValue(values, name);
+  return values[0]?.[1] ?? null;
 };
 
 /** Verifies the complete kind-27235 wire contract shared by client and server. */
@@ -121,7 +121,13 @@ export const verifyPushOwnershipProof = (
     if (action !== "subscribe" && action !== "unsubscribe") {
       return yield* Either.left<PushOwnershipProofFailure>("invalid-action");
     }
-    if (singleTagValue(event, "pubkey") !== event.pubkey) {
+    const pubkey = singleTagValue(event, "pubkey");
+    if (pubkey === null) {
+      return yield* Either.left<PushOwnershipProofFailure>(
+        "invalid-pubkey-tag",
+      );
+    }
+    if (pubkey !== event.pubkey) {
       return yield* Either.left<PushOwnershipProofFailure>("invalid-pubkey");
     }
     if (event.content !== `linky-push-${action}`) {
