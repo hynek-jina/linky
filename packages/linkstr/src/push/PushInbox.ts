@@ -17,6 +17,7 @@ export interface DeliveredPushWrap {
 
 export interface PushInboxOptions {
   readonly lookback: Duration.Duration;
+  readonly refreshInterval?: Duration.Duration;
   readonly resubscribeDelay?: Duration.Duration;
 }
 
@@ -26,6 +27,7 @@ interface RawArrival {
 }
 
 const GIFT_WRAP_KIND = 1059;
+const DEFAULT_REFRESH_INTERVAL = Duration.minutes(10);
 const DEFAULT_RESUBSCRIBE_DELAY = Duration.seconds(5);
 const SEEN_WRAPS_CAPACITY = 4096;
 
@@ -71,6 +73,8 @@ export class PushInbox extends Effect.Service<PushInbox>()(
             Queue.shutdown,
           );
           const seenWrapIds = makeSeenWrapIds();
+          const refreshInterval =
+            options.refreshInterval ?? DEFAULT_REFRESH_INTERVAL;
           const resubscribeDelay =
             options.resubscribeDelay ?? DEFAULT_RESUBSCRIBE_DELAY;
 
@@ -87,17 +91,27 @@ export class PushInbox extends Effect.Service<PushInbox>()(
                 since: Math.max(nowSeconds - lookbackSeconds, 0),
               };
               let eoseSeen = false;
-              yield* transport.subscribe(
-                relay,
-                filter,
-                (raw) => {
-                  Queue.unsafeOffer(rawWraps, {
-                    delivery: eoseSeen ? "live" : "backfill",
-                    raw,
-                  });
-                },
-                { onEose: () => (eoseSeen = true) },
-              );
+              // Relays can drop a long-lived REQ without closing the socket, so
+              // periodic refresh is the only way to detect a deaf subscription.
+              yield* transport
+                .subscribe(
+                  relay,
+                  filter,
+                  (raw) => {
+                    Queue.unsafeOffer(rawWraps, {
+                      delivery: eoseSeen ? "live" : "backfill",
+                      raw,
+                    });
+                  },
+                  { onEose: () => (eoseSeen = true) },
+                )
+                .pipe(
+                  Effect.timeoutTo({
+                    duration: refreshInterval,
+                    onSuccess: () => undefined,
+                    onTimeout: () => undefined,
+                  }),
+                );
             });
 
           yield* Effect.forEach(relays, (relay) =>

@@ -1,4 +1,11 @@
-import { Duration, Effect, Layer, Stream } from "effect";
+import {
+  Duration,
+  Effect,
+  Layer,
+  Stream,
+  TestClock,
+  TestContext,
+} from "effect";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import type { Event as NostrToolsEvent, Filter } from "nostr-tools";
 import { Pubkey, RelayUrl } from "../domain/primitives";
@@ -207,5 +214,50 @@ describe("PushInbox", () => {
         },
       });
     }).pipe(Effect.scoped, Effect.provide(layer), Effect.runPromise);
+  });
+
+  it("refreshes a subscription that stays open", async () => {
+    const relay = RelayUrl.make("wss://refresh-relay.test");
+    const fake = new FakeRelay();
+    const pool: RelayPool = {
+      ensureRelay: () => Promise.resolve(fake.connection),
+    };
+    const layer = PushInbox.Default.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          RelayPolicy.fixed({ readRelays: [relay], writeRelays: [] }),
+          Layer.succeed(NostrTransport, makeRelayPoolTransport(pool)),
+        ),
+      ),
+    );
+    const refreshInterval = Duration.minutes(1);
+
+    await Effect.gen(function* () {
+      const inbox = yield* PushInbox;
+      const events = yield* inbox.open({
+        lookback: Duration.days(3),
+        refreshInterval,
+        resubscribeDelay: Duration.millis(10),
+      });
+      yield* Effect.forkScoped(Stream.runDrain(events));
+      yield* Effect.yieldNow();
+      yield* Effect.promise(() => Promise.resolve());
+      yield* Effect.yieldNow();
+      expect(fake.subscriptions).toHaveLength(1);
+
+      yield* TestClock.adjust(refreshInterval);
+      expect(fake.subscriptions[0]?.closed).toBe(true);
+      yield* TestClock.adjust(Duration.millis(20));
+      yield* Effect.yieldNow();
+      yield* Effect.promise(() => Promise.resolve());
+      yield* Effect.yieldNow();
+
+      expect(fake.subscriptions).toHaveLength(2);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(layer),
+      Effect.provide(TestContext.TestContext),
+      Effect.runPromise,
+    );
   });
 });
