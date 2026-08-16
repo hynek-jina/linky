@@ -5,10 +5,17 @@ import {
   type CollectedInspectorRow,
   type InspectorChannel,
 } from "../inspector/inspectorRows";
-import type { InspectorDataSource } from "./inspectorDataSource";
+import { INSPECTOR_MAX_ROWS } from "../inspector/inspectorStore";
+import {
+  createStaticInspectorDataSource,
+  type InspectorDataSource,
+} from "./inspectorDataSource";
 import { describeInspectorRow } from "./inspectorGlossary";
+import {
+  parseInspectorNdjson,
+  type InspectorImportResult,
+} from "./inspectorImport";
 
-const MAX_ROWS = 5_000;
 const MAX_RENDERED_ROWS = 2_000;
 const FLUSH_INTERVAL_MS = 100;
 const FOLLOW_THRESHOLD_PX = 32;
@@ -43,6 +50,11 @@ interface DetailPaneProps {
 
 interface InspectorAppProps {
   dataSource: InspectorDataSource;
+}
+
+interface OfflineImport {
+  fileName: string;
+  result: InspectorImportResult;
 }
 
 const timelineRowDomId = (id: number): string => `inspector-row-${id}`;
@@ -261,6 +273,10 @@ export function InspectorApp({
   const [selectedRow, setSelectedRow] =
     React.useState<CollectedInspectorRow | null>(null);
   const [isFollowing, setIsFollowing] = React.useState(true);
+  const [offlineImport, setOfflineImport] =
+    React.useState<OfflineImport | null>(null);
+  const [isImporting, setIsImporting] = React.useState(false);
+  const [importMessage, setImportMessage] = React.useState<string | null>(null);
 
   const incomingRowsRef = React.useRef<CollectedInspectorRow[]>([]);
   // Ids are monotonic and SSE delivery is ordered (including replay), so a
@@ -268,18 +284,35 @@ export function InspectorApp({
   const lastSeenIdRef = React.useRef(0);
   const isPausedRef = React.useRef(false);
   const timelineRef = React.useRef<HTMLDivElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const activeDataSource = React.useMemo(
+    () =>
+      offlineImport
+        ? createStaticInspectorDataSource(offlineImport.result.rows)
+        : dataSource,
+    [dataSource, offlineImport],
+  );
 
   const flushIncomingRows = React.useCallback(() => {
     if (isPausedRef.current || incomingRowsRef.current.length === 0) return;
 
     const incoming = incomingRowsRef.current;
     incomingRowsRef.current = [];
-    setRows((current) => [...current, ...incoming].slice(-MAX_ROWS));
+    setRows((current) => [...current, ...incoming].slice(-INSPECTOR_MAX_ROWS));
   }, []);
 
   React.useEffect(() => {
+    incomingRowsRef.current = [];
+    lastSeenIdRef.current = 0;
+    isPausedRef.current = false;
+    setRows([]);
+    setSelectedRow(null);
+    setIsPaused(false);
+    setIsConnected(false);
+
     const flushTimer = window.setInterval(flushIncomingRows, FLUSH_INTERVAL_MS);
-    const disconnect = dataSource.connect({
+    const disconnect = activeDataSource.connect({
       onClear: () => {
         incomingRowsRef.current = [];
         setRows([]);
@@ -291,7 +324,7 @@ export function InspectorApp({
           if (row.id <= lastSeenIdRef.current) continue;
           lastSeenIdRef.current = row.id;
           incomingRowsRef.current.push(row);
-          if (incomingRowsRef.current.length > MAX_ROWS) {
+          if (incomingRowsRef.current.length > INSPECTOR_MAX_ROWS) {
             incomingRowsRef.current.shift();
           }
         }
@@ -302,7 +335,7 @@ export function InspectorApp({
       disconnect();
       window.clearInterval(flushTimer);
     };
-  }, [dataSource, flushIncomingRows]);
+  }, [activeDataSource, flushIncomingRows]);
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -423,7 +456,7 @@ export function InspectorApp({
   const handleClear = React.useCallback(async () => {
     setIsClearing(true);
     try {
-      await dataSource.clear();
+      await activeDataSource.clear();
     } catch {
       // The local view can still be cleared while the collector reconnects.
     } finally {
@@ -432,7 +465,51 @@ export function InspectorApp({
       setSelectedRow(null);
       setIsClearing(false);
     }
-  }, [dataSource]);
+  }, [activeDataSource]);
+
+  const handleImport = React.useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.currentTarget.files?.[0];
+      event.currentTarget.value = "";
+      if (!file) return;
+
+      setIsImporting(true);
+      setImportMessage(`Reading ${file.name}…`);
+      try {
+        const result = parseInspectorNdjson(await file.text());
+        incomingRowsRef.current = [];
+        setRows([]);
+        setSelectedRow(null);
+        setOfflineImport({ fileName: file.name, result });
+        const truncation =
+          result.truncatedRowCount > 0
+            ? `; ${result.truncatedRowCount.toLocaleString()} older rows truncated`
+            : "";
+        setImportMessage(
+          `Imported ${result.rows.length.toLocaleString()} rows (${result.skippedLineCount.toLocaleString()} skipped${truncation}).`,
+        );
+      } catch {
+        setImportMessage(`Could not read ${file.name}.`);
+      } finally {
+        setIsImporting(false);
+      }
+    },
+    [],
+  );
+
+  const handleLeaveOffline = React.useCallback(() => {
+    incomingRowsRef.current = [];
+    setRows([]);
+    setSelectedRow(null);
+    setOfflineImport(null);
+    setImportMessage(null);
+  }, []);
+
+  const statusLabel = offlineImport
+    ? "offline"
+    : isConnected
+      ? "connected"
+      : "reconnecting";
 
   return (
     <main className="inspector-app">
@@ -440,34 +517,65 @@ export function InspectorApp({
         <div className="brand-block">
           <h1>Linky Inspector</h1>
           <span
-            aria-label={isConnected ? "Connected" : "Reconnecting"}
-            className={`connection-dot ${isConnected ? "connected" : "reconnecting"}`}
-            title={isConnected ? "Connected" : "Reconnecting"}
+            aria-label={statusLabel}
+            className={`connection-dot ${statusLabel}`}
+            title={statusLabel}
           />
-          <span className="connection-label">
-            {isConnected ? "connected" : "reconnecting"}
-          </span>
+          <span className="connection-label">{statusLabel}</span>
         </div>
         <div className="top-actions">
           <span className="row-count">
             {renderedRows.length.toLocaleString()} shown /{" "}
             {rows.length.toLocaleString()} total
           </span>
-          <button
-            className={`secondary-button${isPaused ? " active" : ""}`}
-            onClick={handlePauseToggle}
-            type="button"
-          >
-            {isPaused ? "Resume" : "Pause"}
-          </button>
-          <button
-            className="secondary-button danger-button"
-            disabled={isClearing}
-            onClick={() => void handleClear()}
-            type="button"
-          >
-            {isClearing ? "Clearing…" : "Clear"}
-          </button>
+          <input
+            accept=".ndjson,.jsonl,.txt,application/x-ndjson,application/json,text/plain"
+            className="visually-hidden"
+            onChange={(event) => void handleImport(event)}
+            ref={fileInputRef}
+            type="file"
+          />
+          {offlineImport ? (
+            <span className="import-pill" title={offlineImport.fileName}>
+              <span>{offlineImport.fileName}</span>
+              <button
+                aria-label={`Close ${offlineImport.fileName} and return to the live feed`}
+                onClick={handleLeaveOffline}
+                title="Return to live feed"
+                type="button"
+              >
+                ✕
+              </button>
+            </span>
+          ) : (
+            <button
+              className="secondary-button"
+              disabled={isImporting}
+              onClick={() => fileInputRef.current?.click()}
+              type="button"
+            >
+              {isImporting ? "Importing…" : "Import"}
+            </button>
+          )}
+          {!offlineImport && (
+            <>
+              <button
+                className={`secondary-button${isPaused ? " active" : ""}`}
+                onClick={handlePauseToggle}
+                type="button"
+              >
+                {isPaused ? "Resume" : "Pause"}
+              </button>
+              <button
+                className="secondary-button danger-button"
+                disabled={isClearing}
+                onClick={() => void handleClear()}
+                type="button"
+              >
+                {isClearing ? "Clearing…" : "Clear"}
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -513,6 +621,11 @@ export function InspectorApp({
             value={textFilter}
           />
         </label>
+        {importMessage && (
+          <span className="import-status" role="status" title={importMessage}>
+            {importMessage}
+          </span>
+        )}
       </section>
 
       <div className={`workspace${selectedRow ? " has-detail" : ""}`}>
@@ -531,7 +644,9 @@ export function InspectorApp({
             {renderedRows.length === 0 ? (
               <div className="empty-state">
                 {rows.length === 0
-                  ? "Waiting for inspector rows…"
+                  ? offlineImport
+                    ? "No valid inspector rows were imported."
+                    : "Waiting for inspector rows…"
                   : "No rows match the current filters."}
               </div>
             ) : (
