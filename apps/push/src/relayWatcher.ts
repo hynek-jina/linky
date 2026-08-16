@@ -5,20 +5,34 @@ import {
   CATCH_UP_LOOKBACK_SECONDS,
   SEEN_EVENT_RETENTION_MARGIN_MS,
 } from "./config";
-import { PushDeliveryService } from "./push";
 import { PushStorage } from "./storage";
-import type { PushNotificationData } from "./types";
+import type {
+  PushNotificationData,
+  StoredNativeSubscription,
+  StoredSubscription,
+} from "./types";
+
+interface PushDelivery {
+  deliverWeb(
+    subscription: StoredSubscription,
+    payloadData: PushNotificationData,
+  ): Promise<void>;
+  deliverNative(
+    subscription: StoredNativeSubscription,
+    payloadData: PushNotificationData,
+  ): Promise<void>;
+}
 
 interface RelayWatcherOptions {
   relayUrls: string[];
   storage: PushStorage;
-  pushDelivery: PushDeliveryService;
+  pushDelivery: PushDelivery;
 }
 
 export class RelayWatcher {
   private readonly relayUrls: ReadonlyArray<RelayUrl>;
   private readonly storage: PushStorage;
-  private readonly pushDelivery: PushDeliveryService;
+  private readonly pushDelivery: PushDelivery;
   private subscription: PushInboxSubscription | null = null;
 
   constructor(options: RelayWatcherOptions) {
@@ -52,7 +66,7 @@ export class RelayWatcher {
         onFatal: (message) =>
           console.error(`[push] relay watcher failed\n${message}`),
       },
-      (event) => void this.handleEvent(event),
+      (event) => void this.handleDelivered(event),
     );
   }
 
@@ -68,7 +82,7 @@ export class RelayWatcher {
     );
   }
 
-  private async handleEvent({
+  async handleDelivered({
     delivery,
     wrap,
   }: DeliveredPushWrap): Promise<void> {
