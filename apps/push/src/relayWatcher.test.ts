@@ -24,9 +24,7 @@ import type {
   StoredSubscription,
 } from "./types";
 
-const recipient = derivePubkey(
-  NostrSecretKey.make(new Uint8Array(32).fill(1)),
-);
+const recipient = derivePubkey(NostrSecretKey.make(new Uint8Array(32).fill(1)));
 const retentionMs =
   CATCH_UP_LOOKBACK_SECONDS * 1000 + SEEN_EVENT_RETENTION_MARGIN_MS;
 
@@ -37,9 +35,8 @@ interface DeliveryRecord<T> {
 
 class RecordingPushDelivery {
   readonly webDeliveries: Array<DeliveryRecord<StoredSubscription>> = [];
-  readonly nativeDeliveries: Array<
-    DeliveryRecord<StoredNativeSubscription>
-  > = [];
+  readonly nativeDeliveries: Array<DeliveryRecord<StoredNativeSubscription>> =
+    [];
 
   deliverWeb(
     subscription: StoredSubscription,
@@ -140,9 +137,9 @@ function hasSeenEvent(storagePath: string, eventId: string): boolean {
   const db = new Database(storagePath);
   try {
     return (
-      db.query("SELECT event_id FROM seen_events WHERE event_id = ?").get(
-        eventId,
-      ) !== null
+      db
+        .query("SELECT event_id FROM seen_events WHERE event_id = ?")
+        .get(eventId) !== null
     );
   } finally {
     db.close();
@@ -151,33 +148,37 @@ function hasSeenEvent(storagePath: string, eventId: string): boolean {
 
 describe("RelayWatcher", () => {
   it("delivers a live wrap and records it in the seen ledger", async () => {
-    await withHarness(async ({ storage, storagePath, pushDelivery, watcher }) => {
-      registerWebSubscription(storage);
-      const event = deliveredWrap(1);
+    await withHarness(
+      async ({ storage, storagePath, pushDelivery, watcher }) => {
+        registerWebSubscription(storage);
+        const event = deliveredWrap(1);
 
-      await watcher.handleDelivered(event);
+        await watcher.handleDelivered(event);
 
-      expect(pushDelivery.webDeliveries).toHaveLength(1);
-      expect(pushDelivery.nativeDeliveries).toHaveLength(0);
-      expect(hasSeenEvent(storagePath, event.wrap.wrapId)).toBe(true);
-    });
+        expect(pushDelivery.webDeliveries).toHaveLength(1);
+        expect(pushDelivery.nativeDeliveries).toHaveLength(0);
+        expect(hasSeenEvent(storagePath, event.wrap.wrapId)).toBe(true);
+      },
+    );
   });
 
   it("does not record backfill before the same wrap arrives live", async () => {
-    await withHarness(async ({ storage, storagePath, pushDelivery, watcher }) => {
-      registerWebSubscription(storage);
-      const backfill = deliveredWrap(2, "backfill");
+    await withHarness(
+      async ({ storage, storagePath, pushDelivery, watcher }) => {
+        registerWebSubscription(storage);
+        const backfill = deliveredWrap(2, "backfill");
 
-      await watcher.handleDelivered(backfill);
+        await watcher.handleDelivered(backfill);
 
-      expect(pushDelivery.webDeliveries).toHaveLength(0);
-      expect(hasSeenEvent(storagePath, backfill.wrap.wrapId)).toBe(false);
+        expect(pushDelivery.webDeliveries).toHaveLength(0);
+        expect(hasSeenEvent(storagePath, backfill.wrap.wrapId)).toBe(false);
 
-      await watcher.handleDelivered({ ...backfill, delivery: "live" });
+        await watcher.handleDelivered({ ...backfill, delivery: "live" });
 
-      expect(pushDelivery.webDeliveries).toHaveLength(1);
-      expect(hasSeenEvent(storagePath, backfill.wrap.wrapId)).toBe(true);
-    });
+        expect(pushDelivery.webDeliveries).toHaveLength(1);
+        expect(hasSeenEvent(storagePath, backfill.wrap.wrapId)).toBe(true);
+      },
+    );
   });
 
   it("skips a second live arrival of an already delivered wrap", async () => {

@@ -76,9 +76,7 @@ export class PushInbox extends Effect.Service<PushInbox>()(
             Queue.unbounded<RawArrival>(),
             Queue.shutdown,
           );
-          const seenWrapIds = makeSeenWrapIds(
-            DEFAULT_SEEN_WRAP_IDS_CAPACITY,
-          );
+          const seenWrapIds = makeSeenWrapIds(DEFAULT_SEEN_WRAP_IDS_CAPACITY);
           const refreshInterval =
             options.refreshInterval ?? DEFAULT_REFRESH_INTERVAL;
           const resubscribeDelay =
@@ -130,9 +128,7 @@ export class PushInbox extends Effect.Service<PushInbox>()(
                 .pipe(
                   Effect.tap(reportAttemptEnded),
                   Effect.tapError((failure) =>
-                    reportAttemptEnded(
-                      failure.detail ?? "relay unreachable",
-                    ),
+                    reportAttemptEnded(failure.detail ?? "relay unreachable"),
                   ),
                   Effect.timeoutTo({
                     duration: refreshInterval,
