@@ -84,6 +84,8 @@ setting is turned off. Production collection never sends inspector rows to a ser
 Toolbar: channel chips and a text filter narrow the timeline; **Pause** freezes the view while
 still buffering; **Clear** resets the collector; the timeline auto-follows the newest row until you
 scroll up (**Follow ↓** jumps back). When several app tabs report, an **App** selector appears.
+**Import** loads `.ndjson`, `.jsonl`, or `.txt` captures entirely in the browser and switches the
+timeline offline; close the displayed file name to discard it and reconnect to the live feed.
 
 Programmatic access:
 

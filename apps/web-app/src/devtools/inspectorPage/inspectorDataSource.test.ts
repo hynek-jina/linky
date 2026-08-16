@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { InspectorRow } from "../inspector/inspectorRows";
 import { createInspectorStore } from "../inspector/inspectorStore";
-import { createInMemoryInspectorDataSource } from "./inspectorDataSource";
+import {
+  createInMemoryInspectorDataSource,
+  createStaticInspectorDataSource,
+} from "./inspectorDataSource";
 
 const row = (tag: string): InspectorRow => ({
   at: 1_700_000_000_000,
@@ -41,5 +44,39 @@ describe("createInMemoryInspectorDataSource", () => {
     disconnect();
     store.append("tab", [row("disconnected")]);
     expect(receivedTags).toEqual(["buffered", "live"]);
+  });
+});
+
+describe("createStaticInspectorDataSource", () => {
+  it("replays a sorted snapshot and clears it without external effects", async () => {
+    const store = createInspectorStore();
+    const first = store.append("tab-a", [row("first")])[0];
+    const second = store.append("tab-b", [row("second")])[0];
+    if (!first || !second) throw new Error("Expected fixture rows");
+
+    const source = createStaticInspectorDataSource([second, first]);
+    const receivedIds: number[] = [];
+    const onClear = vi.fn();
+    const onConnectionChange = vi.fn();
+    const disconnect = source.connect({
+      onClear,
+      onConnectionChange,
+      onRows: (rows) => receivedIds.push(...rows.map((entry) => entry.id)),
+    });
+
+    expect(receivedIds).toEqual([first.id, second.id]);
+    expect(onConnectionChange).toHaveBeenCalledWith(true);
+
+    await source.clear();
+    expect(onClear).toHaveBeenCalledOnce();
+
+    disconnect();
+    const afterClear = vi.fn();
+    source.connect({
+      onClear: vi.fn(),
+      onConnectionChange: vi.fn(),
+      onRows: afterClear,
+    });
+    expect(afterClear).toHaveBeenCalledWith([]);
   });
 });

@@ -121,6 +121,11 @@
   box-shadow: 0 0 7px rgb(255 99 117 / 55%);
 }
 
+.connection-dot.offline {
+  background: #77a7ff;
+  box-shadow: 0 0 7px rgb(119 167 255 / 55%);
+}
+
 .connection-label,
 .row-count,
 .app-filter > span {
@@ -131,6 +136,42 @@
 .top-actions {
   flex: 0 0 auto;
   gap: 7px;
+}
+
+.import-pill {
+  display: flex;
+  height: 27px;
+  max-width: 210px;
+  align-items: center;
+  border: 1px solid #466798;
+  border-radius: 5px;
+  background: #18263a;
+  color: #a9c8ff;
+  font-size: 11px;
+}
+
+.import-pill > span {
+  min-width: 0;
+  padding: 3px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-pill button {
+  width: 26px;
+  height: 100%;
+  flex: 0 0 auto;
+  border: 0;
+  border-left: 1px solid #466798;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.import-pill button:hover {
+  background: #243957;
+  color: #fff;
 }
 
 .row-count {
@@ -183,8 +224,19 @@
 
 .filter-bar {
   min-height: 42px;
+  flex-wrap: wrap;
   gap: 13px;
   padding: 7px 10px;
+}
+
+.import-status {
+  min-width: 0;
+  flex: 1 0 100%;
+  overflow: hidden;
+  color: #8c96a7;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .channel-filters {
@@ -653,7 +705,8 @@
 }
 
 @media (max-width: 760px) {
-  .connection-label {
+  .connection-label,
+  .row-count {
     display: none;
   }
 

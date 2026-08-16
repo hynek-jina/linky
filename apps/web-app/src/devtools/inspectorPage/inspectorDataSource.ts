@@ -59,3 +59,26 @@ export const createInMemoryInspectorDataSource = (
     return unsubscribe;
   },
 });
+
+export const createStaticInspectorDataSource = (
+  rows: CollectedInspectorRow[],
+): InspectorDataSource => {
+  let currentRows = [...rows].sort(
+    (left, right) => left.id - right.id || left.at - right.at,
+  );
+  const handlers = new Set<InspectorDataSourceHandlers>();
+
+  return {
+    clear: () => {
+      currentRows = [];
+      for (const handler of handlers) handler.onClear();
+      return Promise.resolve();
+    },
+    connect(handler) {
+      handlers.add(handler);
+      handler.onConnectionChange(true);
+      handler.onRows(currentRows);
+      return () => handlers.delete(handler);
+    },
+  };
+};
