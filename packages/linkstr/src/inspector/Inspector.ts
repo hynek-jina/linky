@@ -15,6 +15,23 @@ export interface InspectorService {
 const noop: InspectorService = { emit: () => {}, events: Stream.empty };
 
 /**
+ * The only way emission sites should emit: diagnostics must never disturb the
+ * operation they observe, so a throwing event builder (e.g. a schema
+ * constructor rejecting an off-brand field) is logged and dropped instead of
+ * becoming a defect of the observed effect.
+ */
+export const emitSilently = (
+  inspector: InspectorService,
+  build: () => InspectorEvent,
+): void => {
+  try {
+    inspector.emit(build());
+  } catch (error) {
+    console.warn("linkstr inspector emission failed", error);
+  }
+};
+
+/**
  * Optional diagnostics bus. Services emit through `Inspector.orNoop`, so
  * providing no layer costs nothing; a composition root that wants the feed
  * provides `Inspector.live` and consumes `events`.

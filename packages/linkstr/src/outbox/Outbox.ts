@@ -19,7 +19,7 @@ import type {
 } from "../domain/errors";
 import { EventId, RumorId } from "../domain/primitives";
 import type { ClientId, Pubkey, UnixSeconds } from "../domain/primitives";
-import { Inspector } from "../inspector/Inspector";
+import { emitSilently, Inspector } from "../inspector/Inspector";
 import { OperationFailed, PlainOperationSucceeded } from "../inspector/events";
 import type { Rumor } from "../internal/nostrEvent";
 import { freshClientId, nowSeconds } from "../internal/operations";
@@ -205,19 +205,25 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
           }),
         );
         yield* Queue.offer(terminals, result);
-        inspector.emit(
+        emitSilently(inspector, () =>
           result._tag === "OutboxJobSucceeded"
-            ? new PlainOperationSucceeded({
-                name: "outbox.job",
-                params: { jobId: job.jobId, ref: job.ref },
-                eventIds: [EventId.make(receiptRumorId(result.receipt))],
-                result,
-              })
-            : new OperationFailed({
-                name: "outbox.job",
-                params: { jobId: job.jobId, ref: job.ref },
-                error: result,
-              }),
+            ? new PlainOperationSucceeded(
+                {
+                  name: "outbox.job",
+                  params: { jobId: job.jobId, ref: job.ref },
+                  eventIds: [EventId.make(receiptRumorId(result.receipt))],
+                  result,
+                },
+                { disableValidation: true },
+              )
+            : new OperationFailed(
+                {
+                  name: "outbox.job",
+                  params: { jobId: job.jobId, ref: job.ref },
+                  error: result,
+                },
+                { disableValidation: true },
+              ),
         );
       });
 
@@ -328,13 +334,18 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
           clientId,
           sentAt,
         });
-        inspector.emit(
-          new PlainOperationSucceeded({
-            name: "outbox.enqueue",
-            params: { ref, operation: normalized },
-            eventIds: [EventId.make(rumor.id)],
-            result: receipt,
-          }),
+        emitSilently(
+          inspector,
+          () =>
+            new PlainOperationSucceeded(
+              {
+                name: "outbox.enqueue",
+                params: { ref, operation: normalized },
+                eventIds: [EventId.make(rumor.id)],
+                result: receipt,
+              },
+              { disableValidation: true },
+            ),
         );
         return receipt;
       });
@@ -356,13 +367,18 @@ export class Outbox extends Effect.Service<Outbox>()("linkstr/Outbox", {
           recipient,
         };
         const job = yield* insertJob(operation, ref);
-        inspector.emit(
-          new PlainOperationSucceeded({
-            name: "outbox.enqueue",
-            params: { ref, operation },
-            eventIds: [],
-            result: { jobId: job.jobId },
-          }),
+        emitSilently(
+          inspector,
+          () =>
+            new PlainOperationSucceeded(
+              {
+                name: "outbox.enqueue",
+                params: { ref, operation },
+                eventIds: [],
+                result: { jobId: job.jobId },
+              },
+              { disableValidation: true },
+            ),
         );
         return job.jobId;
       });

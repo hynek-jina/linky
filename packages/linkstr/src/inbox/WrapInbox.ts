@@ -17,7 +17,7 @@ import type { AllRelaysUnreachable } from "../domain/errors";
 import { NoReadRelaysConfigured } from "../domain/errors";
 import { UnixSeconds, WrapId } from "../domain/primitives";
 import type { RelayUrl } from "../domain/primitives";
-import { Inspector } from "../inspector/Inspector";
+import { emitSilently, Inspector } from "../inspector/Inspector";
 import { InboxRouted, InboxWrapDeduped } from "../inspector/events";
 import { inspectPlainOperation } from "../internal/inspectPlainOperation";
 import type { InspectedPlainResult } from "../internal/inspectPlainOperation";
@@ -277,20 +277,32 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
               const wrapId = wrapIdOf(raw);
               if (wrapId !== null && seenWrapIds.has(wrapId)) {
                 return Effect.sync(() => {
-                  inspector.emit(new InboxWrapDeduped({ wrapId }));
+                  emitSilently(
+                    inspector,
+                    () =>
+                      new InboxWrapDeduped(
+                        { wrapId },
+                        { disableValidation: true },
+                      ),
+                  );
                   return Option.none<DeliveredInboxEvent>();
                 });
               }
               const decoded = decodeWrapEvent(raw, identity);
               if (decoded.wrap === null) {
                 return Effect.sync(() => {
-                  inspector.emit(
-                    new InboxRouted({
-                      wrapId: decoded.event.wrapId,
-                      rumorKind: null,
-                      delivery,
-                      event: decoded.event,
-                    }),
+                  emitSilently(
+                    inspector,
+                    () =>
+                      new InboxRouted(
+                        {
+                          wrapId: decoded.event.wrapId,
+                          rumorKind: null,
+                          delivery,
+                          event: decoded.event,
+                        },
+                        { disableValidation: true },
+                      ),
                   );
                   return Option.some<DeliveredInboxEvent>({
                     delivery,
@@ -302,13 +314,18 @@ export class WrapInbox extends Effect.Service<WrapInbox>()(
               return Effect.sync(() => seenWrapIds.add(wrap.id)).pipe(
                 Effect.andThen(advanceCursor(wrap.created_at)),
                 Effect.map(() => {
-                  inspector.emit(
-                    new InboxRouted({
-                      wrapId: wrap.id,
-                      rumorKind: decoded.rumorKind,
-                      delivery,
-                      event: decoded.event,
-                    }),
+                  emitSilently(
+                    inspector,
+                    () =>
+                      new InboxRouted(
+                        {
+                          wrapId: wrap.id,
+                          rumorKind: decoded.rumorKind,
+                          delivery,
+                          event: decoded.event,
+                        },
+                        { disableValidation: true },
+                      ),
                   );
                   return Option.some<DeliveredInboxEvent>({
                     delivery,

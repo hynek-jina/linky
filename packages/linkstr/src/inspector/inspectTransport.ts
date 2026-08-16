@@ -2,7 +2,7 @@ import { Effect, Layer, Option } from "effect";
 import { SignedWrapEvent } from "../internal/nostrEvent";
 import { NostrTransport } from "../services/NostrTransport";
 import type { NostrTransportService } from "../services/NostrTransport";
-import { Inspector } from "./Inspector";
+import { emitSilently, Inspector } from "./Inspector";
 import type { InspectorService } from "./Inspector";
 import {
   WireEventReceived,
@@ -18,30 +18,44 @@ const tapWire = (
   inspector: InspectorService,
 ): NostrTransportService => ({
   publish: (relays, event) =>
-    inner.publish(relays, event).pipe(
-      Effect.tap((results) =>
-        Effect.sync(() =>
-          inspector.emit(
-            event instanceof SignedWrapEvent
-              ? new WirePublished({ wrapId: event.id, wrap: event, results })
-              : new WirePlainPublished({
-                  eventId: event.id,
-                  kind: event.kind,
-                  event,
-                  results,
-                }),
+    inner
+      .publish(relays, event)
+      .pipe(
+        Effect.tap((results) =>
+          Effect.sync(() =>
+            emitSilently(inspector, () =>
+              event instanceof SignedWrapEvent
+                ? new WirePublished(
+                    { wrapId: event.id, wrap: event, results },
+                    { disableValidation: true },
+                  )
+                : new WirePlainPublished(
+                    { eventId: event.id, kind: event.kind, event, results },
+                    { disableValidation: true },
+                  ),
+            ),
           ),
         ),
       ),
-    ),
   subscribe: (relay, filter, onEvent, options) =>
     Effect.suspend(() => {
-      inspector.emit(new WireSubscribed({ relay, filter }));
+      emitSilently(
+        inspector,
+        () =>
+          new WireSubscribed({ relay, filter }, { disableValidation: true }),
+      );
       return inner.subscribe(
         relay,
         filter,
         (event) => {
-          inspector.emit(new WireEventReceived({ relay, event }));
+          emitSilently(
+            inspector,
+            () =>
+              new WireEventReceived(
+                { relay, event },
+                { disableValidation: true },
+              ),
+          );
           onEvent(event);
         },
         options,
@@ -49,13 +63,25 @@ const tapWire = (
     }).pipe(
       Effect.tap((reason) =>
         Effect.sync(() =>
-          inspector.emit(new WireSubscriptionEnded({ relay, detail: reason })),
+          emitSilently(
+            inspector,
+            () =>
+              new WireSubscriptionEnded(
+                { relay, detail: reason },
+                { disableValidation: true },
+              ),
+          ),
         ),
       ),
       Effect.tapError((error) =>
         Effect.sync(() =>
-          inspector.emit(
-            new WireSubscriptionEnded({ relay, detail: error.detail }),
+          emitSilently(
+            inspector,
+            () =>
+              new WireSubscriptionEnded(
+                { relay, detail: error.detail },
+                { disableValidation: true },
+              ),
           ),
         ),
       ),
@@ -64,20 +90,25 @@ const tapWire = (
     inner.fetch(relay, filter).pipe(
       Effect.tap((events) =>
         Effect.sync(() =>
-          inspector.emit(
-            new WireFetched({ relay, filter, events, detail: null }),
+          emitSilently(
+            inspector,
+            () =>
+              new WireFetched(
+                { relay, filter, events, detail: null },
+                { disableValidation: true },
+              ),
           ),
         ),
       ),
       Effect.tapError((error) =>
         Effect.sync(() =>
-          inspector.emit(
-            new WireFetched({
-              relay,
-              filter,
-              events: [],
-              detail: error.detail,
-            }),
+          emitSilently(
+            inspector,
+            () =>
+              new WireFetched(
+                { relay, filter, events: [], detail: error.detail },
+                { disableValidation: true },
+              ),
           ),
         ),
       ),

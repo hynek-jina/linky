@@ -3,7 +3,7 @@ import type { Scope } from "effect";
 import type { Filter } from "nostr-tools";
 import { NoReadRelaysConfigured } from "../domain/errors";
 import type { Pubkey, RelayUrl } from "../domain/primitives";
-import { Inspector } from "../inspector/Inspector";
+import { emitSilently, Inspector } from "../inspector/Inspector";
 import { ProfileWatchRouted } from "../inspector/events";
 import { chunkAuthors } from "../internal/authorChunks";
 import type { SignedPlainEvent } from "../internal/nostrEvent";
@@ -126,12 +126,20 @@ export class ProfileWatch extends Effect.Service<ProfileWatch>()(
             Either.match(decodeVerifiedPlainEvent(raw), {
               onLeft: (reason) =>
                 Effect.sync(() => {
-                  inspector.emit(
-                    new ProfileWatchRouted({
-                      eventId: null,
-                      kind: null,
-                      event: new ProfileEventDropped({ eventId: null, reason }),
-                    }),
+                  emitSilently(
+                    inspector,
+                    () =>
+                      new ProfileWatchRouted(
+                        {
+                          eventId: null,
+                          kind: null,
+                          event: new ProfileEventDropped({
+                            eventId: null,
+                            reason,
+                          }),
+                        },
+                        { disableValidation: true },
+                      ),
                   );
                   return Option.none<ProfileWatchEvent>();
                 }),
@@ -139,15 +147,20 @@ export class ProfileWatch extends Effect.Service<ProfileWatch>()(
                 Effect.map(route(event), (routed) =>
                   Either.match(routed, {
                     onLeft: (reason) => {
-                      inspector.emit(
-                        new ProfileWatchRouted({
-                          eventId: event.id,
-                          kind: event.kind,
-                          event: new ProfileEventDropped({
-                            eventId: event.id,
-                            reason,
-                          }),
-                        }),
+                      emitSilently(
+                        inspector,
+                        () =>
+                          new ProfileWatchRouted(
+                            {
+                              eventId: event.id,
+                              kind: event.kind,
+                              event: new ProfileEventDropped({
+                                eventId: event.id,
+                                reason,
+                              }),
+                            },
+                            { disableValidation: true },
+                          ),
                       );
                       return Option.none<ProfileWatchEvent>();
                     },
@@ -156,12 +169,17 @@ export class ProfileWatch extends Effect.Service<ProfileWatch>()(
                         `${event.pubkey}:${event.kind}`,
                         event.created_at,
                       );
-                      inspector.emit(
-                        new ProfileWatchRouted({
-                          eventId: event.id,
-                          kind: event.kind,
-                          event: fact,
-                        }),
+                      emitSilently(
+                        inspector,
+                        () =>
+                          new ProfileWatchRouted(
+                            {
+                              eventId: event.id,
+                              kind: event.kind,
+                              event: fact,
+                            },
+                            { disableValidation: true },
+                          ),
                       );
                       return Option.some(fact);
                     },
