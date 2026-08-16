@@ -71,6 +71,13 @@ export class RelayWatcher {
       return;
     }
 
+    if (delivery === "backfill") {
+      console.debug(
+        `[push] suppressed historical gift wrap id=${wrap.wrapId} recipient=${recipient}`,
+      );
+      return;
+    }
+
     const nowMs = Date.now();
     if (!this.storage.recordSeenEvent(wrap.wrapId, nowMs)) {
       console.debug(`[push] skipped duplicate event id=${wrap.wrapId}`);
@@ -80,13 +87,6 @@ export class RelayWatcher {
     console.debug(
       `[push] observed gift wrap id=${wrap.wrapId} recipient=${recipient} createdAt=${wrap.createdAt}`,
     );
-    if (delivery === "backfill") {
-      console.debug(
-        `[push] suppressed historical gift wrap id=${wrap.wrapId} recipient=${recipient}`,
-      );
-      return;
-    }
-
     console.debug(
       `[push] delivering gift wrap id=${wrap.wrapId} recipient=${recipient} webSubscriptions=${subscriptions.length} nativeSubscriptions=${nativeSubscriptions.length}`,
     );
