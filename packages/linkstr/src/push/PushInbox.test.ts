@@ -19,7 +19,11 @@ import {
   NostrTransport,
 } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
-import type { DeliveredPushWrap } from "./PushInbox";
+import type {
+  DeliveredPushWrap,
+  PushRelayStatusEvent,
+  PushWrapFailure,
+} from "./PushInbox";
 import { PushInbox } from "./PushInbox";
 
 interface FakeSubscription {
@@ -62,6 +66,14 @@ class FakeRelay {
   eose(): void {
     for (const subscription of this.subscriptions) {
       if (!subscription.closed) subscription.params.oneose?.();
+    }
+  }
+
+  close(reason: string): void {
+    for (const subscription of this.subscriptions) {
+      if (subscription.closed) continue;
+      subscription.closed = true;
+      subscription.params.onclose?.(reason);
     }
   }
 }
@@ -259,5 +271,60 @@ describe("PushInbox", () => {
       Effect.provide(TestContext.TestContext),
       Effect.runPromise,
     );
+  });
+
+  it("reports anomalous wraps and relay statuses", async () => {
+    const relay = RelayUrl.make("wss://reporting-relay.test");
+    const fake = new FakeRelay();
+    const pool: RelayPool = {
+      ensureRelay: () => Promise.resolve(fake.connection),
+    };
+    const layer = PushInbox.Default.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          RelayPolicy.fixed({ readRelays: [relay], writeRelays: [] }),
+          Layer.succeed(NostrTransport, makeRelayPoolTransport(pool)),
+        ),
+      ),
+    );
+    const invalidWraps: Array<PushWrapFailure> = [];
+    const relayStatuses: Array<PushRelayStatusEvent> = [];
+
+    await Effect.gen(function* () {
+      const inbox = yield* PushInbox;
+      const events = yield* inbox.open({
+        lookback: Duration.days(3),
+        resubscribeDelay: Duration.seconds(1),
+        onInvalidWrap: (failure) => invalidWraps.push(failure),
+        onRelayStatus: (event) => relayStatuses.push(event),
+      });
+      yield* Effect.forkScoped(Stream.runDrain(events));
+      yield* eventually(() => fake.subscriptions.length === 1);
+
+      const tampered = pushWrap("tampered");
+      fake.emit({ ...tampered, content: "changed" });
+      yield* eventually(() => invalidWraps.length === 1);
+      expect(invalidWraps).toEqual(["invalid-signature"]);
+
+      fake.emit({ ...pushWrap("unmarked"), tags: [] });
+      yield* Effect.sleep(Duration.millis(10));
+      expect(invalidWraps).toEqual(["invalid-signature"]);
+
+      fake.eose();
+      fake.eose();
+      yield* eventually(() => relayStatuses.length === 1);
+      expect(relayStatuses).toEqual([{ type: "eose", relay }]);
+
+      fake.close("relay maintenance");
+      yield* eventually(() => relayStatuses.length === 2);
+      expect(relayStatuses).toEqual([
+        { type: "eose", relay },
+        {
+          type: "attempt-ended",
+          relay,
+          reason: "relay maintenance",
+        },
+      ]);
+    }).pipe(Effect.scoped, Effect.provide(layer), Effect.runPromise);
   });
 });

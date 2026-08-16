@@ -1,9 +1,13 @@
-import { Duration, Effect, Fiber, Layer, Stream } from "effect";
+import { Cause, Duration, Effect, Exit, Fiber, Layer, Stream } from "effect";
 import type { RelayUrl } from "../domain/primitives";
 import type { NostrTransport } from "../services/NostrTransport";
 import { NostrTransportSimplePool } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
-import type { DeliveredPushWrap } from "./PushInbox";
+import type {
+  DeliveredPushWrap,
+  PushRelayStatusEvent,
+  PushWrapFailure,
+} from "./PushInbox";
 import { PushInbox } from "./PushInbox";
 
 export interface PushInboxConfig {
@@ -12,6 +16,11 @@ export interface PushInboxConfig {
   readonly transport?: Layer.Layer<NostrTransport> | undefined;
   readonly refreshInterval?: Duration.Duration | undefined;
   readonly resubscribeDelay?: Duration.Duration | undefined;
+  readonly onInvalidWrap?: ((failure: PushWrapFailure) => void) | undefined;
+  readonly onRelayStatus?:
+    | ((event: PushRelayStatusEvent) => void)
+    | undefined;
+  readonly onFatal?: ((message: string) => void) | undefined;
 }
 
 export interface PushInboxSubscription {
@@ -33,6 +42,12 @@ export const watchPushInbox = (
       ...(config.resubscribeDelay === undefined
         ? {}
         : { resubscribeDelay: config.resubscribeDelay }),
+      ...(config.onInvalidWrap === undefined
+        ? {}
+        : { onInvalidWrap: config.onInvalidWrap }),
+      ...(config.onRelayStatus === undefined
+        ? {}
+        : { onRelayStatus: config.onRelayStatus }),
     });
     yield* Stream.runForEach(events, (event) =>
       Effect.sync(() => onWrap(event)),
@@ -54,6 +69,11 @@ export const watchPushInbox = (
     ),
   );
   const fiber = Effect.runFork(program);
+  fiber.addObserver((exit) => {
+    if (Exit.isFailure(exit) && !Cause.isInterruptedOnly(exit.cause)) {
+      config.onFatal?.(Cause.pretty(exit.cause));
+    }
+  });
   return {
     close: () => Effect.runPromise(Fiber.interrupt(fiber).pipe(Effect.asVoid)),
   };

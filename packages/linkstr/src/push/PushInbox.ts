@@ -8,17 +8,32 @@ import { resubscribeForever } from "../internal/resubscribe";
 import { NostrTransport } from "../services/NostrTransport";
 import { RelayPolicy } from "../services/RelayPolicy";
 import { decodePushWrap } from "./codec";
-import type { PushWrap } from "./codec";
+import type { PushWrap, PushWrapFailure } from "./codec";
+
+export type { PushWrapFailure } from "./codec";
 
 export interface DeliveredPushWrap {
   readonly delivery: InboxDelivery;
   readonly wrap: PushWrap;
 }
 
+export type PushRelayStatusEvent =
+  | {
+      readonly type: "attempt-ended";
+      readonly relay: RelayUrl;
+      readonly reason: string;
+    }
+  | {
+      readonly type: "eose";
+      readonly relay: RelayUrl;
+    };
+
 export interface PushInboxOptions {
   readonly lookback: Duration.Duration;
   readonly refreshInterval?: Duration.Duration;
   readonly resubscribeDelay?: Duration.Duration;
+  readonly onInvalidWrap?: (failure: PushWrapFailure) => void;
+  readonly onRelayStatus?: (event: PushRelayStatusEvent) => void;
 }
 
 interface RawArrival {
@@ -91,6 +106,14 @@ export class PushInbox extends Effect.Service<PushInbox>()(
                 since: Math.max(nowSeconds - lookbackSeconds, 0),
               };
               let eoseSeen = false;
+              const reportAttemptEnded = (reason: string) =>
+                Effect.sync(() =>
+                  options.onRelayStatus?.({
+                    type: "attempt-ended",
+                    relay,
+                    reason,
+                  }),
+                );
               // Relays can drop a long-lived REQ without closing the socket, so
               // periodic refresh is the only way to detect a deaf subscription.
               yield* transport
@@ -103,9 +126,21 @@ export class PushInbox extends Effect.Service<PushInbox>()(
                       raw,
                     });
                   },
-                  { onEose: () => (eoseSeen = true) },
+                  {
+                    onEose: () => {
+                      if (eoseSeen) return;
+                      eoseSeen = true;
+                      options.onRelayStatus?.({ type: "eose", relay });
+                    },
+                  },
                 )
                 .pipe(
+                  Effect.tap(reportAttemptEnded),
+                  Effect.tapError((failure) =>
+                    reportAttemptEnded(
+                      failure.detail ?? "relay unreachable",
+                    ),
+                  ),
                   Effect.timeoutTo({
                     duration: refreshInterval,
                     onSuccess: () => undefined,
@@ -135,7 +170,12 @@ export class PushInbox extends Effect.Service<PushInbox>()(
             }
 
             return Either.match(decodePushWrap(raw), {
-              onLeft: () => Option.none(),
+              onLeft: (failure) => {
+                if (failure !== "missing-push-marker") {
+                  options.onInvalidWrap?.(failure);
+                }
+                return Option.none();
+              },
               onRight: (wrap) => {
                 // Only authenticated wraps emitted live are recorded; a tampered
                 // copy must not mark its id as seen.
