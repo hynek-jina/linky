@@ -21,6 +21,15 @@ interface FakeSubscription {
   closed: boolean;
 }
 
+const STRICT_FILTER_CLOSE_REASON = "bad req: unindexed tag filter";
+
+const hasMultiLetterTagFilter = (filters: ReadonlyArray<Filter>): boolean =>
+  filters.some((filter) =>
+    Object.keys(filter).some(
+      (key) => key.startsWith("#") && key.slice(1).length !== 1,
+    ),
+  );
+
 class FakeRelay {
   readonly subscriptions: Array<FakeSubscription> = [];
 
@@ -29,6 +38,10 @@ class FakeRelay {
     subscribe: (filters, params) => {
       const subscription = { filters, params, closed: false };
       this.subscriptions.push(subscription);
+      if (hasMultiLetterTagFilter(filters)) {
+        subscription.closed = true;
+        params.onclose?.(STRICT_FILTER_CLOSE_REASON);
+      }
       return { close: () => (subscription.closed = true) };
     },
   };
@@ -78,6 +91,29 @@ const pushWrap = (content: string): NostrToolsEvent =>
   );
 
 describe("PushInbox", () => {
+  it("rejects multi-letter tag filters like a strict production relay", async () => {
+    const relay = RelayUrl.make("wss://strict-relay.test");
+    const fake = new FakeRelay();
+    const pool: RelayPool = {
+      ensureRelay: () => Promise.resolve(fake.connection),
+    };
+    const transport = makeRelayPoolTransport(pool);
+    let delivered = 0;
+
+    const reason = await Effect.runPromise(
+      transport.subscribe(
+        relay,
+        { "#linky": ["push"] },
+        () => (delivered += 1),
+      ),
+    );
+    fake.emit(pushWrap("rejected"));
+
+    expect(reason).toBe(STRICT_FILTER_CLOSE_REASON);
+    expect(fake.subscriptions[0]?.closed).toBe(true);
+    expect(delivered).toBe(0);
+  });
+
   it("validates, phases and dedupes push wraps across relays", async () => {
     const relayA = RelayUrl.make("wss://relay-a.test");
     const relayB = RelayUrl.make("wss://relay-b.test");
@@ -121,12 +157,17 @@ describe("PushInbox", () => {
           fakeA.subscriptions.length === 1 && fakeB.subscriptions.length === 1,
       );
 
-      expect(fakeA.subscriptions[0]?.filters[0]).toEqual(
-        expect.objectContaining({
-          kinds: [1059],
-          "#linky": ["push"],
-        }),
-      );
+      const filter = fakeA.subscriptions[0]?.filters[0];
+      const expectedSince =
+        Math.floor(Date.now() / 1000) - Duration.toSeconds(Duration.days(3));
+      expect(filter?.kinds).toEqual([1059]);
+      expect(filter?.since).toBeGreaterThanOrEqual(expectedSince - 2);
+      expect(filter?.since).toBeLessThanOrEqual(expectedSince + 2);
+      expect(
+        Object.keys(filter ?? {}).filter(
+          (key) => key.startsWith("#") && key.slice(1).length !== 1,
+        ),
+      ).toEqual([]);
 
       const historical = pushWrap("historical");
       fakeA.emit(historical);
