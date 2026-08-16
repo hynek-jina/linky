@@ -11,6 +11,10 @@ import {
 } from "@linky/linkstr-react";
 import { Schema } from "effect";
 import React from "react";
+import {
+  getInspectorEnabled,
+  useInspectorEnabled,
+} from "../../devtools/inspector/inspectorEnabled";
 
 const isRelayUrl = Schema.is(RelayUrl);
 
@@ -20,6 +24,7 @@ const INBOX_CURSOR_STORAGE_KEY_PREFIX = "linky.inbox_cursor";
 export const buildLinkstrConfig = (
   currentNsec: string | null,
   fetchRelays: readonly string[],
+  inspectorEnabled: boolean = getInspectorEnabled(),
 ): LinkstrConfig | null => {
   if (!currentNsec) return null;
   const identity = identityFromNsec(currentNsec.trim());
@@ -37,7 +42,7 @@ export const buildLinkstrConfig = (
       localStorage,
       `${INBOX_CURSOR_STORAGE_KEY_PREFIX}.${identity.pubkey}`,
     ),
-    inspector: import.meta.env.DEV,
+    inspector: inspectorEnabled,
   };
 };
 
@@ -49,8 +54,11 @@ export const useLinkstrConfigSync = ({
   currentNsec: string | null;
   nostrFetchRelays: readonly string[];
 }) => {
+  const inspectorEnabled = useInspectorEnabled();
   const setLinkstrConfig = useAtomSet(linkstrConfigAtom);
   React.useEffect(() => {
-    setLinkstrConfig(buildLinkstrConfig(currentNsec, nostrFetchRelays));
-  }, [currentNsec, nostrFetchRelays, setLinkstrConfig]);
+    setLinkstrConfig(
+      buildLinkstrConfig(currentNsec, nostrFetchRelays, inspectorEnabled),
+    );
+  }, [currentNsec, inspectorEnabled, nostrFetchRelays, setLinkstrConfig]);
 };

@@ -47,6 +47,12 @@ describe("parseRouteFromHash", () => {
     expect(parseRouteFromHash()).toEqual({ kind: "settingsMasterKeys" });
   });
 
+  it("parses the in-app inspector route", () => {
+    replaceHash("#advanced/inspector");
+
+    expect(parseRouteFromHash()).toEqual({ kind: "advancedInspector" });
+  });
+
   it("falls back to wallet for unknown hashes", () => {
     replaceHash("#unknown-route");
 

@@ -25,16 +25,22 @@ export interface InspectorQueryResult {
   rows: CollectedInspectorRow[];
 }
 
+export type InspectorStoreChange =
+  | { kind: "append"; rows: CollectedInspectorRow[] }
+  | { kind: "clear" };
+
 export interface InspectorStore {
   append: (client: string, rows: InspectorRow[]) => CollectedInspectorRow[];
   clear: () => void;
   query: (query?: InspectorQuery) => InspectorQueryResult;
+  subscribe: (listener: (change: InspectorStoreChange) => void) => () => void;
 }
 
 export const createInspectorStore = (
   maxRows: number = INSPECTOR_MAX_ROWS,
 ): InspectorStore => {
   const rows: CollectedInspectorRow[] = [];
+  const listeners = new Set<(change: InspectorStoreChange) => void>();
   let nextId = 1;
 
   return {
@@ -44,12 +50,18 @@ export const createInspectorStore = (
       );
       rows.push(...appended);
       if (rows.length > maxRows) rows.splice(0, rows.length - maxRows);
+      if (appended.length > 0) {
+        for (const listener of listeners) {
+          listener({ kind: "append", rows: appended });
+        }
+      }
       return appended;
     },
 
     clear() {
       // Ids keep counting past a clear so cursors held by pollers stay valid.
       rows.length = 0;
+      for (const listener of listeners) listener({ kind: "clear" });
     },
 
     query({ channel, client, cursor = 0, limit } = {}) {
@@ -66,6 +78,11 @@ export const createInspectorStore = (
         return { rows: page, cursor: page[page.length - 1]?.id ?? cursor };
       }
       return { rows: matching, cursor: nextId - 1 };
+    },
+
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
   };
 };

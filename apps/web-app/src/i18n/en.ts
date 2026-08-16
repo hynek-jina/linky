@@ -9,6 +9,10 @@ export const en = {
   settingsNetwork: "Network",
   settingsSecurity: "Security",
   settingsDebug: "Debug",
+  nostrInspector: "Nostr inspector",
+  nostrInspectorDescription:
+    "Shows decrypted message payloads in plain text. Data stays in memory only and is cleared on reload.",
+  openNostrInspector: "Open Nostr inspector",
   back: "Back",
   menu: "Menu",
   advanced: "Advanced",

@@ -56,6 +56,8 @@ import {
   isDesktopSectionRoot,
 } from "./desktopRouteSection";
 
+const InspectorPage = React.lazy(() => import("../../pages/InspectorPage"));
+
 export interface PeopleRoutesProps {
   bankPaymentOfferDetailProps: () => React.ComponentProps<
     typeof BankPaymentOfferDetailPage
@@ -108,6 +110,12 @@ const RoutePage = (): React.ReactElement => {
       return <MasterKeysPage />;
     case "advancedAutoPayLimit":
       return <AdvancedAutoPayLimitPage />;
+    case "advancedInspector":
+      return (
+        <React.Suspense fallback={<div className="muted">Loading…</div>}>
+          <InspectorPage />
+        </React.Suspense>
+      );
     case "advancedPushDebug":
       return <PushDebugPage />;
     case "mints":

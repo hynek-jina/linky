@@ -10,6 +10,10 @@ export const de = {
   settingsPayments: "Zahlungen",
   settingsNetwork: "Netzwerk",
   settingsSecurity: "Sicherheit",
+  nostrInspector: "Nostr-Inspektor",
+  nostrInspectorDescription:
+    "Zeigt entschlüsselte Nachrichteninhalte im Klartext. Die Daten bleiben nur im Arbeitsspeicher und werden beim Neuladen gelöscht.",
+  openNostrInspector: "Nostr-Inspektor öffnen",
   back: "Zurück",
   advanced: "Erweitert",
   paymentsHistory: "Zahlungsverlauf",
