@@ -17,8 +17,15 @@ export const useLinkstrInspectorBridge = () => {
   React.useEffect(() => {
     if (!inspectorEmissionEnabled) return;
     setHandler({
-      onEvent: (event) =>
-        reportInspectorRows([linkstrEventToRow(event, Date.now())]),
+      onEvent: (event) => {
+        // A mapping throw would kill the linkstr feed fiber and silently drop
+        // every later event; a lost row is the lesser failure.
+        try {
+          reportInspectorRows([linkstrEventToRow(event, Date.now())]);
+        } catch (error) {
+          console.warn("[linky] inspector row mapping failed", error);
+        }
+      },
     });
     return () => setHandler(null);
   }, [inspectorEmissionEnabled, setHandler]);

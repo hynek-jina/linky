@@ -15,6 +15,10 @@ import { RelayPublishResult } from "../services/NostrTransport";
  * Diagnostic taps over everything linkstr does on nostr, emitted only when the
  * optional `Inspector` service is provided. `Schema.Unknown` fields carry full
  * raw values for display; nothing in the package reads them back.
+ *
+ * Emission sites construct these with `{ disableValidation: true }` and emit
+ * via `emitSilently`: a diagnostic event must never throw into the operation
+ * it observes, and an off-brand field is more useful in the feed than dropped.
  */
 
 /** A vertical finished sending, e.g. `name: "reactions.react"`. */
