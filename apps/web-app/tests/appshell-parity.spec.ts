@@ -1,4 +1,4 @@
-import { createSlip39Share } from "@linky/identity/identity";
+import { createSlip39Share } from "@linky/identity";
 import { expect, test, type Page } from "@playwright/test";
 import { Effect } from "effect";
 import { nip19 } from "nostr-tools";

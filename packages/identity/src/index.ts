@@ -1,1 +1,27 @@
-export * from "./identity";
+export { IdentityProvider, IdentityProviderError } from "./IdentityProvider";
+export { MasterSecretProvider } from "./MasterSecretProvider";
+export {
+  deriveCashuMnemonicFromMasterSecret,
+  deriveOwnerMnemonicsFromMasterSecret,
+  parseOwnerLaneIndex,
+  type OwnerMnemonicRequest,
+} from "./derive";
+export type {
+  Bip39Mnemonic12,
+  Bip39Mnemonic24,
+  CashuSeed,
+  MasterSecret,
+  OwnerKey,
+  OwnerLaneIndex,
+  OwnerRole,
+  Slip39Passphrase,
+  Slip39Share,
+} from "./domain";
+export {
+  createSlip39Share,
+  type CreateSlip39ShareOptions,
+  IdentityDerivationError,
+  looksLikeSlip39Share,
+  parseSlip39Share,
+  recoverMasterSecretFromSlip39Share,
+} from "./slip39";

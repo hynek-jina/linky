@@ -11,17 +11,14 @@ import { IdentityProvider } from "./IdentityProvider";
 import { MasterSecretProvider } from "./MasterSecretProvider";
 import { OwnerLaneIndex, type OwnerRole } from "./domain";
 import { encodeNpub, encodeNsec } from "@linky/linkstr";
-import {
-  deriveOwnerMnemonicFromMasterSecret,
-  parseSlip39Share,
-  recoverMasterSecretFromSlip39Share,
-} from "./utils";
+import { deriveOwnerMnemonicFromMasterSecret } from "./derive";
+import { parseSlip39Share, recoverMasterSecretFromSlip39Share } from "./slip39";
 
 /**
  * Cross-app seed and key derivation vectors shared between Linky and Payky.
  *
  * The identical vector table lives in both repos:
- *   linky: packages/identity/src/identity/crossAppDerivation.test.ts
+ *   linky: packages/identity/src/crossAppDerivation.test.ts
  *   payky: src/core/modules/shared/cross-app-derivation.test.ts
  *
  * Both apps derive everything from a 16-byte master secret carried by a

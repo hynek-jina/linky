@@ -1,12 +1,12 @@
 import { Context, Effect, Layer } from "effect";
 import type { MasterSecret, Slip39Passphrase, Slip39Share } from "./domain";
 import {
-  IdentityUtilsError,
+  IdentityDerivationError,
   parseSlip39Passphrase,
   parseSlip39Share,
   recoverMasterSecretFromSlip39Share,
   recoverMasterSecretFromSlip39Shares,
-} from "./utils";
+} from "./slip39";
 
 export class MasterSecretProvider extends Context.Tag("MasterSecretProvider")<
   MasterSecretProvider,
@@ -19,7 +19,7 @@ export class MasterSecretProvider extends Context.Tag("MasterSecretProvider")<
   static fromSlip39Share(
     share: Slip39Share,
     passphrase?: Slip39Passphrase,
-  ): Layer.Layer<MasterSecretProvider, IdentityUtilsError> {
+  ): Layer.Layer<MasterSecretProvider, IdentityDerivationError> {
     return Layer.effect(
       MasterSecretProvider,
       recoverMasterSecretFromSlip39Share(share, passphrase),
@@ -29,7 +29,7 @@ export class MasterSecretProvider extends Context.Tag("MasterSecretProvider")<
   static fromSlip39Shares(
     shares: ReadonlyArray<Slip39Share>,
     passphrase?: Slip39Passphrase,
-  ): Layer.Layer<MasterSecretProvider, IdentityUtilsError> {
+  ): Layer.Layer<MasterSecretProvider, IdentityDerivationError> {
     return Layer.effect(
       MasterSecretProvider,
       recoverMasterSecretFromSlip39Shares(shares, passphrase),
@@ -39,7 +39,7 @@ export class MasterSecretProvider extends Context.Tag("MasterSecretProvider")<
   static fromSlip39RawShare(
     share: string,
     passphrase = "",
-  ): Layer.Layer<MasterSecretProvider, IdentityUtilsError> {
+  ): Layer.Layer<MasterSecretProvider, IdentityDerivationError> {
     return Layer.effect(
       MasterSecretProvider,
       Effect.gen(function* () {

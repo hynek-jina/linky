@@ -3,7 +3,7 @@ import { HDKey } from "@scure/bip32";
 import { entropyToMnemonic, mnemonicToSeedSync } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { Context, Effect, Layer, Schema } from "effect";
-import { deriveBip85Entropy, deriveOwnerKey } from "./bip85";
+import { deriveBip85Entropy, deriveOwnerKeyAtPath } from "./bip85";
 import {
   CASHU_SEED_PATH,
   cashuOwnerPath,
@@ -63,8 +63,11 @@ export class IdentityProvider extends Context.Tag("IdentityProvider")<
       const cashuMnemonic = entropyToMnemonic(cashuEntropy, wordlist);
       const cashuWalletSeed = CashuSeed.make(mnemonicToSeedSync(cashuMnemonic));
 
-      const storageMetaOwnerKey = deriveOwnerKey(root, META_OWNER_PATH);
-      const storageIdentityOwnerKey = deriveOwnerKey(root, IDENTITY_OWNER_PATH);
+      const storageMetaOwnerKey = deriveOwnerKeyAtPath(root, META_OWNER_PATH);
+      const storageIdentityOwnerKey = deriveOwnerKeyAtPath(
+        root,
+        IDENTITY_OWNER_PATH,
+      );
 
       return {
         nostrSigningKey,
@@ -73,13 +76,13 @@ export class IdentityProvider extends Context.Tag("IdentityProvider")<
         storageMetaOwnerKey,
         storageIdentityOwnerKey,
         storageContactsOwnerKey: (index: OwnerLaneIndex) =>
-          deriveOwnerKey(root, contactsOwnerPath(index)),
+          deriveOwnerKeyAtPath(root, contactsOwnerPath(index)),
         storageCashuOwnerKey: (index: OwnerLaneIndex) =>
-          deriveOwnerKey(root, cashuOwnerPath(index)),
+          deriveOwnerKeyAtPath(root, cashuOwnerPath(index)),
         storageMessagesOwnerKey: (index: OwnerLaneIndex) =>
-          deriveOwnerKey(root, messagesOwnerPath(index)),
+          deriveOwnerKeyAtPath(root, messagesOwnerPath(index)),
         storageTransactionsOwnerKey: (index: OwnerLaneIndex) =>
-          deriveOwnerKey(root, transactionsOwnerPath(index)),
+          deriveOwnerKeyAtPath(root, transactionsOwnerPath(index)),
       };
     }).pipe(
       Effect.catchAllDefect(

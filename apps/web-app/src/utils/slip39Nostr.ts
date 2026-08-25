@@ -9,7 +9,7 @@ import {
   parseSlip39Share,
   recoverMasterSecretFromSlip39Share,
   type OwnerRole,
-} from "@linky/identity/identity";
+} from "@linky/identity";
 import { encodeNpub, encodeNsec } from "@linky/linkstr";
 import { Effect, Layer } from "effect";
 
