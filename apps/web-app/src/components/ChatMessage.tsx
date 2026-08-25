@@ -215,6 +215,7 @@ function ChatMessageComponent({
   );
   const [nowMs, setNowMs] = React.useState(() => Date.now());
   const longPressTimerRef = React.useRef<number | null>(null);
+  const longPressFiredRef = React.useRef(false);
   const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
   const swipeTriggeredRef = React.useRef(false);
   const messageDivRef = React.useRef<HTMLDivElement | null>(null);
@@ -645,14 +646,26 @@ function ChatMessageComponent({
   }, []);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    longPressFiredRef.current = false;
     if (event.pointerType !== "touch" || !canReplyOrReact) return;
 
     touchStartRef.current = { x: event.clientX, y: event.clientY };
     swipeTriggeredRef.current = false;
     clearLongPress();
     longPressTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true;
       openMenu();
     }, LONG_PRESS_MS);
+  };
+
+  // Touch browsers can still synthesize a click after the long-press timer
+  // opened the menu; swallow it so it doesn't also trigger bubble content
+  // (e.g. the image viewer).
+  const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!longPressFiredRef.current) return;
+    longPressFiredRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
   };
 
   const resetSwipeTransform = React.useCallback(() => {
@@ -730,6 +743,7 @@ function ChatMessageComponent({
               messageElRef(el, messageId);
             }
           }}
+          onClickCapture={handleClickCapture}
           onContextMenu={(event) => {
             event.preventDefault();
             openMenu();

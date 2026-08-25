@@ -63,6 +63,7 @@ const contactInfo = (
 });
 
 interface RenderChatMessageOptions {
+  canReplyOrReact?: boolean;
   direction?: "in" | "out";
   getNpubMessageContactInfo?: (npub: string) => NpubMessageContactInfo | null;
   onAddNpubContacts?: (npubs: readonly string[]) => void;
@@ -93,7 +94,7 @@ const renderChatMessage = async (
         canOpenBankPaymentOfferDetails={true}
         canActOnPaymentRequest={false}
         canEdit={false}
-        canReplyOrReact={false}
+        canReplyOrReact={options.canReplyOrReact ?? false}
         chatPendingLabel="pending"
         chatSeenLabel="seen"
         declineInfo={null}
@@ -265,5 +266,59 @@ describe("ChatMessage image message actions", () => {
     await openMenu(container);
 
     expect(menuItemLabels()).toEqual(["copy"]);
+  });
+
+  it("opens the viewer on a plain tap", async () => {
+    const container = await renderChatMessage(imageMessageContent, {
+      canReplyOrReact: true,
+    });
+    const imageButton = container.querySelector<HTMLButtonElement>(
+      ".chat-private-image-button",
+    );
+
+    await act(async () => {
+      imageButton?.click();
+    });
+
+    expect(container.querySelector(".chat-image-viewer")).not.toBeNull();
+  });
+
+  it("swallows the click synthesized after a long-press", async () => {
+    vi.useFakeTimers();
+    try {
+      const container = await renderChatMessage(imageMessageContent, {
+        canReplyOrReact: true,
+      });
+      const imageButton = container.querySelector<HTMLButtonElement>(
+        ".chat-private-image-button",
+      );
+      expect(imageButton).not.toBeNull();
+
+      const touchEvent = (type: string): MouseEvent => {
+        const event = new MouseEvent(type, { bubbles: true });
+        Object.defineProperty(event, "pointerType", { value: "touch" });
+        return event;
+      };
+
+      await act(async () => {
+        imageButton?.dispatchEvent(touchEvent("pointerdown"));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(
+        document.body.querySelector(".message-actions-sheet"),
+      ).not.toBeNull();
+
+      await act(async () => {
+        imageButton?.dispatchEvent(touchEvent("pointerup"));
+        imageButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(container.querySelector(".chat-image-viewer")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
