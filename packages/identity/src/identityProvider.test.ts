@@ -1,3 +1,4 @@
+import { decodeNpub, decodeNsec, encodeNpub, encodeNsec } from "@linky/linkstr";
 import { Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import { IdentityProvider, IdentityProviderError } from "./IdentityProvider";
@@ -87,6 +88,18 @@ describe("IdentityProvider", () => {
     expect(id.nostrSigningKey).toBeInstanceOf(Uint8Array);
     expect(id.nostrSigningKey).toHaveLength(32);
     expect(id.nostrPublicKey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("encodes valid bech32 nsec/npub", async () => {
+    const identity = await runTest(IdentityProvider);
+
+    const nsec = encodeNsec(identity.nostrSigningKey);
+    const npub = encodeNpub(identity.nostrPublicKey);
+
+    expect(decodeNsec(nsec)).toEqual(identity.nostrSigningKey);
+    expect(decodeNpub(npub)).toBe(identity.nostrPublicKey);
+    expect(nsec.startsWith("nsec1")).toBe(true);
+    expect(npub.startsWith("npub1")).toBe(true);
   });
 
   it("produces a cashu wallet seed", async () => {

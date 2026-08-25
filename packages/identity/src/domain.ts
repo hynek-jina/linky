@@ -2,7 +2,10 @@ import { validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { Schema } from "effect";
 import { Slip39 } from "slip39-ts";
-import { Unit8ArraySchema } from "../utils/schemas";
+
+const Uint8ArraySchema = Schema.declare(
+  (input: unknown): input is Uint8Array => input instanceof Uint8Array,
+);
 
 const hasLengthBetween =
   (min: number, max: number) =>
@@ -52,29 +55,23 @@ const isOwnerLaneIndex = (value: unknown): value is number => {
   return value >= 0;
 };
 
-export const MasterSecret = Unit8ArraySchema.pipe(
+export const MasterSecret = Uint8ArraySchema.pipe(
   Schema.filter(hasLengthBetween(16, 64)),
   Schema.brand("MasterSecret"),
 );
 export type MasterSecret = typeof MasterSecret.Type;
 
-export const CashuSeed = Unit8ArraySchema.pipe(
+export const CashuSeed = Uint8ArraySchema.pipe(
   Schema.filter(hasLength(64)),
   Schema.brand("CashuSeed"),
 );
 export type CashuSeed = typeof CashuSeed.Type;
 
-export const OwnerKey = Unit8ArraySchema.pipe(
+export const OwnerKey = Uint8ArraySchema.pipe(
   Schema.filter(hasLength(16)),
   Schema.brand("OwnerKey"),
 );
 export type OwnerKey = typeof OwnerKey.Type;
-
-export const Slip39ShareNormalized = Schema.String.pipe(
-  Schema.filter(isNormalizedShare),
-  Schema.brand("Slip39ShareNormalized"),
-);
-export type Slip39ShareNormalized = typeof Slip39ShareNormalized.Type;
 
 export const Slip39Share = Schema.String.pipe(
   Schema.filter(isSlip39Share),

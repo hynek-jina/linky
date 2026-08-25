@@ -15,5 +15,5 @@ export const deriveBip85Entropy = (
   return hmac(sha512, BIP85_HMAC_KEY, node.privateKey).slice(0, bytes);
 };
 
-export const deriveOwnerKey = (root: HDKey, path: string): OwnerKey =>
+export const deriveOwnerKeyAtPath = (root: HDKey, path: string): OwnerKey =>
   OwnerKey.make(deriveBip85Entropy(root, path, 16));
