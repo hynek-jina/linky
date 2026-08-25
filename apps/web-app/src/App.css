@@ -2208,6 +2208,15 @@ button.settings-sensitive-action.is-armed {
   background: rgba(15, 23, 42, 0.7);
 }
 
+/* No native long-press callout on chat images: it would share the blob: URL,
+   which is useless outside this tab; long-press opens the message menu instead. */
+.chat-private-image,
+.chat-image-viewer-image {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .chat-private-image {
   display: block;
   width: min(260px, 70vw);

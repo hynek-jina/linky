@@ -25,12 +25,16 @@ const TAG_DESCRIPTIONS: Record<string, string> = {
     "An event delivered by a relay on an open subscription, before decryption or routing. Follow its wrap id to see what the inbox made of it.",
   InboxRouted:
     "The inbox decrypted an incoming gift wrap and routed it to an app-level fact (e.g. ReactionAdded) — or dropped it (WrapDropped) when the rumor could not be used, for example an unsupported kind.",
+  ChatImageShared:
+    "User exported a decrypted chat image through the system share sheet; the rumor link ties it to the message it came from.",
+  ChatImageSaved:
+    "User saved a decrypted chat image as a file download; the rumor link ties it to the message it came from.",
+  ChatImageShareFailed:
+    "System share of a chat image failed for a reason other than the user cancelling; the app fell back to a file download when triggered from the message menu.",
 };
 
 const describeTag = (row: CollectedInspectorRow): string => {
-  const known = row.channel.startsWith("nostr.")
-    ? TAG_DESCRIPTIONS[row.tag]
-    : undefined;
+  const known = TAG_DESCRIPTIONS[row.tag];
   if (known) return known;
   return `An inspector event tagged "${row.tag}" on the "${row.channel}" channel. Rows sharing any of its link ids are related.`;
 };

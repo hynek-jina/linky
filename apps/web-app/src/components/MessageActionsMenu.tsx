@@ -1,17 +1,28 @@
+import { Download } from "lucide-react";
 import type { FC } from "react";
 import { createPortal } from "react-dom";
 import { EmojiPicker } from "./EmojiPicker";
-import { CopyIcon, EditIcon, ReplyIcon } from "./icons";
+import { CopyIcon, EditIcon, ReplyIcon, ShareIcon } from "./icons";
+
+export interface MessageImageActions {
+  canShare: boolean;
+  onSave: () => void;
+  onShare: () => void;
+}
 
 interface MessageActionsMenuProps {
+  canCopy: boolean;
   canEdit: boolean;
   canReplyOrReact: boolean;
+  imageActions: MessageImageActions | null;
   isOpen: boolean;
   labels: {
     copy: string;
     edit: string;
     react: string;
     reply: string;
+    save: string;
+    share: string;
   };
   onClose: () => void;
   onCopy: () => void;
@@ -21,8 +32,10 @@ interface MessageActionsMenuProps {
 }
 
 export const MessageActionsMenu: FC<MessageActionsMenuProps> = ({
+  canCopy,
   canEdit,
   canReplyOrReact,
+  imageActions,
   isOpen,
   labels,
   onClose,
@@ -83,19 +96,51 @@ export const MessageActionsMenu: FC<MessageActionsMenuProps> = ({
             {labels.edit}
           </button>
         )}
-        <button
-          type="button"
-          className="message-actions-item"
-          onClick={() => {
-            onCopy();
-            onClose();
-          }}
-        >
-          <span className="message-actions-icon">
-            <CopyIcon size={18} />
-          </span>
-          {labels.copy}
-        </button>
+        {imageActions?.canShare && (
+          <button
+            type="button"
+            className="message-actions-item"
+            onClick={() => {
+              imageActions.onShare();
+              onClose();
+            }}
+          >
+            <span className="message-actions-icon">
+              <ShareIcon size={18} />
+            </span>
+            {labels.share}
+          </button>
+        )}
+        {imageActions && (
+          <button
+            type="button"
+            className="message-actions-item"
+            onClick={() => {
+              imageActions.onSave();
+              onClose();
+            }}
+          >
+            <span className="message-actions-icon">
+              <Download size={18} />
+            </span>
+            {labels.save}
+          </button>
+        )}
+        {canCopy && (
+          <button
+            type="button"
+            className="message-actions-item"
+            onClick={() => {
+              onCopy();
+              onClose();
+            }}
+          >
+            <span className="message-actions-icon">
+              <CopyIcon size={18} />
+            </span>
+            {labels.copy}
+          </button>
+        )}
       </div>
     </>,
     document.body,

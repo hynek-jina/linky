@@ -323,6 +323,8 @@ const ChatMessageList = memo(function ChatMessageList({
       edited: t("chatEdited"),
       react: t("chatReactAction"),
       reply: t("chatReplyAction"),
+      save: t("chatImageSave"),
+      share: t("share"),
     }),
     [t],
   );
