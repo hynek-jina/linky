@@ -1,6 +1,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { LinkyBankPaymentOfferInfo } from "../app/lib/bankPaymentOffer";
 import { serializePrivateImageMessage } from "../app/lib/privateImageMessage";
 import type { LocalNostrMessage } from "../app/types/appTypes";
 import { ChatMessage, type NpubMessageContactInfo } from "./ChatMessage";
@@ -63,10 +64,13 @@ const contactInfo = (
 });
 
 interface RenderChatMessageOptions {
+  bankPaymentOfferInfo?: LinkyBankPaymentOfferInfo | null;
   canReplyOrReact?: boolean;
+  canSettleBankPaymentOffer?: boolean;
   direction?: "in" | "out";
   getNpubMessageContactInfo?: (npub: string) => NpubMessageContactInfo | null;
   onAddNpubContacts?: (npubs: readonly string[]) => void;
+  onSettleBankPaymentOffer?: () => Promise<void>;
 }
 
 const renderChatMessage = async (
@@ -89,9 +93,10 @@ const renderChatMessage = async (
           save: "save",
           share: "share",
         }}
-        bankPaymentOfferInfo={null}
+        bankPaymentOfferInfo={options.bankPaymentOfferInfo ?? null}
         bankPaymentOfferPeerNotice={null}
         canOpenBankPaymentOfferDetails={true}
+        canSettleBankPaymentOffer={options.canSettleBankPaymentOffer ?? false}
         canActOnPaymentRequest={false}
         canEdit={false}
         canReplyOrReact={options.canReplyOrReact ?? false}
@@ -124,6 +129,9 @@ const renderChatMessage = async (
         onPayPaymentRequest={() => undefined}
         onReact={() => undefined}
         onReply={() => undefined}
+        onSettleBankPaymentOffer={
+          options.onSettleBankPaymentOffer ?? (async () => undefined)
+        }
         payPaymentRequestBusy={false}
         payPaymentRequestDisabled={false}
         paymentRequestInfo={null}
@@ -131,6 +139,7 @@ const renderChatMessage = async (
         previousMessage={null}
         reactions={[]}
         replyQuoteText={null}
+        settleBankPaymentOfferBusy={false}
       />,
     );
   });
@@ -320,5 +329,56 @@ describe("ChatMessage image message actions", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("ChatMessage bank payment offer actions", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("settles a paid offer from the chat card", async () => {
+    const onSettleBankPaymentOffer = vi.fn(async () => undefined);
+    const bankPaymentOfferInfo: LinkyBankPaymentOfferInfo = {
+      amountSat: 10,
+      amountText: "10 sat",
+      bankPaidAtSec: 1_700_000_000,
+      expiresAtSec: 1_700_000_300,
+      extensionSec: null,
+      initiatedAtSec: 1_699_999_900,
+      offerId: "offer-1",
+      offererPublicKey: "offerer-pubkey",
+      spdPayload: null,
+      status: "bank_paid",
+      statusUpdatedAtSec: 1_700_000_000,
+      text: "Bank payment marked paid",
+    };
+    const container = await renderChatMessage("offer", {
+      bankPaymentOfferInfo,
+      canSettleBankPaymentOffer: true,
+      direction: "out",
+      onSettleBankPaymentOffer,
+    });
+    const detailsButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        ".chat-payment-request-actions button",
+      ),
+    ).find((button) => button.textContent?.includes("details"));
+    const settleButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        ".chat-payment-request-actions button",
+      ),
+    ).find((button) =>
+      button.textContent?.includes("bankPaymentOfferMarkDone"),
+    );
+
+    expect(detailsButton).toBeDefined();
+    expect(settleButton).toBeDefined();
+
+    await act(async () => {
+      settleButton?.click();
+    });
+
+    expect(onSettleBankPaymentOffer).toHaveBeenCalledOnce();
   });
 });

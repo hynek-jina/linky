@@ -142,7 +142,7 @@ const offerDetailUrl = (page: Page) =>
 
 test("proxy payment: bank details reach exactly one acceptor, who is paid in sats", async ({
   browser,
-}) => {
+}, testInfo) => {
   const a = await bootAccount(browser, "A");
   const b = await bootAccount(browser, "B");
   const c = await bootAccount(browser, "C");
@@ -161,15 +161,23 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
       await advertiseCzk(c);
     });
 
+    const offererChatByRecipientNpub = new Map<string, string>();
+
     // Ordering is load-bearing: an empty status query is cached as null and
     // never retried, so B and C must have their status on the relay before A
     // adds them as contacts.
     await test.step("A adds B and C", async () => {
       // One at a time: adding the second contact while the first's status fetch
       // is in flight loses that status (see waitForContactStatusFetched).
-      await addContactByNpub(a.page, b.identity.npub);
+      offererChatByRecipientNpub.set(
+        b.identity.npub,
+        await addContactByNpub(a.page, b.identity.npub),
+      );
       await waitForContactStatusFetched(a.page, b.identity.npub);
-      await addContactByNpub(a.page, c.identity.npub);
+      offererChatByRecipientNpub.set(
+        c.identity.npub,
+        await addContactByNpub(a.page, c.identity.npub),
+      );
       await waitForContactStatusFetched(a.page, c.identity.npub);
     });
 
@@ -220,7 +228,9 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
           timeout: 60_000,
         });
         const match = offerDetailUrl(a.page);
-        if (!match?.[2]) throw new Error(`no offerId in ${a.page.url()}`);
+        if (!match?.[1] || !match[2]) {
+          throw new Error(`invalid offer detail URL ${a.page.url()}`);
+        }
         return decodeURIComponent(match[2]);
       });
 
@@ -342,30 +352,36 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
     });
 
     await test.step("A settles and the winner is paid in sats", async () => {
+      const winnerChatId = offererChatByRecipientNpub.get(winner.identity.npub);
+      if (!winnerChatId) throw new Error("winner chat not found");
+      await a.page.goto(`/#chat/${encodeURIComponent(winnerChatId)}`);
       const settle = a.page.getByRole("button", {
-        name: "Confirm settlement",
+        name: "Mark done",
       });
-      // The button is conditionally rendered, not disabled, so it must be
-      // absent before bank_paid rather than merely disabled.
       await expect(settle).toBeVisible({ timeout: 120_000 });
+      const offerCard = a.page.locator(".chat-bank-payment-offer-card", {
+        has: settle,
+      });
+      await expect(
+        offerCard.getByRole("button", { name: "Details" }),
+      ).toBeVisible();
+      await expect(
+        a.page.getByText("Camera not available.", { exact: true }),
+      ).toBeHidden();
+      await testInfo.attach("mark payment done from chat", {
+        body: await offerCard.screenshot(),
+        contentType: "image/png",
+      });
 
       // Park the winner on the wallet page and stay there: re-mounting the
       // settled offer detail triggers its auto-return-to-chat effect, which
       // races with (and can clobber) a subsequent goto to #wallet.
       await winner.page.goto("/#wallet");
 
-      // settleBankPaymentOffer opens with `if (cashuIsBusy) return;` and shows
-      // no toast, so a fire-and-forget click can silently do nothing.
+      await expect(settle).toBeEnabled();
+      await settle.click();
       await expect
-        .poll(
-          async () => {
-            if (await settle.isVisible().catch(() => false)) {
-              await settle.click().catch(() => {});
-            }
-            return readBalanceSat(winner.page);
-          },
-          { timeout: 240_000 },
-        )
+        .poll(() => readBalanceSat(winner.page), { timeout: 240_000 })
         .toBeGreaterThan(0);
 
       const received = await readBalanceSat(winner.page);

@@ -676,6 +676,7 @@ export const cs = {
   bankPaymentOfferCancel: "Zrušit nabídku",
   bankPaymentOfferDetails: "Platební údaje",
   bankPaymentOfferMarkPaid: "Zaplaceno",
+  bankPaymentOfferMarkDone: "Dokončit",
   bankPaymentOfferSettle: "Potvrdit vyrovnání",
   bankPaymentOfferNotPaid: "Nebylo zaplaceno",
   bankPaymentOfferAcceptedByOther:

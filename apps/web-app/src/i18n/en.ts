@@ -667,6 +667,7 @@ export const en = {
   bankPaymentOfferCancel: "Cancel offer",
   bankPaymentOfferDetails: "Payment details",
   bankPaymentOfferMarkPaid: "I paid",
+  bankPaymentOfferMarkDone: "Mark done",
   bankPaymentOfferSettle: "Confirm settlement",
   bankPaymentOfferNotPaid: "Not paid",
   bankPaymentOfferAcceptedByOther:
