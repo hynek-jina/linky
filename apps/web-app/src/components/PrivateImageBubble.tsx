@@ -36,6 +36,14 @@ export function PrivateImageBubble({
     null,
   );
 
+  // Latest-ref so an inline callback identity can't retrigger the decrypt
+  // effect (parents like the bank offer page re-render every second). Must
+  // stay declared before the decrypt effect so it syncs first.
+  const onBlobChangeRef = React.useRef(onBlobChange);
+  React.useEffect(() => {
+    onBlobChangeRef.current = onBlobChange;
+  }, [onBlobChange]);
+
   React.useEffect(() => {
     if (shouldLoad || typeof IntersectionObserver === "undefined") return;
     const element = placeholderRef.current;
@@ -60,7 +68,7 @@ export function PrivateImageBubble({
 
     setImageUrl(null);
     setImageBlob(null);
-    onBlobChange(null);
+    onBlobChangeRef.current(null);
     setFailed(false);
     setViewerOpen(false);
     setViewerErrorText(null);
@@ -70,7 +78,7 @@ export function PrivateImageBubble({
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
         setImageBlob(blob);
-        onBlobChange(blob);
+        onBlobChangeRef.current(blob);
         setImageUrl(objectUrl);
       })
       .catch(() => {
@@ -81,7 +89,7 @@ export function PrivateImageBubble({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [onBlobChange, payload, shouldLoad]);
+  }, [payload, shouldLoad]);
 
   React.useEffect(() => {
     if (!viewerOpen) return;
