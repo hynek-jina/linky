@@ -166,12 +166,14 @@ interface ChatMessageViewModel extends ParsedChatMessage {
   canActOnPaymentRequest: boolean;
   canEdit: boolean;
   canReplyOrReact: boolean;
+  canSettleBankPaymentOffer: boolean;
   isSeen: boolean;
   message: LocalNostrMessage;
   nextMessage: LocalNostrMessage | null;
   onDeclinePaymentRequest: () => void;
   onOpenBankPaymentOfferDetails: () => void;
   onPayPaymentRequest: (requestInfo: CashuPaymentRequestMessageInfo) => void;
+  onSettleBankPaymentOffer: () => Promise<void>;
   payPaymentRequestDisabled: boolean;
   paymentRequestStatus: "declined" | "paid" | "requested" | null;
   previousMessage: LocalNostrMessage | null;
@@ -278,6 +280,7 @@ interface ChatMessageListProps {
   onPayPaymentRequest: ChatPageProps["onPayPaymentRequest"];
   onReact: ChatPageProps["onReact"];
   onReply: ChatPageProps["onReply"];
+  onSettleBankPaymentOffer: ChatPageProps["onSettleBankPaymentOffer"];
   /** Peer's reported seen window; 0 bounds mean no receipt yet. */
   peerSeenSinceSec: number;
   peerSeenUpToSec: number;
@@ -309,6 +312,7 @@ const ChatMessageList = memo(function ChatMessageList({
   onPayPaymentRequest,
   onReact,
   onReply,
+  onSettleBankPaymentOffer,
   peerSeenSinceSec,
   peerSeenUpToSec,
   reactionsByMessageId,
@@ -437,6 +441,13 @@ const ChatMessageList = memo(function ChatMessageList({
         parsed.bankPaymentOfferInfo,
         offersById,
       );
+      const offererPublicKey = String(
+        parsed.bankPaymentOfferInfo?.offererPublicKey ?? "",
+      ).trim();
+      const canSettleBankPaymentOffer =
+        parsed.bankPaymentOfferInfo?.status === "bank_paid" &&
+        ((Boolean(offererPublicKey) && offererPublicKey === chatOwnPubkeyHex) ||
+          String(message.direction ?? "") === "out");
 
       return {
         ...parsed,
@@ -454,6 +465,7 @@ const ChatMessageList = memo(function ChatMessageList({
           !parsed.bankPaymentOfferInfo &&
           !parsed.declineInfo,
         canReplyOrReact: Boolean(rumorId),
+        canSettleBankPaymentOffer,
         isSeen,
         message,
         nextMessage:
@@ -473,6 +485,7 @@ const ChatMessageList = memo(function ChatMessageList({
         onPayPaymentRequest: (requestInfo) => {
           void onPayPaymentRequest(message, requestInfo);
         },
+        onSettleBankPaymentOffer: () => onSettleBankPaymentOffer(message),
         payPaymentRequestDisabled:
           !parsed.paymentRequestInfo ||
           cashuIsBusy ||
@@ -500,6 +513,7 @@ const ChatMessageList = memo(function ChatMessageList({
     getCashuTokenMessageInfo,
     onDeclinePaymentRequest,
     onPayPaymentRequest,
+    onSettleBankPaymentOffer,
     peerSeenSinceSec,
     peerSeenUpToSec,
     reactionsByMessageId,
@@ -540,15 +554,18 @@ const ChatMessageList = memo(function ChatMessageList({
             bankPaymentOfferInfo={viewModel.bankPaymentOfferInfo}
             bankPaymentOfferPeerNotice={viewModel.bankPaymentOfferPeerNotice}
             canOpenBankPaymentOfferDetails={canOpenBankPaymentOfferDetails}
+            canSettleBankPaymentOffer={viewModel.canSettleBankPaymentOffer}
             onOpenBankPaymentOfferDetails={
               viewModel.onOpenBankPaymentOfferDetails
             }
             onDeclinePaymentRequest={viewModel.onDeclinePaymentRequest}
             onPayPaymentRequest={viewModel.onPayPaymentRequest}
+            onSettleBankPaymentOffer={viewModel.onSettleBankPaymentOffer}
             canActOnPaymentRequest={viewModel.canActOnPaymentRequest}
             payPaymentRequestDisabled={viewModel.payPaymentRequestDisabled}
             payPaymentRequestBusy={cashuIsBusy}
             replyQuoteText={viewModel.replyQuoteText}
+            settleBankPaymentOfferBusy={cashuIsBusy}
             onCopy={onCopy}
             onAddNpubContacts={onAddNpubContacts}
             onEdit={onEdit}
@@ -1156,6 +1173,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   onEdit,
   onOpenNpubContact,
   onPayPaymentRequest,
+  onSettleBankPaymentOffer,
   onReact,
   onReply,
   openContactPay,
@@ -1304,6 +1322,7 @@ export const ChatPage: FC<ChatPageProps> = ({
         onEdit={onEdit}
         onOpenNpubContact={onOpenNpubContact}
         onPayPaymentRequest={onPayPaymentRequest}
+        onSettleBankPaymentOffer={onSettleBankPaymentOffer}
         onReact={onReact}
         onReply={onReply}
         peerSeenSinceSec={Number(selectedContact.chatPeerSeenSinceSec ?? 0)}

@@ -1,4 +1,4 @@
-import { CheckCheck, Info, Plus, X } from "lucide-react";
+import { Check, CheckCheck, Info, Plus, X } from "lucide-react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
@@ -73,6 +73,7 @@ interface ChatMessageProps {
   bankPaymentOfferInfo: LinkyBankPaymentOfferInfo | null;
   bankPaymentOfferPeerNotice: BankPaymentOfferPeerNotice | null;
   canOpenBankPaymentOfferDetails: boolean;
+  canSettleBankPaymentOffer: boolean;
   canEdit: boolean;
   canActOnPaymentRequest: boolean;
   canReplyOrReact: boolean;
@@ -90,6 +91,7 @@ interface ChatMessageProps {
   nextMessage: LocalNostrMessage | null;
   onCopy: (message: LocalNostrMessage) => void;
   onOpenBankPaymentOfferDetails: () => void;
+  onSettleBankPaymentOffer: () => Promise<void>;
   onDeclinePaymentRequest: () => void;
   onEdit: (message: LocalNostrMessage) => void;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
@@ -106,6 +108,7 @@ interface ChatMessageProps {
   previousMessage: LocalNostrMessage | null;
   reactions: readonly ChatReactionChip[];
   replyQuoteText: string | null;
+  settleBankPaymentOfferBusy: boolean;
 }
 
 const SWIPE_REPLY_THRESHOLD = 48;
@@ -173,6 +176,7 @@ function ChatMessageComponent({
   bankPaymentOfferInfo,
   bankPaymentOfferPeerNotice,
   canOpenBankPaymentOfferDetails,
+  canSettleBankPaymentOffer,
   canEdit,
   canActOnPaymentRequest,
   canReplyOrReact,
@@ -199,6 +203,7 @@ function ChatMessageComponent({
   onPayPaymentRequest,
   onReact,
   onReply,
+  onSettleBankPaymentOffer,
   payPaymentRequestBusy,
   payPaymentRequestDisabled,
   paymentRequestInfo,
@@ -206,6 +211,7 @@ function ChatMessageComponent({
   previousMessage,
   reactions,
   replyQuoteText,
+  settleBankPaymentOfferBusy,
 }: ChatMessageProps) {
   const { formatDisplayedAmountParts, formatDisplayedAmountText, t } =
     useAppShellCore();
@@ -213,6 +219,8 @@ function ChatMessageComponent({
   const [privateImageBlob, setPrivateImageBlob] = React.useState<Blob | null>(
     null,
   );
+  const [isSettlingBankPaymentOffer, setIsSettlingBankPaymentOffer] =
+    React.useState(false);
   const [nowMs, setNowMs] = React.useState(() => Date.now());
   const longPressTimerRef = React.useRef<number | null>(null);
   const longPressFiredRef = React.useRef(false);
@@ -294,6 +302,23 @@ function ChatMessageComponent({
       : bankPaymentOfferPeerNotice === "backup_recipient"
         ? t("bankPaymentOfferBackupRecipient")
         : "";
+
+  const settleBankPaymentOffer = async () => {
+    if (
+      !canSettleBankPaymentOffer ||
+      settleBankPaymentOfferBusy ||
+      isSettlingBankPaymentOffer
+    ) {
+      return;
+    }
+
+    setIsSettlingBankPaymentOffer(true);
+    try {
+      await onSettleBankPaymentOffer();
+    } finally {
+      setIsSettlingBankPaymentOffer(false);
+    }
+  };
 
   React.useEffect(() => {
     if (!bankOfferPhaseTtlSec) return;
@@ -836,18 +861,42 @@ function ChatMessageComponent({
                   !isLinkyBankPaymentOfferTerminalStatus(
                     bankPaymentOfferInfo.status,
                   ) ? (
-                    <button
-                      type="button"
-                      className="btn-wide chat-payment-request-pay"
-                      onClick={onOpenBankPaymentOfferDetails}
-                    >
-                      <span className="btn-label-with-icon">
-                        <span className="btn-label-icon" aria-hidden="true">
-                          <Info size={18} />
+                    <div className="chat-payment-request-actions">
+                      <button
+                        type="button"
+                        className={`btn-wide ${canSettleBankPaymentOffer ? "secondary" : "chat-payment-request-pay"}`}
+                        onClick={onOpenBankPaymentOfferDetails}
+                      >
+                        <span className="btn-label-with-icon">
+                          <span className="btn-label-icon" aria-hidden="true">
+                            <Info size={18} />
+                          </span>
+                          <span>{t("details")}</span>
                         </span>
-                        <span>{t("details")}</span>
-                      </span>
-                    </button>
+                      </button>
+                      {canSettleBankPaymentOffer ? (
+                        <button
+                          type="button"
+                          className="btn-wide chat-payment-request-pay"
+                          disabled={
+                            settleBankPaymentOfferBusy ||
+                            isSettlingBankPaymentOffer
+                          }
+                          onClick={() => void settleBankPaymentOffer()}
+                        >
+                          <span className="btn-label-with-icon">
+                            <span className="btn-label-icon" aria-hidden="true">
+                              {isSettlingBankPaymentOffer ? (
+                                <span className="btn-spinner" />
+                              ) : (
+                                <Check size={18} />
+                              )}
+                            </span>
+                            <span>{t("bankPaymentOfferMarkDone")}</span>
+                          </span>
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
               ) : paymentRequestInfo ? (

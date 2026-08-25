@@ -653,6 +653,7 @@ export const de = {
   bankPaymentOfferCancel: "Angebot abbrechen",
   bankPaymentOfferDetails: "Zahlungsdetails",
   bankPaymentOfferMarkPaid: "Ich habe bezahlt",
+  bankPaymentOfferMarkDone: "Erledigen",
   bankPaymentOfferSettle: "Abschluss bestätigen",
   bankPaymentOfferNotPaid: "Nicht bezahlt",
   bankPaymentOfferAcceptedByOther:
