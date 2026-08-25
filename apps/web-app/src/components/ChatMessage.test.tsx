@@ -1,8 +1,24 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { serializePrivateImageMessage } from "../app/lib/privateImageMessage";
 import type { LocalNostrMessage } from "../app/types/appTypes";
 import { ChatMessage, type NpubMessageContactInfo } from "./ChatMessage";
+
+vi.mock("../app/lib/privateImageMessage", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../app/lib/privateImageMessage")>();
+  return {
+    ...actual,
+    decryptPrivateImageMessage: vi.fn(
+      async () => new Blob(["img"], { type: "image/jpeg" }),
+    ),
+  };
+});
+
+vi.mock("../devtools/inspector", () => ({
+  reportInspectorRows: vi.fn(),
+}));
 
 vi.mock("../app/context/AppShellContexts", () => ({
   useAppShellCore: () => ({
@@ -69,6 +85,8 @@ const renderChatMessage = async (
           edited: "edited",
           react: "react",
           reply: "reply",
+          save: "save",
+          share: "share",
         }}
         bankPaymentOfferInfo={null}
         bankPaymentOfferPeerNotice={null}
@@ -154,5 +172,98 @@ describe("ChatMessage contact actions", () => {
 
     expect(oneUnsaved.querySelector(".chat-add-all-contacts")).toBeNull();
     expect(outgoing.querySelector(".chat-add-all-contacts")).toBeNull();
+  });
+});
+
+describe("ChatMessage image message actions", () => {
+  const imageMessageContent = serializePrivateImageMessage({
+    encryptedSha256: "a".repeat(64),
+    encryptedSize: 4,
+    encryptionAlgorithm: "aes-gcm",
+    fileType: "image/jpeg",
+    height: 10,
+    key: "b".repeat(64),
+    nonce: "c".repeat(24),
+    originalSha256: "d".repeat(64),
+    storageEncoding: "base64",
+    type: "linky.private_image.v1",
+    url: "https://example.com/blob",
+    width: 10,
+  });
+  const share = vi.fn<(data?: ShareData) => Promise<void>>(
+    async () => undefined,
+  );
+
+  beforeEach(() => {
+    share.mockClear();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:test"),
+      writable: true,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+      writable: true,
+    });
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: share,
+      writable: true,
+    });
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const openMenu = async (container: HTMLElement) => {
+    const menuButton = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Message actions"]',
+    );
+    await act(async () => {
+      menuButton?.click();
+    });
+  };
+
+  const menuItemLabels = (): string[] =>
+    Array.from(document.body.querySelectorAll(".message-actions-item")).map(
+      (item) => item.textContent ?? "",
+    );
+
+  it("offers share and save instead of copy once the image is decrypted", async () => {
+    const container = await renderChatMessage(imageMessageContent);
+    await openMenu(container);
+
+    expect(menuItemLabels()).toEqual(["share", "save"]);
+  });
+
+  it("shares the decrypted image as a file through the system share", async () => {
+    const container = await renderChatMessage(imageMessageContent);
+    await openMenu(container);
+
+    const shareItem = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(
+        ".message-actions-item",
+      ),
+    ).find((item) => item.textContent === "share");
+    await act(async () => {
+      shareItem?.click();
+    });
+
+    expect(share).toHaveBeenCalledTimes(1);
+    const shared = share.mock.calls[0]?.[0];
+    const sharedFile = shared?.files?.[0];
+    expect(sharedFile?.name).toBe("linky-image.jpg");
+    expect(sharedFile?.type).toBe("image/jpeg");
+    expect(shared && "url" in shared).toBe(false);
+    expect(shared && "text" in shared).toBe(false);
+  });
+
+  it("keeps copy for plain text messages", async () => {
+    const container = await renderChatMessage("hello there");
+    await openMenu(container);
+
+    expect(menuItemLabels()).toEqual(["copy"]);
   });
 });

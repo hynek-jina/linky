@@ -9,6 +9,12 @@ import {
 } from "../app/lib/bankPaymentOffer";
 import { parseIdentityChangeMessageContent } from "../app/lib/identityChangeMessage";
 import {
+  canSharePrivateImage,
+  downloadPrivateImageBlob,
+  isCancelledShareError,
+  sharePrivateImageBlob,
+} from "../app/lib/privateImageFile";
+import {
   extractMessageLinks,
   normalizeMessageLinkMatch,
 } from "../app/lib/messageLinks";
@@ -61,6 +67,8 @@ interface ChatMessageProps {
     edited: string;
     react: string;
     reply: string;
+    save: string;
+    share: string;
   };
   bankPaymentOfferInfo: LinkyBankPaymentOfferInfo | null;
   bankPaymentOfferPeerNotice: BankPaymentOfferPeerNotice | null;
@@ -202,6 +210,9 @@ function ChatMessageComponent({
   const { formatDisplayedAmountParts, formatDisplayedAmountText, t } =
     useAppShellCore();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [privateImageBlob, setPrivateImageBlob] = React.useState<Blob | null>(
+    null,
+  );
   const [nowMs, setNowMs] = React.useState(() => Date.now());
   const longPressTimerRef = React.useRef<number | null>(null);
   const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
@@ -606,6 +617,27 @@ function ChatMessageComponent({
     if (el?.isConnected) el.focus();
   }, []);
 
+  const imageActions = React.useMemo(() => {
+    if (!privateImageInfo || !privateImageBlob) return null;
+    const exportLinks = rumorId ? { rumor: rumorId } : {};
+    return {
+      canShare: canSharePrivateImage(),
+      onSave: () => {
+        downloadPrivateImageBlob(privateImageBlob, exportLinks);
+      },
+      onShare: () => {
+        void sharePrivateImageBlob(
+          privateImageBlob,
+          t("chatImageMessage"),
+          exportLinks,
+        ).catch((error: unknown) => {
+          if (isCancelledShareError(error)) return;
+          downloadPrivateImageBlob(privateImageBlob, exportLinks);
+        });
+      },
+    };
+  }, [privateImageBlob, privateImageInfo, rumorId, t]);
+
   const clearLongPress = React.useCallback(() => {
     if (longPressTimerRef.current == null) return;
     window.clearTimeout(longPressTimerRef.current);
@@ -708,8 +740,10 @@ function ChatMessageComponent({
           onPointerCancel={handlePointerUp}
         >
           <MessageActionsMenu
+            canCopy={!privateImageInfo}
             canEdit={canEdit}
             canReplyOrReact={canReplyOrReact}
+            imageActions={imageActions}
             isOpen={menuOpen}
             labels={actionLabels}
             onReply={() => onReply(message)}
@@ -867,7 +901,12 @@ function ChatMessageComponent({
                   {t("paymentRequestDeclinedMessage")}
                 </span>
               ) : privateImageInfo ? (
-                <PrivateImageBubble payload={privateImageInfo} t={t} />
+                <PrivateImageBubble
+                  onBlobChange={setPrivateImageBlob}
+                  payload={privateImageInfo}
+                  rumorId={rumorId}
+                  t={t}
+                />
               ) : tokenInfo && isStandaloneTokenMessage ? (
                 renderCashuTokenPill(tokenInfo)
               ) : inlineMessageContent ? (

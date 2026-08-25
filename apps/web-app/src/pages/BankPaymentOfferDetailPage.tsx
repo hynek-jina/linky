@@ -188,7 +188,12 @@ const PaymentConfirmation = ({
 }) => (
   <div className="bank-payment-offer-confirmation">
     <strong>{t("bankPaymentOfferConfirmation")}</strong>
-    <PrivateImageBubble payload={confirmation.payload} t={t} />
+    <PrivateImageBubble
+      onBlobChange={() => undefined}
+      payload={confirmation.payload}
+      rumorId={String(confirmation.message.rumorId ?? "").trim() || null}
+      t={t}
+    />
   </div>
 );
 

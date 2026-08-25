@@ -1,71 +1,29 @@
 import { Download } from "lucide-react";
 import React from "react";
 import {
+  downloadPrivateImageBlob,
+  isCancelledShareError,
+  sharePrivateImageBlob,
+} from "../app/lib/privateImageFile";
+import {
   decryptPrivateImageMessage,
   type PrivateImageMessagePayload,
 } from "../app/lib/privateImageMessage";
 import { ShareIcon } from "./icons";
 
 interface PrivateImageBubbleProps {
+  onBlobChange: (blob: Blob | null) => void;
   payload: PrivateImageMessagePayload;
+  rumorId: string | null;
   t: (key: string) => string;
 }
 
-const PRIVATE_IMAGE_FILENAME = "linky-obrazek.jpg";
-
-const isCancelledShareError = (error: unknown): boolean => {
-  if (typeof error !== "object" || error === null) return false;
-
-  const name =
-    "name" in error && typeof error.name === "string" ? error.name : "";
-  if (name === "AbortError") return true;
-
-  const message =
-    "message" in error && typeof error.message === "string"
-      ? error.message
-      : "";
-  return /cancel|abort|dismiss/i.test(message);
-};
-
-const downloadPrivateImageBlob = (blob: Blob) => {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = PRIVATE_IMAGE_FILENAME;
-  anchor.rel = "noopener";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-};
-
-const sharePrivateImageBlob = async (
-  blob: Blob,
-  title: string,
-): Promise<void> => {
-  if (typeof navigator.share !== "function") {
-    throw new Error("share-unavailable");
-  }
-
-  const file = new File([blob], PRIVATE_IMAGE_FILENAME, {
-    type: blob.type || "image/jpeg",
-  });
-  const shareData: ShareData = {
-    files: [file],
-    title,
-  };
-
-  if (
-    typeof navigator.canShare === "function" &&
-    !navigator.canShare(shareData)
-  ) {
-    throw new Error("share-unavailable");
-  }
-
-  await navigator.share(shareData);
-};
-
-export function PrivateImageBubble({ payload, t }: PrivateImageBubbleProps) {
+export function PrivateImageBubble({
+  onBlobChange,
+  payload,
+  rumorId,
+  t,
+}: PrivateImageBubbleProps) {
   const placeholderRef = React.useRef<HTMLDivElement | null>(null);
   const [shouldLoad, setShouldLoad] = React.useState(
     typeof IntersectionObserver === "undefined",
@@ -102,6 +60,7 @@ export function PrivateImageBubble({ payload, t }: PrivateImageBubbleProps) {
 
     setImageUrl(null);
     setImageBlob(null);
+    onBlobChange(null);
     setFailed(false);
     setViewerOpen(false);
     setViewerErrorText(null);
@@ -111,6 +70,7 @@ export function PrivateImageBubble({ payload, t }: PrivateImageBubbleProps) {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
         setImageBlob(blob);
+        onBlobChange(blob);
         setImageUrl(objectUrl);
       })
       .catch(() => {
@@ -121,7 +81,7 @@ export function PrivateImageBubble({ payload, t }: PrivateImageBubbleProps) {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [payload, shouldLoad]);
+  }, [onBlobChange, payload, shouldLoad]);
 
   React.useEffect(() => {
     if (!viewerOpen) return;
@@ -146,9 +106,11 @@ export function PrivateImageBubble({ payload, t }: PrivateImageBubbleProps) {
     setViewerErrorText(null);
   };
 
+  const exportLinks = rumorId ? { rumor: rumorId } : {};
+
   const saveImage = () => {
     if (!imageBlob) return;
-    downloadPrivateImageBlob(imageBlob);
+    downloadPrivateImageBlob(imageBlob, exportLinks);
   };
 
   const shareImage = async () => {
@@ -156,7 +118,11 @@ export function PrivateImageBubble({ payload, t }: PrivateImageBubbleProps) {
 
     setViewerErrorText(null);
     try {
-      await sharePrivateImageBlob(imageBlob, t("chatImageMessage"));
+      await sharePrivateImageBlob(
+        imageBlob,
+        t("chatImageMessage"),
+        exportLinks,
+      );
     } catch (error) {
       if (isCancelledShareError(error)) return;
       setViewerErrorText(t("shareUnavailable"));
@@ -194,7 +160,6 @@ export function PrivateImageBubble({ payload, t }: PrivateImageBubbleProps) {
         type="button"
         className="chat-private-image-button"
         onClick={openViewer}
-        onPointerDown={(event) => event.stopPropagation()}
         aria-label={t("chatImageOpen")}
       >
         <img
