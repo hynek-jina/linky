@@ -78,7 +78,7 @@
         "@evolu/common": "^7.4.1",
         "@evolu/react": "^10.4.0",
         "@evolu/react-web": "^2.4.0",
-        "@linky/core": "workspace:*",
+        "@linky/identity": "workspace:*",
         "@linky/linkstr": "workspace:*",
         "@linky/linkstr-react": "workspace:*",
         "@noble/curves": "^1.4.1",
@@ -139,8 +139,8 @@
         "typescript-eslint": "^8.46.4",
       },
     },
-    "packages/core": {
-      "name": "@linky/core",
+    "packages/identity": {
+      "name": "@linky/identity",
       "version": "0.1.0",
       "dependencies": {
         "@linky/linkstr": "workspace:*",
@@ -610,7 +610,7 @@
 
     "@linky/config": ["@linky/config@workspace:packages/config"],
 
-    "@linky/core": ["@linky/core@workspace:packages/core"],
+    "@linky/identity": ["@linky/identity@workspace:packages/identity"],
 
     "@linky/linkstr": ["@linky/linkstr@workspace:packages/linkstr"],
 
