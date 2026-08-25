@@ -21,7 +21,7 @@ import {
  * Cross-app seed and key derivation vectors shared between Linky and Payky.
  *
  * The identical vector table lives in both repos:
- *   linky: packages/core/src/identity/crossAppDerivation.test.ts
+ *   linky: packages/identity/src/identity/crossAppDerivation.test.ts
  *   payky: src/core/modules/shared/cross-app-derivation.test.ts
  *
  * Both apps derive everything from a 16-byte master secret carried by a
@@ -187,7 +187,7 @@ describe("cross-app derivation vectors (shared with Payky)", () => {
   );
 });
 
-// ── Linky-specific binding: the public @linky/core identity API must land on
+// ── Linky-specific binding: the public @linky/identity API must land on
 // the shared vectors above. Payky's copy binds its own key-derivation API here.
 
 const lane = (index: number): OwnerLaneIndex =>
@@ -195,7 +195,7 @@ const lane = (index: number): OwnerLaneIndex =>
 
 const hex = (u8: Uint8Array): string => bytesToHex(u8);
 
-describe("@linky/core identity API matches the cross-app vectors", () => {
+describe("@linky/identity API matches the cross-app vectors", () => {
   const loadIdentity = async () => {
     const share = await Effect.runPromise(parseSlip39Share(SLIP39_SHARE));
     const masterSecret = await Effect.runPromise(

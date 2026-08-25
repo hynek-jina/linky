@@ -18,7 +18,7 @@ COPY apps/push/package.json apps/push/
 COPY apps/site/package.json apps/site/
 COPY apps/web-app/package.json apps/web-app/
 COPY packages/config/package.json packages/config/
-COPY packages/core/package.json packages/core/
+COPY packages/identity/package.json packages/identity/
 COPY packages/linkstr/package.json packages/linkstr/
 COPY packages/linkstr-react/package.json packages/linkstr-react/
 RUN bun install --frozen-lockfile

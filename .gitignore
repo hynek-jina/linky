@@ -17,7 +17,7 @@ playwright-report
 .capacitor
 local.properties
 *.local
-packages/core/src/**/*.js
+packages/identity/src/**/*.js
 apps/web-app/.inspector/
 
 # Editor directories and files
