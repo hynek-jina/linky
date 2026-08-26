@@ -527,6 +527,7 @@ export const de = {
     "Gib einen npub, NIP-05 oder reservierten Namen ein, zum Beispiel alice.",
   contactSearchEmpty: "Gib ein, nach wem du suchen möchtest.",
   contactSearchNoResult: "Nichts gefunden.",
+  contactSearchVerifiedMatch: "Bestätigter Treffer",
   contactSearchCreateFromQuery: "Kontakt erstellen",
   contactSuggestionsTitle: "Vielleicht kennst du",
   contactSuggestionLastSeen: "Zuletzt gesehen",

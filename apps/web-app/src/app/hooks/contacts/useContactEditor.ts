@@ -1,11 +1,25 @@
 import * as Evolu from "@evolu/common";
-import { decodeNpub } from "@linky/linkstr";
-import { fetchProfileAtom, useAtomSet } from "@linky/linkstr-react";
+import {
+  decodeNpub,
+  encodeNpub,
+  type ProfileMetadata,
+  type ProfileSearchHit,
+} from "@linky/linkstr";
+import {
+  fetchProfileAtom,
+  searchProfilesAtom,
+  useAtomSet,
+} from "@linky/linkstr-react";
+import { Exit } from "effect";
 import React from "react";
 import { omitSyntheticContactLightningAddress } from "../../../derivedProfile";
 import { evolu, type ContactId, type TransactionId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
-import { getProfilePictureUrl, loadCachedProfile } from "../../../profileCache";
+import {
+  getProfilePictureUrl,
+  loadCachedProfile,
+  saveCachedProfile,
+} from "../../../profileCache";
 import type { Route } from "../../../types/route";
 import { MAX_CONTACTS_PER_OWNER } from "../../../utils/constants";
 import { getBestNostrName } from "../../../utils/formatting";
@@ -15,6 +29,7 @@ import {
   resolveNip05Input,
 } from "../../../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import { NOSTR_SEARCH_RELAYS } from "../../../utils/nostrRelays";
 import { getContactQueryPrefill } from "../../lib/contactQueryPrefill";
 import { fetchAndCacheProfile } from "../useLinkstrProfileSync";
 import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
@@ -34,6 +49,8 @@ export interface ContactNewPrefill {
 
 export interface ContactSearchCandidate {
   existingContactId?: string;
+  /** The query resolved to exactly this profile (npub or verified NIP-05). */
+  isExactMatch: boolean;
   lnAddress: string;
   name: string;
   npub: string;
@@ -41,11 +58,24 @@ export interface ContactSearchCandidate {
   query: string;
 }
 
+export const CONTACT_SEARCH_RESULT_LIMIT = 3;
+
 export type ContactSearchResult =
   | { kind: "empty" }
   | { kind: "error"; identifier: string }
-  | { kind: "found"; contact: ContactSearchCandidate }
+  | { kind: "found"; contacts: ContactSearchCandidate[] }
   | { kind: "not_found"; query: string };
+
+const getMetadataLightningAddress = (
+  metadata: ProfileMetadata | null,
+  npub: string,
+): string =>
+  metadata
+    ? omitSyntheticContactLightningAddress(
+        (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
+        npub,
+      )
+    : "";
 
 type ContactRow = ContactRowLike;
 type SelectedContactRow = ContactRowLike & { id: ContactId };
@@ -173,6 +203,9 @@ export const useContactEditor = ({
   const openScannedContactPendingNpubRef = React.useRef<string | null>(null);
 
   const fetchProfileOneShot = useAtomSet(fetchProfileAtom, {
+    mode: "promiseExit",
+  });
+  const searchProfilesOneShot = useAtomSet(searchProfilesAtom, {
     mode: "promiseExit",
   });
 
@@ -618,6 +651,114 @@ export const useContactEditor = ({
     updateContactFields,
   ]);
 
+  const findExistingContactId = React.useCallback(
+    (npub: string): string | undefined => {
+      const existingContact = contacts.find(
+        (contact) => normalizeNpubIdentifier(contact.npub) === npub,
+      );
+      return existingContact?.id ? String(existingContact.id) : undefined;
+    },
+    [contacts],
+  );
+
+  const toSearchCandidate = React.useCallback(
+    (
+      npub: string,
+      metadata: ProfileMetadata | null,
+      query: string,
+      fallback: { name: string; lnAddress: string; isExactMatch: boolean },
+    ): ContactSearchCandidate => {
+      const existingContactId = findExistingContactId(npub);
+      return {
+        ...(existingContactId ? { existingContactId } : {}),
+        isExactMatch: fallback.isExactMatch,
+        lnAddress:
+          getMetadataLightningAddress(metadata, npub) || fallback.lnAddress,
+        name: (metadata ? getBestNostrName(metadata) : null) ?? fallback.name,
+        npub,
+        pictureUrl: getProfilePictureUrl(metadata),
+        query,
+      };
+    },
+    [findExistingContactId],
+  );
+
+  const resolveExactContact = React.useCallback(
+    async (
+      rawQuery: string,
+    ): Promise<
+      | { kind: "resolved"; contact: ContactSearchCandidate }
+      | { kind: "error"; identifier: string }
+      | { kind: "none" }
+    > => {
+      const resolveExact = async (
+        npub: string,
+        fallback: { name: string; lnAddress: string },
+      ) => {
+        const metadata = await fetchAndCacheProfile(fetchProfileOneShot, npub);
+        return {
+          contact: toSearchCandidate(npub, metadata, rawQuery, {
+            ...fallback,
+            isExactMatch: true,
+          }),
+          kind: "resolved" as const,
+        };
+      };
+
+      const directNpub = await decodeDirectNpubIdentifier(rawQuery);
+      if (directNpub)
+        return resolveExact(directNpub, { lnAddress: "", name: "" });
+      if (!parseNip05IdentifierInput(rawQuery)) return { kind: "none" };
+
+      const queryPrefill = getContactQueryPrefill(rawQuery);
+      const nip05Result = await resolveNip05Input(rawQuery);
+      if (nip05Result.kind === "none" || nip05Result.kind === "not_found") {
+        return { kind: "none" };
+      }
+      if (nip05Result.kind === "error") {
+        return queryPrefill.lnAddress
+          ? { kind: "none" }
+          : { identifier: nip05Result.identifier.identifier, kind: "error" };
+      }
+
+      const { identifier } = nip05Result;
+      return resolveExact(nip05Result.npub, {
+        lnAddress:
+          queryPrefill.lnAddress ||
+          (identifier.domain === DEFAULT_NIP05_DOMAIN
+            ? identifier.identifier
+            : ""),
+        name: queryPrefill.name ? identifier.localPart : "",
+      });
+    },
+    [fetchProfileOneShot, toSearchCandidate],
+  );
+
+  const searchProfileCandidates = React.useCallback(
+    async (rawQuery: string): Promise<ContactSearchCandidate[]> => {
+      // An npub is an exact identifier; text search would only add noise.
+      if (/^npub1/i.test(normalizeNpubIdentifier(rawQuery) ?? "")) return [];
+      const exit = await searchProfilesOneShot({
+        options: {
+          limit: CONTACT_SEARCH_RESULT_LIMIT,
+          searchRelays: NOSTR_SEARCH_RELAYS,
+        },
+        query: rawQuery,
+      });
+      if (Exit.isFailure(exit)) return [];
+      return exit.value.map((hit: ProfileSearchHit) => {
+        const npub = encodeNpub(hit.pubkey);
+        saveCachedProfile(npub, hit.metadata, hit.updatedAt);
+        return toSearchCandidate(npub, hit.metadata, rawQuery, {
+          isExactMatch: false,
+          lnAddress: "",
+          name: "",
+        });
+      });
+    },
+    [searchProfilesOneShot, toSearchCandidate],
+  );
+
   const searchNewContact = React.useCallback(
     async (query?: string): Promise<ContactSearchResult> => {
       if (route.kind !== "contactNew") return { kind: "empty" };
@@ -625,73 +766,26 @@ export const useContactEditor = ({
       const rawQuery = String(query ?? form.npub ?? "").trim();
       if (!rawQuery) return { kind: "empty" };
 
-      const queryPrefill = getContactQueryPrefill(rawQuery);
-      let resolvedNpub = await decodeDirectNpubIdentifier(rawQuery);
-      let fallbackName = "";
-      let fallbackLnAddress = "";
+      const [exact, searched] = await Promise.all([
+        resolveExactContact(rawQuery),
+        searchProfileCandidates(rawQuery),
+      ]);
 
-      if (!resolvedNpub) {
-        const nip05Identifier = parseNip05IdentifierInput(rawQuery);
-        if (!nip05Identifier) return { kind: "not_found", query: rawQuery };
-
-        const nip05Result = await resolveNip05Input(rawQuery);
-        if (nip05Result.kind === "resolved") {
-          resolvedNpub = nip05Result.npub;
-          fallbackName = queryPrefill.name
-            ? nip05Result.identifier.localPart
-            : "";
-          if (queryPrefill.lnAddress) {
-            fallbackLnAddress = queryPrefill.lnAddress;
-          } else if (nip05Result.identifier.domain === DEFAULT_NIP05_DOMAIN) {
-            fallbackLnAddress = nip05Result.identifier.identifier;
-          }
-        } else if (nip05Result.kind === "not_found") {
-          return { kind: "not_found", query: rawQuery };
-        } else if (nip05Result.kind === "error") {
-          if (queryPrefill.lnAddress) {
-            return { kind: "not_found", query: rawQuery };
-          }
-          return {
-            identifier: nip05Result.identifier.identifier,
-            kind: "error",
-          };
-        }
+      const contacts: ContactSearchCandidate[] = [];
+      if (exact.kind === "resolved") contacts.push(exact.contact);
+      for (const candidate of searched) {
+        if (contacts.length >= CONTACT_SEARCH_RESULT_LIMIT) break;
+        if (contacts.some((known) => known.npub === candidate.npub)) continue;
+        contacts.push(candidate);
       }
 
-      if (!resolvedNpub) return { kind: "not_found", query: rawQuery };
-
-      const existingContact = contacts.find(
-        (contact) => normalizeNpubIdentifier(contact.npub) === resolvedNpub,
-      );
-      const existingContactId = existingContact?.id
-        ? String(existingContact.id)
-        : "";
-
-      const metadata = await fetchAndCacheProfile(
-        fetchProfileOneShot,
-        resolvedNpub,
-      );
-      const bestName = metadata ? (getBestNostrName(metadata) ?? "") : "";
-      const metadataLn = metadata
-        ? omitSyntheticContactLightningAddress(
-            (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
-            resolvedNpub,
-          )
-        : "";
-
-      return {
-        contact: {
-          ...(existingContactId ? { existingContactId } : {}),
-          lnAddress: metadataLn || fallbackLnAddress,
-          name: bestName || fallbackName,
-          npub: resolvedNpub,
-          pictureUrl: getProfilePictureUrl(metadata),
-          query: rawQuery,
-        },
-        kind: "found",
-      };
+      if (contacts.length > 0) return { contacts, kind: "found" };
+      if (exact.kind === "error") {
+        return { identifier: exact.identifier, kind: "error" };
+      }
+      return { kind: "not_found", query: rawQuery };
     },
-    [contacts, fetchProfileOneShot, form.npub, route.kind],
+    [form.npub, resolveExactContact, route.kind, searchProfileCandidates],
   );
 
   const addNewContactFromSearchResult = React.useCallback(
@@ -787,7 +881,8 @@ export const useContactEditor = ({
     async (identifier: string) => {
       const result = await searchNewContact(identifier);
       if (result.kind === "found") {
-        await addNewContactFromSearchResult(result.contact);
+        const [bestMatch] = result.contacts;
+        if (bestMatch) await addNewContactFromSearchResult(bestMatch);
         return;
       }
 

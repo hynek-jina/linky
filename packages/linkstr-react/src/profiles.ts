@@ -5,6 +5,7 @@ import type {
   ProfileMetadata,
   ProfileWatchEvent,
   Pubkey,
+  SearchProfilesOptions,
   StatusDraft,
 } from "@linky/linkstr";
 import { Effect, Stream } from "effect";
@@ -57,6 +58,15 @@ export const discoverActiveProfilesAtom = linkstrRuntimeAtom.fn<
 >()((options) =>
   Effect.flatMap(Profiles, (profiles) =>
     profiles.discoverActiveProfiles(options),
+  ),
+);
+
+export const searchProfilesAtom = linkstrRuntimeAtom.fn<{
+  readonly query: string;
+  readonly options?: SearchProfilesOptions;
+}>()(({ query, options }) =>
+  Effect.flatMap(Profiles, (profiles) =>
+    profiles.searchProfiles(query, options),
   ),
 );
 

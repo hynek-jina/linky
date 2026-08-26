@@ -1,6 +1,6 @@
 import type { FC } from "react";
 import React from "react";
-import { ArrowLeft, Save, User, UserPlus } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Save, User, UserPlus } from "lucide-react";
 import { getContactQueryPrefill } from "../app/lib/contactQueryPrefill";
 import { PasteIcon } from "../components/icons";
 import { readClipboardText } from "../platform/clipboard";
@@ -139,6 +139,7 @@ export function ContactFields({
 
 interface ContactSearchCandidate {
   existingContactId?: string;
+  isExactMatch: boolean;
   lnAddress: string;
   name: string;
   npub: string;
@@ -146,15 +147,23 @@ interface ContactSearchCandidate {
   query: string;
 }
 
-interface ContactSuggestionCandidate extends ContactSearchCandidate {
+interface ContactSuggestionCandidate extends Omit<
+  ContactSearchCandidate,
+  "isExactMatch"
+> {
   lastSeenAtSec: number;
 }
 
 type ContactSearchResult =
   | { kind: "empty" }
   | { kind: "error"; identifier: string }
-  | { kind: "found"; contact: ContactSearchCandidate }
+  | { kind: "found"; contacts: ContactSearchCandidate[] }
   | { kind: "not_found"; query: string };
+
+interface ContactSearchResults {
+  contacts: ContactSearchCandidate[];
+  query: string;
+}
 
 interface ContactNewPageProps {
   addNewContactFromSearchResult: (
@@ -186,8 +195,8 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   const [step, setStep] = React.useState<"search" | "details">("search");
   const [searchError, setSearchError] = React.useState<string | null>(null);
   const [searchIsBusy, setSearchIsBusy] = React.useState(false);
-  const [searchResult, setSearchResult] =
-    React.useState<ContactSearchCandidate | null>(null);
+  const [searchResults, setSearchResults] =
+    React.useState<ContactSearchResults | null>(null);
   const [manualCreateQuery, setManualCreateQuery] = React.useState<
     string | null
   >(null);
@@ -197,14 +206,10 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   const searchRequestSeqRef = React.useRef(0);
 
   const searchQuery = form.npub.trim();
-  const resultAvatarUrl = searchResult?.pictureUrl ?? null;
-  const resultDisplayName = String(
-    searchResult?.name || searchResult?.query || "",
-  ).trim();
   const showSuggestions =
     step === "search" &&
     !searchQuery &&
-    !searchResult &&
+    !searchResults &&
     !searchError &&
     contactSuggestions.length > 0;
 
@@ -229,7 +234,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
 
   const clearSearchFeedback = React.useCallback(() => {
     setSearchError(null);
-    setSearchResult(null);
+    setSearchResults(null);
     setManualCreateQuery(null);
   }, []);
 
@@ -240,7 +245,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
         if (!options?.silentEmpty) {
           setSearchError(t("contactSearchEmpty"));
         }
-        setSearchResult(null);
+        setSearchResults(null);
         setManualCreateQuery(null);
         return;
       }
@@ -262,7 +267,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
 
       if (result.kind === "found") {
         setManualCreateQuery(null);
-        setSearchResult(result.contact);
+        setSearchResults({ contacts: result.contacts, query: queryText });
         return;
       }
 
@@ -294,12 +299,12 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   React.useEffect(() => {
     if (step !== "search") return;
     if (!searchQuery) {
-      setSearchResult(null);
+      setSearchResults(null);
       setManualCreateQuery(null);
       return;
     }
 
-    if (searchResult?.query.trim() === searchQuery) return;
+    if (searchResults?.query === searchQuery) return;
     if (lastSearchedQueryRef.current === searchQuery) return;
 
     const timer = window.setTimeout(() => {
@@ -307,7 +312,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
     }, 900);
 
     return () => window.clearTimeout(timer);
-  }, [runSearch, searchQuery, searchResult?.query, step]);
+  }, [runSearch, searchQuery, searchResults?.query, step]);
 
   const createManualFromSearch = () => {
     const prefill = getContactQueryPrefill(searchQuery);
@@ -321,12 +326,11 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
     setStep("details");
   };
 
-  const addSearchResult = async () => {
-    if (!searchResult) return;
-    await addNewContactFromSearchResult(searchResult);
-  };
   const addSuggestion = async (suggestion: ContactSuggestionCandidate) => {
-    await addNewContactFromSearchResult(suggestion);
+    await addNewContactFromSearchResult({
+      ...suggestion,
+      isExactMatch: false,
+    });
   };
   const formatSuggestionLastSeen = (lastSeenAtSec: number): string => {
     if (!Number.isFinite(lastSeenAtSec) || lastSeenAtSec <= 0) {
@@ -369,20 +373,20 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
     return `${t("contactSuggestionLastSeen")} ${formatted}`;
   };
   const canCreateContactFromSearch =
-    !searchResult &&
+    !searchResults &&
     Boolean(searchQuery) &&
     manualCreateQuery === searchQuery &&
     !searchIsBusy;
   const showSearchLoader =
     Boolean(searchQuery) &&
-    !searchResult &&
+    !searchResults &&
     !searchError &&
     manualCreateQuery !== searchQuery;
 
   return (
     <section className="panel panel-plain">
       <div className="form-grid">
-        <div className="form-col">
+        <div className="form-col contact-new-form-col">
           {step === "search" ? (
             <>
               <label>{t("contactSearchLabel")}</label>
@@ -501,59 +505,91 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                 </div>
               ) : null}
 
-              {searchResult ? (
-                <div className="contact-new-search-result">
-                  <div className="contact-new-search-result-main">
-                    <div className="contact-avatar is-large" aria-hidden="true">
-                      {resultAvatarUrl ? (
-                        <img
-                          src={resultAvatarUrl}
-                          alt=""
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="contact-avatar-fallback">
-                          {getInitials(resultDisplayName)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="contact-new-search-result-body">
-                      <strong>{resultDisplayName || t("contact")}</strong>
-                      {searchResult.lnAddress ? (
-                        <span title={searchResult.lnAddress}>
-                          {formatShortLightningAddress(searchResult.lnAddress)}
-                        </span>
-                      ) : null}
-                      <small title={searchResult.npub}>
-                        {formatShortNpub(searchResult.npub)}
-                      </small>
-                    </div>
-                  </div>
-                  <div className="contact-new-search-result-action">
-                    <button
-                      type="button"
-                      onClick={() => void addSearchResult()}
-                      disabled={isSavingContact}
-                    >
-                      <span className="btn-label-with-icon">
-                        <span className="btn-label-icon" aria-hidden="true">
-                          {searchResult.existingContactId ? (
-                            <User size={18} />
-                          ) : (
-                            <UserPlus size={18} />
-                          )}
-                        </span>
-                        <span>
-                          {isSavingContact
-                            ? t("saving")
-                            : searchResult.existingContactId
-                              ? t("openContact")
-                              : t("saveContact")}
-                        </span>
-                      </span>
-                    </button>
-                  </div>
+              {searchResults ? (
+                <div className="contact-new-search-results">
+                  {searchResults.contacts.map((candidate) => {
+                    const displayName = String(
+                      candidate.name || candidate.query || "",
+                    ).trim();
+                    return (
+                      <div
+                        className={
+                          candidate.isExactMatch
+                            ? "contact-new-search-result is-exact"
+                            : "contact-new-search-result"
+                        }
+                        key={candidate.npub}
+                      >
+                        <div className="contact-new-search-result-main">
+                          <div
+                            className="contact-avatar is-large"
+                            aria-hidden="true"
+                          >
+                            {candidate.pictureUrl ? (
+                              <img
+                                src={candidate.pictureUrl}
+                                alt=""
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <span className="contact-avatar-fallback">
+                                {getInitials(displayName)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="contact-new-search-result-body">
+                            <strong>{displayName || t("contact")}</strong>
+                            {candidate.isExactMatch ? (
+                              <span className="contact-new-search-result-verified">
+                                <BadgeCheck size={14} aria-hidden="true" />
+                                {t("contactSearchVerifiedMatch")}
+                              </span>
+                            ) : null}
+                            {candidate.lnAddress ? (
+                              <span title={candidate.lnAddress}>
+                                {formatShortLightningAddress(
+                                  candidate.lnAddress,
+                                )}
+                              </span>
+                            ) : null}
+                            <small title={candidate.npub}>
+                              {formatShortNpub(candidate.npub)}
+                            </small>
+                          </div>
+                        </div>
+                        <div className="contact-new-search-result-action">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void addNewContactFromSearchResult(candidate)
+                            }
+                            disabled={isSavingContact}
+                          >
+                            <span className="btn-label-with-icon">
+                              <span
+                                className="btn-label-icon"
+                                aria-hidden="true"
+                              >
+                                {candidate.existingContactId ? (
+                                  <User size={18} />
+                                ) : (
+                                  <UserPlus size={18} />
+                                )}
+                              </span>
+                              <span>
+                                {isSavingContact
+                                  ? t("saving")
+                                  : candidate.existingContactId
+                                    ? t("openContact")
+                                    : t("saveContact")}
+                              </span>
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : null}
 
