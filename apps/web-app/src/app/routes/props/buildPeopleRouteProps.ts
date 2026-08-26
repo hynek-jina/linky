@@ -53,6 +53,7 @@ interface BuildPeopleRoutePropsParams {
   onCancelReply: PeopleRoutesProps["chatProps"]["onCancelReply"];
   onAddUnknownContact: PeopleRoutesProps["chatProps"]["onAddUnknownContact"];
   onAddNpubContacts: PeopleRoutesProps["chatProps"]["onAddNpubContacts"];
+  contactsGroupAssignment: PeopleRoutesProps["chatProps"]["contactsGroupAssignment"];
   onCopy: PeopleRoutesProps["chatProps"]["onCopy"];
   onDeclinePaymentRequest: PeopleRoutesProps["chatProps"]["onDeclinePaymentRequest"];
   onRespondBankPaymentOffer: PeopleRoutesProps["chatProps"]["onRespondBankPaymentOffer"];
@@ -164,6 +165,7 @@ export const buildPeopleRouteProps = ({
   onCancelReply,
   onAddUnknownContact,
   onAddNpubContacts,
+  contactsGroupAssignment,
   onCopy,
   onDeclinePaymentRequest,
   onRespondBankPaymentOffer,
@@ -277,6 +279,7 @@ export const buildPeopleRouteProps = ({
       onCancelEdit,
       onAddUnknownContact,
       onAddNpubContacts,
+      contactsGroupAssignment,
       onBlockUnknownContact,
       sendChatImage,
       sendChatMessage,

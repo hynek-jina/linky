@@ -52,6 +52,7 @@ import type {
 import {
   ChatMessage,
   type BankPaymentOfferPeerNotice,
+  type MessageContactsGroupAssignment,
   type NpubMessageContactInfo,
 } from "../components/ChatMessage";
 import { ChatMessageEditor } from "../components/ChatMessageEditor";
@@ -104,7 +105,8 @@ interface ChatPageProps {
   onCancelEdit: () => void;
   onCancelReply: () => void;
   onAddUnknownContact: () => Promise<void>;
-  onAddNpubContacts: (npubs: readonly string[]) => void;
+  onAddNpubContacts: (npubs: readonly string[], messageId: string) => void;
+  contactsGroupAssignment: MessageContactsGroupAssignment | null;
   onBlockUnknownContact: () => Promise<void>;
   onCopy: (message: LocalNostrMessage) => void;
   onDeclinePaymentRequest: (message: LocalNostrMessage) => Promise<void>;
@@ -274,6 +276,7 @@ interface ChatMessageListProps {
   lang: string;
   onCopy: ChatPageProps["onCopy"];
   onAddNpubContacts: ChatPageProps["onAddNpubContacts"];
+  contactsGroupAssignment: ChatPageProps["contactsGroupAssignment"];
   onDeclinePaymentRequest: ChatPageProps["onDeclinePaymentRequest"];
   onEdit: ChatPageProps["onEdit"];
   onOpenNpubContact: ChatPageProps["onOpenNpubContact"];
@@ -306,6 +309,7 @@ const ChatMessageList = memo(function ChatMessageList({
   lang,
   onCopy,
   onAddNpubContacts,
+  contactsGroupAssignment,
   onDeclinePaymentRequest,
   onEdit,
   onOpenNpubContact,
@@ -568,6 +572,7 @@ const ChatMessageList = memo(function ChatMessageList({
             settleBankPaymentOfferBusy={cashuIsBusy}
             onCopy={onCopy}
             onAddNpubContacts={onAddNpubContacts}
+            contactsGroupAssignment={contactsGroupAssignment}
             onEdit={onEdit}
             onOpenNpubContact={onOpenNpubContact}
             onReact={onReact}
@@ -1167,6 +1172,7 @@ export const ChatPage: FC<ChatPageProps> = ({
   onCancelReply,
   onAddUnknownContact,
   onAddNpubContacts,
+  contactsGroupAssignment,
   onBlockUnknownContact,
   onCopy,
   onDeclinePaymentRequest,
@@ -1318,6 +1324,7 @@ export const ChatPage: FC<ChatPageProps> = ({
         lang={lang}
         onCopy={onCopy}
         onAddNpubContacts={onAddNpubContacts}
+        contactsGroupAssignment={contactsGroupAssignment}
         onDeclinePaymentRequest={onDeclinePaymentRequest}
         onEdit={onEdit}
         onOpenNpubContact={onOpenNpubContact}

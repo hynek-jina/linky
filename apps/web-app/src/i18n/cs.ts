@@ -38,6 +38,7 @@ export const cs = {
   dedupeContacts: "Deduplikovat kontakty",
   reloadApp: "Obnovit aplikaci",
   reloadNow: "Obnovit teď",
+  add: "Přidat",
   cancel: "Zrušit",
   dedupeContactsNone: "Žádné duplicity nenalezeny.",
   dedupeContactsResult:
@@ -587,6 +588,9 @@ export const cs = {
   contactsLimitReached: "Byl dosažen limit kontaktů ({max}).",
   contactSaved: "Kontakt byl uložen.",
   contactsSaved: "Kontakty byly uloženy ({count}).",
+  addToGroupAction: "Přidat do skupiny",
+  addToGroupTitle: "Přidat {count} kontaktů do skupiny:",
+  contactsAddedToGroup: "Kontakty ({count}) přidány do skupiny {group}.",
   contactUpdated: "Kontakt byl upraven.",
   nip05NotFound: "NIP-05 jméno {identifier} nebylo nalezeno.",
   nip05ResolveFailed: "NIP-05 jméno {identifier} se nepodařilo ověřit.",

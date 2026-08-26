@@ -37,6 +37,7 @@ export const de = {
   dedupeContacts: "Doppelte Kontakte zusammenführen",
   reloadApp: "App neu laden",
   reloadNow: "Jetzt neu laden",
+  add: "Hinzufügen",
   cancel: "Abbrechen",
   dedupeContactsNone: "Keine Duplikate gefunden.",
   dedupeContactsResult:
@@ -570,6 +571,9 @@ export const de = {
   contactsLimitReached: "Kontaktlimit erreicht ({max}).",
   contactSaved: "Kontakt gespeichert.",
   contactsSaved: "Kontakte gespeichert ({count}).",
+  addToGroupAction: "Zur Gruppe hinzufügen",
+  addToGroupTitle: "{count} Kontakte zu einer Gruppe hinzufügen:",
+  contactsAddedToGroup: "{count} Kontakte zu {group} hinzugefügt.",
   contactUpdated: "Kontakt aktualisiert.",
   nip05NotFound: "NIP-05-Name {identifier} wurde nicht gefunden.",
   nip05ResolveFailed: "NIP-05-Name {identifier} konnte nicht geprüft werden.",

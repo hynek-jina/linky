@@ -1,4 +1,5 @@
 import * as Evolu from "@evolu/common";
+import type { MessageContactsGroupAssignment } from "../components/ChatMessage";
 import { useQuery } from "@evolu/react";
 import React, { useMemo, useState } from "react";
 import { ContactCard } from "../components/ContactCard";
@@ -472,7 +473,10 @@ export const useAppShellComposition = ({
     addNpubMessageContacts,
     addUnknownContactFromChat,
     appendLocalNostrMessage,
+    assignPendingContactsToGroup,
     autoAcceptedChatMessageIdsRef,
+    closeContactsGroupAssignment,
+    pendingContactsGroupAssignment,
     bankPaymentOfferContacts,
     bankPaymentOfferMessages,
     bankPaymentOfferRecipientCount,
@@ -1380,6 +1384,26 @@ export const useAppShellComposition = ({
     restoreArchivedContact(selectedContact.id);
   }, [restoreArchivedContact, selectedContact]);
 
+  const chatContactsGroupAssignment =
+    React.useMemo<MessageContactsGroupAssignment | null>(
+      () =>
+        pendingContactsGroupAssignment
+          ? {
+              messageId: pendingContactsGroupAssignment.messageId,
+              contactCount: pendingContactsGroupAssignment.savedContacts.length,
+              groupNames,
+              onAssign: assignPendingContactsToGroup,
+              onDismiss: closeContactsGroupAssignment,
+            }
+          : null,
+      [
+        assignPendingContactsToGroup,
+        closeContactsGroupAssignment,
+        groupNames,
+        pendingContactsGroupAssignment,
+      ],
+    );
+
   const { peopleRouteProps } = useProfilePeopleComposition({
     peopleRouteBuilderInput: {
       cashuBalance,
@@ -1430,6 +1454,7 @@ export const useAppShellComposition = ({
       onCancelReply,
       onAddUnknownContact: addUnknownContactFromChat,
       onAddNpubContacts: addNpubMessageContacts,
+      contactsGroupAssignment: chatContactsGroupAssignment,
       onBlockUnknownContact: blockUnknownContactFromChat,
       onCopy: onCopyChatMessage,
       onDeclinePaymentRequest: onDeclineChatPaymentRequest,
