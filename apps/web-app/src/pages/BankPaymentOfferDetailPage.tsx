@@ -516,15 +516,20 @@ export const BankPaymentOfferDetailPage: React.FC<
   }, [entry]);
 
   // The displayed countdown may belong to another recipient's entry (the
-  // offerer sees the accepting contact's phase), so tick regardless of the
-  // current chat's own status.
+  // offerer sees the accepting contact's phase), so tick unless the offer as
+  // a whole has ended.
+  const offerHasEnded =
+    entry === null ||
+    entry.info.status === "settled" ||
+    entry.info.status === "canceled";
   React.useEffect(() => {
+    if (offerHasEnded) return;
     const intervalId = window.setInterval(() => {
       setNowMs(Date.now());
     }, 1_000);
 
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [offerHasEnded]);
 
   const isCreatedByMe =
     entry !== null &&

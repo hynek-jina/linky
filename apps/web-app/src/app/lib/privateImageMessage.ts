@@ -13,6 +13,11 @@ const LINKY_WEB_APP_ORIGIN = "https://app.linky.fit";
 const MAX_IMAGE_SOURCE_BYTES = 20 * 1024 * 1024;
 const MAX_PDF_BYTES = 2 * 1024 * 1024;
 const PDF_FILE_TYPE = "application/pdf";
+const PDF_MAGIC = "%PDF-";
+// Base64url of a 2 MB payload plus the AES-GCM tag, rounded up — no valid
+// attachment is stored larger than this, so anything bigger is refused
+// before a single byte is buffered.
+const MAX_STORED_ATTACHMENT_BYTES = 3 * 1024 * 1024;
 const MAX_IMAGE_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_SIDE_PX = 1280;
 const MIN_IMAGE_SIDE_PX = 480;
@@ -511,6 +516,7 @@ const parsePrivateImageRecord = (
     !originalSha256 ||
     !storageEncoding ||
     !encryptedSize ||
+    encryptedSize > MAX_STORED_ATTACHMENT_BYTES ||
     (hasDimensions && (!width || !height))
   ) {
     return null;
@@ -562,16 +568,45 @@ export const parsePrivateImageMessage = (
   return parsePrivateImageRecord(parsed);
 };
 
+const readBodyExactly = async (
+  response: Response,
+  expectedBytes: number,
+): Promise<Uint8Array | null> => {
+  const declared = Number(response.headers.get("content-length") ?? NaN);
+  if (Number.isFinite(declared) && declared !== expectedBytes) return null;
+  if (!response.body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return bytes.byteLength === expectedBytes ? bytes : null;
+  }
+
+  const bytes = new Uint8Array(expectedBytes);
+  let received = 0;
+  const reader = response.body.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (received + value.byteLength > expectedBytes) return null;
+      bytes.set(value, received);
+      received += value.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return received === expectedBytes ? bytes : null;
+};
+
+const hasPdfMagic = (bytes: Uint8Array): boolean =>
+  textDecoder.decode(bytes.subarray(0, PDF_MAGIC.length)) === PDF_MAGIC;
+
 export const decryptPrivateImageMessage = async (
   payload: PrivateImageMessagePayload,
 ): Promise<Blob> => {
   const response = await fetch(payload.url);
   if (!response.ok) throw new Error("chat-image-download-failed");
 
-  const storedBytes = new Uint8Array(await response.arrayBuffer());
-  if (storedBytes.byteLength !== payload.encryptedSize) {
-    throw new Error("chat-image-size-mismatch");
-  }
+  const storedBytes = await readBodyExactly(response, payload.encryptedSize);
+  if (!storedBytes) throw new Error("chat-image-size-mismatch");
   if (sha256Hex(storedBytes) !== payload.encryptedSha256) {
     throw new Error("chat-image-hash-mismatch");
   }
@@ -601,6 +636,9 @@ export const decryptPrivateImageMessage = async (
 
   if (sha256Hex(decryptedBytes) !== payload.originalSha256) {
     throw new Error("chat-image-original-hash-mismatch");
+  }
+  if (isPdfFileType(payload.fileType) && !hasPdfMagic(decryptedBytes)) {
+    throw new Error("chat-file-not-pdf");
   }
 
   return new Blob([decryptedBytes], { type: payload.fileType });

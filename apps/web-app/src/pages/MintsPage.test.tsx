@@ -27,6 +27,7 @@ const probeLightningFee = vi.fn<
   percent: 1,
 }));
 vi.mock("../app/lib/lightningFeeProbe", () => ({
+  getCachedLightningFee: () => null,
   probeLightningFee: (args: { mintUrl: string; probeMintUrl: string }) =>
     probeLightningFee(args),
 }));

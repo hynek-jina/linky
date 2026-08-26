@@ -1,4 +1,6 @@
 import * as Evolu from "@evolu/common";
+import { reportInspectorRows } from "../../../devtools/inspector";
+import { getInspectorEmissionEnabled } from "../../../devtools/inspector/inspectorEnabled";
 import {
   BankOfferDraft,
   BankOfferId,
@@ -297,6 +299,24 @@ export interface PendingContactsGroupAssignment {
   messageId: string;
   savedContacts: SavedContactRef[];
 }
+
+const reportContactsAddedToGroup = (
+  pending: PendingContactsGroupAssignment,
+  group: string,
+): void => {
+  if (!getInspectorEmissionEnabled()) return;
+  const contactIds = pending.savedContacts.map(({ id }) => String(id));
+  reportInspectorRows([
+    {
+      at: Date.now(),
+      channel: "app.log",
+      tag: "contacts.addToGroup",
+      summary: `${contactIds.length} contacts from a chat message added to group "${group}"`,
+      links: { contact: contactIds, message: pending.messageId },
+      payload: { contactIds, group, messageId: pending.messageId },
+    },
+  ]);
+};
 type NostrBootstrapParams = Parameters<typeof useEvoluNostrBootstrapReady>[0];
 
 interface UseContactsMessagingCompositionParams {
@@ -2981,7 +3001,6 @@ export const useContactsMessagingComposition = ({
 
       const groups = normalizeContactGroups([rawGroup]);
       if (groups.length === 0) return;
-      setPendingContactsGroupAssignment(null);
 
       const groupName = Evolu.NonEmptyString1000.fromUnknown(groups[0]);
       const groupNamesJson = Evolu.NonEmptyString1000.fromUnknown(
@@ -3007,6 +3026,8 @@ export const useContactsMessagingComposition = ({
         }
       }
 
+      setPendingContactsGroupAssignment(null);
+      reportContactsAddedToGroup(pending, groups[0] ?? rawGroup);
       setStatus(
         t("contactsAddedToGroup")
           .replace("{count}", String(pending.savedContacts.length))

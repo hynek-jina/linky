@@ -249,8 +249,11 @@ export const extractActiveKeysetPpk = (
   const fees = list
     .filter(isRecord)
     .filter((keyset) => keyset.active === true && keyset.unit === unit)
-    .map((keyset) => Number(keyset.input_fee_ppk ?? 0))
-    .filter((fee) => Number.isFinite(fee));
+    .map((keyset) => keyset.input_fee_ppk ?? 0)
+    .filter(
+      (fee): fee is number =>
+        typeof fee === "number" && Number.isInteger(fee) && fee >= 0,
+    );
   return fees.length ? Math.min(...fees) : null;
 };
 

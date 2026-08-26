@@ -38,6 +38,10 @@ export function PrivateFileBubble({
   rumorId,
   t,
 }: PrivateFileBubbleProps) {
+  const placeholderRef = React.useRef<HTMLDivElement | null>(null);
+  const [shouldLoad, setShouldLoad] = React.useState(
+    typeof IntersectionObserver === "undefined",
+  );
   const [fileBlob, setFileBlob] = React.useState<Blob | null>(null);
   const [failed, setFailed] = React.useState(false);
   const [preview, setPreview] = React.useState<RenderedPdfPage | null>(null);
@@ -55,6 +59,24 @@ export function PrivateFileBubble({
   }, [onBlobChange]);
 
   React.useEffect(() => {
+    if (shouldLoad || typeof IntersectionObserver === "undefined") return;
+    const element = placeholderRef.current;
+    if (!element) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setShouldLoad(true);
+        observer.disconnect();
+      },
+      { rootMargin: "240px" },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [shouldLoad]);
+
+  React.useEffect(() => {
+    if (!shouldLoad) return;
     let cancelled = false;
     let rendered: RenderedPdfPage[] = [];
     setFileBlob(null);
@@ -85,7 +107,7 @@ export function PrivateFileBubble({
       cancelled = true;
       revokePdfPages(rendered);
     };
-  }, [payload]);
+  }, [payload, shouldLoad]);
 
   React.useEffect(() => {
     if (!viewerOpen || !fileBlob) return;
@@ -153,6 +175,20 @@ export function PrivateFileBubble({
     return (
       <div className="chat-private-image-placeholder is-error">
         {t("chatPdfLoadFailed")}
+      </div>
+    );
+  }
+
+  if (!shouldLoad) {
+    return (
+      <div ref={placeholderRef} className="chat-private-file" aria-busy="true">
+        <span className="chat-private-file-icon" aria-hidden="true">
+          <FileText size={28} />
+        </span>
+        <span className="chat-private-file-body">
+          <span className="chat-private-file-name">{fileName}</span>
+          <span className="chat-private-file-meta">{t("chatPdfMessage")}</span>
+        </span>
       </div>
     );
   }

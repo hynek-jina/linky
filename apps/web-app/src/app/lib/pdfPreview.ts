@@ -5,6 +5,21 @@ export interface RenderedPdfPage {
 }
 
 const PREVIEW_MAX_PAGES = 30;
+// Page geometry is peer-controlled; a page never rasterizes to more than
+// this many device pixels (≈ 4 MP, 16 MB of RGBA).
+const MAX_PAGE_PIXELS = 4_000_000;
+const MAX_PAGE_ASPECT = 8;
+
+const fitScaleToPixelBudget = (
+  requestedScale: number,
+  baseWidth: number,
+  baseHeight: number,
+): number => {
+  const pixels = baseWidth * baseHeight * requestedScale * requestedScale;
+  return pixels > MAX_PAGE_PIXELS
+    ? requestedScale * Math.sqrt(MAX_PAGE_PIXELS / pixels)
+    : requestedScale;
+};
 
 const loadPdfjs = async () => {
   const pdfjs = await import("pdfjs-dist");
@@ -50,7 +65,18 @@ export const renderPdfPages = async (
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
       const page = await document.getPage(pageNumber);
       const baseViewport = page.getViewport({ scale: 1 });
-      const scale = (options.targetWidth * pixelRatio) / baseViewport.width;
+      if (
+        !(baseViewport.width > 0) ||
+        !(baseViewport.height > 0) ||
+        baseViewport.height / baseViewport.width > MAX_PAGE_ASPECT
+      ) {
+        throw new Error("pdf-page-geometry-unsupported");
+      }
+      const scale = fitScaleToPixelBudget(
+        (options.targetWidth * pixelRatio) / baseViewport.width,
+        baseViewport.width,
+        baseViewport.height,
+      );
       const viewport = page.getViewport({ scale });
       const canvas = window.document.createElement("canvas");
       canvas.width = Math.ceil(viewport.width);

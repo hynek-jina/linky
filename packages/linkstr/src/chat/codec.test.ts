@@ -205,6 +205,24 @@ describe("chat rumor encoding", () => {
     expect(rawRumor.tags).not.toContainEqual(["encoding", "base64"]);
   });
 
+  it("rejects a lone dimension on the domain model", () => {
+    expect(
+      () =>
+        new PrivateImage({
+          url: image.url,
+          fileType: image.fileType,
+          encryptionAlgorithm: image.encryptionAlgorithm,
+          key: image.key,
+          nonce: image.nonce,
+          encryptedSha256: image.encryptedSha256,
+          originalSha256: image.originalSha256,
+          encryptedSize: image.encryptedSize,
+          width: 640,
+          storageEncoding: image.storageEncoding,
+        }),
+    ).toThrow();
+  });
+
   it("omits dim for files without dimensions and carries their name", () => {
     const pdf = new PrivateImage({
       url: image.url,

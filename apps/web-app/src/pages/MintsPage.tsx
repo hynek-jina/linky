@@ -3,6 +3,7 @@ import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useMintSettingsContext } from "../app/context/SystemSettingsContexts";
 import { getMintFeePpk } from "../app/hooks/mint/mintInfoHelpers";
 import {
+  getCachedLightningFee,
   type LightningFeeProbeResult,
   probeLightningFee,
 } from "../app/lib/lightningFeeProbe";
@@ -42,6 +43,11 @@ const FEE_INFO_RETRY_SEC = 60;
 
 type LightningFeeState = LightningFeeProbeResult | "failed" | "pending";
 
+// A failed probe is not retried on every navigation; successes persist for a
+// day inside lightningFeeProbe's own cache.
+const FAILED_PROBE_RETRY_MS = 10 * 60 * 1000;
+const failedProbeAtByMint = new Map<string, number>();
+
 const useLightningFeeProbe = (mintUrl: string): LightningFeeState => {
   const [byMint, setByMint] = React.useState<Record<string, LightningFeeState>>(
     {},
@@ -49,6 +55,19 @@ const useLightningFeeProbe = (mintUrl: string): LightningFeeState => {
 
   React.useEffect(() => {
     if (byMint[mintUrl]) return;
+    const cached = getCachedLightningFee(mintUrl);
+    if (cached) {
+      setByMint((prev) => ({ ...prev, [mintUrl]: cached }));
+      return;
+    }
+    const failedAt = failedProbeAtByMint.get(mintUrl);
+    if (
+      failedAt !== undefined &&
+      Date.now() - failedAt < FAILED_PROBE_RETRY_MS
+    ) {
+      setByMint((prev) => ({ ...prev, [mintUrl]: "failed" }));
+      return;
+    }
     const probeMintUrl = isTestMintUrl(mintUrl) ? null : pickProbeMint(mintUrl);
     if (!probeMintUrl) {
       setByMint((prev) => ({ ...prev, [mintUrl]: "failed" }));
@@ -57,7 +76,10 @@ const useLightningFeeProbe = (mintUrl: string): LightningFeeState => {
     setByMint((prev) => ({ ...prev, [mintUrl]: "pending" }));
     void probeLightningFee({ mintUrl, probeMintUrl })
       .then((result) => setByMint((prev) => ({ ...prev, [mintUrl]: result })))
-      .catch(() => setByMint((prev) => ({ ...prev, [mintUrl]: "failed" })));
+      .catch(() => {
+        failedProbeAtByMint.set(mintUrl, Date.now());
+        setByMint((prev) => ({ ...prev, [mintUrl]: "failed" }));
+      });
   }, [byMint, mintUrl]);
 
   return byMint[mintUrl] ?? "pending";

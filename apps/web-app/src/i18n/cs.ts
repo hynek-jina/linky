@@ -601,6 +601,7 @@ export const cs = {
   contactsSaved: "Kontakty byly uloženy ({count}).",
   addToGroupAction: "Přidat do skupiny",
   addToGroupTitle: "Přidat {count} kontaktů do skupiny:",
+  addToGroupTitleFew: "Přidat {count} kontakty do skupiny:",
   contactsAddedToGroup: "Kontakty ({count}) přidány do skupiny {group}.",
   contactUpdated: "Kontakt byl upraven.",
   nip05NotFound: "NIP-05 jméno {identifier} nebylo nalezeno.",

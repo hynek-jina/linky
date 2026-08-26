@@ -1075,16 +1075,23 @@ function MessageContactsGroupPicker({
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [groupInput, setGroupInput] = React.useState("");
   const newGroup = groupInput.trim();
-  const title = t("addToGroupTitle").replace(
-    "{count}",
-    String(assignment.contactCount),
-  );
+  const title = t(
+    assignment.contactCount >= 2 && assignment.contactCount <= 4
+      ? "addToGroupTitleFew"
+      : "addToGroupTitle",
+  ).replace("{count}", String(assignment.contactCount));
 
+  // The picker lives inside the bubble that owns long-press/swipe gestures;
+  // its own interactions must not start them.
   return (
     <div
       className={
         isExpanded ? "chat-add-to-group is-expanded" : "chat-add-to-group"
       }
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerMove={(event) => event.stopPropagation()}
+      onPointerUp={(event) => event.stopPropagation()}
+      onContextMenu={(event) => event.stopPropagation()}
     >
       <div className="chat-add-to-group-header">
         <button

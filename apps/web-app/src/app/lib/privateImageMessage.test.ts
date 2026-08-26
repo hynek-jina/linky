@@ -60,11 +60,16 @@ describe("privateImageMessage compact format", () => {
       /^linky:image:v1:/,
       "",
     );
-    const json = JSON.parse(
+    const json: unknown = JSON.parse(
       atob(encoded.replace(/-/g, "+").replace(/_/g, "/")),
-    ) as Record<string, unknown>;
-    delete json.h;
-    expect(parsePrivateImageMessage(JSON.stringify(json))).toBeNull();
+    );
+    if (typeof json !== "object" || json === null || !("h" in json)) {
+      throw new Error("expected compact payload with h");
+    }
+    const withoutHeight = Object.fromEntries(
+      Object.entries(json).filter(([key]) => key !== "h"),
+    );
+    expect(parsePrivateImageMessage(JSON.stringify(withoutHeight))).toBeNull();
   });
 });
 

@@ -9,6 +9,14 @@ const isPlaceholderLineBreak = (node: Node): boolean =>
   node.parentElement !== null &&
   BLOCK_TAGS.has(node.parentElement.tagName);
 
+// A block element that follows a sibling serializes with a leading newline.
+const getBlockLinePrefix = (node: Node): string =>
+  node instanceof HTMLElement &&
+  BLOCK_TAGS.has(node.tagName) &&
+  node.previousSibling !== null
+    ? "\n"
+    : "";
+
 export const getMessageEditorNodeValue = (node: Node): string => {
   if (node instanceof HTMLElement) {
     const entityValue = node.dataset.messageEntityValue;
@@ -19,11 +27,7 @@ export const getMessageEditorNodeValue = (node: Node): string => {
   const childrenValue = Array.from(node.childNodes)
     .map(getMessageEditorNodeValue)
     .join("");
-  const startsNewLine =
-    node instanceof HTMLElement &&
-    BLOCK_TAGS.has(node.tagName) &&
-    node.previousSibling !== null;
-  return startsNewLine ? `\n${childrenValue}` : childrenValue;
+  return `${getBlockLinePrefix(node)}${childrenValue}`;
 };
 
 export const getMessageEditorValue = (editor: HTMLElement): string =>
@@ -73,7 +77,9 @@ const getOffsetWithinNode = (
   let offset = 0;
   for (const child of Array.from(root.childNodes)) {
     const nestedOffset = getOffsetWithinNode(child, target, targetOffset);
-    if (nestedOffset !== null) return offset + nestedOffset;
+    if (nestedOffset !== null) {
+      return offset + getBlockLinePrefix(child).length + nestedOffset;
+    }
     offset += getMessageEditorNodeValue(child).length;
   }
   return null;

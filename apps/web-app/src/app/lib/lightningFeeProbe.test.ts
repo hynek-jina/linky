@@ -1,9 +1,89 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { probeLightningFee } from "./lightningFeeProbe";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getCachedLightningFee,
+  LIGHTNING_FEE_CACHE_TTL_MS,
+  probeLightningFee,
+} from "./lightningFeeProbe";
 
 describe("probeLightningFee", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("caches a successful probe for a day and drops it afterwards", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (url: string) =>
+          new Response(
+            JSON.stringify(
+              url.endsWith("/v1/mint/quote/bolt11")
+                ? { quote: "q1", request: "lnbc1probe" }
+                : { quote: "m1", amount: 10000, fee_reserve: 50 },
+            ),
+          ),
+      ),
+    );
+    const result = await probeLightningFee({
+      mintUrl: "https://cashu.cz",
+      probeMintUrl: "https://kashu.me",
+    });
+    const now = Date.now();
+    expect(getCachedLightningFee("https://cashu.cz", now)).toEqual(result);
+    expect(
+      getCachedLightningFee(
+        "https://cashu.cz",
+        now + LIGHTNING_FEE_CACHE_TTL_MS + 1,
+      ),
+    ).toBeNull();
+    expect(getCachedLightningFee("https://other.example", now)).toBeNull();
+  });
+
+  it("aborts both requests when the mint does not answer in time", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () =>
+              reject(new Error("aborted")),
+            );
+          }),
+      ),
+    );
+    await expect(
+      probeLightningFee({
+        mintUrl: "https://cashu.cz",
+        probeMintUrl: "https://kashu.me",
+        timeoutMs: 10,
+      }),
+    ).rejects.toThrow("aborted");
+  });
+
+  it("rejects a non-numeric fee_reserve instead of reading it as zero", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (url: string) =>
+          new Response(
+            JSON.stringify(
+              url.endsWith("/v1/mint/quote/bolt11")
+                ? { quote: "q1", request: "lnbc1probe" }
+                : { quote: "m1", amount: 10000, fee_reserve: null },
+            ),
+          ),
+      ),
+    );
+    await expect(
+      probeLightningFee({
+        mintUrl: "https://cashu.cz",
+        probeMintUrl: "https://kashu.me",
+      }),
+    ).rejects.toThrow("fee_reserve");
   });
 
   it("quotes an invoice from the probe mint and derives the fee percent", async () => {

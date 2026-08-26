@@ -597,6 +597,7 @@ export const en = {
   contactsSaved: "Contacts saved ({count}).",
   addToGroupAction: "Add to group",
   addToGroupTitle: "Add {count} contacts to a group:",
+  addToGroupTitleFew: "Add {count} contacts to a group:",
   contactsAddedToGroup: "{count} contacts added to {group}.",
   contactUpdated: "Contact updated.",
   nip05NotFound: "NIP-05 name {identifier} was not found.",
