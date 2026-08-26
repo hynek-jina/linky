@@ -139,6 +139,23 @@ export const ChatMessageEditor = React.forwardRef<
   const pendingCaretRef = React.useRef<number | null>(null);
   const lastRenderedValueRef = React.useRef<string | null>(null);
 
+  const resolveEntity = React.useCallback(
+    (rawValue: string) => {
+      if (rawValue.toLowerCase().startsWith("cashu")) {
+        return {
+          contactInfo: null,
+          tokenInfo: getCashuTokenMessageInfo(rawValue),
+        };
+      }
+      const npub = normalizeNpubIdentifier(rawValue);
+      return {
+        contactInfo: npub ? getNpubMessageContactInfo(npub) : null,
+        tokenInfo: null,
+      };
+    },
+    [getCashuTokenMessageInfo, getNpubMessageContactInfo],
+  );
+
   const setEditorRef = React.useCallback(
     (editor: HTMLDivElement | null) => {
       localRef.current = editor;
@@ -163,9 +180,7 @@ export const ChatMessageEditor = React.forwardRef<
       if (start > cursor)
         fragment.append(document.createTextNode(value.slice(cursor, start)));
 
-      const npub = normalizeNpubIdentifier(rawValue);
-      const contactInfo = npub ? getNpubMessageContactInfo(npub) : null;
-      const tokenInfo = npub ? null : getCashuTokenMessageInfo(rawValue);
+      const { contactInfo, tokenInfo } = resolveEntity(rawValue);
       if (contactInfo) {
         appendContactPill(fragment, rawValue, contactInfo, removeContactLabel);
       } else if (tokenInfo) {
@@ -193,10 +208,9 @@ export const ChatMessageEditor = React.forwardRef<
     }
   }, [
     formatDisplayedAmountText,
-    getCashuTokenMessageInfo,
     getMintIconUrl,
-    getNpubMessageContactInfo,
     removeContactLabel,
+    resolveEntity,
     value,
   ]);
 
@@ -213,13 +227,8 @@ export const ChatMessageEditor = React.forwardRef<
     const expectedValues: string[] = [];
     for (const match of nextValue.matchAll(ENTITY_PATTERN)) {
       const rawValue = String(match[0] ?? "");
-      const npub = normalizeNpubIdentifier(rawValue);
-      if (
-        (npub && getNpubMessageContactInfo(npub)) ||
-        (!npub && getCashuTokenMessageInfo(rawValue))
-      ) {
-        expectedValues.push(rawValue);
-      }
+      const { contactInfo, tokenInfo } = resolveEntity(rawValue);
+      if (contactInfo || tokenInfo) expectedValues.push(rawValue);
     }
     if (
       renderedValues.length === expectedValues.length &&

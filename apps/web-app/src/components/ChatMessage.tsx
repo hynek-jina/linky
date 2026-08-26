@@ -19,7 +19,10 @@ import {
   normalizeMessageLinkMatch,
 } from "../app/lib/messageLinks";
 import type { CashuPaymentRequestMessageInfo } from "../app/lib/paymentRequestMessage";
-import { parsePrivateImageMessage } from "../app/lib/privateImageMessage";
+import {
+  isPrivatePdfPayload,
+  parsePrivateImageMessage,
+} from "../app/lib/privateImageMessage";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import { isStandaloneCashuTokenMessage } from "../app/lib/tokenText";
 import type {
@@ -35,6 +38,7 @@ import { PayIcon } from "./icons";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
+import { PrivateFileBubble } from "./PrivateFileBubble";
 import { PrivateImageBubble } from "./PrivateImageBubble";
 
 interface MintIcon {
@@ -648,19 +652,24 @@ function ChatMessageComponent({
   const imageActions = React.useMemo(() => {
     if (!privateImageInfo || !privateImageBlob) return null;
     const exportLinks = rumorId ? { rumor: rumorId } : {};
+    const fileName = privateImageInfo.fileName;
+    const title = isPrivatePdfPayload(privateImageInfo)
+      ? t("chatPdfMessage")
+      : t("chatImageMessage");
     return {
       canShare: canSharePrivateImage(),
       onSave: () => {
-        downloadPrivateImageBlob(privateImageBlob, exportLinks);
+        downloadPrivateImageBlob(privateImageBlob, exportLinks, fileName);
       },
       onShare: () => {
         void sharePrivateImageBlob(
           privateImageBlob,
-          t("chatImageMessage"),
+          title,
           exportLinks,
+          fileName,
         ).catch((error: unknown) => {
           if (isCancelledShareError(error)) return;
-          downloadPrivateImageBlob(privateImageBlob, exportLinks);
+          downloadPrivateImageBlob(privateImageBlob, exportLinks, fileName);
         });
       },
     };
@@ -965,6 +974,13 @@ function ChatMessageComponent({
                 <span className="pill pill-muted">
                   {t("paymentRequestDeclinedMessage")}
                 </span>
+              ) : privateImageInfo && isPrivatePdfPayload(privateImageInfo) ? (
+                <PrivateFileBubble
+                  onBlobChange={setPrivateImageBlob}
+                  payload={privateImageInfo}
+                  rumorId={rumorId}
+                  t={t}
+                />
               ) : privateImageInfo ? (
                 <PrivateImageBubble
                   onBlobChange={setPrivateImageBlob}

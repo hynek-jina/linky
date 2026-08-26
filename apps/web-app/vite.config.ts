@@ -293,6 +293,8 @@ export default defineConfig({
       strategies: "injectManifest",
       injectManifest: {
         rollupFormat: "es",
+        // pdf.js is loaded on demand for PDF previews; don't precache it.
+        globIgnores: ["**/pdf.worker*", "**/pdfjs-*"],
       },
       manifest: {
         name: "Linky",
@@ -344,6 +346,7 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
           if (id.includes("nostr-tools")) return "nostr";
+          if (id.includes("pdfjs-dist")) return "pdfjs";
           if (id.includes("@cashu")) return "cashu";
           // Keep `buffer` and its deps together to avoid an ESM circular init:
           // polyfills -> vendor (base64-js/ieee754) and vendor -> polyfills.

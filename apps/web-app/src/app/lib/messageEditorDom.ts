@@ -1,11 +1,29 @@
+const BLOCK_TAGS = new Set(["DIV", "P"]);
+
+// Browsers wrap contenteditable lines in block elements (`<div>line</div>`)
+// and pad an empty block with a placeholder `<br>` that renders no extra line.
+const isPlaceholderLineBreak = (node: Node): boolean =>
+  node instanceof HTMLElement &&
+  node.tagName === "BR" &&
+  node.nextSibling === null &&
+  node.parentElement !== null &&
+  BLOCK_TAGS.has(node.parentElement.tagName);
+
 export const getMessageEditorNodeValue = (node: Node): string => {
   if (node instanceof HTMLElement) {
     const entityValue = node.dataset.messageEntityValue;
     if (entityValue !== undefined) return entityValue;
-    if (node.tagName === "BR") return "\n";
+    if (node.tagName === "BR") return isPlaceholderLineBreak(node) ? "" : "\n";
   }
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-  return Array.from(node.childNodes).map(getMessageEditorNodeValue).join("");
+  const childrenValue = Array.from(node.childNodes)
+    .map(getMessageEditorNodeValue)
+    .join("");
+  const startsNewLine =
+    node instanceof HTMLElement &&
+    BLOCK_TAGS.has(node.tagName) &&
+    node.previousSibling !== null;
+  return startsNewLine ? `\n${childrenValue}` : childrenValue;
 };
 
 export const getMessageEditorValue = (editor: HTMLElement): string =>

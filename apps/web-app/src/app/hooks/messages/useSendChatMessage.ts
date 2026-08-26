@@ -14,7 +14,9 @@ import React from "react";
 import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { makeLocalId } from "../../../utils/validation";
 import {
+  chatAttachmentErrorKey,
   createPrivateImageSendPayload,
+  getChatAttachmentRejection,
   parsePrivateImageMessage,
 } from "../../lib/privateImageMessage";
 import type {
@@ -109,6 +111,15 @@ export const useSendChatMessage = <
       }
 
       if (chatSendIsBusy) return;
+
+      const rejectionKey = imageFile
+        ? getChatAttachmentRejection(imageFile)
+        : null;
+      if (rejectionKey) {
+        setStatus(t(rejectionKey));
+        return;
+      }
+
       setChatSendIsBusy(true);
 
       try {
@@ -234,7 +245,12 @@ export const useSendChatMessage = <
           setStatus(t("chatQueued"));
         }
       } catch (e) {
-        setStatus(`${t("errorPrefix")}: ${String(e ?? "unknown")}`);
+        const attachmentErrorKey = chatAttachmentErrorKey(e);
+        setStatus(
+          attachmentErrorKey
+            ? t(attachmentErrorKey)
+            : `${t("errorPrefix")}: ${String(e ?? "unknown")}`,
+        );
       } finally {
         setChatSendIsBusy(false);
       }

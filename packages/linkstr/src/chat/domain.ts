@@ -28,8 +28,9 @@ export class PrivateImage extends Schema.Class<PrivateImage>("PrivateImage")({
   encryptedSha256: Schema.String.pipe(Schema.pattern(LOWERCASE_HEX_64)),
   originalSha256: Schema.String.pipe(Schema.pattern(LOWERCASE_HEX_64)),
   encryptedSize: Schema.Int.pipe(Schema.positive()),
-  width: Schema.Int.pipe(Schema.positive()),
-  height: Schema.Int.pipe(Schema.positive()),
+  width: Schema.optional(Schema.Int.pipe(Schema.positive())),
+  height: Schema.optional(Schema.Int.pipe(Schema.positive())),
+  fileName: Schema.optional(Schema.NonEmptyTrimmedString),
   storageEncoding: Schema.Literal("base64", "raw"),
 }) {}
 

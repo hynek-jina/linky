@@ -303,6 +303,7 @@ describe("handleBankOfferSnapshotReceived", () => {
         id: `bank-payment-offer:${SNAPSHOT_RUMOR_ID}`,
         localOnly: true,
         pubkey: peerPubkey,
+        rumorId: SNAPSHOT_RUMOR_ID,
         status: "sent",
         wrapId: SNAPSHOT_RUMOR_ID,
       }),

@@ -5,16 +5,19 @@ const EXTENSION_BY_IMAGE_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
+  "application/pdf": "pdf",
 };
 
 export interface PrivateImageExportLinks {
   rumor?: string;
 }
 
-const toPrivateImageFile = (blob: Blob): File => {
+const toPrivateImageFile = (blob: Blob, fileName?: string): File => {
   const type = blob.type || "image/jpeg";
   const extension = EXTENSION_BY_IMAGE_TYPE[type] ?? "jpg";
-  return new File([blob], `linky-image.${extension}`, { type });
+  const baseName =
+    type === "application/pdf" ? "linky-document" : "linky-image";
+  return new File([blob], fileName ?? `${baseName}.${extension}`, { type });
 };
 
 const reportPrivateImageExport = (
@@ -59,8 +62,9 @@ export const isCancelledShareError = (error: unknown): boolean => {
 export const downloadPrivateImageBlob = (
   blob: Blob,
   links: PrivateImageExportLinks = {},
+  fileName?: string,
 ): void => {
-  const file = toPrivateImageFile(blob);
+  const file = toPrivateImageFile(blob, fileName);
   const url = URL.createObjectURL(file);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -85,12 +89,13 @@ export const sharePrivateImageBlob = async (
   blob: Blob,
   title: string,
   links: PrivateImageExportLinks = {},
+  fileName?: string,
 ): Promise<void> => {
   if (!canSharePrivateImage()) {
     throw new Error("share-unavailable");
   }
 
-  const file = toPrivateImageFile(blob);
+  const file = toPrivateImageFile(blob, fileName);
   const shareData: ShareData = {
     files: [file],
     title,

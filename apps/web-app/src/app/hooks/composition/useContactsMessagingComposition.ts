@@ -1729,7 +1729,7 @@ export const useContactsMessagingComposition = ({
             id: `bank-payment-offer:${recipient.contactId}:${offerId}`,
             localOnly: true,
             pubkey: myPubHex,
-            rumorId: null,
+            rumorId: exit.value.snapshotId,
             status: "sent",
             wrapId: exit.value.selfCopy.wrapId,
           });
@@ -1879,7 +1879,7 @@ export const useContactsMessagingComposition = ({
           id: `bank-payment-offer:${offerInfo.offerId}`,
           localOnly: true,
           pubkey: offererPublicKey === myPubHex ? myPubHex : offererPublicKey,
-          rumorId: null,
+          rumorId: exit.value.snapshotId,
           status: "sent",
           wrapId: exit.value.selfCopy.wrapId,
         });
@@ -3166,8 +3166,9 @@ export const useContactsMessagingComposition = ({
   const onCopyChatMessage = React.useCallback(
     (message: LocalNostrMessage) => {
       const content = String(message.content ?? "");
-      const copyContent = parsePrivateImageMessage(content)
-        ? privateImagePreviewText(t)
+      const privateImage = parsePrivateImageMessage(content);
+      const copyContent = privateImage
+        ? privateImagePreviewText(t, privateImage)
         : content;
       void copyText(copyContent);
     },

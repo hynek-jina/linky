@@ -410,7 +410,16 @@ export const de = {
   chatQueued: "Zum Senden vorgemerkt.",
   chatPendingShort: "ausstehend",
   chatSeenShort: "gelesen",
-  chatImageAttach: "Bild hinzufügen",
+  chatImageAttach: "Bild oder PDF hinzufügen",
+  chatPdfDecrypting: "PDF wird entschlüsselt…",
+  chatPdfLoadFailed: "PDF konnte nicht geladen werden.",
+  chatPdfMessage: "PDF",
+  chatPdfOpen: "PDF öffnen",
+  chatPdfSave: "Speichern",
+  chatPdfTooLarge: "Das PDF ist zu groß (max. 2 MB).",
+  chatImageTooLarge: "Das Bild ist zu groß (max. 20 MB).",
+  chatAttachmentUnsupported:
+    "Es können nur Bilder und PDF-Dateien gesendet werden.",
   chatImageDecrypting: "Bild wird entschlüsselt…",
   chatImageLoadFailed: "Bild konnte nicht geladen werden.",
   chatImageMessage: "Bild",
@@ -659,6 +668,9 @@ export const de = {
   bankPaymentOfferMarkPaid: "Ich habe bezahlt",
   bankPaymentOfferMarkDone: "Erledigen",
   bankPaymentOfferSettle: "Abschluss bestätigen",
+  bankPaymentOfferRejectedTitle: "Auszahlung abgelehnt",
+  bankPaymentOfferRejectedDescription:
+    "{name} hat die Auszahlung abgelehnt und die Banküberweisung als nicht erhalten markiert. Falls du sie gesendet hast, kläre es im Chat.",
   bankPaymentOfferNotPaid: "Nicht bezahlt",
   bankPaymentOfferAcceptedByOther:
     "Jemand anderes hat das Angebot schneller angenommen. Für dich ist es damit beendet.",

@@ -30,6 +30,13 @@ describe("message editor DOM", () => {
     ]);
   });
 
+  it("serializes browser-inserted line blocks as newlines", () => {
+    const editor = document.createElement("div");
+    editor.innerHTML =
+      "first<div>second</div><div><br></div><div>fourth<br></div>";
+    expect(getMessageEditorValue(editor)).toBe("first\nsecond\n\nfourth");
+  });
+
   it("keeps logical caret offsets across an atomic pill", () => {
     const editor = createEditor();
     setMessageEditorCaret(editor, 17);

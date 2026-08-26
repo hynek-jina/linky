@@ -829,7 +829,7 @@ const ChatComposer = memo(function ChatComposer({
           ref={imageInputRef}
           className="chat-image-input"
           type="file"
-          accept="image/*"
+          accept="image/*,application/pdf,.pdf"
           onChange={(event) => {
             const file = event.target.files?.[0] ?? null;
             event.currentTarget.value = "";

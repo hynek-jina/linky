@@ -205,6 +205,37 @@ describe("chat rumor encoding", () => {
     expect(rawRumor.tags).not.toContainEqual(["encoding", "base64"]);
   });
 
+  it("omits dim for files without dimensions and carries their name", () => {
+    const pdf = new PrivateImage({
+      url: image.url,
+      fileType: "application/pdf",
+      encryptionAlgorithm: "aes-gcm",
+      key: image.key,
+      nonce: image.nonce,
+      encryptedSha256: image.encryptedSha256,
+      originalSha256: image.originalSha256,
+      encryptedSize: 1234,
+      fileName: "invoice.pdf",
+      storageEncoding: "base64",
+    });
+    const rumor = encodeImageMessageRumor(
+      new ImageMessageDraft({ to: bob.pubkey, image: pdf }),
+      alice.pubkey,
+      sentAt,
+      clientId,
+    );
+
+    expect(rumor.tags).not.toContainEqual(["dim", expect.anything()]);
+    expect(rumor.tags).toContainEqual(["name", "invoice.pdf"]);
+    expect(decodeChatRumor(rumor, bob, wrapAuthor.pubkey)).toEqual(
+      Either.right(
+        expect.objectContaining({
+          body: expect.objectContaining({ _tag: "ImageBody", image: pdf }),
+        }),
+      ),
+    );
+  });
+
   it("encodes edits without reply tags", () => {
     const rumor = encodeEditRumor(
       new EditMessageDraft({
