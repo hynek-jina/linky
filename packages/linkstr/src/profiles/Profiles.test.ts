@@ -705,8 +705,36 @@ describe("Profiles.searchProfiles", () => {
       bob.pubkey,
     ]);
     expect(exit.value[1]?.metadata.name).toBe("Alice Bobson");
+    expect(exit.value[0]?.metadata.displayName).toBe("ALICE");
     expect(fetchLog).toHaveLength(2);
     expect(fetchLog[0]).toEqual({ kinds: [0], search: "alice", limit: 30 });
+  });
+
+  it("ranks exact and prefix name matches above substring matches", async () => {
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        relayA,
+        [
+          profileEvent(alice, JSON.stringify({ name: "blackjack" }), base + 3),
+          profileEvent(bob, JSON.stringify({ name: "jackson" }), base + 2),
+          profileEvent(carol, JSON.stringify({ display_name: "Jack" }), base),
+        ],
+      ],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { stored }),
+      Effect.flatMap(Profiles, (profiles) => profiles.searchProfiles("jack")),
+      [relayA],
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value.map((hit) => hit.pubkey)).toEqual([
+      carol.pubkey,
+      bob.pubkey,
+      alice.pubkey,
+    ]);
   });
 
   it("caps the hits at the requested limit", async () => {

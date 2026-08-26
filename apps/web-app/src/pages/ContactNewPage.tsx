@@ -1,6 +1,6 @@
 import type { FC } from "react";
 import React from "react";
-import { ArrowLeft, BadgeCheck, Save, User, UserPlus } from "lucide-react";
+import { ArrowLeft, Save, User, UserPlus } from "lucide-react";
 import { getContactQueryPrefill } from "../app/lib/contactQueryPrefill";
 import { PasteIcon } from "../components/icons";
 import { readClipboardText } from "../platform/clipboard";
@@ -461,12 +461,6 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                           </div>
                           <div className="contact-new-search-result-body">
                             <strong>{displayName || t("contact")}</strong>
-                            {candidate.isExactMatch ? (
-                              <span className="contact-new-search-result-verified">
-                                <BadgeCheck size={14} aria-hidden="true" />
-                                {t("contactSearchVerifiedMatch")}
-                              </span>
-                            ) : null}
                             {candidate.lnAddress ? (
                               <span title={candidate.lnAddress}>
                                 {formatShortLightningAddress(

@@ -539,7 +539,6 @@ export const cs = {
     "Zadejte npub, NIP-05 nebo rezervované jméno, třeba alice.",
   contactSearchEmpty: "Zadejte, koho hledat.",
   contactSearchNoResult: "Nic jsem nenašel.",
-  contactSearchVerifiedMatch: "Ověřená shoda",
   contactSearchCreateFromQuery: "Vytvořit kontakt",
   contactSuggestionsTitle: "Noví uživatelé Linky",
   contactSuggestionLastSeen: "Naposledy",

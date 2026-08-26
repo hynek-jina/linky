@@ -79,6 +79,23 @@ export class ProfileSearchHit extends Schema.Class<ProfileSearchHit>(
 const normalizeSearchText = (value: string): string =>
   value.trim().toLocaleLowerCase();
 
+const searchableNames = (metadata: ProfileMetadata): Array<string> =>
+  [metadata.name, metadata.displayName]
+    .filter((field): field is string => field !== undefined)
+    .map(normalizeSearchText);
+
+/** 0 = a name equals the query, 1 = a name starts with it, 2 = anything else. */
+const searchRelevanceRank = (
+  metadata: ProfileMetadata,
+  query: string,
+): number => {
+  const needle = normalizeSearchText(query);
+  const names = searchableNames(metadata);
+  if (names.includes(needle)) return 0;
+  if (names.some((name) => name.startsWith(needle))) return 1;
+  return 2;
+};
+
 /**
  * Relays without NIP-50 ignore the `search` field and answer with arbitrary
  * kind-0 events, so every hit is re-checked against the query locally.
@@ -358,12 +375,10 @@ export class Profiles extends Effect.Service<Profiles>()("linkstr/Profiles", {
           },
         );
 
-        const result: Array<ProfileSearchHit> = [];
-        const eventIds: Array<EventId> = [];
+        const matches: Array<{ hit: ProfileSearchHit; eventId: EventId }> = [];
         const seen = new Set<Pubkey>();
         // Newest-first, so the first event per author is their current profile.
         for (const event of events) {
-          if (result.length >= limit) break;
           if (seen.has(event.pubkey)) continue;
           seen.add(event.pubkey);
           const decoded = decodeProfileEvent(event);
@@ -373,16 +388,26 @@ export class Profiles extends Effect.Service<Profiles>()("linkstr/Profiles", {
           ) {
             continue;
           }
-          result.push(
-            new ProfileSearchHit({
+          matches.push({
+            eventId: event.id,
+            hit: new ProfileSearchHit({
               pubkey: event.pubkey,
               metadata: decoded.right.metadata,
               updatedAt: event.created_at,
             }),
-          );
-          eventIds.push(event.id);
+          });
         }
-        return { result, eventIds };
+        // Stable sort keeps newest-first within a relevance rank.
+        matches.sort(
+          (a, b) =>
+            searchRelevanceRank(a.hit.metadata, trimmedQuery) -
+            searchRelevanceRank(b.hit.metadata, trimmedQuery),
+        );
+        const kept = matches.slice(0, limit);
+        return {
+          result: kept.map(({ hit }) => hit),
+          eventIds: kept.map(({ eventId }) => eventId),
+        };
       }).pipe(
         inspectPlainOperation(inspector, "profiles.searchProfiles", {
           query,

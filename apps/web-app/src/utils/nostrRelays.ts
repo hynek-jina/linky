@@ -23,7 +23,10 @@ export const NOSTR_RELAYS =
 
 // NIP-50 relays for profile text search; the default read relays do not
 // index kind-0 content, so contact search would find nothing without them.
-const DEFAULT_NOSTR_SEARCH_RELAYS = ["wss://relay.nostr.band"];
+const DEFAULT_NOSTR_SEARCH_RELAYS = [
+  "wss://search.nos.today",
+  "wss://nostr.wine",
+];
 
 const envSearchRelays = Array.from(
   new Set(

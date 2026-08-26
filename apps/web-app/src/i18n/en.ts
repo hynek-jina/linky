@@ -535,7 +535,6 @@ export const en = {
     "Enter an npub, NIP-05, or reserved name, for example alice.",
   contactSearchEmpty: "Enter who to search for.",
   contactSearchNoResult: "Nothing found.",
-  contactSearchVerifiedMatch: "Verified match",
   contactSearchCreateFromQuery: "Create contact",
   contactSuggestionsTitle: "New Linky users",
   contactSuggestionLastSeen: "Last seen",
