@@ -120,7 +120,10 @@ export const encodeImageMessageRumor = (
       ["x", image.encryptedSha256],
       ["ox", image.originalSha256],
       ["size", String(image.encryptedSize)],
-      ["dim", `${image.width}x${image.height}`],
+      ...(image.width !== undefined && image.height !== undefined
+        ? [["dim", `${image.width}x${image.height}`]]
+        : []),
+      ...(image.fileName !== undefined ? [["name", image.fileName]] : []),
       ...(image.storageEncoding === "base64" ? [["encoding", "base64"]] : []),
       ...replyTags(draft.replyTo, draft.root),
     ],
@@ -252,6 +255,17 @@ const decodeTextBody = (
   return Either.right(new TextBody({ text: rumor.content }));
 };
 
+const parseDimensions = (
+  text: string | null,
+): { width: number; height: number } | null => {
+  const match = /^(\d+)x(\d+)$/i.exec(text ?? "");
+  if (!match) return null;
+  const width = Number.parseInt(match[1] ?? "", 10);
+  const height = Number.parseInt(match[2] ?? "", 10);
+  if (width <= 0 || height <= 0) return null;
+  return { width, height };
+};
+
 const decodeImageBody = (
   rumor: Rumor,
 ): Either.Either<MessageBody, DropReason> => {
@@ -267,11 +281,10 @@ const decodeImageBody = (
   const originalSha256 = firstTrimmedTagValue(rumor.tags, "ox");
   const sizeText = firstTrimmedTagValue(rumor.tags, "size");
   const dimensionText = firstTrimmedTagValue(rumor.tags, "dim");
+  const fileName = firstTrimmedTagValue(rumor.tags, "name");
   const encoding = firstTrimmedTagValue(rumor.tags, "encoding");
-  const dimensions = /^(\d+)x(\d+)$/i.exec(dimensionText ?? "");
+  const dimensions = parseDimensions(dimensionText);
   const encryptedSize = Number.parseInt(sizeText ?? "", 10);
-  const width = Number.parseInt(dimensions?.[1] ?? "", 10);
-  const height = Number.parseInt(dimensions?.[2] ?? "", 10);
   const storageEncoding =
     encoding === "base64" ? "base64" : encoding === null ? "raw" : null;
 
@@ -286,10 +299,7 @@ const decodeImageBody = (
     storageEncoding === null ||
     !Number.isFinite(encryptedSize) ||
     encryptedSize <= 0 ||
-    !Number.isFinite(width) ||
-    width <= 0 ||
-    !Number.isFinite(height) ||
-    height <= 0
+    (dimensionText !== null && dimensions === null)
   ) {
     return Either.left("invalid-image");
   }
@@ -304,8 +314,8 @@ const decodeImageBody = (
       encryptedSha256: encryptedSha256.toLowerCase(),
       originalSha256: originalSha256.toLowerCase(),
       encryptedSize: Math.trunc(encryptedSize),
-      width: Math.trunc(width),
-      height: Math.trunc(height),
+      ...(dimensions ?? {}),
+      ...(fileName === null ? {} : { fileName }),
       storageEncoding,
     }),
     {

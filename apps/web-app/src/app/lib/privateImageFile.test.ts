@@ -4,6 +4,7 @@ import { reportInspectorRows } from "../../devtools/inspector";
 import {
   downloadPrivateImageBlob,
   isCancelledShareError,
+  sanitizeExportFileName,
   sharePrivateImageBlob,
 } from "./privateImageFile";
 
@@ -46,6 +47,26 @@ describe("privateImageFile", () => {
 
   afterEach(() => {
     document.body.innerHTML = "";
+  });
+
+  it("reports PDF exports under file tags with a sanitized name", async () => {
+    await sharePrivateImageBlob(
+      new Blob(["%PDF-"], { type: "application/pdf" }),
+      "PDF",
+      { rumor: "rumor-pdf" },
+      "../invoice.exe",
+    );
+    const shared = share.mock.calls[0]?.[0];
+    expect(shared?.files?.[0]?.name).toBe("invoice.pdf");
+    expect(lastReportedRow()?.tag).toBe("ChatFileShared");
+
+    downloadPrivateImageBlob(new Blob(["%PDF-"], { type: "application/pdf" }), {
+      rumor: "rumor-pdf",
+    });
+    expect(lastReportedRow()?.tag).toBe("ChatFileSaved");
+    expect(lastReportedRow()?.payload).toMatchObject({
+      fileName: "linky-document.pdf",
+    });
   });
 
   it("shares the image bytes as a file, never a url or text", async () => {
@@ -130,5 +151,19 @@ describe("privateImageFile", () => {
     expect(isCancelledShareError(new Error("Share canceled"))).toBe(true);
     expect(isCancelledShareError(new Error("boom"))).toBe(false);
     expect(isCancelledShareError(null)).toBe(false);
+  });
+});
+
+describe("sanitizeExportFileName", () => {
+  it("forces the real extension and strips paths and control characters", () => {
+    expect(sanitizeExportFileName("invoice.html", "pdf")).toBe("invoice.pdf");
+    expect(sanitizeExportFileName("Invoice 2026.PDF", "pdf")).toBe(
+      "Invoice 2026.pdf",
+    );
+    expect(sanitizeExportFileName("C:\\dir\\a<b>.pdf", "pdf")).toBe("ab.pdf");
+    expect(sanitizeExportFileName("..\u0000", "pdf")).toBeNull();
+    expect(sanitizeExportFileName(`${"x".repeat(200)}.pdf`, "pdf")).toBe(
+      `${"x".repeat(116)}.pdf`,
+    );
   });
 });

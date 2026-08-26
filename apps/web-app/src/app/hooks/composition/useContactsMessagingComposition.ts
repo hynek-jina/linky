@@ -1,4 +1,6 @@
 import * as Evolu from "@evolu/common";
+import { reportInspectorRows } from "../../../devtools/inspector";
+import { getInspectorEmissionEnabled } from "../../../devtools/inspector/inspectorEnabled";
 import {
   BankOfferDraft,
   BankOfferId,
@@ -52,7 +54,11 @@ import {
   NO_GROUP_FILTER,
 } from "../../../utils/constants";
 import { formatShortNpub, getBestNostrName } from "../../../utils/formatting";
-import { getContactGroups } from "../../../utils/contactGroups";
+import {
+  getContactGroups,
+  normalizeContactGroups,
+  serializeContactGroups,
+} from "../../../utils/contactGroups";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { setStoredPushContactNames } from "../../../utils/pushContactNamesStorage";
 import { getBankPaymentOfferCurrency } from "../../../utils/spdPayment";
@@ -283,6 +289,34 @@ type IdentityOwnersCompositionResult = ReturnType<
   typeof useIdentityOwnersComposition
 >;
 type EvoluMutations = ReturnType<typeof useEvolu>;
+
+interface SavedContactRef {
+  id: ContactId;
+  ownerId: IdentityOwnersCompositionResult["contactsOwnerId"] | null;
+}
+
+export interface PendingContactsGroupAssignment {
+  messageId: string;
+  savedContacts: SavedContactRef[];
+}
+
+const reportContactsAddedToGroup = (
+  pending: PendingContactsGroupAssignment,
+  group: string,
+): void => {
+  if (!getInspectorEmissionEnabled()) return;
+  const contactIds = pending.savedContacts.map(({ id }) => String(id));
+  reportInspectorRows([
+    {
+      at: Date.now(),
+      channel: "app.log",
+      tag: "contacts.addToGroup",
+      summary: `${contactIds.length} contacts from a chat message added to group "${group}"`,
+      links: { contact: contactIds, message: pending.messageId },
+      payload: { contactIds, group, messageId: pending.messageId },
+    },
+  ]);
+};
 type NostrBootstrapParams = Parameters<typeof useEvoluNostrBootstrapReady>[0];
 
 interface UseContactsMessagingCompositionParams {
@@ -1715,7 +1749,7 @@ export const useContactsMessagingComposition = ({
             id: `bank-payment-offer:${recipient.contactId}:${offerId}`,
             localOnly: true,
             pubkey: myPubHex,
-            rumorId: null,
+            rumorId: exit.value.snapshotId,
             status: "sent",
             wrapId: exit.value.selfCopy.wrapId,
           });
@@ -1865,7 +1899,7 @@ export const useContactsMessagingComposition = ({
           id: `bank-payment-offer:${offerInfo.offerId}`,
           localOnly: true,
           pubkey: offererPublicKey === myPubHex ? myPubHex : offererPublicKey,
-          rumorId: null,
+          rumorId: exit.value.snapshotId,
           status: "sent",
           wrapId: exit.value.selfCopy.wrapId,
         });
@@ -2859,8 +2893,11 @@ export const useContactsMessagingComposition = ({
     ],
   );
 
+  const [pendingContactsGroupAssignment, setPendingContactsGroupAssignment] =
+    React.useState<PendingContactsGroupAssignment | null>(null);
+
   const addNpubMessageContacts = React.useCallback(
-    (rawNpubs: readonly string[]) => {
+    (rawNpubs: readonly string[], messageId: string) => {
       const savedNpubs = new Set(
         contacts.flatMap((contact) => {
           const npub = normalizeNpubIdentifier(contact.npub);
@@ -2917,24 +2954,27 @@ export const useContactsMessagingComposition = ({
         return;
       }
 
+      const savedContacts: SavedContactRef[] = [];
       for (const payload of payloads) {
-        const result = contactsOwnerId
-          ? (() => {
-              const scoped = insert("contact", payload, {
-                ownerId: contactsOwnerId,
-              });
-              if (scoped.ok) return scoped;
-              return insert("contact", payload);
-            })()
-          : insert("contact", payload);
-
+        const scoped = contactsOwnerId
+          ? insert("contact", payload, { ownerId: contactsOwnerId })
+          : null;
+        if (scoped?.ok) {
+          savedContacts.push({ id: scoped.value.id, ownerId: contactsOwnerId });
+          continue;
+        }
+        const result = insert("contact", payload);
         if (!result.ok) {
           setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
           return;
         }
+        savedContacts.push({ id: result.value.id, ownerId: null });
       }
 
-      setStatus(t("contactsSaved").replace("{count}", String(payloads.length)));
+      setPendingContactsGroupAssignment({ messageId, savedContacts });
+      setStatus(
+        t("contactsSaved").replace("{count}", String(savedContacts.length)),
+      );
     },
     [
       activeContactsOwnerContactCount,
@@ -2948,6 +2988,53 @@ export const useContactsMessagingComposition = ({
       t,
       unknownNameByNpub,
     ],
+  );
+
+  const closeContactsGroupAssignment = React.useCallback(() => {
+    setPendingContactsGroupAssignment(null);
+  }, []);
+
+  const assignPendingContactsToGroup = React.useCallback(
+    (rawGroup: string) => {
+      const pending = pendingContactsGroupAssignment;
+      if (!pending) return;
+
+      const groups = normalizeContactGroups([rawGroup]);
+      if (groups.length === 0) return;
+
+      const groupName = Evolu.NonEmptyString1000.fromUnknown(groups[0]);
+      const groupNamesJson = Evolu.NonEmptyString1000.fromUnknown(
+        serializeContactGroups(groups),
+      );
+      if (!groupName.ok || !groupNamesJson.ok) {
+        setStatus(`${t("errorPrefix")}: ${t("group")}`);
+        return;
+      }
+
+      for (const { id, ownerId } of pending.savedContacts) {
+        const payload = {
+          id,
+          groupName: groupName.value,
+          groupNamesJson: groupNamesJson.value,
+        };
+        const result = ownerId
+          ? update("contact", payload, { ownerId })
+          : update("contact", payload);
+        if (!result.ok) {
+          setStatus(`${t("errorPrefix")}: ${String(result.error ?? "")}`);
+          return;
+        }
+      }
+
+      setPendingContactsGroupAssignment(null);
+      reportContactsAddedToGroup(pending, groups[0] ?? rawGroup);
+      setStatus(
+        t("contactsAddedToGroup")
+          .replace("{count}", String(pending.savedContacts.length))
+          .replace("{group}", groups.join(", ")),
+      );
+    },
+    [pendingContactsGroupAssignment, setStatus, t, update],
   );
 
   React.useEffect(() => {
@@ -3100,8 +3187,9 @@ export const useContactsMessagingComposition = ({
   const onCopyChatMessage = React.useCallback(
     (message: LocalNostrMessage) => {
       const content = String(message.content ?? "");
-      const copyContent = parsePrivateImageMessage(content)
-        ? privateImagePreviewText(t)
+      const privateImage = parsePrivateImageMessage(content);
+      const copyContent = privateImage
+        ? privateImagePreviewText(t, privateImage)
         : content;
       void copyText(copyContent);
     },
@@ -3321,6 +3409,9 @@ export const useContactsMessagingComposition = ({
     addUnknownContactFromChat,
     appendLocalNostrMessage,
     appendLocalNostrReaction,
+    assignPendingContactsToGroup,
+    closeContactsGroupAssignment,
+    pendingContactsGroupAssignment,
     autoAcceptedChatMessageIdsRef,
     bankPaymentOfferContacts,
     bankPaymentOfferMessages,

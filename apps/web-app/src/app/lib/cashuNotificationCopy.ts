@@ -19,6 +19,22 @@ export const getReceivedMoneyCopyForLanguage = (
   return "You received money";
 };
 
+export const getChatAttachmentCopyForLanguage = (
+  language: string | null | undefined,
+  kind: "image" | "pdf",
+): string => {
+  const normalized = String(language ?? "")
+    .trim()
+    .toLowerCase();
+  if (normalized.startsWith("cs")) {
+    return kind === "pdf" ? "PDF" : "Obrázek";
+  }
+  if (normalized.startsWith("de")) {
+    return kind === "pdf" ? "PDF" : "Bild";
+  }
+  return kind === "pdf" ? "PDF" : "Image";
+};
+
 export const getBankPaymentReimbursementCopyForLanguage = (
   language: string | null | undefined,
 ): string => {

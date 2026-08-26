@@ -30,6 +30,30 @@ describe("message editor DOM", () => {
     ]);
   });
 
+  it("counts the newline of a line block in the caret offset", () => {
+    const editor = document.createElement("div");
+    editor.innerHTML = "first<div>second</div>";
+    document.body.appendChild(editor);
+    const secondText = editor.lastChild?.firstChild;
+    if (!secondText) throw new Error("missing second line");
+    const selection = window.getSelection();
+    if (!selection) throw new Error("missing selection");
+    const range = document.createRange();
+    range.setStart(secondText, 3);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    expect(getMessageEditorCaret(editor)).toBe("first\nsec".length);
+    editor.remove();
+  });
+
+  it("serializes browser-inserted line blocks as newlines", () => {
+    const editor = document.createElement("div");
+    editor.innerHTML =
+      "first<div>second</div><div><br></div><div>fourth<br></div>";
+    expect(getMessageEditorValue(editor)).toBe("first\nsecond\n\nfourth");
+  });
+
   it("keeps logical caret offsets across an atomic pill", () => {
     const editor = createEditor();
     setMessageEditorCaret(editor, 17);

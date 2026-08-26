@@ -29,6 +29,16 @@ const TAG_DESCRIPTIONS: Record<string, string> = {
     "User exported a decrypted chat image through the system share sheet; the rumor link ties it to the message it came from.",
   ChatImageSaved:
     "User saved a decrypted chat image as a file download; the rumor link ties it to the message it came from.",
+  ChatFileShared:
+    "User exported a decrypted chat PDF through the system share sheet; the rumor link ties it to the message it came from.",
+  ChatFileSaved:
+    "User saved a decrypted chat PDF as a file download; the rumor link ties it to the message it came from.",
+  ChatFileShareFailed:
+    "System share of a chat PDF failed for a reason other than the user cancelling; the app fell back to a file download when triggered from the message menu.",
+  "mint.lightningFeeProbe":
+    "Display-only fee probe on the Mints page: an unpaid mint quote from another production mint was submitted as a melt quote to the selected mint to read its Lightning fee_reserve. Nothing is paid; the result is cached for a day. Links carry both quote ids.",
+  "contacts.addToGroup":
+    "User assigned the contacts just saved from a chat message to a group; the payload lists the contact ids and the group name.",
   ChatImageShareFailed:
     "System share of a chat image failed for a reason other than the user cancelling; the app fell back to a file download when triggered from the message menu.",
 };

@@ -1,5 +1,13 @@
 import React from "react";
-import { Check, Copy, ImagePlus, Landmark, Share2, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  FileText,
+  ImagePlus,
+  Landmark,
+  Share2,
+  X,
+} from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
   getLinkyBankPaymentOfferExpiresAtSec,
@@ -22,9 +30,12 @@ import {
   type BankPayment,
 } from "../utils/spdPayment";
 import {
+  getChatAttachmentRejection,
+  isPrivatePdfPayload,
   parsePrivateImageMessage,
   type PrivateImageMessagePayload,
 } from "../app/lib/privateImageMessage";
+import { PrivateFileBubble } from "../components/PrivateFileBubble";
 import { PrivateImageBubble } from "../components/PrivateImageBubble";
 
 interface BankPaymentOfferDetailPageProps {
@@ -185,32 +196,58 @@ const PaymentConfirmation = ({
 }: {
   confirmation: BankPaymentConfirmation;
   t: (key: string) => string;
-}) => (
-  <div className="bank-payment-offer-confirmation">
-    <strong>{t("bankPaymentOfferConfirmation")}</strong>
-    <PrivateImageBubble
-      onBlobChange={() => undefined}
-      payload={confirmation.payload}
-      rumorId={String(confirmation.message.rumorId ?? "").trim() || null}
-      t={t}
-    />
-  </div>
-);
+}) => {
+  const rumorId = String(confirmation.message.rumorId ?? "").trim() || null;
+  return (
+    <div className="bank-payment-offer-confirmation">
+      <strong>{t("bankPaymentOfferConfirmation")}</strong>
+      {isPrivatePdfPayload(confirmation.payload) ? (
+        <PrivateFileBubble
+          onBlobChange={() => undefined}
+          payload={confirmation.payload}
+          rumorId={rumorId}
+          t={t}
+        />
+      ) : (
+        <PrivateImageBubble
+          onBlobChange={() => undefined}
+          payload={confirmation.payload}
+          rumorId={rumorId}
+          t={t}
+        />
+      )}
+    </div>
+  );
+};
+
+interface PendingConfirmation {
+  fileName: string;
+  imageUrl: string | null;
+}
 
 const PendingPaymentConfirmation = ({
-  imageUrl,
+  pending,
   t,
 }: {
-  imageUrl: string;
+  pending: PendingConfirmation;
   t: (key: string) => string;
 }) => (
   <div className="bank-payment-offer-confirmation">
     <strong>{t("bankPaymentOfferConfirmation")}</strong>
-    <img
-      className="chat-private-image"
-      src={imageUrl}
-      alt={t("bankPaymentOfferConfirmation")}
-    />
+    {pending.imageUrl ? (
+      <img
+        className="chat-private-image"
+        src={pending.imageUrl}
+        alt={t("bankPaymentOfferConfirmation")}
+      />
+    ) : (
+      <span className="chat-private-file">
+        <span className="chat-private-file-icon" aria-hidden="true">
+          <FileText size={28} />
+        </span>
+        <span className="chat-private-file-name">{pending.fileName}</span>
+      </span>
+    )}
   </div>
 );
 
@@ -407,9 +444,8 @@ export const BankPaymentOfferDetailPage: React.FC<
   const [isSharingJpeg, setIsSharingJpeg] = React.useState(false);
   const [isConfirmingPaid, setIsConfirmingPaid] = React.useState(false);
   const [isSettling, setIsSettling] = React.useState(false);
-  const [pendingConfirmationUrl, setPendingConfirmationUrl] = React.useState<
-    string | null
-  >(null);
+  const [pendingConfirmation, setPendingConfirmation] =
+    React.useState<PendingConfirmation | null>(null);
   const [isExtending, setIsExtending] = React.useState(false);
   const [responseStatus, setResponseStatus] = React.useState<
     "accepted" | "canceled" | "declined" | null
@@ -435,13 +471,15 @@ export const BankPaymentOfferDetailPage: React.FC<
     [bankPaymentOfferMessages, chatId, chatMessages, offerId],
   );
   React.useEffect(() => {
-    if (confirmation) setPendingConfirmationUrl(null);
+    if (confirmation) setPendingConfirmation(null);
   }, [confirmation]);
   React.useEffect(
     () => () => {
-      if (pendingConfirmationUrl) URL.revokeObjectURL(pendingConfirmationUrl);
+      if (pendingConfirmation?.imageUrl) {
+        URL.revokeObjectURL(pendingConfirmation.imageUrl);
+      }
     },
-    [pendingConfirmationUrl],
+    [pendingConfirmation],
   );
   const payment = React.useMemo(
     () =>
@@ -477,15 +515,21 @@ export const BankPaymentOfferDetailPage: React.FC<
     };
   }, [entry]);
 
+  // The displayed countdown may belong to another recipient's entry (the
+  // offerer sees the accepting contact's phase), so tick unless the offer as
+  // a whole has ended.
+  const offerHasEnded =
+    entry === null ||
+    entry.info.status === "settled" ||
+    entry.info.status === "canceled";
   React.useEffect(() => {
-    if (!entry || !hasTimedPhase(entry.info.status)) return;
-
+    if (offerHasEnded) return;
     const intervalId = window.setInterval(() => {
       setNowMs(Date.now());
     }, 1_000);
 
     return () => window.clearInterval(intervalId);
-  }, [entry]);
+  }, [offerHasEnded]);
 
   const isCreatedByMe =
     entry !== null &&
@@ -739,6 +783,30 @@ export const BankPaymentOfferDetailPage: React.FC<
     );
   }
 
+  const wasRejectedAfterPaying =
+    !isCreatedByMe &&
+    entry.info.status === "canceled" &&
+    (entry.info.bankPaidAtSec ?? 0) > 0;
+  if (wasRejectedAfterPaying) {
+    return (
+      <section className="panel panel-plain bank-payment-offer-state-page">
+        <div className="bank-payment-offer-state-copy">
+          <h2>{t("bankPaymentOfferRejectedTitle")}</h2>
+          <div className="bank-payment-amount">{amountText}</div>
+          <p className="muted">
+            {t("bankPaymentOfferRejectedDescription").replace(
+              "{name}",
+              requesterName,
+            )}
+          </p>
+        </div>
+        <button type="button" className="btn-wide" onClick={closeOffer}>
+          {t("chatImageBackToChat")}
+        </button>
+      </section>
+    );
+  }
+
   if (entry.info.status === "accepted_by_other") {
     return (
       <section className="panel panel-plain bank-payment-offer-state-page">
@@ -850,8 +918,18 @@ export const BankPaymentOfferDetailPage: React.FC<
     const attachConfirmation = async (file: File) => {
       if (isAttachingConfirmation) return;
 
-      const localImageUrl = URL.createObjectURL(file);
-      setPendingConfirmationUrl(localImageUrl);
+      const rejectionKey = getChatAttachmentRejection(file);
+      if (rejectionKey) {
+        setErrorText(t(rejectionKey));
+        return;
+      }
+      setErrorText(null);
+      setPendingConfirmation({
+        fileName: file.name,
+        imageUrl: file.type.startsWith("image/")
+          ? URL.createObjectURL(file)
+          : null,
+      });
       setIsAttachingConfirmation(true);
       try {
         await onSendChatImage(file, entry.message);
@@ -879,15 +957,15 @@ export const BankPaymentOfferDetailPage: React.FC<
 
         {confirmation ? (
           <PaymentConfirmation confirmation={confirmation} t={t} />
-        ) : pendingConfirmationUrl ? (
-          <PendingPaymentConfirmation imageUrl={pendingConfirmationUrl} t={t} />
+        ) : pendingConfirmation ? (
+          <PendingPaymentConfirmation pending={pendingConfirmation} t={t} />
         ) : (
           <>
             <input
               ref={confirmationInputRef}
               className="chat-image-input"
               type="file"
-              accept="image/*"
+              accept="image/*,application/pdf,.pdf"
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
                 event.currentTarget.value = "";
@@ -919,6 +997,7 @@ export const BankPaymentOfferDetailPage: React.FC<
             </button>
           </>
         )}
+        {errorText ? <p className="bank-payment-error">{errorText}</p> : null}
       </section>
     );
   }

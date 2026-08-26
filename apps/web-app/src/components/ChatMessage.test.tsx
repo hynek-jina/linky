@@ -4,7 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LinkyBankPaymentOfferInfo } from "../app/lib/bankPaymentOffer";
 import { serializePrivateImageMessage } from "../app/lib/privateImageMessage";
 import type { LocalNostrMessage } from "../app/types/appTypes";
-import { ChatMessage, type NpubMessageContactInfo } from "./ChatMessage";
+import {
+  ChatMessage,
+  type MessageContactsGroupAssignment,
+  type NpubMessageContactInfo,
+} from "./ChatMessage";
 
 vi.mock("../app/lib/privateImageMessage", async (importOriginal) => {
   const actual =
@@ -69,7 +73,8 @@ interface RenderChatMessageOptions {
   canSettleBankPaymentOffer?: boolean;
   direction?: "in" | "out";
   getNpubMessageContactInfo?: (npub: string) => NpubMessageContactInfo | null;
-  onAddNpubContacts?: (npubs: readonly string[]) => void;
+  onAddNpubContacts?: (npubs: readonly string[], messageId: string) => void;
+  contactsGroupAssignment?: MessageContactsGroupAssignment | null;
   onSettleBankPaymentOffer?: () => Promise<void>;
 }
 
@@ -84,6 +89,7 @@ const renderChatMessage = async (
   await act(async () => {
     root.render(
       <ChatMessage
+        contactsGroupAssignment={options.contactsGroupAssignment ?? null}
         actionLabels={{
           copy: "copy",
           edit: "edit",
@@ -168,7 +174,44 @@ describe("ChatMessage contact actions", () => {
     });
 
     expect(onAddNpubContacts).toHaveBeenCalledOnce();
-    expect(onAddNpubContacts).toHaveBeenCalledWith(["npub1aaaa", "npub1cccc"]);
+    expect(onAddNpubContacts).toHaveBeenCalledWith(
+      ["npub1aaaa", "npub1cccc"],
+      "message-1",
+    );
+  });
+
+  it("offers a group picker in place of Add all once the contacts are saved", async () => {
+    const onAssign = vi.fn();
+    const container = await renderChatMessage("npub1aaaa npub1cccc", {
+      contactsGroupAssignment: {
+        contactCount: 2,
+        groupNames: ["Friends"],
+        messageId: "message-1",
+        onAssign,
+        onDismiss: () => undefined,
+      },
+      getNpubMessageContactInfo: (npub) => contactInfo(npub, true),
+    });
+
+    expect(container.querySelector(".chat-add-all-contacts")).toBeNull();
+    expect(container.querySelector(".contact-group-pill")).toBeNull();
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>(".chat-add-to-group-toggle")
+        ?.click();
+    });
+
+    const pill = container.querySelector<HTMLButtonElement>(
+      ".chat-add-to-group .contact-group-pill",
+    );
+    expect(pill?.textContent).toBe("Friends");
+
+    await act(async () => {
+      pill?.click();
+    });
+
+    expect(onAssign).toHaveBeenCalledWith("Friends");
   });
 
   it("does not show Add all unless two unsaved contacts are incoming", async () => {

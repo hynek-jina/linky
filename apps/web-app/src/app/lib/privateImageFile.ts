@@ -1,24 +1,60 @@
 import { reportInspectorRows } from "../../devtools/inspector";
 import { getInspectorEmissionEnabled } from "../../devtools/inspector/inspectorEnabled";
 
+const PDF_FILE_TYPE = "application/pdf";
 const EXTENSION_BY_IMAGE_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
+  [PDF_FILE_TYPE]: "pdf",
 };
+const MAX_EXPORT_FILE_NAME_LENGTH = 120;
 
 export interface PrivateImageExportLinks {
   rumor?: string;
 }
 
-const toPrivateImageFile = (blob: Blob): File => {
-  const type = blob.type || "image/jpeg";
-  const extension = EXTENSION_BY_IMAGE_TYPE[type] ?? "jpg";
-  return new File([blob], `linky-image.${extension}`, { type });
+// The peer chose the file name, so it is reduced to a plain basename and
+// always ends with the extension of the blob's actual type.
+export const sanitizeExportFileName = (
+  fileName: string,
+  extension: string,
+): string | null => {
+  const baseName = fileName
+    .split(/[\\/]/)
+    .pop()
+    ?.replace(/[<>:"|?*]/g, "")
+    .replace(/\p{Cc}/gu, "")
+    .trim()
+    .replace(/^\.+/, "");
+  if (!baseName) return null;
+  const suffix = `.${extension}`;
+  const stem = baseName.toLowerCase().endsWith(suffix)
+    ? baseName.slice(0, -suffix.length)
+    : baseName.replace(/\.[^.]*$/, "");
+  const trimmedStem = stem.slice(
+    0,
+    MAX_EXPORT_FILE_NAME_LENGTH - suffix.length,
+  );
+  return trimmedStem ? `${trimmedStem}${suffix}` : null;
 };
 
+const toPrivateImageFile = (blob: Blob, fileName?: string): File => {
+  const type = blob.type || "image/jpeg";
+  const extension = EXTENSION_BY_IMAGE_TYPE[type] ?? "jpg";
+  const baseName = type === PDF_FILE_TYPE ? "linky-document" : "linky-image";
+  const safeName =
+    fileName !== undefined ? sanitizeExportFileName(fileName, extension) : null;
+  return new File([blob], safeName ?? `${baseName}.${extension}`, { type });
+};
+
+type ExportEvent = "Saved" | "Shared" | "ShareFailed";
+
+const exportTag = (file: File, event: ExportEvent): string =>
+  `${file.type === PDF_FILE_TYPE ? "ChatFile" : "ChatImage"}${event}`;
+
 const reportPrivateImageExport = (
-  tag: string,
+  event: ExportEvent,
   summary: string,
   file: File,
   links: PrivateImageExportLinks,
@@ -29,7 +65,7 @@ const reportPrivateImageExport = (
     {
       at: Date.now(),
       channel: "app.log",
-      tag,
+      tag: exportTag(file, event),
       summary,
       links: links.rumor ? { rumor: links.rumor } : {},
       payload: {
@@ -59,8 +95,9 @@ export const isCancelledShareError = (error: unknown): boolean => {
 export const downloadPrivateImageBlob = (
   blob: Blob,
   links: PrivateImageExportLinks = {},
+  fileName?: string,
 ): void => {
-  const file = toPrivateImageFile(blob);
+  const file = toPrivateImageFile(blob, fileName);
   const url = URL.createObjectURL(file);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -70,12 +107,7 @@ export const downloadPrivateImageBlob = (
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
-  reportPrivateImageExport(
-    "ChatImageSaved",
-    "Chat image saved as a file",
-    file,
-    links,
-  );
+  reportPrivateImageExport("Saved", "Chat file saved as a file", file, links);
 };
 
 export const canSharePrivateImage = (): boolean =>
@@ -85,12 +117,13 @@ export const sharePrivateImageBlob = async (
   blob: Blob,
   title: string,
   links: PrivateImageExportLinks = {},
+  fileName?: string,
 ): Promise<void> => {
   if (!canSharePrivateImage()) {
     throw new Error("share-unavailable");
   }
 
-  const file = toPrivateImageFile(blob);
+  const file = toPrivateImageFile(blob, fileName);
   const shareData: ShareData = {
     files: [file],
     title,
@@ -108,8 +141,8 @@ export const sharePrivateImageBlob = async (
   } catch (error) {
     if (!isCancelledShareError(error)) {
       reportPrivateImageExport(
-        "ChatImageShareFailed",
-        "System share of a chat image failed",
+        "ShareFailed",
+        "System share of a chat file failed",
         file,
         links,
         error,
@@ -119,8 +152,8 @@ export const sharePrivateImageBlob = async (
   }
 
   reportPrivateImageExport(
-    "ChatImageShared",
-    "Chat image shared via the system share sheet",
+    "Shared",
+    "Chat file shared via the system share sheet",
     file,
     links,
   );

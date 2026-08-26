@@ -27,6 +27,7 @@ Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
 
 const createOfferMessage = (
   status:
+    | "accepted"
     | "accepted_by_other"
     | "bank_details_sent"
     | "bank_paid"
@@ -109,6 +110,114 @@ describe("BankPaymentOfferDetailPage", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     window.location.hash = "";
+  });
+
+  it("keeps the offerer's countdown ticking while the own chat is accepted_by_other", async () => {
+    vi.useFakeTimers();
+    try {
+      const clock = (key: string) =>
+        key === "bankPaymentOfferTimeRemainingClock"
+          ? "{minutes}:{seconds}"
+          : key;
+      const ownEntry = createOfferMessage("accepted_by_other");
+      const acceptedEntry: LocalNostrMessage = {
+        ...createOfferMessage("accepted"),
+        contactId: "contact-2",
+        id: "message-2",
+        wrapId: "wrap-2",
+      };
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const root = createRoot(container);
+
+      await act(async () => {
+        root.render(
+          <BankPaymentOfferDetailPage
+            bankPaymentOfferMessages={[ownEntry, acceptedEntry]}
+            chatId="contact-1"
+            chatMessages={[]}
+            chatOwnPubkeyHex="offerer-pubkey"
+            contacts={[
+              { id: "contact-1", name: "Alice" },
+              { id: "contact-2", name: "Bob" },
+            ]}
+            offerId="offer-1"
+            onCopyText={() => undefined}
+            onRespondBankPaymentOffer={async () => true}
+            onSendChatImage={async () => undefined}
+            onSettleBankPaymentOffer={async () => undefined}
+            t={clock}
+          />,
+        );
+      });
+
+      expect(container.textContent).toContain("5:00");
+
+      await act(async () => {
+        vi.advanceTimersByTime(2_000);
+      });
+
+      expect(container.textContent).toContain("4:58");
+      expect(container.textContent).not.toContain("5:00");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows a rejected-payout screen with only a back-to-chat action after paying", async () => {
+    window.location.hash = "#chat/contact-1/bank-payment-offer/offer-1";
+    const paid = createOfferMessage("bank_paid");
+    const createdAtSec = Math.floor(Date.now() / 1_000);
+    const canceled: LocalNostrMessage = {
+      ...paid,
+      content: createLinkyBankPaymentOfferEvent({
+        amountSat: 1_000,
+        amountText: "1,000 sat",
+        bankPaidAtSec: createdAtSec,
+        clientId: "client-offer-1",
+        createdAt: createdAtSec,
+        offerId: "offer-1",
+        offererPublicKey: "offerer-pubkey",
+        recipientPublicKey: "recipient-pubkey",
+        senderPublicKey: "offerer-pubkey",
+        spdPayload: null,
+        status: "canceled",
+      }).content,
+    };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <BankPaymentOfferDetailPage
+          bankPaymentOfferMessages={[canceled]}
+          chatId="contact-1"
+          chatMessages={[]}
+          chatOwnPubkeyHex="recipient-pubkey"
+          contacts={[{ id: "contact-1", name: "Alice" }]}
+          offerId="offer-1"
+          onCopyText={() => undefined}
+          onRespondBankPaymentOffer={async () => true}
+          onSendChatImage={async () => undefined}
+          onSettleBankPaymentOffer={async () => undefined}
+          t={(key) => key}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain("bankPaymentOfferRejectedTitle");
+    expect(container.textContent).toContain(
+      "bankPaymentOfferRejectedDescription",
+    );
+    const buttons = container.querySelectorAll("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.textContent).toContain("chatImageBackToChat");
+
+    await act(async () => {
+      buttons[0]?.click();
+    });
+    expect(window.location.hash).toBe("#chat/contact-1");
   });
 
   it("shows that another candidate accepted first as a closed state", async () => {

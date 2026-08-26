@@ -234,8 +234,32 @@ export const getMintInfoIconUrl = (
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+// Fees are not part of NUT-06 info; the only published fee is the active
+// keyset's input_fee_ppk from /v1/keysets.
+export const extractActiveKeysetPpk = (
+  keysetsPayload: unknown,
+  unit = "sat",
+): number | null => {
+  if (!isRecord(keysetsPayload)) return null;
+  const list = keysetsPayload.keysets;
+  if (!Array.isArray(list)) return null;
+  const fees = list
+    .filter(isRecord)
+    .filter((keyset) => keyset.active === true && keyset.unit === unit)
+    .map((keyset) => keyset.input_fee_ppk ?? 0)
+    .filter(
+      (fee): fee is number =>
+        typeof fee === "number" && Number.isInteger(fee) && fee >= 0,
+    );
+  return fees.length ? Math.min(...fees) : null;
+};
+
 export const parseMintInfoPayload = (
   info: unknown,
+  keysetsPayload?: unknown,
 ): {
   feesJson: string | null;
   infoJson: string | null;
@@ -256,6 +280,7 @@ export const parseMintInfoPayload = (
     (info as { fee?: unknown }).fee ??
     null;
   const ppk =
+    extractActiveKeysetPpk(keysetsPayload) ??
     extractPpk(feesRaw as Parameters<typeof extractPpk>[0]) ??
     extractPpk(info as Parameters<typeof extractPpk>[0]);
   const fees = ppk !== null ? { ppk, raw: feesRaw } : feesRaw;
@@ -360,4 +385,17 @@ export const dedupeMintInfoRows = (
   }
 
   return didChange ? next : null;
+};
+
+export const getMintFeePpk = (feesJson: OptionalText): number | null => {
+  const text = String(feesJson ?? "").trim();
+  if (!text) return null;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!isRecord(parsed)) return null;
+    const ppk = parsed.ppk;
+    return typeof ppk === "number" && Number.isFinite(ppk) ? ppk : null;
+  } catch {
+    return null;
+  }
 };

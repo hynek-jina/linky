@@ -150,7 +150,11 @@ export function PrivateImageBubble({
       <div
         ref={placeholderRef}
         className="chat-private-image-placeholder"
-        style={{ aspectRatio: `${payload.width} / ${payload.height}` }}
+        style={
+          payload.width && payload.height
+            ? { aspectRatio: `${payload.width} / ${payload.height}` }
+            : undefined
+        }
       >
         {shouldLoad ? (
           <>

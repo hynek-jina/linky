@@ -65,8 +65,9 @@ export const formatChatMessagePreviewText = ({
   formatDisplayedAmountText,
   t,
 }: FormatChatMessagePreviewArgs): string => {
-  if (parsePrivateImageMessage(content)) {
-    return privateImagePreviewText(t);
+  const privateImage = parsePrivateImageMessage(content);
+  if (privateImage) {
+    return privateImagePreviewText(t, privateImage);
   }
 
   const bankPaymentOffer = getLinkyBankPaymentOfferInfo(content);

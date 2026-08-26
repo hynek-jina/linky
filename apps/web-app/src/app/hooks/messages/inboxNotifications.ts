@@ -258,7 +258,7 @@ export const handleBankOfferSnapshotReceived = (
     id: `bank-payment-offer:${event.snapshotId}`,
     localOnly: true,
     pubkey: event.offerer,
-    rumorId: null,
+    rumorId: event.snapshotId,
     status: "sent",
     wrapId: event.snapshotId,
     ...(event.clientId !== null ? { clientId: event.clientId } : {}),

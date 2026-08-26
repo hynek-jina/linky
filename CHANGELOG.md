@@ -20,6 +20,24 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 - Zatím bez uživatelských změn.
 
+## [26.9.2] - 2026-08-26
+
+### en-US
+
+- Send PDF files in chat (up to 2 MB); recipients see a preview and can open or save them.
+- Add contacts mentioned in a message to a group straight from the chat.
+- Redesigned main mint selection with a Recommended badge and fees shown for the selected mint.
+- Custom mint URLs no longer need the https:// prefix.
+- Bank payment offers now show clearly when the payout was rejected.
+
+### cs-CZ
+
+- Posílání PDF v chatu (do 2 MB); příjemce vidí náhled a může PDF otevřít nebo uložit.
+- Kontakty ze zprávy lze přidat do skupiny přímo z chatu.
+- Přepracovaný výběr hlavního mintu se štítkem Doporučeno a poplatky u zvoleného mintu.
+- Vlastní URL mintu už nevyžaduje předponu https://.
+- Nabídky bankovní platby nyní jasně ukazují zamítnutou výplatu.
+
 ## [26.9.1] - 2026-08-15
 
 ### en-US

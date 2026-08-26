@@ -3,6 +3,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MintSettingsContextValue } from "../app/context/SystemSettingsContexts";
+import type { LightningFeeProbeResult } from "../app/lib/lightningFeeProbe";
 import { MintsPage } from "./MintsPage";
 
 let mintSettings: MintSettingsContextValue;
@@ -13,6 +14,22 @@ vi.mock("../app/context/AppShellContexts", () => ({
 
 vi.mock("../app/context/SystemSettingsContexts", () => ({
   useMintSettingsContext: () => mintSettings,
+}));
+
+const probeLightningFee = vi.fn<
+  (args: {
+    mintUrl: string;
+    probeMintUrl: string;
+  }) => Promise<LightningFeeProbeResult>
+>(async () => ({
+  amountSat: 10000,
+  feeReserveSat: 100,
+  percent: 1,
+}));
+vi.mock("../app/lib/lightningFeeProbe", () => ({
+  getCachedLightningFee: () => null,
+  probeLightningFee: (args: { mintUrl: string; probeMintUrl: string }) =>
+    probeLightningFee(args),
 }));
 
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
@@ -72,13 +89,9 @@ describe("MintsPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("routes preset selection, custom save, and melt to their callbacks", async () => {
+  it("routes preset selection and custom save to their callbacks", async () => {
     const applyDefaultMintSelection = vi.fn(async () => {});
-    const meltLargestForeignMintToMainMint = vi.fn(async () => {});
-    mintSettings = createMintSettings({
-      applyDefaultMintSelection,
-      meltLargestForeignMintToMainMint,
-    });
+    mintSettings = createMintSettings({ applyDefaultMintSelection });
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -99,24 +112,85 @@ describe("MintsPage", () => {
       "https://custom.example",
     );
 
-    await act(async () => {
-      click(findButton(container, "Melt foreign balance"));
+    mintSettings = createMintSettings({
+      applyDefaultMintSelection,
+      defaultMintUrlDraft: "kashu.me",
     });
-    expect(meltLargestForeignMintToMainMint).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      root.render(<MintsPage />);
+    });
+    await act(async () => {
+      click(findButton(container, "saveChanges"));
+    });
+    expect(applyDefaultMintSelection).toHaveBeenLastCalledWith(
+      "https://kashu.me",
+    );
+
+    expect(
+      container.querySelector(".mint-choice-badge.is-recommended"),
+    ).not.toBeNull();
+    expect(
+      findButton(container, "cashu.cz").classList.contains("is-selected"),
+    ).toBe(true);
+    expect(container.textContent).not.toContain("Melt foreign balance");
+    const selectedItem = container.querySelector(
+      ".mint-choice-item.is-selected",
+    );
+    expect(selectedItem?.textContent).toContain("cashu.cz");
+    expect(selectedItem?.querySelector(".mint-fees")).not.toBeNull();
+    expect(container.querySelectorAll(".mint-fees")).toHaveLength(1);
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it("updates the custom draft and blocks selection, save, and melt while busy", async () => {
+  it("shows the selected mint's keyset fee and requests a refresh when unknown", async () => {
+    const refreshMintInfo = vi.fn(async () => {});
+    mintSettings = createMintSettings({ refreshMintInfo });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<MintsPage />);
+    });
+    expect(refreshMintInfo).toHaveBeenCalledWith("https://cashu.cz");
+    expect(container.textContent).toContain("unknown");
+
+    mintSettings = createMintSettings({
+      mintInfoByUrl: new Map([
+        [
+          "https://cashu.cz",
+          {
+            id: "row",
+            url: "https://cashu.cz",
+            feesJson: JSON.stringify({ ppk: 100, raw: null }),
+          },
+        ],
+      ]),
+    });
+    await act(async () => {
+      root.render(<MintsPage />);
+    });
+    expect(container.textContent).toContain("~1 sat");
+    expect(probeLightningFee).toHaveBeenCalledWith({
+      mintUrl: "https://cashu.cz",
+      probeMintUrl: "https://mint.minibits.cash/Bitcoin",
+    });
+    expect(container.textContent).toContain("~1 %");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("updates the custom draft and blocks selection and save while busy", async () => {
     const applyDefaultMintSelection = vi.fn(async () => {});
-    const meltLargestForeignMintToMainMint = vi.fn(async () => {});
     const setDefaultMintUrlDraft = vi.fn();
     mintSettings = createMintSettings({
       applyDefaultMintSelection,
       cashuIsBusy: true,
-      meltLargestForeignMintToMainMint,
       setDefaultMintUrlDraft,
     });
     const container = document.createElement("div");
@@ -135,18 +209,14 @@ describe("MintsPage", () => {
 
     const presetButton = findButton(container, "kashu.me");
     const saveButton = findButton(container, "saveChanges");
-    const meltButton = findButton(container, "Melt foreign balance");
     expect(presetButton.disabled).toBe(true);
     expect(saveButton.disabled).toBe(true);
-    expect(meltButton.disabled).toBe(true);
 
     await act(async () => {
       click(presetButton);
       click(saveButton);
-      click(meltButton);
     });
     expect(applyDefaultMintSelection).not.toHaveBeenCalled();
-    expect(meltLargestForeignMintToMainMint).not.toHaveBeenCalled();
     expect(setDefaultMintUrlDraft).not.toHaveBeenCalled();
 
     await act(async () => {

@@ -19,6 +19,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 export const requestMintQuoteBolt11 = async (args: {
   amountSat: number;
   mintUrl: string;
+  signal?: AbortSignal;
 }): Promise<{ invoice: string; quoteId: string }> => {
   const { amountSat, mintUrl } = args;
   const targetUrl = `${mintUrl.replace(/\/+$/, "")}/v1/mint/quote/bolt11`;
@@ -33,6 +34,7 @@ export const requestMintQuoteBolt11 = async (args: {
     },
     mode: "cors",
     body: JSON.stringify({ amount: amountSat, unit: "sat" }),
+    ...(args.signal ? { signal: args.signal } : {}),
   });
 
   if (!quoteRes.ok) {

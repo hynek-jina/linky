@@ -1,22 +1,99 @@
+import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useMintSettingsContext } from "../app/context/SystemSettingsContexts";
+import { getMintFeePpk } from "../app/hooks/mint/mintInfoHelpers";
+import {
+  getCachedLightningFee,
+  type LightningFeeProbeResult,
+  probeLightningFee,
+} from "../app/lib/lightningFeeProbe";
 import { MintButton } from "../components/MintButton";
 import {
   isTestMintUrl,
   MAIN_MINT_URL,
   normalizeMintUrl,
   PRESET_MINTS,
+  PRODUCTION_MINTS,
 } from "../utils/mint";
+
+const RECOMMENDED_MINT_URL = "https://cashu.cz";
+
+// Rough proof count of a typical Cashu payment, used to express ppk in sats.
+const TYPICAL_PAYMENT_PROOF_COUNT = 6;
+
+const ensureHttpsScheme = (value: string): string =>
+  /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+const formatCashuFee = (ppk: number): string => {
+  const sats = Math.ceil((ppk * TYPICAL_PAYMENT_PROOF_COUNT) / 1000);
+  return sats === 0 ? "0 sat" : `~${sats} sat`;
+};
+
+const formatPercent = (percent: number): string =>
+  `~${percent.toFixed(percent >= 10 ? 0 : 1).replace(/\.0$/, "")} %`;
+
+// The probe invoice must come from a real Lightning-backed mint (a dev
+// FakeWallet invoice cannot be quoted), so this ignores the env presets.
+const pickProbeMint = (mintUrl: string): string | null =>
+  PRODUCTION_MINTS.map(normalizeMintUrl).find(
+    (candidate) => candidate !== mintUrl,
+  ) ?? null;
+
+const FEE_INFO_RETRY_SEC = 60;
+
+type LightningFeeState = LightningFeeProbeResult | "failed" | "pending";
+
+// A failed probe is not retried on every navigation; successes persist for a
+// day inside lightningFeeProbe's own cache.
+const FAILED_PROBE_RETRY_MS = 10 * 60 * 1000;
+const failedProbeAtByMint = new Map<string, number>();
+
+const useLightningFeeProbe = (mintUrl: string): LightningFeeState => {
+  const [byMint, setByMint] = React.useState<Record<string, LightningFeeState>>(
+    {},
+  );
+
+  React.useEffect(() => {
+    if (byMint[mintUrl]) return;
+    const cached = getCachedLightningFee(mintUrl);
+    if (cached) {
+      setByMint((prev) => ({ ...prev, [mintUrl]: cached }));
+      return;
+    }
+    const failedAt = failedProbeAtByMint.get(mintUrl);
+    if (
+      failedAt !== undefined &&
+      Date.now() - failedAt < FAILED_PROBE_RETRY_MS
+    ) {
+      setByMint((prev) => ({ ...prev, [mintUrl]: "failed" }));
+      return;
+    }
+    const probeMintUrl = isTestMintUrl(mintUrl) ? null : pickProbeMint(mintUrl);
+    if (!probeMintUrl) {
+      setByMint((prev) => ({ ...prev, [mintUrl]: "failed" }));
+      return;
+    }
+    setByMint((prev) => ({ ...prev, [mintUrl]: "pending" }));
+    void probeLightningFee({ mintUrl, probeMintUrl })
+      .then((result) => setByMint((prev) => ({ ...prev, [mintUrl]: result })))
+      .catch(() => {
+        failedProbeAtByMint.set(mintUrl, Date.now());
+        setByMint((prev) => ({ ...prev, [mintUrl]: "failed" }));
+      });
+  }, [byMint, mintUrl]);
+
+  return byMint[mintUrl] ?? "pending";
+};
 
 export function MintsPage() {
   const {
     applyDefaultMintSelection,
     cashuIsBusy,
-    cashuMeltToMainMintButtonLabel,
     defaultMintUrl,
     defaultMintUrlDraft,
     getMintIconUrl,
-    meltLargestForeignMintToMainMint,
+    mintInfoByUrl,
+    refreshMintInfo,
     setDefaultMintUrlDraft,
   } = useMintSettingsContext();
   const { t } = useAppShellCore();
@@ -24,18 +101,37 @@ export function MintsPage() {
     normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) || MAIN_MINT_URL;
   const stripped = (value: string) => value.replace(/^https?:\/\//i, "");
   const draftValue = String(defaultMintUrlDraft ?? "").trim();
-  const cleanedDraft = normalizeMintUrl(draftValue);
+  const cleanedDraft = draftValue
+    ? normalizeMintUrl(ensureHttpsScheme(draftValue))
+    : "";
   const isDraftValid = (() => {
     if (!cleanedDraft) return false;
     try {
-      new URL(cleanedDraft);
-      return true;
+      return new URL(cleanedDraft).hostname.includes(".");
     } catch {
       return false;
     }
   })();
-  const canSave =
-    Boolean(draftValue) && isDraftValid && cleanedDraft !== selectedMint;
+  const canSave = isDraftValid && cleanedDraft !== selectedMint;
+
+  const selectedMintRow = mintInfoByUrl.get(selectedMint);
+  const selectedMintPpk = getMintFeePpk(selectedMintRow?.feesJson);
+  const selectedMintCheckedAtSec = Number(
+    selectedMintRow?.lastCheckedAtSec ?? 0,
+  );
+  React.useEffect(() => {
+    if (selectedMintPpk !== null) return;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (nowSec - selectedMintCheckedAtSec < FEE_INFO_RETRY_SEC) return;
+    void refreshMintInfo(selectedMint);
+  }, [
+    refreshMintInfo,
+    selectedMint,
+    selectedMintCheckedAtSec,
+    selectedMintPpk,
+  ]);
+
+  const lightningFee = useLightningFeeProbe(selectedMint);
 
   const buttonMints = (() => {
     const set = new Set<string>(PRESET_MINTS);
@@ -45,37 +141,66 @@ export function MintsPage() {
   const standardMints = buttonMints.filter((mint) => !isTestMintUrl(mint));
   const testMints = buttonMints.filter((mint) => isTestMintUrl(mint));
 
+  const renderFees = () => (
+    <div className="mint-fees">
+      <span className="muted">{t("mintFeeCashuPayments")}</span>
+      <span className="mint-fees-value">
+        {selectedMintPpk !== null
+          ? formatCashuFee(selectedMintPpk)
+          : t("unknown")}
+      </span>
+      <span className="muted">{t("mintFeeLightningTopup")}</span>
+      <span className="mint-fees-value">0 sat</span>
+      <span className="muted">{t("mintFeeLightningPayments")}</span>
+      <span className="mint-fees-value">
+        {lightningFee === "pending"
+          ? "…"
+          : lightningFee === "failed"
+            ? t("unknown")
+            : formatPercent(lightningFee.percent)}
+      </span>
+    </div>
+  );
+
   const renderMintButton = (mint: string) => {
-    const isSelected = normalizeMintUrl(mint) === selectedMint;
+    const normalized = normalizeMintUrl(mint);
+    const isSelected = normalized === selectedMint;
     const label = stripped(mint);
     const fallbackLetter = (label.match(/[a-z]/i)?.[0] ?? "?").toUpperCase();
     const isTestMint = isTestMintUrl(mint);
+    const isRecommended = normalized === RECOMMENDED_MINT_URL;
 
     return (
-      <MintButton
+      <div
         key={mint}
-        mint={mint}
-        getMintIconUrl={getMintIconUrl}
-        isSelected={isSelected}
-        isTestMint={isTestMint}
-        label={label}
-        badgeLabel={isTestMint ? t("testMintBadge") : ""}
-        fallbackLetter={fallbackLetter}
-        disabled={cashuIsBusy}
-        onClick={() => void applyDefaultMintSelection(mint)}
-      />
+        className={`mint-choice-item${isSelected ? " is-selected" : ""}`}
+      >
+        <MintButton
+          mint={mint}
+          getMintIconUrl={getMintIconUrl}
+          isSelected={isSelected}
+          isTestMint={isTestMint}
+          label={label}
+          badgeLabel={
+            isTestMint
+              ? t("testMintBadge")
+              : isRecommended
+                ? t("recommendedMintBadge")
+                : ""
+          }
+          badgeTone={isRecommended ? "recommended" : "test"}
+          fallbackLetter={fallbackLetter}
+          disabled={cashuIsBusy}
+          onClick={() => void applyDefaultMintSelection(mint)}
+        />
+        {isSelected ? renderFees() : null}
+      </div>
     );
   };
 
   return (
     <section className="panel">
-      <div className="settings-row" style={{ marginBottom: 6 }}>
-        <div className="settings-left">
-          <label className="muted">{t("selectedMint")}</label>
-        </div>
-      </div>
-
-      <div className="settings-row" style={{ marginBottom: 10 }}>
+      <div className="settings-row" style={{ marginBottom: 14 }}>
         <div className="mint-choice-list">
           <div className="mint-choice-group">
             {standardMints.map((mint) => renderMintButton(mint))}
@@ -108,26 +233,13 @@ export function MintsPage() {
             type="button"
             disabled={cashuIsBusy}
             onClick={async () => {
-              await applyDefaultMintSelection(defaultMintUrlDraft);
+              await applyDefaultMintSelection(cleanedDraft);
             }}
           >
             {t("saveChanges")}
           </button>
         ) : null}
       </div>
-
-      {cashuMeltToMainMintButtonLabel ? (
-        <div className="panel-header" style={{ marginTop: 12 }}>
-          <button
-            type="button"
-            className="secondary"
-            disabled={cashuIsBusy}
-            onClick={() => void meltLargestForeignMintToMainMint()}
-          >
-            {cashuMeltToMainMintButtonLabel}
-          </button>
-        </div>
-      ) : null}
     </section>
   );
 }

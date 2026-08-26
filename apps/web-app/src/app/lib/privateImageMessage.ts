@@ -11,6 +11,13 @@ const PRIVATE_IMAGE_COMPACT_PREFIX = "linky:image:v1:";
 const BLOSSOM_UPLOAD_SERVERS = ["https://blossom.primal.net"];
 const LINKY_WEB_APP_ORIGIN = "https://app.linky.fit";
 const MAX_IMAGE_SOURCE_BYTES = 20 * 1024 * 1024;
+const MAX_PDF_BYTES = 2 * 1024 * 1024;
+const PDF_FILE_TYPE = "application/pdf";
+const PDF_MAGIC = "%PDF-";
+// Base64url of a 2 MB payload plus the AES-GCM tag, rounded up — no valid
+// attachment is stored larger than this, so anything bigger is refused
+// before a single byte is buffered.
+const MAX_STORED_ATTACHMENT_BYTES = 3 * 1024 * 1024;
 const MAX_IMAGE_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_IMAGE_SIDE_PX = 1280;
 const MIN_IMAGE_SIDE_PX = 480;
@@ -23,21 +30,23 @@ export interface PrivateImageMessagePayload {
   encryptedSha256: string;
   encryptedSize: number;
   encryptionAlgorithm: "aes-gcm";
+  fileName?: string;
   fileType: string;
-  height: number;
+  height?: number;
   key: string;
   nonce: string;
   originalSha256: string;
   storageEncoding: "base64" | "raw";
   type: "linky.private_image.v1";
   url: string;
-  width: number;
+  width?: number;
 }
 
 interface CompactPrivateImageMessagePayload {
   a: "g";
   e?: "b";
-  h: number;
+  f?: string;
+  h?: number;
   k: string;
   m: string;
   n: string;
@@ -45,20 +54,29 @@ interface CompactPrivateImageMessagePayload {
   s: number;
   t: "i1";
   u: string;
-  w: number;
+  w?: number;
   x: string;
+}
+
+interface PreparedPrivateFileBytes {
+  bytes: Uint8Array;
+  fileName?: string;
+  fileType: string;
+  height?: number;
+  width?: number;
 }
 
 interface PreparedPrivateImage {
   encryptedBytes: Uint8Array;
   encryptedSha256: string;
   encryptedSize: number;
+  fileName?: string;
   fileType: string;
-  height: number;
+  height?: number;
   key: string;
   nonce: string;
   originalSha256: string;
-  width: number;
+  width?: number;
 }
 
 interface UploadDescriptor {
@@ -206,9 +224,47 @@ const canvasToBlob = async (
     );
   });
 
+export const isPdfFileType = (fileType: string): boolean =>
+  fileType === PDF_FILE_TYPE;
+
+export const isPrivatePdfPayload = (
+  payload: PrivateImageMessagePayload,
+): boolean => isPdfFileType(payload.fileType);
+
+const isPdfFile = (file: File): boolean =>
+  isPdfFileType(file.type) || (file.type === "" && /\.pdf$/i.test(file.name));
+
+/** i18n key of the reason the file can't be sent, or null when it can. */
+export const getChatAttachmentRejection = (file: File): string | null => {
+  if (isPdfFile(file)) {
+    return file.size > MAX_PDF_BYTES ? "chatPdfTooLarge" : null;
+  }
+  if (!file.type.startsWith("image/")) return "chatAttachmentUnsupported";
+  return file.size > MAX_IMAGE_SOURCE_BYTES ? "chatImageTooLarge" : null;
+};
+
+export const chatAttachmentErrorKey = (error: unknown): string | null => {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (message === "chat-file-too-large") return "chatPdfTooLarge";
+  if (message === "chat-image-too-large") return "chatImageTooLarge";
+  if (message === "chat-image-unsupported") return "chatAttachmentUnsupported";
+  return null;
+};
+
+const readPdfBytes = async (file: File): Promise<PreparedPrivateFileBytes> => {
+  if (file.size > MAX_PDF_BYTES) throw new Error("chat-file-too-large");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const fileName = file.name.trim();
+  return {
+    bytes,
+    fileType: PDF_FILE_TYPE,
+    ...(fileName ? { fileName } : {}),
+  };
+};
+
 const resizeImageToJpegBytes = async (
   file: File,
-): Promise<{ bytes: Uint8Array; height: number; width: number }> => {
+): Promise<PreparedPrivateFileBytes> => {
   if (!file.type.startsWith("image/")) {
     throw new Error("chat-image-unsupported");
   }
@@ -241,6 +297,7 @@ const resizeImageToJpegBytes = async (
     if (blob.size <= MAX_IMAGE_OUTPUT_BYTES) {
       return {
         bytes: new Uint8Array(await blob.arrayBuffer()),
+        fileType: "image/jpeg",
         height,
         width,
       };
@@ -254,7 +311,9 @@ const resizeImageToJpegBytes = async (
 };
 
 const encryptImageBytes = async (file: File): Promise<PreparedPrivateImage> => {
-  const resized = await resizeImageToJpegBytes(file);
+  const source = isPdfFile(file)
+    ? await readPdfBytes(file)
+    : await resizeImageToJpegBytes(file);
   const key = randomHex(32);
   const nonce = randomHex(12);
   const keyBytes = hexToBytes(key);
@@ -271,7 +330,7 @@ const encryptImageBytes = async (file: File): Promise<PreparedPrivateImage> => {
   const encryptedBuffer = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: copyToArrayBuffer(nonceBytes) },
     cryptoKey,
-    copyToArrayBuffer(resized.bytes),
+    copyToArrayBuffer(source.bytes),
   );
   const encryptedBytes = new Uint8Array(encryptedBuffer);
   const storedBytes = textEncoder.encode(bytesToBase64Url(encryptedBytes));
@@ -280,12 +339,14 @@ const encryptImageBytes = async (file: File): Promise<PreparedPrivateImage> => {
     encryptedBytes: storedBytes,
     encryptedSha256: sha256Hex(storedBytes),
     encryptedSize: storedBytes.byteLength,
-    fileType: "image/jpeg",
-    height: resized.height,
+    fileType: source.fileType,
     key,
     nonce,
-    originalSha256: sha256Hex(resized.bytes),
-    width: resized.width,
+    originalSha256: sha256Hex(source.bytes),
+    ...(source.width !== undefined && source.height !== undefined
+      ? { width: source.width, height: source.height }
+      : {}),
+    ...(source.fileName !== undefined ? { fileName: source.fileName } : {}),
   };
 };
 
@@ -358,7 +419,8 @@ export const serializePrivateImageMessage = (
   const compact: CompactPrivateImageMessagePayload = {
     a: "g",
     ...(payload.storageEncoding === "base64" ? { e: "b" } : {}),
-    h: payload.height,
+    ...(payload.fileName !== undefined ? { f: payload.fileName } : {}),
+    ...(payload.height !== undefined ? { h: payload.height } : {}),
     k: payload.key,
     m: payload.fileType,
     n: payload.nonce,
@@ -366,7 +428,7 @@ export const serializePrivateImageMessage = (
     s: payload.encryptedSize,
     t: "i1",
     u: payload.url,
-    w: payload.width,
+    ...(payload.width !== undefined ? { w: payload.width } : {}),
     x: payload.encryptedSha256,
   };
   return `${PRIVATE_IMAGE_COMPACT_PREFIX}${textToBase64Url(
@@ -389,14 +451,16 @@ export const createPrivateImageSendPayload = async (
     encryptedSize: prepared.encryptedSize,
     encryptionAlgorithm: "aes-gcm",
     fileType: prepared.fileType,
-    height: prepared.height,
     key: prepared.key,
     nonce: prepared.nonce,
     originalSha256: prepared.originalSha256,
     storageEncoding: "base64",
     type: PRIVATE_IMAGE_MESSAGE_TYPE,
     url: upload.url,
-    width: prepared.width,
+    ...(prepared.width !== undefined && prepared.height !== undefined
+      ? { width: prepared.width, height: prepared.height }
+      : {}),
+    ...(prepared.fileName !== undefined ? { fileName: prepared.fileName } : {}),
   };
 
   return {
@@ -435,8 +499,12 @@ const parsePrivateImageRecord = (
   const encryptedSize = readPositiveInteger(
     isCompact ? parsed.s : parsed.encryptedSize,
   );
-  const width = readPositiveInteger(isCompact ? parsed.w : parsed.width);
-  const height = readPositiveInteger(isCompact ? parsed.h : parsed.height);
+  const widthValue = isCompact ? parsed.w : parsed.width;
+  const heightValue = isCompact ? parsed.h : parsed.height;
+  const hasDimensions = widthValue !== undefined || heightValue !== undefined;
+  const width = readPositiveInteger(widthValue);
+  const height = readPositiveInteger(heightValue);
+  const fileName = readString(isCompact ? parsed.f : parsed.fileName);
 
   if (
     !url ||
@@ -448,8 +516,8 @@ const parsePrivateImageRecord = (
     !originalSha256 ||
     !storageEncoding ||
     !encryptedSize ||
-    !width ||
-    !height
+    encryptedSize > MAX_STORED_ATTACHMENT_BYTES ||
+    (hasDimensions && (!width || !height))
   ) {
     return null;
   }
@@ -459,14 +527,14 @@ const parsePrivateImageRecord = (
     encryptedSize,
     encryptionAlgorithm,
     fileType,
-    height,
     key: key.toLowerCase(),
     nonce: nonce.toLowerCase(),
     originalSha256: originalSha256.toLowerCase(),
     storageEncoding,
     type: PRIVATE_IMAGE_MESSAGE_TYPE,
     url,
-    width,
+    ...(width && height ? { width, height } : {}),
+    ...(fileName ? { fileName } : {}),
   };
 };
 
@@ -500,16 +568,45 @@ export const parsePrivateImageMessage = (
   return parsePrivateImageRecord(parsed);
 };
 
+const readBodyExactly = async (
+  response: Response,
+  expectedBytes: number,
+): Promise<Uint8Array | null> => {
+  const declared = Number(response.headers.get("content-length") ?? NaN);
+  if (Number.isFinite(declared) && declared !== expectedBytes) return null;
+  if (!response.body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return bytes.byteLength === expectedBytes ? bytes : null;
+  }
+
+  const bytes = new Uint8Array(expectedBytes);
+  let received = 0;
+  const reader = response.body.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (received + value.byteLength > expectedBytes) return null;
+      bytes.set(value, received);
+      received += value.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return received === expectedBytes ? bytes : null;
+};
+
+const hasPdfMagic = (bytes: Uint8Array): boolean =>
+  textDecoder.decode(bytes.subarray(0, PDF_MAGIC.length)) === PDF_MAGIC;
+
 export const decryptPrivateImageMessage = async (
   payload: PrivateImageMessagePayload,
 ): Promise<Blob> => {
   const response = await fetch(payload.url);
   if (!response.ok) throw new Error("chat-image-download-failed");
 
-  const storedBytes = new Uint8Array(await response.arrayBuffer());
-  if (storedBytes.byteLength !== payload.encryptedSize) {
-    throw new Error("chat-image-size-mismatch");
-  }
+  const storedBytes = await readBodyExactly(response, payload.encryptedSize);
+  if (!storedBytes) throw new Error("chat-image-size-mismatch");
   if (sha256Hex(storedBytes) !== payload.encryptedSha256) {
     throw new Error("chat-image-hash-mismatch");
   }
@@ -540,12 +637,18 @@ export const decryptPrivateImageMessage = async (
   if (sha256Hex(decryptedBytes) !== payload.originalSha256) {
     throw new Error("chat-image-original-hash-mismatch");
   }
+  if (isPdfFileType(payload.fileType) && !hasPdfMagic(decryptedBytes)) {
+    throw new Error("chat-file-not-pdf");
+  }
 
   return new Blob([decryptedBytes], { type: payload.fileType });
 };
 
-export const privateImagePreviewText = (t: (key: string) => string): string =>
-  t("chatImageMessage");
+export const privateImagePreviewText = (
+  t: (key: string) => string,
+  payload: PrivateImageMessagePayload,
+): string =>
+  isPrivatePdfPayload(payload) ? t("chatPdfMessage") : t("chatImageMessage");
 
 export const privateImageUploadDebugPayload = (payload: {
   encryptedSha256: string;

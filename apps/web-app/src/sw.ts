@@ -26,6 +26,7 @@ import { normalizePubkeyHex } from "./app/hooks/messages/contactIdentity";
 import { getLinkyBankPaymentOfferMessageText } from "./app/lib/bankPaymentOffer";
 import {
   getBankPaymentReimbursementCopyForLanguage,
+  getChatAttachmentCopyForLanguage,
   getReceivedMoneyCopyForLanguage,
   isCashuNotificationMessage,
 } from "./app/lib/cashuNotificationCopy";
@@ -315,6 +316,17 @@ function buildChatPushMessage(
     return {
       body: getReceivedMoneyCopyForLanguage(self.navigator.language),
       isCashu: true,
+      isPaymentNotice: false,
+      senderPub: event.from,
+    };
+  }
+  if (body._tag === "ImageBody") {
+    return {
+      body: getChatAttachmentCopyForLanguage(
+        self.navigator.language,
+        body.image.fileType === "application/pdf" ? "pdf" : "image",
+      ),
+      isCashu: false,
       isPaymentNotice: false,
       senderPub: event.from,
     };

@@ -19,7 +19,7 @@ export const CashuTokenText = Schema.NonEmptyTrimmedString.pipe(
 );
 export type CashuTokenText = typeof CashuTokenText.Type;
 
-export class PrivateImage extends Schema.Class<PrivateImage>("PrivateImage")({
+const PrivateImageFields = {
   url: Schema.NonEmptyTrimmedString,
   fileType: Schema.NonEmptyTrimmedString,
   encryptionAlgorithm: Schema.Literal("aes-gcm"),
@@ -28,10 +28,21 @@ export class PrivateImage extends Schema.Class<PrivateImage>("PrivateImage")({
   encryptedSha256: Schema.String.pipe(Schema.pattern(LOWERCASE_HEX_64)),
   originalSha256: Schema.String.pipe(Schema.pattern(LOWERCASE_HEX_64)),
   encryptedSize: Schema.Int.pipe(Schema.positive()),
-  width: Schema.Int.pipe(Schema.positive()),
-  height: Schema.Int.pipe(Schema.positive()),
+  width: Schema.optional(Schema.Int.pipe(Schema.positive())),
+  height: Schema.optional(Schema.Int.pipe(Schema.positive())),
+  fileName: Schema.optional(Schema.NonEmptyTrimmedString),
   storageEncoding: Schema.Literal("base64", "raw"),
-}) {}
+};
+
+// Images carry both dimensions, PDFs neither; a lone dimension is invalid.
+export class PrivateImage extends Schema.Class<PrivateImage>("PrivateImage")(
+  Schema.Struct(PrivateImageFields).pipe(
+    Schema.filter(
+      (image) => (image.width === undefined) === (image.height === undefined),
+      { message: () => "width and height must be given together" },
+    ),
+  ),
+) {}
 
 export class TextMessageDraft extends Schema.Class<TextMessageDraft>(
   "TextMessageDraft",

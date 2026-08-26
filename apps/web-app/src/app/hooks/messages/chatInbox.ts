@@ -23,8 +23,22 @@ export const chatMessageContentFromBody = (body: MessageBody): string => {
       return body.token;
     case "ImageBody":
       return serializePrivateImageMessage({
-        ...body.image,
+        encryptedSha256: body.image.encryptedSha256,
+        encryptedSize: body.image.encryptedSize,
+        encryptionAlgorithm: body.image.encryptionAlgorithm,
+        fileType: body.image.fileType,
+        key: body.image.key,
+        nonce: body.image.nonce,
+        originalSha256: body.image.originalSha256,
+        storageEncoding: body.image.storageEncoding,
         type: "linky.private_image.v1",
+        url: body.image.url,
+        ...(body.image.width !== undefined && body.image.height !== undefined
+          ? { width: body.image.width, height: body.image.height }
+          : {}),
+        ...(body.image.fileName !== undefined
+          ? { fileName: body.image.fileName }
+          : {}),
       });
   }
 };

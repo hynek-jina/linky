@@ -1,4 +1,4 @@
-import { Check, CheckCheck, Info, Plus, X } from "lucide-react";
+import { Check, CheckCheck, FolderPlus, Info, Plus, X } from "lucide-react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import {
@@ -19,7 +19,10 @@ import {
   normalizeMessageLinkMatch,
 } from "../app/lib/messageLinks";
 import type { CashuPaymentRequestMessageInfo } from "../app/lib/paymentRequestMessage";
-import { parsePrivateImageMessage } from "../app/lib/privateImageMessage";
+import {
+  isPrivatePdfPayload,
+  parsePrivateImageMessage,
+} from "../app/lib/privateImageMessage";
 import type { CashuTokenMessageInfo } from "../app/lib/tokenMessageInfo";
 import { isStandaloneCashuTokenMessage } from "../app/lib/tokenText";
 import type {
@@ -35,6 +38,7 @@ import { PayIcon } from "./icons";
 import { LinkPreviewCard } from "./LinkPreviewCard";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { MessageReactions } from "./MessageReactions";
+import { PrivateFileBubble } from "./PrivateFileBubble";
 import { PrivateImageBubble } from "./PrivateImageBubble";
 
 interface MintIcon {
@@ -96,7 +100,8 @@ interface ChatMessageProps {
   onEdit: (message: LocalNostrMessage) => void;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
-  onAddNpubContacts: (npubs: readonly string[]) => void;
+  onAddNpubContacts: (npubs: readonly string[], messageId: string) => void;
+  contactsGroupAssignment: MessageContactsGroupAssignment | null;
   onOpenNpubContact: (npub: string) => void;
   onPayPaymentRequest: (requestInfo: CashuPaymentRequestMessageInfo) => void;
   onReact: (message: LocalNostrMessage, emoji: string) => void;
@@ -198,6 +203,7 @@ function ChatMessageComponent({
   onMintIconError,
   onMintIconLoad,
   onAddNpubContacts,
+  contactsGroupAssignment,
   onOpenBankPaymentOfferDetails,
   onOpenNpubContact,
   onPayPaymentRequest,
@@ -646,19 +652,24 @@ function ChatMessageComponent({
   const imageActions = React.useMemo(() => {
     if (!privateImageInfo || !privateImageBlob) return null;
     const exportLinks = rumorId ? { rumor: rumorId } : {};
+    const fileName = privateImageInfo.fileName;
+    const title = isPrivatePdfPayload(privateImageInfo)
+      ? t("chatPdfMessage")
+      : t("chatImageMessage");
     return {
       canShare: canSharePrivateImage(),
       onSave: () => {
-        downloadPrivateImageBlob(privateImageBlob, exportLinks);
+        downloadPrivateImageBlob(privateImageBlob, exportLinks, fileName);
       },
       onShare: () => {
         void sharePrivateImageBlob(
           privateImageBlob,
-          t("chatImageMessage"),
+          title,
           exportLinks,
+          fileName,
         ).catch((error: unknown) => {
           if (isCancelledShareError(error)) return;
-          downloadPrivateImageBlob(privateImageBlob, exportLinks);
+          downloadPrivateImageBlob(privateImageBlob, exportLinks, fileName);
         });
       },
     };
@@ -963,6 +974,13 @@ function ChatMessageComponent({
                 <span className="pill pill-muted">
                   {t("paymentRequestDeclinedMessage")}
                 </span>
+              ) : privateImageInfo && isPrivatePdfPayload(privateImageInfo) ? (
+                <PrivateFileBubble
+                  onBlobChange={setPrivateImageBlob}
+                  payload={privateImageInfo}
+                  rumorId={rumorId}
+                  t={t}
+                />
               ) : privateImageInfo ? (
                 <PrivateImageBubble
                   onBlobChange={setPrivateImageBlob}
@@ -981,11 +999,18 @@ function ChatMessageComponent({
                 <button
                   type="button"
                   className="chat-add-all-contacts"
-                  onClick={() => onAddNpubContacts(unsavedMessageContactNpubs)}
+                  onClick={() =>
+                    onAddNpubContacts(unsavedMessageContactNpubs, message.id)
+                  }
                 >
                   <Plus size={15} strokeWidth={2.5} aria-hidden="true" />
                   <span>{t("addAllContacts")}</span>
                 </button>
+              ) : contactsGroupAssignment?.messageId === message.id ? (
+                <MessageContactsGroupPicker
+                  assignment={contactsGroupAssignment}
+                  t={t}
+                />
               ) : null}
               {previewUrl ? (
                 <LinkPreviewCard key={previewUrl} url={previewUrl} />
@@ -1031,3 +1056,98 @@ function ChatMessageComponent({
 }
 
 export const ChatMessage = React.memo(ChatMessageComponent);
+
+export interface MessageContactsGroupAssignment {
+  messageId: string;
+  contactCount: number;
+  groupNames: string[];
+  onAssign: (group: string) => void;
+  onDismiss: () => void;
+}
+
+function MessageContactsGroupPicker({
+  assignment,
+  t,
+}: {
+  assignment: MessageContactsGroupAssignment;
+  t: (key: string) => string;
+}): React.ReactElement {
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [groupInput, setGroupInput] = React.useState("");
+  const newGroup = groupInput.trim();
+  const title = t(
+    assignment.contactCount >= 2 && assignment.contactCount <= 4
+      ? "addToGroupTitleFew"
+      : "addToGroupTitle",
+  ).replace("{count}", String(assignment.contactCount));
+
+  // The picker lives inside the bubble that owns long-press/swipe gestures;
+  // its own interactions must not start them.
+  return (
+    <div
+      className={
+        isExpanded ? "chat-add-to-group is-expanded" : "chat-add-to-group"
+      }
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerMove={(event) => event.stopPropagation()}
+      onPointerUp={(event) => event.stopPropagation()}
+      onContextMenu={(event) => event.stopPropagation()}
+    >
+      <div className="chat-add-to-group-header">
+        <button
+          type="button"
+          className="chat-add-to-group-toggle"
+          onClick={() => setIsExpanded(true)}
+          aria-expanded={isExpanded}
+        >
+          <FolderPlus size={15} aria-hidden="true" />
+          <span>{isExpanded ? title : t("addToGroupAction")}</span>
+        </button>
+        <button
+          type="button"
+          className="icon-only-ghost chat-add-to-group-dismiss"
+          onClick={assignment.onDismiss}
+          aria-label={t("close")}
+          title={t("close")}
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
+      {isExpanded ? (
+        <>
+          {assignment.groupNames.length > 0 ? (
+            <div className="contact-group-pills">
+              {assignment.groupNames.map((group) => (
+                <button
+                  key={group}
+                  type="button"
+                  className="group-filter-btn contact-group-pill"
+                  onClick={() => assignment.onAssign(group)}
+                >
+                  {group}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <form
+            className="chat-add-to-group-new"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (newGroup) assignment.onAssign(newGroup);
+            }}
+          >
+            <input
+              autoFocus
+              value={groupInput}
+              onChange={(event) => setGroupInput(event.target.value)}
+              placeholder={t("groupPlaceholder")}
+            />
+            <button type="submit" disabled={!newGroup}>
+              {t("add")}
+            </button>
+          </form>
+        </>
+      ) : null}
+    </div>
+  );
+}
