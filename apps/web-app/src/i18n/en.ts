@@ -363,8 +363,11 @@ export const en = {
   mints: "Mints",
 
   defaultMint: "Default mint",
-  selectedMint: "Selected mint",
   testMintBadge: "test",
+  recommendedMintBadge: "Recommended",
+  mintFeeCashuPayments: "Cashu payments",
+  mintFeeLightningTopup: "Lightning top-up",
+  mintFeeLightningPayments: "Lightning payments",
   setCustomMint: "Set custom mint",
   mintUrlInvalid: "Invalid mint URL.",
   mintAutoswapChangeWarning:

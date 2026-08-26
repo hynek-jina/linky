@@ -11,6 +11,7 @@ interface MintIcon {
 
 interface MintButtonProps {
   badgeLabel?: string;
+  badgeTone?: "recommended" | "test";
   disabled?: boolean;
   fallbackLetter: string;
   getMintIconUrl: (mint: MintUrlInput) => MintIcon;
@@ -23,6 +24,7 @@ interface MintButtonProps {
 
 export function MintButton({
   badgeLabel,
+  badgeTone = "test",
   disabled = false,
   fallbackLetter,
   getMintIconUrl,
@@ -43,13 +45,10 @@ export function MintButton({
     <button
       key={mint}
       type="button"
-      className={`ghost mint-choice${isTestMint ? " is-test-mint" : ""}`}
+      className={`ghost mint-choice${isTestMint ? " is-test-mint" : ""}${isSelected ? " is-selected" : ""}`}
+      aria-pressed={isSelected}
       disabled={disabled}
       onClick={onClick}
-      style={{
-        border: isSelected ? "1px solid #22c55e" : undefined,
-        boxShadow: isSelected ? "0 0 0 1px rgba(34,197,94,0.35)" : undefined,
-      }}
     >
       {renderedIconUrl ? (
         <img
@@ -90,9 +89,18 @@ export function MintButton({
           {fallbackLetter}
         </span>
       )}
-      {label}
+      <span className="mint-choice-label">{label}</span>
       {badgeLabel ? (
-        <span className="mint-choice-badge">{badgeLabel}</span>
+        <span
+          className={`mint-choice-badge${badgeTone === "recommended" ? " is-recommended" : ""}`}
+        >
+          {badgeLabel}
+        </span>
+      ) : null}
+      {isSelected ? (
+        <span className="mint-choice-check" aria-hidden="true">
+          ✓
+        </span>
       ) : null}
     </button>
   );

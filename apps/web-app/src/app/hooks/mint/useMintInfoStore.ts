@@ -260,7 +260,15 @@ export const useMintInfoStore = ({
 
         if (!info) throw lastErr ?? new Error("No info");
 
-        const parsed = parseMintInfoPayload(info);
+        const keysets: unknown = await fetch(`${cleaned}/v1/keysets`, {
+          method: "GET",
+          headers: { accept: "application/json" },
+          signal: controller.signal,
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .catch(() => null);
+
+        const parsed = parseMintInfoPayload(info, keysets);
         const existing = mintInfoByUrl.get(cleaned);
 
         setMintInfoAll((prev) => {

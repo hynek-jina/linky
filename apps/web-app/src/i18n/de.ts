@@ -364,8 +364,11 @@ export const de = {
   transactionDetailLnurlSuccessUrl: "Link des Empfängers",
 
   defaultMint: "Standard-Mint",
-  selectedMint: "Ausgewählter Mint",
   testMintBadge: "Test",
+  recommendedMintBadge: "Empfohlen",
+  mintFeeCashuPayments: "Cashu-Zahlungen",
+  mintFeeLightningTopup: "Lightning-Aufladung",
+  mintFeeLightningPayments: "Lightning-Zahlungen",
   setCustomMint: "Eigenen Mint festlegen",
   mintUrlInvalid: "Ungültige Mint-URL.",
   mintAutoswapChangeWarning:

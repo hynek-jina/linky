@@ -3346,7 +3346,7 @@ button.icon-only-ghost:disabled {
 .mint-choice-list,
 .mint-choice-group {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
 }
 
@@ -3355,15 +3355,62 @@ button.icon-only-ghost:disabled {
 }
 
 button.mint-choice {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
+  width: 100%;
+  text-align: left;
+}
+
+.mint-choice-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.mint-choice-item.is-selected {
+  border-radius: 12px;
+  background: rgba(20, 184, 166, 0.08);
+}
+
+.mint-choice-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mint-choice-check {
+  font-weight: 700;
+  color: #2dd4bf;
+}
+
+button.mint-choice.is-selected,
+button.mint-choice.is-selected:hover {
+  background: rgba(20, 184, 166, 0.18);
+  border: none;
+  box-shadow: none;
+  color: #99f6e4;
+  font-weight: 600;
+}
+
+.mint-fees {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  padding: 10px 14px 12px;
+  font-size: 13px;
+}
+
+.mint-fees-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .mint-choice-test-group {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
   width: 100%;
   margin-top: 4px;
@@ -3385,6 +3432,11 @@ button.mint-choice.is-test-mint {
   font-weight: 900;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+.mint-choice-badge.is-recommended {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
 }
 
 button.danger {

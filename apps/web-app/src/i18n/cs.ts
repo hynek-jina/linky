@@ -367,8 +367,11 @@ export const cs = {
   mints: "Minty",
 
   defaultMint: "Výchozí mint",
-  selectedMint: "Zvolený mint",
   testMintBadge: "test",
+  recommendedMintBadge: "Doporučeno",
+  mintFeeCashuPayments: "Cashu platby",
+  mintFeeLightningTopup: "Lightning dobití",
+  mintFeeLightningPayments: "Lightning platby",
   setCustomMint: "Nastavit vlastní mint",
   mintUrlInvalid: "Neplatná URL mintu.",
   mintAutoswapChangeWarning:
