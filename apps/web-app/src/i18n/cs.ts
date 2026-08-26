@@ -541,7 +541,7 @@ export const cs = {
   contactSearchNoResult: "Nic jsem nenašel.",
   contactSearchVerifiedMatch: "Ověřená shoda",
   contactSearchCreateFromQuery: "Vytvořit kontakt",
-  contactSuggestionsTitle: "Možná znáte",
+  contactSuggestionsTitle: "Noví uživatelé Linky",
   contactSuggestionLastSeen: "Naposledy",
   contactSuggestionActiveRecently: "Aktivní nedávno",
   contactIdentifierInvalid: "Zadejte platný npub nebo rezervované jméno.",

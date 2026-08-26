@@ -17,13 +17,16 @@ import { getProfilePictureUrl } from "../../../profileCache";
 import { getBestNostrName } from "../../../utils/formatting";
 
 const CONTACT_SUGGESTION_LIMIT = 3;
+const CONTACT_SUGGESTION_WINDOW_SECONDS = 24 * 60 * 60;
 const LINKY_LIGHTNING_ADDRESS_SUFFIX = "@linky.fit";
 const STATUS_EVENT_KIND = 30315;
 
 // Public relays' kind-1 firehose saturates the default activity scan within
 // hours, drowning out linky users entirely; statuses are the event kind linky
-// itself publishes, so scanning only those actually surfaces linky users.
+// itself publishes, so scanning only those actually surfaces linky users. The
+// section is "new Linky users", so only the last day counts.
 const CONTACT_SUGGESTION_DISCOVERY: DiscoverActiveProfilesOptions = {
+  activeWindowSeconds: CONTACT_SUGGESTION_WINDOW_SECONDS,
   activityKinds: [STATUS_EVENT_KIND],
   authorScanLimit: 200,
 };

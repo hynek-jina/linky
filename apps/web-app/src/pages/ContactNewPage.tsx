@@ -206,12 +206,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   const searchRequestSeqRef = React.useRef(0);
 
   const searchQuery = form.npub.trim();
-  const showSuggestions =
-    step === "search" &&
-    !searchQuery &&
-    !searchResults &&
-    !searchError &&
-    contactSuggestions.length > 0;
+  const showSuggestions = step === "search" && contactSuggestions.length > 0;
 
   React.useEffect(() => {
     searchQueryRef.current = searchQuery;
@@ -431,80 +426,6 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                 </button>
               </div>
 
-              {showSuggestions ? (
-                <div className="contact-new-suggestions">
-                  <div className="contact-new-suggestions-title">
-                    {t("contactSuggestionsTitle")}
-                  </div>
-                  <div className="contact-new-suggestion-list">
-                    {contactSuggestions.map((suggestion) => {
-                      const displayName = String(
-                        suggestion.name || suggestion.query || "",
-                      ).trim();
-                      const avatarUrl = suggestion.pictureUrl ?? null;
-
-                      return (
-                        <div
-                          className="contact-new-suggestion"
-                          key={suggestion.npub}
-                        >
-                          <div className="contact-new-suggestion-main">
-                            <span className="contact-avatar" aria-hidden="true">
-                              {avatarUrl ? (
-                                <img
-                                  src={avatarUrl}
-                                  alt=""
-                                  loading="lazy"
-                                  referrerPolicy="no-referrer"
-                                />
-                              ) : (
-                                <span className="contact-avatar-fallback">
-                                  {getInitials(displayName)}
-                                </span>
-                              )}
-                            </span>
-                            <span className="contact-new-suggestion-body">
-                              <strong>{displayName || t("contact")}</strong>
-                              <span title={suggestion.lnAddress}>
-                                {formatShortLightningAddress(
-                                  suggestion.lnAddress,
-                                )}
-                              </span>
-                              <small>
-                                {formatSuggestionLastSeen(
-                                  suggestion.lastSeenAtSec,
-                                )}
-                              </small>
-                            </span>
-                          </div>
-                          <div className="contact-new-suggestion-action">
-                            <button
-                              type="button"
-                              onClick={() => void addSuggestion(suggestion)}
-                              disabled={isSavingContact}
-                            >
-                              <span className="btn-label-with-icon">
-                                <span
-                                  className="btn-label-icon"
-                                  aria-hidden="true"
-                                >
-                                  <UserPlus size={18} />
-                                </span>
-                                <span>
-                                  {isSavingContact
-                                    ? t("saving")
-                                    : t("saveContact")}
-                                </span>
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
               {searchResults ? (
                 <div className="contact-new-search-results">
                   {searchResults.contacts.map((candidate) => {
@@ -616,6 +537,79 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                   >
                     {t("contactSearchCreateFromQuery")}
                   </button>
+                </div>
+              ) : null}
+              {showSuggestions ? (
+                <div className="contact-new-suggestions">
+                  <div className="contact-new-suggestions-title">
+                    {t("contactSuggestionsTitle")}
+                  </div>
+                  <div className="contact-new-suggestion-list">
+                    {contactSuggestions.map((suggestion) => {
+                      const displayName = String(
+                        suggestion.name || suggestion.query || "",
+                      ).trim();
+                      const avatarUrl = suggestion.pictureUrl ?? null;
+
+                      return (
+                        <div
+                          className="contact-new-suggestion"
+                          key={suggestion.npub}
+                        >
+                          <div className="contact-new-suggestion-main">
+                            <span className="contact-avatar" aria-hidden="true">
+                              {avatarUrl ? (
+                                <img
+                                  src={avatarUrl}
+                                  alt=""
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <span className="contact-avatar-fallback">
+                                  {getInitials(displayName)}
+                                </span>
+                              )}
+                            </span>
+                            <span className="contact-new-suggestion-body">
+                              <strong>{displayName || t("contact")}</strong>
+                              <span title={suggestion.lnAddress}>
+                                {formatShortLightningAddress(
+                                  suggestion.lnAddress,
+                                )}
+                              </span>
+                              <small>
+                                {formatSuggestionLastSeen(
+                                  suggestion.lastSeenAtSec,
+                                )}
+                              </small>
+                            </span>
+                          </div>
+                          <div className="contact-new-suggestion-action">
+                            <button
+                              type="button"
+                              onClick={() => void addSuggestion(suggestion)}
+                              disabled={isSavingContact}
+                            >
+                              <span className="btn-label-with-icon">
+                                <span
+                                  className="btn-label-icon"
+                                  aria-hidden="true"
+                                >
+                                  <UserPlus size={18} />
+                                </span>
+                                <span>
+                                  {isSavingContact
+                                    ? t("saving")
+                                    : t("saveContact")}
+                                </span>
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : null}
             </>

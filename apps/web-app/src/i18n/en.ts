@@ -537,7 +537,7 @@ export const en = {
   contactSearchNoResult: "Nothing found.",
   contactSearchVerifiedMatch: "Verified match",
   contactSearchCreateFromQuery: "Create contact",
-  contactSuggestionsTitle: "You might know",
+  contactSuggestionsTitle: "New Linky users",
   contactSuggestionLastSeen: "Last seen",
   contactSuggestionActiveRecently: "Active recently",
   contactIdentifierInvalid: "Enter a valid npub or reserved name.",

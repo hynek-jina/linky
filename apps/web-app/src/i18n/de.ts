@@ -529,7 +529,7 @@ export const de = {
   contactSearchNoResult: "Nichts gefunden.",
   contactSearchVerifiedMatch: "Bestätigter Treffer",
   contactSearchCreateFromQuery: "Kontakt erstellen",
-  contactSuggestionsTitle: "Vielleicht kennst du",
+  contactSuggestionsTitle: "Neue Linky-Nutzer",
   contactSuggestionLastSeen: "Zuletzt gesehen",
   contactSuggestionActiveRecently: "Kürzlich aktiv",
   contactIdentifierInvalid:
