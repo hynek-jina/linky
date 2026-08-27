@@ -14,7 +14,7 @@ import { Exit } from "effect";
 import React from "react";
 import { omitSyntheticContactLightningAddress } from "../../../derivedProfile";
 import { getProfilePictureUrl } from "../../../profileCache";
-import { getBestNostrName } from "../../../utils/formatting";
+import { formatShortNpub, getBestNostrName } from "../../../utils/formatting";
 
 const CONTACT_SUGGESTION_LIMIT = 3;
 const CONTACT_SUGGESTION_WINDOW_SECONDS = 24 * 60 * 60;
@@ -40,18 +40,13 @@ export interface ContactSuggestionCandidate {
   lastSeenAtSec: number;
 }
 
-const getLinkyLightningAddress = (
-  metadata: ProfileMetadata,
-  npub: string,
-): string => {
-  const address = omitSyntheticContactLightningAddress(
-    (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
-    npub,
-  );
-  return address.toLowerCase().endsWith(LINKY_LIGHTNING_ADDRESS_SUFFIX)
-    ? address
-    : "";
-};
+const getProfileLightningAddress = (metadata: ProfileMetadata): string =>
+  (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim();
+
+const isLinkyUser = (metadata: ProfileMetadata): boolean =>
+  getProfileLightningAddress(metadata)
+    .toLowerCase()
+    .endsWith(LINKY_LIGHTNING_ADDRESS_SUFFIX);
 
 export const selectContactSuggestions = (
   profiles: ReadonlyArray<DiscoveredProfile>,
@@ -64,17 +59,23 @@ export const selectContactSuggestions = (
 
     const npub = encodeNpub(profile.pubkey);
     if (knownNpubs.has(npub)) continue;
+    if (!isLinkyUser(profile.metadata)) continue;
 
-    const lnAddress = getLinkyLightningAddress(profile.metadata, npub);
-    if (!lnAddress) continue;
-
+    // A fresh account only has the synthetic npub@linky.fit address, which
+    // is hidden in the UI; the profile still counts as a Linky user.
+    const lnAddress = omitSyntheticContactLightningAddress(
+      getProfileLightningAddress(profile.metadata),
+      npub,
+    );
     suggestions.push({
       lastSeenAtSec: profile.lastActiveAt,
       lnAddress,
-      name: getBestNostrName(profile.metadata) ?? lnAddress,
+      name:
+        getBestNostrName(profile.metadata) ??
+        (lnAddress || formatShortNpub(npub)),
       npub,
       pictureUrl: getProfilePictureUrl(profile.metadata),
-      query: lnAddress,
+      query: lnAddress || npub,
     });
   }
 

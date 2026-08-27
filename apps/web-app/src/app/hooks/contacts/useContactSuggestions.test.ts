@@ -53,6 +53,28 @@ describe("selectContactSuggestions", () => {
     });
   });
 
+  it("keeps new users whose only address is the synthetic npub@linky.fit one", () => {
+    const fresh = discovered(10, { name: "fresh" });
+    const npub = encodeNpub(fresh.pubkey);
+    const profile = new DiscoveredProfile({
+      ...fresh,
+      metadata: new ProfileMetadata({
+        name: "fresh",
+        lud16: `${npub}@linky.fit`,
+      }),
+    });
+
+    const suggestions = selectContactSuggestions([profile], new Set());
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]).toMatchObject({
+      lnAddress: "",
+      name: "fresh",
+      npub,
+      query: npub,
+    });
+  });
+
   it("falls back to the lightning address when the profile has no name", () => {
     const suggestions = selectContactSuggestions(
       [discovered(10, { lud16: "anon@linky.fit" })],
