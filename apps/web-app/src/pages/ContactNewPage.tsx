@@ -8,7 +8,6 @@ import {
   formatShortLightningAddress,
   formatShortNpub,
   getInitials,
-  normalizeLocale,
 } from "../utils/formatting";
 import { normalizeContactGroups } from "../utils/contactGroups";
 
@@ -151,7 +150,7 @@ interface ContactSuggestionCandidate extends Omit<
   ContactSearchCandidate,
   "isExactMatch"
 > {
-  lastSeenAtSec: number;
+  displayLnAddress: string;
 }
 
 type ContactSearchResult =
@@ -174,7 +173,6 @@ interface ContactNewPageProps {
   groupNames: string[];
   handleSaveContact: () => void;
   isSavingContact: boolean;
-  lang: string;
   searchNewContact: (query?: string) => Promise<ContactSearchResult>;
   setForm: (value: ContactFormData) => void;
   t: (key: string) => string;
@@ -187,7 +185,6 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   groupNames,
   handleSaveContact,
   isSavingContact,
-  lang,
   searchNewContact,
   setForm,
   t,
@@ -206,7 +203,8 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   const searchRequestSeqRef = React.useRef(0);
 
   const searchQuery = form.npub.trim();
-  const showSuggestions = step === "search" && contactSuggestions.length > 0;
+  const showSuggestions =
+    step === "search" && !searchQuery && contactSuggestions.length > 0;
 
   React.useEffect(() => {
     searchQueryRef.current = searchQuery;
@@ -326,46 +324,6 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
       ...suggestion,
       isExactMatch: false,
     });
-  };
-  const formatSuggestionLastSeen = (lastSeenAtSec: number): string => {
-    if (!Number.isFinite(lastSeenAtSec) || lastSeenAtSec <= 0) {
-      return t("contactSuggestionActiveRecently");
-    }
-
-    const date = new Date(lastSeenAtSec * 1000);
-    const today = new Date();
-    const todayStartMs = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate(),
-    ).getTime();
-    const dateStartMs = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-    ).getTime();
-    const dayDiff = Math.round(
-      (todayStartMs - dateStartMs) / (24 * 60 * 60 * 1000),
-    );
-
-    const lowerLocale = normalizeLocale(lang);
-    if (dayDiff === 0) {
-      return `${t("contactSuggestionLastSeen")} ${t("today").toLocaleLowerCase(lowerLocale)}`;
-    }
-    if (dayDiff === 1) {
-      return `${t("contactSuggestionLastSeen")} ${t("yesterday").toLocaleLowerCase(lowerLocale)}`;
-    }
-
-    const locale = normalizeLocale(lang);
-    const formatted = new Intl.DateTimeFormat(locale, {
-      day: "numeric",
-      month: "long",
-      ...(date.getFullYear() === today.getFullYear()
-        ? {}
-        : { year: "numeric" }),
-    }).format(date);
-
-    return `${t("contactSuggestionLastSeen")} ${formatted}`;
   };
   const canCreateContactFromSearch =
     !searchResults &&
@@ -567,16 +525,11 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                             </span>
                             <span className="contact-new-suggestion-body">
                               <strong>{displayName || t("contact")}</strong>
-                              <span title={suggestion.lnAddress}>
+                              <span title={suggestion.displayLnAddress}>
                                 {formatShortLightningAddress(
-                                  suggestion.lnAddress,
+                                  suggestion.displayLnAddress,
                                 )}
                               </span>
-                              <small>
-                                {formatSuggestionLastSeen(
-                                  suggestion.lastSeenAtSec,
-                                )}
-                              </small>
                             </span>
                           </div>
                           <div className="contact-new-suggestion-action">

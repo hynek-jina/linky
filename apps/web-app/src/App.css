@@ -4381,6 +4381,9 @@ button.icon {
   background: transparent;
   border-radius: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--topbar-height) - 80px);
 }
 
 .contact-new-search-results {
@@ -4465,7 +4468,8 @@ button.icon {
 .contact-new-suggestions {
   display: grid;
   gap: 8px;
-  margin-top: 28px;
+  margin-top: auto;
+  padding-top: 28px;
 }
 
 .contact-new-suggestions-title {

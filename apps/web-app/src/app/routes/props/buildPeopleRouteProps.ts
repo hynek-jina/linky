@@ -315,7 +315,6 @@ export const buildPeopleRouteProps = ({
       groupNames,
       handleSaveContact,
       isSavingContact,
-      lang,
       searchNewContact,
       t,
     },

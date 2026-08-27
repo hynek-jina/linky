@@ -44,7 +44,7 @@ describe("selectContactSuggestions", () => {
 
     expect(suggestions.map((s) => s.name)).toEqual(["carol", "dave", "erin"]);
     expect(suggestions[0]).toEqual({
-      lastSeenAtSec: 300,
+      displayLnAddress: "carol@linky.fit",
       lnAddress: "carol@linky.fit",
       name: "carol",
       npub: encodeNpub(profiles[2]!.pubkey),
@@ -68,6 +68,7 @@ describe("selectContactSuggestions", () => {
 
     expect(suggestions).toHaveLength(1);
     expect(suggestions[0]).toMatchObject({
+      displayLnAddress: `${npub}@linky.fit`,
       lnAddress: "",
       name: "fresh",
       npub,

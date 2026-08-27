@@ -33,7 +33,6 @@ describe("ContactNewPage", () => {
           groupNames={[]}
           handleSaveContact={() => {}}
           isSavingContact={false}
-          lang="cs"
           searchNewContact={async () => ({ kind: "empty" })}
           setForm={() => {}}
           t={(key) => key}
@@ -78,7 +77,6 @@ describe("ContactNewPage", () => {
           groupNames={[]}
           handleSaveContact={() => {}}
           isSavingContact={false}
-          lang="cs"
           searchNewContact={async () => ({
             contacts: [exact, similar],
             kind: "found",

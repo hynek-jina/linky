@@ -529,8 +529,6 @@ export const de = {
   contactSearchNoResult: "Nichts gefunden.",
   contactSearchCreateFromQuery: "Kontakt erstellen",
   contactSuggestionsTitle: "Neue Linky-Nutzer",
-  contactSuggestionLastSeen: "Zuletzt gesehen",
-  contactSuggestionActiveRecently: "Kürzlich aktiv",
   contactIdentifierInvalid:
     "Gib einen gültigen npub oder reservierten Namen ein.",
   noContactsYet: "Noch keine Kontakte.",
