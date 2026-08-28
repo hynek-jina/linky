@@ -738,6 +738,101 @@
   margin-top: 4px;
 }
 
+.onboarding-step-heading {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.onboarding-step-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #e2e8f0;
+}
+
+.onboarding-step-hint {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.onboarding-welcome-heading {
+  margin: 4px 0 20px;
+}
+
+.onboarding-welcome-title {
+  font-size: 32px;
+  letter-spacing: -0.01em;
+}
+
+.onboarding-welcome-actions {
+  display: grid;
+  gap: 18px;
+}
+
+.onboarding-welcome-action {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.onboarding-welcome-actionHint {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.onboarding-name-input {
+  font-size: 20px;
+  text-align: center;
+}
+
+.onboarding-picture-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.onboarding-picture-option {
+  min-height: 76px;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: 16px;
+  border: none;
+  background: rgba(15, 23, 42, 0.44);
+  box-shadow: none;
+}
+
+.onboarding-picture-option:hover {
+  transform: none;
+  box-shadow: none;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.onboarding-picture-option.is-selected {
+  background: rgba(13, 148, 136, 0.16);
+}
+
+.onboarding-picture-optionIcon {
+  display: inline-flex;
+  color: #e2e8f0;
+}
+
+.selfie-viewport {
+  cursor: default;
+}
+
+.selfie-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
 .profile-avatar-editor {
   display: grid;
   gap: 12px;
@@ -1226,7 +1321,7 @@
 .onboarding-logo-svg {
   width: min(520px, 100%);
   height: auto;
-  max-height: 168px;
+  max-height: 140px;
   display: block;
   opacity: 0.95;
 }

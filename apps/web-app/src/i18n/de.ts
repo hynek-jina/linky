@@ -66,9 +66,11 @@ export const de = {
   notificationReceivedBankPaymentReimbursement:
     "Deine Sats für die Bankzahlung sind angekommen",
 
-  onboardingSubtitle: "Lightning-Kontakte für Zahlungen und Nachrichten.",
-  onboardingCreate: "Ich fange an",
-  onboardingReturn: "Ich kehre zurück",
+  onboardingSubtitle: "Baue dein Bitcoin-Netzwerk auf.",
+  onboardingCreate: "Profil erstellen",
+  onboardingCreateHint: "Keine Telefonnummer, keine E-Mail nötig.",
+  onboardingReturn: "Ich habe schon ein Profil",
+  onboardingReturnHintShort: "Melde dich mit deinen 20 Wörtern an.",
   onboardingPasteNsec: "Schlüssel einfügen",
   onboardingInvalidSeed: "Ungültige SLIP-39-Schlüssel.",
   onboardingInvalidNsec: "Ungültiges Geheimnis.",
@@ -89,6 +91,12 @@ export const de = {
   onboardingStep1: "Wir wählen einen Namen… Du wirst {name} heißen",
   onboardingStep2: "Wir stellen uns vor, wie du aussiehst… Fertig",
   onboardingStep3: "Deine Lightning-Adresse wird erstellt… einen Moment.",
+  onboardingNameTitle: "Wie nennt man dich?",
+  onboardingNameHint: "Gib den Namen ein, an dem dich deine Freunde erkennen.",
+  onboardingPictureTitle: "Wie sehen dich die anderen?",
+  onboardingTakePhoto: "Foto aufnehmen",
+  onboardingCreateAvatar: "Avatar bearbeiten",
+  onboardingCapturePhoto: "Aufnehmen",
   onboardingAvatarTitle: "Wähle deinen Avatar",
   onboardingAvatarIntro:
     "Du kannst das Standardprofil sofort bestätigen oder Namen und Avatar anpassen.",

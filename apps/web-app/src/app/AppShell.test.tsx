@@ -80,6 +80,7 @@ const onboardingComposition = {
   onPendingOnboardingPhotoSelected: vi.fn(),
   pasteReturningSlip39FromClipboard: vi.fn(),
   pickPendingOnboardingPhoto: vi.fn(),
+  selectPendingOnboardingGeneratedAvatar: vi.fn(),
   savePendingOnboardingBackupToPasswordManager: vi.fn(),
   selectReturningSlip39Suggestion: vi.fn(),
   setLang: vi.fn(),

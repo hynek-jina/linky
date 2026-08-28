@@ -119,10 +119,10 @@ test("keeps unauthenticated auth gating without render loops", async ({
   await page.goto("/#wallet");
 
   await expect(
-    page.getByRole("button", { name: "I'm getting started" }),
+    page.getByRole("button", { name: "Create a profile" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "I'm returning" }),
+    page.getByRole("button", { name: "I already have a profile" }),
   ).toBeVisible();
   await expect(page.locator("[data-guide='contact-add-button']")).toHaveCount(
     0,
@@ -139,7 +139,7 @@ test("restores an account from SLIP-39 without getting stuck", async ({
   await page.setViewportSize({ ...MOBILE_VIEWPORT });
 
   await page.goto("/#wallet");
-  await page.getByRole("button", { name: "I'm returning" }).click();
+  await page.getByRole("button", { name: "I already have a profile" }).click();
   await page.getByLabel("Keys").fill(slip39Share);
   const reloadFinished = page.waitForEvent("load");
   await page.getByRole("button", { name: "Continue" }).click();
@@ -165,7 +165,7 @@ test("restores an account when private browsing disables OPFS", async ({
   await page
     .getByRole("button", { name: "Continue with temporary session" })
     .click();
-  await page.getByRole("button", { name: "I'm returning" }).click();
+  await page.getByRole("button", { name: "I already have a profile" }).click();
   await page.getByLabel("Keys").fill(slip39Share);
   const reloadFinished = page.waitForEvent("load");
   await page.getByRole("button", { name: "Continue" }).click();

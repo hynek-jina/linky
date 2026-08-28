@@ -14,11 +14,21 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 ### en-US
 
-- No user-facing changes yet.
-
 ### cs-CZ
 
-- Zatím bez uživatelských změn.
+## [26.9.3] - 2026-08-28
+
+### en-US
+
+- Search for new contacts by name: the add-contact screen shows up to three matching Nostr profiles, with exact npub/NIP-05 matches highlighted.
+- The add-contact screen lists the newest Linky users from the last hour.
+- New-profile setup is split into two steps: pick your name, then choose how others see you — upload a photo, take a selfie with the front camera, or edit the generated avatar.
+- Refreshed welcome screen with clearer texts.
+
+- Hledání nových kontaktů podle jména: obrazovka přidání kontaktu ukáže až tři odpovídající Nostr profily, přesná shoda npub/NIP-05 je zvýrazněná.
+- Obrazovka přidání kontaktu ukazuje nejnovější uživatele Linky za poslední hodinu.
+- Vytvoření profilu je rozdělené do dvou kroků: nejdřív jméno, potom jak tě uvidí ostatní — nahrát fotku, vyfotit selfie přední kamerou nebo upravit vygenerovaného avatara.
+- Přepracovaná úvodní obrazovka s jasnějšími texty.
 
 ## [26.9.2] - 2026-08-26
 

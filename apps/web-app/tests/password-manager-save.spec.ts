@@ -24,10 +24,13 @@ test("password save does not boot a nested app instance", async ({ page }) => {
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "I'm getting started" }).click();
+  await page.getByRole("button", { name: "Create a profile" }).click();
+  await page
+    .getByRole("button", { name: "Continue" })
+    .click({ timeout: 20_000 });
   await expect(
     page.getByRole("button", { name: "Confirm profile" }),
-  ).toBeVisible({ timeout: 20_000 });
+  ).toBeVisible();
 
   const mainBundleRequestsBeforeSave = mainBundleRequests;
   const saveForm = page.locator(".onboarding-password-save-form");

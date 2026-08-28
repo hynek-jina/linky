@@ -71,10 +71,12 @@ export function ProfileAvatarEditor({
       />
 
       <AvatarControlGrid
-        customPictureUrl={profileCustomPictureUrl}
-        isCustomSelected={profileSelectedPictureKind === "custom"}
+        custom={{
+          isSelected: profileSelectedPictureKind === "custom",
+          onPick: onPickProfilePhoto,
+          pictureUrl: profileCustomPictureUrl,
+        }}
         onCycle={cycleProfileAvatarControl}
-        onPickCustom={onPickProfilePhoto}
         t={t}
       />
     </div>
