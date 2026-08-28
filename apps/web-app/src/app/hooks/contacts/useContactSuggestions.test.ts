@@ -44,12 +44,35 @@ describe("selectContactSuggestions", () => {
 
     expect(suggestions.map((s) => s.name)).toEqual(["carol", "dave", "erin"]);
     expect(suggestions[0]).toEqual({
-      lastSeenAtSec: 300,
+      displayLnAddress: "carol@linky.fit",
       lnAddress: "carol@linky.fit",
       name: "carol",
       npub: encodeNpub(profiles[2]!.pubkey),
       pictureUrl: null,
       query: "carol@linky.fit",
+    });
+  });
+
+  it("keeps new users whose only address is the synthetic npub@linky.fit one", () => {
+    const fresh = discovered(10, { name: "fresh" });
+    const npub = encodeNpub(fresh.pubkey);
+    const profile = new DiscoveredProfile({
+      ...fresh,
+      metadata: new ProfileMetadata({
+        name: "fresh",
+        lud16: `${npub}@linky.fit`,
+      }),
+    });
+
+    const suggestions = selectContactSuggestions([profile], new Set());
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]).toMatchObject({
+      displayLnAddress: `${npub}@linky.fit`,
+      lnAddress: "",
+      name: "fresh",
+      npub,
+      query: npub,
     });
   });
 

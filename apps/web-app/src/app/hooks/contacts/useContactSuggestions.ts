@@ -14,16 +14,19 @@ import { Exit } from "effect";
 import React from "react";
 import { omitSyntheticContactLightningAddress } from "../../../derivedProfile";
 import { getProfilePictureUrl } from "../../../profileCache";
-import { getBestNostrName } from "../../../utils/formatting";
+import { formatShortNpub, getBestNostrName } from "../../../utils/formatting";
 
 const CONTACT_SUGGESTION_LIMIT = 3;
+const CONTACT_SUGGESTION_WINDOW_SECONDS = 60 * 60;
 const LINKY_LIGHTNING_ADDRESS_SUFFIX = "@linky.fit";
 const STATUS_EVENT_KIND = 30315;
 
 // Public relays' kind-1 firehose saturates the default activity scan within
 // hours, drowning out linky users entirely; statuses are the event kind linky
-// itself publishes, so scanning only those actually surfaces linky users.
+// itself publishes, so scanning only those actually surfaces linky users. The
+// section is "new Linky users", so only the last hour counts.
 const CONTACT_SUGGESTION_DISCOVERY: DiscoverActiveProfilesOptions = {
+  activeWindowSeconds: CONTACT_SUGGESTION_WINDOW_SECONDS,
   activityKinds: [STATUS_EVENT_KIND],
   authorScanLimit: 200,
 };
@@ -34,21 +37,16 @@ export interface ContactSuggestionCandidate {
   npub: string;
   pictureUrl: string | null;
   query: string;
-  lastSeenAtSec: number;
+  displayLnAddress: string;
 }
 
-const getLinkyLightningAddress = (
-  metadata: ProfileMetadata,
-  npub: string,
-): string => {
-  const address = omitSyntheticContactLightningAddress(
-    (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
-    npub,
-  );
-  return address.toLowerCase().endsWith(LINKY_LIGHTNING_ADDRESS_SUFFIX)
-    ? address
-    : "";
-};
+const getProfileLightningAddress = (metadata: ProfileMetadata): string =>
+  (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim();
+
+const isLinkyUser = (metadata: ProfileMetadata): boolean =>
+  getProfileLightningAddress(metadata)
+    .toLowerCase()
+    .endsWith(LINKY_LIGHTNING_ADDRESS_SUFFIX);
 
 export const selectContactSuggestions = (
   profiles: ReadonlyArray<DiscoveredProfile>,
@@ -61,17 +59,24 @@ export const selectContactSuggestions = (
 
     const npub = encodeNpub(profile.pubkey);
     if (knownNpubs.has(npub)) continue;
+    if (!isLinkyUser(profile.metadata)) continue;
 
-    const lnAddress = getLinkyLightningAddress(profile.metadata, npub);
-    if (!lnAddress) continue;
-
+    // A fresh account only has the synthetic npub@linky.fit address, which
+    // is hidden in the UI; the profile still counts as a Linky user.
+    const displayLnAddress = getProfileLightningAddress(profile.metadata);
+    const lnAddress = omitSyntheticContactLightningAddress(
+      displayLnAddress,
+      npub,
+    );
     suggestions.push({
-      lastSeenAtSec: profile.lastActiveAt,
+      displayLnAddress,
       lnAddress,
-      name: getBestNostrName(profile.metadata) ?? lnAddress,
+      name:
+        getBestNostrName(profile.metadata) ??
+        (lnAddress || formatShortNpub(npub)),
       npub,
       pictureUrl: getProfilePictureUrl(profile.metadata),
-      query: lnAddress,
+      query: lnAddress || npub,
     });
   }
 

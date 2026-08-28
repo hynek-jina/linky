@@ -658,3 +658,121 @@ describe("Profiles.discoverActiveProfiles", () => {
     );
   });
 });
+
+describe("Profiles.searchProfiles", () => {
+  const searchRelay = RelayUrl.make("wss://search.test");
+
+  it("queries read and search relays with a NIP-50 filter and keeps only local matches", async () => {
+    const fetchLog: Array<Filter> = [];
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      // A relay without NIP-50 ignores `search` and answers with anything.
+      [
+        relayA,
+        [
+          profileEvent(
+            carol,
+            JSON.stringify({ name: "carol", nip05: "carol@other.test" }),
+            base + 5,
+          ),
+        ],
+      ],
+      [
+        searchRelay,
+        [
+          profileEvent(bob, JSON.stringify({ name: "Alice Bobson" }), base + 1),
+          profileEvent(bob, JSON.stringify({ name: "old bob" }), base),
+          profileEvent(
+            alice,
+            JSON.stringify({ display_name: "ALICE" }),
+            base + 2,
+          ),
+        ],
+      ],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { fetchLog, stored }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.searchProfiles("alice", { searchRelays: [searchRelay] }),
+      ),
+      [relayA],
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value.map((hit) => hit.pubkey)).toEqual([
+      alice.pubkey,
+      bob.pubkey,
+    ]);
+    expect(exit.value[1]?.metadata.name).toBe("Alice Bobson");
+    expect(exit.value[0]?.metadata.displayName).toBe("ALICE");
+    expect(fetchLog).toHaveLength(2);
+    expect(fetchLog[0]).toEqual({ kinds: [0], search: "alice", limit: 30 });
+  });
+
+  it("ranks exact and prefix name matches above substring matches", async () => {
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        relayA,
+        [
+          profileEvent(alice, JSON.stringify({ name: "blackjack" }), base + 3),
+          profileEvent(bob, JSON.stringify({ name: "jackson" }), base + 2),
+          profileEvent(carol, JSON.stringify({ display_name: "Jack" }), base),
+        ],
+      ],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { stored }),
+      Effect.flatMap(Profiles, (profiles) => profiles.searchProfiles("jack")),
+      [relayA],
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value.map((hit) => hit.pubkey)).toEqual([
+      carol.pubkey,
+      bob.pubkey,
+      alice.pubkey,
+    ]);
+  });
+
+  it("caps the hits at the requested limit", async () => {
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        relayA,
+        [alice, bob, carol].map((identity, index) =>
+          profileEvent(
+            identity,
+            JSON.stringify({ name: `sat-${index}` }),
+            base + index,
+          ),
+        ),
+      ],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { stored }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.searchProfiles("sat", { limit: 2 }),
+      ),
+      [relayA],
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value).toHaveLength(2);
+    expect(exit.value[0]?.pubkey).toBe(carol.pubkey);
+  });
+
+  it("fails when neither read nor search relays are configured", async () => {
+    const exit = await runWith(
+      stubTransport([]),
+      Effect.flatMap(Profiles, (profiles) => profiles.searchProfiles("alice")),
+      [],
+    );
+    expect(exit).toEqual(
+      Exit.fail(expect.objectContaining({ _tag: "NoReadRelaysConfigured" })),
+    );
+  });
+});

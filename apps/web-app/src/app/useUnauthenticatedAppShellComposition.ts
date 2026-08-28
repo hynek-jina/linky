@@ -47,6 +47,8 @@ export const useUnauthenticatedAppShellComposition = () => {
     pickPendingOnboardingPhoto: onboarding.pickPendingOnboardingPhoto,
     savePendingOnboardingBackupToPasswordManager:
       onboarding.savePendingOnboardingBackupToPasswordManager,
+    selectPendingOnboardingGeneratedAvatar:
+      onboarding.selectPendingOnboardingGeneratedAvatar,
     selectReturningSlip39Suggestion: onboarding.selectReturningSlip39Suggestion,
     setLang,
     setOnboardingStep: onboarding.setOnboardingStep,

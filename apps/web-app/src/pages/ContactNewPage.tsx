@@ -8,7 +8,6 @@ import {
   formatShortLightningAddress,
   formatShortNpub,
   getInitials,
-  normalizeLocale,
 } from "../utils/formatting";
 import { normalizeContactGroups } from "../utils/contactGroups";
 
@@ -139,6 +138,7 @@ export function ContactFields({
 
 interface ContactSearchCandidate {
   existingContactId?: string;
+  isExactMatch: boolean;
   lnAddress: string;
   name: string;
   npub: string;
@@ -146,15 +146,23 @@ interface ContactSearchCandidate {
   query: string;
 }
 
-interface ContactSuggestionCandidate extends ContactSearchCandidate {
-  lastSeenAtSec: number;
+interface ContactSuggestionCandidate extends Omit<
+  ContactSearchCandidate,
+  "isExactMatch"
+> {
+  displayLnAddress: string;
 }
 
 type ContactSearchResult =
   | { kind: "empty" }
   | { kind: "error"; identifier: string }
-  | { kind: "found"; contact: ContactSearchCandidate }
+  | { kind: "found"; contacts: ContactSearchCandidate[] }
   | { kind: "not_found"; query: string };
+
+interface ContactSearchResults {
+  contacts: ContactSearchCandidate[];
+  query: string;
+}
 
 interface ContactNewPageProps {
   addNewContactFromSearchResult: (
@@ -165,7 +173,6 @@ interface ContactNewPageProps {
   groupNames: string[];
   handleSaveContact: () => void;
   isSavingContact: boolean;
-  lang: string;
   searchNewContact: (query?: string) => Promise<ContactSearchResult>;
   setForm: (value: ContactFormData) => void;
   t: (key: string) => string;
@@ -178,7 +185,6 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   groupNames,
   handleSaveContact,
   isSavingContact,
-  lang,
   searchNewContact,
   setForm,
   t,
@@ -186,8 +192,8 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   const [step, setStep] = React.useState<"search" | "details">("search");
   const [searchError, setSearchError] = React.useState<string | null>(null);
   const [searchIsBusy, setSearchIsBusy] = React.useState(false);
-  const [searchResult, setSearchResult] =
-    React.useState<ContactSearchCandidate | null>(null);
+  const [searchResults, setSearchResults] =
+    React.useState<ContactSearchResults | null>(null);
   const [manualCreateQuery, setManualCreateQuery] = React.useState<
     string | null
   >(null);
@@ -197,16 +203,8 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   const searchRequestSeqRef = React.useRef(0);
 
   const searchQuery = form.npub.trim();
-  const resultAvatarUrl = searchResult?.pictureUrl ?? null;
-  const resultDisplayName = String(
-    searchResult?.name || searchResult?.query || "",
-  ).trim();
   const showSuggestions =
-    step === "search" &&
-    !searchQuery &&
-    !searchResult &&
-    !searchError &&
-    contactSuggestions.length > 0;
+    step === "search" && !searchQuery && contactSuggestions.length > 0;
 
   React.useEffect(() => {
     searchQueryRef.current = searchQuery;
@@ -229,7 +227,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
 
   const clearSearchFeedback = React.useCallback(() => {
     setSearchError(null);
-    setSearchResult(null);
+    setSearchResults(null);
     setManualCreateQuery(null);
   }, []);
 
@@ -240,7 +238,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
         if (!options?.silentEmpty) {
           setSearchError(t("contactSearchEmpty"));
         }
-        setSearchResult(null);
+        setSearchResults(null);
         setManualCreateQuery(null);
         return;
       }
@@ -262,7 +260,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
 
       if (result.kind === "found") {
         setManualCreateQuery(null);
-        setSearchResult(result.contact);
+        setSearchResults({ contacts: result.contacts, query: queryText });
         return;
       }
 
@@ -294,12 +292,12 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
   React.useEffect(() => {
     if (step !== "search") return;
     if (!searchQuery) {
-      setSearchResult(null);
+      setSearchResults(null);
       setManualCreateQuery(null);
       return;
     }
 
-    if (searchResult?.query.trim() === searchQuery) return;
+    if (searchResults?.query === searchQuery) return;
     if (lastSearchedQueryRef.current === searchQuery) return;
 
     const timer = window.setTimeout(() => {
@@ -307,7 +305,7 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
     }, 900);
 
     return () => window.clearTimeout(timer);
-  }, [runSearch, searchQuery, searchResult?.query, step]);
+  }, [runSearch, searchQuery, searchResults?.query, step]);
 
   const createManualFromSearch = () => {
     const prefill = getContactQueryPrefill(searchQuery);
@@ -321,68 +319,27 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
     setStep("details");
   };
 
-  const addSearchResult = async () => {
-    if (!searchResult) return;
-    await addNewContactFromSearchResult(searchResult);
-  };
   const addSuggestion = async (suggestion: ContactSuggestionCandidate) => {
-    await addNewContactFromSearchResult(suggestion);
-  };
-  const formatSuggestionLastSeen = (lastSeenAtSec: number): string => {
-    if (!Number.isFinite(lastSeenAtSec) || lastSeenAtSec <= 0) {
-      return t("contactSuggestionActiveRecently");
-    }
-
-    const date = new Date(lastSeenAtSec * 1000);
-    const today = new Date();
-    const todayStartMs = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate(),
-    ).getTime();
-    const dateStartMs = new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-    ).getTime();
-    const dayDiff = Math.round(
-      (todayStartMs - dateStartMs) / (24 * 60 * 60 * 1000),
-    );
-
-    const lowerLocale = normalizeLocale(lang);
-    if (dayDiff === 0) {
-      return `${t("contactSuggestionLastSeen")} ${t("today").toLocaleLowerCase(lowerLocale)}`;
-    }
-    if (dayDiff === 1) {
-      return `${t("contactSuggestionLastSeen")} ${t("yesterday").toLocaleLowerCase(lowerLocale)}`;
-    }
-
-    const locale = normalizeLocale(lang);
-    const formatted = new Intl.DateTimeFormat(locale, {
-      day: "numeric",
-      month: "long",
-      ...(date.getFullYear() === today.getFullYear()
-        ? {}
-        : { year: "numeric" }),
-    }).format(date);
-
-    return `${t("contactSuggestionLastSeen")} ${formatted}`;
+    await addNewContactFromSearchResult({
+      ...suggestion,
+      isExactMatch: false,
+    });
   };
   const canCreateContactFromSearch =
-    !searchResult &&
+    !searchResults &&
     Boolean(searchQuery) &&
     manualCreateQuery === searchQuery &&
     !searchIsBusy;
   const showSearchLoader =
     Boolean(searchQuery) &&
-    !searchResult &&
+    !searchResults &&
     !searchError &&
     manualCreateQuery !== searchQuery;
 
   return (
     <section className="panel panel-plain">
       <div className="form-grid">
-        <div className="form-col">
+        <div className="form-col contact-new-form-col">
           {step === "search" ? (
             <>
               <label>{t("contactSearchLabel")}</label>
@@ -427,6 +384,113 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                 </button>
               </div>
 
+              {searchResults ? (
+                <div className="contact-new-search-results">
+                  {searchResults.contacts.map((candidate) => {
+                    const displayName = String(
+                      candidate.name || candidate.query || "",
+                    ).trim();
+                    return (
+                      <div
+                        className={
+                          candidate.isExactMatch
+                            ? "contact-new-search-result is-exact"
+                            : "contact-new-search-result"
+                        }
+                        key={candidate.npub}
+                      >
+                        <div className="contact-new-search-result-main">
+                          <div
+                            className="contact-avatar is-large"
+                            aria-hidden="true"
+                          >
+                            {candidate.pictureUrl ? (
+                              <img
+                                src={candidate.pictureUrl}
+                                alt=""
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <span className="contact-avatar-fallback">
+                                {getInitials(displayName)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="contact-new-search-result-body">
+                            <strong>{displayName || t("contact")}</strong>
+                            {candidate.lnAddress ? (
+                              <span title={candidate.lnAddress}>
+                                {formatShortLightningAddress(
+                                  candidate.lnAddress,
+                                )}
+                              </span>
+                            ) : null}
+                            <small title={candidate.npub}>
+                              {formatShortNpub(candidate.npub)}
+                            </small>
+                          </div>
+                        </div>
+                        <div className="contact-new-search-result-action">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void addNewContactFromSearchResult(candidate)
+                            }
+                            disabled={isSavingContact}
+                          >
+                            <span className="btn-label-with-icon">
+                              <span
+                                className="btn-label-icon"
+                                aria-hidden="true"
+                              >
+                                {candidate.existingContactId ? (
+                                  <User size={18} />
+                                ) : (
+                                  <UserPlus size={18} />
+                                )}
+                              </span>
+                              <span>
+                                {isSavingContact
+                                  ? t("saving")
+                                  : candidate.existingContactId
+                                    ? t("openContact")
+                                    : t("saveContact")}
+                              </span>
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {searchError ? (
+                <div className="contact-new-search-empty">
+                  <p className="contact-new-validation">{searchError}</p>
+                </div>
+              ) : null}
+
+              {showSearchLoader ? (
+                <div className="contact-new-search-loading" role="status">
+                  <span className="btn-spinner" aria-hidden="true" />
+                  <span>{t("contactSearching")}</span>
+                </div>
+              ) : null}
+
+              {canCreateContactFromSearch ? (
+                <div className="contact-new-search-empty">
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={createManualFromSearch}
+                    disabled={searchIsBusy}
+                  >
+                    {t("contactSearchCreateFromQuery")}
+                  </button>
+                </div>
+              ) : null}
               {showSuggestions ? (
                 <div className="contact-new-suggestions">
                   <div className="contact-new-suggestions-title">
@@ -461,16 +525,11 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                             </span>
                             <span className="contact-new-suggestion-body">
                               <strong>{displayName || t("contact")}</strong>
-                              <span title={suggestion.lnAddress}>
+                              <span title={suggestion.displayLnAddress}>
                                 {formatShortLightningAddress(
-                                  suggestion.lnAddress,
+                                  suggestion.displayLnAddress,
                                 )}
                               </span>
-                              <small>
-                                {formatSuggestionLastSeen(
-                                  suggestion.lastSeenAtSec,
-                                )}
-                              </small>
                             </span>
                           </div>
                           <div className="contact-new-suggestion-action">
@@ -498,88 +557,6 @@ export const ContactNewPage: FC<ContactNewPageProps> = ({
                       );
                     })}
                   </div>
-                </div>
-              ) : null}
-
-              {searchResult ? (
-                <div className="contact-new-search-result">
-                  <div className="contact-new-search-result-main">
-                    <div className="contact-avatar is-large" aria-hidden="true">
-                      {resultAvatarUrl ? (
-                        <img
-                          src={resultAvatarUrl}
-                          alt=""
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="contact-avatar-fallback">
-                          {getInitials(resultDisplayName)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="contact-new-search-result-body">
-                      <strong>{resultDisplayName || t("contact")}</strong>
-                      {searchResult.lnAddress ? (
-                        <span title={searchResult.lnAddress}>
-                          {formatShortLightningAddress(searchResult.lnAddress)}
-                        </span>
-                      ) : null}
-                      <small title={searchResult.npub}>
-                        {formatShortNpub(searchResult.npub)}
-                      </small>
-                    </div>
-                  </div>
-                  <div className="contact-new-search-result-action">
-                    <button
-                      type="button"
-                      onClick={() => void addSearchResult()}
-                      disabled={isSavingContact}
-                    >
-                      <span className="btn-label-with-icon">
-                        <span className="btn-label-icon" aria-hidden="true">
-                          {searchResult.existingContactId ? (
-                            <User size={18} />
-                          ) : (
-                            <UserPlus size={18} />
-                          )}
-                        </span>
-                        <span>
-                          {isSavingContact
-                            ? t("saving")
-                            : searchResult.existingContactId
-                              ? t("openContact")
-                              : t("saveContact")}
-                        </span>
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              {searchError ? (
-                <div className="contact-new-search-empty">
-                  <p className="contact-new-validation">{searchError}</p>
-                </div>
-              ) : null}
-
-              {showSearchLoader ? (
-                <div className="contact-new-search-loading" role="status">
-                  <span className="btn-spinner" aria-hidden="true" />
-                  <span>{t("contactSearching")}</span>
-                </div>
-              ) : null}
-
-              {canCreateContactFromSearch ? (
-                <div className="contact-new-search-empty">
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={createManualFromSearch}
-                    disabled={searchIsBusy}
-                  >
-                    {t("contactSearchCreateFromQuery")}
-                  </button>
                 </div>
               ) : null}
             </>

@@ -1,5 +1,5 @@
 import React from "react";
-import { Languages, Settings } from "lucide-react";
+import { Camera, ImageUp, Languages, Settings, Smile } from "lucide-react";
 import type {
   OnboardingStep,
   PendingOnboardingProfile,
@@ -15,6 +15,7 @@ import {
 } from "./PasswordManagerSaveForm";
 import { AvatarControlGrid } from "./AvatarControlGrid";
 import { AvatarPhotoInput } from "./AvatarPhotoInput";
+import { SelfieCaptureModal } from "./SelfieCaptureModal";
 import { PasteIcon } from "./icons";
 
 type UnauthenticatedLayoutProps = {
@@ -36,6 +37,7 @@ type UnauthenticatedLayoutProps = {
     username: string,
     password: string,
   ) => Promise<void>;
+  selectPendingOnboardingGeneratedAvatar: () => void;
   selectReturningSlip39Suggestion: (value: string) => void;
   setReturningSlip39Input: (value: string) => void;
   setOnboardingStep: React.Dispatch<React.SetStateAction<OnboardingStep>>;
@@ -64,6 +66,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   pasteReturningSlip39FromClipboard,
   pickPendingOnboardingPhoto,
   savePendingOnboardingBackupToPasswordManager,
+  selectPendingOnboardingGeneratedAvatar,
   selectReturningSlip39Suggestion,
   setReturningSlip39Input,
   setOnboardingStep,
@@ -75,6 +78,16 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   const showOnboardingHeader =
     onboardingStep?.kind !== "profile" && onboardingStep?.kind !== "returning";
   const [pickerMenuIsOpen, setPickerMenuIsOpen] = React.useState(false);
+  const [profileStage, setProfileStage] = React.useState<"name" | "picture">(
+    "name",
+  );
+  const [nameError, setNameError] = React.useState<string | null>(null);
+  const [avatarEditorIsOpen, setAvatarEditorIsOpen] = React.useState(false);
+  const [selfieCaptureIsOpen, setSelfieCaptureIsOpen] = React.useState(false);
+  const closeSelfieCapture = React.useCallback(
+    () => setSelfieCaptureIsOpen(false),
+    [],
+  );
   const passwordManagerSaveFormRef =
     React.useRef<PasswordManagerSaveFormHandle | null>(null);
 
@@ -125,6 +138,12 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   };
 
   React.useEffect(() => {
+    if (onboardingStep?.kind !== "profile") {
+      setProfileStage("name");
+      setNameError(null);
+      setAvatarEditorIsOpen(false);
+      setSelfieCaptureIsOpen(false);
+    }
     if (
       onboardingStep?.kind === "profile" ||
       onboardingStep?.kind === "returning"
@@ -139,16 +158,14 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
   ) => {
     return (
       <>
-        <div className="settings-row">
-          <div className="muted" style={{ lineHeight: 1.4 }}>
-            {(() => {
-              const name = step.derivedName ?? "";
-              if (step.step === 1) {
-                return formatTemplate(t("onboardingStep1"), { name });
-              }
-              return t("onboardingStep2");
-            })()}
-          </div>
+        <div className="onboarding-step-heading">
+          <p className="muted onboarding-step-hint" role="status">
+            {step.step === 1
+              ? formatTemplate(t("onboardingStep1"), {
+                  name: step.derivedName ?? "",
+                })
+              : t("onboardingStep2")}
+          </p>
         </div>
 
         {step.error ? (
@@ -347,11 +364,69 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
     );
   };
 
-  const renderProfilePicker = (profile: PendingOnboardingProfile) => {
-    const selectedGeneratedAvatar = profile.selectedPictureKind === "generated";
-    const submitPasswordManagerForm = () => {
-      passwordManagerSaveFormRef.current?.requestSave();
+  const renderProfileNameStep = (profile: PendingOnboardingProfile) => {
+    const continueToPicture = (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!profile.name.trim()) {
+        setNameError(t("onboardingNameRequired"));
+        return;
+      }
+      setNameError(null);
+      setProfileStage("picture");
     };
+
+    return (
+      <form className="onboarding-avatar-scroll" onSubmit={continueToPicture}>
+        <div className="onboarding-step-heading">
+          <h2 className="onboarding-step-title">{t("onboardingNameTitle")}</h2>
+          <p className="muted onboarding-step-hint">
+            {t("onboardingNameHint")}
+          </p>
+        </div>
+
+        <div className="onboarding-avatar-nameWrap">
+          <input
+            id="onboarding-profile-name"
+            className="onboarding-name-input"
+            name="profileName"
+            value={profile.name}
+            onChange={(event) => {
+              setNameError(null);
+              setPendingOnboardingName(event.target.value);
+            }}
+            placeholder={t("namePlaceholder")}
+            aria-label={t("name")}
+            autoComplete="nickname"
+            autoCapitalize="words"
+            autoCorrect="off"
+            autoFocus
+            spellCheck={false}
+          />
+        </div>
+
+        {nameError ? (
+          <div className="settings-row">
+            <div className="status" role="status">
+              {nameError}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="onboarding-avatar-actions onboarding-avatar-actionsAdaptive">
+          <button
+            type="submit"
+            className="btn-wide"
+            disabled={onboardingIsBusy}
+          >
+            {t("continue")}
+          </button>
+        </div>
+      </form>
+    );
+  };
+
+  const renderProfilePictureStep = (profile: PendingOnboardingProfile) => {
+    const selectedGeneratedAvatar = profile.selectedPictureKind === "generated";
 
     const submitProfile = async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -360,7 +435,7 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
       const password = profile.slip39Seed;
 
       if (username && password) {
-        submitPasswordManagerForm();
+        passwordManagerSaveFormRef.current?.requestSave();
         await savePendingOnboardingBackupToPasswordManager(username, password);
 
         await new Promise<void>((resolve) => {
@@ -371,40 +446,22 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
       await confirmPendingOnboardingProfile();
     };
 
+    const toggleAvatarEditor = () => {
+      if (selectedGeneratedAvatar && avatarEditorIsOpen) {
+        setAvatarEditorIsOpen(false);
+        return;
+      }
+      selectPendingOnboardingGeneratedAvatar();
+      setAvatarEditorIsOpen(true);
+    };
+    const applyPhoto = (dataUrl: string) => {
+      setAvatarEditorIsOpen(false);
+      setSelfieCaptureIsOpen(false);
+      onPendingOnboardingPhotoSelected(dataUrl);
+    };
+
     return (
-      <div className="onboarding-avatar-stage">
-        <header className="topbar onboarding-avatar-nav">
-          <div className="topbar-left">
-            <button
-              type="button"
-              className="topbar-btn"
-              onClick={() => {
-                setPickerMenuIsOpen(false);
-                setOnboardingStep(null);
-              }}
-              disabled={onboardingIsBusy}
-              aria-label={t("back")}
-              title={t("back")}
-            >
-              <span aria-hidden="true">&lt;</span>
-            </button>
-          </div>
-          <div className="topbar-title" aria-label={t("onboardingAvatarTitle")}>
-            {t("onboardingAvatarTitle")}
-          </div>
-          <button
-            type="button"
-            className="topbar-btn"
-            onClick={() => setPickerMenuIsOpen((current) => !current)}
-            aria-label={t("menu")}
-            title={t("menu")}
-          >
-            <Settings size={20} aria-hidden="true" />
-          </button>
-        </header>
-
-        {renderPickerMenu()}
-
+      <>
         <PasswordManagerSaveForm
           ref={passwordManagerSaveFormRef}
           username={profile.name.trim()}
@@ -415,6 +472,12 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
           className="onboarding-avatar-scroll"
           onSubmit={(event) => void submitProfile(event)}
         >
+          <div className="onboarding-step-heading">
+            <h2 className="onboarding-step-title">
+              {t("onboardingPictureTitle")}
+            </h2>
+          </div>
+
           <div className="onboarding-avatar-preview">
             <div
               className="contact-avatar is-xl onboarding-avatar-previewImage"
@@ -433,45 +496,83 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
                 </span>
               )}
             </div>
-
-            <div className="onboarding-avatar-nameWrap">
-              <label
-                className="onboarding-avatar-nameLabel"
-                htmlFor="onboarding-profile-name"
-              >
-                {t("name")}
-              </label>
-              <input
-                id="onboarding-profile-name"
-                name="profileName"
-                value={profile.name}
-                onChange={(event) =>
-                  setPendingOnboardingName(event.target.value)
-                }
-                placeholder={t("namePlaceholder")}
-                autoComplete="nickname"
-                autoCapitalize="words"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-            </div>
           </div>
 
           <AvatarPhotoInput
             inputRef={onboardingPhotoInputRef}
             onError={onPendingOnboardingPhotoError}
-            onSelected={onPendingOnboardingPhotoSelected}
+            onSelected={applyPhoto}
             t={t}
           />
 
-          <AvatarControlGrid
-            customPictureUrl={profile.customPictureUrl}
-            disabled={onboardingIsBusy}
-            isCustomSelected={!selectedGeneratedAvatar}
-            onCycle={cyclePendingOnboardingAvatarControl}
-            onPickCustom={() => void pickPendingOnboardingPhoto()}
-            t={t}
-          />
+          {selfieCaptureIsOpen ? (
+            <SelfieCaptureModal
+              onCancel={closeSelfieCapture}
+              onCaptured={applyPhoto}
+              onError={onPendingOnboardingPhotoError}
+              t={t}
+            />
+          ) : null}
+
+          <div className="onboarding-picture-options">
+            <button
+              type="button"
+              className="onboarding-picture-option"
+              onClick={() => void pickPendingOnboardingPhoto()}
+              disabled={onboardingIsBusy}
+            >
+              <span
+                className="onboarding-picture-optionIcon"
+                aria-hidden="true"
+              >
+                <ImageUp size={22} />
+              </span>
+              <span className="onboarding-avatar-choiceLabel">
+                {t("profileUploadPhoto")}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="onboarding-picture-option"
+              onClick={() => setSelfieCaptureIsOpen(true)}
+              disabled={onboardingIsBusy}
+            >
+              <span
+                className="onboarding-picture-optionIcon"
+                aria-hidden="true"
+              >
+                <Camera size={22} />
+              </span>
+              <span className="onboarding-avatar-choiceLabel">
+                {t("onboardingTakePhoto")}
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`onboarding-picture-option${selectedGeneratedAvatar && avatarEditorIsOpen ? " is-selected" : ""}`}
+              onClick={toggleAvatarEditor}
+              disabled={onboardingIsBusy}
+              aria-pressed={selectedGeneratedAvatar && avatarEditorIsOpen}
+            >
+              <span
+                className="onboarding-picture-optionIcon"
+                aria-hidden="true"
+              >
+                <Smile size={22} />
+              </span>
+              <span className="onboarding-avatar-choiceLabel">
+                {t("onboardingCreateAvatar")}
+              </span>
+            </button>
+          </div>
+
+          {selectedGeneratedAvatar && avatarEditorIsOpen ? (
+            <AvatarControlGrid
+              disabled={onboardingIsBusy}
+              onCycle={cyclePendingOnboardingAvatarControl}
+              t={t}
+            />
+          ) : null}
 
           {profile.error ? (
             <div className="settings-row">
@@ -491,6 +592,52 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             </button>
           </div>
         </form>
+      </>
+    );
+  };
+
+  const renderProfilePicker = (profile: PendingOnboardingProfile) => {
+    const goBack = () => {
+      setPickerMenuIsOpen(false);
+      if (profileStage === "picture") {
+        setProfileStage("name");
+        return;
+      }
+      setOnboardingStep(null);
+    };
+
+    return (
+      <div className="onboarding-avatar-stage">
+        <header className="topbar onboarding-avatar-nav">
+          <div className="topbar-left">
+            <button
+              type="button"
+              className="topbar-btn"
+              onClick={goBack}
+              disabled={onboardingIsBusy}
+              aria-label={t("back")}
+              title={t("back")}
+            >
+              <span aria-hidden="true">&lt;</span>
+            </button>
+          </div>
+          <span className="topbar-title-spacer" aria-hidden="true" />
+          <button
+            type="button"
+            className="topbar-btn"
+            onClick={() => setPickerMenuIsOpen((current) => !current)}
+            aria-label={t("menu")}
+            title={t("menu")}
+          >
+            <Settings size={20} aria-hidden="true" />
+          </button>
+        </header>
+
+        {renderPickerMenu()}
+
+        {profileStage === "name"
+          ? renderProfileNameStep(profile)
+          : renderProfilePictureStep(profile)}
       </div>
     );
   };
@@ -529,18 +676,14 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
               decoding="async"
             />
           </div>
-          <h1 className="page-title">{t("onboardingTitle")}</h1>
-
-          <p
-            className="muted"
-            style={{
-              margin: "6px 0 12px",
-              lineHeight: 1.4,
-              textAlign: "center",
-            }}
-          >
-            {t("onboardingSubtitle")}
-          </p>
+          <div className="onboarding-step-heading onboarding-welcome-heading">
+            <h1 className="onboarding-step-title onboarding-welcome-title">
+              {t("onboardingTitle")}
+            </h1>
+            <p className="muted onboarding-step-hint">
+              {t("onboardingSubtitle")}
+            </p>
+          </div>
 
           {renderPickerMenu()}
         </>
@@ -555,8 +698,8 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
           renderPreparingStep(onboardingStep)
         )
       ) : (
-        <>
-          <div className="settings-row">
+        <div className="onboarding-welcome-actions">
+          <div className="onboarding-welcome-action">
             <button
               type="button"
               className="btn-wide"
@@ -565,9 +708,12 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             >
               {t("onboardingCreate")}
             </button>
+            <span className="muted onboarding-welcome-actionHint">
+              {t("onboardingCreateHint")}
+            </span>
           </div>
 
-          <div className="settings-row">
+          <div className="onboarding-welcome-action">
             <button
               type="button"
               className="btn-wide secondary"
@@ -576,8 +722,11 @@ export const UnauthenticatedLayout: React.FC<UnauthenticatedLayoutProps> = ({
             >
               {t("onboardingReturn")}
             </button>
+            <span className="muted onboarding-welcome-actionHint">
+              {t("onboardingReturnHintShort")}
+            </span>
           </div>
-        </>
+        </div>
       )}
     </section>
   );

@@ -21,6 +21,27 @@ const envRelays = Array.from(
 export const NOSTR_RELAYS =
   envRelays.length > 0 ? envRelays : DEFAULT_NOSTR_RELAYS;
 
+// NIP-50 relays for profile text search; the default read relays do not
+// index kind-0 content, so contact search would find nothing without them.
+const DEFAULT_NOSTR_SEARCH_RELAYS = [
+  "wss://search.nos.today",
+  "wss://nostr.wine",
+];
+
+const envSearchRelays = Array.from(
+  new Set(
+    (import.meta.env.VITE_NOSTR_SEARCH_RELAYS ?? "")
+      .split(",")
+      .map((url) => url.trim())
+      .filter(isRelayUrl),
+  ),
+);
+
+export const NOSTR_SEARCH_RELAYS: ReadonlyArray<RelayUrl> =
+  envSearchRelays.length > 0
+    ? envSearchRelays
+    : DEFAULT_NOSTR_SEARCH_RELAYS.filter(isRelayUrl);
+
 // Startup bootstrap cache of the user's published relay lists (kinds
 // 10002/10050), so a cold launch connects to the last known set instead of
 // the defaults and rarely needs a runtime rebuild. The signed nostr events

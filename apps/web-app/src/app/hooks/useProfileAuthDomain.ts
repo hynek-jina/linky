@@ -152,6 +152,7 @@ interface UseProfileAuthDomainResult {
   cyclePendingOnboardingAvatarControl: (
     controlId: AvatarEditorControlId,
   ) => void;
+  selectPendingOnboardingGeneratedAvatar: () => void;
   selectReturningSlip39Suggestion: (value: string) => void;
   cashuSeedMnemonic: string | null;
   slip39Seed: string | null;
@@ -727,6 +728,15 @@ export const useProfileAuthDomain = ({
     [updatePendingOnboardingProfile],
   );
 
+  const selectPendingOnboardingGeneratedAvatar = React.useCallback(() => {
+    updatePendingOnboardingProfile((current) => ({
+      ...current,
+      error: null,
+      pictureUrl: current.generatedAvatar.pictureUrl,
+      selectedPictureKind: "generated",
+    }));
+  }, [updatePendingOnboardingProfile]);
+
   const pickPendingOnboardingPhoto = React.useCallback(async () => {
     onboardingPhotoInputRef.current?.click();
   }, []);
@@ -1092,6 +1102,7 @@ export const useProfileAuthDomain = ({
     requestLogout,
     savePendingOnboardingBackupToPasswordManager,
     cyclePendingOnboardingAvatarControl,
+    selectPendingOnboardingGeneratedAvatar,
     selectReturningSlip39Suggestion,
     cashuSeedMnemonic,
     seedMnemonic,

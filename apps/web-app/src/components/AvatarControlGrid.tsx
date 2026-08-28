@@ -2,21 +2,23 @@ import type { AvatarEditorControlId } from "../derivedProfile";
 import { AVATAR_EDITOR_CONTROLS } from "../derivedProfile";
 import { AvatarEditorIcon } from "./AvatarEditorIcon";
 
+interface AvatarControlGridCustomChoice {
+  isSelected: boolean;
+  onPick: () => void;
+  pictureUrl: string | null;
+}
+
 interface AvatarControlGridProps {
-  customPictureUrl: string | null;
+  custom?: AvatarControlGridCustomChoice;
   disabled?: boolean;
-  isCustomSelected: boolean;
   onCycle: (controlId: AvatarEditorControlId) => void;
-  onPickCustom: () => void;
   t: (key: string) => string;
 }
 
 export function AvatarControlGrid({
-  customPictureUrl,
+  custom,
   disabled = false,
-  isCustomSelected,
   onCycle,
-  onPickCustom,
   t,
 }: AvatarControlGridProps) {
   return (
@@ -44,29 +46,31 @@ export function AvatarControlGrid({
         </button>
       ))}
 
-      <button
-        type="button"
-        className={`onboarding-avatar-choice onboarding-avatar-choiceCustom${isCustomSelected ? " is-selected" : ""}`}
-        onClick={onPickCustom}
-        disabled={disabled}
-        aria-pressed={isCustomSelected}
-      >
-        <span className="onboarding-avatar-choicePlus" aria-hidden="true">
-          {customPictureUrl ? (
-            <img
-              src={customPictureUrl}
-              alt=""
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            "+"
-          )}
-        </span>
-        <span className="onboarding-avatar-choiceLabel">
-          {t("profileUploadPhoto")}
-        </span>
-      </button>
+      {custom ? (
+        <button
+          type="button"
+          className={`onboarding-avatar-choice onboarding-avatar-choiceCustom${custom.isSelected ? " is-selected" : ""}`}
+          onClick={custom.onPick}
+          disabled={disabled}
+          aria-pressed={custom.isSelected}
+        >
+          <span className="onboarding-avatar-choicePlus" aria-hidden="true">
+            {custom.pictureUrl ? (
+              <img
+                src={custom.pictureUrl}
+                alt=""
+                loading="lazy"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              "+"
+            )}
+          </span>
+          <span className="onboarding-avatar-choiceLabel">
+            {t("profileUploadPhoto")}
+          </span>
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import type {
   NoRelayAcceptedEvent,
 } from "../domain/errors";
 import { NoReadRelaysConfigured } from "../domain/errors";
-import type { EventId } from "../domain/primitives";
+import type { EventId, RelayUrl } from "../domain/primitives";
 import { Pubkey, UnixSeconds } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { chunkAuthors } from "../internal/authorChunks";
@@ -55,6 +55,67 @@ export interface DiscoverActiveProfilesOptions {
   readonly activeWindowSeconds?: number;
   readonly authorScanLimit?: number;
 }
+
+export const PROFILE_SEARCH_DEFAULT_LIMIT = 3;
+export const PROFILE_SEARCH_RELAY_TIMEOUT_SECONDS = 6;
+
+export interface SearchProfilesOptions {
+  readonly limit?: number;
+  /**
+   * NIP-50 relays queried in addition to the read relays; the read relays
+   * alone rarely index profile text.
+   */
+  readonly searchRelays?: ReadonlyArray<RelayUrl>;
+}
+
+export class ProfileSearchHit extends Schema.Class<ProfileSearchHit>(
+  "ProfileSearchHit",
+)({
+  pubkey: Pubkey,
+  metadata: ProfileMetadata,
+  updatedAt: UnixSeconds,
+}) {}
+
+const normalizeSearchText = (value: string): string =>
+  value.trim().toLocaleLowerCase();
+
+const searchableNames = (metadata: ProfileMetadata): Array<string> =>
+  [metadata.name, metadata.displayName]
+    .filter((field): field is string => field !== undefined)
+    .map(normalizeSearchText);
+
+/** 0 = a name equals the query, 1 = a name starts with it, 2 = anything else. */
+const searchRelevanceRank = (
+  metadata: ProfileMetadata,
+  query: string,
+): number => {
+  const needle = normalizeSearchText(query);
+  const names = searchableNames(metadata);
+  if (names.includes(needle)) return 0;
+  if (names.some((name) => name.startsWith(needle))) return 1;
+  return 2;
+};
+
+/**
+ * Relays without NIP-50 ignore the `search` field and answer with arbitrary
+ * kind-0 events, so every hit is re-checked against the query locally.
+ */
+export const profileMatchesSearchQuery = (
+  metadata: ProfileMetadata,
+  query: string,
+): boolean => {
+  const needle = normalizeSearchText(query);
+  if (!needle) return false;
+  return [
+    metadata.name,
+    metadata.displayName,
+    metadata.nip05,
+    metadata.lud16,
+  ].some(
+    (field) =>
+      field !== undefined && normalizeSearchText(field).includes(needle),
+  );
+};
 
 export class DiscoveredProfile extends Schema.Class<DiscoveredProfile>(
   "DiscoveredProfile",
@@ -285,12 +346,82 @@ export class Profiles extends Effect.Service<Profiles>()("linkstr/Profiles", {
         ),
       );
 
+    const searchProfiles = (
+      query: string,
+      options: SearchProfilesOptions = {},
+    ): Effect.Effect<
+      ReadonlyArray<ProfileSearchHit>,
+      AllRelaysUnreachable | NoReadRelaysConfigured
+    > =>
+      Effect.gen(function* () {
+        const relays = [
+          ...new Set([
+            ...context.relayPolicy.readRelays,
+            ...(options.searchRelays ?? []),
+          ]),
+        ];
+        if (relays.length === 0) return yield* new NoReadRelaysConfigured();
+        const limit = options.limit ?? PROFILE_SEARCH_DEFAULT_LIMIT;
+        const trimmedQuery = query.trim();
+        if (!trimmedQuery) return { result: [], eventIds: [] };
+
+        const events = yield* fetchPlainEvents(
+          context.transport,
+          relays,
+          // Over-fetch: non-NIP-50 relays pad the merge with unrelated profiles.
+          { kinds: [PROFILE_KIND], search: trimmedQuery, limit: limit * 10 },
+          {
+            perRelayTimeout: `${PROFILE_SEARCH_RELAY_TIMEOUT_SECONDS} seconds`,
+          },
+        );
+
+        const matches: Array<{ hit: ProfileSearchHit; eventId: EventId }> = [];
+        const seen = new Set<Pubkey>();
+        // Newest-first, so the first event per author is their current profile.
+        for (const event of events) {
+          if (seen.has(event.pubkey)) continue;
+          seen.add(event.pubkey);
+          const decoded = decodeProfileEvent(event);
+          if (Either.isLeft(decoded)) continue;
+          if (
+            !profileMatchesSearchQuery(decoded.right.metadata, trimmedQuery)
+          ) {
+            continue;
+          }
+          matches.push({
+            eventId: event.id,
+            hit: new ProfileSearchHit({
+              pubkey: event.pubkey,
+              metadata: decoded.right.metadata,
+              updatedAt: event.created_at,
+            }),
+          });
+        }
+        // Stable sort keeps newest-first within a relevance rank.
+        matches.sort(
+          (a, b) =>
+            searchRelevanceRank(a.hit.metadata, trimmedQuery) -
+            searchRelevanceRank(b.hit.metadata, trimmedQuery),
+        );
+        const kept = matches.slice(0, limit);
+        return {
+          result: kept.map(({ hit }) => hit),
+          eventIds: kept.map(({ eventId }) => eventId),
+        };
+      }).pipe(
+        inspectPlainOperation(inspector, "profiles.searchProfiles", {
+          query,
+          ...options,
+        }),
+      );
+
     return {
       publishProfile,
       publishStatus,
       fetchProfile,
       fetchProfiles,
       discoverActiveProfiles,
+      searchProfiles,
     } as const;
   }),
 }) {}
