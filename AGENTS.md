@@ -79,6 +79,10 @@ Playwright starts *every* `webServer` entry regardless of `--project`, so a Vite
 
 Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test needs a real seed login (deterministic Evolu owner lanes); `setRandomIdentityStorage` is the cheaper "just be logged in" variant and leaves `isSeedLogin` false.
 
+## linkshu integration tests
+
+`packages/linkshu` has a second vitest project (`tests/integration/`, excluded from `bun run test`) that needs the dev-stack mint: `docker compose -f docker-compose.dev.yml up -d --wait cashu-mint`, then `bun run --filter @linky/linkshu test:integration`. CI runs it as the `linkshu-integration` job in `.github/workflows/tests.yml`.
+
 ## Gotchas
 
 - Evolu requires a Worker polyfill in test environments (jsdom + polyfill live in `vitest.setup.ts`)

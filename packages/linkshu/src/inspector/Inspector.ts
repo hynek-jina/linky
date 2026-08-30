@@ -1,6 +1,9 @@
-import { Context, Effect, Layer, Option, Stream } from "effect";
-import { notImplemented } from "../internal/skeleton";
+import { Context, Effect, Layer, Option, Queue, Stream } from "effect";
 import type { LinkshuInspectorEvent } from "./events";
+
+// Sliding, because inspection must never stall or leak memory when nobody is
+// consuming: old diagnostics are droppable by design.
+const BUFFER_CAPACITY = 1024;
 
 export interface InspectorService {
   /**
@@ -26,9 +29,24 @@ export class Inspector extends Context.Tag("linkshu/Inspector")<
   InspectorService
 >() {
   /** Sliding in-memory buffer; old diagnostics are droppable by design. */
-  static readonly live: Layer.Layer<Inspector> = Layer.effect(
+  static readonly live: Layer.Layer<Inspector> = Layer.scoped(
     Inspector,
-    notImplemented("Inspector.live"),
+    Effect.map(
+      Effect.acquireRelease(
+        Queue.sliding<LinkshuInspectorEvent>(BUFFER_CAPACITY),
+        Queue.shutdown,
+      ),
+      (queue) => ({
+        emit: (build) => {
+          try {
+            Queue.unsafeOffer(queue, build());
+          } catch (error) {
+            console.warn("linkshu inspector emission failed", error);
+          }
+        },
+        events: Stream.fromQueue(queue),
+      }),
+    ),
   );
 
   /** For composition roots that provide the tag unconditionally. */

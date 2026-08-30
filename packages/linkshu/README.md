@@ -6,10 +6,10 @@ restore, …) is defined here as an Effect service over branded `Schema` types.
 Raw cashu-ts types never cross the package boundary: callers hand in drafts
 and get receipts; token text is the currency of the API.
 
-> **Status: interface contract.** This package is the type-only skeleton
-> agreed on before implementation (#286): every signature is final intent,
-> every body is a stub. Nothing else in the milestone starts until this
-> surface is approved.
+> **Status: foundation implemented (#287).** The ports with their in-memory
+> defaults, the inspector, and mint/wallet management (including the single
+> shared wallet-instance cache) are real. The operation verticals are still
+> interface-contract stubs (#286) and land slice by slice.
 
 ## Verticals
 
@@ -44,7 +44,7 @@ The package owns the state machine; platforms persist rows, never decide
 states. States: `pending`, `accepted`, `reserved`, `issued`, `externalized`,
 `error` — only `accepted` counts as balance. Dedup is by token text against
 the row's original encoding. Failures follow one classification rule
-everywhere: mark a row `error` only on a *definitive* mint rejection;
+everywhere: mark a row `error` only on a _definitive_ mint rejection;
 transient failures (network, timeout, 5xx) retry and never change state.
 Funds are never outside the store: change, remainders, and recovered proofs
 are persisted as `accepted` rows before any receipt resolves.
@@ -100,6 +100,20 @@ already injectable).
   preclude them.
 - **Linky's needs win** every generality conflict; the package is not built
   for publication.
+
+## Tests
+
+Unit tests are colocated (`src/**/*.test.ts`) and run with
+`bun run --filter @linky/linkshu test` (included in the root `bun run test`).
+The integration suite in `tests/integration/` exercises the public API
+against the dev-stack docker mint:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --wait cashu-mint
+bun run --filter @linky/linkshu test:integration
+```
+
+CI runs it as the `linkshu-integration` job in `tests.yml`.
 
 ## Usage
 

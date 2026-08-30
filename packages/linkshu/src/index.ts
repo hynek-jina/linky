@@ -13,6 +13,8 @@ export * from "./melt/Melt";
 export * from "./mint/domain";
 export * from "./mint/Mints";
 export * from "./ports/CashuSeed";
+export * from "./ports/inMemoryKeyValueStore";
+export * from "./ports/inMemoryTokenStore";
 export * from "./ports/KeyValueStore";
 export * from "./ports/TokenStore";
 export * from "./receive/domain";

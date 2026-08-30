@@ -5,8 +5,10 @@ import { FeeProbe } from "./feeProbe/FeeProbe";
 import { Melt } from "./melt/Melt";
 import { Mints } from "./mint/Mints";
 import { CashuSeed } from "./ports/CashuSeed";
-import { KeyValueStore } from "./ports/KeyValueStore";
-import { TokenStore } from "./ports/TokenStore";
+import { inMemoryKeyValueStore } from "./ports/inMemoryKeyValueStore";
+import { inMemoryTokenStore } from "./ports/inMemoryTokenStore";
+import type { KeyValueStore } from "./ports/KeyValueStore";
+import type { TokenStore } from "./ports/TokenStore";
 import { Receive } from "./receive/Receive";
 import { Restore } from "./restore/Restore";
 import { Send } from "./send/Send";
@@ -44,8 +46,8 @@ export const linkshuServices = (config: LinkshuServicesConfig) =>
     Layer.provideMerge(
       Layer.mergeAll(
         CashuSeed.fromBytes(config.bip39Seed),
-        config.keyValueStore ?? KeyValueStore.inMemory,
-        config.tokenStore ?? TokenStore.inMemory,
+        config.keyValueStore ?? inMemoryKeyValueStore,
+        config.tokenStore ?? inMemoryTokenStore,
       ),
     ),
   );
