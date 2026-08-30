@@ -120,6 +120,7 @@ const makeWallet = (args: FakeWalletArgs) => {
         ? args.restore()
         : Promise.reject(new Error("restore unavailable"));
     },
+    batchRestore: () => Promise.reject(new Error("not under test")),
   };
   return { wallet, sendCalls, restoreCalls };
 };

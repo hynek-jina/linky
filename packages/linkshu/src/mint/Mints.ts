@@ -1,17 +1,14 @@
-import { getTokenMetadata } from "@cashu/cashu-ts";
 import { Effect } from "effect";
 import type { MintRejected, MintUnreachable } from "../domain/errors";
-import { CurrencyUnit, parseMintUrl } from "../domain/primitives";
+import { CurrencyUnit } from "../domain/primitives";
 import type { MintUrl } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { inspectOperation } from "../internal/operations";
 import { KeyValueStore } from "../ports/KeyValueStore";
 import { TokenStore } from "../ports/TokenStore";
 import { MintInfo } from "./domain";
-import {
-  SEEN_MINTS_KEY_PREFIX,
-  WalletInstances,
-} from "./internal/WalletInstances";
+import { collectKnownMints } from "./internal/knownMints";
+import { WalletInstances } from "./internal/WalletInstances";
 import type { LoadedWallet } from "./internal/WalletInstances";
 
 /** Linky wallets are sat-denominated today (see README). */
@@ -40,15 +37,6 @@ const buildMintInfo = (mint: MintUrl, wallet: LoadedWallet): MintInfo => {
   });
 };
 
-/** Undecodable stored rows carry no usable mint; they are skipped, not fatal. */
-const tokenTextMint = (tokenText: string): MintUrl | null => {
-  try {
-    return parseMintUrl(getTokenMetadata(tokenText).mint);
-  } catch {
-    return null;
-  }
-};
-
 /**
  * Mint knowledge. Also the home of the package's single wallet-instance
  * cache (one loaded cashu-ts wallet per mint+unit, shared by every
@@ -73,22 +61,9 @@ export class Mints extends Effect.Service<Mints>()("linkshu/Mints", {
       );
 
     /** Every mint the wallet has state for: stored rows plus seen mints. */
-    const knownMints: Effect.Effect<ReadonlyArray<MintUrl>> = Effect.gen(
-      function* () {
-        const mints = new Set<MintUrl>();
-        const rows = yield* tokenStore.loadAll;
-        for (const row of rows) {
-          const mint = tokenTextMint(row.tokenText);
-          if (mint !== null) mints.add(mint);
-        }
-        const seenKeys = yield* kv.listKeys(SEEN_MINTS_KEY_PREFIX);
-        for (const key of seenKeys) {
-          const value = yield* kv.get(key);
-          const mint = value === null ? null : parseMintUrl(value);
-          if (mint !== null) mints.add(mint);
-        }
-        return [...mints].sort();
-      },
+    const knownMints: Effect.Effect<ReadonlyArray<MintUrl>> = collectKnownMints(
+      kv,
+      tokenStore,
     );
 
     return { info, knownMints } as const;

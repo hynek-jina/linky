@@ -61,6 +61,13 @@ export interface LoadedWallet {
     count: number,
     config?: RestoreConfig,
   ): Promise<{ proofs: Proof[]; lastCounterWithSignature?: number }>;
+  /** `restore` in `batchSize` steps until `gapLimit` positions come back empty. */
+  batchRestore(
+    gapLimit?: number,
+    batchSize?: number,
+    counter?: number,
+    keysetId?: string,
+  ): Promise<{ proofs: Proof[]; lastCounterWithSignature?: number }>;
 }
 
 const decodeKeysetId = Schema.decodeUnknownOption(KeysetId);

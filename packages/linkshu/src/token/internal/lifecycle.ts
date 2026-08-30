@@ -15,7 +15,9 @@ import type { TokenState } from "../domain";
 const LEGAL_TRANSITIONS: Record<TokenState, ReadonlyArray<TokenState>> = {
   pending: ["accepted", "error"],
   accepted: ["reserved", "issued", "externalized", "error"],
-  reserved: ["accepted", "issued", "externalized"],
+  // `error` included: a reserved row whose proofs the mint reports spent is
+  // dead, and the earmark cannot keep it alive.
+  reserved: ["accepted", "issued", "externalized", "error"],
   issued: ["accepted", "externalized", "error"],
   externalized: ["accepted"],
   error: ["accepted"],
@@ -106,6 +108,34 @@ export const transitionRow = (
       ),
     );
 };
+
+/**
+ * Rewrites the proofs a row holds without changing its state — validation
+ * pruning spent proofs and merging siblings locally. The state machine is
+ * untouched, so the event reports the state on both sides.
+ */
+export const rewriteRowTokenText = (
+  store: TokenStoreService,
+  inspector: InspectorService,
+  row: StoredTokenRow,
+  tokenText: TokenText,
+  reason: string,
+): Effect.Effect<void> =>
+  store
+    .update(row.id, { tokenText })
+    .pipe(
+      Effect.tap(() =>
+        Effect.sync(() =>
+          inspector.emit(
+            () =>
+              new TokenLifecycleChanged(
+                { rowId: row.id, from: row.state, to: row.state, reason },
+                { disableValidation: true },
+              ),
+          ),
+        ),
+      ),
+    );
 
 /**
  * Dedup lookup: a token is known when its text matches a row's original

@@ -16,9 +16,10 @@ export interface CounterScope {
 }
 
 export const DETERMINISTIC_COUNTER_KEY_PREFIX = "linkshu.detCounter.";
-const COUNTER_LOCK_KEY_PREFIX = "linkshu.detCounterLock.";
+export const COUNTER_LOCK_KEY_PREFIX = "linkshu.detCounterLock.";
 
-const scopeSuffix = (scope: CounterScope): string =>
+/** Key suffix identifying one derivation tree; shared with restore cursors. */
+export const scopeSuffix = (scope: CounterScope): string =>
   [scope.mint, scope.unit, scope.keysetId].map(encodeURIComponent).join(".");
 
 export const deterministicCounterKey = (scope: CounterScope): string =>
