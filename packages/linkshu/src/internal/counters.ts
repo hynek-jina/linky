@@ -50,14 +50,19 @@ export const withCounterLock =
       ),
     );
 
-/** Stored counter of the scope; absent or malformed values read as 0. */
+/**
+ * Stored counter of the scope; absent or malformed values read as 1. Slot 0
+ * is never used: cashu-ts treats a deterministic counter of 0 as "auto-assign
+ * from the wallet's internal counter source", so only counters >= 1 are
+ * honored as the explicit derivation slots this module tracks.
+ */
 export const readCounter = (
   kv: KeyValueStoreService,
   scope: CounterScope,
 ): Effect.Effect<number> =>
   Effect.map(kv.get(deterministicCounterKey(scope)), (raw) => {
     const value = raw === null ? Number.NaN : Number(raw);
-    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    return Number.isFinite(value) && value > 1 ? Math.floor(value) : 1;
   });
 
 /**

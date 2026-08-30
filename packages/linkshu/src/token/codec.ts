@@ -69,12 +69,15 @@ export const parseTokenText = (raw: string): ParsedToken | null => {
 
 /**
  * v4 tokens carrying short v2 keyset ids cannot be expanded without the
- * mint's keyset list, which a pure decoder does not have; they parse
- * (`parseTokenText`) but decode to `null`.
+ * mint's keyset list; without `keysetIds` they parse (`parseTokenText`) but
+ * decode to `null`.
  */
-const decodeViaCashuTs = (text: string): DecodedToken | null => {
+const decodeViaCashuTs = (
+  text: string,
+  keysetIds: readonly string[],
+): DecodedToken | null => {
   try {
-    const token = getDecodedToken(text, []);
+    const token = getDecodedToken(text, keysetIds);
     const mint = parseMintUrl(token.mint);
     if (mint === null) return null;
     return decodeTokenFields({
@@ -93,14 +96,21 @@ const decodeViaCashuTs = (text: string): DecodedToken | null => {
   }
 };
 
-/** Full decode; `null` for malformed, proof-less, or multi-mint tokens. */
-export const decodeTokenText = (raw: string): DecodedToken | null => {
+/**
+ * Full decode; `null` for malformed, proof-less, or multi-mint tokens.
+ * `keysetIds` (full keyset id strings from the mint) are only needed to
+ * expand short v2 keyset ids in v4 tokens.
+ */
+export const decodeTokenText = (
+  raw: string,
+  keysetIds: readonly string[] = [],
+): DecodedToken | null => {
   const text = normalizeTokenText(raw);
   if (text === null) return null;
   if (text.startsWith(V3_PREFIX)) {
     return decodeV3Payload(text.slice(V3_PREFIX.length));
   }
-  return decodeViaCashuTs(text);
+  return decodeViaCashuTs(text, keysetIds);
 };
 
 /** Canonical v4 encoding; roundtrips with `decodeTokenText` by construction. */

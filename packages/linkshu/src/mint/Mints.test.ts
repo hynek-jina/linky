@@ -36,6 +36,8 @@ const baseInfo: GetInfoResponse = {
 
 const walletStubMethods = {
   receive: () => Promise.reject(new Error("not under test")),
+  send: () => Promise.reject(new Error("not under test")),
+  checkProofsStates: () => Promise.reject(new Error("not under test")),
   restore: () => Promise.reject(new Error("not under test")),
 };
 

@@ -42,6 +42,10 @@ export const isOutputsPendingError = (error: unknown): boolean => {
 export const isRecoverableOutputCollision = (error: unknown): boolean =>
   isOutputsAlreadySignedError(error) || isOutputsPendingError(error);
 
+/** cashu-ts's own throw when the offered proofs cannot cover amount + fees. */
+export const isInsufficientBalanceError = (error: unknown): boolean =>
+  lowercaseMessage(error).includes("not enough funds");
+
 /** NUT-07 definitive rejection of spent inputs (code 11001). */
 export const isTokenAlreadySpentError = (error: unknown): boolean =>
   mintErrorCode(error) === 11001 ||

@@ -5,14 +5,21 @@ import {
   MintOperationError,
   NetworkError,
   Wallet,
+  type AmountLike,
   type KeyChain,
+  type OutputConfig,
   type OutputType,
   type Proof,
+  type ProofLike,
+  type ProofState,
   type ReceiveConfig,
   type RestoreConfig,
+  type SendConfig,
+  type SendResponse,
 } from "@cashu/cashu-ts";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { MintRejected, MintUnreachable } from "../../domain/errors";
+import { KeysetId } from "../../domain/primitives";
 import type { CurrencyUnit, MintUrl } from "../../domain/primitives";
 import { CashuSeed } from "../../ports/CashuSeed";
 import {
@@ -40,12 +47,40 @@ export interface LoadedWallet {
     config?: ReceiveConfig,
     outputType?: OutputType,
   ): Promise<Proof[]>;
+  send(
+    amount: AmountLike,
+    proofs: ProofLike[],
+    config?: SendConfig,
+    outputConfig?: OutputConfig,
+  ): Promise<SendResponse>;
+  checkProofsStates(
+    proofs: Array<Pick<ProofLike, "secret" | "id">>,
+  ): Promise<ProofState[]>;
   restore(
     start: number,
     count: number,
     config?: RestoreConfig,
   ): Promise<{ proofs: Proof[]; lastCounterWithSignature?: number }>;
 }
+
+const decodeKeysetId = Schema.decodeUnknownOption(KeysetId);
+
+/** The wallet's bound keyset id as the branded type counter scopes require. */
+export const boundKeysetId = (
+  mint: MintUrl,
+  wallet: LoadedWallet,
+): Effect.Effect<KeysetId, MintRejected> => {
+  const decoded = decodeKeysetId(wallet.keysetId);
+  return decoded._tag === "Some"
+    ? Effect.succeed(decoded.value)
+    : Effect.fail(
+        new MintRejected({
+          mint,
+          code: null,
+          detail: `wallet bound to non-hex keyset id "${wallet.keysetId}"`,
+        }),
+      );
+};
 
 /**
  * The package's error-classification rule (see `domain/errors.ts`): raw

@@ -34,6 +34,8 @@ const fakeWallet = (keysetId: string): LoadedWallet => ({
   keyChain: { getKeysets: () => [] },
   getMintInfo: () => new CashuMintInfo(infoFixture),
   receive: () => Promise.reject(new Error("not under test")),
+  send: () => Promise.reject(new Error("not under test")),
+  checkProofsStates: () => Promise.reject(new Error("not under test")),
   restore: () => Promise.reject(new Error("not under test")),
 });
 
