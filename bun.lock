@@ -5,6 +5,25 @@
     "": {
       "name": "linky",
     },
+    "apps/linkshu-cli": {
+      "name": "@linky/linkshu-cli",
+      "version": "0.1.0",
+      "bin": {
+        "linkshu": "./src/index.ts",
+      },
+      "dependencies": {
+        "@linky/linkshu": "workspace:*",
+        "effect": "^3.19.19",
+      },
+      "devDependencies": {
+        "@linky/config": "workspace:*",
+        "@types/bun": "^1.3.2",
+        "@types/node": "^24.10.1",
+        "eslint": "^9.39.1",
+        "prettier": "^3.4.2",
+        "typescript": "~5.9.3",
+      },
+    },
     "apps/native-shell": {
       "name": "@linky/native-shell",
       "version": "0.1.0",
@@ -630,6 +649,8 @@
     "@linky/identity": ["@linky/identity@workspace:packages/identity"],
 
     "@linky/linkshu": ["@linky/linkshu@workspace:packages/linkshu"],
+
+    "@linky/linkshu-cli": ["@linky/linkshu-cli@workspace:apps/linkshu-cli"],
 
     "@linky/linkstr": ["@linky/linkstr@workspace:packages/linkstr"],
 

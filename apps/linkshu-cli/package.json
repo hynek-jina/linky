@@ -1,0 +1,29 @@
+{
+  "name": "@linky/linkshu-cli",
+  "private": true,
+  "version": "0.1.0",
+  "license": "0BSD",
+  "type": "module",
+  "bin": {
+    "linkshu": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "eslint": "eslint --fix .",
+    "prettier": "prettier --write .",
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@linky/linkshu": "workspace:*",
+    "effect": "^3.19.19"
+  },
+  "devDependencies": {
+    "@linky/config": "workspace:*",
+    "@types/bun": "^1.3.2",
+    "@types/node": "^24.10.1",
+    "eslint": "^9.39.1",
+    "prettier": "^3.4.2",
+    "typescript": "~5.9.3"
+  }
+}

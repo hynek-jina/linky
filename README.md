@@ -61,6 +61,23 @@ For Android native builds: Java 17
 - `bun run dev:prod` — web app only, on :5175, against production services. The separate port keeps browser storage isolated from local-dev sessions.
 - `bun run dev:services` — just the docker stack, attached.
 
+### linkshu CLI wallet
+
+`apps/linkshu-cli/` is a terminal cashu wallet and `@linky/linkshu`'s first consumer — it runs
+under plain Bun with file-based implementations of all three platform ports, which is how the
+package's independence from the browser stays honest. It needs the dev stack's mint:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --wait cashu-mint
+bun run linkshu --help
+bun run linkshu --data-dir /tmp/wallet topup 128
+bun run linkshu --data-dir /tmp/wallet balance
+```
+
+Commands: `balance`, `topup`, `receive`, `send`, `melt`, `restore`. See
+[`apps/linkshu-cli/README.md`](./apps/linkshu-cli/README.md) for the data directory layout, seed
+handling, and the port implementations.
+
 ### Dev inspector
 
 While the dev server runs, the domain-agnostic inspector shows events on open, namespaced channels.
@@ -175,6 +192,9 @@ bun run test
 `@linky/linkshu` additionally has an integration suite against the local
 docker mint (started via `docker compose -f docker-compose.dev.yml up -d
 --wait cashu-mint`): `bun run --filter @linky/linkshu test:integration`.
+
+`@linky/linkshu-cli` runs its port and argument-parsing tests under `bun test` (no mint needed);
+they are part of `bun run test`.
 
 End-to-end tests (Playwright) live in `apps/web-app/tests/*.spec.ts` and are split into two
 projects. `prod-services` is the original suite and runs against production relays and mints:
