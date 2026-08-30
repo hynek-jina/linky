@@ -7,6 +7,9 @@ import {
   Wallet,
   type AmountLike,
   type KeyChain,
+  type MeltProofsConfig,
+  type MeltProofsResponse,
+  type MeltQuoteBolt11Response,
   type MintProofsConfig,
   type MintQuoteBolt11Response,
   type OutputConfig,
@@ -69,6 +72,19 @@ export interface LoadedWallet {
     config?: MintProofsConfig,
     outputType?: OutputType,
   ): Promise<Proof[]>;
+  createMeltQuoteBolt11(
+    invoice: string,
+    amountMsat?: AmountLike,
+  ): Promise<MeltQuoteBolt11Response>;
+  checkMeltQuoteBolt11(
+    quote: string | MeltQuoteBolt11Response,
+  ): Promise<MeltQuoteBolt11Response>;
+  meltProofsBolt11(
+    meltQuote: MeltQuoteBolt11Response,
+    proofsToSend: ProofLike[],
+    config?: MeltProofsConfig,
+    outputType?: OutputType,
+  ): Promise<MeltProofsResponse<MeltQuoteBolt11Response>>;
   restore(
     start: number,
     count: number,

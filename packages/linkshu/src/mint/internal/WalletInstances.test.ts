@@ -40,6 +40,9 @@ const fakeWallet = (keysetId: string): LoadedWallet => ({
   createMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
   checkMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
   mintProofsBolt11: () => Promise.reject(new Error("not under test")),
+  createMeltQuoteBolt11: () => Promise.reject(new Error("not under test")),
+  checkMeltQuoteBolt11: () => Promise.reject(new Error("not under test")),
+  meltProofsBolt11: () => Promise.reject(new Error("not under test")),
   batchRestore: () => Promise.reject(new Error("not under test")),
 });
 
