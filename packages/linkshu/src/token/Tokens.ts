@@ -1,7 +1,14 @@
 import { Effect, Schema } from "effect";
-import { InvalidTokenTransition, WalletBalances, WalletToken } from "./domain";
+import { parseTokenText } from "./codec";
+import {
+  InvalidTokenTransition,
+  MintBalance,
+  WalletBalances,
+  WalletToken,
+} from "./domain";
 import { TokenRowNotFound } from "../domain/errors";
-import { Amount, TokenRowId } from "../domain/primitives";
+import { Amount, NonNegativeAmount, TokenRowId } from "../domain/primitives";
+import type { MintUrl } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { notImplemented } from "../internal/skeleton";
 import { TokenStore } from "../ports/TokenStore";
@@ -21,16 +28,41 @@ export class DeletedSpentToken extends Schema.Class<DeletedSpentToken>(
  */
 export class Tokens extends Effect.Service<Tokens>()("linkshu/Tokens", {
   effect: Effect.gen(function* () {
-    // Contract-level dependency declarations; bodies land with the vertical.
-    yield* TokenStore;
+    const tokenStore = yield* TokenStore;
+    // Contract-level dependency declaration; used once the vertical lands.
     yield* Inspector.orNoop;
 
     /** All live rows enriched with metadata derived from their token text. */
     const list: Effect.Effect<ReadonlyArray<WalletToken>> =
       notImplemented("tokens.list");
 
-    const balances: Effect.Effect<WalletBalances> =
-      notImplemented("tokens.balances");
+    const balances: Effect.Effect<WalletBalances> = Effect.map(
+      tokenStore.loadAll,
+      (rows) => {
+        const perMint = new Map<MintUrl, number>();
+        for (const row of rows) {
+          if (row.state !== "accepted") continue;
+          const parsed = parseTokenText(row.tokenText);
+          if (parsed === null || parsed.mint === null) continue;
+          perMint.set(
+            parsed.mint,
+            (perMint.get(parsed.mint) ?? 0) + parsed.amount,
+          );
+        }
+        const amounts = [...perMint.values()];
+        return new WalletBalances({
+          total: NonNegativeAmount.make(amounts.reduce((a, b) => a + b, 0)),
+          spendable: NonNegativeAmount.make(Math.max(0, ...amounts)),
+          perMint: [...perMint].map(
+            ([mint, amount]) =>
+              new MintBalance({
+                mint,
+                amount: NonNegativeAmount.make(amount),
+              }),
+          ),
+        });
+      },
+    );
 
     /** `accepted` → `reserved`: earmark a row for a pending handover. */
     const reserve = (

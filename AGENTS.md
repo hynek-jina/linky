@@ -83,6 +83,10 @@ Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test n
 
 `packages/linkshu` has a second vitest project (`tests/integration/`, excluded from `bun run test`) that needs the dev-stack mint: `docker compose -f docker-compose.dev.yml up -d --wait cashu-mint`, then `bun run --filter @linky/linkshu test:integration`. CI runs it as the `linkshu-integration` job in `.github/workflows/tests.yml`.
 
+## linkshu CLI wallet
+
+`apps/linkshu-cli` is a terminal wallet on `@linky/linkshu` — run it with `bun run linkshu <command>` from the repo root. It is also the package's platform-independence proof, so keep it free of browser/React/Evolu imports. Its own tests use `bun test` (not vitest) and need no mint; driving actual wallet commands does (`docker compose -f docker-compose.dev.yml up -d --wait cashu-mint`). See `apps/linkshu-cli/README.md`.
+
 ## Gotchas
 
 - Evolu requires a Worker polyfill in test environments (jsdom + polyfill live in `vitest.setup.ts`)

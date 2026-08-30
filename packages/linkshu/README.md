@@ -26,8 +26,9 @@ and get receipts; token text is the currency of the API.
 > the mint's own quote state), `autoswap` (melt-then-mint over the melt
 > vertical, with the pending claim persisted before the invoice can be paid
 > and drained by `resumePendingClaims`) and `feeProbe` (a melt quote against
-> another mint's unpaid invoice, cached per mint for a day) are real. The
-> `Tokens` read model is still an interface-contract stub (#286).
+> another mint's unpaid invoice, cached per mint for a day) are real. Of the
+> `Tokens` read model, `balances` is real; the rest is still an
+> interface-contract stub (#286).
 
 ## Verticals
 
@@ -103,8 +104,9 @@ already injectable).
 ## Rules
 
 - **Environment-agnostic.** No React, no Evolu, no `window`/`localStorage`
-  imports. The CLI wallet living in-tree as the package's first consumer
-  keeps this honest.
+  imports. `apps/linkshu-cli` — a terminal wallet on plain Bun, implementing
+  all three ports over files — is the package's first consumer and keeps this
+  honest.
 - **No raw cashu-ts types in the public API.** The package pins and wraps
   cashu-ts v4 behind its own domain schema, so cashu-ts upgrades stay
   behind the boundary.
@@ -149,8 +151,8 @@ CI runs it as the `linkshu-integration` job in `tests.yml`.
 Service assembly has one home: `linkshuServices(config)` layers every
 vertical over the ports. React apps will use `@linky/linkshu-react` (phase
 two, mirroring linkstr-react's atom architecture) instead of wiring layers
-themselves. Non-React environments (the CLI wallet) use the headless
-one-shot runner:
+themselves. Non-React environments use the headless one-shot runner, which
+also takes the optional `inspector` layer:
 
 ```ts
 import { Effect } from "effect";
