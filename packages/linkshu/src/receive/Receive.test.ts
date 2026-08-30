@@ -59,6 +59,8 @@ const makeWallet = (args: FakeWalletArgs) => {
     getMintInfo: () => {
       throw new Error("not under test");
     },
+    send: () => Promise.reject(new Error("not under test")),
+    checkProofsStates: () => Promise.reject(new Error("not under test")),
     receive: (_token, _config, outputType) => {
       const counter =
         outputType?.type === "deterministic" ? outputType.counter : -1;
@@ -148,8 +150,8 @@ describe("Receive.receive", () => {
     expect(parseTokenText(row.tokenText)?.amount).toBe(5);
     expect(receipt.right.rowId).toBe(row.id);
 
-    expect(receiveCounters).toEqual([0]);
-    expect(counter).toBe("2");
+    expect(receiveCounters).toEqual([1]);
+    expect(counter).toBe("3");
 
     expect(events.map((event) => event._tag)).toEqual([
       "TokenLifecycleChanged",
@@ -158,7 +160,7 @@ describe("Receive.receive", () => {
       "OperationSucceeded",
     ]);
     expect(events[0]).toMatchObject({ from: null, to: "pending" });
-    expect(events[1]).toMatchObject({ from: 0, to: 2, reason: "used" });
+    expect(events[1]).toMatchObject({ from: 1, to: 3, reason: "used" });
     expect(events[2]).toMatchObject({ from: "pending", to: "accepted" });
     expect(events[3]).toMatchObject({
       name: "receive.receive",
@@ -246,7 +248,7 @@ describe("Receive.receive", () => {
       rowId: exit.value.first.rowId,
     });
     expect(exit.value.rows).toHaveLength(1);
-    expect(receiveCounters).toEqual([0]);
+    expect(receiveCounters).toEqual([1]);
   });
 
   it("dedupes against a row's re-signed encoding", async () => {
@@ -358,8 +360,8 @@ describe("Receive.receive", () => {
     expect(Exit.isSuccess(exit)).toBe(true);
     if (!Exit.isSuccess(exit)) return;
     expect(exit.value.receipt._tag).toBe("Right");
-    expect(receiveCounters).toEqual([0, 40]);
-    expect(restoreCalls).toEqual([{ start: 0, count: 100 }]);
+    expect(receiveCounters).toEqual([1, 40]);
+    expect(restoreCalls).toEqual([{ start: 1, count: 100 }]);
     expect(exit.value.counter).toBe("42");
 
     const counterEvents = events.filter(
@@ -367,7 +369,7 @@ describe("Receive.receive", () => {
     );
     expect(counterEvents).toEqual([
       expect.objectContaining({
-        from: 0,
+        from: 1,
         to: 40,
         reason: "collision-recovery",
       }),
@@ -389,15 +391,15 @@ describe("Receive.receive", () => {
     expect(Exit.isSuccess(exit)).toBe(true);
     if (!Exit.isSuccess(exit)) return;
     expect(exit.value.receipt._tag).toBe("Right");
-    expect(receiveCounters).toEqual([0, 64]);
+    expect(receiveCounters).toEqual([1, 65]);
     expect(restoreCalls).toHaveLength(1);
-    expect(exit.value.counter).toBe("66");
+    expect(exit.value.counter).toBe("67");
   });
 
   it("bumps without probing restore for outputs-pending collisions", async () => {
     const { wallet, receiveCounters, restoreCalls } = makeWallet({
       receive: (counter) =>
-        counter === 0
+        counter === 1
           ? Promise.reject(new MintOperationError(11004, "outputs are pending"))
           : Promise.resolve(receivedProofs),
     });
@@ -407,7 +409,7 @@ describe("Receive.receive", () => {
     expect(Exit.isSuccess(exit)).toBe(true);
     if (!Exit.isSuccess(exit)) return;
     expect(exit.value.receipt._tag).toBe("Right");
-    expect(receiveCounters).toEqual([0, 64]);
+    expect(receiveCounters).toEqual([1, 65]);
     expect(restoreCalls).toEqual([]);
   });
 

@@ -7,9 +7,10 @@ import {
   TokenParseFailed,
 } from "../domain/errors";
 import type { CounterLockTimeout, MintUnreachable } from "../domain/errors";
-import { Amount, CurrencyUnit, KeysetId } from "../domain/primitives";
+import { CurrencyUnit } from "../domain/primitives";
 import type { MintUrl, TokenText } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
+import { recoverFromCollision } from "../internal/collisionRecovery";
 import {
   advanceCounterTo,
   readCounter,
@@ -18,11 +19,11 @@ import {
 import type { CounterScope } from "../internal/counters";
 import { inspectOperationWith } from "../internal/operations";
 import {
-  isOutputsAlreadySignedError,
   isRecoverableOutputCollision,
   isTokenAlreadySpentError,
 } from "../internal/outputCollisions";
 import {
+  boundKeysetId,
   classifyMintError,
   WalletInstances,
 } from "../mint/internal/WalletInstances";
@@ -30,8 +31,8 @@ import type { LoadedWallet } from "../mint/internal/WalletInstances";
 import { KeyValueStore } from "../ports/KeyValueStore";
 import { TokenStore } from "../ports/TokenStore";
 import type { StoredTokenRow } from "../ports/TokenStore";
-import { encodeToken, extractTokenText, parseTokenText } from "../token/codec";
-import { decodeTokenFields } from "../token/internal/v3Json";
+import { extractTokenText, parseTokenText } from "../token/codec";
+import { encodeCashuProofs } from "../token/internal/cashuProofs";
 import {
   findRowByTokenText,
   insertRowInState,
@@ -42,8 +43,6 @@ import { ReceiveDraft, ReceiveError, ReceiveReceipt } from "./domain";
 const sat = CurrencyUnit.make("sat");
 
 const MAX_SWAP_ATTEMPTS = 5;
-/** NUT-09 window scanned to find the last signed slot past a collision. */
-const COLLISION_RESTORE_WINDOW = 100;
 /** Fallback bump (one output block) when restore cannot locate the collision. */
 const COLLISION_FALLBACK_BUMP = 64;
 
@@ -95,44 +94,6 @@ const parseDraft = (
     });
   });
 
-const decodeKeysetId = Schema.decodeUnknownOption(KeysetId);
-
-const boundKeysetId = (
-  mint: MintUrl,
-  wallet: LoadedWallet,
-): Effect.Effect<KeysetId, MintRejected> => {
-  const decoded = decodeKeysetId(wallet.keysetId);
-  return decoded._tag === "Some"
-    ? Effect.succeed(decoded.value)
-    : Effect.fail(
-        new MintRejected({
-          mint,
-          code: null,
-          detail: `wallet bound to non-hex keyset id "${wallet.keysetId}"`,
-        }),
-      );
-};
-
-const encodeReceivedProofs = (
-  parsed: ParsedDraft,
-  proofs: ReadonlyArray<CashuProof>,
-): { tokenText: TokenText; amount: Amount } | null => {
-  const decoded = decodeTokenFields({
-    mint: parsed.mint,
-    unit: parsed.unit,
-    memo: parsed.memo,
-    proofs: proofs.map((proof) => ({
-      id: proof.id,
-      amount: proof.amount.toNumber(),
-      secret: proof.secret,
-      C: proof.C,
-    })),
-  });
-  if (decoded === null) return null;
-  const total = decoded.proofs.reduce((sum, proof) => sum + proof.amount, 0);
-  return { tokenText: encodeToken(decoded), amount: Amount.make(total) };
-};
-
 /** Token text (draft and receipt encodings) carries proof secrets. */
 const redactReceipt = (receipt: ReceiveReceipt): unknown => ({
   rowId: receipt.rowId,
@@ -156,46 +117,6 @@ export class Receive extends Effect.Service<Receive>()("linkshu/Receive", {
     const tokenStore = yield* TokenStore;
     const instances = yield* WalletInstances;
     const inspector = yield* Inspector.orNoop;
-
-    const probeLastSignedCounter = (
-      wallet: LoadedWallet,
-      start: number,
-      keysetId: KeysetId,
-    ): Effect.Effect<number | null> =>
-      Effect.tryPromise(() =>
-        wallet.restore(start, COLLISION_RESTORE_WINDOW, { keysetId }),
-      ).pipe(
-        Effect.map(({ lastCounterWithSignature }) =>
-          typeof lastCounterWithSignature === "number" &&
-          Number.isFinite(lastCounterWithSignature)
-            ? lastCounterWithSignature
-            : null,
-        ),
-        Effect.orElseSucceed(() => null),
-      );
-
-    const recoverFromCollision = (
-      wallet: LoadedWallet,
-      scope: CounterScope,
-      counter: number,
-      raw: unknown,
-    ): Effect.Effect<number> =>
-      Effect.gen(function* () {
-        const lastSigned = isOutputsAlreadySignedError(raw)
-          ? yield* probeLastSignedCounter(wallet, counter, scope.keysetId)
-          : null;
-        const target =
-          lastSigned === null
-            ? counter + COLLISION_FALLBACK_BUMP
-            : lastSigned + 1;
-        return yield* advanceCounterTo(
-          kv,
-          inspector,
-          scope,
-          target,
-          "collision-recovery",
-        );
-      });
 
     const swapAtMint = (
       wallet: LoadedWallet,
@@ -239,7 +160,17 @@ export class Receive extends Effect.Service<Receive>()("linkshu/Receive", {
               return yield* Effect.fail(classifyMintError(scope.mint, raw));
             }
             lastCollision = raw;
-            counter = yield* recoverFromCollision(wallet, scope, counter, raw);
+            counter = yield* recoverFromCollision(
+              {
+                kv,
+                inspector,
+                wallet,
+                scope,
+                fallbackBump: COLLISION_FALLBACK_BUMP,
+              },
+              counter,
+              raw,
+            );
           }
           return yield* Effect.fail(
             classifyMintError(scope.mint, lastCollision),
@@ -260,7 +191,12 @@ export class Receive extends Effect.Service<Receive>()("linkshu/Receive", {
           keysetId,
         };
         const proofs = yield* swapAtMint(wallet, scope, parsed.tokenText);
-        const encoded = encodeReceivedProofs(parsed, proofs);
+        const encoded = encodeCashuProofs({
+          mint: parsed.mint,
+          unit: parsed.unit,
+          memo: parsed.memo,
+          proofs,
+        });
         if (encoded === null) {
           return yield* new MintRejected({
             mint: parsed.mint,

@@ -39,7 +39,8 @@ describe("advanceCounterTo", () => {
       Effect.gen(function* () {
         const kv = yield* KeyValueStore;
         const inspector = recordingInspector(events);
-        expect(yield* readCounter(kv, scope)).toBe(0);
+        // Fresh scope reads as 1: slot 0 is cashu-ts's auto-assign sentinel.
+        expect(yield* readCounter(kv, scope)).toBe(1);
         expect(yield* advanceCounterTo(kv, inspector, scope, 5, "used")).toBe(
           5,
         );
@@ -60,7 +61,7 @@ describe("advanceCounterTo", () => {
     expect(events).toEqual([
       expect.objectContaining({
         _tag: "CounterAdvanced",
-        from: 0,
+        from: 1,
         to: 5,
         reason: "used",
       }),
