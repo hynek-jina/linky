@@ -73,6 +73,9 @@ const makeWallet = (args: FakeWalletArgs) => {
         ? args.restore()
         : Promise.reject(new Error("restore unavailable"));
     },
+    createMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
+    checkMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
+    mintProofsBolt11: () => Promise.reject(new Error("not under test")),
     batchRestore: () => Promise.reject(new Error("not under test")),
   };
   return { wallet, receiveCounters, restoreCalls };

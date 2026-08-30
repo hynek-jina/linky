@@ -83,6 +83,9 @@ const makeHarness = (args: HarnessArgs) => {
           witness: null,
         })),
       ),
+    createMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
+    checkMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
+    mintProofsBolt11: () => Promise.reject(new Error("not under test")),
     batchRestore: (_gapLimit, _batchSize, counter = 0, keysetId = "") => {
       restoreCalls.push({ start: counter, keysetId });
       if (args.restoreError !== undefined) {

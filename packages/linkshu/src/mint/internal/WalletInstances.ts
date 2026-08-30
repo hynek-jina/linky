@@ -7,6 +7,8 @@ import {
   Wallet,
   type AmountLike,
   type KeyChain,
+  type MintProofsConfig,
+  type MintQuoteBolt11Response,
   type OutputConfig,
   type OutputType,
   type Proof,
@@ -56,6 +58,17 @@ export interface LoadedWallet {
   checkProofsStates(
     proofs: Array<Pick<ProofLike, "secret" | "id">>,
   ): Promise<ProofState[]>;
+  createMintQuoteBolt11(
+    amount: AmountLike,
+    description?: string,
+  ): Promise<MintQuoteBolt11Response>;
+  checkMintQuoteBolt11(quote: string): Promise<MintQuoteBolt11Response>;
+  mintProofsBolt11(
+    amount: AmountLike,
+    quote: string,
+    config?: MintProofsConfig,
+    outputType?: OutputType,
+  ): Promise<Proof[]>;
   restore(
     start: number,
     count: number,
