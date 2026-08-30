@@ -6,9 +6,10 @@ restore, …) is defined here as an Effect service over branded `Schema` types.
 Raw cashu-ts types never cross the package boundary: callers hand in drafts
 and get receipts; token text is the currency of the API.
 
-> **Status: foundation implemented (#287).** The ports with their in-memory
-> defaults, the inspector, and mint/wallet management (including the single
-> shared wallet-instance cache) are real. The operation verticals are still
+> **Status: foundation (#287) and token codec (#288) implemented.** The ports
+> with their in-memory defaults, the inspector, mint/wallet management
+> (including the single shared wallet-instance cache), and the canonical token
+> codec are real. The remaining operation verticals are still
 > interface-contract stubs (#286) and land slice by slice.
 
 ## Verticals

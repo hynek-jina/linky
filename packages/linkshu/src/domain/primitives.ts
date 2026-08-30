@@ -34,8 +34,9 @@ export const CurrencyUnit = Schema.NonEmptyTrimmedString.pipe(
 );
 export type CurrencyUnit = typeof CurrencyUnit.Type;
 
+/** Hex-encoded keyset id bytes; even length so v4 byte encoding is total. */
 export const KeysetId = Schema.String.pipe(
-  Schema.pattern(/^[0-9a-f]+$/i),
+  Schema.pattern(/^(?:[0-9a-f]{2})+$/i),
   Schema.brand("KeysetId"),
 );
 export type KeysetId = typeof KeysetId.Type;

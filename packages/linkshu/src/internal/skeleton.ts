@@ -17,12 +17,3 @@ export const notImplemented = (
   void params;
   return Effect.die(skeletonError(operation));
 };
-
-/** `notImplemented` for the pure (non-Effect) codec functions. */
-export const notImplementedSync = (
-  operation: string,
-  params?: object,
-): never => {
-  void params;
-  throw skeletonError(operation);
-};
