@@ -54,7 +54,8 @@ export class Proof extends Schema.Class<Proof>("Proof")({
   id: KeysetId,
   amount: Amount,
   secret: Schema.NonEmptyString,
-  C: Schema.NonEmptyString,
+  /** Hex-encoded signature point; byte-hex so v4 encoding is total. */
+  C: Schema.String.pipe(Schema.pattern(/^(?:[0-9a-f]{2})+$/i)),
 }) {}
 
 /** Fully decoded single-mint token; the input/output of the canonical codec. */
