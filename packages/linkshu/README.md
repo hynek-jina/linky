@@ -8,7 +8,8 @@ and get receipts; token text is the currency of the API.
 
 > **Status: foundation (#287), token codec (#288), the receive vertical
 > (#289), the send vertical (#290), validation + restore (#291), the topup
-> flow (#292), and the melt vertical (#293) implemented.** The ports with
+> flow (#292), the melt vertical (#293), and autoswap + the fee probe (#294)
+> implemented.** The ports with
 > their in-memory defaults, the inspector, mint/wallet management (including
 > the single shared wallet-instance cache), the canonical token codec, the
 > token lifecycle state machine, `receive` (deterministic re-signing with
@@ -22,8 +23,11 @@ and get receipts; token text is the currency of the API.
 > inputs held as a `reserved` row while the mint has them, NUT-08 blank
 > outputs burned deterministically before the melt call so restore
 > reproduces the state, lost responses and pending payments resolved from
-> the mint's own quote state) are real. The remaining operation verticals
-> are still interface-contract stubs (#286) and land slice by slice.
+> the mint's own quote state), `autoswap` (melt-then-mint over the melt
+> vertical, with the pending claim persisted before the invoice can be paid
+> and drained by `resumePendingClaims`) and `feeProbe` (a melt quote against
+> another mint's unpaid invoice, cached per mint for a day) are real. The
+> `Tokens` read model is still an interface-contract stub (#286).
 
 ## Verticals
 
@@ -46,10 +50,14 @@ and get receipts; token text is the currency of the API.
   reserved — is persisted before every network call that could strand funds,
   so `resumePending` finishes an interrupted topup on the next run: a lost
   mint response is reclaimed via NUT-09 rather than minted twice
-- `autoswap/` — consolidate a foreign mint into the main mint
-  (melt-then-mint with fee pre-probe); pending claims recover on their own
+- `autoswap/` — consolidate a foreign mint into the main mint: quote a
+  topup at the target, melt the source balance against that invoice
+  (stepping the amount down by the shortage the melt reports), then mint at
+  the target. The claim is persisted before the invoice can be paid, so
+  `resumePendingClaims` finishes an interrupted swap — off the same reserved
+  counter slots, so it never mints twice
 - `feeProbe/` — Lightning fee estimation via a real melt quote (NUT-06
-  publishes none)
+  publishes none); nothing is paid and results cache per mint for a day
 - `token/` — the one token codec (v3 JSON, v4 CBOR, legacy cashu.me JSON)
   plus the `Tokens` read model and lifecycle transitions
 - `mint/` — mint info (name, `input_fee_ppk`, MPP) and the known-mint set;

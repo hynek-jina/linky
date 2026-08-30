@@ -8,6 +8,7 @@ import { KeyValueStore } from "../ports/KeyValueStore";
 import { TokenStore } from "../ports/TokenStore";
 import { MintInfo } from "./domain";
 import { collectKnownMints } from "./internal/knownMints";
+import { boundKeysetInputFeePpk } from "./internal/keysetFees";
 import { WalletInstances } from "./internal/WalletInstances";
 import type { LoadedWallet } from "./internal/WalletInstances";
 
@@ -16,14 +17,6 @@ const sat = CurrencyUnit.make("sat");
 
 const nullableString = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
-
-/** Fee of the keyset the wallet is bound to, as the mint published it. */
-const boundKeysetInputFeePpk = (wallet: LoadedWallet): number | null => {
-  const bound = wallet.keyChain
-    .getKeysets()
-    .find((keyset) => keyset.id === wallet.keysetId);
-  return bound?.toMintKeyset().input_fee_ppk ?? null;
-};
 
 const buildMintInfo = (mint: MintUrl, wallet: LoadedWallet): MintInfo => {
   const published = wallet.getMintInfo();

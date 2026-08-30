@@ -21,6 +21,7 @@ import {
 import type { MintUrl } from "../domain/primitives";
 import { QuoteStateChanged } from "../inspector/events";
 import { Inspector } from "../inspector/Inspector";
+import { cashuAmountToNumber } from "../internal/cashuAmounts";
 import { recoverFromCollision } from "../internal/collisionRecovery";
 import {
   advanceCounterTo,
@@ -72,16 +73,6 @@ const decodeExpiry = Schema.decodeUnknownOption(UnixSeconds);
 const decodeQuoteState = Schema.decodeUnknownOption(
   Schema.Literal("UNPAID", "PENDING", "PAID"),
 );
-
-/** The cashu-ts `Amount` field of a mint response, as a plain finite number. */
-const cashuAmountToNumber = (value: { toNumber(): number }): number | null => {
-  try {
-    const numeric = value.toNumber();
-    return Number.isFinite(numeric) ? numeric : null;
-  } catch {
-    return null;
-  }
-};
 
 const toMeltQuote = (
   mint: MintUrl,

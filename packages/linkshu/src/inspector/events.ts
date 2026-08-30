@@ -1,9 +1,11 @@
 import { Schema } from "effect";
 import {
+  Amount,
   CurrencyUnit,
   DeterministicCounter,
   KeysetId,
   MintUrl,
+  NonNegativeAmount,
   QuoteId,
   TokenRowId,
 } from "../domain/primitives";
@@ -70,11 +72,31 @@ export class QuoteStateChanged extends Schema.TaggedClass<QuoteStateChanged>()(
   },
 ) {}
 
+/**
+ * A mint's Lightning fee was measured. Both quote ids travel so a consumer
+ * can correlate the row with the mint's own quote traffic on either side.
+ */
+export class LightningFeeProbed extends Schema.TaggedClass<LightningFeeProbed>()(
+  "LightningFeeProbed",
+  {
+    mint: MintUrl,
+    probeMint: MintUrl,
+    /** Melt quote at `mint` — the priced side. */
+    meltQuoteId: QuoteId,
+    /** Mint quote at `probeMint` whose (unpaid) invoice was priced. */
+    mintQuoteId: QuoteId,
+    amount: Amount,
+    feeReserve: NonNegativeAmount,
+    percent: Schema.Number,
+  },
+) {}
+
 export const LinkshuInspectorEvent = Schema.Union(
   OperationSucceeded,
   OperationFailed,
   TokenLifecycleChanged,
   CounterAdvanced,
   QuoteStateChanged,
+  LightningFeeProbed,
 );
 export type LinkshuInspectorEvent = typeof LinkshuInspectorEvent.Type;

@@ -1,13 +1,9 @@
-import type {
-  MintQuoteBolt11Response,
-  Proof as CashuProof,
-} from "@cashu/cashu-ts";
+import type { MintQuoteBolt11Response } from "@cashu/cashu-ts";
 import { Clock, Duration, Effect, Either, Fiber, Schema } from "effect";
 import type { Scope } from "effect";
 import { MintRejected, QuoteExpired } from "../domain/errors";
 import type { MintUnreachable } from "../domain/errors";
 import {
-  Amount,
   Bolt11Invoice,
   CurrencyUnit,
   QuoteId,
@@ -15,15 +11,13 @@ import {
 } from "../domain/primitives";
 import { QuoteStateChanged } from "../inspector/events";
 import { Inspector } from "../inspector/Inspector";
-import { recoverFromCollision } from "../internal/collisionRecovery";
-import {
-  advanceCounterTo,
-  readCounter,
-  withCounterLock,
-} from "../internal/counters";
 import { inspectOperationWith } from "../internal/operations";
-import { isRecoverableOutputCollision } from "../internal/outputCollisions";
-import { checkProofStates, unspentProofs } from "../internal/proofStates";
+import {
+  checkMintQuote,
+  claimMintQuote,
+  QUOTE_UNPAID,
+} from "../internal/quoteClaim";
+import type { QuoteClaimContext } from "../internal/quoteClaim";
 import {
   boundKeysetId,
   classifyMintError,
@@ -32,19 +26,9 @@ import {
 import type { LoadedWallet } from "../mint/internal/WalletInstances";
 import { KeyValueStore } from "../ports/KeyValueStore";
 import { TokenStore } from "../ports/TokenStore";
-import {
-  encodeCashuProofs,
-  toDomainProofs,
-} from "../token/internal/cashuProofs";
-import { insertRowInState } from "../token/internal/lifecycle";
-import {
-  collectRowProofs,
-  totalProofAmount,
-} from "../token/internal/rowProofs";
 import { TopupQuote, TopupReceipt } from "./domain";
 import type { TopupDraft, TopupError, TopupHandle } from "./domain";
 import {
-  counterScopeOf,
   deadlineOf,
   PendingTopup,
   readPendingTopups,
@@ -58,15 +42,6 @@ const sat = CurrencyUnit.make("sat");
 const POLL_INTERVAL = Duration.seconds(5);
 /** Transient poll failures are expected offline; a run of them is not. */
 const MAX_CONSECUTIVE_POLL_FAILURES = 10;
-const MAX_MINT_ATTEMPTS = 5;
-/**
- * Deterministic slots reserved per mint attempt, and therefore the NUT-09
- * window a reclaim scans: the outputs of one topup always fall inside it.
- */
-const TOPUP_OUTPUT_BLOCK = 64;
-
-const UNPAID = "UNPAID";
-const ISSUED = "ISSUED";
 
 const decodeQuoteId = Schema.decodeUnknownOption(QuoteId);
 const decodeInvoice = Schema.decodeUnknownOption(Bolt11Invoice);
@@ -126,15 +101,6 @@ export class Topup extends Effect.Service<Topup>()("linkshu/Topup", {
       );
     };
 
-    const checkQuote = (
-      wallet: LoadedWallet,
-      pending: PendingTopup,
-    ): Effect.Effect<MintQuoteBolt11Response, MintUnreachable | MintRejected> =>
-      Effect.tryPromise({
-        try: () => wallet.checkMintQuoteBolt11(pending.quoteId),
-        catch: (error) => classifyMintError(pending.mint, error),
-      });
-
     /**
      * Polls until the mint reports the invoice settled. Transient failures
      * keep the poll alive — a topup must survive going offline — while a
@@ -150,7 +116,7 @@ export class Topup extends Effect.Service<Topup>()("linkshu/Topup", {
         let lastState: string | null = null;
         let consecutiveFailures = 0;
         for (;;) {
-          const outcome = yield* Effect.either(checkQuote(wallet, pending));
+          const outcome = yield* Effect.either(checkMintQuote(wallet, pending));
           if (Either.isLeft(outcome)) {
             const error = outcome.left;
             consecutiveFailures += 1;
@@ -169,7 +135,7 @@ export class Topup extends Effect.Service<Topup>()("linkshu/Topup", {
             }
             // PAID and ISSUED both mean the invoice settled; the mint step
             // decides between minting and reclaiming.
-            if (state !== UNPAID) return;
+            if (state !== QUOTE_UNPAID) return;
             if ((yield* nowSeconds) > deadlineOf(pending)) {
               return yield* new QuoteExpired({
                 quoteId: pending.quoteId,
@@ -181,203 +147,36 @@ export class Topup extends Effect.Service<Topup>()("linkshu/Topup", {
         }
       });
 
-    const persistMinted = (
-      pending: PendingTopup,
-      proofs: ReadonlyArray<CashuProof>,
-    ): Effect.Effect<TopupReceipt, MintRejected> =>
-      Effect.gen(function* () {
-        const encoded = encodeCashuProofs({
-          mint: pending.mint,
-          unit: pending.unit,
-          memo: null,
-          proofs,
-        });
-        if (encoded === null) {
-          return yield* new MintRejected({
-            mint: pending.mint,
-            code: null,
-            detail: "mint returned malformed proofs from the mint quote",
-          });
-        }
-        const row = yield* insertRowInState(tokenStore, inspector, {
-          originalTokenText: encoded.tokenText,
-          tokenText: encoded.tokenText,
-          state: "accepted",
-          reason: "topup",
-        });
-        // Row first: a crash before the record is cleared costs one reclaim
-        // scan on resume, never the funds.
-        yield* removePendingTopup(kv, pending);
-        return new TopupReceipt({
-          rowId: row.id,
-          tokenText: encoded.tokenText,
-          mint: pending.mint,
-          amount: encoded.amount,
-          quoteId: pending.quoteId,
-        });
-      });
-
-    /**
-     * The quote is spent at the mint but a crash lost the response: the
-     * outputs the reserved slots derive are already signed, so NUT-09 hands
-     * them back. Proofs a previous run already stored resolve to that row
-     * instead of being imported twice.
-     */
-    const reclaimIssued = (
+    const claimContext = (
       wallet: LoadedWallet,
-      pending: PendingTopup,
-    ): Effect.Effect<TopupReceipt, TopupError> =>
-      Effect.gen(function* () {
-        const counter = pending.mintCounter;
-        if (counter === null) {
-          return yield* new MintRejected({
-            mint: pending.mint,
-            code: null,
-            detail:
-              "quote already issued by an attempt that reserved no counters; run restore to recover the proofs",
-          });
-        }
-        const restored = yield* Effect.tryPromise({
-          try: () =>
-            wallet.restore(counter, TOPUP_OUTPUT_BLOCK, {
-              keysetId: pending.keysetId,
-            }),
-          catch: (error) => classifyMintError(pending.mint, error),
-        });
-        const proofs = toDomainProofs(restored.proofs);
-        if (proofs === null) {
-          return yield* new MintRejected({
-            mint: pending.mint,
-            code: null,
-            detail: "mint returned malformed proofs from the reclaim scan",
-          });
-        }
+    ): QuoteClaimContext<PendingTopup> => ({
+      kv,
+      inspector,
+      tokenStore,
+      wallet,
+      reason: "topup",
+      withMintCounter: (record, mintCounter) =>
+        new PendingTopup({ ...record, mintCounter }),
+      persist: (record) => writePendingTopup(kv, record),
+      clear: (record) => removePendingTopup(kv, record),
+    });
 
-        const rowProofs = collectRowProofs(
-          yield* tokenStore.loadAll,
-          pending.mint,
-          pending.unit,
-          wallet.keyChain.getKeysets().map((keyset) => keyset.id),
-        );
-        const restoredSecrets = new Set(proofs.map((proof) => proof.secret));
-        const known = rowProofs.find(({ proofs: stored }) =>
-          stored.some((proof) => restoredSecrets.has(proof.secret)),
-        );
-        if (known !== undefined) {
-          yield* removePendingTopup(kv, pending);
-          return new TopupReceipt({
-            rowId: known.row.id,
-            tokenText: known.row.tokenText,
-            mint: pending.mint,
-            amount: Amount.make(totalProofAmount(known.proofs)),
-            quoteId: pending.quoteId,
-          });
-        }
-
-        const states = yield* checkProofStates(wallet, pending.mint, proofs);
-        const spendable = unspentProofs(proofs, states);
-        if (spendable.length === 0) {
-          return yield* new MintRejected({
-            mint: pending.mint,
-            code: null,
-            detail: "quote already issued and its proofs are no longer unspent",
-          });
-        }
-        // Only unspent, unstored proofs reach here, so re-encoding them from
-        // the reclaim scan cannot double-count balance.
-        const reclaimed = restored.proofs.filter((proof) =>
-          spendable.some((candidate) => candidate.secret === proof.secret),
-        );
-        return yield* persistMinted(pending, reclaimed);
-      });
-
-    /**
-     * Mints under the counter lock. Every attempt re-reads the quote state
-     * first: a lost response looks exactly like a counter collision from
-     * here, and only the mint's own `ISSUED` distinguishes "already minted,
-     * reclaim it" from "someone else burned these slots, move past them".
-     */
+    /** The shared claim, wearing topup's receipt. */
     const mintUnderLock = (
       wallet: LoadedWallet,
       pending: PendingTopup,
-    ): Effect.Effect<TopupReceipt, TopupError> => {
-      const scope = counterScopeOf(pending);
-      return withCounterLock(
-        kv,
-        scope,
-      )(
-        Effect.gen(function* () {
-          let record = pending;
-          let lastCollision: unknown = null;
-          for (let attempt = 0; attempt < MAX_MINT_ATTEMPTS; attempt += 1) {
-            const quote = yield* checkQuote(wallet, record);
-            if (quote.state === ISSUED) {
-              return yield* reclaimIssued(wallet, record);
-            }
-            if (quote.state === UNPAID) {
-              return yield* new MintRejected({
-                mint: record.mint,
-                code: null,
-                detail: "mint reported the settled quote as unpaid",
-              });
-            }
-
-            const counter =
-              record.mintCounter ?? (yield* readCounter(kv, scope));
-            record = new PendingTopup({ ...record, mintCounter: counter });
-            // Both writes land before the outputs are derived: a crash now
-            // resumes onto the same slots instead of burning a second block.
-            yield* writePendingTopup(kv, record);
-            yield* advanceCounterTo(
-              kv,
-              inspector,
-              scope,
-              counter + TOPUP_OUTPUT_BLOCK,
-              "used",
-            );
-
-            const outcome = yield* Effect.either(
-              Effect.tryPromise({
-                try: () =>
-                  wallet.mintProofsBolt11(
-                    record.amount,
-                    record.quoteId,
-                    undefined,
-                    { type: "deterministic", counter },
-                  ),
-                catch: (error): unknown => error,
-              }),
-            );
-            if (Either.isRight(outcome)) {
-              return yield* persistMinted(record, outcome.right);
-            }
-            const raw = outcome.left;
-            if (!isRecoverableOutputCollision(raw)) {
-              return yield* Effect.fail(classifyMintError(record.mint, raw));
-            }
-            lastCollision = raw;
-            record = new PendingTopup({
-              ...record,
-              mintCounter: yield* recoverFromCollision(
-                {
-                  kv,
-                  inspector,
-                  wallet,
-                  scope,
-                  fallbackBump: TOPUP_OUTPUT_BLOCK,
-                },
-                counter,
-                raw,
-              ),
-            });
-            yield* writePendingTopup(kv, record);
-          }
-          return yield* Effect.fail(
-            classifyMintError(record.mint, lastCollision),
-          );
-        }),
+    ): Effect.Effect<TopupReceipt, TopupError> =>
+      Effect.map(
+        claimMintQuote(claimContext(wallet), pending),
+        (claimed) =>
+          new TopupReceipt({
+            rowId: claimed.rowId,
+            tokenText: claimed.tokenText,
+            mint: pending.mint,
+            amount: claimed.amount,
+            quoteId: pending.quoteId,
+          }),
       );
-    };
 
     const complete = (
       pending: PendingTopup,
