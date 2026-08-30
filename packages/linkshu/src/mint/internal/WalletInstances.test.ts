@@ -33,6 +33,8 @@ const fakeWallet = (keysetId: string): LoadedWallet => ({
   keysetId,
   keyChain: { getKeysets: () => [] },
   getMintInfo: () => new CashuMintInfo(infoFixture),
+  receive: () => Promise.reject(new Error("not under test")),
+  restore: () => Promise.reject(new Error("not under test")),
 });
 
 const stubKv = (sets: Array<[string, string]>): KeyValueStoreService => ({

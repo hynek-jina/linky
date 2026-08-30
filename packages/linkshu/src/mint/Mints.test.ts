@@ -34,6 +34,11 @@ const baseInfo: GetInfoResponse = {
   },
 };
 
+const walletStubMethods = {
+  receive: () => Promise.reject(new Error("not under test")),
+  restore: () => Promise.reject(new Error("not under test")),
+};
+
 const stubInstances = (loaded: LoadedWallet): Layer.Layer<WalletInstances> =>
   Layer.succeed(
     WalletInstances,
@@ -88,6 +93,7 @@ const runMints = <A, E>(
 describe("Mints.info", () => {
   it("builds MintInfo from the loaded wallet's bound keyset and published info", async () => {
     const loaded: LoadedWallet = {
+      ...walletStubMethods,
       // Bound to the pricier keyset on purpose: info must report the bound
       // keyset's fee, not the cheapest one.
       keysetId: "01aaaa",
@@ -146,6 +152,7 @@ describe("Mints.info", () => {
 
   it("reports absent optional mint fields as null and mpp as false", async () => {
     const loaded: LoadedWallet = {
+      ...walletStubMethods,
       keysetId: "01aaaa",
       keyChain: {
         // No published input_fee_ppk on the bound keyset.
@@ -208,6 +215,7 @@ describe("Mints.knownMints", () => {
     const exit = await runMints(
       Layer.mergeAll(
         stubInstances({
+          ...walletStubMethods,
           keysetId: "01aaaa",
           keyChain: { getKeysets: () => [] },
           getMintInfo: () => new CashuMintInfo(baseInfo),

@@ -6,6 +6,10 @@ import {
   NetworkError,
   Wallet,
   type KeyChain,
+  type OutputType,
+  type Proof,
+  type ReceiveConfig,
+  type RestoreConfig,
 } from "@cashu/cashu-ts";
 import { Effect } from "effect";
 import { MintRejected, MintUnreachable } from "../../domain/errors";
@@ -31,6 +35,16 @@ export interface LoadedWallet {
   readonly keysetId: string;
   readonly keyChain: Pick<KeyChain, "getKeysets">;
   getMintInfo(): CashuMintInfo;
+  receive(
+    token: string,
+    config?: ReceiveConfig,
+    outputType?: OutputType,
+  ): Promise<Proof[]>;
+  restore(
+    start: number,
+    count: number,
+    config?: RestoreConfig,
+  ): Promise<{ proofs: Proof[]; lastCounterWithSignature?: number }>;
 }
 
 /**

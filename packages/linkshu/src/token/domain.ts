@@ -14,7 +14,9 @@ import {
  * The token lifecycle owned by the package — every platform gets identical
  * transition semantics from a dumb row store:
  *
- * - `pending`       — outgoing (e.g. over a messenger), not yet confirmed sent
+ * - `pending`       — in flight: an incoming token being accepted, or an
+ *                     outgoing one (e.g. over a messenger) not yet confirmed
+ *                     sent
  * - `accepted`      — spendable and owned; the row's `tokenText` holds fresh
  *                     post-swap proofs. Only `accepted` rows count as balance.
  * - `reserved`      — earmarked for handover, not yet issued
