@@ -1,0 +1,66 @@
+import { Effect, Exit } from "effect";
+import { inMemoryKeyValueStore } from "../ports/inMemoryKeyValueStore";
+import type { KeyValueStoreService } from "../ports/KeyValueStore";
+import { KeyValueStore } from "../ports/KeyValueStore";
+import { withKeyLease } from "./lease";
+
+const withStore = <A, E>(
+  program: (kv: KeyValueStoreService) => Effect.Effect<A, E>,
+): Effect.Effect<A, E> =>
+  Effect.gen(function* () {
+    const kv = yield* KeyValueStore;
+    return yield* program(kv);
+  }).pipe(Effect.provide(inMemoryKeyValueStore));
+
+describe("withKeyLease", () => {
+  it("serializes 25 concurrent read-increment-write cycles", async () => {
+    const key = "linkshu.test.counter";
+    const final = await Effect.runPromise(
+      withStore((kv) => {
+        const increment = Effect.gen(function* () {
+          const current = Number((yield* kv.get(key)) ?? "0");
+          yield* Effect.sleep(1);
+          yield* kv.set(key, String(current + 1));
+        }).pipe(withKeyLease(kv, key));
+        return Effect.gen(function* () {
+          yield* Effect.all(
+            Array.from({ length: 25 }, () => increment),
+            { concurrency: "unbounded" },
+          );
+          return yield* kv.get(key);
+        });
+      }),
+    );
+    expect(final).toBe("25");
+  });
+
+  it("fails with LeaseLockTimeout when the lock stays held past the acquire deadline", async () => {
+    const exit = await Effect.runPromiseExit(
+      withStore((kv) =>
+        Effect.gen(function* () {
+          expect(yield* kv.tryAcquireLease("k", 60_000)).not.toBeNull();
+          return yield* Effect.void.pipe(
+            withKeyLease(kv, "k", { acquireTimeoutMs: 30, pollMs: 5 }),
+          );
+        }),
+      ),
+    );
+    expect(exit).toEqual(
+      Exit.fail(
+        expect.objectContaining({ _tag: "LeaseLockTimeout", key: "k" }),
+      ),
+    );
+  });
+
+  it("releases the lease when the wrapped effect fails", async () => {
+    const reclaimed = await Effect.runPromise(
+      withStore((kv) =>
+        Effect.gen(function* () {
+          yield* Effect.fail("boom").pipe(withKeyLease(kv, "k"), Effect.ignore);
+          return yield* kv.tryAcquireLease("k", 60_000);
+        }),
+      ),
+    );
+    expect(reclaimed).not.toBeNull();
+  });
+});

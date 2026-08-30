@@ -172,6 +172,10 @@ Unit tests (Vitest) across all workspaces:
 bun run test
 ```
 
+`@linky/linkshu` additionally has an integration suite against the local
+docker mint (started via `docker compose -f docker-compose.dev.yml up -d
+--wait cashu-mint`): `bun run --filter @linky/linkshu test:integration`.
+
 End-to-end tests (Playwright) live in `apps/web-app/tests/*.spec.ts` and are split into two
 projects. `prod-services` is the original suite and runs against production relays and mints:
 

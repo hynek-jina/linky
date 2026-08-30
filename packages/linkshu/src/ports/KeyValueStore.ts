@@ -1,5 +1,4 @@
-import { Context, Effect, Layer, Schema } from "effect";
-import { notImplemented } from "../internal/skeleton";
+import { Context, Effect, Schema } from "effect";
 
 /** Opaque proof of lease ownership; only its issuer can release the lease. */
 export const LeaseId = Schema.NonEmptyTrimmedString.pipe(
@@ -41,10 +40,4 @@ export interface KeyValueStoreService {
 export class KeyValueStore extends Context.Tag("linkshu/KeyValueStore")<
   KeyValueStore,
   KeyValueStoreService
->() {
-  /** Non-durable, single-process; for tests and quick experiments. */
-  static readonly inMemory: Layer.Layer<KeyValueStore> = Layer.effect(
-    KeyValueStore,
-    notImplemented("KeyValueStore.inMemory"),
-  );
-}
+>() {}

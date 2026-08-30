@@ -1,6 +1,5 @@
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Schema } from "effect";
 import { TokenRowId, TokenText, UnixSeconds } from "../domain/primitives";
-import { notImplemented } from "../internal/skeleton";
 import { TokenState } from "../token/domain";
 
 /**
@@ -56,10 +55,4 @@ export interface TokenStoreService {
 export class TokenStore extends Context.Tag("linkshu/TokenStore")<
   TokenStore,
   TokenStoreService
->() {
-  /** Non-durable, single-process; for tests and quick experiments. */
-  static readonly inMemory: Layer.Layer<TokenStore> = Layer.effect(
-    TokenStore,
-    notImplemented("TokenStore.inMemory"),
-  );
-}
+>() {}
