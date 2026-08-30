@@ -7,19 +7,23 @@ Raw cashu-ts types never cross the package boundary: callers hand in drafts
 and get receipts; token text is the currency of the API.
 
 > **Status: foundation (#287), token codec (#288), the receive vertical
-> (#289), the send vertical (#290), validation + restore (#291), and the
-> topup flow (#292) implemented.** The ports with their in-memory defaults,
-> the inspector, mint/wallet management (including the single shared
-> wallet-instance cache), the canonical token codec, the token lifecycle
-> state machine, `receive` (deterministic re-signing with counter-collision
-> recovery over the lease-locked counter), `send` (NUT-07 pre-filter,
-> disjoint send/keep counter blocks, change persisted before the receipt
-> resolves), `validation` (batched NUT-07 checks, spent marking, local
-> merge), `restore` (NUT-09 recovery from seed with persisted cursors) and
-> `topup` (self-recovering quote → poll → mint, with the reserved counter
-> slots persisted before the outputs are derived) are real. The remaining
-> operation verticals are still interface-contract stubs (#286) and land
-> slice by slice.
+> (#289), the send vertical (#290), validation + restore (#291), the topup
+> flow (#292), and the melt vertical (#293) implemented.** The ports with
+> their in-memory defaults, the inspector, mint/wallet management (including
+> the single shared wallet-instance cache), the canonical token codec, the
+> token lifecycle state machine, `receive` (deterministic re-signing with
+> counter-collision recovery over the lease-locked counter), `send` (NUT-07
+> pre-filter, disjoint send/keep counter blocks, change persisted before the
+> receipt resolves), `validation` (batched NUT-07 checks, spent marking,
+> local merge), `restore` (NUT-09 recovery from seed with persisted
+> cursors), `topup` (self-recovering quote → poll → mint, with the reserved
+> counter slots persisted before the outputs are derived) and `melt` (bolt11
+> payment over the shared send machinery: fee-inclusive exact swap, the
+> inputs held as a `reserved` row while the mint has them, NUT-08 blank
+> outputs burned deterministically before the melt call so restore
+> reproduces the state, lost responses and pending payments resolved from
+> the mint's own quote state) are real. The remaining operation verticals
+> are still interface-contract stubs (#286) and land slice by slice.
 
 ## Verticals
 

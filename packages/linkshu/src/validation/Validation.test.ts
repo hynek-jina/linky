@@ -27,13 +27,13 @@ const proof = (amount: number, secret: string): CashuProof => ({
 const tokenOf = (...proofs: ReadonlyArray<CashuProof>): string =>
   getEncodedToken({ mint, unit: "sat", proofs: [...proofs] });
 
-const tokenA = tokenOf(proof(4, "a1"), proof(2, "a2"));
-const tokenB = tokenOf(proof(8, "b1"));
-const spentToken = tokenOf(proof(3, "z1"));
+const tokenA = tokenOf(proof(4, "sec-a1"), proof(2, "sec-a2"));
+const tokenB = tokenOf(proof(8, "sec-b1"));
+const spentToken = tokenOf(proof(3, "sec-z1"));
 const foreignToken = getEncodedToken({
   mint: "https://other.example",
   unit: "sat",
-  proofs: [proof(16, "o1")],
+  proofs: [proof(16, "sec-o1")],
 });
 
 type StateName = "UNSPENT" | "PENDING" | "SPENT";
@@ -58,6 +58,9 @@ const makeWallet = (args: HarnessArgs): LoadedWallet => ({
   createMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
   checkMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
   mintProofsBolt11: () => Promise.reject(new Error("not under test")),
+  createMeltQuoteBolt11: () => Promise.reject(new Error("not under test")),
+  checkMeltQuoteBolt11: () => Promise.reject(new Error("not under test")),
+  meltProofsBolt11: () => Promise.reject(new Error("not under test")),
   batchRestore: () => Promise.reject(new Error("not under test")),
   checkProofsStates: (proofs) =>
     args.checkStatesError !== undefined
@@ -144,7 +147,7 @@ const amountOf = (row: StoredTokenRow | undefined): number | undefined =>
 describe("Validation.checkAll", () => {
   it("marks fully spent rows error and merges the survivors into one row", async () => {
     const { run, events } = makeHarness({
-      stateOf: (secret) => (secret === "z1" ? "SPENT" : "UNSPENT"),
+      stateOf: (secret) => (secret === "sec-z1" ? "SPENT" : "UNSPENT"),
     });
 
     const exit = await run(
@@ -189,12 +192,12 @@ describe("Validation.checkAll", () => {
     // No key material: neither token text nor proof secrets in any event.
     const serialized = JSON.stringify(events);
     expect(serialized).not.toContain("cashu");
-    expect(serialized).not.toContain("a1");
+    expect(serialized).not.toContain("sec-a1");
   });
 
   it("keeps a partially spent row alive with only its surviving proofs", async () => {
     const { run } = makeHarness({
-      stateOf: (secret) => (secret === "a1" ? "SPENT" : "UNSPENT"),
+      stateOf: (secret) => (secret === "sec-a1" ? "SPENT" : "UNSPENT"),
     });
 
     const exit = await run(
@@ -244,7 +247,7 @@ describe("Validation.checkAll", () => {
 
   it("treats a pending proof as unknown rather than spent", async () => {
     const { run } = makeHarness({
-      stateOf: (secret) => (secret === "a1" ? "PENDING" : "SPENT"),
+      stateOf: (secret) => (secret === "sec-a1" ? "PENDING" : "SPENT"),
     });
 
     const exit = await run(
@@ -334,7 +337,7 @@ describe("Validation.checkRow", () => {
 
   it("reports a live row and prunes what the mint took", async () => {
     const { run } = makeHarness({
-      stateOf: (secret) => (secret === "a1" ? "SPENT" : "UNSPENT"),
+      stateOf: (secret) => (secret === "sec-a1" ? "SPENT" : "UNSPENT"),
     });
 
     const exit = await run(checkSeededRow(tokenA));
@@ -376,7 +379,7 @@ describe("Validation.checkRow", () => {
 describe("Validation.checkIssued", () => {
   it("removes issued rows the recipient has claimed", async () => {
     const { run } = makeHarness({
-      stateOf: (secret) => (secret === "b1" ? "SPENT" : "UNSPENT"),
+      stateOf: (secret) => (secret === "sec-b1" ? "SPENT" : "UNSPENT"),
     });
 
     const exit = await run(

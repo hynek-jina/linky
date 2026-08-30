@@ -5,14 +5,14 @@ import {
   TokenRowId,
   TokenText,
   UnixSeconds,
-} from "../../domain/primitives";
-import { StoredTokenRow } from "../../ports/TokenStore";
-import type { TokenState } from "../../token/domain";
+} from "../domain/primitives";
+import { StoredTokenRow } from "../ports/TokenStore";
+import type { TokenState } from "../token/domain";
 import {
-  collectSendSources,
+  collectAcceptedSources,
   dedupeSourceProofs,
   partitionBySpentSecrets,
-} from "./sources";
+} from "./spend";
 
 const mint = MintUrl.make("https://mint.example");
 const otherMint = MintUrl.make("https://other.example");
@@ -42,14 +42,14 @@ const row = (tokenText: string, state: TokenState = "accepted") =>
     createdAt: UnixSeconds.make(1),
   });
 
-describe("collectSendSources", () => {
+describe("collectAcceptedSources", () => {
   it("keeps only accepted rows decodable at the target mint and unit", () => {
     const good = row(token(mint, [[4, "a1"]]));
     const foreign = row(token(otherMint, [[8, "f1"]]));
     const pending = row(token(mint, [[2, "p1"]]), "pending");
     const issued = row(token(mint, [[2, "i1"]]), "issued");
 
-    const sources = collectSendSources(
+    const sources = collectAcceptedSources(
       [good, foreign, pending, issued],
       mint,
       sat,
@@ -66,7 +66,7 @@ describe("dedupeSourceProofs", () => {
       [4, "a1"],
       [2, "a2"],
     ]);
-    const sources = collectSendSources(
+    const sources = collectAcceptedSources(
       [row(shared), row(shared)],
       mint,
       sat,
@@ -88,7 +88,7 @@ describe("partitionBySpentSecrets", () => {
       ]),
     );
     const dead = row(token(mint, [[3, "z1"]]));
-    const sources = collectSendSources([partial, dead], mint, sat, []);
+    const sources = collectAcceptedSources([partial, dead], mint, sat, []);
 
     const partition = partitionBySpentSecrets(sources, new Set(["a2", "z1"]));
     expect(partition.fullySpentRows.map((r) => r.id)).toEqual([dead.id]);
@@ -99,7 +99,7 @@ describe("partitionBySpentSecrets", () => {
 
   it("keeps twin rows live while offering their shared proofs once", () => {
     const shared = token(mint, [[4, "a1"]]);
-    const sources = collectSendSources(
+    const sources = collectAcceptedSources(
       [row(shared), row(shared)],
       mint,
       sat,
