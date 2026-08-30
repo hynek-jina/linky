@@ -21,6 +21,7 @@ import {
   isInsufficientBalanceError,
   isRecoverableOutputCollision,
 } from "../internal/outputCollisions";
+import { checkProofStates, spentSecrets } from "../internal/proofStates";
 import {
   boundKeysetId,
   classifyMintError,
@@ -95,25 +96,9 @@ export class Send extends Effect.Service<Send>()("linkshu/Send", {
       mint: MintUrl,
       proofs: ReadonlyArray<Proof>,
     ): Effect.Effect<ReadonlySet<string>, MintUnreachable | MintRejected> =>
-      proofs.length === 0
-        ? Effect.succeed(new Set<string>())
-        : Effect.tryPromise({
-            try: () =>
-              wallet.checkProofsStates(
-                proofs.map((proof) => ({ secret: proof.secret, id: proof.id })),
-              ),
-            catch: (error) => classifyMintError(mint, error),
-          }).pipe(
-            // NUT-07 states come back in input order.
-            Effect.map(
-              (states) =>
-                new Set(
-                  proofs
-                    .filter((_, index) => states[index]?.state === "SPENT")
-                    .map((proof) => proof.secret),
-                ),
-            ),
-          );
+      checkProofStates(wallet, mint, proofs).pipe(
+        Effect.map((states) => spentSecrets(proofs, states)),
+      );
 
     const markSpentRows = (
       rows: ReadonlyArray<StoredTokenRow>,

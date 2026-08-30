@@ -7,14 +7,16 @@ Raw cashu-ts types never cross the package boundary: callers hand in drafts
 and get receipts; token text is the currency of the API.
 
 > **Status: foundation (#287), token codec (#288), the receive vertical
-> (#289), and the send vertical (#290) implemented.** The ports with their
-> in-memory defaults, the inspector, mint/wallet management (including the
-> single shared wallet-instance cache), the canonical token codec, the token
-> lifecycle state machine, `receive` (deterministic re-signing with
-> counter-collision recovery over the lease-locked counter), and `send`
-> (NUT-07 pre-filter, disjoint send/keep counter blocks, change persisted
-> before the receipt resolves) are real. The remaining operation verticals
-> are still interface-contract stubs (#286) and land slice by slice.
+> (#289), the send vertical (#290), and validation + restore (#291)
+> implemented.** The ports with their in-memory defaults, the inspector,
+> mint/wallet management (including the single shared wallet-instance cache),
+> the canonical token codec, the token lifecycle state machine, `receive`
+> (deterministic re-signing with counter-collision recovery over the
+> lease-locked counter), `send` (NUT-07 pre-filter, disjoint send/keep counter
+> blocks, change persisted before the receipt resolves), `validation` (batched
+> NUT-07 checks, spent marking, local merge) and `restore` (NUT-09 recovery
+> from seed with persisted cursors) are real. The remaining operation
+> verticals are still interface-contract stubs (#286) and land slice by slice.
 
 ## Verticals
 
@@ -94,6 +96,10 @@ already injectable).
   lease lock, never move backwards, and over-advance on ambiguity (blank
   outputs, collisions) — a gap costs a restore scan, a reuse costs a mint
   rejection loop.
+- **A missing NUT-07 answer is never a guess.** A proof state the mint did
+  not return falls the safe way for the caller asking: send still offers the
+  proof (the mint decides), restore never imports it, and validation never
+  marks the row. A truncated response therefore costs a retry, never funds.
 - **Serializable errors.** All errors are `Schema.TaggedError`, so failures
   can be persisted on token rows without ad-hoc stringification.
 - **No dependency edge to `@linky/linkstr`** in either direction. linkstr's

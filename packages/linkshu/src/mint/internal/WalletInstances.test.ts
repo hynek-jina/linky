@@ -37,6 +37,7 @@ const fakeWallet = (keysetId: string): LoadedWallet => ({
   send: () => Promise.reject(new Error("not under test")),
   checkProofsStates: () => Promise.reject(new Error("not under test")),
   restore: () => Promise.reject(new Error("not under test")),
+  batchRestore: () => Promise.reject(new Error("not under test")),
 });
 
 const stubKv = (sets: Array<[string, string]>): KeyValueStoreService => ({

@@ -1,13 +1,12 @@
 import type { CurrencyUnit, MintUrl } from "../../domain/primitives";
+import { dedupeProofs } from "../../internal/proofStates";
 import type { StoredTokenRow } from "../../ports/TokenStore";
-import { decodeTokenText } from "../../token/codec";
 import type { Proof } from "../../token/domain";
+import { collectRowProofs } from "../../token/internal/rowProofs";
+import type { RowProofs } from "../../token/internal/rowProofs";
 
 /** An `accepted` row spendable at the target mint, with its decoded proofs. */
-export interface SendSource {
-  readonly row: StoredTokenRow;
-  readonly proofs: ReadonlyArray<Proof>;
-}
+export type SendSource = RowProofs;
 
 export const collectSendSources = (
   rows: ReadonlyArray<StoredTokenRow>,
@@ -16,30 +15,18 @@ export const collectSendSources = (
   /** The mint's full keyset ids; expands short v2 ids in stored v4 tokens. */
   keysetIds: readonly string[],
 ): ReadonlyArray<SendSource> =>
-  rows.flatMap((row) => {
-    if (row.state !== "accepted") return [];
-    const decoded = decodeTokenText(row.tokenText, keysetIds);
-    if (decoded === null || decoded.mint !== mint || decoded.unit !== unit) {
-      return [];
-    }
-    return [{ row, proofs: decoded.proofs }];
-  });
+  collectRowProofs(
+    rows.filter((row) => row.state === "accepted"),
+    mint,
+    unit,
+    keysetIds,
+  );
 
 /** One state-check candidate per distinct secret (rows may share proofs). */
 export const dedupeSourceProofs = (
   sources: ReadonlyArray<SendSource>,
-): ReadonlyArray<Proof> => {
-  const seen = new Set<string>();
-  const unique: Proof[] = [];
-  for (const source of sources) {
-    for (const proof of source.proofs) {
-      if (seen.has(proof.secret)) continue;
-      seen.add(proof.secret);
-      unique.push(proof);
-    }
-  }
-  return unique;
-};
+): ReadonlyArray<Proof> =>
+  dedupeProofs(sources.flatMap((source) => source.proofs));
 
 export interface SpendablePartition {
   /** Rows whose every proof the mint reports spent; dead, to be marked. */
