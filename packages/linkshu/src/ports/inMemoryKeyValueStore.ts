@@ -2,7 +2,12 @@ import { Clock, Effect, Layer } from "effect";
 import { KeyValueStore, LeaseId } from "./KeyValueStore";
 import type { KeyValueStoreService } from "./KeyValueStore";
 
-const make = (): KeyValueStoreService => {
+/**
+ * One non-durable store instance. Exported so callers can keep the storage
+ * alive across separate runtimes — the layer builds a fresh instance each
+ * time, which is exactly what a crash-recovery test must not do.
+ */
+export const makeInMemoryKeyValueStore = (): KeyValueStoreService => {
   const values = new Map<string, string>();
   const leases = new Map<string, { lease: LeaseId; expiresAt: number }>();
   return {
@@ -37,5 +42,5 @@ const make = (): KeyValueStoreService => {
 /** Non-durable, single-process; for tests and quick experiments. */
 export const inMemoryKeyValueStore: Layer.Layer<KeyValueStore> = Layer.sync(
   KeyValueStore,
-  make,
+  makeInMemoryKeyValueStore,
 );

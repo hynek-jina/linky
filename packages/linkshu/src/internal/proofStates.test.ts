@@ -161,6 +161,9 @@ const walletAnswering = (
       );
     },
     restore: () => Promise.reject(new Error("not under test")),
+    createMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
+    checkMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
+    mintProofsBolt11: () => Promise.reject(new Error("not under test")),
     batchRestore: () => Promise.reject(new Error("not under test")),
   };
   return { wallet, calls };

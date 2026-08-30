@@ -7,16 +7,19 @@ Raw cashu-ts types never cross the package boundary: callers hand in drafts
 and get receipts; token text is the currency of the API.
 
 > **Status: foundation (#287), token codec (#288), the receive vertical
-> (#289), the send vertical (#290), and validation + restore (#291)
-> implemented.** The ports with their in-memory defaults, the inspector,
-> mint/wallet management (including the single shared wallet-instance cache),
-> the canonical token codec, the token lifecycle state machine, `receive`
-> (deterministic re-signing with counter-collision recovery over the
-> lease-locked counter), `send` (NUT-07 pre-filter, disjoint send/keep counter
-> blocks, change persisted before the receipt resolves), `validation` (batched
-> NUT-07 checks, spent marking, local merge) and `restore` (NUT-09 recovery
-> from seed with persisted cursors) are real. The remaining operation
-> verticals are still interface-contract stubs (#286) and land slice by slice.
+> (#289), the send vertical (#290), validation + restore (#291), and the
+> topup flow (#292) implemented.** The ports with their in-memory defaults,
+> the inspector, mint/wallet management (including the single shared
+> wallet-instance cache), the canonical token codec, the token lifecycle
+> state machine, `receive` (deterministic re-signing with counter-collision
+> recovery over the lease-locked counter), `send` (NUT-07 pre-filter,
+> disjoint send/keep counter blocks, change persisted before the receipt
+> resolves), `validation` (batched NUT-07 checks, spent marking, local
+> merge), `restore` (NUT-09 recovery from seed with persisted cursors) and
+> `topup` (self-recovering quote → poll → mint, with the reserved counter
+> slots persisted before the outputs are derived) are real. The remaining
+> operation verticals are still interface-contract stubs (#286) and land
+> slice by slice.
 
 ## Verticals
 
@@ -35,7 +38,10 @@ and get receipts; token text is the currency of the API.
   with cursor-windowed scanning and a deep fallback; also owns the
   seed-bound state wipe
 - `topup/` — a self-recovering flow: mint quote out, invoice paid, proofs
-  minted; pending quotes persist across crashes and resume
+  minted. The pending quote — including the counter slots a mint attempt
+  reserved — is persisted before every network call that could strand funds,
+  so `resumePending` finishes an interrupted topup on the next run: a lost
+  mint response is reclaimed via NUT-09 rather than minted twice
 - `autoswap/` — consolidate a foreign mint into the main mint
   (melt-then-mint with fee pre-probe); pending claims recover on their own
 - `feeProbe/` — Lightning fee estimation via a real melt quote (NUT-06

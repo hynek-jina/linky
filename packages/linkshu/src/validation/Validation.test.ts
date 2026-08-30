@@ -55,6 +55,9 @@ const makeWallet = (args: HarnessArgs): LoadedWallet => ({
   receive: () => Promise.reject(new Error("not under test")),
   send: () => Promise.reject(new Error("not under test")),
   restore: () => Promise.reject(new Error("not under test")),
+  createMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
+  checkMintQuoteBolt11: () => Promise.reject(new Error("not under test")),
+  mintProofsBolt11: () => Promise.reject(new Error("not under test")),
   batchRestore: () => Promise.reject(new Error("not under test")),
   checkProofsStates: (proofs) =>
     args.checkStatesError !== undefined

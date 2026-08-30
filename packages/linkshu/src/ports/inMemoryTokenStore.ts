@@ -3,7 +3,8 @@ import { TokenRowId, UnixSeconds } from "../domain/primitives";
 import { StoredTokenRow, TokenStore } from "./TokenStore";
 import type { TokenStoreService } from "./TokenStore";
 
-const make = (): TokenStoreService => {
+/** One non-durable store instance; see `makeInMemoryKeyValueStore`. */
+export const makeInMemoryTokenStore = (): TokenStoreService => {
   const rows = new Map<TokenRowId, StoredTokenRow>();
   return {
     insert: (row) =>
@@ -46,5 +47,5 @@ const make = (): TokenStoreService => {
 /** Non-durable, single-process; for tests and quick experiments. */
 export const inMemoryTokenStore: Layer.Layer<TokenStore> = Layer.sync(
   TokenStore,
-  make,
+  makeInMemoryTokenStore,
 );
