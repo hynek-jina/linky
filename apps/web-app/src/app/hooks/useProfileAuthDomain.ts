@@ -13,15 +13,21 @@ import {
   derivePubkey,
   encodeNpub,
   ProfileMetadata,
+  StatusDraft,
 } from "@linky/linkstr";
 import {
   linkstrConfigAtom,
   publishProfileAtom,
+  publishStatusAtom,
   useAtomSet,
 } from "@linky/linkstr-react";
 import { Cause, Exit, Option } from "effect";
 import type { Lang } from "../../i18n";
-import { loadCachedProfile, saveCachedProfile } from "../../profileCache";
+import {
+  loadCachedProfile,
+  saveCachedProfile,
+  saveCachedStatus,
+} from "../../profileCache";
 import { NOSTR_RELAYS } from "../../utils/nostrRelays";
 import { readClipboardText } from "../../platform/clipboard";
 import {
@@ -214,6 +220,9 @@ export const useProfileAuthDomain = ({
   const [isSeedLogin, setIsSeedLogin] = React.useState(false);
   const setLinkstrConfig = useAtomSet(linkstrConfigAtom);
   const publishProfile = useAtomSet(publishProfileAtom, {
+    mode: "promiseExit",
+  });
+  const publishStatus = useAtomSet(publishStatusAtom, {
     mode: "promiseExit",
   });
 
@@ -421,8 +430,16 @@ export const useProfileAuthDomain = ({
       }
 
       saveCachedProfile(npub, metadata, Math.floor(Date.now() / 1000));
+
+      // Contact suggestions discover new users by their kind-30315 status,
+      // so publish an empty one right away; failure only costs discovery
+      // visibility, not the account, so it does not abort onboarding.
+      const statusExit = await publishStatus(new StatusDraft({ content: "" }));
+      if (Exit.isSuccess(statusExit)) {
+        saveCachedStatus(npub, "", Math.floor(Date.now() / 1000));
+      }
     },
-    [currentNsec, publishProfile, setLinkstrConfig, t],
+    [currentNsec, publishProfile, publishStatus, setLinkstrConfig, t],
   );
 
   const republishProfileForNewKey = React.useCallback(
