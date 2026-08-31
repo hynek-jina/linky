@@ -69,7 +69,7 @@ const AuthenticatedAppShell = ({
   );
 
   return (
-    <div className={`${pageClassNameWithSwipe} authenticated-page`}>
+    <div className={`${pageClassNameWithSwipe} authenticated-page t`}>
       <PwaUpdateBanner t={t} />
       <CashuContactSendBanner
         amountText={
