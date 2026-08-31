@@ -56,6 +56,7 @@ import React from "react";
 import { linkshuAppInspector } from "../../../devtools/inspector/linkshuInspector";
 import { migrateLegacyCashuLocalState } from "../../migrations/linkshuStorageMigration";
 import type { CashuTokenRow, useEvolu } from "../../../evolu";
+import { useLatest } from "../../../hooks/useLatest";
 import { evoluTokenStore } from "../../../platform/linkshu/evoluTokenStore";
 import { localStorageKeyValueStore } from "../../../platform/linkshu/localStorageKeyValueStore";
 import { resolveLinkshuSeed } from "../../../platform/linkshu/resolveLinkshuSeed";
@@ -92,10 +93,7 @@ const emptyReadModel: LinkshuReadModel = {
 const sameSeed = (a: Bip39Seed, b: Bip39Seed): boolean =>
   a.length === b.length && a.every((byte, index) => byte === b[index]);
 
-/**
- * Runs linkshu Receive end to end (parse, dedup, swap, persist) and resolves
- * with the typed outcome; only defects reject.
- */
+/** linkshu Receive; resolves with the typed outcome, only defects reject. */
 export type ReceiveCashuToken = (
   text: string,
 ) => Promise<Either.Either<ReceiveReceipt, ReceiveError>>;
@@ -107,11 +105,7 @@ export interface SendCashuTokenArgs {
   readonly produceAs: "issued" | "pending";
 }
 
-/**
- * Runs linkshu Send end to end (NUT-07 pre-filter, exact-amount swap, change
- * persisted `accepted`, send row persisted in the drafted state) and resolves
- * with the typed outcome; invalid mint/amount input and defects reject.
- */
+/** linkshu Send; invalid mint/amount input and defects reject. */
 export type SendCashuToken = (
   args: SendCashuTokenArgs,
 ) => Promise<Either.Either<SendReceipt, SendError>>;
@@ -121,12 +115,7 @@ export interface MeltCashuInvoiceArgs {
   readonly mint: string;
 }
 
-/**
- * Pays a bolt11 invoice through linkshu Melt (quote, fee-inclusive swap,
- * melt, NUT-08 change persisted `accepted`) and resolves with the typed
- * outcome; a failed melt leaves the balance intact. Invalid mint/invoice
- * input and defects reject.
- */
+/** linkshu Melt; invalid mint/invoice input and defects reject. */
 export type MeltCashuInvoice = (
   args: MeltCashuInvoiceArgs,
 ) => Promise<Either.Either<MeltReceipt, MeltError>>;
@@ -137,11 +126,7 @@ export interface ProbeLightningFeeArgs {
   readonly probeMint: string;
 }
 
-/**
- * Reads `mint`'s Lightning fee through linkshu FeeProbe; a day-fresh cached
- * result short-circuits the two quotes a live probe costs. Invalid mint
- * input and defects reject.
- */
+/** linkshu FeeProbe; invalid mint input and defects reject. */
 export type ProbeLightningFee = (
   args: ProbeLightningFeeArgs,
 ) => Promise<Either.Either<LightningFeeProbeResult, FeeProbeError>>;
@@ -153,29 +138,21 @@ export interface StartCashuTopupArgs {
 
 /**
  * A running topup: `quote` carries the invoice to display immediately;
- * `completion` resolves with the typed outcome once the invoice is paid and
- * the proofs are persisted, or once the mint itself retires the quote
- * (confirmed unpaid and expired). It rejects only when the runtime shuts
- * down mid-flight — the persisted quote then resumes on the next launch.
+ * `completion` resolves with the typed outcome. It rejects only when the
+ * runtime shuts down mid-flight — the persisted quote then resumes on the
+ * next launch.
  */
 export interface CashuTopupHandle {
   readonly quote: TopupQuote;
   readonly completion: Promise<Either.Either<TopupReceipt, TopupError>>;
 }
 
-/**
- * Creates a mint quote through linkshu Topup and keeps its settlement poll
- * running for the runtime's lifetime. Invalid mint/amount input and defects
- * reject.
- */
+/** linkshu Topup start; invalid mint/amount input and defects reject. */
 export type StartCashuTopup = (
   args: StartCashuTopupArgs,
 ) => Promise<Either.Either<CashuTopupHandle, MintUnreachable | MintRejected>>;
 
-/**
- * Re-attaches every persisted pending topup (linkshu `Topup.resumePending`).
- * Records are retired only on the mint's own answer, never on local age.
- */
+/** Re-attaches every persisted pending topup (linkshu `Topup.resumePending`). */
 export type ResumePendingCashuTopups = () => Promise<
   ReadonlyArray<CashuTopupHandle>
 >;
@@ -185,48 +162,25 @@ export interface AutoswapCashuArgs {
   readonly targetMint: string;
 }
 
-/**
- * Consolidates `sourceMint`'s spendable balance into `targetMint` through
- * linkshu Autoswap: quote at the target, melt at the source, mint at the
- * target. The pending claim is persisted before the melt, so an interruption
- * anywhere after payment is recovered by `resumePendingClaims`. Invalid mint
- * input and defects reject.
- */
+/** linkshu Autoswap claim; invalid mint input and defects reject. */
 export type AutoswapCashu = (
   args: AutoswapCashuArgs,
 ) => Promise<Either.Either<AutoswapReceipt, AutoswapError>>;
 
-/**
- * Drains every persisted pending autoswap claim (linkshu
- * `Autoswap.resumePendingClaims`). Records are retired only on the mint's
- * own answer, never on local age alone.
- */
+/** Drains persisted pending claims (linkshu `Autoswap.resumePendingClaims`). */
 export type ResumePendingCashuAutoswapClaims = () => Promise<
   ReadonlyArray<AutoswapClaimResult>
 >;
 
-/**
- * NUT-07 validation of every `accepted` row through linkshu `Validation`:
- * fully spent rows are marked `error` individually, partially spent rows
- * keep only their surviving proofs, and an unreachable mint leaves its rows
- * untouched (reported in `unavailableMints`). Only defects reject.
- */
+/** linkshu `Validation.checkAll` over stored rows; only defects reject. */
 export type CheckAllCashuTokens = () => Promise<ValidationReport>;
 
-/**
- * NUT-07 check of a single stored row (`Validation.checkRow`); `unavailable`
- * means the mint gave no usable answer and nothing was changed.
- */
+/** NUT-07 check of a single stored row (linkshu `Validation.checkRow`). */
 export type CheckCashuTokenRow = (
   rowId: string,
 ) => Promise<Either.Either<RowCheckResult, TokenRowNotFound>>;
 
-/**
- * NUT-09 restore of deterministic proofs through linkshu `Restore` over the
- * given mints: restored proofs persist as `accepted` rows, and the restore
- * cursor and deterministic counter advance past the last signature found.
- * Invalid mint input and defects reject.
- */
+/** linkshu `Restore` over the given mints; invalid mint input rejects. */
 export type RestoreCashuTokens = (
   mints: ReadonlyArray<string>,
 ) => Promise<RestoreReport>;
@@ -239,13 +193,7 @@ export type TokenTransitionError = TokenRowNotFound | InvalidTokenTransition;
  * defects reject.
  */
 export interface CashuTokenLifecycle {
-  /** NUT-07 check of every `issued` row; claimed rows are removed. */
   readonly checkIssuedClaims: () => Promise<IssuedClaimReport>;
-  /**
-   * Removes `accepted` and `error` rows the mint confirms fully spent
-   * (`Tokens.deleteSpent`) — including legacy plain-text error rows. An
-   * unreachable mint keeps its rows.
-   */
   readonly deleteSpent: () => Promise<ReadonlyArray<DeletedSpentToken>>;
   /**
    * Drops a row whose funds verifiably left the wallet (e.g. a `pending`
@@ -291,14 +239,10 @@ export const useLinkshuComposition = ({
   upsert,
   writeOwnerId,
 }: UseLinkshuCompositionParams) => {
-  const rowsRef = React.useRef(cashuTokenRows);
-  rowsRef.current = cashuTokenRows;
-  const writeOwnerIdRef = React.useRef(writeOwnerId);
-  writeOwnerIdRef.current = writeOwnerId;
-  const updateRef = React.useRef(update);
-  updateRef.current = update;
-  const upsertRef = React.useRef(upsert);
-  upsertRef.current = upsert;
+  const rowsRef = useLatest(cashuTokenRows);
+  const writeOwnerIdRef = useLatest(writeOwnerId);
+  const updateRef = useLatest(update);
+  const upsertRef = useLatest(upsert);
 
   const [bip39Seed, setBip39Seed] = React.useState<Bip39Seed | null>(null);
 
@@ -347,7 +291,7 @@ export const useLinkshuComposition = ({
         }),
       }).pipe(Layer.provideMerge(linkshuAppInspector)),
     );
-  }, [bip39Seed]);
+  }, [bip39Seed, rowsRef, updateRef, upsertRef, writeOwnerIdRef]);
 
   /**
    * Topup polling fibers outlive the effect that started them but must die
@@ -394,192 +338,166 @@ export const useLinkshuComposition = ({
     };
   }, [cashuTokenRows, linkshuRuntime]);
 
-  const receiveCashuToken = React.useMemo<ReceiveCashuToken | null>(() => {
-    if (linkshuRuntime === null) return null;
-    return (text) =>
-      linkshuRuntime.runPromise(
-        Receive.pipe(
-          Effect.flatMap((receive) =>
-            receive.receive(new ReceiveDraft({ text })),
-          ),
-          Effect.either,
-        ),
-      );
-  }, [linkshuRuntime]);
-
-  const sendCashuToken = React.useMemo<SendCashuToken | null>(() => {
-    if (linkshuRuntime === null) return null;
-    return ({ amountSat, mint, produceAs }) =>
-      linkshuRuntime.runPromise(
-        Effect.suspend(() => {
-          const draft = decodeSendDraft({ amount: amountSat, mint, produceAs });
-          return Effect.flatMap(Send, (send) => send.send(draft));
-        }).pipe(Effect.either),
-      );
-  }, [linkshuRuntime]);
-
-  const meltCashuInvoice = React.useMemo<MeltCashuInvoice | null>(() => {
-    if (linkshuRuntime === null) return null;
-    return ({ invoice, mint }) =>
-      linkshuRuntime.runPromise(
-        Effect.suspend(() => {
-          const draft = decodeMeltDraft({ invoice, mint });
-          return Effect.flatMap(Melt, (melt) => melt.melt(draft));
-        }).pipe(Effect.either),
-      );
-  }, [linkshuRuntime]);
-
-  const topupApi = React.useMemo(() => {
+  const operations = React.useMemo(() => {
     if (linkshuRuntime === null || topupScope === null) return null;
+    const runtime = linkshuRuntime;
+    type Env = ManagedRuntime.ManagedRuntime.Context<typeof runtime>;
+
+    const run = <A, E>(effect: Effect.Effect<A, E, Env>): Promise<A> =>
+      runtime.runPromise(effect);
+    const runEither = <A, E>(
+      effect: Effect.Effect<A, E, Env>,
+    ): Promise<Either.Either<A, E>> => run(Effect.either(effect));
+    const rowId = (id: string) => TokenRowId.make(id);
 
     const toHandle = (handle: TopupHandle): CashuTopupHandle => {
-      const completion = linkshuRuntime.runPromise(
-        Effect.either(handle.result),
-      );
+      const completion = runEither(handle.result);
       // Rejection means the runtime shut down mid-poll; an unwatched handle
       // must not surface that as an unhandled rejection.
       completion.catch(() => {});
       return { quote: handle.quote, completion };
     };
 
-    const start: StartCashuTopup = ({ amountSat, mint }) =>
-      linkshuRuntime.runPromise(
+    const receiveCashuToken: ReceiveCashuToken = (text) =>
+      runEither(
+        Effect.flatMap(Receive, (receive) =>
+          receive.receive(new ReceiveDraft({ text })),
+        ),
+      );
+
+    const sendCashuToken: SendCashuToken = ({ amountSat, mint, produceAs }) =>
+      runEither(
+        Effect.suspend(() => {
+          const draft = decodeSendDraft({ amount: amountSat, mint, produceAs });
+          return Effect.flatMap(Send, (send) => send.send(draft));
+        }),
+      );
+
+    const meltCashuInvoice: MeltCashuInvoice = ({ invoice, mint }) =>
+      runEither(
+        Effect.suspend(() => {
+          const draft = decodeMeltDraft({ invoice, mint });
+          return Effect.flatMap(Melt, (melt) => melt.melt(draft));
+        }),
+      );
+
+    const startCashuTopup: StartCashuTopup = ({ amountSat, mint }) =>
+      runEither(
         Effect.suspend(() => {
           const draft = decodeTopupDraft({ mint, amount: amountSat });
           return Effect.flatMap(Topup, (topup) =>
             Scope.extend(topup.start(draft), topupScope),
           );
-        }).pipe(Effect.map(toHandle), Effect.either),
+        }).pipe(Effect.map(toHandle)),
       );
 
-    const resumePending: ResumePendingCashuTopups = () =>
-      linkshuRuntime.runPromise(
+    const resumePendingCashuTopups: ResumePendingCashuTopups = () =>
+      run(
         Effect.flatMap(Topup, (topup) =>
           Scope.extend(topup.resumePending, topupScope),
         ).pipe(Effect.map((handles) => handles.map(toHandle))),
       );
 
-    return { start, resumePending };
-  }, [linkshuRuntime, topupScope]);
-
-  const autoswapApi = React.useMemo(() => {
-    if (linkshuRuntime === null) return null;
-
-    const claim: AutoswapCashu = ({ sourceMint, targetMint }) =>
-      linkshuRuntime.runPromise(
+    const autoswapCashu: AutoswapCashu = ({ sourceMint, targetMint }) =>
+      runEither(
         Effect.suspend(() => {
           const draft = decodeAutoswapDraft({ sourceMint, targetMint });
           return Effect.flatMap(Autoswap, (autoswap) => autoswap.claim(draft));
-        }).pipe(Effect.either),
+        }),
       );
 
-    const resumePendingClaims: ResumePendingCashuAutoswapClaims = () =>
-      linkshuRuntime.runPromise(
-        Effect.flatMap(Autoswap, (autoswap) => autoswap.resumePendingClaims),
-      );
+    const resumePendingCashuAutoswapClaims: ResumePendingCashuAutoswapClaims =
+      () =>
+        run(
+          Effect.flatMap(Autoswap, (autoswap) => autoswap.resumePendingClaims),
+        );
 
-    return { claim, resumePendingClaims };
-  }, [linkshuRuntime]);
-
-  const probeLightningFee = React.useMemo<ProbeLightningFee | null>(() => {
-    if (linkshuRuntime === null) return null;
-    return ({ mint, probeMint }) =>
-      linkshuRuntime.runPromise(
+    const probeLightningFee: ProbeLightningFee = ({ mint, probeMint }) =>
+      runEither(
         Effect.suspend(() => {
           const draft = decodeFeeProbeDraft({ mint, probeMint });
           return Effect.flatMap(FeeProbe, (feeProbe) =>
             feeProbe.probeLightningFee(draft),
           );
-        }).pipe(Effect.either),
+        }),
       );
-  }, [linkshuRuntime]);
 
-  const checkAllCashuTokens = React.useMemo<CheckAllCashuTokens | null>(() => {
-    if (linkshuRuntime === null) return null;
-    return () =>
-      linkshuRuntime.runPromise(
-        Effect.flatMap(Validation, (validation) => validation.checkAll),
-      );
-  }, [linkshuRuntime]);
+    const checkAllCashuTokens: CheckAllCashuTokens = () =>
+      run(Effect.flatMap(Validation, (validation) => validation.checkAll));
 
-  const checkCashuTokenRow = React.useMemo<CheckCashuTokenRow | null>(() => {
-    if (linkshuRuntime === null) return null;
-    return (rowId) =>
-      linkshuRuntime.runPromise(
+    const checkCashuTokenRow: CheckCashuTokenRow = (id) =>
+      runEither(
         Effect.flatMap(Validation, (validation) =>
-          validation.checkRow(TokenRowId.make(rowId)),
-        ).pipe(Effect.either),
+          validation.checkRow(rowId(id)),
+        ),
       );
-  }, [linkshuRuntime]);
 
-  const restoreCashuTokens = React.useMemo<RestoreCashuTokens | null>(() => {
-    if (linkshuRuntime === null) return null;
-    return (mints) =>
-      linkshuRuntime.runPromise(
+    const restoreCashuTokens: RestoreCashuTokens = (mints) =>
+      run(
         Effect.suspend(() => {
           const draft = decodeRestoreDraft({ mints });
           return Effect.flatMap(Restore, (restore) => restore.restore(draft));
         }),
       );
-  }, [linkshuRuntime]);
 
-  const cashuTokenLifecycle = React.useMemo<CashuTokenLifecycle | null>(() => {
-    if (linkshuRuntime === null) return null;
-    const rowId = (id: string) => TokenRowId.make(id);
-    return {
+    const cashuTokenLifecycle: CashuTokenLifecycle = {
       checkIssuedClaims: () =>
-        linkshuRuntime.runPromise(
-          Effect.flatMap(Validation, (validation) => validation.checkIssued),
-        ),
+        run(Effect.flatMap(Validation, (validation) => validation.checkIssued)),
       deleteSpent: () =>
-        linkshuRuntime.runPromise(
-          Effect.flatMap(Tokens, (tokens) => tokens.deleteSpent),
-        ),
+        run(Effect.flatMap(Tokens, (tokens) => tokens.deleteSpent)),
       forget: (id) =>
-        linkshuRuntime.runPromise(
-          Effect.flatMap(TokenStore, (store) => store.remove(rowId(id))),
-        ),
+        run(Effect.flatMap(TokenStore, (store) => store.remove(rowId(id)))),
       markExternalized: (id) =>
-        linkshuRuntime.runPromise(
+        runEither(
           Effect.flatMap(Tokens, (tokens) =>
             tokens.markExternalized(rowId(id)),
-          ).pipe(Effect.either),
+          ),
         ),
       markIssued: (id) =>
-        linkshuRuntime.runPromise(
-          Effect.flatMap(Tokens, (tokens) => tokens.markIssued(rowId(id))).pipe(
-            Effect.either,
-          ),
+        runEither(
+          Effect.flatMap(Tokens, (tokens) => tokens.markIssued(rowId(id))),
         ),
       reserve: (id) =>
-        linkshuRuntime.runPromise(
-          Effect.flatMap(Tokens, (tokens) => tokens.reserve(rowId(id))).pipe(
-            Effect.either,
-          ),
+        runEither(
+          Effect.flatMap(Tokens, (tokens) => tokens.reserve(rowId(id))),
         ),
       returnToWallet: (id) =>
-        linkshuRuntime.runPromise(
-          Effect.flatMap(Tokens, (tokens) =>
-            tokens.returnToWallet(rowId(id)),
-          ).pipe(Effect.either),
+        runEither(
+          Effect.flatMap(Tokens, (tokens) => tokens.returnToWallet(rowId(id))),
         ),
     };
-  }, [linkshuRuntime]);
+
+    return {
+      autoswapCashu,
+      cashuTokenLifecycle,
+      checkAllCashuTokens,
+      checkCashuTokenRow,
+      meltCashuInvoice,
+      probeLightningFee,
+      receiveCashuToken,
+      restoreCashuTokens,
+      resumePendingCashuAutoswapClaims,
+      resumePendingCashuTopups,
+      sendCashuToken,
+      startCashuTopup,
+    };
+  }, [linkshuRuntime, topupScope]);
 
   return {
-    autoswapCashu: autoswapApi?.claim ?? null,
-    cashuTokenLifecycle,
-    checkAllCashuTokens,
-    checkCashuTokenRow,
+    autoswapCashu: operations?.autoswapCashu ?? null,
+    cashuTokenLifecycle: operations?.cashuTokenLifecycle ?? null,
+    checkAllCashuTokens: operations?.checkAllCashuTokens ?? null,
+    checkCashuTokenRow: operations?.checkCashuTokenRow ?? null,
     linkshuRuntime,
-    meltCashuInvoice,
-    probeLightningFee,
-    receiveCashuToken,
-    restoreCashuTokens,
-    resumePendingCashuAutoswapClaims: autoswapApi?.resumePendingClaims ?? null,
-    resumePendingCashuTopups: topupApi?.resumePending ?? null,
-    sendCashuToken,
-    startCashuTopup: topupApi?.start ?? null,
+    meltCashuInvoice: operations?.meltCashuInvoice ?? null,
+    probeLightningFee: operations?.probeLightningFee ?? null,
+    receiveCashuToken: operations?.receiveCashuToken ?? null,
+    restoreCashuTokens: operations?.restoreCashuTokens ?? null,
+    resumePendingCashuAutoswapClaims:
+      operations?.resumePendingCashuAutoswapClaims ?? null,
+    resumePendingCashuTopups: operations?.resumePendingCashuTopups ?? null,
+    sendCashuToken: operations?.sendCashuToken ?? null,
+    startCashuTopup: operations?.startCashuTopup ?? null,
     walletBalances: readModel.balances,
     walletTokens: readModel.tokens,
   };

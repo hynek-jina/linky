@@ -130,7 +130,7 @@ import { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
 import { drainLegacyAcceptedCashuToken } from "../../migrations/legacyAcceptedTokenDrain";
 import { seedLinkshuSeenMintsFromTokenRows } from "../../migrations/linkshuStorageMigration";
 import { useLinkshuComposition } from "./useLinkshuComposition";
-import type { ResumePendingCashuAutoswapClaims } from "./useLinkshuComposition";
+import { useResumeOnLaunchAndOnline } from "../useResumeOnLaunchAndOnline";
 import { useProfileComposition } from "./useProfileComposition";
 
 const isPubkey = Schema.is(Pubkey);
@@ -2793,29 +2793,16 @@ export const useCashuWalletComposition = ({
     };
   }, [autoswapSignature, cashuAutoswapEnabled, cashuIsBusy]);
 
-  const resumedAutoswapForRef =
-    React.useRef<ResumePendingCashuAutoswapClaims | null>(null);
-  React.useEffect(() => {
-    if (resumePendingCashuAutoswapClaims === null) return;
-
-    const resumeAll = () => {
-      void resumePendingCashuAutoswapClaims().catch((error: unknown) => {
-        console.warn("[linky][autoswap] resumePendingClaims failed", error);
-      });
-    };
-
-    // Once per runtime at launch; again whenever the browser comes back
-    // online, because a claim interrupted while offline waits for the next
-    // resume pass.
-    if (resumedAutoswapForRef.current !== resumePendingCashuAutoswapClaims) {
-      resumedAutoswapForRef.current = resumePendingCashuAutoswapClaims;
-      resumeAll();
-    }
-    window.addEventListener("online", resumeAll);
-    return () => {
-      window.removeEventListener("online", resumeAll);
-    };
-  }, [resumePendingCashuAutoswapClaims]);
+  useResumeOnLaunchAndOnline(
+    React.useMemo(() => {
+      if (resumePendingCashuAutoswapClaims === null) return null;
+      return () => {
+        void resumePendingCashuAutoswapClaims().catch((error: unknown) => {
+          console.warn("[linky][autoswap] resumePendingClaims failed", error);
+        });
+      };
+    }, [resumePendingCashuAutoswapClaims]),
+  );
 
   const requestSelectedContact = React.useCallback(async () => {
     if (route.kind !== "contactPay") return;

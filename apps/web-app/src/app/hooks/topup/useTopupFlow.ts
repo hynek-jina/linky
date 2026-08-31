@@ -1,6 +1,7 @@
 import type { TopupError, TopupQuote } from "@linky/linkshu";
 import { Either } from "effect";
 import React from "react";
+import { useLatest } from "../../../hooks/useLatest";
 import { navigateTo } from "../../../hooks/useRouting";
 import type { Route } from "../../../types/route";
 import { buildBip321PaymentUri } from "../../../utils/bip321";
@@ -11,6 +12,7 @@ import { optimizeCaseInsensitiveQrPayload } from "../../../utils/qrPayload";
 import { describeTaggedCashuError } from "../../lib/cashuStoredError";
 import { buildCashuPaymentRequestMessage } from "../../lib/paymentRequestMessage";
 import type { LoggedPaymentEventParams } from "../../types/appTypes";
+import { useResumeOnLaunchAndOnline } from "../useResumeOnLaunchAndOnline";
 import type {
   CashuTopupHandle,
   ResumePendingCashuTopups,
@@ -80,12 +82,9 @@ export const useTopupFlow = ({
   const [topupInvoiceCashuRequest, setTopupInvoiceCashuRequest] =
     React.useState<string | null>(null);
 
-  const activeTopupRef = React.useRef(activeTopup);
-  activeTopupRef.current = activeTopup;
-  const routeKindRef = React.useRef(routeKind);
-  routeKindRef.current = routeKind;
-  const tRef = React.useRef(t);
-  tRef.current = t;
+  const activeTopupRef = useLatest(activeTopup);
+  const routeKindRef = useLatest(routeKind);
+  const tRef = useLatest(t);
 
   /** Quotes already celebrated, so a second signal cannot double-finalize. */
   const finalizedQuoteIdsRef = React.useRef<Set<string>>(new Set());
@@ -143,8 +142,10 @@ export const useTopupFlow = ({
       }, 1400);
     },
     [
+      activeTopupRef,
       formatDisplayedAmountParts,
       logPaymentEvent,
+      routeKindRef,
       showPaidOverlay,
       t,
       topupPaidNavTimerRef,
@@ -173,60 +174,49 @@ export const useTopupFlow = ({
         );
       }
     },
-    [t],
+    [activeTopupRef, t],
   );
 
-  const completeTopupRef = React.useRef(completeTopup);
-  completeTopupRef.current = completeTopup;
-  const failTopupRef = React.useRef(failTopup);
-  failTopupRef.current = failTopup;
+  const completeTopupRef = useLatest(completeTopup);
+  const failTopupRef = useLatest(failTopup);
 
-  const watchTopup = React.useCallback((handle: CashuTopupHandle) => {
-    const quoteId = handle.quote.quoteId;
-    if (watchedQuoteIdsRef.current.has(quoteId)) return;
-    watchedQuoteIdsRef.current.add(quoteId);
-    void handle.completion
-      .then((result) => {
-        if (Either.isRight(result)) {
-          completeTopupRef.current(handle.quote, result.right.tokenText);
-        } else {
-          failTopupRef.current(handle.quote, result.left);
-        }
-      })
-      .catch(() => {
-        // Runtime shut down mid-flight; the pending record resumes later.
-      })
-      .finally(() => {
-        watchedQuoteIdsRef.current.delete(quoteId);
-      });
-  }, []);
-
-  const resumedForRef = React.useRef<ResumePendingCashuTopups | null>(null);
-
-  React.useEffect(() => {
-    if (resumePendingCashuTopups === null) return;
-
-    const resumeAll = () => {
-      void resumePendingCashuTopups()
-        .then((handles) => {
-          for (const handle of handles) watchTopup(handle);
+  const watchTopup = React.useCallback(
+    (handle: CashuTopupHandle) => {
+      const quoteId = handle.quote.quoteId;
+      if (watchedQuoteIdsRef.current.has(quoteId)) return;
+      watchedQuoteIdsRef.current.add(quoteId);
+      void handle.completion
+        .then((result) => {
+          if (Either.isRight(result)) {
+            completeTopupRef.current(handle.quote, result.right.tokenText);
+          } else {
+            failTopupRef.current(handle.quote, result.left);
+          }
         })
-        .catch((error: unknown) => {
-          console.warn("[linky][topup] resumePending failed", error);
+        .catch(() => {
+          // Runtime shut down mid-flight; the pending record resumes later.
+        })
+        .finally(() => {
+          watchedQuoteIdsRef.current.delete(quoteId);
         });
-    };
+    },
+    [completeTopupRef, failTopupRef],
+  );
 
-    // Once per runtime at launch; again whenever the browser comes back
-    // online, because linkshu's poll gives up after a run of failures.
-    if (resumedForRef.current !== resumePendingCashuTopups) {
-      resumedForRef.current = resumePendingCashuTopups;
-      resumeAll();
-    }
-    window.addEventListener("online", resumeAll);
-    return () => {
-      window.removeEventListener("online", resumeAll);
-    };
-  }, [resumePendingCashuTopups, watchTopup]);
+  useResumeOnLaunchAndOnline(
+    React.useMemo(() => {
+      if (resumePendingCashuTopups === null) return null;
+      return () => {
+        void resumePendingCashuTopups()
+          .then((handles) => {
+            for (const handle of handles) watchTopup(handle);
+          })
+          .catch((error: unknown) => {
+            console.warn("[linky][topup] resumePending failed", error);
+          });
+      };
+    }, [resumePendingCashuTopups, watchTopup]),
+  );
 
   React.useEffect(() => {
     if (routeKind !== "topupInvoice" || startCashuTopup === null) return;
@@ -288,6 +278,7 @@ export const useTopupFlow = ({
     defaultMintUrl,
     routeKind,
     startCashuTopup,
+    tRef,
     topupAmount,
     watchTopup,
   ]);
@@ -340,7 +331,7 @@ export const useTopupFlow = ({
     if (routeKind !== "topup" && activeTopupRef.current === null) {
       setTopupAmount("");
     }
-  }, [routeKind]);
+  }, [activeTopupRef, routeKind]);
 
   // The QR also carries a cashu payment request, so the sats can arrive as a
   // token instead of an invoice payment: a balance jump by the requested
@@ -355,7 +346,7 @@ export const useTopupFlow = ({
     if (cashuTotalBalance >= startBalanceRef.current + activeTopup.amountSat) {
       completeTopupRef.current(activeTopup.quote, null);
     }
-  }, [activeTopup, cashuTotalBalance, routeKind]);
+  }, [activeTopup, cashuTotalBalance, completeTopupRef, routeKind]);
 
   /**
    * Starts a topup that never touches the invoice-page state — for flows
