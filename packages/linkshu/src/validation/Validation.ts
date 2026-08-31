@@ -4,12 +4,9 @@ import { Amount } from "../domain/primitives";
 import type { CurrencyUnit, MintUrl, TokenRowId } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import { inspectOperation } from "../internal/operations";
-import {
-  checkProofStates,
-  dedupeProofs,
-  partitionGroupsByState,
-} from "../internal/proofStates";
-import type { LiveGroup, StatePartition } from "../internal/proofStates";
+import { dedupeProofs } from "../internal/proofStates";
+import type { LiveGroup } from "../internal/proofStates";
+import { checkMintRows, groupRowsByMint } from "../internal/rowStates";
 import { WalletInstances } from "../mint/internal/WalletInstances";
 import { TokenStore } from "../ports/TokenStore";
 import type { StoredTokenRow } from "../ports/TokenStore";
@@ -19,10 +16,7 @@ import {
   rewriteRowTokenText,
   transitionRow,
 } from "../token/internal/lifecycle";
-import {
-  collectRowProofs,
-  totalProofAmount,
-} from "../token/internal/rowProofs";
+import { totalProofAmount } from "../token/internal/rowProofs";
 import type { RowProofs } from "../token/internal/rowProofs";
 import {
   IssuedClaimReport,
@@ -30,7 +24,6 @@ import {
   SpentTokenReport,
   ValidationReport,
 } from "./domain";
-import { groupRowsByMint } from "./internal/mintGroups";
 
 /** Serialized onto rows NUT-07 reports fully spent. */
 const encodeSpentRowError = Schema.encodeSync(
@@ -60,33 +53,6 @@ export class Validation extends Effect.Service<Validation>()(
       const tokenStore = yield* TokenStore;
       const instances = yield* WalletInstances;
       const inspector = yield* Inspector.orNoop;
-
-      /**
-       * One mint, one checkstate call. `null` means the mint gave no usable
-       * answer (unreachable, or it rejected the query) — that is information
-       * we do not have, never information that rows are spent.
-       */
-      const checkMintRows = (
-        mint: MintUrl,
-        unit: CurrencyUnit,
-        rows: ReadonlyArray<StoredTokenRow>,
-      ): Effect.Effect<StatePartition<RowProofs> | null> =>
-        Effect.gen(function* () {
-          const wallet = yield* instances.get(mint, unit);
-          const entries = collectRowProofs(
-            rows,
-            mint,
-            unit,
-            wallet.keyChain.getKeysets().map((keyset) => keyset.id),
-          );
-          if (entries.length === 0) return null;
-          const states = yield* checkProofStates(
-            wallet,
-            mint,
-            entries.flatMap((entry) => entry.proofs),
-          );
-          return partitionGroupsByState(entries, states);
-        }).pipe(Effect.catchAll(() => Effect.succeed(null)));
 
       /**
        * Definitive spend knowledge, persisted where the state machine allows
@@ -161,6 +127,7 @@ export class Validation extends Effect.Service<Validation>()(
             rows.filter((row) => row.state === "accepted"),
           )) {
             const partition = yield* checkMintRows(
+              instances,
               group.mint,
               group.unit,
               group.rows,
@@ -205,6 +172,7 @@ export class Validation extends Effect.Service<Validation>()(
             return new RowCheckResult({ rowId, status: "unavailable" });
           }
           const partition = yield* checkMintRows(
+            instances,
             group.mint,
             group.unit,
             group.rows,
@@ -231,6 +199,7 @@ export class Validation extends Effect.Service<Validation>()(
             rows.filter((row) => row.state === "issued"),
           )) {
             const partition = yield* checkMintRows(
+              instances,
               group.mint,
               group.unit,
               group.rows,

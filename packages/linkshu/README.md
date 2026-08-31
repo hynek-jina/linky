@@ -8,8 +8,9 @@ and get receipts; token text is the currency of the API.
 
 > **Status: foundation (#287), token codec (#288), the receive vertical
 > (#289), the send vertical (#290), validation + restore (#291), the topup
-> flow (#292), the melt vertical (#293), and autoswap + the fee probe (#294)
-> implemented.** The ports with
+> flow (#292), the melt vertical (#293), autoswap + the fee probe (#294), and
+> the `Tokens` read model and lifecycle transitions implemented — no
+> interface-contract stub (#286) is left.** The ports with
 > their in-memory defaults, the inspector, mint/wallet management (including
 > the single shared wallet-instance cache), the canonical token codec, the
 > token lifecycle state machine, `receive` (deterministic re-signing with
@@ -25,10 +26,11 @@ and get receipts; token text is the currency of the API.
 > reproduces the state, lost responses and pending payments resolved from
 > the mint's own quote state), `autoswap` (melt-then-mint over the melt
 > vertical, with the pending claim persisted before the invoice can be paid
-> and drained by `resumePendingClaims`) and `feeProbe` (a melt quote against
-> another mint's unpaid invoice, cached per mint for a day) are real. Of the
-> `Tokens` read model, `balances` is real; the rest is still an
-> interface-contract stub (#286).
+> and drained by `resumePendingClaims`), `feeProbe` (a melt quote against
+> another mint's unpaid invoice, cached per mint for a day) and `Tokens`
+> (the enriched row list and balances, the lifecycle transitions,
+> `returnToWallet` over the shared accept flow, and a NUT-07 sweep behind
+> `deleteSpent`) are real.
 
 ## Verticals
 
@@ -60,7 +62,10 @@ and get receipts; token text is the currency of the API.
 - `feeProbe/` — Lightning fee estimation via a real melt quote (NUT-06
   publishes none); nothing is paid and results cache per mint for a day
 - `token/` — the one token codec (v3 JSON, v4 CBOR, legacy cashu.me JSON)
-  plus the `Tokens` read model and lifecycle transitions
+  plus `Tokens`: the read model (enriched rows, balances), the lifecycle
+  transitions, `returnToWallet` (a reserved row flips back locally; anything
+  handed out is re-received so the old encoding dies at the mint), and
+  `deleteSpent`, which asks the mints before it deletes anything
 - `mint/` — mint info (name, `input_fee_ppk`, MPP) and the known-mint set;
   internally the single wallet-instance cache every vertical shares
 
