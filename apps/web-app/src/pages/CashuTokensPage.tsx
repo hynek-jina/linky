@@ -1,12 +1,15 @@
+import * as Evolu from "@evolu/common";
+import type { TokenRowId, WalletToken } from "@linky/linkshu";
 import type { Dispatch, FC, SetStateAction } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
-import type { CashuTokenWithMeta } from "../app/lib/tokenText";
 import type { MintUrlInput } from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
 import { TokenAddIcon } from "../components/icons";
 import type { CashuTokenId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
+
+const CashuTokenIdType = Evolu.id("CashuToken");
 
 interface CashuTokensPageProps {
   canRestoreTokens: boolean;
@@ -15,9 +18,9 @@ interface CashuTokensPageProps {
   cashuBulkCheckIsBusy: boolean;
   cashuIsBusy: boolean;
   cashuMeltToMainMintButtonLabel: string | null;
-  cashuOwnTokens: readonly CashuTokenWithMeta[];
+  cashuOwnTokens: readonly WalletToken[];
   cashuOwnSpentTokensCount: number;
-  cashuIssuedTokens: readonly CashuTokenWithMeta[];
+  cashuIssuedTokens: readonly WalletToken[];
   checkAllCashuTokensAndDeleteInvalid: () => Promise<void>;
   checkIssuedCashuTokensAndDeleteClaimed: () => Promise<{
     checked: number;
@@ -60,10 +63,10 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
 }) => {
   const { formatDisplayedAmountText } = useAppShellCore();
   const navigateTo = useNavigation();
-  const issuedBalance = cashuIssuedTokens.reduce((sum, token) => {
-    const amount = Number(token.amount ?? 0);
-    return sum + (Number.isFinite(amount) ? amount : 0);
-  }, 0);
+  const issuedBalance = cashuIssuedTokens.reduce(
+    (sum, token) => sum + token.amount,
+    0,
+  );
 
   const hasIssuedTokens = cashuIssuedTokens.length > 0;
   const autoCheckedRef = useRef(false);
@@ -95,17 +98,19 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
   );
 
   const handleOpenToken = useCallback(
-    (id: CashuTokenId) => {
+    (id: TokenRowId) => {
+      const decoded = CashuTokenIdType.fromUnknown(id);
+      if (!decoded.ok) return;
       navigateTo({
         route: "cashuToken",
-        id,
+        id: decoded.value,
       });
     },
     [navigateTo],
   );
 
   const renderTokenList = (
-    tokens: readonly CashuTokenWithMeta[],
+    tokens: readonly WalletToken[],
     emptyLabel: string,
   ) => {
     if (tokens.length === 0) {
@@ -119,7 +124,7 @@ export const CashuTokensPage: FC<CashuTokensPageProps> = ({
             key={token.id}
             token={token}
             getMintIconUrl={getMintIconUrl}
-            isError={String(token.state ?? "") === "error"}
+            isError={token.state === "error"}
             onMintIconLoad={handleMintIconLoad}
             onMintIconError={handleMintIconError}
             onOpenToken={handleOpenToken}
