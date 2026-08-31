@@ -502,6 +502,9 @@ export const Schema = {
     id: CashuTokenId,
     // Most recent (accepted) token.
     token: Evolu.NonEmptyString,
+    // Token text the row was first created from — the row's stable identity
+    // for dedup. Reads fall back to rawToken/token for legacy rows.
+    originalTokenText: Evolu.nullOr(Evolu.NonEmptyString),
     // Deprecated compatibility column. New rows use a deterministic id derived
     // from the original token and only store the latest spendable token here.
     rawToken: Evolu.nullOr(Evolu.NonEmptyString),

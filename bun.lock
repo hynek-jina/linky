@@ -98,6 +98,7 @@
         "@evolu/react": "^10.4.0",
         "@evolu/react-web": "^2.4.0",
         "@linky/identity": "workspace:*",
+        "@linky/linkshu": "workspace:*",
         "@linky/linkstr": "workspace:*",
         "@linky/linkstr-react": "workspace:*",
         "@noble/curves": "^1.4.1",
