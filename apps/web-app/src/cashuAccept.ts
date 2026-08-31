@@ -75,8 +75,8 @@ export const acceptCashuToken = async (
 
           // This performs a swap at the mint, returning fresh proofs.
           // OutputsAlreadySigned (already-signed B_'s in the deterministic
-          // counter range, typically from melt-blank leftovers — see
-          // cashuMelt.ts) used to retry with a fixed +64 bump per attempt,
+          // counter range, typically from melt-blank leftovers) used to
+          // retry with a fixed +64 bump per attempt,
           // which silently looped when the colliding range was wider than
           // 5 * 64 = 320 slots. Now we ask the mint via NUT-09 restore where
           // the last signed slot in the window actually is, and bump the
