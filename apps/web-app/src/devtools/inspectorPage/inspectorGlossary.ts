@@ -43,6 +43,14 @@ const TAG_DESCRIPTIONS: Record<string, string> = {
     "User assigned the contacts just saved from a chat message to a group; the payload lists the contact ids and the group name.",
   ChatImageShareFailed:
     "System share of a chat image failed for a reason other than the user cancelling; the app fell back to a file download when triggered from the message menu.",
+  TokenLifecycleChanged:
+    "A stored cashu token row moved to a new lifecycle state inside linkshu (e.g. accepted → issued); the reason names the operation that caused it. Follow the row link to the operation rows around it.",
+  CounterAdvanced:
+    "linkshu moved a deterministic derivation counter (NUT-13) for one mint/unit/keyset — the audit trail for output derivation and collision recovery.",
+  QuoteStateChanged:
+    "A mint or melt quote was observed in a new state while a linkshu flow (topup, autoswap, melt) polled it; the quote link ties the poll sequence together.",
+  LightningFeeProbed:
+    "linkshu measured a mint's Lightning fee by pricing another mint's unpaid invoice as a melt quote. Nothing is paid; links carry both quote ids.",
 };
 
 const describeTag = (row: CollectedInspectorRow): string => {
