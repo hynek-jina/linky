@@ -781,6 +781,7 @@ export const useAppShellComposition = ({
     lnAddressPayAmount,
     lnurlWithdrawIsBusy,
     makeNip98AuthHeader,
+    markCashuTokenExternalized,
     markCashuTokenIssued,
     meltLargestForeignMintToMainMint,
     mintInfoByUrl,
@@ -1018,6 +1019,7 @@ export const useAppShellComposition = ({
     dispatchInboxEvent,
     insert,
     lightningInvoiceAutoPayLimit,
+    markCashuTokenExternalized,
     markCashuTokenIssued,
     nostrBootstrapReady,
     openNewContactPage,
@@ -1033,7 +1035,6 @@ export const useAppShellComposition = ({
     setPendingLnurlWithdrawConfirmation,
     setStatus,
     t,
-    update,
   });
 
   const handleSelectContact = React.useCallback(
