@@ -10,18 +10,154 @@ import {
   safeLocalStorageSetJson,
 } from "../../utils/storage";
 import { getUnknownErrorMessage } from "../../utils/unknown";
-import {
-  isClaimableMintQuoteState,
-  readMintQuoteState,
-} from "../hooks/topup/topupMintQuoteState";
 import { createCashuTokenId } from "./cashuTokenIdentity";
-import {
-  encodeStorageSegment,
-  makeClaimedAutoswapQuoteStorageKey,
-  readClaimedTopupQuoteFromStorage,
-  type ClaimedTopupQuoteStorage,
-} from "./topupQuoteStorage";
 import { mintTopupProofs } from "./topupProofRecovery";
+
+const CLAIMED_AUTOSWAP_QUOTE_STORAGE_KEY_PREFIX = "linky.autoswap.claimed.v1";
+
+const readObjectField = (value: unknown, field: string): unknown => {
+  if (typeof value !== "object" || value === null) return undefined;
+  return Reflect.get(value, field);
+};
+
+const encodeStorageSegment = (value: string): string =>
+  encodeURIComponent(String(value ?? "").trim());
+
+export const makeClaimedAutoswapQuoteStorageKey = (args: {
+  mintUrl: string;
+  ownerId: string;
+  quote: string;
+}): string =>
+  `${CLAIMED_AUTOSWAP_QUOTE_STORAGE_KEY_PREFIX}.${encodeStorageSegment(
+    args.ownerId,
+  )}.${encodeStorageSegment(args.mintUrl)}.${encodeStorageSegment(args.quote)}`;
+
+export interface ClaimedAutoswapQuoteStorage {
+  amount: number;
+  claimedAtMs: number;
+  mintUrl: string;
+  quote: string;
+  token: string;
+  unit: string | null;
+}
+
+const isClaimedAutoswapQuoteStorage = (
+  value: unknown,
+): value is ClaimedAutoswapQuoteStorage => {
+  const unit = readObjectField(value, "unit");
+  return (
+    typeof readObjectField(value, "amount") === "number" &&
+    typeof readObjectField(value, "claimedAtMs") === "number" &&
+    typeof readObjectField(value, "mintUrl") === "string" &&
+    typeof readObjectField(value, "quote") === "string" &&
+    typeof readObjectField(value, "token") === "string" &&
+    (unit === null || typeof unit === "string")
+  );
+};
+
+export const readClaimedAutoswapQuoteFromStorage = (
+  key: string,
+): ClaimedAutoswapQuoteStorage | null => {
+  const raw = safeLocalStorageGet(key);
+  if (!raw) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isClaimedAutoswapQuoteStorage(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+/** Raw bolt11 mint-quote request; autoswap sizes target-mint invoices with it. */
+export const requestMintQuoteBolt11 = async (args: {
+  amountSat: number;
+  mintUrl: string;
+  signal?: AbortSignal;
+}): Promise<{ invoice: string; quoteId: string }> => {
+  const { amountSat, mintUrl } = args;
+  const targetUrl = `${mintUrl.replace(/\/+$/, "")}/v1/mint/quote/bolt11`;
+
+  const quoteRes = await fetch(targetUrl, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "omit",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    mode: "cors",
+    body: JSON.stringify({ amount: amountSat, unit: "sat" }),
+    ...(args.signal ? { signal: args.signal } : {}),
+  });
+
+  if (!quoteRes.ok) {
+    throw new Error(`Mint quote HTTP ${quoteRes.status}`);
+  }
+
+  const rawText = await quoteRes.text();
+  let mintQuote: Record<string, unknown> | null = null;
+  try {
+    const parsed = rawText ? JSON.parse(rawText) : null;
+    mintQuote = isRecord(parsed) ? parsed : null;
+  } catch {
+    throw new Error(
+      `Mint quote parse failed (${quoteRes.status}): ${rawText.slice(0, 200)}`,
+    );
+  }
+
+  const quoteId = String(mintQuote?.quote ?? mintQuote?.id ?? "").trim();
+  const invoice = String(
+    mintQuote?.request ?? mintQuote?.pr ?? mintQuote?.paymentRequest ?? "",
+  ).trim();
+
+  if (!quoteId || !invoice) {
+    throw new Error(
+      `Missing mint quote (quote=${quoteId || "-"}, invoice=${invoice || "-"})`,
+    );
+  }
+
+  return { quoteId, invoice };
+};
+
+export const readMintQuoteState = (value: unknown): string => {
+  const state = readObjectField(value, "state");
+  if (state !== undefined && state !== null) return String(state);
+  const status = readObjectField(value, "status");
+  return String(status ?? "");
+};
+
+const readMintQuoteEnumValue = (
+  value: unknown,
+  field: "ISSUED" | "PAID",
+): string | null => {
+  const enumValue = readObjectField(value, field);
+  if (enumValue === undefined || enumValue === null) return null;
+  return String(enumValue);
+};
+
+const normalizeMintQuoteState = (value: string): string =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+export const isClaimableMintQuoteState = (
+  state: string,
+  mintQuoteStateEnum: unknown,
+): boolean => {
+  const normalized = normalizeMintQuoteState(state);
+  if (!normalized) return false;
+  if (normalized === "paid" || normalized === "issued") return true;
+
+  const paidState = readMintQuoteEnumValue(mintQuoteStateEnum, "PAID");
+  if (normalizeMintQuoteState(paidState ?? "") === normalized) return true;
+
+  const issuedState = readMintQuoteEnumValue(mintQuoteStateEnum, "ISSUED");
+  return normalizeMintQuoteState(issuedState ?? "") === normalized;
+};
 
 export interface AutoswapPendingClaim {
   amount: number;
@@ -139,7 +275,7 @@ export const claimAutoswapPendingEntry = async (args: {
       quote: args.claim.quote,
     });
     const insertClaimedToken = async (
-      claimed: ClaimedTopupQuoteStorage,
+      claimed: ClaimedAutoswapQuoteStorage,
     ): Promise<{ ok: true } | { ok: false; reason: string }> => {
       if (args.ctx.isCashuTokenKnownAny(claimed.token)) return { ok: true };
 
@@ -166,7 +302,8 @@ export const claimAutoswapPendingEntry = async (args: {
           };
     };
 
-    const claimedBeforeRun = readClaimedTopupQuoteFromStorage(claimStorageKey);
+    const claimedBeforeRun =
+      readClaimedAutoswapQuoteFromStorage(claimStorageKey);
     if (claimedBeforeRun) {
       const restored = await insertClaimedToken(claimedBeforeRun);
       if (!restored.ok) return { kind: "failed", reason: restored.reason };

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   isClaimableMintQuoteState,
   readMintQuoteState,
-} from "../src/app/hooks/topup/topupMintQuoteState";
+} from "../src/app/lib/autoswapClaim";
 
-describe("topupMintQuoteState", () => {
+describe("autoswap mint quote state", () => {
   it("reads quote state from state or status fields", () => {
     expect(readMintQuoteState({ state: "PAID" })).toBe("PAID");
     expect(readMintQuoteState({ status: "ISSUED" })).toBe("ISSUED");
