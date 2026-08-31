@@ -187,7 +187,7 @@ export const de = {
   restoreTokens: "Token wiederherstellen",
   restoring: "Wird wiederhergestellt…",
   restoreNothing: "Keine fehlenden Token gefunden.",
-  restoreDone: "{proofs} Nachweise in {tokens} Token wiederhergestellt.",
+  restoreDone: "{amount} sat in {tokens} Token wiederhergestellt.",
   restoreFailed: "Wiederherstellung fehlgeschlagen",
   cashuMeltToMainMint: "Zu {mint} übertragen",
   cashuMeltToMainMintUnavailable:

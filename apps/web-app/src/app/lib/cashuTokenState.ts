@@ -74,21 +74,6 @@ const DEFINITIVE_INVALID_CODES = new Set<number>([
   11001, // TokenAlreadySpentError
 ]);
 
-const TRANSIENT_ERROR_PATTERNS: readonly string[] = [
-  "failed to fetch",
-  "networkerror",
-  "network error",
-  "timeout",
-  "timed out",
-  "econn",
-  "enotfound",
-  "dns",
-  "offline",
-  "503",
-  "502",
-  "504",
-];
-
 const getCashuErrorMessage = (error: unknown): string => {
   if (typeof error === "object" && error !== null && "message" in error) {
     return String(Reflect.get(error, "message") ?? "");
@@ -108,11 +93,6 @@ export const isDefinitiveCashuError = (error: unknown): boolean => {
   return SPENT_OR_INVALID_ERROR_PATTERNS.some((pattern) =>
     message.includes(pattern),
   );
-};
-
-export const isTransientCashuError = (error: unknown): boolean => {
-  const message = getCashuErrorMessage(error).trim().toLowerCase();
-  return TRANSIENT_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
 };
 
 export const isCashuTokenDefinitivelySpent = (token: {

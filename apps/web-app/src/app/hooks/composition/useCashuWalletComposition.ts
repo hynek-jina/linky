@@ -116,10 +116,7 @@ import {
   type CashuPaymentRequestMessageInfo,
 } from "../../lib/paymentRequestMessage";
 import { getCashuTokenMessageInfo as getCashuTokenMessageInfoBase } from "../../lib/tokenMessageInfo";
-import {
-  enrichCashuTokenRow,
-  extractCashuTokenMeta,
-} from "../../lib/tokenText";
+import { extractCashuTokenMeta } from "../../lib/tokenText";
 import type {
   ContactRowLike,
   LocalNostrMessage,
@@ -667,21 +664,15 @@ export const useCashuWalletComposition = ({
     [cashuTokensAllFiltered],
   );
 
-  const cashuTokensWithMeta = useMemo(
-    () =>
-      cashuTokensFiltered.flatMap((row) => {
-        const enriched = enrichCashuTokenRow(row);
-        return enriched ? [enriched] : [];
-      }),
-    [cashuTokensFiltered],
-  );
-
   const {
     autoswapCashu,
     cashuTokenLifecycle,
+    checkAllCashuTokens,
+    checkCashuTokenRow,
     meltCashuInvoice,
     probeLightningFee,
     receiveCashuToken,
+    restoreCashuTokens,
     resumePendingCashuAutoswapClaims,
     resumePendingCashuTopups,
     sendCashuToken,
@@ -698,7 +689,6 @@ export const useCashuWalletComposition = ({
 
   const {
     cashuTokensHydratedRef,
-    ensureCashuTokenPersisted,
     isCashuTokenKnownAny,
     isCashuTokenStored,
     rememberCashuTokenKnown,
@@ -981,11 +971,9 @@ export const useCashuWalletComposition = ({
     [walletTokens],
   );
 
-  // Still row-based: the delete flow below writes into each row's stored
-  // owner lane, which the linkshu read model does not carry.
   const cashuOwnSpentTokens = React.useMemo(
     () =>
-      cashuTokensWithMeta.filter(
+      walletTokens.filter(
         (token) =>
           !isCashuTokenEmittedState(token.state) &&
           !isCashuTokenReservedState(token.state) &&
@@ -994,50 +982,30 @@ export const useCashuWalletComposition = ({
             error: token.error,
           }),
       ),
-    [cashuTokensWithMeta],
+    [walletTokens],
   );
 
+  // Removal happens through linkshu `Tokens.deleteSpent`: rows go only when
+  // the mint itself confirms all their proofs spent — including legacy
+  // plain-text error rows — never on the locally recorded error alone.
   const [deleteSpentCashuTokensIsBusy, setDeleteSpentCashuTokensIsBusy] =
     useState(false);
   const deleteSpentCashuTokens = React.useCallback(async () => {
     if (deleteSpentCashuTokensIsBusy) return;
-    const targets = cashuOwnSpentTokens;
-    if (targets.length === 0) return;
+    if (cashuTokenLifecycle === null) return;
 
     setDeleteSpentCashuTokensIsBusy(true);
     try {
-      const fallbackOwnerId = await resolveOwnerIdForWrite();
-      let deleted = 0;
-      for (const token of targets) {
-        const payload = {
-          id: token.id,
-          isDeleted: Evolu.sqliteTrue,
-        };
-        // Delete in the row's own lane; Evolu keys rows by (ownerId, id) so a
-        // delete under the active lane silently misses rows in older lanes.
-        const ownerId =
-          resolveCashuRowStoredOwnerLane(token) ?? fallbackOwnerId;
-        const result = ownerId
-          ? update("cashuToken", payload, { ownerId })
-          : update("cashuToken", payload);
-        if (result.ok) deleted += 1;
-      }
-      if (deleted > 0) {
+      const deleted = await cashuTokenLifecycle.deleteSpent();
+      if (deleted.length > 0) {
         setStatus(
-          t("cashuDeleteSpentDone").replace("{count}", String(deleted)),
+          t("cashuDeleteSpentDone").replace("{count}", String(deleted.length)),
         );
       }
     } finally {
       setDeleteSpentCashuTokensIsBusy(false);
     }
-  }, [
-    cashuOwnSpentTokens,
-    deleteSpentCashuTokensIsBusy,
-    resolveOwnerIdForWrite,
-    setStatus,
-    t,
-    update,
-  ]);
+  }, [cashuTokenLifecycle, deleteSpentCashuTokensIsBusy, setStatus, t]);
 
   const canPayWithCashu = cashuBalance > 0;
 
@@ -1224,13 +1192,10 @@ export const useCashuWalletComposition = ({
 
   const { claimNpubCashOnce, claimNpubCashOnceLatestRef } = useNpubCashClaim({
     cashuIsBusy,
-    cashuTokensAll,
     currentNpub: nostrBootstrapReady ? currentNpub : null,
     currentNsec: nostrBootstrapReady ? currentNsec : null,
     enqueueCashuOp,
-    ensureCashuTokenPersisted,
     formatDisplayedAmountParts,
-    upsert,
     isMintDeleted,
     logPaymentEvent,
     makeLocalStorageKey,
@@ -1239,6 +1204,7 @@ export const useCashuWalletComposition = ({
     mintInfoByUrl,
     npubCashServerBaseUrl,
     npubCashClaimInFlightRef,
+    receiveCashuToken,
     refreshMintInfo,
     resolveOwnerIdForWrite,
     rememberCashuTokenKnown,
@@ -2034,6 +2000,8 @@ export const useCashuWalletComposition = ({
     cashuBulkCheckIsBusy,
     cashuIsBusy,
     cashuTokensAll: cashuTokensAllFiltered,
+    checkAllCashuTokens,
+    checkCashuTokenRow,
     pendingCashuDeleteId,
     pushToast,
     setCashuBulkCheckIsBusy,
@@ -2518,14 +2486,13 @@ export const useCashuWalletComposition = ({
     cashuTokensAll: cashuTokensAllFiltered,
     defaultMintUrl,
     enqueueCashuOp,
-    upsert,
     isMintDeleted,
     logPaymentEvent,
     mintInfoDeduped,
     pushToast,
     readSeenMintsFromStorage,
     rememberSeenMint,
-    resolveOwnerIdForWrite,
+    restoreCashuTokens,
     setCashuIsBusy,
     setTokensRestoreIsBusy,
     t,

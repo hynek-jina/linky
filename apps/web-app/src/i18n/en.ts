@@ -188,7 +188,7 @@ export const en = {
   restoreTokens: "Restore tokens",
   restoring: "Restoring…",
   restoreNothing: "No missing tokens found.",
-  restoreDone: "Restored {proofs} proofs into {tokens} tokens.",
+  restoreDone: "Restored {amount} sat into {tokens} tokens.",
   restoreFailed: "Restore failed",
   cashuMeltToMainMint: "Melt to {mint}",
   cashuMeltToMainMintUnavailable: "No tokens on a non-main mint were found.",

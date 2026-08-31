@@ -4,6 +4,7 @@ import { useAppShellCore } from "../app/context/AppShellContexts";
 import { formatStoredCashuError } from "../app/lib/cashuStoredError";
 import {
   isCashuTokenAcceptedState,
+  isCashuTokenErrorState,
   isCashuTokenExternalizedState,
   isCashuTokenIssuedState,
   isCashuTokenReservedState,
@@ -96,7 +97,12 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   const isReserved = isCashuTokenReservedState(row?.state);
   const isPending = String(row?.state ?? "") === "pending";
   const isOwnToken = isCashuTokenAcceptedState(row?.state);
-  const canReturnToWallet = isCashuTokenUnavailableState(row?.state);
+  // Error rows can hold live proofs (e.g. a partially spent receive); linkshu
+  // `returnToWallet` re-receives them, which is the recovery path since
+  // validation itself never resurrects an error row.
+  const canReturnToWallet =
+    isCashuTokenUnavailableState(row?.state) ||
+    isCashuTokenErrorState(row?.state);
   const shareUrl = buildCashuShareUrl(tokenText);
   const shareMessage = (() => {
     if (!shareUrl) return "";
