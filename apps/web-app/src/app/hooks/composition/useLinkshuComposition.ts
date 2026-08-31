@@ -1,6 +1,10 @@
 import type * as Evolu from "@evolu/common";
 import {
+  FeeProbe,
+  FeeProbeDraft,
   linkshuServices,
+  Melt,
+  MeltDraft,
   NonNegativeAmount,
   Receive,
   ReceiveDraft,
@@ -14,8 +18,12 @@ import {
 } from "@linky/linkshu";
 import type {
   Bip39Seed,
+  FeeProbeError,
   InvalidTokenTransition,
   IssuedClaimReport,
+  LightningFeeProbeResult,
+  MeltError,
+  MeltReceipt,
   ReceiveError,
   ReceiveReceipt,
   SendError,
@@ -88,6 +96,36 @@ export type SendCashuToken = (
   args: SendCashuTokenArgs,
 ) => Promise<Either.Either<SendReceipt, SendError>>;
 
+export interface MeltCashuInvoiceArgs {
+  readonly invoice: string;
+  readonly mint: string;
+}
+
+/**
+ * Pays a bolt11 invoice through linkshu Melt (quote, fee-inclusive swap,
+ * melt, NUT-08 change persisted `accepted`) and resolves with the typed
+ * outcome; a failed melt leaves the balance intact. Invalid mint/invoice
+ * input and defects reject.
+ */
+export type MeltCashuInvoice = (
+  args: MeltCashuInvoiceArgs,
+) => Promise<Either.Either<MeltReceipt, MeltError>>;
+
+export interface ProbeLightningFeeArgs {
+  readonly mint: string;
+  /** A different, Lightning-backed mint that issues the probe invoice. */
+  readonly probeMint: string;
+}
+
+/**
+ * Reads `mint`'s Lightning fee through linkshu FeeProbe; a day-fresh cached
+ * result short-circuits the two quotes a live probe costs. Invalid mint
+ * input and defects reject.
+ */
+export type ProbeLightningFee = (
+  args: ProbeLightningFeeArgs,
+) => Promise<Either.Either<LightningFeeProbeResult, FeeProbeError>>;
+
 export type TokenTransitionError = TokenRowNotFound | InvalidTokenTransition;
 
 /**
@@ -122,6 +160,8 @@ export interface CashuTokenLifecycle {
 }
 
 const decodeSendDraft = Schema.decodeUnknownSync(SendDraft);
+const decodeMeltDraft = Schema.decodeUnknownSync(MeltDraft);
+const decodeFeeProbeDraft = Schema.decodeUnknownSync(FeeProbeDraft);
 
 /**
  * The app's linkshu composition root: resolves the seed, layers
@@ -248,6 +288,30 @@ export const useLinkshuComposition = ({
       );
   }, [linkshuRuntime]);
 
+  const meltCashuInvoice = React.useMemo<MeltCashuInvoice | null>(() => {
+    if (linkshuRuntime === null) return null;
+    return ({ invoice, mint }) =>
+      linkshuRuntime.runPromise(
+        Effect.suspend(() => {
+          const draft = decodeMeltDraft({ invoice, mint });
+          return Effect.flatMap(Melt, (melt) => melt.melt(draft));
+        }).pipe(Effect.either),
+      );
+  }, [linkshuRuntime]);
+
+  const probeLightningFee = React.useMemo<ProbeLightningFee | null>(() => {
+    if (linkshuRuntime === null) return null;
+    return ({ mint, probeMint }) =>
+      linkshuRuntime.runPromise(
+        Effect.suspend(() => {
+          const draft = decodeFeeProbeDraft({ mint, probeMint });
+          return Effect.flatMap(FeeProbe, (feeProbe) =>
+            feeProbe.probeLightningFee(draft),
+          );
+        }).pipe(Effect.either),
+      );
+  }, [linkshuRuntime]);
+
   const cashuTokenLifecycle = React.useMemo<CashuTokenLifecycle | null>(() => {
     if (linkshuRuntime === null) return null;
     const rowId = (id: string) => TokenRowId.make(id);
@@ -290,6 +354,8 @@ export const useLinkshuComposition = ({
   return {
     cashuTokenLifecycle,
     linkshuRuntime,
+    meltCashuInvoice,
+    probeLightningFee,
     receiveCashuToken,
     sendCashuToken,
     walletBalances: readModel.balances,

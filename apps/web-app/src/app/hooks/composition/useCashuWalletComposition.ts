@@ -138,10 +138,7 @@ import {
   canOfferPaymentMintMelt,
   getPaymentMintMeltPlan,
 } from "../../lib/paymentMintMelt";
-import {
-  buildCashuMintCandidates as buildCashuMintCandidatesBase,
-  selectSendMintForAmount,
-} from "../../lib/paymentMintSelection";
+import { selectSendMintForAmount } from "../../lib/paymentMintSelection";
 import {
   buildCashuPaymentRequestMessage,
   parseCashuPaymentRequestMessage,
@@ -863,6 +860,8 @@ export const useCashuWalletComposition = ({
 
   const {
     cashuTokenLifecycle,
+    meltCashuInvoice,
+    probeLightningFee,
     receiveCashuToken,
     sendCashuToken,
     walletBalances,
@@ -1742,19 +1741,6 @@ export const useCashuWalletComposition = ({
     setContactPayMethod,
   });
 
-  const buildCashuMintCandidates = React.useCallback(
-    (
-      mintGroups: Map<string, { tokens: string[]; sum: number }>,
-      preferredMint: string | null,
-    ) => {
-      return buildCashuMintCandidatesBase(
-        mintGroups,
-        normalizeMintUrl(preferredMint ?? ""),
-      );
-    },
-    [],
-  );
-
   const payContactWithCashuMessage =
     usePayContactWithCashuMessage<ContactRowLike>({
       appendLocalNostrMessage,
@@ -2348,27 +2334,21 @@ export const useCashuWalletComposition = ({
     payLightningAddressWithCashu: payLightningAddressWithCashuBase,
     payLightningInvoiceWithCashu: payLightningInvoiceWithCashuBase,
   } = useLightningPaymentsDomain({
-    buildCashuMintCandidates,
     canPayWithCashu,
     cashuBalance,
     cashuIsBusy,
-    cashuOwnerId,
-    cashuTokensAll,
-    cashuTokensWithMeta,
-    cashuVisibleOwnerIds,
     contacts,
     defaultMintUrl,
     formatDisplayedAmountParts,
-    upsert,
     logPaymentEvent,
-    normalizeMintUrl,
+    meltCashuInvoice,
     setCashuIsBusy,
     setContactsOnboardingHasPaid,
     setPostPaySaveContact,
     setStatus,
     showPaidOverlay,
     t,
-    update,
+    walletMintBalances: walletBalances.perMint,
   });
 
   const payLightningAddressWithCashu = React.useCallback(
@@ -3999,6 +3979,7 @@ export const useCashuWalletComposition = ({
     pendingMintDeleteUrl,
     pendingPaymentMintMeltConfirmation,
     postPaySaveContact,
+    probeLightningFee,
     refreshMintInfo,
     requestDeleteCashuToken,
     requestSelectedContact,

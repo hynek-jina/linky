@@ -1,12 +1,10 @@
+import type { LightningFeeProbeResult } from "@linky/linkshu";
+import { Either } from "effect";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useMintSettingsContext } from "../app/context/SystemSettingsContexts";
+import type { ProbeLightningFee } from "../app/hooks/composition/useLinkshuComposition";
 import { getMintFeePpk } from "../app/hooks/mint/mintInfoHelpers";
-import {
-  getCachedLightningFee,
-  type LightningFeeProbeResult,
-  probeLightningFee,
-} from "../app/lib/lightningFeeProbe";
 import { MintButton } from "../components/MintButton";
 import {
   isTestMintUrl,
@@ -44,22 +42,21 @@ const FEE_INFO_RETRY_SEC = 60;
 type LightningFeeState = LightningFeeProbeResult | "failed" | "pending";
 
 // A failed probe is not retried on every navigation; successes persist for a
-// day inside lightningFeeProbe's own cache.
+// day inside linkshu FeeProbe's own cache, which the probe call reads first.
 const FAILED_PROBE_RETRY_MS = 10 * 60 * 1000;
 const failedProbeAtByMint = new Map<string, number>();
 
-const useLightningFeeProbe = (mintUrl: string): LightningFeeState => {
+const useLightningFeeProbe = (
+  probeLightningFee: ProbeLightningFee | null,
+  mintUrl: string,
+): LightningFeeState => {
   const [byMint, setByMint] = React.useState<Record<string, LightningFeeState>>(
     {},
   );
 
   React.useEffect(() => {
+    if (probeLightningFee === null) return;
     if (byMint[mintUrl]) return;
-    const cached = getCachedLightningFee(mintUrl);
-    if (cached) {
-      setByMint((prev) => ({ ...prev, [mintUrl]: cached }));
-      return;
-    }
     const failedAt = failedProbeAtByMint.get(mintUrl);
     if (
       failedAt !== undefined &&
@@ -68,19 +65,26 @@ const useLightningFeeProbe = (mintUrl: string): LightningFeeState => {
       setByMint((prev) => ({ ...prev, [mintUrl]: "failed" }));
       return;
     }
-    const probeMintUrl = isTestMintUrl(mintUrl) ? null : pickProbeMint(mintUrl);
-    if (!probeMintUrl) {
+    const probeMint = isTestMintUrl(mintUrl) ? null : pickProbeMint(mintUrl);
+    if (!probeMint) {
       setByMint((prev) => ({ ...prev, [mintUrl]: "failed" }));
       return;
     }
     setByMint((prev) => ({ ...prev, [mintUrl]: "pending" }));
-    void probeLightningFee({ mintUrl, probeMintUrl })
-      .then((result) => setByMint((prev) => ({ ...prev, [mintUrl]: result })))
+    void probeLightningFee({ mint: mintUrl, probeMint })
+      .then((outcome) => {
+        if (Either.isRight(outcome)) {
+          setByMint((prev) => ({ ...prev, [mintUrl]: outcome.right }));
+          return;
+        }
+        failedProbeAtByMint.set(mintUrl, Date.now());
+        setByMint((prev) => ({ ...prev, [mintUrl]: "failed" }));
+      })
       .catch(() => {
         failedProbeAtByMint.set(mintUrl, Date.now());
         setByMint((prev) => ({ ...prev, [mintUrl]: "failed" }));
       });
-  }, [byMint, mintUrl]);
+  }, [byMint, mintUrl, probeLightningFee]);
 
   return byMint[mintUrl] ?? "pending";
 };
@@ -93,6 +97,7 @@ export function MintsPage() {
     defaultMintUrlDraft,
     getMintIconUrl,
     mintInfoByUrl,
+    probeLightningFee,
     refreshMintInfo,
     setDefaultMintUrlDraft,
   } = useMintSettingsContext();
@@ -131,7 +136,7 @@ export function MintsPage() {
     selectedMintPpk,
   ]);
 
-  const lightningFee = useLightningFeeProbe(selectedMint);
+  const lightningFee = useLightningFeeProbe(probeLightningFee, selectedMint);
 
   const buttonMints = (() => {
     const set = new Set<string>(PRESET_MINTS);
