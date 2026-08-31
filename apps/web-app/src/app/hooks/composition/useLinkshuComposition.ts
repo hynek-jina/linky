@@ -13,6 +13,8 @@ import {
   Tokens,
   TokenRowId,
   TokenStore,
+  Topup,
+  TopupDraft,
   Validation,
   WalletBalances,
 } from "@linky/linkshu";
@@ -24,14 +26,20 @@ import type {
   LightningFeeProbeResult,
   MeltError,
   MeltReceipt,
+  MintRejected,
+  MintUnreachable,
   ReceiveError,
   ReceiveReceipt,
   SendError,
   SendReceipt,
   TokenRowNotFound,
+  TopupError,
+  TopupHandle,
+  TopupQuote,
+  TopupReceipt,
   WalletToken,
 } from "@linky/linkshu";
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { Effect, Exit, Layer, ManagedRuntime, Schema, Scope } from "effect";
 import type { Either } from "effect";
 import React from "react";
 import { linkshuAppInspector } from "../../../devtools/inspector/linkshuInspector";
@@ -126,6 +134,40 @@ export type ProbeLightningFee = (
   args: ProbeLightningFeeArgs,
 ) => Promise<Either.Either<LightningFeeProbeResult, FeeProbeError>>;
 
+export interface StartCashuTopupArgs {
+  readonly amountSat: number;
+  readonly mint: string;
+}
+
+/**
+ * A running topup: `quote` carries the invoice to display immediately;
+ * `completion` resolves with the typed outcome once the invoice is paid and
+ * the proofs are persisted, or once the mint itself retires the quote
+ * (confirmed unpaid and expired). It rejects only when the runtime shuts
+ * down mid-flight — the persisted quote then resumes on the next launch.
+ */
+export interface CashuTopupHandle {
+  readonly quote: TopupQuote;
+  readonly completion: Promise<Either.Either<TopupReceipt, TopupError>>;
+}
+
+/**
+ * Creates a mint quote through linkshu Topup and keeps its settlement poll
+ * running for the runtime's lifetime. Invalid mint/amount input and defects
+ * reject.
+ */
+export type StartCashuTopup = (
+  args: StartCashuTopupArgs,
+) => Promise<Either.Either<CashuTopupHandle, MintUnreachable | MintRejected>>;
+
+/**
+ * Re-attaches every persisted pending topup (linkshu `Topup.resumePending`).
+ * Records are retired only on the mint's own answer, never on local age.
+ */
+export type ResumePendingCashuTopups = () => Promise<
+  ReadonlyArray<CashuTopupHandle>
+>;
+
 export type TokenTransitionError = TokenRowNotFound | InvalidTokenTransition;
 
 /**
@@ -162,6 +204,7 @@ export interface CashuTokenLifecycle {
 const decodeSendDraft = Schema.decodeUnknownSync(SendDraft);
 const decodeMeltDraft = Schema.decodeUnknownSync(MeltDraft);
 const decodeFeeProbeDraft = Schema.decodeUnknownSync(FeeProbeDraft);
+const decodeTopupDraft = Schema.decodeUnknownSync(TopupDraft);
 
 /**
  * The app's linkshu composition root: resolves the seed, layers
@@ -230,12 +273,23 @@ export const useLinkshuComposition = ({
     );
   }, [bip39Seed]);
 
+  /**
+   * Topup polling fibers outlive the effect that started them but must die
+   * with the runtime, so they run in one scope closed just before dispose.
+   */
+  const topupScope = React.useMemo(
+    () => (linkshuRuntime === null ? null : Effect.runSync(Scope.make())),
+    [linkshuRuntime],
+  );
+
   React.useEffect(() => {
-    if (linkshuRuntime === null) return;
+    if (linkshuRuntime === null || topupScope === null) return;
     return () => {
-      void linkshuRuntime.dispose();
+      void Effect.runPromise(Scope.close(topupScope, Exit.void)).then(() =>
+        linkshuRuntime.dispose(),
+      );
     };
-  }, [linkshuRuntime]);
+  }, [linkshuRuntime, topupScope]);
 
   const [readModel, setReadModel] =
     React.useState<LinkshuReadModel>(emptyReadModel);
@@ -299,6 +353,39 @@ export const useLinkshuComposition = ({
       );
   }, [linkshuRuntime]);
 
+  const topupApi = React.useMemo(() => {
+    if (linkshuRuntime === null || topupScope === null) return null;
+
+    const toHandle = (handle: TopupHandle): CashuTopupHandle => {
+      const completion = linkshuRuntime.runPromise(
+        Effect.either(handle.result),
+      );
+      // Rejection means the runtime shut down mid-poll; an unwatched handle
+      // must not surface that as an unhandled rejection.
+      completion.catch(() => {});
+      return { quote: handle.quote, completion };
+    };
+
+    const start: StartCashuTopup = ({ amountSat, mint }) =>
+      linkshuRuntime.runPromise(
+        Effect.suspend(() => {
+          const draft = decodeTopupDraft({ mint, amount: amountSat });
+          return Effect.flatMap(Topup, (topup) =>
+            Scope.extend(topup.start(draft), topupScope),
+          );
+        }).pipe(Effect.map(toHandle), Effect.either),
+      );
+
+    const resumePending: ResumePendingCashuTopups = () =>
+      linkshuRuntime.runPromise(
+        Effect.flatMap(Topup, (topup) =>
+          Scope.extend(topup.resumePending, topupScope),
+        ).pipe(Effect.map((handles) => handles.map(toHandle))),
+      );
+
+    return { start, resumePending };
+  }, [linkshuRuntime, topupScope]);
+
   const probeLightningFee = React.useMemo<ProbeLightningFee | null>(() => {
     if (linkshuRuntime === null) return null;
     return ({ mint, probeMint }) =>
@@ -357,7 +444,9 @@ export const useLinkshuComposition = ({
     meltCashuInvoice,
     probeLightningFee,
     receiveCashuToken,
+    resumePendingCashuTopups: topupApi?.resumePending ?? null,
     sendCashuToken,
+    startCashuTopup: topupApi?.start ?? null,
     walletBalances: readModel.balances,
     walletTokens: readModel.tokens,
   };

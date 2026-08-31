@@ -38,7 +38,6 @@ import {
 } from "../../../lnurlPay";
 import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { getCashuDeterministicSeedFromStorage } from "../../../utils/cashuDeterministic";
-import { isCashuOutputsAlreadySignedError } from "../../../utils/cashuErrors";
 import { getCashuLib } from "../../../utils/cashuLib";
 import { cashuAmountToNumber } from "../../../utils/cashuProofs";
 import { createLoadedCashuWallet } from "../../../utils/cashuWallet";
@@ -46,7 +45,6 @@ import {
   CASHU_AUTOSWAP_MIN_SOURCE_SUM,
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
-  LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX,
   MAX_CONTACTS_PER_OWNER,
   WALLET_WARNING_BALANCE_THRESHOLD_SAT,
   WALLET_WARNING_DISMISSED_STORAGE_KEY,
@@ -72,8 +70,6 @@ import {
   safeLocalStorageGet,
   safeLocalStorageRemove,
   safeLocalStorageSet,
-  safeLocalStorageSetJson,
-  withLocalStorageLeaseLock,
 } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
@@ -86,15 +82,7 @@ import { useNpubCashMintSelection } from "../mint/useNpubCashMintSelection";
 import { useContactPayMethod } from "../payments/useContactPayMethod";
 import { usePayContactWithCashuMessage } from "../payments/usePayContactWithCashuMessage";
 import { useRouteAmountResetEffects } from "../payments/useRouteAmountResetEffects";
-import {
-  isClaimableMintQuoteState,
-  readMintQuoteState,
-} from "../topup/topupMintQuoteState";
-import {
-  requestMintQuoteBolt11,
-  useTopupInvoiceQuoteEffects,
-  type TopupMintQuoteDraft,
-} from "../topup/useTopupInvoiceQuoteEffects";
+import { useTopupFlow } from "../topup/useTopupFlow";
 import { useAnonymousPaymentTelemetry } from "../useAnonymousPaymentTelemetry";
 import { useCashuDomain } from "../useCashuDomain";
 import { useLightningPaymentsDomain } from "../useLightningPaymentsDomain";
@@ -108,6 +96,7 @@ import {
   claimAutoswapPendingEntry,
   makePendingAutoswapClaimsKey,
   readPendingAutoswapClaims,
+  requestMintQuoteBolt11,
   type AutoswapPendingClaim,
 } from "../../lib/autoswapClaim";
 import { getLinkyBankPaymentOfferInfo } from "../../lib/bankPaymentOffer";
@@ -149,19 +138,6 @@ import {
   enrichCashuTokenRow,
   extractCashuTokenMeta,
 } from "../../lib/tokenText";
-import {
-  isExpiredPendingTopupQuote,
-  isLikelyCorsOrNetworkError,
-  isSameTopupMintQuote,
-  makeClaimedTopupQuoteLockKey,
-  makeClaimedTopupQuoteStorageKey,
-  readClaimedTopupQuoteFromStorage,
-  readPendingTopupQuoteFromStorage,
-  toPendingTopupQuoteStorage,
-  toTopupMintQuoteDraft,
-  type ClaimedTopupQuoteStorage,
-} from "../../lib/topupQuoteStorage";
-import { mintTopupProofs } from "../../lib/topupProofRecovery";
 import type {
   ContactRowLike,
   LocalNostrMessage,
@@ -262,8 +238,6 @@ interface UseCashuWalletCompositionParams {
   payAmount: string;
   profile: Pick<
     ProfileCompositionResult,
-    | "effectiveMyLightningAddress"
-    | "myProfileName"
     | "npubCashInfoInFlightRef"
     | "npubCashInfoLoadedAtMsRef"
     | "npubCashInfoLoadedForNpubRef"
@@ -352,8 +326,6 @@ export const useCashuWalletComposition = ({
     updateLocalNostrMessage,
   } = contactsMessaging;
   const {
-    effectiveMyLightningAddress,
-    myProfileName,
     npubCashInfoInFlightRef,
     npubCashInfoLoadedAtMsRef,
     npubCashInfoLoadedForNpubRef,
@@ -375,8 +347,6 @@ export const useCashuWalletComposition = ({
 
   const hasMintOverrideRef = React.useRef(false);
 
-  const topupInvoiceStartBalanceRef = React.useRef<number | null>(null);
-  const topupInvoicePaidHandledRef = React.useRef(false);
   const [pendingCashuDeleteId, setPendingCashuDeleteId] =
     useState<CashuTokenId | null>(null);
   const [pendingMintDeleteUrl, setPendingMintDeleteUrl] = useState<
@@ -391,8 +361,6 @@ export const useCashuWalletComposition = ({
   );
   const [lightningInvoiceAutoPayLimit, setLightningInvoiceAutoPayLimit] =
     useState<number>(() => getInitialLightningInvoiceAutoPayLimit());
-
-  const pendingTopupStorageKey = `${LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX}.${String(appOwnerId ?? "anon")}`;
 
   useAnonymousPaymentTelemetry({
     appOwnerId,
@@ -457,61 +425,6 @@ export const useCashuWalletComposition = ({
 
   const [lnAddressPayAmount, setLnAddressPayAmount] = useState<string>("");
 
-  const [topupAmount, setTopupAmount] = useState<string>("");
-  const [topupInvoice, setTopupInvoice] = useState<string | null>(null);
-  const [topupInvoiceCashuRequest, setTopupInvoiceCashuRequest] = useState<
-    string | null
-  >(null);
-  const [topupInvoiceQr, setTopupInvoiceQr] = useState<string | null>(null);
-  const [topupInvoiceQrPayload, setTopupInvoiceQrPayload] = useState<
-    string | null
-  >(null);
-  const [topupInvoiceError, setTopupInvoiceError] = useState<string | null>(
-    null,
-  );
-  const [topupInvoiceIsBusy, setTopupInvoiceIsBusy] = useState(false);
-  const [topupMintQuote, setTopupMintQuote] =
-    useState<TopupMintQuoteDraft | null>(null);
-
-  React.useEffect(() => {
-    if (!appOwnerId) {
-      setTopupMintQuote(null);
-      return;
-    }
-
-    const stored = readPendingTopupQuoteFromStorage(pendingTopupStorageKey);
-    if (!stored) {
-      safeLocalStorageRemove(pendingTopupStorageKey);
-      setTopupMintQuote(null);
-      return;
-    }
-
-    if (isExpiredPendingTopupQuote(stored.createdAtMs)) {
-      safeLocalStorageRemove(pendingTopupStorageKey);
-      setTopupMintQuote(null);
-      return;
-    }
-
-    const nextQuote = toTopupMintQuoteDraft(stored);
-    setTopupMintQuote((current) => {
-      if (isSameTopupMintQuote(current, nextQuote)) return current;
-      return nextQuote;
-    });
-  }, [appOwnerId, pendingTopupStorageKey]);
-
-  React.useEffect(() => {
-    if (!appOwnerId) return;
-
-    if (!topupMintQuote) {
-      safeLocalStorageRemove(pendingTopupStorageKey);
-      return;
-    }
-
-    safeLocalStorageSet(
-      pendingTopupStorageKey,
-      JSON.stringify(toPendingTopupQuoteStorage(topupMintQuote)),
-    );
-  }, [appOwnerId, pendingTopupStorageKey, topupMintQuote]);
   const [pendingCashuTokenContactPickId, setPendingCashuTokenContactPickId] =
     useState<CashuTokenId | null>(null);
 
@@ -556,82 +469,6 @@ export const useCashuWalletComposition = ({
   } = usePaidOverlayState({
     t,
   });
-
-  const finalizeTopupInvoicePaid = React.useCallback(
-    (args: { amountSat: number; gainedToken?: string | null }) => {
-      if (topupInvoicePaidHandledRef.current) return;
-
-      const amountSat = args.amountSat;
-      const topupInvoice = topupMintQuote?.invoice ?? null;
-      const topupInvoicePreview = topupInvoice
-        ? getLightningInvoicePreview(topupInvoice)
-        : null;
-
-      logPaymentEvent({
-        amount: amountSat,
-        details:
-          topupInvoice || args.gainedToken
-            ? {
-                ...(args.gainedToken ? { gainedToken: args.gainedToken } : {}),
-                ...(topupInvoice ? { lightningInvoice: topupInvoice } : {}),
-                ...(topupInvoicePreview?.description
-                  ? { lightningMemo: topupInvoicePreview.description }
-                  : {}),
-              }
-            : null,
-        direction: "in",
-        method: "lightning_invoice",
-        mint: topupMintQuote?.mintUrl ?? defaultMintUrl ?? null,
-        status: "ok",
-        unit: topupMintQuote?.unit ?? "sat",
-      });
-
-      topupInvoicePaidHandledRef.current = true;
-      topupInvoiceStartBalanceRef.current = null;
-      setTopupAmount("");
-      setTopupInvoice(null);
-      setTopupInvoiceQr(null);
-      setTopupInvoiceError(null);
-      setTopupInvoiceIsBusy(false);
-
-      const displayAmount = formatDisplayedAmountParts(amountSat);
-      showPaidOverlay(
-        t("topupOverlay")
-          .replace(
-            "{amount}",
-            `${displayAmount.approxPrefix}${displayAmount.amountText}`,
-          )
-          .replace("{unit}", displayAmount.unitLabel),
-      );
-
-      if (topupPaidNavTimerRef.current !== null) {
-        try {
-          window.clearTimeout(topupPaidNavTimerRef.current);
-        } catch {
-          // ignore
-        }
-      }
-
-      topupPaidNavTimerRef.current = window.setTimeout(() => {
-        topupPaidNavTimerRef.current = null;
-        navigateTo({ route: "wallet" });
-      }, 1400);
-    },
-    [
-      defaultMintUrl,
-      formatDisplayedAmountParts,
-      logPaymentEvent,
-      setTopupAmount,
-      setTopupInvoice,
-      setTopupInvoiceError,
-      setTopupInvoiceIsBusy,
-      setTopupInvoiceQr,
-      showPaidOverlay,
-      t,
-      topupMintQuote,
-      topupPaidNavTimerRef,
-    ],
-  );
 
   // Default mint cross-tab + cross-device sync via Evolu `ownerMeta`.
   //
@@ -863,7 +700,9 @@ export const useCashuWalletComposition = ({
     meltCashuInvoice,
     probeLightningFee,
     receiveCashuToken,
+    resumePendingCashuTopups,
     sendCashuToken,
+    startCashuTopup,
     walletBalances,
     walletTokens,
   } = useLinkshuComposition({
@@ -992,254 +831,6 @@ export const useCashuWalletComposition = ({
     cashuTokensAll,
     upsert,
     update,
-  ]);
-
-  React.useEffect(() => {
-    if (!topupMintQuote) return;
-
-    let cancelled = false;
-    let claimInFlight = false;
-    let lastLoggedClaimError = "";
-    // Cache the loaded wallet across the 5s polling ticks within this
-    // effect mount. Each tick only does a `checkMintQuote` + the eventual
-    // mintProofs, neither of which needs a fresh `loadMint()`. The effect
-    // tears down when topupMintQuote changes, so the cache is naturally
-    // scoped to one quote / one mintUrl+unit pair.
-    let cachedWallet: LoadedCashuWallet | null = null;
-    const run = async () => {
-      if (claimInFlight) return;
-      claimInFlight = true;
-      try {
-        const quoteId = String(topupMintQuote.quote ?? "").trim();
-        if (!quoteId) return;
-
-        const topupOwnerKey = String(appOwnerId ?? "anon");
-        const claimStorageKey = makeClaimedTopupQuoteStorageKey({
-          ownerId: topupOwnerKey,
-          mintUrl: topupMintQuote.mintUrl,
-          quote: quoteId,
-        });
-        const claimLockKey = makeClaimedTopupQuoteLockKey({
-          ownerId: topupOwnerKey,
-          mintUrl: topupMintQuote.mintUrl,
-          quote: quoteId,
-        });
-
-        const insertClaimedTopupToken = async (
-          claimed: ClaimedTopupQuoteStorage,
-        ) => {
-          if (isCashuTokenKnownAny(claimed.token)) return true;
-
-          const ownerId = await resolveOwnerIdForWrite();
-          const payload = {
-            id: createCashuTokenId(claimed.token),
-            token: claimed.token as typeof Evolu.NonEmptyString.Type,
-            state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-          };
-
-          const result = ownerId
-            ? upsert("cashuToken", payload, { ownerId })
-            : upsert("cashuToken", payload);
-          if (!result.ok) {
-            setStatus(
-              `${t("errorPrefix")}: ${getUnknownErrorMessage(result.error, "unknown")}`,
-            );
-            return false;
-          }
-
-          return true;
-        };
-
-        const claimedBeforeRun =
-          readClaimedTopupQuoteFromStorage(claimStorageKey);
-        if (claimedBeforeRun) {
-          const restored = await insertClaimedTopupToken(claimedBeforeRun);
-          if (restored && !cancelled) {
-            if (route.kind === "topupInvoice" && claimedBeforeRun.amount > 0) {
-              finalizeTopupInvoicePaid({
-                amountSat: claimedBeforeRun.amount,
-                gainedToken: claimedBeforeRun.token,
-              });
-            }
-            setTopupMintQuote(null);
-          }
-          return;
-        }
-
-        const { Mint, Wallet, MintQuoteState, getEncodedToken } =
-          await getCashuLib();
-        await withLocalStorageLeaseLock({
-          key: claimLockKey,
-          ttlMs: 15_000,
-          timeoutMs: 2_000,
-          waitMs: 50,
-          fn: async () => {
-            const alreadyClaimed =
-              readClaimedTopupQuoteFromStorage(claimStorageKey);
-            if (alreadyClaimed) {
-              const restored = await insertClaimedTopupToken(alreadyClaimed);
-              if (restored && !cancelled) {
-                if (
-                  route.kind === "topupInvoice" &&
-                  alreadyClaimed.amount > 0
-                ) {
-                  finalizeTopupInvoicePaid({
-                    amountSat: alreadyClaimed.amount,
-                    gainedToken: alreadyClaimed.token,
-                  });
-                }
-                setTopupMintQuote(null);
-              }
-              return;
-            }
-
-            let wallet = cachedWallet;
-            if (!wallet) {
-              const det = getCashuDeterministicSeedFromStorage();
-              wallet = await createLoadedCashuWallet({
-                Mint,
-                Wallet,
-                mintUrl: topupMintQuote.mintUrl,
-                ...(topupMintQuote.unit ? { unit: topupMintQuote.unit } : {}),
-                ...(det ? { bip39seed: det.bip39seed } : {}),
-              });
-              cachedWallet = wallet;
-            }
-
-            const status = await wallet.checkMintQuoteBolt11(quoteId);
-            const quoteState = readMintQuoteState(status);
-            if (!isClaimableMintQuoteState(quoteState, MintQuoteState)) {
-              return;
-            }
-
-            const unit = wallet.unit ?? topupMintQuote.unit ?? null;
-            const proofs = await mintTopupProofs({
-              amount: topupMintQuote.amount,
-              mintUrl: topupMintQuote.mintUrl,
-              quoteId,
-              unit,
-              wallet,
-            });
-            const token = String(
-              getEncodedToken({
-                mint: topupMintQuote.mintUrl,
-                proofs,
-                ...(unit ? { unit } : {}),
-              }) ?? "",
-            ).trim();
-            if (!token) throw new Error("Mint produced empty token");
-
-            safeLocalStorageSetJson(claimStorageKey, {
-              amount: topupMintQuote.amount,
-              claimedAtMs: Date.now(),
-              mintUrl: topupMintQuote.mintUrl,
-              quote: quoteId,
-              token,
-              unit,
-            });
-
-            if (!isCashuTokenKnownAny(token)) {
-              const ownerId = await resolveOwnerIdForWrite();
-              const payload = {
-                id: createCashuTokenId(token),
-                token: token as typeof Evolu.NonEmptyString.Type,
-                state: "accepted" as typeof Evolu.NonEmptyString100.Type,
-              };
-
-              const result = ownerId
-                ? upsert("cashuToken", payload, { ownerId })
-                : upsert("cashuToken", payload);
-              if (!result.ok) {
-                setStatus(
-                  `${t("errorPrefix")}: ${getUnknownErrorMessage(result.error, "unknown")}`,
-                );
-                return;
-              }
-            }
-
-            if (route.kind === "topupInvoice") {
-              finalizeTopupInvoicePaid({
-                amountSat: topupMintQuote.amount,
-                gainedToken: token,
-              });
-            } else {
-              const displayAmount = formatDisplayedAmountParts(
-                topupMintQuote.amount,
-              );
-              showPaidOverlay(
-                t("topupOverlay")
-                  .replace(
-                    "{amount}",
-                    `${displayAmount.approxPrefix}${displayAmount.amountText}`,
-                  )
-                  .replace("{unit}", displayAmount.unitLabel),
-              );
-            }
-
-            if (!cancelled) setTopupMintQuote(null);
-          },
-        });
-      } catch (error) {
-        const message = getUnknownErrorMessage(error, "unknown");
-        const errorKey = `${topupMintQuote.mintUrl}:${message}`;
-        if (errorKey !== lastLoggedClaimError) {
-          lastLoggedClaimError = errorKey;
-          console.warn("[linky][topup] mint claim failed", {
-            error: message,
-            likelyCors: isLikelyCorsOrNetworkError(message),
-            mintUrl: topupMintQuote.mintUrl,
-            route: route.kind,
-          });
-        }
-        if (isCashuOutputsAlreadySignedError(error) && !cancelled) {
-          // mintTopupProofs exhausted deterministic recovery; clearing the
-          // quote prevents the five-second poll from repeating the failed claim.
-          setTopupMintQuote(null);
-        }
-      } finally {
-        claimInFlight = false;
-      }
-    };
-
-    void run();
-    const intervalId = window.setInterval(() => {
-      void run();
-    }, 5000);
-    const runWhenVisible = () => {
-      if (
-        typeof document !== "undefined" &&
-        document.visibilityState === "hidden"
-      ) {
-        return;
-      }
-      void run();
-    };
-
-    window.addEventListener("focus", runWhenVisible);
-    window.addEventListener("pageshow", runWhenVisible);
-    window.addEventListener("online", runWhenVisible);
-    document.addEventListener("visibilitychange", runWhenVisible);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", runWhenVisible);
-      window.removeEventListener("pageshow", runWhenVisible);
-      window.removeEventListener("online", runWhenVisible);
-      document.removeEventListener("visibilitychange", runWhenVisible);
-    };
-  }, [
-    appOwnerId,
-    formatDisplayedAmountParts,
-    finalizeTopupInvoicePaid,
-    upsert,
-    isCashuTokenKnownAny,
-    resolveOwnerIdForWrite,
-    topupMintQuote,
-    t,
-    route.kind,
-    showPaidOverlay,
-    setStatus,
   ]);
 
   const {
@@ -1467,69 +1058,34 @@ export const useCashuWalletComposition = ({
 
   const canPayWithCashu = cashuBalance > 0;
 
-  React.useEffect(() => {
-    if (route.kind !== "topupInvoice") return;
-    if (topupInvoiceIsBusy) return;
-    if (!topupInvoice || !topupInvoiceQr) return;
-
-    const amountSat = Number.parseInt(topupAmount.trim(), 10);
-    if (!Number.isFinite(amountSat) || amountSat <= 0) return;
-
-    if (topupInvoiceStartBalanceRef.current === null) {
-      topupInvoiceStartBalanceRef.current = cashuTotalBalance;
-      return;
-    }
-
-    if (topupInvoicePaidHandledRef.current) return;
-
-    const start = topupInvoiceStartBalanceRef.current ?? 0;
-    const expected = start + amountSat;
-    if (cashuTotalBalance < expected) return;
-
-    finalizeTopupInvoicePaid({ amountSat });
-  }, [
-    cashuTotalBalance,
-    finalizeTopupInvoicePaid,
-    formatDisplayedAmountParts,
-    route.kind,
-    showPaidOverlay,
-    t,
-    topupAmount,
-    topupInvoice,
-    topupInvoiceIsBusy,
-    topupPaidNavTimerRef,
-    topupInvoiceQr,
-  ]);
-
   const [postPaySaveContact, setPostPaySaveContact] = React.useState<null | {
     lnAddress: string;
     amountSat: number;
   }>(null);
 
-  useTopupInvoiceQuoteEffects({
-    defaultMintUrl,
-    effectiveMyLightningAddress,
-    routeKind: route.kind,
-    t,
+  const {
+    setTopupAmount,
+    startBackgroundTopup,
     topupAmount,
     topupInvoice,
+    topupInvoiceCashuRequest,
     topupInvoiceError,
     topupInvoiceIsBusy,
-    topupInvoicePaidHandledRef,
     topupInvoiceQr,
-    topupInvoiceStartBalanceRef,
-    topupMintQuote,
+    topupInvoiceQrPayload,
+    topupMintUrl,
+  } = useTopupFlow({
+    cashuTotalBalance,
+    defaultMintUrl,
+    formatDisplayedAmountParts,
+    logPaymentEvent,
+    resumePendingCashuTopups,
+    routeKind: route.kind,
+    showPaidOverlay,
+    startCashuTopup,
+    t,
     topupPaidNavTimerRef,
-    topupRefreshKey: myProfileName,
     topupRecipientNprofile,
-    setTopupAmount,
-    setTopupInvoice,
-    setTopupInvoiceCashuRequest,
-    setTopupInvoiceError,
-    setTopupInvoiceIsBusy,
-    setTopupInvoiceQr,
-    setTopupInvoiceQrPayload,
-    setTopupMintQuote,
   });
 
   const defaultMintDisplay = useMemo(() => {
@@ -2426,21 +1982,18 @@ export const useCashuWalletComposition = ({
     setLnurlWithdrawIsBusy(true);
     try {
       setStatus(t("lnurlWithdrawPreparing"));
-      const { invoice, quoteId } = await requestMintQuoteBolt11({
+      const started = await startBackgroundTopup({
         amountSat: pending.amountSat,
-        mintUrl,
+        mint: mintUrl,
       });
+      if (Either.isLeft(started)) {
+        setStatus(`${t("errorPrefix")}: ${started.left}`);
+        return;
+      }
       await redeemLnurlWithdraw({
         callback: pending.callback,
-        invoice,
+        invoice: started.right.invoice,
         k1: pending.k1,
-      });
-      setTopupMintQuote({
-        amount: pending.amountSat,
-        invoice,
-        mintUrl,
-        quote: quoteId,
-        unit: "sat",
       });
       setPendingLnurlWithdrawConfirmation(null);
       setStatus(t("lnurlWithdrawPending"));
@@ -2455,6 +2008,7 @@ export const useCashuWalletComposition = ({
     lnurlWithdrawIsBusy,
     pendingLnurlWithdrawConfirmation,
     setStatus,
+    startBackgroundTopup,
     t,
   ]);
 
@@ -4015,7 +3569,7 @@ export const useCashuWalletComposition = ({
     topupInvoiceIsBusy,
     topupInvoiceQr,
     topupInvoiceQrPayload,
-    topupMintQuote,
+    topupMintUrl,
     walletWarningApplies,
     walletWarningDismissed,
   };

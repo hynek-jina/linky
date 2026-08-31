@@ -671,7 +671,6 @@ export const useAppShellComposition = ({
     effectiveProfilePicture,
     isProfileEditing,
     myProfileMetadata,
-    myProfileName,
     myProfileQr,
     myProfileStatus,
     npubCashInfoInFlightRef,
@@ -838,7 +837,7 @@ export const useAppShellComposition = ({
     topupInvoiceIsBusy,
     topupInvoiceQr,
     topupInvoiceQrPayload,
-    topupMintQuote,
+    topupMintUrl,
     walletWarningApplies,
     walletWarningDismissed,
   } = useCashuWalletComposition({
@@ -894,8 +893,6 @@ export const useAppShellComposition = ({
     },
     payAmount,
     profile: {
-      effectiveMyLightningAddress,
-      myProfileName,
       npubCashInfoInFlightRef,
       npubCashInfoLoadedAtMsRef,
       npubCashInfoLoadedForNpubRef,
@@ -1366,7 +1363,7 @@ export const useAppShellComposition = ({
       topupInvoiceIsBusy,
       topupInvoiceCashuRequest,
       topupMintUrl:
-        topupMintQuote?.mintUrl ??
+        topupMintUrl ??
         normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ??
         MAIN_MINT_URL,
       topupInvoiceQr,
