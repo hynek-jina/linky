@@ -79,8 +79,6 @@ export const PAYMENT_ANALYTICS_RECIPIENT_NPUB =
 export const NO_GROUP_FILTER = "__linky_no_group__";
 export const ARCHIVED_CONTACTS_FILTER = "__linky_archived_contacts__";
 
-export const LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY =
-  "linky.lastAcceptedCashuToken.v1";
 export const PENDING_DEEP_LINK_TEXT_STORAGE_KEY =
   "linky.pendingDeepLinkText.v1";
 

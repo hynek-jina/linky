@@ -4,46 +4,6 @@ import type { CashuTokenId, CashuTokenRow } from "../../evolu";
 export const createCashuTokenId = (token: string): CashuTokenId =>
   Evolu.createIdFromString<"CashuToken">(token.trim());
 
-interface SparseCashuTokenPayloadArgs {
-  error?: string | null;
-  id: CashuTokenId;
-  state: string;
-  token: string;
-}
-
-export const buildSparseCashuTokenPayload = (
-  args: SparseCashuTokenPayloadArgs,
-) => {
-  const token = Evolu.NonEmptyString.fromUnknown(args.token);
-  const state = Evolu.NonEmptyString100.fromUnknown(args.state);
-  if (!token.ok || !state.ok) {
-    throw new Error("Invalid Cashu token payload");
-  }
-
-  const errorText = String(args.error ?? "")
-    .trim()
-    .slice(0, 1000);
-  if (!errorText) {
-    return {
-      id: args.id,
-      token: token.value,
-      state: state.value,
-    };
-  }
-
-  const error = Evolu.NonEmptyString1000.fromUnknown(errorText);
-  if (!error.ok) {
-    throw new Error("Invalid Cashu token error");
-  }
-
-  return {
-    id: args.id,
-    token: token.value,
-    state: state.value,
-    error: error.value,
-  };
-};
-
 interface CashuTokenIdentityLike {
   rawToken?: unknown;
   token?: unknown;

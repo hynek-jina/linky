@@ -14,10 +14,10 @@
 // per-mint seen keys are seeded from them plus the mints of stored token
 // rows.
 //
-// Removal condition: delete this folder and its three marked call sites
-// (useLinkshuComposition, useCashuWalletComposition,
-// wipeLinkshuSeedBoundState) once production devices have all launched a
-// post-cutover build; the done flags make later runs no-ops either way.
+// Removal condition: delete this folder (including legacyAcceptedTokenDrain)
+// and its marked call sites (useLinkshuComposition, useCashuWalletComposition
+// twice, wipeLinkshuSeedBoundState) once production devices have all launched
+// a post-cutover build; the done flags make later runs no-ops either way.
 
 import { parseMintUrl } from "@linky/linkshu";
 import { parseCashuToken } from "../../cashu";
