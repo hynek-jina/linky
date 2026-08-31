@@ -6,7 +6,6 @@ import { useAppShellCore } from "../app/context/AppShellContexts";
 import type { MintUrlInput } from "../app/types/appTypes";
 import { CashuTokenPill } from "../components/CashuTokenPill";
 import { TokenAddIcon } from "../components/icons";
-import type { CashuTokenId } from "../evolu";
 import { useNavigation } from "../hooks/useRouting";
 
 const CashuTokenIdType = Evolu.id("CashuToken");
@@ -23,8 +22,7 @@ interface CashuTokensPageProps {
   cashuIssuedTokens: readonly WalletToken[];
   checkAllCashuTokensAndDeleteInvalid: () => Promise<void>;
   checkIssuedCashuTokensAndDeleteClaimed: () => Promise<{
-    checked: number;
-    claimed: ReadonlyArray<{ id: CashuTokenId; amount: number }>;
+    claimed: ReadonlyArray<{ amount: number; id: string }>;
   }>;
   deleteSpentCashuTokens: () => Promise<void>;
   deleteSpentCashuTokensIsBusy: boolean;

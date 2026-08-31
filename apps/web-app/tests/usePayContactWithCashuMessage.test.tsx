@@ -1,5 +1,15 @@
 import * as Evolu from "@evolu/common";
 import {
+  Amount,
+  CurrencyUnit,
+  InsufficientFunds,
+  MintUrl,
+  NonNegativeAmount,
+  SendReceipt,
+  TokenRowId,
+  TokenText,
+} from "@linky/linkshu";
+import {
   ClientId,
   EnqueueReceipt,
   OutboxJobId,
@@ -11,42 +21,32 @@ import {
   WrapDelivery,
   WrapId,
 } from "@linky/linkstr";
-import { Exit } from "effect";
+import { Either, Exit } from "effect";
 import { getPublicKey, nip19 } from "nostr-tools";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createCashuTokenId } from "../src/app/lib/cashuTokenIdentity";
 import type {
-  CashuTokenUpdate,
-  CashuTokenUpsert,
-} from "../src/app/hooks/payments/persistCashuMessagePayment";
+  CashuTokenLifecycle,
+  SendCashuToken,
+} from "../src/app/hooks/composition/useLinkshuComposition";
 import type {
   EnqueueOutbox,
   SendPaymentNotice,
 } from "../src/app/hooks/payments/publishCashuMessagePayment";
 import type {
-  CashuTokenRowLike,
   ContactRowLike,
   LocalNostrMessage,
   NewLocalNostrMessage,
 } from "../src/app/types/appTypes";
 
-const {
-  createSendTokenWithTokensAtMintMock,
-  enqueueOutboxMock,
-  navigateToMock,
-  sendPaymentNoticeMock,
-} = vi.hoisted(() => ({
-  createSendTokenWithTokensAtMintMock: vi.fn(),
-  enqueueOutboxMock: vi.fn<EnqueueOutbox>(),
-  navigateToMock: vi.fn(),
-  sendPaymentNoticeMock: vi.fn<SendPaymentNotice>(),
-}));
-
-vi.mock("../src/cashuSend", () => ({
-  createSendTokenWithTokensAtMint: createSendTokenWithTokensAtMintMock,
-}));
+const { enqueueOutboxMock, navigateToMock, sendPaymentNoticeMock } = vi.hoisted(
+  () => ({
+    enqueueOutboxMock: vi.fn<EnqueueOutbox>(),
+    navigateToMock: vi.fn(),
+    sendPaymentNoticeMock: vi.fn<SendPaymentNotice>(),
+  }),
+);
 
 vi.mock("../src/hooks/useRouting", () => ({
   navigateTo: navigateToMock,
@@ -63,19 +63,8 @@ import { usePayContactWithCashuMessage } from "../src/app/hooks/payments/usePayC
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-const oldOwnerResult = Evolu.OwnerId.fromUnknown("AAAAAAAAAAAAAAAAAAAAAA");
-const activeOwnerResult = Evolu.OwnerId.fromUnknown("AQEBAQEBAQEBAQEBAQEBAQ");
-if (!oldOwnerResult.ok || !activeOwnerResult.ok) {
-  throw new Error("Invalid test owner ids");
-}
-const OLD_OWNER_ID = oldOwnerResult.value;
-const ACTIVE_OWNER_ID = activeOwnerResult.value;
 const CONTACT_ID = Evolu.createIdFromString<"Contact">("contact");
-const OLD_TOKEN_ID = createCashuTokenId("cashu-old-token");
-const withOwner = (row: CashuTokenRowLike, ownerId: Evolu.OwnerId) => ({
-  ...row,
-  ownerId,
-});
+const MINT_URL = "https://mint.example";
 
 const currentNpub = nip19.npubEncode(getPublicKey(new Uint8Array(32).fill(1)));
 const contactNpub = nip19.npubEncode(getPublicKey(new Uint8Array(32).fill(2)));
@@ -84,7 +73,7 @@ const sendTokenText = `cashuA${btoa(
   JSON.stringify({
     token: [
       {
-        mint: "https://mint.example",
+        mint: MINT_URL,
         proofs: [{ amount: 600, C: "c", id: "i", secret: "s" }],
       },
     ],
@@ -94,6 +83,16 @@ const sendTokenText = `cashuA${btoa(
   .replace(/\+/g, "-")
   .replace(/\//g, "_")
   .replace(/=+$/g, "")}`;
+
+const sendReceipt = new SendReceipt({
+  rowId: TokenRowId.make("send-row"),
+  tokenText: TokenText.make(sendTokenText),
+  mint: MintUrl.make(MINT_URL),
+  unit: CurrencyUnit.make("sat"),
+  amount: Amount.make(600),
+  changeAmount: NonNegativeAmount.make(400),
+  feePaid: NonNegativeAmount.make(0),
+});
 
 const sentAt = UnixSeconds.make(1_730_000_000);
 
@@ -129,64 +128,47 @@ type PayContact = ReturnType<
 
 interface SetupOptions {
   appendLocalNostrMessage?: (message: NewLocalNostrMessage) => string;
-  cashuTokensAll?: readonly CashuTokenRowLike[];
-  cashuTokensWithMeta?: readonly CashuTokenRowLike[];
   enqueuePendingPayment?: ReturnType<typeof vi.fn>;
+  forget?: ReturnType<typeof vi.fn>;
   logPaymentEvent?: ReturnType<typeof vi.fn>;
   nostrMessagesLocal?: LocalNostrMessage[];
   pushToast?: ReturnType<typeof vi.fn>;
+  sendCashuToken?: SendCashuToken;
+  setStatus?: ReturnType<typeof vi.fn>;
   showPaidOverlay?: ReturnType<typeof vi.fn>;
-  update?: CashuTokenUpdate;
   updateLocalNostrMessage?: ReturnType<typeof vi.fn>;
-  upsert?: CashuTokenUpsert;
 }
 
 const setup = async (options: SetupOptions = {}) => {
   let payContact: PayContact | null = null;
   const enqueuePendingPayment = options.enqueuePendingPayment ?? vi.fn();
+  const forget = options.forget ?? vi.fn(async () => {});
   const logPaymentEvent = options.logPaymentEvent ?? vi.fn();
   const pushToast = options.pushToast ?? vi.fn();
+  const setStatus = options.setStatus ?? vi.fn();
   const showPaidOverlay = options.showPaidOverlay ?? vi.fn();
-  const update =
-    options.update ?? vi.fn<CashuTokenUpdate>(() => ({ ok: true }));
   const updateLocalNostrMessage = options.updateLocalNostrMessage ?? vi.fn();
-  const upsert =
-    options.upsert ?? vi.fn<CashuTokenUpsert>(() => ({ ok: true }));
+  const sendCashuToken =
+    options.sendCashuToken ?? vi.fn(async () => Either.right(sendReceipt));
+
+  const cashuTokenLifecycle: CashuTokenLifecycle = {
+    checkIssuedClaims: vi.fn(),
+    forget,
+    markExternalized: vi.fn(),
+    markIssued: vi.fn(),
+    reserve: vi.fn(),
+    returnToWallet: vi.fn(),
+  };
 
   const Harness = () => {
     const pay = usePayContactWithCashuMessage<ContactRowLike>({
       appendLocalNostrMessage:
         options.appendLocalNostrMessage ?? (() => "local-message"),
-      buildCashuMintCandidates: (mintGroups) => {
-        const mint = mintGroups.get("https://mint.example");
-        return mint
-          ? [
-              {
-                mint: "https://mint.example",
-                sum: mint.sum,
-                tokens: mint.tokens,
-              },
-            ]
-          : [];
-      },
       cashuBalance: 1_000,
-      cashuTokensAll: options.cashuTokensAll ?? [],
-      cashuTokensWithMeta: options.cashuTokensWithMeta ?? [
-        withOwner(
-          {
-            amount: 1_000,
-            id: OLD_TOKEN_ID,
-            mint: "https://mint.example",
-            state: "accepted",
-            token: "cashu-old-token",
-            unit: "sat",
-          },
-          OLD_OWNER_ID,
-        ),
-      ],
+      cashuTokenLifecycle,
       currentNpub,
       currentNsec: "nsec-test",
-      defaultMintUrl: "https://mint.example",
+      defaultMintUrl: MINT_URL,
       enqueuePendingPayment,
       formatDisplayedAmountParts: (amountSat) => ({
         approxPrefix: "",
@@ -198,14 +180,13 @@ const setup = async (options: SetupOptions = {}) => {
       nostrMessagesLocal: options.nostrMessagesLocal ?? [],
       payWithCashuEnabled: true,
       pushToast,
-      resolveOwnerIdForWrite: vi.fn(async () => ACTIVE_OWNER_ID),
+      sendCashuToken,
       setContactsOnboardingHasPaid: vi.fn(),
-      setStatus: vi.fn(),
+      setStatus,
       showPaidOverlay,
       t: (key) => key,
-      update,
       updateLocalNostrMessage,
-      upsert,
+      walletMintBalances: [{ amount: 1_000, mint: MINT_URL }],
     });
 
     React.useEffect(() => {
@@ -221,20 +202,36 @@ const setup = async (options: SetupOptions = {}) => {
 
   return {
     enqueuePendingPayment,
+    forget,
     getPay: () => payContact,
     logPaymentEvent,
     pushToast,
     root,
+    sendCashuToken,
+    setStatus,
     showPaidOverlay,
-    update,
     updateLocalNostrMessage,
-    upsert,
   };
+};
+
+const payAlice = async (harness: Awaited<ReturnType<typeof setup>>) => {
+  let result: Awaited<ReturnType<PayContact>> | null = null;
+  await act(async () => {
+    result =
+      (await harness.getPay()?.({
+        amountSat: 600,
+        contact: {
+          id: CONTACT_ID,
+          name: "Alice",
+          npub: contactNpub,
+        },
+      })) ?? null;
+  });
+  return result;
 };
 
 describe("usePayContactWithCashuMessage", () => {
   afterEach(() => {
-    createSendTokenWithTokensAtMintMock.mockReset();
     enqueueOutboxMock.mockReset();
     navigateToMock.mockReset();
     sendPaymentNoticeMock.mockReset();
@@ -242,20 +239,11 @@ describe("usePayContactWithCashuMessage", () => {
     localStorage.clear();
   });
 
-  it("orders swap, owner-aware commit, publish, and transaction finalization", async () => {
+  it("sends via linkshu, publishes, forgets the delivered row, finalizes transaction", async () => {
     const operations: string[] = [];
-    createSendTokenWithTokensAtMintMock.mockImplementation(async () => {
-      operations.push("swap");
-      return {
-        mint: "https://mint.example",
-        ok: true,
-        remainingAmount: 400,
-        remainingToken: "cashu-change-token",
-        sendAmount: 600,
-        sendProofs: [],
-        sendToken: sendTokenText,
-        unit: "sat",
-      };
+    const sendCashuToken = vi.fn<SendCashuToken>(async (args) => {
+      operations.push(`send:${args.mint}:${args.amountSat}:${args.produceAs}`);
+      return Either.right(sendReceipt);
     });
     enqueueOutboxMock.mockImplementation(async (input) => {
       operations.push("enqueue");
@@ -266,57 +254,31 @@ describe("usePayContactWithCashuMessage", () => {
     sendPaymentNoticeMock.mockImplementation(async (draft) =>
       Exit.succeed(noticeReceipt(draft.clientId ?? fallbackClientId)),
     );
-
-    const update = vi.fn<CashuTokenUpdate>((_table, payload, options) => {
-      if (typeof payload === "object" && payload !== null) {
-        operations.push(
-          `delete:${String(Reflect.get(payload, "id"))}:${String(options?.ownerId)}`,
-        );
-      }
-      return { ok: true };
-    });
-    const upsert = vi.fn<CashuTokenUpsert>((_table, payload) => {
-      if (typeof payload === "object" && payload !== null) {
-        operations.push(
-          `insert:${String(Reflect.get(payload, "token"))}:${String(Reflect.get(payload, "state"))}`,
-        );
-      }
-      return { ok: true };
+    const forget = vi.fn(async (rowId: string) => {
+      operations.push(`forget:${rowId}`);
     });
     const logPaymentEvent = vi.fn(() => {
       operations.push("transaction");
     });
-    const harness = await setup({
-      logPaymentEvent,
-      update,
-      upsert,
-    });
+    const harness = await setup({ forget, logPaymentEvent, sendCashuToken });
 
-    let result: Awaited<ReturnType<PayContact>> | null = null;
-    await act(async () => {
-      result =
-        (await harness.getPay()?.({
-          amountSat: 600,
-          contact: {
-            id: CONTACT_ID,
-            name: "Alice",
-            npub: contactNpub,
-          },
-        })) ?? null;
-    });
+    const result = await payAlice(harness);
 
     expect(result).toEqual({ ok: true, queued: false });
     expect(operations).toEqual([
-      "swap",
-      `delete:${String(OLD_TOKEN_ID)}:${String(OLD_OWNER_ID)}`,
-      "insert:cashu-change-token:accepted",
+      `send:${MINT_URL}:600:pending`,
       "enqueue",
+      "forget:send-row",
       "transaction",
     ]);
-    expect(operations).not.toContain(
-      `delete:${String(OLD_TOKEN_ID)}:${String(ACTIVE_OWNER_ID)}`,
+    expect(logPaymentEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: "complete", status: "ok" }),
     );
     expect(sendPaymentNoticeMock).toHaveBeenCalledOnce();
+    expect(navigateToMock).toHaveBeenCalledWith({
+      id: CONTACT_ID,
+      route: "chat",
+    });
 
     await act(async () => harness.root.unmount());
   });
@@ -324,23 +286,13 @@ describe("usePayContactWithCashuMessage", () => {
   it("queues an offline placeholder without swapping or publishing", async () => {
     vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
     const appendLocalNostrMessage = vi.fn(() => "offline-message");
-    const harness = await setup({ appendLocalNostrMessage });
+    const sendCashuToken = vi.fn<SendCashuToken>();
+    const harness = await setup({ appendLocalNostrMessage, sendCashuToken });
 
-    let result: Awaited<ReturnType<PayContact>> | null = null;
-    await act(async () => {
-      result =
-        (await harness.getPay()?.({
-          amountSat: 600,
-          contact: {
-            id: CONTACT_ID,
-            name: "Alice",
-            npub: contactNpub,
-          },
-        })) ?? null;
-    });
+    const result = await payAlice(harness);
 
     expect(result).toEqual({ ok: true, queued: true });
-    expect(createSendTokenWithTokensAtMintMock).not.toHaveBeenCalled();
+    expect(sendCashuToken).not.toHaveBeenCalled();
     expect(enqueueOutboxMock).not.toHaveBeenCalled();
     expect(sendPaymentNoticeMock).not.toHaveBeenCalled();
     expect(harness.enqueuePendingPayment).toHaveBeenCalledWith({
@@ -353,54 +305,48 @@ describe("usePayContactWithCashuMessage", () => {
     await act(async () => harness.root.unmount());
   });
 
-  it("stores an unpublished send token and returns queued on enqueue failure", async () => {
-    createSendTokenWithTokensAtMintMock.mockResolvedValue({
-      mint: "https://mint.example",
-      ok: true,
-      remainingAmount: 0,
-      remainingToken: null,
-      sendAmount: 600,
-      sendProofs: [],
-      sendToken: sendTokenText,
-      unit: "sat",
-    });
+  it("keeps the pending row and returns queued on enqueue failure", async () => {
     enqueueOutboxMock.mockResolvedValue(
       Exit.fail({ _tag: "LinkstrNotConfigured" }),
     );
     const pushToast = vi.fn();
     const showPaidOverlay = vi.fn();
-    const upsert = vi.fn<CashuTokenUpsert>(() => ({ ok: true }));
-    const harness = await setup({
-      pushToast,
-      showPaidOverlay,
-      upsert,
-    });
+    const harness = await setup({ pushToast, showPaidOverlay });
 
-    let result: Awaited<ReturnType<PayContact>> | null = null;
-    await act(async () => {
-      result =
-        (await harness.getPay()?.({
-          amountSat: 600,
-          contact: {
-            id: CONTACT_ID,
-            name: "Alice",
-            npub: contactNpub,
-          },
-        })) ?? null;
-    });
+    const result = await payAlice(harness);
 
     expect(result).toEqual({ ok: true, queued: true });
-    expect(upsert).toHaveBeenCalledWith(
-      "cashuToken",
-      expect.objectContaining({
-        state: "pending",
-        token: sendTokenText,
-      }),
-      { ownerId: ACTIVE_OWNER_ID },
-    );
+    expect(harness.forget).not.toHaveBeenCalled();
     expect(sendPaymentNoticeMock).not.toHaveBeenCalled();
     expect(pushToast).toHaveBeenCalledWith("payFailed: LinkstrNotConfigured");
     expect(showPaidOverlay).toHaveBeenCalledWith("paidQueuedTo");
+
+    await act(async () => harness.root.unmount());
+  });
+
+  it("reports insufficient funds without publishing when the send fails", async () => {
+    const sendCashuToken = vi.fn<SendCashuToken>(async () =>
+      Either.left(
+        new InsufficientFunds({
+          mint: MintUrl.make(MINT_URL),
+          required: Amount.make(600),
+          available: NonNegativeAmount.make(10),
+        }),
+      ),
+    );
+    const setStatus = vi.fn();
+    const harness = await setup({ sendCashuToken, setStatus });
+
+    const result = await payAlice(harness);
+
+    expect(result).toEqual({
+      error: "Insufficient funds",
+      ok: false,
+      queued: false,
+    });
+    expect(setStatus).toHaveBeenCalledWith("payInsufficient");
+    expect(enqueueOutboxMock).not.toHaveBeenCalled();
+    expect(harness.forget).not.toHaveBeenCalled();
 
     await act(async () => harness.root.unmount());
   });

@@ -7,13 +7,14 @@ import type {
 } from "@cashu/cashu-ts";
 import {
   bumpCashuDeterministicCounter,
+  CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE,
   getCashuDeterministicCounter,
   getCashuDeterministicSeedFromStorage,
+  getCashuSwapCounterUsage,
   getCashuSwapOutputCounters,
   withCashuDeterministicCounterLock,
 } from "./utils/cashuDeterministic";
 import { isCashuRecoverableOutputCollisionError } from "./utils/cashuErrors";
-import { sendWithCashuDeterministicCounters } from "./cashuSend";
 import { getCashuLib } from "./utils/cashuLib";
 import {
   cashuAmountToNumber,
@@ -50,6 +51,48 @@ type CashuPayErrorResult = {
   remainingAmount: number;
   remainingToken: string | null;
   unit: string | null;
+};
+
+const sendWithCashuDeterministicCounters = async <
+  TResult extends { keep: readonly Proof[] },
+>(
+  args: {
+    deterministic: boolean;
+    keysetId: string;
+    mintUrl: string;
+    unit: string;
+  },
+  send: (counter: number | null) => Promise<TResult>,
+): Promise<TResult> => {
+  if (!args.deterministic) return await send(null);
+
+  let counter = getCashuDeterministicCounter(args);
+  let result: TResult | null = null;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      result = await send(counter);
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error;
+      if (!isCashuRecoverableOutputCollisionError(error)) throw error;
+      bumpCashuDeterministicCounter({
+        ...args,
+        used: CASHU_DETERMINISTIC_OUTPUT_BLOCK_SIZE * 2,
+      });
+      counter = getCashuDeterministicCounter(args);
+    }
+  }
+
+  if (!result) throw lastError ?? new Error("swap failed");
+
+  bumpCashuDeterministicCounter({
+    ...args,
+    used: getCashuSwapCounterUsage(result.keep.length),
+  });
+  return result;
 };
 
 // Number of NUT-08 blank outputs cashu-ts will emit for a given fee reserve.

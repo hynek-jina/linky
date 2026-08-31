@@ -35,6 +35,30 @@ describe("describeTaggedCashuError", () => {
     ).toBe("old text");
   });
 
+  it("maps linkshu send and lifecycle failures to readable text", () => {
+    expect(
+      describeTaggedCashuError({
+        _tag: "InsufficientFunds",
+        mint: "m",
+        required: 10,
+        available: 4,
+      }),
+    ).toBe("Insufficient funds");
+    expect(
+      describeTaggedCashuError({ _tag: "TokenAlreadyKnown", rowId: "r" }),
+    ).toBe("Token is already in the wallet");
+    expect(describeTaggedCashuError({ _tag: "TokenRowNotFound" })).toBe(
+      "Token not found",
+    );
+    expect(
+      describeTaggedCashuError({
+        _tag: "InvalidTokenTransition",
+        from: "pending",
+        to: "issued",
+      }),
+    ).toBe("Token state does not allow this");
+  });
+
   it("returns null for unknown tags and untagged values", () => {
     expect(describeTaggedCashuError({ _tag: "SomethingNew" })).toBeNull();
     expect(describeTaggedCashuError({ message: "boom" })).toBeNull();

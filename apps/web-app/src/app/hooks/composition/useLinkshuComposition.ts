@@ -4,16 +4,26 @@ import {
   NonNegativeAmount,
   Receive,
   ReceiveDraft,
+  SendDraft,
+  Send,
   Tokens,
+  TokenRowId,
+  TokenStore,
+  Validation,
   WalletBalances,
 } from "@linky/linkshu";
 import type {
   Bip39Seed,
+  InvalidTokenTransition,
+  IssuedClaimReport,
   ReceiveError,
   ReceiveReceipt,
+  SendError,
+  SendReceipt,
+  TokenRowNotFound,
   WalletToken,
 } from "@linky/linkshu";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import type { Either } from "effect";
 import React from "react";
 import { linkshuAppInspector } from "../../../devtools/inspector/linkshuInspector";
@@ -61,6 +71,57 @@ const sameSeed = (a: Bip39Seed, b: Bip39Seed): boolean =>
 export type ReceiveCashuToken = (
   text: string,
 ) => Promise<Either.Either<ReceiveReceipt, ReceiveError>>;
+
+export interface SendCashuTokenArgs {
+  readonly amountSat: number;
+  readonly mint: string;
+  /** `issued` for QR/share (claim-watched), `pending` for messenger sends. */
+  readonly produceAs: "issued" | "pending";
+}
+
+/**
+ * Runs linkshu Send end to end (NUT-07 pre-filter, exact-amount swap, change
+ * persisted `accepted`, send row persisted in the drafted state) and resolves
+ * with the typed outcome; invalid mint/amount input and defects reject.
+ */
+export type SendCashuToken = (
+  args: SendCashuTokenArgs,
+) => Promise<Either.Either<SendReceipt, SendError>>;
+
+export type TokenTransitionError = TokenRowNotFound | InvalidTokenTransition;
+
+/**
+ * Lifecycle operations over stored token rows, keyed by the row id linkshu
+ * reports (`String(CashuTokenId)`). Only typed failures come back as Left;
+ * defects reject.
+ */
+export interface CashuTokenLifecycle {
+  /** NUT-07 check of every `issued` row; claimed rows are removed. */
+  readonly checkIssuedClaims: () => Promise<IssuedClaimReport>;
+  /**
+   * Drops a row whose funds verifiably left the wallet (e.g. a `pending`
+   * messenger send once the message is confirmed published). Not a state
+   * transition — the handed-over encoding stays valid for its recipient.
+   */
+  readonly forget: (rowId: string) => Promise<void>;
+  readonly markExternalized: (
+    rowId: string,
+  ) => Promise<Either.Either<void, TokenTransitionError>>;
+  readonly markIssued: (
+    rowId: string,
+  ) => Promise<Either.Either<void, TokenTransitionError>>;
+  readonly reserve: (
+    rowId: string,
+  ) => Promise<Either.Either<void, TokenTransitionError>>;
+  /** Re-receives the row so any handed-out encoding dies at the mint. */
+  readonly returnToWallet: (
+    rowId: string,
+  ) => Promise<
+    Either.Either<ReceiveReceipt, ReceiveError | TokenTransitionError>
+  >;
+}
+
+const decodeSendDraft = Schema.decodeUnknownSync(SendDraft);
 
 /**
  * The app's linkshu composition root: resolves the seed, layers
@@ -176,9 +237,61 @@ export const useLinkshuComposition = ({
       );
   }, [linkshuRuntime]);
 
+  const sendCashuToken = React.useMemo<SendCashuToken | null>(() => {
+    if (linkshuRuntime === null) return null;
+    return ({ amountSat, mint, produceAs }) =>
+      linkshuRuntime.runPromise(
+        Effect.suspend(() => {
+          const draft = decodeSendDraft({ amount: amountSat, mint, produceAs });
+          return Effect.flatMap(Send, (send) => send.send(draft));
+        }).pipe(Effect.either),
+      );
+  }, [linkshuRuntime]);
+
+  const cashuTokenLifecycle = React.useMemo<CashuTokenLifecycle | null>(() => {
+    if (linkshuRuntime === null) return null;
+    const rowId = (id: string) => TokenRowId.make(id);
+    return {
+      checkIssuedClaims: () =>
+        linkshuRuntime.runPromise(
+          Effect.flatMap(Validation, (validation) => validation.checkIssued),
+        ),
+      forget: (id) =>
+        linkshuRuntime.runPromise(
+          Effect.flatMap(TokenStore, (store) => store.remove(rowId(id))),
+        ),
+      markExternalized: (id) =>
+        linkshuRuntime.runPromise(
+          Effect.flatMap(Tokens, (tokens) =>
+            tokens.markExternalized(rowId(id)),
+          ).pipe(Effect.either),
+        ),
+      markIssued: (id) =>
+        linkshuRuntime.runPromise(
+          Effect.flatMap(Tokens, (tokens) => tokens.markIssued(rowId(id))).pipe(
+            Effect.either,
+          ),
+        ),
+      reserve: (id) =>
+        linkshuRuntime.runPromise(
+          Effect.flatMap(Tokens, (tokens) => tokens.reserve(rowId(id))).pipe(
+            Effect.either,
+          ),
+        ),
+      returnToWallet: (id) =>
+        linkshuRuntime.runPromise(
+          Effect.flatMap(Tokens, (tokens) =>
+            tokens.returnToWallet(rowId(id)),
+          ).pipe(Effect.either),
+        ),
+    };
+  }, [linkshuRuntime]);
+
   return {
+    cashuTokenLifecycle,
     linkshuRuntime,
     receiveCashuToken,
+    sendCashuToken,
     walletBalances: readModel.balances,
     walletTokens: readModel.tokens,
   };

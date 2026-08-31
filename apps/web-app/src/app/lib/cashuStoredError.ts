@@ -30,6 +30,14 @@ export const describeTaggedCashuError = (error: unknown): string | null => {
       return withDetail("Mint rejected the token", detail);
     case "CounterLockTimeout":
       return "Wallet is busy in another window, try again";
+    case "InsufficientFunds":
+      return "Insufficient funds";
+    case "TokenAlreadyKnown":
+      return "Token is already in the wallet";
+    case "TokenRowNotFound":
+      return "Token not found";
+    case "InvalidTokenTransition":
+      return "Token state does not allow this";
     case "LegacyError":
       return detail;
     default:
