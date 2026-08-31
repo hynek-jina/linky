@@ -1,6 +1,5 @@
 import * as Evolu from "@evolu/common";
-import { reportInspectorRows } from "../../../devtools/inspector";
-import { getInspectorEmissionEnabled } from "../../../devtools/inspector/inspectorEnabled";
+import type { ProfileMetadata } from "@linky/linkstr";
 import {
   BankOfferDraft,
   BankOfferId,
@@ -16,7 +15,6 @@ import {
   ReactionReceipt,
   UnixSeconds,
 } from "@linky/linkstr";
-import type { ProfileMetadata } from "@linky/linkstr";
 import {
   fetchProfilesAtom,
   publishMuteListAtom,
@@ -30,21 +28,25 @@ import {
   deriveDefaultProfile,
   omitSyntheticContactLightningAddress,
 } from "../../../derivedProfile";
+import { reportInspectorRows } from "../../../devtools/inspector";
+import { getInspectorEmissionEnabled } from "../../../devtools/inspector/inspectorEnabled";
+import { useLinkstrInspectorBridge } from "../../../devtools/inspector/useLinkstrInspectorBridge";
 import { useEvolu, type ContactId } from "../../../evolu";
-import { navigateTo, useRouting } from "../../../hooks/useRouting";
 import { useDeferredOnlineReady } from "../../../hooks/useDeferredOnlineReady";
+import { useDocumentVisible } from "../../../hooks/useDocumentVisible";
+import { navigateTo, useRouting } from "../../../hooks/useRouting";
 import { type Lang } from "../../../i18n";
-import {
-  getProfilePictureUrl,
-  loadCachedProfile,
-  releaseAllAvatarObjectUrls,
-} from "../../../profileCache";
 import {
   buildStatusFilterValue,
   extractStatusFilterCurrencies,
   isStatusFilterValue,
   parseStatusFilterValue,
 } from "../../../nostrStatus";
+import {
+  getProfilePictureUrl,
+  loadCachedProfile,
+  releaseAllAvatarObjectUrls,
+} from "../../../profileCache";
 import {
   ARCHIVED_CONTACTS_FILTER,
   BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY,
@@ -53,14 +55,15 @@ import {
   MAX_CONTACTS_PER_OWNER,
   NO_GROUP_FILTER,
 } from "../../../utils/constants";
-import { formatShortNpub, getBestNostrName } from "../../../utils/formatting";
 import {
   getContactGroups,
   normalizeContactGroups,
   serializeContactGroups,
 } from "../../../utils/contactGroups";
+import { formatShortNpub, getBestNostrName } from "../../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { setStoredPushContactNames } from "../../../utils/pushContactNamesStorage";
+import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { getBankPaymentOfferCurrency } from "../../../utils/spdPayment";
 import {
   getInitialBankPaymentOfferRecipientCount,
@@ -70,57 +73,19 @@ import {
   withLocalStorageLeaseLock,
 } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
-import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { makeLocalId } from "../../../utils/validation";
-import { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
-import { useContactEditor } from "../contacts/useContactEditor";
-import { useVisibleContacts } from "../contacts/useVisibleContacts";
-import {
-  buildUnknownContactId,
-  isUnknownContactId,
-  normalizePubkeyHex,
-  readUnknownContactIdPubkey,
-} from "../messages/contactIdentity";
-import { useDocumentVisible } from "../../../hooks/useDocumentVisible";
-import type { PeerSeenWindow } from "../messages/seenReceiptInbox";
-import { useChatReadCursorSync } from "../messages/useChatReadCursorSync";
-import { useChatSeenReceiptSync } from "../messages/useChatSeenReceiptSync";
-import {
-  useEditChatMessage,
-  type EditChatContext,
-} from "../messages/useEditChatMessage";
-import {
-  useSendChatMessage,
-  type ReplyContext,
-} from "../messages/useSendChatMessage";
-import { useLinkstrInboxSync } from "../messages/useLinkstrInboxSync";
-import { useSendReaction } from "../messages/useSendReaction";
-import { useLinkstrInspectorBridge } from "../../../devtools/inspector/useLinkstrInspectorBridge";
-import { useLinkstrConfigSync } from "../useLinkstrConfigSync";
-import {
-  fetchAndCacheProfiles,
-  useLinkstrProfileSync,
-} from "../useLinkstrProfileSync";
-import { useContactsDomain } from "../useContactsDomain";
-import { useEvoluNostrBootstrapReady } from "../useEvoluNostrBootstrapReady";
-import { useFeedbackContact } from "../useFeedbackContact";
-import { useMessagesDomain } from "../useMessagesDomain";
-import { usePushRegistrationLifecycle } from "../usePushRegistrationLifecycle";
-import { useRelayDomain } from "../useRelayDomain";
-import { findUniqueContactByLightningAddress } from "../../lib/contactIdentity";
-import { resolveContactRowOwnerLane } from "../../lib/contactOwnerLane";
 import {
   forgetLinkyBankPaymentOfferSpdPayload,
+  getLastBankPaymentOfferResponseSecByContactId,
   getLinkyBankPaymentOfferExpiresAtSec,
   getLinkyBankPaymentOfferInfo,
   getLinkyBankPaymentOfferMessageText,
   getLinkyBankPaymentOfferStatusRank,
-  getLastBankPaymentOfferResponseSecByContactId,
   isLinkyBankPaymentOfferExpired,
   isLinkyBankPaymentOfferTerminalStatus,
   isLinkyBankPaymentOfferWholeOfferTerminalStatus,
-  LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX,
   LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT,
+  LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX,
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
   markLinkyBankPaymentOfferBankDetailsSent,
@@ -130,6 +95,8 @@ import {
   type LinkyBankPaymentOfferStatus,
 } from "../../lib/bankPaymentOffer";
 import { collectUnreadNewestIncomingByContactId } from "../../lib/chatUnread";
+import { findUniqueContactByLightningAddress } from "../../lib/contactIdentity";
+import { resolveContactRowOwnerLane } from "../../lib/contactOwnerLane";
 import { buildLinkyPaymentRequestDeclineMessage } from "../../lib/paymentRequestMessage";
 import {
   parsePrivateImageMessage,
@@ -140,6 +107,39 @@ import type {
   LocalNostrMessage,
   PaymentLogData,
 } from "../../types/appTypes";
+import { useContactEditor } from "../contacts/useContactEditor";
+import { useVisibleContacts } from "../contacts/useVisibleContacts";
+import {
+  buildUnknownContactId,
+  isUnknownContactId,
+  normalizePubkeyHex,
+  readUnknownContactIdPubkey,
+} from "../messages/contactIdentity";
+import type { PeerSeenWindow } from "../messages/seenReceiptInbox";
+import { useChatReadCursorSync } from "../messages/useChatReadCursorSync";
+import { useChatSeenReceiptSync } from "../messages/useChatSeenReceiptSync";
+import {
+  useEditChatMessage,
+  type EditChatContext,
+} from "../messages/useEditChatMessage";
+import { useLinkstrInboxSync } from "../messages/useLinkstrInboxSync";
+import {
+  useSendChatMessage,
+  type ReplyContext,
+} from "../messages/useSendChatMessage";
+import { useSendReaction } from "../messages/useSendReaction";
+import { useContactsDomain } from "../useContactsDomain";
+import { useEvoluNostrBootstrapReady } from "../useEvoluNostrBootstrapReady";
+import { useFeedbackContact } from "../useFeedbackContact";
+import { useLinkstrConfigSync } from "../useLinkstrConfigSync";
+import {
+  fetchAndCacheProfiles,
+  useLinkstrProfileSync,
+} from "../useLinkstrProfileSync";
+import { useMessagesDomain } from "../useMessagesDomain";
+import { usePushRegistrationLifecycle } from "../usePushRegistrationLifecycle";
+import { useRelayDomain } from "../useRelayDomain";
+import { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
 
 const inMemoryNostrPictureCache = new Map<string, string | null>();
 
@@ -278,6 +278,9 @@ interface ChatSelectedContact {
   npub?: string | null;
   unknownPubkeyHex?: string | null;
 }
+
+const hasOwnProperty = (value: object, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(value, key);
 
 const encodeUnknownNpub = (pubkeyHex: string | null): string | null => {
   if (!pubkeyHex) return null;
@@ -1267,15 +1270,19 @@ export const useContactsMessagingComposition = ({
     unknownNameByNpub,
   ]);
 
-  const unknownContactById = React.useMemo(() => {
-    const byId = new Map<string, UnknownChatContact>();
-    for (const contact of unknownContacts) {
+  const displayContacts = React.useMemo<DisplayContact[]>(() => {
+    return [...contacts, ...unknownContacts];
+  }, [contacts, unknownContacts]);
+
+  const displayContactById = React.useMemo(() => {
+    const byId = new Map<string, DisplayContact>();
+    for (const contact of displayContacts) {
       const id = String(contact.id ?? "").trim();
       if (!id) continue;
       byId.set(id, contact);
     }
     return byId;
-  }, [unknownContacts]);
+  }, [displayContacts]);
 
   const selectedChatContact = React.useMemo<ChatSelectedContact | null>(() => {
     if (route.kind !== "chat" && route.kind !== "bankPaymentOffer") return null;
@@ -1285,7 +1292,7 @@ export const useContactsMessagingComposition = ({
     ).trim();
     if (!chatId) return null;
 
-    const source = selectedContact ?? unknownContactById.get(chatId) ?? null;
+    const source = displayContactById.get(chatId) ?? null;
     if (!source) return null;
 
     const normalizedId = String(source.id ?? "").trim();
@@ -1321,21 +1328,7 @@ export const useContactsMessagingComposition = ({
           }
         : {}),
     };
-  }, [route, selectedContact, unknownContactById]);
-
-  const displayContacts = React.useMemo<DisplayContact[]>(() => {
-    return [...contacts, ...unknownContacts];
-  }, [contacts, unknownContacts]);
-
-  const displayContactById = React.useMemo(() => {
-    const byId = new Map<string, DisplayContact>();
-    for (const contact of displayContacts) {
-      const id = String(contact.id ?? "").trim();
-      if (!id) continue;
-      byId.set(id, contact);
-    }
-    return byId;
-  }, [displayContacts]);
+  }, [displayContactById, route, selectedContact]);
 
   const displayContactsSearchData = React.useMemo(() => {
     return displayContacts.map((contact) => {
@@ -1563,6 +1556,17 @@ export const useContactsMessagingComposition = ({
     visibleContacts.others,
   ]);
 
+  const selectedContactNpub = normalizeNpubIdentifier(selectedContact?.npub);
+  // Memoized for identity stability: the cache fallback would otherwise
+  // produce a fresh object every render and retrigger effects downstream.
+  const selectedContactMetadata = React.useMemo(() => {
+    if (!selectedContactNpub) return undefined;
+    if (hasOwnProperty(nostrMetadataByNpub, selectedContactNpub)) {
+      return nostrMetadataByNpub[selectedContactNpub];
+    }
+    return loadCachedProfile(selectedContactNpub)?.metadata ?? undefined;
+  }, [nostrMetadataByNpub, selectedContactNpub]);
+
   const {
     addNewContactFromIdentifier,
     addNewContactFromSearchResult,
@@ -1574,6 +1578,7 @@ export const useContactsMessagingComposition = ({
     handleSaveContact,
     isSavingContact,
     openScannedContactPendingNpubRef,
+    selectedContactPublicProfile,
     resetEditedContactFieldFromNostr,
     searchNewContact,
     setForm,
@@ -1585,6 +1590,7 @@ export const useContactsMessagingComposition = ({
     currentNpub,
     insert,
     route,
+    selectedContactMetadata,
     selectedContact,
     setContactNewPrefill,
     setPendingDeleteId,
@@ -1730,15 +1736,9 @@ export const useContactsMessagingComposition = ({
               ...(amountSat !== null && isPositiveInt(amountSat)
                 ? { amountSat }
                 : {}),
-              clientId,
             }),
           );
-
           if (!Exit.isSuccess(exit)) continue;
-          sentCount += 1;
-          if (!firstSentContactId) {
-            firstSentContactId = recipient.contactId;
-          }
 
           upsertBankPaymentOfferMessage({
             clientId,
@@ -1753,6 +1753,10 @@ export const useContactsMessagingComposition = ({
             status: "sent",
             wrapId: exit.value.selfCopy.wrapId,
           });
+          sentCount += 1;
+          if (!firstSentContactId) {
+            firstSentContactId = recipient.contactId;
+          }
         }
 
         if (sentCount === 0) {
@@ -3506,6 +3510,7 @@ export const useContactsMessagingComposition = ({
     searchNewContact,
     selectedChatContact,
     selectedContact,
+    selectedContactPublicProfile,
     selectedRelayUrl,
     sendChatImage,
     sendChatMessage,

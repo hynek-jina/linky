@@ -567,6 +567,7 @@ export const de = {
   close: "Schließen",
   continue: "Weiter",
   contactNotFound: "Kontakt nicht gefunden.",
+  contactPublicProfileValue: "Öffentliches Profil",
   name: "Name",
   npub: "Kennung",
   lightningAddress: "Lightning-Adresse",

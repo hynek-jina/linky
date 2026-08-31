@@ -579,6 +579,7 @@ export const cs = {
   continue: "Pokračovat",
 
   contactNotFound: "Kontakt nenalezen.",
+  contactPublicProfileValue: "Veřejný profil",
   name: "Jméno",
   npub: "Identifikátor",
   lightningAddress: "Lightning adresa",

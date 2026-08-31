@@ -9,8 +9,8 @@ import {
   encodeNpub,
   identityFromNsec,
   OutboxRef,
-  PaymentNoticeDraft,
   parsePubkey,
+  PaymentNoticeDraft,
   Pubkey,
   TokenMessageDraft,
 } from "@linky/linkstr";
@@ -26,8 +26,8 @@ import { deriveDefaultProfile } from "../../../derivedProfile";
 import {
   evolu,
   useEvolu,
-  type CashuTokenRow,
   type CashuTokenId,
+  type CashuTokenRow,
   type ContactId,
 } from "../../../evolu";
 import { navigateTo, useRouting } from "../../../hooks/useRouting";
@@ -37,7 +37,6 @@ import {
   redeemLnurlWithdraw,
   type LnurlWithdrawPreview,
 } from "../../../lnurlPay";
-import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { getCashuDeterministicSeedFromStorage } from "../../../utils/cashuDeterministic";
 import { isCashuOutputsAlreadySignedError } from "../../../utils/cashuErrors";
 import { getCashuLib } from "../../../utils/cashuLib";
@@ -53,7 +52,6 @@ import {
   WALLET_WARNING_DISMISSED_STORAGE_KEY,
 } from "../../../utils/constants";
 import { formatDisplayAmountParts } from "../../../utils/displayAmounts";
-import { isNpubCashDisabled } from "../../../utils/npubCashServer";
 import {
   getLightningInvoicePreview,
   type LightningInvoicePreview,
@@ -65,7 +63,9 @@ import {
   normalizeMintUrl,
 } from "../../../utils/mint";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
+import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import { parseNpubCashProfileInfo } from "../../../utils/npubCashInfo";
+import { isNpubCashDisabled } from "../../../utils/npubCashServer";
 import {
   getInitialCashuAutoswapEnabled,
   getInitialLightningInvoiceAutoPayLimit,
@@ -78,32 +78,6 @@ import {
 } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
-import { useCashuTokenChecks } from "../cashu/useCashuTokenChecks";
-import { useNpubCashClaim } from "../cashu/useNpubCashClaim";
-import { useRestoreMissingTokens } from "../cashu/useRestoreMissingTokens";
-import { useSaveCashuFromText } from "../cashu/useSaveCashuFromText";
-import { normalizePubkeyHex } from "../messages/contactIdentity";
-import { useNpubCashMintSelection } from "../mint/useNpubCashMintSelection";
-import { useContactPayMethod } from "../payments/useContactPayMethod";
-import { usePayContactWithCashuMessage } from "../payments/usePayContactWithCashuMessage";
-import { useRouteAmountResetEffects } from "../payments/useRouteAmountResetEffects";
-import {
-  isClaimableMintQuoteState,
-  readMintQuoteState,
-} from "../topup/topupMintQuoteState";
-import {
-  requestMintQuoteBolt11,
-  useTopupInvoiceQuoteEffects,
-  type TopupMintQuoteDraft,
-} from "../topup/useTopupInvoiceQuoteEffects";
-import { useAnonymousPaymentTelemetry } from "../useAnonymousPaymentTelemetry";
-import { useCashuDomain } from "../useCashuDomain";
-import { useLightningPaymentsDomain } from "../useLightningPaymentsDomain";
-import { useMintDomain } from "../useMintDomain";
-import { useOwnerScopedStorage } from "../useOwnerScopedStorage";
-import { usePaidOverlayState } from "../usePaidOverlayState";
-import { usePaymentsDomain } from "../usePaymentsDomain";
-import { useProfileNpubCashEffects } from "../useProfileNpubCashEffects";
 import {
   appendPendingAutoswapClaim,
   claimAutoswapPendingEntry,
@@ -153,6 +127,7 @@ import {
   enrichCashuTokenRow,
   extractCashuTokenMeta,
 } from "../../lib/tokenText";
+import { mintTopupProofs } from "../../lib/topupProofRecovery";
 import {
   isExpiredPendingTopupQuote,
   isLikelyCorsOrNetworkError,
@@ -165,12 +140,37 @@ import {
   toTopupMintQuoteDraft,
   type ClaimedTopupQuoteStorage,
 } from "../../lib/topupQuoteStorage";
-import { mintTopupProofs } from "../../lib/topupProofRecovery";
 import type {
   ContactRowLike,
   LocalNostrMessage,
   PaymentLogData,
 } from "../../types/appTypes";
+import { useCashuTokenChecks } from "../cashu/useCashuTokenChecks";
+import { useNpubCashClaim } from "../cashu/useNpubCashClaim";
+import { useRestoreMissingTokens } from "../cashu/useRestoreMissingTokens";
+import { useSaveCashuFromText } from "../cashu/useSaveCashuFromText";
+import { normalizePubkeyHex } from "../messages/contactIdentity";
+import { useNpubCashMintSelection } from "../mint/useNpubCashMintSelection";
+import { useContactPayMethod } from "../payments/useContactPayMethod";
+import { usePayContactWithCashuMessage } from "../payments/usePayContactWithCashuMessage";
+import { useRouteAmountResetEffects } from "../payments/useRouteAmountResetEffects";
+import {
+  isClaimableMintQuoteState,
+  readMintQuoteState,
+} from "../topup/topupMintQuoteState";
+import {
+  requestMintQuoteBolt11,
+  useTopupInvoiceQuoteEffects,
+  type TopupMintQuoteDraft,
+} from "../topup/useTopupInvoiceQuoteEffects";
+import { useAnonymousPaymentTelemetry } from "../useAnonymousPaymentTelemetry";
+import { useCashuDomain } from "../useCashuDomain";
+import { useLightningPaymentsDomain } from "../useLightningPaymentsDomain";
+import { useMintDomain } from "../useMintDomain";
+import { useOwnerScopedStorage } from "../useOwnerScopedStorage";
+import { usePaidOverlayState } from "../usePaidOverlayState";
+import { usePaymentsDomain } from "../usePaymentsDomain";
+import { useProfileNpubCashEffects } from "../useProfileNpubCashEffects";
 import {
   useContactsMessagingComposition,
   type DisplayContact,
@@ -4148,7 +4148,7 @@ export const useCashuWalletComposition = ({
 
     logPaymentEvent({
       amount: amountSat,
-      contactId: selectedContact.id,
+      contactId: route.id,
       details: {
         mintUrls: [preferredMint],
         recipientNprofile,
@@ -4163,21 +4163,18 @@ export const useCashuWalletComposition = ({
       unit: "sat",
     });
 
-    if (
-      String(contactPayBackToChatRef.current ?? "") ===
-      String(selectedContact.id)
-    ) {
-      navigateTo({ route: "chat", id: selectedContact.id });
+    if (String(contactPayBackToChatRef.current ?? "") === String(route.id)) {
+      navigateTo({ route: "chat", id: route.id });
       return;
     }
 
-    navigateTo({ route: "contact", id: selectedContact.id });
+    navigateTo({ route: "contact", id: route.id });
   }, [
     contactPayBackToChatRef,
     currentNpub,
     defaultMintUrl,
     payAmount,
-    route.kind,
+    route,
     selectedContact,
     sendChatMessage,
     logPaymentEvent,

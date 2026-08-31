@@ -162,6 +162,7 @@ export type ContactRowLike = {
   id?: ContactIdLike;
   isUnknownContact?: boolean;
   lnAddress?: OptionalText;
+  lnAddressSetByUser?: OptionalNumber;
   name?: OptionalText;
   nameSetByUser?: OptionalNumber;
   npub?: OptionalText;

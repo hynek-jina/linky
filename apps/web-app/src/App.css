@@ -1974,6 +1974,29 @@ button.settings-sensitive-action.is-armed {
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
 }
 
+.input-with-public-value {
+  position: relative;
+}
+
+.input-with-public-value.has-public-value input {
+  padding-right: 45%;
+}
+
+.input-public-value {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  color: #64748b;
+  font-size: 13px;
+  font-style: italic;
+}
+
 .topup-invoice-panel {
   background:
     radial-gradient(

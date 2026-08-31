@@ -12,7 +12,6 @@ import {
 } from "@linky/linkstr-react";
 import { Exit } from "effect";
 import React from "react";
-import { omitSyntheticContactLightningAddress } from "../../../derivedProfile";
 import { evolu, type ContactId, type TransactionId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import {
@@ -22,6 +21,10 @@ import {
 } from "../../../profileCache";
 import type { Route } from "../../../types/route";
 import { MAX_CONTACTS_PER_OWNER } from "../../../utils/constants";
+import {
+  getContactGroups,
+  serializeContactGroups,
+} from "../../../utils/contactGroups";
 import { getBestNostrName } from "../../../utils/formatting";
 import {
   DEFAULT_NIP05_DOMAIN,
@@ -30,13 +33,13 @@ import {
 } from "../../../utils/nostrNip05";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { NOSTR_SEARCH_RELAYS } from "../../../utils/nostrRelays";
-import { getContactQueryPrefill } from "../../lib/contactQueryPrefill";
-import { fetchAndCacheProfile } from "../useLinkstrProfileSync";
-import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
 import {
-  getContactGroups,
-  serializeContactGroups,
-} from "../../../utils/contactGroups";
+  getContactPublicProfile,
+  resolveContactProfile,
+} from "../../lib/contactProfile";
+import { getContactQueryPrefill } from "../../lib/contactQueryPrefill";
+import type { ContactFormState, ContactRowLike } from "../../types/appTypes";
+import { fetchAndCacheProfile } from "../useLinkstrProfileSync";
 import { useContactSuggestions } from "./useContactSuggestions";
 
 type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
@@ -69,19 +72,14 @@ export type ContactSearchResult =
 const getMetadataLightningAddress = (
   metadata: ProfileMetadata | null,
   npub: string,
-): string =>
-  metadata
-    ? omitSyntheticContactLightningAddress(
-        (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
-        npub,
-      )
-    : "";
+): string => getContactPublicProfile(npub, metadata).lnAddress;
 
 type ContactRow = ContactRowLike;
 type SelectedContactRow = ContactRowLike & { id: ContactId };
 
 type ContactFieldsPatch = {
   id: ContactId;
+  lnAddressSetByUser?: typeof Evolu.SqliteBoolean.Type | null;
   nameSetByUser?: typeof Evolu.SqliteBoolean.Type | null;
 } & Partial<
   Record<
@@ -98,6 +96,7 @@ interface UseContactEditorParams {
   currentNpub: string | null;
   insert: EvoluMutations["insert"];
   route: Route;
+  selectedContactMetadata: ProfileMetadata | null | undefined;
   selectedContact: SelectedContactRow | null;
   setContactNewPrefill: React.Dispatch<
     React.SetStateAction<ContactNewPrefill | null>
@@ -165,6 +164,7 @@ export const useContactEditor = ({
   currentNpub,
   insert,
   route,
+  selectedContactMetadata,
   selectedContact,
   setContactNewPrefill,
   setPendingDeleteId,
@@ -245,8 +245,17 @@ export const useContactEditor = ({
       const sourceNameSetByUser = Evolu.SqliteBoolean.fromUnknown(
         source.nameSetByUser,
       );
+      const sourceLnAddressSetByUser = Evolu.SqliteBoolean.fromUnknown(
+        source.lnAddressSetByUser,
+      );
 
       return {
+        lnAddressSetByUser:
+          payload.lnAddressSetByUser !== undefined
+            ? payload.lnAddressSetByUser
+            : sourceLnAddressSetByUser.ok
+              ? sourceLnAddressSetByUser.value
+              : null,
         nameSetByUser:
           payload.nameSetByUser !== undefined
             ? payload.nameSetByUser
@@ -366,11 +375,14 @@ export const useContactEditor = ({
     [transactionsQuery, updateTransactionFields],
   );
 
+  const seededEditContactIdRef = React.useRef<ContactId | null>(null);
+
   React.useEffect(() => {
     const previousRouteKind = previousRouteKindRef.current;
     previousRouteKindRef.current = route.kind;
 
     if (route.kind === "contactNew") {
+      seededEditContactIdRef.current = null;
       setPendingDeleteId(null);
       setEditingId(null);
       setContactEditInitial(null);
@@ -388,40 +400,72 @@ export const useContactEditor = ({
       return;
     }
 
-    if (route.kind !== "contactEdit") return;
+    if (route.kind !== "contactEdit") {
+      seededEditContactIdRef.current = null;
+      return;
+    }
     setPendingDeleteId(null);
 
     if (!selectedContact) {
+      seededEditContactIdRef.current = null;
       setEditingId(null);
       setContactEditInitial(null);
       setForm(makeEmptyContactForm());
       return;
     }
 
+    // Seed once per edited contact; later row/profile updates must not wipe
+    // what the user is typing.
+    if (seededEditContactIdRef.current === selectedContact.id) return;
+    seededEditContactIdRef.current = selectedContact.id;
+
     setEditingId(selectedContact.id);
-    setContactEditInitial((prev) => {
-      if (prev?.id === selectedContact.id) return prev;
-      return {
-        id: selectedContact.id as ContactId,
-        name: String(selectedContact.name ?? ""),
-        npub: String(selectedContact.npub ?? ""),
-        lnAddress: String(selectedContact.lnAddress ?? ""),
-        groups: getContactGroups(selectedContact),
-      };
+    const resolvedProfile = resolveContactProfile(
+      selectedContact,
+      selectedContactMetadata,
+    );
+    setContactEditInitial({
+      id: selectedContact.id as ContactId,
+      name: resolvedProfile.localName,
+      npub: String(selectedContact.npub ?? ""),
+      lnAddress: resolvedProfile.localLnAddress,
+      groups: getContactGroups(selectedContact),
     });
     setForm({
-      name: String(selectedContact.name ?? ""),
+      name: resolvedProfile.localName,
       npub: String(selectedContact.npub ?? ""),
-      lnAddress: String(selectedContact.lnAddress ?? ""),
+      lnAddress: resolvedProfile.localLnAddress,
       groups: getContactGroups(selectedContact),
     });
   }, [
     contactNewPrefill,
     route.kind,
+    selectedContactMetadata,
     selectedContact,
     setContactNewPrefill,
     setPendingDeleteId,
   ]);
+
+  const selectedContactPublicProfile = React.useMemo(() => {
+    const npub = normalizeNpubIdentifier(form.npub);
+    if (!npub) return { lnAddress: "", name: "" };
+
+    const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub);
+    if (selectedContact && selectedNpub === npub) {
+      // The row backs the public value for non-overridden fields, so the
+      // hint stays correct even when the profile cache is empty.
+      const resolved = resolveContactProfile(
+        selectedContact,
+        selectedContactMetadata,
+      );
+      return { lnAddress: resolved.lnAddress, name: resolved.name };
+    }
+
+    return getContactPublicProfile(
+      npub,
+      loadCachedProfile(npub)?.metadata ?? undefined,
+    );
+  }, [form.npub, selectedContact, selectedContactMetadata]);
 
   const handleSaveContact = React.useCallback(async () => {
     if (isSavingContact) return; // Prevent double-click
@@ -519,21 +563,47 @@ export const useContactEditor = ({
         : null,
     };
     let savedContactId: ContactId | null = editingId;
+    const selectedNpub = normalizeNpubIdentifier(selectedContact?.npub);
+    const cachedMetadata = npub
+      ? (loadCachedProfile(npub)?.metadata ?? undefined)
+      : undefined;
+    const publicProfile =
+      editingId && selectedContact && npub && selectedNpub === npub
+        ? resolveContactProfile(selectedContact, cachedMetadata)
+        : getContactPublicProfile(npub, cachedMetadata);
+    const parsePublicText = (value: string) => {
+      const parsed = value ? Evolu.NonEmptyString1000.fromUnknown(value) : null;
+      return parsed?.ok ? parsed.value : null;
+    };
 
     const createPayload: Partial<{
       groupName: typeof Evolu.NonEmptyString1000.Type;
       groupNamesJson: typeof Evolu.NonEmptyString1000.Type;
       lnAddress: typeof Evolu.NonEmptyString1000.Type;
+      lnAddressSetByUser: typeof Evolu.SqliteBoolean.Type;
       name: typeof Evolu.NonEmptyString1000.Type;
       nameSetByUser: typeof Evolu.SqliteBoolean.Type;
       npub: typeof Evolu.NonEmptyString1000.Type;
     }> = {};
     if (payload.name) {
       createPayload.name = payload.name;
-      createPayload.nameSetByUser = Evolu.sqliteTrue;
+      if (name !== publicProfile.name) {
+        createPayload.nameSetByUser = Evolu.sqliteTrue;
+      }
+    } else {
+      const publicName = parsePublicText(publicProfile.name);
+      if (publicName) createPayload.name = publicName;
     }
     if (payload.npub) createPayload.npub = payload.npub;
-    if (payload.lnAddress) createPayload.lnAddress = payload.lnAddress;
+    if (payload.lnAddress) {
+      createPayload.lnAddress = payload.lnAddress;
+      if (lnAddress.toLowerCase() !== publicProfile.lnAddress.toLowerCase()) {
+        createPayload.lnAddressSetByUser = Evolu.sqliteTrue;
+      }
+    } else {
+      const publicLnAddress = parsePublicText(publicProfile.lnAddress);
+      if (publicLnAddress) createPayload.lnAddress = publicLnAddress;
+    }
     if (payload.groupName) createPayload.groupName = payload.groupName;
     if (payload.groupNamesJson)
       createPayload.groupNamesJson = payload.groupNamesJson;
@@ -565,6 +635,13 @@ export const useContactEditor = ({
         }
         if ((prevNpub ?? "") !== (nextNpub ?? "")) {
           changedFields.npub = payload.npub;
+
+          if (!name && !selectedContact?.nameSetByUser) {
+            changedFields.name = null;
+          }
+          if (!lnAddress && !selectedContact?.lnAddressSetByUser) {
+            changedFields.lnAddress = null;
+          }
         }
         if ((prevLn ?? "") !== (nextLn ?? "")) {
           changedFields.lnAddress = payload.lnAddress;
@@ -580,10 +657,27 @@ export const useContactEditor = ({
         Object.assign(changedFields, payload);
       }
 
-      // A typed name is user-set; clearing it hands the name back to the profile.
+      // A typed value that differs from the profile is a user override;
+      // otherwise the row keeps mirroring the profile, so store the public
+      // value (the row is the display source) and clear the flag.
       if (changedFields.name !== undefined) {
-        changedFields.nameSetByUser =
-          changedFields.name === null ? null : Evolu.sqliteTrue;
+        const isNameOverride = Boolean(name) && name !== publicProfile.name;
+        changedFields.nameSetByUser = isNameOverride ? Evolu.sqliteTrue : null;
+        if (!isNameOverride) {
+          changedFields.name = parsePublicText(publicProfile.name);
+        }
+      }
+
+      if (changedFields.lnAddress !== undefined) {
+        const isLnAddressOverride =
+          Boolean(lnAddress) &&
+          lnAddress.toLowerCase() !== publicProfile.lnAddress.toLowerCase();
+        changedFields.lnAddressSetByUser = isLnAddressOverride
+          ? Evolu.sqliteTrue
+          : null;
+        if (!isLnAddressOverride) {
+          changedFields.lnAddress = parsePublicText(publicProfile.lnAddress);
+        }
       }
 
       // Only update if there are actual changes (besides just the id).
@@ -644,6 +738,7 @@ export const useContactEditor = ({
     insert,
     isSavingContact,
     route.kind,
+    selectedContact,
     setPendingDeleteId,
     setRecentlyAddedContactId,
     setStatus,
@@ -913,8 +1008,9 @@ export const useContactEditor = ({
     navigateTo({ route: "contact", id: existing.id as ContactId });
   }, [contacts]);
 
-  // Resets the field to the watch-fed cached profile value; the pubkey is
-  // watched, so the cache is as fresh as the relays.
+  // Drops the local override: writes the watch-fed cached profile value into
+  // the row (the pubkey is watched, so the cache is as fresh as the relays)
+  // and empties the form field, so the public value shows as placeholder.
   const resetEditedContactFieldFromNostr = React.useCallback(
     (field: "name" | "lnAddress") => {
       if (route.kind !== "contactEdit") return;
@@ -930,27 +1026,25 @@ export const useContactEditor = ({
         const parsedName = bestName
           ? Evolu.NonEmptyString1000.fromUnknown(bestName)
           : null;
-        setForm((prev) => ({ ...prev, name: bestName ?? "" }));
         updateContactFields({
           id: editingId,
           name: parsedName?.ok ? parsedName.value : null,
           nameSetByUser: null,
         });
-        return;
+      } else {
+        const ln = getContactPublicProfile(npub, metadata).lnAddress;
+        const parsedLn = ln ? Evolu.NonEmptyString1000.fromUnknown(ln) : null;
+        updateContactFields({
+          id: editingId,
+          lnAddress: parsedLn?.ok ? parsedLn.value : null,
+          lnAddressSetByUser: null,
+        });
       }
 
-      const ln = metadata
-        ? omitSyntheticContactLightningAddress(
-            (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
-            npub ?? "",
-          )
-        : "";
-      const parsedLn = ln ? Evolu.NonEmptyString1000.fromUnknown(ln) : null;
-      setForm((prev) => ({ ...prev, lnAddress: ln }));
-      updateContactFields({
-        id: editingId,
-        lnAddress: parsedLn?.ok ? parsedLn.value : null,
-      });
+      setForm((prev) => ({ ...prev, [field]: "" }));
+      setContactEditInitial((prev) =>
+        prev && prev.id === editingId ? { ...prev, [field]: "" } : prev,
+      );
     },
     [editingId, form.npub, route.kind, updateContactFields],
   );
@@ -997,6 +1091,7 @@ export const useContactEditor = ({
     handleSaveContact,
     isSavingContact,
     openScannedContactPendingNpubRef,
+    selectedContactPublicProfile,
     resetEditedContactFieldFromNostr,
     searchNewContact,
     setEditingId,

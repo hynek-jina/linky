@@ -1,5 +1,4 @@
 import * as Evolu from "@evolu/common";
-import { decodeNpub, encodeNpub, Pubkey } from "@linky/linkstr";
 import type {
   ProfileFetchEntry,
   ProfileFetchResult,
@@ -8,6 +7,7 @@ import type {
   ProfileWatchEvent,
   StatusUpdated,
 } from "@linky/linkstr";
+import { decodeNpub, encodeNpub, Pubkey } from "@linky/linkstr";
 import {
   profileWatchAtom,
   profileWatchHandlerAtom,
@@ -17,7 +17,6 @@ import {
 } from "@linky/linkstr-react";
 import { Exit } from "effect";
 import React from "react";
-import { omitSyntheticContactLightningAddress } from "../../derivedProfile";
 import {
   cacheProfileAvatarFromUrl,
   deleteCachedProfileAvatar,
@@ -31,9 +30,8 @@ import {
 import { getBestNostrName } from "../../utils/formatting";
 import { normalizeNpubIdentifier } from "../../utils/nostrNpub";
 import { resolveContactRowOwnerLane } from "../lib/contactOwnerLane";
+import { getContactPublicProfile } from "../lib/contactProfile";
 import type { ContactRowLike } from "../types/appTypes";
-
-type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
 export const decodeNpubToPubkey = (npub: string): Pubkey | null => {
   return decodeNpub(npub);
@@ -109,6 +107,18 @@ type SetByNpub<T> = React.Dispatch<
   React.SetStateAction<Record<string, T | null>>
 >;
 
+// Structural subset of `EvoluMutations["update"]` (the sync only writes
+// contact rows and ignores the result), so tests can substitute it.
+type ContactRowUpdate = (
+  table: "contact",
+  props: {
+    id: string;
+    lnAddress?: typeof Evolu.NonEmptyString1000.Type | null;
+    name?: typeof Evolu.NonEmptyString1000.Type | null;
+  },
+  options?: { readonly ownerId?: Evolu.OwnerId },
+) => unknown;
+
 interface ProfileSyncContext {
   contacts: readonly (ContactRowLike & { id: string })[];
   contactsOwnerId: Evolu.OwnerId | null;
@@ -117,12 +127,13 @@ interface ProfileSyncContext {
   setNostrMetadataByNpub: SetByNpub<ProfileMetadata>;
   setNostrPictureByNpub: SetByNpub<string>;
   setNostrStatusByNpub: SetByNpub<string>;
-  update: EvoluMutations["update"];
+  update: ContactRowUpdate;
 }
 
 const syncContactsFromProfile = (
   npub: string,
   metadata: ProfileMetadata,
+  previousMetadata: ProfileMetadata | null | undefined,
   ctx: ProfileSyncContext,
 ): void => {
   // Never rewrite rows under an open contact form.
@@ -130,31 +141,54 @@ const syncContactsFromProfile = (
     return;
   }
 
-  const bestName = getBestNostrName(metadata);
-  const profileLn = omitSyntheticContactLightningAddress(
-    (metadata.lud16 ?? "").trim() || (metadata.lud06 ?? "").trim(),
+  const bestName = getBestNostrName(metadata) ?? "";
+  const profileLn = getContactPublicProfile(npub, metadata).lnAddress;
+  const previousBestName = previousMetadata
+    ? (getBestNostrName(previousMetadata) ?? "")
+    : "";
+  const previousProfileLn = getContactPublicProfile(
     npub,
-  );
+    previousMetadata,
+  ).lnAddress.toLowerCase();
 
   for (const contact of ctx.contacts) {
     if (normalizeNpubIdentifier(contact.npub) !== npub) continue;
 
-    const patch: Partial<
-      Record<"lnAddress" | "name", typeof Evolu.NonEmptyString1000.Type>
-    > = {};
+    const patch: Partial<{
+      lnAddress: typeof Evolu.NonEmptyString1000.Type | null;
+      name: typeof Evolu.NonEmptyString1000.Type | null;
+    }> = {};
 
+    // Non-overridden fields follow the profile. A value the profile never
+    // provided (legacy manual entry, search fallback) is never cleared:
+    // clearing requires that the row still holds what the previous profile
+    // said, i.e. the profile itself dropped the field.
     const currentName = String(contact.name ?? "").trim();
-    if (!contact.nameSetByUser && bestName && bestName !== currentName) {
-      const parsedName = Evolu.NonEmptyString1000.fromUnknown(bestName);
-      if (parsedName.ok) patch.name = parsedName.value;
+    if (!contact.nameSetByUser) {
+      if (bestName && bestName !== currentName) {
+        const parsedName = Evolu.NonEmptyString1000.fromUnknown(bestName);
+        if (parsedName.ok) patch.name = parsedName.value;
+      } else if (!bestName && currentName && currentName === previousBestName) {
+        patch.name = null;
+      }
     }
 
+    const parsedLnAddressSetByUser = Evolu.SqliteBoolean.fromUnknown(
+      contact.lnAddressSetByUser,
+    );
+    const hasLocalLnAddress =
+      parsedLnAddressSetByUser.ok &&
+      parsedLnAddressSetByUser.value === Evolu.sqliteTrue;
     const currentLn = String(contact.lnAddress ?? "")
       .trim()
       .toLowerCase();
-    if (profileLn && profileLn.toLowerCase() !== currentLn) {
-      const parsedLn = Evolu.NonEmptyString1000.fromUnknown(profileLn);
-      if (parsedLn.ok) patch.lnAddress = parsedLn.value;
+    if (!hasLocalLnAddress) {
+      if (profileLn && profileLn.toLowerCase() !== currentLn) {
+        const parsedLn = Evolu.NonEmptyString1000.fromUnknown(profileLn);
+        if (parsedLn.ok) patch.lnAddress = parsedLn.value;
+      } else if (!profileLn && currentLn && currentLn === previousProfileLn) {
+        patch.lnAddress = null;
+      }
     }
 
     if (Object.keys(patch).length === 0) continue;
@@ -194,7 +228,7 @@ const applyProfileUpdated = (
     });
   }
 
-  syncContactsFromProfile(npub, fact.metadata, ctx);
+  syncContactsFromProfile(npub, fact.metadata, cached?.metadata, ctx);
 };
 
 const applyStatusUpdated = (
@@ -287,6 +321,23 @@ export const useLinkstrProfileSync = ({
     });
     return () => setProfileWatchHandler(null);
   }, [enabled, setProfileWatchHandler]);
+
+  // Reconcile contact rows against the cached profiles: watch events fire
+  // only for strictly newer facts, so a row that fell out of step with an
+  // already-cached profile (new contact, or a sync-policy change) would
+  // otherwise stay stale until the peer republishes. Writes only on diffs.
+  React.useEffect(() => {
+    for (const npub of watchedNpubs) {
+      const cachedProfile = loadCachedProfile(npub);
+      if (!cachedProfile) continue;
+      syncContactsFromProfile(
+        npub,
+        cachedProfile.metadata,
+        cachedProfile.metadata,
+        contextRef.current,
+      );
+    }
+  }, [watchedNpubs]);
 
   React.useEffect(() => {
     let cancelled = false;
