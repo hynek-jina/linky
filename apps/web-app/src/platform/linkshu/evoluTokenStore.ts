@@ -43,10 +43,9 @@ import type { CashuTokenId, CashuTokenRow } from "../../evolu";
  * at the read boundary; rows written by linkshu carry serialized tagged
  * errors and pass through unchanged.
  */
-export class LegacyError extends Schema.TaggedError<LegacyError>()(
-  "LegacyError",
-  { detail: Schema.String },
-) {}
+class LegacyError extends Schema.TaggedError<LegacyError>()("LegacyError", {
+  detail: Schema.String,
+}) {}
 
 const encodeLegacyError = Schema.encodeSync(Schema.parseJson(LegacyError));
 const decodeTokenText = Schema.decodeUnknownOption(TokenText);

@@ -3,11 +3,6 @@ import { Either } from "effect";
 import React from "react";
 import type { CashuTokenId, CashuTokenRow } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
-import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../../utils/constants";
-import {
-  safeLocalStorageGet,
-  safeLocalStorageSet,
-} from "../../../utils/storage";
 import { resolveCashuTokenStoredOwnerLaneById } from "../../lib/cashuOwnerLane";
 import type {
   CheckAllCashuTokens,
@@ -66,9 +61,6 @@ export const useCashuTokenChecks = ({
     ) => {
       const { navigate = true, setStatus: setStatusEnabled = true } =
         options ?? {};
-      const row = cashuTokensAll.find(
-        (tkn) => String(tkn?.id ?? "") === String(id),
-      );
       const ownerId = resolveCashuTokenStoredOwnerLaneById(
         cashuTokensAll,
         id,
@@ -79,16 +71,6 @@ export const useCashuTokenChecks = ({
         ? update("cashuToken", payload, { ownerId })
         : update("cashuToken", payload);
       if (result.ok) {
-        const token = String(row?.token ?? "").trim();
-        const rawToken = String(row?.rawToken ?? "").trim();
-        if (token || rawToken) {
-          const remembered = String(
-            safeLocalStorageGet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY) ?? "",
-          ).trim();
-          if (remembered && (remembered === token || remembered === rawToken)) {
-            safeLocalStorageSet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY, "");
-          }
-        }
         if (setStatusEnabled) {
           setStatus(t("cashuDeleted"));
         }

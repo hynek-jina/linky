@@ -127,6 +127,7 @@ import {
   type DisplayContact,
 } from "./useContactsMessagingComposition";
 import { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
+import { drainLegacyAcceptedCashuToken } from "../../migrations/legacyAcceptedTokenDrain";
 import { seedLinkshuSeenMintsFromTokenRows } from "../../migrations/linkshuStorageMigration";
 import { useLinkshuComposition } from "./useLinkshuComposition";
 import type { ResumePendingCashuAutoswapClaims } from "./useLinkshuComposition";
@@ -693,6 +694,12 @@ export const useCashuWalletComposition = ({
     seedLinkshuSeenMintsFromTokenRows(cashuTokensAll);
   }, [cashuTokensAll]);
 
+  // ONE-TIME MIGRATION — DELETE ME EVENTUALLY (see legacyAcceptedTokenDrain.ts)
+  React.useEffect(() => {
+    if (receiveCashuToken === null) return;
+    void drainLegacyAcceptedCashuToken(receiveCashuToken);
+  }, [receiveCashuToken]);
+
   const {
     cashuTokensHydratedRef,
     isCashuTokenKnownAny,
@@ -700,10 +707,7 @@ export const useCashuWalletComposition = ({
     rememberCashuTokenKnown,
   } = useCashuDomain({
     appOwnerId: cashuOwnerId,
-    appOwnerIdRef: cashuOwnerIdRef,
     cashuTokensAll,
-    upsert,
-    logPaymentEvent,
   });
 
   const migratedMisplacedCashuTokenIdsRef = React.useRef<Set<string>>(

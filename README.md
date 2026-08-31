@@ -204,8 +204,9 @@ cd apps/web-app && bunx playwright test --project=prod-services
 ```
 
 `local-stack` runs the proxy-payment flow — three accounts on one machine, talking over the local
-Nostr relay and paying each other with the local Cashu mint. It needs the docker stack up first,
-because the app is served from it as a production build on :5176:
+Nostr relay and paying each other with the local Cashu mint — plus the linkshu storage-migration
+scenario (legacy wallet keys seeded before first launch, wallet must keep working). It needs the
+docker stack up first, because the app is served from it as a production build on :5176:
 
 ```bash
 docker compose -f docker-compose.dev.yml --profile e2e up -d --build --wait

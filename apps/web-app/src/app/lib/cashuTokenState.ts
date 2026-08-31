@@ -2,10 +2,10 @@ import { isStoredCashuErrorTokenSpent } from "./cashuStoredError";
 
 export const CASHU_TOKEN_STATE_ACCEPTED = "accepted";
 export const CASHU_TOKEN_STATE_ERROR = "error";
-export const CASHU_TOKEN_STATE_EXTERNALIZED = "externalized";
-export const CASHU_TOKEN_STATE_ISSUED = "issued";
-export const CASHU_TOKEN_STATE_PENDING = "pending";
-export const CASHU_TOKEN_STATE_RESERVED = "reserved";
+const CASHU_TOKEN_STATE_EXTERNALIZED = "externalized";
+const CASHU_TOKEN_STATE_ISSUED = "issued";
+const CASHU_TOKEN_STATE_PENDING = "pending";
+const CASHU_TOKEN_STATE_RESERVED = "reserved";
 
 export type CashuTokenState =
   | typeof CASHU_TOKEN_STATE_ACCEPTED
@@ -81,7 +81,7 @@ const getCashuErrorMessage = (error: unknown): string => {
   return String(error ?? "");
 };
 
-export const isDefinitiveCashuError = (error: unknown): boolean => {
+const isDefinitiveCashuError = (error: unknown): boolean => {
   if (typeof error === "object" && error !== null && "code" in error) {
     const code = Reflect.get(error, "code");
     if (typeof code === "number" && DEFINITIVE_INVALID_CODES.has(code)) {
