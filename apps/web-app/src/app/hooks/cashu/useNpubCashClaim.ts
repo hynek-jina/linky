@@ -147,8 +147,7 @@ export const useNpubCashClaim = ({
 
           if (
             result.status === "empty" ||
-            result.status === "duplicate-before-accept" ||
-            result.status === "duplicate-after-accept"
+            result.status === "duplicate-before-accept"
           ) {
             return;
           }

@@ -20,10 +20,6 @@ interface AcceptAndPersistCashuTokenParams {
   acceptToken?: (token: string) => Promise<AcceptedCashuToken>;
   afterPersist: (rawToken: string, acceptedToken: string) => void;
   beforePersist: (acceptedToken: string) => void;
-  isAcceptedAlreadyStored?: (
-    rawToken: string,
-    acceptedToken: string,
-  ) => boolean;
   isAlreadyStored: (token: string) => boolean;
   persistAccepted: (
     rawToken: string,
@@ -35,7 +31,6 @@ interface AcceptAndPersistCashuTokenParams {
     message: string,
     ownerId: Evolu.OwnerId,
   ) => PersistenceResult;
-  resolveOwnerBeforeDuplicateCheck?: boolean;
   resolveOwnerId: () => Promise<Evolu.OwnerId | null>;
   tokenText: string;
 }
@@ -48,12 +43,7 @@ interface DefaultCashuTokenPersistence {
 
 interface DefaultAcceptAndPersistCashuTokenParams {
   acceptToken?: (token: string) => Promise<AcceptedCashuToken>;
-  isAcceptedAlreadyStored?: (
-    rawToken: string,
-    acceptedToken: string,
-  ) => boolean;
   isAlreadyStored: (token: string) => boolean;
-  resolveOwnerBeforeDuplicateCheck?: boolean;
   resolveOwnerId: () => Promise<Evolu.OwnerId | null>;
   tokenText: string;
 }
@@ -61,7 +51,6 @@ interface DefaultAcceptAndPersistCashuTokenParams {
 export type AcceptAndPersistCashuTokenResult =
   | { status: "empty" }
   | { status: "duplicate-before-accept" }
-  | { status: "duplicate-after-accept" }
   | { status: "storage-unavailable" }
   | {
       status: "accepted";
@@ -82,34 +71,23 @@ export const acceptAndPersistCashuToken = async ({
   acceptToken = acceptCashuToken,
   afterPersist,
   beforePersist,
-  isAcceptedAlreadyStored,
   isAlreadyStored,
   persistAccepted,
   persistFailure,
-  resolveOwnerBeforeDuplicateCheck = false,
   resolveOwnerId,
   tokenText,
 }: AcceptAndPersistCashuTokenParams): Promise<AcceptAndPersistCashuTokenResult> => {
   const rawToken = tokenText.trim();
   if (!rawToken) return { status: "empty" };
-  const earlyOwnerId = resolveOwnerBeforeDuplicateCheck
-    ? await resolveOwnerId()
-    : null;
-  if (resolveOwnerBeforeDuplicateCheck && !earlyOwnerId) {
-    return { status: "storage-unavailable" };
-  }
   if (isAlreadyStored(rawToken)) return { status: "duplicate-before-accept" };
 
-  const ownerId = earlyOwnerId ?? (await resolveOwnerId());
+  const ownerId = await resolveOwnerId();
   if (!ownerId) return { status: "storage-unavailable" };
 
   try {
     const accepted = await acceptToken(rawToken);
     const acceptedToken = String(accepted.token ?? "").trim();
     beforePersist(acceptedToken);
-    if (isAcceptedAlreadyStored?.(rawToken, acceptedToken)) {
-      return { status: "duplicate-after-accept" };
-    }
 
     const persisted = persistAccepted(rawToken, acceptedToken, ownerId);
     if (!persisted.ok) {
@@ -142,9 +120,7 @@ export const createDefaultCashuTokenAcceptor = ({
 }: DefaultCashuTokenPersistence) => {
   return async ({
     acceptToken,
-    isAcceptedAlreadyStored,
     isAlreadyStored,
-    resolveOwnerBeforeDuplicateCheck,
     resolveOwnerId,
     tokenText,
   }: DefaultAcceptAndPersistCashuTokenParams) =>
@@ -153,10 +129,6 @@ export const createDefaultCashuTokenAcceptor = ({
       isAlreadyStored,
       resolveOwnerId,
       ...(acceptToken ? { acceptToken } : {}),
-      ...(isAcceptedAlreadyStored ? { isAcceptedAlreadyStored } : {}),
-      ...(resolveOwnerBeforeDuplicateCheck !== undefined
-        ? { resolveOwnerBeforeDuplicateCheck }
-        : {}),
       beforePersist: (acceptedToken) => {
         if (acceptedToken) {
           safeLocalStorageSet(

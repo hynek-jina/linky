@@ -886,13 +886,14 @@ export const useCashuWalletComposition = ({
     [cashuTokensFiltered],
   );
 
-  const { walletBalances, walletTokens } = useLinkshuComposition({
-    cashuTokenRows: cashuTokensAllFiltered,
-    currentNsec,
-    update,
-    upsert,
-    writeOwnerId: cashuOwnerId ?? appOwnerId,
-  });
+  const { receiveCashuToken, walletBalances, walletTokens } =
+    useLinkshuComposition({
+      cashuTokenRows: cashuTokensAllFiltered,
+      currentNsec,
+      update,
+      upsert,
+      writeOwnerId: cashuOwnerId ?? appOwnerId,
+    });
 
   const {
     cashuTokensHydratedRef,
@@ -2639,15 +2640,13 @@ export const useCashuWalletComposition = ({
 
   const saveCashuFromText = useSaveCashuFromText({
     enqueueCashuOp,
-    ensureCashuTokenPersisted,
     formatDisplayedAmountParts,
-    upsert,
     isCashuTokenStored,
     isMintDeleted,
     logPaymentEvent,
     mintInfoByUrl,
+    receiveCashuToken,
     refreshMintInfo,
-    resolveOwnerIdForWrite,
     rememberCashuTokenKnown,
     setCashuDraft,
     setCashuIsBusy,

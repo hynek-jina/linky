@@ -1,6 +1,7 @@
 import type { FC } from "react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { formatStoredCashuError } from "../app/lib/cashuStoredError";
 import {
   isCashuTokenAcceptedState,
   isCashuTokenExternalizedState,
@@ -270,7 +271,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
 
       {String(safeRow.state ?? "") === "error" && (
         <p className="cashu-token-status cashu-token-status-error">
-          {String(safeRow.error ?? "").trim() || t("cashuInvalid")}
+          {formatStoredCashuError(safeRow.error) ?? t("cashuInvalid")}
         </p>
       )}
 

@@ -268,6 +268,149 @@ describe("makeEvoluTokenStore", () => {
     expect(await loadAll(store)).toHaveLength(0);
   });
 
+  describe("write overlay over a lagging read model", () => {
+    /**
+     * Like the fake table, but `loadTokenRows` serves a stale snapshot that
+     * only advances on `sync()` — the React render state the real adapter
+     * reads lags Evolu mutations the same way.
+     */
+    const makeLaggingCashuTable = () => {
+      const rows = new Map<string, CashuTokenRow>();
+      let snapshot: CashuTokenRow[] = [];
+      const keyOf = (ownerId: string, id: string) => `${ownerId}|${id}`;
+
+      const store: TokenStoreService = makeEvoluTokenStore({
+        getWriteOwnerId: () => activeOwnerId,
+        loadTokenRows: () => Promise.resolve(snapshot),
+        update: (_table, payload, options) => {
+          const key = keyOf(String(options.ownerId), String(payload.id));
+          const existing = rows.get(key);
+          if (existing === undefined) return { ok: true };
+          rows.set(key, {
+            ...existing,
+            ...(payload.error !== undefined ? { error: payload.error } : {}),
+            ...(payload.isDeleted !== undefined
+              ? { isDeleted: payload.isDeleted }
+              : {}),
+            ...(payload.state !== undefined ? { state: payload.state } : {}),
+            ...(payload.token !== undefined ? { token: payload.token } : {}),
+          });
+          return { ok: true };
+        },
+        upsert: (_table, payload, options) => {
+          const key = keyOf(String(options.ownerId), String(payload.id));
+          const existing = rows.get(key);
+          const base =
+            existing ??
+            createCashuTokenRowFixture({
+              ownerId: String(options.ownerId),
+              token: String(payload.token),
+            });
+          rows.set(key, {
+            ...base,
+            error: payload.error ?? null,
+            id: payload.id,
+            originalTokenText: payload.originalTokenText,
+            state: payload.state,
+            token: payload.token,
+          });
+          return { ok: true };
+        },
+      });
+
+      const sync = (): void => {
+        snapshot = [...rows.values()];
+      };
+
+      return { store, sync };
+    };
+
+    it("updates a just-inserted row before the read model shows it", async () => {
+      const { store, sync } = makeLaggingCashuTable();
+      const inserted = await Effect.runPromise(
+        store.insert(newRow({ state: "pending", tokenText: "cashuAfresh" })),
+      );
+
+      await Effect.runPromise(
+        store.update(inserted.id, {
+          state: "accepted",
+          tokenText: TokenText.make("cashuAswapped"),
+        }),
+      );
+
+      const beforeSync = await loadAll(store);
+      expect(beforeSync).toHaveLength(1);
+      expect(beforeSync[0]).toMatchObject({
+        state: "accepted",
+        tokenText: "cashuAswapped",
+      });
+
+      sync();
+      const afterSync = await loadAll(store);
+      expect(afterSync).toHaveLength(1);
+      expect(afterSync[0]).toMatchObject({
+        state: "accepted",
+        tokenText: "cashuAswapped",
+      });
+    });
+
+    it("keeps serving the overlay row until the read model reflects it", async () => {
+      const { store, sync } = makeLaggingCashuTable();
+      const inserted = await Effect.runPromise(
+        store.insert(newRow({ state: "pending", tokenText: "cashuAlagging" })),
+      );
+      sync();
+
+      await Effect.runPromise(store.update(inserted.id, { state: "accepted" }));
+
+      // Snapshot still shows the pending write; the overlay must win.
+      const stale = await loadAll(store);
+      expect(stale[0].state).toBe("accepted");
+
+      sync();
+      expect((await loadAll(store))[0].state).toBe("accepted");
+    });
+
+    it("hides a removed row the read model still contains", async () => {
+      const { store, sync } = makeLaggingCashuTable();
+      const inserted = await Effect.runPromise(
+        store.insert(newRow({ tokenText: "cashuAremoveLag" })),
+      );
+      sync();
+
+      await Effect.runPromise(store.remove(inserted.id));
+      expect(await loadAll(store)).toHaveLength(0);
+
+      sync();
+      expect(await loadAll(store)).toHaveLength(0);
+    });
+
+    it("dedups against a row inserted but not yet visible", async () => {
+      const { store } = makeLaggingCashuTable();
+      await Effect.runPromise(
+        store.insert(newRow({ tokenText: "cashuAinvisible" })),
+      );
+
+      const rows = await loadAll(store);
+      expect(rows.map((row) => row.tokenText)).toEqual(["cashuAinvisible"]);
+    });
+
+    it("serves updates of already-visible rows before the read model catches up", async () => {
+      const { store, sync } = makeLaggingCashuTable();
+      const inserted = await Effect.runPromise(
+        store.insert(newRow({ state: "accepted", tokenText: "cashuAcatchUp" })),
+      );
+      sync();
+      await loadAll(store);
+
+      await Effect.runPromise(store.update(inserted.id, { state: "issued" }));
+      expect((await loadAll(store))[0].state).toBe("issued");
+
+      sync();
+      expect((await loadAll(store))[0].state).toBe("issued");
+    });
+  });
+
   it("targets the row's stored owner lane, not the active write lane", async () => {
     const { seed, store } = makeFakeCashuTable();
     seed(
