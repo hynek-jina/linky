@@ -37,10 +37,6 @@ import {
   type LnurlWithdrawPreview,
 } from "../../../lnurlPay";
 import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
-import { getCashuDeterministicSeedFromStorage } from "../../../utils/cashuDeterministic";
-import { getCashuLib } from "../../../utils/cashuLib";
-import { cashuAmountToNumber } from "../../../utils/cashuProofs";
-import { createLoadedCashuWallet } from "../../../utils/cashuWallet";
 import {
   CASHU_AUTOSWAP_MIN_SOURCE_SUM,
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
@@ -91,14 +87,6 @@ import { useOwnerScopedStorage } from "../useOwnerScopedStorage";
 import { usePaidOverlayState } from "../usePaidOverlayState";
 import { usePaymentsDomain } from "../usePaymentsDomain";
 import { useProfileNpubCashEffects } from "../useProfileNpubCashEffects";
-import {
-  appendPendingAutoswapClaim,
-  claimAutoswapPendingEntry,
-  makePendingAutoswapClaimsKey,
-  readPendingAutoswapClaims,
-  requestMintQuoteBolt11,
-  type AutoswapPendingClaim,
-} from "../../lib/autoswapClaim";
 import { getLinkyBankPaymentOfferInfo } from "../../lib/bankPaymentOffer";
 import {
   readCashuRowOwnerId,
@@ -112,17 +100,11 @@ import {
 import { reportCashuSendRowForgotten } from "../../lib/cashuSendInspector";
 import { describeTaggedCashuError } from "../../lib/cashuStoredError";
 import {
-  isCashuTokenAcceptedState,
   isCashuTokenDefinitivelySpent,
   isCashuTokenEmittedState,
   isCashuTokenIssuedState,
   isCashuTokenReservedState,
 } from "../../lib/cashuTokenState";
-import {
-  buildPaymentAmountAttempts,
-  buildPaymentFailureAmountAttempts,
-  isRetryablePaymentAmountFailure,
-} from "../../lib/paymentAmountFallback";
 import {
   canOfferPaymentMintMelt,
   getPaymentMintMeltPlan,
@@ -149,9 +131,8 @@ import {
 } from "./useContactsMessagingComposition";
 import { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
 import { useLinkshuComposition } from "./useLinkshuComposition";
+import type { ResumePendingCashuAutoswapClaims } from "./useLinkshuComposition";
 import { useProfileComposition } from "./useProfileComposition";
-
-type LoadedCashuWallet = Awaited<ReturnType<typeof createLoadedCashuWallet>>;
 
 const isPubkey = Schema.is(Pubkey);
 const CashuTokenIdFromUnknown = Evolu.id("CashuToken");
@@ -696,10 +677,12 @@ export const useCashuWalletComposition = ({
   );
 
   const {
+    autoswapCashu,
     cashuTokenLifecycle,
     meltCashuInvoice,
     probeLightningFee,
     receiveCashuToken,
+    resumePendingCashuAutoswapClaims,
     resumePendingCashuTopups,
     sendCashuToken,
     startCashuTopup,
@@ -2557,36 +2540,16 @@ export const useCashuWalletComposition = ({
   const largestForeignMintForTokenList = React.useMemo(() => {
     if (!mainMintForTokenList) return null;
 
-    const groups = new Map<
-      string,
-      { mint: string; sum: number; tokens: string[] }
-    >();
-    for (const row of cashuTokensWithMeta) {
-      if (!isCashuTokenAcceptedState(row.state)) continue;
-
-      const mint = normalizeMintUrl(String(row.mint ?? "").trim());
-      if (!mint || mint === mainMintForTokenList) continue;
-
-      const tokenText = String(row.token ?? row.rawToken ?? "").trim();
-      if (!tokenText) continue;
-
-      const amount = Number(row.amount ?? 0);
-      const nextAmount = Number.isFinite(amount) && amount > 0 ? amount : 0;
-      const entry = groups.get(mint) ?? { mint, sum: 0, tokens: [] };
-      entry.sum += nextAmount;
-      entry.tokens.push(tokenText);
-      groups.set(mint, entry);
-    }
-
-    let selected: { mint: string; sum: number; tokens: string[] } | null = null;
-    for (const entry of groups.values()) {
-      if (!selected || entry.sum > selected.sum) {
-        selected = entry;
+    let selected: { mint: string; sum: number } | null = null;
+    for (const [mint, sum] of cashuAcceptedMintBalances) {
+      if (mint === mainMintForTokenList || sum <= 0) continue;
+      if (!selected || sum > selected.sum) {
+        selected = { mint, sum };
       }
     }
 
     return selected;
-  }, [cashuTokensWithMeta, mainMintForTokenList]);
+  }, [cashuAcceptedMintBalances, mainMintForTokenList]);
 
   const formatMintButtonLabel = React.useCallback((mintUrl: string) => {
     try {
@@ -2715,21 +2678,6 @@ export const useCashuWalletComposition = ({
     walletBalances.perMint,
   ]);
 
-  // Shared per-quote in-flight set so the inline claim trigger in the
-  // autoswap path and the 5s background tick can never both successfully
-  // call mintTopupProofs for the same quote. Without this, the second path
-  // would land in the NUT-09 restore branch, return proofs in a different
-  // order than the first, encode a different token string, miss the
-  // isCashuTokenKnownAny dedup, and insert a duplicate cashuToken row.
-  const autoswapClaimInFlightRef = React.useRef<Set<string>>(new Set());
-  // Cross-tick cache so the background claim effect doesn't reload the
-  // target-mint wallet (info+keysets+keys) every tick while a quote is
-  // still PENDING at the mint. Keyed by `mintUrl|unit`; entries cleared
-  // on logout (effect cleanup).
-  const autoswapClaimWalletCacheRef = React.useRef<
-    Map<string, LoadedCashuWallet>
-  >(new Map());
-
   const meltLargestForeignMintToMainMint = React.useCallback(async () => {
     if (cashuIsBusy) return;
 
@@ -2739,443 +2687,75 @@ export const useCashuWalletComposition = ({
       return;
     }
 
-    const sourceGroups = new Map<string, { mint: string; sum: number }>();
-    for (const row of cashuTokensWithMeta) {
-      if (!isCashuTokenAcceptedState(row.state)) continue;
-
-      const mint = normalizeMintUrl(String(row.mint ?? "").trim());
-      if (!mint || mint === targetMint) continue;
-
-      const amount = Number(row.amount ?? 0);
-      const nextAmount = Number.isFinite(amount) && amount > 0 ? amount : 0;
-      const entry = sourceGroups.get(mint) ?? { mint, sum: 0 };
-      entry.sum += nextAmount;
-      sourceGroups.set(mint, entry);
-    }
-
-    let sourceMint: string | null = null;
-    let sourceBalance = 0;
-    for (const entry of sourceGroups.values()) {
-      if (!sourceMint || entry.sum > sourceBalance) {
-        sourceMint = entry.mint;
-        sourceBalance = entry.sum;
-      }
-    }
-
-    if (!sourceMint || sourceBalance <= 0) {
+    const source = largestForeignMintForTokenList;
+    if (!source || autoswapCashu === null) {
       setStatus(t("cashuMeltToMainMintUnavailable"));
       return;
     }
-
-    const sourceRows = cashuTokensWithMeta.filter((row) => {
-      if (!isCashuTokenAcceptedState(row.state)) return false;
-      return normalizeMintUrl(String(row.mint ?? "").trim()) === sourceMint;
-    });
-    const sourceTokens = sourceRows
-      .map((row) => String(row.token ?? row.rawToken ?? "").trim())
-      .filter((tokenText) => tokenText.length > 0);
-
-    if (sourceTokens.length === 0) {
-      setStatus(t("cashuMeltToMainMintUnavailable"));
-      return;
-    }
-
-    interface AcceptedCashuTokenPayload {
-      id: CashuTokenId;
-      state: "accepted";
-      token: string;
-    }
-
-    const insertAcceptedToken = async (args: {
-      amount?: number | null;
-      mint?: string | null;
-      rawToken?: string | null;
-      token: string;
-      unit?: string | null;
-    }) => {
-      const targetAliases = readCashuRowAliases({
-        rawToken: args.rawToken ?? null,
-        token: args.token,
-      });
-      const targetId = String(createCashuTokenId(args.rawToken || args.token));
-      const ownerId = await resolveOwnerIdForWrite();
-      const existingRow = cashuTokensAll.find((row) => {
-        return (
-          String(row.id ?? "") === targetId ||
-          readCashuRowAliases(row).some((alias) =>
-            targetAliases.includes(alias),
-          )
-        );
-      });
-
-      if (existingRow) {
-        return {
-          ownerId,
-          ok: true,
-          error: null,
-          rowId: existingRow.id,
-          skippedDuplicate: true,
-        };
-      }
-
-      const payload: AcceptedCashuTokenPayload = {
-        id: createCashuTokenId(args.rawToken || args.token),
-        token: args.token,
-        state: "accepted",
-      };
-
-      const result = ownerId
-        ? upsert("cashuToken", payload, { ownerId })
-        : upsert("cashuToken", payload);
-      return {
-        ownerId,
-        ok: result.ok,
-        error: result.ok
-          ? null
-          : getUnknownErrorMessage(result.error, "unknown"),
-        rowId: result.ok ? result.value.id : null,
-        skippedDuplicate: false,
-      };
-    };
-
-    type DeletableCashuRow = Pick<CashuTokenRow, "id"> &
-      Partial<Pick<CashuTokenRow, "ownerId">>;
-
-    const markRowsDeleted = async (
-      rows: DeletableCashuRow[],
-      fallbackOwnerId?: Evolu.OwnerId | null,
-    ) => {
-      for (const row of rows) {
-        const payload = { id: row.id, isDeleted: Evolu.sqliteTrue };
-        const ownerId = row.ownerId ?? fallbackOwnerId;
-        const result = ownerId
-          ? update("cashuToken", payload, { ownerId })
-          : update("cashuToken", payload);
-        if (!result.ok) {
-          throw new Error(getUnknownErrorMessage(result.error, "unknown"));
-        }
-      }
-    };
-
-    const initialAmountAttempts = buildPaymentAmountAttempts(
-      sourceBalance,
-      sourceBalance,
-    );
-    // Cap retries hard. Each iteration creates a fresh top-up quote at the
-    // target mint, and most mints rate-limit quote creation aggressively
-    // (we have hit 429 on `/v1/mint/quote/bolt11` and even `/v1/info` on
-    // mint.lnpay.cz). Eight matches buildPaymentAmountAttempts's natural
-    // stepping schedule [0,1,2,3,5,8,13,21] so we can reach a 21-sat drop
-    // off the source balance — enough headroom for percentage fee_reserve
-    // schedules (e.g. 1% with min) on borderline balances.
-    const MAX_AMOUNT_ATTEMPTS = 8;
-    const queuedAmountAttempts = [...initialAmountAttempts].slice(
-      0,
-      MAX_AMOUNT_ATTEMPTS,
-    );
-    const seenAmountAttempts = new Set(queuedAmountAttempts);
-    let finalError = t("cashuMeltToMainMintFailed");
 
     setCashuIsBusy(true);
     setStatus(t("cashuMeltToMainMintProcessing"));
-
     try {
       rememberSeenMint(targetMint);
-      // Skip refreshMintInfo here: the mint store already
-      // gates on a once-per-session ref (useMintInfoStore.ts) and the boot
-      // effect auto-refreshes the default mint at app startup. The wallet
-      // load below independently fetches info+keysets+keys via cashu-ts,
-      // which is what melt actually needs.
-
-      const { Mint, Wallet } = await getCashuLib();
-      const det = getCashuDeterministicSeedFromStorage();
-      const targetWallet = await createLoadedCashuWallet({
-        Mint,
-        Wallet,
-        mintUrl: targetMint,
-        unit: "sat",
-        ...(det ? { bip39seed: det.bip39seed } : {}),
+      const outcome = await autoswapCashu({
+        sourceMint: source.mint,
+        targetMint,
       });
-      const { meltInvoiceWithTokensAtMint, prepareMeltMintContext } =
-        await import("../../../cashuMelt");
 
-      // Pre-load source-mint context (info+keysets+keys+checkstate) once.
-      // Each retry only varies the amount; reusing the wallet handle and the
-      // already-state-checked spendable proofs across attempts cuts ~4
-      // mint round-trips per iteration. The melt-quote / swap / melt steps
-      // still run per-attempt because they bind to the per-attempt invoice.
-      let sourceMeltContext: Awaited<
-        ReturnType<typeof prepareMeltMintContext>
-      > | null = null;
-      try {
-        sourceMeltContext = await prepareMeltMintContext({
-          mint: sourceMint,
-          tokens: sourceTokens,
-          unit: "sat",
-        });
-      } catch (error) {
-        finalError = getUnknownErrorMessage(error, "unknown");
+      if (Either.isRight(outcome)) {
+        const moved = formatDisplayedAmountParts(outcome.right.movedAmount);
+        setStatus(
+          t("cashuMeltToMainMintDone")
+            .replace("{amount}", `${moved.approxPrefix}${moved.amountText}`)
+            .replace("{unit}", moved.unitLabel)
+            .replace("{mint}", formatMintButtonLabel(targetMint)),
+        );
+        return;
       }
 
-      // Pre-flight fee discovery: ask source mint how much fee_reserve + input
-      // fee it will charge for a probe invoice of the full sourceBalance, then
-      // size the first target-mint invoice as
-      //   sourceAmount = sourceBalance - fee_reserve - input_fee
-      // so the first real melt attempt has the right headroom instead of
-      // burning the entire retry ladder hitting Insufficient.
-      if (sourceMeltContext) {
-        try {
-          const probe = await requestMintQuoteBolt11({
-            amountSat: sourceBalance,
-            mintUrl: targetMint,
-          });
-          const probeMeltQuote =
-            await sourceMeltContext.wallet.createMeltQuoteBolt11(probe.invoice);
-          const probeFeeReserve = cashuAmountToNumber(
-            probeMeltQuote.fee_reserve,
-          );
-          const probeInputFee = cashuAmountToNumber(
-            sourceMeltContext.wallet.getFeesForProofs(
-              sourceMeltContext.spendableProofs,
-            ),
-          );
-          const sizedAmount = Math.max(
-            1,
-            sourceBalance - probeFeeReserve - probeInputFee,
-          );
-          if (
-            Number.isFinite(sizedAmount) &&
-            sizedAmount >= 1 &&
-            sizedAmount < sourceBalance
-          ) {
-            // Drop the no-fee-reserve attempts that we now know will fail and
-            // promote the discovered sized amount to the front of the queue.
-            const tail = queuedAmountAttempts.filter(
-              (candidate) => candidate < sizedAmount,
-            );
-            queuedAmountAttempts.length = 0;
-            queuedAmountAttempts.push(sizedAmount, ...tail);
-            seenAmountAttempts.clear();
-            for (const candidate of queuedAmountAttempts) {
-              seenAmountAttempts.add(candidate);
-            }
-          }
-        } catch {
-          // Probe failed (rate-limited mint, network error, etc.). Fall
-          // through to the original retry strategy starting from sourceBalance.
-        }
-      }
-
-      let activeSourceRows: DeletableCashuRow[] = sourceRows;
-      let activeSourceOwnerId = cashuOwnerId;
-      let activeSourceTokens = sourceTokens;
-
-      for (
-        let attemptIndex = 0;
-        attemptIndex < queuedAmountAttempts.length;
-        attemptIndex += 1
+      const error = outcome.left;
+      // PaymentFailed carrying the target mint means the melt already paid
+      // the target's invoice but the claim did not finish; the persisted
+      // pending claim completes it via resumePendingClaims.
+      if (
+        error._tag === "PaymentFailed" &&
+        normalizeMintUrl(error.mint) === targetMint
       ) {
-        const amountSat = queuedAmountAttempts[attemptIndex];
-        let quoteId = "";
-        let invoice = "";
-
-        try {
-          const requestedQuote = await requestMintQuoteBolt11({
-            amountSat,
-            mintUrl: targetMint,
-          });
-          quoteId = requestedQuote.quoteId;
-          invoice = requestedQuote.invoice;
-
-          const meltResult = await meltInvoiceWithTokensAtMint({
-            invoice,
-            mint: sourceMint,
-            tokens: activeSourceTokens,
-            unit: "sat",
-            ...(sourceMeltContext ? { context: sourceMeltContext } : {}),
-          });
-
-          if (!meltResult.ok) {
-            const errorMessage = String(meltResult.error ?? "unknown");
-
-            if (meltResult.remainingToken && meltResult.remainingAmount > 0) {
-              const retryable = isRetryablePaymentAmountFailure(errorMessage);
-
-              if (retryable) {
-                const recoveryInsert = await insertAcceptedToken({
-                  token: meltResult.remainingToken,
-                  mint: meltResult.mint,
-                  unit: meltResult.unit,
-                  amount: meltResult.remainingAmount,
-                });
-                if (!recoveryInsert.ok || !recoveryInsert.rowId) {
-                  throw new Error(
-                    String(recoveryInsert.error ?? "missing recovery token id"),
-                  );
-                }
-
-                await markRowsDeleted(activeSourceRows, activeSourceOwnerId);
-
-                activeSourceRows = [
-                  {
-                    id: recoveryInsert.rowId,
-                  },
-                ];
-                activeSourceOwnerId = recoveryInsert.ownerId;
-                activeSourceTokens = [meltResult.remainingToken];
-
-                finalError = errorMessage;
-                break;
-              }
-
-              const recoveryInsert = await insertAcceptedToken({
-                token: meltResult.remainingToken,
-                mint: meltResult.mint,
-                unit: meltResult.unit,
-                amount: meltResult.remainingAmount,
-              });
-              if (!recoveryInsert.ok) {
-                throw new Error(String(recoveryInsert.error));
-              }
-              await markRowsDeleted(activeSourceRows, activeSourceOwnerId);
-              finalError = errorMessage;
-              break;
-            }
-
-            if (
-              isRetryablePaymentAmountFailure(errorMessage) &&
-              queuedAmountAttempts.length < MAX_AMOUNT_ATTEMPTS
-            ) {
-              // Prefer stepping by the exact shortage the mint reported
-              // (`need X, have Y`), then fall back through the fee ladder.
-              // For tiny balances this matters: 2 sats with a 1-sat input
-              // fee should retry 1 sat, not drop straight to 0.
-              const candidates = buildPaymentFailureAmountAttempts(
-                amountSat,
-                errorMessage,
-              );
-              for (const retryAmount of candidates) {
-                if (seenAmountAttempts.has(retryAmount)) continue;
-                seenAmountAttempts.add(retryAmount);
-                queuedAmountAttempts.push(retryAmount);
-                if (queuedAmountAttempts.length >= MAX_AMOUNT_ATTEMPTS) break;
-              }
-              // Brief pause before re-hitting the mint quote endpoint —
-              // back-to-back POSTs trigger 429 on most public mints.
-              await new Promise<void>((resolve) => {
-                window.setTimeout(resolve, 800);
-              });
-            }
-
-            finalError = errorMessage;
-            continue;
-          }
-
-          if (meltResult.remainingToken && meltResult.remainingAmount > 0) {
-            const remainingInsert = await insertAcceptedToken({
-              token: meltResult.remainingToken,
-              mint: meltResult.mint,
-              unit: meltResult.unit,
-              amount: meltResult.remainingAmount,
-            });
-            if (!remainingInsert.ok) {
-              throw new Error(String(remainingInsert.error));
-            }
-          }
-
-          const mintedUnit = targetWallet.unit ?? "sat";
-
-          // Persist the pending claim BEFORE deleting the source rows so
-          // the background autoswap-claim effect can recover after a crash.
-          // The actual mintProofs + insert is shared with that effect via
-          // claimAutoswapPendingEntry + a per-quote in-flight set, so we
-          // can fire it inline here for instant UX without any duplicate
-          // risk: if the 5s tick happens to overlap, the second caller
-          // sees in_flight and bails.
-          const pendingClaimOwnerKey = String(appOwnerId ?? "anon");
-          const pendingClaimsKey =
-            makePendingAutoswapClaimsKey(pendingClaimOwnerKey);
-          const pendingClaim: AutoswapPendingClaim = {
-            amount: amountSat,
-            createdAtMs: Date.now(),
-            invoice,
-            mintUrl: targetMint,
-            quote: quoteId,
-            unit: mintedUnit,
-          };
-          appendPendingAutoswapClaim(pendingClaimsKey, pendingClaim);
-
-          await markRowsDeleted(activeSourceRows, activeSourceOwnerId);
-
-          void (async () => {
-            // Best-effort instant claim. Failures (mint quote not yet
-            // claimable, network error, 429) are picked up by the
-            // background tick on its next 5s pass.
-            const outcome = await claimAutoswapPendingEntry({
-              claim: pendingClaim,
-              claimOwnerKey: pendingClaimOwnerKey,
-              claimsKey: pendingClaimsKey,
-              ctx: {
-                upsert,
-                isCashuTokenKnownAny,
-                resolveOwnerIdForWrite,
-              },
-              inFlightSet: autoswapClaimInFlightRef.current,
-              walletCache: autoswapClaimWalletCacheRef.current,
-            });
-            if (outcome.kind === "claimed") {
-              const okAmount = formatDisplayedAmountParts(amountSat);
-              setStatus(
-                t("cashuMeltToMainMintDone")
-                  .replace(
-                    "{amount}",
-                    `${okAmount.approxPrefix}${okAmount.amountText}`,
-                  )
-                  .replace("{unit}", okAmount.unitLabel)
-                  .replace("{mint}", formatMintButtonLabel(targetMint)),
-              );
-            }
-          })();
-
-          const displayAmount = formatDisplayedAmountParts(amountSat);
-          setStatus(
-            t("cashuMeltToMainMintPending")
-              .replace(
-                "{amount}",
-                `${displayAmount.approxPrefix}${displayAmount.amountText}`,
-              )
-              .replace("{unit}", displayAmount.unitLabel),
-          );
-          return;
-        } catch (error) {
-          finalError = getUnknownErrorMessage(error, "unknown");
-          if (!isRetryablePaymentAmountFailure(finalError)) {
-            break;
-          }
-        }
+        const pending = formatDisplayedAmountParts(source.sum);
+        setStatus(
+          t("cashuMeltToMainMintPending")
+            .replace("{amount}", `${pending.approxPrefix}${pending.amountText}`)
+            .replace("{unit}", pending.unitLabel),
+        );
+        return;
       }
 
-      setStatus(`${t("cashuMeltToMainMintFailed")}: ${finalError}`);
+      setStatus(
+        `${t("cashuMeltToMainMintFailed")}: ${
+          describeTaggedCashuError(error) ?? error._tag
+        }`,
+      );
+    } catch (error) {
+      setStatus(
+        `${t("cashuMeltToMainMintFailed")}: ${getUnknownErrorMessage(
+          error,
+          "unknown",
+        )}`,
+      );
     } finally {
       setCashuIsBusy(false);
     }
   }, [
+    autoswapCashu,
     cashuIsBusy,
-    cashuOwnerId,
-    cashuTokensAll,
-    cashuTokensWithMeta,
     defaultMintUrl,
-    appOwnerId,
     formatDisplayedAmountParts,
     formatMintButtonLabel,
-    upsert,
-    isCashuTokenKnownAny,
+    largestForeignMintForTokenList,
     rememberSeenMint,
-    resolveOwnerIdForWrite,
     setCashuIsBusy,
     setStatus,
     t,
-    update,
   ]);
 
   const autoswapAttemptedSignatureRef = React.useRef<string | null>(null);
@@ -3206,7 +2786,7 @@ export const useCashuWalletComposition = ({
     if (largestForeignMintForTokenList.sum < CASHU_AUTOSWAP_MIN_SOURCE_SUM) {
       return null;
     }
-    return `${largestForeignMintForTokenList.mint}|${largestForeignMintForTokenList.sum}|${largestForeignMintForTokenList.tokens.length}`;
+    return `${largestForeignMintForTokenList.mint}|${largestForeignMintForTokenList.sum}`;
   }, [largestForeignMintForTokenList]);
 
   React.useEffect(() => {
@@ -3236,83 +2816,29 @@ export const useCashuWalletComposition = ({
     };
   }, [autoswapSignature, cashuAutoswapEnabled, cashuIsBusy]);
 
-  const appOwnerIdValue = appOwnerId;
+  const resumedAutoswapForRef =
+    React.useRef<ResumePendingCashuAutoswapClaims | null>(null);
   React.useEffect(() => {
-    const ownerKey = String(appOwnerIdValue ?? "anon");
-    const claimSources = [
-      {
-        claimsKey: makePendingAutoswapClaimsKey(ownerKey),
-        ownerKey,
-      },
-    ];
-    if (ownerKey !== "anon") {
-      claimSources.push({
-        claimsKey: makePendingAutoswapClaimsKey("anon"),
-        ownerKey: "anon",
+    if (resumePendingCashuAutoswapClaims === null) return;
+
+    const resumeAll = () => {
+      void resumePendingCashuAutoswapClaims().catch((error: unknown) => {
+        console.warn("[linky][autoswap] resumePendingClaims failed", error);
       });
+    };
+
+    // Once per runtime at launch; again whenever the browser comes back
+    // online, because a claim interrupted while offline waits for the next
+    // resume pass.
+    if (resumedAutoswapForRef.current !== resumePendingCashuAutoswapClaims) {
+      resumedAutoswapForRef.current = resumePendingCashuAutoswapClaims;
+      resumeAll();
     }
-    const inFlightSet = autoswapClaimInFlightRef.current;
-    const walletCache = autoswapClaimWalletCacheRef.current;
-
-    let cancelled = false;
-    let tickInFlight = false;
-    let lastWarnedKey = "";
-
-    const tick = async () => {
-      if (cancelled || tickInFlight) return;
-      const pendingSources = claimSources
-        .map((source) => ({
-          ...source,
-          pending: readPendingAutoswapClaims(source.claimsKey),
-        }))
-        .filter((source) => source.pending.length > 0);
-      if (pendingSources.length === 0) return;
-      tickInFlight = true;
-      try {
-        for (const source of pendingSources) {
-          for (const claim of source.pending) {
-            if (cancelled) break;
-            const outcome = await claimAutoswapPendingEntry({
-              claim,
-              claimOwnerKey: source.ownerKey,
-              claimsKey: source.claimsKey,
-              ctx: {
-                upsert,
-                isCashuTokenKnownAny,
-                resolveOwnerIdForWrite,
-              },
-              inFlightSet,
-              walletCache,
-            });
-            if (outcome.kind === "failed") {
-              const warnKey = `${claim.mintUrl}:${claim.quote}:${outcome.reason}`;
-              if (warnKey !== lastWarnedKey) {
-                lastWarnedKey = warnKey;
-                console.warn("[linky][autoswap] background claim failed", {
-                  error: outcome.reason,
-                  mintUrl: claim.mintUrl,
-                  quote: claim.quote,
-                });
-              }
-            }
-          }
-        }
-      } finally {
-        tickInFlight = false;
-      }
-    };
-
-    void tick();
-    const intervalId = window.setInterval(() => {
-      void tick();
-    }, 5_000);
-
+    window.addEventListener("online", resumeAll);
     return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-      walletCache.clear();
+      window.removeEventListener("online", resumeAll);
     };
-  }, [appOwnerIdValue, isCashuTokenKnownAny, resolveOwnerIdForWrite, upsert]);
+  }, [resumePendingCashuAutoswapClaims]);
 
   const requestSelectedContact = React.useCallback(async () => {
     if (route.kind !== "contactPay") return;

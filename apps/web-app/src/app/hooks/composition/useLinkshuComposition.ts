@@ -1,5 +1,7 @@
 import type * as Evolu from "@evolu/common";
 import {
+  Autoswap,
+  AutoswapDraft,
   FeeProbe,
   FeeProbeDraft,
   linkshuServices,
@@ -19,6 +21,9 @@ import {
   WalletBalances,
 } from "@linky/linkshu";
 import type {
+  AutoswapClaimResult,
+  AutoswapError,
+  AutoswapReceipt,
   Bip39Seed,
   FeeProbeError,
   InvalidTokenTransition,
@@ -168,6 +173,31 @@ export type ResumePendingCashuTopups = () => Promise<
   ReadonlyArray<CashuTopupHandle>
 >;
 
+export interface AutoswapCashuArgs {
+  readonly sourceMint: string;
+  readonly targetMint: string;
+}
+
+/**
+ * Consolidates `sourceMint`'s spendable balance into `targetMint` through
+ * linkshu Autoswap: quote at the target, melt at the source, mint at the
+ * target. The pending claim is persisted before the melt, so an interruption
+ * anywhere after payment is recovered by `resumePendingClaims`. Invalid mint
+ * input and defects reject.
+ */
+export type AutoswapCashu = (
+  args: AutoswapCashuArgs,
+) => Promise<Either.Either<AutoswapReceipt, AutoswapError>>;
+
+/**
+ * Drains every persisted pending autoswap claim (linkshu
+ * `Autoswap.resumePendingClaims`). Records are retired only on the mint's
+ * own answer, never on local age alone.
+ */
+export type ResumePendingCashuAutoswapClaims = () => Promise<
+  ReadonlyArray<AutoswapClaimResult>
+>;
+
 export type TokenTransitionError = TokenRowNotFound | InvalidTokenTransition;
 
 /**
@@ -201,6 +231,7 @@ export interface CashuTokenLifecycle {
   >;
 }
 
+const decodeAutoswapDraft = Schema.decodeUnknownSync(AutoswapDraft);
 const decodeSendDraft = Schema.decodeUnknownSync(SendDraft);
 const decodeMeltDraft = Schema.decodeUnknownSync(MeltDraft);
 const decodeFeeProbeDraft = Schema.decodeUnknownSync(FeeProbeDraft);
@@ -386,6 +417,25 @@ export const useLinkshuComposition = ({
     return { start, resumePending };
   }, [linkshuRuntime, topupScope]);
 
+  const autoswapApi = React.useMemo(() => {
+    if (linkshuRuntime === null) return null;
+
+    const claim: AutoswapCashu = ({ sourceMint, targetMint }) =>
+      linkshuRuntime.runPromise(
+        Effect.suspend(() => {
+          const draft = decodeAutoswapDraft({ sourceMint, targetMint });
+          return Effect.flatMap(Autoswap, (autoswap) => autoswap.claim(draft));
+        }).pipe(Effect.either),
+      );
+
+    const resumePendingClaims: ResumePendingCashuAutoswapClaims = () =>
+      linkshuRuntime.runPromise(
+        Effect.flatMap(Autoswap, (autoswap) => autoswap.resumePendingClaims),
+      );
+
+    return { claim, resumePendingClaims };
+  }, [linkshuRuntime]);
+
   const probeLightningFee = React.useMemo<ProbeLightningFee | null>(() => {
     if (linkshuRuntime === null) return null;
     return ({ mint, probeMint }) =>
@@ -439,11 +489,13 @@ export const useLinkshuComposition = ({
   }, [linkshuRuntime]);
 
   return {
+    autoswapCashu: autoswapApi?.claim ?? null,
     cashuTokenLifecycle,
     linkshuRuntime,
     meltCashuInvoice,
     probeLightningFee,
     receiveCashuToken,
+    resumePendingCashuAutoswapClaims: autoswapApi?.resumePendingClaims ?? null,
     resumePendingCashuTopups: topupApi?.resumePending ?? null,
     sendCashuToken,
     startCashuTopup: topupApi?.start ?? null,
