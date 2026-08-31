@@ -127,6 +127,7 @@ import {
   type DisplayContact,
 } from "./useContactsMessagingComposition";
 import { useIdentityOwnersComposition } from "./useIdentityOwnersComposition";
+import { seedLinkshuSeenMintsFromTokenRows } from "../../migrations/linkshuStorageMigration";
 import { useLinkshuComposition } from "./useLinkshuComposition";
 import type { ResumePendingCashuAutoswapClaims } from "./useLinkshuComposition";
 import { useProfileComposition } from "./useProfileComposition";
@@ -686,6 +687,11 @@ export const useCashuWalletComposition = ({
     upsert,
     writeOwnerId: cashuOwnerId ?? appOwnerId,
   });
+
+  // ONE-TIME MIGRATION — DELETE ME EVENTUALLY (see linkshuStorageMigration.ts)
+  React.useEffect(() => {
+    seedLinkshuSeenMintsFromTokenRows(cashuTokensAll);
+  }, [cashuTokensAll]);
 
   const {
     cashuTokensHydratedRef,

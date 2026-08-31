@@ -35,4 +35,20 @@ describe("wipeLinkshuSeedBoundState", () => {
       expect(localStorage.getItem(key)).toBe("42");
     }
   });
+
+  // ONE-TIME MIGRATION — DELETE ME EVENTUALLY (with linkshuStorageMigration.ts)
+  it("kills not-yet-migrated legacy counter keys with the seed they were bound to", async () => {
+    const legacyKey =
+      "linky.cashu.detCounter.v1:https%3A%2F%2Fmint.example:sat:00ff";
+    localStorage.setItem(legacyKey, "412");
+
+    await wipeLinkshuSeedBoundState(MNEMONIC);
+
+    expect(localStorage.getItem(legacyKey)).toBeNull();
+    expect(
+      localStorage.getItem(
+        `${VALUE_PREFIX}linkshu.detCounter.https%3A%2F%2Fmint.example.sat.00ff`,
+      ),
+    ).toBeNull();
+  });
 });

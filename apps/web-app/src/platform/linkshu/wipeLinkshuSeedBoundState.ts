@@ -1,6 +1,7 @@
 import { Bip39Seed, Restore, runLinkshu } from "@linky/linkshu";
 import { mnemonicToSeedSync } from "@scure/bip39";
 import { Effect } from "effect";
+import { migrateLegacyCashuLocalState } from "../../app/migrations/linkshuStorageMigration";
 import { linkshuAppInspector } from "../../devtools/inspector/linkshuInspector";
 import { localStorageKeyValueStore } from "./localStorageKeyValueStore";
 
@@ -16,6 +17,11 @@ import { localStorageKeyValueStore } from "./localStorageKeyValueStore";
 export const wipeLinkshuSeedBoundState = async (
   mnemonic: string,
 ): Promise<void> => {
+  // ONE-TIME MIGRATION — DELETE ME EVENTUALLY (see linkshuStorageMigration
+  // .ts): migrating first parks any legacy counter keys under the linkshu
+  // prefixes this wipe clears, so state bound to the replaced seed dies here
+  // instead of surviving to be migrated under the new seed later.
+  migrateLegacyCashuLocalState();
   try {
     await runLinkshu(
       {
