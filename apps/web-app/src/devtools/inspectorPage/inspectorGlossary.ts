@@ -35,8 +35,6 @@ const TAG_DESCRIPTIONS: Record<string, string> = {
     "User saved a decrypted chat PDF as a file download; the rumor link ties it to the message it came from.",
   ChatFileShareFailed:
     "System share of a chat PDF failed for a reason other than the user cancelling; the app fell back to a file download when triggered from the message menu.",
-  "mint.lightningFeeProbe":
-    "Display-only fee probe on the Mints page: an unpaid mint quote from another production mint was submitted as a melt quote to the selected mint to read its Lightning fee_reserve. Nothing is paid; the result is cached for a day. Links carry both quote ids.",
   "profiles.searchProfiles":
     "Add-contact text search: a NIP-50 kind-0 query fanned out to the read relays plus the configured search relays; relays without NIP-50 answer with unrelated profiles, so only hits that match the query locally are returned (the params carry the query and limit).",
   "contacts.addToGroup":

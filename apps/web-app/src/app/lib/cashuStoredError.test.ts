@@ -43,7 +43,10 @@ describe("describeTaggedCashuError", () => {
         required: 10,
         available: 4,
       }),
-    ).toBe("Insufficient funds");
+    ).toBe("Insufficient funds (need 10, have 4)");
+    expect(describeTaggedCashuError({ _tag: "InsufficientFunds" })).toBe(
+      "Insufficient funds",
+    );
     expect(
       describeTaggedCashuError({ _tag: "TokenAlreadyKnown", rowId: "r" }),
     ).toBe("Token is already in the wallet");
@@ -57,6 +60,22 @@ describe("describeTaggedCashuError", () => {
         to: "issued",
       }),
     ).toBe("Token state does not allow this");
+  });
+
+  it("maps linkshu melt failures to readable text", () => {
+    expect(
+      describeTaggedCashuError({
+        _tag: "PaymentFailed",
+        mint: "m",
+        quoteId: "q",
+        detail: "the lightning payment failed at the mint",
+      }),
+    ).toBe(
+      "Lightning payment failed: the lightning payment failed at the mint",
+    );
+    expect(describeTaggedCashuError({ _tag: "QuoteExpired", mint: "m" })).toBe(
+      "The quote expired, try again",
+    );
   });
 
   it("returns null for unknown tags and untagged values", () => {

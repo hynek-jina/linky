@@ -13,6 +13,23 @@ const readStringField = (error: object, key: string): string | null => {
 const withDetail = (base: string, detail: string | null): string =>
   detail === null ? base : `${base}: ${detail}`;
 
+const readAmountField = (error: object, key: string): number | null => {
+  const value: unknown = Reflect.get(error, key);
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+};
+
+/**
+ * The `need X, have Y` suffix keeps the amount-degrade retry ladder
+ * (`getPaymentAmountShortage`) able to size the next attempt exactly.
+ */
+const describeInsufficientFunds = (error: object): string => {
+  const required = readAmountField(error, "required");
+  const available = readAmountField(error, "available");
+  return required !== null && available !== null
+    ? `Insufficient funds (need ${required}, have ${available})`
+    : "Insufficient funds";
+};
+
 /** Human text for a live or parsed tagged cashu error; null for unknown shapes. */
 export const describeTaggedCashuError = (error: unknown): string | null => {
   if (typeof error !== "object" || error === null) return null;
@@ -31,7 +48,11 @@ export const describeTaggedCashuError = (error: unknown): string | null => {
     case "CounterLockTimeout":
       return "Wallet is busy in another window, try again";
     case "InsufficientFunds":
-      return "Insufficient funds";
+      return describeInsufficientFunds(error);
+    case "PaymentFailed":
+      return withDetail("Lightning payment failed", detail);
+    case "QuoteExpired":
+      return "The quote expired, try again";
     case "TokenAlreadyKnown":
       return "Token is already in the wallet";
     case "TokenRowNotFound":

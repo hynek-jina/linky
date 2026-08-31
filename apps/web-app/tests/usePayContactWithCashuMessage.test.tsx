@@ -340,7 +340,7 @@ describe("usePayContactWithCashuMessage", () => {
     const result = await payAlice(harness);
 
     expect(result).toEqual({
-      error: "Insufficient funds",
+      error: "Insufficient funds (need 600, have 10)",
       ok: false,
       queued: false,
     });
