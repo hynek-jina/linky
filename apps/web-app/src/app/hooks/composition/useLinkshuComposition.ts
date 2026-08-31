@@ -2,11 +2,19 @@ import type * as Evolu from "@evolu/common";
 import {
   linkshuServices,
   NonNegativeAmount,
+  Receive,
+  ReceiveDraft,
   Tokens,
   WalletBalances,
 } from "@linky/linkshu";
-import type { Bip39Seed, WalletToken } from "@linky/linkshu";
+import type {
+  Bip39Seed,
+  ReceiveError,
+  ReceiveReceipt,
+  WalletToken,
+} from "@linky/linkshu";
 import { Effect, Layer, ManagedRuntime } from "effect";
+import type { Either } from "effect";
 import React from "react";
 import { linkshuAppInspector } from "../../../devtools/inspector/linkshuInspector";
 import type { CashuTokenRow, useEvolu } from "../../../evolu";
@@ -45,6 +53,14 @@ const emptyReadModel: LinkshuReadModel = {
 
 const sameSeed = (a: Bip39Seed, b: Bip39Seed): boolean =>
   a.length === b.length && a.every((byte, index) => byte === b[index]);
+
+/**
+ * Runs linkshu Receive end to end (parse, dedup, swap, persist) and resolves
+ * with the typed outcome; only defects reject.
+ */
+export type ReceiveCashuToken = (
+  text: string,
+) => Promise<Either.Either<ReceiveReceipt, ReceiveError>>;
 
 /**
  * The app's linkshu composition root: resolves the seed, layers
@@ -147,8 +163,22 @@ export const useLinkshuComposition = ({
     };
   }, [cashuTokenRows, linkshuRuntime]);
 
+  const receiveCashuToken = React.useMemo<ReceiveCashuToken | null>(() => {
+    if (linkshuRuntime === null) return null;
+    return (text) =>
+      linkshuRuntime.runPromise(
+        Receive.pipe(
+          Effect.flatMap((receive) =>
+            receive.receive(new ReceiveDraft({ text })),
+          ),
+          Effect.either,
+        ),
+      );
+  }, [linkshuRuntime]);
+
   return {
     linkshuRuntime,
+    receiveCashuToken,
     walletBalances: readModel.balances,
     walletTokens: readModel.tokens,
   };

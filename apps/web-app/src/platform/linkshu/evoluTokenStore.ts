@@ -6,7 +6,7 @@ import {
   TokenText,
   UnixSeconds,
 } from "@linky/linkshu";
-import type { TokenStoreService } from "@linky/linkshu";
+import type { TokenRowPatch, TokenStoreService } from "@linky/linkshu";
 import { Effect, Layer, Schema } from "effect";
 import { resolveCashuRowStoredOwnerLane } from "../../app/lib/cashuOwnerLane";
 import {
@@ -29,6 +29,13 @@ import type { CashuTokenId, CashuTokenRow } from "../../evolu";
  * delete. Mutations target the owner lane the row is stored in — writing
  * through the active lane when the row lives in an older `cashu-n` lane
  * silently no-ops (see `resolveCashuRowStoredOwnerLane`).
+ *
+ * `loadTokenRows` serves the React render state, which lags Evolu mutations
+ * by at least one render. Linkshu chains writes and reads within one
+ * operation (Receive inserts a pending row, swaps at the mint, then updates
+ * that row), so the store keeps a write overlay of its own mutations and
+ * serves them until the lagging read model reflects each one — otherwise the
+ * post-swap update would miss the just-inserted row and silently no-op.
  */
 
 /**
@@ -144,9 +151,42 @@ const toStoredTokenRow = (row: CashuTokenRow): StoredTokenRow | null => {
   });
 };
 
+interface OverlayEntry {
+  row: StoredTokenRow;
+  readonly evoluId: CashuTokenId;
+  readonly lane: Evolu.OwnerId;
+  removed: boolean;
+}
+
+const applyPatchToStoredRow = (
+  row: StoredTokenRow,
+  patch: TokenRowPatch,
+): StoredTokenRow =>
+  new StoredTokenRow({
+    ...row,
+    ...(patch.tokenText !== undefined ? { tokenText: patch.tokenText } : {}),
+    ...(patch.state !== undefined ? { state: patch.state } : {}),
+    ...(patch.error !== undefined ? { error: patch.error } : {}),
+  });
+
+/** The lagging read model reflects the overlay's last write for this row. */
+const reflectsOverlayRow = (
+  evoluRow: CashuTokenRow,
+  overlayRow: StoredTokenRow,
+): boolean => {
+  const state =
+    normalizeCashuTokenState(evoluRow.state) ?? CASHU_TOKEN_STATE_ACCEPTED;
+  return (
+    state === overlayRow.state &&
+    String(evoluRow.token ?? "").trim() === overlayRow.tokenText
+  );
+};
+
 export const makeEvoluTokenStore = (
   deps: EvoluTokenStoreDeps,
 ): TokenStoreService => {
+  const overlay = new Map<string, OverlayEntry>();
+
   const loadLiveRows = async (): Promise<CashuTokenRow[]> =>
     (await deps.loadTokenRows()).filter((row) => !isDeletedCashuRow(row));
 
@@ -166,10 +206,25 @@ export const makeEvoluTokenStore = (
     }
   };
 
+  const toUpdatePayload = (
+    id: CashuTokenId,
+    patch: TokenRowPatch,
+  ): EvoluCashuTokenUpdatePayload => ({
+    id,
+    ...(patch.tokenText !== undefined
+      ? { token: Evolu.NonEmptyString.orThrow(patch.tokenText) }
+      : {}),
+    ...(patch.state !== undefined
+      ? { state: Evolu.NonEmptyString100.orThrow(patch.state) }
+      : {}),
+    ...(patch.error !== undefined ? { error: toErrorColumn(patch.error) } : {}),
+  });
+
   return {
     insert: (row) =>
       Effect.sync(() => {
         const id = createCashuTokenId(row.originalTokenText);
+        const lane = deps.getWriteOwnerId();
         const errorColumn = toErrorColumn(row.error);
         const result = deps.upsert(
           "cashuToken",
@@ -182,12 +237,12 @@ export const makeEvoluTokenStore = (
             token: Evolu.NonEmptyString.orThrow(row.tokenText),
             ...(errorColumn !== null ? { error: errorColumn } : {}),
           },
-          { ownerId: deps.getWriteOwnerId() },
+          { ownerId: lane },
         );
         if (!result.ok) {
           throw new Error(`cashuToken upsert failed: ${String(result.error)}`);
         }
-        return new StoredTokenRow({
+        const stored = new StoredTokenRow({
           createdAt: UnixSeconds.make(Math.floor(Date.now() / 1000)),
           error: row.error,
           id: TokenRowId.make(String(id)),
@@ -195,45 +250,92 @@ export const makeEvoluTokenStore = (
           state: row.state,
           tokenText: row.tokenText,
         });
+        overlay.set(String(id), {
+          row: stored,
+          evoluId: id,
+          lane,
+          removed: false,
+        });
+        return stored;
       }),
 
     update: (id, patch) =>
       Effect.promise(async () => {
+        const entry = overlay.get(String(id));
+        if (entry !== undefined) {
+          if (entry.removed) return;
+          runUpdate(toUpdatePayload(entry.evoluId, patch), entry.lane);
+          entry.row = applyPatchToStoredRow(entry.row, patch);
+          return;
+        }
         const target = await findRow(id);
         if (target === null) return;
-        runUpdate(
-          {
-            id: target.id,
-            ...(patch.tokenText !== undefined
-              ? { token: Evolu.NonEmptyString.orThrow(patch.tokenText) }
-              : {}),
-            ...(patch.state !== undefined
-              ? { state: Evolu.NonEmptyString100.orThrow(patch.state) }
-              : {}),
-            ...(patch.error !== undefined
-              ? { error: toErrorColumn(patch.error) }
-              : {}),
-          },
-          rowLane(target),
-        );
+        const lane = rowLane(target);
+        runUpdate(toUpdatePayload(target.id, patch), lane);
+        const stored = toStoredTokenRow(target);
+        if (stored !== null) {
+          overlay.set(String(id), {
+            row: applyPatchToStoredRow(stored, patch),
+            evoluId: target.id,
+            lane,
+            removed: false,
+          });
+        }
       }),
 
     remove: (id) =>
       Effect.promise(async () => {
+        const entry = overlay.get(String(id));
+        if (entry !== undefined) {
+          if (!entry.removed) {
+            runUpdate(
+              { id: entry.evoluId, isDeleted: Evolu.sqliteTrue },
+              entry.lane,
+            );
+            entry.removed = true;
+          }
+          return;
+        }
         const target = await findRow(id);
         if (target === null) return;
-        runUpdate(
-          { id: target.id, isDeleted: Evolu.sqliteTrue },
-          rowLane(target),
-        );
+        const lane = rowLane(target);
+        runUpdate({ id: target.id, isDeleted: Evolu.sqliteTrue }, lane);
+        const stored = toStoredTokenRow(target);
+        if (stored !== null) {
+          overlay.set(String(id), {
+            row: stored,
+            evoluId: target.id,
+            lane,
+            removed: true,
+          });
+        }
       }),
 
     loadAll: Effect.promise(async () => {
-      const rows = await loadLiveRows();
-      return rows.flatMap((row) => {
+      const liveRows = await loadLiveRows();
+      const seenIds = new Set<string>();
+      const result: StoredTokenRow[] = [];
+      for (const row of liveRows) {
+        const key = String(row.id);
+        seenIds.add(key);
+        const entry = overlay.get(key);
+        if (entry !== undefined) {
+          if (entry.removed) continue;
+          if (reflectsOverlayRow(row, entry.row)) {
+            overlay.delete(key);
+          } else {
+            result.push(entry.row);
+            continue;
+          }
+        }
         const stored = toStoredTokenRow(row);
-        return stored === null ? [] : [stored];
-      });
+        if (stored !== null) result.push(stored);
+      }
+      for (const [key, entry] of overlay) {
+        if (seenIds.has(key) || entry.removed) continue;
+        result.push(entry.row);
+      }
+      return result;
     }),
   };
 };

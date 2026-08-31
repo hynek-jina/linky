@@ -1,3 +1,5 @@
+import { isStoredCashuErrorTokenSpent } from "./cashuStoredError";
+
 export const CASHU_TOKEN_STATE_ACCEPTED = "accepted";
 export const CASHU_TOKEN_STATE_ERROR = "error";
 export const CASHU_TOKEN_STATE_EXTERNALIZED = "externalized";
@@ -118,5 +120,8 @@ export const isCashuTokenDefinitivelySpent = (token: {
   error?: unknown;
 }): boolean => {
   if (!isCashuTokenErrorState(token.state)) return false;
-  return isDefinitiveCashuError(token.error);
+  return (
+    isStoredCashuErrorTokenSpent(token.error) ||
+    isDefinitiveCashuError(token.error)
+  );
 };

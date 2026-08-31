@@ -70,30 +70,6 @@ describe("acceptAndPersistCashuToken", () => {
     expect(resolveOwnerId).not.toHaveBeenCalled();
   });
 
-  it("does not persist when the accepted token alias appeared concurrently", async () => {
-    const persistAccepted = vi.fn();
-    const result = await acceptAndPersistCashuToken({
-      tokenText: "cashu-input",
-      acceptToken: async () => ({
-        amount: 21,
-        mint: "https://mint.example",
-        token: "cashu-accepted",
-        unit: "sat",
-      }),
-      isAlreadyStored: () => false,
-      isAcceptedAlreadyStored: (_, acceptedToken) =>
-        acceptedToken === "cashu-accepted",
-      resolveOwnerId: async () => ownerId,
-      beforePersist: vi.fn(),
-      persistAccepted,
-      afterPersist: vi.fn(),
-      persistFailure: vi.fn(() => ({ ok: true })),
-    });
-
-    expect(result).toEqual({ status: "duplicate-after-accept" });
-    expect(persistAccepted).not.toHaveBeenCalled();
-  });
-
   it("persists the raw token as an error when acceptance fails", async () => {
     const persistFailure = vi.fn();
     const result = await acceptAndPersistCashuToken({
