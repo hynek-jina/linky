@@ -7,6 +7,7 @@ import type { LocalMintInfoRow, MintUrlInput } from "../types/appTypes";
 
 export interface AdvancedSettingsContextValue {
   bankPaymentOfferRecipientCount: number;
+  bankPaymentOfferStaggerDelaySec: number;
   cashuAutoswapEnabled: boolean;
   copyNostrKeys: () => Promise<void>;
   copySeed: () => Promise<void>;
@@ -31,6 +32,7 @@ export interface AdvancedSettingsContextValue {
   saveSeedToPasswordManager: () => Promise<PasswordManagerSaveResult>;
   seedMnemonic: string | null;
   setBankPaymentOfferRecipientCount: (value: number) => void;
+  setBankPaymentOfferStaggerDelaySec: (value: number) => void;
   setCashuAutoswapEnabled: (value: boolean) => void;
   setLightningInvoiceAutoPayLimit: (value: number) => void;
   setPayWithCashuEnabled: (value: boolean) => void;

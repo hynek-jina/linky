@@ -6,12 +6,24 @@ import type { LocalNostrMessage } from "../app/types/appTypes";
 import { createLinkyBankPaymentOfferEvent } from "../testUtils/bankPaymentOfferEvent";
 import { BankPaymentOfferDetailPage } from "./BankPaymentOfferDetailPage";
 
+const { appShellMock } = vi.hoisted(() => ({
+  appShellMock: {
+    allowedDisplayCurrencies: ["sat"] as string[],
+    cycleDisplayCurrency: vi.fn(),
+  },
+}));
+
 vi.mock("../app/context/AppShellContexts", () => ({
+  useAppShellActions: () => ({
+    cycleDisplayCurrency: appShellMock.cycleDisplayCurrency,
+  }),
   useAppShellCore: () => ({
+    allowedDisplayCurrencies: appShellMock.allowedDisplayCurrencies,
     formatDisplayedAmountText: (amountSat: number) => `${amountSat} sat`,
     nostrPictureByNpub: {
       npub1alice: "https://example.com/alice.jpg",
     },
+    t: (key: string) => key,
   }),
 }));
 
@@ -110,6 +122,9 @@ describe("BankPaymentOfferDetailPage", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     window.location.hash = "";
+    localStorage.clear();
+    appShellMock.allowedDisplayCurrencies = ["sat"];
+    appShellMock.cycleDisplayCurrency.mockClear();
   });
 
   it("keeps the offerer's countdown ticking while the own chat is accepted_by_other", async () => {
@@ -278,9 +293,153 @@ describe("BankPaymentOfferDetailPage", () => {
       ".bank-payment-offer-progress-step",
     );
 
+    expect(steps).toHaveLength(4);
     expect(steps[0]?.classList.contains("is-complete")).toBe(true);
-    expect(steps[1]?.classList.contains("is-complete")).toBe(false);
-    expect(steps[1]?.querySelector("svg")).toBeNull();
+    expect(steps[1]?.classList.contains("is-complete")).toBe(true);
+    expect(steps[2]?.classList.contains("is-complete")).toBe(false);
+    expect(steps[3]?.classList.contains("is-complete")).toBe(false);
+    expect(Array.from(steps, (step) => step.textContent)).toEqual([
+      "bankPaymentOfferProgressOffered",
+      "bankPaymentOfferProgressAccept",
+      "bankPaymentOfferProgressBankPayment",
+      "bankPaymentOfferProgressSats",
+    ]);
+  });
+
+  it("keeps the confirm action visible and hides the payment rows behind a toggle", async () => {
+    const container = await renderOffer(
+      vi.fn(async () => true),
+      "bank_details_sent",
+    );
+
+    expect(container.querySelector(".bank-payment-fields")).toBeNull();
+    const detailsToggle = container.querySelector<HTMLButtonElement>(
+      ".bank-payment-offer-details-toggle",
+    );
+    const confirmButton = container.querySelector<HTMLButtonElement>(
+      ".bank-payment-request",
+    );
+    expect(confirmButton?.textContent).toContain("bankPaymentOfferMarkPaid");
+    expect(
+      detailsToggle &&
+        confirmButton &&
+        Boolean(confirmButton.compareDocumentPosition(detailsToggle) & 4),
+    ).toBe(true);
+
+    await act(async () => {
+      detailsToggle?.click();
+    });
+    expect(
+      container.querySelector(".bank-payment-fields")?.textContent,
+    ).toContain("CZ6508000000192000145399");
+  });
+
+  it("cycles the display unit when the amount is tapped", async () => {
+    appShellMock.allowedDisplayCurrencies = ["sat", "czk"];
+    const container = await renderOffer(
+      vi.fn(async () => true),
+      "bank_details_sent",
+    );
+
+    const amountButton = container.querySelector<HTMLButtonElement>(
+      ".bank-payment-amount-button",
+    );
+    expect(amountButton).not.toBeNull();
+    await act(async () => {
+      amountButton?.click();
+    });
+    expect(appShellMock.cycleDisplayCurrency).toHaveBeenCalledOnce();
+  });
+
+  it("names the accepting contact in the offerer summary", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const named = (key: string) =>
+      key === "bankPaymentOfferProgressAcceptedByName"
+        ? "{name} has already accepted the offer."
+        : key;
+
+    await act(async () => {
+      root.render(
+        <BankPaymentOfferDetailPage
+          bankPaymentOfferMessages={[createOfferMessage("accepted")]}
+          chatId="contact-1"
+          chatMessages={[]}
+          chatOwnPubkeyHex="offerer-pubkey"
+          contacts={[{ id: "contact-1", name: "Alice", npub: "npub1alice" }]}
+          offerId="offer-1"
+          onCopyText={() => undefined}
+          onRespondBankPaymentOffer={async () => true}
+          onSendChatImage={async () => undefined}
+          onSettleBankPaymentOffer={async () => undefined}
+          t={named}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain(
+      "Alice has already accepted the offer.",
+    );
+    expect(container.textContent).not.toContain(
+      "bankPaymentOfferProgressAcceptedInfo",
+    );
+  });
+
+  it("lists staggered recipients still waiting in the queue", async () => {
+    const nowSec = Math.floor(Date.now() / 1_000);
+    localStorage.setItem(
+      "linky.bank_payment_offer_stagger.v1.offer-1",
+      JSON.stringify({
+        amountSat: 1_000,
+        amountText: "1,000 sat",
+        createdAtSec: nowSec,
+        expiresAtSec: nowSec + 300,
+        offerId: "offer-1",
+        ownerPubkey: "offerer-pubkey",
+        pending: [
+          {
+            contactId: "contact-2",
+            contactPubHex: "b".repeat(64),
+            dueAtSec: nowSec + 10,
+          },
+        ],
+      }),
+    );
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <BankPaymentOfferDetailPage
+          bankPaymentOfferMessages={[createOfferMessage("offered")]}
+          chatId="contact-1"
+          chatMessages={[]}
+          chatOwnPubkeyHex="offerer-pubkey"
+          contacts={[
+            { id: "contact-1", name: "Alice" },
+            { id: "contact-2", name: "Bob" },
+          ]}
+          offerId="offer-1"
+          onCopyText={() => undefined}
+          onRespondBankPaymentOffer={async () => true}
+          onSendChatImage={async () => undefined}
+          onSettleBankPaymentOffer={async () => undefined}
+          t={(key) => key}
+        />,
+      );
+    });
+
+    const recipients = container.querySelectorAll(
+      ".bank-payment-offer-recipient",
+    );
+    expect(recipients).toHaveLength(2);
+    expect(recipients[0]?.textContent).toContain("Alice");
+    expect(recipients[1]?.textContent).toContain("Bob");
+    expect(recipients[1]?.textContent).toContain(
+      "bankPaymentOfferStatusQueued",
+    );
   });
 
   it("requests one more minute without changing the active offer phase", async () => {

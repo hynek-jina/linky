@@ -67,6 +67,7 @@ import { appendPushDebugLog } from "../../../utils/pushDebugLog";
 import { getBankPaymentOfferCurrency } from "../../../utils/spdPayment";
 import {
   getInitialBankPaymentOfferRecipientCount,
+  getInitialBankPaymentOfferStaggerDelaySec,
   safeLocalStorageGet,
   safeLocalStorageGetJson,
   safeLocalStorageSetJson,
@@ -84,14 +85,23 @@ import {
   isLinkyBankPaymentOfferExpired,
   isLinkyBankPaymentOfferTerminalStatus,
   isLinkyBankPaymentOfferWholeOfferTerminalStatus,
+  forgetLinkyBankPaymentOfferStaggerQueue,
   LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT,
+  LINKY_BANK_PAYMENT_OFFER_DEFAULT_STAGGER_DELAY_SEC,
   LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX,
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
+  LINKY_BANK_PAYMENT_OFFER_MAX_STAGGER_DELAY_SEC,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
+  LINKY_BANK_PAYMENT_OFFER_MIN_STAGGER_DELAY_SEC,
+  LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
+  LINKY_BANK_PAYMENT_OFFER_STAGGER_LOCK_KEY_PREFIX,
   markLinkyBankPaymentOfferBankDetailsSent,
   mergeBankPaymentOffersIntoLastMessageByContactId,
   readLinkyBankPaymentOfferSpdRecord,
+  readLinkyBankPaymentOfferStaggerRecords,
   rememberLinkyBankPaymentOfferSpdPayload,
+  rememberLinkyBankPaymentOfferStaggerQueue,
+  removeLinkyBankPaymentOfferStaggerRecipients,
   type LinkyBankPaymentOfferStatus,
 } from "../../lib/bankPaymentOffer";
 import { collectUnreadNewestIncomingByContactId } from "../../lib/chatUnread";
@@ -255,6 +265,25 @@ const clampBankPaymentOfferRecipientCount = (value: number): number => {
     Math.max(LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT, Math.round(value)),
   );
 };
+
+const clampBankPaymentOfferStaggerDelaySec = (value: number): number => {
+  if (!Number.isFinite(value)) {
+    return LINKY_BANK_PAYMENT_OFFER_DEFAULT_STAGGER_DELAY_SEC;
+  }
+
+  return Math.min(
+    LINKY_BANK_PAYMENT_OFFER_MAX_STAGGER_DELAY_SEC,
+    Math.max(LINKY_BANK_PAYMENT_OFFER_MIN_STAGGER_DELAY_SEC, Math.round(value)),
+  );
+};
+
+const BANK_PAYMENT_OFFER_STAGGER_RETRY_MS = 5_000;
+
+// Statuses that keep the offer open for more recipients: anything else means a
+// winner exists or the whole offer ended, so extending it would be pointless.
+const bankPaymentOfferStaggerQueueStillWanted = (
+  status: LinkyBankPaymentOfferStatus,
+): boolean => status === "offered" || status === "declined";
 
 interface UnknownChatContact extends ContactRowLike {
   id: string;
@@ -454,6 +483,26 @@ export const useContactsMessagingComposition = ({
     (value: number) => {
       setBankPaymentOfferRecipientCountState(
         clampBankPaymentOfferRecipientCount(value),
+      );
+    },
+    [],
+  );
+
+  const [
+    bankPaymentOfferStaggerDelaySec,
+    setBankPaymentOfferStaggerDelaySecState,
+  ] = useState<number>(() =>
+    clampBankPaymentOfferStaggerDelaySec(
+      getInitialBankPaymentOfferStaggerDelaySec(
+        LINKY_BANK_PAYMENT_OFFER_DEFAULT_STAGGER_DELAY_SEC,
+      ),
+    ),
+  );
+
+  const setBankPaymentOfferStaggerDelaySec = React.useCallback(
+    (value: number) => {
+      setBankPaymentOfferStaggerDelaySecState(
+        clampBankPaymentOfferStaggerDelaySec(value),
       );
     },
     [],
@@ -1646,12 +1695,77 @@ export const useContactsMessagingComposition = ({
   const canAddContact =
     activeContactsOwnerContactCount < MAX_CONTACTS_PER_OWNER;
 
+  const sendBankPaymentOfferedMessage = React.useCallback(
+    async (args: {
+      amountSat: number | null;
+      amountText: string;
+      contactId: string;
+      contactPubHex: string;
+      expiresAtSec?: number;
+      myPubHex: string;
+      offerId: string;
+    }): Promise<number | null> => {
+      const { amountSat, amountText, contactId, contactPubHex, myPubHex } =
+        args;
+      const offerId = args.offerId;
+      if (
+        !isPubkey(contactPubHex) ||
+        !isPubkey(myPubHex) ||
+        !isBankOfferId(offerId) ||
+        !isNonEmptyTrimmedString(amountText)
+      ) {
+        return null;
+      }
+
+      const text = getLinkyBankPaymentOfferMessageText(amountText, "offered");
+      if (!isNonEmptyTrimmedString(text)) return null;
+
+      const clientId = ClientId.make(makeLocalId());
+      const expiresAtSec = positiveUnixSeconds(args.expiresAtSec);
+      const exit = await sendBankOffer(
+        new BankOfferDraft({
+          to: contactPubHex,
+          offerId,
+          offerer: myPubHex,
+          status: "offered",
+          amountText,
+          text,
+          ...(amountSat !== null && isPositiveInt(amountSat)
+            ? { amountSat }
+            : {}),
+          ...(expiresAtSec === undefined ? {} : { expiresAtSec }),
+        }),
+      );
+      if (!Exit.isSuccess(exit)) return null;
+
+      upsertBankPaymentOfferMessage({
+        clientId,
+        contactId,
+        content: exit.value.content,
+        createdAtSec: exit.value.sentAt,
+        direction: "out",
+        id: `bank-payment-offer:${contactId}:${offerId}`,
+        localOnly: true,
+        pubkey: myPubHex,
+        rumorId: exit.value.snapshotId,
+        status: "sent",
+        wrapId: exit.value.selfCopy.wrapId,
+      });
+      return exit.value.sentAt;
+    },
+    [sendBankOffer, upsertBankPaymentOfferMessage],
+  );
+
+  const [bankPaymentOfferStaggerTick, setBankPaymentOfferStaggerTick] =
+    useState(0);
+
   const requestBankPaymentOffer = React.useCallback(
     async (args: {
       amountSat?: unknown;
       amountText: string;
       contacts: readonly { id?: unknown; name?: unknown; npub?: unknown }[];
       spdPayload?: unknown;
+      staggerDelaySec?: unknown;
     }): Promise<{ chatId: string; offerId: string } | null> => {
       const amountSatRaw = Number(args.amountSat ?? 0);
       const amountSat =
@@ -1660,6 +1774,9 @@ export const useContactsMessagingComposition = ({
           : null;
       const amountText = String(args.amountText ?? "").trim();
       const spdPayload = String(args.spdPayload ?? "").trim();
+      const staggerDelaySec = clampBankPaymentOfferStaggerDelaySec(
+        Number(args.staggerDelaySec ?? 0),
+      );
       if (!amountText) {
         setStatus(t("spdPaymentOfferMissingAmount"));
         return null;
@@ -1714,56 +1831,62 @@ export const useContactsMessagingComposition = ({
 
         let sentCount = 0;
         let firstSentContactId = "";
+        let firstSentAtSec: number | null = null;
+        const queuedRecipients: { contactId: string; contactPubHex: string }[] =
+          [];
 
         for (const recipient of recipients) {
-          if (!isPubkey(recipient.contactPubHex)) continue;
+          // With a stagger delay only the first reachable recipient gets the
+          // offer now; the rest wait in the persisted queue.
+          if (staggerDelaySec > 0 && firstSentAtSec !== null) {
+            queuedRecipients.push(recipient);
+            continue;
+          }
 
-          const clientId = ClientId.make(makeLocalId());
-          const text = getLinkyBankPaymentOfferMessageText(
+          const sentAtSec = await sendBankPaymentOfferedMessage({
+            amountSat,
             amountText,
-            "offered",
-          );
-          if (!isNonEmptyTrimmedString(text)) continue;
-
-          const exit = await sendBankOffer(
-            new BankOfferDraft({
-              to: recipient.contactPubHex,
-              offerId,
-              offerer: myPubHex,
-              status: "offered",
-              amountText,
-              text,
-              ...(amountSat !== null && isPositiveInt(amountSat)
-                ? { amountSat }
-                : {}),
-            }),
-          );
-          if (!Exit.isSuccess(exit)) continue;
-
-          upsertBankPaymentOfferMessage({
-            clientId,
             contactId: recipient.contactId,
-            content: exit.value.content,
-            createdAtSec: exit.value.sentAt,
-            direction: "out",
-            id: `bank-payment-offer:${recipient.contactId}:${offerId}`,
-            localOnly: true,
-            pubkey: myPubHex,
-            rumorId: exit.value.snapshotId,
-            status: "sent",
-            wrapId: exit.value.selfCopy.wrapId,
+            contactPubHex: recipient.contactPubHex,
+            myPubHex,
+            offerId,
           });
+          if (sentAtSec === null) continue;
+
           sentCount += 1;
-          if (!firstSentContactId) {
+          if (firstSentAtSec === null) {
+            firstSentAtSec = sentAtSec;
             firstSentContactId = recipient.contactId;
           }
         }
 
-        if (sentCount === 0) {
+        if (sentCount === 0 || firstSentAtSec === null) {
           setStatus(t("spdPaymentOfferFailed"));
           return null;
         }
 
+        if (queuedRecipients.length > 0) {
+          // Delayed recipients share the first send's expiry, so extending
+          // the offer never extends its total lifetime.
+          const staggerBaseSec = firstSentAtSec;
+          rememberLinkyBankPaymentOfferStaggerQueue({
+            amountSat,
+            amountText,
+            createdAtSec: staggerBaseSec,
+            expiresAtSec:
+              staggerBaseSec + LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC,
+            offerId,
+            ownerPubkey: myPubHex,
+            pending: queuedRecipients.map((recipient, index) => ({
+              contactId: recipient.contactId,
+              contactPubHex: recipient.contactPubHex,
+              dueAtSec: staggerBaseSec + (index + 1) * staggerDelaySec,
+            })),
+          });
+          setBankPaymentOfferStaggerTick((tick) => tick + 1);
+        }
+
+        setBankPaymentOfferStaggerDelaySec(staggerDelaySec);
         return { chatId: firstSentContactId, offerId };
       } catch (error) {
         setStatus(
@@ -1772,7 +1895,13 @@ export const useContactsMessagingComposition = ({
         return null;
       }
     },
-    [currentNsec, sendBankOffer, setStatus, t, upsertBankPaymentOfferMessage],
+    [
+      currentNsec,
+      sendBankPaymentOfferedMessage,
+      setBankPaymentOfferStaggerDelaySec,
+      setStatus,
+      t,
+    ],
   );
 
   const respondToBankPaymentOffer = React.useCallback(
@@ -2250,6 +2379,198 @@ export const useContactsMessagingComposition = ({
       }
     };
   }, [bankPaymentOfferMessages, currentNsec, respondToBankPaymentOffer]);
+
+  // Staggered proxy payment offers: queued recipients (persisted by
+  // requestBankPaymentOffer) receive the offer once their delay elapses,
+  // unless the offer meanwhile found a winner or ended.
+  React.useEffect(() => {
+    if (!currentNsec) return;
+    const identity = identityFromNsec(currentNsec);
+    if (!identity) return;
+    const myPubHex = identity.pubkey;
+
+    const records = readLinkyBankPaymentOfferStaggerRecords(myPubHex);
+    if (records.length === 0) return;
+
+    const closedOfferIds = new Set<string>();
+    const offeredContactIdsByOfferId = new Map<string, Set<string>>();
+    for (const message of bankPaymentOfferMessages) {
+      const info = getLinkyBankPaymentOfferInfo(String(message.content ?? ""));
+      if (!info) continue;
+      if (!bankPaymentOfferStaggerQueueStillWanted(info.status)) {
+        closedOfferIds.add(info.offerId);
+      }
+      const contactId = String(message.contactId ?? "").trim();
+      if (contactId) {
+        const contactIds =
+          offeredContactIdsByOfferId.get(info.offerId) ?? new Set<string>();
+        contactIds.add(contactId);
+        offeredContactIdsByOfferId.set(info.offerId, contactIds);
+      }
+    }
+
+    let cancelled = false;
+    let timeoutId: number | undefined;
+    const bumpTick = () => setBankPaymentOfferStaggerTick((tick) => tick + 1);
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const dueRecords: typeof records = [];
+    let nextDueAtSec: number | null = null;
+    for (const record of records) {
+      if (closedOfferIds.has(record.offerId)) {
+        forgetLinkyBankPaymentOfferStaggerQueue(record.offerId);
+        if (getInspectorEmissionEnabled()) {
+          reportInspectorRows([
+            {
+              at: Date.now(),
+              channel: "nostr.operation",
+              tag: "bankOffer.staggerDropped",
+              summary: `proxy payment offer is no longer open — dropped ${record.pending.length} queued recipients`,
+              links: {
+                contact: record.pending.map((recipient) => recipient.contactId),
+                offer: record.offerId,
+              },
+              payload: {
+                offerId: record.offerId,
+                pendingContactIds: record.pending.map(
+                  (recipient) => recipient.contactId,
+                ),
+              },
+            },
+          ]);
+        }
+        continue;
+      }
+
+      const dueAtSec = Math.min(
+        ...record.pending.map((recipient) => recipient.dueAtSec),
+      );
+      if (dueAtSec <= nowSec) {
+        dueRecords.push(record);
+      } else {
+        nextDueAtSec =
+          nextDueAtSec === null ? dueAtSec : Math.min(nextDueAtSec, dueAtSec);
+      }
+    }
+
+    const dispatchDue = async () => {
+      let progressed = false;
+      for (const record of dueRecords) {
+        if (cancelled) return;
+        try {
+          await withLocalStorageLeaseLock({
+            key: `${LINKY_BANK_PAYMENT_OFFER_STAGGER_LOCK_KEY_PREFIX}.${record.offerId}`,
+            timeoutMs: 0,
+            fn: async () => {
+              // Re-read under the lock: another tab may have just sent.
+              const lockedRecord = readLinkyBankPaymentOfferStaggerRecords(
+                myPubHex,
+              ).find((candidate) => candidate.offerId === record.offerId);
+              if (!lockedRecord) {
+                progressed = true;
+                return;
+              }
+
+              const dueNowSec = Math.floor(Date.now() / 1000);
+              const sentContactIds: string[] = [];
+              for (const recipient of lockedRecord.pending) {
+                if (cancelled) return;
+                if (recipient.dueAtSec > dueNowSec) continue;
+                if (
+                  offeredContactIdsByOfferId
+                    .get(record.offerId)
+                    ?.has(recipient.contactId)
+                ) {
+                  // Already offered (e.g. by another tab); just dequeue.
+                  sentContactIds.push(recipient.contactId);
+                  continue;
+                }
+
+                const sentAtSec = await sendBankPaymentOfferedMessage({
+                  amountSat: lockedRecord.amountSat,
+                  amountText: lockedRecord.amountText,
+                  contactId: recipient.contactId,
+                  contactPubHex: recipient.contactPubHex,
+                  expiresAtSec: lockedRecord.expiresAtSec,
+                  myPubHex,
+                  offerId: lockedRecord.offerId,
+                });
+                if (sentAtSec === null) continue;
+
+                sentContactIds.push(recipient.contactId);
+                if (getInspectorEmissionEnabled()) {
+                  reportInspectorRows([
+                    {
+                      at: Date.now(),
+                      channel: "nostr.operation",
+                      tag: "bankOffer.staggerExtended",
+                      summary:
+                        "proxy payment offer extended to the next queued recipient",
+                      links: {
+                        contact: recipient.contactId,
+                        offer: lockedRecord.offerId,
+                      },
+                      payload: {
+                        contactId: recipient.contactId,
+                        dueAtSec: recipient.dueAtSec,
+                        offerId: lockedRecord.offerId,
+                        sentAtSec,
+                      },
+                    },
+                  ]);
+                }
+              }
+
+              if (sentContactIds.length > 0) {
+                removeLinkyBankPaymentOfferStaggerRecipients(
+                  record.offerId,
+                  sentContactIds,
+                );
+                progressed = true;
+              }
+            },
+          });
+        } catch {
+          // Another tab holds the stagger lock for this offer; let it finish.
+        }
+      }
+
+      if (cancelled) return;
+      if (progressed) {
+        // Successful sends also re-run this effect via the message upsert;
+        // the tick covers dequeues that left the messages untouched.
+        bumpTick();
+      } else {
+        // A failed publish leaves both queue and messages unchanged, so
+        // nothing re-runs this effect on its own; nudge a retry.
+        timeoutId = window.setTimeout(
+          bumpTick,
+          BANK_PAYMENT_OFFER_STAGGER_RETRY_MS,
+        );
+      }
+    };
+
+    if (dueRecords.length > 0) {
+      void dispatchDue();
+    } else if (nextDueAtSec !== null) {
+      timeoutId = window.setTimeout(
+        bumpTick,
+        Math.max(0, nextDueAtSec * 1000 - Date.now()),
+      );
+    }
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [
+    bankPaymentOfferMessages,
+    bankPaymentOfferStaggerTick,
+    currentNsec,
+    sendBankPaymentOfferedMessage,
+  ]);
 
   const bankPaymentOfferExpiryGroups = React.useMemo(() => {
     if (!currentNpub || bankPaymentOfferMessages.length === 0) return [];
@@ -3420,6 +3741,7 @@ export const useContactsMessagingComposition = ({
     bankPaymentOfferContacts,
     bankPaymentOfferMessages,
     bankPaymentOfferRecipientCount,
+    bankPaymentOfferStaggerDelaySec,
     blockArchivedContact,
     blockUnknownContactFromChat,
     buildSavedContactName,
@@ -3517,6 +3839,7 @@ export const useContactsMessagingComposition = ({
     sendChatOrEditMessage,
     setActiveGroup,
     setBankPaymentOfferRecipientCount,
+    setBankPaymentOfferStaggerDelaySec,
     setChatDraft,
     setContactNewPrefill,
     setContactsOnboardingHasBackedUpKeys,

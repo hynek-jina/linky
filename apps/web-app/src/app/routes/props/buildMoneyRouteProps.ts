@@ -10,6 +10,7 @@ interface BuildMoneyRoutePropsParams {
   canPayWithCashu: MoneyRoutesProps["lnAddressPayProps"]["canPayWithCashu"];
   bankPaymentOfferContacts: MoneyRoutesProps["spdPaymentProps"]["offerContacts"];
   bankPaymentOfferRecipientCount: MoneyRoutesProps["spdPaymentProps"]["initialOfferContactCount"];
+  bankPaymentOfferStaggerDelaySec: MoneyRoutesProps["spdPaymentProps"]["initialOfferDelaySec"];
   cashuBalance: MoneyRoutesProps["cashuTokensProps"]["cashuBalance"];
   cashuBalanceAfterMelt: MoneyRoutesProps["lnAddressPayProps"]["cashuBalanceAfterMelt"];
   cashuTotalBalance: MoneyRoutesProps["cashuTokensProps"]["cashuTotalBalance"];
@@ -107,6 +108,7 @@ export const buildMoneyRouteProps = ({
   canPayWithCashu,
   bankPaymentOfferContacts,
   bankPaymentOfferRecipientCount,
+  bankPaymentOfferStaggerDelaySec,
   cashuBalance,
   cashuBalanceAfterMelt,
   cashuTotalBalance,
@@ -260,6 +262,7 @@ export const buildMoneyRouteProps = ({
     spdPaymentProps: {
       cashuBalanceAfterMelt,
       initialOfferContactCount: bankPaymentOfferRecipientCount,
+      initialOfferDelaySec: bankPaymentOfferStaggerDelaySec,
       offerContacts: bankPaymentOfferContacts,
       onRequestReimbursement: onRequestBankPaymentOffer,
       spdPayload: route.kind === "bankPayment" ? route.spdPayload : "",

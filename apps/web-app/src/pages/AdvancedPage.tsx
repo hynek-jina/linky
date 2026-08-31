@@ -14,12 +14,11 @@ import {
   Landmark,
   Languages,
   LogOut,
-  Minus,
-  Plus,
   RadioTower,
   RefreshCw,
   RotateCw,
   ShieldCheck,
+  Timer,
   Trash2,
   Upload,
   UserRound,
@@ -44,9 +43,13 @@ import {
 } from "../app/hooks/useRelayHealth";
 import {
   LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
+  LINKY_BANK_PAYMENT_OFFER_MAX_STAGGER_DELAY_SEC,
   LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
+  LINKY_BANK_PAYMENT_OFFER_MIN_STAGGER_DELAY_SEC,
+  LINKY_BANK_PAYMENT_OFFER_STAGGER_DELAY_STEP_SEC,
 } from "../app/lib/bankPaymentOffer";
 import { FeedbackIcon } from "../components/icons";
+import { SettingsStepper } from "../components/SettingsStepper";
 import { useNavigation } from "../hooks/useRouting";
 import { getNativeNotificationPermissionState } from "../platform/nativeBridge";
 import { isNativePlatform } from "../platform/runtime";
@@ -163,6 +166,7 @@ export function AdvancedPage(): React.ReactElement {
   const inspectorLogsEnabled = useInspectorLogsEnabled();
   const {
     bankPaymentOfferRecipientCount,
+    bankPaymentOfferStaggerDelaySec,
     cashuAutoswapEnabled,
     copyNostrKeys,
     dedupeContacts,
@@ -184,6 +188,7 @@ export function AdvancedPage(): React.ReactElement {
     requestPasteNostrKeys,
     seedMnemonic,
     setBankPaymentOfferRecipientCount,
+    setBankPaymentOfferStaggerDelaySec,
     setCashuAutoswapEnabled,
     setPayWithCashuEnabled,
   } = useAdvancedSettingsContext();
@@ -530,46 +535,40 @@ export function AdvancedPage(): React.ReactElement {
             </span>
           </div>
           <div className="settings-right">
-            <div
-              className="settings-stepper"
-              aria-label={t("bankPaymentOfferRecipientCount")}
-            >
-              <button
-                type="button"
-                className="settings-stepper-button"
-                disabled={
-                  bankPaymentOfferRecipientCount <=
-                  LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT
-                }
-                onClick={() =>
-                  setBankPaymentOfferRecipientCount(
-                    bankPaymentOfferRecipientCount - 1,
-                  )
-                }
-                aria-label={t("bankPaymentOfferRecipientDecrease")}
-              >
-                <Minus size={16} />
-              </button>
-              <span className="settings-stepper-value">
-                {bankPaymentOfferRecipientCount}
-              </span>
-              <button
-                type="button"
-                className="settings-stepper-button"
-                disabled={
-                  bankPaymentOfferRecipientCount >=
-                  LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT
-                }
-                onClick={() =>
-                  setBankPaymentOfferRecipientCount(
-                    bankPaymentOfferRecipientCount + 1,
-                  )
-                }
-                aria-label={t("bankPaymentOfferRecipientIncrease")}
-              >
-                <Plus size={16} />
-              </button>
-            </div>
+            <SettingsStepper
+              ariaLabel={t("bankPaymentOfferRecipientCount")}
+              decreaseLabel={t("bankPaymentOfferRecipientDecrease")}
+              increaseLabel={t("bankPaymentOfferRecipientIncrease")}
+              max={LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT}
+              min={LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT}
+              onChange={setBankPaymentOfferRecipientCount}
+              step={1}
+              value={bankPaymentOfferRecipientCount}
+            />
+          </div>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-left">
+            <span className="settings-icon" aria-hidden="true">
+              <Timer size={18} />
+            </span>
+            <span className="settings-label">
+              {t("bankPaymentOfferStaggerDelay")}
+            </span>
+          </div>
+          <div className="settings-right">
+            <SettingsStepper
+              ariaLabel={t("bankPaymentOfferStaggerDelay")}
+              decreaseLabel={t("bankPaymentOfferStaggerDelayDecrease")}
+              increaseLabel={t("bankPaymentOfferStaggerDelayIncrease")}
+              max={LINKY_BANK_PAYMENT_OFFER_MAX_STAGGER_DELAY_SEC}
+              min={LINKY_BANK_PAYMENT_OFFER_MIN_STAGGER_DELAY_SEC}
+              onChange={setBankPaymentOfferStaggerDelaySec}
+              step={LINKY_BANK_PAYMENT_OFFER_STAGGER_DELAY_STEP_SEC}
+              value={bankPaymentOfferStaggerDelaySec}
+              valueText={`${bankPaymentOfferStaggerDelaySec} s`}
+            />
           </div>
         </div>
       </div>

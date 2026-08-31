@@ -256,8 +256,10 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
 
     const { loser, winner } =
       await test.step("the auto-responder sends bank details to exactly one acceptor", async () => {
+        // The payment rows are collapsed by default, so the rendered QR is
+        // the winner's marker.
         const hasBankDetails = async (account: Account) =>
-          (await account.page.locator(".bank-payment-fields").count()) > 0;
+          (await account.page.locator(".bank-payment-offer-qr").count()) > 0;
 
         // Time-boxed so a broken first publish attempt is not hidden by the
         // responder's 30s retry loop.
@@ -305,6 +307,9 @@ test("proxy payment: bank details reach exactly one acceptor, who is paid in sat
         winner.page.locator(".bank-payment-offer-qr-placeholder"),
       ).toHaveCount(0);
 
+      await winner.page
+        .getByRole("button", { name: "Payment details" })
+        .click();
       const fields = winner.page.locator(".bank-payment-fields");
       await expect(fields).toContainText(SPD_ACCOUNT);
       await expect(fields).toContainText(SPD_VARIABLE_SYMBOL);

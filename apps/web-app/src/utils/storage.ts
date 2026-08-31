@@ -4,6 +4,7 @@ import {
 } from "./browserPreferences";
 import {
   BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
+  BANK_PAYMENT_OFFER_STAGGER_DELAY_SEC_STORAGE_KEY,
   CASHU_AUTOSWAP_STORAGE_KEY,
   DECIMAL_AMOUNT_INPUT_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
@@ -337,6 +338,23 @@ export const getInitialBankPaymentOfferRecipientCount = (
     );
     const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
     if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+export const getInitialBankPaymentOfferStaggerDelaySec = (
+  fallback: number,
+): number => {
+  try {
+    const raw = localStorage.getItem(
+      BANK_PAYMENT_OFFER_STAGGER_DELAY_SEC_STORAGE_KEY,
+    );
+    const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
+    if (Number.isFinite(parsed) && parsed >= 0) {
       return parsed;
     }
     return fallback;
