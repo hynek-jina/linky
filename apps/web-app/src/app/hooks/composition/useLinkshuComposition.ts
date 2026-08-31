@@ -54,6 +54,7 @@ import { Effect, Exit, Layer, ManagedRuntime, Schema, Scope } from "effect";
 import type { Either } from "effect";
 import React from "react";
 import { linkshuAppInspector } from "../../../devtools/inspector/linkshuInspector";
+import { migrateLegacyCashuLocalState } from "../../migrations/linkshuStorageMigration";
 import type { CashuTokenRow, useEvolu } from "../../../evolu";
 import { evoluTokenStore } from "../../../platform/linkshu/evoluTokenStore";
 import { localStorageKeyValueStore } from "../../../platform/linkshu/localStorageKeyValueStore";
@@ -303,6 +304,11 @@ export const useLinkshuComposition = ({
 
   React.useEffect(() => {
     if (!currentNsec) return;
+    // ONE-TIME MIGRATION — DELETE ME EVENTUALLY (see linkshuStorageMigration
+    // .ts): runs before seed resolution, and the runtime only exists after
+    // the resolved seed lands, so linkshu can never read a counter that
+    // still lives under a legacy key.
+    migrateLegacyCashuLocalState();
     let cancelled = false;
     void resolveLinkshuSeed()
       .then((seed) => {
