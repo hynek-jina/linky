@@ -10,6 +10,8 @@ import {
   NonNegativeAmount,
   Receive,
   ReceiveDraft,
+  Restore,
+  RestoreDraft,
   SendDraft,
   Send,
   Tokens,
@@ -25,6 +27,7 @@ import type {
   AutoswapError,
   AutoswapReceipt,
   Bip39Seed,
+  DeletedSpentToken,
   FeeProbeError,
   InvalidTokenTransition,
   IssuedClaimReport,
@@ -35,6 +38,8 @@ import type {
   MintUnreachable,
   ReceiveError,
   ReceiveReceipt,
+  RestoreReport,
+  RowCheckResult,
   SendError,
   SendReceipt,
   TokenRowNotFound,
@@ -42,6 +47,7 @@ import type {
   TopupHandle,
   TopupQuote,
   TopupReceipt,
+  ValidationReport,
   WalletToken,
 } from "@linky/linkshu";
 import { Effect, Exit, Layer, ManagedRuntime, Schema, Scope } from "effect";
@@ -198,6 +204,32 @@ export type ResumePendingCashuAutoswapClaims = () => Promise<
   ReadonlyArray<AutoswapClaimResult>
 >;
 
+/**
+ * NUT-07 validation of every `accepted` row through linkshu `Validation`:
+ * fully spent rows are marked `error` individually, partially spent rows
+ * keep only their surviving proofs, and an unreachable mint leaves its rows
+ * untouched (reported in `unavailableMints`). Only defects reject.
+ */
+export type CheckAllCashuTokens = () => Promise<ValidationReport>;
+
+/**
+ * NUT-07 check of a single stored row (`Validation.checkRow`); `unavailable`
+ * means the mint gave no usable answer and nothing was changed.
+ */
+export type CheckCashuTokenRow = (
+  rowId: string,
+) => Promise<Either.Either<RowCheckResult, TokenRowNotFound>>;
+
+/**
+ * NUT-09 restore of deterministic proofs through linkshu `Restore` over the
+ * given mints: restored proofs persist as `accepted` rows, and the restore
+ * cursor and deterministic counter advance past the last signature found.
+ * Invalid mint input and defects reject.
+ */
+export type RestoreCashuTokens = (
+  mints: ReadonlyArray<string>,
+) => Promise<RestoreReport>;
+
 export type TokenTransitionError = TokenRowNotFound | InvalidTokenTransition;
 
 /**
@@ -208,6 +240,12 @@ export type TokenTransitionError = TokenRowNotFound | InvalidTokenTransition;
 export interface CashuTokenLifecycle {
   /** NUT-07 check of every `issued` row; claimed rows are removed. */
   readonly checkIssuedClaims: () => Promise<IssuedClaimReport>;
+  /**
+   * Removes `accepted` and `error` rows the mint confirms fully spent
+   * (`Tokens.deleteSpent`) — including legacy plain-text error rows. An
+   * unreachable mint keeps its rows.
+   */
+  readonly deleteSpent: () => Promise<ReadonlyArray<DeletedSpentToken>>;
   /**
    * Drops a row whose funds verifiably left the wallet (e.g. a `pending`
    * messenger send once the message is confirmed published). Not a state
@@ -235,6 +273,7 @@ const decodeAutoswapDraft = Schema.decodeUnknownSync(AutoswapDraft);
 const decodeSendDraft = Schema.decodeUnknownSync(SendDraft);
 const decodeMeltDraft = Schema.decodeUnknownSync(MeltDraft);
 const decodeFeeProbeDraft = Schema.decodeUnknownSync(FeeProbeDraft);
+const decodeRestoreDraft = Schema.decodeUnknownSync(RestoreDraft);
 const decodeTopupDraft = Schema.decodeUnknownSync(TopupDraft);
 
 /**
@@ -449,6 +488,35 @@ export const useLinkshuComposition = ({
       );
   }, [linkshuRuntime]);
 
+  const checkAllCashuTokens = React.useMemo<CheckAllCashuTokens | null>(() => {
+    if (linkshuRuntime === null) return null;
+    return () =>
+      linkshuRuntime.runPromise(
+        Effect.flatMap(Validation, (validation) => validation.checkAll),
+      );
+  }, [linkshuRuntime]);
+
+  const checkCashuTokenRow = React.useMemo<CheckCashuTokenRow | null>(() => {
+    if (linkshuRuntime === null) return null;
+    return (rowId) =>
+      linkshuRuntime.runPromise(
+        Effect.flatMap(Validation, (validation) =>
+          validation.checkRow(TokenRowId.make(rowId)),
+        ).pipe(Effect.either),
+      );
+  }, [linkshuRuntime]);
+
+  const restoreCashuTokens = React.useMemo<RestoreCashuTokens | null>(() => {
+    if (linkshuRuntime === null) return null;
+    return (mints) =>
+      linkshuRuntime.runPromise(
+        Effect.suspend(() => {
+          const draft = decodeRestoreDraft({ mints });
+          return Effect.flatMap(Restore, (restore) => restore.restore(draft));
+        }),
+      );
+  }, [linkshuRuntime]);
+
   const cashuTokenLifecycle = React.useMemo<CashuTokenLifecycle | null>(() => {
     if (linkshuRuntime === null) return null;
     const rowId = (id: string) => TokenRowId.make(id);
@@ -456,6 +524,10 @@ export const useLinkshuComposition = ({
       checkIssuedClaims: () =>
         linkshuRuntime.runPromise(
           Effect.flatMap(Validation, (validation) => validation.checkIssued),
+        ),
+      deleteSpent: () =>
+        linkshuRuntime.runPromise(
+          Effect.flatMap(Tokens, (tokens) => tokens.deleteSpent),
         ),
       forget: (id) =>
         linkshuRuntime.runPromise(
@@ -491,10 +563,13 @@ export const useLinkshuComposition = ({
   return {
     autoswapCashu: autoswapApi?.claim ?? null,
     cashuTokenLifecycle,
+    checkAllCashuTokens,
+    checkCashuTokenRow,
     linkshuRuntime,
     meltCashuInvoice,
     probeLightningFee,
     receiveCashuToken,
+    restoreCashuTokens,
     resumePendingCashuAutoswapClaims: autoswapApi?.resumePendingClaims ?? null,
     resumePendingCashuTopups: topupApi?.resumePending ?? null,
     sendCashuToken,
