@@ -16,6 +16,22 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 ### cs-CZ
 
+## [26.9.4] - 2026-08-31
+
+### en-US
+
+- Proxy payment offers can reach recipients one by one with an adjustable delay; recipients keep their order and queued contacts are visible in the offer detail.
+- The proxy payment detail shows a four-step progress bar, names who accepted, and the amount can be tapped to switch its unit.
+- Clearer payer view: the confirmation button sits right under the QR code and payment details are collapsed by default.
+- New Linky users now appear in add-contact suggestions right after finishing sign-up.
+
+### cs-CZ
+
+- Nabídky proxy plateb lze posílat příjemcům postupně s nastavitelnou prodlevou; příjemci mají dané pořadí a čekající kontakty jsou vidět v detailu nabídky.
+- Detail proxy platby ukazuje čtyřdílný ukazatel průběhu, jméno toho, kdo nabídku přijal, a klepnutím na částku lze přepnout jednotku.
+- Přehlednější pohled plátce: potvrzení je hned pod QR kódem a detaily platby jsou sbalené.
+- Noví uživatelé Linky se hned po dokončení registrace zobrazují v návrzích při přidávání kontaktu.
+
 ## [26.9.3] - 2026-08-28
 
 ### en-US
