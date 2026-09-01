@@ -78,6 +78,7 @@ type NavigationAction =
   | { route: "advanced" }
   | { route: "advancedAutoPayLimit" }
   | { route: "advancedInspector" }
+  | { route: "advancedInspectorTimeline" }
   | { route: "advancedPushDebug" }
   | { route: "cashuTokenEmit" }
   | { route: "cashuToken"; id: CashuTokenId }
@@ -141,6 +142,9 @@ export const navigateTo = (action: NavigationAction): void => {
       break;
     case "advancedInspector":
       window.location.assign("#advanced/inspector");
+      break;
+    case "advancedInspectorTimeline":
+      window.location.assign("#advanced/inspector/timeline");
       break;
     case "advancedPushDebug":
       window.location.assign("#advanced/push-debug");

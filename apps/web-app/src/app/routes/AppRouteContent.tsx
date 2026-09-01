@@ -18,6 +18,7 @@ import {
   EvoluServerNewPage,
   EvoluServerPage,
   EvoluServersPage,
+  InspectorSettingsPage,
   LnAddressPayPage,
   LanguagePage,
   ManualPayPage,
@@ -111,6 +112,8 @@ const RoutePage = (): React.ReactElement => {
     case "advancedAutoPayLimit":
       return <AdvancedAutoPayLimitPage />;
     case "advancedInspector":
+      return <InspectorSettingsPage />;
+    case "advancedInspectorTimeline":
       return (
         <React.Suspense fallback={<div className="muted">Loading…</div>}>
           <InspectorPage />

@@ -5,7 +5,6 @@ import {
 import {
   BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
   BANK_PAYMENT_OFFER_STAGGER_DELAY_SEC_STORAGE_KEY,
-  CASHU_AUTOSWAP_STORAGE_KEY,
   DECIMAL_AMOUNT_INPUT_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
@@ -291,18 +290,6 @@ export const getInitialPayWithCashuEnabled = (): boolean => {
     return v === "1";
   } catch {
     return true;
-  }
-};
-
-export const getInitialCashuAutoswapEnabled = (): boolean => {
-  try {
-    const raw = localStorage.getItem(CASHU_AUTOSWAP_STORAGE_KEY);
-    const v = String(raw ?? "").trim();
-    // Opt-in: keep an explicitly stored preference, otherwise stay disabled.
-    if (!v) return false;
-    return v === "1";
-  } catch {
-    return false;
   }
 };
 

@@ -38,7 +38,6 @@ import {
 } from "../../../lnurlPay";
 import { NOSTR_RELAYS } from "../../../utils/nostrRelays";
 import {
-  CASHU_AUTOSWAP_MIN_SOURCE_SUM,
   CASHU_ONBOARDING_SET_MAIN_MINT_STORAGE_KEY,
   CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY,
   MAX_CONTACTS_PER_OWNER,
@@ -53,14 +52,12 @@ import {
 } from "../../../utils/lightningInvoice";
 import {
   CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY,
-  isTestMintUrl,
   MAIN_MINT_URL,
   normalizeMintUrl,
 } from "../../../utils/mint";
 import { normalizeNpubIdentifier } from "../../../utils/nostrNpub";
 import { parseNpubCashProfileInfo } from "../../../utils/npubCashInfo";
 import {
-  getInitialCashuAutoswapEnabled,
   getInitialLightningInvoiceAutoPayLimit,
   getInitialPayWithCashuEnabled,
   safeLocalStorageGet,
@@ -330,9 +327,6 @@ export const useCashuWalletComposition = ({
   const [payWithCashuEnabled, setPayWithCashuEnabled] = useState<boolean>(() =>
     getInitialPayWithCashuEnabled(),
   );
-  const [cashuAutoswapEnabled, setCashuAutoswapEnabled] = useState<boolean>(
-    () => getInitialCashuAutoswapEnabled(),
-  );
   const [lightningInvoiceAutoPayLimit, setLightningInvoiceAutoPayLimit] =
     useState<number>(() => getInitialLightningInvoiceAutoPayLimit());
 
@@ -410,16 +404,6 @@ export const useCashuWalletComposition = ({
     pendingLnurlWithdrawConfirmation,
     setPendingLnurlWithdrawConfirmation,
   ] = useState<LnurlWithdrawPreview | null>(null);
-  const [
-    pendingMintAutoswapChangeConfirmation,
-    setPendingMintAutoswapChangeConfirmation,
-  ] = useState<{
-    fromMint: string;
-    toMint: string;
-  } | null>(null);
-  const pendingMintAutoswapChangeResolverRef = React.useRef<
-    ((confirmed: boolean) => void) | null
-  >(null);
   const [
     pendingPaymentMintMeltConfirmation,
     setPendingPaymentMintMeltConfirmation,
@@ -938,18 +922,10 @@ export const useCashuWalletComposition = ({
     }
   }, [defaultMintUrl]);
 
-  const currentMainMintAcceptedBalance = React.useMemo(() => {
-    const currentMainMint = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
-    if (!currentMainMint) return 0;
-    return cashuAcceptedMintBalances.get(currentMainMint) ?? 0;
-  }, [cashuAcceptedMintBalances, defaultMintUrl]);
-
   const {
     applyDefaultMintSelection: applyDefaultMintSelectionInner,
     makeNip98AuthHeader,
   } = useNpubCashMintSelection({
-    cashuAutoswapEnabled,
-    currentMainMintAcceptedBalance,
     currentNpub,
     currentNsec,
     defaultMintUrl,
@@ -961,17 +937,6 @@ export const useCashuWalletComposition = ({
     profileClaimLightningAddressServerBaseUrl,
     npubCashMintSyncRef,
     pushToast,
-    requestMintAutoswapChangeConfirmation: React.useCallback(
-      (args: { fromMint: string; toMint: string }) => {
-        pendingMintAutoswapChangeResolverRef.current?.(false);
-        return new Promise<boolean>((resolve) => {
-          pendingMintAutoswapChangeResolverRef.current = resolve;
-          setPendingMintAutoswapChangeConfirmation(args);
-        });
-      },
-      [],
-    ),
-    setCashuAutoswapEnabled,
     setDefaultMintUrl,
     setDefaultMintUrlDraft,
     setStatus,
@@ -1046,38 +1011,6 @@ export const useCashuWalletComposition = ({
     setOwnedProfileLightningAddresses,
     setOwnedProfileLightningAddressesLoading,
   ]);
-
-  React.useEffect(() => {
-    const selectedMint = normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL);
-    if (!cashuAutoswapEnabled) return;
-    if (!isTestMintUrl(selectedMint)) return;
-    setCashuAutoswapEnabled(false);
-  }, [cashuAutoswapEnabled, defaultMintUrl, setCashuAutoswapEnabled]);
-
-  const resolvePendingMintAutoswapChangeConfirmation = React.useCallback(
-    (confirmed: boolean) => {
-      const resolve = pendingMintAutoswapChangeResolverRef.current;
-      pendingMintAutoswapChangeResolverRef.current = null;
-      setPendingMintAutoswapChangeConfirmation(null);
-      resolve?.(confirmed);
-    },
-    [],
-  );
-
-  const closeMintAutoswapChangeConfirmation = React.useCallback(() => {
-    resolvePendingMintAutoswapChangeConfirmation(false);
-  }, [resolvePendingMintAutoswapChangeConfirmation]);
-
-  const confirmMintAutoswapChangeConfirmation = React.useCallback(() => {
-    resolvePendingMintAutoswapChangeConfirmation(true);
-  }, [resolvePendingMintAutoswapChangeConfirmation]);
-
-  React.useEffect(() => {
-    return () => {
-      pendingMintAutoswapChangeResolverRef.current?.(false);
-      pendingMintAutoswapChangeResolverRef.current = null;
-    };
-  }, []);
 
   const { claimNpubCashOnce, claimNpubCashOnceLatestRef } = useNpubCashClaim({
     cashuIsBusy,
@@ -2595,8 +2528,6 @@ export const useCashuWalletComposition = ({
     t,
   ]);
 
-  const autoswapAttemptedSignatureRef = React.useRef<string | null>(null);
-  const autoswapInFlightRef = React.useRef(false);
   React.useEffect(() => {
     meltLargestForeignMintToMainMintRef.current =
       meltLargestForeignMintToMainMint;
@@ -2612,46 +2543,6 @@ export const useCashuWalletComposition = ({
     setPendingPaymentMintMeltConfirmation(null);
     await meltLargestForeignMintToMainMintRef.current();
   }, [cashuIsBusy]);
-
-  // Below this threshold the melt fee_reserve typically dominates the
-  // foreign-mint balance, so the swap fails with "Insufficient funds" and
-  // we end up with stranded dust at both the source and target mints. The
-  // user can still trigger the manual `Melt to <main mint>` button for any
-  // amount.
-  const autoswapSignature = React.useMemo(() => {
-    if (!largestForeignMintForTokenList) return null;
-    if (largestForeignMintForTokenList.sum < CASHU_AUTOSWAP_MIN_SOURCE_SUM) {
-      return null;
-    }
-    return `${largestForeignMintForTokenList.mint}|${largestForeignMintForTokenList.sum}`;
-  }, [largestForeignMintForTokenList]);
-
-  React.useEffect(() => {
-    if (!cashuAutoswapEnabled) return;
-    if (cashuIsBusy) return;
-    if (autoswapInFlightRef.current) return;
-    if (!autoswapSignature) {
-      autoswapAttemptedSignatureRef.current = null;
-      return;
-    }
-    if (autoswapAttemptedSignatureRef.current === autoswapSignature) return;
-
-    const timeoutId = window.setTimeout(() => {
-      autoswapAttemptedSignatureRef.current = autoswapSignature;
-      autoswapInFlightRef.current = true;
-      void (async () => {
-        try {
-          await meltLargestForeignMintToMainMintRef.current();
-        } finally {
-          autoswapInFlightRef.current = false;
-        }
-      })();
-    }, 3000);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [autoswapSignature, cashuAutoswapEnabled, cashuIsBusy]);
 
   useResumeOnLaunchAndOnline(
     React.useMemo(() => {
@@ -2809,7 +2700,6 @@ export const useCashuWalletComposition = ({
     applyDefaultMintSelection,
     canPayWithCashu,
     cancelPendingCashuContactSend,
-    cashuAutoswapEnabled,
     cashuBalance,
     cashuBalanceAfterMelt,
     cashuBulkCheckIsBusy,
@@ -2832,11 +2722,9 @@ export const useCashuWalletComposition = ({
     checkSingleIssuedCashuTokenIsClaimed,
     closeLightningInvoiceConfirmation,
     closeLnurlWithdrawConfirmation,
-    closeMintAutoswapChangeConfirmation,
     closePaymentMintMeltConfirmation,
     confirmLightningInvoicePayment,
     confirmLnurlWithdraw,
-    confirmMintAutoswapChangeConfirmation,
     confirmPaymentMintMelt,
     contactPayMethod,
     defaultMintDisplay,
@@ -2876,7 +2764,6 @@ export const useCashuWalletComposition = ({
     pendingCashuTokenContactPickId,
     pendingLightningInvoiceConfirmation,
     pendingLnurlWithdrawConfirmation,
-    pendingMintAutoswapChangeConfirmation,
     pendingMintDeleteUrl,
     pendingPaymentMintMeltConfirmation,
     postPaySaveContact,
@@ -2889,7 +2776,6 @@ export const useCashuWalletComposition = ({
     returnCashuTokenToWallet,
     saveCashuFromText,
     sendCashuTokenToContact,
-    setCashuAutoswapEnabled,
     setCashuDraft,
     setCashuEmitAmount,
     setContactPayMethod,

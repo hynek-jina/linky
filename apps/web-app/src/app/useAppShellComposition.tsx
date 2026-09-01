@@ -573,8 +573,6 @@ export const useAppShellComposition = ({
     sendChatMessage,
     sendChatOrEditMessage,
     setActiveGroup,
-    setBankPaymentOfferRecipientCount,
-    setBankPaymentOfferStaggerDelaySec,
     setChatDraft,
     setContactNewPrefill,
     setContactsOnboardingHasBackedUpKeys,
@@ -740,7 +738,6 @@ export const useAppShellComposition = ({
     applyDefaultMintSelection,
     canPayWithCashu,
     cancelPendingCashuContactSend,
-    cashuAutoswapEnabled,
     cashuBalance,
     cashuBalanceAfterMelt,
     cashuBulkCheckIsBusy,
@@ -763,11 +760,9 @@ export const useAppShellComposition = ({
     checkSingleIssuedCashuTokenIsClaimed,
     closeLightningInvoiceConfirmation,
     closeLnurlWithdrawConfirmation,
-    closeMintAutoswapChangeConfirmation,
     closePaymentMintMeltConfirmation,
     confirmLightningInvoicePayment,
     confirmLnurlWithdraw,
-    confirmMintAutoswapChangeConfirmation,
     confirmPaymentMintMelt,
     contactPayMethod,
     defaultMintDisplay,
@@ -807,7 +802,6 @@ export const useAppShellComposition = ({
     pendingCashuTokenContactPickId,
     pendingLightningInvoiceConfirmation,
     pendingLnurlWithdrawConfirmation,
-    pendingMintAutoswapChangeConfirmation,
     pendingMintDeleteUrl,
     pendingPaymentMintMeltConfirmation,
     postPaySaveContact,
@@ -820,7 +814,6 @@ export const useAppShellComposition = ({
     returnCashuTokenToWallet,
     saveCashuFromText,
     sendCashuTokenToContact,
-    setCashuAutoswapEnabled,
     setCashuDraft,
     setCashuEmitAmount,
     setContactPayMethod,
@@ -937,7 +930,6 @@ export const useAppShellComposition = ({
 
   useAppPreferences({
     allowedDisplayCurrencies,
-    cashuAutoswapEnabled,
     decimalAmountInputEnabled,
     displayCurrency,
     bankPaymentOfferRecipientCount,
@@ -1215,9 +1207,6 @@ export const useAppShellComposition = ({
     if (paidOverlayIsOpen) return null;
     if (pendingPaymentMintMeltConfirmation) {
       return closePaymentMintMeltConfirmation;
-    }
-    if (pendingMintAutoswapChangeConfirmation) {
-      return closeMintAutoswapChangeConfirmation;
     }
     if (pendingLnurlWithdrawConfirmation) {
       return closeLnurlWithdrawConfirmation;
@@ -1615,9 +1604,6 @@ export const useAppShellComposition = ({
     relaySettingsContext,
   } = useSystemSettingsComposition({
     advancedSettingsInput: {
-      bankPaymentOfferRecipientCount,
-      bankPaymentOfferStaggerDelaySec,
-      cashuAutoswapEnabled,
       copyNostrKeys,
       copySeed,
       passwordManagerSeedUsername: String(
@@ -1642,9 +1628,6 @@ export const useAppShellComposition = ({
       requestPasteNostrKeys,
       saveSeedToPasswordManager,
       seedMnemonic,
-      setBankPaymentOfferRecipientCount,
-      setBankPaymentOfferStaggerDelaySec,
-      setCashuAutoswapEnabled,
       setLightningInvoiceAutoPayLimit,
       setPayWithCashuEnabled,
     },
@@ -1770,7 +1753,6 @@ export const useAppShellComposition = ({
       nostrPictureByNpub,
       paidOverlayIsOpen,
       paidOverlayTitle,
-      pendingMintAutoswapChangeConfirmation,
       pendingPaymentMintMeltConfirmation,
       pendingLnurlWithdrawConfirmation,
       pendingLightningInvoiceConfirmation,
@@ -1842,7 +1824,6 @@ export const useAppShellComposition = ({
       paidOverlayTitle,
       pendingLightningInvoiceConfirmation,
       pendingLnurlWithdrawConfirmation,
-      pendingMintAutoswapChangeConfirmation,
       pendingPaymentMintMeltConfirmation,
       postPaySaveContact,
       profileCustomPictureUrl,
@@ -1876,14 +1857,12 @@ export const useAppShellComposition = ({
   const appActions = React.useMemo(
     () => ({
       cancelPendingNfcWrite,
-      closeMintAutoswapChangeConfirmation,
       closePaymentMintMeltConfirmation,
       closeLnurlWithdrawConfirmation,
       closeMenu,
       closeShareOptions,
       closeLightningInvoiceConfirmation,
       closeScan,
-      confirmMintAutoswapChangeConfirmation,
       confirmPaymentMintMelt,
       confirmLnurlWithdraw,
       confirmLightningInvoicePayment,
@@ -1932,13 +1911,11 @@ export const useAppShellComposition = ({
       closeLightningInvoiceConfirmation,
       closeLnurlWithdrawConfirmation,
       closeMenu,
-      closeMintAutoswapChangeConfirmation,
       closePaymentMintMeltConfirmation,
       closeScan,
       closeShareOptions,
       confirmLightningInvoicePayment,
       confirmLnurlWithdraw,
-      confirmMintAutoswapChangeConfirmation,
       confirmPaymentMintMelt,
       stableContactsGuideNav,
       copyShareOptionsText,

@@ -25,9 +25,6 @@ const translate = (key: string): string => key;
 const createAdvancedSettings = (
   pushToast: (message: string) => void,
 ): AdvancedSettingsContextValue => ({
-  bankPaymentOfferRecipientCount: 1,
-  bankPaymentOfferStaggerDelaySec: 0,
-  cashuAutoswapEnabled: true,
   copyNostrKeys: noopAsync,
   copySeed: noopAsync,
   dedupeContacts: noopAsync,
@@ -50,9 +47,6 @@ const createAdvancedSettings = (
   requestPasteNostrKeys: noopAsync,
   saveSeedToPasswordManager: async () => "saved",
   seedMnemonic: null,
-  setBankPaymentOfferRecipientCount: noop,
-  setBankPaymentOfferStaggerDelaySec: noop,
-  setCashuAutoswapEnabled: noop,
   setLightningInvoiceAutoPayLimit: noop,
   setPayWithCashuEnabled: noop,
 });

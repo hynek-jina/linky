@@ -4,8 +4,6 @@ import { nip19 } from "nostr-tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY } from "../../../utils/mint";
 import {
-  getMintSelectionAutoswapPlan,
-  getMintSelectionDisplayName,
   resolveMintSyncServerBaseUrl,
   useNpubCashMintSelection,
 } from "./useNpubCashMintSelection";
@@ -13,58 +11,6 @@ import {
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
   configurable: true,
   value: true,
-});
-
-describe("getMintSelectionAutoswapPlan", () => {
-  it("warns when changing the main mint would autoswap eligible balance", () => {
-    expect(
-      getMintSelectionAutoswapPlan({
-        cashuAutoswapEnabled: true,
-        currentMainMintAcceptedBalance: 128,
-        currentMintUrl: "https://cashu.cz",
-        nextMintUrl: "https://kashu.me",
-      }),
-    ).toEqual({
-      shouldDisableAutoswapForTestMint: false,
-      shouldWarnAboutMintChange: true,
-    });
-  });
-
-  it("skips the warning when the current main-mint balance is below the autoswap threshold", () => {
-    expect(
-      getMintSelectionAutoswapPlan({
-        cashuAutoswapEnabled: true,
-        currentMainMintAcceptedBalance: 127,
-        currentMintUrl: "https://cashu.cz",
-        nextMintUrl: "https://kashu.me",
-      }),
-    ).toEqual({
-      shouldDisableAutoswapForTestMint: false,
-      shouldWarnAboutMintChange: false,
-    });
-  });
-
-  it("disables autoswap instead of warning when the new mint is a test mint", () => {
-    expect(
-      getMintSelectionAutoswapPlan({
-        cashuAutoswapEnabled: true,
-        currentMainMintAcceptedBalance: 5_000,
-        currentMintUrl: "https://cashu.cz",
-        nextMintUrl: "https://testnut.cashu.space",
-      }),
-    ).toEqual({
-      shouldDisableAutoswapForTestMint: true,
-      shouldWarnAboutMintChange: false,
-    });
-  });
-});
-
-describe("getMintSelectionDisplayName", () => {
-  it("returns the host for normalized mint URLs", () => {
-    expect(getMintSelectionDisplayName("https://mint.minibits.cash")).toBe(
-      "mint.minibits.cash",
-    );
-  });
 });
 
 describe("resolveMintSyncServerBaseUrl", () => {
@@ -91,17 +37,10 @@ describe("resolveMintSyncServerBaseUrl", () => {
 
 interface SelectionHarnessProps {
   applyRef: React.RefObject<((mintUrl: string) => Promise<void>) | null>;
-  cashuAutoswapEnabled: boolean;
-  currentMainMintAcceptedBalance: number;
   defaultMintUrl: string;
   makeLocalStorageKey: (prefix: string) => string;
   ownedLightningAddresses: readonly string[];
   pushToast: (message: string) => void;
-  requestMintAutoswapChangeConfirmation: (args: {
-    fromMint: string;
-    toMint: string;
-  }) => Promise<boolean>;
-  setCashuAutoswapEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setDefaultMintUrl: React.Dispatch<React.SetStateAction<string | null>>;
   setDefaultMintUrlDraft: React.Dispatch<React.SetStateAction<string>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
@@ -113,14 +52,10 @@ const validNsec = nip19.nsecEncode(
 
 const SelectionHarness = ({
   applyRef,
-  cashuAutoswapEnabled,
-  currentMainMintAcceptedBalance,
   defaultMintUrl,
   makeLocalStorageKey,
   ownedLightningAddresses,
   pushToast,
-  requestMintAutoswapChangeConfirmation,
-  setCashuAutoswapEnabled,
   setDefaultMintUrl,
   setDefaultMintUrlDraft,
   setStatus,
@@ -128,8 +63,6 @@ const SelectionHarness = ({
   const hasMintOverrideRef = React.useRef(false);
   const npubCashMintSyncRef = React.useRef<string | null>(null);
   const { applyDefaultMintSelection } = useNpubCashMintSelection({
-    cashuAutoswapEnabled,
-    currentMainMintAcceptedBalance,
     currentNpub: "npub-test",
     currentNsec: validNsec,
     defaultMintUrl,
@@ -141,8 +74,6 @@ const SelectionHarness = ({
     ownedLightningAddresses,
     profileClaimLightningAddressServerBaseUrl: "https://npub.linky.fit",
     pushToast,
-    requestMintAutoswapChangeConfirmation,
-    setCashuAutoswapEnabled,
     setDefaultMintUrl,
     setDefaultMintUrlDraft,
     setStatus,
@@ -164,26 +95,15 @@ const readApplyMintSelection = (
 };
 
 interface RenderSelectionHarnessOptions {
-  cashuAutoswapEnabled?: boolean;
-  currentMainMintAcceptedBalance?: number;
   defaultMintUrl?: string;
   ownedLightningAddresses?: readonly string[];
-  requestConfirmationResult?: boolean;
 }
 
 const renderSelectionHarness = async ({
-  cashuAutoswapEnabled = true,
-  currentMainMintAcceptedBalance = 1_000,
   defaultMintUrl = "https://cashu.cz",
   ownedLightningAddresses = ["alice@linky.fit"],
-  requestConfirmationResult = true,
 }: RenderSelectionHarnessOptions = {}) => {
   const pushToast = vi.fn();
-  const requestMintAutoswapChangeConfirmation = vi.fn(
-    async () => requestConfirmationResult,
-  );
-  const setCashuAutoswapEnabled =
-    vi.fn<React.Dispatch<React.SetStateAction<boolean>>>();
   const setDefaultMintUrl =
     vi.fn<React.Dispatch<React.SetStateAction<string | null>>>();
   const setDefaultMintUrlDraft =
@@ -200,16 +120,10 @@ const renderSelectionHarness = async ({
     root.render(
       <SelectionHarness
         applyRef={applyRef}
-        cashuAutoswapEnabled={cashuAutoswapEnabled}
-        currentMainMintAcceptedBalance={currentMainMintAcceptedBalance}
         defaultMintUrl={defaultMintUrl}
         makeLocalStorageKey={makeLocalStorageKey}
         ownedLightningAddresses={ownedLightningAddresses}
         pushToast={pushToast}
-        requestMintAutoswapChangeConfirmation={
-          requestMintAutoswapChangeConfirmation
-        }
-        setCashuAutoswapEnabled={setCashuAutoswapEnabled}
         setDefaultMintUrl={setDefaultMintUrl}
         setDefaultMintUrlDraft={setDefaultMintUrlDraft}
         setStatus={setStatus}
@@ -221,9 +135,7 @@ const renderSelectionHarness = async ({
     applyRef,
     makeLocalStorageKey,
     pushToast,
-    requestMintAutoswapChangeConfirmation,
     root,
-    setCashuAutoswapEnabled,
     setDefaultMintUrl,
     setDefaultMintUrlDraft,
     setStatus,
@@ -254,7 +166,6 @@ describe("useNpubCashMintSelection", () => {
     ).toBeNull();
     expect(harness.setDefaultMintUrl).not.toHaveBeenCalled();
     expect(harness.setDefaultMintUrlDraft).not.toHaveBeenCalled();
-    expect(harness.setCashuAutoswapEnabled).not.toHaveBeenCalled();
     expect(harness.pushToast).toHaveBeenCalledWith("mintUpdateFailed");
 
     await act(async () => {
@@ -262,14 +173,12 @@ describe("useNpubCashMintSelection", () => {
     });
   });
 
-  it("saves the synced mint but disables autoswap when migration is declined", async () => {
+  it("saves the synced mint without touching the existing balance", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(null, { status: 200 })),
     );
-    const harness = await renderSelectionHarness({
-      requestConfirmationResult: false,
-    });
+    const harness = await renderSelectionHarness();
 
     await act(async () => {
       await readApplyMintSelection(harness.applyRef)("https://kashu.me");
@@ -280,46 +189,11 @@ describe("useNpubCashMintSelection", () => {
         harness.makeLocalStorageKey(CASHU_DEFAULT_MINT_OVERRIDE_STORAGE_KEY),
       ),
     ).toBe("https://kashu.me");
-    expect(harness.requestMintAutoswapChangeConfirmation).toHaveBeenCalledTimes(
-      1,
-    );
     expect(harness.setDefaultMintUrl).toHaveBeenCalledWith("https://kashu.me");
     expect(harness.setDefaultMintUrlDraft).toHaveBeenCalledWith(
       "https://kashu.me",
     );
-    expect(harness.setCashuAutoswapEnabled).toHaveBeenCalledWith(false);
-    expect(harness.setStatus).toHaveBeenLastCalledWith(
-      "mintSavedAutoswapDisabled",
-    );
-
-    await act(async () => {
-      harness.root.unmount();
-    });
-  });
-
-  it("disables autoswap for a test mint without showing migration confirmation", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(null, { status: 200 })),
-    );
-    const harness = await renderSelectionHarness();
-
-    await act(async () => {
-      await readApplyMintSelection(harness.applyRef)(
-        "https://testnut.cashu.space",
-      );
-    });
-
-    expect(
-      harness.requestMintAutoswapChangeConfirmation,
-    ).not.toHaveBeenCalled();
-    expect(harness.setDefaultMintUrl).toHaveBeenCalledWith(
-      "https://testnut.cashu.space",
-    );
-    expect(harness.setCashuAutoswapEnabled).toHaveBeenCalledWith(false);
-    expect(harness.setStatus).toHaveBeenLastCalledWith(
-      "mintSavedAutoswapDisabledTestMint",
-    );
+    expect(harness.setStatus).toHaveBeenLastCalledWith("mintSaved");
 
     await act(async () => {
       harness.root.unmount();

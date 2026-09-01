@@ -1885,6 +1885,7 @@ export const useContactsMessagingComposition = ({
           setBankPaymentOfferStaggerTick((tick) => tick + 1);
         }
 
+        setBankPaymentOfferRecipientCount(args.contacts.length);
         setBankPaymentOfferStaggerDelaySec(staggerDelaySec);
         return { chatId: firstSentContactId, offerId };
       } catch (error) {
@@ -1897,6 +1898,7 @@ export const useContactsMessagingComposition = ({
     [
       currentNsec,
       sendBankPaymentOfferedMessage,
+      setBankPaymentOfferRecipientCount,
       setBankPaymentOfferStaggerDelaySec,
       setStatus,
       t,
@@ -3837,8 +3839,6 @@ export const useContactsMessagingComposition = ({
     sendChatMessage,
     sendChatOrEditMessage,
     setActiveGroup,
-    setBankPaymentOfferRecipientCount,
-    setBankPaymentOfferStaggerDelaySec,
     setChatDraft,
     setContactNewPrefill,
     setContactsOnboardingHasBackedUpKeys,

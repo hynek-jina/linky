@@ -17,6 +17,7 @@ export { EvoluHistoryDataPage } from "./EvoluHistoryDataPage";
 export { EvoluServerNewPage } from "./EvoluServerNewPage";
 export { EvoluServerPage } from "./EvoluServerPage";
 export { EvoluServersPage } from "./EvoluServersPage";
+export { InspectorSettingsPage } from "./InspectorSettingsPage";
 export { LnAddressPayPage } from "./LnAddressPayPage";
 export { LanguagePage } from "./LanguagePage";
 export { ManualPayPage } from "./ManualPayPage";

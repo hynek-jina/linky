@@ -14,7 +14,11 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 ### en-US
 
+- Removed automatic swapping to the main mint. Changing the main mint no longer moves existing balances; funds move only when you tap "Melt to main mint" on the tokens page.
+
 ### cs-CZ
+
+- Odstraněn automatický převod do hlavního mintu. Změna hlavního mintu už nepřesouvá stávající zůstatky; prostředky se převedou jen po klepnutí na „Směnit" na stránce tokenů.
 
 ## [26.9.5] - 2026-09-01
 
