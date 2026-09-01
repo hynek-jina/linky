@@ -5,7 +5,11 @@ import type { MintUrl } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
 import type { CounterScope } from "../internal/counters";
 import { inspectOperationWith } from "../internal/operations";
-import { selectSpendableProofs, swapProofsForAmount } from "../internal/spend";
+import {
+  removeConsumedRows,
+  selectSpendableProofs,
+  swapProofsForAmount,
+} from "../internal/spend";
 import {
   boundKeysetId,
   WalletInstances,
@@ -108,23 +112,26 @@ export class Send extends Effect.Service<Send>()("linkshu/Send", {
 
         // Change lands as `accepted` before the sources go away, so the funds
         // are never outside the store even if the caller crashes mid-flow.
-        if (keepEncoded !== null) {
-          yield* insertRowInState(tokenStore, inspector, {
-            originalTokenText: keepEncoded.tokenText,
-            tokenText: keepEncoded.tokenText,
-            state: "accepted",
-            reason: "send-change",
-          });
-        }
+        const changeRow =
+          keepEncoded === null
+            ? null
+            : yield* insertRowInState(tokenStore, inspector, {
+                originalTokenText: keepEncoded.tokenText,
+                tokenText: keepEncoded.tokenText,
+                state: "accepted",
+                reason: "send-change",
+              });
         const sendRow = yield* insertRowInState(tokenStore, inspector, {
           originalTokenText: sendEncoded.tokenText,
           tokenText: sendEncoded.tokenText,
           state: draft.produceAs,
           reason: "send",
         });
-        yield* Effect.forEach(liveRows, (row) => tokenStore.remove(row.id), {
-          discard: true,
-        });
+        yield* removeConsumedRows(
+          tokenStore,
+          liveRows,
+          changeRow === null ? [sendRow] : [changeRow, sendRow],
+        );
 
         return new SendReceipt({
           rowId: sendRow.id,

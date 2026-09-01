@@ -13,12 +13,14 @@ import { Inspector } from "../inspector/Inspector";
 import { deterministicCounterKey } from "../internal/counters";
 import { WalletInstances } from "../mint/internal/WalletInstances";
 import type { LoadedWallet } from "../mint/internal/WalletInstances";
+import { deterministicIdTokenStore } from "../ports/deterministicIdTokenStore";
 import { inMemoryKeyValueStore } from "../ports/inMemoryKeyValueStore";
 import { inMemoryTokenStore } from "../ports/inMemoryTokenStore";
 import { KeyValueStore } from "../ports/KeyValueStore";
 import { NewTokenRow, TokenStore } from "../ports/TokenStore";
 import type { StoredTokenRow } from "../ports/TokenStore";
 import { parseTokenText } from "../token/codec";
+import { encodeCashuProofs } from "../token/internal/cashuProofs";
 import type { TokenState } from "../token/domain";
 import { SendDraft } from "./domain";
 import { Send } from "./Send";
@@ -131,7 +133,10 @@ const makeWallet = (args: FakeWalletArgs) => {
   return { wallet, sendCalls, restoreCalls };
 };
 
-const makeHarness = (wallet: LoadedWallet) => {
+const makeHarness = (
+  wallet: LoadedWallet,
+  tokenStore: Layer.Layer<TokenStore> = inMemoryTokenStore,
+) => {
   const events: Array<LinkshuInspectorEvent> = [];
   const layer = Send.DefaultWithoutDependencies.pipe(
     Layer.provideMerge(
@@ -141,7 +146,7 @@ const makeHarness = (wallet: LoadedWallet) => {
           WalletInstances.make({ get: () => Effect.succeed(wallet) }),
         ),
         inMemoryKeyValueStore,
-        inMemoryTokenStore,
+        tokenStore,
         Layer.succeed(Inspector, {
           emit: (build) => {
             events.push(build());
@@ -462,6 +467,43 @@ describe("Send.send", () => {
     // Both twin rows consumed; only the issued send row remains.
     expect(exit.value.rows).toHaveLength(1);
     expect(exit.value.rows[0]?.state).toBe("issued");
+  });
+
+  it("spares the source row whose id the change insert reused (deterministic-id store)", async () => {
+    // A fully-unselected source row passes through the swap's keep side
+    // unchanged, so the change row re-encodes byte-identically to it — a
+    // store deriving ids from `originalTokenText` reuses the source row's id.
+    const passthrough = [proof(4, "src-a1"), proof(2, "src-a2")];
+    const collisionText = encodeCashuProofs({
+      mint,
+      unit: CurrencyUnit.make("sat"),
+      memo: null,
+      proofs: passthrough,
+    })?.tokenText;
+    expect(collisionText).toBeDefined();
+    if (collisionText === undefined) return;
+
+    const { wallet } = makeWallet({
+      send: () =>
+        Promise.resolve({ keep: passthrough, send: [proof(8, "s1")] }),
+    });
+    const { run } = makeHarness(wallet, deterministicIdTokenStore);
+
+    const exit = await run(sendAndInspect(draft(8), [collisionText, tokenB]));
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    const { receipt, rows } = exit.value;
+
+    expect(receipt._tag).toBe("Right");
+    if (receipt._tag !== "Right") return;
+    expect(receipt.right.changeAmount).toBe(6);
+    expect(rows).toHaveLength(2);
+    // The change landed on the source row's own id and survived the removal.
+    const changeRow = rows.find((row) => row.tokenText === collisionText);
+    expect(changeRow?.state).toBe("accepted");
+    const sendRow = rowByState(rows, "issued");
+    expect(sendRow?.id).toBe(receipt.right.rowId);
+    expect(rows.find((row) => row.tokenText === tokenB)).toBeUndefined();
   });
 
   it("starts the swap from the persisted counter", async () => {

@@ -32,7 +32,11 @@ import type { CounterScope } from "../internal/counters";
 import { inspectOperationWith } from "../internal/operations";
 import { isRecoverableOutputCollision } from "../internal/outputCollisions";
 import { checkProofStates, unspentProofs } from "../internal/proofStates";
-import { selectSpendableProofs, swapProofsForAmount } from "../internal/spend";
+import {
+  removeConsumedRows,
+  selectSpendableProofs,
+  swapProofsForAmount,
+} from "../internal/spend";
 import {
   boundKeysetId,
   classifyMintError,
@@ -578,23 +582,26 @@ export class Melt extends Effect.Service<Melt>()("linkshu/Melt", {
         // the funds are never outside the store: the remainder as balance,
         // the melt inputs as a `reserved` row for as long as the mint may
         // hold them.
-        if (keepEncoded !== null) {
-          yield* insertRowInState(tokenStore, inspector, {
-            originalTokenText: keepEncoded.tokenText,
-            tokenText: keepEncoded.tokenText,
-            state: "accepted",
-            reason: "melt-keep",
-          });
-        }
+        const keepRow =
+          keepEncoded === null
+            ? null
+            : yield* insertRowInState(tokenStore, inspector, {
+                originalTokenText: keepEncoded.tokenText,
+                tokenText: keepEncoded.tokenText,
+                state: "accepted",
+                reason: "melt-keep",
+              });
         const inputsRow = yield* insertRowInState(tokenStore, inspector, {
           originalTokenText: inputsEncoded.tokenText,
           tokenText: inputsEncoded.tokenText,
           state: "reserved",
           reason: "melt",
         });
-        yield* Effect.forEach(liveRows, (row) => tokenStore.remove(row.id), {
-          discard: true,
-        });
+        yield* removeConsumedRows(
+          tokenStore,
+          liveRows,
+          keepRow === null ? [inputsRow] : [keepRow, inputsRow],
+        );
 
         return yield* executeMelt({
           wallet,

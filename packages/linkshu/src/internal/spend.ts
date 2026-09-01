@@ -170,6 +170,27 @@ export const selectSpendableProofs = (
     };
   });
 
+/**
+ * Removes the source rows a swap consumed, sparing any physical row a fresh
+ * post-swap insert reused: cashu-ts passes unselected proofs through to the
+ * keep side unchanged, so a fully-unselected source row can re-encode
+ * byte-identically — a store deriving ids from `originalTokenText` then
+ * hands the change insert that source row's own id, and removing it would
+ * destroy the just-persisted funds.
+ */
+export const removeConsumedRows = (
+  tokenStore: TokenStoreService,
+  liveRows: ReadonlyArray<StoredTokenRow>,
+  inserted: ReadonlyArray<StoredTokenRow>,
+): Effect.Effect<void> => {
+  const insertedIds = new Set(inserted.map((row) => row.id));
+  return Effect.forEach(
+    liveRows.filter((row) => !insertedIds.has(row.id)),
+    (row) => tokenStore.remove(row.id),
+    { discard: true },
+  );
+};
+
 export interface SwapContext {
   readonly kv: KeyValueStoreService;
   readonly inspector: InspectorService;
