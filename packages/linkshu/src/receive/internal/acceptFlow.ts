@@ -9,6 +9,7 @@ import {
 import type { CounterLockTimeout, MintUnreachable } from "../../domain/errors";
 import { CurrencyUnit } from "../../domain/primitives";
 import type { Amount, MintUrl, TokenText } from "../../domain/primitives";
+import { TokenLifecycleChanged } from "../../inspector/events";
 import type { InspectorService } from "../../inspector/Inspector";
 import { recoverFromCollision } from "../../internal/collisionRecovery";
 import {
@@ -245,6 +246,41 @@ const markRowFailed = (
       )
     : Effect.void;
 
+/**
+ * Undoes what the insert clobbered when the store handed it the replaced
+ * row's own id: a raw store write back to the pre-flow snapshot, not a
+ * domain transition — the row never legally left its state (`pending` →
+ * `issued` has no place in the state machine).
+ */
+const restoreReplacedRow = (
+  ctx: ReceiveContext,
+  replaced: ReplacedRow,
+): Effect.Effect<void> =>
+  ctx.tokenStore
+    .update(replaced.row.id, {
+      state: replaced.row.state,
+      tokenText: replaced.row.tokenText,
+      error: replaced.row.error,
+    })
+    .pipe(
+      Effect.tap(() =>
+        Effect.sync(() =>
+          ctx.inspector.emit(
+            () =>
+              new TokenLifecycleChanged(
+                {
+                  rowId: replaced.row.id,
+                  from: "pending",
+                  to: replaced.row.state,
+                  reason: replaced.reason,
+                },
+                { disableValidation: true },
+              ),
+          ),
+        ),
+      ),
+    );
+
 const settleFailedRow = (
   ctx: ReceiveContext,
   row: StoredTokenRow,
@@ -254,14 +290,22 @@ const settleFailedRow = (
 ): Effect.Effect<never, AcceptFailure> => {
   // A transient failure leaves nothing behind, so a replaced row survives it
   // untouched; a definitive one is recorded on the row the caller holds.
-  const settle = isTransient(error)
-    ? ctx.tokenStore.remove(row.id)
-    : replaced === null
-      ? markRowFailed(ctx, row, error, reason)
-      : Effect.zipRight(
-          ctx.tokenStore.remove(row.id),
-          markRowFailed(ctx, replaced.row, error, reason),
-        );
+  // When the store gave the insert the replaced row's own id, the fresh and
+  // replaced rows are one physical row holding the funds: it is never
+  // removed, only marked failed or restored to its pre-flow snapshot.
+  const settle =
+    replaced !== null && replaced.row.id === row.id
+      ? isTransient(error) || !isLegalTransition(replaced.row.state, "error")
+        ? restoreReplacedRow(ctx, replaced)
+        : markRowFailed(ctx, replaced.row, error, reason)
+      : isTransient(error)
+        ? ctx.tokenStore.remove(row.id)
+        : replaced === null
+          ? markRowFailed(ctx, row, error, reason)
+          : Effect.zipRight(
+              ctx.tokenStore.remove(row.id),
+              markRowFailed(ctx, replaced.row, error, reason),
+            );
   return Effect.zipRight(settle, Effect.fail(error));
 };
 
@@ -300,8 +344,10 @@ export const receiveTokenText = (
       reason,
     });
     return yield* acceptRow(ctx, row, parsed, reason).pipe(
+      // A store deriving ids from `originalTokenText` hands the insert the
+      // replaced row's own id; that one physical row already superseded it.
       Effect.tap(() =>
-        replaced === null
+        replaced === null || replaced.row.id === row.id
           ? Effect.void
           : ctx.tokenStore.remove(replaced.row.id),
       ),
