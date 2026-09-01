@@ -90,10 +90,7 @@ import { useProfileNpubCashEffects } from "../useProfileNpubCashEffects";
 import { getLinkyBankPaymentOfferInfo } from "../../lib/bankPaymentOffer";
 import { readCashuRowOwnerId } from "../../lib/cashuOwnerLane";
 import { isCashuRowCandidateBetter } from "../../lib/cashuRowPreference";
-import {
-  createCashuTokenId,
-  readCashuTokenAliases as readCashuRowAliases,
-} from "../../lib/cashuTokenIdentity";
+import { readCashuTokenAliases as readCashuRowAliases } from "../../lib/cashuTokenIdentity";
 import { reportCashuSendRowForgotten } from "../../lib/cashuSendInspector";
 import { describeTaggedCashuError } from "../../lib/cashuStoredError";
 import {
@@ -683,7 +680,7 @@ export const useCashuWalletComposition = ({
     currentNsec,
     update,
     upsert,
-    writeOwnerId: cashuOwnerId ?? appOwnerId,
+    writeOwnerId: cashuOwnerId,
   });
 
   // ONE-TIME MIGRATION — DELETE ME EVENTUALLY (see linkshuStorageMigration.ts)
@@ -706,112 +703,6 @@ export const useCashuWalletComposition = ({
     appOwnerId: cashuOwnerId,
     cashuTokensAll,
   });
-
-  const migratedMisplacedCashuTokenIdsRef = React.useRef<Set<string>>(
-    new Set(),
-  );
-
-  React.useEffect(() => {
-    if (!appOwnerId) return;
-
-    const sourceOwnerId = String(appOwnerId ?? "").trim();
-    if (!sourceOwnerId) return;
-    if (!activeCashuOwnerId) return;
-    if (sourceOwnerId === activeCashuOwnerId) return;
-    if (!cashuOwnerId) return;
-
-    const activeRows = cashuTokensAll.filter((row) => {
-      if (row.isDeleted) return false;
-      return readCashuRowOwnerId(row) === activeCashuOwnerId;
-    });
-
-    const hasActiveDuplicate = (row: (typeof cashuTokensAll)[number]) => {
-      const identityToken = String(row.rawToken ?? row.token ?? "").trim();
-      const rowCandidates = [
-        String(row.id ?? "").trim(),
-        identityToken ? String(createCashuTokenId(identityToken)) : "",
-        String(row.rawToken ?? "").trim(),
-        String(row.token ?? "").trim(),
-      ].filter(Boolean);
-      if (rowCandidates.length === 0) return false;
-
-      return activeRows.some((activeRow) => {
-        const activeIdentityToken = String(
-          activeRow.rawToken ?? activeRow.token ?? "",
-        ).trim();
-        const activeCandidates = [
-          String(activeRow.id ?? "").trim(),
-          activeIdentityToken
-            ? String(createCashuTokenId(activeIdentityToken))
-            : "",
-          String(activeRow.rawToken ?? "").trim(),
-          String(activeRow.token ?? "").trim(),
-        ].filter(Boolean);
-
-        return rowCandidates.some((candidate) =>
-          activeCandidates.includes(candidate),
-        );
-      });
-    };
-
-    const misplacedRows = cashuTokensAll.filter((row) => {
-      if (row.isDeleted) return false;
-      return readCashuRowOwnerId(row) === sourceOwnerId;
-    });
-
-    for (const row of misplacedRows) {
-      const rowId = String(row.id ?? "").trim();
-      if (!rowId) continue;
-      if (migratedMisplacedCashuTokenIdsRef.current.has(rowId)) continue;
-
-      if (!hasActiveDuplicate(row)) {
-        const token = String(row.token ?? row.rawToken ?? "").trim();
-        const rawToken = String(row.rawToken ?? "").trim();
-        const state = String(row.state ?? "").trim() || "accepted";
-        const error = String(row.error ?? "").trim();
-
-        if (token) {
-          const payload: {
-            id: CashuTokenId;
-            token: typeof Evolu.NonEmptyString.Type;
-            state: typeof Evolu.NonEmptyString100.Type;
-            error?: typeof Evolu.NonEmptyString1000.Type;
-          } = {
-            id: createCashuTokenId(rawToken || token),
-            token: token as typeof Evolu.NonEmptyString.Type,
-            state: state as typeof Evolu.NonEmptyString100.Type,
-          };
-
-          if (error) {
-            payload.error = error as typeof Evolu.NonEmptyString1000.Type;
-          }
-
-          const insertResult = upsert("cashuToken", payload, {
-            ownerId: cashuOwnerId,
-          });
-          if (!insertResult.ok) continue;
-        }
-      }
-
-      migratedMisplacedCashuTokenIdsRef.current.add(rowId);
-
-      update(
-        "cashuToken",
-        {
-          id: row.id,
-          isDeleted: Evolu.sqliteTrue,
-        },
-        { ownerId: appOwnerId },
-      );
-    }
-  }, [
-    activeCashuOwnerId,
-    appOwnerId,
-    cashuOwnerId,
-    cashuTokensAll,
-    upsert,
-    update,
-  ]);
 
   const {
     getMintIconUrl,
