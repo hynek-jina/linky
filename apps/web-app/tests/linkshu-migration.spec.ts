@@ -4,14 +4,18 @@
  *
  * Seeds legacy-format localStorage BEFORE first app launch: a deterministic
  * counter and restore cursor scoped to the real dev-mint keyset, a legacy
- * seen-mints array, delete-only pending/claim records, and the pre-cutover
+ * seen-mints array, PAID-but-unclaimed pending topup and autoswap-claim
+ * records for real dev-mint quotes (FakeWallet settles their invoices
+ * automatically), delete-only claim records, and the pre-cutover
  * `linky.lastAcceptedCashuToken.v1` leftover. Then launches the app and
  * asserts the one-time migration renamed the counter/cursor byte-for-byte
- * into linkshu's keys, retired the legacy keys it owns (seen-mints arrays
- * stay — the mints UI still reads them), and that a top-up (balance)
- * and a Lightning invoice payment both work with derivation continuing from
- * the migrated counter slot. A mid-test reload proves the migrated state and
- * balance survive a relaunch without re-running the migration.
+ * into linkshu's keys, converted the pending records so linkshu's resume
+ * path claims both quotes into balance, retired the legacy keys it owns
+ * (seen-mints arrays stay — the mints UI still reads them), and that a
+ * top-up (balance) and a Lightning invoice payment both work with
+ * derivation continuing from the migrated counter slot. A mid-test reload
+ * proves the migrated state and balance survive a relaunch without
+ * re-running the migration.
  *
  * Needs the docker stack up — see "E2E tests" in CLAUDE.md.
  *
@@ -19,9 +23,7 @@
  * launch — the legacy writers that produced them are deleted, and Evolu's
  * SQLite lives in OPFS behind owner-derived encryption — so "migrated
  * balance intact" is asserted as balance created through the migrated
- * counter accounting surviving a relaunch, not as pre-seeded rows. Legacy
- * pending topup/autoswap records are deleted without conversion by design
- * (#298), so only their removal is asserted.
+ * counter accounting surviving a relaunch, not as pre-seeded rows.
  */
 import {
   expect,
@@ -45,6 +47,10 @@ const UNIT = "sat";
 
 const FUNDING_SAT = 100;
 const INVOICE_SAT = 21;
+/** Seeded pending records; their sum stays below FUNDING_SAT so the topup
+ * step's balance poll cannot pass on the resumed claims alone. */
+const PENDING_TOPUP_SAT = 53;
+const PENDING_AUTOSWAP_SAT = 21;
 /** input_fee_ppk: 100 on the dev mint plus the melt fee reserve. */
 const MAX_PAYMENT_FEE_SAT = 3;
 
@@ -65,7 +71,9 @@ const legacyKeys = (keysetId: string) => ({
   cursor: `linky.cashu.restoreCursor.v1:${legacyScope(keysetId)}`,
   counterLock: `linky.cashu.detCounterLock.v1:${legacyScope(keysetId)}`,
   seenMints: "linky.cashu.seenMints.v1.legacyOwnerId",
-  pendingTopup: "linky.local.pendingTopupQuote.v1.quote1",
+  pendingTopup: "linky.local.pendingTopupQuote.v1.legacyOwnerId",
+  pendingTopupMalformed: "linky.local.pendingTopupQuote.v1.quote1",
+  pendingAutoswap: "linky.local.pendingAutoswapClaim.v1.legacyOwnerId",
   topupClaimed: "linky.topup.claimed.v1.quote1",
   autoswapClaimed: "linky.autoswap.claimed.v1.claim1",
 });
@@ -74,6 +82,10 @@ const linkshuKeys = (keysetId: string) => ({
   counter: `linky.linkshu.value.linkshu.detCounter.${linkshuScope(keysetId)}`,
   cursor: `linky.linkshu.value.linkshu.restoreCursor.${linkshuScope(keysetId)}`,
   seenMint: `linky.linkshu.value.linkshu.seenMints.${encodeURIComponent(MINT_URL)}`,
+  pendingTopup: (quoteId: string) =>
+    `linky.linkshu.value.linkshu.pendingTopup.${[MINT_URL, quoteId].map(encodeURIComponent).join(".")}`,
+  pendingAutoswap: (quoteId: string) =>
+    `linky.linkshu.value.linkshu.pendingAutoswapClaim.${[MINT_URL, quoteId].map(encodeURIComponent).join(".")}`,
 });
 
 interface MintKeysetEntry {
@@ -110,10 +122,10 @@ const fetchActiveSatKeysetId = async (
   throw new Error(`no active ${UNIT} keyset at ${MINT_URL}`);
 };
 
-const createMintInvoice = async (
+const createMintQuote = async (
   request: APIRequestContext,
   amountSat: number,
-): Promise<string> => {
+): Promise<{ invoice: string; quoteId: string }> => {
   const response = await request.post(`${MINT_URL}/v1/mint/quote/bolt11`, {
     data: { amount: amountSat, unit: UNIT },
   });
@@ -123,11 +135,23 @@ const createMintInvoice = async (
     typeof body === "object" && body !== null && "request" in body
       ? body.request
       : null;
+  const quoteId =
+    typeof body === "object" && body !== null && "quote" in body
+      ? body.quote
+      : null;
   if (typeof invoice !== "string" || !invoice.startsWith("ln")) {
     throw new Error("mint quote returned no bolt11 invoice");
   }
-  return invoice;
+  if (typeof quoteId !== "string" || quoteId.length === 0) {
+    throw new Error("mint quote returned no quote id");
+  }
+  return { invoice, quoteId };
 };
+
+const createMintInvoice = async (
+  request: APIRequestContext,
+  amountSat: number,
+): Promise<string> => (await createMintQuote(request, amountSat)).invoice;
 
 const readStorage = (page: Page, key: string): Promise<string | null> =>
   page.evaluate((storageKey) => localStorage.getItem(storageKey), key);
@@ -167,9 +191,43 @@ test("legacy cashu storage migrates and the wallet keeps working", async ({
     await stubFiatRates(page);
     await stubThirdPartyAssets(page);
 
+    // Real dev-mint quotes for the pending records; FakeWallet settles their
+    // invoices by itself, so both are PAID but unclaimed — the exact state
+    // the pre-fix migration stranded by deleting the records (the quote id
+    // is the only claim handle; no outputs exist at the mint to restore).
+    const pendingTopupQuote = await createMintQuote(request, PENDING_TOPUP_SAT);
+    const pendingAutoswapQuote = await createMintQuote(
+      request,
+      PENDING_AUTOSWAP_SAT,
+    );
+
     await test.step("seed legacy-format storage before first launch", async () => {
+      const legacyPendingTopupRecord = {
+        amount: PENDING_TOPUP_SAT,
+        createdAtMs: Date.now(),
+        invoice: pendingTopupQuote.invoice,
+        mintUrl: MINT_URL,
+        quote: pendingTopupQuote.quoteId,
+        unit: UNIT,
+      };
+      const legacyPendingAutoswapRecord = {
+        amount: PENDING_AUTOSWAP_SAT,
+        createdAtMs: Date.now(),
+        invoice: pendingAutoswapQuote.invoice,
+        mintUrl: MINT_URL,
+        quote: pendingAutoswapQuote.quoteId,
+        unit: UNIT,
+      };
       await page.addInitScript(
-        ([keys, counterValue, cursorValue, mintUrl, lastAcceptedKey]) => {
+        ([
+          keys,
+          counterValue,
+          cursorValue,
+          mintUrl,
+          lastAcceptedKey,
+          pendingTopupJson,
+          pendingAutoswapJson,
+        ]) => {
           try {
             // Seed only on the first load; a reload after migration must not
             // resurrect the deleted legacy keys.
@@ -181,10 +239,12 @@ test("legacy cashu storage migrates and the wallet keeps working", async ({
             localStorage.setItem(keys.cursor, cursorValue);
             localStorage.setItem(keys.counterLock, String(Date.now()));
             localStorage.setItem(keys.seenMints, JSON.stringify([mintUrl]));
+            localStorage.setItem(keys.pendingTopup, pendingTopupJson);
             localStorage.setItem(
-              keys.pendingTopup,
+              keys.pendingTopupMalformed,
               JSON.stringify({ quoteId: "quote1" }),
             );
+            localStorage.setItem(keys.pendingAutoswap, pendingAutoswapJson);
             localStorage.setItem(keys.topupClaimed, "1");
             localStorage.setItem(keys.autoswapClaimed, "1");
             // Pre-cutover code cleared this by writing "", so an upgrading
@@ -200,6 +260,8 @@ test("legacy cashu storage migrates and the wallet keeps working", async ({
           LEGACY_CURSOR_VALUE,
           MINT_URL,
           LAST_ACCEPTED_KEY,
+          JSON.stringify(legacyPendingTopupRecord),
+          JSON.stringify([legacyPendingAutoswapRecord]),
         ] as const,
       );
     });
@@ -233,6 +295,42 @@ test("legacy cashu storage migrates and the wallet keeps working", async ({
       // The one-shot drain retires the last-accepted leftover.
       await expect
         .poll(() => readStorage(page, LAST_ACCEPTED_KEY), { timeout: 60_000 })
+        .toBeNull();
+
+      // The malformed pending record was dropped, not converted: no linkshu
+      // pending-topup key references its quote id.
+      const pendingTopupKeys = await page.evaluate(() =>
+        Object.keys(localStorage).filter((key) =>
+          key.startsWith("linky.linkshu.value.linkshu.pendingTopup."),
+        ),
+      );
+      expect(pendingTopupKeys.filter((key) => key.endsWith(".quote1"))).toEqual(
+        [],
+      );
+    });
+
+    await test.step("converted pending records are claimed into balance", async () => {
+      await expect
+        .poll(() => readBalanceSat(page), { timeout: 120_000 })
+        .toBeGreaterThanOrEqual(PENDING_TOPUP_SAT + PENDING_AUTOSWAP_SAT);
+
+      // Claim completion retires the converted linkshu pending records.
+      await expect
+        .poll(
+          () =>
+            readStorage(page, linkshu.pendingTopup(pendingTopupQuote.quoteId)),
+          { timeout: 60_000 },
+        )
+        .toBeNull();
+      await expect
+        .poll(
+          () =>
+            readStorage(
+              page,
+              linkshu.pendingAutoswap(pendingAutoswapQuote.quoteId),
+            ),
+          { timeout: 60_000 },
+        )
         .toBeNull();
     });
 
