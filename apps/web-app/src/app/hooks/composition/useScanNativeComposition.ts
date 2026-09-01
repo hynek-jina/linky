@@ -18,6 +18,7 @@ import {
   startNativeNfcWrite,
   supportsNativeNfcWrite,
 } from "../../../platform/nativeBridge";
+import { readClipboardText } from "../../../platform/clipboard";
 import { isNativePlatform } from "../../../platform/runtime";
 import { PENDING_DEEP_LINK_TEXT_STORAGE_KEY } from "../../../utils/constants";
 import {
@@ -809,30 +810,18 @@ export const useScanNativeComposition = ({
   ]);
 
   const pasteScanValue = React.useCallback(async () => {
-    let text = "";
+    let text = await readClipboardText();
 
-    if (navigator.clipboard?.readText) {
-      try {
-        text = await navigator.clipboard.readText();
-      } catch {
-        if (
-          typeof window !== "undefined" &&
-          typeof window.prompt === "function"
-        ) {
-          text = String(window.prompt(t("scanPastePrompt")) ?? "");
-        } else {
-          pushToast(t("pasteNotAvailable"));
-          return;
-        }
+    if (text === null) {
+      if (
+        typeof window !== "undefined" &&
+        typeof window.prompt === "function"
+      ) {
+        text = String(window.prompt(t("scanPastePrompt")) ?? "");
+      } else {
+        pushToast(t("pasteNotAvailable"));
+        return;
       }
-    } else if (
-      typeof window !== "undefined" &&
-      typeof window.prompt === "function"
-    ) {
-      text = String(window.prompt(t("scanPastePrompt")) ?? "");
-    } else {
-      pushToast(t("pasteNotAvailable"));
-      return;
     }
 
     const raw = String(text ?? "").trim();
