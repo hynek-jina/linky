@@ -1994,12 +1994,11 @@ export const useCashuWalletComposition = ({
     checkAndRefreshCashuToken,
     requestDeleteCashuToken,
   } = useCashuTokenChecks({
-    appOwnerId: cashuOwnerId,
     cashuBulkCheckIsBusy,
     cashuIsBusy,
-    cashuTokensAll: cashuTokensAllFiltered,
     checkAllCashuTokens,
     checkCashuTokenRow,
+    forgetCashuToken: cashuTokenLifecycle?.forget ?? null,
     pendingCashuDeleteId,
     pushToast,
     setCashuBulkCheckIsBusy,
@@ -2007,7 +2006,6 @@ export const useCashuWalletComposition = ({
     setPendingCashuDeleteId,
     setStatus,
     t,
-    update,
   });
 
   // Issued-token claim detection over linkshu Validation.checkIssued: one
@@ -2205,6 +2203,10 @@ export const useCashuWalletComposition = ({
 
   const deleteCashuToken = React.useCallback(
     async (id: CashuTokenId): Promise<boolean> => {
+      if (cashuTokenLifecycle === null) {
+        setStatus(`${t("errorPrefix")}: Cashu storage is not ready`);
+        return false;
+      }
       const matchingAliases = new Set<string>();
 
       for (const row of cashuTokensAll) {
@@ -2246,43 +2248,22 @@ export const useCashuWalletComposition = ({
             })
           : [];
 
-      if (rowsToDelete.length > 0) {
-        for (const row of rowsToDelete) {
-          const rowOwnerId = readCashuRowOwnerId(row);
-          const payload = {
-            id: row.id,
-            isDeleted: Evolu.sqliteTrue,
-          };
-          const result = rowOwnerId
-            ? update("cashuToken", payload, { ownerId: row.ownerId })
-            : update("cashuToken", payload);
-
-          if (!result.ok) {
-            setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
-            return false;
+      try {
+        if (rowsToDelete.length > 0) {
+          for (const row of rowsToDelete) {
+            await cashuTokenLifecycle.forget(String(row.id));
           }
+        } else {
+          await cashuTokenLifecycle.forget(String(id));
         }
-
-        return true;
-      }
-
-      const ownerId = await resolveOwnerIdForWrite();
-      const payload = {
-        id,
-        isDeleted: Evolu.sqliteTrue,
-      };
-      const result = ownerId
-        ? update("cashuToken", payload, { ownerId })
-        : update("cashuToken", payload);
-
-      if (!result.ok) {
-        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+      } catch (error) {
+        setStatus(`${t("errorPrefix")}: ${String(error)}`);
         return false;
       }
 
       return true;
     },
-    [cashuTokensAll, resolveOwnerIdForWrite, setStatus, t, update],
+    [cashuTokenLifecycle, cashuTokensAll, setStatus, t],
   );
 
   const startSendCashuTokenToContact = React.useCallback(

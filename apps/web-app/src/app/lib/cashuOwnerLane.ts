@@ -1,7 +1,6 @@
 import * as Evolu from "@evolu/common";
-import type { CashuTokenId, CashuTokenRow } from "../../evolu";
+import type { CashuTokenRow } from "../../evolu";
 
-type CashuOwnerLaneRow = Pick<CashuTokenRow, "id" | "ownerId">;
 type CashuOwnerRow = Pick<CashuTokenRow, "ownerId">;
 
 export const readCashuRowOwnerId = (row: CashuOwnerRow): string =>
@@ -28,14 +27,4 @@ export const resolveCashuRowOwnerLane = (
   visibleOwnerIds: readonly Evolu.OwnerId[],
 ): Evolu.OwnerId | null => {
   return visibleOwnerIds.find((owner) => owner === row.ownerId) ?? null;
-};
-
-export const resolveCashuTokenStoredOwnerLaneById = (
-  rows: readonly CashuOwnerLaneRow[],
-  id: CashuTokenId,
-  fallbackOwnerId: Evolu.OwnerId | null,
-): Evolu.OwnerId | null => {
-  const row = rows.find((entry) => entry.id === id) ?? null;
-
-  return resolveCashuRowStoredOwnerLane(row) ?? fallbackOwnerId;
 };
