@@ -1,5 +1,6 @@
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { readClipboardText } from "../platform/clipboard";
 
 interface AmountInputDraft {
   amountSat: string;
@@ -16,7 +17,17 @@ interface UseAmountInputKeypadResult {
   decimalKeyEnabled: boolean;
   inputDisplayValue: string | null;
   onKeyPress: (key: string) => void;
+  pasteFromClipboard: () => Promise<boolean>;
 }
+
+export const normalizePastedAmountInput = (
+  value: string,
+  allowDecimals: boolean,
+): string | null => {
+  const normalized = value.trim().replace(",", ".");
+  const pattern = allowDecimals ? /^\d+(?:\.\d{0,2})?$/ : /^\d+$/;
+  return pattern.test(normalized) ? normalized : null;
+};
 
 export const useAmountInputKeypad = ({
   amount,
@@ -56,11 +67,45 @@ export const useAmountInputKeypad = ({
     ],
   );
 
+  const pasteFromClipboard = React.useCallback(async () => {
+    const clipboardText = await readClipboardText();
+    if (clipboardText === null) return false;
+
+    const pastedAmount = normalizePastedAmountInput(
+      clipboardText,
+      decimalAmountInputKeyVisible,
+    );
+    if (pastedAmount === null) return false;
+
+    let result = { amountSat: "", displayValue: "" };
+    for (const key of pastedAmount) {
+      result = applyAmountInputKeyWithDraft(
+        result.amountSat,
+        result.displayValue,
+        key,
+      );
+    }
+
+    setDraft({
+      amountSat: result.amountSat,
+      displayCurrency,
+      displayValue: result.displayValue,
+    });
+    onAmountChange(result.amountSat);
+    return true;
+  }, [
+    applyAmountInputKeyWithDraft,
+    decimalAmountInputKeyVisible,
+    displayCurrency,
+    onAmountChange,
+  ]);
+
   return {
     decimalKeyEnabled: decimalAmountInputKeyVisible,
     inputDisplayValue: decimalAmountInputKeyVisible
       ? currentDisplayValue
       : null,
     onKeyPress,
+    pasteFromClipboard,
   };
 };
