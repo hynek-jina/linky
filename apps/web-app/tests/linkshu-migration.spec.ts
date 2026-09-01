@@ -57,6 +57,15 @@ const MAX_PAYMENT_FEE_SAT = 3;
 const LEGACY_COUNTER_VALUE = "7";
 const LEGACY_CURSOR_VALUE = "5";
 
+/** Decoy scope no resumed claim touches: proves the byte-for-byte copy
+ * without racing the converted pending records' claims, which advance the
+ * live-scope counter as soon as the runtime is up. The values must stay
+ * below LEGACY_COUNTER_VALUE so the migration's keyset lookup (highest
+ * counter wins) still binds the converted records to the real keyset. */
+const DECOY_KEYSET_ID = "00decoy";
+const DECOY_COUNTER_VALUE = "3";
+const DECOY_CURSOR_VALUE = "2";
+
 const MIGRATION_DONE_KEY = "linky.linkshu_storage_migration_v1";
 const LAST_ACCEPTED_KEY = "linky.lastAcceptedCashuToken.v1";
 
@@ -174,6 +183,8 @@ test("legacy cashu storage migrates and the wallet keeps working", async ({
   const keysetId = await fetchActiveSatKeysetId(request);
   const legacy = legacyKeys(keysetId);
   const linkshu = linkshuKeys(keysetId);
+  const legacyDecoy = legacyKeys(DECOY_KEYSET_ID);
+  const linkshuDecoy = linkshuKeys(DECOY_KEYSET_ID);
 
   const identity = await createSeedIdentity();
   const context = await browser.newContext({
@@ -223,6 +234,8 @@ test("legacy cashu storage migrates and the wallet keeps working", async ({
           keys,
           counterValue,
           cursorValue,
+          decoyCounterValue,
+          decoyCursorValue,
           mintUrl,
           lastAcceptedKey,
           pendingTopupJson,
@@ -237,6 +250,8 @@ test("legacy cashu storage migrates and the wallet keeps working", async ({
 
             localStorage.setItem(keys.counter, counterValue);
             localStorage.setItem(keys.cursor, cursorValue);
+            localStorage.setItem(keys.decoyCounter, decoyCounterValue);
+            localStorage.setItem(keys.decoyCursor, decoyCursorValue);
             localStorage.setItem(keys.counterLock, String(Date.now()));
             localStorage.setItem(keys.seenMints, JSON.stringify([mintUrl]));
             localStorage.setItem(keys.pendingTopup, pendingTopupJson);
@@ -255,9 +270,15 @@ test("legacy cashu storage migrates and the wallet keeps working", async ({
           }
         },
         [
-          legacy,
+          {
+            ...legacy,
+            decoyCounter: legacyDecoy.counter,
+            decoyCursor: legacyDecoy.cursor,
+          },
           LEGACY_COUNTER_VALUE,
           LEGACY_CURSOR_VALUE,
+          DECOY_COUNTER_VALUE,
+          DECOY_CURSOR_VALUE,
           MINT_URL,
           LAST_ACCEPTED_KEY,
           JSON.stringify(legacyPendingTopupRecord),
@@ -275,10 +296,21 @@ test("legacy cashu storage migrates and the wallet keeps working", async ({
         .poll(() => readStorage(page, MIGRATION_DONE_KEY), { timeout: 60_000 })
         .toBe("1");
 
-      // Counter and cursor copied byte-for-byte under linkshu's keys.
-      expect(await readStorage(page, linkshu.counter)).toBe(
-        LEGACY_COUNTER_VALUE,
+      // The byte-for-byte copy is proven on the decoy scope, which no claim
+      // touches; the live-scope counter races the resumed pending-record
+      // claims (each consumes a 64-slot block), so it only ever grows from
+      // the copied value. Cursors are untouched by claims.
+      expect(await readStorage(page, linkshuDecoy.counter)).toBe(
+        DECOY_COUNTER_VALUE,
       );
+      expect(await readStorage(page, linkshuDecoy.cursor)).toBe(
+        DECOY_CURSOR_VALUE,
+      );
+      expect(await readStorage(page, legacyDecoy.counter)).toBeNull();
+      expect(await readStorage(page, legacyDecoy.cursor)).toBeNull();
+      expect(
+        Number(await readStorage(page, linkshu.counter)),
+      ).toBeGreaterThanOrEqual(Number(LEGACY_COUNTER_VALUE));
       expect(await readStorage(page, linkshu.cursor)).toBe(LEGACY_CURSOR_VALUE);
       expect(await readStorage(page, linkshu.seenMint)).toBe(MINT_URL);
 
