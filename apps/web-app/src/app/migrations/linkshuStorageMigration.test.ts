@@ -66,11 +66,9 @@ describe("migrateLegacyCashuLocalState", () => {
     expect(created).toEqual([]);
   });
 
-  it("deletes stale lock, pending topup/autoswap, claimed-stash, and claim-lock keys", () => {
+  it("deletes stale lock, claimed-stash, and claim-lock keys", () => {
     const doomed = [
       `linky.cashu.detCounterLock.v1:${ENC_MINT}:sat:00ffab12`,
-      "linky.local.pendingTopupQuote.v1.owner1",
-      "linky.local.pendingAutoswapClaim.v1.owner1",
       `linky.topup.claimed.v1.owner1.${ENC_MINT}.quote1`,
       `linky.autoswap.claimed.v1.owner1.${ENC_MINT}.quote2`,
       `linky.topup.claimLock.v1.owner1.${ENC_MINT}.quote1`,
@@ -80,6 +78,167 @@ describe("migrateLegacyCashuLocalState", () => {
     migrateLegacyCashuLocalState();
 
     for (const key of doomed) expect(localStorage.getItem(key)).toBeNull();
+  });
+
+  describe("pending topup-quote conversion", () => {
+    const LEGACY_TOPUP_KEY = "linky.local.pendingTopupQuote.v1.owner1";
+    const LINKSHU_TOPUP_KEY = `linky.linkshu.value.linkshu.pendingTopup.${ENC_MINT}.quoteX`;
+    const legacyTopupRecord = {
+      amount: 53,
+      createdAtMs: 1756700000123,
+      invoice: "lnbc530n1fakeinvoice",
+      mintUrl: MINT,
+      quote: "quoteX",
+      unit: "sat",
+    };
+
+    it("converts a pending topup quote into linkshu's pending-record format, scoped to the legacy counter's keyset", () => {
+      localStorage.setItem(LEGACY_COUNTER_KEY, "412");
+      localStorage.setItem(LEGACY_TOPUP_KEY, JSON.stringify(legacyTopupRecord));
+
+      migrateLegacyCashuLocalState();
+
+      expect(localStorage.getItem(LEGACY_TOPUP_KEY)).toBeNull();
+      const written = localStorage.getItem(LINKSHU_TOPUP_KEY);
+      expect(written).not.toBeNull();
+      expect(JSON.parse(written ?? "")).toEqual({
+        quoteId: "quoteX",
+        mint: MINT,
+        unit: "sat",
+        keysetId: "00ffab12",
+        amount: 53,
+        invoice: "lnbc530n1fakeinvoice",
+        expiresAt: null,
+        createdAt: 1756700000,
+        mintCounter: null,
+      });
+    });
+
+    it("falls back to the placeholder keyset id when no legacy counter or cursor names one", () => {
+      localStorage.setItem(LEGACY_TOPUP_KEY, JSON.stringify(legacyTopupRecord));
+
+      migrateLegacyCashuLocalState();
+
+      expect(
+        JSON.parse(localStorage.getItem(LINKSHU_TOPUP_KEY) ?? ""),
+      ).toMatchObject({ keysetId: "00" });
+    });
+
+    it("defaults a null legacy unit to sat", () => {
+      localStorage.setItem(
+        LEGACY_TOPUP_KEY,
+        JSON.stringify({ ...legacyTopupRecord, unit: null }),
+      );
+
+      migrateLegacyCashuLocalState();
+
+      expect(
+        JSON.parse(localStorage.getItem(LINKSHU_TOPUP_KEY) ?? ""),
+      ).toMatchObject({ unit: "sat" });
+    });
+
+    it("drops a malformed or invoice-less record without writing anything", () => {
+      localStorage.setItem(LEGACY_TOPUP_KEY, "not json at all");
+      localStorage.setItem(
+        "linky.local.pendingTopupQuote.v1.owner2",
+        JSON.stringify({ ...legacyTopupRecord, invoice: null }),
+      );
+
+      migrateLegacyCashuLocalState();
+
+      expect(localStorage.getItem(LEGACY_TOPUP_KEY)).toBeNull();
+      expect(
+        localStorage.getItem("linky.local.pendingTopupQuote.v1.owner2"),
+      ).toBeNull();
+      const created = Object.keys(storageSnapshot()).filter((key) =>
+        key.startsWith("linky.linkshu.value.linkshu.pendingTopup."),
+      );
+      expect(created).toEqual([]);
+    });
+
+    it("keeps an existing linkshu pending record on collision and still deletes the legacy key", () => {
+      localStorage.setItem(LINKSHU_TOPUP_KEY, '{"existing":"record"}');
+      localStorage.setItem(LEGACY_TOPUP_KEY, JSON.stringify(legacyTopupRecord));
+
+      migrateLegacyCashuLocalState();
+
+      expect(localStorage.getItem(LINKSHU_TOPUP_KEY)).toBe(
+        '{"existing":"record"}',
+      );
+      expect(localStorage.getItem(LEGACY_TOPUP_KEY)).toBeNull();
+    });
+
+    it("is idempotent: a re-run leaves the converted record untouched", () => {
+      localStorage.setItem(LEGACY_COUNTER_KEY, "412");
+      localStorage.setItem(LEGACY_TOPUP_KEY, JSON.stringify(legacyTopupRecord));
+
+      migrateLegacyCashuLocalState();
+      const afterFirstRun = storageSnapshot();
+
+      migrateLegacyCashuLocalState();
+      expect(storageSnapshot()).toEqual(afterFirstRun);
+    });
+  });
+
+  describe("pending autoswap-claim conversion", () => {
+    const LEGACY_AUTOSWAP_KEY = "linky.local.pendingAutoswapClaim.v1.owner1";
+    const legacyClaim = (quote: string, amount: number) => ({
+      amount,
+      createdAtMs: 1756700000123,
+      invoice: `lnbc${quote}fake`,
+      mintUrl: MINT,
+      quote,
+      unit: "sat",
+    });
+
+    it("converts every array entry into its own linkshu pending-claim record with the target mint as sourceMint", () => {
+      localStorage.setItem(LEGACY_CURSOR_KEY, "377");
+      localStorage.setItem(
+        LEGACY_AUTOSWAP_KEY,
+        JSON.stringify([legacyClaim("quoteA", 21), legacyClaim("quoteB", 42)]),
+      );
+
+      migrateLegacyCashuLocalState();
+
+      expect(localStorage.getItem(LEGACY_AUTOSWAP_KEY)).toBeNull();
+      const keyA = `linky.linkshu.value.linkshu.pendingAutoswapClaim.${ENC_MINT}.quoteA`;
+      expect(JSON.parse(localStorage.getItem(keyA) ?? "")).toEqual({
+        quoteId: "quoteA",
+        mint: MINT,
+        unit: "sat",
+        keysetId: "00ffab12",
+        amount: 21,
+        invoice: "lnbcquoteAfake",
+        sourceMint: MINT,
+        createdAt: 1756700000,
+        mintCounter: null,
+      });
+      const keyB = `linky.linkshu.value.linkshu.pendingAutoswapClaim.${ENC_MINT}.quoteB`;
+      expect(JSON.parse(localStorage.getItem(keyB) ?? "")).toMatchObject({
+        quoteId: "quoteB",
+        amount: 42,
+      });
+    });
+
+    it("drops malformed entries while converting valid ones from the same array", () => {
+      localStorage.setItem(
+        LEGACY_AUTOSWAP_KEY,
+        JSON.stringify([
+          legacyClaim("quoteA", 21),
+          { mintUrl: "not a url", quote: "quoteBad" },
+        ]),
+      );
+
+      migrateLegacyCashuLocalState();
+
+      expect(localStorage.getItem(LEGACY_AUTOSWAP_KEY)).toBeNull();
+      const created = Object.keys(storageSnapshot()).filter((key) =>
+        key.startsWith("linky.linkshu.value.linkshu.pendingAutoswapClaim."),
+      );
+      expect(created).toEqual([
+        `linky.linkshu.value.linkshu.pendingAutoswapClaim.${ENC_MINT}.quoteA`,
+      ]);
+    });
   });
 
   it("seeds linkshu seen-mint keys from every legacy owner-scoped array and keeps the legacy arrays", () => {
