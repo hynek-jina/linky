@@ -37,6 +37,10 @@ export const TopupPage: FC<TopupPageProps> = ({
     amount: topupAmount,
     onAmountChange: (nextAmount) => setTopupAmount(nextAmount),
   });
+  const pasteAmountOrScanValue = async () => {
+    if (await amountInput.pasteFromClipboard()) return;
+    await pasteScanValue();
+  };
 
   return (
     <section className="panel">
@@ -90,7 +94,7 @@ export const TopupPage: FC<TopupPageProps> = ({
           <button
             type="button"
             className="btn-wide secondary"
-            onClick={() => void pasteScanValue()}
+            onClick={() => void pasteAmountOrScanValue()}
           >
             <span className="btn-label-with-icon">
               <span className="btn-label-icon" aria-hidden="true">
