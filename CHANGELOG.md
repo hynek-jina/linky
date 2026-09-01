@@ -16,6 +16,18 @@ používá také v Google Play a musí se vejít do 500 znaků na jazyk.
 
 ### cs-CZ
 
+## [26.9.4] - 2026-09-01
+
+### en-US
+
+- Reworked Cashu wallet internals for more reliable sends, receives, top-ups, Lightning payments, and token recovery.
+- Existing balances and unfinished top-ups or automatic swaps now migrate safely to the new wallet engine.
+
+### cs-CZ
+
+- Přepracované vnitřní fungování Cashu peněženky zvyšuje spolehlivost odesílání, příjmu, dobíjení, Lightning plateb a obnovy tokenů.
+- Stávající zůstatky a nedokončená dobití či automatické převody se bezpečně převedou do nové peněženky.
+
 ## [26.9.3] - 2026-08-28
 
 ### en-US
