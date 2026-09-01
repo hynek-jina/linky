@@ -1,24 +1,20 @@
-import * as Evolu from "@evolu/common";
 import { Either } from "effect";
 import React from "react";
-import type { CashuTokenId, CashuTokenRow } from "../../../evolu";
+import type { CashuTokenId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
-import { resolveCashuTokenStoredOwnerLaneById } from "../../lib/cashuOwnerLane";
 import type {
   CheckAllCashuTokens,
   CheckCashuTokenRow,
 } from "../composition/useLinkshuComposition";
 
-type EvoluMutations = ReturnType<typeof import("../../../evolu").useEvolu>;
-
 interface UseCashuTokenChecksParams {
-  appOwnerId: Evolu.OwnerId | null;
   cashuBulkCheckIsBusy: boolean;
   cashuIsBusy: boolean;
-  cashuTokensAll: readonly CashuTokenRow[];
   /** Null until the linkshu runtime is composed (seed + owners resolved). */
   checkAllCashuTokens: CheckAllCashuTokens | null;
   checkCashuTokenRow: CheckCashuTokenRow | null;
+  /** Null until the linkshu runtime is composed (seed + owners resolved). */
+  forgetCashuToken: ((rowId: string) => Promise<void>) | null;
   pendingCashuDeleteId: CashuTokenId | null;
   pushToast: (message: string) => void;
   setCashuBulkCheckIsBusy: React.Dispatch<React.SetStateAction<boolean>>;
@@ -28,7 +24,6 @@ interface UseCashuTokenChecksParams {
   >;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
-  update: EvoluMutations["update"];
 }
 
 /**
@@ -39,12 +34,11 @@ interface UseCashuTokenChecksParams {
  * statuses, and toasts, and hosts the (unrelated) row-delete confirmation.
  */
 export const useCashuTokenChecks = ({
-  appOwnerId,
   cashuBulkCheckIsBusy,
   cashuIsBusy,
-  cashuTokensAll,
   checkAllCashuTokens,
   checkCashuTokenRow,
+  forgetCashuToken,
   pendingCashuDeleteId,
   pushToast,
   setCashuBulkCheckIsBusy,
@@ -52,39 +46,24 @@ export const useCashuTokenChecks = ({
   setPendingCashuDeleteId,
   setStatus,
   t,
-  update,
 }: UseCashuTokenChecksParams) => {
   const handleDeleteCashuToken = React.useCallback(
-    (
-      id: CashuTokenId,
-      options?: { navigate?: boolean; setStatus?: boolean },
-    ) => {
-      const { navigate = true, setStatus: setStatusEnabled = true } =
-        options ?? {};
-      const ownerId = resolveCashuTokenStoredOwnerLaneById(
-        cashuTokensAll,
-        id,
-        appOwnerId,
-      );
-      const payload = { id, isDeleted: Evolu.sqliteTrue };
-      const result = ownerId
-        ? update("cashuToken", payload, { ownerId })
-        : update("cashuToken", payload);
-      if (result.ok) {
-        if (setStatusEnabled) {
-          setStatus(t("cashuDeleted"));
-        }
-        setPendingCashuDeleteId(null);
-        if (navigate) {
-          navigateTo({ route: "wallet" });
-        }
+    async (id: CashuTokenId) => {
+      if (forgetCashuToken === null) {
+        pushToast(t("errorPrefix"));
         return;
       }
-      if (setStatusEnabled) {
-        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
+      try {
+        await forgetCashuToken(String(id));
+      } catch (error) {
+        setStatus(`${t("errorPrefix")}: ${String(error)}`);
+        return;
       }
+      setStatus(t("cashuDeleted"));
+      setPendingCashuDeleteId(null);
+      navigateTo({ route: "wallet" });
     },
-    [appOwnerId, cashuTokensAll, setPendingCashuDeleteId, setStatus, t, update],
+    [forgetCashuToken, pushToast, setPendingCashuDeleteId, setStatus, t],
   );
 
   const checkAndRefreshCashuToken = React.useCallback(
@@ -160,7 +139,7 @@ export const useCashuTokenChecks = ({
   const requestDeleteCashuToken = React.useCallback(
     (id: CashuTokenId) => {
       if (pendingCashuDeleteId === id) {
-        handleDeleteCashuToken(id);
+        void handleDeleteCashuToken(id);
         return;
       }
       setPendingCashuDeleteId(id);
