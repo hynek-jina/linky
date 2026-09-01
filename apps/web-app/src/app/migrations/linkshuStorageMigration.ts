@@ -19,8 +19,7 @@
 // twice, wipeLinkshuSeedBoundState) once production devices have all launched
 // a post-cutover build; the done flags make later runs no-ops either way.
 
-import { parseMintUrl } from "@linky/linkshu";
-import { parseCashuToken } from "../../cashu";
+import { parseMintUrl, parseTokenText } from "@linky/linkshu";
 
 const DONE_STORAGE_KEY = "linky.linkshu_storage_migration_v1";
 const ROW_MINTS_DONE_STORAGE_KEY = "linky.linkshu_seen_mints_backfill_v1";
@@ -156,7 +155,7 @@ export const seedLinkshuSeenMintsFromTokenRows = (
     for (const row of rows) {
       const tokenText = row.rawToken ?? row.token ?? "";
       const candidate =
-        row.mint ?? (tokenText ? parseCashuToken(tokenText)?.mint : null);
+        row.mint ?? (tokenText ? parseTokenText(tokenText)?.mint : null);
       if (typeof candidate === "string") seedSeenMint(candidate);
     }
     localStorage.setItem(ROW_MINTS_DONE_STORAGE_KEY, "1");

@@ -88,10 +88,7 @@ import { usePaidOverlayState } from "../usePaidOverlayState";
 import { usePaymentsDomain } from "../usePaymentsDomain";
 import { useProfileNpubCashEffects } from "../useProfileNpubCashEffects";
 import { getLinkyBankPaymentOfferInfo } from "../../lib/bankPaymentOffer";
-import {
-  readCashuRowOwnerId,
-  resolveCashuRowStoredOwnerLane,
-} from "../../lib/cashuOwnerLane";
+import { readCashuRowOwnerId } from "../../lib/cashuOwnerLane";
 import { isCashuRowCandidateBetter } from "../../lib/cashuRowPreference";
 import {
   createCashuTokenId,
@@ -872,13 +869,13 @@ export const useCashuWalletComposition = ({
   }, [cashuTokensAllFiltered, cashuTokensFiltered, currentNpub, currentNsec]);
 
   React.useEffect(() => {
+    if (cashuTokenLifecycle === null) return;
     const pendingTokens = cashuTokensAllFiltered.filter((row) => {
       const state = String(row.state ?? "");
       if (state !== "pending") return false;
       const isDeleted = Boolean(row.isDeleted);
       return !isDeleted;
     });
-    if (pendingTokens.length === 0) return;
 
     for (const row of pendingTokens) {
       const tokenText = String(row.token ?? row.rawToken ?? "").trim();
@@ -890,20 +887,11 @@ export const useCashuWalletComposition = ({
         return isOut && matches && status !== "pending";
       });
       if (!hasMessage) continue;
-      const payload = {
-        id: row.id,
-        isDeleted: Evolu.sqliteTrue,
-      };
-      // Target the lane that holds the row (Evolu keys rows by (ownerId, id));
-      // deleting under the active lane no-ops on rows in older cashu-n lanes.
-      const rowOwnerId = resolveCashuRowStoredOwnerLane(row) ?? cashuOwnerId;
-      if (rowOwnerId) {
-        update("cashuToken", payload, { ownerId: rowOwnerId });
-      } else {
-        update("cashuToken", payload);
-      }
+      // Deleting through linkshu keeps the token store's write overlay in
+      // sync; a raw Evolu delete would leave the overlay serving the row.
+      void cashuTokenLifecycle.forget(String(row.id));
     }
-  }, [cashuOwnerId, cashuTokensAllFiltered, nostrMessagesLocal, update]);
+  }, [cashuTokenLifecycle, cashuTokensAllFiltered, nostrMessagesLocal]);
 
   // lastMessageByContactId provided by the derived Nostr index above.
 

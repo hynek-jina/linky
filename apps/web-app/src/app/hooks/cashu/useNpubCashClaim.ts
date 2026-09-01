@@ -1,7 +1,7 @@
 import * as Evolu from "@evolu/common";
 import { Either } from "effect";
 import React from "react";
-import { parseCashuToken } from "../../../cashu";
+import { parseTokenText } from "@linky/linkshu";
 import type { JsonValue } from "../../../types/json";
 import {
   LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX,
@@ -121,10 +121,9 @@ export const useNpubCashClaim = ({
       await enqueueCashuOp(async () => {
         setCashuIsBusy(true);
 
-        const parsed = parseCashuToken(tokenRaw);
-        const parsedMint = parsed?.mint?.trim() ? parsed.mint.trim() : null;
-        const parsedAmount =
-          parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
+        const parsed = parseTokenText(tokenRaw);
+        const parsedMint = parsed?.mint ?? null;
+        const parsedAmount = parsed?.amount ?? null;
         const logFailure = (message: string): void => {
           logPaymentEvent({
             direction: "in",
