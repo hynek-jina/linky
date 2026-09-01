@@ -1,6 +1,6 @@
 import { Either } from "effect";
 import React from "react";
-import { parseCashuToken } from "../../../cashu";
+import { parseTokenText } from "@linky/linkshu";
 import { navigateTo } from "../../../hooks/useRouting";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
@@ -96,10 +96,9 @@ export const useSaveCashuFromText = ({
       setStatus(t("cashuAccepting"));
 
       // Best-effort metadata so failures still log mint/amount context.
-      const parsed = parseCashuToken(tokenRaw);
-      const parsedMint = parsed?.mint?.trim() ? parsed.mint.trim() : null;
-      const parsedAmount =
-        parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
+      const parsed = parseTokenText(tokenRaw);
+      const parsedMint = parsed?.mint ?? null;
+      const parsedAmount = parsed?.amount ?? null;
       const optionContactId = String(options?.contactId ?? "").trim();
       const unknownContactId = isUnknownContactId(optionContactId)
         ? optionContactId

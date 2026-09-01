@@ -11,7 +11,7 @@ import {
   isCashuTokenUnavailableState,
 } from "../app/lib/cashuTokenState";
 import { extractCashuTokenMeta } from "../app/lib/tokenText";
-import { parseCashuToken } from "../cashu";
+import { parseTokenText } from "@linky/linkshu";
 import { NfcIcon } from "../components/icons";
 import { WalletBalance } from "../components/WalletBalance";
 import type { CashuTokenId, CashuTokenRow } from "../evolu";
@@ -70,18 +70,13 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   const tokenText = tokenMeta?.tokenText ?? "";
 
   const { mintText, tokenAmount } = React.useMemo(() => {
-    const parsed = tokenText ? parseCashuToken(tokenText) : null;
+    const parsed = tokenText ? parseTokenText(tokenText) : null;
     const storedAmount = Number(tokenMeta?.amount ?? 0);
-    const parsedAmount = Number(parsed?.amount ?? 0);
     const amount =
       Number.isFinite(storedAmount) && storedAmount > 0
         ? storedAmount
-        : Number.isFinite(parsedAmount) && parsedAmount > 0
-          ? parsedAmount
-          : 0;
-    const mint =
-      String(tokenMeta?.mint ?? "").trim() ||
-      (parsed?.mint ? String(parsed.mint).trim() : "");
+        : (parsed?.amount ?? 0);
+    const mint = String(tokenMeta?.mint ?? "").trim() || (parsed?.mint ?? "");
     return { mintText: mint, tokenAmount: amount };
   }, [tokenMeta?.amount, tokenMeta?.mint, tokenText]);
   const mintDisplay = (() => {

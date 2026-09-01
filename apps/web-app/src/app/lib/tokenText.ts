@@ -1,4 +1,4 @@
-import { normalizeCashuToken, parseCashuToken } from "../../cashu";
+import { extractTokenText, parseTokenText } from "@linky/linkshu";
 import type { CashuTokenRow } from "../../evolu";
 import { isBankPaymentPayload } from "../../utils/spdPayment";
 import type { CashuTokenMeta } from "../types/appTypes";
@@ -12,37 +12,23 @@ export const extractCashuTokenMeta = (
   const storedUnit = String(row.unit ?? "").trim() || null;
   const storedAmount = Number(row.amount ?? 0);
 
-  let mint: string | null = null;
-  let unit: string | null = null;
-  let amount: number | null = null;
-
-  if (tokenText) {
-    const parsed = parseCashuToken(tokenText);
-    if (parsed) {
-      const parsedMint = String(parsed.mint ?? "").trim();
-      mint = parsedMint || null;
-      const parsedUnit = String(parsed.unit ?? "").trim();
-      // Cashu tokens without an explicit unit use sat by default. Linky only
-      // accepts sat-denominated wallet tokens.
-      unit = parsedUnit || "sat";
-      if (Number.isFinite(parsed.amount) && parsed.amount > 0) {
-        amount = Math.floor(parsed.amount);
-      }
-    }
-  }
+  const parsed = tokenText ? parseTokenText(tokenText) : null;
 
   // Old rows can still carry the former metadata snapshots. They are only a
   // fallback for malformed/legacy tokens and are no longer written.
-  if (!mint) mint = storedMint || null;
-  if (!unit) unit = storedUnit;
-  if (!amount) {
-    amount =
-      Number.isFinite(storedAmount) && storedAmount > 0
-        ? Math.floor(storedAmount)
-        : null;
-  }
+  const fallbackAmount =
+    Number.isFinite(storedAmount) && storedAmount > 0
+      ? Math.floor(storedAmount)
+      : null;
 
-  return { tokenText, mint, unit, amount };
+  return {
+    tokenText,
+    mint: parsed?.mint ?? (storedMint || null),
+    // Cashu tokens without an explicit unit use sat by default. Linky only
+    // accepts sat-denominated wallet tokens.
+    unit: parsed ? (parsed.unit ?? "sat") : storedUnit,
+    amount: parsed?.amount ?? fallbackAmount,
+  };
 };
 
 export type CashuTokenWithMeta = Omit<
@@ -69,162 +55,15 @@ export const enrichCashuTokenRow = (
   };
 };
 
+/** linkshu's `extractTokenText` behind a bank-payment-payload exclusion. */
 export const extractCashuTokenFromText = (text: string): string | null => {
-  const raw0 = String(text ?? "").trim();
-  if (!raw0) return null;
-  if (isBankPaymentPayload(raw0) || getLinkyBankPaymentOfferInfo(raw0)) {
-    return null;
-  }
-
-  const queryKeys = ["token", "cashu", "cashutoken", "cashu_token", "t"];
-  const cashuSchemePrefix = /^(web\+)?cashu:(\/\/)?/i;
-
-  const normalizeCandidate = (value: string): string =>
-    value.replace(/^cashu/i, "cashu");
-
-  const decodeCandidate = (value: string): string => {
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  };
-
-  const tryToken = (value: string): string | null => {
-    const trimmed = String(value ?? "").trim();
-    if (!trimmed) return null;
-    const normalized = normalizeCashuToken(normalizeCandidate(trimmed));
-    if (!normalized) return null;
-    return parseCashuToken(normalized) ? normalized : null;
-  };
-
-  const tokenRegex = /cashu[0-9A-Za-z_-]+={0,2}/gi;
-
-  const tryInText = (value: string): string | null => {
-    const raw = String(value ?? "").trim();
-    if (!raw) return null;
-
-    const stripped = raw
-      .replace(cashuSchemePrefix, "")
-      .replace(/^nostr:/i, "")
-      .replace(/^lightning:/i, "")
-      .trim();
-
-    const direct = tryToken(stripped);
-    if (direct) return direct;
-
-    for (const m of stripped.matchAll(tokenRegex)) {
-      const candidate = tryToken(String(m[0] ?? ""));
-      if (candidate) return candidate;
-    }
-
-    const compact = stripped.replace(/\s+/g, "");
-    if (compact && compact !== stripped) {
-      const compactDirect = tryToken(compact);
-      if (compactDirect) return compactDirect;
-      for (const m of compact.matchAll(tokenRegex)) {
-        const candidate = tryToken(String(m[0] ?? ""));
-        if (candidate) return candidate;
-      }
-    }
-
-    const queryIndex = stripped.indexOf("?");
-    if (queryIndex >= 0 && queryIndex < stripped.length - 1) {
-      const params = new URLSearchParams(stripped.slice(queryIndex + 1));
-      for (const key of queryKeys) {
-        const queryValue = params.get(key);
-        if (!queryValue) continue;
-        const found = tryInText(queryValue);
-        if (found) return found;
-      }
-    }
-
-    if (/^https?:\/\//i.test(stripped)) {
-      try {
-        const u = new URL(stripped);
-        for (const key of queryKeys) {
-          const v = u.searchParams.get(key);
-          if (v) {
-            const decoded = (() => {
-              try {
-                return decodeURIComponent(v);
-              } catch {
-                return v;
-              }
-            })();
-            const found = tryInText(decoded);
-            if (found) return found;
-          }
-        }
-
-        const hash = String(u.hash ?? "").replace(/^#/, "");
-        if (hash) {
-          const decodedHash = decodeCandidate(hash);
-          const found = tryInText(decodedHash);
-          if (found) return found;
-        }
-
-        const host = decodeCandidate(String(u.host ?? "").trim());
-        if (host) {
-          const found = tryInText(host);
-          if (found) return found;
-        }
-
-        for (const pathSegment of u.pathname.split("/")) {
-          const decodedSegment = decodeCandidate(pathSegment.trim());
-          if (!decodedSegment) continue;
-          const found = tryInText(decodedSegment);
-          if (found) return found;
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    const tokenField = stripped.match(/"token"\s*:\s*"([^"]+)"/i);
-    if (tokenField?.[1]) {
-      const decoded = (() => {
-        try {
-          return decodeURIComponent(tokenField[1]);
-        } catch {
-          return tokenField[1];
-        }
-      })();
-      const found = tryInText(decoded);
-      if (found) return found;
-    }
-
-    const firstBrace = stripped.indexOf("{");
-    const lastBrace = stripped.lastIndexOf("}");
-    if (firstBrace >= 0 && lastBrace > firstBrace) {
-      const candidate = stripped.slice(firstBrace, lastBrace + 1).trim();
-      const maybe = tryToken(candidate);
-      if (maybe) return maybe;
-    }
-
-    return null;
-  };
-
-  const foundRaw = tryInText(raw0);
-  if (foundRaw) return foundRaw;
-
-  if (/%[0-9A-Fa-f]{2}/.test(raw0)) {
-    try {
-      const decoded = decodeURIComponent(raw0);
-      const foundDecoded = tryInText(decoded);
-      if (foundDecoded) return foundDecoded;
-    } catch {
-      // ignore
-    }
-  }
-
-  return null;
-};
-
-export const isStandaloneCashuTokenMessage = (text: string): boolean => {
   const raw = String(text ?? "").trim();
-  if (!raw) return false;
-
-  const normalized = normalizeCashuToken(raw);
-  return normalized !== null && parseCashuToken(normalized) !== null;
+  if (!raw) return null;
+  if (isBankPaymentPayload(raw) || getLinkyBankPaymentOfferInfo(raw)) {
+    return null;
+  }
+  return extractTokenText(raw);
 };
+
+export const isStandaloneCashuTokenMessage = (text: string): boolean =>
+  parseTokenText(String(text ?? "")) !== null;

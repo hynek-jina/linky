@@ -1,4 +1,4 @@
-import { parseCashuToken } from "../../cashu";
+import { parseTokenText } from "@linky/linkshu";
 import type { CashuTokenRow } from "../../evolu";
 import type { MintUrlInput } from "../types/appTypes";
 import { getLinkyBankPaymentOfferInfo } from "./bankPaymentOffer";
@@ -51,14 +51,14 @@ export const getCashuTokenMessageInfo = (
   const tokenRaw = extractCashuTokenFromText(text);
   if (!tokenRaw) return null;
 
-  const parsed = parseCashuToken(tokenRaw);
+  const parsed = parseTokenText(tokenRaw);
   if (!parsed) return null;
 
   return {
     tokenRaw,
     mintDisplay: getMintDisplay(parsed.mint),
-    mintUrl: parsed.mint ? String(parsed.mint) : null,
-    amount: Number.isFinite(parsed.amount) ? parsed.amount : null,
+    mintUrl: parsed.mint,
+    amount: parsed.amount,
     unit: parsed.unit,
     // Best-effort: "valid" means not yet imported into wallet.
     isValid: !isKnownCashuToken(cashuTokensAll, tokenRaw),

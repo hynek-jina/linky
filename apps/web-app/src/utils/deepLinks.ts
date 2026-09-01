@@ -1,4 +1,4 @@
-import { parseCashuToken } from "../cashu";
+import { parseTokenText } from "@linky/linkshu";
 import { normalizeNpubIdentifier } from "./nostrNpub";
 
 export interface NativeDeepLinkScanText {
@@ -32,7 +32,7 @@ const normalizeStrictCashuToken = (value: string): string | null => {
   const trimmed = normalizeCandidate(value);
   if (!trimmed) return null;
   const normalized = trimmed.replace(/^cashu/i, "cashu");
-  return parseCashuToken(normalized) ? normalized : null;
+  return parseTokenText(normalized) ? normalized : null;
 };
 
 export const buildCashuDeepLink = (rawToken: unknown): string | null => {

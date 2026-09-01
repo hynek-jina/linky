@@ -239,7 +239,6 @@ export default defineConfig({
       "@capacitor/core",
       "@capacitor/push-notifications",
       "@capacitor/share",
-      "@cashu/cashu-ts",
       "@evolu/common",
       "@evolu/react",
       "@noble/hashes/hmac.js",
@@ -347,7 +346,6 @@ export default defineConfig({
           if (!id.includes("node_modules")) return;
           if (id.includes("nostr-tools")) return "nostr";
           if (id.includes("pdfjs-dist")) return "pdfjs";
-          if (id.includes("@cashu")) return "cashu";
           // Keep `buffer` and its deps together to avoid an ESM circular init:
           // polyfills -> vendor (base64-js/ieee754) and vendor -> polyfills.
           if (
