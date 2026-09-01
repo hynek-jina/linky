@@ -13,12 +13,14 @@ WORKDIR /app
 # Manifests first so editing source does not bust the dependency layer.
 COPY package.json bun.lock ./
 COPY patches patches
+COPY apps/linkshu-cli/package.json apps/linkshu-cli/
 COPY apps/native-shell/package.json apps/native-shell/
 COPY apps/push/package.json apps/push/
 COPY apps/site/package.json apps/site/
 COPY apps/web-app/package.json apps/web-app/
 COPY packages/config/package.json packages/config/
 COPY packages/identity/package.json packages/identity/
+COPY packages/linkshu/package.json packages/linkshu/
 COPY packages/linkstr/package.json packages/linkstr/
 COPY packages/linkstr-react/package.json packages/linkstr-react/
 RUN bun install --frozen-lockfile

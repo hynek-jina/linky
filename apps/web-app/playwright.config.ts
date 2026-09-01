@@ -1,6 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
-const PROXY_PAYMENT_SPEC = "**/proxy-payment.spec.ts";
+const LOCAL_STACK_SPECS = [
+  "**/proxy-payment.spec.ts",
+  "**/linkshu-migration.spec.ts",
+];
 
 export default defineConfig({
   testDir: "./tests",
@@ -15,7 +18,7 @@ export default defineConfig({
       // The original suite: a Vite dev server in `prod-services` mode, talking to
       // the real public relays and mints.
       name: "prod-services",
-      testIgnore: PROXY_PAYMENT_SPEC,
+      testIgnore: LOCAL_STACK_SPECS,
       use: { baseURL: "http://127.0.0.1:5174" },
     },
     {
@@ -24,7 +27,7 @@ export default defineConfig({
       // the app; start it with:
       //   docker compose -f docker-compose.dev.yml --profile e2e up -d --build --wait
       name: "local-stack",
-      testMatch: PROXY_PAYMENT_SPEC,
+      testMatch: LOCAL_STACK_SPECS,
       // Three cold app boots plus a full offer state machine.
       timeout: 600_000,
       // The app deliberately does nothing relay-facing for the first ~2.5-8s

@@ -36,10 +36,7 @@ import type { DispatchInboxEvent } from "../messages/useLinkstrInboxSync";
 import { useGuideScannerDomain } from "../useGuideScannerDomain";
 import { useScannedTextHandler } from "../useScannedTextHandler";
 import { useScannedTextHandlerRefBridge } from "../useScannedTextHandlerRefBridge";
-import {
-  CASHU_TOKEN_STATE_EXTERNALIZED,
-  isCashuTokenAcceptedState,
-} from "../../lib/cashuTokenState";
+import { isCashuTokenAcceptedState } from "../../lib/cashuTokenState";
 import {
   consumeNotificationOpenDetailFromHash,
   readNotificationOpenRoute,
@@ -109,6 +106,7 @@ interface UseScanNativeCompositionParams {
   dispatchInboxEvent: DispatchInboxEvent;
   insert: EvoluMutations["insert"];
   lightningInvoiceAutoPayLimit: CashuWalletCompositionResult["lightningInvoiceAutoPayLimit"];
+  markCashuTokenExternalized: CashuWalletCompositionResult["markCashuTokenExternalized"];
   markCashuTokenIssued: CashuWalletCompositionResult["markCashuTokenIssued"];
   nostrBootstrapReady: ContactsMessagingCompositionResult["nostrBootstrapReady"];
   openNewContactPage: ContactsMessagingCompositionResult["openNewContactPage"];
@@ -124,7 +122,6 @@ interface UseScanNativeCompositionParams {
   setPendingLnurlWithdrawConfirmation: CashuWalletCompositionResult["setPendingLnurlWithdrawConfirmation"];
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   t: (key: string) => string;
-  update: EvoluMutations["update"];
 }
 
 export const useScanNativeComposition = ({
@@ -145,6 +142,7 @@ export const useScanNativeComposition = ({
   dispatchInboxEvent,
   insert,
   lightningInvoiceAutoPayLimit,
+  markCashuTokenExternalized,
   markCashuTokenIssued,
   nostrBootstrapReady,
   openNewContactPage,
@@ -160,7 +158,6 @@ export const useScanNativeComposition = ({
   setPendingLnurlWithdrawConfirmation,
   setStatus,
   t,
-  update,
 }: UseScanNativeCompositionParams) => {
   const fetchWrapEvent = useAtomSet(fetchWrapEventAtom, {
     mode: "promiseExit",
@@ -466,21 +463,9 @@ export const useScanNativeComposition = ({
 
       if (!wrote) return;
 
-      const payload = {
-        id,
-        state: CASHU_TOKEN_STATE_EXTERNALIZED,
-        error: null,
-      };
-
-      const result = cashuOwnerId
-        ? update("cashuToken", payload, { ownerId: cashuOwnerId })
-        : update("cashuToken", payload);
-
-      if (!result.ok) {
-        setStatus(`${t("errorPrefix")}: ${String(result.error)}`);
-      }
+      await markCashuTokenExternalized(id);
     },
-    [cashuOwnerId, pushToast, setStatus, t, update, writeNfcUriWithToast],
+    [markCashuTokenExternalized, pushToast, t, writeNfcUriWithToast],
   );
 
   const shareCashuTokenText = React.useCallback(

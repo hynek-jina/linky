@@ -3,6 +3,7 @@ import type { OwnerId, SyncOwner } from "@evolu/common";
 import React from "react";
 import type { EvoluServerStatus } from "../../evolu";
 import type { PasswordManagerSaveResult } from "../../platform/passwordManager";
+import type { ProbeLightningFee } from "../hooks/composition/useLinkshuComposition";
 import type { LocalMintInfoRow, MintUrlInput } from "../types/appTypes";
 
 export interface AdvancedSettingsContextValue {
@@ -110,6 +111,8 @@ export interface MintSettingsContextValue {
   meltLargestForeignMintToMainMint: () => Promise<void>;
   mintInfoByUrl: Map<string, LocalMintInfoRow>;
   pendingMintDeleteUrl: string | null;
+  /** Null until the linkshu runtime is composed (seed + owners resolved). */
+  probeLightningFee: ProbeLightningFee | null;
   refreshMintInfo: (url: string) => Promise<void>;
   setDefaultMintUrlDraft: (value: string) => void;
   setMintInfoAll: React.Dispatch<React.SetStateAction<LocalMintInfoRow[]>>;

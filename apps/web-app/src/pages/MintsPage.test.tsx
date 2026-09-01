@@ -1,9 +1,11 @@
 import type { OwnerId } from "@evolu/common";
+import { LightningFeeProbeResult } from "@linky/linkshu";
+import { Either, Schema } from "effect";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MintSettingsContextValue } from "../app/context/SystemSettingsContexts";
-import type { LightningFeeProbeResult } from "../app/lib/lightningFeeProbe";
+import type { ProbeLightningFee } from "../app/hooks/composition/useLinkshuComposition";
 import { MintsPage } from "./MintsPage";
 
 let mintSettings: MintSettingsContextValue;
@@ -16,21 +18,19 @@ vi.mock("../app/context/SystemSettingsContexts", () => ({
   useMintSettingsContext: () => mintSettings,
 }));
 
-const probeLightningFee = vi.fn<
-  (args: {
-    mintUrl: string;
-    probeMintUrl: string;
-  }) => Promise<LightningFeeProbeResult>
->(async () => ({
-  amountSat: 10000,
-  feeReserveSat: 100,
-  percent: 1,
-}));
-vi.mock("../app/lib/lightningFeeProbe", () => ({
-  getCachedLightningFee: () => null,
-  probeLightningFee: (args: { mintUrl: string; probeMintUrl: string }) =>
-    probeLightningFee(args),
-}));
+const decodeProbeResult = Schema.decodeUnknownSync(LightningFeeProbeResult);
+const probeLightningFee = vi.fn<ProbeLightningFee>(
+  async ({ mint, probeMint }) =>
+    Either.right(
+      decodeProbeResult({
+        mint,
+        probeMint,
+        amount: 10000,
+        feeReserve: 100,
+        percent: 1,
+      }),
+    ),
+);
 
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
   configurable: true,
@@ -58,6 +58,7 @@ const createMintSettings = (
   meltLargestForeignMintToMainMint: vi.fn(async () => {}),
   mintInfoByUrl: new Map(),
   pendingMintDeleteUrl: null,
+  probeLightningFee,
   refreshMintInfo: async () => {},
   setDefaultMintUrlDraft: vi.fn(),
   setMintInfoAll: vi.fn(),
@@ -175,8 +176,8 @@ describe("MintsPage", () => {
     });
     expect(container.textContent).toContain("~1 sat");
     expect(probeLightningFee).toHaveBeenCalledWith({
-      mintUrl: "https://cashu.cz",
-      probeMintUrl: "https://mint.minibits.cash/Bitcoin",
+      mint: "https://cashu.cz",
+      probeMint: "https://mint.minibits.cash/Bitcoin",
     });
     expect(container.textContent).toContain("~1 %");
 

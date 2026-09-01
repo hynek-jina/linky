@@ -34,6 +34,7 @@ import { useLinkstrInspectorBridge } from "../../../devtools/inspector/useLinkst
 import { useEvolu, type ContactId } from "../../../evolu";
 import { useDeferredOnlineReady } from "../../../hooks/useDeferredOnlineReady";
 import { useDocumentVisible } from "../../../hooks/useDocumentVisible";
+import { useLatest } from "../../../hooks/useLatest";
 import { navigateTo, useRouting } from "../../../hooks/useRouting";
 import { type Lang } from "../../../i18n";
 import {
@@ -803,9 +804,7 @@ export const useContactsMessagingComposition = ({
     visibleOwnerIds: contactsVisibleOwnerIds,
   });
 
-  const contactsLatestRef = React.useRef(contacts);
-
-  contactsLatestRef.current = contacts;
+  const contactsLatestRef = useLatest(contacts);
 
   React.useEffect(() => {
     const records = [];
@@ -3595,7 +3594,7 @@ export const useContactsMessagingComposition = ({
       if (!stored) return written;
       return written.seenUpToSec >= stored.seenUpToSec ? written : stored;
     },
-    [],
+    [contactsLatestRef],
   );
 
   const advanceContactPeerSeen = React.useCallback(
@@ -3619,7 +3618,7 @@ export const useContactsMessagingComposition = ({
         peerSeenWrittenByContactIdRef.current.set(contactId, seenWindow);
       }
     },
-    [contactsOwnerId, contactsVisibleOwnerIds, update],
+    [contactsLatestRef, contactsOwnerId, contactsVisibleOwnerIds, update],
   );
 
   const dispatchInboxEvent = useLinkstrInboxSync({

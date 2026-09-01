@@ -39,14 +39,22 @@ const TAG_DESCRIPTIONS: Record<string, string> = {
     "A staggered proxy payment offer reached its next queued recipient: the configured delay elapsed without a winner, so the offer was extended while keeping the original expiry.",
   "bankOffer.staggerDropped":
     "The queued recipients of a staggered proxy payment offer were discarded because the offer stopped being open — someone accepted it, it ended, or it expired.",
-  "mint.lightningFeeProbe":
-    "Display-only fee probe on the Mints page: an unpaid mint quote from another production mint was submitted as a melt quote to the selected mint to read its Lightning fee_reserve. Nothing is paid; the result is cached for a day. Links carry both quote ids.",
   "profiles.searchProfiles":
     "Add-contact text search: a NIP-50 kind-0 query fanned out to the read relays plus the configured search relays; relays without NIP-50 answer with unrelated profiles, so only hits that match the query locally are returned (the params carry the query and limit).",
   "contacts.addToGroup":
     "User assigned the contacts just saved from a chat message to a group; the payload lists the contact ids and the group name.",
   ChatImageShareFailed:
     "System share of a chat image failed for a reason other than the user cancelling; the app fell back to a file download when triggered from the message menu.",
+  TokenLifecycleChanged:
+    "A stored cashu token row moved to a new lifecycle state inside linkshu (e.g. accepted → issued); the reason names the operation that caused it. Follow the row link to the operation rows around it.",
+  CounterAdvanced:
+    "linkshu moved a deterministic derivation counter (NUT-13) for one mint/unit/keyset — the audit trail for output derivation and collision recovery.",
+  QuoteStateChanged:
+    "A mint or melt quote was observed in a new state while a linkshu flow (topup, autoswap, melt) polled it; the quote link ties the poll sequence together.",
+  LightningFeeProbed:
+    "linkshu measured a mint's Lightning fee by pricing another mint's unpaid invoice as a melt quote. Nothing is paid; links carry both quote ids.",
+  "send.rowForgotten":
+    "The app dropped a pending send row because its token verifiably reached the recipient (chat message published, or payment request POSTed). Follow the row link back to the send.send operation that produced it.",
 };
 
 const describeTag = (row: CollectedInspectorRow): string => {

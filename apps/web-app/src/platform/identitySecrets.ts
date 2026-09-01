@@ -1,5 +1,4 @@
 import { INITIAL_MNEMONIC_STORAGE_KEY } from "../mnemonic";
-import { wipeCashuDeterministicState } from "../utils/cashuDeterministic";
 import {
   CASHU_BIP85_MNEMONIC_STORAGE_KEY,
   NOSTR_IDENTITY_SOURCE_STORAGE_KEY,
@@ -11,6 +10,7 @@ import {
   clearStoredPushNsec,
   setStoredPushNsec,
 } from "../utils/pushNsecStorage";
+import { wipeLinkshuSeedBoundState } from "./linkshu/wipeLinkshuSeedBoundState";
 import {
   readStoredSecret,
   removeStoredSecret,
@@ -36,14 +36,13 @@ const mirrorPushNsecBestEffort = async (nsec: string): Promise<void> => {
   }
 };
 
-// Per-mint/keyset deterministic counters live in localStorage under
-// `linky.cashu.detCounter.v1:*` and are bound to whichever cashu BIP-85
-// mnemonic was active when they were last bumped. When the mnemonic itself
-// changes (re-onboarding, paste-nsec then derive back, restore-from-different
-// SLIP-39, ...) the counters become stale — they still point past the new
-// seed's actual signed range at the mint, so future mints start at an
-// arbitrary offset and NUT-09 restore from 0 silently gives up before
-// reaching them. Wipe whenever we're about to write a *different* mnemonic.
+// Deterministic counters, restore cursors, and counter leases are bound to
+// whichever cashu BIP-85 mnemonic was active when they were written. When the
+// mnemonic itself changes (re-onboarding, paste-nsec then derive back,
+// restore-from-different SLIP-39, ...) they describe positions the new seed
+// cannot reproduce, so they must go before the new mnemonic's runtime reads
+// them. Wiping is also correct when no prior mnemonic is readable: any
+// surviving keys then belong to a seed that is already gone.
 const wipeCashuStateIfMnemonicChanged = async (
   nextCashuMnemonic: string,
 ): Promise<void> => {
@@ -52,9 +51,8 @@ const wipeCashuStateIfMnemonicChanged = async (
   const current = (
     await readStoredSecret(CASHU_BIP85_MNEMONIC_STORAGE_KEY)
   )?.trim();
-  if (!current) return; // no prior state to wipe
   if (current === next) return; // unchanged
-  wipeCashuDeterministicState();
+  await wipeLinkshuSeedBoundState(next);
 };
 
 interface PersistIdentitySecretsParams {
@@ -153,10 +151,17 @@ export const persistSyncedActiveNostrIdentity = async ({
 };
 
 export const clearIdentitySecrets = async (): Promise<void> => {
-  // The deterministic counters belong to the seed that's being cleared. If
+  // The seed-bound wallet state belongs to the seed that's being cleared. If
   // the user logs in again with a different seed they'd otherwise inherit
-  // stale offsets that break NUT-09 restore.
-  wipeCashuDeterministicState();
+  // stale offsets that break NUT-09 restore. When the mnemonic is already
+  // unreadable the wipe-on-write in wipeCashuStateIfMnemonicChanged covers
+  // the next login instead.
+  const currentCashuMnemonic = (
+    await readStoredSecret(CASHU_BIP85_MNEMONIC_STORAGE_KEY)
+  )?.trim();
+  if (currentCashuMnemonic) {
+    await wipeLinkshuSeedBoundState(currentCashuMnemonic);
+  }
 
   await Promise.all([
     removeStoredSecret(NOSTR_NSEC_STORAGE_KEY),

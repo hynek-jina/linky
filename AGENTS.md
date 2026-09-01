@@ -55,7 +55,7 @@ Exception: August 2026 accidentally shipped as `26.9.0`, so keep releasing as `2
 Two Playwright projects in `apps/web-app/playwright.config.ts`:
 
 - `prod-services` — the original suite. Playwright starts `vite --mode prod-services` on :5174 and the tests hit production relays/mints.
-- `local-stack` — `tests/proxy-payment.spec.ts` only, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
+- `local-stack` — `tests/proxy-payment.spec.ts` and `tests/linkshu-migration.spec.ts`, against the docker stack with the app served as a **production build** on :5176. It declares no `webServer`; compose owns the app, so bring the stack up first.
 
 ```bash
 # once, and again after changing app source (VITE_* values are inlined at build time)
@@ -79,6 +79,14 @@ Playwright starts *every* `webServer` entry regardless of `--project`, so a Vite
 
 Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test needs a real seed login (deterministic Evolu owner lanes); `setRandomIdentityStorage` is the cheaper "just be logged in" variant and leaves `isSeedLogin` false.
 
+## linkshu integration tests
+
+`packages/linkshu` has a second vitest project (`tests/integration/`, excluded from `bun run test`) that needs the dev-stack mint: `docker compose -f docker-compose.dev.yml up -d --wait cashu-mint`, then `bun run --filter @linky/linkshu test:integration`. CI runs it as the `linkshu-integration` job in `.github/workflows/tests.yml`.
+
+## linkshu CLI wallet
+
+`apps/linkshu-cli` is a terminal wallet on `@linky/linkshu` — run it with `bun run linkshu <command>` from the repo root. It is also the package's platform-independence proof, so keep it free of browser/React/Evolu imports. Its own tests use `bun test` (not vitest) and need no mint; driving actual wallet commands does (`docker compose -f docker-compose.dev.yml up -d --wait cashu-mint`). See `apps/linkshu-cli/README.md`.
+
 ## Gotchas
 
 - Evolu requires a Worker polyfill in test environments (jsdom + polyfill live in `vitest.setup.ts`)
@@ -86,8 +94,10 @@ Shared helpers live in `tests/helpers/`. Use `setSeedLoginStorage` when a test n
 - In this workspace/Bun setup, `bunx --cwd apps/web-app playwright test tests` can resolve incorrectly; run `cd apps/web-app && bunx playwright test tests` instead
 - Playwright cannot intercept requests made by a service worker, and `src/sw.ts` has a Workbox `CacheFirst` route for image destinations that matches cross-origin URLs — any test stubbing remote images must use `serviceWorkers: "block"`
 - The local Nutshell mint charges `input_fee_ppk: 100`, so it is **not** fee-free; a receiver nets slightly less than the amount sent
+- The dev mint runs with `MINT_RATE_LIMIT=FALSE`; nutshell's defaults (60 requests/minute globally, 20/minute for transactions) answer 429 partway through any full integration run
 - The `nostr-rs-relay` image's `/bin/sh` is dash, so its healthcheck must invoke `bash` explicitly for `/dev/tcp`
 - `nostr-tools` is patched via Bun `patchedDependencies` (`patches/nostr-tools@2.23.3.patch`): the browser keepalive REQ uses `limit: 1` because nostr-rs-relay silently ignores `limit: 0` REQs, so the unanswered ping killed every healthy connection ~every 50s. The ping code is duplicated into every `lib/` entry bundle (13 files) — when bumping nostr-tools, re-apply to all copies or drop the patch if upstream fixed it, and verify at runtime (a partial patch still sends `limit: 0`). Dockerfiles that run `bun install` must `COPY patches` first
+- `docker/web-app/Dockerfile` copies every workspace `package.json` before `bun install --frozen-lockfile`; adding a new workspace without adding its manifest COPY there breaks the e2e image build
 - SQLite WASM files served from `public/sqlite-wasm/` with `cache-control: no-store` in dev
 - Debug APKs install side-by-side as `fit.linky.app.debug`; native push in them requires a `fit.linky.app.debug` client in `google-services.json` (register that package in the Firebase console), otherwise the google-services plugin is skipped for debug-only builds and push is unsupported
 - Play upload bundles require release signing via `apps/native-shell/android/keystore.properties` or `LINKY_UPLOAD_STORE_FILE` / `LINKY_UPLOAD_STORE_PASSWORD` / `LINKY_UPLOAD_KEY_ALIAS` / `LINKY_UPLOAD_KEY_PASSWORD`; `bun run native:aab:release` fails fast when those credentials are missing

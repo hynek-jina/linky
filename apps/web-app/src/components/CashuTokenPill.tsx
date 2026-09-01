@@ -1,10 +1,8 @@
+import type { TokenRowId, WalletToken } from "@linky/linkshu";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { isCashuTokenUnavailableState } from "../app/lib/cashuTokenState";
-import type { CashuTokenWithMeta } from "../app/lib/tokenText";
 import type { MintUrlInput } from "../app/types/appTypes";
-import { parseCashuToken } from "../cashu";
-import type { CashuTokenId } from "../evolu";
 import { getNextMintIconUrl } from "../utils/mint";
 
 interface MintIcon {
@@ -20,17 +18,8 @@ interface CashuTokenPillProps {
   isError?: boolean;
   onMintIconError: (origin: string, nextUrl: string | null) => void;
   onMintIconLoad: (origin: string, url: string | null) => void;
-  onOpenToken: (id: CashuTokenId) => void;
-  token: CashuTokenWithMeta;
-}
-
-function getTokenMint(token: CashuTokenWithMeta): MintUrlInput {
-  const storedMint = String(token.mint ?? "").trim();
-  if (storedMint) return storedMint;
-
-  const tokenText = String(token.token ?? token.rawToken ?? "").trim();
-  const parsed = tokenText ? parseCashuToken(tokenText) : null;
-  return parsed?.mint ? String(parsed.mint).trim() : null;
+  onOpenToken: (id: TokenRowId) => void;
+  token: WalletToken;
 }
 
 function areMintIconsEqual(previous: MintIcon, next: MintIcon) {
@@ -59,10 +48,9 @@ function arePropsEqual(
 
   if (previous.getMintIconUrl === next.getMintIconUrl) return true;
 
-  const mint = getTokenMint(next.token);
   return areMintIconsEqual(
-    previous.getMintIconUrl(mint),
-    next.getMintIconUrl(mint),
+    previous.getMintIconUrl(next.token.mint),
+    next.getMintIconUrl(next.token.mint),
   );
 }
 
@@ -76,35 +64,10 @@ export const CashuTokenPill = React.memo(function CashuTokenPill({
   token,
 }: CashuTokenPillProps) {
   const { formatDisplayedAmountParts } = useAppShellCore();
-  const tokenText = String(token.token ?? token.rawToken ?? "").trim();
-  const storedAmount = Number(token.amount ?? 0);
-  const storedMint = String(token.mint ?? "").trim();
 
-  const parsed = React.useMemo(
-    () =>
-      !storedMint || !(storedAmount > 0)
-        ? tokenText
-          ? parseCashuToken(tokenText)
-          : null
-        : null,
-    [storedAmount, storedMint, tokenText],
-  );
-
-  const amount =
-    (Number.isFinite(storedAmount) && storedAmount > 0
-      ? storedAmount
-      : parsed && Number.isFinite(parsed.amount) && parsed.amount > 0
-        ? parsed.amount
-        : 0) || 0;
-
-  const mint = storedMint
-    ? storedMint
-    : parsed?.mint
-      ? String(parsed.mint).trim()
-      : null;
-  const icon = getMintIconUrl(mint);
+  const icon = getMintIconUrl(token.mint);
   const showMintFallback = icon.failed || !icon.url;
-  const displayAmount = formatDisplayedAmountParts(amount);
+  const displayAmount = formatDisplayedAmountParts(token.amount);
   const isMuted = isCashuTokenUnavailableState(token.state);
   const handleClick = React.useCallback(() => {
     onOpenToken(token.id);

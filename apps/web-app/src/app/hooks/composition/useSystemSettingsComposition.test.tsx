@@ -132,6 +132,7 @@ const createMintSettings = (draft: string): MintSettingsContextValue => ({
   meltLargestForeignMintToMainMint: noopAsync,
   mintInfoByUrl: new Map(),
   pendingMintDeleteUrl: null,
+  probeLightningFee: null,
   refreshMintInfo: noopAsync,
   setDefaultMintUrlDraft: noop,
   setMintInfoAll: noop,

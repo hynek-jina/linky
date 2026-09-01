@@ -1,53 +1,18 @@
 import type { OwnerId } from "@evolu/common";
-import * as Evolu from "@evolu/common";
 import React from "react";
-import { parseCashuToken } from "../../cashu";
 import type { CashuTokenRow } from "../../evolu";
-import { LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY } from "../../utils/constants";
-import { safeLocalStorageGet, safeLocalStorageSet } from "../../utils/storage";
 import { isCashuTokenErrorState } from "../lib/cashuTokenState";
 import { createCashuTokenId } from "../lib/cashuTokenIdentity";
-import type { LoggedPaymentEventParams } from "../types/appTypes";
-
-type EvoluMutations = ReturnType<typeof import("../../evolu").useEvolu>;
 
 interface UseCashuDomainParams {
   appOwnerId: OwnerId | null;
-  appOwnerIdRef: React.MutableRefObject<OwnerId | null>;
   cashuTokensAll: readonly CashuTokenRow[];
-  upsert: EvoluMutations["upsert"];
-  logPaymentEvent: (event: LoggedPaymentEventParams) => void;
 }
 
 export const useCashuDomain = ({
   appOwnerId,
-  appOwnerIdRef,
   cashuTokensAll,
-  upsert,
-  logPaymentEvent,
 }: UseCashuDomainParams) => {
-  const buildCashuTokenPayload = React.useCallback(
-    (args: {
-      amount: number | null;
-      mint: string | null;
-      state: "accepted";
-      token: string;
-    }) => {
-      const payload: {
-        id: ReturnType<typeof createCashuTokenId>;
-        token: typeof Evolu.NonEmptyString.Type;
-        state: typeof Evolu.NonEmptyString100.Type;
-      } = {
-        id: createCashuTokenId(args.token),
-        token: args.token as typeof Evolu.NonEmptyString.Type,
-        state: args.state as typeof Evolu.NonEmptyString100.Type,
-      };
-
-      return payload;
-    },
-    [],
-  );
-
   const cashuTokensAllRef = React.useRef(cashuTokensAll);
   React.useEffect(() => {
     cashuTokensAllRef.current = cashuTokensAll;
@@ -174,99 +139,9 @@ export const useCashuDomain = ({
     [isOptimisticallyKnownCashuToken, normalizeCashuTokenText, rowMatchesToken],
   );
 
-  const ensuredTokenRef = React.useRef<Set<string>>(new Set());
-
-  const ensureCashuTokenPersisted = React.useCallback(
-    (token: string) => {
-      const remembered = String(token ?? "").trim();
-      if (!remembered) return;
-
-      if (isCashuTokenKnownAny(remembered)) {
-        safeLocalStorageSet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY, "");
-        return;
-      }
-
-      window.setTimeout(() => {
-        try {
-          const ownerId = appOwnerIdRef.current;
-          if (!ownerId) return;
-
-          const current = cashuTokensAllRef.current;
-          const exists = current.some((row) =>
-            rowMatchesToken(row, remembered),
-          );
-          if (exists) {
-            safeLocalStorageSet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY, "");
-            return;
-          }
-
-          if (ensuredTokenRef.current.has(remembered)) return;
-          ensuredTokenRef.current.add(remembered);
-
-          const parsed = parseCashuToken(remembered);
-          const mint = parsed?.mint?.trim() ? parsed.mint.trim() : null;
-          const amount =
-            parsed?.amount && parsed.amount > 0 ? parsed.amount : null;
-
-          const result = upsert(
-            "cashuToken",
-            buildCashuTokenPayload({
-              token: remembered,
-              mint,
-              amount,
-              state: "accepted",
-            }),
-            { ownerId },
-          );
-
-          if (result.ok) {
-            logPaymentEvent({
-              direction: "in",
-              status: "ok",
-              amount: typeof amount === "number" ? amount : null,
-              fee: null,
-              mint,
-              unit: null,
-              error: null,
-              contactId: null,
-              method: "cashu_receive",
-              phase: "receive",
-            });
-            safeLocalStorageSet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY, "");
-          }
-        } catch {
-          // ignore
-        }
-      }, 800);
-    },
-    [
-      appOwnerIdRef,
-      buildCashuTokenPayload,
-      upsert,
-      isCashuTokenKnownAny,
-      logPaymentEvent,
-      rowMatchesToken,
-    ],
-  );
-
-  React.useEffect(() => {
-    const remembered = String(
-      safeLocalStorageGet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY) ?? "",
-    ).trim();
-
-    if (!remembered) return;
-    if (isCashuTokenKnownAny(remembered)) {
-      safeLocalStorageSet(LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY, "");
-      return;
-    }
-
-    ensureCashuTokenPersisted(remembered);
-  }, [cashuTokensAll, ensureCashuTokenPersisted, isCashuTokenKnownAny]);
-
   return {
     cashuTokensAllRef,
     cashuTokensHydratedRef,
-    ensureCashuTokenPersisted,
     isCashuTokenKnownAny,
     isCashuTokenStored,
     rememberCashuTokenKnown,

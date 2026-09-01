@@ -681,7 +681,6 @@ export const useAppShellComposition = ({
     effectiveProfilePicture,
     isProfileEditing,
     myProfileMetadata,
-    myProfileName,
     myProfileQr,
     myProfileStatus,
     npubCashInfoInFlightRef,
@@ -791,6 +790,7 @@ export const useAppShellComposition = ({
     lnAddressPayAmount,
     lnurlWithdrawIsBusy,
     makeNip98AuthHeader,
+    markCashuTokenExternalized,
     markCashuTokenIssued,
     meltLargestForeignMintToMainMint,
     mintInfoByUrl,
@@ -811,6 +811,7 @@ export const useAppShellComposition = ({
     pendingMintDeleteUrl,
     pendingPaymentMintMeltConfirmation,
     postPaySaveContact,
+    probeLightningFee,
     refreshMintInfo,
     requestDeleteCashuToken,
     requestSelectedContact,
@@ -846,7 +847,7 @@ export const useAppShellComposition = ({
     topupInvoiceIsBusy,
     topupInvoiceQr,
     topupInvoiceQrPayload,
-    topupMintQuote,
+    topupMintUrl,
     walletWarningApplies,
     walletWarningDismissed,
   } = useCashuWalletComposition({
@@ -902,8 +903,6 @@ export const useAppShellComposition = ({
     },
     payAmount,
     profile: {
-      effectiveMyLightningAddress,
-      myProfileName,
       npubCashInfoInFlightRef,
       npubCashInfoLoadedAtMsRef,
       npubCashInfoLoadedForNpubRef,
@@ -1029,6 +1028,7 @@ export const useAppShellComposition = ({
     dispatchInboxEvent,
     insert,
     lightningInvoiceAutoPayLimit,
+    markCashuTokenExternalized,
     markCashuTokenIssued,
     nostrBootstrapReady,
     openNewContactPage,
@@ -1044,7 +1044,6 @@ export const useAppShellComposition = ({
     setPendingLnurlWithdrawConfirmation,
     setStatus,
     t,
-    update,
   });
 
   const handleSelectContact = React.useCallback(
@@ -1376,7 +1375,7 @@ export const useAppShellComposition = ({
       topupInvoiceIsBusy,
       topupInvoiceCashuRequest,
       topupMintUrl:
-        topupMintQuote?.mintUrl ??
+        topupMintUrl ??
         normalizeMintUrl(defaultMintUrl ?? MAIN_MINT_URL) ??
         MAIN_MINT_URL,
       topupInvoiceQr,
@@ -1710,6 +1709,7 @@ export const useAppShellComposition = ({
       meltLargestForeignMintToMainMint,
       mintInfoByUrl,
       pendingMintDeleteUrl,
+      probeLightningFee,
       refreshMintInfo,
       setDefaultMintUrlDraft,
       setMintInfoAll,

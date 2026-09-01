@@ -1,4 +1,4 @@
-import { parseCashuToken } from "../../cashu";
+import { parseTokenText } from "@linky/linkshu";
 
 const readNonNegativeFiniteInt = (value: number | null): number | null => {
   if (value === null || !Number.isFinite(value) || value < 0) return null;
@@ -10,7 +10,7 @@ const sumTokenAmounts = (tokens: readonly string[]): number | null => {
 
   let sum = 0;
   for (const token of tokens) {
-    const parsed = parseCashuToken(token);
+    const parsed = parseTokenText(token);
     if (!parsed) return null;
     sum += parsed.amount;
   }

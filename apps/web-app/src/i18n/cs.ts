@@ -194,7 +194,7 @@ export const cs = {
   restoreTokens: "Obnovit tokeny",
   restoring: "Obnovuji…",
   restoreNothing: "Žádné chybějící tokeny nenalezeny.",
-  restoreDone: "Obnoveno {proofs} proofů do {tokens} tokenů.",
+  restoreDone: "Obnoveno {amount} sat do {tokens} tokenů.",
   restoreFailed: "Obnova selhala",
   cashuMeltToMainMint: "Směnit na {mint}",
   cashuMeltToMainMintUnavailable:

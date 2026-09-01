@@ -1,9 +1,11 @@
+import { isStoredCashuErrorTokenSpent } from "./cashuStoredError";
+
 export const CASHU_TOKEN_STATE_ACCEPTED = "accepted";
 export const CASHU_TOKEN_STATE_ERROR = "error";
-export const CASHU_TOKEN_STATE_EXTERNALIZED = "externalized";
-export const CASHU_TOKEN_STATE_ISSUED = "issued";
-export const CASHU_TOKEN_STATE_PENDING = "pending";
-export const CASHU_TOKEN_STATE_RESERVED = "reserved";
+const CASHU_TOKEN_STATE_EXTERNALIZED = "externalized";
+const CASHU_TOKEN_STATE_ISSUED = "issued";
+const CASHU_TOKEN_STATE_PENDING = "pending";
+const CASHU_TOKEN_STATE_RESERVED = "reserved";
 
 export type CashuTokenState =
   | typeof CASHU_TOKEN_STATE_ACCEPTED
@@ -72,21 +74,6 @@ const DEFINITIVE_INVALID_CODES = new Set<number>([
   11001, // TokenAlreadySpentError
 ]);
 
-const TRANSIENT_ERROR_PATTERNS: readonly string[] = [
-  "failed to fetch",
-  "networkerror",
-  "network error",
-  "timeout",
-  "timed out",
-  "econn",
-  "enotfound",
-  "dns",
-  "offline",
-  "503",
-  "502",
-  "504",
-];
-
 const getCashuErrorMessage = (error: unknown): string => {
   if (typeof error === "object" && error !== null && "message" in error) {
     return String(Reflect.get(error, "message") ?? "");
@@ -94,7 +81,7 @@ const getCashuErrorMessage = (error: unknown): string => {
   return String(error ?? "");
 };
 
-export const isDefinitiveCashuError = (error: unknown): boolean => {
+const isDefinitiveCashuError = (error: unknown): boolean => {
   if (typeof error === "object" && error !== null && "code" in error) {
     const code = Reflect.get(error, "code");
     if (typeof code === "number" && DEFINITIVE_INVALID_CODES.has(code)) {
@@ -108,15 +95,13 @@ export const isDefinitiveCashuError = (error: unknown): boolean => {
   );
 };
 
-export const isTransientCashuError = (error: unknown): boolean => {
-  const message = getCashuErrorMessage(error).trim().toLowerCase();
-  return TRANSIENT_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
-};
-
 export const isCashuTokenDefinitivelySpent = (token: {
   state?: unknown;
   error?: unknown;
 }): boolean => {
   if (!isCashuTokenErrorState(token.state)) return false;
-  return isDefinitiveCashuError(token.error);
+  return (
+    isStoredCashuErrorTokenSpent(token.error) ||
+    isDefinitiveCashuError(token.error)
+  );
 };

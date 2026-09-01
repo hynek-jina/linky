@@ -9,6 +9,7 @@ interface CashuTokenRowInput {
   id?: string;
   isDeleted?: boolean;
   mint?: string | null;
+  originalTokenText?: string | null;
   ownerId?: string;
   rawToken?: string | null;
   state?: string | null;
@@ -49,6 +50,7 @@ export const createCashuTokenRowFixture = (
     id: createCashuTokenId(input.id ?? token),
     isDeleted: input.isDeleted ? Evolu.sqliteTrue : null,
     mint: nullableNonEmptyString1000(input.mint),
+    originalTokenText: nullableNonEmptyString(input.originalTokenText),
     ownerId: Evolu.OwnerId.orThrow(input.ownerId ?? "AAAAAAAAAAAAAAAAAAAAAA"),
     rawToken: nullableNonEmptyString(input.rawToken),
     state: nullableNonEmptyString100(input.state),

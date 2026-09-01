@@ -54,6 +54,10 @@ services:
       MINT_LISTEN_PORT: "3338"
       MINT_PRIVATE_KEY: LOCAL_DEV_ONLY_PRIVATE_KEY
       MINT_DATABASE: data/mint
+      # Test suites hit this mint in bursts; upstream defaults (60 requests
+      # per minute globally, 20 per minute for transactions) reject them
+      # with 429 while a real user would never come close.
+      MINT_RATE_LIMIT: "FALSE"
       # FakeWallet simulation knobs for payment-timing tests (defaults shown).
       # FAKEWALLET_BRR: "true"                  # auto-settle created invoices
       # FAKEWALLET_DELAY_INCOMING_PAYMENT: "3"  # seconds before a top-up invoice settles

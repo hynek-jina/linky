@@ -1,15 +1,17 @@
 import type { FC } from "react";
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { formatStoredCashuError } from "../app/lib/cashuStoredError";
 import {
   isCashuTokenAcceptedState,
+  isCashuTokenErrorState,
   isCashuTokenExternalizedState,
   isCashuTokenIssuedState,
   isCashuTokenReservedState,
   isCashuTokenUnavailableState,
 } from "../app/lib/cashuTokenState";
 import { extractCashuTokenMeta } from "../app/lib/tokenText";
-import { parseCashuToken } from "../cashu";
+import { parseTokenText } from "@linky/linkshu";
 import { NfcIcon } from "../components/icons";
 import { WalletBalance } from "../components/WalletBalance";
 import type { CashuTokenId, CashuTokenRow } from "../evolu";
@@ -68,18 +70,13 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   const tokenText = tokenMeta?.tokenText ?? "";
 
   const { mintText, tokenAmount } = React.useMemo(() => {
-    const parsed = tokenText ? parseCashuToken(tokenText) : null;
+    const parsed = tokenText ? parseTokenText(tokenText) : null;
     const storedAmount = Number(tokenMeta?.amount ?? 0);
-    const parsedAmount = Number(parsed?.amount ?? 0);
     const amount =
       Number.isFinite(storedAmount) && storedAmount > 0
         ? storedAmount
-        : Number.isFinite(parsedAmount) && parsedAmount > 0
-          ? parsedAmount
-          : 0;
-    const mint =
-      String(tokenMeta?.mint ?? "").trim() ||
-      (parsed?.mint ? String(parsed.mint).trim() : "");
+        : (parsed?.amount ?? 0);
+    const mint = String(tokenMeta?.mint ?? "").trim() || (parsed?.mint ?? "");
     return { mintText: mint, tokenAmount: amount };
   }, [tokenMeta?.amount, tokenMeta?.mint, tokenText]);
   const mintDisplay = (() => {
@@ -95,7 +92,12 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
   const isReserved = isCashuTokenReservedState(row?.state);
   const isPending = String(row?.state ?? "") === "pending";
   const isOwnToken = isCashuTokenAcceptedState(row?.state);
-  const canReturnToWallet = isCashuTokenUnavailableState(row?.state);
+  // Error rows can hold live proofs (e.g. a partially spent receive); linkshu
+  // `returnToWallet` re-receives them, which is the recovery path since
+  // validation itself never resurrects an error row.
+  const canReturnToWallet =
+    isCashuTokenUnavailableState(row?.state) ||
+    isCashuTokenErrorState(row?.state);
   const shareUrl = buildCashuShareUrl(tokenText);
   const shareMessage = (() => {
     if (!shareUrl) return "";
@@ -270,7 +272,7 @@ export const CashuTokenPage: FC<CashuTokenPageProps> = ({
 
       {String(safeRow.state ?? "") === "error" && (
         <p className="cashu-token-status cashu-token-status-error">
-          {String(safeRow.error ?? "").trim() || t("cashuInvalid")}
+          {formatStoredCashuError(safeRow.error) ?? t("cashuInvalid")}
         </p>
       )}
 

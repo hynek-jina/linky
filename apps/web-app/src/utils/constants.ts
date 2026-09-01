@@ -81,8 +81,6 @@ export const PAYMENT_ANALYTICS_RECIPIENT_NPUB =
 export const NO_GROUP_FILTER = "__linky_no_group__";
 export const ARCHIVED_CONTACTS_FILTER = "__linky_archived_contacts__";
 
-export const LAST_ACCEPTED_CASHU_TOKEN_STORAGE_KEY =
-  "linky.lastAcceptedCashuToken.v1";
 export const PENDING_DEEP_LINK_TEXT_STORAGE_KEY =
   "linky.pendingDeepLinkText.v1";
 
@@ -107,10 +105,6 @@ export const LOCAL_NPUB_CASH_CLAIM_LOCK_STORAGE_KEY_PREFIX =
   "linky.local.npubCashClaimLock.v1";
 export const LOCAL_NPUB_CASH_CLAIM_LAST_ATTEMPT_STORAGE_KEY_PREFIX =
   "linky.local.npubCashClaimLastAttempt.v1";
-export const LOCAL_PENDING_TOPUP_QUOTE_STORAGE_KEY_PREFIX =
-  "linky.local.pendingTopupQuote.v1";
-export const LOCAL_PENDING_AUTOSWAP_CLAIM_STORAGE_KEY_PREFIX =
-  "linky.local.pendingAutoswapClaim.v1";
 
 export const BLOCKED_NOSTR_PUBKEYS_STORAGE_KEY =
   "linky.blocked_nostr_pubkeys.v1";

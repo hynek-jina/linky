@@ -1,12 +1,10 @@
 import * as Evolu from "@evolu/common";
 import { describe, expect, it } from "vitest";
 import { createCashuTokenRowFixture } from "../../testUtils/cashuTokenRow";
-import { createCashuTokenId } from "./cashuTokenIdentity";
 import {
   readCashuRowOwnerId,
   resolveCashuRowOwnerLane,
   resolveCashuRowStoredOwnerLane,
-  resolveCashuTokenStoredOwnerLaneById,
 } from "./cashuOwnerLane";
 
 const owner0 = Evolu.OwnerId.orThrow("AAAAAAAAAAAAAAAAAAAAAA");
@@ -42,37 +40,5 @@ describe("cashu owner lane helpers", () => {
         createCashuTokenRowFixture({ ownerId: owner2 }),
       ),
     ).toBe(owner2);
-  });
-
-  it("resolves an update owner by token id before falling back", () => {
-    const tokenAId = createCashuTokenId("token-a");
-    const tokenBId = createCashuTokenId("token-b");
-
-    expect(
-      resolveCashuTokenStoredOwnerLaneById(
-        [
-          createCashuTokenRowFixture({ id: "token-a", ownerId: owner0 }),
-          createCashuTokenRowFixture({ id: "token-b", ownerId: owner1 }),
-        ],
-        tokenBId,
-        owner2,
-      ),
-    ).toBe(owner1);
-
-    expect(
-      resolveCashuTokenStoredOwnerLaneById(
-        [createCashuTokenRowFixture({ id: "token-a", ownerId: owner0 })],
-        tokenBId,
-        owner2,
-      ),
-    ).toBe(owner2);
-
-    expect(
-      resolveCashuTokenStoredOwnerLaneById(
-        [createCashuTokenRowFixture({ id: "token-a", ownerId: owner0 })],
-        tokenAId,
-        owner2,
-      ),
-    ).toBe(owner0);
   });
 });

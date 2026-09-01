@@ -1,13 +1,14 @@
 import * as Evolu from "@evolu/common";
 import type { PaymentNoticeContext } from "@linky/linkstr";
+import type { SendError, SendReceipt } from "@linky/linkshu";
 import {
   enqueueOutboxAtom,
   sendPaymentNoticeAtom,
   useAtomSet,
 } from "@linky/linkstr-react";
+import { Either } from "effect";
 import React from "react";
-import { createSendTokenWithTokensAtMint } from "../../../cashuSend";
-import type { CashuTokenRow, ContactId } from "../../../evolu";
+import type { ContactId } from "../../../evolu";
 import { navigateTo } from "../../../hooks/useRouting";
 import { CONTACTS_ONBOARDING_HAS_PAID_STORAGE_KEY } from "../../../utils/constants";
 import type { DisplayAmountParts } from "../../../utils/displayAmounts";
@@ -15,7 +16,10 @@ import { normalizeMintUrl } from "../../../utils/mint";
 import { safeLocalStorageSet } from "../../../utils/storage";
 import { getUnknownErrorMessage } from "../../../utils/unknown";
 import { makeLocalId } from "../../../utils/validation";
-import type { CashuTokenWithMeta } from "../../lib/tokenText";
+import { reportCashuSendRowForgotten } from "../../lib/cashuSendInspector";
+import { describeTaggedCashuError } from "../../lib/cashuStoredError";
+import { selectSendMintForAmount } from "../../lib/paymentMintSelection";
+import type { SendMintBalance } from "../../lib/paymentMintSelection";
 import type {
   ContactRowLike,
   LocalNostrMessage,
@@ -24,22 +28,13 @@ import type {
   PaymentLogData,
   UpdateLocalNostrMessage,
 } from "../../types/appTypes";
-import type { ReplyContext } from "../messages/useSendChatMessage";
-import { buildCashuMessagePaymentPayload } from "./buildCashuMessagePaymentPayload";
 import type {
-  CashuMessagePaymentHookResult,
-  CashuMessagePaymentPublishingOutcome,
-} from "./cashuMessagePaymentTypes";
-import {
-  type CashuTokenUpdate,
-  type CashuTokenUpsert,
-  logCashuMessagePublishFailure,
-  logCashuMessageSwapFailure,
-  persistCashuMessagePaymentResult,
-  persistCashuMessageSwapAttempt,
-} from "./persistCashuMessagePayment";
+  CashuTokenLifecycle,
+  SendCashuToken,
+} from "../composition/useLinkshuComposition";
+import type { ReplyContext } from "../messages/useSendChatMessage";
+import type { CashuMessagePaymentHookResult } from "./cashuMessagePaymentTypes";
 import { publishCashuMessagePayment } from "./publishCashuMessagePayment";
-import { selectCashuMessagePayment } from "./selectCashuMessagePayment";
 
 type AppendLocalNostrMessage = (message: NewLocalNostrMessage) => string;
 
@@ -47,13 +42,9 @@ const ContactIdSchema = Evolu.id("Contact");
 
 interface UsePayContactWithCashuMessageParams {
   appendLocalNostrMessage: AppendLocalNostrMessage;
-  buildCashuMintCandidates: (
-    mintGroups: Map<string, { sum: number; tokens: string[] }>,
-    preferredMint: string,
-  ) => Array<{ mint: string; sum: number; tokens: string[] }>;
   cashuBalance: number;
-  cashuTokensAll: readonly CashuTokenRow[];
-  cashuTokensWithMeta: readonly CashuTokenWithMeta[];
+  /** Null until the linkshu runtime is composed (seed + owners resolved). */
+  cashuTokenLifecycle: CashuTokenLifecycle | null;
   currentNpub: string | null;
   currentNsec: string | null;
   defaultMintUrl: string | null;
@@ -68,22 +59,32 @@ interface UsePayContactWithCashuMessageParams {
   nostrMessagesLocal: LocalNostrMessage[];
   payWithCashuEnabled: boolean;
   pushToast: (message: string) => void;
-  resolveOwnerIdForWrite: () => Promise<Evolu.OwnerId | null>;
+  /** Null until the linkshu runtime is composed (seed + owners resolved). */
+  sendCashuToken: SendCashuToken | null;
   setContactsOnboardingHasPaid: React.Dispatch<React.SetStateAction<boolean>>;
   setStatus: React.Dispatch<React.SetStateAction<string | null>>;
   showPaidOverlay: (title: string) => void;
   t: (key: string) => string;
-  update: CashuTokenUpdate;
   updateLocalNostrMessage: UpdateLocalNostrMessage;
-  upsert: CashuTokenUpsert;
+  /** Per-mint spendable balances from the linkshu read model. */
+  walletMintBalances: readonly SendMintBalance[];
 }
 
+const describeSendError = (error: SendError): string =>
+  describeTaggedCashuError(error) ?? error._tag;
+
+/**
+ * Contact payment over messages: linkshu Send produces the token as a
+ * `pending` row (funds stay in the store while the message is in flight),
+ * the token text travels as a chat message, and the row is forgotten once
+ * the publish is confirmed. Unconfirmed publishes leave the row `pending`
+ * for the outbox retry / the pending-row cleanup effect / manual
+ * return-to-wallet.
+ */
 export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   appendLocalNostrMessage,
-  buildCashuMintCandidates,
   cashuBalance,
-  cashuTokensAll,
-  cashuTokensWithMeta,
+  cashuTokenLifecycle,
   currentNpub,
   currentNsec,
   defaultMintUrl,
@@ -94,14 +95,13 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
   nostrMessagesLocal,
   payWithCashuEnabled,
   pushToast,
-  resolveOwnerIdForWrite,
+  sendCashuToken,
   setContactsOnboardingHasPaid,
   setStatus,
   showPaidOverlay,
   t,
-  update,
   updateLocalNostrMessage,
-  upsert,
+  walletMintBalances,
 }: UsePayContactWithCashuMessageParams) => {
   const enqueueOutbox = useAtomSet(enqueueOutboxAtom, {
     mode: "promiseExit",
@@ -215,73 +215,91 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         return { ok: true, queued: true };
       }
 
-      const selection = selectCashuMessagePayment({
-        amountSat,
-        buildCandidates: buildCashuMintCandidates,
-        cashuBalance,
-        defaultMintUrl,
-        normalizeMintUrl,
-        tokens: cashuTokensWithMeta,
-      });
-      logPayStep("mint-candidates", {
-        candidates: selection.candidates.map((candidate) => ({
-          mint: candidate.mint,
-          sum: candidate.sum,
-          tokenCount: candidate.tokens.length,
-        })),
-        count: selection.candidates.length,
-      });
+      if (sendCashuToken === null || cashuTokenLifecycle === null) {
+        if (notify)
+          setStatus(`${t("errorPrefix")}: Cashu storage is not ready`);
+        return { error: "cashu storage not ready", ok: false, queued: false };
+      }
 
-      if (selection.kind === "insufficient") {
+      const mint = selectSendMintForAmount(
+        walletMintBalances,
+        normalizeMintUrl(defaultMintUrl ?? ""),
+        amountSat,
+      );
+      if (mint === null) {
         if (notify) setStatus(t("payInsufficient"));
         return { error: "insufficient", ok: false, queued: false };
       }
+      logPayStep("mint-selected", { amountSat, mint });
 
-      const cashuWriteOwnerId = await resolveOwnerIdForWrite();
-      const swap = await buildCashuMessagePaymentPayload({
-        commitSwapState: async (outcome) => {
-          persistCashuMessageSwapAttempt({
-            cashuTokensAll,
-            cashuTokensWithMeta,
-            cashuWriteOwnerId,
-            outcome,
-            update,
-            upsert,
-          });
-        },
-        createSendToken: createSendTokenWithTokensAtMint,
-        logPayStep,
-        selection,
-      });
-
-      if (swap.kind !== "success") {
-        logCashuMessageSwapFailure({
-          amountSat,
+      const logFailure = (
+        error: string,
+        mintUrl: string | null,
+        phase: "publish" | "swap",
+      ): void => {
+        if (logCompletedOnly) return;
+        logPaymentEvent({
+          amount: amountSat,
           contactId,
-          error: swap.error,
-          logCompletedOnly,
-          logPaymentEvent,
-          mint: swap.mint,
+          direction: "out",
+          error,
+          fee: null,
+          method: "cashu_chat",
+          mint: mintUrl,
+          phase,
+          status: "error",
+          unit: "sat",
         });
-        if (notify) {
-          setStatus(
-            swap.error
-              ? `${t("payFailed")}: ${swap.error}`
-              : t("payInsufficient"),
-          );
-        }
-        return {
-          error: getUnknownErrorMessage(swap.error, ""),
-          ok: false,
-          queued: false,
-        };
+      };
+
+      let sendOutcome: Either.Either<SendReceipt, SendError>;
+      try {
+        sendOutcome = await sendCashuToken({
+          amountSat,
+          mint,
+          produceAs: "pending",
+        });
+      } catch (error) {
+        const message = getUnknownErrorMessage(error, "unknown");
+        logFailure(message, mint, "swap");
+        if (notify) setStatus(`${t("payFailed")}: ${message}`);
+        return { error: message, ok: false, queued: false };
       }
 
-      let publishing: CashuMessagePaymentPublishingOutcome;
+      if (Either.isLeft(sendOutcome)) {
+        const sendError = sendOutcome.left;
+        const message = describeSendError(sendError);
+        logFailure(message, mint, "swap");
+        if (notify) {
+          setStatus(
+            sendError._tag === "InsufficientFunds"
+              ? t("payInsufficient")
+              : `${t("payFailed")}: ${message}`,
+          );
+        }
+        return { error: message, ok: false, queued: false };
+      }
+
+      const receipt = sendOutcome.right;
+      logPayStep("swap-ok", {
+        changeAmount: receipt.changeAmount,
+        feePaid: receipt.feePaid,
+        mint: receipt.mint,
+        sendAmount: receipt.amount,
+      });
+
+      let publishing;
       try {
         publishing = await publishCashuMessagePayment({
           appendLocalNostrMessage,
-          batches: [swap.batch],
+          batches: [
+            {
+              amount: receipt.amount,
+              mint: receipt.mint,
+              token: receipt.tokenText,
+              unit: receipt.unit,
+            },
+          ],
           contactId,
           contactNpub,
           currentNpub,
@@ -296,34 +314,13 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
           updateLocalNostrMessage,
         });
       } catch (error) {
-        persistCashuMessagePaymentResult({
-          cashuTokensAll,
-          cashuWriteOwnerId,
-          contactId,
-          logCompletedOnly: true,
-          logPaymentEvent,
-          paymentRequestId: paymentRequestId ?? null,
-          publishing: {
-            hasPendingMessages: true,
-            paymentNoticeError: null,
-            publishErrors: [],
-            publishedTokenTexts: [],
-            unpublishedTokenTexts: [swap.batch.token],
-          },
-          swap,
-          upsert,
-        });
-        logCashuMessagePublishFailure({
-          amountSat,
-          contactId,
-          error,
-          logCompletedOnly,
-          logPaymentEvent,
-          mint: swap.batch.mint,
-        });
-        const errorMessage = getUnknownErrorMessage(error, "unknown");
-        if (notify) setStatus(`${t("payFailed")}: ${errorMessage}`);
-        return { error: errorMessage, ok: false, queued: false };
+        // The send row stays `pending`: the outbox may still deliver the
+        // message, and the pending-row cleanup effect / return-to-wallet
+        // cover both outcomes.
+        const message = getUnknownErrorMessage(error, "unknown");
+        logFailure(message, receipt.mint, "publish");
+        if (notify) setStatus(`${t("payFailed")}: ${message}`);
+        return { error: message, ok: false, queued: false };
       }
 
       for (const publishError of publishing.publishErrors) {
@@ -332,24 +329,42 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
         }
       }
 
-      persistCashuMessagePaymentResult({
-        cashuTokensAll,
-        cashuWriteOwnerId,
-        contactId,
-        logCompletedOnly,
-        logPaymentEvent,
-        paymentRequestId: paymentRequestId ?? null,
-        publishing,
-        swap,
-        upsert,
-      });
+      if (!publishing.hasPendingMessages) {
+        // The message carrying the token is published; the funds are the
+        // contact's now, so the pending row has nothing left to guard.
+        await cashuTokenLifecycle.forget(String(receipt.rowId));
+        reportCashuSendRowForgotten({
+          mint: receipt.mint,
+          reason: "message-published",
+          rowId: String(receipt.rowId),
+        });
+      }
+
+      if (!logCompletedOnly || !publishing.hasPendingMessages) {
+        logPaymentEvent({
+          amount: receipt.amount,
+          contactId,
+          details: {
+            issuedToken: receipt.tokenText,
+            ...(paymentRequestId ? { requestId: paymentRequestId } : {}),
+          },
+          direction: "out",
+          error: null,
+          fee: null,
+          method: "cashu_chat",
+          mint: receipt.mint,
+          phase: publishing.hasPendingMessages ? "publish" : "complete",
+          status: "ok",
+          unit: "sat",
+        });
+      }
 
       if (notify) {
         const displayName =
           String(contact.name ?? "").trim() ||
           String(contact.lnAddress ?? "").trim() ||
           t("appTitle");
-        const displayAmount = formatDisplayedAmountParts(swap.batch.amount);
+        const displayAmount = formatDisplayedAmountParts(receipt.amount);
         showPaidOverlay(
           (publishing.hasPendingMessages ? t("paidQueuedTo") : t("paidSentTo"))
             .replace(
@@ -368,10 +383,8 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
     },
     [
       appendLocalNostrMessage,
-      buildCashuMintCandidates,
       cashuBalance,
-      cashuTokensAll,
-      cashuTokensWithMeta,
+      cashuTokenLifecycle,
       currentNpub,
       currentNsec,
       defaultMintUrl,
@@ -383,15 +396,14 @@ export const usePayContactWithCashuMessage = <TContact extends ContactRowLike>({
       nostrMessagesLocal,
       payWithCashuEnabled,
       pushToast,
+      sendCashuToken,
       sendPaymentNotice,
-      resolveOwnerIdForWrite,
       setContactsOnboardingHasPaid,
       setStatus,
       showPaidOverlay,
       t,
-      update,
       updateLocalNostrMessage,
-      upsert,
+      walletMintBalances,
     ],
   );
 };
