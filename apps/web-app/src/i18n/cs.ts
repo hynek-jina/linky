@@ -10,11 +10,7 @@ export const cs = {
   settingsSecurity: "Zabezpečení",
   settingsDebug: "Debug",
   nostrInspector: "Inspector",
-  nostrInspectorDescription:
-    "Zobrazuje podrobnosti událostí včetně dešifrovaného obsahu zpráv jako prostého textu. Data zůstávají jen v paměti a po obnovení stránky se smažou.",
   nostrInspectorLogs: "Ukládat logy inspectoru",
-  nostrInspectorLogsDescription:
-    "Mohou obsahovat dešifrované zprávy jako prostý text. Neukládají se šifrovaně, ale do úložiště prohlížeče na tomto zařízení až na 24 hodin.",
   nostrInspectorLogsStats:
     "{count} řádků · {size} · nejstarší řádek je starý {age}",
   nostrInspectorLogsLoading: "Načítám statistiky logů…",
@@ -152,12 +148,11 @@ export const cs = {
   payWithCashu: "Platit s cashu",
   preferCashu: "Dávat přednost cashu",
   payWithCashuDisabled: "Platit s cashu je vypnuto v pokročilém nastavení.",
-  cashuAutoswap: "Auto-swap do hlavního mintu",
   showProfileQrOnTilt: "Otočením telefonu zobrazit profil",
   lightningInvoiceAutoPayLimit: "Limit autoplatby",
-  bankPaymentOfferRecipientCount: "Kolika kontaktům sdílet nabídky",
-  bankPaymentOfferRecipientDecrease: "Snížit počet kontaktů",
-  bankPaymentOfferRecipientIncrease: "Zvýšit počet kontaktů",
+  bankPaymentOfferStaggerDelay: "Prodleva mezi příjemci nabídky",
+  bankPaymentOfferStaggerDelayDecrease: "Zkrátit prodlevu",
+  bankPaymentOfferStaggerDelayIncrease: "Prodloužit prodlevu",
   custom: "Vlastní",
   restore: "Obnovit",
   claimOwnLightningAddressTitle: "Vlastní lightning adresa",
@@ -382,15 +377,7 @@ export const cs = {
   mintFeeLightningPayments: "Lightning platby",
   setCustomMint: "Nastavit vlastní mint",
   mintUrlInvalid: "Neplatná URL mintu.",
-  mintAutoswapChangeWarning:
-    "Linky bude převádět prostředky z původního {fromMint} do {toMint}.",
-  mintAutoswapChangeWarningTitle: "Prostřeky budou převáděny do nového mintu",
-  mintAutoswapChangeWarningKeep: "V pořádku",
-  mintAutoswapChangeWarningDisable: "Nic nepřevádět",
   mintSaved: "Mint uložen.",
-  mintSavedAutoswapDisabled: "Mint uložen. Auto-swap byl vypnut.",
-  mintSavedAutoswapDisabledTestMint:
-    "Mint uložen. Auto-swap byl pro testovací mint vypnut.",
   mintUpdateFailed: "Aktualizace mintu selhala.",
   mintUpdating: "Aktualizuji mint…",
   useDefault: "Použít výchozí",
@@ -579,6 +566,7 @@ export const cs = {
   continue: "Pokračovat",
 
   contactNotFound: "Kontakt nenalezen.",
+  contactPublicProfileValue: "Veřejný profil",
   name: "Jméno",
   npub: "Identifikátor",
   lightningAddress: "Lightning adresa",
@@ -686,6 +674,7 @@ export const cs = {
   spdPaymentLastResponseTime: "Minule {time}",
   bankPaymentOfferTitle: "Nabídka platby",
   bankPaymentOfferStatusOffered: "Nabídnuto",
+  bankPaymentOfferStatusQueued: "Ve frontě",
   bankPaymentOfferStatusAccepted: "Přijato",
   bankPaymentOfferStatusAcceptedByOther: "Přijal někdo jiný",
   bankPaymentOfferStatusBankDetailsSent: "Údaje odeslány",
@@ -731,7 +720,10 @@ export const cs = {
   bankPaymentOfferProgressTitle: "Průběh proxy platby",
   bankPaymentOfferProgressAcceptedInfo:
     "Nabídka byla přijata. Čekáš na provedení platby",
-  bankPaymentOfferProgressAccept: "Přijetí nabídky",
+  bankPaymentOfferProgressAcceptedByName:
+    "Nabídku přijal kontakt {name}. Čekáš na provedení platby",
+  bankPaymentOfferProgressOffered: "Nabídka",
+  bankPaymentOfferProgressAccept: "Spárováno",
   bankPaymentOfferProgressBankDetails: "Údaje",
   bankPaymentOfferProgressBankPayment: "Fiat platba",
   bankPaymentOfferProgressSats: "Bitcoin vyrovnání",
@@ -814,10 +806,7 @@ export const cs = {
   unitUsdName: "Americké dolary",
   unitHiddenName: "Skryté",
   decimalInput: "Desetinná místa",
-  decimalInputDescription: "Povolit zadávání haléřů u fiat měn.",
   sendReadReceipts: "Odesílat potvrzení o přečtení",
-  sendReadReceiptsDescription:
-    "Kontakty uvidí, kdy sis jejich zprávy přečetl(a). Jejich potvrzení vidíš vždy.",
   decimalPoint: ",",
 
   cashuBalance: "Dostupný zůstatek",

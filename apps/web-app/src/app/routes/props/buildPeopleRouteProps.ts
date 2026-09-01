@@ -100,6 +100,10 @@ interface BuildPeopleRoutePropsParams {
   replyContext: PeopleRoutesProps["chatProps"]["replyContext"];
   selectedProfileStatusCurrencies: PeopleRoutesProps["profileProps"]["selectedProfileStatusCurrencies"];
   selectedContact: PeopleRoutesProps["contactProps"]["selectedContact"];
+  selectedContactPublicProfile: {
+    lnAddress: string;
+    name: string;
+  };
   sendChatImage: PeopleRoutesProps["chatProps"]["sendChatImage"];
   sendChatMessage: PeopleRoutesProps["chatProps"]["sendChatMessage"];
   setChatDraft: PeopleRoutesProps["chatProps"]["setChatDraft"];
@@ -212,6 +216,7 @@ export const buildPeopleRouteProps = ({
   replyContext,
   selectedProfileStatusCurrencies,
   selectedContact,
+  selectedContactPublicProfile,
   sendChatImage,
   sendChatMessage,
   setChatDraft,
@@ -298,6 +303,8 @@ export const buildPeopleRouteProps = ({
       groupNames,
       editingId,
       contactEditsSavable,
+      publicLnAddress: selectedContactPublicProfile.lnAddress,
+      publicName: selectedContactPublicProfile.name,
       pendingDeleteId,
       handleSaveContact,
       isSavingContact,

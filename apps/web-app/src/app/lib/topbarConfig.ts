@@ -52,11 +52,14 @@ export const resolveBackAction = (
     case "settingsMasterKeys":
     case "advancedAutoPayLimit":
     case "advancedInspector":
-    case "advancedPushDebug":
     case "mints":
     case "nostrRelays":
     case "evoluServers":
       return () => navigateTo({ route: "settings" });
+
+    case "advancedInspectorTimeline":
+    case "advancedPushDebug":
+      return () => navigateTo({ route: "advancedInspector" });
 
     case "mint":
       return () => navigateTo({ route: "mints" });
@@ -238,6 +241,7 @@ export const buildTopbarRight = ({
     route.kind === "advanced" ||
     route.kind === "advancedAutoPayLimit" ||
     route.kind === "advancedInspector" ||
+    route.kind === "advancedInspectorTimeline" ||
     route.kind === "advancedPushDebug" ||
     route.kind === "mints" ||
     route.kind === "topupNoAmount" ||
@@ -294,6 +298,7 @@ export const buildTopbarTitle = (
     return t("lightningInvoiceAutoPayLimit");
   }
   if (route.kind === "advancedInspector") return t("nostrInspector");
+  if (route.kind === "advancedInspectorTimeline") return t("nostrInspector");
   if (route.kind === "advancedPushDebug") return "Push Debug";
   if (route.kind === "mints") return t("mints");
   if (route.kind === "mint") return t("mints");

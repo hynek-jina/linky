@@ -53,6 +53,12 @@ describe("parseRouteFromHash", () => {
     expect(parseRouteFromHash()).toEqual({ kind: "advancedInspector" });
   });
 
+  it("parses the in-app inspector timeline route", () => {
+    replaceHash("#advanced/inspector/timeline");
+
+    expect(parseRouteFromHash()).toEqual({ kind: "advancedInspectorTimeline" });
+  });
+
   it("falls back to wallet for unknown hashes", () => {
     replaceHash("#unknown-route");
 

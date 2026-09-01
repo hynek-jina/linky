@@ -11,11 +11,7 @@ export const de = {
   settingsNetwork: "Netzwerk",
   settingsSecurity: "Sicherheit",
   nostrInspector: "Inspektor",
-  nostrInspectorDescription:
-    "Zeigt Ereignisdetails einschließlich entschlüsselter Nachrichteninhalte im Klartext. Die Daten bleiben nur im Arbeitsspeicher und werden beim Neuladen gelöscht.",
   nostrInspectorLogs: "Inspektorprotokolle sammeln",
-  nostrInspectorLogsDescription:
-    "Kann entschlüsselte Nachrichten im Klartext enthalten. Wird unverschlüsselt bis zu 24 Stunden im Browserspeicher dieses Geräts abgelegt.",
   nostrInspectorLogsStats: "{count} Zeilen · {size} · älteste Zeile {age} alt",
   nostrInspectorLogsLoading: "Protokollstatistik wird geladen…",
   downloadNostrInspectorLogs: "Protokolle herunterladen",
@@ -147,12 +143,11 @@ export const de = {
   preferCashu: "Cashu bevorzugen",
   payWithCashuDisabled:
     "Cashu-Zahlungen sind in den erweiterten Einstellungen deaktiviert.",
-  cashuAutoswap: "Automatisch zum Haupt-Mint wechseln",
   showProfileQrOnTilt: "Profil beim Drehen des Telefons anzeigen",
   lightningInvoiceAutoPayLimit: "Limit für automatische Zahlungen",
-  bankPaymentOfferRecipientCount: "Kontakte für Zahlungsangebote",
-  bankPaymentOfferRecipientDecrease: "Anzahl der Kontakte verringern",
-  bankPaymentOfferRecipientIncrease: "Anzahl der Kontakte erhöhen",
+  bankPaymentOfferStaggerDelay: "Verzögerung zwischen Angebotsempfängern",
+  bankPaymentOfferStaggerDelayDecrease: "Verzögerung verringern",
+  bankPaymentOfferStaggerDelayIncrease: "Verzögerung erhöhen",
   custom: "Benutzerdefiniert",
   restore: "Wiederherstellen",
   claimOwnLightningAddressTitle: "Eigene Lightning-Adresse",
@@ -379,15 +374,7 @@ export const de = {
   mintFeeLightningPayments: "Lightning-Zahlungen",
   setCustomMint: "Eigenen Mint festlegen",
   mintUrlInvalid: "Ungültige Mint-URL.",
-  mintAutoswapChangeWarning:
-    "Linky überträgt geeignetes Guthaben von {fromMint} zu {toMint}.",
-  mintAutoswapChangeWarningTitle: "Guthaben wird zum neuen Mint übertragen",
-  mintAutoswapChangeWarningDisable: "Nichts übertragen",
   mintSaved: "Mint gespeichert.",
-  mintSavedAutoswapDisabled:
-    "Mint gespeichert. Automatischer Wechsel deaktiviert.",
-  mintSavedAutoswapDisabledTestMint:
-    "Mint gespeichert. Automatischer Wechsel für den Test-Mint deaktiviert.",
   mintUpdateFailed: "Mint-Aktualisierung fehlgeschlagen.",
   mintUpdating: "Mint wird aktualisiert…",
   useDefault: "Standard verwenden",
@@ -567,6 +554,7 @@ export const de = {
   close: "Schließen",
   continue: "Weiter",
   contactNotFound: "Kontakt nicht gefunden.",
+  contactPublicProfileValue: "Öffentliches Profil",
   name: "Name",
   npub: "Kennung",
   lightningAddress: "Lightning-Adresse",
@@ -664,6 +652,7 @@ export const de = {
   spdPaymentLastResponseTime: "Letztes Mal {time}",
   bankPaymentOfferTitle: "Zahlungsangebot",
   bankPaymentOfferStatusOffered: "Angeboten",
+  bankPaymentOfferStatusQueued: "In der Warteschlange",
   bankPaymentOfferStatusAccepted: "Angenommen",
   bankPaymentOfferStatusAcceptedByOther: "Von jemand anderem angenommen",
   bankPaymentOfferStatusBankDetailsSent: "Details gesendet",
@@ -715,7 +704,10 @@ export const de = {
   bankPaymentOfferProgressTitle: "Fortschritt der stellvertretenden Zahlung",
   bankPaymentOfferProgressAcceptedInfo:
     "Jemand hat das Angebot bereits angenommen.",
-  bankPaymentOfferProgressAccept: "Angebot angenommen",
+  bankPaymentOfferProgressAcceptedByName:
+    "{name} hat das Angebot bereits angenommen.",
+  bankPaymentOfferProgressOffered: "Angebot",
+  bankPaymentOfferProgressAccept: "Vermittelt",
   bankPaymentOfferProgressBankDetails: "Details",
   bankPaymentOfferProgressBankPayment: "Fiat-Zahlung",
   bankPaymentOfferProgressSats: "Bitcoin-Ausgleich",
@@ -798,10 +790,7 @@ export const de = {
   unitUsdName: "US-Dollar",
   unitHiddenName: "Ausgeblendet",
   decimalInput: "Dezimalstellen",
-  decimalInputDescription: "Cent-Beträge bei Fiatwährungen erlauben.",
   sendReadReceipts: "Lesebestätigungen senden",
-  sendReadReceiptsDescription:
-    "Kontakte sehen, wann du ihre Nachrichten gelesen hast. Ihre Bestätigungen siehst du immer.",
   decimalPoint: ",",
 
   cashuBalance: "Verfügbares Guthaben",

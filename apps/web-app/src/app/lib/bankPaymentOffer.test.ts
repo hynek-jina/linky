@@ -3,6 +3,7 @@ import { createLinkyBankPaymentOfferEvent } from "../../testUtils/bankPaymentOff
 import type { LocalNostrMessage } from "../types/appTypes";
 import {
   forgetLinkyBankPaymentOfferSpdPayload,
+  forgetLinkyBankPaymentOfferStaggerQueue,
   getActiveBankPaymentOfferContacts,
   getLastBankPaymentOfferResponseSecByContactId,
   getLinkyBankPaymentOfferInfo,
@@ -11,8 +12,12 @@ import {
   markLinkyBankPaymentOfferBankDetailsSent,
   mergeBankPaymentOffersIntoLastMessageByContactId,
   readLinkyBankPaymentOfferSpdRecord,
+  readLinkyBankPaymentOfferStaggerRecords,
   rememberLinkyBankPaymentOfferSpdPayload,
+  rememberLinkyBankPaymentOfferStaggerQueue,
+  removeLinkyBankPaymentOfferStaggerRecipients,
   shouldPushLinkyBankPaymentOfferStatus,
+  type LinkyBankPaymentOfferStaggerRecord,
   type LinkyBankPaymentOfferStatus,
 } from "./bankPaymentOffer";
 
@@ -476,5 +481,96 @@ describe("bank payment offer SPD payload storage", () => {
         ownerPubkey: "owner-a",
       })?.spdPayload,
     ).toBe("SPD*1.0*ACC:CZ123");
+  });
+});
+
+describe("bank payment offer stagger queue storage", () => {
+  const createStaggerRecord = (
+    overrides: Partial<LinkyBankPaymentOfferStaggerRecord> = {},
+  ): LinkyBankPaymentOfferStaggerRecord => ({
+    amountSat: 480,
+    amountText: "480 Kč",
+    createdAtSec: 1_700_000_000,
+    expiresAtSec: 1_700_000_300,
+    offerId: "offer-1",
+    ownerPubkey: "owner-a",
+    pending: [
+      {
+        contactId: "contact-b",
+        contactPubHex: "pub-b",
+        dueAtSec: 1_700_000_010,
+      },
+      {
+        contactId: "contact-c",
+        contactPubHex: "pub-c",
+        dueAtSec: 1_700_000_020,
+      },
+    ],
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+    vi.setSystemTime(1_700_000_000_000);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("persists a queue and reads it back for the owner only", () => {
+    rememberLinkyBankPaymentOfferStaggerQueue(createStaggerRecord());
+
+    expect(readLinkyBankPaymentOfferStaggerRecords("owner-a")).toEqual([
+      createStaggerRecord(),
+    ]);
+    expect(readLinkyBankPaymentOfferStaggerRecords("owner-b")).toEqual([]);
+  });
+
+  it("deletes an expired queue on read", () => {
+    rememberLinkyBankPaymentOfferStaggerQueue(createStaggerRecord());
+
+    vi.setSystemTime(1_700_000_300_000);
+    expect(readLinkyBankPaymentOfferStaggerRecords("owner-a")).toEqual([]);
+    expect(
+      localStorage.getItem("linky.bank_payment_offer_stagger.v1.offer-1"),
+    ).toBeNull();
+  });
+
+  it("removes dequeued recipients and drops the emptied queue", () => {
+    rememberLinkyBankPaymentOfferStaggerQueue(createStaggerRecord());
+
+    removeLinkyBankPaymentOfferStaggerRecipients("offer-1", ["contact-b"]);
+    expect(
+      readLinkyBankPaymentOfferStaggerRecords("owner-a")[0]?.pending.map(
+        (recipient) => recipient.contactId,
+      ),
+    ).toEqual(["contact-c"]);
+
+    removeLinkyBankPaymentOfferStaggerRecipients("offer-1", ["contact-c"]);
+    expect(
+      localStorage.getItem("linky.bank_payment_offer_stagger.v1.offer-1"),
+    ).toBeNull();
+  });
+
+  it("forgets a queue and survives corrupted storage content", () => {
+    localStorage.setItem(
+      "linky.bank_payment_offer_stagger.v1.offer-broken",
+      "{not json",
+    );
+    rememberLinkyBankPaymentOfferStaggerQueue(createStaggerRecord());
+
+    forgetLinkyBankPaymentOfferStaggerQueue("offer-1");
+    expect(readLinkyBankPaymentOfferStaggerRecords("owner-a")).toEqual([]);
+  });
+
+  it("does not persist a queue with no pending recipients", () => {
+    rememberLinkyBankPaymentOfferStaggerQueue(
+      createStaggerRecord({ pending: [] }),
+    );
+    expect(
+      localStorage.getItem("linky.bank_payment_offer_stagger.v1.offer-1"),
+    ).toBeNull();
   });
 });

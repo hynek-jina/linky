@@ -11,7 +11,6 @@ import { AppTopbar } from "./AppTopbar";
 import { LightningInvoiceConfirmModal } from "./LightningInvoiceConfirmModal";
 import { LnurlWithdrawConfirmModal } from "./LnurlWithdrawConfirmModal";
 import { MenuModal } from "./MenuModal";
-import { MintAutoswapConfirmModal } from "./MintAutoswapConfirmModal";
 import { NfcWriteModal } from "./NfcWriteModal";
 import { PaidOverlay } from "./PaidOverlay";
 import { PaymentMintMeltConfirmModal } from "./PaymentMintMeltConfirmModal";
@@ -89,17 +88,6 @@ export function AuthenticatedLayout({
           onClose={actions.closeLnurlWithdrawConfirmation}
           onConfirm={actions.confirmLnurlWithdraw}
           t={state.t}
-        />
-      ) : null}
-
-      {state.pendingMintAutoswapChangeConfirmation &&
-      !state.paidOverlayIsOpen ? (
-        <MintAutoswapConfirmModal
-          fromMint={state.pendingMintAutoswapChangeConfirmation.fromMint}
-          onClose={actions.closeMintAutoswapChangeConfirmation}
-          onConfirm={actions.confirmMintAutoswapChangeConfirmation}
-          t={state.t}
-          toMint={state.pendingMintAutoswapChangeConfirmation.toMint}
         />
       ) : null}
 

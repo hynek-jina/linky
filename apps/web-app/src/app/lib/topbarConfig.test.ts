@@ -106,7 +106,12 @@ describe("resolveBackAction", () => {
     expect(backHashFor({ kind: "settingsMasterKeys" })).toBe("#settings");
     expect(backHashFor({ kind: "advancedAutoPayLimit" })).toBe("#settings");
     expect(backHashFor({ kind: "advancedInspector" })).toBe("#settings");
-    expect(backHashFor({ kind: "advancedPushDebug" })).toBe("#settings");
+    expect(backHashFor({ kind: "advancedInspectorTimeline" })).toBe(
+      "#advanced/inspector",
+    );
+    expect(backHashFor({ kind: "advancedPushDebug" })).toBe(
+      "#advanced/inspector",
+    );
     expect(backHashFor({ kind: "mints" })).toBe("#settings");
     expect(backHashFor({ kind: "nostrRelays" })).toBe("#settings");
     expect(backHashFor({ kind: "evoluServers" })).toBe("#settings");

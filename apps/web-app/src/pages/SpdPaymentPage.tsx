@@ -1,6 +1,13 @@
 import React from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { useFiatRates } from "../app/hooks/useFiatRates";
+import {
+  LINKY_BANK_PAYMENT_OFFER_MAX_STAGGER_DELAY_SEC,
+  LINKY_BANK_PAYMENT_OFFER_MIN_STAGGER_DELAY_SEC,
+  LINKY_BANK_PAYMENT_OFFER_STAGGER_DELAY_STEP_SEC,
+} from "../app/lib/bankPaymentOffer";
+import { BankPaymentAmount } from "../components/BankPaymentAmount";
+import { SettingsStepper } from "../components/SettingsStepper";
 import { navigateTo } from "../hooks/useRouting";
 import type { FiatRates } from "../utils/displayAmounts";
 import { formatInteger, getInitials } from "../utils/formatting";
@@ -9,6 +16,7 @@ import { tryParseBankPayment, type BankPayment } from "../utils/spdPayment";
 interface SpdPaymentPageProps {
   cashuBalanceAfterMelt: number;
   initialOfferContactCount: number;
+  initialOfferDelaySec: number;
   offerContacts: {
     id?: unknown;
     lastBankPaymentResponseSec?: unknown;
@@ -25,6 +33,7 @@ interface SpdPaymentPageProps {
       npub?: unknown;
     }[];
     spdPayload: string;
+    staggerDelaySec: number;
   }) => Promise<{ chatId: string; offerId: string } | null>;
   spdPayload: string;
   t: (key: string) => string;
@@ -50,16 +59,22 @@ const getOfferContactKey = (contact: {
   return `npub:${String(contact.npub ?? "").trim()}`;
 };
 
+// Selection keeps insertion order: the offer is extended to recipients in
+// this order when a stagger delay is set.
 const getInitialOfferContactKeys = (
   contacts: SpdPaymentPageProps["offerContacts"],
   count: number,
-): Set<string> =>
-  new Set(
-    contacts
-      .slice(0, Math.max(0, count))
-      .map(getOfferContactKey)
-      .filter(Boolean),
+): string[] =>
+  contacts.slice(0, Math.max(0, count)).map(getOfferContactKey).filter(Boolean);
+
+const clampOfferDelaySec = (value: number): number => {
+  if (!Number.isFinite(value))
+    return LINKY_BANK_PAYMENT_OFFER_MIN_STAGGER_DELAY_SEC;
+  return Math.min(
+    LINKY_BANK_PAYMENT_OFFER_MAX_STAGGER_DELAY_SEC,
+    Math.max(LINKY_BANK_PAYMENT_OFFER_MIN_STAGGER_DELAY_SEC, Math.trunc(value)),
   );
+};
 
 const formatResponseDuration = (durationSec: number): string => {
   const safeDurationSec = Math.max(0, Math.trunc(durationSec));
@@ -143,6 +158,7 @@ const buildSpdRows = (
 export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
   cashuBalanceAfterMelt,
   initialOfferContactCount,
+  initialOfferDelaySec,
   offerContacts,
   onRequestReimbursement,
   spdPayload,
@@ -157,18 +173,24 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
     React.useState(false);
   const previousSpdPayloadRef = React.useRef(spdPayload);
   const [selectedOfferContactKeys, setSelectedOfferContactKeys] =
-    React.useState<Set<string>>(() =>
+    React.useState<string[]>(() =>
       getInitialOfferContactKeys(offerContacts, initialOfferContactCount),
     );
+  const [offerDelaySec, setOfferDelaySec] = React.useState<number>(() =>
+    clampOfferDelaySec(initialOfferDelaySec),
+  );
   const payment = React.useMemo(
     () => tryParseBankPayment(spdPayload),
     [spdPayload],
   );
   const selectedOfferContacts = React.useMemo(
     () =>
-      offerContacts.filter((contact) =>
-        selectedOfferContactKeys.has(getOfferContactKey(contact)),
-      ),
+      selectedOfferContactKeys.flatMap((key) => {
+        const contact = offerContacts.find(
+          (candidate) => getOfferContactKey(candidate) === key,
+        );
+        return contact ? [contact] : [];
+      }),
     [offerContacts, selectedOfferContactKeys],
   );
 
@@ -240,6 +262,7 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
         amountText,
         contacts: selectedOfferContacts,
         spdPayload: payment.payload,
+        staggerDelaySec: offerDelaySec,
       });
       if (offer) {
         navigateTo({
@@ -258,9 +281,10 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
   return (
     <section className="panel panel-plain bank-payment-page">
       <div className="bank-payment-summary">
-        <div className="bank-payment-amount">
-          {amountText || t("spdPaymentAmountUnknown")}
-        </div>
+        <BankPaymentAmount
+          canCycle={Boolean(amountText)}
+          text={amountText || t("spdPaymentAmountUnknown")}
+        />
         <div className="muted bank-payment-recipient">
           {recipient || t("spdPaymentRecipientUnknown")}
         </div>
@@ -296,6 +320,23 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
           : requestReimbursementLabel}
       </button>
 
+      <div className="bank-payment-offer-delay">
+        <span className="bank-payment-offer-delay-label">
+          {t("bankPaymentOfferStaggerDelay")}
+        </span>
+        <SettingsStepper
+          ariaLabel={t("bankPaymentOfferStaggerDelay")}
+          decreaseLabel={t("bankPaymentOfferStaggerDelayDecrease")}
+          increaseLabel={t("bankPaymentOfferStaggerDelayIncrease")}
+          max={LINKY_BANK_PAYMENT_OFFER_MAX_STAGGER_DELAY_SEC}
+          min={LINKY_BANK_PAYMENT_OFFER_MIN_STAGGER_DELAY_SEC}
+          onChange={(value) => setOfferDelaySec(clampOfferDelaySec(value))}
+          step={LINKY_BANK_PAYMENT_OFFER_STAGGER_DELAY_STEP_SEC}
+          value={offerDelaySec}
+          valueText={`${offerDelaySec} s`}
+        />
+      </div>
+
       {offerContacts.length > 0 ? (
         <div className="bank-payment-offer-contact-list">
           {offerContacts.map((contact) => {
@@ -309,7 +350,8 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
             const name = String(contact.name ?? "").trim();
             const npub = String(contact.npub ?? "").trim();
             const pictureUrl = String(contact.pictureUrl ?? "").trim();
-            const isSelected = selectedOfferContactKeys.has(key);
+            const orderIndex = selectedOfferContactKeys.indexOf(key);
+            const isSelected = orderIndex !== -1;
 
             return (
               <button
@@ -324,27 +366,39 @@ export const SpdPaymentPage: React.FC<SpdPaymentPageProps> = ({
                 aria-pressed={isSelected}
                 onClick={() => {
                   setHasEditedOfferContacts(true);
-                  setSelectedOfferContactKeys((current) => {
-                    const next = new Set(current);
-                    if (next.has(key)) next.delete(key);
-                    else next.add(key);
-                    return next;
-                  });
+                  setSelectedOfferContactKeys((current) =>
+                    // A re-added contact joins the end of the queue.
+                    current.includes(key)
+                      ? current.filter((candidate) => candidate !== key)
+                      : [...current, key],
+                  );
                 }}
               >
-                <span className="contact-avatar" aria-hidden="true">
-                  {pictureUrl ? (
-                    <img
-                      src={pictureUrl}
-                      alt=""
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="contact-avatar-fallback">
-                      {getInitials(name)}
+                {/* The badge lives outside .contact-avatar, whose
+                    overflow:hidden would clip it. */}
+                <span
+                  className="bank-payment-offer-contact-avatar"
+                  aria-hidden="true"
+                >
+                  <span className="contact-avatar">
+                    {pictureUrl ? (
+                      <img
+                        src={pictureUrl}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="contact-avatar-fallback">
+                        {getInitials(name)}
+                      </span>
+                    )}
+                  </span>
+                  {isSelected ? (
+                    <span className="bank-payment-offer-contact-order">
+                      {orderIndex + 1}
                     </span>
-                  )}
+                  ) : null}
                 </span>
                 <span className="contact-name">{name || t("contact")}</span>
                 {lastBankPaymentResponseSec !== null ? (

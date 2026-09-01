@@ -94,12 +94,15 @@ collect automatically until the setting is explicitly turned off.
    pane lists them (click to jump) — e.g. one `reactions.react` operation and the two
    `WirePublished` wraps it produced.
 
-The same timeline is available in-app at `#advanced/inspector`. Production builds collect only
-after enabling **Inspector** in Advanced settings. The in-app buffer can contain decrypted
-message payloads in plain text, stays in browser memory only, and is cleared on reload or when the
-setting is turned off. Production collection never sends inspector rows to a server.
-An independent Advanced toggle can retain the same plain-text rows in on-device browser storage
-for up to 24 hours (about 25 MiB) and download them as import-compatible `.ndjson`.
+The same timeline is available in-app at `#advanced/inspector/timeline`. All inspector controls
+live on one settings page at `#advanced/inspector` (reached from Advanced → Inspector): the
+collection toggle, the persistent-log toggle with download/clear, the timeline link, and the
+Push/SW debug page. Production builds collect only after enabling **Inspector** there. The in-app
+buffer can contain decrypted message payloads in plain text, stays in browser memory only, and is
+cleared on reload or when the setting is turned off. Production collection never sends inspector
+rows to a server. An independent toggle on the same page can retain the same plain-text rows in
+on-device browser storage for up to 24 hours (about 25 MiB) and download them as import-compatible
+`.ndjson`.
 
 Toolbar: channel chips and a text filter narrow the timeline; **Pause** freezes the view while
 still buffering; **Clear** resets the collector; the timeline auto-follows the newest row until you

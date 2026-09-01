@@ -1,6 +1,8 @@
 import React from "react";
 import {
   Check,
+  ChevronDown,
+  ChevronUp,
   Copy,
   FileText,
   ImagePlus,
@@ -15,6 +17,7 @@ import {
   getLinkyBankPaymentOfferStatusRank,
   isLinkyBankPaymentOfferExpired,
   isLinkyBankPaymentOfferTerminalStatus,
+  readLinkyBankPaymentOfferStaggerRecords,
   setLinkyBankPaymentOfferMinimized,
   type LinkyBankPaymentOfferInfo,
   type LinkyBankPaymentOfferStatus,
@@ -35,6 +38,7 @@ import {
   parsePrivateImageMessage,
   type PrivateImageMessagePayload,
 } from "../app/lib/privateImageMessage";
+import { BankPaymentAmount } from "../components/BankPaymentAmount";
 import { PrivateFileBubble } from "../components/PrivateFileBubble";
 import { PrivateImageBubble } from "../components/PrivateImageBubble";
 
@@ -293,6 +297,13 @@ const RecipientProgress = ({
   const hasPaidFiat = status === "bank_paid" || status === "settled";
   const steps = [
     {
+      // The offer exists, so the first phase is always done — this makes the
+      // bar read as progress instead of an empty checklist.
+      isComplete: true,
+      key: "offered",
+      label: t("bankPaymentOfferProgressOffered"),
+    },
+    {
       isComplete: hasAccepted,
       key: "accepted",
       label: t("bankPaymentOfferProgressAccept"),
@@ -308,20 +319,26 @@ const RecipientProgress = ({
       label: t("bankPaymentOfferProgressSats"),
     },
   ];
+  const completedCount = steps.filter((step) => step.isComplete).length;
 
   return (
     <div
       className="bank-payment-offer-progress"
       aria-label={t("bankPaymentOfferProgressTitle")}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={steps.length}
+      aria-valuenow={completedCount}
     >
       {steps.map((step) => (
         <div
           className={`bank-payment-offer-progress-step${step.isComplete ? " is-complete" : ""}`}
           key={step.key}
         >
-          <span className="bank-payment-offer-progress-dot" aria-hidden="true">
-            {step.isComplete ? <Check size={13} /> : null}
-          </span>
+          <span
+            className="bank-payment-offer-progress-segment"
+            aria-hidden="true"
+          />
           <span>{step.label}</span>
         </div>
       ))}
@@ -331,11 +348,13 @@ const RecipientProgress = ({
 
 const RequesterIntro = ({
   amountText,
+  canCycleAmount,
   requesterName,
   status,
   t,
 }: {
   amountText: string;
+  canCycleAmount: boolean;
   requesterName: string;
   status: LinkyBankPaymentOfferStatus;
   t: (key: string) => string;
@@ -344,7 +363,7 @@ const RequesterIntro = ({
     <strong>
       {t("bankPaymentOfferRequestedBy").replace("{name}", requesterName)}
     </strong>
-    <div className="bank-payment-amount">{amountText}</div>
+    <BankPaymentAmount canCycle={canCycleAmount} text={amountText} />
     <RecipientProgress status={status} t={t} />
   </div>
 );
@@ -460,6 +479,27 @@ export const BankPaymentOfferDetailPage: React.FC<
     () => findOfferEntries(bankPaymentOfferMessages, offerId),
     [bankPaymentOfferMessages, offerId],
   );
+  const [showPaymentRows, setShowPaymentRows] = React.useState(false);
+  // Recipients still waiting for their staggered send; the queue drains via
+  // message upserts, so offerEntries changing keeps this list current.
+  const queuedRecipients = React.useMemo(() => {
+    const ownerPubkey = String(chatOwnPubkeyHex ?? "").trim();
+    if (!ownerPubkey) return [];
+
+    const record = readLinkyBankPaymentOfferStaggerRecords(ownerPubkey).find(
+      (candidate) => candidate.offerId === String(offerId ?? "").trim(),
+    );
+    if (!record) return [];
+
+    const offeredContactIds = new Set(
+      offerEntries.map((offerEntry) =>
+        String(offerEntry.message.contactId ?? "").trim(),
+      ),
+    );
+    return record.pending.filter(
+      (recipient) => !offeredContactIds.has(recipient.contactId),
+    );
+  }, [chatOwnPubkeyHex, offerEntries, offerId]);
   const confirmation = React.useMemo(
     () =>
       findPaymentConfirmation(
@@ -679,21 +719,43 @@ export const BankPaymentOfferDetailPage: React.FC<
       }
     };
 
+    const acceptingEntry = offerEntries.find(
+      ({ info }) =>
+        info.status === "accepted" ||
+        info.status === "bank_details_sent" ||
+        info.status === "bank_paid",
+    );
+    const acceptingContactName = acceptingEntry
+      ? String(
+          contacts.find(
+            (candidate) =>
+              String(candidate.id ?? "").trim() ===
+              String(acceptingEntry.message.contactId ?? "").trim(),
+          )?.name ?? "",
+        ).trim()
+      : "";
+    const acceptedInfoText = acceptingEntry
+      ? acceptingContactName
+        ? t("bankPaymentOfferProgressAcceptedByName").replace(
+            "{name}",
+            acceptingContactName,
+          )
+        : t("bankPaymentOfferProgressAcceptedInfo")
+      : null;
+
     return (
       <section className="panel panel-plain bank-payment-offer-owner-page">
         <div className="bank-payment-offer-owner-summary">
-          <div className="bank-payment-amount">{activeAmountText}</div>
+          <BankPaymentAmount
+            canCycle={Boolean(activeEntry.info.amountSat)}
+            text={activeAmountText}
+          />
           <RecipientProgress status={activeEntry.info.status} t={t} />
           {remainingSec !== null
             ? timerWithExtension(activeEntry, remainingSec)
             : null}
-          {offerEntries.some(
-            ({ info }) =>
-              info.status === "accepted" ||
-              info.status === "bank_details_sent" ||
-              info.status === "bank_paid",
-          ) ? (
-            <p className="muted">{t("bankPaymentOfferProgressAcceptedInfo")}</p>
+          {acceptedInfoText ? (
+            <p className="muted">{acceptedInfoText}</p>
           ) : null}
         </div>
 
@@ -731,6 +793,44 @@ export const BankPaymentOfferDetailPage: React.FC<
                   className={`chat-payment-request-status is-${offerEntry.info.status}`}
                 >
                   {getStatusLabel(offerEntry.info.status, false, t)}
+                </span>
+              </div>
+            );
+          })}
+          {queuedRecipients.map((recipient) => {
+            const contact = contacts.find(
+              (candidate) =>
+                String(candidate.id ?? "").trim() === recipient.contactId,
+            );
+            const name =
+              String(contact?.name ?? "").trim() || t("unknownContactTitle");
+            const npub = normalizeNpubIdentifier(contact?.npub);
+            const pictureUrl = npub ? (nostrPictureByNpub[npub] ?? null) : null;
+            return (
+              <div
+                className="bank-payment-offer-recipient"
+                key={recipient.contactId}
+              >
+                <span className="bank-payment-offer-recipient-identity">
+                  <span
+                    className="bank-payment-offer-recipient-avatar"
+                    aria-hidden="true"
+                  >
+                    {pictureUrl ? (
+                      <img
+                        src={pictureUrl}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span>{getInitials(name)}</span>
+                    )}
+                  </span>
+                  <span>{name}</span>
+                </span>
+                <span className="chat-payment-request-status is-queued">
+                  {t("bankPaymentOfferStatusQueued")}
                 </span>
               </div>
             );
@@ -792,7 +892,10 @@ export const BankPaymentOfferDetailPage: React.FC<
       <section className="panel panel-plain bank-payment-offer-state-page">
         <div className="bank-payment-offer-state-copy">
           <h2>{t("bankPaymentOfferRejectedTitle")}</h2>
-          <div className="bank-payment-amount">{amountText}</div>
+          <BankPaymentAmount
+            canCycle={Boolean(entry.info.amountSat)}
+            text={amountText}
+          />
           <p className="muted">
             {t("bankPaymentOfferRejectedDescription").replace(
               "{name}",
@@ -855,6 +958,7 @@ export const BankPaymentOfferDetailPage: React.FC<
         <div className="bank-payment-offer-state-copy">
           <RequesterIntro
             amountText={amountText}
+            canCycleAmount={Boolean(entry.info.amountSat)}
             requesterName={requesterName}
             status={entry.info.status}
             t={t}
@@ -942,17 +1046,11 @@ export const BankPaymentOfferDetailPage: React.FC<
       <section className="panel panel-plain bank-payment-offer-state-page">
         <div className="bank-payment-offer-state-copy">
           <h2>{t("bankPaymentOfferWaitingForSatsTitle")}</h2>
-          <div className="bank-payment-amount">{amountText}</div>
+          <BankPaymentAmount
+            canCycle={Boolean(entry.info.amountSat)}
+            text={amountText}
+          />
           <RecipientProgress status={entry.info.status} t={t} />
-          <p className="muted">
-            {t("bankPaymentOfferWaitingForSatsDescription").replace(
-              "{name}",
-              requesterName,
-            )}
-          </p>
-          {remainingSec !== null
-            ? timerWithExtension(entry, remainingSec)
-            : null}
         </div>
 
         {confirmation ? (
@@ -997,6 +1095,18 @@ export const BankPaymentOfferDetailPage: React.FC<
             </button>
           </>
         )}
+
+        <div className="bank-payment-offer-state-copy">
+          <p className="muted">
+            {t("bankPaymentOfferWaitingForSatsDescription").replace(
+              "{name}",
+              requesterName,
+            )}
+          </p>
+          {remainingSec !== null
+            ? timerWithExtension(entry, remainingSec)
+            : null}
+        </div>
         {errorText ? <p className="bank-payment-error">{errorText}</p> : null}
       </section>
     );
@@ -1008,6 +1118,7 @@ export const BankPaymentOfferDetailPage: React.FC<
         <div className="bank-payment-offer-state-copy">
           <RequesterIntro
             amountText={amountText}
+            canCycleAmount={Boolean(entry.info.amountSat)}
             requesterName={requesterName}
             status={entry.info.status}
             t={t}
@@ -1078,6 +1189,7 @@ export const BankPaymentOfferDetailPage: React.FC<
       <div className="bank-payment-summary bank-payment-offer-requester-summary">
         <RequesterIntro
           amountText={amountText}
+          canCycleAmount={Boolean(entry.info.amountSat)}
           requesterName={requesterName}
           status={entry.info.status}
           t={t}
@@ -1095,31 +1207,8 @@ export const BankPaymentOfferDetailPage: React.FC<
         )}
       </div>
 
-      <div className="bank-payment-fields">
-        {rows.map((row) => (
-          <div className="settings-row bank-payment-row" key={row.key}>
-            <div>
-              <strong>{row.label}</strong>
-              <button
-                type="button"
-                className="copyable transaction-detail-copy bank-payment-copy"
-                onClick={() => onCopyText(row.value)}
-                aria-label={t("copy")}
-                title={t("copy")}
-              >
-                <span className="transaction-detail-copyText">{row.value}</span>
-                <span
-                  className="transaction-detail-copyIcon"
-                  aria-hidden="true"
-                >
-                  <Copy size={14} />
-                </span>
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
+      {/* Confirming the payment must stay reachable without scrolling past
+          the QR, so the field rows hide behind a toggle below. */}
       <button
         type="button"
         className="btn-wide bank-payment-request"
@@ -1139,6 +1228,49 @@ export const BankPaymentOfferDetailPage: React.FC<
           </span>
         </span>
       </button>
+
+      <button
+        type="button"
+        className="btn-wide secondary bank-payment-offer-details-toggle"
+        aria-expanded={showPaymentRows}
+        onClick={() => setShowPaymentRows((current) => !current)}
+      >
+        <span className="btn-label-with-icon">
+          <span className="btn-label-icon" aria-hidden="true">
+            {showPaymentRows ? <ChevronUp /> : <ChevronDown />}
+          </span>
+          <span>{t("bankPaymentOfferDetails")}</span>
+        </span>
+      </button>
+
+      {showPaymentRows ? (
+        <div className="bank-payment-fields">
+          {rows.map((row) => (
+            <div className="settings-row bank-payment-row" key={row.key}>
+              <div>
+                <strong>{row.label}</strong>
+                <button
+                  type="button"
+                  className="copyable transaction-detail-copy bank-payment-copy"
+                  onClick={() => onCopyText(row.value)}
+                  aria-label={t("copy")}
+                  title={t("copy")}
+                >
+                  <span className="transaction-detail-copyText">
+                    {row.value}
+                  </span>
+                  <span
+                    className="transaction-detail-copyIcon"
+                    aria-hidden="true"
+                  >
+                    <Copy size={14} />
+                  </span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <div className="bank-payment-open-actions">
         <button

@@ -7,8 +7,6 @@ import type { ProbeLightningFee } from "../hooks/composition/useLinkshuCompositi
 import type { LocalMintInfoRow, MintUrlInput } from "../types/appTypes";
 
 export interface AdvancedSettingsContextValue {
-  bankPaymentOfferRecipientCount: number;
-  cashuAutoswapEnabled: boolean;
   copyNostrKeys: () => Promise<void>;
   copySeed: () => Promise<void>;
   dedupeContacts: () => Promise<void>;
@@ -31,8 +29,6 @@ export interface AdvancedSettingsContextValue {
   requestPasteNostrKeys: () => Promise<void>;
   saveSeedToPasswordManager: () => Promise<PasswordManagerSaveResult>;
   seedMnemonic: string | null;
-  setBankPaymentOfferRecipientCount: (value: number) => void;
-  setCashuAutoswapEnabled: (value: boolean) => void;
   setLightningInvoiceAutoPayLimit: (value: number) => void;
   setPayWithCashuEnabled: (value: boolean) => void;
 }

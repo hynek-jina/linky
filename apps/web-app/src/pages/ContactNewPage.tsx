@@ -1,15 +1,15 @@
+import { ArrowLeft, Save, User, UserPlus } from "lucide-react";
 import type { FC } from "react";
 import React from "react";
-import { ArrowLeft, Save, User, UserPlus } from "lucide-react";
 import { getContactQueryPrefill } from "../app/lib/contactQueryPrefill";
 import { PasteIcon } from "../components/icons";
 import { readClipboardText } from "../platform/clipboard";
+import { normalizeContactGroups } from "../utils/contactGroups";
 import {
   formatShortLightningAddress,
   formatShortNpub,
   getInitials,
 } from "../utils/formatting";
-import { normalizeContactGroups } from "../utils/contactGroups";
 
 export interface ContactFormData {
   name: string;
@@ -23,7 +23,12 @@ interface ContactFieldsProps {
   groupNames: string[];
   includeNpub?: boolean;
   lightningLabelAction?: React.ReactNode;
+  lightningPlaceholder?: string;
+  /** Shown greyed inside the field next to a differing typed value. */
+  lightningPublicValue?: string;
   nameLabelAction?: React.ReactNode;
+  namePlaceholder?: string;
+  namePublicValue?: string;
   setForm: (value: ContactFormData) => void;
   t: (key: string) => string;
 }
@@ -33,7 +38,11 @@ export function ContactFields({
   groupNames,
   includeNpub = false,
   lightningLabelAction,
+  lightningPlaceholder,
+  lightningPublicValue,
   nameLabelAction,
+  namePlaceholder,
+  namePublicValue,
   setForm,
   t,
 }: ContactFieldsProps) {
@@ -67,14 +76,42 @@ export function ContactFields({
       </div>
     );
 
+  // The wrapper is always rendered: toggling it with the public value would
+  // remount the input mid-typing and drop its focus.
+  const renderInputWithPublicValue = (
+    input: React.ReactNode,
+    publicValue: string | undefined,
+  ) => (
+    <div
+      className={
+        publicValue
+          ? "input-with-public-value has-public-value"
+          : "input-with-public-value"
+      }
+    >
+      {input}
+      {publicValue ? (
+        <span
+          className="input-public-value"
+          title={t("contactPublicProfileValue")}
+        >
+          {publicValue}
+        </span>
+      ) : null}
+    </div>
+  );
+
   return (
     <>
       {renderLabel(t("name"), nameLabelAction)}
-      <input
-        value={form.name}
-        onChange={(event) => setForm({ ...form, name: event.target.value })}
-        placeholder={t("namePlaceholder")}
-      />
+      {renderInputWithPublicValue(
+        <input
+          value={form.name}
+          onChange={(event) => setForm({ ...form, name: event.target.value })}
+          placeholder={namePlaceholder ?? t("namePlaceholder")}
+        />,
+        namePublicValue,
+      )}
 
       {includeNpub ? (
         <>
@@ -88,13 +125,16 @@ export function ContactFields({
       ) : null}
 
       {renderLabel(t("lightningAddress"), lightningLabelAction)}
-      <input
-        value={form.lnAddress}
-        onChange={(event) =>
-          setForm({ ...form, lnAddress: event.target.value })
-        }
-        placeholder={t("lightningAddressPlaceholder")}
-      />
+      {renderInputWithPublicValue(
+        <input
+          value={form.lnAddress}
+          onChange={(event) =>
+            setForm({ ...form, lnAddress: event.target.value })
+          }
+          placeholder={lightningPlaceholder ?? t("lightningAddressPlaceholder")}
+        />,
+        lightningPublicValue,
+      )}
 
       <label>{t("group")}</label>
       {allGroups.length > 0 ? (

@@ -10,11 +10,7 @@ export const en = {
   settingsSecurity: "Security",
   settingsDebug: "Debug",
   nostrInspector: "Inspector",
-  nostrInspectorDescription:
-    "Shows event details, including decrypted message payloads in plain text. Data stays in memory only and is cleared on reload.",
   nostrInspectorLogs: "Collect inspector logs",
-  nostrInspectorLogsDescription:
-    "May include decrypted message payloads in plain text. Stored unencrypted in this device's browser storage for up to 24 hours.",
   nostrInspectorLogsStats: "{count} rows · {size} · oldest row {age} old",
   nostrInspectorLogsLoading: "Loading log statistics…",
   downloadNostrInspectorLogs: "Download logs",
@@ -149,12 +145,11 @@ export const en = {
   payWithCashu: "Pay with cashu",
   preferCashu: "Prefer cashu",
   payWithCashuDisabled: "Pay with cashu is disabled in Advanced settings.",
-  cashuAutoswap: "Auto-swap to main mint",
   showProfileQrOnTilt: "Show profile when phone is turned",
   lightningInvoiceAutoPayLimit: "Auto-pay limit",
-  bankPaymentOfferRecipientCount: "Contacts to share offers with",
-  bankPaymentOfferRecipientDecrease: "Decrease contact count",
-  bankPaymentOfferRecipientIncrease: "Increase contact count",
+  bankPaymentOfferStaggerDelay: "Delay between offer recipients",
+  bankPaymentOfferStaggerDelayDecrease: "Decrease delay",
+  bankPaymentOfferStaggerDelayIncrease: "Increase delay",
   custom: "Custom",
   restore: "Restore",
   claimOwnLightningAddressTitle: "Own lightning address",
@@ -378,15 +373,7 @@ export const en = {
   mintFeeLightningPayments: "Lightning payments",
   setCustomMint: "Set custom mint",
   mintUrlInvalid: "Invalid mint URL.",
-  mintAutoswapChangeWarning:
-    "Linky will swap eligible funds from {fromMint} to the {toMint}.",
-  mintAutoswapChangeWarningTitle: "Funds will be swapped to the new mint",
-  mintAutoswapChangeWarningKeep: "OK",
-  mintAutoswapChangeWarningDisable: "Don't swap anything",
   mintSaved: "Mint saved.",
-  mintSavedAutoswapDisabled: "Mint saved. Auto-swap turned off.",
-  mintSavedAutoswapDisabledTestMint:
-    "Mint saved. Auto-swap turned off for the test mint.",
   mintUpdateFailed: "Mint update failed.",
   mintUpdating: "Updating mint…",
   useDefault: "Use default",
@@ -575,6 +562,7 @@ export const en = {
   continue: "Continue",
 
   contactNotFound: "Contact not found.",
+  contactPublicProfileValue: "Public profile",
   name: "Name",
   npub: "Identifier",
   lightningAddress: "Lightning address",
@@ -677,6 +665,7 @@ export const en = {
   spdPaymentLastResponseTime: "Last time {time}",
   bankPaymentOfferTitle: "Payment offer",
   bankPaymentOfferStatusOffered: "Offered",
+  bankPaymentOfferStatusQueued: "Queued",
   bankPaymentOfferStatusAccepted: "Accepted",
   bankPaymentOfferStatusAcceptedByOther: "Accepted by someone else",
   bankPaymentOfferStatusBankDetailsSent: "Details sent",
@@ -723,7 +712,10 @@ export const en = {
   bankPaymentOfferProgressTitle: "Proxy payment progress",
   bankPaymentOfferProgressAcceptedInfo:
     "Someone has already accepted the offer.",
-  bankPaymentOfferProgressAccept: "Offer accepted",
+  bankPaymentOfferProgressAcceptedByName:
+    "{name} has already accepted the offer.",
+  bankPaymentOfferProgressOffered: "Offer",
+  bankPaymentOfferProgressAccept: "Matched",
   bankPaymentOfferProgressBankDetails: "Details",
   bankPaymentOfferProgressBankPayment: "Fiat payment",
   bankPaymentOfferProgressSats: "Bitcoin settlement",
@@ -807,10 +799,7 @@ export const en = {
   unitUsdName: "US dollars",
   unitHiddenName: "Hidden",
   decimalInput: "Decimal places",
-  decimalInputDescription: "Allow cents when entering fiat amounts.",
   sendReadReceipts: "Send read receipts",
-  sendReadReceiptsDescription:
-    "Let contacts see when you have read their messages. You always see their receipts.",
   decimalPoint: ".",
 
   cashuBalance: "Available balance",

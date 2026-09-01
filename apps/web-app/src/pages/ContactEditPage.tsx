@@ -1,5 +1,5 @@
-import type { FC } from "react";
 import { Archive, RefreshCcw, Save } from "lucide-react";
+import type { FC } from "react";
 import type { ContactId } from "../evolu";
 import { ContactFields, type ContactFormData } from "./ContactNewPage";
 
@@ -17,6 +17,8 @@ interface ContactEditPageProps {
   handleSaveContact: () => void;
   isSavingContact: boolean;
   blockArchivedContact: () => Promise<void>;
+  publicLnAddress: string;
+  publicName: string;
   pendingDeleteId: ContactId | null;
   restoreArchivedContact: () => void;
   requestDeleteCurrentContact: () => void;
@@ -34,6 +36,8 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
   handleSaveContact,
   isSavingContact,
   blockArchivedContact,
+  publicLnAddress,
+  publicName,
   pendingDeleteId,
   restoreArchivedContact,
   requestDeleteCurrentContact,
@@ -46,6 +50,14 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
   const canBlockArchivedContact = Boolean(
     String(selectedContact?.npub ?? "").trim(),
   );
+  const showPublicName = Boolean(
+    publicName && form.name.trim() && form.name.trim() !== publicName,
+  );
+  const showPublicLnAddress = Boolean(
+    publicLnAddress &&
+    form.lnAddress.trim() &&
+    form.lnAddress.trim().toLowerCase() !== publicLnAddress.toLowerCase(),
+  );
 
   return (
     <section className="panel panel-plain">
@@ -57,6 +69,7 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
             form={form}
             groupNames={groupNames}
             includeNpub
+            lightningPublicValue={showPublicLnAddress ? publicLnAddress : ""}
             nameLabelAction={
               String(form.npub ?? "").trim() &&
               String(form.name ?? "").trim() ? (
@@ -71,6 +84,8 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
                 </button>
               ) : null
             }
+            namePlaceholder={publicName || t("namePlaceholder")}
+            namePublicValue={showPublicName ? publicName : ""}
             lightningLabelAction={
               String(form.npub ?? "").trim() &&
               String(form.lnAddress ?? "").trim() ? (
@@ -86,6 +101,9 @@ export const ContactEditPage: FC<ContactEditPageProps> = ({
                   <RefreshCcw size={18} aria-hidden="true" />
                 </button>
               ) : null
+            }
+            lightningPlaceholder={
+              publicLnAddress || t("lightningAddressPlaceholder")
             }
             setForm={setForm}
             t={t}

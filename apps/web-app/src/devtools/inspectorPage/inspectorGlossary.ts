@@ -35,6 +35,10 @@ const TAG_DESCRIPTIONS: Record<string, string> = {
     "User saved a decrypted chat PDF as a file download; the rumor link ties it to the message it came from.",
   ChatFileShareFailed:
     "System share of a chat PDF failed for a reason other than the user cancelling; the app fell back to a file download when triggered from the message menu.",
+  "bankOffer.staggerExtended":
+    "A staggered proxy payment offer reached its next queued recipient: the configured delay elapsed without a winner, so the offer was extended while keeping the original expiry.",
+  "bankOffer.staggerDropped":
+    "The queued recipients of a staggered proxy payment offer were discarded because the offer stopped being open — someone accepted it, it ended, or it expired.",
   "profiles.searchProfiles":
     "Add-contact text search: a NIP-50 kind-0 query fanned out to the read relays plus the configured search relays; relays without NIP-50 answer with unrelated profiles, so only hits that match the query locally are returned (the params carry the query and limit).",
   "contacts.addToGroup":

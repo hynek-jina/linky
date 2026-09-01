@@ -61,12 +61,7 @@ export function SettingsPage(): React.ReactElement {
 
       <div className="settings-row">
         <div className="settings-left">
-          <span className="settings-label-group settings-label-group-stacked">
-            <span className="settings-label">{t("decimalInput")}</span>
-            <span className="settings-description">
-              {t("decimalInputDescription")}
-            </span>
-          </span>
+          <span className="settings-label">{t("decimalInput")}</span>
         </div>
 
         <div className="settings-right">

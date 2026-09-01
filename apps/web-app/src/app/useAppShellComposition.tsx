@@ -1,7 +1,7 @@
 import * as Evolu from "@evolu/common";
-import type { MessageContactsGroupAssignment } from "../components/ChatMessage";
 import { useQuery } from "@evolu/react";
 import React, { useMemo, useState } from "react";
+import type { MessageContactsGroupAssignment } from "../components/ChatMessage";
 import { ContactCard } from "../components/ContactCard";
 import {
   createCashuTokensAllQuery,
@@ -41,8 +41,8 @@ import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 import {
   getInitialAllowedDisplayCurrencies,
   getInitialDecimalAmountInputEnabled,
-  getInitialSeenReceiptsEnabledAtSec,
   getInitialDisplayCurrency,
+  getInitialSeenReceiptsEnabledAtSec,
   safeLocalStorageGet,
   safeLocalStorageSet,
 } from "../utils/storage";
@@ -50,6 +50,10 @@ import {
   logPayStep,
   useCashuWalletComposition,
 } from "./hooks/composition/useCashuWalletComposition";
+import {
+  useContactsMessagingComposition,
+  type DisplayContact,
+} from "./hooks/composition/useContactsMessagingComposition";
 import { useIdentityOwnersComposition } from "./hooks/composition/useIdentityOwnersComposition";
 import { usePaymentMoneyComposition } from "./hooks/composition/usePaymentMoneyComposition";
 import { useProfileComposition } from "./hooks/composition/useProfileComposition";
@@ -70,7 +74,6 @@ import { useFiatRates } from "./hooks/useFiatRates";
 import { useOwnerScopedStorage } from "./hooks/useOwnerScopedStorage";
 import { useStatusToasts } from "./hooks/useStatusToasts";
 import { useStoragePersistRequestEffect } from "./hooks/useStoragePersistRequestEffect";
-import { getDesktopActiveContactId } from "./routes/desktopRouteSection";
 import {
   buildIdentityChangeMessageContent,
   buildIdentityChangeMessageWrapId,
@@ -88,11 +91,15 @@ import {
   buildTopbarTitle,
   resolveBackAction,
 } from "./lib/topbarConfig";
+import { getDesktopActiveContactId } from "./routes/desktopRouteSection";
 import type { ContactRowLike } from "./types/appTypes";
-import {
-  useContactsMessagingComposition,
-  type DisplayContact,
-} from "./hooks/composition/useContactsMessagingComposition";
+
+const AppContactId = Evolu.id("Contact");
+
+const parseContactId = (value: unknown): ContactId | null => {
+  const result = AppContactId.fromUnknown(value);
+  return result.ok ? result.value : null;
+};
 
 interface UseAppShellCompositionParams {
   currentNsec: string;
@@ -480,6 +487,7 @@ export const useAppShellComposition = ({
     bankPaymentOfferContacts,
     bankPaymentOfferMessages,
     bankPaymentOfferRecipientCount,
+    bankPaymentOfferStaggerDelaySec,
     blockArchivedContact,
     blockUnknownContactFromChat,
     buildSavedContactName,
@@ -559,12 +567,12 @@ export const useAppShellComposition = ({
     searchNewContact,
     selectedChatContact,
     selectedContact,
+    selectedContactPublicProfile,
     selectedRelayUrl,
     sendChatImage,
     sendChatMessage,
     sendChatOrEditMessage,
     setActiveGroup,
-    setBankPaymentOfferRecipientCount,
     setChatDraft,
     setContactNewPrefill,
     setContactsOnboardingHasBackedUpKeys,
@@ -730,7 +738,6 @@ export const useAppShellComposition = ({
     applyDefaultMintSelection,
     canPayWithCashu,
     cancelPendingCashuContactSend,
-    cashuAutoswapEnabled,
     cashuBalance,
     cashuBalanceAfterMelt,
     cashuBulkCheckIsBusy,
@@ -753,11 +760,9 @@ export const useAppShellComposition = ({
     checkSingleIssuedCashuTokenIsClaimed,
     closeLightningInvoiceConfirmation,
     closeLnurlWithdrawConfirmation,
-    closeMintAutoswapChangeConfirmation,
     closePaymentMintMeltConfirmation,
     confirmLightningInvoicePayment,
     confirmLnurlWithdraw,
-    confirmMintAutoswapChangeConfirmation,
     confirmPaymentMintMelt,
     contactPayMethod,
     defaultMintDisplay,
@@ -797,7 +802,6 @@ export const useAppShellComposition = ({
     pendingCashuTokenContactPickId,
     pendingLightningInvoiceConfirmation,
     pendingLnurlWithdrawConfirmation,
-    pendingMintAutoswapChangeConfirmation,
     pendingMintDeleteUrl,
     pendingPaymentMintMeltConfirmation,
     postPaySaveContact,
@@ -810,7 +814,6 @@ export const useAppShellComposition = ({
     returnCashuTokenToWallet,
     saveCashuFromText,
     sendCashuTokenToContact,
-    setCashuAutoswapEnabled,
     setCashuDraft,
     setCashuEmitAmount,
     setContactPayMethod,
@@ -927,10 +930,10 @@ export const useAppShellComposition = ({
 
   useAppPreferences({
     allowedDisplayCurrencies,
-    cashuAutoswapEnabled,
     decimalAmountInputEnabled,
     displayCurrency,
     bankPaymentOfferRecipientCount,
+    bankPaymentOfferStaggerDelaySec,
     lightningInvoiceAutoPayLimit,
     payWithCashuEnabled,
     seenReceiptsEnabledAtSec,
@@ -1205,9 +1208,6 @@ export const useAppShellComposition = ({
     if (pendingPaymentMintMeltConfirmation) {
       return closePaymentMintMeltConfirmation;
     }
-    if (pendingMintAutoswapChangeConfirmation) {
-      return closeMintAutoswapChangeConfirmation;
-    }
     if (pendingLnurlWithdrawConfirmation) {
       return closeLnurlWithdrawConfirmation;
     }
@@ -1233,7 +1233,7 @@ export const useAppShellComposition = ({
 
   const chatEditContactId =
     route.kind === "chat" && !selectedChatContact?.isUnknownContact
-      ? (selectedContact?.id ?? null)
+      ? parseContactId(selectedContact?.id)
       : null;
   const topbarRight = React.useMemo(
     () =>
@@ -1268,7 +1268,7 @@ export const useAppShellComposition = ({
         ? {
             contactId: selectedChatContact.isUnknownContact
               ? null
-              : (selectedContact?.id ?? null),
+              : parseContactId(selectedContact?.id),
             isUnknownContact: Boolean(selectedChatContact.isUnknownContact),
             name: String(selectedChatContact.name ?? "").trim() || null,
             npub: normalizeNpubIdentifier(selectedChatContact.npub),
@@ -1319,6 +1319,7 @@ export const useAppShellComposition = ({
       cashuOwnSpentTokensCount: cashuOwnSpentTokens.length,
       bankPaymentOfferContacts,
       bankPaymentOfferRecipientCount,
+      bankPaymentOfferStaggerDelaySec,
       deleteSpentCashuTokens,
       deleteSpentCashuTokensIsBusy,
       checkAllCashuTokensAndDeleteInvalid,
@@ -1379,9 +1380,44 @@ export const useAppShellComposition = ({
   }, [editingId, restoreArchivedContact]);
 
   const restoreCurrentContact = React.useCallback(() => {
-    if (!selectedContact) return;
-    restoreArchivedContact(selectedContact.id);
-  }, [restoreArchivedContact, selectedContact]);
+    if (route.kind !== "contact") return;
+    restoreArchivedContact(route.id);
+  }, [restoreArchivedContact, route]);
+
+  const peopleSelectedContact = React.useMemo(() => {
+    const routeContactId =
+      route.kind === "contact" ||
+      route.kind === "contactEdit" ||
+      route.kind === "contactPay"
+        ? route.id
+        : null;
+    if (!selectedContact || !routeContactId) return null;
+
+    return {
+      archivedAtSec:
+        typeof selectedContact.archivedAtSec === "number" ||
+        typeof selectedContact.archivedAtSec === "string"
+          ? selectedContact.archivedAtSec
+          : null,
+      groupName:
+        typeof selectedContact.groupName === "string"
+          ? selectedContact.groupName
+          : null,
+      groupNamesJson:
+        typeof selectedContact.groupNamesJson === "string"
+          ? selectedContact.groupNamesJson
+          : null,
+      id: routeContactId,
+      lnAddress:
+        typeof selectedContact.lnAddress === "string"
+          ? selectedContact.lnAddress
+          : null,
+      name:
+        typeof selectedContact.name === "string" ? selectedContact.name : null,
+      npub:
+        typeof selectedContact.npub === "string" ? selectedContact.npub : null,
+    };
+  }, [route, selectedContact]);
 
   const chatContactsGroupAssignment =
     React.useMemo<MessageContactsGroupAssignment | null>(
@@ -1478,7 +1514,7 @@ export const useAppShellComposition = ({
       ownedLightningAddresses: ownedProfileLightningAddresses,
       route,
       selectedContactStatusText: (() => {
-        const npub = normalizeNpubIdentifier(selectedContact?.npub);
+        const npub = normalizeNpubIdentifier(peopleSelectedContact?.npub);
         return npub ? (nostrStatusByNpub[npub] ?? null) : null;
       })(),
       pendingDeleteId,
@@ -1503,7 +1539,8 @@ export const useAppShellComposition = ({
       replyContext,
       saveClaimedLightningAddress,
       saveProfileEdits,
-      selectedContact,
+      selectedContact: peopleSelectedContact,
+      selectedContactPublicProfile,
       sendChatImage,
       sendChatMessage: sendChatOrEditMessage,
       setChatDraft,
@@ -1567,8 +1604,6 @@ export const useAppShellComposition = ({
     relaySettingsContext,
   } = useSystemSettingsComposition({
     advancedSettingsInput: {
-      bankPaymentOfferRecipientCount,
-      cashuAutoswapEnabled,
       copyNostrKeys,
       copySeed,
       passwordManagerSeedUsername: String(
@@ -1593,8 +1628,6 @@ export const useAppShellComposition = ({
       requestPasteNostrKeys,
       saveSeedToPasswordManager,
       seedMnemonic,
-      setBankPaymentOfferRecipientCount,
-      setCashuAutoswapEnabled,
       setLightningInvoiceAutoPayLimit,
       setPayWithCashuEnabled,
     },
@@ -1720,7 +1753,6 @@ export const useAppShellComposition = ({
       nostrPictureByNpub,
       paidOverlayIsOpen,
       paidOverlayTitle,
-      pendingMintAutoswapChangeConfirmation,
       pendingPaymentMintMeltConfirmation,
       pendingLnurlWithdrawConfirmation,
       pendingLightningInvoiceConfirmation,
@@ -1792,7 +1824,6 @@ export const useAppShellComposition = ({
       paidOverlayTitle,
       pendingLightningInvoiceConfirmation,
       pendingLnurlWithdrawConfirmation,
-      pendingMintAutoswapChangeConfirmation,
       pendingPaymentMintMeltConfirmation,
       postPaySaveContact,
       profileCustomPictureUrl,
@@ -1826,14 +1857,12 @@ export const useAppShellComposition = ({
   const appActions = React.useMemo(
     () => ({
       cancelPendingNfcWrite,
-      closeMintAutoswapChangeConfirmation,
       closePaymentMintMeltConfirmation,
       closeLnurlWithdrawConfirmation,
       closeMenu,
       closeShareOptions,
       closeLightningInvoiceConfirmation,
       closeScan,
-      confirmMintAutoswapChangeConfirmation,
       confirmPaymentMintMelt,
       confirmLnurlWithdraw,
       confirmLightningInvoicePayment,
@@ -1882,13 +1911,11 @@ export const useAppShellComposition = ({
       closeLightningInvoiceConfirmation,
       closeLnurlWithdrawConfirmation,
       closeMenu,
-      closeMintAutoswapChangeConfirmation,
       closePaymentMintMeltConfirmation,
       closeScan,
       closeShareOptions,
       confirmLightningInvoicePayment,
       confirmLnurlWithdraw,
-      confirmMintAutoswapChangeConfirmation,
       confirmPaymentMintMelt,
       stableContactsGuideNav,
       copyShareOptionsText,

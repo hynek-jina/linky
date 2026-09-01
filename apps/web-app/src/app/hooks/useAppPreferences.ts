@@ -1,7 +1,7 @@
 import React from "react";
 import {
   BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
-  CASHU_AUTOSWAP_STORAGE_KEY,
+  BANK_PAYMENT_OFFER_STAGGER_DELAY_SEC_STORAGE_KEY,
   DECIMAL_AMOUNT_INPUT_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
@@ -15,10 +15,10 @@ import type { DisplayCurrency } from "../../utils/displayAmounts";
 
 interface UseAppPreferencesParams {
   allowedDisplayCurrencies: readonly DisplayCurrency[];
-  cashuAutoswapEnabled: boolean;
   decimalAmountInputEnabled: boolean;
   displayCurrency: DisplayCurrency;
   bankPaymentOfferRecipientCount: number;
+  bankPaymentOfferStaggerDelaySec: number;
   lightningInvoiceAutoPayLimit: number;
   payWithCashuEnabled: boolean;
   seenReceiptsEnabledAtSec: number | null;
@@ -27,10 +27,10 @@ interface UseAppPreferencesParams {
 
 export const useAppPreferences = ({
   allowedDisplayCurrencies,
-  cashuAutoswapEnabled,
   decimalAmountInputEnabled,
   displayCurrency,
   bankPaymentOfferRecipientCount,
+  bankPaymentOfferStaggerDelaySec,
   lightningInvoiceAutoPayLimit,
   payWithCashuEnabled,
   seenReceiptsEnabledAtSec,
@@ -99,13 +99,13 @@ export const useAppPreferences = ({
   React.useEffect(() => {
     try {
       localStorage.setItem(
-        CASHU_AUTOSWAP_STORAGE_KEY,
-        cashuAutoswapEnabled ? "1" : "0",
+        BANK_PAYMENT_OFFER_STAGGER_DELAY_SEC_STORAGE_KEY,
+        String(bankPaymentOfferStaggerDelaySec),
       );
     } catch {
       // ignore
     }
-  }, [cashuAutoswapEnabled]);
+  }, [bankPaymentOfferStaggerDelaySec]);
 
   React.useEffect(() => {
     try {

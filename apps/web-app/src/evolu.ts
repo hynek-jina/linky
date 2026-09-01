@@ -431,6 +431,9 @@ export const Schema = {
     nameSetByUser: Evolu.nullOr(Evolu.SqliteBoolean),
     npub: Evolu.nullOr(Evolu.NonEmptyString1000),
     lnAddress: Evolu.nullOr(Evolu.NonEmptyString1000),
+    // "1" once the user typed a custom lightning address; profile updates
+    // then leave `lnAddress` alone until the override is cleared.
+    lnAddressSetByUser: Evolu.nullOr(Evolu.SqliteBoolean),
     groupName: Evolu.nullOr(Evolu.NonEmptyString1000),
     groupNamesJson: Evolu.nullOr(Evolu.NonEmptyString1000),
     archivedAtSec: Evolu.nullOr(Evolu.PositiveInt),

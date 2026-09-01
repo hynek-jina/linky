@@ -8,11 +8,16 @@ const { navigateTo } = vi.hoisted(() => ({ navigateTo: vi.fn() }));
 vi.mock("../hooks/useRouting", () => ({ navigateTo }));
 
 vi.mock("../app/context/AppShellContexts", () => ({
+  useAppShellActions: () => ({
+    cycleDisplayCurrency: () => undefined,
+  }),
   useAppShellCore: () => ({
+    allowedDisplayCurrencies: ["sat"],
     displayCurrency: "sat",
     displayUnit: "sat",
     formatDisplayedAmountText: (amountSat: number) => `${amountSat} sat`,
     lang: "en",
+    t: (key: string) => key,
   }),
 }));
 
@@ -57,6 +62,7 @@ describe("SpdPaymentPage offer recipients", () => {
         <SpdPaymentPage
           cashuBalanceAfterMelt={100_000}
           initialOfferContactCount={2}
+          initialOfferDelaySec={0}
           offerContacts={[
             { id: "a", name: "Alice", npub: "npub1alice" },
             { id: "b", name: "Bob", npub: "npub1bob" },
@@ -98,6 +104,15 @@ describe("SpdPaymentPage offer recipients", () => {
       contactButtons[2]?.click();
     });
 
+    // The delay stepper moves in 5 s increments and travels with the offer.
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '.bank-payment-offer-delay [aria-label="bankPaymentOfferStaggerDelayIncrease"]',
+        )
+        ?.click();
+    });
+
     await act(async () => {
       requestButton?.click();
     });
@@ -109,8 +124,67 @@ describe("SpdPaymentPage offer recipients", () => {
           expect.objectContaining({ id: "a" }),
           expect.objectContaining({ id: "c" }),
         ],
+        staggerDelaySec: 5,
       }),
     );
+  });
+
+  it("numbers selected recipients and re-adds a removed contact at the end", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <SpdPaymentPage
+          cashuBalanceAfterMelt={100_000}
+          initialOfferContactCount={3}
+          initialOfferDelaySec={5}
+          offerContacts={[
+            { id: "a", name: "Alice", npub: "npub1alice" },
+            { id: "b", name: "Bob", npub: "npub1bob" },
+            { id: "c", name: "Carol", npub: "npub1carol" },
+          ]}
+          onRequestReimbursement={async () => null}
+          spdPayload="SPD*1.0*ACC:CZ5855000000001265098001*AM:480*CC:CZK"
+          t={t}
+        />,
+      );
+    });
+
+    const readOrders = () =>
+      Array.from(
+        container.querySelectorAll<HTMLButtonElement>(
+          ".bank-payment-offer-contact",
+        ),
+      ).map(
+        (button) =>
+          button.querySelector(".bank-payment-offer-contact-order")
+            ?.textContent ?? null,
+      );
+
+    expect(readOrders()).toEqual(["1", "2", "3"]);
+
+    const contactButtons = container.querySelectorAll<HTMLButtonElement>(
+      ".bank-payment-offer-contact",
+    );
+
+    // Removing the second contact moves the third one up…
+    await act(async () => {
+      contactButtons[1]?.click();
+    });
+    expect(readOrders()).toEqual(["1", null, "2"]);
+
+    // …and re-adding it puts it at the end of the queue.
+    await act(async () => {
+      contactButtons[1]?.click();
+    });
+    expect(readOrders()).toEqual(["1", "3", "2"]);
+
+    const delayValue = container.querySelector(
+      ".bank-payment-offer-delay .settings-stepper-value",
+    );
+    expect(delayValue?.textContent).toBe("5 s");
   });
 
   it("opens the newly created proxy payment", async () => {
@@ -127,6 +201,7 @@ describe("SpdPaymentPage offer recipients", () => {
         <SpdPaymentPage
           cashuBalanceAfterMelt={100_000}
           initialOfferContactCount={1}
+          initialOfferDelaySec={0}
           offerContacts={[
             { id: "contact-a", name: "Alice", npub: "npub1alice" },
           ]}
@@ -160,6 +235,7 @@ describe("SpdPaymentPage offer recipients", () => {
         <SpdPaymentPage
           cashuBalanceAfterMelt={100_000}
           initialOfferContactCount={1}
+          initialOfferDelaySec={0}
           offerContacts={[
             {
               id: "contact-a",

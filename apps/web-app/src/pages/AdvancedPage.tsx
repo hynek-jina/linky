@@ -10,17 +10,12 @@ import {
   Coins,
   Copy,
   Download,
-  FlaskConical,
   Landmark,
   Languages,
   LogOut,
-  Minus,
-  Plus,
   RadioTower,
-  RefreshCw,
   RotateCw,
   ShieldCheck,
-  Trash2,
   Upload,
   UserRound,
   Zap,
@@ -31,139 +26,18 @@ import {
 } from "../app/context/AppShellContexts";
 import { useAdvancedSettingsContext } from "../app/context/SystemSettingsContexts";
 import {
-  setInspectorEnabled,
-  setInspectorLogsEnabled,
-  useInspectorEnabled,
-  useInspectorLogsEnabled,
-} from "../devtools/inspector/inspectorEnabled";
-import type { PersistentInspectorLogStats } from "../devtools/inspector/persistentInspectorLogBuffer";
-import {
   countConnectedRelays,
   overallRelayStatus,
   useRelayHealth,
 } from "../app/hooks/useRelayHealth";
-import {
-  LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT,
-  LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT,
-} from "../app/lib/bankPaymentOffer";
 import { FeedbackIcon } from "../components/icons";
+import { SettingsLinkRow, SettingsToggleRow } from "../components/SettingsRows";
 import { useNavigation } from "../hooks/useRouting";
 import { getNativeNotificationPermissionState } from "../platform/nativeBridge";
 import { isNativePlatform } from "../platform/runtime";
 
-interface SettingsLinkRowProps {
-  className?: string;
-  dataGuide?: string;
-  disabled?: boolean;
-  icon: React.ReactNode;
-  label: React.ReactNode;
-  onClick: () => void;
-  tail?: React.ReactNode;
-}
-
-function SettingsLinkRow({
-  className = "",
-  dataGuide,
-  disabled,
-  icon,
-  label,
-  onClick,
-  tail,
-}: SettingsLinkRowProps) {
-  return (
-    <button
-      type="button"
-      className={`settings-row settings-link${className ? ` ${className}` : ""}`}
-      onClick={onClick}
-      disabled={disabled}
-      data-guide={dataGuide}
-    >
-      <span className="settings-left">
-        <span className="settings-icon" aria-hidden="true">
-          {icon}
-        </span>
-        <span className="settings-label">{label}</span>
-      </span>
-      <span className="settings-right">
-        {tail}
-        <span className="settings-chevron" aria-hidden="true">
-          &gt;
-        </span>
-      </span>
-    </button>
-  );
-}
-
-interface SettingsToggleRowProps {
-  checked: boolean;
-  description?: string;
-  disabled?: boolean;
-  icon: React.ReactNode;
-  label: string;
-  onChange: (checked: boolean) => void;
-}
-
-function SettingsToggleRow({
-  checked,
-  description,
-  disabled,
-  icon,
-  label,
-  onChange,
-}: SettingsToggleRowProps) {
-  return (
-    <div className="settings-row">
-      <div className="settings-left">
-        <span className="settings-icon" aria-hidden="true">
-          {icon}
-        </span>
-        {description ? (
-          <span className="settings-label-group settings-label-group-stacked">
-            <span className="settings-label">{label}</span>
-            <span className="settings-description">{description}</span>
-          </span>
-        ) : (
-          <span className="settings-label">{label}</span>
-        )}
-      </div>
-      <label className="switch">
-        <input
-          className="switch-input"
-          type="checkbox"
-          aria-label={label}
-          checked={checked}
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-      </label>
-    </div>
-  );
-}
-
-const formatInspectorLogSize = (size: number): string => {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KiB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MiB`;
-};
-
-const formatInspectorLogAge = (
-  oldestAt: number | null,
-  now: number,
-): string => {
-  if (oldestAt === null) return "—";
-  const ageSeconds = Math.max(0, Math.floor((now - oldestAt) / 1_000));
-  if (ageSeconds < 60) return `${ageSeconds}s`;
-  const ageMinutes = Math.floor(ageSeconds / 60);
-  if (ageMinutes < 60) return `${ageMinutes}m`;
-  return `${Math.floor(ageMinutes / 60)}h`;
-};
-
 export function AdvancedPage(): React.ReactElement {
-  const inspectorEnabled = useInspectorEnabled();
-  const inspectorLogsEnabled = useInspectorLogsEnabled();
   const {
-    bankPaymentOfferRecipientCount,
-    cashuAutoswapEnabled,
     copyNostrKeys,
     dedupeContacts,
     dedupeContactsIsBusy,
@@ -183,8 +57,6 @@ export function AdvancedPage(): React.ReactElement {
     requestLogout,
     requestPasteNostrKeys,
     seedMnemonic,
-    setBankPaymentOfferRecipientCount,
-    setCashuAutoswapEnabled,
     setPayWithCashuEnabled,
   } = useAdvancedSettingsContext();
   const relayHealth = useRelayHealth();
@@ -200,10 +72,6 @@ export function AdvancedPage(): React.ReactElement {
   const { openFeedbackContact, toggleSendReadReceipts } = useAppShellActions();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationsIsBusy, setNotificationsIsBusy] = useState(false);
-  const [inspectorLogStats, setInspectorLogStats] =
-    useState<PersistentInspectorLogStats | null>(null);
-  const [inspectorLogActionIsBusy, setInspectorLogActionIsBusy] =
-    useState(false);
   const [armedSecurityAction, setArmedSecurityAction] = useState<
     "copyNostr" | "pasteNostr" | null
   >(null);
@@ -213,16 +81,6 @@ export function AdvancedPage(): React.ReactElement {
   const appVersionLabel = __APP_COMMIT_SHA__
     ? `${__APP_VERSION__} (${__APP_COMMIT_SHA__})`
     : `${__APP_VERSION__}`;
-
-  const inspectorLogStatsLabel = inspectorLogStats
-    ? t("nostrInspectorLogsStats")
-        .replace("{count}", String(inspectorLogStats.rowCount))
-        .replace("{size}", formatInspectorLogSize(inspectorLogStats.totalSize))
-        .replace(
-          "{age}",
-          formatInspectorLogAge(inspectorLogStats.oldestAt, Date.now()),
-        )
-    : t("nostrInspectorLogsLoading");
 
   const getAutoPayLimitLabel = useCallback(
     (limit: number) => {
@@ -283,66 +141,6 @@ export function AdvancedPage(): React.ReactElement {
       clearArmTimeout();
     };
   }, [clearArmTimeout]);
-
-  useEffect(() => {
-    if (!inspectorLogsEnabled) {
-      setInspectorLogStats(null);
-      return;
-    }
-
-    let active = true;
-    let unsubscribe = (): void => undefined;
-    void import("../devtools/inspector/persistentInspectorLogSink")
-      .then(
-        async ({
-          initializePersistentInspectorLogs,
-          subscribePersistentInspectorLogs,
-        }) => {
-          if (!active) return;
-          unsubscribe = subscribePersistentInspectorLogs((stats) => {
-            if (active) setInspectorLogStats(stats);
-          });
-          const stats = await initializePersistentInspectorLogs();
-          if (active) setInspectorLogStats(stats);
-        },
-      )
-      .catch(() => {
-        if (active) pushToast(t("nostrInspectorLogsError"));
-      });
-
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [inspectorLogsEnabled, pushToast, t]);
-
-  const downloadInspectorLogs = async (): Promise<void> => {
-    setInspectorLogActionIsBusy(true);
-    try {
-      const { downloadPersistentInspectorLogs } =
-        await import("../devtools/inspector/persistentInspectorLogSink");
-      await downloadPersistentInspectorLogs();
-      pushToast(t("nostrInspectorLogsDownloaded"));
-    } catch {
-      pushToast(t("nostrInspectorLogsError"));
-    } finally {
-      setInspectorLogActionIsBusy(false);
-    }
-  };
-
-  const clearInspectorLogs = async (): Promise<void> => {
-    setInspectorLogActionIsBusy(true);
-    try {
-      const { clearPersistentInspectorLogs } =
-        await import("../devtools/inspector/persistentInspectorLogSink");
-      await clearPersistentInspectorLogs();
-      pushToast(t("nostrInspectorLogsCleared"));
-    } catch {
-      pushToast(t("nostrInspectorLogsError"));
-    } finally {
-      setInspectorLogActionIsBusy(false);
-    }
-  };
 
   useEffect(() => {
     let isActive = true;
@@ -486,7 +284,6 @@ export function AdvancedPage(): React.ReactElement {
         <SettingsToggleRow
           icon={<CheckCheck size={18} />}
           label={t("sendReadReceipts")}
-          description={t("sendReadReceiptsDescription")}
           checked={sendReadReceiptsEnabled}
           onChange={toggleSendReadReceipts}
         />
@@ -502,13 +299,6 @@ export function AdvancedPage(): React.ReactElement {
           onChange={setPayWithCashuEnabled}
         />
 
-        <SettingsToggleRow
-          icon={<RefreshCw size={18} />}
-          label={t("cashuAutoswap")}
-          checked={cashuAutoswapEnabled}
-          onChange={setCashuAutoswapEnabled}
-        />
-
         <SettingsLinkRow
           onClick={() => navigateTo({ route: "advancedAutoPayLimit" })}
           icon={<Zap size={18} />}
@@ -519,59 +309,6 @@ export function AdvancedPage(): React.ReactElement {
             </span>
           }
         />
-
-        <div className="settings-row">
-          <div className="settings-left">
-            <span className="settings-icon" aria-hidden="true">
-              <UserRound size={18} />
-            </span>
-            <span className="settings-label">
-              {t("bankPaymentOfferRecipientCount")}
-            </span>
-          </div>
-          <div className="settings-right">
-            <div
-              className="settings-stepper"
-              aria-label={t("bankPaymentOfferRecipientCount")}
-            >
-              <button
-                type="button"
-                className="settings-stepper-button"
-                disabled={
-                  bankPaymentOfferRecipientCount <=
-                  LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT
-                }
-                onClick={() =>
-                  setBankPaymentOfferRecipientCount(
-                    bankPaymentOfferRecipientCount - 1,
-                  )
-                }
-                aria-label={t("bankPaymentOfferRecipientDecrease")}
-              >
-                <Minus size={16} />
-              </button>
-              <span className="settings-stepper-value">
-                {bankPaymentOfferRecipientCount}
-              </span>
-              <button
-                type="button"
-                className="settings-stepper-button"
-                disabled={
-                  bankPaymentOfferRecipientCount >=
-                  LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT
-                }
-                onClick={() =>
-                  setBankPaymentOfferRecipientCount(
-                    bankPaymentOfferRecipientCount + 1,
-                  )
-                }
-                aria-label={t("bankPaymentOfferRecipientIncrease")}
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="settings-section">
@@ -665,60 +402,10 @@ export function AdvancedPage(): React.ReactElement {
           label={t("reloadApp")}
         />
 
-        <SettingsToggleRow
-          icon={<Bug size={18} />}
-          label={t("nostrInspector")}
-          description={t("nostrInspectorDescription")}
-          checked={inspectorEnabled}
-          onChange={setInspectorEnabled}
-        />
-
-        <SettingsToggleRow
-          icon={<Bug size={18} />}
-          label={t("nostrInspectorLogs")}
-          description={t("nostrInspectorLogsDescription")}
-          checked={inspectorLogsEnabled}
-          onChange={setInspectorLogsEnabled}
-        />
-
-        {inspectorLogsEnabled ? (
-          <div className="inspector-log-stats" aria-live="polite">
-            {inspectorLogStatsLabel}
-          </div>
-        ) : null}
-
-        <SettingsLinkRow
-          onClick={() => void downloadInspectorLogs()}
-          disabled={
-            !inspectorLogsEnabled ||
-            inspectorLogActionIsBusy ||
-            !inspectorLogStats?.rowCount
-          }
-          icon={<Download size={18} />}
-          label={t("downloadNostrInspectorLogs")}
-        />
-
-        <SettingsLinkRow
-          onClick={() => void clearInspectorLogs()}
-          disabled={
-            !inspectorLogsEnabled ||
-            inspectorLogActionIsBusy ||
-            !inspectorLogStats?.rowCount
-          }
-          icon={<Trash2 size={18} />}
-          label={t("clearNostrInspectorLogs")}
-        />
-
         <SettingsLinkRow
           onClick={() => navigateTo({ route: "advancedInspector" })}
           icon={<Bug size={18} />}
-          label={t("openNostrInspector")}
-        />
-
-        <SettingsLinkRow
-          onClick={() => navigateTo({ route: "advancedPushDebug" })}
-          icon={<FlaskConical size={18} />}
-          label="Push / SW Debug (log)"
+          label={t("nostrInspector")}
         />
       </div>
 

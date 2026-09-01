@@ -6,6 +6,10 @@ export const LINKY_BANK_PAYMENT_OFFER_PHASE_TTL_SEC = 5 * 60;
 export const LINKY_BANK_PAYMENT_OFFER_DEFAULT_RECIPIENT_COUNT = 2;
 export const LINKY_BANK_PAYMENT_OFFER_MIN_RECIPIENT_COUNT = 1;
 export const LINKY_BANK_PAYMENT_OFFER_MAX_RECIPIENT_COUNT = 10;
+export const LINKY_BANK_PAYMENT_OFFER_DEFAULT_STAGGER_DELAY_SEC = 0;
+export const LINKY_BANK_PAYMENT_OFFER_MIN_STAGGER_DELAY_SEC = 0;
+export const LINKY_BANK_PAYMENT_OFFER_MAX_STAGGER_DELAY_SEC = 30;
+export const LINKY_BANK_PAYMENT_OFFER_STAGGER_DELAY_STEP_SEC = 5;
 const LINKY_BANK_PAYMENT_OFFER_MINIMIZED_STORAGE_KEY_PREFIX =
   "linky.bank_payment_offer_minimized.v1";
 const LINKY_BANK_PAYMENT_OFFER_SPD_STORAGE_KEY_PREFIX =
@@ -13,6 +17,10 @@ const LINKY_BANK_PAYMENT_OFFER_SPD_STORAGE_KEY_PREFIX =
 const LINKY_BANK_PAYMENT_OFFER_SPD_MAX_AGE_SEC = 60 * 60;
 export const LINKY_BANK_PAYMENT_OFFER_DETAILS_LOCK_KEY_PREFIX =
   "linky.bank_payment_offer_details_lock.v1";
+const LINKY_BANK_PAYMENT_OFFER_STAGGER_STORAGE_KEY_PREFIX =
+  "linky.bank_payment_offer_stagger.v1";
+export const LINKY_BANK_PAYMENT_OFFER_STAGGER_LOCK_KEY_PREFIX =
+  "linky.bank_payment_offer_stagger_lock.v1";
 
 export type LinkyBankPaymentOfferStatus =
   | "accepted"
@@ -266,6 +274,175 @@ export const forgetLinkyBankPaymentOfferSpdPayload = (
   } catch {
     // ignore
   }
+};
+
+export interface LinkyBankPaymentOfferStaggerRecipient {
+  contactId: string;
+  contactPubHex: string;
+  dueAtSec: number;
+}
+
+export interface LinkyBankPaymentOfferStaggerRecord {
+  amountSat: number | null;
+  amountText: string;
+  createdAtSec: number;
+  expiresAtSec: number;
+  offerId: string;
+  ownerPubkey: string;
+  pending: LinkyBankPaymentOfferStaggerRecipient[];
+}
+
+const isLinkyBankPaymentOfferStaggerRecipient = (
+  value: unknown,
+): value is LinkyBankPaymentOfferStaggerRecipient => {
+  const contactId = readObjectField(value, "contactId");
+  const contactPubHex = readObjectField(value, "contactPubHex");
+  const dueAtSec = readObjectField(value, "dueAtSec");
+  return (
+    typeof contactId === "string" &&
+    contactId.trim() !== "" &&
+    typeof contactPubHex === "string" &&
+    contactPubHex.trim() !== "" &&
+    typeof dueAtSec === "number" &&
+    Number.isFinite(dueAtSec) &&
+    dueAtSec > 0
+  );
+};
+
+const isLinkyBankPaymentOfferStaggerRecord = (
+  value: unknown,
+): value is LinkyBankPaymentOfferStaggerRecord => {
+  const amountSat = readObjectField(value, "amountSat");
+  const amountText = readObjectField(value, "amountText");
+  const createdAtSec = readObjectField(value, "createdAtSec");
+  const expiresAtSec = readObjectField(value, "expiresAtSec");
+  const offerId = readObjectField(value, "offerId");
+  const ownerPubkey = readObjectField(value, "ownerPubkey");
+  const pending = readObjectField(value, "pending");
+  return (
+    (amountSat === null ||
+      (typeof amountSat === "number" &&
+        Number.isFinite(amountSat) &&
+        amountSat > 0)) &&
+    typeof amountText === "string" &&
+    amountText.trim() !== "" &&
+    typeof createdAtSec === "number" &&
+    Number.isFinite(createdAtSec) &&
+    createdAtSec > 0 &&
+    typeof expiresAtSec === "number" &&
+    Number.isFinite(expiresAtSec) &&
+    expiresAtSec > 0 &&
+    typeof offerId === "string" &&
+    offerId.trim() !== "" &&
+    typeof ownerPubkey === "string" &&
+    ownerPubkey.trim() !== "" &&
+    Array.isArray(pending) &&
+    pending.every(isLinkyBankPaymentOfferStaggerRecipient)
+  );
+};
+
+const getStaggerRecordStorageKey = (offerId: string): string =>
+  `${LINKY_BANK_PAYMENT_OFFER_STAGGER_STORAGE_KEY_PREFIX}.${encodeURIComponent(offerId)}`;
+
+// A future createdAtSec (backward clock jump) counts as expired for the same
+// reason as the SPD record: the queue must never outlive the offered phase.
+const isExpiredStaggerRecord = (
+  record: LinkyBankPaymentOfferStaggerRecord,
+  nowSec: number,
+): boolean => record.createdAtSec > nowSec || nowSec >= record.expiresAtSec;
+
+const readStaggerRecordByStorageKey = (
+  storageKey: string,
+): LinkyBankPaymentOfferStaggerRecord | null => {
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(storageKey);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (isLinkyBankPaymentOfferStaggerRecord(parsed)) return parsed;
+  } catch {
+    // ignore corrupted storage content
+  }
+  return null;
+};
+
+export const forgetLinkyBankPaymentOfferStaggerQueue = (
+  offerId: string,
+): void => {
+  try {
+    window.localStorage.removeItem(getStaggerRecordStorageKey(offerId));
+  } catch {
+    // ignore
+  }
+};
+
+export const rememberLinkyBankPaymentOfferStaggerQueue = (
+  record: LinkyBankPaymentOfferStaggerRecord,
+): void => {
+  if (!record.offerId.trim() || record.pending.length === 0) return;
+  try {
+    window.localStorage.setItem(
+      getStaggerRecordStorageKey(record.offerId),
+      JSON.stringify(record),
+    );
+  } catch {
+    // Local storage can be unavailable in privacy-restricted browsers.
+  }
+};
+
+export const readLinkyBankPaymentOfferStaggerRecords = (
+  ownerPubkey: string,
+): LinkyBankPaymentOfferStaggerRecord[] => {
+  const records: LinkyBankPaymentOfferStaggerRecord[] = [];
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const staleKeys: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (
+        !key?.startsWith(
+          `${LINKY_BANK_PAYMENT_OFFER_STAGGER_STORAGE_KEY_PREFIX}.`,
+        )
+      ) {
+        continue;
+      }
+      const record = readStaggerRecordByStorageKey(key);
+      if (!record || isExpiredStaggerRecord(record, nowSec)) {
+        staleKeys.push(key);
+        continue;
+      }
+      if (record.ownerPubkey !== ownerPubkey) continue;
+      records.push(record);
+    }
+    for (const key of staleKeys) window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+  return records;
+};
+
+export const removeLinkyBankPaymentOfferStaggerRecipients = (
+  offerId: string,
+  contactIds: readonly string[],
+): void => {
+  const record = readStaggerRecordByStorageKey(
+    getStaggerRecordStorageKey(offerId),
+  );
+  if (!record) return;
+
+  const pending = record.pending.filter(
+    (recipient) => !contactIds.includes(recipient.contactId),
+  );
+  if (pending.length === 0) {
+    forgetLinkyBankPaymentOfferStaggerQueue(offerId);
+    return;
+  }
+  rememberLinkyBankPaymentOfferStaggerQueue({ ...record, pending });
 };
 
 const isLinkyBankPaymentOfferStatus = (

@@ -4,7 +4,7 @@ import {
 } from "./browserPreferences";
 import {
   BANK_PAYMENT_OFFER_RECIPIENT_COUNT_STORAGE_KEY,
-  CASHU_AUTOSWAP_STORAGE_KEY,
+  BANK_PAYMENT_OFFER_STAGGER_DELAY_SEC_STORAGE_KEY,
   DECIMAL_AMOUNT_INPUT_STORAGE_KEY,
   DISPLAY_ALLOWED_CURRENCIES_STORAGE_KEY,
   DISPLAY_CURRENCY_STORAGE_KEY,
@@ -293,18 +293,6 @@ export const getInitialPayWithCashuEnabled = (): boolean => {
   }
 };
 
-export const getInitialCashuAutoswapEnabled = (): boolean => {
-  try {
-    const raw = localStorage.getItem(CASHU_AUTOSWAP_STORAGE_KEY);
-    const v = String(raw ?? "").trim();
-    // Opt-in: keep an explicitly stored preference, otherwise stay disabled.
-    if (!v) return false;
-    return v === "1";
-  } catch {
-    return false;
-  }
-};
-
 export const getInitialShowProfileQrOnTiltEnabled = (): boolean => {
   try {
     return localStorage.getItem(SHOW_PROFILE_QR_ON_TILT_STORAGE_KEY) === "1";
@@ -337,6 +325,23 @@ export const getInitialBankPaymentOfferRecipientCount = (
     );
     const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
     if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+export const getInitialBankPaymentOfferStaggerDelaySec = (
+  fallback: number,
+): number => {
+  try {
+    const raw = localStorage.getItem(
+      BANK_PAYMENT_OFFER_STAGGER_DELAY_SEC_STORAGE_KEY,
+    );
+    const parsed = Number.parseInt(String(raw ?? "").trim(), 10);
+    if (Number.isFinite(parsed) && parsed >= 0) {
       return parsed;
     }
     return fallback;
