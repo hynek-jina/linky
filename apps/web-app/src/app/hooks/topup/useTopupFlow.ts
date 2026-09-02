@@ -138,6 +138,9 @@ export const useTopupFlow = ({
       }
       topupPaidNavTimerRef.current = window.setTimeout(() => {
         topupPaidNavTimerRef.current = null;
+        // The user may have navigated elsewhere during the celebration delay;
+        // yanking them to the wallet then would stomp their navigation.
+        if (routeKindRef.current !== "topupInvoice") return;
         navigateTo({ route: "wallet" });
       }, 1400);
     },
