@@ -1,11 +1,14 @@
-import { useEffect, useState, type FC } from "react";
+import { useEffect, type FC } from "react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
+import { LnurlPayPreviewNotices } from "../components/LnurlPayPreviewNotices";
 import { PaymentAmountPanel } from "../components/PaymentAmountPanel";
 import {
-  fetchLnurlPayPreview,
+  getLnurlPayAmountRangeError,
+  useLnurlPayPreview,
+} from "../hooks/useLnurlPayPreview";
+import {
   getLnurlPayDisplayText,
   inferLightningAddressFromLnurlTarget,
-  type LnurlPayPreview,
 } from "../lnurlPay";
 import { formatMiddleDots, getInitials } from "../utils/formatting";
 
@@ -47,45 +50,12 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
   t,
 }) => {
   const { formatDisplayedAmountText } = useAppShellCore();
-  const [previewState, setPreviewState] = useState<{
-    target: string;
-    preview: LnurlPayPreview | null;
-    error: string | null;
-  }>({ target: "", preview: null, error: null });
-
-  const target = String(lnAddress ?? "").trim();
-  const previewLoaded = previewState.target === target;
-  const previewLoading = !!target && !previewLoaded;
-  const preview = previewLoaded ? previewState.preview : null;
-  const previewError = previewLoaded ? previewState.error : null;
-
-  useEffect(() => {
-    if (!target) return;
-    let cancelled = false;
-    fetchLnurlPayPreview(target)
-      .then((next) => {
-        if (cancelled) return;
-        setPreviewState({ target, preview: next, error: null });
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        const message =
-          error instanceof Error ? error.message : String(error ?? "");
-        setPreviewState({
-          target,
-          preview: null,
-          error: message || t("lnurlPayLoadFailed"),
-        });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [target, t]);
-
-  const isFixedAmount =
-    preview !== null && preview.minSendableSat === preview.maxSendableSat;
-  const fixedAmountSat = isFixedAmount ? preview.minSendableSat : null;
+  const {
+    error: previewError,
+    fixedAmountSat,
+    loading: previewLoading,
+    preview,
+  } = useLnurlPayPreview(lnAddress);
 
   useEffect(() => {
     if (fixedAmountSat === null) return;
@@ -111,18 +81,7 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
     cashuBalance,
   )}`;
 
-  const minSendableSat = preview?.minSendableSat ?? null;
-  const maxSendableSat = preview?.maxSendableSat ?? null;
-
-  const amountBelowRange =
-    minSendableSat !== null &&
-    Number.isFinite(amountSat) &&
-    amountSat > 0 &&
-    amountSat < minSendableSat;
-  const amountAboveRange =
-    maxSendableSat !== null &&
-    Number.isFinite(amountSat) &&
-    amountSat > maxSendableSat;
+  const rangeError = getLnurlPayAmountRangeError(preview, amountSat, t);
 
   const invalid =
     !canPayWithCashu ||
@@ -131,66 +90,14 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
     amountSat > cashuBalanceAfterMelt ||
     previewLoading ||
     previewError !== null ||
-    amountBelowRange ||
-    amountAboveRange;
+    rangeError !== null;
 
   let submitTitle: string | undefined;
   if (amountSat > cashuBalanceAfterMelt) {
     submitTitle = t("payInsufficient");
-  } else if (amountBelowRange && minSendableSat !== null) {
-    submitTitle = t("lnurlPayAmountTooLow").replace(
-      "{min}",
-      String(minSendableSat),
-    );
-  } else if (amountAboveRange && maxSendableSat !== null) {
-    submitTitle = t("lnurlPayAmountTooHigh").replace(
-      "{max}",
-      String(maxSendableSat),
-    );
+  } else if (rangeError !== null) {
+    submitTitle = rangeError;
   }
-
-  const renderNotices = (): React.ReactNode => {
-    if (previewLoading) {
-      return <p className="muted">{t("lnurlPayLoading")}</p>;
-    }
-    if (previewError) {
-      return (
-        <p className="muted">
-          {t("lnurlPayLoadFailed")}: {previewError}
-        </p>
-      );
-    }
-    if (!preview) return null;
-
-    const descriptionLine = preview.description ? (
-      <p className="muted">{preview.description}</p>
-    ) : null;
-
-    if (isFixedAmount) {
-      return (
-        <>
-          {descriptionLine}
-          <p className="muted">
-            {t("lnurlPayFixedHint").replace(
-              "{amount}",
-              String(preview.minSendableSat),
-            )}
-          </p>
-        </>
-      );
-    }
-
-    return (
-      <>
-        {descriptionLine}
-        <p className="muted">
-          {t("lnurlPayRangeHint")
-            .replace("{min}", String(preview.minSendableSat))
-            .replace("{max}", String(preview.maxSendableSat))}
-        </p>
-      </>
-    );
-  };
 
   return (
     <PaymentAmountPanel
@@ -234,7 +141,14 @@ export const LnAddressPayPage: FC<LnAddressPayPageProps> = ({
           </div>
         </div>
       }
-      notices={renderNotices()}
+      notices={
+        <LnurlPayPreviewNotices
+          error={previewError}
+          loading={previewLoading}
+          preview={preview}
+          t={t}
+        />
+      }
       onAmountChange={setLnAddressPayAmount}
       onSubmit={() => {
         if (invalid) return;
