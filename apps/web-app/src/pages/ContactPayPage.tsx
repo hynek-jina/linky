@@ -1,9 +1,14 @@
-import type { FC } from "react";
+import { useEffect, type FC } from "react";
 import { Bean, Zap } from "lucide-react";
 import { useAppShellCore } from "../app/context/AppShellContexts";
 import { RequestIcon } from "../components/icons";
+import { LnurlPayPreviewNotices } from "../components/LnurlPayPreviewNotices";
 import { PaymentAmountPanel } from "../components/PaymentAmountPanel";
 import type { ContactId } from "../evolu";
+import {
+  getLnurlPayAmountRangeError,
+  useLnurlPayPreview,
+} from "../hooks/useLnurlPayPreview";
 import { getInitials } from "../utils/formatting";
 import { normalizeNpubIdentifier } from "../utils/nostrNpub";
 
@@ -53,16 +58,8 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
 }) => {
   const { formatDisplayedAmountText } = useAppShellCore();
 
-  if (!selectedContact) {
-    return (
-      <section className="panel">
-        <p className="muted">{t("contactNotFound")}</p>
-      </section>
-    );
-  }
-
-  const ln = String(selectedContact.lnAddress ?? "").trim();
-  const npub = normalizeNpubIdentifier(selectedContact.npub);
+  const ln = String(selectedContact?.lnAddress ?? "").trim();
+  const npub = normalizeNpubIdentifier(selectedContact?.npub);
   const url = npub ? nostrPictureByNpub[npub] : null;
   const isRequestFlow = contactPaymentIntent === "request";
   const canUseCashu = payWithCashuEnabled && Boolean(npub);
@@ -75,6 +72,27 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
       : canUseCashu
         ? "cashu"
         : "lightning";
+
+  // Load the LNURL-pay request up front so a fixed amount is prefilled and
+  // min/max limits are shown before the user tries to submit.
+  const lightningActive = !isRequestFlow && method === "lightning" && ln !== "";
+  const lnurlPreview = useLnurlPayPreview(lightningActive ? ln : "");
+  const { fixedAmountSat } = lnurlPreview;
+
+  useEffect(() => {
+    if (fixedAmountSat === null) return;
+    const next = String(fixedAmountSat);
+    setPayAmount((current) => (current === next ? current : next));
+  }, [fixedAmountSat, setPayAmount]);
+
+  if (!selectedContact) {
+    return (
+      <section className="panel">
+        <p className="muted">{t("contactNotFound")}</p>
+      </section>
+    );
+  }
+
   const methodIcon = isRequestFlow ? (
     <RequestIcon size={18} />
   ) : method === "lightning" ? (
@@ -90,12 +108,19 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
   const availableAmountText = `${t("availablePrefix")} ${formatDisplayedAmountText(
     cashuBalance,
   )}`;
+  const lnurlRangeError = lightningActive
+    ? getLnurlPayAmountRangeError(lnurlPreview.preview, amountSat, t)
+    : null;
   const invalid = isRequestFlow
     ? !npub || !Number.isFinite(amountSat) || amountSat <= 0
     : (method === "lightning" ? !ln : !canUseCashu) ||
       !Number.isFinite(amountSat) ||
       amountSat <= 0 ||
-      validAmount > cashuBalanceAfterMelt;
+      validAmount > cashuBalanceAfterMelt ||
+      (lightningActive &&
+        (lnurlPreview.loading ||
+          lnurlPreview.error !== null ||
+          lnurlRangeError !== null));
 
   return (
     <PaymentAmountPanel
@@ -188,6 +213,15 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
           {method === "lightning" && !ln && (
             <p className="muted">{t("payMissingLn")}</p>
           )}
+
+          {lightningActive && (
+            <LnurlPayPreviewNotices
+              error={lnurlPreview.error}
+              loading={lnurlPreview.loading}
+              preview={lnurlPreview.preview}
+              t={t}
+            />
+          )}
         </>
       }
       onAmountChange={setPayAmount}
@@ -209,7 +243,7 @@ export const ContactPayPage: FC<ContactPayPageProps> = ({
         method === "lightning" &&
         validAmount > cashuBalanceAfterMelt
           ? t("payInsufficient")
-          : undefined
+          : (lnurlRangeError ?? undefined)
       }
       t={t}
     />

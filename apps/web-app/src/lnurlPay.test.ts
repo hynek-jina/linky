@@ -99,6 +99,107 @@ describe("LNURL-pay lightning address metadata", () => {
   });
 });
 
+describe("LNURL-pay request resolution", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("lowercases a lightning address when building the well-known URL", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          callback: "https://21m.lol/lnurlp/api/v1/lnurl/cb/hDBYoW",
+          maxSendable: 10000000000,
+          metadata: '[["text/plain", "Payment to plex"]]',
+          minSendable: 1000,
+          tag: "payRequest",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await expect(fetchLnurlPayPreview("Plex@21m.lol")).resolves.toMatchObject({
+      minSendableSat: 1,
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://21m.lol/.well-known/lnurlp/plex",
+    );
+  });
+
+  it("surfaces the server error reason instead of a tag mismatch", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "ERROR",
+          reason: "Lightning address not found.",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await expect(fetchLnurlPayPreview("missing@21m.lol")).rejects.toThrow(
+      "Lightning address not found.",
+    );
+  });
+});
+
+describe("fetchLnurlInvoiceForTarget fixed-amount re-quotes", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const mockPayRequestThenInvoice = (fixedMsat: number) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          callback: "https://lnbits.cz/lnurlp/api/v1/lnurl/cb/KfCp5v",
+          maxSendable: fixedMsat,
+          metadata: '[["text/plain", "Fixed price"]]',
+          minSendable: fixedMsat,
+          tag: "payRequest",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ pr: "lnbc1testinvoice" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    return fetchMock;
+  };
+
+  it("follows a slightly drifted fixed quote (fiat re-quote)", async () => {
+    const fetchMock = mockPayRequestThenInvoice(4360500);
+
+    await expect(
+      fetchLnurlInvoiceForTarget("fixed@lnbits.cz", 4352),
+    ).resolves.toMatchObject({ pr: "lnbc1testinvoice" });
+
+    const invoiceUrl = new URL(String(fetchMock.mock.calls[1]?.[0]));
+    expect(invoiceUrl.searchParams.get("amount")).toBe("4360500");
+  });
+
+  it("rejects a fixed quote that drifted too far from the confirmed amount", async () => {
+    mockPayRequestThenInvoice(5000000);
+
+    await expect(
+      fetchLnurlInvoiceForTarget("fixed@lnbits.cz", 4352),
+    ).rejects.toThrow("Amount out of LNURL range");
+  });
+});
+
 describe("fetchLnurlWithdrawPreview", () => {
   afterEach(() => {
     vi.restoreAllMocks();

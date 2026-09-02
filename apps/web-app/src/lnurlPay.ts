@@ -11,6 +11,10 @@ import { asNonEmptyString } from "./utils/validation";
 
 const HOSTED_APP_ORIGIN = "https://app.linky.fit";
 
+// How far a fixed-amount LNURL's fresh quote may drift from the confirmed
+// amount and still be paid without re-confirmation (fiat re-quotes, rounding).
+const FIXED_AMOUNT_REQUOTE_TOLERANCE = 0.02;
+
 type LnurlPayRequest = {
   callback?: string;
   commentAllowed?: number;
@@ -389,7 +393,9 @@ const isLnurlWithdrawCallbackResponse = (
 };
 
 const getLnurlpUrlFromLightningAddress = (lightningAddress: string): string => {
-  const raw = lightningAddress.trim();
+  // LUD-16 usernames are lowercase-only and domains are case-insensitive;
+  // servers reject mixed-case addresses (e.g. `Plex@21m.lol`) as not found.
+  const raw = lightningAddress.trim().toLowerCase();
   const at = raw.lastIndexOf("@");
   if (at <= 0 || at === raw.length - 1) {
     throw new Error("Invalid lightning address");
@@ -473,6 +479,12 @@ const fetchValidatedLnurlPayRequest = async (
   }
   const payReq = payReqJson;
 
+  // An LNURL error response carries no tag, so report the server's reason
+  // before the tag check turns it into a misleading tag-mismatch error.
+  if (String(payReq.status ?? "").toUpperCase() === "ERROR") {
+    throw new Error(asNonEmptyString(payReq.reason) ?? "LNURL error");
+  }
+
   const tag = String(payReq.tag ?? "").trim();
   const looksLikePayRequest =
     asNonEmptyString(payReq.callback) !== null &&
@@ -481,10 +493,6 @@ const fetchValidatedLnurlPayRequest = async (
 
   if (!looksLikePayRequest && !isKnownLnurlTag(tag, "payRequest")) {
     throw new LnurlTagMismatchError(tag);
-  }
-
-  if (String(payReq.status ?? "").toUpperCase() === "ERROR") {
-    throw new Error(asNonEmptyString(payReq.reason) ?? "LNURL error");
   }
 
   const callback = asNonEmptyString(payReq.callback);
@@ -551,7 +559,21 @@ export const fetchLnurlInvoiceForTarget = async (
 
   const payRequest = await fetchValidatedLnurlPayRequest(paymentTarget);
 
-  const amountMsat = Math.round(amountSat * 1000);
+  let amountMsat = Math.round(amountSat * 1000);
+  // Fiat-denominated fixed-amount LNURLs re-quote min/max msat from the
+  // exchange rate on every fetch, so the value confirmed from the preview
+  // drifts by the time the invoice is requested (and sat rounding alone can
+  // put it outside a sub-sat-precise fixed range). Follow the fresh quote
+  // when it stays close to what the user confirmed.
+  const isFixedAmount =
+    payRequest.minSendableMsat === payRequest.maxSendableMsat;
+  if (isFixedAmount) {
+    const freshFixedMsat = payRequest.minSendableMsat;
+    const drift = Math.abs(freshFixedMsat - amountMsat) / amountMsat;
+    if (drift <= FIXED_AMOUNT_REQUOTE_TOLERANCE) {
+      amountMsat = freshFixedMsat;
+    }
+  }
   if (
     amountMsat < payRequest.minSendableMsat ||
     amountMsat > payRequest.maxSendableMsat
@@ -653,6 +675,12 @@ export const fetchLnurlWithdrawPreview = async (
     throw new Error("Invalid LNURL withdraw response");
   }
 
+  // An LNURL error response carries no tag, so report the server's reason
+  // before the tag check turns it into a misleading tag-mismatch error.
+  if (String(withdrawJson.status ?? "").toUpperCase() === "ERROR") {
+    throw new Error(asNonEmptyString(withdrawJson.reason) ?? "LNURL error");
+  }
+
   const tag = String(withdrawJson.tag ?? "").trim();
   const looksLikeWithdrawRequest =
     asNonEmptyString(withdrawJson.callback) !== null &&
@@ -662,10 +690,6 @@ export const fetchLnurlWithdrawPreview = async (
 
   if (!looksLikeWithdrawRequest && !isKnownLnurlTag(tag, "withdrawRequest")) {
     throw new LnurlTagMismatchError(tag);
-  }
-
-  if (String(withdrawJson.status ?? "").toUpperCase() === "ERROR") {
-    throw new Error(asNonEmptyString(withdrawJson.reason) ?? "LNURL error");
   }
 
   const callback = asNonEmptyString(withdrawJson.callback);
