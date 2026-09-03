@@ -1,10 +1,10 @@
 import { Effect, Either, Schema } from "effect";
+import type { Duration } from "effect";
+import type { Filter } from "nostr-tools";
 import type { PlainEventReceipt } from "../domain/delivery";
-import type {
-  AllRelaysUnreachable,
-  NoRelayAcceptedEvent,
-} from "../domain/errors";
-import { NoReadRelaysConfigured } from "../domain/errors";
+import { RelayRejection } from "../domain/delivery";
+import type { NoRelayAcceptedEvent } from "../domain/errors";
+import { AllRelaysUnreachable, NoReadRelaysConfigured } from "../domain/errors";
 import type { EventId, RelayUrl } from "../domain/primitives";
 import { Pubkey, UnixSeconds } from "../domain/primitives";
 import { Inspector } from "../inspector/Inspector";
@@ -28,6 +28,8 @@ import {
 import { ProfileMetadata } from "./domain";
 import type { StatusDraft } from "./domain";
 import { ProfileUpdated, StatusUpdated } from "./events";
+import { createProfileSearchCollector, prefixSearchQuery } from "./search";
+import type { ProfileSearchHit } from "./search";
 
 export class ProfileFetchResult extends Schema.Class<ProfileFetchResult>(
   "ProfileFetchResult",
@@ -56,66 +58,26 @@ export interface DiscoverActiveProfilesOptions {
   readonly authorScanLimit?: number;
 }
 
-export const PROFILE_SEARCH_DEFAULT_LIMIT = 3;
-export const PROFILE_SEARCH_RELAY_TIMEOUT_SECONDS = 6;
+export const PROFILE_SEARCH_DEFAULT_LIMIT = 6;
+/** Per relay: several kind-0 versions per author collapse into one hit. */
+export const PROFILE_SEARCH_OVERFETCH_FACTOR = 4;
+export const PROFILE_SEARCH_DEADLINE: Duration.DurationInput = "2500 millis";
 
 export interface SearchProfilesOptions {
   readonly limit?: number;
   /**
-   * NIP-50 relays queried in addition to the read relays; the read relays
-   * alone rarely index profile text.
+   * NIP-50 relays. Only these receive the `search` filter; the read relays
+   * are used as a fallback when none are given, since most of them ignore
+   * `search` and would only pad the merge with unrelated profiles.
    */
   readonly searchRelays?: ReadonlyArray<RelayUrl>;
+  /** Relays still silent when this elapses are dropped from the result. */
+  readonly deadline?: Duration.DurationInput;
+  /** Profiles whose nip05/lud16 ends in `@<domain>` rank above all others. */
+  readonly preferredDomains?: ReadonlyArray<string>;
+  /** Ranked hits so far, each time another relay answers. */
+  readonly onHits?: (hits: ReadonlyArray<ProfileSearchHit>) => void;
 }
-
-export class ProfileSearchHit extends Schema.Class<ProfileSearchHit>(
-  "ProfileSearchHit",
-)({
-  pubkey: Pubkey,
-  metadata: ProfileMetadata,
-  updatedAt: UnixSeconds,
-}) {}
-
-const normalizeSearchText = (value: string): string =>
-  value.trim().toLocaleLowerCase();
-
-const searchableNames = (metadata: ProfileMetadata): Array<string> =>
-  [metadata.name, metadata.displayName]
-    .filter((field): field is string => field !== undefined)
-    .map(normalizeSearchText);
-
-/** 0 = a name equals the query, 1 = a name starts with it, 2 = anything else. */
-const searchRelevanceRank = (
-  metadata: ProfileMetadata,
-  query: string,
-): number => {
-  const needle = normalizeSearchText(query);
-  const names = searchableNames(metadata);
-  if (names.includes(needle)) return 0;
-  if (names.some((name) => name.startsWith(needle))) return 1;
-  return 2;
-};
-
-/**
- * Relays without NIP-50 ignore the `search` field and answer with arbitrary
- * kind-0 events, so every hit is re-checked against the query locally.
- */
-export const profileMatchesSearchQuery = (
-  metadata: ProfileMetadata,
-  query: string,
-): boolean => {
-  const needle = normalizeSearchText(query);
-  if (!needle) return false;
-  return [
-    metadata.name,
-    metadata.displayName,
-    metadata.nip05,
-    metadata.lud16,
-  ].some(
-    (field) =>
-      field !== undefined && normalizeSearchText(field).includes(needle),
-  );
-};
 
 export class DiscoveredProfile extends Schema.Class<DiscoveredProfile>(
   "DiscoveredProfile",
@@ -354,56 +316,68 @@ export class Profiles extends Effect.Service<Profiles>()("linkstr/Profiles", {
       AllRelaysUnreachable | NoReadRelaysConfigured
     > =>
       Effect.gen(function* () {
-        const relays = [
-          ...new Set([
-            ...context.relayPolicy.readRelays,
-            ...(options.searchRelays ?? []),
-          ]),
-        ];
+        const searchRelays = [...new Set(options.searchRelays ?? [])];
+        const relays =
+          searchRelays.length > 0
+            ? searchRelays
+            : context.relayPolicy.readRelays;
         if (relays.length === 0) return yield* new NoReadRelaysConfigured();
         const limit = options.limit ?? PROFILE_SEARCH_DEFAULT_LIMIT;
         const trimmedQuery = query.trim();
         if (!trimmedQuery) return { result: [], eventIds: [] };
 
-        const events = yield* fetchPlainEvents(
-          context.transport,
-          relays,
-          // Over-fetch: non-NIP-50 relays pad the merge with unrelated profiles.
-          { kinds: [PROFILE_KIND], search: trimmedQuery, limit: limit * 10 },
-          {
-            perRelayTimeout: `${PROFILE_SEARCH_RELAY_TIMEOUT_SECONDS} seconds`,
-          },
+        const searchQueries = [trimmedQuery, prefixSearchQuery(trimmedQuery)];
+        const filters = searchQueries
+          .filter((search): search is string => search !== undefined)
+          .map(
+            (search): Filter => ({
+              kinds: [PROFILE_KIND],
+              search,
+              limit: limit * PROFILE_SEARCH_OVERFETCH_FACTOR,
+            }),
+          );
+        const collector = createProfileSearchCollector(trimmedQuery, {
+          preferredDomains: options.preferredDomains ?? [],
+        });
+        const failures: Array<RelayRejection> = [];
+        let answered = 0;
+
+        const fetchOne = ([relay, filter]: readonly [RelayUrl, Filter]) =>
+          context.transport.fetch(relay, filter).pipe(
+            Effect.tap((events) =>
+              Effect.sync(() => {
+                answered += 1;
+                collector.add(relay, events);
+                options.onHits?.(collector.top(limit).map(({ hit }) => hit));
+              }),
+            ),
+            Effect.catchAll((failure) =>
+              Effect.sync(() => {
+                failures.push(
+                  new RelayRejection({
+                    relay: failure.relay,
+                    detail: failure.detail,
+                  }),
+                );
+              }),
+            ),
+          );
+        // Whatever arrived by the deadline is the answer; the slow tail is
+        // interrupted rather than awaited.
+        yield* Effect.forEach(
+          relays.flatMap((relay) =>
+            filters.map((filter) => [relay, filter] as const),
+          ),
+          fetchOne,
+          { concurrency: "unbounded", discard: true },
+        ).pipe(
+          Effect.timeoutOption(options.deadline ?? PROFILE_SEARCH_DEADLINE),
         );
 
-        const matches: Array<{ hit: ProfileSearchHit; eventId: EventId }> = [];
-        const seen = new Set<Pubkey>();
-        // Newest-first, so the first event per author is their current profile.
-        for (const event of events) {
-          if (seen.has(event.pubkey)) continue;
-          seen.add(event.pubkey);
-          const decoded = decodeProfileEvent(event);
-          if (Either.isLeft(decoded)) continue;
-          if (
-            !profileMatchesSearchQuery(decoded.right.metadata, trimmedQuery)
-          ) {
-            continue;
-          }
-          matches.push({
-            eventId: event.id,
-            hit: new ProfileSearchHit({
-              pubkey: event.pubkey,
-              metadata: decoded.right.metadata,
-              updatedAt: event.created_at,
-            }),
-          });
+        if (answered === 0) {
+          return yield* new AllRelaysUnreachable({ failures });
         }
-        // Stable sort keeps newest-first within a relevance rank.
-        matches.sort(
-          (a, b) =>
-            searchRelevanceRank(a.hit.metadata, trimmedQuery) -
-            searchRelevanceRank(b.hit.metadata, trimmedQuery),
-        );
-        const kept = matches.slice(0, limit);
+        const kept = collector.top(limit);
         return {
           result: kept.map(({ hit }) => hit),
           eventIds: kept.map(({ eventId }) => eventId),
@@ -411,7 +385,8 @@ export class Profiles extends Effect.Service<Profiles>()("linkstr/Profiles", {
       }).pipe(
         inspectPlainOperation(inspector, "profiles.searchProfiles", {
           query,
-          ...options,
+          limit: options.limit,
+          searchRelays: options.searchRelays,
         }),
       );
 

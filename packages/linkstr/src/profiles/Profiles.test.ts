@@ -74,6 +74,7 @@ const stubTransport = (
     fetchLog?: Array<Filter>;
     stored?: ReadonlyMap<RelayUrl, ReadonlyArray<NostrToolsEvent>>;
     unreachable?: ReadonlyArray<RelayUrl>;
+    silent?: ReadonlyArray<RelayUrl>;
   },
 ): Layer.Layer<NostrTransport> =>
   Layer.succeed(NostrTransport, {
@@ -96,6 +97,7 @@ const stubTransport = (
     fetch: (relay, filter) =>
       Effect.suspend(() => {
         options?.fetchLog?.push(filter);
+        if (options?.silent?.includes(relay) === true) return Effect.never;
         return options?.unreachable?.includes(relay) === true
           ? new RelayUnreachable({ relay, detail: "down" })
           : Effect.succeed(options?.stored?.get(relay) ?? []);
@@ -661,21 +663,12 @@ describe("Profiles.discoverActiveProfiles", () => {
 
 describe("Profiles.searchProfiles", () => {
   const searchRelay = RelayUrl.make("wss://search.test");
+  const otherSearchRelay = RelayUrl.make("wss://search-2.test");
 
-  it("queries read and search relays with a NIP-50 filter and keeps only local matches", async () => {
+  it("sends the NIP-50 filter only to the search relays and dedupes authors newest-first", async () => {
     const fetchLog: Array<Filter> = [];
     const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
-      // A relay without NIP-50 ignores `search` and answers with anything.
-      [
-        relayA,
-        [
-          profileEvent(
-            carol,
-            JSON.stringify({ name: "carol", nip05: "carol@other.test" }),
-            base + 5,
-          ),
-        ],
-      ],
+      [relayA, [profileEvent(carol, JSON.stringify({ name: "alice" }), base)]],
       [
         searchRelay,
         [
@@ -704,13 +697,134 @@ describe("Profiles.searchProfiles", () => {
       alice.pubkey,
       bob.pubkey,
     ]);
-    expect(exit.value[1]?.metadata.name).toBe("Alice Bobson");
     expect(exit.value[0]?.metadata.displayName).toBe("ALICE");
-    expect(fetchLog).toHaveLength(2);
-    expect(fetchLog[0]).toEqual({ kinds: [0], search: "alice", limit: 30 });
+    expect(exit.value[1]?.metadata.name).toBe("Alice Bobson");
+    // The plain query plus a prefix-wildcard companion, each to the search
+    // relay only.
+    expect(fetchLog).toEqual([
+      { kinds: [0], search: "alice", limit: 24 },
+      { kinds: [0], search: "alice*", limit: 24 },
+    ]);
   });
 
-  it("ranks exact and prefix name matches above substring matches", async () => {
+  it("skips the wildcard companion for short words and explicit search syntax", async () => {
+    const fetchLog: Array<Filter> = [];
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [relayA, [profileEvent(alice, JSON.stringify({ name: "al" }), base)]],
+    ]);
+    const run = (query: string) =>
+      runWith(
+        stubTransport([], { fetchLog, stored }),
+        Effect.flatMap(Profiles, (profiles) => profiles.searchProfiles(query)),
+        [relayA],
+      );
+
+    await run("al");
+    await run('"alice smith"');
+    await run("ali*");
+    expect(fetchLog.map((filter) => filter.search)).toEqual([
+      "al",
+      '"alice smith"',
+      "ali*",
+    ]);
+  });
+
+  it("ranks profiles on a preferred domain above every other hit", async () => {
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        relayA,
+        [
+          profileEvent(alice, JSON.stringify({ name: "sat" }), base + 2),
+          profileEvent(
+            bob,
+            JSON.stringify({ name: "satoshi", lud16: "npub1x@linky.fit" }),
+            base + 1,
+          ),
+          profileEvent(
+            carol,
+            JSON.stringify({ name: "sats", nip05: "carol@Linky.fit" }),
+            base,
+          ),
+        ],
+      ],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { stored }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.searchProfiles("sat", { preferredDomains: ["linky.fit"] }),
+      ),
+      [relayA],
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    // alice's exact name match loses to the two linky users; among them both
+    // are prefix matches and carol's nip05 outweighs bob's relay position.
+    expect(exit.value.map((hit) => hit.pubkey)).toEqual([
+      carol.pubkey,
+      bob.pubkey,
+      alice.pubkey,
+    ]);
+  });
+
+  it("falls back to the read relays when no search relays are configured", async () => {
+    const fetchLog: Array<Filter> = [];
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [relayA, [profileEvent(alice, JSON.stringify({ name: "alice" }), base)]],
+      // A relay without NIP-50 ignores `search` and answers with anything.
+      [relayB, [profileEvent(carol, JSON.stringify({ name: "carol" }), base)]],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { fetchLog, stored }),
+      Effect.flatMap(Profiles, (profiles) => profiles.searchProfiles("alice")),
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value.map((hit) => hit.pubkey)).toEqual([alice.pubkey]);
+    expect(fetchLog).toHaveLength(4);
+  });
+
+  it("matches ignoring accents and word order, including the about text", async () => {
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        relayA,
+        [
+          profileEvent(alice, JSON.stringify({ name: "Hynek Jína" }), base + 2),
+          profileEvent(
+            bob,
+            JSON.stringify({ display_name: "Jína Hynek" }),
+            base + 1,
+          ),
+          profileEvent(
+            carol,
+            JSON.stringify({ name: "carol", about: "friend of hynek jina" }),
+            base,
+          ),
+        ],
+      ],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { stored }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.searchProfiles("hynek jina"),
+      ),
+      [relayA],
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value.map((hit) => hit.pubkey)).toEqual([
+      alice.pubkey,
+      bob.pubkey,
+      carol.pubkey,
+    ]);
+  });
+
+  it("ranks exact and prefix name matches above word matches", async () => {
     const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
       [
         relayA,
@@ -734,6 +848,39 @@ describe("Profiles.searchProfiles", () => {
       carol.pubkey,
       bob.pubkey,
       alice.pubkey,
+    ]);
+  });
+
+  it("keeps relay order within a tier and prefers profiles with nip05 or picture", async () => {
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        relayA,
+        [
+          profileEvent(alice, JSON.stringify({ name: "sat alice" }), base),
+          profileEvent(
+            bob,
+            JSON.stringify({ name: "sat bob", nip05: "bob@linky.fit" }),
+            base + 1,
+          ),
+          profileEvent(carol, JSON.stringify({ name: "sat carol" }), base + 2),
+        ],
+      ],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { stored }),
+      Effect.flatMap(Profiles, (profiles) => profiles.searchProfiles("sat")),
+      [relayA],
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    // bob jumps ahead on nip05; alice stays before carol on relay position
+    // even though carol's profile is newer.
+    expect(exit.value.map((hit) => hit.pubkey)).toEqual([
+      bob.pubkey,
+      alice.pubkey,
+      carol.pubkey,
     ]);
   });
 
@@ -762,7 +909,82 @@ describe("Profiles.searchProfiles", () => {
     expect(Exit.isSuccess(exit)).toBe(true);
     if (!Exit.isSuccess(exit)) return;
     expect(exit.value).toHaveLength(2);
-    expect(exit.value[0]?.pubkey).toBe(carol.pubkey);
+    expect(exit.value[0]?.pubkey).toBe(alice.pubkey);
+  });
+
+  it("reports ranked hits after every relay answer", async () => {
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        searchRelay,
+        [profileEvent(alice, JSON.stringify({ name: "sat a" }), base)],
+      ],
+      [
+        otherSearchRelay,
+        [profileEvent(bob, JSON.stringify({ name: "sat b" }), base + 1)],
+      ],
+    ]);
+    const progress: Array<Array<Pubkey>> = [];
+
+    const exit = await runWith(
+      stubTransport([], { stored }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.searchProfiles("sat", {
+          searchRelays: [searchRelay, otherSearchRelay],
+          onHits: (hits) => progress.push(hits.map((hit) => hit.pubkey)),
+        }),
+      ),
+      [],
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    // One report per answer (two relays × plain + wildcard query); equal
+    // relevance, so bob's newer profile ranks first once it arrives.
+    expect(progress).toHaveLength(4);
+    expect(progress[0]).toEqual([alice.pubkey]);
+    expect(progress.at(-1)).toEqual([bob.pubkey, alice.pubkey]);
+  });
+
+  it("returns what arrived when a relay is still silent at the deadline", async () => {
+    const stored = new Map<RelayUrl, ReadonlyArray<NostrToolsEvent>>([
+      [
+        searchRelay,
+        [profileEvent(alice, JSON.stringify({ name: "sat" }), base)],
+      ],
+    ]);
+
+    const exit = await runWith(
+      stubTransport([], { stored, silent: [otherSearchRelay] }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.searchProfiles("sat", {
+          searchRelays: [searchRelay, otherSearchRelay],
+          deadline: "20 millis",
+        }),
+      ),
+      [],
+    );
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (!Exit.isSuccess(exit)) return;
+    expect(exit.value.map((hit) => hit.pubkey)).toEqual([alice.pubkey]);
+  });
+
+  it("fails when every search relay is unreachable or silent past the deadline", async () => {
+    const exit = await runWith(
+      stubTransport([], {
+        unreachable: [searchRelay],
+        silent: [otherSearchRelay],
+      }),
+      Effect.flatMap(Profiles, (profiles) =>
+        profiles.searchProfiles("sat", {
+          searchRelays: [searchRelay, otherSearchRelay],
+          deadline: "20 millis",
+        }),
+      ),
+      [],
+    );
+    expect(exit).toEqual(
+      Exit.fail(expect.objectContaining({ _tag: "AllRelaysUnreachable" })),
+    );
   });
 
   it("fails when neither read nor search relays are configured", async () => {
